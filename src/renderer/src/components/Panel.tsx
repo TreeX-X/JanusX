@@ -1,0 +1,278 @@
+import { useState, useCallback } from 'react'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useAppStore } from '@/stores/app'
+import { GitPanel } from '@/components/GitPanel'
+import { CheckpointPanel } from '@/components/CheckpointPanel'
+import type { FileNode } from '@/types'
+
+type PanelView = 'files' | 'git' | 'checkpoints'
+
+interface FileTreeItemProps {
+  node: FileNode
+  depth: number
+  activeFilePath: string | null
+  onSelect: (path: string) => void
+}
+
+function FileTreeItem({ node, depth, activeFilePath, onSelect }: FileTreeItemProps) {
+  const [expanded, setExpanded] = useState(false)
+  const isFolder = node.type === 'directory'
+  const isActive = activeFilePath === node.path
+
+  const handleClick = useCallback(() => {
+    if (isFolder) {
+      setExpanded((v) => !v)
+    } else {
+      onSelect(node.path)
+    }
+  }, [isFolder, onSelect, node.path])
+
+  return (
+    <div>
+      <div
+        onClick={handleClick}
+        className="py-[5px] px-2 mb-px rounded cursor-pointer transition-colors flex items-center gap-1.5 text-xs select-none"
+        style={{
+          paddingLeft: `${8 + depth * 16}px`,
+          color: isActive ? '#ff7830' : '#999',
+          background: isActive ? 'rgba(255, 120, 48, 0.1)' : 'transparent',
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'
+            e.currentTarget.style.color = '#ccc'
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = '#999'
+          }
+        }}
+      >
+        {isFolder && (
+          <div
+            className="w-1.5 h-1.5 border-r-[1.5px] border-b-[1.5px] transition-transform"
+            style={{
+              borderColor: isActive ? '#ff7830' : '#666',
+              transform: expanded ? 'rotate(45deg)' : 'rotate(-45deg)',
+            }}
+          />
+        )}
+        <div
+          className="w-3 h-3 shrink-0 relative"
+          style={{
+            marginLeft: isFolder ? 0 : '6px',
+          }}
+        >
+          {isFolder ? (
+            <div
+              className="absolute left-0 top-[3px] w-3 h-2 rounded-px"
+              style={{ border: `1.5px solid ${isActive ? '#ff7830' : '#666'}` }}
+            />
+          ) : (
+            <div
+              className="absolute left-px top-[2px] w-2.5 h-2.5 rounded-px"
+              style={{
+                border: `1.5px solid ${isActive ? '#ff7830' : '#666'}`,
+                clipPath: 'polygon(0 0, 70% 0, 100% 30%, 100% 100%, 0 100%)',
+              }}
+            />
+          )}
+        </div>
+        <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{node.name}</span>
+      </div>
+      {isFolder && node.children && expanded && (
+        <div>
+          {node.children.map((child) => (
+            <FileTreeItem key={child.path} node={child} depth={depth + 1} activeFilePath={activeFilePath} onSelect={onSelect} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function Panel() {
+  const [activeView, setActiveView] = useState<PanelView>('files')
+  const fileTree = useWorkspaceStore((s) => s.fileTree)
+  const activeFilePath = useWorkspaceStore((s) => s.activeFilePath)
+  const setActiveFilePath = useWorkspaceStore((s) => s.setActiveFilePath)
+  const { activeWorkspaceId, workspaces } = useWorkspaceStore()
+  const panelCollapsed = useAppStore((s) => s.panelCollapsed)
+  const togglePanel = useAppStore((s) => s.togglePanel)
+
+  const handleRefresh = useCallback(async () => {
+    if (!activeWorkspaceId) return
+    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
+    if (!ws) return
+    try {
+      const tree = (await window.electron.invoke('filetree:load', ws.path)) as FileNode[]
+      useWorkspaceStore.setState({ fileTree: tree })
+    } catch (err) {
+      console.error('Failed to refresh file tree:', err)
+    }
+  }, [activeWorkspaceId, workspaces])
+
+  return (
+    <aside
+      className="flex flex-col overflow-hidden"
+      style={{
+        background: 'rgba(26, 26, 26, 0.85)',
+        backdropFilter: 'blur(16px)',
+        borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
+      }}
+    >
+      {/* 展开态 */}
+      {!panelCollapsed && (
+        <>
+          {/* Tabs header */}
+          <div
+            className="flex items-center"
+            style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+          >
+            <div className="flex-1 flex">
+              {(['files', 'git', 'checkpoints'] as const).map((view) => (
+                <button
+                  key={view}
+                  onClick={() => setActiveView(view)}
+                  className="px-3 py-2 text-[11px] transition-colors relative"
+                  style={{
+                    color: activeView === view ? '#ff7830' : '#555',
+                  }}
+                >
+                  {view === 'files' ? '文件' : view === 'git' ? 'Git' : '还原点'}
+                  {activeView === view && (
+                    <div
+                      className="absolute bottom-0 left-2 right-2 h-px"
+                      style={{ background: '#ff7830' }}
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 items-center pr-2">
+              {activeView === 'files' && (
+                <button
+                  title="刷新"
+                  onClick={handleRefresh}
+                  className="w-[18px] h-[18px] rounded-[3px] flex items-center justify-center text-xs transition-colors hover:bg-[rgba(255,120,48,0.12)]"
+                  style={{
+                    background: 'rgba(255, 120, 48, 0.06)',
+                    border: '1px solid rgba(255, 120, 48, 0.15)',
+                    color: '#ff7830',
+                  }}
+                >
+                  ↻
+                </button>
+              )}
+              <button
+                onClick={togglePanel}
+                title="收起面板"
+                className="w-5 h-5 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+              >
+                <div
+                  className="w-[7px] h-[7px] transition-colors"
+                  style={{
+                    borderRight: '1.5px solid rgba(255, 255, 255, 0.2)',
+                    borderBottom: '1.5px solid rgba(255, 255, 255, 0.2)',
+                    transform: 'rotate(-45deg)',
+                  }}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Search box (files view only) */}
+          {activeView === 'files' && (
+            <div className="p-2">
+              <input
+                type="text"
+                className="w-full h-7 rounded px-2.5 text-xs transition-colors focus:outline-none focus:bg-[rgba(255,255,255,0.05)] focus:border-[rgba(255,120,48,0.4)]"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: '#d4d4d4',
+                }}
+                placeholder="搜索文件..."
+              />
+            </div>
+          )}
+
+          {/* Content */}
+          {activeView === 'files' ? (
+            <div className="flex-1 p-1.5 overflow-y-auto text-xs">
+              {fileTree.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <div className="text-[#555]">未加载工作区</div>
+                  <button
+                    onClick={handleRefresh}
+                    className="px-3 py-1.5 rounded text-[11px] transition-colors"
+                    style={{
+                      background: 'rgba(255, 120, 48, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      color: '#ff7830',
+                    }}
+                  >
+                    刷新
+                  </button>
+                </div>
+              ) : (
+                fileTree.map((node) => (
+                  <FileTreeItem
+                    key={node.path}
+                    node={node}
+                    depth={0}
+                    activeFilePath={activeFilePath}
+                    onSelect={setActiveFilePath}
+                  />
+                ))
+              )}
+            </div>
+          ) : activeView === 'git' ? (
+            <GitPanel />
+          ) : (
+            <CheckpointPanel />
+          )}
+        </>
+      )}
+
+      {/* 收起态 */}
+      {panelCollapsed && (
+        <div className="flex-1 flex flex-col items-center py-3 gap-2 overflow-hidden">
+          <button
+            onClick={togglePanel}
+            title="展开面板"
+            className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.04)] mb-1"
+          >
+            <div
+              className="w-[7px] h-[7px] transition-colors"
+              style={{
+                borderRight: '1.5px solid rgba(255, 255, 255, 0.2)',
+                borderBottom: '1.5px solid rgba(255, 255, 255, 0.2)',
+                transform: 'rotate(135deg)',
+              }}
+            />
+          </button>
+          <div
+            className="w-5 h-px"
+            style={{ background: 'rgba(255, 255, 255, 0.06)' }}
+          />
+          <span
+            className="select-none"
+            style={{
+              writingMode: 'vertical-rl',
+              textOrientation: 'mixed',
+              fontSize: '10px',
+              fontWeight: 500,
+              letterSpacing: '1.5px',
+              color: 'rgba(255, 255, 255, 0.2)',
+            }}
+          >
+            {activeView === 'files' ? '文件' : activeView === 'git' ? 'Git' : '还原点'}
+          </span>
+        </div>
+      )}
+    </aside>
+  )
+}

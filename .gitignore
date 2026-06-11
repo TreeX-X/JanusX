@@ -1,0 +1,20 @@
+node_modules/
+dist/
+dist-electron/
+release/
+out/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.local
+
+# Claude Code / Codex / Workflow
+.claude/
+.codex/
+.hybrid/
+CLAUDE.md
+
+# Design & Documentation (prototypes, tech proposals)
+design-mockups/
+docs/
