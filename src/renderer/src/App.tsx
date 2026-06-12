@@ -7,6 +7,7 @@ import { TerminalArea } from '@/components/TerminalArea'
 import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel } from '@/components/Panel'
 import { StatusBar } from '@/components/StatusBar'
+import { FileEditor } from '@/components/FileEditor'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
 
 export default function App() {
@@ -76,6 +77,7 @@ export default function App() {
         <Panel />
         <StatusBar />
       </div>
+      <FileEditor />
     </div>
   )
 }

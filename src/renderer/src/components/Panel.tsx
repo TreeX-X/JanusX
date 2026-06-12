@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
+import { useEditorStore } from '@/stores/editor'
 import { GitPanel } from '@/components/GitPanel'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
 import type { FileNode } from '@/types'
@@ -27,10 +28,23 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect }: FileTreeItemPro
     }
   }, [isFolder, onSelect, node.path])
 
+  const handleDoubleClick = useCallback(() => {
+    if (!isFolder) {
+      const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
+      const ws = workspaces.find(w => w.id === activeWorkspaceId)
+      if (ws) {
+        const separator = ws.path.includes('\\') ? '\\' : '/'
+        const absolutePath = ws.path + separator + node.path.split('/').join(separator)
+        useEditorStore.getState().openFile(absolutePath, ws.path)
+      }
+    }
+  }, [isFolder, node.path])
+
   return (
     <div>
       <div
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         className="py-[5px] px-2 mb-px rounded cursor-pointer transition-colors flex items-center gap-1.5 text-xs select-none"
         style={{
           paddingLeft: `${8 + depth * 16}px`,

@@ -27,6 +27,17 @@ body {
   height: 100vh;
 }
 
+/* 文本选中颜色 */
+::selection {
+  background: rgba(38, 79, 120, 0.35);
+}
+
+/* Monaco 编辑器选中颜色 — CSS 层面兜底 */
+.monaco-editor .selected-text,
+.monaco-editor .focused .selected-text {
+  background-color: rgba(38, 79, 120, 0.35) !important;
+}
+
 /* 滚动条 */
 ::-webkit-scrollbar {
   width: 5px;
@@ -73,4 +84,72 @@ body {
 @keyframes pulse-breathing {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* 灵动岛展开动画 — 从胶囊尺寸弹出 */
+@keyframes island-expand {
+  0% {
+    width: 110px;
+    height: 28px;
+    border-radius: 14px;
+    opacity: 0.8;
+  }
+  100% {
+    width: 530px;
+    height: 205px;
+    border-radius: 20px;
+    opacity: 1;
+  }
+}
+
+/* 灵动岛收合动画 — 缩回胶囊尺寸并淡出 */
+@keyframes island-collapse {
+  0% {
+    width: 530px;
+    height: 205px;
+    border-radius: 20px;
+    opacity: 1;
+  }
+  100% {
+    width: 110px;
+    height: 28px;
+    border-radius: 14px;
+    opacity: 0;
+  }
+}
+
+/* 遮罩层淡入 */
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 遮罩层淡出 */
+@keyframes backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* 模态框弹入 */
+@keyframes island-expand-modal {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 浮动面板弹入 */
+@keyframes file-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }

@@ -1,4 +1,5 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import type { Workspace, FileNode } from '@/types'
@@ -9,6 +10,8 @@ export function Sidebar() {
   const setLoadState = useAppStore((s) => s.setLoadState)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
+
+  const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null)
 
   const handleAddWorkspace = useCallback(async () => {
     try {
@@ -40,23 +43,28 @@ export function Sidebar() {
     }
   }, [addWorkspace, setActiveWorkspace, setLoadState])
 
-  const handleDelete = useCallback(
-    async (id: string, e: React.MouseEvent) => {
+  const handleDeleteClick = useCallback(
+    (ws: Workspace, e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!confirm('确认删除此工作区？')) return
-      try {
-        await window.electron.invoke('workspace:delete', id)
-        removeWorkspace(id)
-        if (workspaces.length <= 1) {
-          setLoadState('no-workspace')
-          useWorkspaceStore.setState({ fileTree: [], terminals: [], activeTerminalId: null })
-        }
-      } catch (err) {
-        console.error('Failed to delete workspace:', err)
-      }
+      setDeleteTarget(ws)
     },
-    [removeWorkspace, workspaces.length, setLoadState]
+    [],
   )
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return
+    try {
+      await window.electron.invoke('workspace:delete', deleteTarget.id)
+      removeWorkspace(deleteTarget.id)
+      if (workspaces.length <= 1) {
+        setLoadState('no-workspace')
+        useWorkspaceStore.setState({ fileTree: [], terminals: [], activeTerminalId: null })
+      }
+    } catch (err) {
+      console.error('Failed to delete workspace:', err)
+    }
+    setDeleteTarget(null)
+  }, [deleteTarget, removeWorkspace, workspaces.length, setLoadState])
 
   const handleSelect = useCallback(
     async (id: string) => {
@@ -156,7 +164,7 @@ export function Sidebar() {
                     {ws.name}
                   </span>
                   <button
-                    onClick={(e) => handleDelete(ws.id, e)}
+                    onClick={(e) => handleDeleteClick(ws, e)}
                     className="w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
                   >
                     ×
@@ -215,6 +223,137 @@ export function Sidebar() {
             </div>
           ))}
         </div>
+      )}
+      {/* 删除确认弹窗 — portal 到 body 级别，居窗口中央 */}
+      {deleteTarget && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{
+            background: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 1000,
+          }}
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="overflow-hidden"
+            style={{
+              width: 380,
+              background: 'rgba(22,22,22,0.98)',
+              border: '1px solid rgba(255,88,88,0.2)',
+              borderRadius: 8,
+              boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+              animation: 'island-expand-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="flex justify-between items-center"
+              style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              <div
+                className="font-semibold flex items-center"
+                style={{ fontSize: 13, color: '#fff', gap: 6 }}
+              >
+                <span style={{ color: '#ff5858' }}>&#9888;</span>
+                删除工作区
+              </div>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="cursor-pointer transition-colors"
+                style={{ color: '#666', fontSize: 18, background: 'none', border: 'none' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#ff7830' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#666' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '16px 16px 20px' }}>
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 14, lineHeight: 1.6 }}>
+                确认删除工作区{' '}
+                <strong style={{ color: '#fff' }}>{deleteTarget.name}</strong>
+                {' '}吗？此操作不会删除磁盘上的文件，但会移除该工作区下的所有终端会话和还原点记录。
+              </div>
+
+              <div
+                style={{
+                  padding: '8px 10px',
+                  background: 'rgba(255,88,88,0.06)',
+                  border: '1px solid rgba(255,88,88,0.12)',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  color: '#c0848a',
+                  lineHeight: 1.5,
+                }}
+              >
+                <span style={{ color: '#ff5858', marginRight: 4 }}>&#8226;</span>
+                终端快照和 Checkpoint 数据将被清除
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              className="flex justify-end"
+              style={{
+                padding: '10px 16px',
+                borderTop: '1px solid rgba(255,255,255,0.06)',
+                gap: 8,
+              }}
+            >
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="rounded cursor-pointer transition-colors"
+                style={{
+                  height: 28,
+                  padding: '0 14px',
+                  fontSize: 11,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#999',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                  e.currentTarget.style.color = '#ccc'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                  e.currentTarget.style.color = '#999'
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="rounded cursor-pointer transition-colors"
+                style={{
+                  height: 28,
+                  padding: '0 14px',
+                  fontSize: 11,
+                  background: 'rgba(255,88,88,0.12)',
+                  border: '1px solid rgba(255,88,88,0.3)',
+                  color: '#ff5858',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,88,88,0.22)'
+                  e.currentTarget.style.borderColor = 'rgba(255,88,88,0.5)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,88,88,0.12)'
+                  e.currentTarget.style.borderColor = 'rgba(255,88,88,0.3)'
+                }}
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </aside>
   )

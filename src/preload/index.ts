@@ -36,6 +36,10 @@ const ALLOWED_INVOKE_CHANNELS = [
   'checkpoint:diff:all',
   'checkpoint:delete',
   'checkpoint:clearAll',
+  'file:read',
+  'file:save',
+  'file:readBinary',
+  'file:stat',
 ]
 
 const ALLOWED_SEND_CHANNELS = [

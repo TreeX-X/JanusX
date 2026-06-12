@@ -81,3 +81,21 @@ export interface GitStatus {
   changes: GitFileChange[]
   clean: boolean
 }
+
+// ── File Editor types ──
+
+export type FileViewType = 'code' | 'markdown' | 'html' | 'image' | 'binary'
+
+export interface OpenFile {
+  id: string
+  name: string
+  path: string
+  absolutePath: string
+  viewType: FileViewType
+  content: string
+  base64?: string
+  mimeType?: string
+  isDirty: boolean
+  isLoading: boolean
+  error?: string
+}

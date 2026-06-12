@@ -7,6 +7,8 @@ import { BlobStore } from './blob-store'
 import { GitAdapter } from './git-adapter'
 import { generateUnifiedDiff, threeWayMerge, parseConflictMarkers } from './diff-engine'
 
+const MAX_CHECKPOINTS = 40
+
 export class CheckpointManager {
   private checkpoints = new Map<string, ConversationCheckpoint>()
   private blobStore!: BlobStore
@@ -32,8 +34,8 @@ export class CheckpointManager {
     this.workspacePath = workspacePath
     this.storagePath = newPath
 
-    // Clear stale checkpoints from previous sessions
-    await this.clearAll()
+    // Clear stale checkpoint files from previous sessions (disk only, safe — memory is empty)
+    await this.clearDiskCheckpoints()
 
     await mkdir(join(this.storagePath, 'blobs'), { recursive: true })
     this.blobStore = new BlobStore(join(this.storagePath, 'blobs'))
@@ -81,6 +83,10 @@ export class CheckpointManager {
 
     this.checkpoints.set(id, checkpoint)
     await this.saveCheckpoint(checkpoint)
+
+    // Auto-prune oldest checkpoints beyond retention limit (fire-and-forget)
+    this.pruneOldCheckpoints().catch(() => {})
+
     return checkpoint
   }
 
@@ -197,6 +203,34 @@ export class CheckpointManager {
     if (checkpoint.stashRef && this.workspacePath) {
       await this.gitAdapter.stashDrop(this.workspacePath, checkpoint.stashRef).catch(() => {})
     }
+  }
+
+  /** Evict oldest finalized checkpoints beyond MAX_CHECKPOINTS. */
+  private async pruneOldCheckpoints(): Promise<void> {
+    const finalized = Array.from(this.checkpoints.values())
+      .filter(cp => cp.status === 'finalized')
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+
+    const excess = finalized.length - MAX_CHECKPOINTS
+    if (excess <= 0) return
+
+    const toRemove = finalized.slice(0, excess)
+    for (const cp of toRemove) {
+      await this.deleteCheckpoint(cp.id)
+    }
+  }
+
+  /** Startup cleanup: delete checkpoint JSON files from disk only. No stash or memory operations. */
+  private async clearDiskCheckpoints(): Promise<void> {
+    try {
+      const files = await readdir(this.storagePath)
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue
+        try {
+          await unlink(join(this.storagePath, file))
+        } catch { /* skip locked or missing files */ }
+      }
+    } catch { /* directory may not exist yet — first run, nothing to clear */ }
   }
 
   async clearAll(): Promise<void> {

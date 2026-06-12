@@ -7,6 +7,7 @@ import { registerTerminalHandlers } from './ipc/terminal-handlers'
 import { registerGitHandlers } from './ipc/git-handlers'
 import { registerAgentHandlers } from './ipc/agent-handlers'
 import { registerCheckpointHandlers } from './ipc/checkpoint-handlers'
+import { registerFileHandlers } from './ipc/file-handlers'
 import { terminalManager } from './terminal/manager'
 import { agentStreamManager } from './agent/stream-manager'
 
@@ -38,6 +39,7 @@ function createWindow(): void {
   registerGitHandlers()
   registerAgentHandlers(mainWindow)
   registerCheckpointHandlers()
+  registerFileHandlers()
 
   // 窗口控制 IPC
   ipcMain.handle('window:minimize', () => {

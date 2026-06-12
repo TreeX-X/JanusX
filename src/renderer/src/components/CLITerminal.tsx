@@ -20,7 +20,7 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
         foreground: '#d4d4d4',
         cursor: '#ff7830',
         cursorAccent: '#121212',
-        selectionBackground: 'rgba(255, 120, 48, 0.2)',
+        selectionBackground: 'rgba(100, 140, 200, 0.25)',
         black: '#27272a',
         red: '#dc2626',
         green: '#16a34a',
@@ -55,6 +55,43 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
 
+    // 剪贴板快捷键拦截
+    let skipNextInput = false
+
+    term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey
+      if (!isCtrl) return true
+
+      // Ctrl+C — 有选中内容时复制，否则放行（发送 \x03 中断信号）
+      if (e.key === 'c') {
+        if (term.hasSelection()) {
+          navigator.clipboard.writeText(term.getSelection())
+          e.preventDefault()
+          return false
+        }
+        return true
+      }
+
+      // Ctrl+V — 从剪贴板粘贴（term.paste 会触发 onData，用标志位跳过重复发送）
+      if (e.key === 'v') {
+        navigator.clipboard.readText().then((text) => {
+          if (text) {
+            skipNextInput = true
+            term.paste(text)
+          }
+        })
+        return false
+      }
+
+      // Ctrl+A — 全选
+      if (e.key === 'a') {
+        term.selectAll()
+        return false
+      }
+
+      return true
+    })
+
     // 延迟 fit 确保 DOM 已渲染
     requestAnimationFrame(() => fitAddon.fit())
 
@@ -79,10 +116,12 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     let inCSI = false
 
     term.onData((data) => {
-      // Always forward raw input to PTY
-      window.electron.send('terminal:input', { id: terminalId, data })
+      // 粘贴时 term.paste() 已将文本发送给 PTY，跳过重复转发
+      const pasted = skipNextInput
+      if (pasted) skipNextInput = false
+      else window.electron.send('terminal:input', { id: terminalId, data })
 
-      // Track user input for checkpoint system
+      // Track user input for checkpoint system (无论是否粘贴都要追踪)
       for (const ch of data) {
         const code = ch.charCodeAt(0)
 
