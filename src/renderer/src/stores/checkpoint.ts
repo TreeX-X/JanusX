@@ -9,6 +9,7 @@ export interface CheckpointSummary {
   branch: string
   prompt: string
   fileCount: number
+  changedFileCount: number
   status: 'pending' | 'finalized'
 }
 
@@ -29,6 +30,7 @@ interface CheckpointStore {
   createCheckpoint: (options: { terminalId: string; engine: string; prompt: string; cwd: string }) => Promise<void>
   restoreCheckpoint: (checkpointId: string, cwd: string) => Promise<void>
   fetchDiff: (checkpointId: string, filePath: string) => Promise<void>
+  fetchAllDiffs: (checkpointId: string) => Promise<void>
   deleteCheckpoint: (checkpointId: string) => Promise<void>
   setSelected: (checkpoint: CheckpointSummary | null) => void
   clearConflicts: () => void
@@ -87,6 +89,19 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
       })) as string
       set((state) => ({
         diffs: { ...state.diffs, [`${checkpointId}:${filePath}`]: diff },
+      }))
+    } catch (err) {
+      set({ error: (err as Error).message })
+    }
+  },
+
+  fetchAllDiffs: async (checkpointId) => {
+    try {
+      const diff = (await window.electron.invoke('checkpoint:diff:all', {
+        checkpointId,
+      })) as string
+      set((state) => ({
+        diffs: { ...state.diffs, [`${checkpointId}:`]: diff },
       }))
     } catch (err) {
       set({ error: (err as Error).message })

@@ -74,8 +74,64 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     observer.observe(containerRef.current)
 
     // 输入 → IPC
+    let inputLine = ''
+    let inEsc = false
+    let inCSI = false
+
     term.onData((data) => {
+      // Always forward raw input to PTY
       window.electron.send('terminal:input', { id: terminalId, data })
+
+      // Track user input for checkpoint system
+      for (const ch of data) {
+        const code = ch.charCodeAt(0)
+
+        // ESC — start of escape sequence
+        if (code === 0x1b) {
+          inEsc = true
+          inCSI = false
+          continue
+        }
+
+        // After ESC: '[' starts CSI, other byte ends the sequence
+        if (inEsc && !inCSI) {
+          if (code === 0x5b) {
+            inCSI = true
+          } else {
+            inEsc = false
+          }
+          continue
+        }
+
+        // Inside CSI — skip until final letter
+        if (inCSI) {
+          if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) {
+            inEsc = false
+            inCSI = false
+          }
+          continue
+        }
+
+        // Enter — submit the line
+        if (ch === '\r') {
+          if (inputLine.length > 0) {
+            window.electron.send('terminal:submit-line', { id: terminalId, text: inputLine })
+          }
+          inputLine = ''
+          continue
+        }
+
+        // Backspace
+        if (code === 0x7f || code === 0x08) {
+          inputLine = inputLine.slice(0, -1)
+          continue
+        }
+
+        // Regular character (including Chinese and all Unicode)
+        if (code >= 0x20) {
+          inputLine += ch
+        }
+      }
     })
 
     // 输出 ← IPC

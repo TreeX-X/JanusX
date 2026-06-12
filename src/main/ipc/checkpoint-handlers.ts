@@ -32,6 +32,7 @@ export function registerCheckpointHandlers(): void {
       branch: cp.branch,
       prompt: cp.prompt,
       fileCount: Object.keys(cp.filesSnapshot).length,
+      changedFileCount: 0,
       status: cp.status,
     }
   })
@@ -57,6 +58,7 @@ export function registerCheckpointHandlers(): void {
       branch: cp.branch,
       prompt: cp.prompt,
       fileCount: Object.keys(cp.filesSnapshot).length,
+      changedFileCount: Object.values(cp.filesSnapshot).filter(s => s.afterHash && s.afterHash !== s.beforeHash).length,
       status: cp.status,
     }))
   })
@@ -65,8 +67,17 @@ export function registerCheckpointHandlers(): void {
     return checkpointManager.getDiff(checkpointId, filePath)
   })
 
+  ipcMain.handle('checkpoint:diff:all', async (_event, { checkpointId }: { checkpointId: string }) => {
+    return checkpointManager.getAllDiffs(checkpointId)
+  })
+
   ipcMain.handle('checkpoint:delete', async (_event, { checkpointId }: { checkpointId: string }) => {
     await checkpointManager.deleteCheckpoint(checkpointId)
+    return { success: true }
+  })
+
+  ipcMain.handle('checkpoint:clearAll', async () => {
+    await checkpointManager.clearAll()
     return { success: true }
   })
 }

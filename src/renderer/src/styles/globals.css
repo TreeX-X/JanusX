@@ -68,3 +68,9 @@ body {
 .titlebar-no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* 灵动岛脉冲呼吸动画 */
+@keyframes pulse-breathing {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}

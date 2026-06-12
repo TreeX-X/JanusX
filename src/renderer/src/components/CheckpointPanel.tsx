@@ -49,7 +49,7 @@ export function CheckpointPanel() {
     restoreCheckpoint,
     deleteCheckpoint,
     diffs,
-    fetchDiff,
+    fetchAllDiffs,
     conflicts,
     clearConflicts,
     subscribeToEvents,
@@ -59,6 +59,7 @@ export function CheckpointPanel() {
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [restoreTarget, setRestoreTarget] = useState<CheckpointSummary | null>(null)
+  const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchCheckpoints()
@@ -88,12 +89,12 @@ export function CheckpointPanel() {
         setExpandedDiffId(null)
       } else {
         if (!diffs[key]) {
-          fetchDiff(cpId, '')
+          fetchAllDiffs(cpId)
         }
         setExpandedDiffId(key)
       }
     },
-    [diffs, fetchDiff, expandedDiffId],
+    [diffs, fetchAllDiffs, expandedDiffId],
   )
 
   return (
@@ -243,7 +244,7 @@ export function CheckpointPanel() {
                 }}
               >
                 {/* Header */}
-                <div className="flex justify-between" style={{ marginBottom: 4 }}>
+                <div className="flex justify-between items-center" style={{ marginBottom: 4 }}>
                   <span
                     className="font-bold rounded"
                     style={{
@@ -263,11 +264,11 @@ export function CheckpointPanel() {
                       fontFamily: "'SF Mono', monospace",
                     }}
                   >
-                    #对话 {cp.conversationIndex}
+                    #{cp.conversationIndex}
                   </span>
                 </div>
 
-                {/* Prompt */}
+                {/* Prompt / Terminal conversation content */}
                 <div
                   style={{
                     fontSize: 12,
@@ -275,10 +276,60 @@ export function CheckpointPanel() {
                     lineHeight: 1.4,
                     marginBottom: 6,
                     wordBreak: 'break-all',
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: expandedPromptId === cp.id ? 'none' : 42,
+                    overflow: 'hidden',
+                    position: 'relative',
                   }}
                 >
-                  {cp.prompt.length > 60 ? cp.prompt.slice(0, 60) + '...' : cp.prompt}
+                  {cp.prompt}
+                  {cp.prompt.length > 80 && expandedPromptId !== cp.id && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        paddingLeft: 16,
+                        background: 'linear-gradient(90deg, transparent, rgba(18,18,18,0.95) 40%)',
+                      }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setExpandedPromptId(cp.id)
+                        }}
+                        style={{
+                          fontSize: 10,
+                          color: '#ff7830',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        展开
+                      </button>
+                    </span>
+                  )}
                 </div>
+                {cp.prompt.length > 80 && expandedPromptId === cp.id && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setExpandedPromptId(null)
+                    }}
+                    style={{
+                      fontSize: 10,
+                      color: '#ff7830',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      marginBottom: 4,
+                      padding: 0,
+                    }}
+                  >
+                    收起
+                  </button>
+                )}
 
                 {/* Files summary */}
                 <div
@@ -293,9 +344,11 @@ export function CheckpointPanel() {
                 >
                   <div className="flex justify-between">
                     <span className="overflow-hidden overflow-ellipsis whitespace-nowrap">
-                      {cp.fileCount} 个文件变更
+                      {cp.status === 'finalized' ? cp.changedFileCount : '—'} 个文件变更
                     </span>
-                    <span style={{ color: '#4ec9b0' }}>+{cp.fileCount}</span>
+                    {cp.status === 'finalized' && cp.changedFileCount > 0 && (
+                      <span style={{ color: '#4ec9b0' }}>+{cp.changedFileCount}</span>
+                    )}
                   </div>
                 </div>
 

@@ -33,12 +33,15 @@ const ALLOWED_INVOKE_CHANNELS = [
   'checkpoint:restore',
   'checkpoint:list',
   'checkpoint:diff',
+  'checkpoint:diff:all',
   'checkpoint:delete',
+  'checkpoint:clearAll',
 ]
 
 const ALLOWED_SEND_CHANNELS = [
   'terminal:input',
   'terminal:resize',
+  'terminal:submit-line',
 ]
 
 const ALLOWED_ON_CHANNELS = [

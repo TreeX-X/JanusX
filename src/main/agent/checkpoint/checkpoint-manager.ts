@@ -12,6 +12,7 @@ export class CheckpointManager {
   private blobStore!: BlobStore
   private gitAdapter = new GitAdapter()
   private storagePath = ''
+  private workspacePath = ''
   private conversationCounters = new Map<string, number>()
 
   async initialize(workspacePath: string): Promise<void> {
@@ -23,7 +24,17 @@ export class CheckpointManager {
       throw new Error(`工作区路径不存在或不是目录: ${workspacePath}`)
     }
 
-    this.storagePath = join(workspacePath, '.switchx', 'checkpoints')
+    const newPath = join(workspacePath, '.switchx', 'checkpoints')
+
+    // Only clear + reinitialize if this is a new workspace or first init
+    if (this.storagePath === newPath) return
+
+    this.workspacePath = workspacePath
+    this.storagePath = newPath
+
+    // Clear stale checkpoints from previous sessions
+    await this.clearAll()
+
     await mkdir(join(this.storagePath, 'blobs'), { recursive: true })
     this.blobStore = new BlobStore(join(this.storagePath, 'blobs'))
     await this.blobStore.initialize()
@@ -39,11 +50,14 @@ export class CheckpointManager {
     const currentIndex = (this.conversationCounters.get(counterKey) ?? 0) + 1
     this.conversationCounters.set(counterKey, currentIndex)
 
-    // Snapshot tracked files
+    // Stash FIRST to get a clean working directory, then snapshot HEAD state
+    const stashRef = await this.gitAdapter.stashPush(options.cwd, `switchx:${options.terminalId}:${id}`)
+
+    // Snapshot tracked files (now against clean HEAD)
     const files: Record<string, FileSnapshot> = {}
     const trackedFiles = await this.gitAdapter.listTrackedFiles(options.cwd)
 
-    for (const filePath of trackedFiles.slice(0, 200)) { // limit to 200 files for performance
+    for (const filePath of trackedFiles.slice(0, 200)) {
       try {
         const fullPath = join(options.cwd, filePath)
         const content = await readFile(fullPath)
@@ -51,9 +65,6 @@ export class CheckpointManager {
         files[filePath] = { beforeHash: hash }
       } catch { /* file may be inaccessible */ }
     }
-
-    // Create git stash
-    const stashRef = await this.gitAdapter.stashPush(options.cwd, `switchx:${options.terminalId}:${id}`)
 
     const checkpoint: ConversationCheckpoint = {
       id,
@@ -71,6 +82,30 @@ export class CheckpointManager {
     this.checkpoints.set(id, checkpoint)
     await this.saveCheckpoint(checkpoint)
     return checkpoint
+  }
+
+  /**
+   * Atomically finalize the previous checkpoint (if any) and create a new one.
+   * This prevents race conditions between separate finalize and create calls.
+   */
+  async finalizeAndCreateCheckpoint(
+    previousCheckpointId: string | null,
+    options: CheckpointCreateOptions,
+  ): Promise<{ finalized: boolean; checkpoint: ConversationCheckpoint }> {
+    // Step 1: Finalize previous checkpoint FIRST (reads current file state before stash)
+    let finalized = false
+    if (previousCheckpointId) {
+      try {
+        await this.finalizeCheckpoint(previousCheckpointId, options.cwd)
+        finalized = true
+      } catch (err) {
+        console.error('Checkpoint finalize failed (continuing with create):', err)
+      }
+    }
+
+    // Step 2: Create new checkpoint (stashes changes, snapshots clean state)
+    const checkpoint = await this.createCheckpoint(options)
+    return { finalized, checkpoint }
   }
 
   async finalizeCheckpoint(checkpointId: string, cwd: string): Promise<void> {
@@ -159,9 +194,26 @@ export class CheckpointManager {
     } catch { /* may not exist */ }
 
     // Drop git stash if exists
-    if (checkpoint.stashRef) {
-      await this.gitAdapter.stashDrop('', checkpoint.stashRef).catch(() => {})
+    if (checkpoint.stashRef && this.workspacePath) {
+      await this.gitAdapter.stashDrop(this.workspacePath, checkpoint.stashRef).catch(() => {})
     }
+  }
+
+  async clearAll(): Promise<void> {
+    const all = Array.from(this.checkpoints.values())
+    for (const cp of all) {
+      if (cp.stashRef && this.workspacePath) {
+        await this.gitAdapter.stashDrop(this.workspacePath, cp.stashRef).catch(() => {})
+      }
+      try {
+        await unlink(join(this.storagePath, `${cp.id}.json`))
+      } catch { /* may not exist */ }
+    }
+    this.checkpoints.clear()
+    this.conversationCounters.clear()
+    try {
+      await unlink(join(this.storagePath, 'index.json'))
+    } catch { /* may not exist */ }
   }
 
   async getDiff(checkpointId: string, filePath: string): Promise<string> {
@@ -170,6 +222,18 @@ export class CheckpointManager {
     const snapshot = checkpoint.filesSnapshot[filePath]
     if (!snapshot?.diff) return ''
     return snapshot.diff
+  }
+
+  async getAllDiffs(checkpointId: string): Promise<string> {
+    const checkpoint = this.checkpoints.get(checkpointId)
+    if (!checkpoint) return ''
+    const parts: string[] = []
+    for (const [filePath, snapshot] of Object.entries(checkpoint.filesSnapshot)) {
+      if (snapshot.diff) {
+        parts.push(snapshot.diff)
+      }
+    }
+    return parts.join('\n')
   }
 
   private async saveCheckpoint(checkpoint: ConversationCheckpoint): Promise<void> {
