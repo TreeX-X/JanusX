@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import os from 'os'
 
 const ALLOWED_INVOKE_CHANNELS = [
   'workspace:list',
@@ -59,6 +60,12 @@ const ALLOWED_ON_CHANNELS = [
 ]
 
 contextBridge.exposeInMainWorld('electron', {
+  /*-- 同步暴露平台与 Windows build 号，供渲染端构造 xterm windowsPty 用 --*/
+  /*-- preload 在 Node 环境，可同步读取；os.release() 形如 "10.0.22621"，第三段为 build 号 --*/
+  platform: process.platform,
+  windowsBuild:
+    process.platform === 'win32' ? Number(os.release().split('.')[2]) || undefined : undefined,
+
   invoke: (channel: string, ...args: unknown[]) => {
     if (ALLOWED_INVOKE_CHANNELS.includes(channel)) {
       return ipcRenderer.invoke(channel, ...args)

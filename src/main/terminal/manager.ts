@@ -13,6 +13,10 @@ class TerminalManager {
       rows: 30,
       cwd: config.cwd,
       env: process.env as Record<string, string>,
+      /*-- 显式启用 ConPTY（build≥18309 默认开，显式更稳妥），Windows 有效，非 Windows 忽略 --*/
+      useConpty: true,
+      /*-- 用 node-pty 自带的新版 conpty.dll，启用 reflowCursorLine 的前提，对齐 VS Code --*/
+      useConptyDll: true,
     })
 
     const instance: TerminalInstance = {

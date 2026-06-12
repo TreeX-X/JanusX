@@ -14,6 +14,17 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
   useEffect(() => {
     if (!containerRef.current) return
 
+    /*-- Windows 下传 windowsPty，让 xterm 按 ConPTY 模式处理行重排/光标语义，修正 IME 定位，对齐 VS Code --*/
+    /*-- platform/windowsBuild 由 preload 同步暴露；非 Windows 传 undefined，零回归 --*/
+    const windowsPty =
+      window.electron.platform === 'win32'
+        ? { backend: 'conpty' as const, buildNumber: window.electron.windowsBuild }
+        : undefined
+
+    /*-- 仅 Windows + conpty 时启用：xterm 行重排时把光标放到正确行，helper-textarea --*/
+    /*-- （IME 候选栏锚点）随之贴住光标，修正候选栏定位。issue #274372，前提是 useConptyDll --*/
+    const reflowCursorLine = windowsPty?.backend === 'conpty'
+
     const term = new Terminal({
       theme: {
         background: '#121212',
@@ -49,6 +60,8 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
       cursorWidth: 2,
       scrollback: 5000,
       allowTransparency: true,
+      windowsPty,
+      reflowCursorLine,
     })
 
     const fitAddon = new FitAddon()
