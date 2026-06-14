@@ -41,6 +41,17 @@ const ALLOWED_INVOKE_CHANNELS = [
   'file:save',
   'file:readBinary',
   'file:stat',
+  'project:detect',
+  'project:detect-with-details',
+  'project:config:read',
+  'project:config:write',
+  'project:config:create-default',
+  'project:config:validate',
+  'project:run',
+  'project:stop',
+  'project:list',
+  'project:get',
+  'project:schemas',
 ]
 
 const ALLOWED_SEND_CHANNELS = [

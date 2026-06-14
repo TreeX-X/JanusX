@@ -1,0 +1,212 @@
+/**
+ * src/renderer/src/components/ProjectConfigForm/QuickConfigForm.module.css
+ * 快速配置表单样式
+ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* 配置选择 */
+.configSelector {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.configTab {
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.configTab:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.configTab.active {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: rgba(255, 120, 48, 0.08);
+}
+
+/* 字段列表 */
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.required {
+  color: #ff6b6b;
+  font-size: 11px;
+}
+
+.input {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'SF Mono', 'Cascadia Code', monospace;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.input:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.input::placeholder {
+  color: #444;
+}
+
+.select {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.select:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.description {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* 数组编辑器 */
+.arrayEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arrayItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arrayItem .input {
+  flex: 1;
+}
+
+.removeBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.removeBtn:hover {
+  background: rgba(255, 88, 88, 0.1);
+  border-color: rgba(255, 88, 88, 0.25);
+  color: #ff5858;
+}
+
+.addBtn {
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.addBtn:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 对象编辑器 */
+.objectEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.objectEntry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.objectEntry .input {
+  flex: 1;
+}
+
+.equals {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 提示 */
+.hint {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.hint p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}

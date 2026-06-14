@@ -3,7 +3,7 @@ import { useAppStore } from '@/stores/app'
 
 export function StatusBar() {
   const { terminals, activeWorkspaceId, workspaces } = useWorkspaceStore()
-  const { loadState } = useAppStore()
+  const { loadState, blueprintMode } = useAppStore()
 
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId)
 
@@ -34,7 +34,7 @@ export function StatusBar() {
           />
           <span>已连接</span>
         </div>
-        <span>{statusText[loadState] ?? '就绪'}</span>
+        <span>{blueprintMode ? '蓝图画布引擎运行中' : (statusText[loadState] ?? '就绪')}</span>
         {workspace && <span>{workspace.name}</span>}
       </div>
       <div className="flex items-center gap-2.5">

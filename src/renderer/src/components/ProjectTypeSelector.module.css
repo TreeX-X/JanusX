@@ -1,0 +1,76 @@
+/**
+ * src/renderer/src/components/ProjectTypeSelector.module.css
+ */
+
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.typeItem {
+  position: relative;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.typeItem:hover {
+  background: rgba(255, 120, 48, 0.05);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.typeItem.selected {
+  background: rgba(255, 120, 48, 0.1);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.typeContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.typeName {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.autoBadge {
+  font-size: 10px;
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, 0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 400;
+}
+
+.typeDesc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.checkmark {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 14px;
+}

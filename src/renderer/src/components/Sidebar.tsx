@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
+import { ProjectLauncher } from './ProjectLauncher'
 import type { Workspace, FileNode } from '@/types'
 
 export function Sidebar() {
@@ -12,6 +13,10 @@ export function Sidebar() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
 
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null)
+  const [longPressingId, setLongPressingId] = useState<string | null>(null)
+  const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pressTargetRef = useRef<string | null>(null)
 
   const handleAddWorkspace = useCallback(async () => {
     try {
@@ -86,6 +91,32 @@ export function Sidebar() {
     [setActiveWorkspace, setLoadState, workspaces]
   )
 
+  const cancelLongPress = useCallback(() => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current)
+      pressTimerRef.current = null
+    }
+    if (pressTargetRef.current) {
+      setLongPressingId(null)
+      pressTargetRef.current = null
+    }
+  }, [])
+
+  const handlePointerDown = useCallback(
+    (ws: Workspace, e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      if ((e.target as HTMLElement).closest('.ws-del')) return
+      pressTargetRef.current = ws.id
+      setLongPressingId(ws.id)
+      pressTimerRef.current = setTimeout(() => {
+        setLongPressingId(null)
+        pressTargetRef.current = null
+        setConfigTarget(ws)
+      }, 450)
+    },
+    [],
+  )
+
   return (
     <aside
       className="flex flex-col overflow-hidden"
@@ -141,7 +172,11 @@ export function Sidebar() {
                 <div
                   key={ws.id}
                   onClick={() => handleSelect(ws.id)}
-                  className="p-[9px] px-3 mb-px rounded-md cursor-pointer transition-all flex items-center gap-2.5 text-[13px] relative group"
+                  onPointerDown={(e) => handlePointerDown(ws, e)}
+                  onPointerUp={cancelLongPress}
+                  onPointerLeave={cancelLongPress}
+                  onPointerCancel={cancelLongPress}
+                  className={`ws p-[9px] px-3 mb-px rounded-md cursor-pointer transition-all flex items-center gap-2.5 text-[13px] relative group${longPressingId === ws.id ? ' long-pressing' : ''}`}
                   style={{
                     color: ws.id === activeWorkspaceId ? '#ff7830' : '#999',
                     background:
@@ -165,7 +200,7 @@ export function Sidebar() {
                   </span>
                   <button
                     onClick={(e) => handleDeleteClick(ws, e)}
-                    className="w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
+                    className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
                   >
                     ×
                   </button>
@@ -201,8 +236,12 @@ export function Sidebar() {
             <div
               key={ws.id}
               onClick={() => handleSelect(ws.id)}
+              onPointerDown={(e) => handlePointerDown(ws, e)}
+              onPointerUp={cancelLongPress}
+              onPointerLeave={cancelLongPress}
+              onPointerCancel={cancelLongPress}
               title={ws.name}
-              className="w-8 h-7 flex items-center justify-center cursor-pointer transition-all relative"
+              className={`ws w-8 h-7 flex items-center justify-center cursor-pointer transition-all relative${longPressingId === ws.id ? ' long-pressing' : ''}`}
             >
               {ws.id === activeWorkspaceId && (
                 <div
@@ -350,6 +389,56 @@ export function Sidebar() {
               >
                 删除
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+      {/* 工作区启动配置弹窗 */}
+      {configTarget && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{
+            background: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 1000,
+          }}
+          onClick={() => setConfigTarget(null)}
+        >
+          <div
+            className="ws-config-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="flex justify-between items-center"
+              style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              <div
+                className="font-semibold flex items-center"
+                style={{ fontSize: 13, color: '#fff', gap: 8 }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d4d4d4" strokeWidth="2">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
+                <span>工作区启动配置</span>
+              </div>
+              <button
+                onClick={() => setConfigTarget(null)}
+                className="cursor-pointer transition-colors"
+                style={{ color: '#666', fontSize: 18, background: 'none', border: 'none' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#ff7830' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#666' }}
+              >
+                &times;
+              </button>
+            </div>
+            {/* Body */}
+            <div style={{ padding: '0', overflow: 'hidden', flex: 1 }}>
+              <ProjectLauncher projectPath={configTarget.path} />
             </div>
           </div>
         </div>,

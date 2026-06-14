@@ -153,3 +153,175 @@ body {
     transform: scale(1) translateY(0);
   }
 }
+
+/* ════════════════════════════════════════════════════════════
+   工作区配置 / 项目启动弹窗 shell
+   ════════════════════════════════════════════════════════════ */
+.ws-config-modal {
+  width: 720px;
+  max-height: 80vh;
+  background: rgba(18, 18, 18, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: island-expand-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.ws-config-modal .ws-config-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ws-config-modal .ws-config-ws-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.ws-config-modal .ws-config-ws-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 120, 48, 0.1);
+  border-radius: 6px;
+  color: #ff7830;
+}
+
+.ws-config-modal .ws-config-ws-name { font-size: 13px; font-weight: 600; color: #e4e4e7; }
+.ws-config-modal .ws-config-ws-path { font-size: 11px; color: #71717a; font-family: 'SF Mono', monospace; margin-top: 2px; }
+.ws-config-modal .ws-config-section { display: flex; flex-direction: column; gap: 8px; }
+.ws-config-modal .ws-config-label { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; color: #888; }
+.ws-config-modal .ws-config-row { display: flex; gap: 10px; }
+.ws-config-modal .ws-config-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.ws-config-modal .ws-config-field-label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.3px; }
+.ws-config-modal .ws-config-select {
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  color: #d4d4d4;
+  font-size: 12px;
+  outline: none;
+}
+.ws-config-modal .ws-config-select:focus { border-color: rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.05); }
+.ws-config-modal .ws-config-detected { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #666; padding: 2px 0; }
+.ws-config-modal .ws-config-detected-dot { width: 5px; height: 5px; border-radius: 50%; background: #4ec9b0; }
+.ws-config-modal .ws-config-cmds { display: flex; flex-direction: column; gap: 8px; }
+.ws-config-modal .ws-config-cmd {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+}
+.ws-config-modal .ws-config-cmd:hover { border-color: rgba(255, 255, 255, 0.15); }
+.ws-config-modal .ws-config-cmd-head { display: flex; align-items: center; gap: 6px; }
+.ws-config-modal .ws-config-cmd-icon { font-size: 11px; font-family: 'SF Mono', monospace; color: #888; font-weight: bold; width: 14px; text-align: center; }
+.ws-config-modal .ws-config-cmd-name {
+  flex: 1;
+  background: none; border: none; color: #d4d4d4; font-size: 12px; font-weight: 500; outline: none;
+}
+.ws-config-modal .ws-config-cmd-default {
+  font-size: 9px; color: #4ec9b0; background: rgba(78, 201, 176, 0.12); padding: 1px 5px; border-radius: 3px;
+}
+.ws-config-modal .ws-config-cmd-del {
+  background: none; border: none; color: #555; cursor: pointer; font-size: 14px; padding: 0 4px;
+}
+.ws-config-modal .ws-config-cmd-del:hover { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+.ws-config-modal .ws-config-cmd-row { display: flex; gap: 6px; }
+.ws-config-modal .ws-config-cmd-input {
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: #999; font-size: 11px; font-family: 'SF Mono', monospace; flex: 1; outline: none;
+}
+.ws-config-modal .ws-config-cmd-input:focus { border-color: rgba(255, 255, 255, 0.25); color: #fff; }
+.ws-config-modal .ws-config-add-cmd, .ws-config-modal .ws-config-add-env {
+  padding: 6px 0;
+  background: none; border: none; color: #555; font-size: 11px; cursor: pointer; text-align: left;
+}
+.ws-config-modal .ws-config-add-cmd:hover, .ws-config-modal .ws-config-add-env:hover { color: #d4d4d4; }
+.ws-config-modal .ws-config-env-row { display: flex; gap: 6px; align-items: center; }
+.ws-config-modal .ws-config-env-input {
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: #999; font-size: 11px; font-family: 'SF Mono', monospace; flex: 1; outline: none;
+}
+
+/* pulse-dot 动画（JsonEditor loading 用） */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/*-- 长按工作区视觉反馈：径向渐变波纹从中心扩散 --*/
+.ws.long-pressing {
+  color: #fff !important;
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: inset 0 0 15px rgba(255, 120, 48, 0.2);
+  transition: all 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  overflow: hidden;
+}
+
+.ws.long-pressing::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(255, 120, 48, 0.4) 0%, transparent 60%);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  animation: ws-awaken 0.45s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes ws-awaken {
+  0% { width: 0; height: 0; opacity: 1; }
+  100% { width: 250px; height: 250px; opacity: 0.3; }
+}
+
+/* 灵动岛切换工作区脉冲动画 */
+@keyframes switching-pulse {
+  0% { box-shadow: 0 0 20px rgba(255, 120, 48, 0.4), 0 0 40px rgba(255, 120, 48, 0.15); }
+  50% { box-shadow: 0 0 30px rgba(255, 120, 48, 0.6), 0 0 60px rgba(255, 120, 48, 0.25); }
+  100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
+}
+
+/* 长按触发动画 */
+@keyframes trigger-flash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 120, 48, 0.6); }
+  30% { box-shadow: 0 0 20px 8px rgba(255, 120, 48, 0.4); }
+  60% { box-shadow: 0 0 30px 12px rgba(255, 120, 48, 0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 120, 48, 0); }
+}
+
+/* 长按光效淡出 */
+@keyframes progress-fade-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+
+@keyframes switching-dot-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 12px rgba(255, 120, 48, 0.9); }
+  50% { transform: scale(1.5); box-shadow: 0 0 20px rgba(255, 120, 48, 1); }
+  100% { transform: scale(1); box-shadow: 0 0 8px rgba(255, 120, 48, 0.7); }
+}
