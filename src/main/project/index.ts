@@ -9,7 +9,6 @@
 // 类型导出
 // ═══════════════════════════════════════════════════════════
 export type {
-  ProjectType,
   LaunchConfig,
   LaunchConfiguration,
   DetectResult,

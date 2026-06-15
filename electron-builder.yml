@@ -13,12 +13,15 @@ win:
     - nsis
     - portable
   icon: resources/icon.ico
-  artifactName: ${productName}-${version}-${arch}-setup.${ext}
 
 nsis:
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
+
+portable:
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}
 
 mac:
   target:

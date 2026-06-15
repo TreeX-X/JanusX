@@ -6,7 +6,7 @@
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join, resolve } from 'path'
 import { existsSync } from 'fs'
-import type { LaunchConfig, LaunchConfiguration, ProjectType, ValidationResult } from '../types'
+import type { LaunchConfig, LaunchConfiguration, ValidationResult } from '../types'
 import { ProjectType } from '../types'
 
 const CONFIG_FILENAME = '.switchx/switchx.launch.json'
@@ -51,10 +51,10 @@ export class ProjectConfig {
     await mkdir(configDir, { recursive: true })
 
     // 添加元数据
-    if (!config.metadata) {
-      config.metadata = {}
+    config.metadata = {
+      autoDetected: config.metadata?.autoDetected ?? false,
+      lastModified: new Date().toISOString(),
     }
-    config.metadata.lastModified = new Date().toISOString()
 
     try {
       const content = JSON.stringify(config, null, 2)

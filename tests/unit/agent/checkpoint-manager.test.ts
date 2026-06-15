@@ -64,6 +64,19 @@ vi.mock('fs/promises', () => {
     mkdir: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
     unlink: vi.fn().mockResolvedValue(undefined),
+    access: vi.fn().mockImplementation(async (path: string) => {
+      if (String(path) === '/workspace' || mockFiles[String(path)]) return
+      throw new Error('ENOENT')
+    }),
+    stat: vi.fn().mockImplementation(async (path: string) => {
+      if (String(path) !== '/workspace') {
+        throw new Error('ENOENT')
+      }
+
+      return {
+        isDirectory: () => true,
+      }
+    }),
   }
 })
 
