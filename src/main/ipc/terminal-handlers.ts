@@ -40,17 +40,6 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         checkpointCreatedAt: 0,
         initialized: false,
       })
-
-      // Initialize checkpoint manager for this workspace — MUST await
-      try {
-        await checkpointManager.initialize(cwd)
-        const state = terminalStates.get(id)
-        if (state) state.initialized = true
-        mainWindow.webContents.send('checkpoint:ready', { terminalId: id, success: true })
-      } catch (err) {
-        console.error('Checkpoint init failed:', err)
-        mainWindow.webContents.send('checkpoint:ready', { terminalId: id, success: false, error: String(err) })
-      }
     }
 
     // PTY output — just forward to renderer
@@ -75,6 +64,17 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       }
       terminalStates.delete(id)
     })
+
+    if (engine) {
+      checkpointManager.initialize(cwd).then(() => {
+        const state = terminalStates.get(id)
+        if (state) state.initialized = true
+        mainWindow.webContents.send('checkpoint:ready', { terminalId: id, success: true })
+      }).catch((err) => {
+        console.error('Checkpoint init failed:', err)
+        mainWindow.webContents.send('checkpoint:ready', { terminalId: id, success: false, error: String(err) })
+      })
+    }
 
     return { pid: instance.pty.pid }
   })

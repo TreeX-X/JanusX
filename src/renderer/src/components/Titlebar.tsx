@@ -33,7 +33,7 @@ export function Titlebar() {
 
   /*-- 下拉拖拽状态（全部通过 ref，pointermove 零 setState） --*/
   const blueprintMode = useAppStore((s) => s.blueprintMode)
-  const toggleBlueprint = useAppStore((s) => s.toggleBlueprint)
+  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const startYRef = useRef(0)
   const isDraggingRef = useRef(false)
   const currentDragYRef = useRef(0)
@@ -44,6 +44,8 @@ export function Titlebar() {
 
   /*-- P2: 动量感知 — 记录最近 5 帧 {y, t} --*/
   const velocityHistory = useRef<Array<{ y: number; t: number }>>([])
+  const flipFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flipRequestRef = useRef(0)
 
   // 监听工作区切换 → 触发灵动岛过渡动画
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -111,6 +113,7 @@ export function Titlebar() {
     return () => {
       if (longPressTimer.current) clearTimeout(longPressTimer.current)
       if (triggeredTimer.current) clearTimeout(triggeredTimer.current)
+      if (flipFallbackTimerRef.current) clearTimeout(flipFallbackTimerRef.current)
     }
   }, [])
 
@@ -183,6 +186,11 @@ export function Titlebar() {
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
+    flipRequestRef.current += 1
+    if (flipFallbackTimerRef.current) {
+      clearTimeout(flipFallbackTimerRef.current)
+      flipFallbackTimerRef.current = null
+    }
     isLongPressRef.current = false
     isDraggingRef.current = true
     startYRef.current = e.clientY
@@ -414,6 +422,35 @@ export function Titlebar() {
     /*-- 达到翻转阈值且不是长按 → 切换蓝图模式 --*/
     if (currentDragYRef.current >= SWIPE_THRESHOLD && !isLongPressRef.current) {
       /*-- 先回弹到原位，动画完成后再切换蓝图模式（避免视觉割裂） --*/
+      const requestId = ++flipRequestRef.current
+      const nextBlueprintMode = !useAppStore.getState().blueprintMode
+      let flipApplied = false
+      let removeFlipTransitionListener: (() => void) | null = null
+
+      const applyFlipOnce = () => {
+        if (flipApplied || requestId !== flipRequestRef.current) return
+        flipApplied = true
+        if (removeFlipTransitionListener) {
+          removeFlipTransitionListener()
+          removeFlipTransitionListener = null
+        }
+        if (flipFallbackTimerRef.current) {
+          clearTimeout(flipFallbackTimerRef.current)
+          flipFallbackTimerRef.current = null
+        }
+        if (el) {
+          hasDragInlineRef.current = false
+          el.style.transform = ''
+          el.style.transition = ''
+          el.style.borderColor = ''
+          el.style.boxShadow = ''
+          el.style.border = ''
+          const dot = el.querySelector('.island-dot') as HTMLElement | null
+          if (dot) dot.style.boxShadow = ''
+        }
+        setBlueprintMode(nextBlueprintMode)
+      }
+
       if (el) {
         hasDragInlineRef.current = true
         el.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border 0.3s ease, box-shadow 0.3s ease'
@@ -424,34 +461,14 @@ export function Titlebar() {
 
         const onFlipTransitionEnd = (ev: TransitionEvent) => {
           if (ev.propertyName !== 'transform') return
-          el.removeEventListener('transitionend', onFlipTransitionEnd)
-          /*-- 清除 inline style → JSX 接管 → 切换蓝图模式 --*/
-          hasDragInlineRef.current = false
-          el.style.transform = ''
-          el.style.transition = ''
-          el.style.borderColor = ''
-          el.style.boxShadow = ''
-          el.style.border = ''
-          const dot = el.querySelector('.island-dot') as HTMLElement | null
-          if (dot) dot.style.boxShadow = ''
-          /*-- 此时再切换蓝图模式，JSX 直接渲染蓝图样式，无割裂 --*/
-          toggleBlueprint()
+          applyFlipOnce()
         }
+        removeFlipTransitionListener = () => el.removeEventListener('transitionend', onFlipTransitionEnd)
         el.addEventListener('transitionend', onFlipTransitionEnd)
         /* 兜底 */
-        setTimeout(() => {
-          hasDragInlineRef.current = false
-          el.style.transform = ''
-          el.style.transition = ''
-          el.style.borderColor = ''
-          el.style.boxShadow = ''
-          el.style.border = ''
-          const dot = el.querySelector('.island-dot') as HTMLElement | null
-          if (dot) dot.style.boxShadow = ''
-          toggleBlueprint()
-        }, 450)
+        flipFallbackTimerRef.current = setTimeout(applyFlipOnce, 450)
       } else {
-        toggleBlueprint()
+        applyFlipOnce()
       }
 
     } else {
@@ -474,9 +491,14 @@ export function Titlebar() {
 
     currentDragYRef.current = 0
     velocityHistory.current = []
-  }, [toggleBlueprint])
+  }, [setBlueprintMode])
 
   const handlePointerCancel = useCallback(() => {
+    flipRequestRef.current += 1
+    if (flipFallbackTimerRef.current) {
+      clearTimeout(flipFallbackTimerRef.current)
+      flipFallbackTimerRef.current = null
+    }
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
@@ -662,7 +684,6 @@ export function Titlebar() {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerCancel}
             onPointerCancel={handlePointerCancel}
             className="flex items-center justify-center select-none"
             style={{

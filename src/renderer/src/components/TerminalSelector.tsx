@@ -15,6 +15,12 @@ const ICONS: Record<TerminalPreset, string> = {
   opencode: opencodeIcon,
 }
 
+function waitForTerminalMount(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+}
+
 interface TerminalOptionProps {
   preset: TerminalPreset
   name: string
@@ -50,8 +56,9 @@ function TerminalOption({ preset, name, onClick }: TerminalOptionProps) {
 }
 
 export function TerminalSelector() {
-  const { activeWorkspaceId, addTerminal, addLog } = useWorkspaceStore()
+  const { activeWorkspaceId, addTerminal, removeTerminal, addLog } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
+  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
 
   // 监听 checkpoint 初始化事件（终端创建后由主进程发送）
   useEffect(() => {
@@ -107,8 +114,10 @@ export function TerminalSelector() {
       addTerminal(terminal)
       addLog('info', `[终端] 创建 ${presetNames[preset]} 终端 (${terminalId.slice(0, 8)})，等待 checkpoint 初始化...`)
 
-      // 先切换视图 → TerminalArea 挂载并注册 checkpoint:ready 监听
+      // 先切换视图并等待 TerminalArea/CLITerminal 挂载，避免 PTY 首屏输出在监听注册前丢失。
+      setBlueprintMode(false)
       setLoadState('terminal-active')
+      await waitForTerminalMount()
 
       try {
         const result = (await window.electron.invoke('terminal:create', {
@@ -127,9 +136,14 @@ export function TerminalSelector() {
         }))
       } catch (err) {
         console.error('Failed to create terminal:', err)
+        addLog('error', `[终端] 创建失败: ${(err as Error).message}`)
+        removeTerminal(terminalId)
+        if (useWorkspaceStore.getState().terminals.length === 0) {
+          setLoadState('no-terminal')
+        }
       }
     },
-    [activeWorkspaceId, addTerminal, setLoadState, addLog]
+    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode, addLog]
   )
 
   return (

@@ -14,6 +14,7 @@ interface AppStore {
   toggleSidebar: () => void
   togglePanel: () => void
   toggleBlueprint: () => void
+  setBlueprintMode: (enabled: boolean) => void
   setFlipDuration: (ms: number) => void
   setIsIslandDragging: (v: boolean) => void
 }
@@ -29,6 +30,7 @@ export const useAppStore = create<AppStore>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   togglePanel: () => set((s) => ({ panelCollapsed: !s.panelCollapsed })),
   toggleBlueprint: () => set((s) => ({ blueprintMode: !s.blueprintMode })),
+  setBlueprintMode: (blueprintMode) => set({ blueprintMode }),
   setFlipDuration: (ms) => set({ flipDuration: ms }),
   setIsIslandDragging: (v) => set({ isIslandDragging: v }),
 }))

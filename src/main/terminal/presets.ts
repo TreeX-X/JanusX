@@ -22,6 +22,12 @@ export const PRESETS: Record<TerminalPreset, TerminalPresetConfig> = {
     command: 'codex',
     description: '自动启动 Codex CLI',
   },
+  opencode: {
+    name: 'OpenCode',
+    preset: 'opencode',
+    command: 'opencode',
+    description: '自动启动 OpenCode CLI',
+  },
 }
 
 export function getAutoCommand(preset: TerminalPreset): string | undefined {

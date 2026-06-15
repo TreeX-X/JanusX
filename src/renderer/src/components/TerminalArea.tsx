@@ -16,9 +16,16 @@ const PRESETS: { type: TerminalPreset; name: string; icon: string; autoCommand?:
   { type: 'opencode', name: 'OpenCode', icon: opencodeIcon, autoCommand: 'opencode' },
 ]
 
+function waitForTerminalMount(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+}
+
 export function TerminalArea() {
   const { terminals, activeTerminalId, activeWorkspaceId, addTerminal, setActiveTerminal, removeTerminal, logs, addLog, clearLogs } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
+  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [ringOpen, setRingOpen] = useState(false)
   const ringRef = useRef<HTMLDivElement>(null)
@@ -99,6 +106,9 @@ export function TerminalArea() {
 
       addTerminal(terminal)
       addLog('info', `[终端] 创建 ${preset.name} 终端 (${terminalId.slice(0, 8)})，等待 checkpoint 初始化...`)
+      setBlueprintMode(false)
+      setLoadState('terminal-active')
+      await waitForTerminalMount()
 
       try {
         const result = (await window.electron.invoke('terminal:create', {
@@ -117,9 +127,14 @@ export function TerminalArea() {
         }))
       } catch (err) {
         console.error('Failed to create terminal:', err)
+        addLog('error', `[终端] 创建失败: ${(err as Error).message}`)
+        removeTerminal(terminalId)
+        if (useWorkspaceStore.getState().terminals.length === 0) {
+          setLoadState('no-terminal')
+        }
       }
     },
-    [activeWorkspaceId, addTerminal]
+    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode, addLog]
   )
 
   return (

@@ -105,8 +105,22 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
       return true
     })
 
-    // 延迟 fit 确保 DOM 已渲染
-    requestAnimationFrame(() => fitAddon.fit())
+    const fitAndSync = () => {
+      try {
+        fitAddon.fit()
+        term.focus()
+        window.electron.send('terminal:resize', {
+          id: terminalId,
+          cols: term.cols,
+          rows: term.rows,
+        })
+      } catch {
+        // ignore fit errors during initial layout
+      }
+    }
+
+    // 延迟两帧确保容器完成布局，避免初次创建终端时 xterm 以 0 尺寸渲染。
+    requestAnimationFrame(() => requestAnimationFrame(fitAndSync))
 
     const observer = new ResizeObserver(() => {
       try {
