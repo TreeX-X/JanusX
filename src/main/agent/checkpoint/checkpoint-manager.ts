@@ -26,7 +26,7 @@ export class CheckpointManager {
       throw new Error(`工作区路径不存在或不是目录: ${workspacePath}`)
     }
 
-    const newPath = join(workspacePath, '.switchx', 'checkpoints')
+    const newPath = join(workspacePath, '.janusX', 'checkpoints')
 
     // Only clear + reinitialize if this is a new workspace or first init
     if (this.storagePath === newPath) return

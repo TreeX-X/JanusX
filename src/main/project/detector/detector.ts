@@ -102,7 +102,7 @@ export class ProjectDetector {
   private static createContext(projectPath: string): DetectionContext {
     try {
       const files = readdirSync(projectPath)
-      const configPath = join(projectPath, '.switchx/switchx.launch.json')
+      const configPath = join(projectPath, '.janusX/janusX.launch.json')
 
       return {
         projectPath: resolve(projectPath),

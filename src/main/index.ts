@@ -23,7 +23,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 1000,
     minHeight: 600,
-    title: 'SwitchX',
+    title: 'JanusX',
     icon: appIcon,
     frame: false,
     backgroundColor: '#121212',

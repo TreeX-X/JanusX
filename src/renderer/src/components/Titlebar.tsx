@@ -592,7 +592,7 @@ export function Titlebar() {
                 }}
               />
               <span className="text-[11px] font-semibold text-[#a1a1aa] tracking-[0.2px]">
-                SwitchX
+                JanusX
               </span>
             </div>
           )}
@@ -605,7 +605,7 @@ export function Titlebar() {
                 style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}
               >
                 <div className="text-[11px] font-bold uppercase tracking-[1px] text-[#ff7830] flex items-center gap-1.5">
-                  <span>⚡</span> SwitchX
+                  <span>⚡</span> JanusX
                 </div>
                 <div className="text-[9px] text-[#52525b]">双击收合</div>
               </div>
@@ -657,8 +657,8 @@ export function Titlebar() {
 
       {/* Logo */}
       <div className="absolute left-[70px] flex items-center gap-1.5 text-[13px] font-medium text-[#888] tracking-[0.3px] titlebar-no-drag">
-        <img src={appIcon} alt="SwitchX" className="w-4 h-4" />
-        <span>SwitchX</span>
+        <img src={appIcon} alt="JanusX" className="w-4 h-4" />
+        <span>JanusX</span>
       </div>
 
       {/* 灵动岛 — 折叠态内嵌在标题栏 */}
@@ -814,7 +814,7 @@ export function Titlebar() {
                     ? 'Running'
                     : activeWorkspace
                       ? activeWorkspace.name
-                      : 'SwitchX'}
+                      : 'JanusX'}
               </span>
             </div>
           </div>

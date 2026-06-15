@@ -115,7 +115,7 @@ export function registerProjectHandlers() {
   /**
    * 读取项目配置
    * @param projectPath 项目根目录
-   * @returns .switchx/switchx.launch.json 配置，若不存在返回 null
+   * @returns .janusX/janusX.launch.json 配置，若不存在返回 null
    */
   ipcMain.handle('project:config:read', async (_, projectPath: string) => {
     try {

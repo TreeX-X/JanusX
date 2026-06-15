@@ -1,5 +1,5 @@
-appId: com.switchx.app
-productName: SwitchX
+appId: com.janusx.app
+productName: JanusX
 directories:
   output: release/${version}
   buildResources: resources

@@ -9,7 +9,7 @@ import { existsSync } from 'fs'
 import type { LaunchConfig, LaunchConfiguration, ValidationResult } from '../types'
 import { ProjectType } from '../types'
 
-const CONFIG_FILENAME = '.switchx/switchx.launch.json'
+const CONFIG_FILENAME = '.janusX/janusX.launch.json'
 const CONFIG_VERSION = '0.1.0'
 
 export class ProjectConfig {
@@ -46,8 +46,8 @@ export class ProjectConfig {
   static async write(projectPath: string, config: LaunchConfig): Promise<void> {
     const configPath = join(projectPath, CONFIG_FILENAME)
 
-    // 确保 .switchx 目录存在
-    const configDir = join(projectPath, '.switchx')
+    // 确保 .janusX 目录存在
+    const configDir = join(projectPath, '.janusX')
     await mkdir(configDir, { recursive: true })
 
     // 添加元数据

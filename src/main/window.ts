@@ -16,7 +16,7 @@ export const DEFAULT_WINDOW_CONFIG: WindowConfig = {
   height: 900,
   minWidth: 1000,
   minHeight: 600,
-  title: 'SwitchX',
+  title: 'JanusX',
   backgroundColor: '#121212',
 }
 

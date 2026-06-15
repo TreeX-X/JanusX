@@ -197,7 +197,7 @@ function EmptyWorkspace() {
           }}
         />
       </div>
-      <div className="text-sm text-[#666]">开始使用 SwitchX</div>
+      <div className="text-sm text-[#666]">开始使用 JanusX</div>
       <button
         onClick={handleAdd}
         className="px-5 py-2.5 rounded-md text-[13px] cursor-pointer transition-colors"

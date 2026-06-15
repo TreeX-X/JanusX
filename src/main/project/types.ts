@@ -37,7 +37,7 @@ export enum ProjectType {
 // ════════════════════════════════════════════════════════════
 
 /**
- * .switchx/switchx.launch.json 根配置
+ * .janusX/janusX.launch.json 根配置
  */
 export interface LaunchConfig {
   version: string // "0.1.0"

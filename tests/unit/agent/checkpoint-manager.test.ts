@@ -94,7 +94,7 @@ describe('CheckpointManager', () => {
 
     // Populate mockFiles with tracked file content (paths as the source code would resolve them)
     mockFiles[join('/workspace', 'src/index.ts')] = 'export const hello = "world"'
-    mockFiles[join('/workspace', 'README.md')] = '# SwitchX'
+    mockFiles[join('/workspace', 'README.md')] = '# JanusX'
 
     const { CheckpointManager } = await import('../../../src/main/agent/checkpoint/checkpoint-manager')
     manager = new CheckpointManager()
