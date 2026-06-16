@@ -100,11 +100,14 @@ class LlmService {
   ): Promise<{ success: boolean; latency?: number; error?: string }> {
     await this.initialize()
 
+    console.log('[LlmService] testConnection called with:', { testModel, settingsModelId: settings.modelId })
+
     try {
       const adapter = this.registry.get(settings.id)
 
       // 检查适配器是否有 testConnection 方法
       if ('testConnection' in adapter && typeof adapter.testConnection === 'function') {
+        console.log('[LlmService] Calling adapter.testConnection with model:', testModel)
         const result = await (adapter as any).testConnection(settings, testModel)
         return {
           success: result.valid,

@@ -93,6 +93,12 @@ export interface ProviderSettings {
   /** 组织 ID（OpenAI） */
   organization?: string
 
+  /* ────── 模型配置 ────── */
+  /** 默认模型 ID（实际使用） */
+  modelId?: string
+  /** 测试模型 ID（连接测试） */
+  testModelId?: string
+
   /* ────── Vertex AI 专用配置 ────── */
   vertexAI?: VertexAIConfig
 

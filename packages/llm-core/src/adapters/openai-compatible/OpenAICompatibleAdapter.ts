@@ -290,6 +290,13 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       // 使用指定的测试模型，或者根据 baseURL 推断默认模型
       const modelToTest = testModel || this.getDefaultModel(settings)
 
+      console.log('[OpenAICompatibleAdapter] testConnection:', {
+        providedTestModel: testModel,
+        defaultModel: this.getDefaultModel(settings),
+        finalModel: modelToTest,
+        baseURL: settings.baseURL
+      })
+
       // 创建一个测试模型
       const model = await this.createLanguageModel(settings, modelToTest)
 
