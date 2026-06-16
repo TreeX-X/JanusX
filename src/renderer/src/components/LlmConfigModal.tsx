@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import styles from './LlmConfigModal.module.css'
 
 interface LlmConfigModalProps {
@@ -135,7 +136,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`} onClick={handleBackdropClick}>
       <div className={styles.llmConfigPanel}>
         <div className={styles.configHeader}>
@@ -223,6 +224,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
