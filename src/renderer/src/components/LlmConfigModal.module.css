@@ -1,8 +1,8 @@
 /* ================= LLM 配置模态框样式 ================= */
-/* 基于 JanusX 神性设计原型 */
+/* 基于 JanusX 神性设计原型 + 主题橙色 (#ff7830) */
 
 .modalBackdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
@@ -58,9 +58,9 @@
 .statusDot {
   width: 8px;
   height: 8px;
-  background: #00f0ff;
+  background: #ff7830;
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 8px rgba(255, 120, 48, 0.4);
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -142,8 +142,8 @@
 
 .configInput:focus {
   background: rgba(255, 255, 255, 0.06);
-  border-color: #00f0ff;
-  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.4);
+  border-color: #ff7830;
+  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.4);
 }
 
 .configInput::placeholder {
