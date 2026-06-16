@@ -1,0 +1,35 @@
+{
+  "name": "@janusx/llm-core",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "JanusX LLM 核心抽象层 - 统一 Provider 管理",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "provider",
+    "vertex-ai",
+    "openai"
+  ],
+  "author": "Tree",
+  "license": "MIT",
+  "dependencies": {
+    "ai": "^3.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

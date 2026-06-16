@@ -1,0 +1,116 @@
+{
+  "version": "2026.06.16",
+  "providers": [
+    {
+      "id": "openai-compatible",
+      "name": "OpenAI Compatible",
+      "description": "标准 OpenAI API 兼容接口 (URL + Key)",
+      "authType": "api-key",
+      "defaultEndpoint": "https://api.openai.com/v1",
+      "capabilities": ["chat", "completion", "embedding", "image", "rerank"],
+      "configSchema": {
+        "baseURL": {
+          "type": "string",
+          "required": true,
+          "label": "API Base URL",
+          "placeholder": "https://api.openai.com/v1",
+          "description": "API 服务的基础 URL"
+        },
+        "apiKey": {
+          "type": "password",
+          "required": true,
+          "label": "API Key",
+          "description": "用于认证的 API 密钥"
+        },
+        "organization": {
+          "type": "string",
+          "required": false,
+          "label": "Organization ID",
+          "description": "OpenAI 组织 ID（可选）"
+        }
+      },
+      "supportedAdapters": ["openai", "azure", "deepseek", "moonshot", "zhipu", "custom"]
+    },
+    {
+      "id": "vertex-ai",
+      "name": "Vertex AI",
+      "description": "Google Cloud Vertex AI (GCP Service Account 认证)",
+      "authType": "vertex-ai",
+      "capabilities": ["chat", "embedding", "image"],
+      "configSchema": {
+        "projectId": {
+          "type": "string",
+          "required": true,
+          "label": "GCP Project ID",
+          "placeholder": "my-gcp-project",
+          "description": "Google Cloud 项目 ID"
+        },
+        "region": {
+          "type": "select",
+          "required": true,
+          "label": "Region",
+          "description": "模型部署区域",
+          "options": [
+            { "value": "us-central1", "label": "us-central1 (Iowa)" },
+            { "value": "us-east1", "label": "us-east1 (South Carolina)" },
+            { "value": "us-west1", "label": "us-west1 (Oregon)" },
+            { "value": "europe-west1", "label": "europe-west1 (Belgium)" },
+            { "value": "europe-west4", "label": "europe-west4 (Netherlands)" },
+            { "value": "asia-east1", "label": "asia-east1 (Taiwan)" },
+            { "value": "asia-northeast1", "label": "asia-northeast1 (Tokyo)" },
+            { "value": "asia-southeast1", "label": "asia-southeast1 (Singapore)" }
+          ]
+        },
+        "authMode": {
+          "type": "select",
+          "required": true,
+          "label": "认证方式",
+          "description": "选择认证方法",
+          "options": [
+            {
+              "value": "adc",
+              "label": "Application Default Credentials (推荐)",
+              "description": "使用 gcloud CLI 配置的默认凭据"
+            },
+            {
+              "value": "json-key",
+              "label": "Service Account JSON Key",
+              "description": "使用服务账号 JSON 密钥文件"
+            }
+          ]
+        },
+        "serviceAccountJSON": {
+          "type": "textarea",
+          "required": false,
+          "label": "Service Account JSON",
+          "placeholder": "{\n  \"type\": \"service_account\",\n  \"project_id\": \"...\",\n  ...\n}",
+          "description": "完整的服务账号 JSON 内容",
+          "condition": "authMode=json-key",
+          "rows": 8
+        },
+        "serviceAccountPath": {
+          "type": "file",
+          "required": false,
+          "label": "JSON Key 文件路径",
+          "placeholder": "/path/to/service-account.json",
+          "description": "服务账号 JSON 文件的本地路径",
+          "condition": "authMode=json-key",
+          "accept": ".json"
+        }
+      },
+      "supportedModels": [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-1.0-pro",
+        "gemini-pro-vision",
+        "text-embedding-004",
+        "imagen-3"
+      ],
+      "documentation": {
+        "setup": "https://cloud.google.com/vertex-ai/docs/start/introduction",
+        "authentication": "https://cloud.google.com/docs/authentication/getting-started",
+        "models": "https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/overview"
+      }
+    }
+  ]
+}

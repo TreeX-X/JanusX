@@ -6,13 +6,19 @@
   "main": "out/main/index.js",
   "author": "Tree",
   "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "build:llm-core": "npm run build --workspace=@janusx/llm-core",
     "preview": "electron-vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
+    "test:llm-core": "npm test --workspace=@janusx/llm-core",
     "typecheck": "tsc --noEmit",
+    "typecheck:llm-core": "npm run typecheck --workspace=@janusx/llm-core",
     "lint": "eslint src --ext .ts,.tsx",
     "package:win": "npm run build && electron-builder --win",
     "package:mac": "npm run build && electron-builder --mac",
