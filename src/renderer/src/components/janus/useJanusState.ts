@@ -9,7 +9,7 @@ import type { Workspace } from '@/types'
    单一数据源：所有 Janus 视觉状态从此导出
    ════════════════════════════════════════════════════════════ */
 
-const WS_SWITCH_DURATION = 300
+const WS_SWITCH_DURATION = 600  // 延长到 600ms，更自然
 
 interface JanusState {
   mode: JanusMode
@@ -61,16 +61,16 @@ export function useJanusState(): JanusState {
 
     const el = eyeContainerRef.current
     if (el) {
-      el.style.transition = 'opacity 0.15s ease-out, transform 0.15s ease-out'
+      el.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out'
       el.style.opacity = '0'
       el.style.transform = 'scale(0.3)'
       setTimeout(() => {
         const ref = eyeContainerRef.current
         if (!ref) return
-        ref.style.transition = 'opacity 0.15s ease-in, transform 0.15s ease-in'
+        ref.style.transition = 'opacity 0.3s ease-in, transform 0.3s ease-in'
         ref.style.opacity = '1'
         ref.style.transform = 'scale(1)'
-      }, 150)
+      }, 250)
     }
 
     switchTimerRef.current = setTimeout(() => {
