@@ -32,9 +32,9 @@ export function registerLlmHandlers(): void {
   })
 
   // 测试连接
-  ipcMain.handle('llm:test-connection', async (_, settings: ProviderSettings) => {
+  ipcMain.handle('llm:test-connection', async (_, payload: ProviderSettings & { testModel?: string }) => {
     try {
-      return await llmService.testConnection(settings)
+      return await llmService.testConnection(payload, payload.testModel)
     } catch (error: any) {
       console.error('[IPC] llm:test-connection error:', error)
       return { success: false, error: error.message }

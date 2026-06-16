@@ -18,7 +18,7 @@ interface ProviderSettings {
   authType: string
   baseURL?: string
   apiKey?: string
-  organization?: string
+  modelId?: string
 }
 
 export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
@@ -28,7 +28,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
     authType: 'api-key',
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
-    organization: ''
+    modelId: 'gpt-4o'
   })
 
   const [testStatus, setTestStatus] = useState<{
@@ -64,7 +64,10 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
     setTestStatus({ state: 'testing', message: 'Pinging API node...' })
 
     try {
-      const result = (await window.electron.invoke('llm:test-connection', formData)) as {
+      const result = (await window.electron.invoke('llm:test-connection', {
+        ...formData,
+        testModel: formData.modelId || 'gpt-4o'
+      })) as {
         success: boolean
         latency?: number
         error?: string
@@ -195,13 +198,13 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
           </div>
 
           <div className={styles.formGroup}>
-            <label>Organization (Optional)</label>
+            <label>Model ID</label>
             <input
               type="text"
               className={styles.configInput}
-              placeholder="org-..."
-              value={formData.organization || ''}
-              onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+              placeholder="gpt-4o, gpt-3.5-turbo, deepseek-chat..."
+              value={formData.modelId || ''}
+              onChange={(e) => setFormData({ ...formData, modelId: e.target.value })}
             />
           </div>
         </div>

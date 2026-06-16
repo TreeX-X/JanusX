@@ -95,7 +95,8 @@ class LlmService {
    * 测试连接
    */
   async testConnection(
-    settings: ProviderSettings
+    settings: ProviderSettings,
+    testModel?: string
   ): Promise<{ success: boolean; latency?: number; error?: string }> {
     await this.initialize()
 
@@ -104,7 +105,7 @@ class LlmService {
 
       // 检查适配器是否有 testConnection 方法
       if ('testConnection' in adapter && typeof adapter.testConnection === 'function') {
-        const result = await (adapter as any).testConnection(settings)
+        const result = await (adapter as any).testConnection(settings, testModel)
         return {
           success: result.valid,
           latency: result.latency,

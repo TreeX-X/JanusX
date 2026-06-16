@@ -274,17 +274,24 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
    * 测试连接（深度验证）
    *
    * @param settings Provider 配置
+   * @param testModel 可选的测试模型 ID，如果不提供则使用默认模型
    * @returns 验证结果，包含延迟信息
    *
    * @remarks
    * 此方法会发送真实的 API 请求，可能产生费用
    */
-  async testConnection(settings: ProviderSettings): Promise<ValidationResult & { latency?: number }> {
+  async testConnection(
+    settings: ProviderSettings,
+    testModel?: string
+  ): Promise<ValidationResult & { latency?: number }> {
     const startTime = Date.now()
 
     try {
+      // 使用指定的测试模型，或者根据 baseURL 推断默认模型
+      const modelToTest = testModel || this.getDefaultModel(settings)
+
       // 创建一个测试模型
-      const model = await this.createLanguageModel(settings, 'gpt-3.5-turbo')
+      const model = await this.createLanguageModel(settings, modelToTest)
 
       // 发送一个最小请求（1 token 输出）
       const { generateText } = await import('ai')
