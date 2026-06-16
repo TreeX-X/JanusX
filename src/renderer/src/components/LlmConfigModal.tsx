@@ -19,6 +19,7 @@ interface ProviderSettings {
   baseURL?: string
   apiKey?: string
   modelId?: string
+  testModelId?: string
 }
 
 export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
@@ -28,7 +29,8 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
     authType: 'api-key',
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
-    modelId: 'gpt-4o'
+    modelId: 'gpt-4o',
+    testModelId: 'gpt-3.5-turbo'
   })
 
   const [testStatus, setTestStatus] = useState<{
@@ -66,7 +68,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
     try {
       const result = (await window.electron.invoke('llm:test-connection', {
         ...formData,
-        testModel: formData.modelId || 'gpt-4o'
+        testModel: formData.testModelId || formData.modelId || 'gpt-3.5-turbo'
       })) as {
         success: boolean
         latency?: number
@@ -198,13 +200,24 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
           </div>
 
           <div className={styles.formGroup}>
-            <label>Model ID</label>
+            <label>Default Model (实际使用)</label>
             <input
               type="text"
               className={styles.configInput}
-              placeholder="gpt-4o, gpt-3.5-turbo, deepseek-chat..."
+              placeholder="gpt-4o, deepseek-chat..."
               value={formData.modelId || ''}
               onChange={(e) => setFormData({ ...formData, modelId: e.target.value })}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Test Model (连接测试)</label>
+            <input
+              type="text"
+              className={styles.configInput}
+              placeholder="gpt-3.5-turbo (推荐便宜模型)"
+              value={formData.testModelId || ''}
+              onChange={(e) => setFormData({ ...formData, testModelId: e.target.value })}
             />
           </div>
         </div>
