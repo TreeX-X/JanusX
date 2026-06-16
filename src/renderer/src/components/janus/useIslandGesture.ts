@@ -228,11 +228,12 @@ export function useIslandGesture({
           onDragProgress(deltaY, progress)
         }
 
-        // 下拉引导提示
+        // 下拉引导提示 — 跟随岛屿移动，避免遮挡
         const hint = pullHintRef.current
         if (hint) {
           if (deltaY > 20 && !isRunning) {
             hint.style.opacity = String(Math.min(deltaY / 30, 1))
+            hint.style.transform = `translate(-50%, ${offset}px)` // 跟随岛屿向下移动
             if (deltaY >= T) {
               hint.textContent = '松开立即翻转'
               hint.style.color = '#fff'
@@ -267,7 +268,10 @@ export function useIslandGesture({
 
         // 隐藏提示
         const hint = pullHintRef.current
-        if (hint) hint.style.opacity = '0'
+        if (hint) {
+          hint.style.opacity = '0'
+          hint.style.transform = 'translateX(-50%)' // 重置位置
+        }
 
         // 计算释放速度
         const history = velocityHistory.current
@@ -357,6 +361,7 @@ export function useIslandGesture({
 
     const hint = pullHintRef.current
     if (hint) hint.style.opacity = '0'
+    if (hint) hint.style.transform = 'translateX(-50%)' // 重置位置
 
     currentDragY.current = 0
     velocityHistory.current = []

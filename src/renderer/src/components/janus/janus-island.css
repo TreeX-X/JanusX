@@ -290,7 +290,7 @@ body.is-running {
 }
 
 .janus-expanded.mode-order {
-  border-color: rgba(255,255,255,0.15);
+  border-color: var(--janus-order);
   box-shadow: 0 16px 50px rgba(0,0,0,0.9), 0 0 20px var(--janus-order-glow);
 }
 
