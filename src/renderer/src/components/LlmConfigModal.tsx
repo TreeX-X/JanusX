@@ -67,12 +67,6 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
       setTestStatus({ state: 'testing', message: 'Pinging API node...' })
 
       const testModel = formData.testModelId || formData.modelId || 'gpt-3.5-turbo'
-      console.log('[LLM Config] Test connection with:', {
-        testModelId: formData.testModelId,
-        modelId: formData.modelId,
-        finalTestModel: testModel,
-        formData
-      })
 
       const result = (await window.electron.invoke('llm:test-connection', {
         ...formData,

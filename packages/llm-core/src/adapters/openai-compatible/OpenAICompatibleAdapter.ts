@@ -287,15 +287,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
     const startTime = Date.now()
 
     try {
-      // 使用指定的测试模型，或者根据 baseURL 推断默认模型
       const modelToTest = testModel || this.getDefaultModel(settings)
-
-      console.log('[OpenAICompatibleAdapter] testConnection:', {
-        providedTestModel: testModel,
-        defaultModel: this.getDefaultModel(settings),
-        finalModel: modelToTest,
-        baseURL: settings.baseURL
-      })
 
       // 测试 /models 端点
       const response = await fetch(`${settings.baseURL}/models`, {
@@ -306,15 +298,8 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
         }
       })
 
-      console.log('[OpenAICompatibleAdapter] Models API response:', {
-        status: response.status,
-        ok: response.ok,
-        contentType: response.headers.get('content-type')
-      })
-
       if (!response.ok) {
         const text = await response.text()
-        console.log('[OpenAICompatibleAdapter] Models API error body:', text)
         return {
           valid: false,
           errors: [`API 返回错误 (HTTP ${response.status}): ${text.substring(0, 200)}`]
@@ -322,13 +307,11 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       }
 
       const data = await response.json()
-      console.log('[OpenAICompatibleAdapter] Available models count:', (data as any).data?.length || 0)
 
       // 检查指定的模型是否存在
       const modelExists = (data as any).data?.some((m: any) => m.id === modelToTest)
 
       if (!modelExists) {
-        console.warn('[OpenAICompatibleAdapter] Model not found:', modelToTest)
         return {
           valid: false,
           errors: [`模型 '${modelToTest}' 不在可用列表中。可用模型: ${(data as any).data?.slice(0, 5).map((m: any) => m.id).join(', ')}...`]
@@ -336,11 +319,6 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       }
 
       const latency = Date.now() - startTime
-
-      console.log('[OpenAICompatibleAdapter] Connection test passed:', {
-        latency,
-        modelFound: true
-      })
 
       // 简化模式：只验证 API 可达性和模型存在性
       // 不实际调用 generateText，避免格式兼容性问题
@@ -350,8 +328,6 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       }
 
     } catch (error: any) {
-      console.error('[OpenAICompatibleAdapter] testConnection error:', error)
-
       let errorMessage = error.message || String(error)
 
       if (error.response) {

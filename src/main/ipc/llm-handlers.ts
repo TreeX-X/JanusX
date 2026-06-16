@@ -34,12 +34,6 @@ export function registerLlmHandlers(): void {
   // 测试连接
   ipcMain.handle('llm:test-connection', async (_, payload: ProviderSettings & { testModel?: string }) => {
     try {
-      console.log('[IPC] llm:test-connection received:', {
-        providerId: payload.id,
-        testModel: payload.testModel,
-        modelId: payload.modelId,
-        testModelId: payload.testModelId
-      })
       return await llmService.testConnection(payload, payload.testModel)
     } catch (error: any) {
       console.error('[IPC] llm:test-connection error:', error)
