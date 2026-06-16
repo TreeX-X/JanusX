@@ -63,9 +63,9 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
   }
 
   const handleTest = async () => {
-    setTestStatus({ state: 'testing', message: 'Pinging API node...' })
-
     try {
+      setTestStatus({ state: 'testing', message: 'Pinging API node...' })
+
       const result = (await window.electron.invoke('llm:test-connection', {
         ...formData,
         testModel: formData.testModelId || formData.modelId || 'gpt-3.5-turbo'
@@ -88,6 +88,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
         })
       }
     } catch (error: any) {
+      console.error('Test connection error:', error)
       setTestStatus({
         state: 'error',
         message: `Error: ${error.message || 'Network failed'}`
@@ -96,9 +97,9 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
   }
 
   const handleSave = async () => {
-    setSaveStatus('saving')
-
     try {
+      setSaveStatus('saving')
+
       const result = (await window.electron.invoke('llm:save-provider', formData)) as {
         success: boolean
         error?: string
@@ -119,6 +120,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
         })
       }
     } catch (error: any) {
+      console.error('Save provider error:', error)
       setSaveStatus('error')
       setTestStatus({
         state: 'error',
@@ -127,11 +129,35 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
     }
   }
 
+  // 安全的输入处理函数
+  const handleInputChange = (field: keyof ProviderSettings) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setFormData(prev => ({ ...prev, [field]: e.target.value }))
+    } catch (error) {
+      console.error('Input change error:', error)
+    }
+  }
+
+  const handleSelectChange = (field: keyof ProviderSettings) => (e: React.ChangeEvent<HTMLSelectElement>) => {
+    try {
+      setFormData(prev => ({ ...prev, [field]: e.target.value }))
+    } catch (error) {
+      console.error('Select change error:', error)
+    }
+  }
+
   const handleBackdropClick = (e: React.MouseEvent) => {
+    // 防止事件冒泡导致的问题
     if (e.target === e.currentTarget) {
+      e.stopPropagation()
       onClose()
       resetStatus()
     }
+  }
+
+  const handlePanelClick = (e: React.MouseEvent) => {
+    // 阻止事件冒泡到 backdrop
+    e.stopPropagation()
   }
 
   const resetStatus = () => {
@@ -143,7 +169,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
 
   return createPortal(
     <div className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`} onClick={handleBackdropClick}>
-      <div className={styles.llmConfigPanel}>
+      <div className={styles.llmConfigPanel} onClick={handlePanelClick}>
         <div className={styles.configHeader}>
           <div className={styles.configTitle}>
             <i className={styles.statusDot}></i>
@@ -162,7 +188,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               className={styles.configInput}
               placeholder="My OpenAI Provider"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={handleInputChange('name')}
             />
           </div>
 
@@ -171,7 +197,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
             <select
               className={styles.configInput}
               value={formData.id}
-              onChange={(e) => setFormData({ ...formData, id: e.target.value })}
+              onChange={handleSelectChange('id')}
             >
               <option value="openai-compatible">OpenAI Compatible</option>
             </select>
@@ -184,7 +210,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               className={styles.configInput}
               placeholder="https://api.openai.com/v1"
               value={formData.baseURL || ''}
-              onChange={(e) => setFormData({ ...formData, baseURL: e.target.value })}
+              onChange={handleInputChange('baseURL')}
             />
           </div>
 
@@ -195,7 +221,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               className={styles.configInput}
               placeholder="sk-..."
               value={formData.apiKey || ''}
-              onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+              onChange={handleInputChange('apiKey')}
             />
           </div>
 
@@ -206,7 +232,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               className={styles.configInput}
               placeholder="gpt-4o, deepseek-chat..."
               value={formData.modelId || ''}
-              onChange={(e) => setFormData({ ...formData, modelId: e.target.value })}
+              onChange={handleInputChange('modelId')}
             />
           </div>
 
@@ -217,7 +243,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               className={styles.configInput}
               placeholder="gpt-3.5-turbo (推荐便宜模型)"
               value={formData.testModelId || ''}
-              onChange={(e) => setFormData({ ...formData, testModelId: e.target.value })}
+              onChange={handleInputChange('testModelId')}
             />
           </div>
         </div>
