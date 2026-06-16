@@ -248,3 +248,30 @@ body {
   0% { width: 0; height: 0; opacity: 1; }
   100% { width: 250px; height: 250px; opacity: 0.3; }
 }
+
+/* ================= LLM 配置触发器神性动画 ================= */
+/* 参考 JanusX 原型设计的渐进式交互 */
+
+/* LLM 触发器悬浮效果 */
+.group:hover .absolute:nth-child(1) > div:first-child {
+  background: #fff !important;
+  transform: translate(-50%, -4px) rotate(0deg) !important;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+}
+
+.group:hover .absolute:nth-child(1) > div:last-child {
+  transform: translate(-50%, 3px) rotate(0deg) !important;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.group:hover span:last-child {
+  opacity: 0.9 !important;
+  transform: translateX(0) scale(1) !important;
+}
+
+/* Janus 神性色彩系统 */
+:root {
+  --janus-cyan: #00f0ff;
+  --janus-cyan-glow: rgba(0, 240, 255, 0.4);
+  --janus-green: #00ff88;
+}

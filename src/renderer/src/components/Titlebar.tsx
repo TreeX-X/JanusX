@@ -3,16 +3,19 @@ import appIcon from '@/assets/icons/app-icon.svg'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland, JanusExpanded } from '@/components/janus'
+import { LlmConfigModal } from '@/components/LlmConfigModal'
 import type { JanusMode } from '@/components/janus'
 
 /* ════════════════════════════════════════════════════════════
    Titlebar — 标题栏（简化版）
    灵动岛逻辑已提取至 janus/ 模块
+   新增：LLM 配置隐藏触发器（参考神性设计原型）
    ════════════════════════════════════════════════════════════ */
 
 export function Titlebar() {
   const [expanded, setExpanded] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
+  const [llmModalOpen, setLlmModalOpen] = useState(false)
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -38,6 +41,10 @@ export function Titlebar() {
 
   const handleRunningChange = useCallback((running: boolean) => {
     setIsRunning(running)
+  }, [])
+
+  const handleLlmTriggerClick = useCallback(() => {
+    setLlmModalOpen(true)
   }, [])
 
   return (
@@ -66,11 +73,47 @@ export function Titlebar() {
         />
       </div>
 
-      {/* Logo */}
-      <div className="absolute left-[70px] flex items-center gap-1.5 text-[13px] font-medium text-[#888] tracking-[0.3px] titlebar-no-drag">
-        <img src={appIcon} alt="JanusX" className="w-4 h-4" />
-        <span>JanusX</span>
+      {/* Logo + 隐藏的 LLM 配置触发器 */}
+      <div
+        className="absolute left-[70px] flex items-center gap-2 titlebar-no-drag cursor-pointer group"
+        onClick={handleLlmTriggerClick}
+      >
+        {/* X 形图标（参考原型设计） */}
+        <div className="relative w-4 h-4">
+          <div
+            className="absolute w-3.5 h-[1.5px] top-1/2 left-1/2 rounded-[1px] transition-all duration-[400ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+            style={{
+              background: '#888',
+              transform: 'translate(-50%, -50%) rotate(45deg)',
+            }}
+          />
+          <div
+            className="absolute w-3.5 h-[1.5px] top-1/2 left-1/2 rounded-[1px] transition-all duration-[400ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+            style={{
+              background: '#00f0ff',
+              transform: 'translate(-50%, -50%) rotate(-45deg)',
+            }}
+          />
+        </div>
+
+        {/* 文字 */}
+        <span className="text-[13px] font-medium text-[#888] tracking-[0.5px] transition-all duration-[400ms] group-hover:text-white group-hover:drop-shadow-[0_0_10px_rgba(0,240,255,0.4)]">
+          JanusX
+        </span>
+
+        {/* 隐藏的后缀代码（悬浮时滑出） */}
+        <span
+          className="font-mono text-[9px] font-semibold text-[#00f0ff] tracking-[1px] opacity-0 transition-all duration-[400ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+          style={{
+            transform: 'translateX(-8px) scale(0.9)',
+          }}
+        >
+          :: LLM_CFG
+        </span>
       </div>
+
+      {/* LLM 配置模态框 */}
+      <LlmConfigModal isOpen={llmModalOpen} onClose={() => setLlmModalOpen(false)} />
 
       {/* 灵动岛 */}
       <div
