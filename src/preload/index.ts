@@ -52,6 +52,15 @@ const ALLOWED_INVOKE_CHANNELS = [
   'project:list',
   'project:get',
   'project:schemas',
+  // LLM 相关频道
+  'llm:get-providers',
+  'llm:save-provider',
+  'llm:test-connection',
+  'llm:remove-provider',
+  'llm:set-default-provider',
+  'llm:list-models',
+  'llm:get-adapters',
+  'llm:get-default-provider',
 ]
 
 const ALLOWED_SEND_CHANNELS = [
