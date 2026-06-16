@@ -10,6 +10,12 @@ interface AppStore {
   flipDuration: number
   /** 灵动岛是否正在拖拽中（App.tsx 据此禁用 transition） */
   isIslandDragging: boolean
+  /** 拖拽翻转进度 0~1，用于实时预览旋转角度 */
+  dragFlipProgress: number
+  /** Janus 运行态 */
+  janusRunning: boolean
+  /** 运行中的项目列表 */
+  runningProjects: any[]
   setLoadState: (state: AppLoadState) => void
   toggleSidebar: () => void
   togglePanel: () => void
@@ -17,6 +23,9 @@ interface AppStore {
   setBlueprintMode: (enabled: boolean) => void
   setFlipDuration: (ms: number) => void
   setIsIslandDragging: (v: boolean) => void
+  setDragFlipProgress: (v: number) => void
+  setJanusRunning: (running: boolean) => void
+  setRunningProjects: (projects: any[]) => void
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -26,6 +35,9 @@ export const useAppStore = create<AppStore>((set) => ({
   blueprintMode: false,
   flipDuration: 650,
   isIslandDragging: false,
+  dragFlipProgress: 0,
+  janusRunning: false,
+  runningProjects: [],
   setLoadState: (loadState) => set({ loadState }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   togglePanel: () => set((s) => ({ panelCollapsed: !s.panelCollapsed })),
@@ -33,4 +45,7 @@ export const useAppStore = create<AppStore>((set) => ({
   setBlueprintMode: (blueprintMode) => set({ blueprintMode }),
   setFlipDuration: (ms) => set({ flipDuration: ms }),
   setIsIslandDragging: (v) => set({ isIslandDragging: v }),
+  setDragFlipProgress: (v) => set({ dragFlipProgress: v }),
+  setJanusRunning: (running) => set({ janusRunning: running }),
+  setRunningProjects: (projects) => set({ runningProjects: projects }),
 }))

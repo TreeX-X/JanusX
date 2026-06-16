@@ -11,7 +11,7 @@ import { FileEditor } from '@/components/FileEditor'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
 
 export default function App() {
-  const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration } = useAppStore()
+  const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
 
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
   const flipperElRef = useRef<HTMLDivElement | null>(null)
@@ -84,13 +84,12 @@ export default function App() {
               transition: isIslandDragging
                 ? 'none'
                 : `transform ${flipDuration}ms cubic-bezier(0.25, 1, 0.25, 1)`,
-              /*-- P0: 默认 transform 由 React 计算；拖拽期间由 Titlebar direct DOM 覆盖 --*/
+              /*-- P0: 拖拽期间由 dragFlipProgress 实时计算旋转角度 --*/
               transform: (() => {
                 const base = blueprintMode ? -180 : 0
                 if (isIslandDragging) {
-                  /* 拖拽中：预览偏转由 Titlebar 直接操作 DOM，此处返回当前值避免冲突 */
-                  const el = flipperElRef.current
-                  return el ? el.style.transform : `rotateX(${base}deg)`
+                  const dragRotation = dragFlipProgress * -15
+                  return `rotateX(${base + dragRotation}deg)`
                 }
                 return `rotateX(${base}deg)`
               })(),
