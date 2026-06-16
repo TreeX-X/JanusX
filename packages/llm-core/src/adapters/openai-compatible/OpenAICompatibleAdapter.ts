@@ -297,6 +297,37 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
         baseURL: settings.baseURL
       })
 
+      // 先尝试简单的 HTTP 测试（列出模型）
+      try {
+        const response = await fetch(`${settings.baseURL}/models`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${settings.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        console.log('[OpenAICompatibleAdapter] Models API response:', {
+          status: response.status,
+          ok: response.ok,
+          contentType: response.headers.get('content-type')
+        })
+
+        if (!response.ok) {
+          const text = await response.text()
+          console.log('[OpenAICompatibleAdapter] Models API error body:', text)
+          return {
+            valid: false,
+            errors: [`API 返回错误 (HTTP ${response.status}): ${text.substring(0, 200)}`]
+          }
+        }
+
+        const data = await response.json()
+        console.log('[OpenAICompatibleAdapter] Available models:', data)
+      } catch (fetchError: any) {
+        console.error('[OpenAICompatibleAdapter] Models API fetch error:', fetchError)
+      }
+
       // 创建一个测试模型
       const model = await this.createLanguageModel(settings, modelToTest)
 
@@ -316,10 +347,25 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
         latency
       }
     } catch (error: any) {
+      console.error('[OpenAICompatibleAdapter] testConnection error:', error)
+
+      // 提取更详细的错误信息
+      let errorMessage = error.message || String(error)
+
+      // 如果有响应体，尝试提取
+      if (error.response) {
+        errorMessage += ` (HTTP ${error.response.status})`
+      }
+
+      // 如果有原因，添加到错误信息
+      if (error.cause) {
+        errorMessage += ` - ${error.cause}`
+      }
+
       return {
         valid: false,
         errors: [
-          `连接测试失败: ${error.message || String(error)}`
+          `连接测试失败: ${errorMessage}`
         ]
       }
     }
