@@ -5,12 +5,12 @@
 
 /* ── CSS 变量 ── */
 :root {
-  --janus-sleep: #555;
-  --janus-sleep-glow: rgba(85,85,85,0.3);
-  --janus-order: #00f0ff;
-  --janus-order-glow: rgba(0,240,255,0.6);
-  --janus-analytics: #ffaa00;
-  --janus-analytics-glow: rgba(255,170,0,0.6);
+  --janus-sleep: #ff7830;
+  --janus-sleep-glow: rgba(255,120,48,0.6);
+  --janus-order: #ff7830;
+  --janus-order-glow: rgba(255,120,48,0.6);
+  --janus-analytics: #ff7830;
+  --janus-analytics-glow: rgba(255,120,48,0.6);
   --janus-running: #00ff88;
   --janus-running-glow: rgba(0,255,136,0.6);
   /* 全局当前色（展开面板 portal 继承自 body.is-running 覆盖） */
