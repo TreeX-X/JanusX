@@ -30,6 +30,12 @@ export { ExtensionRegistry } from './core/ExtensionRegistry'
 export { ProviderFactory } from './core/ProviderFactory'
 
 /* ════════════════════════════════════════════════════════════
+   适配器导出
+   ════════════════════════════════════════════════════════════ */
+
+export { OpenAICompatibleAdapter } from './adapters'
+
+/* ════════════════════════════════════════════════════════════
    工具函数导出
    ════════════════════════════════════════════════════════════ */
 
