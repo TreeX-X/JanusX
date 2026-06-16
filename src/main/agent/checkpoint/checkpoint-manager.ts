@@ -53,7 +53,7 @@ export class CheckpointManager {
     this.conversationCounters.set(counterKey, currentIndex)
 
     // Stash FIRST to get a clean working directory, then snapshot HEAD state
-    const stashRef = await this.gitAdapter.stashPush(options.cwd, `switchx:${options.terminalId}:${id}`)
+    const stashRef = await this.gitAdapter.stashPush(options.cwd, `janusx:${options.terminalId}:${id}`)
 
     // Snapshot tracked files (now against clean HEAD)
     const files: Record<string, FileSnapshot> = {}

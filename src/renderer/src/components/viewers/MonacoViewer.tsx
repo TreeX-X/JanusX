@@ -34,7 +34,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false }: 
   )
 
   const handleBeforeMount = useCallback((monaco: any) => {
-    monaco.editor.defineTheme('switchx-dark', {
+    monaco.editor.defineTheme('janusx-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [],
@@ -58,7 +58,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false }: 
         language={language}
         value={content}
         onChange={handleChange}
-        theme="switchx-dark"
+        theme="janusx-dark"
         loading={<LoadingIndicator />}
         options={{
           fontSize: 13,

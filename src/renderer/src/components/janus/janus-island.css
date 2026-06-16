@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════════════════
    JanusX Island — 独立动画与样式模块
-   设计原型：JanusX-Divine-System-Focus-Snap-Edition
+   重构版：data-mode 属性驱动，无 !important，GPU 加速展开动画
    ════════════════════════════════════════════════════════════ */
 
 /* ── CSS 变量 ── */
@@ -13,8 +13,7 @@
   --janus-analytics-glow: rgba(255,170,0,0.6);
   --janus-running: #00ff88;
   --janus-running-glow: rgba(0,255,136,0.6);
-
-  /* Global current color (defaults to order/cyan) */
+  /* 全局当前色（展开面板 portal 继承自 body.is-running 覆盖） */
   --janus-current: var(--janus-order);
   --janus-current-glow: var(--janus-order-glow);
 }
@@ -28,7 +27,6 @@ body.is-running {
    灵动岛 — 折叠态胶囊
    ════════════════════════════════════════════════════════════ */
 
-/* 基础胶囊样式 */
 .janus-island {
   width: 52px;
   height: 26px;
@@ -42,50 +40,38 @@ body.is-running {
   cursor: grab;
   user-select: none;
   position: relative;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: border-color 0.4s, box-shadow 0.4s, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   margin-top: 5px;
+  will-change: transform;
 }
 
-/* Pull hint */
-.pull-hint {
-  position: absolute;
-  top: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11px;
-  color: #888;
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-  z-index: 1000;
-  background: rgba(0,0,0,0.6);
-  padding: 4px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.1);
+/* 运转态 — 绿色边框 */
+.janus-island[data-mode="running"] {
+  border-color: var(--janus-running);
+  background: radial-gradient(ellipse at center, rgba(0,255,136,0.12) 0%, transparent 60%);
 }
 
-/* 按压态 — 轻微缩小 */
+/* 蓄力时暂停 CSS 待机动画 */
+.janus-island.is-charging .janus-eye-mini {
+  animation: none;
+  transition: none;
+}
+
+/* 按压态 */
 .janus-island.pressing {
   transform: scale(0.96);
-  border-color: rgba(255,255,255,0.25) !important;
+  border-color: rgba(255,255,255,0.25);
 }
 
-/* 工作区切换 — 白色边框闪烁 */
+/* 工作区切换闪烁 */
 .janus-island.switching {
-  border-color: #fff !important;
-  box-shadow: 0 0 15px rgba(255,255,255,0.4) !important;
+  border-color: #fff;
+  box-shadow: 0 0 15px rgba(255,255,255,0.4);
   transform: scale(1.05);
-  transition: all 0.15s ease-out;
+  transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out, transform 0.15s ease-out;
 }
 
-/* 运行态 — 绿色边框 + 径向底光 */
-.janus-island.mode-running,
-body.is-running .janus-island {
-  border-color: var(--janus-running) !important;
-  background: radial-gradient(ellipse at center, rgba(0,255,136,0.15) 0%, transparent 60%);
-}
-
-/* 长按蓄力满后的 Snap 回弹 */
+/* 长按 Snap 回弹 */
 .janus-island.trigger-snap {
   animation: island-snap 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
@@ -96,7 +82,7 @@ body.is-running .janus-island {
   100% { transform: scale(1); }
 }
 
-/* 无色涟漪 burst */
+/* 涟漪 burst */
 .burst-ripple {
   position: absolute;
   top: 50%;
@@ -125,26 +111,32 @@ body.is-running .janus-island {
 
 @keyframes ripple-snap {
   0%   { transform: scale(1); opacity: 1; border-width: 3px; }
-  100% { transform: scale(2.4, 2.8); opacity: 0; border-width: 0px; }
+  100% { transform: scale(2.4, 2.8); opacity: 0; border-width: 0; }
 }
 
-/* 长按蓄力时暂停 CSS 待机动画 */
-.janus-island.is-charging .janus-eye-mini,
-.janus-island.is-charging .eye-mini {
-  animation: none !important;
-  transition: none !important;
-}
-
-/* 工作区切换眼睛过渡 */
-.janus-eye-transitioning {
-  transition: opacity 0.15s ease-out, transform 0.15s ease-out !important;
+/* Pull hint */
+.pull-hint {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #888;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 1000;
+  background: rgba(0,0,0,0.6);
+  padding: 4px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 /* ════════════════════════════════════════════════════════════
    Janus 神性眼 — 微型（折叠态）
+   选择器: .janus-island[data-mode="X"] — 无需 body class
    ════════════════════════════════════════════════════════════ */
 
-/* 面容容器 */
 .janus-face-mini {
   display: flex;
   align-items: center;
@@ -153,17 +145,8 @@ body.is-running .janus-island {
   position: relative;
 }
 
-.janus-face-lg {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  position: relative;
-}
-
-/* 休眠态：单点 + 呼吸 */
-.mode-sleep .janus-eye-mini,
-.mode-sleep .eye-mini {
+/* 休眠：单点呼吸 */
+.janus-island[data-mode="sleep"] .janus-eye-mini {
   width: 4px;
   height: 4px;
   border-radius: 50%;
@@ -172,11 +155,8 @@ body.is-running .janus-island {
   animation: janus-breathe 3s ease-in-out infinite;
 }
 
-/* 秩序态：矩形眼 + 眨眼待机 */
-.mode-order .janus-eye-mini,
-.mode-management .janus-eye-mini,
-.mode-order .eye-mini,
-.mode-management .eye-mini {
+/* 秩序：矩形眼 + 眨眼待机 */
+.janus-island[data-mode="order"] .janus-eye-mini {
   width: 8px;
   height: 10px;
   border-radius: 0;
@@ -185,19 +165,8 @@ body.is-running .janus-island {
   animation: mini-idle 8s infinite cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@keyframes mini-idle {
-  0%, 15%, 35%, 100% { transform: translateX(0) scale(1); }
-  17%, 19% { transform: translateX(0) scaleY(0.1); }
-  21% { transform: translateX(0) scale(1); }
-  40%, 48% { transform: translateX(-2px) scale(0.9); }
-  55%, 65% { transform: translateX(2px) scale(0.9); }
-  70% { transform: translateX(0) scale(1); }
-  85% { transform: scale(1.1); }
-  90% { transform: scale(1); }
-}
-
-/* 分析态：左眼扫描 + 右眼数据流 */
-.mode-analytics .left-eye-mini {
+/* 解析：扫描线 + 数据格栅 */
+.janus-island[data-mode="analytics"] .left-eye-mini {
   width: 10px;
   height: 2px;
   background: var(--janus-analytics);
@@ -205,13 +174,46 @@ body.is-running .janus-island {
   animation: data-scan-mini 1s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
 }
 
-.mode-analytics .right-eye-mini {
+.janus-island[data-mode="analytics"] .right-eye-mini {
   width: 8px;
   height: 10px;
   background: repeating-linear-gradient(to bottom, #fff 0, #fff 2px, transparent 2px, transparent 4px);
   background-size: 100% 200%;
   box-shadow: 0 0 10px var(--janus-analytics);
   animation: data-crunching 0.3s linear infinite;
+}
+
+/* 运转：EQ 弹跳 */
+.janus-island[data-mode="running"] .janus-eye-mini {
+  width: 6px;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 0 10px #fff, 0 0 20px var(--janus-running);
+}
+
+.janus-island[data-mode="running"] .left-eye-mini {
+  animation: eq-bounce 0.25s ease-in-out infinite alternate;
+}
+
+.janus-island[data-mode="running"] .right-eye-mini {
+  animation: eq-bounce 0.35s ease-in-out infinite alternate-reverse;
+}
+
+/* ── 眼睛关键帧 ── */
+@keyframes janus-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.85); }
+}
+
+@keyframes mini-idle {
+  0%, 15%, 35%, 100% { transform: translateX(0) scale(1); }
+  17%, 19%            { transform: translateX(0) scaleY(0.1); }
+  21%                 { transform: translateX(0) scale(1); }
+  40%, 48%            { transform: translateX(-2px) scale(0.9); }
+  55%, 65%            { transform: translateX(2px) scale(0.9); }
+  70%                 { transform: translateX(0) scale(1); }
+  85%                 { transform: scale(1.1); }
+  90%                 { transform: scale(1); }
 }
 
 @keyframes data-scan-mini {
@@ -223,40 +225,15 @@ body.is-running .janus-island {
   100% { background-position: 0 100%; }
 }
 
-/* 运行态：圆形 + 等化器弹跳 */
-.mode-running .janus-eye-mini,
-.mode-running .eye-mini,
-body.is-running .janus-eye-mini,
-body.is-running .eye-mini {
-  width: 6px !important;
-  border-radius: 3px !important;
-  background: #fff !important;
-  background-image: none !important;
-  box-shadow: 0 0 10px #fff, 0 0 20px var(--janus-running) !important;
-  transition: none !important;
-  transform: translateY(0) !important;
-}
-
-.mode-running .left-eye-mini,
-body.is-running .left-eye-mini {
-  animation: eq-bounce 0.25s ease-in-out infinite alternate !important;
-}
-
-.mode-running .right-eye-mini,
-body.is-running .right-eye-mini {
-  animation: eq-bounce 0.35s ease-in-out infinite alternate-reverse !important;
-}
-
 @keyframes eq-bounce {
   0%   { height: 4px; }
   100% { height: 14px; }
 }
 
 /* ════════════════════════════════════════════════════════════
-   展开面板
+   展开面板 — transform-scale 动画，GPU 加速，无 reflow
    ════════════════════════════════════════════════════════════ */
 
-/* 遮罩层 */
 .janus-backdrop {
   position: fixed;
   inset: 0;
@@ -271,7 +248,7 @@ body.is-running .right-eye-mini {
 .janus-backdrop-bg {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0,0,0,0.6);
   animation: backdrop-in 0.2s ease-out;
 }
 
@@ -280,17 +257,11 @@ body.is-running .right-eye-mini {
   to   { opacity: 1; }
 }
 
-@keyframes backdrop-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-/* 展开容器 */
+/* 展开容器 — 自身管理定位 */
 .janus-expanded {
   position: absolute;
   left: 50%;
   top: 43px;
-  transform: translateX(-50%);
   width: 530px;
   height: 260px;
   border-radius: 20px;
@@ -301,29 +272,61 @@ body.is-running .right-eye-mini {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  animation: island-expand 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  /* 缩放原点：顶部中央 = island 所在位置 */
+  transform-origin: top center;
+  will-change: transform, opacity;
+  animation: island-expand 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
   transition: box-shadow 0.4s, border-color 0.4s;
 }
 
-/* 展开面板 — 运行态 */
 .janus-expanded.mode-running {
   border-color: var(--janus-running);
   box-shadow: 0 16px 50px rgba(0,0,0,0.9), 0 0 30px var(--janus-running-glow);
 }
 
-/* 展开面板 — 分析态 */
 .janus-expanded.mode-analytics {
   border-color: var(--janus-analytics);
   box-shadow: 0 16px 50px rgba(0,0,0,0.9), 0 0 20px var(--janus-analytics-glow);
 }
 
-/* 展开面板 — 秩序态 (default) */
 .janus-expanded.mode-order {
   border-color: rgba(255,255,255,0.15);
   box-shadow: 0 16px 50px rgba(0,0,0,0.9), 0 0 20px var(--janus-order-glow);
 }
 
-/* 展开面板内部元素 — 使用 var(--janus-current) 级联 */
+.janus-expanded.collapsing {
+  animation: island-collapse 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+/* 展开：从 island 尺寸缩放到完整面板 */
+@keyframes island-expand {
+  from {
+    transform: translateX(-50%) scaleX(0.098) scaleY(0.1);
+    opacity: 0;
+    border-radius: 26px;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+    border-radius: 20px;
+  }
+}
+
+/* 收回：缩回 island 尺寸 */
+@keyframes island-collapse {
+  from {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+    border-radius: 20px;
+  }
+  to {
+    transform: translateX(-50%) scaleX(0.098) scaleY(0.1);
+    opacity: 0;
+    border-radius: 26px;
+  }
+}
+
+/* 展开面板内 — 使用 --janus-current 级联 */
 .janus-expanded .island-title {
   color: var(--janus-current);
   transition: color 0.4s;
@@ -335,38 +338,24 @@ body.is-running .right-eye-mini {
 }
 
 .janus-status-text {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  font-size: 10px;
   color: var(--janus-current);
   text-shadow: 0 0 8px var(--janus-current);
+  z-index: 25;
+  font-family: 'SF Mono', monospace;
+  font-weight: bold;
+  letter-spacing: 3px;
+  opacity: 0.9;
   transition: color 0.4s, text-shadow 0.4s;
 }
 
-.janus-expanded .halo-outer {
-  border-color: var(--janus-current);
-  box-shadow: 0 0 20px var(--janus-current-glow), inset 0 0 20px var(--janus-current-glow);
-  transition: border-color 0.4s, box-shadow 0.4s;
-}
+/* ════════════════════════════════════════════════════════════
+   CRT 效果区
+   ════════════════════════════════════════════════════════════ */
 
-.janus-expanded .halo-inner {
-  border-color: var(--janus-current);
-  box-shadow: 0 0 15px var(--janus-current-glow);
-  transition: border-color 0.4s, box-shadow 0.4s;
-}
-
-.janus-expanded.collapsing {
-  animation: island-collapse 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
-}
-
-@keyframes island-expand {
-  0%   { width: 52px; height: 26px; border-radius: 13px; opacity: 0; }
-  100% { width: 530px; height: 260px; border-radius: 20px; opacity: 1; }
-}
-
-@keyframes island-collapse {
-  0%   { width: 530px; height: 260px; border-radius: 20px; opacity: 1; }
-  100% { width: 52px; height: 26px; border-radius: 13px; opacity: 0; }
-}
-
-/* CRT 效果区 */
 .janus-crt {
   flex: 1;
   display: flex;
@@ -380,10 +369,10 @@ body.is-running .right-eye-mini {
   margin: 10px 0;
   border: 1px solid #1a1a1a;
   box-shadow: inset 0 0 40px rgba(0,0,0,1);
+  contain: layout style paint;
   transition: box-shadow 0.5s;
 }
 
-/* 运行态 CRT 脉冲 */
 .janus-crt.running {
   animation: crt-reactor-pulse 2s infinite alternate;
 }
@@ -408,7 +397,6 @@ body.is-running .right-eye-mini {
   transition: all 0.5s;
 }
 
-/* 运行态网格 */
 .warp-grid.running {
   background-image:
     linear-gradient(rgba(0,255,136,0.15) 1px, transparent 1px),
@@ -425,20 +413,19 @@ body.is-running .right-eye-mini {
 .scanline {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.5) 51%);
+  background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.5) 51%);
   background-size: 100% 4px;
   pointer-events: none;
   z-index: 21;
   animation: scan-crt 8s linear infinite;
 }
 
-@keyframes scan-crt {
-  100% { background-position: 0 100vh; }
+.scanline.running {
+  display: none;
 }
 
-/* 运行态隐藏扫描线 */
-.scanline.running {
-  display: none !important;
+@keyframes scan-crt {
+  100% { background-position: 0 100vh; }
 }
 
 /* 像素覆盖 */
@@ -457,87 +444,30 @@ body.is-running .right-eye-mini {
    Divine Halo — 神性光环
    ════════════════════════════════════════════════════════════ */
 
-.divine-halo-container {
-  position: absolute;
-  width: 140px;
-  height: 140px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 15;
-  opacity: 0.3;
-  transition: all 0.5s ease;
-  pointer-events: none;
-}
-
-.halo-outer {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border: 2px dashed var(--janus-current);
-  border-radius: 50%;
-  animation: spin 20s linear infinite;
-  box-shadow: 0 0 20px var(--janus-current-glow), inset 0 0 20px var(--janus-current-glow);
-  transition: border-color 0.4s, box-shadow 0.4s;
-}
-
-.halo-inner {
-  position: absolute;
-  width: 70%;
-  height: 70%;
-  border: 1px solid var(--janus-current);
-  transform: rotate(45deg);
-  animation: spin-reverse 15s linear infinite;
-  box-shadow: 0 0 15px var(--janus-current-glow);
-  transition: border-color 0.4s, box-shadow 0.4s;
-}
-
-/* 分析态光环 */
-.divine-halo-container.analytics {
-  opacity: 0.7 !important;
-  transform: scale(1.1);
-}
-
-.divine-halo-container.analytics .halo-outer {
-  animation: spin 4s linear infinite;
-  border-style: solid;
-  border-color: var(--janus-analytics);
-  box-shadow: 0 0 20px var(--janus-analytics-glow), inset 0 0 20px var(--janus-analytics-glow);
-}
-
-.divine-halo-container.analytics .halo-inner {
-  animation: spin-reverse 3s linear infinite;
-  border-color: var(--janus-analytics);
-  box-shadow: 0 0 15px var(--janus-analytics-glow);
-}
-
-/* 运行态光环 */
-.divine-halo-container.running {
-  opacity: 0.9 !important;
-  transform: scale(1.25) !important;
-  filter: drop-shadow(-4px 0 0px rgba(0,255,136,0.5)) drop-shadow(4px 0 0px rgba(0,180,255,0.5));
-}
-
-.divine-halo-container.running .halo-outer {
-  animation: spin 0.8s linear infinite !important;
-  border-style: solid !important;
-  border-width: 3px !important;
-  border-color: var(--janus-running) !important;
-  box-shadow: 0 0 20px var(--janus-running-glow), inset 0 0 20px var(--janus-running-glow) !important;
-}
-
-.divine-halo-container.running .halo-inner {
-  animation: spin-reverse 0.6s linear infinite !important;
-  border-color: #fff !important;
-  border-width: 2px !important;
-}
-
 @keyframes spin {
   100% { transform: rotate(360deg); }
 }
 
 @keyframes spin-reverse {
   100% { transform: rotate(-315deg); }
+}
+
+/* 升腾数据微粒 */
+.particle {
+  position: absolute;
+  bottom: -10px;
+  background-color: var(--janus-current);
+  box-shadow: 0 0 10px var(--janus-current);
+  opacity: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@keyframes float-up {
+  0%   { transform: translateY(0) scale(1); opacity: 0; }
+  20%  { opacity: 0.8; }
+  80%  { opacity: 0.8; }
+  100% { transform: translateY(-150px) scale(0.5); opacity: 0; }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -554,11 +484,16 @@ body.is-running .right-eye-mini {
   50% { transform: translateY(-8px); }
 }
 
-/* 秩序态大型眼 */
-.mode-order .janus-eye-lg,
-.mode-management .janus-eye-lg,
-.mode-order .eye-lg,
-.mode-management .eye-lg {
+.janus-face-lg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  position: relative;
+}
+
+/* 秩序态大眼 */
+.mode-order .janus-eye-lg {
   width: 36px;
   height: 48px;
   border-radius: 0;
@@ -569,16 +504,16 @@ body.is-running .right-eye-mini {
 
 @keyframes lg-idle {
   0%, 15%, 35%, 100% { transform: translateX(0) scale(1); }
-  17%, 19% { transform: translateX(0) scaleY(0.05); }
-  21% { transform: translateX(0) scale(1); }
-  40%, 50% { transform: translateX(-6px) scale(0.95); }
-  55%, 65% { transform: translateX(6px) scale(0.95); }
-  70% { transform: translateX(0) scale(1); }
-  85% { transform: scale(1.15); }
-  90% { transform: scale(1); }
+  17%, 19%            { transform: translateX(0) scaleY(0.05); }
+  21%                 { transform: translateX(0) scale(1); }
+  40%, 50%            { transform: translateX(-6px) scale(0.95); }
+  55%, 65%            { transform: translateX(6px) scale(0.95); }
+  70%                 { transform: translateX(0) scale(1); }
+  85%                 { transform: scale(1.15); }
+  90%                 { transform: scale(1); }
 }
 
-/* 分析态大型眼 */
+/* 解析态大眼 */
 .mode-analytics .left-eye-lg {
   width: 40px;
   height: 4px;
@@ -601,28 +536,20 @@ body.is-running .right-eye-mini {
   100% { transform: translateY(20px); }
 }
 
-/* 运行态大型眼 */
-.mode-running .janus-eye-lg,
-.mode-running .eye-lg,
-body.is-running .janus-eye-lg,
-body.is-running .eye-lg {
-  width: 16px !important;
-  border-radius: 8px !important;
-  background: #fff !important;
-  background-image: none !important;
-  box-shadow: 0 0 30px #fff, 0 0 60px var(--janus-running) !important;
-  transition: none !important;
-  transform: translateY(0) !important;
+/* 运转态大眼 */
+.mode-running .janus-eye-lg {
+  width: 16px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 30px #fff, 0 0 60px var(--janus-running);
 }
 
-.mode-running .left-eye-lg,
-body.is-running .left-eye-lg {
-  animation: eq-bounce-lg 0.2s ease-in-out infinite alternate !important;
+.mode-running .left-eye-lg {
+  animation: eq-bounce-lg 0.2s ease-in-out infinite alternate;
 }
 
-.mode-running .right-eye-lg,
-body.is-running .right-eye-lg {
-  animation: eq-bounce-lg 0.3s ease-in-out infinite alternate-reverse !important;
+.mode-running .right-eye-lg {
+  animation: eq-bounce-lg 0.3s ease-in-out infinite alternate-reverse;
 }
 
 @keyframes eq-bounce-lg {
@@ -630,102 +557,15 @@ body.is-running .right-eye-lg {
   100% { height: 80px; }
 }
 
-/* 状态文本 */
-.janus-status-text {
-  position: absolute;
-  bottom: 12px;
-  left: 16px;
-  font-size: 10px;
-  color: var(--janus-current);
-  text-shadow: 0 0 8px var(--janus-current);
-  z-index: 25;
-  font-family: 'SF Mono', monospace;
-  font-weight: bold;
-  letter-spacing: 3px;
-  opacity: 0.9;
-  transition: color 0.4s, text-shadow 0.4s;
-}
-
 /* ════════════════════════════════════════════════════════════
-   工作区切换动画
+   工作区切换标签动画（保留，按需使用）
    ════════════════════════════════════════════════════════════ */
 
-.workspace-switch-content {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  pointer-events: none;
-  transform: translateZ(0);
-}
+.workspace-label-crossfade-out { animation: label-fade-out 0.15s ease-out forwards; }
+.workspace-label-crossfade-in  { animation: label-fade-in  0.15s ease-out 0.08s forwards; }
 
-.workspace-switch-stack {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  height: 24px;
-  transition: width 0.34s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.workspace-label-window {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  height: 14px;
-  line-height: 14px;
-  overflow: hidden;
-}
-
-.workspace-label-static,
-.workspace-label-layer {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-label-layer {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  transform: translate3d(0, -50%, 0);
-  backface-visibility: hidden;
-  will-change: transform, opacity;
-}
-
-.workspace-label-crossfade-out {
-  animation: label-fade-out 0.15s ease-out forwards;
-}
-
-.workspace-label-crossfade-in {
-  animation: label-fade-in 0.15s ease-out 0.08s forwards;
-}
-
-@keyframes label-fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-@keyframes label-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-/* ════════════════════════════════════════════════════════════
-   Janus 眼睛通用动画
-   ════════════════════════════════════════════════════════════ */
-
-@keyframes janus-breathe {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.4; transform: scale(0.85); }
-}
+@keyframes label-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes label-fade-in  { from { opacity: 0; } to { opacity: 1; } }
 
 /* ════════════════════════════════════════════════════════════
    Reduced Motion
@@ -734,19 +574,11 @@ body.is-running .right-eye-lg {
 @media (prefers-reduced-motion: reduce) {
   .janus-island,
   .janus-expanded,
-  .workspace-switch-content,
-  .workspace-switch-stack,
-  .workspace-label-crossfade-out,
-  .workspace-label-crossfade-in,
   .janus-eye-mini,
-  .eye-mini,
   .janus-eye-lg,
-  .eye-lg,
   .janus-face-mini,
-  .janus-face-lg,
-  .halo-outer,
-  .halo-inner {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+  .janus-face-lg {
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
   }
 }

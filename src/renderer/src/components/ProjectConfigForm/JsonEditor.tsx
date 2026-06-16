@@ -15,9 +15,9 @@ interface JsonEditorProps {
   readOnly?: boolean
 }
 
-/*-- switchx-dark 主题定义，与 MonacoViewer 保持一致 --*/
+/*-- janusx-dark 主题定义，与 MonacoViewer 保持一致 --*/
 const handleBeforeMount = (monaco: any) => {
-  monaco.editor.defineTheme('switchx-dark', {
+  monaco.editor.defineTheme('janusx-dark', {
     base: 'vs-dark',
     inherit: true,
     rules: [],
@@ -65,7 +65,7 @@ export function JsonEditor({ value, onChange, readOnly = false }: JsonEditorProp
           language="json"
           value={value}
           onChange={handleChange}
-          theme="switchx-dark"
+          theme="janusx-dark"
           loading={<LoadingIndicator />}
           options={{
             fontSize: 13,

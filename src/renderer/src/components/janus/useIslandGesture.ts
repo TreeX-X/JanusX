@@ -40,6 +40,7 @@ export function useIslandGesture({
   const isPointerDown = useRef(false)
   const isDragging = useRef(false)
   const hasTriggeredLongPress = useRef(false)
+  const startX = useRef(0)
   const startY = useRef(0)
   const currentDragY = useRef(0)
 
@@ -101,20 +102,19 @@ export function useIslandGesture({
         hasTriggeredLongPress.current = true
         cancelLongPressProgress(true)
 
-        // 触发 Snap 回弹动画
+        // 触发 Snap 回弹动画 + 涟漪效果
         if (island) {
           island.classList.add('trigger-snap')
           setTimeout(() => {
             island.classList.remove('trigger-snap')
           }, 500)
-        }
 
-        // 触发涟漪效果
-        const ripple = island.previousElementSibling as HTMLElement
-        if (ripple?.classList.contains('burst-ripple')) {
-          ripple.classList.remove('burst')
-          void ripple.offsetWidth  // 强制重绘
-          ripple.classList.add('burst')
+          const ripple = island.previousElementSibling as HTMLElement | null
+          if (ripple?.classList.contains('burst-ripple')) {
+            ripple.classList.remove('burst')
+            void ripple.offsetWidth  // 强制重绘
+            ripple.classList.add('burst')
+          }
         }
 
         onLongPress()
@@ -157,6 +157,7 @@ export function useIslandGesture({
       isPointerDown.current = true
       isDragging.current = false
       hasTriggeredLongPress.current = false
+      startX.current = e.clientX
       startY.current = e.clientY
       currentDragY.current = 0
       velocityHistory.current = []
@@ -191,7 +192,7 @@ export function useIslandGesture({
       if (
         !isDragging.current &&
         Math.abs(deltaY) > 5 &&
-        Math.abs(deltaY) > Math.abs(e.clientX - startY.current)
+        Math.abs(deltaY) > Math.abs(e.clientX - startX.current)
       ) {
         isDragging.current = true
         if (pressDelayTimer.current) clearTimeout(pressDelayTimer.current)

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { JanusMode } from './JanusEye'
 
@@ -55,10 +55,33 @@ export function JanusExpanded({
 
   const statusText =
     isRunning
-      ? 'DIVINE REACTOR // OVERLOAD'
+      ? 'RUNNING // ACTIVE'
       : mode === 'analytics'
-        ? 'ANALYTICS // PROCESSING'
+        ? 'ANALYTICS // PROCESSING...'
         : 'ORDER // IDLE'
+
+  /*-- 粒子系统 --*/
+  const [particles, setParticles] = useState<Array<{
+    id: number; left: number; size: number; duration: number
+  }>>([])
+  const pidRef = useRef(0)
+
+  useEffect(() => {
+    const isActive = mode === 'analytics' || isRunning
+    const speed = isActive ? 200 : 800
+
+    const spawn = () => {
+      const id = ++pidRef.current
+      const left = 20 + Math.random() * 60
+      const size = (isActive && Math.random() > 0.5) ? 6 : (Math.random() > 0.8 ? 12 : 6)
+      const duration = isActive ? (1.5 + Math.random() * 2) : (3 + Math.random() * 4)
+      setParticles(prev => [...prev, { id, left, size, duration }])
+      setTimeout(() => setParticles(prev => prev.filter(p => p.id !== id)), duration * 1000)
+    }
+
+    const interval = setInterval(spawn, speed)
+    return () => clearInterval(interval)
+  }, [mode, isRunning])
 
   /*-- expanded 面板的模式 class --*/
   const expandedModeClass = isRunning
@@ -78,16 +101,12 @@ export function JanusExpanded({
         onClick={handleBackdropClick}
       />
 
-      {/* 展开容器 */}
+      {/* 展开容器 — 定位由 CSS .janus-expanded 管理 */}
       <div
-        className="absolute left-1/2"
-        style={{ top: 38, transform: 'translateX(-50%)' }}
+        className={`janus-expanded ${expandedModeClass} ${collapsing ? 'collapsing' : ''}`}
+        onDoubleClick={handleDoubleClick}
+        onAnimationEnd={collapsing ? handleCollapseEnd : undefined}
       >
-        <div
-          className={`janus-expanded ${expandedModeClass} ${collapsing ? 'collapsing' : ''}`}
-          onDoubleClick={handleDoubleClick}
-          onAnimationEnd={collapsing ? handleCollapseEnd : undefined}
-        >
           {/* Header */}
           <div
             className="flex justify-between items-center pb-1.5"
@@ -116,15 +135,14 @@ export function JanusExpanded({
             {/* 像素覆盖 */}
             <div className="pixel-overlay" />
 
-            {/* Divine Halo */}
-            <div
-              className={`divine-halo-container ${
-                mode === 'analytics' ? 'analytics' : ''
-              } ${isRunning ? 'running' : ''}`}
-            >
-              <div className="halo-outer" />
-              <div className="halo-inner" />
-            </div>
+            {/* 升腾粒子 */}
+            {particles.map(({ id, left, size, duration }) => (
+              <div
+                key={id}
+                className="particle"
+                style={{ left: `${left}%`, width: size, height: size, animation: `float-up ${duration}s ease-in forwards` }}
+              />
+            ))}
 
             {/* 悬浮大型眼 — CSS 驱动，非 JanusEye 组件 */}
             <div className="levitation-wrapper">
@@ -154,7 +172,6 @@ export function JanusExpanded({
             </span>
           </div>
         </div>
-      </div>
     </div>,
     document.body,
   )

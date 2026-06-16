@@ -31,11 +31,11 @@ class ConfigService {
   private config: GlobalConfig | null = null
 
   constructor() {
-    this.configPath = join(app.getPath('userData'), 'switchx', 'config.json')
+    this.configPath = join(app.getPath('userData'), 'janusx', 'config.json')
   }
 
   private async ensureDir(): Promise<void> {
-    await mkdir(join(app.getPath('userData'), 'switchx'), { recursive: true })
+    await mkdir(join(app.getPath('userData'), 'janusx'), { recursive: true })
   }
 
   async load(): Promise<GlobalConfig> {

@@ -23,7 +23,14 @@ export function JanusEye({ mode, size = 10, className, leftRef, rightRef }: Janu
   return (
     <div
       className={className}
-      style={{ position: 'relative' }}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '3px',
+      }}
       data-janus-mode={mode}
       role="img"
       aria-label={`Janus eye - ${mode} mode`}

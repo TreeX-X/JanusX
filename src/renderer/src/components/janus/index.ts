@@ -1,4 +1,5 @@
 export { JanusIsland } from './JanusIsland'
 export { JanusExpanded } from './JanusExpanded'
 export { JanusEye } from './JanusEye'
+export { useJanusState } from './useJanusState'
 export type { JanusMode } from './JanusEye'

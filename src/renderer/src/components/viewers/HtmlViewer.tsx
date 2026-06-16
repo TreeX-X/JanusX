@@ -22,7 +22,7 @@ export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
   )
 
   const handleBeforeMount = useCallback((monaco: any) => {
-    monaco.editor.defineTheme('switchx-dark', {
+    monaco.editor.defineTheme('janusx-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [],
@@ -108,7 +108,7 @@ export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
             language="html"
             value={content}
             onChange={handleChange}
-            theme="switchx-dark"
+            theme="janusx-dark"
             loading={null}
             options={{
               fontSize: 13,

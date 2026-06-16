@@ -21,7 +21,7 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
   )
 
   const handleBeforeMount = useCallback((monaco: any) => {
-    monaco.editor.defineTheme('switchx-dark', {
+    monaco.editor.defineTheme('janusx-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [],
@@ -86,7 +86,7 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
             language="markdown"
             value={content}
             onChange={handleChange}
-            theme="switchx-dark"
+            theme="janusx-dark"
             loading={null}
             options={{
               fontSize: 13,

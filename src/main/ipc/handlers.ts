@@ -3,7 +3,7 @@ import { join, relative } from 'path'
 import { readdir, readFile, writeFile, mkdir, unlink, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
 
-const WORKSPACES_DIR = join(app.getPath('userData'), 'switchx', 'workspaces')
+const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 
 async function ensureDir(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true })
