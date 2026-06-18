@@ -294,12 +294,27 @@
       resetTestStatus();
     });
 
+    let modalMouseDownTarget = null;
+    let modalMouseUpTarget = null;
+    llmModal.addEventListener('mousedown', (e) => {
+      modalMouseDownTarget = e.target;
+    });
+    llmModal.addEventListener('mouseup', (e) => {
+      modalMouseUpTarget = e.target;
+    });
     llmModal.addEventListener('click', (e) => {
-      if (e.target === llmModal) {
+      if (modalMouseDownTarget === llmModal && modalMouseUpTarget === llmModal) {
         llmModal.classList.remove('show');
         resetTestStatus();
       }
+      modalMouseDownTarget = null;
+      modalMouseUpTarget = null;
     });
+
+    const llmPanel = llmModal.querySelector('.llm-config-panel');
+    llmPanel.addEventListener('mousedown', (e) => e.stopPropagation());
+    llmPanel.addEventListener('mouseup', (e) => e.stopPropagation());
+    llmPanel.addEventListener('click', (e) => e.stopPropagation());
 
     // --- 表单交互逻辑 ---
     const tempSlider = document.getElementById('tempSlider');
