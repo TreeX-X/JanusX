@@ -5,9 +5,16 @@
  */
 
 import type { ProviderSettings, ProviderExtension, LanguageModelV1, EmbeddingModelV1 } from './types'
+import { AuthType } from './types'
 import { ExtensionRegistry } from './ExtensionRegistry'
 import { ModelCreationError, ValidationError, wrapError } from '../utils/errors'
 import { validateSettings } from '../utils/validation'
+
+const AUTH_TYPE_TO_ADAPTER: Record<string, string> = {
+  [AuthType.API_KEY]: 'openai-compatible',
+  [AuthType.VERTEX_AI]: 'vertex-ai',
+  [AuthType.NONE]: 'openai-compatible',
+}
 
 /* ════════════════════════════════════════════════════════════
    工厂类实现
@@ -43,6 +50,11 @@ export class ProviderFactory {
    */
   private constructor() {
     this.registry = ExtensionRegistry.getInstance()
+  }
+
+  private resolveAdapter(settings: ProviderSettings): ProviderExtension {
+    const adapterId = AUTH_TYPE_TO_ADAPTER[settings.authType] || settings.id
+    return this.registry.get(adapterId)
   }
 
   /**
@@ -92,7 +104,7 @@ export class ProviderFactory {
     }
 
     // 获取 Provider 扩展
-    const provider = this.registry.get(settings.id)
+    const provider = this.resolveAdapter(settings)
 
     // 创建模型
     try {
@@ -129,7 +141,7 @@ export class ProviderFactory {
     }
 
     // 获取 Provider 扩展
-    const provider = this.registry.get(settings.id)
+    const provider = this.resolveAdapter(settings)
 
     // 检查能力
     if (!provider.capabilities.embedding) {
@@ -172,7 +184,7 @@ export class ProviderFactory {
 
     // 获取 Provider 并调用其验证方法
     try {
-      const provider = this.registry.get(settings.id)
+      const provider = this.resolveAdapter(settings)
       const result = await provider.validateSettings(settings)
       return result.valid
     } catch {

@@ -582,3 +582,267 @@ body.is-running {
     animation-duration: 0.01ms;
   }
 }
+
+/* ════════════════════════════════════════════════════════════
+   JanusChat — 虚幻模糊风格对话界面
+   ════════════════════════════════════════════════════════════ */
+
+.janus-chat {
+  position: absolute;
+  bottom: 40px;
+  left: 16px;
+  right: 16px;
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+/* 消息区域 */
+.janus-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: none;
+}
+
+.janus-chat-messages::-webkit-scrollbar {
+  display: none;
+}
+
+/* 空状态 */
+.janus-chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  opacity: 0.4;
+}
+
+.janus-chat-empty-icon {
+  font-size: 24px;
+  color: var(--janus-current);
+  text-shadow: 0 0 12px var(--janus-current-glow);
+  margin-bottom: 8px;
+  animation: janus-breathe 3s ease-in-out infinite;
+}
+
+.janus-chat-empty-text {
+  font-size: 12px;
+  color: #666;
+  font-family: 'SF Mono', monospace;
+  letter-spacing: 1px;
+}
+
+.janus-chat-empty-hint {
+  font-size: 10px;
+  color: #444;
+  margin-top: 4px;
+}
+
+/* 消息气泡 */
+.janus-chat-message {
+  max-width: 85%;
+  animation: message-in 0.3s ease-out;
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.janus-chat-message.user {
+  align-self: flex-end;
+}
+
+.janus-chat-message.assistant {
+  align-self: flex-start;
+}
+
+.janus-chat-message-content {
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-word;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.janus-chat-message.user .janus-chat-message-content {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+}
+
+.janus-chat-message.assistant .janus-chat-message-content {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #aaa;
+}
+
+/* 加载动画 */
+.janus-chat-message-content.loading {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px;
+}
+
+.janus-chat-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--janus-current);
+  opacity: 0.6;
+  animation: dot-pulse 1.4s ease-in-out infinite;
+}
+
+.janus-chat-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.janus-chat-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* 错误提示 */
+.janus-chat-error {
+  font-size: 10px;
+  color: #ff6b6b;
+  text-align: center;
+  padding: 4px 8px;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 107, 107, 0.2);
+}
+
+/* 输入区域 */
+.janus-chat-input-wrapper {
+  display: flex;
+  gap: 6px;
+  padding: 8px 0 0;
+  position: relative;
+}
+
+.janus-chat-input {
+  flex: 1;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 0 12px;
+  font-size: 11px;
+  color: #ccc;
+  outline: none;
+  transition: all 0.3s;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.janus-chat-input:focus {
+  border-color: var(--accent-color, var(--janus-current));
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 12px rgba(255, 120, 48, 0.15);
+}
+
+.janus-chat-input::placeholder {
+  color: #555;
+}
+
+.janus-chat-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.janus-chat-send {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.janus-chat-send:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--accent-color, var(--janus-current));
+  color: var(--accent-color, var(--janus-current));
+}
+
+.janus-chat-send:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.janus-chat-clear {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #555;
+  font-size: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  opacity: 0;
+}
+
+.janus-chat-input-wrapper:hover .janus-chat-clear {
+  opacity: 1;
+}
+
+.janus-chat-clear:hover {
+  background: rgba(255, 100, 100, 0.15);
+  border-color: rgba(255, 100, 100, 0.3);
+  color: #ff6b6b;
+}
+
+/* 对话切换按钮 */
+.janus-chat-toggle {
+  font-size: 9px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.janus-chat-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}

@@ -34,6 +34,7 @@ export { ProviderFactory } from './core/ProviderFactory'
    ════════════════════════════════════════════════════════════ */
 
 export { OpenAICompatibleAdapter } from './adapters'
+export { VertexAIAdapter } from './adapters'
 
 /* ════════════════════════════════════════════════════════════
    工具函数导出
@@ -62,6 +63,16 @@ export {
   validateVertexAISettings,
   validateSettings
 } from './utils/validation'
+
+/* ════════════════════════════════════════════════════════════
+   代理管理导出
+   ════════════════════════════════════════════════════════════ */
+
+export {
+  ProxyManager,
+  getProxyManager,
+  getSystemProxy
+} from './utils/proxy'
 
 /* ════════════════════════════════════════════════════════════
    配置加载器导出

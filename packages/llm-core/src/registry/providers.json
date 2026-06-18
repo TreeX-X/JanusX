@@ -51,6 +51,7 @@
           "label": "Region",
           "description": "模型部署区域",
           "options": [
+            { "value": "global", "label": "global" },
             { "value": "us-central1", "label": "us-central1 (Iowa)" },
             { "value": "us-east1", "label": "us-east1 (South Carolina)" },
             { "value": "us-west1", "label": "us-west1 (Oregon)" },
@@ -99,12 +100,13 @@
         }
       },
       "supportedModels": [
-        "gemini-1.5-pro",
-        "gemini-1.5-flash",
-        "gemini-1.0-pro",
-        "gemini-pro-vision",
-        "text-embedding-004",
-        "imagen-3"
+        "gemini-3.5-flash",
+        "gemini-3-pro-preview",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash-001",
+        "text-embedding-005",
+        "gemini-embedding-2-preview"
       ],
       "documentation": {
         "setup": "https://cloud.google.com/vertex-ai/docs/start/introduction",

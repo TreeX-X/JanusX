@@ -13,7 +13,9 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/renderer/src/*"]
+      "@/*": ["src/renderer/src/*"],
+      "ai": ["packages/llm-core/node_modules/ai"],
+      "@ai-sdk/*": ["packages/llm-core/node_modules/@ai-sdk/*"]
     }
   },
   "include": ["src"],

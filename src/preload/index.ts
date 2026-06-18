@@ -61,6 +61,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'llm:list-models',
   'llm:get-adapters',
   'llm:get-default-provider',
+  'llm:chat',
 ]
 
 const ALLOWED_SEND_CHANNELS = [

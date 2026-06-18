@@ -119,6 +119,40 @@ export function validateApiKeySettings(settings: ProviderSettings): ValidationRe
 }
 
 /**
+ * 验证 PEM 私钥格式
+ */
+export function validatePrivateKey(key: string): { valid: boolean; error?: string } {
+  if (!key) {
+    return { valid: false, error: '私钥为空' }
+  }
+
+  // 将字面的 \n 转换为实际换行符以便验证
+  const normalized = key.replace(/\\n/g, '\n').trim()
+
+  // 检查 PEM 头部
+  if (!normalized.includes('-----BEGIN')) {
+    return { valid: false, error: '缺少 PEM 头部标记（-----BEGIN ...-----）' }
+  }
+
+  // 检查 PEM 尾部
+  if (!normalized.includes('-----END')) {
+    return { valid: false, error: '缺少 PEM 尾部标记（-----END ...-----）' }
+  }
+
+  // 检查基本结构
+  const hasBegin = normalized.includes('-----BEGIN PRIVATE KEY-----') || 
+                   normalized.includes('-----BEGIN RSA PRIVATE KEY-----')
+  const hasEnd = normalized.includes('-----END PRIVATE KEY-----') || 
+                 normalized.includes('-----END RSA PRIVATE KEY-----')
+
+  if (!hasBegin || !hasEnd) {
+    return { valid: false, error: 'PEM 标记格式不正确' }
+  }
+
+  return { valid: true }
+}
+
+/**
  * 验证 Vertex AI 配置
  */
 export function validateVertexAISettings(config: VertexAIConfig): ValidationResult {
@@ -139,10 +173,11 @@ export function validateVertexAISettings(config: VertexAIConfig): ValidationResu
 
   // 验证认证方式
   const hasADC = config.useADC === true
+  const hasIndividual = !!(config.clientEmail && config.privateKey)
   const hasJSON = !!(config.serviceAccountJSON || config.serviceAccountPath)
 
-  if (!hasADC && !hasJSON) {
-    errors.push('必须选择至少一种认证方式：ADC 或 Service Account JSON')
+  if (!hasADC && !hasIndividual && !hasJSON) {
+    errors.push('必须选择至少一种认证方式：Client Email + Private Key、ADC 或 Service Account JSON')
   }
 
   // Service Account JSON 格式验证
@@ -151,9 +186,23 @@ export function validateVertexAISettings(config: VertexAIConfig): ValidationResu
       const parsed = JSON.parse(config.serviceAccountJSON)
       if (!parsed.client_email || !parsed.private_key) {
         errors.push('Service Account JSON 缺少必要字段（client_email, private_key）')
+      } else {
+        // 验证 JSON 中的私钥格式
+        const keyCheck = validatePrivateKey(parsed.private_key)
+        if (!keyCheck.valid) {
+          errors.push(`Service Account JSON 中的私钥格式错误: ${keyCheck.error}`)
+        }
       }
     } catch {
       errors.push('Service Account JSON 格式不正确')
+    }
+  }
+
+  // 单独提供的私钥格式验证
+  if (config.privateKey) {
+    const keyCheck = validatePrivateKey(config.privateKey)
+    if (!keyCheck.valid) {
+      errors.push(`私钥格式错误: ${keyCheck.error}`)
     }
   }
 

@@ -278,7 +278,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
    * @returns 验证结果，包含延迟信息
    *
    * @remarks
-   * 此方法会发送真实的 API 请求，可能产生费用
+   * 直接向 /chat/completions 发送最小请求，验证完整链路可用
    */
   async testConnection(
     settings: ProviderSettings,
@@ -288,61 +288,63 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
 
     try {
       const modelToTest = testModel || this.getDefaultModel(settings)
+      const baseURL = settings.baseURL?.replace(/\/+$/, '') || 'https://api.openai.com/v1'
+      const url = `${baseURL}/chat/completions`
 
-      // 测试 /models 端点
-      const response = await fetch(`${settings.baseURL}/models`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${settings.apiKey}`,
-          'Content-Type': 'application/json'
-        }
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (settings.apiKey) {
+        headers['Authorization'] = `Bearer ${settings.apiKey}`
+      }
+
+      const payload = {
+        model: modelToTest,
+        messages: [{ role: 'user', content: 'hi' }],
+      }
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
       })
-
-      if (!response.ok) {
-        const text = await response.text()
-        return {
-          valid: false,
-          errors: [`API 返回错误 (HTTP ${response.status}): ${text.substring(0, 200)}`]
-        }
-      }
-
-      const data = await response.json()
-
-      // 检查指定的模型是否存在
-      const modelExists = (data as any).data?.some((m: any) => m.id === modelToTest)
-
-      if (!modelExists) {
-        return {
-          valid: false,
-          errors: [`模型 '${modelToTest}' 不在可用列表中。可用模型: ${(data as any).data?.slice(0, 5).map((m: any) => m.id).join(', ')}...`]
-        }
-      }
 
       const latency = Date.now() - startTime
 
-      // 简化模式：只验证 API 可达性和模型存在性
-      // 不实际调用 generateText，避免格式兼容性问题
+      if (resp.ok) {
+        return { valid: true, latency }
+      }
+
+      const text = await resp.text().catch(() => '')
+      let detail = text
+      try {
+        const json = JSON.parse(text)
+        detail = json?.error?.message || text
+      } catch {}
+
+      if (resp.status === 401) {
+        return { valid: false, errors: ['API Key 无效'] }
+      }
+      if (resp.status === 404) {
+        return { valid: false, errors: [`模型 '${modelToTest}' 未找到，请检查 model 配置`] }
+      }
+
       return {
-        valid: true,
-        latency
+        valid: false,
+        errors: [`API 返回错误 (${resp.status}): ${detail.substring(0, 200)}`]
       }
 
     } catch (error: any) {
       let errorMessage = error.message || String(error)
 
-      if (error.response) {
-        errorMessage += ` (HTTP ${error.response.status})`
-      }
-
-      if (error.cause) {
-        errorMessage += ` - ${error.cause}`
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        return { valid: false, errors: ['连接超时，请检查网络或 base_url'] }
       }
 
       return {
         valid: false,
-        errors: [
-          `连接测试失败: ${errorMessage}`
-        ]
+        errors: [`连接测试失败: ${errorMessage}`]
       }
     }
   }

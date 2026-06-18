@@ -60,12 +60,18 @@ export interface VertexAIConfig {
   projectId: string
   /** 部署区域（如 us-central1） */
   region: string
+  /** Service Account Email (client_email) */
+  clientEmail?: string
+  /** Service Account Private Key (private_key) */
+  privateKey?: string
   /** Service Account JSON 内容（字符串） */
   serviceAccountJSON?: string
   /** Service Account JSON 文件路径 */
   serviceAccountPath?: string
   /** 使用 Application Default Credentials */
   useADC?: boolean
+  /** HTTP 代理地址（如 http://127.0.0.1:7890） */
+  proxy?: string
 }
 
 /* ════════════════════════════════════════════════════════════

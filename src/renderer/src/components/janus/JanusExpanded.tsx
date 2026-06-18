@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { JanusMode } from './JanusEye'
+import { JanusChat } from './JanusChat'
 
 /* ════════════════════════════════════════════════════════════
    JanusExpanded — 展开面板组件
-   CRT 效果 + Divine Halo + 大型 CSS 驱动眼
+   CRT 效果 + Divine Halo + 大型 CSS 驱动眼 + 对话界面
    ════════════════════════════════════════════════════════════ */
 
 interface JanusExpandedProps {
@@ -27,6 +28,7 @@ export function JanusExpanded({
   onCollapse,
 }: JanusExpandedProps) {
   const [collapsing, setCollapsing] = useState(false)
+  const [showChat, setShowChat] = useState(false)
 
   const handleCollapse = useCallback(() => {
     setCollapsing(true)
@@ -49,6 +51,10 @@ export function JanusExpanded({
     [handleCollapse],
   )
 
+  const toggleChat = useCallback(() => {
+    setShowChat(prev => !prev)
+  }, [])
+
   /*-- 状态文本 --*/
   const modeLabel =
     mode === 'analytics' ? 'ANALYTICS' : mode === 'running' ? 'RUNNING' : 'ORDER'
@@ -59,6 +65,9 @@ export function JanusExpanded({
       : mode === 'analytics'
         ? 'ANALYTICS // PROCESSING...'
         : 'ORDER // IDLE'
+
+  /*-- 模式颜色 --*/
+  const modeColor = mode === 'running' ? '#00ff88' : '#ff7830'
 
   /*-- 粒子系统 --*/
   const [particles, setParticles] = useState<Array<{
@@ -158,6 +167,9 @@ export function JanusExpanded({
             </div>
           </div>
 
+          {/* 对话界面 */}
+          <JanusChat visible={showChat} modeColor={modeColor} />
+
           {/* Footer */}
           <div
             className="flex justify-between items-center pt-1.5 text-[10px]"
@@ -166,12 +178,22 @@ export function JanusExpanded({
               color: '#71717a',
             }}
           >
-            <span>神性协议终端</span>
+            <span className="flex items-center gap-2">
+              <span>神性协议终端</span>
+              <button
+                className="janus-chat-toggle"
+                onClick={toggleChat}
+                style={{ color: showChat ? modeColor : '#52525b' }}
+              >
+                {showChat ? '◎ 关闭对话' : '◎ 对话'}
+              </button>
+            </span>
             <span className="text-[10px] font-bold tracking-[1px] island-footer-right">
               MODE: {modeLabel}
             </span>
           </div>
         </div>
+
     </div>,
     document.body,
   )
