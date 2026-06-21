@@ -66,11 +66,7 @@ class LlmService {
     if (this.initialized) return
 
     // 初始化全局代理管理器（自动检测系统代理）
-    const proxyManager = getProxyManager({
-      info: console.log,
-      warn: console.warn,
-      error: console.error,
-    })
+    const proxyManager = getProxyManager()
     proxyManager.autoDetect()
 
     // 设置 Electron session 代理

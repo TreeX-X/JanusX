@@ -150,5 +150,4 @@ export function registerLlmHandlers(): void {
     }
   })
 
-  console.log('[IPC] LLM handlers registered')
 }
