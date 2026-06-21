@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
+import { ModalCloseButton } from './ModalCloseButton'
 import type { Workspace, FileNode } from '@/types'
 
 export function Sidebar() {
@@ -272,7 +273,6 @@ export function Sidebar() {
             backdropFilter: 'blur(10px)',
             zIndex: 1000,
           }}
-          onClick={() => setDeleteTarget(null)}
         >
           <div
             className="overflow-hidden"
@@ -284,7 +284,6 @@ export function Sidebar() {
               boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
               animation: 'island-expand-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div
@@ -301,15 +300,7 @@ export function Sidebar() {
                 <span style={{ color: '#ff5858' }}>&#9888;</span>
                 删除工作区
               </div>
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="cursor-pointer transition-colors"
-                style={{ color: '#666', fontSize: 18, background: 'none', border: 'none' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#ff7830' }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#666' }}
-              >
-                &times;
-              </button>
+              <ModalCloseButton onClose={() => setDeleteTarget(null)} />
             </div>
 
             {/* Body */}
@@ -403,12 +394,8 @@ export function Sidebar() {
             backdropFilter: 'blur(10px)',
             zIndex: 1000,
           }}
-          onClick={() => setConfigTarget(null)}
         >
-          <div
-            className="ws-config-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="ws-config-modal">
             {/* Header */}
             <div
               className="flex justify-between items-center"
@@ -426,15 +413,7 @@ export function Sidebar() {
                 </svg>
                 <span>工作区启动配置</span>
               </div>
-              <button
-                onClick={() => setConfigTarget(null)}
-                className="cursor-pointer transition-colors"
-                style={{ color: '#666', fontSize: 18, background: 'none', border: 'none' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#ff7830' }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#666' }}
-              >
-                &times;
-              </button>
+              <ModalCloseButton onClose={() => setConfigTarget(null)} />
             </div>
             {/* Body */}
             <div style={{ padding: '0', overflow: 'hidden', flex: 1 }}>

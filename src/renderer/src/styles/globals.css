@@ -249,6 +249,45 @@ body {
   100% { width: 250px; height: 250px; opacity: 0.3; }
 }
 
+/* ================= 弹窗红灯关闭按钮（macOS 红绿灯风格） ================= */
+/* 所有弹出小窗口统一使用：点击红灯关闭，点击遮罩/其他区域不会关闭 */
+.modal-close-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  transition: filter 0.15s ease;
+}
+
+.modal-close-light:hover {
+  filter: brightness(1.12);
+}
+
+.modal-close-light:active {
+  filter: brightness(0.9);
+}
+
+.modal-close-light::after {
+  content: '\2715';
+  font-size: 7px;
+  line-height: 1;
+  color: transparent;
+  font-weight: bold;
+  transition: color 0.15s ease;
+}
+
+.modal-close-light:hover::after {
+  color: rgba(0, 0, 0, 0.55);
+}
+
 /* ================= LLM 配置触发器神性动画 ================= */
 /* 参考 JanusX 原型设计的渐进式交互 */
 /* 核心：X 形图标悬浮时变成两个横杠 */

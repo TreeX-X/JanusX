@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useCheckpointStore, type CheckpointSummary } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { ModalCloseButton } from './ModalCloseButton'
 
 const ENGINE_LABELS: Record<string, string> = {
   claude: 'Claude Code',
@@ -490,11 +491,6 @@ export function CheckpointPanel() {
             backdropFilter: 'blur(10px)',
             zIndex: 1000,
           }}
-          onClick={() => {
-            setShowModal(false)
-            setRestoreTarget(null)
-            clearConflicts()
-          }}
         >
           <div
             className="overflow-hidden"
@@ -505,7 +501,6 @@ export function CheckpointPanel() {
               borderRadius: 8,
               boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
             <div
@@ -522,19 +517,13 @@ export function CheckpointPanel() {
                 <span style={{ color: '#ff7830' }}>&#9889;</span>
                 还原点三路合并决策 (3-Way Merge)
               </div>
-              <button
-                onClick={() => {
+              <ModalCloseButton
+                onClose={() => {
                   setShowModal(false)
                   setRestoreTarget(null)
                   clearConflicts()
                 }}
-                className="cursor-pointer transition-colors"
-                style={{ color: '#666', fontSize: 18, background: 'none', border: 'none' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#ff7830' }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#666' }}
-              >
-                &times;
-              </button>
+              />
             </div>
 
             {/* Modal body */}

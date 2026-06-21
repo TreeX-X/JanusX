@@ -75,19 +75,6 @@
   }
 }
 
-.closeBtn {
-  color: #666;
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  transition: color 0.2s;
-  user-select: none;
-}
-
-.closeBtn:hover {
-  color: #fff;
-}
-
 .configBody {
   padding: 20px;
   display: flex;

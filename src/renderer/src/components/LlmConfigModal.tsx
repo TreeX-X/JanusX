@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './LlmConfigModal.module.css'
+import { ModalCloseButton } from './ModalCloseButton'
 import { getProviders, saveProvider, testConnection, removeProvider, setDefaultProvider, getDefaultProvider } from '@/services/llm'
 import type { ProviderSettings } from '@janusx/llm-core'
 
@@ -206,26 +207,17 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
     }
   }
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose()
-      resetForm()
-    }
-  }
-
   if (!isOpen) return null
 
   return createPortal(
-    <div className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`} onClick={handleBackdropClick}>
-      <div className={styles.llmConfigPanel} onClick={e => e.stopPropagation()}>
+    <div className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`}>
+      <div className={styles.llmConfigPanel}>
         <div className={styles.configHeader}>
           <div className={styles.configTitle}>
             <i className={styles.statusDot}></i>
             LLM Engine Settings
           </div>
-          <div className={styles.closeBtn} onClick={() => { onClose(); resetForm() }}>
-            &times;
-          </div>
+          <ModalCloseButton onClose={() => { onClose(); resetForm() }} />
         </div>
 
         <div className={styles.configBody}>
