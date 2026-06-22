@@ -197,7 +197,7 @@ export function registerLlmHandlers(): void {
       const model = await llmService.getLanguageModel(providerId, actualModelId)
       const { streamText } = await llmService.getAiModule()
 
-      const result = streamText({
+      const result = await streamText({
         model: model as any,
         messages: formattedMessages.map(m => ({
           role: m.role as 'user' | 'assistant' | 'system',
