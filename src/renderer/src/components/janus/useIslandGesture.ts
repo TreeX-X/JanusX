@@ -200,6 +200,7 @@ export function useIslandGesture({
         const island = islandRef.current
         if (island) {
           island.classList.remove('pressing')
+          island.classList.add('is-dragging')
           island.style.transform = 'translateY(0)'
         }
       }
@@ -258,7 +259,10 @@ export function useIslandGesture({
 
       if (pressDelayTimer.current) clearTimeout(pressDelayTimer.current)
       const island = islandRef.current
-      if (island) island.classList.remove('pressing')
+      if (island) {
+        island.classList.remove('pressing')
+        island.classList.remove('is-dragging')
+      }
 
       if (isDragging.current) {
         isDragging.current = false
@@ -355,6 +359,7 @@ export function useIslandGesture({
     const island = islandRef.current
     if (island) {
       island.classList.remove('pressing')
+      island.classList.remove('is-dragging')
       island.style.transform = ''
       island.style.transition = ''
     }
