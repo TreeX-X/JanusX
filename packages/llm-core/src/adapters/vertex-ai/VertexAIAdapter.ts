@@ -290,8 +290,8 @@ export class VertexAIAdapter implements ProviderExtension {
     }
   }
 
-  getDefaultModel(_settings: ProviderSettings): string {
-    return 'gemini-2.5-flash'
+  getDefaultModel(settings: ProviderSettings): string {
+    return settings.modelId || 'gemini-2.5-flash'
   }
 
   async initialize(settings: ProviderSettings): Promise<void> {
