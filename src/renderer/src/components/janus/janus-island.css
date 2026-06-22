@@ -16,6 +16,14 @@
   /* 全局当前色（展开面板 portal 继承自 body.is-running 覆盖） */
   --janus-current: var(--janus-order);
   --janus-current-glow: var(--janus-order-glow);
+  /* Island / Expanded 共享几何变量，保证展开动画起点与 Island 完全对齐 */
+  --janus-island-w: 52px;
+  --janus-island-h: 26px;
+  --janus-island-br: calc(var(--janus-island-h) / 2);
+  --janus-expanded-w: 530px;
+  --janus-expanded-h: 260px;
+  --janus-expanded-top: 43px;
+  --janus-expanded-br: 20px;
 }
 
 body.is-running {
@@ -28,9 +36,9 @@ body.is-running {
    ════════════════════════════════════════════════════════════ */
 
 .janus-island {
-  width: 52px;
-  height: 26px;
-  border-radius: 13px;
+  width: var(--janus-island-w);
+  height: var(--janus-island-h);
+  border-radius: var(--janus-island-br);
   background-color: #000;
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: 0 4px 15px rgba(0,0,0,0.5);
@@ -43,6 +51,23 @@ body.is-running {
   transition: border-color 0.4s, box-shadow 0.4s, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   margin-top: 5px;
   will-change: transform;
+  outline: none;
+}
+
+.janus-island:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255,120,48,0.4), 0 4px 15px rgba(0,0,0,0.5);
+  border-color: rgba(255,120,48,0.6);
+}
+
+/* 双击成功即时反馈：发光爆发 + 轻微回弹 */
+.janus-island.double-tap-flash {
+  animation: double-tap-pulse 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes double-tap-pulse {
+  0%   { transform: scale(1); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+  50%  { transform: scale(1.08); box-shadow: 0 0 22px var(--janus-current-glow), 0 0 40px var(--janus-current-glow); border-color: var(--janus-current); }
+  100% { transform: scale(1); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
 }
 
 /* 运转态 — 绿色边框 */
@@ -261,13 +286,13 @@ body.is-running {
 .janus-expanded {
   position: absolute;
   left: 50%;
-  top: 43px;
-  width: 530px;
-  height: 260px;
-  border-radius: 20px;
+  top: var(--janus-expanded-top);
+  width: var(--janus-expanded-w);
+  height: var(--janus-expanded-h);
+  border-radius: var(--janus-expanded-br);
   background: #000;
   border: 1px solid rgba(255,255,255,0.15);
-  box-shadow: 0 16px 50px rgba(0,0,0,0.9), 0 0 20px var(--janus-current-glow);
+  box-shadow: 0 16px 50px rgba(0,0,0,0.9), 0 0 0 transparent;
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
@@ -275,8 +300,8 @@ body.is-running {
   /* 缩放原点：顶部中央 = island 所在位置 */
   transform-origin: top center;
   will-change: transform, opacity;
-  animation: island-expand 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-  transition: box-shadow 0.4s, border-color 0.4s;
+  animation: island-expand 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transition: box-shadow 0.55s ease-out 0.12s, border-color 0.4s;
 }
 
 .janus-expanded.mode-running {
@@ -295,20 +320,20 @@ body.is-running {
 }
 
 .janus-expanded.collapsing {
-  animation: island-collapse 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+  animation: island-collapse 0.35s cubic-bezier(0.7, 0, 0.3, 1) forwards;
 }
 
-/* 展开：从 island 尺寸缩放到完整面板 */
+/* 展开：从 island 尺寸缩放到完整面板，scale 由几何变量精确计算 */
 @keyframes island-expand {
   from {
-    transform: translateX(-50%) scaleX(0.098) scaleY(0.1);
+    transform: translateX(-50%) scaleX(calc(var(--janus-island-w) / var(--janus-expanded-w))) scaleY(calc(var(--janus-island-h) / var(--janus-expanded-h)));
     opacity: 0;
-    border-radius: 26px;
+    border-radius: var(--janus-island-br);
   }
   to {
     transform: translateX(-50%) scale(1);
     opacity: 1;
-    border-radius: 20px;
+    border-radius: var(--janus-expanded-br);
   }
 }
 
@@ -317,13 +342,37 @@ body.is-running {
   from {
     transform: translateX(-50%) scale(1);
     opacity: 1;
-    border-radius: 20px;
+    border-radius: var(--janus-expanded-br);
   }
   to {
-    transform: translateX(-50%) scaleX(0.098) scaleY(0.1);
+    transform: translateX(-50%) scaleX(calc(var(--janus-island-w) / var(--janus-expanded-w))) scaleY(calc(var(--janus-island-h) / var(--janus-expanded-h)));
     opacity: 0;
-    border-radius: 26px;
+    border-radius: var(--janus-island-br);
   }
+}
+
+/* 面板内部元素 stagger 进入 */
+.janus-expanded > *,
+.janus-expanded .janus-eye-large,
+.janus-expanded .janus-crt,
+.janus-expanded .janus-particles,
+.janus-expanded .janus-status-text {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: expanded-child-enter 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* header 最先进 */
+.janus-expanded > *:nth-child(1) { animation-delay: 0.06s; }
+/* 内容主体（大眼 + CRT + 粒子） */
+.janus-expanded > *:nth-child(2) { animation-delay: 0.12s; }
+/* footer / status */
+.janus-expanded > *:nth-child(3) { animation-delay: 0.18s; }
+.janus-expanded .janus-status-text { animation-delay: 0.2s; }
+
+@keyframes expanded-child-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* 展开面板内 — 使用 --janus-current 级联 */

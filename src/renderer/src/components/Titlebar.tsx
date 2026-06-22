@@ -122,6 +122,7 @@ export function Titlebar() {
       >
         {!expanded && (
           <JanusIsland
+            expanded={expanded}
             onExpand={handleExpand}
             onRunningChange={handleRunningChange}
           />

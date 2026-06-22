@@ -43,7 +43,7 @@ export function JanusExpanded({
     handleCollapse()
   }, [handleCollapse])
 
-  const handleDoubleClick = useCallback(
+  const handleHeaderDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       handleCollapse()
@@ -113,22 +113,25 @@ export function JanusExpanded({
       {/* 展开容器 — 定位由 CSS .janus-expanded 管理 */}
       <div
         className={`janus-expanded ${expandedModeClass} ${collapsing ? 'collapsing' : ''}`}
-        onDoubleClick={handleDoubleClick}
         onAnimationEnd={collapsing ? handleCollapseEnd : undefined}
       >
           {/* Header */}
           <div
-            className="flex justify-between items-center pb-1.5"
+            className="flex justify-between items-center pb-1.5 janus-expanded-header"
             style={{
               borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+              cursor: 'pointer',
+              userSelect: 'none',
             }}
+            onDoubleClick={handleHeaderDoubleClick}
+            title="双击标题栏收合"
           >
             <div
               className="text-[11px] font-bold uppercase tracking-[1px] flex items-center gap-1.5 island-title"
             >
               <span>◎</span> JANUS ENGINE
             </div>
-            <div className="text-[9px] text-[#52525b]">双击空白处收合</div>
+            <div className="text-[9px] text-[#52525b]">双击标题栏收合</div>
           </div>
 
           {/* CRT 区域 */}

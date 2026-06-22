@@ -76,11 +76,12 @@ function useProjectRunning(activeWorkspace: Workspace | undefined) {
 }
 
 interface JanusIslandProps {
+  expanded?: boolean
   onExpand: () => void
   onRunningChange?: (isRunning: boolean) => void
 }
 
-export function JanusIsland({ onExpand, onRunningChange }: JanusIslandProps) {
+export function JanusIsland({ expanded = false, onExpand, onRunningChange }: JanusIslandProps) {
   const { mode, isSwitching, activeWorkspace, eyeContainerRef } = useJanusState()
   const { janusRunning, toggleRunning } = useProjectRunning(activeWorkspace)
 
@@ -92,6 +93,22 @@ export function JanusIsland({ onExpand, onRunningChange }: JanusIslandProps) {
   }, [toggleRunning])
 
   const handleDoubleTap = useCallback(() => { onExpand() }, [onExpand])
+
+  const handleDoubleTapFeedback = useCallback(() => {
+    const island = islandRef.current
+    if (!island) return
+    island.classList.add('double-tap-flash')
+    window.setTimeout(() => {
+      island.classList.remove('double-tap-flash')
+    }, 180)
+  }, [])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onExpand()
+    }
+  }, [onExpand])
 
   const handleSwipeFlip = useCallback(() => {
     setBlueprintMode(!blueprintMode)
@@ -114,6 +131,7 @@ export function JanusIsland({ onExpand, onRunningChange }: JanusIslandProps) {
     onLongPress: handleLongPress,
     onSwipeFlip: handleSwipeFlip,
     onDoubleTap: handleDoubleTap,
+    onDoubleTapFeedback: handleDoubleTapFeedback,
     onDragProgress: handleDragProgress,
     isRunning: janusRunning,
   })
@@ -130,12 +148,17 @@ export function JanusIsland({ onExpand, onRunningChange }: JanusIslandProps) {
       <div className="burst-ripple" />
       <div
         ref={islandRef}
+        role="button"
+        tabIndex={0}
+        aria-label="展开 Janus 面板"
+        aria-expanded={expanded}
         data-mode={mode}
         className={`janus-island${isSwitching ? ' switching' : ''}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onKeyDown={handleKeyDown}
       >
         <div ref={(el) => { eyeContainerRef.current = el }} className="janus-face-mini">
           <JanusEye mode={mode} size={10} leftRef={eyeLeftRef} rightRef={eyeRightRef} />
