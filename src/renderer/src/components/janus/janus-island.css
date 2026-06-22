@@ -784,11 +784,9 @@ body.is-running {
 
 .janus-chat-input {
   flex: 1;
-  height: 28px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
-  padding: 0 12px;
   font-size: 11px;
   color: #ccc;
   outline: none;
@@ -881,4 +879,203 @@ body.is-running {
 
 .janus-chat-toggle:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+/* Markdown 内容渲染 */
+.janus-chat-message-content p {
+  margin: 0 0 6px;
+}
+
+.janus-chat-message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.janus-chat-message-content ul,
+.janus-chat-message-content ol {
+  margin: 0 0 6px;
+  padding-left: 16px;
+}
+
+.janus-chat-message-content li {
+  margin-bottom: 2px;
+}
+
+.janus-chat-message-content blockquote {
+  margin: 0 0 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent-color, var(--janus-current));
+  color: #999;
+}
+
+.janus-chat-message-content hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+/* 行内代码 */
+.janus-chat-inline-code {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-family: 'SF Mono', monospace;
+  font-size: 10px;
+}
+
+/* 代码块与复制按钮 */
+.janus-chat-pre {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.janus-chat-code-block {
+  position: relative;
+  background: #0d0d0d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px;
+  margin: 4px 0;
+}
+
+.janus-chat-code-block code {
+  display: block;
+  font-family: 'SF Mono', monospace;
+  font-size: 10px;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding-right: 36px;
+}
+
+.janus-chat-copy-code {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: #888;
+  font-size: 9px;
+  padding: 2px 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.janus-chat-code-block:hover .janus-chat-copy-code {
+  opacity: 1;
+}
+
+.janus-chat-copy-code:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* 流式加载动画 */
+.janus-chat-loading {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+/* 输入框 textarea 自适应 */
+.janus-chat-input {
+  resize: none;
+  min-height: 28px;
+  max-height: 74px;
+  line-height: 1.4;
+  padding: 6px 12px;
+}
+
+.janus-chat-input::-webkit-scrollbar {
+  display: none;
+}
+
+/* 停止按钮 */
+.janus-chat-stop {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 100, 100, 0.12);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  color: #ff6b6b;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.janus-chat-stop:hover {
+  background: rgba(255, 100, 100, 0.2);
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.25);
+}
+
+/* 错误卡片 */
+.janus-chat-error-card {
+  align-self: flex-start;
+  max-width: 90%;
+  padding: 8px 10px;
+  margin-top: 4px;
+  background: rgba(255, 100, 100, 0.08);
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  border-radius: 10px;
+  animation: message-in 0.3s ease-out;
+}
+
+.janus-chat-error-text {
+  font-size: 10px;
+  color: #ff6b6b;
+  line-height: 1.5;
+}
+
+.janus-chat-error-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.janus-chat-retry,
+.janus-chat-config-llm {
+  font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.janus-chat-retry:hover,
+.janus-chat-config-llm:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent-color, var(--janus-current));
+  color: var(--accent-color, var(--janus-current));
+}
+
+/* 新消息徽章 */
+.janus-chat-new-message-badge {
+  position: absolute;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 10px;
+  color: var(--accent-color, var(--janus-current));
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.2s;
+}
+
+.janus-chat-new-message-badge:hover {
+  background: rgba(255, 255, 255, 0.12);
 }

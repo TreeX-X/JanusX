@@ -20,6 +20,14 @@ interface ChatRequest {
   modelId?: string
 }
 
+/** 流式对话请求参数 */
+interface ChatStreamRequest {
+  requestId: string
+  messages: ChatMessage[]
+  providerId: string
+  modelId?: string
+}
+
 /**
  * 注册 LLM 相关的 IPC handlers
  */
@@ -148,6 +156,82 @@ export function registerLlmHandlers(): void {
       console.error('[IPC] llm:chat error:', error.message)
       throw error
     }
+  })
+
+  // 流式对话请求
+  const abortControllers = new Map<string, AbortController>()
+
+  ipcMain.handle('llm:chat-stream', async (event, request: ChatStreamRequest) => {
+    const { requestId, messages, providerId, modelId } = request
+    const controller = new AbortController()
+    abortControllers.set(requestId, controller)
+
+    const sendError = (message: string) => {
+      event.sender.send('llm:chat:error', { requestId, error: message })
+    }
+
+    try {
+      const settings = await llmService.getProviderSettings(providerId)
+      if (!settings) {
+        throw new Error(`Provider "${providerId}" 未配置`)
+      }
+
+      const actualModelId = modelId || settings.modelId || 'gemini-2.5-flash'
+
+      // 过滤掉空内容的消息
+      const formattedMessages = messages
+        .filter(m => m.content && m.content.trim().length > 0)
+        .map(m => ({
+          role: m.role,
+          content: m.content
+        }))
+
+      // Vertex AI 暂走非流式，但统一包装为单段流
+      if (settings.authType === 'vertex-ai') {
+        const text = await llmService.callVertexAI(settings, formattedMessages, actualModelId)
+        event.sender.send('llm:chat:delta', { requestId, delta: text, done: true })
+        event.sender.send('llm:chat:done', { requestId })
+        return { success: true }
+      }
+
+      const model = await llmService.getLanguageModel(providerId, actualModelId)
+      const { streamText } = await llmService.getAiModule()
+
+      const result = streamText({
+        model: model as any,
+        messages: formattedMessages.map(m => ({
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content
+        })),
+        abortSignal: controller.signal,
+      })
+
+      for await (const delta of result.textStream) {
+        if (controller.signal.aborted) break
+        event.sender.send('llm:chat:delta', { requestId, delta, done: false })
+      }
+
+      event.sender.send('llm:chat:delta', { requestId, delta: '', done: true })
+      event.sender.send('llm:chat:done', { requestId })
+      return { success: true }
+    } catch (error: any) {
+      // 用户主动取消时不作为错误上报
+      if (controller.signal.aborted || error?.name === 'AbortError') {
+        event.sender.send('llm:chat:done', { requestId })
+        return { success: true }
+      }
+      console.error('[IPC] llm:chat-stream error:', error.message || error)
+      sendError(error.message || String(error))
+      return { success: false, error: error.message || String(error) }
+    } finally {
+      abortControllers.delete(requestId)
+    }
+  })
+
+  // 中止流式请求
+  ipcMain.handle('llm:chat:abort', async (_, requestId: string) => {
+    abortControllers.get(requestId)?.abort()
+    return { success: true }
   })
 
 }

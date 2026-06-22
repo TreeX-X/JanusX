@@ -62,6 +62,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'llm:get-adapters',
   'llm:get-default-provider',
   'llm:chat',
+  'llm:chat-stream',
+  'llm:chat:abort',
 ]
 
 const ALLOWED_SEND_CHANNELS = [
@@ -78,6 +80,10 @@ const ALLOWED_ON_CHANNELS = [
   'agent:event',
   'checkpoint:event',
   'checkpoint:ready',
+  // LLM 流式频道
+  'llm:chat:delta',
+  'llm:chat:done',
+  'llm:chat:error',
 ]
 
 contextBridge.exposeInMainWorld('electron', {

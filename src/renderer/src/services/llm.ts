@@ -73,3 +73,101 @@ export async function chat(
     modelId
   }) as Promise<string>
 }
+
+/* ════════════════════════════════════════════════════════════
+   流式对话 API
+   ════════════════════════════════════════════════════════════ */
+
+interface ChatStreamEvent {
+  requestId: string
+  delta?: string
+  done?: boolean
+  error?: string
+}
+
+let requestSeq = 0
+
+/**
+ * 流式对话
+ * @param messages 完整消息列表（含 system / user / assistant）
+ * @param onDelta 收到增量内容时回调
+ * @param onDone 流结束时回调
+ * @param onError 发生错误时回调
+ * @returns abort 取消函数
+ */
+export function chatStream(
+  messages: ChatMessage[],
+  onDelta: (delta: string) => void,
+  onDone: () => void,
+  onError: (error: string) => void
+): { abort: () => void } {
+  const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
+  let cleaned = false
+
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    unsubDelta()
+    unsubDone()
+    unsubError()
+  }
+
+  const filterByRequest = (payload: unknown): ChatStreamEvent | null => {
+    const p = payload as ChatStreamEvent | undefined
+    return p?.requestId === requestId ? p : null
+  }
+
+  const unsubDelta = window.electron.on('llm:chat:delta', (payload: unknown) => {
+    const p = filterByRequest(payload)
+    if (!p || p.done) return
+    onDelta(p.delta ?? '')
+  })
+
+  const unsubDone = window.electron.on('llm:chat:done', (payload: unknown) => {
+    const p = filterByRequest(payload)
+    if (!p) return
+    cleanup()
+    onDone()
+  })
+
+  const unsubError = window.electron.on('llm:chat:error', (payload: unknown) => {
+    const p = filterByRequest(payload)
+    if (!p) return
+    cleanup()
+    onError(p.error ?? '未知错误')
+  })
+
+  getDefaultProvider()
+    .then((def) => {
+      if (cleaned) return
+      if (!def?.provider.id) {
+        cleanup()
+        onError('未配置默认 LLM Provider')
+        return
+      }
+      window.electron
+        .invoke('llm:chat-stream', {
+          requestId,
+          messages,
+          providerId: def.provider.id,
+          modelId: def.modelId
+        })
+        .catch((err: unknown) => {
+          if (cleaned) return
+          cleanup()
+          onError(err instanceof Error ? err.message : '启动流式对话失败')
+        })
+    })
+    .catch((err: unknown) => {
+      if (cleaned) return
+      cleanup()
+      onError(err instanceof Error ? err.message : '获取默认 Provider 失败')
+    })
+
+  return {
+    abort: () => {
+      cleanup()
+      window.electron.invoke('llm:chat:abort', requestId).catch(() => {})
+    }
+  }
+}
