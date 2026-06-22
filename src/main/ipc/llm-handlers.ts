@@ -186,10 +186,10 @@ export function registerLlmHandlers(): void {
           content: m.content
         }))
 
-      // Vertex AI 暂走非流式，但统一包装为单段流
+      // Vertex AI 暂走非流式，但统一包装为单段流（done: false 让渲染端正常累计）
       if (settings.authType === 'vertex-ai') {
         const text = await llmService.callVertexAI(settings, formattedMessages, actualModelId)
-        event.sender.send('llm:chat:delta', { requestId, delta: text, done: true })
+        event.sender.send('llm:chat:delta', { requestId, delta: text, done: false })
         event.sender.send('llm:chat:done', { requestId })
         return { success: true }
       }
