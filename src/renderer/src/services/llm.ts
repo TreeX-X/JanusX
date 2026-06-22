@@ -118,24 +118,27 @@ export function chatStream(
   }
 
   const unsubDelta = window.electron.on('llm:chat:delta', (payload: unknown) => {
+    console.log('[chatStream] raw delta payload:', payload)
     const p = filterByRequest(payload)
     if (!p || p.done) return
-    console.log('[chatStream] delta received, length:', (p.delta ?? '').length)
+    console.log('[chatStream] delta accepted, length:', (p.delta ?? '').length)
     onDelta(p.delta ?? '')
   })
 
   const unsubDone = window.electron.on('llm:chat:done', (payload: unknown) => {
+    console.log('[chatStream] raw done payload:', payload)
     const p = filterByRequest(payload)
     if (!p) return
-    console.log('[chatStream] done received')
+    console.log('[chatStream] done accepted')
     cleanup()
     onDone()
   })
 
   const unsubError = window.electron.on('llm:chat:error', (payload: unknown) => {
+    console.log('[chatStream] raw error payload:', payload)
     const p = filterByRequest(payload)
     if (!p) return
-    console.error('[chatStream] error received:', p.error)
+    console.error('[chatStream] error accepted:', p.error)
     cleanup()
     onError(p.error ?? '未知错误')
   })
