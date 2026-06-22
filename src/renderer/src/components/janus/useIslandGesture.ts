@@ -12,15 +12,11 @@ const SWIPE_THRESHOLD = 60          // 翻转阈值 px
 const VELOCITY_THRESHOLD = 0.5      // 快甩阈值 px/ms
 const LONG_PRESS_DURATION = 550     // 长按时长 ms（设计原型值）
 const PRESS_DELAY = 100             // 按压延迟 ms
-const DOUBLE_TAP_DELAY = 300        // 双击时间窗口 ms
-const TAP_MOVE_THRESHOLD = 10       // 双击/单击允许的位移阈值 px
 
 interface IslandGestureOptions {
   onLongPress: () => void           // 长按完成回调
   onSwipeFlip: () => void           // 下拉翻转回调
   onDoubleTap: () => void           // 双击回调
-  /** 双击判定成功但尚未展开时的即时反馈回调 */
-  onDoubleTapFeedback?: () => void  // 新增
   /** 拖拽过程中实时回调，用于翻转容器预览旋转 */
   onDragProgress?: (deltaY: number, progress: number) => void
   isRunning: boolean
@@ -30,7 +26,6 @@ export function useIslandGesture({
   onLongPress,
   onSwipeFlip,
   onDoubleTap,
-  onDoubleTapFeedback,
   onDragProgress,
   isRunning,
 }: IslandGestureOptions) {
@@ -61,8 +56,7 @@ export function useIslandGesture({
 
   /*-- 双击检测 --*/
   const lastTapTime = useRef(0)
-  const lastTapX = useRef(0)
-  const lastTapY = useRef(0)
+  const DOUBLE_TAP_DELAY = 300
 
   /*-- 清理 --*/
   useEffect(() => {
@@ -176,10 +170,7 @@ export function useIslandGesture({
 
       // 启动长按延迟
       pressDelayTimer.current = setTimeout(() => {
-        // 双击窗口期内不启动长按，避免双击第二下误触发长按动画
-        if (!isDragging.current && Date.now() - lastTapTime.current >= DOUBLE_TAP_DELAY) {
-          startLongPressProgress()
-        }
+        if (!isDragging.current) startLongPressProgress()
       }, PRESS_DELAY)
 
       // 拖拽取消长按
@@ -337,26 +328,16 @@ export function useIslandGesture({
         if (!hasTriggeredLongPress.current) {
           cancelLongPressProgress()
           const now = Date.now()
-          const withinTime = now - lastTapTime.current < DOUBLE_TAP_DELAY
-          const dx = Math.abs(e.clientX - lastTapX.current)
-          const dy = Math.abs(e.clientY - lastTapY.current)
-          const withinDistance = dx <= TAP_MOVE_THRESHOLD && dy <= TAP_MOVE_THRESHOLD
-
-          if (withinTime && withinDistance) {
-            if (onDoubleTapFeedback) onDoubleTapFeedback()
+          if (now - lastTapTime.current < DOUBLE_TAP_DELAY) {
             onDoubleTap()
             lastTapTime.current = 0
-            lastTapX.current = 0
-            lastTapY.current = 0
           } else {
             lastTapTime.current = now
-            lastTapX.current = e.clientX
-            lastTapY.current = e.clientY
           }
         }
       }
     },
-    [onSwipeFlip, onDoubleTap, onDoubleTapFeedback, cancelLongPressProgress, onDragProgress],
+    [onSwipeFlip, onDoubleTap, cancelLongPressProgress, onDragProgress],
   )
 
   const handlePointerCancel = useCallback(() => {
