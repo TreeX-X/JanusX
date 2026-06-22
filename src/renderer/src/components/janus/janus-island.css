@@ -37,12 +37,35 @@ body.is-running {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: grab;
+  cursor: default;
   user-select: none;
   position: relative;
   transition: border-color 0.4s, box-shadow 0.4s, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   margin-top: 5px;
   will-change: transform;
+}
+
+/* 拖拽态光标（默认不再显示 grab hand） */
+.janus-island.is-dragging {
+  cursor: grabbing;
+}
+
+/* 空闲悬停呼吸：缩放 + 边框提亮 + 柔光 */
+@keyframes island-hover-breathe {
+  0%, 100% {
+    transform: scale(1);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 0 transparent;
+  }
+  50% {
+    transform: scale(1.03);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 8px var(--janus-current-glow, transparent);
+  }
+}
+
+.janus-island:hover:not(.pressing):not(.is-charging):not(.is-dragging):not(.switching):not(.trigger-snap) {
+  animation: island-hover-breathe 1.5s ease-in-out infinite;
 }
 
 /* 运转态 — 绿色边框 */
@@ -143,6 +166,19 @@ body.is-running {
   justify-content: center;
   gap: 3px;
   position: relative;
+}
+
+/* 眼睛空闲悬停注意：轻微外扩，不干扰各模式动画/长按聚拢 */
+.janus-eye-mini {
+  transition: margin 0.3s ease;
+}
+
+.janus-island:hover:not(.pressing):not(.is-charging):not(.is-dragging):not(.switching):not(.trigger-snap) .left-eye-mini {
+  margin-right: 1.5px;
+}
+
+.janus-island:hover:not(.pressing):not(.is-charging):not(.is-dragging):not(.switching):not(.trigger-snap) .right-eye-mini {
+  margin-left: 1.5px;
 }
 
 /* 休眠：单点呼吸 */
