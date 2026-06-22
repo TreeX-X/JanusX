@@ -62,7 +62,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'llm:get-adapters',
   'llm:get-default-provider',
   'llm:chat',
-  'llm:chat-stream',
+  // stream 请求改为单向 send
   'llm:chat:abort',
 ]
 
@@ -70,6 +70,8 @@ const ALLOWED_SEND_CHANNELS = [
   'terminal:input',
   'terminal:resize',
   'terminal:submit-line',
+  // LLM 流式请求（单向 send）
+  'llm:chat-stream',
 ]
 
 const ALLOWED_ON_CHANNELS = [

@@ -158,17 +158,17 @@ export function registerLlmHandlers(): void {
     }
   })
 
-  // 流式对话请求
+  // 流式对话请求（单向 send/on 模式，确保事件可靠送达渲染端）
   const abortControllers = new Map<string, AbortController>()
 
-  ipcMain.handle('llm:chat-stream', async (event, request: ChatStreamRequest) => {
+  ipcMain.on('llm:chat-stream', async (event, request: ChatStreamRequest) => {
     const { requestId, messages, providerId, modelId } = request
     const controller = new AbortController()
     abortControllers.set(requestId, controller)
 
     const sendEvent = (channel: 'llm:chat:delta' | 'llm:chat:done' | 'llm:chat:error', payload: any) => {
       console.log('[llm:chat-stream] sending', channel, requestId, 'payload keys:', Object.keys(payload))
-      event.sender.send(channel, payload)
+      event.reply(channel, payload)
     }
 
     const sendError = (message: string) => {
@@ -198,7 +198,7 @@ export function registerLlmHandlers(): void {
         console.log('[llm:chat-stream] Vertex AI result length:', text?.length || 0)
         sendEvent('llm:chat:delta', { requestId, delta: text, done: false })
         sendEvent('llm:chat:done', { requestId })
-        return { success: true }
+        return
       }
 
       const model = await llmService.getLanguageModel(providerId, actualModelId)
@@ -220,16 +220,14 @@ export function registerLlmHandlers(): void {
 
       sendEvent('llm:chat:delta', { requestId, delta: '', done: true })
       sendEvent('llm:chat:done', { requestId })
-      return { success: true }
     } catch (error: any) {
       // 用户主动取消时不作为错误上报
       if (controller.signal.aborted || error?.name === 'AbortError') {
         sendEvent('llm:chat:done', { requestId })
-        return { success: true }
+        return
       }
       console.error('[IPC] llm:chat-stream error:', error.message || error)
       sendError(error.message || String(error))
-      return { success: false, error: error.message || String(error) }
     } finally {
       abortControllers.delete(requestId)
     }

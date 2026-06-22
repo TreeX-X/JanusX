@@ -148,18 +148,12 @@ export function chatStream(
         onError('未配置默认 LLM Provider')
         return
       }
-      window.electron
-        .invoke('llm:chat-stream', {
-          requestId,
-          messages,
-          providerId: def.provider.id,
-          modelId: def.modelId
-        })
-        .catch((err: unknown) => {
-          if (cleaned) return
-          cleanup()
-          onError(err instanceof Error ? err.message : '启动流式对话失败')
-        })
+      window.electron.send('llm:chat-stream', {
+        requestId,
+        messages,
+        providerId: def.provider.id,
+        modelId: def.modelId
+      })
     })
     .catch((err: unknown) => {
       if (cleaned) return
