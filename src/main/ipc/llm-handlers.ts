@@ -188,7 +188,9 @@ export function registerLlmHandlers(): void {
 
       // Vertex AI 暂走非流式，但统一包装为单段流（done: false 让渲染端正常累计）
       if (settings.authType === 'vertex-ai') {
+        console.log('[llm:chat-stream] Vertex AI start', { requestId, actualModelId })
         const text = await llmService.callVertexAI(settings, formattedMessages, actualModelId)
+        console.log('[llm:chat-stream] Vertex AI result length:', text?.length || 0)
         event.sender.send('llm:chat:delta', { requestId, delta: text, done: false })
         event.sender.send('llm:chat:done', { requestId })
         return { success: true }

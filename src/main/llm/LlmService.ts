@@ -299,6 +299,11 @@ class LlmService {
     })
 
     const data = await response.json()
+    console.log('[callVertexAI] response status:', response.status, 'candidates:', data.candidates?.length, 'finishReason:', data.candidates?.[0]?.finishReason)
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || `Vertex AI 请求失败: ${response.status}`)
+    }
 
     if (data.error) {
       throw new Error(data.error.message)
