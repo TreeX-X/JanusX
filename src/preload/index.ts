@@ -108,7 +108,10 @@ contextBridge.exposeInMainWorld('electron', {
 
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     if (ALLOWED_ON_CHANNELS.includes(channel)) {
-      const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args)
+      const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => {
+        console.log('[preload] event received:', channel, args)
+        callback(...args)
+      }
       ipcRenderer.on(channel, handler)
       return () => {
         ipcRenderer.removeListener(channel, handler)

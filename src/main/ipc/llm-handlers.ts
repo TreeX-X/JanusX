@@ -166,8 +166,13 @@ export function registerLlmHandlers(): void {
     const controller = new AbortController()
     abortControllers.set(requestId, controller)
 
+    const sendEvent = (channel: 'llm:chat:delta' | 'llm:chat:done' | 'llm:chat:error', payload: any) => {
+      console.log('[llm:chat-stream] sending', channel, requestId, 'payload keys:', Object.keys(payload))
+      event.sender.send(channel, payload)
+    }
+
     const sendError = (message: string) => {
-      event.sender.send('llm:chat:error', { requestId, error: message })
+      sendEvent('llm:chat:error', { requestId, error: message })
     }
 
     try {
@@ -191,8 +196,8 @@ export function registerLlmHandlers(): void {
         console.log('[llm:chat-stream] Vertex AI start', { requestId, actualModelId })
         const text = await llmService.callVertexAI(settings, formattedMessages, actualModelId)
         console.log('[llm:chat-stream] Vertex AI result length:', text?.length || 0)
-        event.sender.send('llm:chat:delta', { requestId, delta: text, done: false })
-        event.sender.send('llm:chat:done', { requestId })
+        sendEvent('llm:chat:delta', { requestId, delta: text, done: false })
+        sendEvent('llm:chat:done', { requestId })
         return { success: true }
       }
 
@@ -210,16 +215,16 @@ export function registerLlmHandlers(): void {
 
       for await (const delta of result.textStream) {
         if (controller.signal.aborted) break
-        event.sender.send('llm:chat:delta', { requestId, delta, done: false })
+        sendEvent('llm:chat:delta', { requestId, delta, done: false })
       }
 
-      event.sender.send('llm:chat:delta', { requestId, delta: '', done: true })
-      event.sender.send('llm:chat:done', { requestId })
+      sendEvent('llm:chat:delta', { requestId, delta: '', done: true })
+      sendEvent('llm:chat:done', { requestId })
       return { success: true }
     } catch (error: any) {
       // 用户主动取消时不作为错误上报
       if (controller.signal.aborted || error?.name === 'AbortError') {
-        event.sender.send('llm:chat:done', { requestId })
+        sendEvent('llm:chat:done', { requestId })
         return { success: true }
       }
       console.error('[IPC] llm:chat-stream error:', error.message || error)
