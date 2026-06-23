@@ -134,12 +134,7 @@ export function registerLlmHandlers(): void {
           content: m.content
         }))
 
-      // Vertex AI 使用直接调用方式
-      if (settings.authType === 'vertex-ai') {
-        return await llmService.callVertexAI(settings, formattedMessages, actualModelId)
-      }
-
-      // 其他 provider 使用 AI SDK
+      // 使用 AI SDK
       const model = await llmService.getLanguageModel(providerId, actualModelId)
       const { generateText } = await llmService.getAiModule()
 
@@ -190,16 +185,6 @@ export function registerLlmHandlers(): void {
           role: m.role,
           content: m.content
         }))
-
-      // Vertex AI 暂走非流式，但统一包装为单段流（done: false 让渲染端正常累计）
-      if (settings.authType === 'vertex-ai') {
-        console.log('[llm:chat-stream] Vertex AI start', { requestId, actualModelId })
-        const text = await llmService.callVertexAI(settings, formattedMessages, actualModelId)
-        console.log('[llm:chat-stream] Vertex AI result length:', text?.length || 0)
-        sendEvent('llm:chat:delta', { requestId, delta: text, done: false })
-        sendEvent('llm:chat:done', { requestId })
-        return
-      }
 
       const model = await llmService.getLanguageModel(providerId, actualModelId)
       const { streamText } = await llmService.getAiModule()
