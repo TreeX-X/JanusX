@@ -1,0 +1,271 @@
+/* ════════════════════════════════════════════════════════════
+   蓝图画布样式 — 暗色主题，复用 Janus 视觉变量口径
+   ════════════════════════════════════════════════════════════ */
+
+.blueprint-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, #151515 0%, #080808 100%);
+  color: #d4d4d4;
+  overflow: hidden;
+}
+
+/* —— 顶部工具栏 —— */
+.blueprint-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(12, 12, 12, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  z-index: 5;
+}
+
+.blueprint-toolbar__title {
+  font-size: 12px;
+  color: #888;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.blueprint-toolbar select,
+.blueprint-toolbar input {
+  height: 26px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #d4d4d4;
+  font-size: 12px;
+  padding: 0 6px;
+  outline: none;
+}
+
+.blueprint-toolbar select:focus,
+.blueprint-toolbar input:focus {
+  border-color: var(--janus-order, #ff7830);
+}
+
+.blueprint-btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: #d4d4d4;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.blueprint-btn:hover {
+  background: rgba(255, 120, 48, 0.12);
+  border-color: rgba(255, 120, 48, 0.5);
+}
+
+.blueprint-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.blueprint-btn--primary {
+  background: rgba(255, 120, 48, 0.18);
+  border-color: rgba(255, 120, 48, 0.5);
+}
+
+.blueprint-toolbar__spacer {
+  flex: 1;
+}
+
+.blueprint-toolbar__error {
+  font-size: 11px;
+  color: #ff5f57;
+}
+
+.blueprint-toolbar__loading {
+  font-size: 11px;
+  color: #888;
+}
+
+/* —— 画布容器 —— */
+.blueprint-canvas-wrapper {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* —— 自定义节点卡片 —— */
+.bp-node-card {
+  width: 220px;
+  padding: 10px 12px;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #d4d4d4;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.bp-node-card--selected {
+  border-color: var(--janus-order, #ff7830);
+  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.6), 0 2px 12px rgba(255, 120, 48, 0.25);
+}
+
+.bp-node-card__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.bp-node-card__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.bp-node-card__type {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: auto;
+}
+
+.bp-node-card__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e4e4e4;
+  line-height: 1.3;
+  word-break: break-word;
+  max-height: 34px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.bp-node-card__progress {
+  margin-top: 8px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bp-node-card__progress-bar {
+  height: 100%;
+  background: var(--janus-order, #ff7830);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.bp-node-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #666;
+}
+
+.bp-node-card__terminal {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  background: rgba(0, 255, 136, 0.1);
+  color: #00ff88;
+  border-radius: 8px;
+}
+
+/* —— 右键菜单 —— */
+.bp-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  padding: 4px;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
+}
+
+.bp-context-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #d4d4d4;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bp-context-menu__item:hover {
+  background: rgba(255, 120, 48, 0.18);
+}
+
+.bp-context-menu__item--danger:hover {
+  background: rgba(255, 95, 87, 0.18);
+  color: #ff8a85;
+}
+
+.bp-context-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bp-context-menu__label {
+  padding: 4px 10px;
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bp-context-menu__status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 0 4px 4px;
+}
+
+.bp-context-menu__status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #aaa;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bp-context-menu__status:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e4e4e4;
+}
+
+.bp-context-menu__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

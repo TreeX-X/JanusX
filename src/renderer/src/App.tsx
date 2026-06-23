@@ -8,6 +8,7 @@ import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel } from '@/components/Panel'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
+import { BlueprintView } from '@/components/blueprint/BlueprintView'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
 
 export default function App() {
@@ -109,26 +110,16 @@ export default function App() {
               {loadState === 'terminal-active' && <TerminalArea />}
             </div>
 
-            {/*-- 背面：蓝图视图（留白占位） --*/}
+            {/*-- 背面：蓝图视图（P2 画布） --*/}
             <div
-              className="absolute inset-0 flex flex-col items-center justify-center"
+              className="absolute inset-0 overflow-hidden"
               style={{
                 backfaceVisibility: 'hidden',
                 transform: 'rotateX(180deg)',
                 background: 'radial-gradient(circle at center, #151515 0%, #080808 100%)',
               }}
             >
-              {/*-- 蓝图内容占位 --*/}
-              <div
-                className="flex flex-col items-center gap-4 opacity-40"
-                style={{ userSelect: 'none' }}
-              >
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff7830" strokeWidth="1.5">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-                <div className="text-[13px] text-[#666]">蓝图画布</div>
-                <div className="text-[11px] text-[#444]">下拉灵动岛翻转到此视图</div>
-              </div>
+              <BlueprintView />
             </div>
           </div>
         </main>
