@@ -65,6 +65,18 @@ const ALLOWED_INVOKE_CHANNELS = [
   'llm:chat',
   // stream 请求改为单向 send
   'llm:chat:abort',
+  // 蓝图与 Janus Analyzer 频道
+  'blueprint:list',
+  'blueprint:load',
+  'blueprint:create',
+  'blueprint:update',
+  'blueprint:delete',
+  'blueprint:node:create',
+  'blueprint:node:update',
+  'blueprint:node:delete',
+  'janus:terminal:bind',
+  'janus:analyzer:analyze',
+  'janus:analyzer:accept-discovered',
 ]
 
 const ALLOWED_SEND_CHANNELS = [
@@ -87,6 +99,9 @@ const ALLOWED_ON_CHANNELS = [
   'llm:chat:delta',
   'llm:chat:done',
   'llm:chat:error',
+  // Janus Island 通知（主进程 -> 渲染）
+  'janus:island:analysis',
+  'janus:island:discovered',
 ]
 
 contextBridge.exposeInMainWorld('electron', {
