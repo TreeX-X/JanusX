@@ -10,6 +10,7 @@ import { registerCheckpointHandlers } from './ipc/checkpoint-handlers'
 import { registerFileHandlers } from './ipc/file-handlers'
 import { registerProjectHandlers } from './ipc/project-handlers'
 import { registerLlmHandlers } from './ipc/llm-handlers'
+import { registerJanusHandlers } from './ipc/janus-handlers'
 import { terminalManager } from './terminal/manager'
 import { agentStreamManager } from './agent/stream-manager'
 
@@ -44,6 +45,7 @@ function createWindow(): void {
   registerFileHandlers()
   registerProjectHandlers()
   registerLlmHandlers()
+  registerJanusHandlers(mainWindow)
 
   // 窗口控制 IPC
   ipcMain.handle('window:minimize', () => {

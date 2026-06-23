@@ -99,3 +99,49 @@ export async function pull(cwd: string) {
 export async function getCurrentBranch(cwd: string) {
   return git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD')
 }
+
+/** Janus Analyzer 需要的 commit 区间条目。字段与 getLog 返回保持一致。 */
+export interface CommitRangeItem {
+  hash: string
+  shortHash: string
+  message: string
+  author: string
+  date: string
+}
+
+/** 判断某个 commit SHA 是否存在于当前仓库（用于校验分析游标是否仍有效）。 */
+export async function commitExists(cwd: string, sha: string): Promise<boolean> {
+  try {
+    await git(cwd, 'cat-file', '-e', `${sha}^{commit}`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 取 [from, to) 区间内的 commit 列表（from 为 null 时从最早开始），按时间倒序，最多 limit 条。 */
+export async function getCommitRange(
+  cwd: string,
+  from: string | null,
+  to: string,
+  limit: number
+): Promise<CommitRangeItem[]> {
+  const range = from ? `${from}..${to}` : to
+  const raw = await git(
+    cwd,
+    'log',
+    `--max-count=${limit}`,
+    '--pretty=format:%H|%h|%s|%an|%ai',
+    range
+  ).catch(() => '')
+  if (!raw) return []
+  return raw.split('\n').map((line) => {
+    const [hash, shortHash, message, author, date] = line.split('|')
+    return { hash, shortHash, message, author, date }
+  })
+}
+
+/** 取某个 commit 的完整 diff 文本（patch 形式，含改动内容，不含 commit message）。 */
+export async function getCommitDiff(cwd: string, hash: string): Promise<string> {
+  return git(cwd, 'diff-tree', '-p', '--no-color', '--root', hash).catch(() => '')
+}

@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { terminalManager } from '../terminal/manager'
 import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
+import { analyzer } from '../janus/analyzer'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -61,6 +62,10 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
             checkpointId: cpId,
           })
         }).catch(err => console.error('Checkpoint finalize failed:', err))
+      }
+      // Janus Analyzer 入口④：终端关闭最终分析（fire-and-forget，不阻塞）
+      if (state) {
+        analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
       }
       terminalStates.delete(id)
     })

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import os from 'os'
+import { JANUS_PERSONA } from '../shared/janus/persona'
 
 const ALLOWED_INVOKE_CHANNELS = [
   'workspace:list',
@@ -94,6 +95,9 @@ contextBridge.exposeInMainWorld('electron', {
   platform: process.platform,
   windowsBuild:
     process.platform === 'win32' ? Number(os.release().split('.')[2]) || undefined : undefined,
+
+  /*-- Janus 人格 prompt 单一来源：主进程 Analyzer 与渲染层 JanusChat 共用 --*/
+  janusPersona: JANUS_PERSONA,
 
   invoke: (channel: string, ...args: unknown[]) => {
     if (ALLOWED_INVOKE_CHANNELS.includes(channel)) {
