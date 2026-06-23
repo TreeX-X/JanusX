@@ -103,6 +103,7 @@ export function chatStream(
 ): { abort: () => void } {
   const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
   let cleaned = false
+  let doneCalled = false
 
   const cleanup = () => {
     if (cleaned) return
@@ -121,14 +122,15 @@ export function chatStream(
     console.log('[chatStream] raw delta payload:', payload)
     const p = filterByRequest(payload)
     if (!p || p.done) return
-    console.log('[chatStream] delta accepted, length:', (p.delta ?? '').length)
+    console.log('[chatStream] delta accepted, length:', (p.delta ?? '').length, 'preview:', (p.delta ?? '').slice(0, 80))
     onDelta(p.delta ?? '')
   })
 
   const unsubDone = window.electron.on('llm:chat:done', (payload: unknown) => {
     console.log('[chatStream] raw done payload:', payload)
     const p = filterByRequest(payload)
-    if (!p) return
+    if (!p || doneCalled) return
+    doneCalled = true
     console.log('[chatStream] done accepted')
     cleanup()
     onDone()

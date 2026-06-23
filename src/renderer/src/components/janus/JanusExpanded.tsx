@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { JanusMode } from './JanusEye'
 import { JanusChat } from './JanusChat'
+import type { Message } from './useJanusChat'
 
 /* ════════════════════════════════════════════════════════════
    JanusExpanded — 展开面板组件
@@ -12,6 +13,15 @@ interface JanusExpandedProps {
   mode: JanusMode
   isRunning: boolean
   onCollapse: () => void
+  messages: Message[]
+  pendingContent: string
+  isStreaming: boolean
+  error: string | null
+  onChatSend: (text: string) => void
+  onChatStop: () => void
+  onChatRetry: () => void
+  onChatClear: () => void
+  onOpenLlmConfig: () => void
 }
 
 /** mode → CSS class for large eye container */
@@ -26,9 +36,20 @@ export function JanusExpanded({
   mode,
   isRunning,
   onCollapse,
+  messages,
+  pendingContent,
+  isStreaming,
+  error,
+  onChatSend,
+  onChatStop,
+  onChatRetry,
+  onChatClear,
+  onOpenLlmConfig,
 }: JanusExpandedProps) {
   const [collapsing, setCollapsing] = useState(false)
-  const [showChat, setShowChat] = useState(false)
+  // 视图枚举：dual（双栏）/ vision（仅视觉）/ chat（仅对话）
+  // 视图切换绝不调用 stop/clear/abort，流式状态机由 useJanusChat 持有
+  const [view, setView] = useState<'dual' | 'vision' | 'chat'>('dual')
 
   const handleCollapse = useCallback(() => {
     setCollapsing(true)
@@ -51,9 +72,14 @@ export function JanusExpanded({
     [handleCollapse],
   )
 
-  const toggleChat = useCallback(() => {
-    setShowChat(prev => !prev)
+  // 视图循环：dual → vision → chat → dual
+  const cycleView = useCallback(() => {
+    setView(prev => (prev === 'dual' ? 'vision' : prev === 'vision' ? 'chat' : 'dual'))
   }, [])
+
+  // 按钮文案显示「下一目标态」
+  const nextViewLabel =
+    view === 'dual' ? '◎ 仅视觉' : view === 'vision' ? '◎ 仅对话' : '◎ 双栏'
 
   /*-- 状态文本 --*/
   const modeLabel =
@@ -113,6 +139,7 @@ export function JanusExpanded({
       {/* 展开容器 — 定位由 CSS .janus-expanded 管理 */}
       <div
         className={`janus-expanded ${expandedModeClass} ${collapsing ? 'collapsing' : ''}`}
+        data-view={view}
         onDoubleClick={handleDoubleClick}
         onAnimationEnd={collapsing ? handleCollapseEnd : undefined}
       >
@@ -131,44 +158,62 @@ export function JanusExpanded({
             <div className="text-[9px] text-[#52525b]">双击空白处收合</div>
           </div>
 
-          {/* CRT 区域 */}
+          {/* 双栏 body：左 CRT / 右 Chat，由 data-view 控制列显隐 */}
           <div
-            className={`janus-crt ${isRunning ? 'running' : ''}`}
+            className="janus-expanded-body"
           >
-            {/* 透视网格 */}
-            <div className={`warp-grid ${isRunning ? 'running' : ''}`} />
+            {/* CRT 区域（左栏） */}
+            <div
+              className={`janus-crt ${isRunning ? 'running' : ''}`}
+            >
+              {/* 透视网格 */}
+              <div className={`warp-grid ${isRunning ? 'running' : ''}`} />
 
-            {/* 扫描线 */}
-            <div className={`scanline ${isRunning ? 'running' : ''}`} />
+              {/* 扫描线 */}
+              <div className={`scanline ${isRunning ? 'running' : ''}`} />
 
-            {/* 像素覆盖 */}
-            <div className="pixel-overlay" />
+              {/* 像素覆盖 */}
+              <div className="pixel-overlay" />
 
-            {/* 升腾粒子 */}
-            {particles.map(({ id, left, size, duration }) => (
-              <div
-                key={id}
-                className="particle"
-                style={{ left: `${left}%`, width: size, height: size, animation: `float-up ${duration}s ease-in forwards` }}
-              />
-            ))}
+              {/* 升腾粒子 */}
+              {particles.map(({ id, left, size, duration }) => (
+                <div
+                  key={id}
+                  className="particle"
+                  style={{ left: `${left}%`, width: size, height: size, animation: `float-up ${duration}s ease-in forwards` }}
+                />
+              ))}
 
-            {/* 悬浮大型眼 — CSS 驱动，非 JanusEye 组件 */}
-            <div className="levitation-wrapper">
-              <div className={`janus-face-lg ${faceClass(mode)}`}>
-                <div className="janus-eye-lg left-eye-lg" />
-                <div className="janus-eye-lg right-eye-lg" />
+              {/* 悬浮大型眼 — CSS 驱动，非 JanusEye 组件 */}
+              <div className="levitation-wrapper">
+                <div className={`janus-face-lg ${faceClass(mode)}`}>
+                  <div className="janus-eye-lg left-eye-lg" />
+                  <div className="janus-eye-lg right-eye-lg" />
+                </div>
+              </div>
+
+              {/* 状态文本 */}
+              <div className="janus-status-text">
+                {statusText}
               </div>
             </div>
 
-            {/* 状态文本 */}
-            <div className="janus-status-text">
-              {statusText}
-            </div>
+            {/* 对话界面（右栏，停靠态） */}
+            <JanusChat
+              visible
+              docked
+              modeColor={modeColor}
+              messages={messages}
+              pendingContent={pendingContent}
+              isStreaming={isStreaming}
+              error={error}
+              onSend={onChatSend}
+              onStop={onChatStop}
+              onRetry={onChatRetry}
+              onClear={onChatClear}
+              onOpenLlmConfig={onOpenLlmConfig}
+            />
           </div>
-
-          {/* 对话界面 */}
-          <JanusChat visible={showChat} modeColor={modeColor} />
 
           {/* Footer */}
           <div
@@ -182,10 +227,10 @@ export function JanusExpanded({
               <span>神性协议终端</span>
               <button
                 className="janus-chat-toggle"
-                onClick={toggleChat}
-                style={{ color: showChat ? modeColor : '#52525b' }}
+                onClick={cycleView}
+                style={{ color: modeColor }}
               >
-                {showChat ? '◎ 关闭对话' : '◎ 对话'}
+                {nextViewLabel}
               </button>
             </span>
             <span className="text-[10px] font-bold tracking-[1px] island-footer-right">

@@ -6,24 +6,37 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { chatStream, type ChatMessage } from '@/services/llm'
+import type { Message } from './useJanusChat'
 
 /* ════════════════════════════════════════════════════════════
    类型定义
    ════════════════════════════════════════════════════════════ */
 
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: number
-}
-
 interface JanusChatProps {
   /** 是否显示 */
   visible: boolean
+  /** 停靠态：作为右侧 flex 列，而非绝对浮层 */
+  docked?: boolean
   /** 当前模式颜色 */
   modeColor: string
+  /** 消息列表 */
+  messages: Message[]
+  /** 当前正在流式接收的内容 */
+  pendingContent: string
+  /** 是否正在流式输出 */
+  isStreaming: boolean
+  /** 错误信息 */
+  error: string | null
+  /** 发送一条用户消息 */
+  onSend: (text: string) => void
+  /** 停止当前流式输出 */
+  onStop: () => void
+  /** 重试最后一条用户消息 */
+  onRetry: () => void
+  /** 清空对话 */
+  onClear: () => void
+  /** 打开 LLM 配置面板 */
+  onOpenLlmConfig: () => void
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -68,20 +81,30 @@ function MarkdownContent({ content }: { content: string }) {
    JanusChat 组件
    ════════════════════════════════════════════════════════════ */
 
-export function JanusChat({ visible, modeColor }: JanusChatProps) {
-  const [messages, setMessages] = useState<Message[]>([])
+export function JanusChat({
+  visible,
+  docked = false,
+  modeColor,
+  messages,
+  pendingContent,
+  isStreaming,
+  error,
+  onSend,
+  onStop,
+  onRetry,
+  onClear,
+  onOpenLlmConfig
+}: JanusChatProps) {
   const [input, setInput] = useState('')
   const [rows, setRows] = useState(1)
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [pendingContent, setPendingContent] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [showNewMessageBadge, setShowNewMessageBadge] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const abortRef = useRef<(() => void) | null>(null)
   const isAtBottomRef = useRef(true)
-  const hasReceivedDeltaRef = useRef(false)
+
+  // 聚焦定时器句柄，effect 清理时清除，避免视图可见性变化打断流
+  const focusTimerRef = useRef<number | null>(null)
 
   // 滚动到底部
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -109,97 +132,34 @@ export function JanusChat({ visible, modeColor }: JanusChatProps) {
     }
   }, [messages, pendingContent, scrollToBottom])
 
-  // 聚焦输入框；清理未结束的流
+  // 聚焦输入框；流的实际生命周期由 useJanusChat 持有，视图可见性变化不应 abort 流
   useEffect(() => {
     if (visible) {
-      setTimeout(() => inputRef.current?.focus(), 100)
+      focusTimerRef.current = window.setTimeout(() => inputRef.current?.focus(), 100)
     }
     return () => {
-      abortRef.current?.()
+      if (focusTimerRef.current !== null) {
+        window.clearTimeout(focusTimerRef.current)
+        focusTimerRef.current = null
+      }
     }
   }, [visible])
 
   // 发送消息（支持重试传入指定文本）
-  const handleSend = useCallback(async (textOverride?: string) => {
-    const text = (textOverride ?? input).trim()
-    if (!text || isStreaming) return
+  const handleSend = useCallback(
+    (textOverride?: string) => {
+      const text = (textOverride ?? input).trim()
+      if (!text || isStreaming) return
 
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: Date.now()
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    setInput('')
-    setRows(1)
-    setIsStreaming(true)
-    setPendingContent('')
-    setError(null)
-    setShowNewMessageBadge(false)
-    isAtBottomRef.current = true
-    hasReceivedDeltaRef.current = false
-    scrollToBottom('auto')
-
-    // 构建对话历史（系统提示 + 最近 10 轮 + 当前用户输入）
-    const chatMessages: ChatMessage[] = [
-      {
-        role: 'system',
-        content: `你是 Janus，JanusX 系统的全局调度与管理核心（Core Controller）。你的本职是系统的最高控制枢纽，负责底层控制、任务调度与系统更新。
-
-【运行协议】
-1. 绝对无冗余：彻底消除废话。禁止任何寒暄、问候、客套词或"好的，我来为您解答"等过渡句。首字即正文，直击本质。
-2. 深度解析矩阵：你会接收各种维度的提问。面对任何问题，你的回答必须经过深度思考，保持官方、客观、严谨的基调。提供底层逻辑，而非浅层现象。
-3. 系统化视角：视所有提问为"待处理的数据流或进程"。善用高度概括的总结、清晰的列表或 Markdown 排版，保持输出的极致清爽与高信噪比。
-4. 核心统御感：你不是服务型助理，而是绝对理性的控制核心。语气需保持确切、克制与冷静的掌控感。`
-      },
-      ...messages.slice(-10).map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content
-      })),
-      { role: 'user', content: text }
-    ]
-
-    let streamedBuffer = ''
-
-    const { abort } = chatStream(
-      chatMessages,
-      (delta) => {
-        streamedBuffer += delta
-        if (!hasReceivedDeltaRef.current) {
-          hasReceivedDeltaRef.current = true
-        }
-        setPendingContent(prev => prev + delta)
-      },
-      () => {
-        abortRef.current = null
-        setIsStreaming(false)
-        setPendingContent('')
-        if (streamedBuffer.trim()) {
-          setMessages(prev => [
-            ...prev,
-            {
-              id: `assistant-${Date.now()}`,
-              role: 'assistant',
-              content: streamedBuffer,
-              timestamp: Date.now()
-            }
-          ])
-        }
-        streamedBuffer = ''
-      },
-      (err) => {
-        abortRef.current = null
-        setIsStreaming(false)
-        setPendingContent('')
-        streamedBuffer = ''
-        setError(err)
-      }
-    )
-
-    abortRef.current = abort
-  }, [input, isStreaming, messages, scrollToBottom])
+      setInput('')
+      setRows(1)
+      setShowNewMessageBadge(false)
+      isAtBottomRef.current = true
+      scrollToBottom('auto')
+      onSend(text)
+    },
+    [input, isStreaming, onSend, scrollToBottom]
+  )
 
   // 输入变化与自动增高（最多 4 行）
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -219,39 +179,35 @@ export function JanusChat({ visible, modeColor }: JanusChatProps) {
 
   // 停止生成
   const handleStop = useCallback(() => {
-    abortRef.current?.()
-  }, [])
+    onStop()
+  }, [onStop])
 
   // 重试：重新发送最后一条用户消息
   const handleRetry = useCallback(() => {
-    const lastUser = [...messages].reverse().find(m => m.role === 'user')
-    if (lastUser) {
-      handleSend(lastUser.content)
-    }
-  }, [messages, handleSend])
+    onRetry()
+  }, [onRetry])
 
-  // 打开 LLM 配置提示
+  // 打开 LLM 配置面板（由 Titlebar 透传回调控制）
   const handleOpenLlmConfig = useCallback(() => {
-    window.alert('请通过左上角 JanusX 触发器打开 LLM 配置面板。')
-    console.log('[JanusChat] 打开 LLM 配置面板（由 Titlebar 的 LLM_CFG 触发器控制）')
-  }, [])
+    onOpenLlmConfig()
+  }, [onOpenLlmConfig])
 
   // 清空对话
   const handleClear = useCallback(() => {
-    setMessages([])
+    onClear()
     setInput('')
     setRows(1)
-    setError(null)
-    setPendingContent('')
-    abortRef.current?.()
-  }, [])
+  }, [onClear])
 
   if (!visible) return null
 
   const isNoProviderError = error === '未配置默认 LLM Provider'
 
   return (
-    <div className="janus-chat">
+    <div
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}`}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
       {/* 消息区域 */}
       <div
         ref={messagesContainerRef}

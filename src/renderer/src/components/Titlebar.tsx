@@ -4,6 +4,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland, JanusExpanded } from '@/components/janus'
 import { LlmConfigModal } from '@/components/LlmConfigModal'
+import { useJanusChat } from '@/components/janus/useJanusChat'
 import type { JanusMode } from '@/components/janus'
 
 /* ════════════════════════════════════════════════════════════
@@ -16,6 +17,17 @@ export function Titlebar() {
   const [expanded, setExpanded] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [llmModalOpen, setLlmModalOpen] = useState(false)
+
+  const {
+    messages,
+    pendingContent,
+    isStreaming,
+    error,
+    send: handleChatSend,
+    stop: handleChatStop,
+    retry: handleChatRetry,
+    clear: handleChatClear,
+  } = useJanusChat()
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -134,6 +146,15 @@ export function Titlebar() {
           mode={janusMode}
           isRunning={isRunning}
           onCollapse={handleCollapse}
+          messages={messages}
+          pendingContent={pendingContent}
+          isStreaming={isStreaming}
+          error={error}
+          onChatSend={handleChatSend}
+          onChatStop={handleChatStop}
+          onChatRetry={handleChatRetry}
+          onChatClear={handleChatClear}
+          onOpenLlmConfig={() => setLlmModalOpen(true)}
         />
       )}
     </div>

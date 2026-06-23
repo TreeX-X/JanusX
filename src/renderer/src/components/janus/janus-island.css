@@ -298,16 +298,21 @@ body.is-running {
   position: absolute;
   left: 50%;
   top: 43px;
-  width: 530px;
-  height: 260px;
+  width: 840px;
+  height: 420px;
   border-radius: 20px;
   background: #000;
   border: 1px solid rgba(255,255,255,0.15);
   box-shadow: 0 16px 50px rgba(0,0,0,0.9), 0 0 20px var(--janus-current-glow);
-  padding: 14px 16px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  /* 折叠/展开 scale 参数化：贴合 52×26 灵动岛 pill，改尺寸无需调整魔法数 */
+  --island-w: 52px;
+  --island-h: 26px;
+  --panel-w: 840px;
+  --panel-h: 420px;
   /* 缩放原点：顶部中央 = island 所在位置 */
   transform-origin: top center;
   will-change: transform, opacity;
@@ -334,12 +339,12 @@ body.is-running {
   animation: island-collapse 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
 }
 
-/* 展开：从 island 尺寸缩放到完整面板 */
+/* 展开：从 island 尺寸缩放到完整面板（scale 由 CSS 变量参数化） */
 @keyframes island-expand {
   from {
-    transform: translateX(-50%) scaleX(0.098) scaleY(0.1);
+    transform: translateX(-50%) scaleX(calc(var(--island-w) / var(--panel-w))) scaleY(calc(var(--island-h) / var(--panel-h)));
     opacity: 0;
-    border-radius: 26px;
+    border-radius: 13px;
   }
   to {
     transform: translateX(-50%) scale(1);
@@ -348,7 +353,7 @@ body.is-running {
   }
 }
 
-/* 收回：缩回 island 尺寸 */
+/* 收回：缩回 island 尺寸（scale 由 CSS 变量参数化） */
 @keyframes island-collapse {
   from {
     transform: translateX(-50%) scale(1);
@@ -356,9 +361,9 @@ body.is-running {
     border-radius: 20px;
   }
   to {
-    transform: translateX(-50%) scaleX(0.098) scaleY(0.1);
+    transform: translateX(-50%) scaleX(calc(var(--island-w) / var(--panel-w))) scaleY(calc(var(--island-h) / var(--panel-h)));
     opacity: 0;
-    border-radius: 26px;
+    border-radius: 13px;
   }
 }
 
@@ -392,8 +397,33 @@ body.is-running {
    CRT 效果区
    ════════════════════════════════════════════════════════════ */
 
+/* 双栏 body：左 CRT / 右 Chat */
+.janus-expanded-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* data-view 列显隐控制：vision 仅 CRT；chat 仅对话；dual 并列 */
+.janus-expanded[data-view="vision"] .janus-crt {
+  flex: 1;
+}
+.janus-expanded[data-view="vision"] .janus-chat--docked {
+  display: none;
+}
+.janus-expanded[data-view="chat"] .janus-crt {
+  display: none;
+}
+.janus-expanded[data-view="chat"] .janus-chat--docked {
+  flex: 1 1 auto;
+  width: auto;
+}
+
 .janus-crt {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -610,6 +640,8 @@ body.is-running {
 @media (prefers-reduced-motion: reduce) {
   .janus-island,
   .janus-expanded,
+  .janus-expanded-body,
+  .janus-chat--docked,
   .janus-eye-mini,
   .janus-eye-lg,
   .janus-face-mini,
@@ -633,6 +665,24 @@ body.is-running {
   flex-direction: column;
   z-index: 30;
   pointer-events: auto;
+}
+
+/* 停靠态：作为右栏 flex 子元素，覆盖绝对定位浮层。
+   用 relative 而非 static，保留内部绝对定位元素（如新消息徽标 z:40）的锚点。
+   靠源序生效（docked 位于基线 .janus-chat 之后，同等特异性 0,1,0 后定义覆盖先定义），无需 !important。
+   基线 .janus-chat 若新增 absolute 几何属性，本停靠需同步覆盖。
+   data-view 三态规则（特异性 0,3,0）位于其后且特异性更高，不受本规则影响。 */
+.janus-chat--docked {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  top: auto;
+  height: auto;
+  flex: 0 0 360px;
+  min-width: 0;
+  width: 360px;
+  z-index: auto;
 }
 
 /* 消息区域 */
