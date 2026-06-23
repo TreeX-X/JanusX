@@ -4,8 +4,7 @@
  *              本文件偏离文档处：
  *              - BlueprintNode 新增 `lastAnalyzedCommitSha` 游标字段（任务约束3）。
  *              - BlueprintAnalysis.result 新增 `schemaVersion` 用于向前兼容。
- *              - 暂不实现 GlobalBlueprint。
- *              - 存储目录沿用项目既有 `.janusX/` 约定（非文档的 `.switchx/`）。
+ *              - Blueprint 为应用级全局资源，节点通过 workspaceId 关联单个工作区。
  */
 
 /** 蓝图节点类型 */
@@ -128,7 +127,8 @@ export interface BlueprintNode {
   activities: BlueprintActivity[]
   analyses: BlueprintAnalysis[]
 
-  /** 终端绑定（归属机制 B：焦点节点 + boundTerminal） */
+  /** 工作区与终端绑定：节点最多关联一个工作区，一个工作区可关联多个节点 */
+  workspaceId: string | null
   boundTerminalId: string | null
   terminalHistory: string[]
 

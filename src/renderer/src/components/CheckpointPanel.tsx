@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useCheckpointStore, type CheckpointSummary } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { ModalCloseButton } from './ModalCloseButton'
+import { Select } from './ui/Select'
 
 const ENGINE_LABELS: Record<string, string> = {
   claude: 'Claude Code',
@@ -114,30 +115,22 @@ export function CheckpointPanel() {
         >
           过滤 CLI
         </span>
-        <select
+        <Select
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 rounded outline-none cursor-pointer"
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: '工作区全部 CLI' },
+            { value: 'claude', label: 'Claude Code' },
+            { value: 'codex', label: 'Codex' },
+            { value: 'opencode', label: 'OpenCode' }
+          ]}
+          className="flex-1 rounded"
           style={{
             height: 24,
             fontSize: 11,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: '#bbb',
-            padding: '0 4px',
+            color: '#bbb'
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(255,120,48,0.4)'
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-          }}
-        >
-          <option value="all">工作区全部 CLI</option>
-          <option value="claude">Claude Code</option>
-          <option value="codex">Codex</option>
-          <option value="opencode">OpenCode</option>
-        </select>
+        />
         <button
           onClick={async () => {
             if (!activeWorkspaceId) return

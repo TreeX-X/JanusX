@@ -9,6 +9,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { LaunchConfig, ProjectTypeSchema, SchemaField } from '@/types/project'
 import styles from './QuickConfigForm.module.css'
+import { Select } from '../ui/Select'
 
 interface QuickConfigFormProps {
   config: LaunchConfig | null
@@ -132,17 +133,15 @@ function FormField({ field, value, onChange }: FormFieldProps) {
       )}
 
       {field.type === 'select' && (
-        <select
+        <Select
           value={currentValue}
-          onChange={e => onChange(e.target.value)}
+          onChange={onChange}
           className={styles.select}
-        >
-          {field.options?.map(opt => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          options={(field.options ?? []).map((opt) => ({
+            value: opt.value,
+            label: opt.label
+          }))}
+        />
       )}
 
       {field.type === 'array' && (

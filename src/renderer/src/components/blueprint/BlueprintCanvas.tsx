@@ -26,15 +26,60 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { useBlueprintStore } from '@/stores/blueprint'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useAppStore } from '@/stores/app'
+import type { Terminal, TerminalPreset } from '@/types'
 import {
   createNode as createNodeIPC,
   analyze as analyzeIPC,
+  bindTerminal as bindTerminalIPC,
   type Blueprint,
   type BlueprintNode,
   type BlueprintNodeStatus
 } from '@/services/blueprint'
 import { BlueprintNodeCard, type BlueprintNodeData } from './BlueprintNodeCard'
 import { STATUS_VISUALS, STATUS_ORDER } from './blueprintStatus'
+import { PromptDialog } from './PromptDialog'
+import { Select } from '../ui/Select'
+
+const GLOBAL_BLUEPRINT_SCOPE = '__global__'
+const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
+const TERMINAL_PRESETS: {
+  type: TerminalPreset
+  label: string
+  name: string
+  autoCommand?: string
+}[] = [
+  { type: 'shell', label: 'Shell', name: 'bash' },
+  { type: 'claude', label: 'Claude', name: 'claude', autoCommand: 'claude' },
+  { type: 'codex', label: 'Codex', name: 'codex', autoCommand: 'codex' },
+  { type: 'opencode', label: 'OpenCode', name: 'opencode', autoCommand: 'opencode' }
+]
+
+function getTerminalPreset(preset: TerminalPreset) {
+  return TERMINAL_PRESETS.find((item) => item.type === preset) ?? TERMINAL_PRESETS[2]
+}
+
+function collectDescendantIds(nodes: Record<string, BlueprintNode>, nodeId: string): Set<string> {
+  const out = new Set<string>()
+  const visit = (id: string) => {
+    const node = nodes[id]
+    if (!node) return
+    for (const childId of node.children) {
+      if (out.has(childId)) continue
+      out.add(childId)
+      visit(childId)
+    }
+  }
+  visit(nodeId)
+  return out
+}
+
+function waitForTerminalMount(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+}
 
 /* ════════════════════════════════════════════════════════════
    树形布局
@@ -93,7 +138,8 @@ function computeLayout(
 /** 从 Blueprint 派生 RF nodes / edges（保留已有位置） */
 function deriveRF(
   bp: Blueprint,
-  existing: Record<string, { x: number; y: number }>
+  existing: Record<string, { x: number; y: number }>,
+  workspaceNameById: Record<string, string>
 ): { nodes: Node<BlueprintNodeData, 'blueprint'>[]; edges: Edge[] } {
   const layout = computeLayout(bp.nodes, bp.rootNodeId, bp.canvasLayout ?? {})
   const nodes: Node<BlueprintNodeData, 'blueprint'>[] = bp.nodeIds
@@ -109,6 +155,7 @@ function deriveRF(
           status: n.status,
           nodeType: n.type,
           progress: n.progress,
+          workspaceName: n.workspaceId ? workspaceNameById[n.workspaceId] ?? null : null,
           boundTerminalId: n.boundTerminalId
         }
       }
@@ -142,12 +189,11 @@ interface ContextMenu {
    ════════════════════════════════════════════════════════════ */
 export interface BlueprintCanvasProps {
   blueprintId: string
-  workspacePath: string
   /** 双击节点回调（P3 节点详情入口），MVP 可不传 */
   onNodeOpen?: (nodeId: string) => void
 }
 
-export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: BlueprintCanvasProps) {
+export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProps) {
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
@@ -155,15 +201,51 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
   const updateNode = useBlueprintStore((s) => s.updateNode)
   const deleteNode = useBlueprintStore((s) => s.deleteNode)
   const refreshAfterAnalysis = useBlueprintStore((s) => s.refreshAfterAnalysis)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
+  const addTerminal = useWorkspaceStore((s) => s.addTerminal)
+  const removeTerminal = useWorkspaceStore((s) => s.removeTerminal)
+  const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
+  const addLog = useWorkspaceStore((s) => s.addLog)
+  const setLoadState = useAppStore((s) => s.setLoadState)
+  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
 
   const [rfNodes, setRFNodes] = useState<Node<BlueprintNodeData, 'blueprint'>[]>([])
   const [rfEdges, setRFEdges] = useState<Edge[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
+  const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
+  const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [promptState, setPromptState] = useState<
+    | { kind: 'child'; parentId: string }
+    | { kind: 'root' }
+    | null
+  >(null)
 
   const rfInstanceRef = useRef<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>(null)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
+
+  const workspaceNameById = useMemo(
+    () => Object.fromEntries(workspaces.map((w) => [w.id, w.name])),
+    [workspaces]
+  )
+  const detailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
+  const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
+  const detailNodeParentOptions = useMemo(() => {
+    if (!currentBlueprint || !detailNode) return []
+    const descendants = collectDescendantIds(currentBlueprint.nodes, detailNode.id)
+    return [
+      { value: '', label: '作为根节点' },
+      ...currentBlueprint.nodeIds
+        .filter((id) => id !== detailNode.id && !descendants.has(id))
+        .map((id) => ({
+          value: id,
+          label: currentBlueprint.nodes[id]?.title || id
+        }))
+    ]
+  }, [currentBlueprint, detailNode])
 
   // 初次加载
   useEffect(() => {
@@ -178,19 +260,19 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
       ids: currentBlueprint.nodeIds,
       fields: currentBlueprint.nodeIds.map((id) => {
         const n = currentBlueprint.nodes[id]
-        return n ? [n.title, n.status, n.progress, n.boundTerminalId, n.parentId] : null
+        return n ? [n.title, n.status, n.progress, n.workspaceId, n.boundTerminalId, n.parentId] : null
       })
     })
   }, [currentBlueprint])
 
   useEffect(() => {
     if (!currentBlueprint) return
-    const { nodes, edges } = deriveRF(currentBlueprint, positionsRef.current)
+    const { nodes, edges } = deriveRF(currentBlueprint, positionsRef.current, workspaceNameById)
     // 记录最新位置（含自动布局）
     positionsRef.current = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
     setRFNodes(nodes)
     setRFEdges(edges)
-  }, [signature]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [signature, workspaceNameById]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 节点变更（拖拽 / 选中）
   const onNodesChange = useCallback(
@@ -217,8 +299,8 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
     (_e, node) => {
+      setDetailNodeId(node.id)
       if (onNodeOpen) onNodeOpen(node.id)
-      else console.log('[BlueprintCanvas] open node', node.id)
     },
     [onNodeOpen]
   )
@@ -245,29 +327,59 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
   }, [contextMenu])
 
   /* —— 操作 —— */
-  const addChild = useCallback(
-    async (parentId: string) => {
-      const title = window.prompt('子节点标题：')?.trim()
-      if (!title) return
-      const created = await createNodeIPC(workspacePath, blueprintId, { title, type: 'task' }, parentId)
-      if (!created) return
-      await loadBlueprint(blueprintId)
-    },
-    [workspacePath, blueprintId, loadBlueprint]
-  )
+  const addChild = useCallback((parentId: string) => {
+    setPromptState({ kind: 'child', parentId })
+  }, [])
 
-  const addRoot = useCallback(async () => {
-    const title = window.prompt('根节点标题：')?.trim()
-    if (!title) return
-    await createNodeIPC(workspacePath, blueprintId, { title, type: 'task' }, null)
-    await loadBlueprint(blueprintId)
-  }, [workspacePath, blueprintId, loadBlueprint])
+  const addRoot = useCallback(() => {
+    setPromptState({ kind: 'root' })
+  }, [])
+
+  const handlePromptConfirm = useCallback(
+    async (title: string) => {
+      if (!promptState) return
+      if (promptState.kind === 'child') {
+        const parent = currentBlueprint?.nodes[promptState.parentId]
+        const created = await createNodeIPC(
+          GLOBAL_BLUEPRINT_SCOPE,
+          blueprintId,
+          { title, type: 'task', workspaceId: parent?.workspaceId ?? null },
+          promptState.parentId
+        )
+        setPromptState(null)
+        if (!created) return
+        await loadBlueprint(blueprintId)
+      } else {
+        setPromptState(null)
+        await createNodeIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, { title, type: 'task', workspaceId: null }, null)
+        await loadBlueprint(blueprintId)
+      }
+    },
+    [promptState, currentBlueprint, blueprintId, loadBlueprint]
+  )
 
   const removeNode = useCallback(
     async (nodeId: string) => {
-      await deleteNode(blueprintId, nodeId)
+      const node = currentBlueprint?.nodes[nodeId]
+      if (!node) return
+      const isPrimaryRoot = currentBlueprint?.rootNodeId === nodeId
+      const isRoot = !node.parentId
+      const message = isPrimaryRoot
+        ? `确认删除主根节点「${node.title || nodeId}」？其子节点会提升为根节点，并自动选择新的主根。`
+        : isRoot
+          ? `确认删除根节点「${node.title || nodeId}」？其子节点会提升为根节点。`
+          : `确认删除节点「${node.title || nodeId}」？其子节点会挂载到上级节点。`
+      if (!window.confirm(message)) return
+      const ok = await deleteNode(blueprintId, nodeId)
+      if (ok) {
+        setSelectedId((current) => (current === nodeId ? null : current))
+        setDetailNodeId((current) => (current === nodeId ? null : current))
+        setActionError(null)
+      } else {
+        setActionError('无法删除最后一个节点，请直接删除蓝图')
+      }
     },
-    [blueprintId, deleteNode]
+    [blueprintId, currentBlueprint, deleteNode]
   )
 
   const markStatus = useCallback(
@@ -278,17 +390,132 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
     [blueprintId, updateNode]
   )
 
+  const focusOrCreateTerminal = useCallback(
+    async (node: BlueprintNode, requestedPreset: TerminalPreset = terminalPreset) => {
+      setActionError(null)
+      if (!node.workspaceId) {
+        setActionError('请先为节点绑定工作区')
+        return
+      }
+      const workspace = workspaces.find((w) => w.id === node.workspaceId)
+      if (!workspace) {
+        setActionError('节点绑定的工作区不存在，请重新绑定')
+        return
+      }
+
+      setActiveWorkspace(workspace.id)
+      const afterSwitch = useWorkspaceStore.getState()
+      const existing = node.boundTerminalId
+        ? afterSwitch.terminals.find((t) => t.id === node.boundTerminalId)
+        : null
+
+      setBlueprintMode(false)
+      setLoadState(existing ? 'terminal-active' : afterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
+
+      if (existing) {
+        setActiveTerminal(existing.id)
+        await bindTerminalIPC(workspace.path, node.id, existing.id)
+        await loadBlueprint(blueprintId)
+        return
+      }
+
+      const preset = getTerminalPreset(requestedPreset)
+      const terminalId = crypto.randomUUID()
+      const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
+      const terminal: Terminal = {
+        id: terminalId,
+        workspaceId: workspace.id,
+        name: preset.name,
+        preset: preset.type,
+        cwd: workspace.path,
+        shell: defaultShell,
+        autoCommand: preset.autoCommand,
+        pid: null,
+        status: 'idle'
+      }
+
+      addTerminal(terminal)
+      addLog('info', `[蓝图] 为节点创建 ${preset.label} 终端 (${terminalId.slice(0, 8)})`)
+      setLoadState('terminal-active')
+      await waitForTerminalMount()
+
+      try {
+        const result = (await window.electron.invoke('terminal:create', {
+          id: terminalId,
+          workspaceId: workspace.id,
+          cwd: workspace.path,
+          shell: defaultShell,
+          autoCommand: preset.autoCommand,
+          preset: preset.type
+        })) as { pid: number }
+
+        useWorkspaceStore.setState((s) => ({
+          terminals: s.terminals.map((t) =>
+            t.id === terminalId ? { ...t, pid: result.pid, status: 'running' as const } : t
+          )
+        }))
+        await bindTerminalIPC(workspace.path, node.id, terminalId)
+        await loadBlueprint(blueprintId)
+      } catch (err) {
+        removeTerminal(terminalId)
+        setActionError(`终端创建失败: ${(err as Error).message}`)
+      }
+    },
+    [
+      workspaces,
+      setActiveWorkspace,
+      setBlueprintMode,
+      setLoadState,
+      setActiveTerminal,
+      addTerminal,
+      addLog,
+      removeTerminal,
+      loadBlueprint,
+      blueprintId,
+      terminalPreset
+    ]
+  )
+
+  const bindNodeWorkspace = useCallback(
+    async (nodeId: string, workspaceId: string) => {
+      const nextWorkspaceId = workspaceId || null
+      await updateNode(blueprintId, nodeId, {
+        workspaceId: nextWorkspaceId,
+        boundTerminalId: null
+      })
+      setActionError(null)
+    },
+    [blueprintId, updateNode]
+  )
+
+  const bindNodeParent = useCallback(
+    async (nodeId: string, parentId: string) => {
+      await updateNode(blueprintId, nodeId, {
+        parentId: parentId || null
+      })
+      setActionError(null)
+    },
+    [blueprintId, updateNode]
+  )
+
   const analyzeSelected = useCallback(async () => {
     if (!selectedId) return
+    const node = currentBlueprint?.nodes[selectedId]
+    const workspace = node?.workspaceId ? workspaces.find((w) => w.id === node.workspaceId) : null
+    if (!node || !workspace) {
+      setActionError('请先为选中节点绑定可用工作区')
+      return
+    }
     setAnalyzing(true)
+    setActionError(null)
     try {
-      const res = await analyzeIPC({ nodeId: selectedId, workspacePath, trigger: 'manual' })
+      const res = await analyzeIPC({ nodeId: selectedId, workspacePath: workspace.path, trigger: 'manual' })
       console.log('[BlueprintCanvas] analyze result', selectedId, res)
       await refreshAfterAnalysis()
     } finally {
       setAnalyzing(false)
     }
-  }, [selectedId, workspacePath, refreshAfterAnalysis])
+  }, [selectedId, currentBlueprint, workspaces, refreshAfterAnalysis])
 
   const fitView = useCallback(() => {
     rfInstanceRef.current?.fitView({ padding: 0.2, duration: 200 })
@@ -304,13 +531,27 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
           {currentBlueprint ? currentBlueprint.name : '加载中…'}
         </span>
         <button className="blueprint-btn" onClick={addRoot}>+ 新建根节点</button>
+        <button className="blueprint-btn" onClick={() => selectedId && addChild(selectedId)} disabled={!selectedId}>
+          + 新建子节点
+        </button>
+        <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
+          删除选中
+        </button>
         <button className="blueprint-btn" onClick={analyzeSelected} disabled={!selectedId || analyzing}>
           {analyzing ? '分析中…' : '分析选中'}
         </button>
+        <button className="blueprint-btn" onClick={() => selectedId && setDetailNodeId(selectedId)} disabled={!selectedId}>
+          节点详情
+        </button>
         <button className="blueprint-btn" onClick={fitView}>适应画布</button>
+        {selectedNode ? (
+          <span className="blueprint-toolbar__hint">
+            {selectedNode.workspaceId ? workspaceNameById[selectedNode.workspaceId] ?? '工作区失效' : '未绑定工作区'}
+          </span>
+        ) : null}
         <div className="blueprint-toolbar__spacer" />
         {loading ? <span className="blueprint-toolbar__loading">…</span> : null}
-        {error ? <span className="blueprint-toolbar__error">{error}</span> : null}
+        {actionError || error ? <span className="blueprint-toolbar__error">{actionError ?? error}</span> : null}
       </div>
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
@@ -352,6 +593,9 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
+          <button className="bp-context-menu__item" onClick={() => { setDetailNodeId(contextMenu.nodeId); setContextMenu(null) }}>
+            节点详情
+          </button>
           <button className="bp-context-menu__item" onClick={() => { addChild(contextMenu.nodeId); setContextMenu(null) }}>
             + 添加子节点
           </button>
@@ -359,7 +603,7 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
             className="bp-context-menu__item bp-context-menu__item--danger"
             onClick={() => { removeNode(contextMenu.nodeId); setContextMenu(null) }}
           >
-            删除节点
+            {currentBlueprint?.rootNodeId === contextMenu.nodeId ? '删除主根节点' : '删除节点'}
           </button>
           <div className="bp-context-menu__sep" />
           <div className="bp-context-menu__label">标记状态</div>
@@ -380,6 +624,99 @@ export function BlueprintCanvas({ blueprintId, workspacePath, onNodeOpen }: Blue
           </div>
         </div>
       ) : null}
+
+      {detailNode ? (
+        <aside className="bp-node-detail">
+          <div className="bp-node-detail__header">
+            <div>
+              <div className="bp-node-detail__eyebrow">节点详情</div>
+              <div className="bp-node-detail__title">{detailNode.title || '(未命名)'}</div>
+            </div>
+            <button className="bp-node-detail__close" onClick={() => setDetailNodeId(null)} aria-label="关闭节点详情">
+              ×
+            </button>
+          </div>
+
+          <div className="bp-node-detail__section">
+            <label className="bp-node-detail__label">绑定工作区</label>
+            <Select
+              value={detailNode.workspaceId ?? ''}
+              onChange={(value) => bindNodeWorkspace(detailNode.id, value)}
+              placeholder="选择工作区"
+              options={[
+                { value: '', label: '未绑定工作区' },
+                ...workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))
+              ]}
+              className="blueprint-select bp-node-detail__select"
+              dropdownClassName="bp-node-detail__dropdown"
+            />
+          </div>
+
+          <div className="bp-node-detail__section">
+            <label className="bp-node-detail__label">挂载位置</label>
+            <Select
+              value={detailNode.parentId ?? ''}
+              onChange={(value) => bindNodeParent(detailNode.id, value)}
+              options={detailNodeParentOptions}
+              disabled={currentBlueprint?.rootNodeId === detailNode.id}
+              className="blueprint-select bp-node-detail__select"
+              dropdownClassName="bp-node-detail__dropdown"
+            />
+          </div>
+
+          <div className="bp-node-detail__section">
+            <label className="bp-node-detail__label">新建终端类型</label>
+            <Select
+              value={terminalPreset}
+              onChange={(value) => setTerminalPreset(value as TerminalPreset)}
+              options={TERMINAL_PRESETS.map((preset) => ({ value: preset.type, label: preset.label }))}
+              className="blueprint-select bp-node-detail__select"
+              dropdownClassName="bp-node-detail__dropdown"
+            />
+          </div>
+
+          <div className="bp-node-detail__meta">
+            <div>
+              <span>状态</span>
+              <strong>{STATUS_VISUALS[detailNode.status]?.label ?? detailNode.status}</strong>
+            </div>
+            <div>
+              <span>终端</span>
+              <strong>{detailNode.boundTerminalId ? detailNode.boundTerminalId.slice(0, 8) : '未绑定'}</strong>
+            </div>
+          </div>
+
+          <div className="bp-node-detail__actions">
+            <button
+              className="blueprint-btn blueprint-btn--primary"
+              onClick={() => focusOrCreateTerminal(detailNode, terminalPreset)}
+              disabled={!detailNode.workspaceId}
+            >
+              进入终端
+            </button>
+            <button
+              className="blueprint-btn"
+              onClick={() => bindNodeWorkspace(detailNode.id, '')}
+              disabled={!detailNode.workspaceId}
+            >
+              解绑工作区
+            </button>
+          </div>
+
+          {detailNode.workspaceId && !workspaceNameById[detailNode.workspaceId] ? (
+            <div className="bp-node-detail__warning">绑定的工作区已不存在，请重新选择。</div>
+          ) : null}
+        </aside>
+      ) : null}
+
+      <PromptDialog
+        open={promptState !== null}
+        title={promptState?.kind === 'child' ? '新建子节点' : '新建根节点'}
+        label={promptState?.kind === 'child' ? '子节点标题' : '根节点标题'}
+        placeholder="输入标题"
+        onConfirm={handlePromptConfirm}
+        onCancel={() => setPromptState(null)}
+      />
     </div>
   )
 }

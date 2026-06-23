@@ -1,0 +1,139 @@
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #d4d4d4;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 0 10px;
+  height: 100%;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  text-align: left;
+}
+
+.trigger:hover:not(:disabled) {
+  border-color: var(--janus-order, #ff7830);
+}
+
+.triggerOpen,
+.trigger:focus-visible {
+  border-color: var(--janus-order, #ff7830);
+  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.4);
+}
+
+.trigger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.triggerLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder {
+  color: #666;
+}
+
+.arrow {
+  flex-shrink: 0;
+  color: #888;
+  transition: transform 0.18s;
+}
+
+.triggerOpen .arrow {
+  transform: rotate(180deg);
+}
+
+.dropdown {
+  position: fixed;
+  z-index: 3000;
+  box-sizing: border-box;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  animation-name: selectFadeIn;
+  animation-fill-mode: both;
+  animation-duration: 0.12s;
+}
+
+.dropdownUp {
+  transform-origin: bottom;
+}
+
+@keyframes selectFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.option {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #d4d4d4;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.12s;
+}
+
+.option:hover {
+  background: rgba(255, 120, 48, 0.18);
+}
+
+.optionSelected {
+  background: rgba(255, 120, 48, 0.12);
+  font-weight: 600;
+  color: #ff9a52;
+}
+
+.optionSelected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--janus-order, #ff7830);
+  border-radius: 2px;
+}
+
+.optionDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.optionDisabled:hover {
+  background: transparent;
+}
+
+.empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+}

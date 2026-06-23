@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './LlmConfigModal.module.css'
 import { ModalCloseButton } from './ModalCloseButton'
+import { Select } from './ui/Select'
 import { getProviders, saveProvider, testConnection, removeProvider, setDefaultProvider, getDefaultProvider } from '@/services/llm'
 import type { ProviderSettings } from '@janusx/llm-core'
 
@@ -20,6 +21,7 @@ const VERTEX_REGIONS = [
 type ProviderType = 'openai-compatible' | 'vertex-ai'
 
 export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
+  const modalRootRef = useRef<HTMLDivElement | null>(null)
   const [providerType, setProviderType] = useState<ProviderType>('openai-compatible')
   const [providers, setProviders] = useState<ProviderSettings[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -207,10 +209,12 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
     }
   }
 
+  const getModalPortalContainer = useCallback(() => modalRootRef.current, [])
+
   if (!isOpen) return null
 
   return createPortal(
-    <div className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`}>
+    <div ref={modalRootRef} className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`}>
       <div className={styles.llmConfigPanel}>
         <div className={styles.configHeader}>
           <div className={styles.configTitle}>
@@ -279,14 +283,19 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
           {/* Provider 类型选择 */}
           <div className={styles.formGroup}>
             <label>{editingId ? '编辑 Provider' : '添加 Provider'}</label>
-            <select
-              className={styles.configInput}
+            <Select
+              className={`${styles.configInput} ${styles.selectInput}`}
               value={providerType}
-              onChange={e => { setProviderType(e.target.value as ProviderType); setTestStatus({ state: 'idle', message: '' }) }}
-            >
-              <option value="openai-compatible">OpenAI Compatible (URL + Key)</option>
-              <option value="vertex-ai">Google Vertex AI (GCP 认证)</option>
-            </select>
+              getPortalContainer={getModalPortalContainer}
+              onChange={(v) => {
+                setProviderType(v as ProviderType)
+                setTestStatus({ state: 'idle', message: '' })
+              }}
+              options={[
+                { value: 'openai-compatible', label: 'OpenAI Compatible (URL + Key)' },
+                { value: 'vertex-ai', label: 'Google Vertex AI (GCP 认证)' }
+              ]}
+            />
           </div>
 
           {/* OpenAI Compatible 表单 */}
@@ -355,25 +364,29 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               </div>
               <div className={styles.formGroup}>
                 <label>Region</label>
-                <select
-                  className={styles.configInput}
+                <Select
+                  className={`${styles.configInput} ${styles.selectInput}`}
                   value={vertexRegion}
-                  onChange={e => setVertexRegion(e.target.value)}
-                >
-                  {VERTEX_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                  getPortalContainer={getModalPortalContainer}
+                  onChange={setVertexRegion}
+                  options={VERTEX_REGIONS.map((r) => ({ value: r, label: r }))}
+                />
               </div>
               <div className={styles.formGroup}>
                 <label>认证方式</label>
-                <select
-                  className={styles.configInput}
+                <Select
+                  className={`${styles.configInput} ${styles.selectInput}`}
                   value={vertexAuthMode}
-                  onChange={e => setVertexAuthMode(e.target.value as 'service-account' | 'adc' | 'json-paste')}
-                >
-                  <option value="service-account">Service Account (邮箱 + 密钥)</option>
-                  <option value="json-paste">粘贴完整 JSON Key</option>
-                  <option value="adc">Application Default Credentials</option>
-                </select>
+                  getPortalContainer={getModalPortalContainer}
+                  onChange={(v) =>
+                    setVertexAuthMode(v as 'service-account' | 'adc' | 'json-paste')
+                  }
+                  options={[
+                    { value: 'service-account', label: 'Service Account (邮箱 + 密钥)' },
+                    { value: 'json-paste', label: '粘贴完整 JSON Key' },
+                    { value: 'adc', label: 'Application Default Credentials' }
+                  ]}
+                />
               </div>
               {vertexAuthMode === 'service-account' && (
                 <>
@@ -446,16 +459,18 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               </div>
               <div className={styles.formGroup}>
                 <label>Default Model</label>
-                <select
-                  className={styles.configInput}
+                <Select
+                  className={`${styles.configInput} ${styles.selectInput}`}
                   value={vertexModel}
-                  onChange={e => setVertexModel(e.target.value)}
-                >
-                  <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-                  <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
-                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                </select>
+                  getPortalContainer={getModalPortalContainer}
+                  onChange={setVertexModel}
+                  options={[
+                    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+                    { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview' },
+                    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+                    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
+                  ]}
+                />
               </div>
             </>
           )}

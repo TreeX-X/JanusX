@@ -14,6 +14,7 @@ export interface BlueprintNodeData extends Record<string, unknown> {
   status: BlueprintNodeStatus
   nodeType: BlueprintNodeType
   progress: number
+  workspaceName: string | null
   boundTerminalId: string | null
 }
 
@@ -51,6 +52,9 @@ function BlueprintNodeCardImpl({ data, selected }: NodeProps<BlueprintRFNodeType
 
       <div className="bp-node-card__footer">
         <span style={{ color: visual.color }}>{visual.label}</span>
+        <span className={`bp-node-card__workspace${d.workspaceName ? '' : ' bp-node-card__workspace--empty'}`}>
+          {d.workspaceName ?? '未绑定工作区'}
+        </span>
         {d.boundTerminalId ? (
           <span className="bp-node-card__terminal" title={`终端: ${d.boundTerminalId}`}>
             term

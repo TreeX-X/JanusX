@@ -137,6 +137,13 @@
   color: #555;
 }
 
+.configInput.selectInput {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  line-height: 1;
+}
+
 select.configInput {
   appearance: none;
   cursor: pointer;

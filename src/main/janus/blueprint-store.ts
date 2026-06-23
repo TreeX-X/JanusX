@@ -1,9 +1,9 @@
 /**
  * @file Blueprint 存储层
- * @description 工作区蓝图的持久化（design §2.6）。
- *              存储目录沿用项目既有 `.janusX/` 约定：
- *                {workspace}/.janusX/blueprints/{blueprintId}.json
- *                {workspace}/.janusX/blueprints/index.json   { blueprints: string[], focusedNodeId: string|null }
+ * @description 应用级全局蓝图持久化（design §2.6）。
+ *              存储目录：
+ *                {userData}/janusx/blueprints/{blueprintId}.json
+ *                {userData}/janusx/blueprints/index.json
  *
  *              焦点（归属机制 B）：每个 workspace 同时最多一个焦点节点，
  *              cursor 为 `focusedNodeId`，commit 归焦点节点。
@@ -12,6 +12,7 @@
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
+import { app } from 'electron'
 import type {
   Blueprint,
   BlueprintNode,
@@ -22,26 +23,32 @@ import type {
 
 const BLUEPRINTS_DIR = ['blueprints'] // 相对 .janusX
 const INDEX_FILE = 'index.json'
+const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 
 interface WorkspaceIndex {
   blueprints: string[]
   focusedNodeId: string | null
+  focusedNodeByWorkspace?: Record<string, string | null>
 }
 
-function dotDir(workspace: string): string {
-  return join(workspace, '.janusX')
+function blueprintsDir(): string {
+  return join(app.getPath('userData'), 'janusx', ...BLUEPRINTS_DIR)
 }
 
-function blueprintsDir(workspace: string): string {
-  return join(dotDir(workspace), ...BLUEPRINTS_DIR)
+function indexFile(): string {
+  return join(blueprintsDir(), INDEX_FILE)
 }
 
-function indexFile(workspace: string): string {
-  return join(blueprintsDir(workspace), INDEX_FILE)
+function blueprintFile(id: string): string {
+  return join(blueprintsDir(), `${id}.json`)
 }
 
-function blueprintFile(workspace: string, id: string): string {
-  return join(blueprintsDir(workspace), `${id}.json`)
+function legacyIndexFile(workspace: string): string {
+  return join(workspace, '.janusX', ...BLUEPRINTS_DIR, INDEX_FILE)
+}
+
+function legacyBlueprintFile(workspace: string, id: string): string {
+  return join(workspace, '.janusX', ...BLUEPRINTS_DIR, `${id}.json`)
 }
 
 function nowIso(): string {
@@ -66,6 +73,7 @@ function makeNode(input: Partial<BlueprintNode> & { title: string; type: Bluepri
     issues: input.issues ?? [],
     activities: input.activities ?? [],
     analyses: input.analyses ?? [],
+    workspaceId: input.workspaceId ?? null,
     boundTerminalId: input.boundTerminalId ?? null,
     terminalHistory: input.terminalHistory ?? [],
     lastAnalyzedCommitSha: input.lastAnalyzedCommitSha ?? null,
@@ -96,43 +104,63 @@ async function writeJson(file: string, data: unknown): Promise<void> {
 }
 
 class BlueprintStore {
-  /** workspacePath -> (blueprintId -> Blueprint) 内存缓存（lazy 加载） */
-  private cache = new Map<string, Map<string, Blueprint>>()
-  private indexCache = new Map<string, WorkspaceIndex>()
+  private cache = new Map<string, Blueprint>()
+  private indexCache: WorkspaceIndex | null = null
+  private migratedWorkspaces = new Set<string>()
 
-  private getWorkspaceMap(workspace: string): Map<string, Blueprint> {
-    let m = this.cache.get(workspace)
-    if (!m) {
-      m = new Map()
-      this.cache.set(workspace, m)
-    }
-    return m
-  }
-
-  async loadIndex(workspace: string): Promise<WorkspaceIndex> {
-    const cached = this.indexCache.get(workspace)
-    if (cached) return cached
-    const idx = (await readJson<WorkspaceIndex>(indexFile(workspace))) ?? {
+  async loadIndex(_workspace?: string): Promise<WorkspaceIndex> {
+    if (this.indexCache) return this.indexCache
+    const idx = (await readJson<WorkspaceIndex>(indexFile())) ?? {
       blueprints: [],
-      focusedNodeId: null
+      focusedNodeId: null,
+      focusedNodeByWorkspace: {}
     }
-    this.indexCache.set(workspace, idx)
+    if (!idx.focusedNodeByWorkspace) idx.focusedNodeByWorkspace = {}
+    this.indexCache = idx
     return idx
   }
 
-  private async saveIndex(workspace: string): Promise<void> {
-    const idx = await this.loadIndex(workspace)
-    await writeJson(indexFile(workspace), idx)
+  private async saveIndex(_workspace?: string): Promise<void> {
+    const idx = await this.loadIndex()
+    await writeJson(indexFile(), idx)
+  }
+
+  private async migrateLegacyWorkspace(workspace: string): Promise<void> {
+    if (!workspace || workspace === GLOBAL_BLUEPRINT_SCOPE || this.migratedWorkspaces.has(workspace)) return
+    this.migratedWorkspaces.add(workspace)
+    const legacy = await readJson<WorkspaceIndex>(legacyIndexFile(workspace))
+    if (!legacy?.blueprints?.length) return
+
+    const idx = await this.loadIndex()
+    let changed = false
+    for (const id of legacy.blueprints) {
+      if (idx.blueprints.includes(id)) continue
+      const bp = await readJson<Blueprint>(legacyBlueprintFile(workspace, id))
+      if (!bp) continue
+      for (const nid of Object.keys(bp.nodes)) {
+        const n = bp.nodes[nid]
+        if (n.lastAnalyzedCommitSha === undefined) n.lastAnalyzedCommitSha = null
+        if (n.statusSource === undefined) n.statusSource = 'manual'
+        if (n.workspaceId === undefined) n.workspaceId = null
+        if (!Array.isArray(n.activities)) n.activities = []
+        if (!Array.isArray(n.analyses)) n.analyses = []
+      }
+      idx.blueprints.push(id)
+      this.cache.set(id, bp)
+      await writeJson(blueprintFile(id), bp)
+      changed = true
+    }
+    if (changed) await this.saveIndex()
   }
 
   async listBlueprints(workspace: string): Promise<Blueprint[]> {
+    await this.migrateLegacyWorkspace(workspace)
     const idx = await this.loadIndex(workspace)
-    const map = this.getWorkspaceMap(workspace)
     const out: Blueprint[] = []
     for (const id of idx.blueprints) {
-      const bp = map.get(id) ?? (await this.readBlueprintFile(workspace, id))
+      const bp = this.cache.get(id) ?? (await this.readBlueprintFile(workspace, id))
       if (bp) {
-        map.set(id, bp)
+        this.cache.set(id, bp)
         out.push(bp)
       }
     }
@@ -140,13 +168,14 @@ class BlueprintStore {
   }
 
   private async readBlueprintFile(workspace: string, id: string): Promise<Blueprint | null> {
-    const bp = await readJson<Blueprint>(blueprintFile(workspace, id))
+    const bp = await readJson<Blueprint>(blueprintFile(id))
     if (bp) {
       // 容错：老节点补齐新增字段
       for (const nid of Object.keys(bp.nodes)) {
         const n = bp.nodes[nid]
         if (n.lastAnalyzedCommitSha === undefined) n.lastAnalyzedCommitSha = null
         if (n.statusSource === undefined) n.statusSource = 'manual'
+        if (n.workspaceId === undefined) n.workspaceId = null
         if (!Array.isArray(n.activities)) n.activities = []
         if (!Array.isArray(n.analyses)) n.analyses = []
       }
@@ -155,11 +184,10 @@ class BlueprintStore {
   }
 
   async loadBlueprint(workspace: string, id: string): Promise<Blueprint | null> {
-    const map = this.getWorkspaceMap(workspace)
-    const cached = map.get(id)
+    const cached = this.cache.get(id)
     if (cached) return cached
     const bp = await this.readBlueprintFile(workspace, id)
-    if (bp) map.set(id, bp)
+    if (bp) this.cache.set(id, bp)
     return bp
   }
 
@@ -185,12 +213,11 @@ class BlueprintStore {
       createdAt: ts,
       updatedAt: ts
     }
-    const map = this.getWorkspaceMap(workspace)
-    map.set(id, bp)
+    this.cache.set(id, bp)
     const idx = await this.loadIndex(workspace)
     idx.blueprints.push(id)
     await this.saveIndex(workspace)
-    await writeJson(blueprintFile(workspace, id), bp)
+    await writeJson(blueprintFile(id), bp)
     return bp
   }
 
@@ -205,23 +232,27 @@ class BlueprintStore {
     if (patch.description !== undefined) bp.description = patch.description
     if (patch.canvasLayout !== undefined) bp.canvasLayout = patch.canvasLayout
     bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(workspace, id), bp)
+    await writeJson(blueprintFile(id), bp)
     return bp
   }
 
   async deleteBlueprint(workspace: string, id: string): Promise<boolean> {
-    const map = this.getWorkspaceMap(workspace)
-    const existed = map.has(id)
-    map.delete(id)
+    const existed = this.cache.has(id) || (await readJson<Blueprint>(blueprintFile(id))) !== null
+    this.cache.delete(id)
     const idx = await this.loadIndex(workspace)
     idx.blueprints = idx.blueprints.filter((b) => b !== id)
     if (idx.focusedNodeId) {
       const stillExists = await this.nodeExistsInIndex(workspace, idx.focusedNodeId)
       if (!stillExists) idx.focusedNodeId = null
     }
+    for (const [ws, nodeId] of Object.entries(idx.focusedNodeByWorkspace ?? {})) {
+      if (!nodeId) continue
+      const stillExists = await this.nodeExistsInIndex(workspace, nodeId)
+      if (!stillExists) idx.focusedNodeByWorkspace![ws] = null
+    }
     await this.saveIndex(workspace)
     try {
-      await fs.unlink(blueprintFile(workspace, id))
+      await fs.unlink(blueprintFile(id))
     } catch {
       /* 文件可能不存在 */
     }
@@ -253,7 +284,7 @@ class BlueprintStore {
       bp.nodes[parentId].updatedAt = nowIso()
     }
     bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(workspace, blueprintId), bp)
+    await writeJson(blueprintFile(blueprintId), bp)
     return node
   }
 
@@ -268,17 +299,42 @@ class BlueprintStore {
     const node = bp.nodes[nodeId]
     // 不允许通过通用 patch 覆盖只读字段
     const { id: _id, createdAt: _c, ...safe } = patch
+    if (safe.parentId !== undefined && safe.parentId !== node.parentId) {
+      const nextParentId = safe.parentId
+      if (nodeId === bp.rootNodeId && nextParentId) return null
+      if (nextParentId === nodeId) return null
+      if (nextParentId && !bp.nodes[nextParentId]) return null
+      const isDescendant = (candidateId: string, ancestorId: string): boolean => {
+        let cursor = bp.nodes[candidateId]?.parentId ?? null
+        while (cursor) {
+          if (cursor === ancestorId) return true
+          cursor = bp.nodes[cursor]?.parentId ?? null
+        }
+        return false
+      }
+      if (nextParentId && isDescendant(nextParentId, nodeId)) return null
+      const oldParent = node.parentId ? bp.nodes[node.parentId] : null
+      if (oldParent) {
+        oldParent.children = oldParent.children.filter((id) => id !== nodeId)
+        oldParent.updatedAt = nowIso()
+      }
+      const nextParent = nextParentId ? bp.nodes[nextParentId] : null
+      if (nextParent && !nextParent.children.includes(nodeId)) {
+        nextParent.children.push(nodeId)
+        nextParent.updatedAt = nowIso()
+      }
+    }
     Object.assign(node, safe)
     node.updatedAt = nowIso()
     bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(workspace, blueprintId), bp)
+    await writeJson(blueprintFile(blueprintId), bp)
     return node
   }
 
   async deleteNode(workspace: string, blueprintId: string, nodeId: string): Promise<boolean> {
     const bp = await this.loadBlueprint(workspace, blueprintId)
     if (!bp || !bp.nodes[nodeId]) return false
-    if (nodeId === bp.rootNodeId) return false // 根节点不允许删除
+    if (bp.nodeIds.length <= 1) return false
     const node = bp.nodes[nodeId]
     // 重新挂载子节点到父节点
     const parent = node.parentId ? bp.nodes[node.parentId] : null
@@ -286,7 +342,7 @@ class BlueprintStore {
       const child = bp.nodes[childId]
       if (child) {
         child.parentId = node.parentId
-        if (parent) parent.children.push(childId)
+        if (parent && !parent.children.includes(childId)) parent.children.push(childId)
       }
     }
     if (parent) {
@@ -294,13 +350,26 @@ class BlueprintStore {
     }
     delete bp.nodes[nodeId]
     bp.nodeIds = bp.nodeIds.filter((n) => n !== nodeId)
+    delete bp.canvasLayout[nodeId]
+    if (bp.rootNodeId === nodeId) {
+      const promoted =
+        node.children.find((childId) => bp.nodes[childId]) ??
+        bp.nodeIds.find((id) => bp.nodes[id]?.parentId === null) ??
+        bp.nodeIds[0]
+      if (!promoted) return false
+      bp.rootNodeId = promoted
+      bp.nodes[promoted].parentId = null
+    }
     bp.updatedAt = nowIso()
     const idx = await this.loadIndex(workspace)
     if (idx.focusedNodeId === nodeId) {
       idx.focusedNodeId = null
-      await this.saveIndex(workspace)
     }
-    await writeJson(blueprintFile(workspace, blueprintId), bp)
+    for (const [ws, focused] of Object.entries(idx.focusedNodeByWorkspace ?? {})) {
+      if (focused === nodeId) idx.focusedNodeByWorkspace![ws] = null
+    }
+    await this.saveIndex(workspace)
+    await writeJson(blueprintFile(blueprintId), bp)
     return true
   }
 
@@ -330,7 +399,7 @@ class BlueprintStore {
     }
     node.updatedAt = nowIso()
     bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(workspace, blueprintId), bp)
+    await writeJson(blueprintFile(blueprintId), bp)
     return node
   }
 
@@ -345,18 +414,19 @@ class BlueprintStore {
     if (!bp || !bp.nodes[nodeId]) return
     bp.nodes[nodeId].lastAnalyzedCommitSha = sha
     bp.nodes[nodeId].updatedAt = nowIso()
-    await writeJson(blueprintFile(workspace, blueprintId), bp)
+    await writeJson(blueprintFile(blueprintId), bp)
   }
 
   /** 焦点节点（归属机制 B） */
   async getFocusedNodeId(workspace: string): Promise<string | null> {
     const idx = await this.loadIndex(workspace)
-    return idx.focusedNodeId
+    return idx.focusedNodeByWorkspace?.[workspace] ?? idx.focusedNodeId
   }
 
   async setFocusedNodeId(workspace: string, nodeId: string | null): Promise<void> {
     const idx = await this.loadIndex(workspace)
-    idx.focusedNodeId = nodeId
+    idx.focusedNodeByWorkspace ??= {}
+    idx.focusedNodeByWorkspace[workspace] = nodeId
     await this.saveIndex(workspace)
   }
 

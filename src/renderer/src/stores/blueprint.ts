@@ -11,6 +11,7 @@ import {
   listBlueprints,
   loadBlueprint,
   createBlueprint as createBlueprintIPC,
+  deleteBlueprint as deleteBlueprintIPC,
   updateNode as updateNodeIPC,
   deleteNode as deleteNodeIPC,
   type Blueprint,
@@ -18,31 +19,32 @@ import {
   type NodeCreateInput
 } from '@/services/blueprint'
 
+const GLOBAL_BLUEPRINT_SCOPE = '__global__'
+
 interface BlueprintStore {
-  /** 当前工作区下的蓝图摘要列表 */
+  /** 应用级全局蓝图摘要列表 */
   blueprints: Blueprint[]
   /** 当前打开的蓝图（含 nodes 树） */
   currentBlueprint: Blueprint | null
-  /** 当前 store 绑定的工作区路径 */
-  workspacePath: string | null
-
   loading: boolean
   error: string | null
 
-  /** 拉取工作区下的蓝图列表（同时刷新 workspacePath） */
-  loadBlueprints: (workspacePath: string) => Promise<void>
+  /** 拉取应用级全局蓝图列表；参数仅为兼容旧调用 */
+  loadBlueprints: (workspacePath?: string) => Promise<void>
   /** 加载指定蓝图的完整数据（含 nodes 树） */
   loadBlueprint: (id: string) => Promise<void>
   /** 新建蓝图，成功后追加到列表并设为 currentBlueprint */
   createBlueprint: (input: BlueprintCreateInput) => Promise<Blueprint | null>
+  /** 删除蓝图，成功后从列表和当前视图移除 */
+  deleteBlueprint: (id: string) => Promise<boolean>
   /** 局部更新节点，成功后同步 currentBlueprint.nodes */
   updateNode: (
     blueprintId: string,
     nodeId: string,
     patch: Partial<Blueprint['nodes'][string]>
   ) => Promise<void>
-  /** 删除节点，成功后从 currentBlueprint 移除 */
-  deleteNode: (blueprintId: string, nodeId: string) => Promise<void>
+  /** 删除节点，成功后重新拉取 currentBlueprint */
+  deleteNode: (blueprintId: string, nodeId: string) => Promise<boolean>
   /** 分析完成后，重新拉取 currentBlueprint 以同步 analyzer 写入的字段 */
   refreshAfterAnalysis: () => Promise<void>
 }
@@ -50,14 +52,13 @@ interface BlueprintStore {
 export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
   blueprints: [],
   currentBlueprint: null,
-  workspacePath: null,
   loading: false,
   error: null,
 
   loadBlueprints: async (workspacePath) => {
-    set({ loading: true, error: null, workspacePath })
+    set({ loading: true, error: null })
     try {
-      const list = await listBlueprints(workspacePath)
+      const list = await listBlueprints(workspacePath ?? GLOBAL_BLUEPRINT_SCOPE)
       set({ blueprints: list ?? [], loading: false })
     } catch (err: unknown) {
       set({
@@ -68,14 +69,9 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
   },
 
   loadBlueprint: async (id) => {
-    const cwd = get().workspacePath
-    if (!cwd) {
-      set({ error: '未设置 workspacePath，无法加载蓝图' })
-      return
-    }
     set({ loading: true, error: null })
     try {
-      const bp = await loadBlueprint(cwd, id)
+      const bp = await loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, id)
       set({ currentBlueprint: bp, loading: false })
     } catch (err: unknown) {
       set({
@@ -86,14 +82,9 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
   },
 
   createBlueprint: async (input) => {
-    const cwd = get().workspacePath
-    if (!cwd) {
-      set({ error: '未设置 workspacePath，无法创建蓝图' })
-      return null
-    }
     set({ loading: true, error: null })
     try {
-      const bp = await createBlueprintIPC(cwd, input)
+      const bp = await createBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, input)
       set((s) => ({
         blueprints: [...s.blueprints, bp],
         currentBlueprint: bp,
@@ -109,16 +100,41 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
     }
   },
 
+  deleteBlueprint: async (id) => {
+    set({ loading: true, error: null })
+    try {
+      const ok = await deleteBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, id)
+      if (!ok) {
+        set({ loading: false })
+        return false
+      }
+      set((s) => {
+        const next = s.blueprints.filter((bp) => bp.id !== id)
+        return {
+          blueprints: next,
+          currentBlueprint: s.currentBlueprint?.id === id ? next[0] ?? null : s.currentBlueprint,
+          loading: false
+        }
+      })
+      return true
+    } catch (err: unknown) {
+      set({
+        error: err instanceof Error ? err.message : String(err),
+        loading: false
+      })
+      return false
+    }
+  },
+
   updateNode: async (blueprintId, nodeId, patch) => {
-    const cwd = get().workspacePath
     const current = get().currentBlueprint
-    if (!cwd || !current || current.id !== blueprintId) {
+    if (!current || current.id !== blueprintId) {
       set({ error: '当前未打开目标蓝图，无法更新节点' })
       return
     }
     set({ loading: true, error: null })
     try {
-      const updated = await updateNodeIPC(cwd, blueprintId, nodeId, patch)
+      const updated = await updateNodeIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, nodeId, patch)
       if (updated) {
         set((s) => ({
           currentBlueprint: s.currentBlueprint
@@ -141,36 +157,27 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
   },
 
   deleteNode: async (blueprintId, nodeId) => {
-    const cwd = get().workspacePath
     const current = get().currentBlueprint
-    if (!cwd || !current || current.id !== blueprintId) {
+    if (!current || current.id !== blueprintId) {
       set({ error: '当前未打开目标蓝图，无法删除节点' })
-      return
+      return false
     }
     set({ loading: true, error: null })
     try {
-      const ok = await deleteNodeIPC(cwd, blueprintId, nodeId)
+      const ok = await deleteNodeIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, nodeId)
       if (ok) {
-        set((s) => {
-          if (!s.currentBlueprint) return { loading: false }
-          const { [nodeId]: _removed, ...restNodes } = s.currentBlueprint.nodes
-          return {
-            currentBlueprint: {
-              ...s.currentBlueprint,
-              nodes: restNodes,
-              nodeIds: s.currentBlueprint.nodeIds.filter((id) => id !== nodeId)
-            },
-            loading: false
-          }
-        })
+        await get().loadBlueprint(blueprintId)
+        return true
       } else {
-        set({ loading: false })
+        set({ error: '无法删除最后一个节点，请直接删除蓝图', loading: false })
+        return false
       }
     } catch (err: unknown) {
       set({
         error: err instanceof Error ? err.message : String(err),
         loading: false
       })
+      return false
     }
   },
 
