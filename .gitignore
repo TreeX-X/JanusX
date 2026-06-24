@@ -12,6 +12,17 @@ Thumbs.db
 # Claude Code / Codex / Workflow
 .claude/
 .codex/
+.codex-cache/
+.codex-tmp/
+.codex-session/
+.codex-sessions/
+.codexrc.local
+.codex*.local
+codex-session*.json
+codex-session*.jsonl
+codex-*.log
+codex-*.patch
+codex-*.diff
 .hybrid/
 CLAUDE.md
 
