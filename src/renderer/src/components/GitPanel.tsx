@@ -9,48 +9,77 @@ export function GitPanel() {
   const [commitMsg, setCommitMsg] = useState('')
 
   const cwd = workspaces.find((w) => w.id === activeWorkspaceId)?.path
+  const refreshGitData = useCallback(async () => {
+    if (!cwd) return
+    await Promise.all([fetchStatus(cwd), fetchLog(cwd, 20)])
+  }, [cwd, fetchLog, fetchStatus])
 
   useEffect(() => {
     if (!cwd) return
-    fetchStatus(cwd)
-    fetchLog(cwd, 20)
-  }, [cwd])
+    void refreshGitData()
+  }, [cwd, refreshGitData])
 
-  const handleStageAll = useCallback(() => {
+  useEffect(() => {
+    if (!cwd) return
+
+    let disposed = false
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+    const unsubscribe = window.electron.on('filetree:changed', (workspacePath: unknown) => {
+      if (workspacePath !== cwd) return
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(() => {
+        if (!disposed) {
+          void refreshGitData()
+        }
+      }, 180)
+    })
+
+    return () => {
+      disposed = true
+      if (refreshTimer) clearTimeout(refreshTimer)
+      if (typeof unsubscribe === 'function') unsubscribe()
+    }
+  }, [cwd, refreshGitData])
+
+  const handleStageAll = useCallback(async () => {
     if (!cwd || !status) return
     const unstaged = status.changes.filter((c) => !c.staged).map((c) => c.path)
-    if (unstaged.length > 0) stageFiles(cwd, unstaged)
+    if (unstaged.length > 0) await stageFiles(cwd, unstaged)
   }, [cwd, status, stageFiles])
 
-  const handleUnstageAll = useCallback(() => {
+  const handleUnstageAll = useCallback(async () => {
     if (!cwd || !status) return
     const staged = status.changes.filter((c) => c.staged).map((c) => c.path)
-    if (staged.length > 0) unstageFiles(cwd, staged)
+    if (staged.length > 0) await unstageFiles(cwd, staged)
   }, [cwd, status, unstageFiles])
 
-  const handleCommit = useCallback(() => {
+  const handleCommit = useCallback(async () => {
     if (!cwd || !commitMsg.trim()) return
-    commitChanges(cwd, commitMsg.trim())
+    await commitChanges(cwd, commitMsg.trim())
+    await fetchLog(cwd, 20)
     setCommitMsg('')
-  }, [cwd, commitMsg, commitChanges])
+  }, [cwd, commitMsg, commitChanges, fetchLog])
 
-  const handlePush = useCallback(() => {
+  const handlePush = useCallback(async () => {
     if (!cwd) return
-    pushChanges(cwd)
-  }, [cwd, pushChanges])
+    await pushChanges(cwd)
+    await fetchLog(cwd, 20)
+  }, [cwd, fetchLog, pushChanges])
 
-  const handlePull = useCallback(() => {
+  const handlePull = useCallback(async () => {
     if (!cwd) return
-    pullChanges(cwd)
-  }, [cwd, pullChanges])
+    await pullChanges(cwd)
+    await fetchLog(cwd, 20)
+  }, [cwd, fetchLog, pullChanges])
 
   const handleToggleStage = useCallback(
-    (file: GitFileChange) => {
+    async (file: GitFileChange) => {
       if (!cwd) return
       if (file.staged) {
-        unstageFiles(cwd, [file.path])
+        await unstageFiles(cwd, [file.path])
       } else {
-        stageFiles(cwd, [file.path])
+        await stageFiles(cwd, [file.path])
       }
     },
     [cwd, stageFiles, unstageFiles]
@@ -101,14 +130,6 @@ export function GitPanel() {
             ↓{status?.branch.behind}
           </span>
         )}
-        <button
-          onClick={() => cwd && fetchStatus(cwd)}
-          className="w-[18px] h-[18px] rounded-[3px] flex items-center justify-center transition-colors hover:bg-[rgba(255,120,48,0.12)]"
-          style={{ background: 'rgba(255, 120, 48, 0.06)', border: '1px solid rgba(255, 120, 48, 0.15)', color: '#ff7830' }}
-          title="刷新"
-        >
-          ↻
-        </button>
       </div>
 
       {/* Status summary */}

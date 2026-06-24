@@ -16,7 +16,7 @@ import type { JanusMode } from '@/components/janus'
 export function Titlebar() {
   const [expanded, setExpanded] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
-  const [llmModalOpen, setLlmModalOpen] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
 
   const {
     messages,
@@ -55,8 +55,8 @@ export function Titlebar() {
     setIsRunning(running)
   }, [])
 
-  const handleLlmTriggerClick = useCallback(() => {
-    setLlmModalOpen(true)
+  const handleSettingsTriggerClick = useCallback(() => {
+    setSettingsModalOpen(true)
   }, [])
 
   return (
@@ -88,7 +88,8 @@ export function Titlebar() {
       {/* Logo + 隐藏的 LLM 配置触发器 */}
       <div
         className="absolute left-[70px] flex items-center gap-2 titlebar-no-drag cursor-pointer group"
-        onClick={handleLlmTriggerClick}
+        onClick={handleSettingsTriggerClick}
+        title="Settings"
       >
         {/* X 形图标（悬浮时变成两个横杠） */}
         <div className="relative w-4 h-4">
@@ -120,24 +121,23 @@ export function Titlebar() {
             transform: 'translateX(-8px) scale(0.9)',
           }}
         >
-          :: LLM_CFG
+          :: SETTINGS
         </span>
       </div>
 
       {/* LLM 配置模态框 */}
-      <LlmConfigModal isOpen={llmModalOpen} onClose={() => setLlmModalOpen(false)} />
+      <LlmConfigModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
 
       {/* 灵动岛 */}
       <div
         className="absolute left-1/2 top-0 -translate-x-1/2 titlebar-no-drag"
         style={{ zIndex: 2000 }}
       >
-        {!expanded && (
-          <JanusIsland
-            onExpand={handleExpand}
-            onRunningChange={handleRunningChange}
-          />
-        )}
+        <JanusIsland
+          expanded={expanded}
+          onExpand={handleExpand}
+          onRunningChange={handleRunningChange}
+        />
       </div>
 
       {/* 展开面板 */}
@@ -154,7 +154,7 @@ export function Titlebar() {
           onChatStop={handleChatStop}
           onChatRetry={handleChatRetry}
           onChatClear={handleChatClear}
-          onOpenLlmConfig={() => setLlmModalOpen(true)}
+          onOpenLlmConfig={() => setSettingsModalOpen(true)}
         />
       )}
     </div>

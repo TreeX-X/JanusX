@@ -12,6 +12,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'terminal:kill',
   'dialog:openDirectory',
   'filetree:load',
+  'filetree:children',
   'system:getDefaultShell',
   'system:getPlatform',
   'system:which',
@@ -90,6 +91,7 @@ const ALLOWED_SEND_CHANNELS = [
 const ALLOWED_ON_CHANNELS = [
   'terminal:data',
   'terminal:exit',
+  'filetree:changed',
   'workspace:updated',
   'app:init-state',
   'agent:event',

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useEditorStore } from '@/stores/editor'
@@ -13,20 +13,24 @@ interface FileTreeItemProps {
   depth: number
   activeFilePath: string | null
   onSelect: (path: string) => void
+  onToggleDirectory: (path: string) => Promise<void>
 }
 
-function FileTreeItem({ node, depth, activeFilePath, onSelect }: FileTreeItemProps) {
+function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory }: FileTreeItemProps) {
   const [expanded, setExpanded] = useState(false)
   const isFolder = node.type === 'directory'
   const isActive = activeFilePath === node.path
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback(async () => {
     if (isFolder) {
+      if (!expanded && !node.loaded) {
+        await onToggleDirectory(node.path)
+      }
       setExpanded((v) => !v)
     } else {
       onSelect(node.path)
     }
-  }, [isFolder, onSelect, node.path])
+  }, [expanded, isFolder, node.loaded, node.path, onSelect, onToggleDirectory])
 
   const handleDoubleClick = useCallback(() => {
     if (!isFolder) {
@@ -99,7 +103,14 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect }: FileTreeItemPro
       {isFolder && node.children && expanded && (
         <div>
           {node.children.map((child) => (
-            <FileTreeItem key={child.path} node={child} depth={depth + 1} activeFilePath={activeFilePath} onSelect={onSelect} />
+            <FileTreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              activeFilePath={activeFilePath}
+              onSelect={onSelect}
+              onToggleDirectory={onToggleDirectory}
+            />
           ))}
         </div>
       )}
@@ -112,21 +123,45 @@ export function Panel() {
   const fileTree = useWorkspaceStore((s) => s.fileTree)
   const activeFilePath = useWorkspaceStore((s) => s.activeFilePath)
   const setActiveFilePath = useWorkspaceStore((s) => s.setActiveFilePath)
-  const { activeWorkspaceId, workspaces } = useWorkspaceStore()
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
   const togglePanel = useAppStore((s) => s.togglePanel)
 
-  const handleRefresh = useCallback(async () => {
-    if (!activeWorkspaceId) return
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws) return
+  const handleToggleDirectory = useCallback(async (path: string) => {
+    const { workspaces, activeWorkspaceId, fileTree: currentTree } = useWorkspaceStore.getState()
+    const workspace = workspaces.find((item) => item.id === activeWorkspaceId)
+    if (!workspace) return
+
     try {
-      const tree = (await window.electron.invoke('filetree:load', ws.path)) as FileNode[]
-      useWorkspaceStore.setState({ fileTree: tree })
-    } catch (err) {
-      console.error('Failed to refresh file tree:', err)
+      const children = (await window.electron.invoke(
+        'filetree:children',
+        workspace.path,
+        path,
+      )) as FileNode[]
+
+      const injectChildren = (nodes: FileNode[]): FileNode[] =>
+        nodes.map((node) => {
+          if (node.path === path && node.type === 'directory') {
+            return {
+              ...node,
+              children,
+              loaded: true,
+              hasChildren: children.length > 0,
+            }
+          }
+          if (node.children && node.children.length > 0) {
+            return {
+              ...node,
+              children: injectChildren(node.children),
+            }
+          }
+          return node
+        })
+
+      useWorkspaceStore.setState({ fileTree: injectChildren(currentTree) })
+    } catch {
+      // ignore
     }
-  }, [activeWorkspaceId, workspaces])
+  }, [])
 
   return (
     <aside
@@ -166,20 +201,6 @@ export function Panel() {
               ))}
             </div>
             <div className="flex gap-1 items-center pr-2">
-              {activeView === 'files' && (
-                <button
-                  title="刷新"
-                  onClick={handleRefresh}
-                  className="w-[18px] h-[18px] rounded-[3px] flex items-center justify-center text-xs transition-colors hover:bg-[rgba(255,120,48,0.12)]"
-                  style={{
-                    background: 'rgba(255, 120, 48, 0.06)',
-                    border: '1px solid rgba(255, 120, 48, 0.15)',
-                    color: '#ff7830',
-                  }}
-                >
-                  ↻
-                </button>
-              )}
               <button
                 onClick={togglePanel}
                 title="收起面板"
@@ -219,17 +240,6 @@ export function Panel() {
               {fileTree.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3">
                   <div className="text-[#555]">未加载工作区</div>
-                  <button
-                    onClick={handleRefresh}
-                    className="px-3 py-1.5 rounded text-[11px] transition-colors"
-                    style={{
-                      background: 'rgba(255, 120, 48, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      color: '#ff7830',
-                    }}
-                  >
-                    刷新
-                  </button>
                 </div>
               ) : (
                 fileTree.map((node) => (
@@ -239,6 +249,7 @@ export function Panel() {
                     depth={0}
                     activeFilePath={activeFilePath}
                     onSelect={setActiveFilePath}
+                    onToggleDirectory={handleToggleDirectory}
                   />
                 ))
               )}

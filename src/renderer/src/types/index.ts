@@ -51,6 +51,8 @@ export interface FileNode {
   path: string
   type: 'file' | 'directory'
   children?: FileNode[]
+  hasChildren?: boolean
+  loaded?: boolean
 }
 
 // ── Git types ──

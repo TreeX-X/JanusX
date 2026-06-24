@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { Titlebar } from '@/components/Titlebar'
@@ -11,11 +11,45 @@ import { FileEditor } from '@/components/FileEditor'
 import { BlueprintView } from '@/components/blueprint/BlueprintView'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
 
+function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): FileNode[] {
+  const currentMap = new Map(currentNodes.map((node) => [node.path, node]))
+
+  return nextNodes.map((node) => {
+    const existing = currentMap.get(node.path)
+    if (!existing || node.type !== 'directory') {
+      return node
+    }
+
+    const currentChildren = existing.children ?? []
+    const nextChildren = node.children ?? []
+
+    return {
+      ...node,
+      loaded: existing.loaded ?? false,
+      hasChildren: node.hasChildren ?? existing.hasChildren,
+      children:
+        existing.loaded && currentChildren.length > 0
+          ? mergeFileTreeState(nextChildren, currentChildren)
+          : nextChildren,
+    }
+  })
+}
+
 export default function App() {
   const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
 
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
   const flipperElRef = useRef<HTMLDivElement | null>(null)
+
+  const loadWorkspaceFileTree = useCallback(async (workspacePath: string) => {
+    try {
+      const tree = (await window.electron.invoke('filetree:load', workspacePath)) as FileNode[]
+      const currentTree = useWorkspaceStore.getState().fileTree
+      useWorkspaceStore.setState({ fileTree: mergeFileTreeState(tree, currentTree) })
+    } catch {
+      // ignore
+    }
+  }, [])
 
   useEffect(() => {
     const initApp = async () => {
@@ -39,12 +73,7 @@ export default function App() {
             if (state.activeWorkspaceId) {
               const ws = state.workspaces.find((w) => w.id === state.activeWorkspaceId)
               if (ws) {
-                try {
-                  const tree = (await window.electron.invoke('filetree:load', ws.path)) as FileNode[]
-                  useWorkspaceStore.setState({ fileTree: tree })
-                } catch {
-                  // ignore
-                }
+                await loadWorkspaceFileTree(ws.path)
               }
             }
           } else {
@@ -58,7 +87,19 @@ export default function App() {
       }
     }
     initApp()
-  }, [])
+  }, [loadWorkspaceFileTree])
+
+  useEffect(() => {
+    const unsubscribe = window.electron.on('filetree:changed', async (workspacePath: unknown) => {
+      if (typeof workspacePath !== 'string') return
+      const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
+      if (!activeWorkspaceId) return
+      const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
+      if (!activeWorkspace || activeWorkspace.path !== workspacePath) return
+      await loadWorkspaceFileTree(workspacePath)
+    })
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined
+  }, [loadWorkspaceFileTree])
 
   return (
     <div className="h-screen flex flex-col" style={{ background: '#121212', color: '#d4d4d4' }}>

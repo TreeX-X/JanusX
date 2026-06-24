@@ -1,16 +1,131 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron'
-import { join, relative } from 'path'
-import { readdir, readFile, writeFile, mkdir, unlink, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { watch, type FSWatcher } from 'fs'
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'fs/promises'
+import { join, relative, resolve } from 'path'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
+const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
+const watcherRegistry = new Map<string, FSWatcher>()
+const watcherTimers = new Map<string, NodeJS.Timeout>()
 
 async function ensureDir(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true })
 }
 
+function normalizeRelativePath(rootPath: string, targetPath: string): string {
+  return relative(rootPath, targetPath).replace(/\\/g, '/')
+}
+
+function isPathWithinRoot(rootPath: string, targetPath: string): boolean {
+  const resolvedRoot = resolve(rootPath)
+  const resolvedTarget = resolve(targetPath)
+  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}\\`) || resolvedTarget.startsWith(`${resolvedRoot}/`)
+}
+
+async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<unknown[]> {
+  try {
+    const entries = await readdir(targetDir, { withFileTypes: true })
+    const nodes = await Promise.all(
+      entries
+        .filter((entry) => !HIDDEN_FILETREE_ENTRIES.has(entry.name))
+        .map(async (entry) => {
+          const fullPath = join(targetDir, entry.name)
+          const nodePath = normalizeRelativePath(rootPath, fullPath)
+
+          if (entry.isDirectory()) {
+            let hasChildren = false
+            try {
+              const children = await readdir(fullPath, { withFileTypes: true })
+              hasChildren = children.some((child) => !HIDDEN_FILETREE_ENTRIES.has(child.name))
+            } catch {
+              hasChildren = false
+            }
+
+            return {
+              name: entry.name,
+              path: nodePath,
+              type: 'directory' as const,
+              children: [],
+              hasChildren,
+              loaded: false,
+            }
+          }
+
+          return {
+            name: entry.name,
+            path: nodePath,
+            type: 'file' as const,
+          }
+        }),
+    )
+
+    nodes.sort((a: any, b: any) => {
+      if (a.type === 'directory' && b.type !== 'directory') return -1
+      if (a.type !== 'directory' && b.type === 'directory') return 1
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    })
+
+    return nodes
+  } catch {
+    return []
+  }
+}
+
+function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: string): void {
+  if (watcherRegistry.has(workspacePath)) return
+
+  try {
+    const watcher = watch(
+      workspacePath,
+      { recursive: process.platform === 'win32' || process.platform === 'darwin' },
+      () => {
+        const existingTimer = watcherTimers.get(workspacePath)
+        if (existingTimer) clearTimeout(existingTimer)
+
+        watcherTimers.set(
+          workspacePath,
+          setTimeout(() => {
+            watcherTimers.delete(workspacePath)
+            if (!mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('filetree:changed', workspacePath)
+            }
+          }, 150),
+        )
+      },
+    )
+
+    watcher.on('error', () => {
+      watcher.close()
+      watcherRegistry.delete(workspacePath)
+      const timer = watcherTimers.get(workspacePath)
+      if (timer) {
+        clearTimeout(timer)
+        watcherTimers.delete(workspacePath)
+      }
+    })
+
+    watcherRegistry.set(workspacePath, watcher)
+  } catch {
+    // ignore watcher registration failure
+  }
+}
+
+function disposeWorkspaceWatchers(): void {
+  for (const [workspacePath, watcher] of watcherRegistry.entries()) {
+    watcher.close()
+    watcherRegistry.delete(workspacePath)
+    const timer = watcherTimers.get(workspacePath)
+    if (timer) {
+      clearTimeout(timer)
+      watcherTimers.delete(workspacePath)
+    }
+  }
+}
+
 export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
-  // 初始化
+  mainWindow.on('closed', disposeWorkspaceWatchers)
+
   ipcMain.handle('app:init', async () => {
     try {
       await ensureDir(WORKSPACES_DIR)
@@ -32,7 +147,6 @@ export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
     }
   })
 
-  // 工作区 CRUD
   ipcMain.handle('workspace:list', async () => {
     await ensureDir(WORKSPACES_DIR)
     const files = await readdir(WORKSPACES_DIR)
@@ -83,14 +197,12 @@ export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
     }
   })
 
-  // 系统对话框
   ipcMain.handle('dialog:openDirectory', async () => {
     return dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
     })
   })
 
-  // 系统信息
   ipcMain.handle('system:getDefaultShell', () => {
     if (process.platform === 'win32') return 'powershell.exe'
     return process.env.SHELL || '/bin/bash'
@@ -100,46 +212,25 @@ export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
     return process.platform
   })
 
-  // 文件树加载
-  ipcMain.handle('filetree:load', async (_event, dirPath: string) => {
-    const IGNORED = new Set(['node_modules', '.git', '.next', 'dist', 'out', '.hybrid', '.claude', '.codex'])
+  ipcMain.handle('filetree:load', async (_event, rootPath: string) => {
+    registerWorkspaceWatcher(mainWindow, rootPath)
+    return readDirectoryNodes(rootPath, rootPath)
+  })
 
-    async function scanDir(dir: string, depth = 0): Promise<unknown[]> {
-      if (depth > 3) return []
-      try {
-        const entries = await readdir(dir, { withFileTypes: true })
-        const nodes = []
-        for (const entry of entries) {
-          if (IGNORED.has(entry.name)) continue
-          const fullPath = join(dir, entry.name)
-          if (entry.isDirectory()) {
-            const children = await scanDir(fullPath, depth + 1)
-            nodes.push({
-              name: entry.name,
-              path: relative(dirPath, fullPath).replace(/\\/g, '/'),
-              type: 'directory',
-              children,
-            })
-          } else {
-            nodes.push({
-              name: entry.name,
-              path: relative(dirPath, fullPath).replace(/\\/g, '/'),
-              type: 'file',
-            })
-          }
-        }
-        // 按类型排序：文件夹在前，文件在后
-        nodes.sort((a: any, b: any) => {
-          if (a.type === 'directory' && b.type !== 'directory') return -1
-          if (a.type !== 'directory' && b.type === 'directory') return 1
-          return a.name.localeCompare(b.name)
-        })
-        return nodes
-      } catch {
-        return []
-      }
+  ipcMain.handle('filetree:children', async (_event, rootPath: string, relativePathValue: string) => {
+    const safeRelativePath = relativePathValue.replace(/^[/\\]+/, '')
+    const targetDir = resolve(rootPath, safeRelativePath)
+
+    if (!isPathWithinRoot(rootPath, targetDir)) return []
+
+    try {
+      const info = await stat(targetDir)
+      if (!info.isDirectory()) return []
+    } catch {
+      return []
     }
 
-    return scanDir(dirPath)
+    registerWorkspaceWatcher(mainWindow, rootPath)
+    return readDirectoryNodes(rootPath, targetDir)
   })
 }
