@@ -80,6 +80,28 @@ const segmentSchema = z.object({
       })
     )
     .default([])
+  ,
+  featureUpdates: z
+    .array(
+      z.object({
+        featureId: z.string(),
+        progress: z.number().min(0).max(100).optional(),
+        status: z.enum(['planned', 'in-progress', 'done', 'blocked']).optional(),
+        description: z.string().optional(),
+        requirementNotes: z.array(z.string()).optional()
+      })
+    )
+    .default([]),
+  newFeatureRequirements: z
+    .array(
+      z.object({
+        title: z.string(),
+        description: z.string(),
+        suggestedParent: z.string().default(''),
+        confidence: z.number().min(0).max(1).default(0.5)
+      })
+    )
+    .default([])
 })
 type SegmentResult = z.infer<typeof segmentSchema>
 
@@ -92,7 +114,7 @@ interface Segment {
 const ANALYZER_DUTY = `
 
 【分析子系统职责】
-你现在作为 Janus 的分析子系统运行。你将对照蓝图节点的预期（positioning / description / techSolution / todos / issues）与实际 commit 变更，产出结构化判断：
+你现在作为 Janus 的分析子系统运行。你将对照蓝图节点的预期（positioning / description / techSolution / features / todos / issues）与实际 commit 变更，产出结构化判断：
 - progress：0-100，按已完成的预期工作量占比估算。
 - status：从 not-started / planning / in-progress / testing / bug-fixing / blocked / paused / done / archived 中选择最贴切的当前状态。
 - summary：一句话概括本次变更相对预期的进展。
@@ -100,6 +122,8 @@ const ANALYZER_DUTY = `
 - evidence：支撑判断的具体证据（文件路径 / commit / 代码要点）。
 - unresolved：仍存疑或未完成的事项。
 - discoveredRequirements：预期之外、由本次变更新暴露出的需求提议（仅提议，不执行），suggestedParent 为建议挂载的父节点标题。
+ - featureUpdates：对已有功能点的受控更新，只允许更新 featureId 对应条目的 progress/status/description/requirementNotes。
+ - newFeatureRequirements：新增功能需求提议，按结构化条目输出，不要直接改写整段 description。
 规则：只提议不执行；对置信度保守；不要编造证据；信息不足以判断时 confidence 取低值并据实说明。`
 
 export function getAnalysisSystemPrompt(): string {
@@ -234,8 +258,10 @@ function mergeSegments(
   // 累加去重
   const evidence = dedupeStrings(results.flatMap((r) => r.result.evidence))
   const unresolved = dedupeStrings(results.flatMap((r) => r.result.unresolved))
-  const discovered = dedupeDiscovered(
-    results.flatMap((r) => r.result.discoveredRequirements ?? [])
+  const discovered = dedupeDiscovered(results.flatMap((r) => r.result.discoveredRequirements ?? []))
+  const featureUpdates = dedupeFeatureUpdates(results.flatMap((r) => r.result.featureUpdates ?? []))
+  const newFeatureRequirements = dedupeDiscovered(
+    results.flatMap((r) => r.result.newFeatureRequirements ?? [])
   )
 
   return {
@@ -246,7 +272,9 @@ function mergeSegments(
     confidence,
     evidence,
     unresolved,
-    discoveredRequirements: discovered
+    discoveredRequirements: discovered,
+    featureUpdates,
+    newFeatureRequirements
   }
 }
 
@@ -272,6 +300,26 @@ function dedupeDiscovered(
     if (seen.has(key)) continue
     seen.add(key)
     out.push(d)
+  }
+  return out
+}
+
+function dedupeFeatureUpdates(
+  arr: Array<{
+    featureId: string
+    progress?: number
+    status?: 'planned' | 'in-progress' | 'done' | 'blocked'
+    description?: string
+    requirementNotes?: string[]
+  }>
+) {
+  const seen = new Set<string>()
+  const out: typeof arr = []
+  for (const item of arr) {
+    const key = item.featureId.trim().toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
   }
   return out
 }
@@ -486,6 +534,15 @@ class JanusAnalyzer {
 
     // ---- 落库 + 回写状态 + 推进游标 ----
     await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
+    if (analysis.applied && analysis.result) {
+      await blueprintStore.applyAnalysisPatch(workspace, blueprintId, nodeId, {
+        progress: analysis.result.progress,
+        status: analysis.result.status,
+        featureUpdates: analysis.result.featureUpdates,
+        newFeatureRequirements: analysis.result.newFeatureRequirements,
+        discoveredRequirements: analysis.result.discoveredRequirements
+      })
+    }
     await blueprintStore.setCursor(workspace, blueprintId, nodeId, lastSha)
 
     // ---- Island 通知 ----
@@ -509,7 +566,7 @@ class JanusAnalyzer {
       nodeId,
       trigger,
       inputSummary,
-      result:
+        result:
         result ?? {
           schemaVersion: ANALYSIS_SCHEMA_VERSION,
           progress: 0,
@@ -518,7 +575,9 @@ class JanusAnalyzer {
           confidence: 0,
           evidence: [],
           unresolved: [],
-          discoveredRequirements: []
+          discoveredRequirements: [],
+          featureUpdates: [],
+          newFeatureRequirements: []
         },
       applied: result !== null,
       error,

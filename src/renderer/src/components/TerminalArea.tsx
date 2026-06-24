@@ -138,13 +138,20 @@ export function TerminalArea() {
   )
 
   return (
-    <div className="flex flex-col h-full relative" style={{ background: 'rgba(10, 10, 10, 0.95)' }}>
+    <div
+      className="flex flex-col h-full relative overflow-hidden"
+      style={{
+        background: 'linear-gradient(180deg, rgba(19, 19, 19, 0.96) 0%, rgba(8, 8, 8, 0.98) 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -24px 40px rgba(0,0,0,0.22)',
+      }}
+    >
       {/* Tab 栏 */}
       <div
         className="flex overflow-x-auto gap-px px-2.5"
         style={{
-          background: 'rgba(6, 6, 6, 0.95)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          background: '#111111',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.035)',
           scrollbarWidth: 'none',
         }}
       >
@@ -152,25 +159,28 @@ export function TerminalArea() {
           <div
             key={t.id}
             onClick={() => setActiveTerminal(t.id)}
-            className="py-2 px-3.5 text-xs cursor-pointer flex items-center gap-2 rounded-t-md mt-0.5 font-mono relative transition-colors select-none group/tab"
+            className="h-8 px-3 text-[11px] leading-none cursor-pointer flex items-center gap-2 rounded-none mt-0 font-mono relative transition-colors select-none group/tab"
             style={{
-              color: t.id === activeTerminalId ? '#d4d4d4' : '#666',
-              background: t.id === activeTerminalId ? 'rgba(10, 10, 10, 0.95)' : 'transparent',
+              color: t.id === activeTerminalId ? '#ff7830' : 'rgba(104, 104, 104, 0.82)',
+              background: t.id === activeTerminalId ? 'rgba(255, 255, 255, 0.025)' : 'transparent',
+              boxShadow: 'none',
             }}
           >
-            <span>{t.name}</span>
-            <span
+            <span className="flex h-4 min-w-0 items-center leading-none">{t.name}</span>
+            <button
+              type="button"
+              aria-label={`关闭 ${t.name} 终端`}
               onClick={(e) => handleClose(t.id, e)}
-              className="text-[15px] leading-none opacity-0 group-hover/tab:opacity-40 hover:!opacity-100 transition-opacity cursor-pointer"
-              style={{ color: '#888' }}
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-0 bg-transparent p-0 font-sans text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-40 hover:!opacity-100 cursor-pointer"
+              style={{ color: '#888', lineHeight: 1 }}
               onMouseEnter={(e) => { e.currentTarget.style.color = '#ff7830' }}
               onMouseLeave={(e) => { e.currentTarget.style.color = '#888' }}
             >
               ×
-            </span>
+            </button>
             {t.id === activeTerminalId && (
               <div
-                className="absolute bottom-0 left-2.5 right-2.5 h-px"
+                className="absolute bottom-0 left-0 right-0 h-px"
                 style={{ background: '#ff7830' }}
               />
             )}
@@ -179,10 +189,10 @@ export function TerminalArea() {
         <div
           ref={addBtnRef}
           onClick={() => setRingOpen((v) => !v)}
-          className="py-2 px-3 text-xs cursor-pointer rounded-t-md mt-0.5 font-mono transition-colors select-none ml-auto"
-          style={{ color: ringOpen ? '#ff7830' : '#666' }}
+          className="h-8 px-3 text-[12px] leading-none cursor-pointer rounded-none mt-0 font-mono transition-colors select-none ml-auto flex items-center"
+          style={{ color: '#ff7830' }}
           onMouseEnter={(e) => { if (!ringOpen) e.currentTarget.style.color = '#ff7830' }}
-          onMouseLeave={(e) => { if (!ringOpen) e.currentTarget.style.color = '#666' }}
+          onMouseLeave={(e) => { if (!ringOpen) e.currentTarget.style.color = '#ff7830' }}
         >
           +
         </div>
@@ -195,11 +205,11 @@ export function TerminalArea() {
         style={{
           top: '36px',
           right: '8px',
-          background: 'rgba(22, 22, 22, 0.97)',
+          background: 'rgba(18, 18, 18, 0.9)',
           backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
           borderRadius: '24px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.42)',
           opacity: ringOpen ? 1 : 0,
           pointerEvents: ringOpen ? 'auto' : 'none',
           transform: ringOpen ? 'translateY(0)' : 'translateY(4px)',
@@ -238,7 +248,14 @@ export function TerminalArea() {
       </div>
 
       {/* 终端内容区 */}
-      <div className="flex-1 relative overflow-hidden">
+      <div
+        className="flex-1 relative overflow-hidden mx-1.5 my-1"
+        style={{
+          background: 'linear-gradient(180deg, rgba(9, 9, 9, 0.96) 0%, rgba(4, 4, 4, 0.98) 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.03)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
+        }}
+      >
         {terminals.map((t) => (
           <div
             key={t.id}
@@ -259,13 +276,13 @@ export function TerminalArea() {
       <div
         className="flex-shrink-0 transition-all overflow-hidden"
         style={{
-          background: 'rgba(6, 6, 6, 0.95)',
-          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+          background: '#101010',
+          borderTop: '1px solid rgba(255, 255, 255, 0.035)',
           height: drawerOpen ? '180px' : '28px',
         }}
       >
         <div
-          className="h-7 flex items-center justify-between px-3 cursor-pointer select-none hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+          className="h-7 flex items-center justify-between px-3 cursor-pointer select-none hover:bg-[rgba(255,255,255,0.012)] transition-colors"
           onClick={() => setDrawerOpen((v) => !v)}
         >
           <div className="text-[11px] text-[#666] flex items-center gap-1.5">

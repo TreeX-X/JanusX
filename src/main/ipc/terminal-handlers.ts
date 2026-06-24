@@ -17,7 +17,17 @@ const terminalStates = new Map<string, TerminalCpState>()
 // Cooldown between checkpoint creations (ms)
 const CHECKPOINT_COOLDOWN_MS = 5_000  // 5 seconds
 
+function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
+  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
+  mainWindow.webContents.send(channel, payload)
+}
+
 export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
+  mainWindow.on('closed', () => {
+    terminalManager.killAll()
+    terminalStates.clear()
+  })
+
   ipcMain.handle('terminal:create', async (event, config) => {
     const { id, cwd, shell, autoCommand, preset } = config as {
       id: string
@@ -45,19 +55,19 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
 
     // PTY output — just forward to renderer
     instance.pty.onData((data: string) => {
-      mainWindow.webContents.send('terminal:data', { id, data })
+      sendToRenderer(mainWindow, 'terminal:data', { id, data })
     })
 
     // Terminal exit — finalize any pending checkpoint
     instance.pty.onExit(({ exitCode }: { exitCode: number }) => {
-      mainWindow.webContents.send('terminal:exit', { id, exitCode })
+      sendToRenderer(mainWindow, 'terminal:exit', { id, exitCode })
       terminalManager.kill(id)
 
       const state = terminalStates.get(id)
       if (state?.checkpointId) {
         const cpId = state.checkpointId
         checkpointManager.finalizeCheckpoint(cpId, state.cwd).then(() => {
-          mainWindow.webContents.send('checkpoint:event', {
+          sendToRenderer(mainWindow, 'checkpoint:event', {
             type: 'finalized',
             checkpointId: cpId,
           })
@@ -74,10 +84,10 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       checkpointManager.initialize(cwd).then(() => {
         const state = terminalStates.get(id)
         if (state) state.initialized = true
-        mainWindow.webContents.send('checkpoint:ready', { terminalId: id, success: true })
+        sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: true })
       }).catch((err) => {
         console.error('Checkpoint init failed:', err)
-        mainWindow.webContents.send('checkpoint:ready', { terminalId: id, success: false, error: String(err) })
+        sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: false, error: String(err) })
       })
     }
 
@@ -112,13 +122,13 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       cwd: state.cwd,
     }).then(({ finalized, checkpoint }) => {
       if (finalized && previousCpId) {
-        mainWindow.webContents.send('checkpoint:event', {
+        sendToRenderer(mainWindow, 'checkpoint:event', {
           type: 'finalized',
           checkpointId: previousCpId,
         })
       }
       state.checkpointId = checkpoint.id
-      mainWindow.webContents.send('checkpoint:event', {
+      sendToRenderer(mainWindow, 'checkpoint:event', {
         type: 'created',
         checkpointId: checkpoint.id,
       })

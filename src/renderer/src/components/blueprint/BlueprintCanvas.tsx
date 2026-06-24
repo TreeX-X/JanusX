@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file 蓝图画布（React Flow）— MVP
  * @description
  *  - 从 store 加载蓝图，把 Blueprint.nodes（Record）转成 React Flow nodes + edges。
@@ -6,7 +6,7 @@
  *  - 交互：拖拽 / 选中 / 双击（onNodeOpen 回调）/ 右键菜单（加子节点 / 删除 / 状态标记）。
  *  - 工具栏：新建根节点 / 分析选中节点 / 适应画布。
  *
- *  canvasLayout 持久化方案（MVP）：见文末「交付说明」。当前为内存态——
+ *  canvasLayout 持久化方案（MVP）：见文末「交付说明」。当前为内存态：
  *  节点拖拽仅更新本地 nodes 状态，不写回 main；蓝图自带 canvasLayout 作为初始位置。
  */
 
@@ -33,7 +33,11 @@ import {
   createNode as createNodeIPC,
   analyze as analyzeIPC,
   bindTerminal as bindTerminalIPC,
+  addNodeFeature as addNodeFeatureIPC,
+  updateNodeFeature as updateNodeFeatureIPC,
+  deleteNodeFeature as deleteNodeFeatureIPC,
   type Blueprint,
+  type BlueprintFeatureItem,
   type BlueprintNode,
   type BlueprintNodeStatus
 } from '@/services/blueprint'
@@ -81,9 +85,7 @@ function waitForTerminalMount(): Promise<void> {
   })
 }
 
-/* ════════════════════════════════════════════════════════════
-   树形布局
-   ════════════════════════════════════════════════════════════ */
+/* Tree layout */
 const NODE_W = 240
 const NODE_H = 110
 const X_GAP = 32
@@ -175,18 +177,14 @@ function deriveRF(
   return { nodes, edges }
 }
 
-/* ════════════════════════════════════════════════════════════
-   右键菜单
-   ════════════════════════════════════════════════════════════ */
+/* Context menu */
 interface ContextMenu {
   x: number
   y: number
   nodeId: string
 }
 
-/* ════════════════════════════════════════════════════════════
-   组件
-   ════════════════════════════════════════════════════════════ */
+/* Component */
 export interface BlueprintCanvasProps {
   blueprintId: string
   /** 双击节点回调（P3 节点详情入口），MVP 可不传 */
@@ -217,6 +215,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const [analyzing, setAnalyzing] = useState(false)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)
+  const [toolbarExpanded, setToolbarExpanded] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [promptState, setPromptState] = useState<
     | { kind: 'child'; parentId: string }
@@ -233,6 +232,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   )
   const detailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
   const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
+  const detailWorkspaceMissing = !!detailNode?.workspaceId && !workspaceNameById[detailNode.workspaceId]
+  const featureActionDisabled = !detailNode?.workspaceId || detailWorkspaceMissing
   const detailNodeParentOptions = useMemo(() => {
     if (!currentBlueprint || !detailNode) return []
     const descendants = collectDescendantIds(currentBlueprint.nodes, detailNode.id)
@@ -252,7 +253,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     if (blueprintId) loadBlueprint(blueprintId)
   }, [blueprintId, loadBlueprint])
 
-  // 当 currentBlueprint 的节点集合 / 字段变化时，重派生 RF nodes/edges（保留已拖拽位置）
+  // 当 currentBlueprint 的节点集或关键字段变化时，重新派生 React Flow nodes/edges，保留已拖拽位置
   const signature = useMemo(() => {
     if (!currentBlueprint) return ''
     return JSON.stringify({
@@ -326,7 +327,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     }
   }, [contextMenu])
 
-  /* —— 操作 —— */
+  /* 操作 */
   const addChild = useCallback((parentId: string) => {
     setPromptState({ kind: 'child', parentId })
   }, [])
@@ -365,10 +366,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       const isPrimaryRoot = currentBlueprint?.rootNodeId === nodeId
       const isRoot = !node.parentId
       const message = isPrimaryRoot
-        ? `确认删除主根节点「${node.title || nodeId}」？其子节点会提升为根节点，并自动选择新的主根。`
+        ? `确认删除主根节点“${node.title || nodeId}”？其子节点会提升为根节点，并自动选择新的主根。`
         : isRoot
-          ? `确认删除根节点「${node.title || nodeId}」？其子节点会提升为根节点。`
-          : `确认删除节点「${node.title || nodeId}」？其子节点会挂载到上级节点。`
+          ? `确认删除根节点“${node.title || nodeId}”？其子节点会提升为根节点。`
+          : `确认删除节点“${node.title || nodeId}”？其子节点会挂载到上级节点。`
       if (!window.confirm(message)) return
       const ok = await deleteNode(blueprintId, nodeId)
       if (ok) {
@@ -498,6 +499,72 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     [blueprintId, updateNode]
   )
 
+  const addFeature = useCallback(
+    async (node: BlueprintNode) => {
+      const workspace = node.workspaceId ? workspaces.find((item) => item.id === node.workspaceId) : null
+      if (!workspace) {
+        setActionError('请先为节点绑定可用工作区')
+        return
+      }
+      await addNodeFeatureIPC(workspace.path, blueprintId, node.id, {
+        title: '',
+        description: '',
+        progress: 0,
+        status: 'planned',
+        requirementNotes: []
+      })
+      await loadBlueprint(blueprintId)
+    },
+    [blueprintId, loadBlueprint, workspaces]
+  )
+
+  const updateFeature = useCallback(
+    async (nodeId: string, feature: BlueprintFeatureItem) => {
+      const node = currentBlueprint?.nodes[nodeId]
+      const workspace = node?.workspaceId ? workspaces.find((item) => item.id === node.workspaceId) : null
+      if (!workspace) {
+        setActionError('请先为节点绑定可用工作区')
+        return
+      }
+      await updateNodeFeatureIPC(workspace.path, blueprintId, nodeId, feature.id, feature)
+      await loadBlueprint(blueprintId)
+    },
+    [blueprintId, currentBlueprint, loadBlueprint, workspaces]
+  )
+
+  const removeFeature = useCallback(
+    async (nodeId: string, featureId: string) => {
+      const node = currentBlueprint?.nodes[nodeId]
+      const workspace = node?.workspaceId ? workspaces.find((item) => item.id === node.workspaceId) : null
+      if (!workspace) {
+        setActionError('请先为节点绑定可用工作区')
+        return
+      }
+      await deleteNodeFeatureIPC(workspace.path, blueprintId, nodeId, featureId)
+      await loadBlueprint(blueprintId)
+    },
+    [blueprintId, currentBlueprint, loadBlueprint, workspaces]
+  )
+
+  const applyAnalysisPatch = useCallback(
+    async (nodeId: string, patch: { progress?: number; status?: BlueprintNodeStatus }) => {
+      const node = currentBlueprint?.nodes[nodeId]
+      const workspace = node?.workspaceId ? workspaces.find((item) => item.id === node.workspaceId) : null
+      if (!workspace) {
+        setActionError('请先为节点绑定可用工作区')
+        return
+      }
+      await window.electron.invoke('janus:analyzer:apply-patch', {
+        workspacePath: workspace.path,
+        blueprintId,
+        nodeId,
+        patch
+      })
+      await loadBlueprint(blueprintId)
+    },
+    [blueprintId, currentBlueprint, loadBlueprint, workspaces]
+  )
+
   const analyzeSelected = useCallback(async () => {
     if (!selectedId) return
     const node = currentBlueprint?.nodes[selectedId]
@@ -522,35 +589,73 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   }, [])
 
   const nodeTypes = useMemo(() => ({ blueprint: BlueprintNodeCard }), [])
+  const featureActionLabel = featureActionDisabled ? '先绑定工作区' : '添加功能点'
+  const featureActionHint = detailWorkspaceMissing
+    ? '当前工作区已失效，请先重新绑定后再管理功能点。'
+    : !detailNode?.workspaceId
+      ? '功能点会写入节点绑定的工作区，先选择一个工作区。'
+      : '功能点将写入当前绑定的工作区。'
 
   return (
     <div className="blueprint-canvas-wrapper">
       {/* 画布操作工具栏 */}
-      <div className="blueprint-toolbar">
-        <span className="blueprint-toolbar__title">
-          {currentBlueprint ? currentBlueprint.name : '加载中…'}
-        </span>
-        <button className="blueprint-btn" onClick={addRoot}>+ 新建根节点</button>
-        <button className="blueprint-btn" onClick={() => selectedId && addChild(selectedId)} disabled={!selectedId}>
-          + 新建子节点
-        </button>
-        <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
-          删除选中
-        </button>
-        <button className="blueprint-btn" onClick={analyzeSelected} disabled={!selectedId || analyzing}>
-          {analyzing ? '分析中…' : '分析选中'}
-        </button>
-        <button className="blueprint-btn" onClick={() => selectedId && setDetailNodeId(selectedId)} disabled={!selectedId}>
-          节点详情
-        </button>
-        <button className="blueprint-btn" onClick={fitView}>适应画布</button>
-        {selectedNode ? (
-          <span className="blueprint-toolbar__hint">
-            {selectedNode.workspaceId ? workspaceNameById[selectedNode.workspaceId] ?? '工作区失效' : '未绑定工作区'}
-          </span>
-        ) : null}
-        <div className="blueprint-toolbar__spacer" />
-        {loading ? <span className="blueprint-toolbar__loading">…</span> : null}
+      <div className="blueprint-toolbar blueprint-toolbar--canvas">
+        <div className="blueprint-toolbar__main">
+          <div className="blueprint-toolbar__identity">
+            <span className="blueprint-toolbar__title">
+              {currentBlueprint ? currentBlueprint.name : '加载中…'}
+            </span>
+            {selectedNode ? (
+              <span className="blueprint-toolbar__hint">
+                {selectedNode.workspaceId ? workspaceNameById[selectedNode.workspaceId] ?? '工作区失效' : '未绑定工作区'}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="blueprint-toolbar__actions">
+            <div className="blueprint-toolbar__group blueprint-toolbar__group--primary">
+              <button className="blueprint-btn blueprint-btn--primary" onClick={addRoot}>+ 新建根节点</button>
+              <button className="blueprint-btn" onClick={() => selectedId && addChild(selectedId)} disabled={!selectedId}>
+                + 子节点
+              </button>
+              <button className="blueprint-btn" onClick={() => selectedId && setDetailNodeId(selectedId)} disabled={!selectedId}>
+                节点详情
+              </button>
+            </div>
+
+            <div className="blueprint-toolbar__group blueprint-toolbar__group--utility">
+              <button
+                className={`blueprint-btn blueprint-toolbar__toggle${toolbarExpanded ? ' blueprint-toolbar__toggle--active' : ''}`}
+                onClick={() => setToolbarExpanded((current) => !current)}
+                aria-expanded={toolbarExpanded}
+                aria-controls="blueprint-toolbar-panel"
+                aria-label={toolbarExpanded ? '收起更多操作' : '展开更多操作'}
+              >
+                {toolbarExpanded ? '收起' : '更多'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          id="blueprint-toolbar-panel"
+          className={`blueprint-toolbar__panel-wrap${toolbarExpanded ? ' blueprint-toolbar__panel-wrap--expanded' : ''}`}
+          aria-hidden={!toolbarExpanded}
+        >
+          <div className="blueprint-toolbar__panel">
+            <div className="blueprint-toolbar__panel-actions">
+              <button className="blueprint-btn" onClick={analyzeSelected} disabled={!selectedId || analyzing}>
+                {analyzing ? '分析中…' : '分析选中'}
+              </button>
+              <button className="blueprint-btn" onClick={fitView}>适应画布</button>
+              <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
+                删除选中
+              </button>
+            </div>
+            {loading ? <span className="blueprint-toolbar__loading">加载中…</span> : null}
+          </div>
+        </div>
+
         {actionError || error ? <span className="blueprint-toolbar__error">{actionError ?? error}</span> : null}
       </div>
 
@@ -630,7 +735,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           <div className="bp-node-detail__header">
             <div>
               <div className="bp-node-detail__eyebrow">节点详情</div>
-              <div className="bp-node-detail__title">{detailNode.title || '(未命名)'}</div>
+              <div className="bp-node-detail__title">{detailNode.title || <span className="bp-node-detail__title--empty">未命名</span>}</div>
             </div>
             <button className="bp-node-detail__close" onClick={() => setDetailNodeId(null)} aria-label="关闭节点详情">
               ×
@@ -675,6 +780,78 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
             />
           </div>
 
+          <div className="bp-node-detail__section">
+            <div className="bp-node-detail__section-head">
+              <label className="bp-node-detail__label">功能点</label>
+              <button
+                className={`bp-node-detail__feature-add${featureActionDisabled ? ' bp-node-detail__feature-add--disabled' : ''}`}
+                onClick={() => addFeature(detailNode)}
+                disabled={featureActionDisabled}
+                title={featureActionHint}
+              >
+                <span className="bp-node-detail__feature-add-icon">+</span>
+                <span>{featureActionLabel}</span>
+              </button>
+            </div>
+            <div className="bp-feature-hint">{featureActionHint}</div>
+            <div className="bp-feature-list">
+              {(detailNode.features ?? []).map((feature) => (
+                <div className="bp-feature-card" key={feature.id}>
+                  <div className="bp-feature-card__row">
+                    <input
+                      className="bp-feature-card__input"
+                      value={feature.title}
+                      onChange={(event) =>
+                        updateFeature(detailNode.id, {
+                          ...feature,
+                          title: event.target.value
+                        })
+                      }
+                    />
+                    <button className="bp-feature-card__delete" onClick={() => removeFeature(detailNode.id, feature.id)}>
+                      删除
+                    </button>
+                  </div>
+                  <div className="bp-feature-card__grid">
+                    <Select
+                      value={feature.status}
+                      onChange={(value) =>
+                        updateFeature(detailNode.id, {
+                          ...feature,
+                          status: value as BlueprintFeatureItem['status']
+                        })
+                      }
+                      options={[
+                        { value: 'planned', label: '待规划' },
+                        { value: 'in-progress', label: '进行中' },
+                        { value: 'done', label: '已完成' },
+                        { value: 'blocked', label: '阻塞' }
+                      ]}
+                      className="blueprint-select bp-node-detail__select"
+                    />
+                    <input
+                      className="bp-feature-card__input"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={feature.progress}
+                      onChange={(event) =>
+                        updateFeature(detailNode.id, {
+                          ...feature,
+                          progress: Number(event.target.value || 0)
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="bp-feature-card__notes">
+                    {feature.requirementNotes?.length ? feature.requirementNotes.map((note) => <span key={note}>{note}</span>) : <span>无补充需求</span>}
+                  </div>
+                </div>
+              ))}
+              {(detailNode.features ?? []).length === 0 ? <div className="bp-feature-empty">还没有功能点，从这里开始补充。</div> : null}
+            </div>
+          </div>
+
           <div className="bp-node-detail__meta">
             <div>
               <span>状态</span>
@@ -682,7 +859,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
             </div>
             <div>
               <span>终端</span>
-              <strong>{detailNode.boundTerminalId ? detailNode.boundTerminalId.slice(0, 8) : '未绑定'}</strong>
+              <strong>{detailNode.boundTerminalId ? detailNode.boundTerminalId.slice(0, 8) : '—'}</strong>
             </div>
           </div>
 
@@ -701,14 +878,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
             >
               解绑工作区
             </button>
-          </div>
 
-          {detailNode.workspaceId && !workspaceNameById[detailNode.workspaceId] ? (
+          </div>
+          {detailWorkspaceMissing ? (
             <div className="bp-node-detail__warning">绑定的工作区已不存在，请重新选择。</div>
           ) : null}
         </aside>
       ) : null}
-
       <PromptDialog
         open={promptState !== null}
         title={promptState?.kind === 'child' ? '新建子节点' : '新建根节点'}

@@ -63,12 +63,51 @@ body {
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar {
-  width: 6px;
+  width: 12px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 120, 48, 0.42);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar.vertical {
+  width: 12px !important;
+  right: 1px !important;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  left: 0 !important;
+  width: 10px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 2px solid transparent !important;
+  background-clip: content-box !important;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover {
+  background: rgba(255, 120, 48, 0.42) !important;
+  border: 3px solid transparent !important;
+  background-clip: content-box !important;
+}
+
+.xterm .xterm-scrollable-element > .shadow.top,
+.xterm .xterm-scrollable-element > .shadow.left,
+.xterm .xterm-scrollable-element > .shadow.top.left,
+.xterm .xterm-scrollable-element > .shadow.top-left-corner {
+  display: none !important;
 }
 
 /* Electron 拖拽区域 */

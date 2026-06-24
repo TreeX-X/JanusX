@@ -69,6 +69,53 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
   )
 
   ipcMain.handle(
+    'blueprint:node:features',
+    async (
+      _e,
+      cwd: string,
+      blueprintId: string,
+      nodeId: string,
+      features: Array<{ title: string; description?: string; progress?: number; status?: string; requirementNotes?: string[] }>
+    ) => {
+      return blueprintStore.patchNodeFeatures(cwd, blueprintId, nodeId, features)
+    }
+  )
+
+  ipcMain.handle(
+    'blueprint:node:feature:add',
+    async (
+      _e,
+      cwd: string,
+      blueprintId: string,
+      nodeId: string,
+      feature: { title: string; description?: string; progress?: number; status?: string; requirementNotes?: string[] }
+    ) => {
+      return blueprintStore.appendNodeFeature(cwd, blueprintId, nodeId, feature)
+    }
+  )
+
+  ipcMain.handle(
+    'blueprint:node:feature:update',
+    async (
+      _e,
+      cwd: string,
+      blueprintId: string,
+      nodeId: string,
+      featureId: string,
+      patch: { title?: string; description?: string; progress?: number; status?: string; requirementNotes?: string[] }
+    ) => {
+      return blueprintStore.updateNodeFeature(cwd, blueprintId, nodeId, featureId, patch)
+    }
+  )
+
+  ipcMain.handle(
+    'blueprint:node:feature:delete',
+    async (_e, cwd: string, blueprintId: string, nodeId: string, featureId: string) => {
+      return blueprintStore.deleteNodeFeature(cwd, blueprintId, nodeId, featureId)
+    }
+  )
+
+  ipcMain.handle(
     'blueprint:node:delete',
     async (_e, cwd: string, blueprintId: string, nodeId: string) => {
       return blueprintStore.deleteNode(cwd, blueprintId, nodeId)
@@ -98,6 +145,33 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
         workspacePath: payload.workspacePath,
         trigger
       })
+    }
+  )
+
+  ipcMain.handle(
+    'janus:analyzer:apply-patch',
+    async (
+      _e,
+      payload: {
+        workspacePath: string
+        blueprintId: string
+        nodeId: string
+        patch: {
+          progress?: number
+          status?: BlueprintNode['status']
+          featureUpdates?: Array<{
+            featureId: string
+            progress?: number
+            status?: string
+            description?: string
+            requirementNotes?: string[]
+          }>
+          newFeatureRequirements?: Array<{ title: string; description: string }>
+          discoveredRequirements?: Array<{ title: string; description: string; suggestedParent: string; confidence: number }>
+        }
+      }
+    ) => {
+      return blueprintStore.applyAnalysisPatch(payload.workspacePath, payload.blueprintId, payload.nodeId, payload.patch)
     }
   )
 

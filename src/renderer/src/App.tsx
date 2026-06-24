@@ -142,7 +142,8 @@ export default function App() {
               className="absolute inset-0 p-2"
               style={{
                 backfaceVisibility: 'hidden',
-                background: 'rgba(10, 10, 10, 0.95)',
+                background:
+                  'radial-gradient(circle at top, rgba(36, 36, 36, 0.28) 0%, rgba(18, 18, 18, 0.96) 38%, rgba(9, 9, 9, 0.98) 100%)',
               }}
             >
               {loadState === 'no-workspace' && <EmptyWorkspace />}

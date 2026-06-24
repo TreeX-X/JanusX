@@ -15,6 +15,8 @@ import { randomUUID } from 'crypto'
 import { app } from 'electron'
 import type {
   Blueprint,
+  BlueprintFeatureItem,
+  BlueprintFeatureStatus,
   BlueprintNode,
   BlueprintNodeType,
   BlueprintAnalysis,
@@ -55,6 +57,24 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
+function makeFeatureItem(input: Partial<BlueprintFeatureItem> & { title: string }): BlueprintFeatureItem {
+  const ts = nowIso()
+  return {
+    id: input.id ?? randomUUID(),
+    title: input.title,
+    description: input.description ?? '',
+    progress: input.progress ?? 0,
+    status: input.status ?? 'planned',
+    requirementNotes: input.requirementNotes ?? [],
+    createdAt: input.createdAt ?? ts,
+    updatedAt: input.updatedAt ?? ts
+  }
+}
+
+function normalizeFeatureStatus(status?: BlueprintFeatureStatus): BlueprintFeatureStatus {
+  return status ?? 'planned'
+}
+
 function makeNode(input: Partial<BlueprintNode> & { title: string; type: BlueprintNodeType }): BlueprintNode {
   const ts = nowIso()
   return {
@@ -66,6 +86,7 @@ function makeNode(input: Partial<BlueprintNode> & { title: string; type: Bluepri
     statusSource: input.statusSource ?? 'manual',
     positioning: input.positioning ?? '',
     description: input.description ?? '',
+    features: Array.isArray(input.features) ? input.features.map((feature) => makeFeatureItem(feature)) : [],
     completedItems: input.completedItems ?? [],
     techSolution: input.techSolution ?? '',
     notes: input.notes ?? '',
@@ -144,6 +165,8 @@ class BlueprintStore {
         if (n.workspaceId === undefined) n.workspaceId = null
         if (!Array.isArray(n.activities)) n.activities = []
         if (!Array.isArray(n.analyses)) n.analyses = []
+        if (!Array.isArray(n.features)) n.features = []
+        n.features = n.features.map((feature) => makeFeatureItem(feature))
       }
       idx.blueprints.push(id)
       this.cache.set(id, bp)
@@ -178,6 +201,8 @@ class BlueprintStore {
         if (n.workspaceId === undefined) n.workspaceId = null
         if (!Array.isArray(n.activities)) n.activities = []
         if (!Array.isArray(n.analyses)) n.analyses = []
+        if (!Array.isArray(n.features)) n.features = []
+        n.features = n.features.map((feature) => makeFeatureItem(feature))
       }
     }
     return bp
@@ -331,6 +356,78 @@ class BlueprintStore {
     return node
   }
 
+  async patchNodeFeatures(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string,
+    features: Array<Partial<BlueprintFeatureItem> & { title: string }>
+  ): Promise<BlueprintNode | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[nodeId]) return null
+    const node = bp.nodes[nodeId]
+    node.features = features.map((feature) => makeFeatureItem(feature))
+    node.updatedAt = nowIso()
+    bp.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), bp)
+    return node
+  }
+
+  async appendNodeFeature(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string,
+    feature: Partial<BlueprintFeatureItem> & { title: string }
+  ): Promise<BlueprintNode | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[nodeId]) return null
+    const node = bp.nodes[nodeId]
+    node.features = [...(node.features ?? []), makeFeatureItem(feature)]
+    node.updatedAt = nowIso()
+    bp.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), bp)
+    return node
+  }
+
+  async updateNodeFeature(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string,
+    featureId: string,
+    patch: Partial<BlueprintFeatureItem>
+  ): Promise<BlueprintNode | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[nodeId]) return null
+    const node = bp.nodes[nodeId]
+    const feature = (node.features ?? []).find((item) => item.id === featureId)
+    if (!feature) return null
+    if (patch.title !== undefined) feature.title = patch.title
+    if (patch.description !== undefined) feature.description = patch.description
+    if (patch.progress !== undefined) feature.progress = Math.max(0, Math.min(100, patch.progress))
+    if (patch.status !== undefined) feature.status = normalizeFeatureStatus(patch.status)
+    if (patch.requirementNotes !== undefined) feature.requirementNotes = [...patch.requirementNotes]
+    feature.updatedAt = nowIso()
+    node.updatedAt = nowIso()
+    bp.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), bp)
+    return node
+  }
+
+  async deleteNodeFeature(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string,
+    featureId: string
+  ): Promise<BlueprintNode | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[nodeId]) return null
+    const node = bp.nodes[nodeId]
+    node.features = (node.features ?? []).filter((item) => item.id !== featureId)
+    node.updatedAt = nowIso()
+    bp.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), bp)
+    return node
+  }
+
   async deleteNode(workspace: string, blueprintId: string, nodeId: string): Promise<boolean> {
     const bp = await this.loadBlueprint(workspace, blueprintId)
     if (!bp || !bp.nodes[nodeId]) return false
@@ -396,6 +493,92 @@ class BlueprintStore {
       node.progress = r.progress
       node.status = r.status
       node.statusSource = 'janus'
+      for (const update of r.featureUpdates ?? []) {
+        const feature = (node.features ?? []).find((item) => item.id === update.featureId)
+        if (!feature) continue
+        if (update.progress !== undefined) feature.progress = Math.max(0, Math.min(100, update.progress))
+        if (update.status !== undefined) feature.status = normalizeFeatureStatus(update.status)
+        if (update.description !== undefined) feature.description = update.description
+        if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
+        feature.updatedAt = nowIso()
+      }
+      const featureTitles = new Set((node.features ?? []).map((item) => item.title.trim().toLowerCase()))
+      for (const req of r.newFeatureRequirements ?? []) {
+        const key = req.title.trim().toLowerCase()
+        if (featureTitles.has(key)) continue
+        node.features = [...(node.features ?? []), makeFeatureItem({
+          title: req.title,
+          description: req.description,
+          status: 'planned',
+          progress: 0
+        })]
+        featureTitles.add(key)
+      }
+    }
+    node.updatedAt = nowIso()
+    bp.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), bp)
+    return node
+  }
+
+  async applyAnalysisPatch(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string,
+    patch: {
+      progress?: number
+      status?: BlueprintNode['status']
+      featureUpdates?: Array<{
+        featureId: string
+        progress?: number
+        status?: BlueprintFeatureStatus
+        description?: string
+        requirementNotes?: string[]
+      }>
+      newFeatureRequirements?: Array<{ title: string; description: string }>
+      discoveredRequirements?: AnalysisResult['discoveredRequirements']
+    }
+  ): Promise<BlueprintNode | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[nodeId]) return null
+    const node = bp.nodes[nodeId]
+    if (patch.progress !== undefined) node.progress = Math.max(0, Math.min(100, patch.progress))
+    if (patch.status !== undefined) node.status = patch.status
+    for (const update of patch.featureUpdates ?? []) {
+      const feature = (node.features ?? []).find((item) => item.id === update.featureId)
+      if (!feature) continue
+      if (update.progress !== undefined) feature.progress = Math.max(0, Math.min(100, update.progress))
+      if (update.status !== undefined) feature.status = normalizeFeatureStatus(update.status)
+      if (update.description !== undefined) feature.description = update.description
+      if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
+      feature.updatedAt = nowIso()
+    }
+    if (patch.newFeatureRequirements?.length) {
+      const featureTitles = new Set((node.features ?? []).map((item) => item.title.trim().toLowerCase()))
+      for (const req of patch.newFeatureRequirements) {
+        const key = req.title.trim().toLowerCase()
+        if (featureTitles.has(key)) continue
+        node.features = [
+          ...(node.features ?? []),
+          makeFeatureItem({
+            title: req.title,
+            description: req.description,
+            status: 'planned',
+            progress: 0
+          })
+        ]
+        featureTitles.add(key)
+      }
+    }
+    if (patch.discoveredRequirements?.length) {
+      for (const req of patch.discoveredRequirements) {
+        node.todos.push({
+          id: randomUUID(),
+          text: `${req.title}${req.description ? `：${req.description}` : ''}`,
+          done: false,
+          createdAt: nowIso()
+        })
+      }
     }
     node.updatedAt = nowIso()
     bp.updatedAt = nowIso()

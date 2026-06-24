@@ -9,6 +9,11 @@ const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
 const watcherRegistry = new Map<string, FSWatcher>()
 const watcherTimers = new Map<string, NodeJS.Timeout>()
 
+function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
+  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
+  mainWindow.webContents.send(channel, payload)
+}
+
 async function ensureDir(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true })
 }
@@ -87,9 +92,7 @@ function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: stri
           workspacePath,
           setTimeout(() => {
             watcherTimers.delete(workspacePath)
-            if (!mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('filetree:changed', workspacePath)
-            }
+            sendToRenderer(mainWindow, 'filetree:changed', workspacePath)
           }, 150),
         )
       },

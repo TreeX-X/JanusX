@@ -1,0 +1,100 @@
+{
+  "id": "e8d2472e-1180-408b-881e-e38dbb032db0",
+  "name": "test",
+  "description": "",
+  "rootNodeId": "169b579d-e646-46f5-b57e-efe3b9b9bf11",
+  "nodeIds": [
+    "169b579d-e646-46f5-b57e-efe3b9b9bf11",
+    "b2da68a5-f431-4819-8be1-88ee53bedbf4"
+  ],
+  "nodes": {
+    "169b579d-e646-46f5-b57e-efe3b9b9bf11": {
+      "id": "169b579d-e646-46f5-b57e-efe3b9b9bf11",
+      "title": "根任务",
+      "type": "epic",
+      "status": "not-started",
+      "progress": 0,
+      "statusSource": "manual",
+      "positioning": "",
+      "description": "",
+      "completedItems": [],
+      "techSolution": "",
+      "notes": "",
+      "todos": [],
+      "issues": [],
+      "activities": [
+        {
+          "id": "abf5e018-fdac-4b4d-9d57-d4316054cf60",
+          "type": "analysis",
+          "content": "",
+          "metadata": {
+            "analysisId": "705c9584-fe12-48bd-957b-78c5eba5dec2",
+            "applied": false
+          },
+          "createdAt": "2026-06-23T13:45:21.524Z"
+        }
+      ],
+      "analyses": [
+        {
+          "id": "705c9584-fe12-48bd-957b-78c5eba5dec2",
+          "nodeId": "169b579d-e646-46f5-b57e-efe3b9b9bf11",
+          "trigger": "manual",
+          "inputSummary": {
+            "blueprint": "标题：根任务\n定位：\n描述：\n技术方案：\n待办：0 项（完成 0）\n问题：0 项",
+            "actual": "commit：50 个"
+          },
+          "result": {
+            "schemaVersion": 1,
+            "progress": 0,
+            "status": "not-started",
+            "summary": "",
+            "confidence": 0,
+            "evidence": [],
+            "unresolved": [],
+            "discoveredRequirements": []
+          },
+          "applied": false,
+          "error": "Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.; Model does not have a default object generation mode.",
+          "createdAt": "2026-06-23T13:45:21.524Z"
+        }
+      ],
+      "boundTerminalId": null,
+      "terminalHistory": [],
+      "lastAnalyzedCommitSha": null,
+      "children": [],
+      "parentId": null,
+      "tags": [],
+      "createdAt": "2026-06-23T10:04:31.700Z",
+      "updatedAt": "2026-06-23T13:45:21.524Z"
+    },
+    "b2da68a5-f431-4819-8be1-88ee53bedbf4": {
+      "id": "b2da68a5-f431-4819-8be1-88ee53bedbf4",
+      "title": "test",
+      "type": "task",
+      "status": "not-started",
+      "progress": 0,
+      "statusSource": "manual",
+      "positioning": "",
+      "description": "",
+      "completedItems": [],
+      "techSolution": "",
+      "notes": "",
+      "todos": [],
+      "issues": [],
+      "activities": [],
+      "analyses": [],
+      "boundTerminalId": null,
+      "terminalHistory": [],
+      "lastAnalyzedCommitSha": null,
+      "children": [],
+      "parentId": null,
+      "tags": [],
+      "createdAt": "2026-06-23T13:45:04.253Z",
+      "updatedAt": "2026-06-23T13:45:04.253Z"
+    }
+  },
+  "mountedTo": null,
+  "canvasLayout": {},
+  "createdAt": "2026-06-23T10:04:31.700Z",
+  "updatedAt": "2026-06-23T13:45:21.524Z"
+}

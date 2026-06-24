@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JanusMode } from './JanusEye'
 import { JanusChat } from './JanusChat'
 import type { Message } from './useJanusChat'
@@ -10,9 +9,12 @@ import type { Message } from './useJanusChat'
    ════════════════════════════════════════════════════════════ */
 
 interface JanusExpandedProps {
+  stage: 'peek' | 'expanded'
   mode: JanusMode
   isRunning: boolean
+  onAdvance: () => void
   onCollapse: () => void
+  onStepBack: () => void
   messages: Message[]
   pendingContent: string
   isStreaming: boolean
@@ -33,9 +35,12 @@ function faceClass(mode: JanusMode): string {
 }
 
 export function JanusExpanded({
+  stage,
   mode,
   isRunning,
+  onAdvance,
   onCollapse,
+  onStepBack,
   messages,
   pendingContent,
   isStreaming,
@@ -47,9 +52,18 @@ export function JanusExpanded({
   onOpenLlmConfig,
 }: JanusExpandedProps) {
   const [collapsing, setCollapsing] = useState(false)
-  // 视图枚举：dual（双栏）/ vision（仅视觉）/ chat（仅对话）
-  // 视图切换绝不调用 stop/clear/abort，流式状态机由 useJanusChat 持有
+  const [enteredFromCollapsed, setEnteredFromCollapsed] = useState(true)
+  const shellRef = useRef<HTMLDivElement | null>(null)
   const [view, setView] = useState<'dual' | 'vision' | 'chat'>('dual')
+
+  useEffect(() => {
+    if (stage === 'peek') setView('dual')
+  }, [stage])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setEnteredFromCollapsed(false), 220)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   const handleCollapse = useCallback(() => {
     setCollapsing(true)
@@ -61,15 +75,23 @@ export function JanusExpanded({
   }, [onCollapse])
 
   const handleBackdropClick = useCallback(() => {
+    if (stage === 'expanded') {
+      onStepBack()
+      return
+    }
     handleCollapse()
-  }, [handleCollapse])
+  }, [handleCollapse, onStepBack, stage])
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      handleCollapse()
+      if (stage === 'peek') {
+        onAdvance()
+        return
+      }
+      onStepBack()
     },
-    [handleCollapse],
+    [onAdvance, onStepBack, stage],
   )
 
   // 视图循环：dual → vision → chat → dual
@@ -94,6 +116,18 @@ export function JanusExpanded({
 
   /*-- 模式颜色 --*/
   const modeColor = mode === 'running' ? '#00ff88' : '#ff7830'
+  const peekTitle = useMemo(() => {
+    if (isRunning) return 'Running'
+    if (mode === 'analytics') return 'Analyzing'
+    if (mode === 'sleep') return 'Idle'
+    return 'Ready'
+  }, [isRunning, mode])
+  const peekSubtitle = useMemo(() => {
+    if (isRunning) return 'Workspace active'
+    if (mode === 'analytics') return 'Blueprint view engaged'
+    if (mode === 'sleep') return 'No workspace selected'
+    return 'Double-click to open'
+  }, [isRunning, mode])
 
   /*-- 粒子系统 --*/
   const [particles, setParticles] = useState<Array<{
@@ -125,25 +159,67 @@ export function JanusExpanded({
       ? 'mode-analytics'
       : 'mode-order'
 
-  return createPortal(
-    <div
-      className="janus-backdrop visible titlebar-no-drag"
-      style={{ zIndex: 99999 }}
-    >
-      {/* 遮罩 */}
-      <div
-        className="janus-backdrop-bg"
-        onClick={handleBackdropClick}
-      />
+  useEffect(() => {
+    if (collapsing) return
 
-      {/* 展开容器 — 定位由 CSS .janus-expanded 管理 */}
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      const shell = shellRef.current
+      if (!shell || !target || shell.contains(target)) return
+      handleBackdropClick()
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      handleBackdropClick()
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [collapsing, handleBackdropClick])
+
+  return (
+    <>
+      {stage === 'expanded' && <div className="janus-veil" />}
       <div
-        className={`janus-expanded ${expandedModeClass} ${collapsing ? 'collapsing' : ''}`}
+        ref={shellRef}
+        className={`janus-expanded ${expandedModeClass}${enteredFromCollapsed ? ' from-collapsed' : ''}${collapsing ? ' collapsing' : ''}`}
+        data-stage={stage}
         data-view={view}
+        role="dialog"
+        aria-label="Janus Island"
         onDoubleClick={handleDoubleClick}
         onAnimationEnd={collapsing ? handleCollapseEnd : undefined}
       >
-          {/* Header */}
+        {stage === 'peek' ? (
+          <div className="janus-peek-shell">
+            <div className="janus-peek-orbit" aria-hidden="true" />
+            <div className="janus-peek-core">
+              <div className={`janus-peek-sigil ${expandedModeClass}`}>
+                <div className="janus-peek-halo halo-outer" aria-hidden="true" />
+                <div className="janus-peek-halo halo-inner" aria-hidden="true" />
+                <div className="janus-peek-eyes" aria-hidden="true">
+                  <div className="janus-peek-eye left" />
+                  <div className="janus-peek-eye right" />
+                </div>
+              </div>
+              <div className="janus-peek-copy">
+                <div className="janus-peek-title">{peekTitle}</div>
+                <div className="janus-peek-subtitle">{peekSubtitle}</div>
+              </div>
+              <div className="janus-peek-pulse" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
           <div
             className="flex justify-between items-center pb-1.5"
             style={{
@@ -155,10 +231,9 @@ export function JanusExpanded({
             >
               <span>◎</span> JANUS ENGINE
             </div>
-            <div className="text-[9px] text-[#52525b]">双击空白处收合</div>
+            <div className="text-[9px] text-[#52525b]">Esc / 外部点击收起</div>
           </div>
 
-          {/* 双栏 body：左 CRT / 右 Chat，由 data-view 控制列显隐 */}
           <div
             className="janus-expanded-body"
           >
@@ -237,9 +312,9 @@ export function JanusExpanded({
               MODE: {modeLabel}
             </span>
           </div>
-        </div>
-
-    </div>,
-    document.body,
+          </>
+        )}
+      </div>
+    </>
   )
 }

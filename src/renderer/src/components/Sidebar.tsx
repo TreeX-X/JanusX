@@ -7,6 +7,9 @@ import { ModalCloseButton } from './ModalCloseButton'
 import type { Workspace, FileNode } from '@/types'
 
 export function Sidebar() {
+  const longPressDuration = 450
+  const longPressVisualDelay = 120
+  const longPressProgressDuration = Math.max(120, longPressDuration - longPressVisualDelay)
   const { workspaces, activeWorkspaceId, setActiveWorkspace, addWorkspace, removeWorkspace } =
     useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
@@ -15,9 +18,14 @@ export function Sidebar() {
 
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null)
   const [longPressingId, setLongPressingId] = useState<string | null>(null)
+  const [longPressProgressId, setLongPressProgressId] = useState<string | null>(null)
+  const [longPressCompletedId, setLongPressCompletedId] = useState<string | null>(null)
   const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pressVisualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressTargetRef = useRef<string | null>(null)
+  const suppressClickRef = useRef<string | null>(null)
 
   const handleAddWorkspace = useCallback(async () => {
     try {
@@ -74,6 +82,10 @@ export function Sidebar() {
 
   const handleSelect = useCallback(
     async (id: string) => {
+      if (suppressClickRef.current === id) {
+        suppressClickRef.current = null
+        return
+      }
       setActiveWorkspace(id)
       // 根据目标工作区是否有终端来设置状态
       const snapshot = useWorkspaceStore.getState().terminalSnapshots[id]
@@ -93,12 +105,22 @@ export function Sidebar() {
   )
 
   const cancelLongPress = useCallback(() => {
+    const hadActivePress = !!pressTargetRef.current
     if (pressTimerRef.current) {
       clearTimeout(pressTimerRef.current)
       pressTimerRef.current = null
     }
+    if (pressVisualTimerRef.current) {
+      clearTimeout(pressVisualTimerRef.current)
+      pressVisualTimerRef.current = null
+    }
+    if (hadActivePress && completeTimerRef.current) {
+      clearTimeout(completeTimerRef.current)
+      completeTimerRef.current = null
+    }
     if (pressTargetRef.current) {
       setLongPressingId(null)
+      setLongPressProgressId(null)
       pressTargetRef.current = null
     }
   }, [])
@@ -107,15 +129,45 @@ export function Sidebar() {
     (ws: Workspace, e: React.PointerEvent) => {
       if (e.button !== 0) return
       if ((e.target as HTMLElement).closest('.ws-del')) return
+      if (pressTimerRef.current) {
+        clearTimeout(pressTimerRef.current)
+      }
+      if (pressVisualTimerRef.current) {
+        clearTimeout(pressVisualTimerRef.current)
+      }
+      if (completeTimerRef.current) {
+        clearTimeout(completeTimerRef.current)
+      }
       pressTargetRef.current = ws.id
-      setLongPressingId(ws.id)
+      setLongPressingId(null)
+      setLongPressProgressId(null)
+      setLongPressCompletedId(null)
+      pressVisualTimerRef.current = setTimeout(() => {
+        if (pressTargetRef.current === ws.id) {
+          setLongPressingId(ws.id)
+          setLongPressProgressId(ws.id)
+        }
+        pressVisualTimerRef.current = null
+      }, longPressVisualDelay)
       pressTimerRef.current = setTimeout(() => {
+        pressTimerRef.current = null
+        if (pressVisualTimerRef.current) {
+          clearTimeout(pressVisualTimerRef.current)
+          pressVisualTimerRef.current = null
+        }
         setLongPressingId(null)
+        setLongPressProgressId(null)
+        setLongPressCompletedId(ws.id)
+        suppressClickRef.current = ws.id
         pressTargetRef.current = null
-        setConfigTarget(ws)
-      }, 450)
+        completeTimerRef.current = setTimeout(() => {
+          setLongPressCompletedId(null)
+          setConfigTarget(ws)
+          completeTimerRef.current = null
+        }, 130)
+      }, longPressDuration)
     },
-    [],
+    [longPressDuration, longPressVisualDelay],
   )
 
   return (
@@ -169,44 +221,79 @@ export function Sidebar() {
                 <div className="text-xs text-[#666]">暂无工作区</div>
               </div>
             ) : (
-              workspaces.map((ws) => (
-                <div
-                  key={ws.id}
-                  onClick={() => handleSelect(ws.id)}
-                  onPointerDown={(e) => handlePointerDown(ws, e)}
-                  onPointerUp={cancelLongPress}
-                  onPointerLeave={cancelLongPress}
-                  onPointerCancel={cancelLongPress}
-                  className={`ws p-[9px] px-3 mb-px rounded-md cursor-pointer transition-all flex items-center gap-2.5 text-[13px] relative group${longPressingId === ws.id ? ' long-pressing' : ''}`}
-                  style={{
-                    color: ws.id === activeWorkspaceId ? '#ff7830' : '#999',
-                    background:
-                      ws.id === activeWorkspaceId ? 'rgba(255, 120, 48, 0.08)' : 'transparent',
-                  }}
-                >
-                  {ws.id === activeWorkspaceId && (
-                    <div
-                      className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r-sm"
-                      style={{ background: '#ff7830' }}
-                    />
-                  )}
+              workspaces.map((ws) => {
+                const isActive = ws.id === activeWorkspaceId
+                const isLongPressing = longPressingId === ws.id
+                const isLongPressComplete = longPressCompletedId === ws.id
+                const showProgress = isLongPressing || isActive || isLongPressComplete
+
+                return (
                   <div
-                    className="w-1 h-1 rounded-full shrink-0"
+                    key={ws.id}
+                    onClick={() => handleSelect(ws.id)}
+                    onPointerDown={(e) => handlePointerDown(ws, e)}
+                    onPointerUp={cancelLongPress}
+                    onPointerLeave={cancelLongPress}
+                    onPointerCancel={cancelLongPress}
+                    className={`ws p-[9px] px-3 mb-px rounded-md cursor-pointer transition-all flex items-center gap-2.5 text-[13px] relative group${isLongPressing ? ' long-pressing' : ''}`}
                     style={{
-                      background: ws.id === activeWorkspaceId ? '#ff7830' : '#444',
+                      color: isActive ? '#ff7830' : '#999',
+                      background: isLongPressing
+                        ? isActive
+                          ? 'rgba(255, 120, 48, 0.11)'
+                          : 'rgba(255, 255, 255, 0.045)'
+                        : isActive
+                          ? 'rgba(255, 120, 48, 0.08)'
+                          : 'transparent',
+                      transform: isLongPressing ? 'scale(0.988)' : 'scale(1)',
+                      boxShadow: isLongPressing
+                        ? 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 8px 16px rgba(0,0,0,0.18)'
+                        : isLongPressComplete
+                          ? '0 0 0 1px rgba(255, 120, 48, 0.12), 0 0 14px rgba(255, 120, 48, 0.14)'
+                          : 'none',
                     }}
-                  />
-                  <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                    {ws.name}
-                  </span>
-                  <button
-                    onClick={(e) => handleDeleteClick(ws, e)}
-                    className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
                   >
-                    ×
-                  </button>
-                </div>
-              ))
+                    <div
+                      className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r-sm overflow-hidden pointer-events-none"
+                      style={{
+                        background: showProgress ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
+                      }}
+                    >
+                      <div
+                        className="absolute inset-0 origin-bottom"
+                        style={{
+                          background: isLongPressComplete ? '#ffd2b8' : '#ff7830',
+                          opacity: isLongPressComplete ? 0.9 : showProgress ? 1 : 0,
+                          transform:
+                            isLongPressing && longPressProgressId === ws.id
+                              ? 'scaleY(1)'
+                              : showProgress
+                                ? 'scaleY(1)'
+                                : 'scaleY(0)',
+                          transition: isLongPressing
+                            ? `transform ${longPressProgressDuration}ms linear, opacity 120ms ease`
+                            : 'opacity 120ms ease',
+                        }}
+                      />
+                    </div>
+                    <div
+                      className="w-1 h-1 rounded-full shrink-0"
+                      style={{
+                        background: isActive ? '#ff7830' : '#444',
+                      }}
+                    />
+                    <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                      {ws.name}
+                    </span>
+                    <button
+                      onClick={(e) => handleDeleteClick(ws, e)}
+                      className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )
+              })
             )}
           </div>
         </>
@@ -233,35 +320,67 @@ export function Sidebar() {
             className="w-5 h-px my-1"
             style={{ background: 'rgba(255, 255, 255, 0.06)' }}
           />
-          {workspaces.map((ws) => (
-            <div
-              key={ws.id}
-              onClick={() => handleSelect(ws.id)}
-              onPointerDown={(e) => handlePointerDown(ws, e)}
-              onPointerUp={cancelLongPress}
-              onPointerLeave={cancelLongPress}
-              onPointerCancel={cancelLongPress}
-              title={ws.name}
-              className={`ws w-8 h-7 flex items-center justify-center cursor-pointer transition-all relative${longPressingId === ws.id ? ' long-pressing' : ''}`}
-            >
-              {ws.id === activeWorkspaceId && (
-                <div
-                  className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-sm"
-                  style={{ background: '#ff7830' }}
-                />
-              )}
+          {workspaces.map((ws) => {
+            const isActive = ws.id === activeWorkspaceId
+            const isLongPressing = longPressingId === ws.id
+            const isLongPressComplete = longPressCompletedId === ws.id
+            const showProgress = isLongPressing || isActive || isLongPressComplete
+
+            return (
               <div
-                className="rounded-full transition-all"
+                key={ws.id}
+                onClick={() => handleSelect(ws.id)}
+                onPointerDown={(e) => handlePointerDown(ws, e)}
+                onPointerUp={cancelLongPress}
+                onPointerLeave={cancelLongPress}
+                onPointerCancel={cancelLongPress}
+                title={ws.name}
+                className={`ws w-8 h-7 flex items-center justify-center cursor-pointer transition-all relative${isLongPressing ? ' long-pressing' : ''}`}
                 style={{
-                  width: ws.id === activeWorkspaceId ? '8px' : '6px',
-                  height: ws.id === activeWorkspaceId ? '8px' : '6px',
-                  background: ws.id === activeWorkspaceId ? '#ff7830' : 'rgba(255, 255, 255, 0.12)',
-                  boxShadow:
-                    ws.id === activeWorkspaceId ? '0 0 6px rgba(255, 120, 48, 0.5)' : 'none',
+                  background: isLongPressing ? 'rgba(255, 255, 255, 0.04)' : 'transparent',
+                  transform: isLongPressing ? 'scale(0.96)' : 'scale(1)',
+                  boxShadow: isLongPressing
+                    ? 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 8px 14px rgba(0,0,0,0.2)'
+                    : isLongPressComplete
+                      ? '0 0 0 1px rgba(255, 120, 48, 0.12), 0 0 12px rgba(255, 120, 48, 0.14)'
+                      : 'none',
                 }}
-              />
-            </div>
-          ))}
+              >
+                <div
+                  className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-sm overflow-hidden pointer-events-none"
+                  style={{
+                    background: showProgress ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
+                  }}
+                >
+                  <div
+                    className="absolute inset-0 origin-bottom"
+                    style={{
+                      background: isLongPressComplete ? '#ffd2b8' : '#ff7830',
+                      opacity: isLongPressComplete ? 0.9 : showProgress ? 1 : 0,
+                      transform:
+                        isLongPressing && longPressProgressId === ws.id
+                          ? 'scaleY(1)'
+                          : showProgress
+                            ? 'scaleY(1)'
+                            : 'scaleY(0)',
+                      transition: isLongPressing
+                        ? `transform ${longPressProgressDuration}ms linear, opacity 120ms ease`
+                        : 'opacity 120ms ease',
+                    }}
+                  />
+                </div>
+                <div
+                  className="rounded-full transition-all"
+                  style={{
+                    width: isActive ? '8px' : '6px',
+                    height: isActive ? '8px' : '6px',
+                    background: isActive ? '#ff7830' : 'rgba(255, 255, 255, 0.12)',
+                    boxShadow: isActive ? '0 0 6px rgba(255, 120, 48, 0.5)' : 'none',
+                  }}
+                />
+              </div>
+            )
+          })}
         </div>
       )}
       {/* 删除确认弹窗 — portal 到 body 级别，居窗口中央 */}

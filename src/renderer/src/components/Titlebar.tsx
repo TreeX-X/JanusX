@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import appIcon from '@/assets/icons/app-icon.svg'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
-import { JanusIsland, JanusExpanded } from '@/components/janus'
+import { JanusIsland } from '@/components/janus'
 import { LlmConfigModal } from '@/components/LlmConfigModal'
 import { useJanusChat } from '@/components/janus/useJanusChat'
 import type { JanusMode } from '@/components/janus'
@@ -14,7 +14,7 @@ import type { JanusMode } from '@/components/janus'
    ════════════════════════════════════════════════════════════ */
 
 export function Titlebar() {
-  const [expanded, setExpanded] = useState(false)
+  const [islandStage, setIslandStage] = useState<'collapsed' | 'peek' | 'expanded'>('collapsed')
   const [isRunning, setIsRunning] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
 
@@ -43,12 +43,20 @@ export function Titlebar() {
         ? 'analytics'
         : 'order'
 
-  const handleExpand = useCallback(() => {
-    setExpanded(true)
+  const handleIslandAdvance = useCallback(() => {
+    setIslandStage((prev) => {
+      if (prev === 'collapsed') return 'peek'
+      if (prev === 'peek') return 'expanded'
+      return prev
+    })
   }, [])
 
-  const handleCollapse = useCallback(() => {
-    setExpanded(false)
+  const handleIslandCollapse = useCallback(() => {
+    setIslandStage('collapsed')
+  }, [])
+
+  const handleIslandStepBack = useCallback(() => {
+    setIslandStage((prev) => (prev === 'expanded' ? 'peek' : 'collapsed'))
   }, [])
 
   const handleRunningChange = useCallback((running: boolean) => {
@@ -134,18 +142,11 @@ export function Titlebar() {
         style={{ zIndex: 2000 }}
       >
         <JanusIsland
-          expanded={expanded}
-          onExpand={handleExpand}
+          stage={islandStage}
+          onAdvance={handleIslandAdvance}
+          onCollapse={handleIslandCollapse}
+          onStepBack={handleIslandStepBack}
           onRunningChange={handleRunningChange}
-        />
-      </div>
-
-      {/* 展开面板 */}
-      {expanded && (
-        <JanusExpanded
-          mode={janusMode}
-          isRunning={isRunning}
-          onCollapse={handleCollapse}
           messages={messages}
           pendingContent={pendingContent}
           isStreaming={isStreaming}
@@ -156,7 +157,8 @@ export function Titlebar() {
           onChatClear={handleChatClear}
           onOpenLlmConfig={() => setSettingsModalOpen(true)}
         />
-      )}
+      </div>
+
     </div>
   )
 }

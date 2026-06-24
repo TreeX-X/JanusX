@@ -14,7 +14,8 @@ import type {
   BlueprintNode,
   BlueprintNodeType,
   AnalysisTrigger,
-  DiscoveredRequirement
+  DiscoveredRequirement,
+  BlueprintFeatureItem
 } from '../../../main/janus/types'
 
 /* ════════════════════════════════════════════════════════════
@@ -36,7 +37,8 @@ export type {
   AnalysisTrigger,
   AnalysisResult,
   AnalysisInputSummary,
-  DiscoveredRequirement
+  DiscoveredRequirement,
+  BlueprintFeatureItem
 } from '../../../main/janus/types'
 
 /* ════════════════════════════════════════════════════════════
@@ -79,6 +81,8 @@ export interface AcceptDiscoveredPayload {
   parentId?: string
   fallbackNodeId?: string
 }
+
+export type FeatureItemInput = Partial<BlueprintFeatureItem> & { title: string }
 
 /* ════════════════════════════════════════════════════════════
    Island 事件 payload 类型（主进程 webContents.send 形状，
@@ -172,6 +176,50 @@ export async function createNode(
     input,
     parentId
   ) as Promise<BlueprintNode | null>
+}
+
+export async function replaceNodeFeatures(
+  cwd: string,
+  blueprintId: string,
+  nodeId: string,
+  features: FeatureItemInput[]
+): Promise<BlueprintNode | null> {
+  return window.electron.invoke('blueprint:node:features', cwd, blueprintId, nodeId, features) as Promise<BlueprintNode | null>
+}
+
+export async function addNodeFeature(
+  cwd: string,
+  blueprintId: string,
+  nodeId: string,
+  feature: FeatureItemInput
+): Promise<BlueprintNode | null> {
+  return window.electron.invoke('blueprint:node:feature:add', cwd, blueprintId, nodeId, feature) as Promise<BlueprintNode | null>
+}
+
+export async function updateNodeFeature(
+  cwd: string,
+  blueprintId: string,
+  nodeId: string,
+  featureId: string,
+  patch: Partial<BlueprintFeatureItem>
+): Promise<BlueprintNode | null> {
+  return window.electron.invoke(
+    'blueprint:node:feature:update',
+    cwd,
+    blueprintId,
+    nodeId,
+    featureId,
+    patch
+  ) as Promise<BlueprintNode | null>
+}
+
+export async function deleteNodeFeature(
+  cwd: string,
+  blueprintId: string,
+  nodeId: string,
+  featureId: string
+): Promise<BlueprintNode | null> {
+  return window.electron.invoke('blueprint:node:feature:delete', cwd, blueprintId, nodeId, featureId) as Promise<BlueprintNode | null>
 }
 
 /**

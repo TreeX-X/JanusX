@@ -26,11 +26,62 @@
   z-index: 5;
 }
 
+.blueprint-toolbar--canvas {
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  min-height: 50px;
+}
+
+.blueprint-toolbar__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.blueprint-toolbar__identity {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
 .blueprint-toolbar__title {
   font-size: 12px;
   color: #888;
-  margin-right: 8px;
   white-space: nowrap;
+}
+
+.blueprint-toolbar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 8px;
+}
+
+.blueprint-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.blueprint-toolbar__group--primary {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.blueprint-toolbar__group--utility {
+  flex: 0 0 auto;
+}
+
+.blueprint-toolbar__spacer {
+  flex: 1;
 }
 
 .blueprint-toolbar select,
@@ -100,17 +151,57 @@
 }
 
 .blueprint-toolbar__hint {
-  max-width: 180px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
-  color: #777;
-  padding: 0 6px;
+  color: #aaa;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
-.blueprint-toolbar__spacer {
-  flex: 1;
+.blueprint-toolbar__toggle {
+  min-width: 64px;
+}
+
+.blueprint-toolbar__toggle--active {
+  border-color: rgba(255, 120, 48, 0.35);
+  color: #ffb27d;
+}
+
+.blueprint-toolbar__panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.blueprint-toolbar__panel-wrap {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: max-height 180ms ease, opacity 160ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+.blueprint-toolbar__panel-wrap--expanded {
+  max-height: 96px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.blueprint-toolbar__panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .blueprint-toolbar__error {
@@ -304,6 +395,139 @@
   margin-bottom: 12px;
 }
 
+.bp-node-detail__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bp-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bp-node-detail__feature-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 120, 48, 0.28);
+  background: rgba(255, 120, 48, 0.12);
+  color: #ffd3b7;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.bp-node-detail__feature-add:hover:not(:disabled) {
+  border-color: rgba(255, 120, 48, 0.42);
+  background: rgba(255, 120, 48, 0.18);
+  color: #fff1e7;
+  transform: translateY(-1px);
+}
+
+.bp-node-detail__feature-add:disabled,
+.bp-node-detail__feature-add--disabled {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #777;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.bp-node-detail__feature-add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 14px;
+}
+
+.bp-feature-hint {
+  font-size: 11px;
+  color: #8b8b8b;
+}
+
+.bp-feature-card {
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bp-feature-card__row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.bp-feature-card__input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.22);
+  color: #e4e4e4;
+  padding: 0 10px;
+}
+
+.bp-feature-card__delete {
+  border: 1px solid rgba(255, 120, 48, 0.25);
+  background: rgba(255, 120, 48, 0.08);
+  color: #ff9f66;
+  border-radius: 6px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.bp-feature-card__grid {
+  display: grid;
+  grid-template-columns: 1fr 96px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.bp-feature-card__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #aaa;
+  font-size: 11px;
+}
+
+.bp-feature-card__notes span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bp-feature-empty {
+  color: #777;
+  font-size: 11px;
+  padding: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.bp-node-card__title--empty {
+  color: var(--text-muted, #888);
+  font-style: italic;
+}
+
+.bp-node-detail__title--empty {
+  color: var(--text-muted, #888);
+  font-style: italic;
+}
+
 .bp-node-detail__select {
   width: 100%;
 }
@@ -366,6 +590,32 @@
   margin-top: 10px;
   color: #ffb86c;
   font-size: 11px;
+}
+
+@media (max-width: 960px) {
+  .blueprint-toolbar--canvas .blueprint-toolbar__main,
+  .blueprint-toolbar__panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .blueprint-toolbar--canvas .blueprint-toolbar__actions,
+  .blueprint-toolbar--canvas .blueprint-toolbar__group,
+  .blueprint-toolbar__panel-actions {
+    width: 100%;
+  }
+
+  .blueprint-toolbar--canvas .blueprint-toolbar__group--primary {
+    justify-content: flex-start;
+  }
+
+  .blueprint-toolbar--canvas .blueprint-toolbar__hint {
+    max-width: 100%;
+  }
+
+  .blueprint-toolbar__panel-wrap--expanded {
+    max-height: 180px;
+  }
 }
 
 /* —— 右键菜单 —— */

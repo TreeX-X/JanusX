@@ -39,6 +39,19 @@ export interface BlueprintTodo {
   createdAt: string
 }
 
+export type BlueprintFeatureStatus = 'planned' | 'in-progress' | 'done' | 'blocked'
+
+export interface BlueprintFeatureItem {
+  id: string
+  title: string
+  description: string
+  progress: number
+  status: BlueprintFeatureStatus
+  requirementNotes: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export type BlueprintIssueSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type BlueprintIssueStatus = 'open' | 'resolved' | 'wontfix'
 
@@ -87,6 +100,14 @@ export interface AnalysisResult {
   evidence: string[]
   unresolved: string[]
   discoveredRequirements: DiscoveredRequirement[]
+  featureUpdates: Array<{
+    featureId: string
+    progress?: number
+    status?: BlueprintFeatureStatus
+    description?: string
+    requirementNotes?: string[]
+  }>
+  newFeatureRequirements: DiscoveredRequirement[]
 }
 
 export interface AnalysisInputSummary {
@@ -117,6 +138,7 @@ export interface BlueprintNode {
   /** 内容 */
   positioning: string
   description: string
+  features: BlueprintFeatureItem[]
   completedItems: string[]
   techSolution: string
   notes: string
