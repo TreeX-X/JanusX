@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto'
-import { readFile, writeFile, mkdir, readdir, unlink, access, stat } from 'fs/promises'
-import { join, relative } from 'path'
+import { readFile, writeFile, mkdir, readdir, unlink, stat, rm } from 'fs/promises'
+import { join, relative, dirname, resolve } from 'path'
 import type { AgentEngine } from '../types'
-import type { ConversationCheckpoint, FileSnapshot, ConflictInfo, CheckpointCreateOptions } from './types'
+import type { ConversationCheckpoint, ConflictInfo, CheckpointCreateOptions, SnapshotFileEntry } from './types'
 import { BlobStore } from './blob-store'
 import { GitAdapter } from './git-adapter'
-import { generateUnifiedDiff, threeWayMerge, parseConflictMarkers } from './diff-engine'
+import { generateUnifiedDiff } from './diff-engine'
 
 const MAX_CHECKPOINTS = 40
 
@@ -14,11 +14,9 @@ export class CheckpointManager {
   private blobStore!: BlobStore
   private gitAdapter = new GitAdapter()
   private storagePath = ''
-  private workspacePath = ''
   private conversationCounters = new Map<string, number>()
 
   async initialize(workspacePath: string): Promise<void> {
-    // Validate workspace path exists and is a directory
     try {
       const st = await stat(workspacePath)
       if (!st.isDirectory()) throw new Error(`Not a directory: ${workspacePath}`)
@@ -27,16 +25,11 @@ export class CheckpointManager {
     }
 
     const newPath = join(workspacePath, '.janusX', 'checkpoints')
-
-    // Only clear + reinitialize if this is a new workspace or first init
     if (this.storagePath === newPath) return
 
-    this.workspacePath = workspacePath
     this.storagePath = newPath
 
-    // Clear stale checkpoint files from previous sessions (disk only, safe — memory is empty)
     await this.clearDiskCheckpoints()
-
     await mkdir(join(this.storagePath, 'blobs'), { recursive: true })
     this.blobStore = new BlobStore(join(this.storagePath, 'blobs'))
     await this.blobStore.initialize()
@@ -46,27 +39,11 @@ export class CheckpointManager {
   async createCheckpoint(options: CheckpointCreateOptions): Promise<ConversationCheckpoint> {
     const id = randomUUID()
     const branch = await this.gitAdapter.getCurrentBranch(options.cwd).catch(() => 'unknown')
-
-    // Track conversation index per terminal
     const counterKey = options.terminalId
     const currentIndex = (this.conversationCounters.get(counterKey) ?? 0) + 1
     this.conversationCounters.set(counterKey, currentIndex)
 
-    // Stash FIRST to get a clean working directory, then snapshot HEAD state
-    const stashRef = await this.gitAdapter.stashPush(options.cwd, `janusx:${options.terminalId}:${id}`)
-
-    // Snapshot tracked files (now against clean HEAD)
-    const files: Record<string, FileSnapshot> = {}
-    const trackedFiles = await this.gitAdapter.listTrackedFiles(options.cwd)
-
-    for (const filePath of trackedFiles.slice(0, 200)) {
-      try {
-        const fullPath = join(options.cwd, filePath)
-        const content = await readFile(fullPath)
-        const hash = await this.blobStore.store(content)
-        files[filePath] = { beforeHash: hash }
-      } catch { /* file may be inaccessible */ }
-    }
+    const filesSnapshot = await this.captureWorkspaceSnapshot(options.cwd)
 
     const checkpoint: ConversationCheckpoint = {
       id,
@@ -76,29 +53,21 @@ export class CheckpointManager {
       engine: options.engine,
       branch,
       prompt: options.prompt,
-      stashRef,
-      filesSnapshot: files,
-      status: 'pending',
+      filesSnapshot,
+      status: 'ready',
+      schemaVersion: 2,
     }
 
     this.checkpoints.set(id, checkpoint)
     await this.saveCheckpoint(checkpoint)
-
-    // Auto-prune oldest checkpoints beyond retention limit (fire-and-forget)
     this.pruneOldCheckpoints().catch(() => {})
-
     return checkpoint
   }
 
-  /**
-   * Atomically finalize the previous checkpoint (if any) and create a new one.
-   * This prevents race conditions between separate finalize and create calls.
-   */
   async finalizeAndCreateCheckpoint(
     previousCheckpointId: string | null,
     options: CheckpointCreateOptions,
   ): Promise<{ finalized: boolean; checkpoint: ConversationCheckpoint }> {
-    // Step 1: Finalize previous checkpoint FIRST (reads current file state before stash)
     let finalized = false
     if (previousCheckpointId) {
       try {
@@ -109,77 +78,52 @@ export class CheckpointManager {
       }
     }
 
-    // Step 2: Create new checkpoint (stashes changes, snapshots clean state)
     const checkpoint = await this.createCheckpoint(options)
     return { finalized, checkpoint }
   }
 
-  async finalizeCheckpoint(checkpointId: string, cwd: string): Promise<void> {
+  async finalizeCheckpoint(checkpointId: string, _cwd: string): Promise<void> {
     const checkpoint = this.checkpoints.get(checkpointId)
     if (!checkpoint) throw new Error(`Checkpoint not found: ${checkpointId}`)
 
-    for (const [filePath, snapshot] of Object.entries(checkpoint.filesSnapshot)) {
-      try {
-        const fullPath = join(cwd, filePath)
-        const content = await readFile(fullPath)
-        const afterHash = await this.blobStore.store(content)
-
-        if (afterHash !== snapshot.beforeHash) {
-          snapshot.afterHash = afterHash
-          // Generate diff
-          const beforeContent = await this.blobStore.retrieve(snapshot.beforeHash)
-          if (beforeContent) {
-            snapshot.diff = generateUnifiedDiff(filePath, beforeContent.toString(), content.toString())
-          }
-        }
-      } catch { /* file may have been deleted */ }
+    if (checkpoint.status !== 'ready') {
+      checkpoint.status = 'ready'
+      await this.saveCheckpoint(checkpoint)
     }
-
-    checkpoint.status = 'finalized'
-    await this.saveCheckpoint(checkpoint)
   }
 
   async restoreCheckpoint(checkpointId: string, cwd: string): Promise<{ conflicts: ConflictInfo[] }> {
     const checkpoint = this.checkpoints.get(checkpointId)
     if (!checkpoint) throw new Error(`Checkpoint not found: ${checkpointId}`)
 
-    const conflicts: ConflictInfo[] = []
+    const currentSnapshot = await this.captureWorkspaceSnapshot(cwd)
+    const targetPaths = new Set(Object.keys(checkpoint.filesSnapshot))
+    const currentPaths = new Set(Object.keys(currentSnapshot))
 
-    for (const [filePath, snapshot] of Object.entries(checkpoint.filesSnapshot)) {
-      const beforeContent = await this.blobStore.retrieve(snapshot.beforeHash)
-      if (!beforeContent) continue
-
-      if (!snapshot.afterHash) {
-        // File wasn't changed by this conversation, skip
-        continue
+    for (const path of targetPaths) {
+      const entry = checkpoint.filesSnapshot[path]
+      const content = await this.blobStore.retrieve(entry.hash)
+      if (!content) {
+        throw new Error(`Checkpoint blob missing for ${path}`)
       }
 
-      try {
-        const fullPath = join(cwd, filePath)
-        const currentContent = await readFile(fullPath)
-        const currentHash = (await this.blobStore.store(currentContent)).toString()
+      const targetPath = this.resolveWorkspacePath(cwd, path)
+      if (!targetPath) {
+        throw new Error(`Invalid checkpoint path: ${path}`)
+      }
 
-        if (currentHash === snapshot.afterHash) {
-          // File unchanged since conversation end - safe direct restore
-          await writeFile(fullPath, beforeContent)
-        } else {
-          // File was modified by another terminal - 3-way merge
-          const result = threeWayMerge(
-            beforeContent.toString(),
-            beforeContent.toString(), // "ours" = the version we want to restore
-            currentContent.toString(),
-          )
-
-          await writeFile(fullPath, result.merged)
-
-          if (result.conflicts) {
-            conflicts.push({ filePath, resolution: 'manual' })
-          }
-        }
-      } catch { /* file may not exist */ }
+      await mkdir(dirname(targetPath), { recursive: true })
+      await writeFile(targetPath, content)
     }
 
-    return { conflicts }
+    for (const path of currentPaths) {
+      if (targetPaths.has(path)) continue
+      const targetPath = this.resolveWorkspacePath(cwd, path)
+      if (!targetPath) continue
+      await rm(targetPath, { force: true })
+    }
+
+    return { conflicts: [] }
   }
 
   async listCheckpoints(filter?: { terminalId?: string; engine?: AgentEngine }): Promise<ConversationCheckpoint[]> {
@@ -194,33 +138,23 @@ export class CheckpointManager {
     if (!checkpoint) return
 
     this.checkpoints.delete(checkpointId)
-
     try {
       await unlink(join(this.storagePath, `${checkpointId}.json`))
-    } catch { /* may not exist */ }
-
-    // Drop git stash if exists
-    if (checkpoint.stashRef && this.workspacePath) {
-      await this.gitAdapter.stashDrop(this.workspacePath, checkpoint.stashRef).catch(() => {})
-    }
+    } catch {}
   }
 
-  /** Evict oldest finalized checkpoints beyond MAX_CHECKPOINTS. */
   private async pruneOldCheckpoints(): Promise<void> {
-    const finalized = Array.from(this.checkpoints.values())
-      .filter(cp => cp.status === 'finalized')
+    const checkpoints = Array.from(this.checkpoints.values())
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 
-    const excess = finalized.length - MAX_CHECKPOINTS
+    const excess = checkpoints.length - MAX_CHECKPOINTS
     if (excess <= 0) return
 
-    const toRemove = finalized.slice(0, excess)
-    for (const cp of toRemove) {
+    for (const cp of checkpoints.slice(0, excess)) {
       await this.deleteCheckpoint(cp.id)
     }
   }
 
-  /** Startup cleanup: delete checkpoint JSON files from disk only. No stash or memory operations. */
   private async clearDiskCheckpoints(): Promise<void> {
     try {
       const files = await readdir(this.storagePath)
@@ -228,51 +162,56 @@ export class CheckpointManager {
         if (!file.endsWith('.json')) continue
         try {
           await unlink(join(this.storagePath, file))
-        } catch { /* skip locked or missing files */ }
+        } catch {}
       }
-    } catch { /* directory may not exist yet — first run, nothing to clear */ }
+    } catch {}
   }
 
   async clearAll(): Promise<void> {
     const all = Array.from(this.checkpoints.values())
     for (const cp of all) {
-      if (cp.stashRef && this.workspacePath) {
-        await this.gitAdapter.stashDrop(this.workspacePath, cp.stashRef).catch(() => {})
-      }
       try {
         await unlink(join(this.storagePath, `${cp.id}.json`))
-      } catch { /* may not exist */ }
+      } catch {}
     }
     this.checkpoints.clear()
     this.conversationCounters.clear()
     try {
       await unlink(join(this.storagePath, 'index.json'))
-    } catch { /* may not exist */ }
+    } catch {}
   }
 
-  async getDiff(checkpointId: string, filePath: string): Promise<string> {
+  async getDiff(checkpointId: string, filePath: string, cwd: string): Promise<string> {
     const checkpoint = this.checkpoints.get(checkpointId)
     if (!checkpoint) return ''
+
     const snapshot = checkpoint.filesSnapshot[filePath]
-    if (!snapshot?.diff) return ''
-    return snapshot.diff
+    if (!snapshot) return ''
+
+    const targetContent = await this.blobStore.retrieve(snapshot.hash)
+    if (!targetContent) return ''
+
+    const currentContent = await this.safeReadWorkspaceFile(cwd, filePath)
+    return generateUnifiedDiff(
+      filePath,
+      currentContent?.toString() ?? '',
+      targetContent.toString(),
+    )
   }
 
-  async getAllDiffs(checkpointId: string): Promise<string> {
+  async getAllDiffs(checkpointId: string, cwd: string): Promise<string> {
     const checkpoint = this.checkpoints.get(checkpointId)
     if (!checkpoint) return ''
+
     const parts: string[] = []
-    for (const [filePath, snapshot] of Object.entries(checkpoint.filesSnapshot)) {
-      if (snapshot.diff) {
-        parts.push(snapshot.diff)
-      }
+    for (const filePath of Object.keys(checkpoint.filesSnapshot)) {
+      const diff = await this.getDiff(checkpointId, filePath, cwd)
+      if (diff) parts.push(diff)
     }
     return parts.join('\n')
   }
 
   private async saveCheckpoint(checkpoint: ConversationCheckpoint): Promise<void> {
-    // Ensure directory exists before writing — handles cases where
-    // initialize() was called with a different cwd or directory was deleted
     await mkdir(this.storagePath, { recursive: true })
     const data = JSON.stringify(checkpoint, null, 2)
     await writeFile(join(this.storagePath, `${checkpoint.id}.json`), data)
@@ -286,25 +225,119 @@ export class CheckpointManager {
         if (!file.endsWith('.json') || file === 'index.json') continue
         try {
           const data = await readFile(join(this.storagePath, file), 'utf-8')
-          const cp = JSON.parse(data) as ConversationCheckpoint
+          const cp = this.normalizeCheckpoint(JSON.parse(data) as Partial<ConversationCheckpoint>)
+          if (!cp) continue
           this.checkpoints.set(cp.id, cp)
-          // Restore conversation counter
           const current = this.conversationCounters.get(cp.terminalId) ?? 0
           if (cp.conversationIndex > current) {
             this.conversationCounters.set(cp.terminalId, cp.conversationIndex)
           }
-        } catch { /* skip corrupt files */ }
+        } catch {}
       }
-    } catch { /* directory may not exist yet */ }
+    } catch {}
   }
 
   private async saveIndex(): Promise<void> {
     await mkdir(this.storagePath, { recursive: true })
     const index = {
-      version: 1,
+      version: 2,
       checkpointIds: Array.from(this.checkpoints.keys()),
     }
     await writeFile(join(this.storagePath, 'index.json'), JSON.stringify(index, null, 2))
+  }
+
+  private async captureWorkspaceSnapshot(cwd: string): Promise<Record<string, SnapshotFileEntry>> {
+    const files: Record<string, SnapshotFileEntry> = {}
+    for await (const absolutePath of this.walkWorkspaceFiles(cwd)) {
+      try {
+        const relPath = relative(cwd, absolutePath).replace(/\\/g, '/')
+        const content = await readFile(absolutePath)
+        const hash = await this.blobStore.store(content)
+        files[relPath] = {
+          path: relPath,
+          hash,
+          size: content.byteLength,
+        }
+      } catch {}
+    }
+    return files
+  }
+
+  private async *walkWorkspaceFiles(root: string): AsyncGenerator<string> {
+    const entries = await readdir(root, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.name === '.git' || entry.name === '.janusX') continue
+      const absolutePath = join(root, entry.name)
+      if (entry.isDirectory()) {
+        yield* this.walkWorkspaceFiles(absolutePath)
+      } else if (entry.isFile()) {
+        yield absolutePath
+      }
+    }
+  }
+
+  private async safeReadWorkspaceFile(cwd: string, filePath: string): Promise<Buffer | null> {
+    const targetPath = this.resolveWorkspacePath(cwd, filePath)
+    if (!targetPath) return null
+    try {
+      return await readFile(targetPath)
+    } catch {
+      return null
+    }
+  }
+
+  private resolveWorkspacePath(cwd: string, filePath: string): string | null {
+    if (!filePath || filePath.includes('\0')) return null
+    const resolvedWorkspace = resolve(cwd)
+    const resolvedPath = resolve(resolvedWorkspace, filePath)
+    const rel = relative(resolvedWorkspace, resolvedPath)
+    if (!rel || rel.startsWith('..') || rel === '.') return null
+    const segments = rel.split(/[\\/]/)
+    if (segments.includes('.git') || segments.includes('.janusX')) {
+      return null
+    }
+    return resolvedPath
+  }
+
+  private normalizeCheckpoint(raw: Partial<ConversationCheckpoint>): ConversationCheckpoint | null {
+    if (
+      !raw.id ||
+      !raw.terminalId ||
+      typeof raw.conversationIndex !== 'number' ||
+      !raw.createdAt ||
+      !raw.engine ||
+      !raw.branch ||
+      typeof raw.prompt !== 'string'
+    ) {
+      return null
+    }
+
+    const normalizedFiles: Record<string, SnapshotFileEntry> = {}
+    const rawFiles = raw.filesSnapshot ?? {}
+    for (const [path, value] of Object.entries(rawFiles)) {
+      if (!value || typeof value !== 'object') continue
+      const entry = value as Partial<SnapshotFileEntry> & { beforeHash?: string }
+      const hash = entry.hash ?? entry.beforeHash
+      if (!hash) continue
+      normalizedFiles[path] = {
+        path,
+        hash,
+        size: typeof entry.size === 'number' ? entry.size : 0,
+      }
+    }
+
+    return {
+      id: raw.id,
+      terminalId: raw.terminalId,
+      conversationIndex: raw.conversationIndex,
+      createdAt: raw.createdAt,
+      engine: raw.engine,
+      branch: raw.branch,
+      prompt: raw.prompt,
+      filesSnapshot: normalizedFiles,
+      status: 'ready',
+      schemaVersion: 2,
+    }
   }
 }
 

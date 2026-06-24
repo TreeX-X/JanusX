@@ -1,9 +1,9 @@
 import type { AgentEngine } from '../types'
 
-export interface FileSnapshot {
-  beforeHash: string
-  afterHash?: string
-  diff?: string
+export interface SnapshotFileEntry {
+  path: string
+  hash: string
+  size: number
 }
 
 export interface ConversationCheckpoint {
@@ -14,14 +14,14 @@ export interface ConversationCheckpoint {
   engine: AgentEngine
   branch: string
   prompt: string
-  stashRef: string | null
-  filesSnapshot: Record<string, FileSnapshot>
-  status: 'pending' | 'finalized'
+  filesSnapshot: Record<string, SnapshotFileEntry>
+  status: 'ready'
+  schemaVersion: 2
 }
 
 export interface ConflictInfo {
   filePath: string
-  resolution: 'ours' | 'theirs' | 'manual'
+  resolution: 'snapshot'
 }
 
 export interface CheckpointCreateOptions {

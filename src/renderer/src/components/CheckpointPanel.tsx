@@ -86,17 +86,19 @@ export function CheckpointPanel() {
 
   const handleToggleDiff = useCallback(
     (cpId: string) => {
+      const ws = workspaces.find((w) => w.id === activeWorkspaceId)
+      const cwd = ws?.path ?? ''
       const key = `${cpId}:`
       if (expandedDiffId === key) {
         setExpandedDiffId(null)
       } else {
         if (!diffs[key]) {
-          fetchAllDiffs(cpId)
+          fetchAllDiffs(cpId, cwd)
         }
         setExpandedDiffId(key)
       }
     },
-    [diffs, fetchAllDiffs, expandedDiffId],
+    [activeWorkspaceId, diffs, fetchAllDiffs, expandedDiffId, workspaces],
   )
 
   return (
@@ -195,7 +197,7 @@ export function CheckpointPanel() {
         {filteredCheckpoints.map((cp) => {
           const isDiffExpanded = expandedDiffId === `${cp.id}:`
           const tagStyle = ENGINE_TAG_STYLES[cp.engine] ?? ENGINE_TAG_STYLES.opencode
-          const isActive = cp.status === 'finalized'
+          const isActive = cp.status === 'ready'
 
           return (
             <div key={cp.id} className="flex gap-3 relative">
@@ -338,9 +340,9 @@ export function CheckpointPanel() {
                 >
                   <div className="flex justify-between">
                     <span className="overflow-hidden overflow-ellipsis whitespace-nowrap">
-                      {cp.status === 'finalized' ? cp.changedFileCount : '—'} 个文件变更
+                      {cp.changedFileCount} 个快照文件
                     </span>
-                    {cp.status === 'finalized' && cp.changedFileCount > 0 && (
+                    {cp.changedFileCount > 0 && (
                       <span style={{ color: '#4ec9b0' }}>+{cp.changedFileCount}</span>
                     )}
                   </div>

@@ -10,12 +10,12 @@ export interface CheckpointSummary {
   prompt: string
   fileCount: number
   changedFileCount: number
-  status: 'pending' | 'finalized'
+  status: 'ready'
 }
 
 export interface ConflictInfo {
   filePath: string
-  resolution: 'ours' | 'theirs' | 'manual'
+  resolution: 'snapshot'
 }
 
 interface CheckpointStore {
@@ -29,8 +29,8 @@ interface CheckpointStore {
   fetchCheckpoints: (filter?: { terminalId?: string; engine?: string }) => Promise<void>
   createCheckpoint: (options: { terminalId: string; engine: string; prompt: string; cwd: string }) => Promise<void>
   restoreCheckpoint: (checkpointId: string, cwd: string) => Promise<void>
-  fetchDiff: (checkpointId: string, filePath: string) => Promise<void>
-  fetchAllDiffs: (checkpointId: string) => Promise<void>
+  fetchDiff: (checkpointId: string, filePath: string, cwd: string) => Promise<void>
+  fetchAllDiffs: (checkpointId: string, cwd: string) => Promise<void>
   deleteCheckpoint: (checkpointId: string) => Promise<void>
   setSelected: (checkpoint: CheckpointSummary | null) => void
   clearConflicts: () => void
@@ -81,11 +81,12 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
     }
   },
 
-  fetchDiff: async (checkpointId, filePath) => {
+  fetchDiff: async (checkpointId, filePath, cwd) => {
     try {
       const diff = (await window.electron.invoke('checkpoint:diff', {
         checkpointId,
         filePath,
+        cwd,
       })) as string
       set((state) => ({
         diffs: { ...state.diffs, [`${checkpointId}:${filePath}`]: diff },
@@ -95,10 +96,11 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
     }
   },
 
-  fetchAllDiffs: async (checkpointId) => {
+  fetchAllDiffs: async (checkpointId, cwd) => {
     try {
       const diff = (await window.electron.invoke('checkpoint:diff:all', {
         checkpointId,
+        cwd,
       })) as string
       set((state) => ({
         diffs: { ...state.diffs, [`${checkpointId}:`]: diff },
