@@ -7,8 +7,8 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at center, #151515 0%, #080808 100%);
-  color: #d4d4d4;
+  background: radial-gradient(circle at center, #111 0%, var(--bg-deep, #050505) 100%);
+  color: var(--text, #e0e0e0);
   overflow: hidden;
 }
 
@@ -20,8 +20,8 @@
   gap: 8px;
   padding: 8px 12px;
   min-height: 43px;
-  background: rgba(12, 12, 12, 0.9);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--chrome-bg, rgba(12, 12, 12, 0.85));
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.04));
   backdrop-filter: blur(20px);
   z-index: 5;
 }
@@ -232,8 +232,8 @@
 .bp-node-card {
   width: 220px;
   padding: 10px 12px;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 18, 20, 0.85);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.04));
   border-radius: 10px;
   color: #d4d4d4;
   font-size: 12px;

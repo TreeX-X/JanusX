@@ -18,9 +18,9 @@ export function StatusBar() {
     <footer
       className="col-span-3 flex items-center justify-between px-3.5 text-[10px]"
       style={{
-        background: 'rgba(8, 8, 8, 0.95)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-        color: '#555',
+        background: 'rgba(8, 8, 10, 0.95)',
+        borderTop: '1px solid var(--border)',
+        color: 'var(--text-dim)',
       }}
     >
       <div className="flex items-center gap-3.5">

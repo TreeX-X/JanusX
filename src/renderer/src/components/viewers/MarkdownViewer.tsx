@@ -180,8 +180,8 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
                     return (
                       <code
                         style={{
-                          background: 'rgba(26, 26, 26, 0.85)',
-                          border: '1px solid rgba(255, 255, 255, 0.06)',
+                          background: 'rgba(18, 18, 20, 0.85)',
+                          border: '1px solid rgba(255, 255, 255, 0.04)',
                           borderRadius: 3,
                           padding: '1px 5px',
                           fontSize: 12,
@@ -206,8 +206,8 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
                 pre: ({ children }) => (
                   <pre
                     style={{
-                      background: 'rgba(26, 26, 26, 0.85)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: 'rgba(18, 18, 20, 0.85)',
+                      border: '1px solid rgba(255, 255, 255, 0.04)',
                       borderRadius: 4,
                       padding: 12,
                       overflowX: 'auto',
@@ -268,7 +268,7 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
                     style={{
                       border: '1px solid rgba(255, 255, 255, 0.06)',
                       padding: '6px 10px',
-                      background: 'rgba(26, 26, 26, 0.85)',
+                      background: 'rgba(18, 18, 20, 0.85)',
                       color: '#e8e8e8',
                       fontWeight: 600,
                       textAlign: 'left',

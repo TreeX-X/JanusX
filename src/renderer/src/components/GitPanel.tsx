@@ -1,17 +1,44 @@
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useGitStore } from '@/stores/git'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { GitFileChange } from '@/types'
+import { ModalCloseButton } from './ModalCloseButton'
+
+type GitRemoteAction = 'push' | 'pull'
+
+const REMOTE_ACTION_META: Record<
+  GitRemoteAction,
+  { title: string; actionLabel: string; description: string; hint: string }
+> = {
+  push: {
+    title: '确认 Push',
+    actionLabel: '确认 Push',
+    description: '将本地提交推送到远端分支。',
+    hint: '执行前请确认当前分支、远端目标和待推送提交均符合预期。',
+  },
+  pull: {
+    title: '确认 Pull',
+    actionLabel: '确认 Pull',
+    description: '从远端分支拉取并合并最新变更。',
+    hint: 'Pull 可能触发合并或冲突，请确认当前工作区状态允许拉取。',
+  },
+}
 
 export function GitPanel() {
   const { status, commits, loading, error, fetchStatus, fetchLog, stageFiles, unstageFiles, commitChanges, pushChanges, pullChanges } = useGitStore()
   const { activeWorkspaceId, workspaces } = useWorkspaceStore()
   const [commitMsg, setCommitMsg] = useState('')
+  const [confirmAction, setConfirmAction] = useState<GitRemoteAction | null>(null)
 
   const cwd = workspaces.find((w) => w.id === activeWorkspaceId)?.path
-  const refreshGitData = useCallback(async () => {
+  const refreshGitData = useCallback(async (includeLog = true) => {
     if (!cwd) return
-    await Promise.all([fetchStatus(cwd), fetchLog(cwd, 20)])
+    if (includeLog) {
+      await Promise.all([fetchStatus(cwd), fetchLog(cwd, 20)])
+    } else {
+      await fetchStatus(cwd)
+    }
   }, [cwd, fetchLog, fetchStatus])
 
   useEffect(() => {
@@ -30,7 +57,7 @@ export function GitPanel() {
       if (refreshTimer) clearTimeout(refreshTimer)
       refreshTimer = setTimeout(() => {
         if (!disposed) {
-          void refreshGitData()
+          void refreshGitData(false)
         }
       }, 180)
     })
@@ -61,17 +88,27 @@ export function GitPanel() {
     setCommitMsg('')
   }, [cwd, commitMsg, commitChanges, fetchLog])
 
-  const handlePush = useCallback(async () => {
-    if (!cwd) return
-    await pushChanges(cwd)
-    await fetchLog(cwd, 20)
-  }, [cwd, fetchLog, pushChanges])
+  const handlePush = useCallback(() => {
+    if (!cwd || loading) return
+    setConfirmAction('push')
+  }, [cwd, loading])
 
-  const handlePull = useCallback(async () => {
-    if (!cwd) return
-    await pullChanges(cwd)
+  const handlePull = useCallback(() => {
+    if (!cwd || loading) return
+    setConfirmAction('pull')
+  }, [cwd, loading])
+
+  const handleConfirmRemoteAction = useCallback(async () => {
+    if (!cwd || !confirmAction) return
+
+    if (confirmAction === 'push') {
+      await pushChanges(cwd)
+    } else {
+      await pullChanges(cwd)
+    }
     await fetchLog(cwd, 20)
-  }, [cwd, fetchLog, pullChanges])
+    setConfirmAction(null)
+  }, [confirmAction, cwd, fetchLog, pullChanges, pushChanges])
 
   const handleToggleStage = useCallback(
     async (file: GitFileChange) => {
@@ -99,12 +136,17 @@ export function GitPanel() {
   const addedCount = status?.changes.filter((c) => c.status === 'A' || c.status === '??').length ?? 0
   const deletedCount = status?.changes.filter((c) => c.status === 'D').length ?? 0
 
+  const confirmMeta = confirmAction ? REMOTE_ACTION_META[confirmAction] : null
+  const branchName = status?.branch.name ?? '当前分支'
+  const upstreamName = status?.branch.upstream ?? '未设置 upstream'
+
   return (
+    <>
     <div className="flex-1 flex flex-col overflow-hidden text-xs">
       {/* Branch bar */}
       <div
         className="flex items-center gap-2 px-3 py-2"
-        style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+        style={{ borderBottom: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <div
@@ -133,7 +175,7 @@ export function GitPanel() {
       </div>
 
       {/* Status summary */}
-      <div className="flex gap-3 px-3 py-2" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+      <div className="flex gap-3 px-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#e5c07b' }} />
           <span className="text-[#888]">{modifiedCount} 修改</span>
@@ -242,7 +284,7 @@ export function GitPanel() {
       {/* Commit input */}
       <div
         className="p-2"
-        style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}
+        style={{ borderTop: '1px solid var(--border)' }}
       >
         <div className="flex gap-1.5">
           <input
@@ -273,32 +315,162 @@ export function GitPanel() {
         </div>
         <div className="flex gap-1.5 mt-1.5">
           <button
+            type="button"
             onClick={handlePush}
             disabled={loading}
-            className="flex-1 h-6 rounded text-[10px] transition-colors disabled:opacity-30"
-            style={{
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              color: '#888',
-            }}
+            className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[#888] cursor-pointer transition-[background,border-color,color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[#ffb27d] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[#888] disabled:hover:shadow-none"
           >
             Push
           </button>
           <button
+            type="button"
             onClick={handlePull}
             disabled={loading}
-            className="flex-1 h-6 rounded text-[10px] transition-colors disabled:opacity-30"
-            style={{
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              color: '#888',
-            }}
+            className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[#888] cursor-pointer transition-[background,border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[#ffb27d] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[#888] disabled:hover:shadow-none"
           >
             Pull
           </button>
         </div>
       </div>
     </div>
+    {confirmMeta && createPortal(
+      <div
+        className="fixed inset-0 flex items-center justify-center"
+        style={{
+          background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 1000,
+        }}
+      >
+        <div
+          className="overflow-hidden"
+          style={{
+            width: 390,
+            background: 'rgba(22,22,22,0.98)',
+            border: '1px solid rgba(255,120,48,0.25)',
+            borderRadius: 8,
+            boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+            animation: 'island-expand-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          }}
+        >
+          <div
+            className="flex justify-between items-center"
+            style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            <div
+              className="font-semibold flex items-center"
+              style={{ fontSize: 13, color: '#fff', gap: 6 }}
+            >
+              <span style={{ color: '#ff7830' }}>{confirmAction === 'push' ? '↑' : '↓'}</span>
+              {confirmMeta.title}
+            </div>
+            <ModalCloseButton onClose={() => setConfirmAction(null)} />
+          </div>
+
+          <div style={{ padding: '16px 16px 18px' }}>
+            <div style={{ fontSize: 12, color: '#999', lineHeight: 1.6 }}>
+              {confirmMeta.description}
+            </div>
+            <div
+              style={{
+                marginTop: 12,
+                padding: '9px 10px',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                borderRadius: 5,
+                fontSize: 11,
+                color: '#777',
+                lineHeight: 1.6,
+              }}
+            >
+              <div>
+                分支 <strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{branchName}</strong>
+              </div>
+              <div>
+                远端 <strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{upstreamName}</strong>
+              </div>
+            </div>
+            <div
+              style={{
+                marginTop: 12,
+                padding: '8px 10px',
+                background: 'rgba(255,120,48,0.06)',
+                border: '1px solid rgba(255,120,48,0.12)',
+                borderRadius: 4,
+                fontSize: 11,
+                color: '#b8896d',
+                lineHeight: 1.5,
+              }}
+            >
+              {confirmMeta.hint}
+            </div>
+          </div>
+
+          <div
+            className="flex justify-end"
+            style={{
+              padding: '10px 16px',
+              borderTop: '1px solid var(--border)',
+              gap: 8,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setConfirmAction(null)}
+              className="rounded cursor-pointer transition-colors"
+              style={{
+                height: 28,
+                padding: '0 14px',
+                fontSize: 11,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: '#999',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                e.currentTarget.style.color = '#ccc'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                e.currentTarget.style.color = '#999'
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmRemoteAction}
+              disabled={loading}
+              className="rounded cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+              style={{
+                height: 28,
+                padding: '0 16px',
+                fontSize: 11,
+                background: 'rgba(255,120,48,0.12)',
+                border: '1px solid rgba(255,120,48,0.3)',
+                color: '#ff7830',
+              }}
+              onMouseEnter={(e) => {
+                if (loading) return
+                e.currentTarget.style.background = 'rgba(255,120,48,0.2)'
+                e.currentTarget.style.borderColor = 'rgba(255,120,48,0.5)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,120,48,0.12)'
+                e.currentTarget.style.borderColor = 'rgba(255,120,48,0.3)'
+              }}
+            >
+              {loading ? '执行中...' : confirmMeta.actionLabel}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )}
+    </>
   )
 }
 

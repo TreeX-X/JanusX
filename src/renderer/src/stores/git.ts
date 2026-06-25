@@ -16,19 +16,19 @@ interface GitStore {
   pullChanges: (cwd: string) => Promise<void>
 }
 
-export const useGitStore = create<GitStore>((set, get) => ({
+export const useGitStore = create<GitStore>((set) => ({
   status: null,
   commits: [],
   loading: false,
   error: null,
 
   fetchStatus: async (cwd) => {
-    set({ loading: true, error: null })
+    set({ error: null })
     try {
       const status = await window.electron.invoke('git:status', cwd)
-      set({ status: status as GitStatus, loading: false })
+      set({ status: status as GitStatus })
     } catch (err: any) {
-      set({ error: err.message, loading: false })
+      set({ error: err.message })
     }
   },
 

@@ -33,8 +33,8 @@ function TerminalOption({ preset, name, onClick }: TerminalOptionProps) {
       onClick={onClick}
       className="w-full rounded-lg cursor-pointer transition-all flex flex-col items-center justify-center gap-3 px-4 py-5 min-h-[132px]"
       style={{
-        background: 'rgba(255, 255, 255, 0.025)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'rgba(18, 18, 20, 0.85)',
+        border: '1px solid var(--border)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
       }}
       onMouseEnter={(e) => {
@@ -43,8 +43,8 @@ function TerminalOption({ preset, name, onClick }: TerminalOptionProps) {
         e.currentTarget.style.transform = 'translateY(-2px)'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+        e.currentTarget.style.background = 'rgba(18, 18, 20, 0.85)'
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.04)'
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
@@ -151,7 +151,7 @@ export function TerminalSelector() {
     <div
       className="flex flex-col items-center justify-center h-full gap-6 px-4 py-8 sm:px-6 md:px-10"
       style={{
-        background: 'linear-gradient(180deg, rgba(17,17,17,0.46) 0%, rgba(8,8,8,0.18) 100%)',
+        background: 'var(--bg-deep)',
       }}
     >
       <div className="flex flex-col items-center gap-2 text-center">

@@ -102,10 +102,10 @@ export default function App() {
   }, [loadWorkspaceFileTree])
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: '#121212', color: '#d4d4d4' }}>
+    <div className="h-screen flex flex-col" style={{ background: 'var(--bg-app)', color: 'var(--text)' }}>
       <Titlebar />
       <div
-        className="flex-1 grid grid-rows-[1fr_26px] overflow-hidden transition-[grid-template-columns] duration-200"
+        className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden transition-[grid-template-columns] duration-200"
         style={{
           gridTemplateColumns: `${sidebarCollapsed ? '48px' : '240px'} 1fr ${panelCollapsed ? '48px' : '280px'}`,
         }}
@@ -113,7 +113,7 @@ export default function App() {
         <Sidebar />
 
         {/*-- 中心区域：3D 翻转容器（正面=终端，背面=蓝图） --*/}
-        <main className="overflow-hidden relative" style={{ perspective: 1500 }}>
+        <main className="overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
           <div
             ref={flipperElRef}
             style={{
@@ -139,11 +139,10 @@ export default function App() {
           >
             {/*-- 正面：终端视图 --*/}
             <div
-              className="absolute inset-0 p-2"
+              className="absolute inset-0"
               style={{
                 backfaceVisibility: 'hidden',
-                background:
-                  'radial-gradient(circle at top, rgba(36, 36, 36, 0.28) 0%, rgba(18, 18, 18, 0.96) 38%, rgba(9, 9, 9, 0.98) 100%)',
+                background: 'var(--bg-deep)',
               }}
             >
               {loadState === 'no-workspace' && <EmptyWorkspace />}
@@ -158,7 +157,7 @@ export default function App() {
               style={{
                 backfaceVisibility: 'hidden',
                 transform: 'rotateX(180deg)',
-                background: 'radial-gradient(circle at center, #151515 0%, #080808 100%)',
+                background: 'radial-gradient(circle at center, #111 0%, var(--bg-deep) 100%)',
               }}
             >
               <BlueprintView />
@@ -211,7 +210,7 @@ function EmptyWorkspace() {
   return (
     <div
       className="flex flex-col items-center justify-center h-full gap-5"
-      style={{ background: 'rgba(12, 12, 12, 0.9)' }}
+      style={{ background: 'var(--bg-deep)' }}
     >
       <div className="relative w-20 h-20 opacity-30">
         <div

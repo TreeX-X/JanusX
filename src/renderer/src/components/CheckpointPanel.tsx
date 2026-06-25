@@ -107,7 +107,7 @@ export function CheckpointPanel() {
       <div
         className="px-3 py-2 flex items-center gap-2 shrink-0"
         style={{
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid var(--border)',
           background: 'rgba(255,255,255,0.01)',
         }}
       >
@@ -207,7 +207,7 @@ export function CheckpointPanel() {
                 style={{
                   width: 15,
                   height: 15,
-                  background: '#1a1a1a',
+                  background: 'rgba(18,18,20,0.85)',
                   border: `2px solid ${isActive ? '#ff7830' : '#555'}`,
                   boxShadow: isActive ? '0 0 8px rgba(255,120,48,0.4)' : 'none',
                   marginTop: 2,

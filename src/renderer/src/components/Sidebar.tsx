@@ -174,9 +174,9 @@ export function Sidebar() {
     <aside
       className="flex flex-col overflow-hidden"
       style={{
-        background: 'rgba(26, 26, 26, 0.85)',
-        backdropFilter: 'blur(16px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+        background: 'var(--surface)',
+        backdropFilter: 'blur(20px)',
+        borderRight: '1px solid var(--border)',
       }}
     >
       {/* 展开态 */}
@@ -184,7 +184,7 @@ export function Sidebar() {
         <>
           <div
             className="p-2.5 px-3 text-[10px] font-semibold tracking-wider uppercase text-[#555] flex justify-between items-center"
-            style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+            style={{ borderBottom: '1px solid var(--border)' }}
           >
             <span>工作区</span>
             <div className="flex gap-1 items-center">
@@ -237,13 +237,13 @@ export function Sidebar() {
                     onPointerCancel={cancelLongPress}
                     className={`ws p-[9px] px-3 mb-px rounded-md cursor-pointer transition-all flex items-center gap-2.5 text-[13px] relative group${isLongPressing ? ' long-pressing' : ''}`}
                     style={{
-                      color: isActive ? '#ff7830' : '#999',
+                      color: isActive ? '#fff' : '#999',
                       background: isLongPressing
                         ? isActive
                           ? 'rgba(255, 120, 48, 0.11)'
                           : 'rgba(255, 255, 255, 0.045)'
                         : isActive
-                          ? 'rgba(255, 120, 48, 0.08)'
+                          ? 'var(--accent-soft)'
                           : 'transparent',
                       transform: isLongPressing ? 'scale(0.988)' : 'scale(1)',
                       boxShadow: isLongPressing
@@ -280,6 +280,7 @@ export function Sidebar() {
                       className="w-1 h-1 rounded-full shrink-0"
                       style={{
                         background: isActive ? '#ff7830' : '#444',
+                        boxShadow: isActive ? '0 0 6px var(--accent-glow)' : 'none',
                       }}
                     />
                     <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">

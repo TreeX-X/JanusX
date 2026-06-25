@@ -167,9 +167,9 @@ export function Panel() {
     <aside
       className="flex flex-col overflow-hidden"
       style={{
-        background: 'rgba(26, 26, 26, 0.85)',
-        backdropFilter: 'blur(16px)',
-        borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
+        background: 'var(--surface)',
+        backdropFilter: 'blur(20px)',
+        borderLeft: '1px solid var(--border)',
       }}
     >
       {/* 展开态 */}
@@ -178,7 +178,7 @@ export function Panel() {
           {/* Tabs header */}
           <div
             className="flex items-center"
-            style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+            style={{ borderBottom: '1px solid var(--border)' }}
           >
             <div className="flex-1 flex">
               {(['files', 'git', 'checkpoints'] as const).map((view) => (
@@ -187,7 +187,7 @@ export function Panel() {
                   onClick={() => setActiveView(view)}
                   className="px-3 py-2 text-[11px] transition-colors relative"
                   style={{
-                    color: activeView === view ? '#ff7830' : '#555',
+                    color: activeView === view ? '#fff' : '#555',
                   }}
                 >
                   {view === 'files' ? '文件' : view === 'git' ? 'Git' : '还原点'}
