@@ -71,6 +71,7 @@ export interface AnalyzerAnalyzePayload {
   nodeId: string
   workspacePath?: string
   trigger?: AnalysisTrigger
+  commitLimit?: number
 }
 
 /** janus:node:focus 入参 */
@@ -86,6 +87,16 @@ export interface AcceptDiscoveredPayload {
   discovered: DiscoveredRequirement
   parentId?: string
   fallbackNodeId?: string
+}
+
+export interface AnalysisHistoryPayload {
+  workspacePath: string
+  blueprintId: string
+  nodeId: string
+}
+
+export interface ApplyAnalysisPayload extends AnalysisHistoryPayload {
+  analysisId: string
 }
 
 export type FeatureItemInput = Partial<BlueprintFeatureItem> & { title: string }
@@ -330,6 +341,14 @@ export async function acceptDiscovered(
     'janus:analyzer:accept-discovered',
     payload
   ) as Promise<BlueprintNode | null>
+}
+
+export async function listAnalyses(payload: AnalysisHistoryPayload): Promise<BlueprintAnalysis[]> {
+  return window.electron.invoke('janus:analysis:list', payload) as Promise<BlueprintAnalysis[]>
+}
+
+export async function applyAnalysis(payload: ApplyAnalysisPayload): Promise<BlueprintNode | null> {
+  return window.electron.invoke('janus:analysis:apply', payload) as Promise<BlueprintNode | null>
 }
 
 /* ════════════════════════════════════════════════════════════

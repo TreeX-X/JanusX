@@ -173,13 +173,19 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
     'janus:analyzer:analyze',
     async (
       _e,
-      payload: { nodeId: string; workspacePath?: string; trigger?: 'manual' | 'commit-threshold' | 'terminal-close' | 'reconcile' }
+      payload: {
+        nodeId: string
+        workspacePath?: string
+        trigger?: 'manual' | 'commit-threshold' | 'terminal-close' | 'reconcile'
+        commitLimit?: number
+      }
     ) => {
       const trigger = payload.trigger ?? 'manual'
       // 手动入口直接 await，IPC 返回分析结果
       return analyzer.analyzeNode(payload.nodeId, {
         workspacePath: payload.workspacePath,
-        trigger
+        trigger,
+        commitLimit: payload.commitLimit
       })
     }
   )
@@ -207,6 +213,35 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
       }
     ) => {
       return blueprintStore.applyAnalysisPatch(payload.workspacePath, payload.blueprintId, payload.nodeId, payload.patch)
+    }
+  )
+
+  ipcMain.handle(
+    'janus:analysis:list',
+    async (
+      _e,
+      payload: {
+        workspacePath: string
+        blueprintId: string
+        nodeId: string
+      }
+    ) => {
+      return blueprintStore.listAnalyses(payload.workspacePath, payload.blueprintId, payload.nodeId)
+    }
+  )
+
+  ipcMain.handle(
+    'janus:analysis:apply',
+    async (
+      _e,
+      payload: {
+        workspacePath: string
+        blueprintId: string
+        nodeId: string
+        analysisId: string
+      }
+    ) => {
+      return blueprintStore.applyAnalysis(payload.workspacePath, payload.blueprintId, payload.nodeId, payload.analysisId)
     }
   )
 

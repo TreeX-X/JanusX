@@ -25,6 +25,11 @@ export type BlueprintNodeStatus =
 /** 最近一次状态来源 */
 export type BlueprintStatusSource = 'manual' | 'janus'
 
+export interface WorkspaceSnapshot {
+  name: string
+  path: string
+}
+
 /** 分析触发来源 */
 export type AnalysisTrigger =
   | 'commit-threshold'
@@ -151,6 +156,7 @@ export interface BlueprintNode {
 
   /** 工作区与终端绑定：节点最多关联一个工作区，一个工作区可关联多个节点 */
   workspaceId: string | null
+  workspaceSnapshot: WorkspaceSnapshot | null
   boundTerminalId: string | null
   terminalHistory: string[]
 

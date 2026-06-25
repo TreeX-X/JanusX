@@ -16,6 +16,8 @@ export interface BlueprintNodeData extends Record<string, unknown> {
   progress: number
   workspaceName: string | null
   boundTerminalId: string | null
+  searchMatched?: boolean
+  searchDimmed?: boolean
 }
 
 /** Blueprint ????? React Flow Node ?? */
@@ -27,7 +29,14 @@ function BlueprintNodeCardImpl({ data, selected }: NodeProps<BlueprintRFNodeType
   const progress = Math.max(0, Math.min(100, d.progress ?? 0))
 
   return (
-    <div className={`bp-node-card${selected ? ' bp-node-card--selected' : ''}`}>
+    <div
+      className={[
+        'bp-node-card',
+        selected ? 'bp-node-card--selected' : '',
+        d.searchMatched ? 'bp-node-card--matched' : '',
+        d.searchDimmed ? 'bp-node-card--dimmed' : ''
+      ].filter(Boolean).join(' ')}
+    >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
 
       <div className="bp-node-card__header">

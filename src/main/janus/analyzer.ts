@@ -38,6 +38,8 @@ const DIFF_TOKEN_CAP = 8000
 const CHARS_PER_TOKEN = 3.5
 /** 单次 analyzeNode 处理的 commit 批量上限（保护首分析爆炸）。 */
 const COMMIT_BATCH_CAP = 50
+/** 首次分析默认只看最近 5 次提交，避免根任务首次触发时产生过多分段。 */
+const INITIAL_COMMIT_BATCH_DEFAULT = 5
 
 /** 状态严格度排序（越大越严，取最严为合并状态）。 */
 const STATUS_SEVERITY: Record<BlueprintNodeStatus, number> = {
@@ -108,6 +110,11 @@ type SegmentResult = z.infer<typeof segmentSchema>
 interface Segment {
   commits: CommitRangeItem[]
   diff: string
+}
+
+interface AnalysisErrorInfo {
+  code: string
+  message: string
 }
 
 /** Analyzer 职责追加段（拼在 JANUS_PERSONA 之后）。 */
@@ -333,6 +340,71 @@ function dedupeFeatureUpdates(
   return out
 }
 
+function errorMessageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+function normalizeAnalysisError(err: unknown): AnalysisErrorInfo {
+  const raw = errorMessageOf(err)
+  if (raw === 'no-default-llm') {
+    return {
+      code: 'no-default-llm',
+      message: '未配置默认模型。请在模型设置中选择一个可用的默认 LLM 后重新分析。'
+    }
+  }
+  if (/default object generation mode/i.test(raw) || /object generation mode/i.test(raw)) {
+    return {
+      code: 'llm-object-mode-unsupported',
+      message:
+        '当前默认模型不支持 Janus 结构化分析。请切换到支持 JSON/结构化输出的模型，或在模型提供方适配里启用 object generation / JSON mode 后重试。'
+    }
+  }
+  if (/json/i.test(raw) && /(mode|schema|object|structured|parse)/i.test(raw)) {
+    return {
+      code: 'llm-structured-output-failed',
+      message:
+        '模型没有返回可解析的结构化分析结果。请重试，或换用结构化输出更稳定的模型。'
+    }
+  }
+  return {
+    code: 'analysis-segment-failed',
+    message: `分段分析失败：${raw || '未知错误'}`
+  }
+}
+
+function summarizeAnalysisErrors(errors: AnalysisErrorInfo[], allFailed: boolean): string {
+  if (errors.length === 0) {
+    return allFailed
+      ? '分析失败：所有分段都未返回有效结果。请检查默认模型配置后重试。'
+      : '部分分段分析失败。请检查默认模型配置后重试。'
+  }
+
+  const groups = new Map<string, { message: string; count: number }>()
+  for (const error of errors) {
+    const key = `${error.code}:${error.message}`
+    const existing = groups.get(key)
+    if (existing) {
+      existing.count += 1
+    } else {
+      groups.set(key, { message: error.message, count: 1 })
+    }
+  }
+
+  const detail = [...groups.values()]
+    .map((item) => (item.count > 1 ? `${item.message}（重复 ${item.count} 次）` : item.message))
+    .join('；')
+  const prefix = allFailed
+    ? `${errors.length} 个分段分析全部失败`
+    : `${errors.length} 个分段分析失败`
+  return `${prefix}：${detail}`
+}
+
+function resolveCommitLimit(value: number | undefined, isFirstAnalysis: boolean): number {
+  const fallback = isFirstAnalysis ? INITIAL_COMMIT_BATCH_DEFAULT : COMMIT_BATCH_CAP
+  const candidate = Number.isFinite(value) ? Math.trunc(value as number) : fallback
+  return Math.max(1, Math.min(COMMIT_BATCH_CAP, candidate))
+}
+
 /** 单段 LLM 调用。 */
 async function callLLM(
   node: BlueprintNode,
@@ -350,6 +422,7 @@ async function callLLM(
   const res = await generateObject({
     model,
     name: 'blueprintAnalysis',
+    mode: 'json',
     schema: segmentSchema,
     system: getAnalysisSystemPrompt(),
     messages: [{ role: 'user', content: buildUserMessage(node, segment) }],
@@ -469,7 +542,8 @@ class JanusAnalyzer {
     }
 
     // ---- 取未分析 commit 批次 ----
-    const commits = await getCommitRange(workspace, cursor, 'HEAD', COMMIT_BATCH_CAP)
+    const commitLimit = resolveCommitLimit(opts.commitLimit, cursor === null)
+    const commits = await getCommitRange(workspace, cursor, 'HEAD', commitLimit)
     if (commits.length === 0) {
       return null // 无新增 commit，无需分析
     }
@@ -479,8 +553,8 @@ class JanusAnalyzer {
     if (!def) {
       const analysis = this.buildAnalysis(nodeId, opts.trigger, {
         blueprint: summarizeBlueprint(node),
-        actual: `待分析 commit：${commits.length} 个`
-      }, null, 'no-default-llm')
+        actual: `待分析 commit：${commits.length} 个（上限 ${commitLimit}）`
+      }, null, normalizeAnalysisError(new Error('no-default-llm')).message)
       await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
       this.emitAnalysis(analysis, node, blueprintId, workspace)
       return analysis
@@ -496,13 +570,13 @@ class JanusAnalyzer {
 
     // ---- 逐段 LLM ----
     const segResults: Array<{ segment: Segment; result: SegmentResult }> = []
-    const errors: string[] = []
+    const errors: AnalysisErrorInfo[] = []
     for (const seg of segments) {
       try {
         const r = await callLLM(node, seg)
         segResults.push({ segment: seg, result: r })
       } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err))
+        errors.push(normalizeAnalysisError(err))
       }
     }
 
@@ -513,9 +587,9 @@ class JanusAnalyzer {
       const analysis = this.buildAnalysis(
         nodeId,
         opts.trigger,
-        { blueprint: summarizeBlueprint(node), actual: `commit：${commits.length} 个` },
+        { blueprint: summarizeBlueprint(node), actual: `commit：${commits.length} 个（上限 ${commitLimit}）` },
         null,
-        errors.join('; ') || 'all-segments-failed'
+        summarizeAnalysisErrors(errors, true)
       )
       await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
       this.emitAnalysis(analysis, node, blueprintId, workspace)
@@ -529,16 +603,16 @@ class JanusAnalyzer {
       merged.confidence = Math.min(merged.confidence, 0.4)
       merged.unresolved = dedupeStrings([
         ...merged.unresolved,
-        `部分分段分析失败：${errors.join('; ')}`
+        summarizeAnalysisErrors(errors, false)
       ])
     }
 
     const analysis = this.buildAnalysis(
       nodeId,
       opts.trigger,
-      { blueprint: summarizeBlueprint(node), actual: buildActualSummary(commits, segments) },
+      { blueprint: summarizeBlueprint(node), actual: buildActualSummary(commits, segments, commitLimit) },
       merged,
-      errors.length > 0 ? `partial-failure: ${errors.join('; ')}` : undefined
+      errors.length > 0 ? summarizeAnalysisErrors(errors, false) : undefined
     )
 
     // ---- 落库 + 回写状态 + 推进游标 ----
@@ -639,6 +713,7 @@ class JanusAnalyzer {
 export interface AnalyzeOptions {
   workspacePath?: string
   trigger: AnalysisTrigger
+  commitLimit?: number
 }
 
 function summarizeBlueprint(node: BlueprintNode): string {
@@ -651,9 +726,10 @@ function summarizeBlueprint(node: BlueprintNode): string {
   ].join('\n')
 }
 
-function buildActualSummary(commits: CommitRangeItem[], segments: Segment[]): string {
+function buildActualSummary(commits: CommitRangeItem[], segments: Segment[], commitLimit: number): string {
   return [
     `commit 数：${commits.length}`,
+    `commit 上限：${commitLimit}`,
     `分析分段数：${segments.length}`,
     `commit 列表：`,
     ...commits.map((c) => `- ${c.shortHash} ${c.message}`)

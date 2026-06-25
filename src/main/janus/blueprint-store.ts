@@ -10,7 +10,7 @@
  */
 
 import { promises as fs } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { app } from 'electron'
 import type {
@@ -20,10 +20,12 @@ import type {
   BlueprintNode,
   BlueprintNodeType,
   BlueprintAnalysis,
-  AnalysisResult
+  AnalysisResult,
+  WorkspaceSnapshot
 } from './types'
 
 const BLUEPRINTS_DIR = ['blueprints'] // 相对 .janusX
+const WORKSPACES_DIR = ['workspaces'] // 相对 userData/janusx
 const INDEX_FILE = 'index.json'
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 
@@ -31,6 +33,12 @@ interface WorkspaceIndex {
   blueprints: string[]
   focusedNodeId: string | null
   focusedNodeByWorkspace?: Record<string, string | null>
+}
+
+interface WorkspaceRecord {
+  id: string
+  name: string
+  path: string
 }
 
 function blueprintsDir(): string {
@@ -45,6 +53,10 @@ function blueprintFile(id: string): string {
   return join(blueprintsDir(), `${id}.json`)
 }
 
+function workspacesDir(): string {
+  return join(app.getPath('userData'), 'janusx', ...WORKSPACES_DIR)
+}
+
 function legacyIndexFile(workspace: string): string {
   return join(workspace, '.janusX', ...BLUEPRINTS_DIR, INDEX_FILE)
 }
@@ -55,6 +67,22 @@ function legacyBlueprintFile(workspace: string, id: string): string {
 
 function nowIso(): string {
   return new Date().toISOString()
+}
+
+function normalizePathKey(path: string): string {
+  try {
+    const out = resolve(path)
+    return process.platform === 'win32' ? out.toLowerCase() : out
+  } catch {
+    return process.platform === 'win32' ? path.toLowerCase() : path
+  }
+}
+
+function toWorkspaceSnapshot(workspace: WorkspaceRecord): WorkspaceSnapshot {
+  return {
+    name: workspace.name,
+    path: workspace.path
+  }
 }
 
 function makeFeatureItem(input: Partial<BlueprintFeatureItem> & { title: string }): BlueprintFeatureItem {
@@ -95,6 +123,7 @@ function makeNode(input: Partial<BlueprintNode> & { title: string; type: Bluepri
     activities: input.activities ?? [],
     analyses: input.analyses ?? [],
     workspaceId: input.workspaceId ?? null,
+    workspaceSnapshot: input.workspaceSnapshot ?? null,
     boundTerminalId: input.boundTerminalId ?? null,
     terminalHistory: input.terminalHistory ?? [],
     lastAnalyzedCommitSha: input.lastAnalyzedCommitSha ?? null,
@@ -146,6 +175,55 @@ class BlueprintStore {
     await writeJson(indexFile(), idx)
   }
 
+  private async listWorkspaceRecords(): Promise<WorkspaceRecord[]> {
+    try {
+      const files = await fs.readdir(workspacesDir())
+      const records: WorkspaceRecord[] = []
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue
+        const record = await readJson<WorkspaceRecord>(join(workspacesDir(), file))
+        if (record?.id && record.name && record.path) records.push(record)
+      }
+      return records
+    } catch {
+      return []
+    }
+  }
+
+  private async findWorkspaceRecord(workspaceIdOrPath: string | null | undefined): Promise<WorkspaceRecord | null> {
+    if (!workspaceIdOrPath || workspaceIdOrPath === GLOBAL_BLUEPRINT_SCOPE) return null
+    const records = await this.listWorkspaceRecords()
+    const byId = records.find((record) => record.id === workspaceIdOrPath)
+    if (byId) return byId
+
+    const targetPath = normalizePathKey(workspaceIdOrPath)
+    return records.find((record) => normalizePathKey(record.path) === targetPath) ?? null
+  }
+
+  private async resolveWorkspaceKey(workspaceIdOrPath: string): Promise<string> {
+    const record = await this.findWorkspaceRecord(workspaceIdOrPath)
+    return record?.id ?? workspaceIdOrPath
+  }
+
+  private async hydrateWorkspaceSnapshot(node: BlueprintNode): Promise<boolean> {
+    let changed = false
+    if (node.workspaceSnapshot === undefined) {
+      node.workspaceSnapshot = null
+      changed = true
+    }
+    if (!node.workspaceId) return changed
+
+    const record = await this.findWorkspaceRecord(node.workspaceId)
+    if (!record) return changed
+
+    const nextSnapshot = toWorkspaceSnapshot(record)
+    if (node.workspaceSnapshot?.name !== nextSnapshot.name || node.workspaceSnapshot?.path !== nextSnapshot.path) {
+      node.workspaceSnapshot = nextSnapshot
+      changed = true
+    }
+    return changed
+  }
+
   private async migrateLegacyWorkspace(workspace: string): Promise<void> {
     if (!workspace || workspace === GLOBAL_BLUEPRINT_SCOPE || this.migratedWorkspaces.has(workspace)) return
     this.migratedWorkspaces.add(workspace)
@@ -163,10 +241,12 @@ class BlueprintStore {
         if (n.lastAnalyzedCommitSha === undefined) n.lastAnalyzedCommitSha = null
         if (n.statusSource === undefined) n.statusSource = 'manual'
         if (n.workspaceId === undefined) n.workspaceId = null
+        if (n.workspaceSnapshot === undefined) n.workspaceSnapshot = null
         if (!Array.isArray(n.activities)) n.activities = []
         if (!Array.isArray(n.analyses)) n.analyses = []
         if (!Array.isArray(n.features)) n.features = []
         n.features = n.features.map((feature) => makeFeatureItem(feature))
+        await this.hydrateWorkspaceSnapshot(n)
       }
       idx.blueprints.push(id)
       this.cache.set(id, bp)
@@ -193,17 +273,42 @@ class BlueprintStore {
   private async readBlueprintFile(workspace: string, id: string): Promise<Blueprint | null> {
     const bp = await readJson<Blueprint>(blueprintFile(id))
     if (bp) {
+      let changed = false
       // 容错：老节点补齐新增字段
       for (const nid of Object.keys(bp.nodes)) {
         const n = bp.nodes[nid]
-        if (n.lastAnalyzedCommitSha === undefined) n.lastAnalyzedCommitSha = null
-        if (n.statusSource === undefined) n.statusSource = 'manual'
-        if (n.workspaceId === undefined) n.workspaceId = null
-        if (!Array.isArray(n.activities)) n.activities = []
-        if (!Array.isArray(n.analyses)) n.analyses = []
-        if (!Array.isArray(n.features)) n.features = []
+        if (n.lastAnalyzedCommitSha === undefined) {
+          n.lastAnalyzedCommitSha = null
+          changed = true
+        }
+        if (n.statusSource === undefined) {
+          n.statusSource = 'manual'
+          changed = true
+        }
+        if (n.workspaceId === undefined) {
+          n.workspaceId = null
+          changed = true
+        }
+        if (n.workspaceSnapshot === undefined) {
+          n.workspaceSnapshot = null
+          changed = true
+        }
+        if (!Array.isArray(n.activities)) {
+          n.activities = []
+          changed = true
+        }
+        if (!Array.isArray(n.analyses)) {
+          n.analyses = []
+          changed = true
+        }
+        if (!Array.isArray(n.features)) {
+          n.features = []
+          changed = true
+        }
         n.features = n.features.map((feature) => makeFeatureItem(feature))
+        changed = (await this.hydrateWorkspaceSnapshot(n)) || changed
       }
+      if (changed) await writeJson(blueprintFile(id), bp)
     }
     return bp
   }
@@ -302,6 +407,7 @@ class BlueprintStore {
     const bp = await this.loadBlueprint(workspace, blueprintId)
     if (!bp) return null
     const node = makeNode({ ...input, parentId })
+    await this.hydrateWorkspaceSnapshot(node)
     bp.nodes[node.id] = node
     bp.nodeIds.push(node.id)
     if (parentId && bp.nodes[parentId]) {
@@ -324,6 +430,15 @@ class BlueprintStore {
     const node = bp.nodes[nodeId]
     // 不允许通过通用 patch 覆盖只读字段
     const { id: _id, createdAt: _c, ...safe } = patch
+    if (safe.workspaceId !== undefined) {
+      if (!safe.workspaceId) {
+        safe.workspaceId = null
+        safe.workspaceSnapshot = null
+      } else if (safe.workspaceSnapshot === undefined) {
+        const record = await this.findWorkspaceRecord(safe.workspaceId)
+        safe.workspaceSnapshot = record ? toWorkspaceSnapshot(record) : node.workspaceSnapshot ?? null
+      }
+    }
     if (safe.parentId !== undefined && safe.parentId !== node.parentId) {
       const nextParentId = safe.parentId
       if (nodeId === bp.rootNodeId && nextParentId) return null
@@ -541,8 +656,14 @@ class BlueprintStore {
     const bp = await this.loadBlueprint(workspace, blueprintId)
     if (!bp || !bp.nodes[nodeId]) return null
     const node = bp.nodes[nodeId]
-    if (patch.progress !== undefined) node.progress = Math.max(0, Math.min(100, patch.progress))
-    if (patch.status !== undefined) node.status = patch.status
+    if (patch.progress !== undefined) {
+      node.progress = Math.max(0, Math.min(100, patch.progress))
+      node.statusSource = 'janus'
+    }
+    if (patch.status !== undefined) {
+      node.status = patch.status
+      node.statusSource = 'janus'
+    }
     for (const update of patch.featureUpdates ?? []) {
       const feature = (node.features ?? []).find((item) => item.id === update.featureId)
       if (!feature) continue
@@ -575,6 +696,52 @@ class BlueprintStore {
     return node
   }
 
+  async listAnalyses(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string
+  ): Promise<BlueprintAnalysis[]> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[nodeId]) return []
+    return [...(bp.nodes[nodeId].analyses ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
+
+  async applyAnalysis(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string,
+    analysisId: string
+  ): Promise<BlueprintNode | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[nodeId]) return null
+    const node = bp.nodes[nodeId]
+    const analysis = (node.analyses ?? []).find((item) => item.id === analysisId)
+    if (!analysis?.applied || !analysis.result) return null
+
+    const updated = await this.applyAnalysisPatch(workspace, blueprintId, nodeId, {
+      progress: analysis.result.progress,
+      status: analysis.result.status,
+      featureUpdates: analysis.result.featureUpdates,
+      newFeatureRequirements: analysis.result.newFeatureRequirements
+    })
+    if (!updated) return null
+
+    const latest = await this.loadBlueprint(workspace, blueprintId)
+    const latestNode = latest?.nodes[nodeId]
+    if (!latest || !latestNode) return updated
+    latestNode.activities.push({
+      id: randomUUID(),
+      type: 'analysis',
+      content: `重新应用分析：${analysis.result.summary || analysis.id}`,
+      metadata: { analysisId: analysis.id, reapplied: true },
+      createdAt: nowIso()
+    })
+    latestNode.updatedAt = nowIso()
+    latest.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), latest)
+    return latestNode
+  }
+
   /** 更新分析游标 */
   async setCursor(
     workspace: string,
@@ -592,20 +759,29 @@ class BlueprintStore {
   /** 焦点节点（归属机制 B） */
   async getFocusedNodeId(workspace: string): Promise<string | null> {
     const idx = await this.loadIndex(workspace)
-    return idx.focusedNodeByWorkspace?.[workspace] ?? idx.focusedNodeId
+    const key = await this.resolveWorkspaceKey(workspace)
+    const focused = idx.focusedNodeByWorkspace?.[key] ?? idx.focusedNodeByWorkspace?.[workspace] ?? idx.focusedNodeId
+    if (focused && key !== workspace && idx.focusedNodeByWorkspace?.[workspace] === focused && idx.focusedNodeByWorkspace[key] !== focused) {
+      idx.focusedNodeByWorkspace[key] = focused
+      delete idx.focusedNodeByWorkspace[workspace]
+      await this.saveIndex(workspace)
+    }
+    return focused ?? null
   }
 
   async setFocusedNodeId(workspace: string, nodeId: string | null): Promise<void> {
     const idx = await this.loadIndex(workspace)
     idx.focusedNodeByWorkspace ??= {}
-    idx.focusedNodeByWorkspace[workspace] = nodeId
+    const key = await this.resolveWorkspaceKey(workspace)
+    idx.focusedNodeByWorkspace[key] = nodeId
+    if (key !== workspace) delete idx.focusedNodeByWorkspace[workspace]
     await this.saveIndex(workspace)
   }
 
   async focusNode(workspace: string, nodeId: string): Promise<BlueprintNode | null> {
     const found = await this.findNode(workspace, nodeId)
     if (!found) return null
-    await this.setFocusedNodeId(workspace, nodeId)
+    await this.setFocusedNodeId(found.node.workspaceId ?? workspace, nodeId)
     return found.node
   }
 
@@ -624,7 +800,7 @@ class BlueprintStore {
       node.terminalHistory = [...node.terminalHistory, terminalId]
       await this.updateNode(workspace, blueprintId, nodeId, { terminalHistory: node.terminalHistory })
     }
-    await this.setFocusedNodeId(workspace, nodeId)
+    await this.setFocusedNodeId(node?.workspaceId ?? workspace, nodeId)
     return node
   }
 

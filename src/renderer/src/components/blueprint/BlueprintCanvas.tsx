@@ -32,7 +32,10 @@ import {
   updateBlueprint as updateBlueprintIPC,
   analyze as analyzeIPC,
   bindTerminal as bindTerminalIPC,
+  listAnalyses as listAnalysesIPC,
+  applyAnalysis as applyAnalysisIPC,
   type Blueprint,
+  type BlueprintAnalysis,
   type BlueprintFeatureItem,
   type BlueprintIssue,
   type BlueprintIssueSeverity,
@@ -48,6 +51,9 @@ import { Select } from '../ui/Select'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
+const ANALYSIS_COMMIT_LIMIT_DEFAULT = 5
+const ANALYSIS_COMMIT_LIMIT_MIN = 1
+const ANALYSIS_COMMIT_LIMIT_MAX = 50
 const TERMINAL_PRESETS: {
   type: TerminalPreset
   label: string
@@ -60,6 +66,7 @@ const TERMINAL_PRESETS: {
   { type: 'opencode', label: 'OpenCode', name: 'opencode', autoCommand: 'opencode' }
 ]
 type TextItemField = 'positioning' | 'techSolution'
+type StatusFilter = BlueprintNodeStatus | 'all'
 const NODE_TYPE_ORDER: BlueprintNodeType[] = ['epic', 'feature', 'task', 'issue']
 const ISSUE_SEVERITY_VALUES = ['low', 'medium', 'high', 'critical'] as const
 const ISSUE_STATUS_VALUES = ['open', 'resolved', 'wontfix'] as const
@@ -79,6 +86,13 @@ const FEATURE_STATUS_LABEL: Record<BlueprintFeatureItem['status'], string> = {
   'in-progress': '进行中',
   done: '已完成',
   blocked: '阻塞'
+}
+
+const TRIGGER_LABEL: Record<string, string> = {
+  'commit-threshold': '提交触发',
+  manual: '手动分析',
+  'terminal-close': '终端关闭',
+  reconcile: '补漏对账'
 }
 
 function splitLines(value: string): string[] {
@@ -102,6 +116,50 @@ function normalizeIssueStatus(value: string): BlueprintNode['issues'][number]['s
 
 function serializeItems(items: string[]): string {
   return items.map((item) => item.trim()).filter(Boolean).join('\n')
+}
+
+function normalizeSearchText(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function normalizeAnalysisCommitLimit(value: string): number {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) return ANALYSIS_COMMIT_LIMIT_DEFAULT
+  return Math.max(ANALYSIS_COMMIT_LIMIT_MIN, Math.min(ANALYSIS_COMMIT_LIMIT_MAX, parsed))
+}
+
+function buildNodeSearchText(node: BlueprintNode): string {
+  return [
+    node.title,
+    node.type,
+    node.status,
+    STATUS_VISUALS[node.status]?.label,
+    node.positioning,
+    node.techSolution,
+    node.description,
+    ...(node.tags ?? []),
+    ...(node.features ?? []).flatMap((feature) => [
+      feature.title,
+      feature.description,
+      feature.status,
+      ...(feature.requirementNotes ?? [])
+    ]),
+    ...(node.issues ?? []).flatMap((issue) => [
+      issue.title,
+      issue.description,
+      issue.severity,
+      issue.status
+    ])
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+}
+
+function nodeMatchesFocus(node: BlueprintNode, query: string, statusFilter: StatusFilter): boolean {
+  const statusMatches = statusFilter === 'all' || node.status === statusFilter
+  const queryMatches = !query || buildNodeSearchText(node).includes(query)
+  return statusMatches && queryMatches
 }
 
 function makeRequirementItem(input: {
@@ -248,13 +306,16 @@ function computeLayout(
 function deriveRF(
   bp: Blueprint,
   existing: Record<string, { x: number; y: number }>,
-  workspaceNameById: Record<string, string>
+  workspaceNameById: Record<string, string>,
+  focusedNodeIds: Set<string>,
+  focusActive: boolean
 ): { nodes: Node<BlueprintNodeData, 'blueprint'>[]; edges: Edge[] } {
   const layout = computeLayout(bp.nodes, bp.rootNodeId, bp.canvasLayout ?? {})
   const nodes: Node<BlueprintNodeData, 'blueprint'>[] = bp.nodeIds
     .filter((id) => bp.nodes[id])
     .map((id) => {
       const n = bp.nodes[id]
+      const isFocused = focusedNodeIds.has(id)
       return {
         id,
         type: 'blueprint',
@@ -264,8 +325,10 @@ function deriveRF(
           status: n.status,
           nodeType: n.type,
           progress: n.progress,
-          workspaceName: n.workspaceId ? workspaceNameById[n.workspaceId] ?? null : null,
-          boundTerminalId: n.boundTerminalId
+          workspaceName: n.workspaceId ? workspaceNameById[n.workspaceId] ?? n.workspaceSnapshot?.name ?? null : null,
+          boundTerminalId: n.boundTerminalId,
+          searchMatched: focusActive && isFocused,
+          searchDimmed: focusActive && !isFocused
         }
       }
     })
@@ -324,7 +387,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [analysisCommitLimit, setAnalysisCommitLimit] = useState(String(ANALYSIS_COMMIT_LIMIT_DEFAULT))
   const [actionError, setActionError] = useState<string | null>(null)
+  const [analysisHistoryOpen, setAnalysisHistoryOpen] = useState(false)
+  const [analysisHistory, setAnalysisHistory] = useState<BlueprintAnalysis[]>([])
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null)
+  const [analysisHistoryLoading, setAnalysisHistoryLoading] = useState(false)
+  const [applyingAnalysisId, setApplyingAnalysisId] = useState<string | null>(null)
   const [promptState, setPromptState] = useState<
     | { kind: 'child'; parentId: string }
     | { kind: 'root' }
@@ -341,10 +412,29 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   )
   const detailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
   const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
+  const normalizedSearchQuery = useMemo(() => normalizeSearchText(searchQuery), [searchQuery])
+  const focusActive = normalizedSearchQuery.length > 0 || statusFilter !== 'all'
+  const focusedNodeIds = useMemo(() => {
+    if (!currentBlueprint || !focusActive) return new Set<string>()
+    return new Set(
+      currentBlueprint.nodeIds.filter((id) => {
+        const node = currentBlueprint.nodes[id]
+        return node ? nodeMatchesFocus(node, normalizedSearchQuery, statusFilter) : false
+      })
+    )
+  }, [currentBlueprint, focusActive, normalizedSearchQuery, statusFilter])
+  const focusedNodeCount = focusedNodeIds.size
   const detailWorkspaceMissing = !!detailNode?.workspaceId && !workspaceNameById[detailNode.workspaceId]
   const latestAnalysis = detailNode?.analyses?.length
     ? detailNode.analyses[detailNode.analyses.length - 1]
     : null
+  const selectedAnalysis = useMemo(() => {
+    if (!analysisHistory.length) return null
+    if (selectedAnalysisId) {
+      return analysisHistory.find((analysis) => analysis.id === selectedAnalysisId) ?? analysisHistory[0]
+    }
+    return analysisHistory[0]
+  }, [analysisHistory, selectedAnalysisId])
   const detailNodeParentOptions = useMemo(() => {
     if (!currentBlueprint || !detailNode) return []
     const descendants = collectDescendantIds(currentBlueprint.nodes, detailNode.id)
@@ -380,19 +470,38 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       ids: currentBlueprint.nodeIds,
       fields: currentBlueprint.nodeIds.map((id) => {
         const n = currentBlueprint.nodes[id]
-        return n ? [n.title, n.status, n.progress, n.workspaceId, n.boundTerminalId, n.parentId] : null
-      })
+        return n
+          ? [
+              n.title,
+              n.status,
+              n.progress,
+              n.workspaceId,
+              n.workspaceSnapshot?.name,
+              n.workspaceSnapshot?.path,
+              n.boundTerminalId,
+              n.parentId,
+              n.positioning,
+              n.techSolution,
+              n.description,
+              n.tags,
+              n.features?.map((feature) => [feature.title, feature.description, feature.status, feature.requirementNotes]),
+              n.issues?.map((issue) => [issue.title, issue.description, issue.severity, issue.status])
+            ]
+          : null
+      }),
+      search: normalizedSearchQuery,
+      statusFilter
     })
-  }, [currentBlueprint])
+  }, [currentBlueprint, normalizedSearchQuery, statusFilter])
 
   useEffect(() => {
     if (!currentBlueprint) return
-    const { nodes, edges } = deriveRF(currentBlueprint, positionsRef.current, workspaceNameById)
+    const { nodes, edges } = deriveRF(currentBlueprint, positionsRef.current, workspaceNameById, focusedNodeIds, focusActive)
     // 记录最新位置（含自动布局）
     positionsRef.current = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
     setRFNodes(nodes)
     setRFEdges(edges)
-  }, [signature, workspaceNameById]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [signature, workspaceNameById, focusedNodeIds, focusActive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const scheduleLayoutSave = useCallback(() => {
     if (layoutSaveTimerRef.current !== null) {
@@ -483,7 +592,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         const created = await createNodeIPC(
           GLOBAL_BLUEPRINT_SCOPE,
           blueprintId,
-          { title, type: 'task', workspaceId: parent?.workspaceId ?? null },
+          { title, type: 'task', workspaceId: parent?.workspaceId ?? null, workspaceSnapshot: parent?.workspaceSnapshot ?? null },
           promptState.parentId
         )
         setPromptState(null)
@@ -647,13 +756,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const bindNodeWorkspace = useCallback(
     async (nodeId: string, workspaceId: string) => {
       const nextWorkspaceId = workspaceId || null
+      const workspace = nextWorkspaceId ? workspaces.find((item) => item.id === nextWorkspaceId) : null
       await updateNode(blueprintId, nodeId, {
         workspaceId: nextWorkspaceId,
+        workspaceSnapshot: workspace ? { name: workspace.name, path: workspace.path } : null,
         boundTerminalId: null
       })
       setActionError(null)
     },
-    [blueprintId, updateNode]
+    [blueprintId, updateNode, workspaces]
   )
 
   const bindNodeParent = useCallback(
@@ -778,6 +889,89 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     })
   }, [detailNode, persistNodePatch])
 
+  useEffect(() => {
+    setAnalysisHistoryOpen(false)
+    setAnalysisHistory([])
+    setSelectedAnalysisId(null)
+    setAnalysisHistoryLoading(false)
+    setApplyingAnalysisId(null)
+  }, [detailNodeId])
+
+  const getAnalysisWorkspacePath = useCallback(
+    (node: BlueprintNode): string => {
+      const workspace = node.workspaceId ? workspaces.find((item) => item.id === node.workspaceId) : null
+      return workspace?.path ?? GLOBAL_BLUEPRINT_SCOPE
+    },
+    [workspaces]
+  )
+
+  const loadAnalysisHistory = useCallback(
+    async (node: BlueprintNode) => {
+      setAnalysisHistoryLoading(true)
+      setActionError(null)
+      try {
+        const items = await listAnalysesIPC({
+          workspacePath: getAnalysisWorkspacePath(node),
+          blueprintId,
+          nodeId: node.id
+        })
+        const fallback = [...(node.analyses ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        const next = items.length ? items : fallback
+        setAnalysisHistory(next)
+        setSelectedAnalysisId((current) => current && next.some((item) => item.id === current) ? current : next[0]?.id ?? null)
+      } catch (err) {
+        const fallback = [...(node.analyses ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        setAnalysisHistory(fallback)
+        setSelectedAnalysisId(fallback[0]?.id ?? null)
+        setActionError(`分析历史加载失败: ${(err as Error).message}`)
+      } finally {
+        setAnalysisHistoryLoading(false)
+      }
+    },
+    [blueprintId, getAnalysisWorkspacePath]
+  )
+
+  const toggleAnalysisHistory = useCallback(
+    async (node: BlueprintNode) => {
+      const nextOpen = !analysisHistoryOpen
+      setAnalysisHistoryOpen(nextOpen)
+      if (nextOpen) {
+        await loadAnalysisHistory(node)
+      }
+    },
+    [analysisHistoryOpen, loadAnalysisHistory]
+  )
+
+  const reapplyAnalysis = useCallback(
+    async (node: BlueprintNode, analysis: BlueprintAnalysis) => {
+      if (!analysis.applied) {
+        setActionError('失败或未应用的分析不能重新应用')
+        return
+      }
+      setApplyingAnalysisId(analysis.id)
+      setActionError(null)
+      try {
+        const updated = await applyAnalysisIPC({
+          workspacePath: getAnalysisWorkspacePath(node),
+          blueprintId,
+          nodeId: node.id,
+          analysisId: analysis.id
+        })
+        if (!updated) {
+          setActionError('无法重新应用该分析')
+          return
+        }
+        await loadBlueprint(blueprintId)
+        await loadAnalysisHistory(updated)
+      } catch (err) {
+        setActionError(`重新应用分析失败: ${(err as Error).message}`)
+      } finally {
+        setApplyingAnalysisId(null)
+      }
+    },
+    [blueprintId, getAnalysisWorkspacePath, loadAnalysisHistory, loadBlueprint]
+  )
+
   const applyAnalysisPatch = useCallback(
     async (nodeId: string, patch: { progress?: number; status?: BlueprintNodeStatus }) => {
       const node = currentBlueprint?.nodes[nodeId]
@@ -808,19 +1002,52 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     setAnalyzing(true)
     setActionError(null)
     try {
-      const res = await analyzeIPC({ nodeId: selectedId, workspacePath: workspace.path, trigger: 'manual' })
+      const commitLimit = normalizeAnalysisCommitLimit(analysisCommitLimit)
+      setAnalysisCommitLimit(String(commitLimit))
+      const res = await analyzeIPC({
+        nodeId: selectedId,
+        workspacePath: workspace.path,
+        trigger: 'manual',
+        commitLimit
+      })
       console.log('[BlueprintCanvas] analyze result', selectedId, res)
+      if (res?.error) {
+        setActionError(res.error)
+      }
       await refreshAfterAnalysis()
+    } catch (err) {
+      setActionError(`分析失败: ${(err as Error).message}`)
     } finally {
       setAnalyzing(false)
     }
-  }, [selectedId, currentBlueprint, workspaces, refreshAfterAnalysis])
+  }, [selectedId, currentBlueprint, workspaces, analysisCommitLimit, refreshAfterAnalysis])
 
   const fitView = useCallback(() => {
     rfInstanceRef.current?.fitView({ padding: 0.2, duration: 200 })
   }, [])
 
+  const focusFirstMatch = useCallback(() => {
+    if (!currentBlueprint || focusedNodeCount === 0) return
+    const firstId = currentBlueprint.nodeIds.find((id) => focusedNodeIds.has(id))
+    if (!firstId) return
+    setSelectedId(firstId)
+    const rfNode = rfInstanceRef.current?.getNode(firstId)
+    if (rfNode) {
+      rfInstanceRef.current?.setCenter(rfNode.position.x + NODE_W / 2, rfNode.position.y + NODE_H / 2, {
+        zoom: 1,
+        duration: 220
+      })
+    }
+  }, [currentBlueprint, focusedNodeCount, focusedNodeIds])
+
   const nodeTypes = useMemo(() => ({ blueprint: BlueprintNodeCard }), [])
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: '全部状态' },
+      ...STATUS_ORDER.map((status) => ({ value: status, label: STATUS_VISUALS[status].label }))
+    ],
+    []
+  )
   const featureActionLabel = '添加需求项'
   const featureActionHint = '需求项保存在应用级蓝图中，Janus 后续只维护参考完成度、状态和评估备注。'
 
@@ -835,12 +1062,42 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
             </span>
             {selectedNode ? (
               <span className="blueprint-toolbar__hint">
-                {selectedNode.workspaceId ? workspaceNameById[selectedNode.workspaceId] ?? '工作区失效' : '未绑定工作区'}
+                {selectedNode.workspaceId ? workspaceNameById[selectedNode.workspaceId] ?? selectedNode.workspaceSnapshot?.name ?? '工作区失效' : '未绑定工作区'}
               </span>
             ) : null}
           </div>
 
           <div className="blueprint-toolbar__actions">
+            <div className="blueprint-toolbar__group blueprint-toolbar__group--focus">
+              <input
+                className="blueprint-toolbar__search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                placeholder="搜索节点"
+                aria-label="搜索蓝图节点"
+              />
+              <Select
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as StatusFilter)}
+                options={statusFilterOptions}
+                className="blueprint-select blueprint-select--status-filter"
+              />
+              {focusActive ? (
+                <span className="blueprint-toolbar__match-count">{focusedNodeCount} 个匹配</span>
+              ) : null}
+              {focusActive ? (
+                <button
+                  className="blueprint-btn"
+                  onClick={() => {
+                    setSearchQuery('')
+                    setStatusFilter('all')
+                  }}
+                >
+                  清除
+                </button>
+              ) : null}
+            </div>
+
             <div className="blueprint-toolbar__group blueprint-toolbar__group--primary">
               <button className="blueprint-btn blueprint-btn--primary" onClick={addRoot}>+ 新建根节点</button>
               <button className="blueprint-btn" onClick={() => selectedId && addChild(selectedId)} disabled={!selectedId}>
@@ -872,8 +1129,23 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         >
           <div className="blueprint-toolbar__panel">
             <div className="blueprint-toolbar__panel-actions">
+              <label className="blueprint-toolbar__commit-limit">
+                <span>最近</span>
+                <input
+                  type="number"
+                  min={ANALYSIS_COMMIT_LIMIT_MIN}
+                  max={ANALYSIS_COMMIT_LIMIT_MAX}
+                  value={analysisCommitLimit}
+                  onChange={(event) => setAnalysisCommitLimit(event.target.value)}
+                  onBlur={() => setAnalysisCommitLimit(String(normalizeAnalysisCommitLimit(analysisCommitLimit)))}
+                />
+                <span>次</span>
+              </label>
               <button className="blueprint-btn" onClick={analyzeSelected} disabled={!selectedId || analyzing}>
                 {analyzing ? '分析中…' : '分析选中'}
+              </button>
+              <button className="blueprint-btn" onClick={focusFirstMatch} disabled={!focusActive || focusedNodeCount === 0}>
+                定位匹配
               </button>
               <button className="blueprint-btn" onClick={fitView}>适应画布</button>
               <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
@@ -1241,7 +1513,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               <div className="bp-history-card">
                 <div className="bp-history-card__title">{latestAnalysis.result.summary || latestAnalysis.error || '无摘要'}</div>
                 <div className="bp-history-card__meta">
-                  {new Date(latestAnalysis.createdAt).toLocaleString()} · {latestAnalysis.applied ? '已应用' : '未应用'} · 置信度 {Math.round((latestAnalysis.result.confidence ?? 0) * 100)}%
+                  {new Date(latestAnalysis.createdAt).toLocaleString()} · {TRIGGER_LABEL[latestAnalysis.trigger] ?? latestAnalysis.trigger} · {latestAnalysis.applied ? '已应用' : '未应用'} · 置信度 {Math.round((latestAnalysis.result.confidence ?? 0) * 100)}%
                 </div>
                 {latestAnalysis.result.evidence?.length ? (
                   <ul className="bp-history-card__list">
@@ -1253,10 +1525,113 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                     {latestAnalysis.result.unresolved.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
                   </ul>
                 ) : null}
+                <div className="bp-history-card__actions">
+                  <button className="blueprint-btn" onClick={() => toggleAnalysisHistory(detailNode)}>
+                    {analysisHistoryOpen ? '收起历史' : '查看历史'}
+                  </button>
+                  {analysisHistoryOpen ? (
+                    <button className="blueprint-btn" onClick={() => loadAnalysisHistory(detailNode)} disabled={analysisHistoryLoading}>
+                      {analysisHistoryLoading ? '刷新中...' : '刷新'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : (
               <div className="bp-node-detail__empty">暂无分析记录</div>
             )}
+            {analysisHistoryOpen ? (
+              <div className="bp-analysis-history">
+                <div className="bp-analysis-history__list">
+                  {analysisHistoryLoading ? <div className="bp-node-detail__empty">加载分析历史...</div> : null}
+                  {!analysisHistoryLoading && analysisHistory.length === 0 ? <div className="bp-node-detail__empty">暂无历史</div> : null}
+                  {analysisHistory.map((analysis) => (
+                    <button
+                      key={analysis.id}
+                      className={`bp-analysis-history__item${selectedAnalysis?.id === analysis.id ? ' bp-analysis-history__item--active' : ''}`}
+                      onClick={() => setSelectedAnalysisId(analysis.id)}
+                    >
+                      <span>{new Date(analysis.createdAt).toLocaleString()}</span>
+                      <strong>{analysis.result.summary || analysis.error || '无摘要'}</strong>
+                      <em>
+                        {TRIGGER_LABEL[analysis.trigger] ?? analysis.trigger} · {STATUS_VISUALS[analysis.result.status]?.label ?? analysis.result.status} · {analysis.result.progress}%
+                      </em>
+                    </button>
+                  ))}
+                </div>
+
+                {selectedAnalysis ? (
+                  <div className="bp-analysis-detail">
+                    <div className="bp-analysis-detail__head">
+                      <div>
+                        <strong>{selectedAnalysis.result.summary || selectedAnalysis.error || '无摘要'}</strong>
+                        <span>
+                          {selectedAnalysis.applied ? '已应用' : '未应用'} · 置信度 {Math.round((selectedAnalysis.result.confidence ?? 0) * 100)}%
+                        </span>
+                      </div>
+                      <button
+                        className="blueprint-btn"
+                        onClick={() => reapplyAnalysis(detailNode, selectedAnalysis)}
+                        disabled={!selectedAnalysis.applied || applyingAnalysisId === selectedAnalysis.id}
+                      >
+                        {applyingAnalysisId === selectedAnalysis.id ? '应用中...' : '重新应用'}
+                      </button>
+                    </div>
+
+                    <div className="bp-analysis-detail__grid">
+                      <div><span>状态</span><strong>{STATUS_VISUALS[selectedAnalysis.result.status]?.label ?? selectedAnalysis.result.status}</strong></div>
+                      <div><span>进度</span><strong>{selectedAnalysis.result.progress}%</strong></div>
+                      <div><span>触发</span><strong>{TRIGGER_LABEL[selectedAnalysis.trigger] ?? selectedAnalysis.trigger}</strong></div>
+                      <div><span>时间</span><strong>{new Date(selectedAnalysis.createdAt).toLocaleString()}</strong></div>
+                    </div>
+
+                    {selectedAnalysis.error ? <div className="bp-analysis-detail__error">{selectedAnalysis.error}</div> : null}
+
+                    <div className="bp-analysis-detail__section">
+                      <label>输入摘要</label>
+                      <pre>{`蓝图预期：\n${selectedAnalysis.inputSummary.blueprint || '无'}\n\n实际变更：\n${selectedAnalysis.inputSummary.actual || '无'}`}</pre>
+                    </div>
+
+                    {selectedAnalysis.result.evidence?.length ? (
+                      <div className="bp-analysis-detail__section">
+                        <label>证据</label>
+                        <ul>{selectedAnalysis.result.evidence.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
+                      </div>
+                    ) : null}
+
+                    {selectedAnalysis.result.unresolved?.length ? (
+                      <div className="bp-analysis-detail__section bp-analysis-detail__section--warn">
+                        <label>未解决事项</label>
+                        <ul>{selectedAnalysis.result.unresolved.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
+                      </div>
+                    ) : null}
+
+                    {selectedAnalysis.result.featureUpdates?.length ? (
+                      <div className="bp-analysis-detail__section">
+                        <label>需求项更新</label>
+                        <ul>
+                          {selectedAnalysis.result.featureUpdates.map((item, index) => (
+                            <li key={`${item.featureId}-${index}`}>
+                              {item.featureId} · {item.status ? FEATURE_STATUS_LABEL[item.status] ?? item.status : '状态未变'} · {item.progress ?? '进度未变'}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {selectedAnalysis.result.discoveredRequirements?.length ? (
+                      <div className="bp-analysis-detail__section">
+                        <label>新需求提议</label>
+                        <ul>
+                          {selectedAnalysis.result.discoveredRequirements.map((item, index) => (
+                            <li key={`${item.title}-${index}`}>{item.title} · {Math.round(item.confidence * 100)}%</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="bp-node-detail__section">
@@ -1301,7 +1676,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
 
           </div>
           {detailWorkspaceMissing ? (
-            <div className="bp-node-detail__warning">绑定的工作区已不存在，请重新选择。</div>
+            <div className="bp-node-detail__warning">
+              绑定的工作区已不存在，请重新选择。
+              {detailNode.workspaceSnapshot ? ` 上次绑定：${detailNode.workspaceSnapshot.name} · ${detailNode.workspaceSnapshot.path}` : ''}
+            </div>
           ) : null}
         </aside>
       ) : null}

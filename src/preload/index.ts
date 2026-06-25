@@ -83,6 +83,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'janus:terminal:bind',
   'janus:analyzer:analyze',
   'janus:analyzer:apply-patch',
+  'janus:analysis:list',
+  'janus:analysis:apply',
   'janus:analyzer:accept-discovered',
 ]
 
