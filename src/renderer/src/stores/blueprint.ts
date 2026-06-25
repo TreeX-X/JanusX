@@ -14,18 +14,32 @@ import {
   deleteBlueprint as deleteBlueprintIPC,
   updateNode as updateNodeIPC,
   deleteNode as deleteNodeIPC,
+  focusNode as focusNodeIPC,
   type Blueprint,
   type BlueprintCreateInput,
+  type BlueprintNode,
   type NodeCreateInput
 } from '@/services/blueprint'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
+
+export interface ActiveBlueprintSession {
+  blueprintId: string
+  nodeId: string
+  workspaceId: string
+  workspaceName: string
+  workspacePath: string
+  startedAt: string
+  nodeSnapshot: BlueprintNode
+}
 
 interface BlueprintStore {
   /** 应用级全局蓝图摘要列表 */
   blueprints: Blueprint[]
   /** 当前打开的蓝图（含 nodes 树） */
   currentBlueprint: Blueprint | null
+  /** 当前通过“开始工作”激活的节点协作会话 */
+  activeSession: ActiveBlueprintSession | null
   loading: boolean
   error: string | null
 
@@ -37,6 +51,14 @@ interface BlueprintStore {
   createBlueprint: (input: BlueprintCreateInput) => Promise<Blueprint | null>
   /** 删除蓝图，成功后从列表和当前视图移除 */
   deleteBlueprint: (id: string) => Promise<boolean>
+  /** 激活节点协作会话，不创建终端，不注入上下文 */
+  focusNode: (input: {
+    blueprintId: string
+    nodeId: string
+    workspaceId: string
+    workspaceName: string
+    workspacePath: string
+  }) => Promise<BlueprintNode | null>
   /** 局部更新节点，成功后同步 currentBlueprint.nodes */
   updateNode: (
     blueprintId: string,
@@ -52,6 +74,7 @@ interface BlueprintStore {
 export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
   blueprints: [],
   currentBlueprint: null,
+  activeSession: null,
   loading: false,
   error: null,
 
@@ -72,7 +95,15 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const bp = await loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, id)
-      set({ currentBlueprint: bp, loading: false })
+      set((s) => {
+        const active = s.activeSession
+        const nextNode = active && bp?.id === active.blueprintId ? bp.nodes[active.nodeId] : null
+        return {
+          currentBlueprint: bp,
+          activeSession: active && nextNode ? { ...active, nodeSnapshot: nextNode } : active,
+          loading: false
+        }
+      })
     } catch (err: unknown) {
       set({
         error: err instanceof Error ? err.message : String(err),
@@ -113,6 +144,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
         return {
           blueprints: next,
           currentBlueprint: s.currentBlueprint?.id === id ? next[0] ?? null : s.currentBlueprint,
+          activeSession: s.activeSession?.blueprintId === id ? null : s.activeSession,
           loading: false
         }
       })
@@ -123,6 +155,41 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
         loading: false
       })
       return false
+    }
+  },
+
+  focusNode: async (input) => {
+    set({ error: null })
+    try {
+      const node = await focusNodeIPC({
+        workspacePath: input.workspacePath,
+        nodeId: input.nodeId
+      })
+      if (!node) {
+        set({ error: '无法激活节点协作会话' })
+        return null
+      }
+      set((s) => ({
+        currentBlueprint: s.currentBlueprint?.id === input.blueprintId
+          ? {
+              ...s.currentBlueprint,
+              nodes: { ...s.currentBlueprint.nodes, [input.nodeId]: node }
+            }
+          : s.currentBlueprint,
+        activeSession: {
+          blueprintId: input.blueprintId,
+          nodeId: input.nodeId,
+          workspaceId: input.workspaceId,
+          workspaceName: input.workspaceName,
+          workspacePath: input.workspacePath,
+          startedAt: new Date().toISOString(),
+          nodeSnapshot: node
+        }
+      }))
+      return node
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+      return null
     }
   },
 
@@ -143,6 +210,10 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
                 nodes: { ...s.currentBlueprint.nodes, [nodeId]: updated }
               }
             : null,
+          activeSession:
+            s.activeSession?.blueprintId === blueprintId && s.activeSession.nodeId === nodeId
+              ? { ...s.activeSession, nodeSnapshot: updated }
+              : s.activeSession,
           loading: false
         }))
       } else {
@@ -167,6 +238,12 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
       const ok = await deleteNodeIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, nodeId)
       if (ok) {
         await get().loadBlueprint(blueprintId)
+        set((s) => ({
+          activeSession:
+            s.activeSession?.blueprintId === blueprintId && s.activeSession.nodeId === nodeId
+              ? null
+              : s.activeSession
+        }))
         return true
       } else {
         set({ error: '无法删除最后一个节点，请直接删除蓝图', loading: false })

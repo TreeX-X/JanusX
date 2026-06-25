@@ -7,6 +7,8 @@ import { projectService, type ProjectConfig } from '@/services/project'
 import type { Workspace } from '@/types'
 import { JanusChat } from './JanusChat'
 import type { Message } from './useJanusChat'
+import { useBlueprintStore } from '@/stores/blueprint'
+import { STATUS_VISUALS } from '../blueprint/blueprintStatus'
 
 /* ════════════════════════════════════════════════════════════
    JanusIsland — 52×26px 折叠态胶囊
@@ -179,27 +181,42 @@ export function JanusIsland({
     isRunning: janusRunning,
   })
 
+  const activeSession = useBlueprintStore((s) => s.activeSession)
+  const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const activeNode =
+    activeSession && currentBlueprint?.id === activeSession.blueprintId
+      ? currentBlueprint.nodes[activeSession.nodeId] ?? activeSession.nodeSnapshot
+      : activeSession?.nodeSnapshot ?? null
+  const latestAnalysis = activeNode?.analyses?.length
+    ? activeNode.analyses[activeNode.analyses.length - 1]
+    : null
+  const activeVisual = activeNode ? STATUS_VISUALS[activeNode.status] ?? STATUS_VISUALS['not-started'] : null
+
   const peekTitle = useMemo(() => {
+    if (activeNode) return 'Working'
     if (janusRunning) return 'Running'
     if (mode === 'analytics') return 'Analyzing'
     if (mode === 'sleep') return 'Idle'
     return 'Ready'
-  }, [janusRunning, mode])
+  }, [activeNode, janusRunning, mode])
 
   const peekSubtitle = useMemo(() => {
+    if (activeNode) return activeNode.title || 'Blueprint node active'
     if (janusRunning) return 'Workspace active'
     if (mode === 'analytics') return 'Blueprint view engaged'
     if (mode === 'sleep') return 'No workspace selected'
     return 'Double-click to open'
-  }, [janusRunning, mode])
+  }, [activeNode, janusRunning, mode])
 
-  const modeLabel = mode === 'analytics' ? 'ANALYTICS' : mode === 'running' ? 'RUNNING' : 'ORDER'
-  const statusText = janusRunning
+  const modeLabel = activeNode ? 'BLUEPRINT' : mode === 'analytics' ? 'ANALYTICS' : mode === 'running' ? 'RUNNING' : 'ORDER'
+  const statusText = activeNode
+    ? 'BLUEPRINT // FOCUSED'
+    : janusRunning
     ? 'RUNNING // ACTIVE'
     : mode === 'analytics'
       ? 'ANALYTICS // PROCESSING...'
       : 'ORDER // IDLE'
-  const modeColor = mode === 'running' ? '#00ff88' : '#ff7830'
+  const modeColor = activeVisual?.color ?? (mode === 'running' ? '#00ff88' : '#ff7830')
   const nextViewLabel = view === 'dual' ? '◎ 仅视觉' : view === 'vision' ? '◎ 仅对话' : '◎ 双栏'
 
   useEffect(() => {
@@ -233,7 +250,7 @@ export function JanusIsland({
       setParticles([])
       return
     }
-    const active = mode === 'analytics' || janusRunning
+    const active = !!activeNode || mode === 'analytics' || janusRunning
     const speed = active ? 200 : 800
     const spawn = () => {
       const id = ++pidRef.current
@@ -245,7 +262,7 @@ export function JanusIsland({
     }
     const interval = window.setInterval(spawn, speed)
     return () => window.clearInterval(interval)
-  }, [janusRunning, mode, stage])
+  }, [activeNode, janusRunning, mode, stage])
 
   useEffect(() => {
     onRunningChange?.(janusRunning)
@@ -329,7 +346,7 @@ export function JanusIsland({
           </div>
 
           <div className="janus-expanded-body">
-            <div className={`janus-crt ${janusRunning ? 'running' : ''}`}>
+            <div className={`janus-crt ${janusRunning || activeNode ? 'running' : ''}${activeNode ? ' janus-crt--session' : ''}`}>
               <div className={`warp-grid ${janusRunning ? 'running' : ''}`} />
               <div className={`scanline ${janusRunning ? 'running' : ''}`} />
               <div className="pixel-overlay" />
@@ -340,13 +357,66 @@ export function JanusIsland({
                   style={{ left: `${left}%`, width: size, height: size, animation: `float-up ${duration}s ease-in forwards` }}
                 />
               ))}
-              <div className="levitation-wrapper">
-                <div className={`janus-face-lg ${faceClass(mode)}`}>
-                  <div className="janus-eye-lg left-eye-lg" />
-                  <div className="janus-eye-lg right-eye-lg" />
+              {activeNode ? (
+                <div className="janus-work-session">
+                  <div className="janus-work-session__eyebrow">CURRENT BLUEPRINT NODE</div>
+                  <div className="janus-work-session__title">{activeNode.title || 'Untitled node'}</div>
+                  <div className="janus-work-session__meta">
+                    <span>{activeSession?.workspaceName ?? 'Workspace'}</span>
+                    <span style={{ color: activeVisual?.color }}>{activeVisual?.label ?? activeNode.status}</span>
+                  </div>
+                  <div className="janus-work-session__progress">
+                    <div className="janus-work-session__progress-head">
+                      <span>Janus reference</span>
+                      <strong>{Math.round(activeNode.progress)}%</strong>
+                    </div>
+                    <div className="janus-work-session__bar">
+                      <span style={{ width: `${Math.max(0, Math.min(100, activeNode.progress))}%`, background: activeVisual?.color }} />
+                    </div>
+                    <em>{activeNode.statusSource === 'janus' ? 'Updated by analysis' : 'Manual baseline'}</em>
+                  </div>
+                  {activeNode.description ? (
+                    <div className="janus-work-session__block">
+                      <span>Goal</span>
+                      <p>{activeNode.description}</p>
+                    </div>
+                  ) : null}
+                  {activeNode.techSolution ? (
+                    <div className="janus-work-session__block">
+                      <span>Plan</span>
+                      <p>{activeNode.techSolution}</p>
+                    </div>
+                  ) : null}
+                  <div className="janus-work-session__grid">
+                    <div>
+                      <span>Todos</span>
+                      <strong>{(activeNode.todos ?? []).filter((todo) => !todo.done).length}</strong>
+                    </div>
+                    <div>
+                      <span>Issues</span>
+                      <strong>{(activeNode.issues ?? []).filter((issue) => issue.status === 'open').length}</strong>
+                    </div>
+                    <div>
+                      <span>Analyses</span>
+                      <strong>{activeNode.analyses?.length ?? 0}</strong>
+                    </div>
+                  </div>
+                  <div className="janus-work-session__analysis">
+                    <span>Latest analysis</span>
+                    <p>{latestAnalysis?.result.summary || latestAnalysis?.error || 'Waiting for commit evidence.'}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="janus-status-text">{statusText}</div>
+              ) : (
+                <>
+                  <div className="levitation-wrapper">
+                    <div className={`janus-face-lg ${faceClass(mode)}`}>
+                      <div className="janus-eye-lg left-eye-lg" />
+                      <div className="janus-eye-lg right-eye-lg" />
+                    </div>
+                  </div>
+                  <div className="janus-status-text">{statusText}</div>
+                </>
+              )}
             </div>
 
             <JanusChat

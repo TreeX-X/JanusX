@@ -75,8 +75,14 @@ const ALLOWED_INVOKE_CHANNELS = [
   'blueprint:node:create',
   'blueprint:node:update',
   'blueprint:node:delete',
+  'blueprint:node:features',
+  'blueprint:node:feature:add',
+  'blueprint:node:feature:update',
+  'blueprint:node:feature:delete',
+  'janus:node:focus',
   'janus:terminal:bind',
   'janus:analyzer:analyze',
+  'janus:analyzer:apply-patch',
   'janus:analyzer:accept-discovered',
 ]
 

@@ -10,6 +10,14 @@ import { useEffect, useState } from 'react'
 import './blueprint.css'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
+import {
+  acceptDiscovered,
+  onAnalysisResult,
+  onDiscovered,
+  type DiscoveredRequirement,
+  type IslandAnalysisEvent,
+  type IslandDiscoveredEvent
+} from '@/services/blueprint'
 import { BlueprintCanvas } from './BlueprintCanvas'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
@@ -29,11 +37,32 @@ export function BlueprintView() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [analysisNotice, setAnalysisNotice] = useState<IslandAnalysisEvent | null>(null)
+  const [discoveredNotice, setDiscoveredNotice] = useState<IslandDiscoveredEvent | null>(null)
+  const [noticeError, setNoticeError] = useState<string | null>(null)
 
   // 拉取全局蓝图列表
   useEffect(() => {
     loadBlueprints(activeWorkspace?.path)
   }, [activeWorkspace?.path, loadBlueprints])
+
+  useEffect(() => {
+    const unsubscribeAnalysis = onAnalysisResult((event) => {
+      setAnalysisNotice(event)
+      const current = useBlueprintStore.getState().currentBlueprint
+      if (current?.id === event.blueprintId) {
+        useBlueprintStore.getState().refreshAfterAnalysis()
+      }
+    })
+    const unsubscribeDiscovered = onDiscovered((event) => {
+      setDiscoveredNotice(event)
+      setNoticeError(null)
+    })
+    return () => {
+      unsubscribeAnalysis()
+      unsubscribeDiscovered()
+    }
+  }, [])
 
   // 列表到达后默认选中第一个
   useEffect(() => {
@@ -77,6 +106,39 @@ export function BlueprintView() {
     if (next) loadBlueprint(next.id)
   }
 
+  const handleAcceptDiscovered = async (requirement: DiscoveredRequirement, index: number) => {
+    if (!discoveredNotice) return
+    setNoticeError(null)
+    try {
+      const created = await acceptDiscovered({
+        workspacePath: discoveredNotice.workspacePath,
+        blueprintId: discoveredNotice.blueprintId,
+        discovered: requirement,
+        fallbackNodeId: discoveredNotice.nodeId
+      })
+      if (!created) {
+        setNoticeError('添加失败：未找到目标蓝图或父节点')
+        return
+      }
+      await loadBlueprint(discoveredNotice.blueprintId)
+      setDiscoveredNotice((current) => {
+        if (!current) return null
+        const next = current.discovered.filter((_, i) => i !== index)
+        return next.length ? { ...current, discovered: next } : null
+      })
+    } catch (err) {
+      setNoticeError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleIgnoreDiscovered = (index: number) => {
+    setDiscoveredNotice((current) => {
+      if (!current) return null
+      const next = current.discovered.filter((_, i) => i !== index)
+      return next.length ? { ...current, discovered: next } : null
+    })
+  }
+
   return (
     <div className="blueprint-view">
       {/* 顶部：选择 / 新建 */}
@@ -102,6 +164,45 @@ export function BlueprintView() {
         {loading ? <span className="blueprint-toolbar__loading">加载中…</span> : null}
         {error ? <span className="blueprint-toolbar__error">{error}</span> : null}
       </div>
+
+      {(analysisNotice || discoveredNotice) ? (
+        <div className="bp-janus-notices" aria-live="polite">
+          {analysisNotice ? (
+            <div className="bp-janus-notice">
+              <div>
+                <div className="bp-janus-notice__title">
+                  {analysisNotice.applied ? 'Janus 分析完成' : 'Janus 分析未应用'}
+                </div>
+                <div className="bp-janus-notice__body">
+                  {analysisNotice.nodeTitle} · {analysisNotice.result.summary || analysisNotice.error || '无摘要'}
+                </div>
+              </div>
+              <button className="bp-janus-notice__close" onClick={() => setAnalysisNotice(null)}>关闭</button>
+            </div>
+          ) : null}
+
+          {discoveredNotice ? (
+            <div className="bp-janus-notice bp-janus-notice--discovered">
+              <div className="bp-janus-notice__title">发现新需求 · {discoveredNotice.nodeTitle}</div>
+              <div className="bp-janus-requirements">
+                {discoveredNotice.discovered.map((requirement, index) => (
+                  <div className="bp-janus-requirement" key={`${requirement.title}-${index}`}>
+                    <div>
+                      <strong>{requirement.title}</strong>
+                      <span>{requirement.description}</span>
+                    </div>
+                    <div className="bp-janus-requirement__actions">
+                      <button onClick={() => handleAcceptDiscovered(requirement, index)}>添加到蓝图</button>
+                      <button onClick={() => handleIgnoreDiscovered(index)}>忽略</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {noticeError ? <div className="bp-janus-notice__error">{noticeError}</div> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* 画布 */}
       {currentBlueprint ? (

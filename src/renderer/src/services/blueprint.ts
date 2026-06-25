@@ -73,6 +73,12 @@ export interface AnalyzerAnalyzePayload {
   trigger?: AnalysisTrigger
 }
 
+/** janus:node:focus 入参 */
+export interface FocusNodePayload {
+  workspacePath: string
+  nodeId: string
+}
+
 /** janus:analyzer:accept-discovered 入参 */
 export interface AcceptDiscoveredPayload {
   workspacePath: string
@@ -90,6 +96,8 @@ export type FeatureItemInput = Partial<BlueprintFeatureItem> & { title: string }
    ════════════════════════════════════════════════════════════ */
 
 export interface IslandAnalysisEvent {
+  blueprintId: string
+  workspacePath: string
   nodeId: string
   nodeTitle: string
   applied: boolean
@@ -99,7 +107,10 @@ export interface IslandAnalysisEvent {
 }
 
 export interface IslandDiscoveredEvent {
+  blueprintId: string
+  workspacePath: string
   nodeId: string
+  nodeTitle: string
   discovered: DiscoveredRequirement[]
   createdAt: string
 }
@@ -259,11 +270,24 @@ export async function deleteNode(
 }
 
 /* ════════════════════════════════════════════════════════════
-   终端绑定（main §6.4）
+   节点协作会话 / 终端绑定（main §6.4）
    ════════════════════════════════════════════════════════════ */
 
 /**
- * 绑定 terminalId 到节点（节点「开始工作」入口）。
+ * 激活节点协作会话：设为当前 workspace 焦点并调度后台补漏分析。
+ * 不创建终端，不注入上下文。
+ * @main `janus:node:focus` handler(`_e, cwd, nodeId`)
+ */
+export async function focusNode(payload: FocusNodePayload): Promise<BlueprintNode | null> {
+  return window.electron.invoke(
+    'janus:node:focus',
+    payload.workspacePath,
+    payload.nodeId
+  ) as Promise<BlueprintNode | null>
+}
+
+/**
+ * 绑定 terminalId 到节点（用户显式进入终端入口）。
  * @main `janus:terminal:bind` handler(`_e, cwd, nodeId, terminalId`)
  */
 export async function bindTerminal(

@@ -536,7 +536,6 @@ class BlueprintStore {
         requirementNotes?: string[]
       }>
       newFeatureRequirements?: Array<{ title: string; description: string }>
-      discoveredRequirements?: AnalysisResult['discoveredRequirements']
     }
   ): Promise<BlueprintNode | null> {
     const bp = await this.loadBlueprint(workspace, blueprintId)
@@ -570,16 +569,6 @@ class BlueprintStore {
         featureTitles.add(key)
       }
     }
-    if (patch.discoveredRequirements?.length) {
-      for (const req of patch.discoveredRequirements) {
-        node.todos.push({
-          id: randomUUID(),
-          text: `${req.title}${req.description ? `：${req.description}` : ''}`,
-          done: false,
-          createdAt: nowIso()
-        })
-      }
-    }
     node.updatedAt = nowIso()
     bp.updatedAt = nowIso()
     await writeJson(blueprintFile(blueprintId), bp)
@@ -611,6 +600,13 @@ class BlueprintStore {
     idx.focusedNodeByWorkspace ??= {}
     idx.focusedNodeByWorkspace[workspace] = nodeId
     await this.saveIndex(workspace)
+  }
+
+  async focusNode(workspace: string, nodeId: string): Promise<BlueprintNode | null> {
+    const found = await this.findNode(workspace, nodeId)
+    if (!found) return null
+    await this.setFocusedNodeId(workspace, nodeId)
+    return found.node
   }
 
   async bindTerminal(

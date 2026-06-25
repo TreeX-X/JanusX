@@ -702,6 +702,142 @@ body.is-running {
   transition: box-shadow 0.5s;
 }
 
+.janus-crt--session {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 14px;
+}
+
+.janus-work-session {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'SF Mono', monospace;
+}
+
+.janus-work-session__eyebrow {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--janus-current);
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+}
+
+.janus-work-session__title {
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.janus-work-session__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.janus-work-session__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.janus-work-session__progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.janus-work-session__progress-head strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.janus-work-session__bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.janus-work-session__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.janus-work-session__progress em {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.42);
+  font-style: normal;
+}
+
+.janus-work-session__block,
+.janus-work-session__analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.janus-work-session__block span,
+.janus-work-session__analysis span,
+.janus-work-session__grid span {
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.44);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.janus-work-session__block p,
+.janus-work-session__analysis p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.janus-work-session__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.janus-work-session__grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.janus-work-session__grid strong {
+  color: #fff;
+  font-size: 14px;
+}
+
 @media (max-width: 900px) {
   .janus-expanded[data-stage="expanded"] {
     width: min(calc(100vw - 24px), 720px);

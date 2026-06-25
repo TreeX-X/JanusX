@@ -2,7 +2,8 @@
  * @file Janus / Blueprint IPC Handlers
  * @description
  *  - 蓝图 CRUD（§6.1）与节点操作（§6.2）。
- *  - janus:terminal:bind（§6.4，节点"开始工作"→设焦点 + 绑 terminalId）。
+ *  - janus:node:focus（§6.4，节点"开始工作"→设焦点 + 调度后台分析）。
+ *  - janus:terminal:bind（§6.4，显式进入终端时设焦点 + 绑 terminalId）。
  *  - janus:analyzer:analyze（手动触发，入口③）。
  *  - janus:analyzer:accept-discovered（接受新需求提议 → 在 suggestedParent 下建子节点，§5.5 闭环）。
  *  - 分析完成后主进程发 janus:island:analysis / janus:island:discovered（渲染侧接线为 follow-up）。
@@ -11,7 +12,12 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { blueprintStore } from '../janus/blueprint-store'
 import { analyzer } from '../janus/analyzer'
-import type { BlueprintNode, BlueprintNodeType, DiscoveredRequirement } from '../janus/types'
+import type {
+  BlueprintFeatureStatus,
+  BlueprintNode,
+  BlueprintNodeType,
+  DiscoveredRequirement
+} from '../janus/types'
 
 export function registerJanusHandlers(mainWindow: BrowserWindow): void {
   analyzer.setMainWindow(mainWindow)
@@ -75,7 +81,13 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
       cwd: string,
       blueprintId: string,
       nodeId: string,
-      features: Array<{ title: string; description?: string; progress?: number; status?: string; requirementNotes?: string[] }>
+      features: Array<{
+        title: string
+        description?: string
+        progress?: number
+        status?: BlueprintFeatureStatus
+        requirementNotes?: string[]
+      }>
     ) => {
       return blueprintStore.patchNodeFeatures(cwd, blueprintId, nodeId, features)
     }
@@ -88,7 +100,13 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
       cwd: string,
       blueprintId: string,
       nodeId: string,
-      feature: { title: string; description?: string; progress?: number; status?: string; requirementNotes?: string[] }
+      feature: {
+        title: string
+        description?: string
+        progress?: number
+        status?: BlueprintFeatureStatus
+        requirementNotes?: string[]
+      }
     ) => {
       return blueprintStore.appendNodeFeature(cwd, blueprintId, nodeId, feature)
     }
@@ -102,7 +120,13 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
       blueprintId: string,
       nodeId: string,
       featureId: string,
-      patch: { title?: string; description?: string; progress?: number; status?: string; requirementNotes?: string[] }
+      patch: {
+        title?: string
+        description?: string
+        progress?: number
+        status?: BlueprintFeatureStatus
+        requirementNotes?: string[]
+      }
     ) => {
       return blueprintStore.updateNodeFeature(cwd, blueprintId, nodeId, featureId, patch)
     }
@@ -122,7 +146,19 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
     }
   )
 
-  // ───────────── 终端绑定 / 焦点（§6.4） ─────────────
+  // ───────────── 节点协作会话 / 终端绑定（§6.4） ─────────────
+  ipcMain.handle(
+    'janus:node:focus',
+    async (_e, cwd: string, nodeId: string) => {
+      const node = await blueprintStore.focusNode(cwd, nodeId)
+      if (node) {
+        analyzer.registerNodeWorkspace(node.id, cwd)
+        analyzer.scheduleAnalyze(node.id, { workspacePath: cwd, trigger: 'reconcile' })
+      }
+      return node
+    }
+  )
+
   ipcMain.handle(
     'janus:terminal:bind',
     async (_e, cwd: string, nodeId: string, terminalId: string) => {
@@ -162,12 +198,11 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
           featureUpdates?: Array<{
             featureId: string
             progress?: number
-            status?: string
+            status?: BlueprintFeatureStatus
             description?: string
             requirementNotes?: string[]
           }>
           newFeatureRequirements?: Array<{ title: string; description: string }>
-          discoveredRequirements?: Array<{ title: string; description: string; suggestedParent: string; confidence: number }>
         }
       }
     ) => {

@@ -114,7 +114,7 @@ interface Segment {
 const ANALYZER_DUTY = `
 
 【分析子系统职责】
-你现在作为 Janus 的分析子系统运行。你将对照蓝图节点的预期（positioning / description / techSolution / features / todos / issues）与实际 commit 变更，产出结构化判断：
+你现在作为 Janus 的分析子系统运行。你将对照蓝图节点的预期（positioning / techSolution / requirement features / issues）与实际 commit 变更，产出结构化判断：
 - progress：0-100，按已完成的预期工作量占比估算。
 - status：从 not-started / planning / in-progress / testing / bug-fixing / blocked / paused / done / archived 中选择最贴切的当前状态。
 - summary：一句话概括本次变更相对预期的进展。
@@ -122,8 +122,8 @@ const ANALYZER_DUTY = `
 - evidence：支撑判断的具体证据（文件路径 / commit / 代码要点）。
 - unresolved：仍存疑或未完成的事项。
 - discoveredRequirements：预期之外、由本次变更新暴露出的需求提议（仅提议，不执行），suggestedParent 为建议挂载的父节点标题。
- - featureUpdates：对已有功能点的受控更新，只允许更新 featureId 对应条目的 progress/status/description/requirementNotes。
- - newFeatureRequirements：新增功能需求提议，按结构化条目输出，不要直接改写整段 description。
+ - featureUpdates：对已有需求项的受控更新，只允许更新 featureId 对应条目的 progress/status/description/requirementNotes。不要改写定位和技术方案。
+ - newFeatureRequirements：新增需求项提议，按结构化条目输出，不要直接改写整段 description。
 规则：只提议不执行；对置信度保守；不要编造证据；信息不足以判断时 confidence 取低值并据实说明。`
 
 export function getAnalysisSystemPrompt(): string {
@@ -185,8 +185,13 @@ function splitDiffByFile(diff: string): string[] {
 }
 
 function buildUserMessage(node: BlueprintNode, segment: Segment): string {
-  const todos = node.todos.length
-    ? node.todos.map((t) => `${t.done ? '[x]' : '[ ]'} ${t.text}`).join('\n')
+  const requirements = node.features.length
+    ? node.features
+        .map((feature) => {
+          const notes = feature.requirementNotes.length ? ` | 评估备注：${feature.requirementNotes.join('；')}` : ''
+          return `- ${feature.title} [${feature.status}, ${feature.progress}%]：${feature.description || '（无描述）'}${notes}`
+        })
+        .join('\n')
     : '（无）'
   const issues = node.issues.length
     ? node.issues.map((i) => `- [${i.severity}] ${i.title} (${i.status})`).join('\n')
@@ -199,10 +204,10 @@ function buildUserMessage(node: BlueprintNode, segment: Segment): string {
   return `【蓝图节点预期】
 标题：${node.title}
 定位：${node.positioning || '（未填）'}
-描述：${node.description || '（未填）'}
 技术方案：${node.techSolution || '（未填）'}
-待办：
-${todos}
+旧版节点描述（仅兼容参考）：${node.description || '（无）'}
+需求项：
+${requirements}
 问题：
 ${issues}
 
@@ -229,14 +234,18 @@ function mergeSegments(
       confidence: 0,
       evidence: [],
       unresolved: [],
-      discoveredRequirements: []
+      discoveredRequirements: [],
+      featureUpdates: [],
+      newFeatureRequirements: []
     }
   }
   if (results.length === 1) {
     return {
       schemaVersion: ANALYSIS_SCHEMA_VERSION,
       ...results[0].result,
-      discoveredRequirements: results[0].result.discoveredRequirements ?? []
+      discoveredRequirements: results[0].result.discoveredRequirements ?? [],
+      featureUpdates: results[0].result.featureUpdates ?? [],
+      newFeatureRequirements: results[0].result.newFeatureRequirements ?? []
     }
   }
 
@@ -473,7 +482,7 @@ class JanusAnalyzer {
         actual: `待分析 commit：${commits.length} 个`
       }, null, 'no-default-llm')
       await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
-      this.emitAnalysis(analysis, node)
+      this.emitAnalysis(analysis, node, blueprintId, workspace)
       return analysis
     }
 
@@ -509,7 +518,7 @@ class JanusAnalyzer {
         errors.join('; ') || 'all-segments-failed'
       )
       await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
-      this.emitAnalysis(analysis, node)
+      this.emitAnalysis(analysis, node, blueprintId, workspace)
       return analysis
     }
 
@@ -539,16 +548,15 @@ class JanusAnalyzer {
         progress: analysis.result.progress,
         status: analysis.result.status,
         featureUpdates: analysis.result.featureUpdates,
-        newFeatureRequirements: analysis.result.newFeatureRequirements,
-        discoveredRequirements: analysis.result.discoveredRequirements
+        newFeatureRequirements: analysis.result.newFeatureRequirements
       })
     }
     await blueprintStore.setCursor(workspace, blueprintId, nodeId, lastSha)
 
     // ---- Island 通知 ----
-    this.emitAnalysis(analysis, node)
+    this.emitAnalysis(analysis, node, blueprintId, workspace)
     if (analysis.applied && merged.discoveredRequirements.length > 0) {
-      this.emitDiscovered(nodeId, merged.discoveredRequirements)
+      this.emitDiscovered(blueprintId, workspace, node, merged.discoveredRequirements)
     }
 
     return analysis
@@ -585,9 +593,16 @@ class JanusAnalyzer {
     }
   }
 
-  private emitAnalysis(analysis: BlueprintAnalysis, node: BlueprintNode): void {
+  private emitAnalysis(
+    analysis: BlueprintAnalysis,
+    node: BlueprintNode,
+    blueprintId: string,
+    workspacePath: string
+  ): void {
     try {
       this.mainWindow?.webContents.send('janus:island:analysis', {
+        blueprintId,
+        workspacePath,
         nodeId: analysis.nodeId,
         nodeTitle: node.title,
         applied: analysis.applied,
@@ -601,12 +616,17 @@ class JanusAnalyzer {
   }
 
   private emitDiscovered(
-    nodeId: string,
+    blueprintId: string,
+    workspacePath: string,
+    node: BlueprintNode,
     discovered: AnalysisResult['discoveredRequirements']
   ): void {
     try {
       this.mainWindow?.webContents.send('janus:island:discovered', {
-        nodeId,
+        blueprintId,
+        workspacePath,
+        nodeId: node.id,
+        nodeTitle: node.title,
         discovered,
         createdAt: new Date().toISOString()
       })
@@ -625,9 +645,8 @@ function summarizeBlueprint(node: BlueprintNode): string {
   return [
     `标题：${node.title}`,
     `定位：${node.positioning}`,
-    `描述：${node.description}`,
     `技术方案：${node.techSolution}`,
-    `待办：${node.todos.length} 项（完成 ${node.todos.filter((t) => t.done).length}）`,
+    `需求项：${node.features.length} 项（完成 ${node.features.filter((feature) => feature.status === 'done').length}）`,
     `问题：${node.issues.length} 项`
   ].join('\n')
 }
