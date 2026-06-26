@@ -15,7 +15,9 @@ import type {
   BlueprintNodeType,
   AnalysisTrigger,
   DiscoveredRequirement,
-  BlueprintFeatureItem
+  BlueprintFeatureItem,
+  BlueprintRequirementCandidate,
+  BlueprintRequirementCandidateStatus
 } from '../../../main/janus/types'
 
 /* ════════════════════════════════════════════════════════════
@@ -38,7 +40,9 @@ export type {
   AnalysisResult,
   AnalysisInputSummary,
   DiscoveredRequirement,
-  BlueprintFeatureItem
+  BlueprintFeatureItem,
+  BlueprintRequirementCandidate,
+  BlueprintRequirementCandidateStatus
 } from '../../../main/janus/types'
 
 /* ════════════════════════════════════════════════════════════
@@ -99,6 +103,29 @@ export interface ApplyAnalysisPayload extends AnalysisHistoryPayload {
   analysisId: string
 }
 
+export interface ListCandidatesPayload {
+  workspacePath: string
+  blueprintId: string
+  status?: BlueprintRequirementCandidateStatus
+}
+
+export interface AcceptCandidatePayload {
+  workspacePath: string
+  blueprintId: string
+  candidateId: string
+  title?: string
+  description?: string
+  parentId?: string
+  decisionNote?: string
+}
+
+export interface RejectCandidatePayload {
+  workspacePath: string
+  blueprintId: string
+  candidateId: string
+  decisionNote?: string
+}
+
 export type FeatureItemInput = Partial<BlueprintFeatureItem> & { title: string }
 
 /* ════════════════════════════════════════════════════════════
@@ -122,6 +149,8 @@ export interface IslandDiscoveredEvent {
   workspacePath: string
   nodeId: string
   nodeTitle: string
+  candidateIds?: string[]
+  requirements?: BlueprintRequirementCandidate[]
   discovered: DiscoveredRequirement[]
   createdAt: string
 }
@@ -349,6 +378,28 @@ export async function listAnalyses(payload: AnalysisHistoryPayload): Promise<Blu
 
 export async function applyAnalysis(payload: ApplyAnalysisPayload): Promise<BlueprintNode | null> {
   return window.electron.invoke('janus:analysis:apply', payload) as Promise<BlueprintNode | null>
+}
+
+export async function listRequirementCandidates(
+  payload: ListCandidatesPayload
+): Promise<BlueprintRequirementCandidate[]> {
+  return window.electron.invoke('janus:requirements:list-candidates', payload) as Promise<
+    BlueprintRequirementCandidate[]
+  >
+}
+
+export async function acceptRequirementCandidate(
+  payload: AcceptCandidatePayload
+): Promise<BlueprintNode | null> {
+  return window.electron.invoke('janus:requirements:accept-candidate', payload) as Promise<BlueprintNode | null>
+}
+
+export async function rejectRequirementCandidate(
+  payload: RejectCandidatePayload
+): Promise<BlueprintRequirementCandidate | null> {
+  return window.electron.invoke('janus:requirements:reject-candidate', payload) as Promise<
+    BlueprintRequirementCandidate | null
+  >
 }
 
 /* ════════════════════════════════════════════════════════════

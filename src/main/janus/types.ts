@@ -95,6 +95,26 @@ export interface DiscoveredRequirement {
   confidence: number
 }
 
+export type BlueprintRequirementCandidateStatus = 'pending' | 'accepted' | 'rejected'
+
+export interface BlueprintRequirementCandidate {
+  id: string
+  blueprintId: string
+  sourceNodeId: string
+  sourceAnalysisId: string
+  title: string
+  description: string
+  suggestedParentId?: string
+  suggestedParentTitle?: string
+  confidence: number
+  status: BlueprintRequirementCandidateStatus
+  acceptedNodeId?: string
+  decisionNote?: string
+  evidence: string[]
+  createdAt: string
+  decidedAt?: string
+}
+
 /** 单次 LLM 分析产出的结构化结果 */
 export interface AnalysisResult {
   schemaVersion: number
@@ -183,6 +203,7 @@ export interface Blueprint {
   rootNodeId: string
   nodeIds: string[]
   nodes: Record<string, BlueprintNode>
+  requirementCandidates: BlueprintRequirementCandidate[]
   mountedTo: string | null
   canvasLayout: Record<string, { x: number; y: number }>
   createdAt: string

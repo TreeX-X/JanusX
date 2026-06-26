@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { chatStream, type ChatMessage } from '@/services/llm'
+import { useStreamingPrinter } from './useStreamingPrinter'
 
 export interface Message {
   id: string
@@ -28,27 +29,51 @@ const SYSTEM_PROMPT = window.electron.janusPersona
 
 export function useJanusChat(): UseJanusChatReturn {
   const [messages, setMessages] = useState<Message[]>([])
-  const [pendingContent, setPendingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const {
+    output: printedContent,
+    append: appendToPrinter,
+    complete: completePrinter,
+    flush: flushPrinter,
+    reset: resetPrinter
+  } = useStreamingPrinter()
 
   const messagesRef = useRef(messages)
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
 
-  useEffect(() => {
-    console.log('[JanusChat] messages updated, count:', messages.length)
-  }, [messages])
-
   const abortRef = useRef<(() => void) | null>(null)
-  // 流式文本的唯一累积真值源；pendingContent 只是它的渲染镜像
-  const streamAccRef = useRef('')
+  const streamIdRef = useRef(0)
 
-  const stop = useCallback(() => {
+  const abortCurrentRequest = useCallback(() => {
     abortRef.current?.()
     abortRef.current = null
   }, [])
+
+  const commitAssistantMessage = useCallback((content: string) => {
+    if (!content.trim()) return
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content,
+        timestamp: Date.now()
+      }
+    ])
+  }, [])
+
+  const stop = useCallback(() => {
+    if (!isStreaming && !abortRef.current) return
+    streamIdRef.current += 1
+    abortCurrentRequest()
+    const final = flushPrinter()
+    resetPrinter()
+    setIsStreaming(false)
+    commitAssistantMessage(final)
+  }, [abortCurrentRequest, commitAssistantMessage, flushPrinter, isStreaming, resetPrinter])
 
   const send = useCallback(
     (text: string) => {
@@ -63,10 +88,11 @@ export function useJanusChat(): UseJanusChatReturn {
       }
 
       setMessages((prev) => [...prev, userMessage])
-      setPendingContent('')
+      const streamId = streamIdRef.current + 1
+      streamIdRef.current = streamId
+      resetPrinter()
       setIsStreaming(true)
       setError(null)
-      streamAccRef.current = ''
 
       const chatMessages: ChatMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -80,69 +106,31 @@ export function useJanusChat(): UseJanusChatReturn {
       const { abort } = chatStream(
         chatMessages,
         (delta) => {
-          // 写入唯一真值源，再镜像到 state 供渲染预览
-          streamAccRef.current += delta
-          setPendingContent(streamAccRef.current)
-          console.log(
-            '[JanusChat] delta len:',
-            delta.length,
-            'total:',
-            streamAccRef.current.length,
-            'preview:',
-            delta.slice(0, 50)
-          )
+          appendToPrinter(delta)
         },
         () => {
           abortRef.current = null
-          setIsStreaming(false)
-          // 从稳定 ref 读取最终文本，避免闭包局部变量在批处理/重渲染下失步
-          const final = streamAccRef.current
-          streamAccRef.current = ''
-          setPendingContent('')
-          console.log(
-            '[JanusChat] stream done, final length:',
-            final.length,
-            'trimmed:',
-            final.trim().length
-          )
-          console.log('[JanusChat] pendingContent cleared/reason: stream done')
-          if (final.trim()) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `assistant-${Date.now()}`,
-                role: 'assistant',
-                content: final,
-                timestamp: Date.now()
-              }
-            ])
-          }
+          void completePrinter().then((final) => {
+            if (streamIdRef.current !== streamId) return
+            setIsStreaming(false)
+            resetPrinter()
+            commitAssistantMessage(final)
+          })
         },
         (err) => {
+          if (streamIdRef.current !== streamId) return
           abortRef.current = null
           setIsStreaming(false)
-          const final = streamAccRef.current
-          streamAccRef.current = ''
-          setPendingContent('')
-          console.error('[JanusChat] pendingContent cleared/reason: error', err)
-          if (final.trim()) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `assistant-${Date.now()}`,
-                role: 'assistant',
-                content: final,
-                timestamp: Date.now()
-              }
-            ])
-          }
+          const final = flushPrinter()
+          resetPrinter()
+          commitAssistantMessage(final)
           setError(err)
         }
       )
 
       abortRef.current = abort
     },
-    [isStreaming]
+    [appendToPrinter, commitAssistantMessage, completePrinter, flushPrinter, isStreaming, resetPrinter]
   )
 
   const retry = useCallback(() => {
@@ -153,14 +141,13 @@ export function useJanusChat(): UseJanusChatReturn {
   }, [send])
 
   const clear = useCallback(() => {
-    stop()
+    streamIdRef.current += 1
+    abortCurrentRequest()
     setMessages([])
-    setPendingContent('')
-    streamAccRef.current = ''
+    resetPrinter()
     setIsStreaming(false)
     setError(null)
-    console.log('[JanusChat] pendingContent cleared/reason: clear chat')
-  }, [stop])
+  }, [abortCurrentRequest, resetPrinter])
 
-  return { messages, pendingContent, isStreaming, error, send, stop, retry, clear }
+  return { messages, pendingContent: printedContent, isStreaming, error, send, stop, retry, clear }
 }

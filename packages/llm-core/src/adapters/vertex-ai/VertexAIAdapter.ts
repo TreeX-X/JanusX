@@ -12,6 +12,7 @@ import { validateVertexAISettings } from '../../utils/validation'
 import { ModelCreationError, wrapError } from '../../utils/errors'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { getProxyManager } from '../../utils/proxy'
+import { withAiSdkV1StreamCompatibility } from '../../utils/stream-compat'
 
 /**
  * 规范化 PEM 私钥格式
@@ -115,7 +116,7 @@ export class VertexAIAdapter implements ProviderExtension {
       }
 
       const vertex = createVertex(vertexOptions)
-      return vertex(modelId) as any
+      return withAiSdkV1StreamCompatibility(vertex(modelId) as any)
     } catch (error) {
       throw new ModelCreationError(
         this.id,

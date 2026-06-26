@@ -1625,6 +1625,10 @@ body.is-running {
   align-self: flex-start;
 }
 
+.janus-chat-message.streaming {
+  animation: message-in 0.18s ease-out;
+}
+
 .janus-chat-message-content {
   padding: 6px 10px;
   border-radius: 12px;
@@ -1645,6 +1649,28 @@ body.is-running {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.05);
   color: #aaa;
+}
+
+.janus-chat-streaming-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.janus-chat-streaming-cursor {
+  display: inline-block;
+  width: 5px;
+  height: 1.15em;
+  margin-left: 1px;
+  vertical-align: -0.18em;
+  background: var(--accent-color, var(--janus-current));
+  box-shadow: 0 0 8px var(--janus-current-glow);
+  animation: janus-stream-cursor 0.95s steps(2, start) infinite;
+}
+
+@keyframes janus-stream-cursor {
+  0%, 45% { opacity: 0.95; }
+  46%, 100% { opacity: 0; }
 }
 
 /* 加载动画 */

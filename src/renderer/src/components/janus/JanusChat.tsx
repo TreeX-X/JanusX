@@ -77,6 +77,15 @@ function MarkdownContent({ content }: { content: string }) {
   )
 }
 
+function StreamingText({ content }: { content: string }) {
+  return (
+    <div className="janus-chat-streaming-text">
+      {content}
+      <span className="janus-chat-streaming-cursor" aria-hidden="true" />
+    </div>
+  )
+}
+
 /* ════════════════════════════════════════════════════════════
    JanusChat 组件
    ════════════════════════════════════════════════════════════ */
@@ -126,7 +135,7 @@ export function JanusChat({
   // 消息/流式内容变化时自动滚动（仅当用户已在底部）
   useEffect(() => {
     if (isAtBottomRef.current) {
-      scrollToBottom('smooth')
+      scrollToBottom(pendingContent ? 'auto' : 'smooth')
     } else {
       setShowNewMessageBadge(true)
     }
@@ -234,10 +243,10 @@ export function JanusChat({
         ))}
 
         {(isStreaming || pendingContent) && (
-          <div className="janus-chat-message assistant">
+          <div className="janus-chat-message assistant streaming">
             <div className="janus-chat-message-content">
               {pendingContent ? (
-                <MarkdownContent content={pendingContent} />
+                <StreamingText content={pendingContent} />
               ) : (
                 <div className="janus-chat-loading">
                   <span className="janus-chat-dot" />

@@ -6,21 +6,38 @@
  *  样式见 ./blueprint.css。
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import './blueprint.css'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import {
-  acceptDiscovered,
+  acceptRequirementCandidate,
+  listRequirementCandidates,
   onAnalysisResult,
   onDiscovered,
-  type DiscoveredRequirement,
+  rejectRequirementCandidate,
+  type BlueprintRequirementCandidate,
+  type BlueprintRequirementCandidateStatus,
   type IslandAnalysisEvent,
   type IslandDiscoveredEvent
 } from '@/services/blueprint'
 import { BlueprintCanvas } from './BlueprintCanvas'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
+
+const GLOBAL_BLUEPRINT_SCOPE = '__global__'
+
+const CANDIDATE_STATUS_LABEL: Record<BlueprintRequirementCandidateStatus, string> = {
+  pending: '待确认',
+  accepted: '已接受',
+  rejected: '已拒绝'
+}
+
+interface CandidateDraft {
+  title: string
+  description: string
+  parentId: string
+}
 
 export function BlueprintView() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -39,7 +56,72 @@ export function BlueprintView() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [analysisNotice, setAnalysisNotice] = useState<IslandAnalysisEvent | null>(null)
   const [discoveredNotice, setDiscoveredNotice] = useState<IslandDiscoveredEvent | null>(null)
+  const [candidateStatus, setCandidateStatus] = useState<BlueprintRequirementCandidateStatus>('pending')
+  const [candidates, setCandidates] = useState<BlueprintRequirementCandidate[]>([])
+  const [candidateDrafts, setCandidateDrafts] = useState<Record<string, CandidateDraft>>({})
+  const [candidateLoading, setCandidateLoading] = useState(false)
   const [noticeError, setNoticeError] = useState<string | null>(null)
+
+  const loadCandidates = useCallback(
+    async (
+      blueprintId = selectedId,
+      status = candidateStatus,
+      workspacePath = activeWorkspace?.path ?? GLOBAL_BLUEPRINT_SCOPE
+    ) => {
+      if (!blueprintId) {
+        setCandidates([])
+        return
+      }
+      setCandidateLoading(true)
+      setNoticeError(null)
+      try {
+        const list = await listRequirementCandidates({ workspacePath, blueprintId, status })
+        setCandidates(list)
+        setCandidateDrafts((current) => {
+          const next = { ...current }
+          for (const candidate of list) {
+            if (!next[candidate.id]) {
+              next[candidate.id] = {
+                title: candidate.title,
+                description: candidate.description,
+                parentId: candidate.suggestedParentId ?? ''
+              }
+            }
+          }
+          return next
+        })
+      } catch (err) {
+        setNoticeError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setCandidateLoading(false)
+      }
+    },
+    [activeWorkspace?.path, candidateStatus, selectedId]
+  )
+
+  const updateCandidateDraft = useCallback((candidateId: string, patch: Partial<CandidateDraft>) => {
+    setCandidateDrafts((current) => {
+      const previous = current[candidateId] ?? { title: '', description: '', parentId: '' }
+      return {
+        ...current,
+        [candidateId]: {
+          ...previous,
+          ...patch
+        }
+      }
+    })
+  }, [])
+
+  const getCandidateWorkspacePath = useCallback(
+    (candidate: BlueprintRequirementCandidate): string => {
+      const sourceNode = currentBlueprint?.nodes[candidate.sourceNodeId]
+      const workspace = sourceNode?.workspaceId
+        ? workspaces.find((item) => item.id === sourceNode.workspaceId)
+        : null
+      return workspace?.path ?? activeWorkspace?.path ?? GLOBAL_BLUEPRINT_SCOPE
+    },
+    [activeWorkspace?.path, currentBlueprint, workspaces]
+  )
 
   // 拉取全局蓝图列表
   useEffect(() => {
@@ -57,12 +139,14 @@ export function BlueprintView() {
     const unsubscribeDiscovered = onDiscovered((event) => {
       setDiscoveredNotice(event)
       setNoticeError(null)
+      setCandidateStatus('pending')
+      void loadCandidates(event.blueprintId, 'pending', event.workspacePath)
     })
     return () => {
       unsubscribeAnalysis()
       unsubscribeDiscovered()
     }
-  }, [])
+  }, [loadCandidates])
 
   // 列表到达后默认选中第一个
   useEffect(() => {
@@ -77,6 +161,10 @@ export function BlueprintView() {
       if (next) loadBlueprint(next.id)
     }
   }, [blueprints, selectedId, loadBlueprint])
+
+  useEffect(() => {
+    void loadCandidates()
+  }, [loadCandidates])
 
   const handleSelect = (id: string) => {
     setSelectedId(id)
@@ -106,38 +194,67 @@ export function BlueprintView() {
     if (next) loadBlueprint(next.id)
   }
 
-  const handleAcceptDiscovered = async (requirement: DiscoveredRequirement, index: number) => {
-    if (!discoveredNotice) return
+  const handleAcceptCandidate = async (candidate: BlueprintRequirementCandidate) => {
+    const draft = candidateDrafts[candidate.id] ?? {
+      title: candidate.title,
+      description: candidate.description,
+      parentId: candidate.suggestedParentId ?? ''
+    }
+    const workspacePath = getCandidateWorkspacePath(candidate)
     setNoticeError(null)
     try {
-      const created = await acceptDiscovered({
-        workspacePath: discoveredNotice.workspacePath,
-        blueprintId: discoveredNotice.blueprintId,
-        discovered: requirement,
-        fallbackNodeId: discoveredNotice.nodeId
+      const created = await acceptRequirementCandidate({
+        workspacePath,
+        blueprintId: candidate.blueprintId,
+        candidateId: candidate.id,
+        title: draft.title,
+        description: draft.description,
+        parentId: draft.parentId || undefined
       })
       if (!created) {
-        setNoticeError('添加失败：未找到目标蓝图或父节点')
+        setNoticeError('接受失败：候选需求不存在或目标父节点无效')
         return
       }
-      await loadBlueprint(discoveredNotice.blueprintId)
-      setDiscoveredNotice((current) => {
-        if (!current) return null
-        const next = current.discovered.filter((_, i) => i !== index)
-        return next.length ? { ...current, discovered: next } : null
-      })
+      await loadBlueprint(candidate.blueprintId)
+      await loadCandidates(candidate.blueprintId, candidateStatus, workspacePath)
     } catch (err) {
       setNoticeError(err instanceof Error ? err.message : String(err))
     }
   }
 
-  const handleIgnoreDiscovered = (index: number) => {
-    setDiscoveredNotice((current) => {
-      if (!current) return null
-      const next = current.discovered.filter((_, i) => i !== index)
-      return next.length ? { ...current, discovered: next } : null
-    })
+  const handleRejectCandidate = async (candidate: BlueprintRequirementCandidate) => {
+    const workspacePath = getCandidateWorkspacePath(candidate)
+    setNoticeError(null)
+    try {
+      const rejected = await rejectRequirementCandidate({
+        workspacePath,
+        blueprintId: candidate.blueprintId,
+        candidateId: candidate.id
+      })
+      if (!rejected) {
+        setNoticeError('拒绝失败：候选需求不存在')
+        return
+      }
+      await loadCandidates(candidate.blueprintId, candidateStatus, workspacePath)
+    } catch (err) {
+      setNoticeError(err instanceof Error ? err.message : String(err))
+    }
   }
+
+  const candidateStatusOptions = (['pending', 'accepted', 'rejected'] as BlueprintRequirementCandidateStatus[]).map((status) => ({
+    value: status,
+    label: CANDIDATE_STATUS_LABEL[status]
+  }))
+
+  const candidateParentOptions = currentBlueprint
+    ? [
+        { value: '', label: '按建议父节点' },
+        ...currentBlueprint.nodeIds.map((nodeId) => ({
+          value: nodeId,
+          label: currentBlueprint.nodes[nodeId]?.title ?? nodeId
+        }))
+      ]
+    : [{ value: '', label: '按建议父节点' }]
 
   return (
     <div className="blueprint-view">
@@ -183,22 +300,108 @@ export function BlueprintView() {
 
           {discoveredNotice ? (
             <div className="bp-janus-notice bp-janus-notice--discovered">
-              <div className="bp-janus-notice__title">发现新需求 · {discoveredNotice.nodeTitle}</div>
-              <div className="bp-janus-requirements">
-                {discoveredNotice.discovered.map((requirement, index) => (
-                  <div className="bp-janus-requirement" key={`${requirement.title}-${index}`}>
-                    <div>
-                      <strong>{requirement.title}</strong>
-                      <span>{requirement.description}</span>
+              <div>
+                <div className="bp-janus-notice__title">候选需求已入库 · {discoveredNotice.nodeTitle}</div>
+                <div className="bp-janus-notice__body">
+                  {discoveredNotice.candidateIds?.length ?? discoveredNotice.discovered.length} 条候选已写入 Inbox
+                </div>
+              </div>
+              <button className="bp-janus-notice__close" onClick={() => setDiscoveredNotice(null)}>关闭</button>
+              {noticeError ? <div className="bp-janus-notice__error">{noticeError}</div> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {currentBlueprint ? (
+        <div className="bp-candidate-inbox">
+          <div className="bp-candidate-inbox__head">
+            <div>
+              <strong>候选需求 Inbox</strong>
+              <span>{candidateLoading ? '刷新中...' : `${candidates.length} 条${CANDIDATE_STATUS_LABEL[candidateStatus]}`}</span>
+            </div>
+            <div className="bp-candidate-inbox__tools">
+              <Select
+                value={candidateStatus}
+                onChange={(value) => setCandidateStatus(value as BlueprintRequirementCandidateStatus)}
+                options={candidateStatusOptions}
+                className="blueprint-select bp-candidate-inbox__select"
+              />
+              <button className="blueprint-btn" onClick={() => loadCandidates()} disabled={candidateLoading}>
+                刷新
+              </button>
+            </div>
+          </div>
+
+          {!candidateLoading && candidates.length === 0 ? (
+            <div className="bp-candidate-inbox__empty">暂无{CANDIDATE_STATUS_LABEL[candidateStatus]}候选</div>
+          ) : null}
+          {noticeError ? <div className="bp-candidate-inbox__error">{noticeError}</div> : null}
+
+          {candidates.length > 0 ? (
+            <div className="bp-candidate-list">
+              {candidates.map((candidate) => {
+                const draft = candidateDrafts[candidate.id] ?? {
+                  title: candidate.title,
+                  description: candidate.description,
+                  parentId: candidate.suggestedParentId ?? ''
+                }
+                const editable = candidate.status === 'pending'
+                const sourceNode = currentBlueprint.nodes[candidate.sourceNodeId]
+                return (
+                  <div className="bp-candidate-card" key={candidate.id}>
+                    <div className="bp-candidate-card__meta">
+                      <span>{CANDIDATE_STATUS_LABEL[candidate.status]}</span>
+                      <span>{Math.round(candidate.confidence * 100)}%</span>
+                      <span>来源：{sourceNode?.title ?? candidate.sourceNodeId}</span>
                     </div>
-                    <div className="bp-janus-requirement__actions">
-                      <button onClick={() => handleAcceptDiscovered(requirement, index)}>添加到蓝图</button>
-                      <button onClick={() => handleIgnoreDiscovered(index)}>忽略</button>
+
+                    {editable ? (
+                      <input
+                        className="bp-candidate-card__input"
+                        value={draft.title}
+                        onChange={(event) => updateCandidateDraft(candidate.id, { title: event.currentTarget.value })}
+                      />
+                    ) : (
+                      <strong className="bp-candidate-card__title">{candidate.title}</strong>
+                    )}
+
+                    {editable ? (
+                      <textarea
+                        className="bp-candidate-card__textarea"
+                        value={draft.description}
+                        onChange={(event) => updateCandidateDraft(candidate.id, { description: event.currentTarget.value })}
+                      />
+                    ) : (
+                      <p>{candidate.description}</p>
+                    )}
+
+                    <div className="bp-candidate-card__footer">
+                      <Select
+                        value={editable ? draft.parentId : candidate.suggestedParentId ?? ''}
+                        onChange={(value) => updateCandidateDraft(candidate.id, { parentId: value })}
+                        options={candidateParentOptions}
+                        disabled={!editable}
+                        className="blueprint-select bp-candidate-card__parent"
+                      />
+                      {editable ? (
+                        <div className="bp-candidate-card__actions">
+                          <button className="blueprint-btn blueprint-btn--primary" onClick={() => handleAcceptCandidate(candidate)}>
+                            接受
+                          </button>
+                          <button className="blueprint-btn" onClick={() => handleRejectCandidate(candidate)}>
+                            拒绝
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="bp-candidate-card__decision">
+                          {candidate.acceptedNodeId ? `节点 ${candidate.acceptedNodeId.slice(0, 8)}` : candidate.decisionNote || '已留痕'}
+                        </span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-              {noticeError ? <div className="bp-janus-notice__error">{noticeError}</div> : null}
+                )
+              })}
             </div>
           ) : null}
         </div>

@@ -16,6 +16,7 @@ import type {
 import { AuthType } from '../../core/types'
 import { validateApiKeySettings } from '../../utils/validation'
 import { ModelCreationError, wrapError } from '../../utils/errors'
+import { withAiSdkV1StreamCompatibility } from '../../utils/stream-compat'
 
 /* ════════════════════════════════════════════════════════════
    OpenAI Compatible Adapter 实现
@@ -76,7 +77,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       // 创建语言模型
       const model = openai(modelId) as any
 
-      return model
+      return withAiSdkV1StreamCompatibility(model)
     } catch (error) {
       throw new ModelCreationError(
         this.id,

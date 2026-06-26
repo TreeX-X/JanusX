@@ -16,6 +16,7 @@ import type {
   BlueprintFeatureStatus,
   BlueprintNode,
   BlueprintNodeType,
+  BlueprintRequirementCandidateStatus,
   DiscoveredRequirement
 } from '../janus/types'
 
@@ -208,7 +209,6 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
             description?: string
             requirementNotes?: string[]
           }>
-          newFeatureRequirements?: Array<{ title: string; description: string }>
         }
       }
     ) => {
@@ -242,6 +242,70 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
       }
     ) => {
       return blueprintStore.applyAnalysis(payload.workspacePath, payload.blueprintId, payload.nodeId, payload.analysisId)
+    }
+  )
+
+  ipcMain.handle(
+    'janus:requirements:list-candidates',
+    async (
+      _e,
+      payload: {
+        workspacePath: string
+        blueprintId: string
+        status?: BlueprintRequirementCandidateStatus
+      }
+    ) => {
+      return blueprintStore.listRequirementCandidates(payload.workspacePath, payload.blueprintId, payload.status)
+    }
+  )
+
+  ipcMain.handle(
+    'janus:requirements:accept-candidate',
+    async (
+      _e,
+      payload: {
+        workspacePath: string
+        blueprintId: string
+        candidateId: string
+        title?: string
+        description?: string
+        parentId?: string
+        decisionNote?: string
+      }
+    ) => {
+      const node = await blueprintStore.acceptRequirementCandidate(
+        payload.workspacePath,
+        payload.blueprintId,
+        payload.candidateId,
+        {
+          title: payload.title,
+          description: payload.description,
+          parentId: payload.parentId,
+          decisionNote: payload.decisionNote
+        }
+      )
+      if (node) analyzer.registerNodeWorkspace(node.id, payload.workspacePath)
+      return node
+    }
+  )
+
+  ipcMain.handle(
+    'janus:requirements:reject-candidate',
+    async (
+      _e,
+      payload: {
+        workspacePath: string
+        blueprintId: string
+        candidateId: string
+        decisionNote?: string
+      }
+    ) => {
+      return blueprintStore.rejectRequirementCandidate(
+        payload.workspacePath,
+        payload.blueprintId,
+        payload.candidateId,
+        payload.decisionNote
+      )
     }
   )
 

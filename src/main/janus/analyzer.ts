@@ -30,7 +30,8 @@ import {
   type BlueprintAnalysis,
   type BlueprintNode,
   type BlueprintNodeStatus,
-  type AnalysisTrigger
+  type AnalysisTrigger,
+  type BlueprintRequirementCandidate
 } from './types'
 
 /** 单 commit diff token 估算阈值（约 8K token；用字符数/3.5 估算，不打 LLM 数 token）。 */
@@ -130,7 +131,7 @@ const ANALYZER_DUTY = `
 - unresolved：仍存疑或未完成的事项。
 - discoveredRequirements：预期之外、由本次变更新暴露出的需求提议（仅提议，不执行），suggestedParent 为建议挂载的父节点标题。
  - featureUpdates：对已有需求项的受控更新，只允许更新 featureId 对应条目的 progress/status/description/requirementNotes。不要改写定位和技术方案。
- - newFeatureRequirements：新增需求项提议，按结构化条目输出，不要直接改写整段 description。
+ - newFeatureRequirements：当前节点内可能需要补充的新增需求项提议；同样只进入候选需求 Inbox，不能直接写入 features。
 规则：只提议不执行；对置信度保守；不要编造证据；信息不足以判断时 confidence 取低值并据实说明。`
 
 export function getAnalysisSystemPrompt(): string {
@@ -580,7 +581,7 @@ class JanusAnalyzer {
       }
     }
 
-    const lastSha = commits[commits.length - 1].hash
+    const lastSha = commits[0].hash
 
     if (segResults.length === 0) {
       // 全部段失败：留痕，不推进游标
@@ -621,16 +622,30 @@ class JanusAnalyzer {
       await blueprintStore.applyAnalysisPatch(workspace, blueprintId, nodeId, {
         progress: analysis.result.progress,
         status: analysis.result.status,
-        featureUpdates: analysis.result.featureUpdates,
-        newFeatureRequirements: analysis.result.newFeatureRequirements
+        featureUpdates: analysis.result.featureUpdates
       })
     }
+    const candidateRequirements = [
+      ...merged.discoveredRequirements,
+      ...merged.newFeatureRequirements
+    ]
+    const candidates =
+      analysis.applied && candidateRequirements.length > 0
+        ? await blueprintStore.upsertRequirementCandidates(
+            workspace,
+            blueprintId,
+            nodeId,
+            analysis.id,
+            candidateRequirements,
+            merged.evidence
+          )
+        : []
     await blueprintStore.setCursor(workspace, blueprintId, nodeId, lastSha)
 
     // ---- Island 通知 ----
     this.emitAnalysis(analysis, node, blueprintId, workspace)
-    if (analysis.applied && merged.discoveredRequirements.length > 0) {
-      this.emitDiscovered(blueprintId, workspace, node, merged.discoveredRequirements)
+    if (candidates.length > 0) {
+      this.emitDiscovered(blueprintId, workspace, node, candidates)
     }
 
     return analysis
@@ -693,7 +708,7 @@ class JanusAnalyzer {
     blueprintId: string,
     workspacePath: string,
     node: BlueprintNode,
-    discovered: AnalysisResult['discoveredRequirements']
+    candidates: BlueprintRequirementCandidate[]
   ): void {
     try {
       this.mainWindow?.webContents.send('janus:island:discovered', {
@@ -701,7 +716,14 @@ class JanusAnalyzer {
         workspacePath,
         nodeId: node.id,
         nodeTitle: node.title,
-        discovered,
+        candidateIds: candidates.map((candidate) => candidate.id),
+        requirements: candidates,
+        discovered: candidates.map((candidate) => ({
+          title: candidate.title,
+          description: candidate.description,
+          suggestedParent: candidate.suggestedParentTitle ?? '',
+          confidence: candidate.confidence
+        })),
         createdAt: new Date().toISOString()
       })
     } catch (err) {

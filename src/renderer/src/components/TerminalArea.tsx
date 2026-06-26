@@ -159,7 +159,7 @@ export function TerminalArea() {
     >
       {/* Tab 栏 */}
       <div
-        className="flex h-9 shrink-0 items-end overflow-x-auto gap-0.5 px-3"
+        className="flex h-9 shrink-0 items-end overflow-x-auto gap-1 px-3"
         style={{
           background: 'rgba(10, 10, 10, 0.6)',
           borderBottom: '1px solid var(--border)',
@@ -170,7 +170,7 @@ export function TerminalArea() {
           <div
             key={t.id}
             onClick={() => setActiveTerminal(t.id)}
-            className="h-8 min-w-[100px] px-3 text-[11px] leading-none cursor-pointer flex items-center gap-2 rounded-t-md mt-0 font-mono relative transition-colors select-none group/tab"
+            className="h-8 min-w-[100px] max-w-[180px] px-2 text-[11px] leading-none cursor-pointer flex items-center gap-1.5 rounded-t-md mt-0 font-mono relative transition-colors select-none group/tab"
             style={{
               color: t.id === activeTerminalId ? '#fff' : 'rgba(255, 255, 255, 0.4)',
               background: t.id === activeTerminalId ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
@@ -190,7 +190,8 @@ export function TerminalArea() {
             }}
           >
             <span
-              className="flex h-4 min-w-0 items-center overflow-hidden text-ellipsis whitespace-nowrap leading-none"
+              title={t.name}
+              className="flex h-full min-w-0 flex-1 items-center overflow-hidden text-ellipsis whitespace-nowrap leading-none"
               style={{ color: t.id === activeTerminalId ? '#ff7830' : 'inherit' }}
             >
               {t.name}
@@ -199,8 +200,8 @@ export function TerminalArea() {
               type="button"
               aria-label={`关闭 ${t.name} 终端`}
               onClick={(e) => handleClose(t.id, e)}
-              className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border-0 bg-transparent p-0 font-sans text-sm leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-50 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)] cursor-pointer"
-              style={{ color: '#888', lineHeight: 1 }}
+              className="ml-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border-0 bg-transparent p-0 font-sans text-[13px] leading-none opacity-40 transition-[opacity,color,background] group-hover/tab:opacity-70 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)] cursor-pointer"
+              style={{ color: '#888', lineHeight: 1, transform: 'translateY(-0.5px)' }}
               onMouseEnter={(e) => { e.currentTarget.style.color = '#fff' }}
               onMouseLeave={(e) => { e.currentTarget.style.color = '#888' }}
             >

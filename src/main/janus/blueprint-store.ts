@@ -20,7 +20,10 @@ import type {
   BlueprintNode,
   BlueprintNodeType,
   BlueprintAnalysis,
+  BlueprintRequirementCandidate,
+  BlueprintRequirementCandidateStatus,
   AnalysisResult,
+  DiscoveredRequirement,
   WorkspaceSnapshot
 } from './types'
 
@@ -101,6 +104,26 @@ function makeFeatureItem(input: Partial<BlueprintFeatureItem> & { title: string 
 
 function normalizeFeatureStatus(status?: BlueprintFeatureStatus): BlueprintFeatureStatus {
   return status ?? 'planned'
+}
+
+function normalizeCandidatePart(value?: string): string {
+  return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function candidateKey(sourceNodeId: string, title: string, description: string, suggestedParentTitle?: string): string {
+  return [
+    sourceNodeId,
+    normalizeCandidatePart(title),
+    normalizeCandidatePart(description),
+    normalizeCandidatePart(suggestedParentTitle)
+  ].join('|')
+}
+
+function resolveSuggestedParentId(bp: Blueprint, suggestedParentTitle?: string): string | undefined {
+  const normalized = normalizeCandidatePart(suggestedParentTitle)
+  if (!normalized) return undefined
+  const parent = Object.values(bp.nodes).find((node) => normalizeCandidatePart(node.title) === normalized)
+  return parent?.id
 }
 
 function makeNode(input: Partial<BlueprintNode> & { title: string; type: BlueprintNodeType }): BlueprintNode {
@@ -236,6 +259,7 @@ class BlueprintStore {
       if (idx.blueprints.includes(id)) continue
       const bp = await readJson<Blueprint>(legacyBlueprintFile(workspace, id))
       if (!bp) continue
+      if (!Array.isArray(bp.requirementCandidates)) bp.requirementCandidates = []
       for (const nid of Object.keys(bp.nodes)) {
         const n = bp.nodes[nid]
         if (n.lastAnalyzedCommitSha === undefined) n.lastAnalyzedCommitSha = null
@@ -274,6 +298,10 @@ class BlueprintStore {
     const bp = await readJson<Blueprint>(blueprintFile(id))
     if (bp) {
       let changed = false
+      if (!Array.isArray(bp.requirementCandidates)) {
+        bp.requirementCandidates = []
+        changed = true
+      }
       // 容错：老节点补齐新增字段
       for (const nid of Object.keys(bp.nodes)) {
         const n = bp.nodes[nid]
@@ -338,6 +366,7 @@ class BlueprintStore {
       rootNodeId: root.id,
       nodeIds: [root.id],
       nodes: { [root.id]: root },
+      requirementCandidates: [],
       mountedTo: null,
       canvasLayout: {},
       createdAt: ts,
@@ -617,18 +646,6 @@ class BlueprintStore {
         if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
         feature.updatedAt = nowIso()
       }
-      const featureTitles = new Set((node.features ?? []).map((item) => item.title.trim().toLowerCase()))
-      for (const req of r.newFeatureRequirements ?? []) {
-        const key = req.title.trim().toLowerCase()
-        if (featureTitles.has(key)) continue
-        node.features = [...(node.features ?? []), makeFeatureItem({
-          title: req.title,
-          description: req.description,
-          status: 'planned',
-          progress: 0
-        })]
-        featureTitles.add(key)
-      }
     }
     node.updatedAt = nowIso()
     bp.updatedAt = nowIso()
@@ -650,7 +667,6 @@ class BlueprintStore {
         description?: string
         requirementNotes?: string[]
       }>
-      newFeatureRequirements?: Array<{ title: string; description: string }>
     }
   ): Promise<BlueprintNode | null> {
     const bp = await this.loadBlueprint(workspace, blueprintId)
@@ -673,27 +689,170 @@ class BlueprintStore {
       if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
       feature.updatedAt = nowIso()
     }
-    if (patch.newFeatureRequirements?.length) {
-      const featureTitles = new Set((node.features ?? []).map((item) => item.title.trim().toLowerCase()))
-      for (const req of patch.newFeatureRequirements) {
-        const key = req.title.trim().toLowerCase()
-        if (featureTitles.has(key)) continue
-        node.features = [
-          ...(node.features ?? []),
-          makeFeatureItem({
-            title: req.title,
-            description: req.description,
-            status: 'planned',
-            progress: 0
-          })
-        ]
-        featureTitles.add(key)
-      }
-    }
     node.updatedAt = nowIso()
     bp.updatedAt = nowIso()
     await writeJson(blueprintFile(blueprintId), bp)
     return node
+  }
+
+  async upsertRequirementCandidates(
+    workspace: string,
+    blueprintId: string,
+    sourceNodeId: string,
+    sourceAnalysisId: string,
+    requirements: DiscoveredRequirement[],
+    evidence: string[] = []
+  ): Promise<BlueprintRequirementCandidate[]> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp || !bp.nodes[sourceNodeId]) return []
+
+    bp.requirementCandidates ??= []
+    const touched: BlueprintRequirementCandidate[] = []
+    let changed = false
+    const now = nowIso()
+
+    for (const requirement of requirements) {
+      const title = requirement.title.trim()
+      if (!title) continue
+
+      const description = requirement.description?.trim() ?? ''
+      const suggestedParentTitle = requirement.suggestedParent?.trim() || undefined
+      const key = candidateKey(sourceNodeId, title, description, suggestedParentTitle)
+      const existing = bp.requirementCandidates.find((candidate) =>
+        candidateKey(candidate.sourceNodeId, candidate.title, candidate.description, candidate.suggestedParentTitle) === key
+      )
+
+      if (existing) {
+        if (existing.status !== 'pending') continue
+        existing.sourceAnalysisId = sourceAnalysisId
+        existing.confidence = Math.max(existing.confidence, requirement.confidence)
+        existing.suggestedParentId = existing.suggestedParentId ?? resolveSuggestedParentId(bp, suggestedParentTitle)
+        existing.suggestedParentTitle = existing.suggestedParentTitle ?? suggestedParentTitle
+        existing.evidence = Array.from(new Set([...(existing.evidence ?? []), ...evidence]))
+        touched.push(existing)
+        changed = true
+        continue
+      }
+
+      const candidate: BlueprintRequirementCandidate = {
+        id: randomUUID(),
+        blueprintId,
+        sourceNodeId,
+        sourceAnalysisId,
+        title,
+        description,
+        suggestedParentId: resolveSuggestedParentId(bp, suggestedParentTitle),
+        suggestedParentTitle,
+        confidence: requirement.confidence,
+        status: 'pending',
+        evidence: [...evidence],
+        createdAt: now
+      }
+      bp.requirementCandidates.push(candidate)
+      touched.push(candidate)
+      changed = true
+    }
+
+    if (changed) {
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+    }
+
+    return touched
+  }
+
+  async listRequirementCandidates(
+    workspace: string,
+    blueprintId: string,
+    status?: BlueprintRequirementCandidateStatus
+  ): Promise<BlueprintRequirementCandidate[]> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp) return []
+    const candidates = bp.requirementCandidates ?? []
+    return candidates
+      .filter((candidate) => !status || candidate.status === status)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
+
+  async acceptRequirementCandidate(
+    workspace: string,
+    blueprintId: string,
+    candidateId: string,
+    patch: {
+      title?: string
+      description?: string
+      parentId?: string
+      decisionNote?: string
+    } = {}
+  ): Promise<BlueprintNode | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp) return null
+    bp.requirementCandidates ??= []
+
+    const candidate = bp.requirementCandidates.find((item) => item.id === candidateId)
+    if (!candidate) return null
+    if (candidate.status === 'accepted' && candidate.acceptedNodeId) {
+      return bp.nodes[candidate.acceptedNodeId] ?? null
+    }
+
+    const title = patch.title?.trim() || candidate.title
+    const description = patch.description !== undefined ? patch.description : candidate.description
+    let parentId = patch.parentId ?? candidate.suggestedParentId ?? null
+    if (!parentId || !bp.nodes[parentId]) parentId = candidate.sourceNodeId
+    if (!bp.nodes[parentId]) parentId = bp.rootNodeId
+
+    const sourceNode = bp.nodes[candidate.sourceNodeId]
+    const node = makeNode({
+      title,
+      type: 'task',
+      description,
+      status: 'not-started',
+      progress: 0,
+      tags: ['discovered-by-janus'],
+      parentId,
+      workspaceId: sourceNode?.workspaceId ?? null,
+      workspaceSnapshot: sourceNode?.workspaceSnapshot ?? null
+    })
+    await this.hydrateWorkspaceSnapshot(node)
+
+    bp.nodes[node.id] = node
+    bp.nodeIds.push(node.id)
+    bp.nodes[parentId].children.push(node.id)
+    bp.nodes[parentId].updatedAt = nowIso()
+
+    candidate.title = title
+    candidate.description = description
+    candidate.suggestedParentId = parentId
+    candidate.suggestedParentTitle = bp.nodes[parentId].title
+    candidate.status = 'accepted'
+    candidate.acceptedNodeId = node.id
+    candidate.decisionNote = patch.decisionNote
+    candidate.decidedAt = nowIso()
+
+    bp.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), bp)
+    return node
+  }
+
+  async rejectRequirementCandidate(
+    workspace: string,
+    blueprintId: string,
+    candidateId: string,
+    decisionNote?: string
+  ): Promise<BlueprintRequirementCandidate | null> {
+    const bp = await this.loadBlueprint(workspace, blueprintId)
+    if (!bp) return null
+    bp.requirementCandidates ??= []
+
+    const candidate = bp.requirementCandidates.find((item) => item.id === candidateId)
+    if (!candidate) return null
+
+    candidate.status = 'rejected'
+    candidate.decisionNote = decisionNote
+    candidate.decidedAt = nowIso()
+    bp.updatedAt = nowIso()
+    await writeJson(blueprintFile(blueprintId), bp)
+    return candidate
   }
 
   async listAnalyses(
@@ -721,8 +880,7 @@ class BlueprintStore {
     const updated = await this.applyAnalysisPatch(workspace, blueprintId, nodeId, {
       progress: analysis.result.progress,
       status: analysis.result.status,
-      featureUpdates: analysis.result.featureUpdates,
-      newFeatureRequirements: analysis.result.newFeatureRequirements
+      featureUpdates: analysis.result.featureUpdates
     })
     if (!updated) return null
 

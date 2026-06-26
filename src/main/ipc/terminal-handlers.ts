@@ -137,8 +137,8 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
           })
         }).catch(err => console.error('Checkpoint finalize failed:', err))
       }
-      // Janus Analyzer 入口④：终端关闭最终分析（fire-and-forget，不阻塞）
-      if (state) {
+      // Janus Analyzer 入口④：仅 AI CLI 工作终端关闭触发，普通 shell 不参与蓝图分析。
+      if (state && state.engine !== 'shell') {
         analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
       }
       terminalStates.delete(id)

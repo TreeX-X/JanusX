@@ -10,8 +10,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "dev": "npm run build:llm-core && electron-vite dev",
+    "build": "npm run build:llm-core && electron-vite build",
     "build:llm-core": "npm run build --workspace=@janusx/llm-core",
     "preview": "electron-vite preview",
     "test:unit": "vitest",

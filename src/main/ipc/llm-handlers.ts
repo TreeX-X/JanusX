@@ -162,7 +162,6 @@ export function registerLlmHandlers(): void {
     abortControllers.set(requestId, controller)
 
     const sendEvent = (channel: 'llm:chat:delta' | 'llm:chat:done' | 'llm:chat:error', payload: any) => {
-      console.log('[llm:chat-stream] sending', channel, requestId, 'payload keys:', Object.keys(payload))
       event.reply(channel, payload)
     }
 
