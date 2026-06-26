@@ -26,7 +26,7 @@ interface CheckpointStore {
   loading: boolean
   error: string | null
 
-  fetchCheckpoints: (filter?: { terminalId?: string; engine?: string }) => Promise<void>
+  fetchCheckpoints: (filter?: { terminalId?: string; engine?: string; cwd?: string }) => Promise<void>
   createCheckpoint: (options: { terminalId: string; engine: string; prompt: string; cwd: string }) => Promise<void>
   restoreCheckpoint: (checkpointId: string, cwd: string) => Promise<void>
   fetchDiff: (checkpointId: string, filePath: string, cwd: string) => Promise<void>
@@ -76,6 +76,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
         cwd,
       })) as { conflicts: ConflictInfo[] }
       set({ loading: false, conflicts: result.conflicts })
+      await get().fetchCheckpoints({ cwd })
     } catch (err) {
       set({ error: (err as Error).message, loading: false })
     }
@@ -127,7 +128,12 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
   clearConflicts: () => set({ conflicts: [] }),
 
   subscribeToEvents: () => {
-    const unsub = window.electron.on('checkpoint:event', () => {
+    const unsub = window.electron.on('checkpoint:event', (payload: unknown) => {
+      const event = payload as { type?: string; error?: string }
+      if (event.type === 'error') {
+        set({ error: event.error ?? 'Checkpoint event failed' })
+        return
+      }
       const state = get()
       state.fetchCheckpoints()
     })

@@ -57,8 +57,20 @@ export function TerminalArea() {
       }
     })
     const unsubEvent = window.electron.on('checkpoint:event', (payload: unknown) => {
-      const { type, checkpointId } = payload as { type: string; checkpointId: string }
-      addLog('info', `[还原点] ${type} — ${checkpointId.slice(0, 8)}`)
+      const { type, checkpointId, terminalId, error } = payload as {
+        type: string
+        checkpointId?: string
+        terminalId?: string
+        error?: string
+      }
+      if (type === 'error') {
+        const prefix = terminalId ? `终端 ${terminalId.slice(0, 8)} ` : ''
+        addLog('error', `[还原点] ${prefix}创建失败: ${error ?? 'unknown error'}`)
+        return
+      }
+      if (checkpointId) {
+        addLog('info', `[还原点] ${type} — ${checkpointId.slice(0, 8)}`)
+      }
     })
     return () => { unsubReady(); unsubEvent() }
   }, [addLog])

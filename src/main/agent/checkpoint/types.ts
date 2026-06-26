@@ -1,5 +1,7 @@
 import type { AgentEngine } from '../types'
 
+export type CheckpointEngine = AgentEngine | 'shell' | 'manual'
+
 export interface SnapshotFileEntry {
   path: string
   hash: string
@@ -11,7 +13,7 @@ export interface ConversationCheckpoint {
   terminalId: string
   conversationIndex: number
   createdAt: string
-  engine: AgentEngine
+  engine: CheckpointEngine
   branch: string
   prompt: string
   filesSnapshot: Record<string, SnapshotFileEntry>
@@ -26,7 +28,7 @@ export interface ConflictInfo {
 
 export interface CheckpointCreateOptions {
   terminalId: string
-  engine: AgentEngine
+  engine: CheckpointEngine
   prompt: string
   cwd: string
 }

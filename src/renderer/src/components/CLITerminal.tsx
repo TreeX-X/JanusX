@@ -68,9 +68,6 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
 
-    // 剪贴板快捷键拦截
-    let skipNextInput = false
-
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       const isCtrl = e.ctrlKey || e.metaKey
       if (!isCtrl) return true
@@ -85,11 +82,10 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
         return true
       }
 
-      // Ctrl+V — 从剪贴板粘贴（term.paste 会触发 onData，用标志位跳过重复发送）
+      // Ctrl+V — 从剪贴板粘贴，统一走 onData 转发到 PTY 并追踪提交行
       if (e.key === 'v') {
         navigator.clipboard.readText().then((text) => {
           if (text) {
-            skipNextInput = true
             term.paste(text)
           }
         })
@@ -143,10 +139,7 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     let inCSI = false
 
     term.onData((data) => {
-      // 粘贴时 term.paste() 已将文本发送给 PTY，跳过重复转发
-      const pasted = skipNextInput
-      if (pasted) skipNextInput = false
-      else window.electron.send('terminal:input', { id: terminalId, data })
+      window.electron.send('terminal:input', { id: terminalId, data })
 
       // Track user input for checkpoint system (无论是否粘贴都要追踪)
       for (const ch of data) {
@@ -169,9 +162,9 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
           continue
         }
 
-        // Inside CSI — skip until final letter
+        // Inside CSI — skip until final byte (0x40-0x7e, e.g. ~ for bracketed paste)
         if (inCSI) {
-          if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) {
+          if (code >= 0x40 && code <= 0x7e) {
             inEsc = false
             inCSI = false
           }
@@ -179,7 +172,7 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
         }
 
         // Enter — submit the line
-        if (ch === '\r') {
+        if (ch === '\r' || ch === '\n') {
           if (inputLine.length > 0) {
             window.electron.send('terminal:submit-line', { id: terminalId, text: inputLine })
           }

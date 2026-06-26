@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { access } from 'fs/promises'
 import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
-import type { AgentEngine } from '../agent/types'
+import type { CheckpointEngine } from '../agent/checkpoint/types'
 
 export function registerCheckpointHandlers(): void {
   ipcMain.handle(
@@ -10,7 +10,7 @@ export function registerCheckpointHandlers(): void {
       _event,
       options: {
         terminalId: string
-        engine: AgentEngine
+        engine: CheckpointEngine
         prompt: string
         cwd: string
       }
@@ -36,7 +36,7 @@ export function registerCheckpointHandlers(): void {
         branch: cp.branch,
         prompt: cp.prompt,
         fileCount: Object.keys(cp.filesSnapshot).length,
-        changedFileCount: Object.keys(cp.filesSnapshot).length,
+        changedFileCount: 0,
         status: cp.status,
       }
     }
@@ -59,20 +59,24 @@ export function registerCheckpointHandlers(): void {
 
   ipcMain.handle(
     'checkpoint:list',
-    async (_event, filter?: { terminalId?: string; engine?: AgentEngine }) => {
+    async (_event, filter?: { terminalId?: string; engine?: CheckpointEngine; cwd?: string }) => {
       const cps = await checkpointManager.listCheckpoints(filter)
+      const changedCounts = await checkpointManager.getChangedFileCounts(
+        cps.map(cp => cp.id),
+        filter?.cwd,
+      )
       return cps.map((cp) => ({
-        id: cp.id,
-        terminalId: cp.terminalId,
-        engine: cp.engine,
-        conversationIndex: cp.conversationIndex,
-        createdAt: cp.createdAt,
-        branch: cp.branch,
-        prompt: cp.prompt,
-        fileCount: Object.keys(cp.filesSnapshot).length,
-        changedFileCount: Object.keys(cp.filesSnapshot).length,
-        status: cp.status,
-      }))
+          id: cp.id,
+          terminalId: cp.terminalId,
+          engine: cp.engine,
+          conversationIndex: cp.conversationIndex,
+          createdAt: cp.createdAt,
+          branch: cp.branch,
+          prompt: cp.prompt,
+          fileCount: Object.keys(cp.filesSnapshot).length,
+          changedFileCount: changedCounts[cp.id] ?? 0,
+          status: cp.status,
+        }))
     }
   )
 

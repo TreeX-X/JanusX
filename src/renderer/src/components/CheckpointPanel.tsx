@@ -5,6 +5,8 @@ import { ModalCloseButton } from './ModalCloseButton'
 import { Select } from './ui/Select'
 
 const ENGINE_LABELS: Record<string, string> = {
+  manual: '手动',
+  shell: 'Shell',
   claude: 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
@@ -24,6 +26,16 @@ function formatDate(iso: string): string {
 
 /** Color config for engine tags */
 const ENGINE_TAG_STYLES: Record<string, { color: string; bg: string; border: string }> = {
+  manual: {
+    color: '#d4d4d4',
+    bg: 'rgba(255,255,255,0.06)',
+    border: 'rgba(255,255,255,0.14)',
+  },
+  shell: {
+    color: '#58a6ff',
+    bg: 'rgba(88,166,255,0.08)',
+    border: 'rgba(88,166,255,0.2)',
+  },
   claude: {
     color: '#4ec9b0',
     bg: 'rgba(78,201,176,0.08)',
@@ -54,9 +66,9 @@ export function CheckpointPanel() {
     fetchAllDiffs,
     conflicts,
     clearConflicts,
-    subscribeToEvents,
   } = useCheckpointStore()
   const { activeWorkspaceId, workspaces } = useWorkspaceStore()
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
   const [filter, setFilter] = useState('all')
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
@@ -64,41 +76,37 @@ export function CheckpointPanel() {
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchCheckpoints()
-  }, [fetchCheckpoints])
-
-  useEffect(() => {
-    const unsub = subscribeToEvents()
-    return unsub
-  }, [subscribeToEvents])
+    fetchCheckpoints(activeWorkspace?.path ? { cwd: activeWorkspace.path } : undefined)
+  }, [fetchCheckpoints, activeWorkspace?.path])
 
   const filteredCheckpoints =
     filter === 'all' ? checkpoints : checkpoints.filter((cp) => cp.engine === filter)
+  const restorePruneCount = restoreTarget
+    ? checkpoints.filter((cp) => cp.conversationIndex > restoreTarget.conversationIndex).length
+    : 0
 
   const handleRestore = useCallback(async () => {
     if (!restoreTarget) return
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    const cwd = ws?.path ?? ''
+    const cwd = activeWorkspace?.path ?? ''
     await restoreCheckpoint(restoreTarget.id, cwd)
     setShowModal(false)
     setRestoreTarget(null)
-  }, [restoreTarget, restoreCheckpoint, activeWorkspaceId, workspaces])
+  }, [restoreTarget, restoreCheckpoint, activeWorkspace?.path])
 
   const handleToggleDiff = useCallback(
     (cpId: string) => {
-      const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-      const cwd = ws?.path ?? ''
+      const cwd = activeWorkspace?.path ?? ''
       const key = `${cpId}:`
       if (expandedDiffId === key) {
         setExpandedDiffId(null)
       } else {
-        if (!diffs[key]) {
+        if (!(key in diffs)) {
           fetchAllDiffs(cpId, cwd)
         }
         setExpandedDiffId(key)
       }
     },
-    [activeWorkspaceId, diffs, fetchAllDiffs, expandedDiffId, workspaces],
+    [activeWorkspace?.path, diffs, fetchAllDiffs, expandedDiffId],
   )
 
   return (
@@ -115,13 +123,15 @@ export function CheckpointPanel() {
           className="uppercase font-semibold"
           style={{ fontSize: 10, color: '#555' }}
         >
-          过滤 CLI
+          过滤来源
         </span>
         <Select
           value={filter}
           onChange={setFilter}
           options={[
-            { value: 'all', label: '工作区全部 CLI' },
+            { value: 'all', label: '工作区全部来源' },
+            { value: 'manual', label: '手动' },
+            { value: 'shell', label: 'Shell' },
             { value: 'claude', label: 'Claude Code' },
             { value: 'codex', label: 'Codex' },
             { value: 'opencode', label: 'OpenCode' }
@@ -135,14 +145,12 @@ export function CheckpointPanel() {
         />
         <button
           onClick={async () => {
-            if (!activeWorkspaceId) return
-            const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-            if (!ws?.path) return
+            if (!activeWorkspace?.path) return
             await createCheckpoint({
               terminalId: 'manual',
-              engine: 'claude',
+              engine: 'manual',
               prompt: '手动还原点',
-              cwd: ws.path,
+              cwd: activeWorkspace.path,
             })
           }}
           className="h-6 px-2 rounded text-[10px] transition-colors shrink-0"
@@ -340,7 +348,7 @@ export function CheckpointPanel() {
                 >
                   <div className="flex justify-between">
                     <span className="overflow-hidden overflow-ellipsis whitespace-nowrap">
-                      {cp.changedFileCount} 个快照文件
+                      {cp.changedFileCount} 个差异文件
                     </span>
                     {cp.changedFileCount > 0 && (
                       <span style={{ color: '#4ec9b0' }}>+{cp.changedFileCount}</span>
@@ -437,25 +445,29 @@ export function CheckpointPanel() {
                         lineHeight: 1.5,
                       }}
                     >
-                      {diffs[`${cp.id}:`] ? (
-                        diffs[`${cp.id}:`]
-                          .split('\n')
-                          .map((line, i) => (
-                            <div
-                              key={i}
-                              style={{
-                                color: line.startsWith('-')
-                                  ? '#e06c75'
-                                  : line.startsWith('+')
-                                    ? '#4ec9b0'
-                                    : '#888',
-                              }}
-                            >
-                              {line}
-                            </div>
-                          ))
+                      {`${cp.id}:` in diffs ? (
+                        diffs[`${cp.id}:`] ? (
+                          diffs[`${cp.id}:`]
+                            .split('\n')
+                            .map((line, i) => (
+                              <div
+                                key={i}
+                                style={{
+                                  color: line.startsWith('-')
+                                    ? '#e06c75'
+                                    : line.startsWith('+')
+                                      ? '#4ec9b0'
+                                      : '#888',
+                                }}
+                              >
+                                {line}
+                              </div>
+                            ))
+                        ) : (
+                          <div style={{ color: '#666' }}>没有差异文件</div>
+                        )
                       ) : (
-                        <div style={{ color: '#555' }}>加载中...</div>
+                        <div style={{ color: '#555' }}>加载差异...</div>
                       )}
                     </pre>
                   </div>
@@ -477,24 +489,24 @@ export function CheckpointPanel() {
         })}
       </div>
 
-      {/* Restore confirmation modal (3-Way Merge) */}
+      {/* Restore confirmation modal */}
       {showModal && restoreTarget && (
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(10px)',
+            background: 'rgba(0,0,0,0.64)',
+            backdropFilter: 'blur(12px)',
             zIndex: 1000,
           }}
         >
           <div
             className="overflow-hidden"
             style={{
-              width: 480,
-              background: 'rgba(22,22,22,0.98)',
-              border: '1px solid rgba(255,120,48,0.25)',
+              width: 460,
+              background: 'rgba(18,18,18,0.98)',
+              border: '1px solid rgba(255,255,255,0.1)',
               borderRadius: 8,
-              boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
             }}
           >
             {/* Modal header */}
@@ -506,11 +518,10 @@ export function CheckpointPanel() {
               }}
             >
               <div
-                className="font-semibold flex items-center"
-                style={{ fontSize: 13, color: '#fff', gap: 6 }}
+                className="font-semibold"
+                style={{ fontSize: 13, color: '#fff' }}
               >
-                <span style={{ color: '#ff7830' }}>&#9889;</span>
-                还原点三路合并决策 (3-Way Merge)
+                确认还原
               </div>
               <ModalCloseButton
                 onClose={() => {
@@ -523,13 +534,8 @@ export function CheckpointPanel() {
 
             {/* Modal body */}
             <div style={{ padding: 16 }}>
-              <div style={{ fontSize: 12, color: '#999', marginBottom: 12, lineHeight: 1.5 }}>
-                即将还原到{' '}
-                <strong style={{ color: '#fff' }}>
-                  {ENGINE_LABELS[restoreTarget.engine]}
-                </strong>{' '}
-                对话 #{restoreTarget.conversationIndex} 的检查点。
-                系统将执行三路合并 (3-Way Merge)：以当前工作区为基准，对比检查点快照与原始提交，自动合并安全变更。
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 12, lineHeight: 1.6 }}>
+                将工作区恢复到 #{restoreTarget.conversationIndex}。编号更大的还原点会从列表中移除。
               </div>
 
               <div
@@ -538,8 +544,8 @@ export function CheckpointPanel() {
                   color: '#d4d4d4',
                   marginBottom: 16,
                   padding: '8px 10px',
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.05)',
+                  background: 'rgba(255,255,255,0.025)',
+                  border: '1px solid rgba(255,255,255,0.06)',
                   borderRadius: 6,
                   lineHeight: 1.4,
                 }}
@@ -547,14 +553,12 @@ export function CheckpointPanel() {
                 &ldquo;{restoreTarget.prompt}&rdquo;
               </div>
 
-              {/* Scenario cards */}
               <div className="flex flex-col" style={{ gap: 8, marginBottom: 12 }}>
-                {/* Safe merge card */}
                 <div
                   style={{
                     padding: '10px 12px',
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.05)',
+                    background: 'rgba(255,255,255,0.025)',
+                    border: '1px solid rgba(255,255,255,0.06)',
                     borderRadius: 6,
                   }}
                 >
@@ -566,27 +570,41 @@ export function CheckpointPanel() {
                         color: '#d4d4d4',
                       }}
                     >
-                      {restoreTarget.fileCount} 个文件
+                      {restoreTarget.changedFileCount} 个差异文件
                     </span>
                     <span
                       className="rounded"
                       style={{
                         fontSize: 10,
                         fontWeight: 600,
-                        color: '#4ec9b0',
-                        background: 'rgba(78,201,176,0.1)',
+                        color: '#d4d4d4',
+                        background: 'rgba(255,255,255,0.07)',
                         padding: '2px 6px',
                       }}
                     >
-                      安全合并
+                      目标状态
                     </span>
                   </div>
                   <div style={{ fontSize: 11, color: '#666' }}>
-                    无冲突文件将自动合并到当前工作区
+                    当前工作区将被替换为该还原点记录的文件状态
                   </div>
                 </div>
 
-                {/* Conflict card (if any) */}
+                {restorePruneCount > 0 && (
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      background: 'rgba(255,120,48,0.03)',
+                      border: '1px solid rgba(255,120,48,0.18)',
+                      borderRadius: 6,
+                      fontSize: 11,
+                      color: '#999',
+                    }}
+                  >
+                    将移除 {restorePruneCount} 个后续还原点，保留当前还原点及之前的历史。
+                  </div>
+                )}
+
                 {conflicts.length > 0 && (
                   <div
                     style={{
@@ -638,8 +656,8 @@ export function CheckpointPanel() {
 
               <div style={{ fontSize: 11, color: '#666', lineHeight: 1.5 }}>
                 {conflicts.length > 0
-                  ? '冲突文件将包含合并标记，需要手动解决。'
-                  : '所有文件将安全还原，无冲突。'}
+                  ? '冲突文件需要手动处理。'
+                  : '还原完成后，右侧列表会自动刷新。'}
               </div>
             </div>
 
@@ -685,8 +703,8 @@ export function CheckpointPanel() {
                   height: 28,
                   padding: '0 16px',
                   fontSize: 11,
-                  border: '1px solid rgba(255,120,48,0.3)',
-                  background: 'rgba(255,120,48,0.12)',
+                  border: '1px solid rgba(255,120,48,0.28)',
+                  background: 'rgba(255,120,48,0.1)',
                   color: '#ff7830',
                 }}
                 onMouseEnter={(e) => {
@@ -698,7 +716,7 @@ export function CheckpointPanel() {
                   e.currentTarget.style.borderColor = 'rgba(255,120,48,0.3)'
                 }}
               >
-                确认还原并合并
+                确认还原
               </button>
             </div>
           </div>

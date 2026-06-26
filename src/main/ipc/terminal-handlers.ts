@@ -1,25 +1,91 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { terminalManager } from '../terminal/manager'
 import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
+import type { CheckpointEngine } from '../agent/checkpoint/types'
 import { analyzer } from '../janus/analyzer'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
   checkpointId: string | null  // current pending checkpoint
   cwd: string
-  engine: 'claude' | 'codex' | 'opencode'
-  checkpointCreatedAt: number  // timestamp of last checkpoint creation
+  engine: CheckpointEngine
   initialized: boolean         // whether checkpointManager.initialize() succeeded
+  creating: boolean
+  pendingSubmitText: string | null
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
 
-// Cooldown between checkpoint creations (ms)
-const CHECKPOINT_COOLDOWN_MS = 5_000  // 5 seconds
-
 function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
   mainWindow.webContents.send(channel, payload)
+}
+
+function createCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text: string): void {
+  const prompt = text.trim()
+  if (!prompt) return
+
+  const state = terminalStates.get(id)
+  if (!state) {
+    sendToRenderer(mainWindow, 'checkpoint:event', {
+      type: 'error',
+      terminalId: id,
+      error: 'Terminal checkpoint state not found',
+    })
+    return
+  }
+
+  if (!state.initialized) {
+    state.pendingSubmitText = prompt
+    return
+  }
+
+  if (state.creating) {
+    state.pendingSubmitText = prompt
+    return
+  }
+
+  state.creating = true
+
+  const previousCpId = state.checkpointId
+  state.checkpointId = null
+
+  checkpointManager.finalizeAndCreateCheckpoint(previousCpId, {
+    terminalId: id,
+    engine: state.engine,
+    prompt,
+    cwd: state.cwd,
+  }).then(({ finalized, checkpoint }) => {
+    if (finalized && previousCpId) {
+      sendToRenderer(mainWindow, 'checkpoint:event', {
+        type: 'finalized',
+        terminalId: id,
+        checkpointId: previousCpId,
+      })
+    }
+    state.checkpointId = checkpoint.id
+    sendToRenderer(mainWindow, 'checkpoint:event', {
+      type: 'created',
+      terminalId: id,
+      checkpointId: checkpoint.id,
+    })
+  }).catch((err) => {
+    state.checkpointId = previousCpId
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Checkpoint lifecycle failed:', err)
+    sendToRenderer(mainWindow, 'checkpoint:event', {
+      type: 'error',
+      terminalId: id,
+      error: message,
+    })
+  }).finally(() => {
+    state.creating = false
+    const pending = state.pendingSubmitText
+    state.pendingSubmitText = null
+    if (pending && terminalStates.has(id)) {
+      createCheckpointFromSubmit(mainWindow, id, pending)
+    }
+  })
 }
 
 export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
@@ -39,19 +105,17 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
 
     const instance = terminalManager.create({ id, workspaceId: '', cwd, shell, autoCommand })
 
-    // Determine engine from preset
-    const isCLI = preset && preset !== 'shell'
-    const engine = isCLI ? (preset as 'claude' | 'codex' | 'opencode') : null
+    const engine: CheckpointEngine =
+      preset === 'claude' || preset === 'codex' || preset === 'opencode' ? preset : 'shell'
 
-    if (engine) {
-      terminalStates.set(id, {
-        checkpointId: null,
-        cwd,
-        engine,
-        checkpointCreatedAt: 0,
-        initialized: false,
-      })
-    }
+    terminalStates.set(id, {
+      checkpointId: null,
+      cwd,
+      engine,
+      initialized: false,
+      creating: false,
+      pendingSubmitText: null,
+    })
 
     // PTY output — just forward to renderer
     instance.pty.onData((data: string) => {
@@ -80,16 +144,19 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       terminalStates.delete(id)
     })
 
-    if (engine) {
-      checkpointManager.initialize(cwd).then(() => {
-        const state = terminalStates.get(id)
-        if (state) state.initialized = true
-        sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: true })
-      }).catch((err) => {
-        console.error('Checkpoint init failed:', err)
-        sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: false, error: String(err) })
-      })
-    }
+    checkpointManager.initialize(cwd).then(() => {
+      const state = terminalStates.get(id)
+      if (state) {
+        state.initialized = true
+        const pending = state.pendingSubmitText
+        state.pendingSubmitText = null
+        if (pending) createCheckpointFromSubmit(mainWindow, id, pending)
+      }
+      sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: true })
+    }).catch((err) => {
+      console.error('Checkpoint init failed:', err)
+      sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: false, error: String(err) })
+    })
 
     return { pid: instance.pty.pid }
   })
@@ -101,38 +168,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
 
   // Submit-line handler — renderer sends clean user input on Enter
   ipcMain.on('terminal:submit-line', (_event, { id, text }: { id: string; text: string }) => {
-    const state = terminalStates.get(id)
-    if (!state || !state.initialized) return
-
-    const now = Date.now()
-
-    // Cooldown: don't create checkpoints too frequently
-    if (now - state.checkpointCreatedAt < CHECKPOINT_COOLDOWN_MS) return
-
-    state.checkpointCreatedAt = now
-
-    // Atomically finalize previous checkpoint and create new one
-    const previousCpId = state.checkpointId
-    state.checkpointId = null
-
-    checkpointManager.finalizeAndCreateCheckpoint(previousCpId, {
-      terminalId: id,
-      engine: state.engine,
-      prompt: text,
-      cwd: state.cwd,
-    }).then(({ finalized, checkpoint }) => {
-      if (finalized && previousCpId) {
-        sendToRenderer(mainWindow, 'checkpoint:event', {
-          type: 'finalized',
-          checkpointId: previousCpId,
-        })
-      }
-      state.checkpointId = checkpoint.id
-      sendToRenderer(mainWindow, 'checkpoint:event', {
-        type: 'created',
-        checkpointId: checkpoint.id,
-      })
-    }).catch(err => console.error('Checkpoint lifecycle failed:', err))
+    createCheckpointFromSubmit(mainWindow, id, text)
   })
 
   ipcMain.on('terminal:resize', (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {

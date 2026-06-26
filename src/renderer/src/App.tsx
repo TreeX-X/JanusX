@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useCheckpointStore } from '@/stores/checkpoint'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalArea } from '@/components/TerminalArea'
@@ -37,6 +38,7 @@ function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): Fi
 
 export default function App() {
   const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
+  const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
 
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
   const flipperElRef = useRef<HTMLDivElement | null>(null)
@@ -100,6 +102,10 @@ export default function App() {
     })
     return typeof unsubscribe === 'function' ? unsubscribe : undefined
   }, [loadWorkspaceFileTree])
+
+  useEffect(() => {
+    return subscribeToCheckpointEvents()
+  }, [subscribeToCheckpointEvents])
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg-app)', color: 'var(--text)' }}>

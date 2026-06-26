@@ -19,7 +19,7 @@ export class GitAdapter {
 
   async listTrackedFiles(cwd: string): Promise<string[]> {
     try {
-      const output = await git(cwd, 'ls-files')
+      const output = await git(cwd, 'ls-files', '--cached', '--others', '--exclude-standard')
       return output ? output.split('\n').filter(Boolean) : []
     } catch {
       return []
