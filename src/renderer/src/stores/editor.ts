@@ -2,6 +2,109 @@ import { create } from 'zustand'
 import type { OpenFile, FileViewType } from '@/types'
 import { getFileViewType, getFileName } from '@/lib/file-utils'
 
+type LoadedFileSnapshot = Pick<
+  OpenFile,
+  'viewType' | 'content' | 'base64' | 'mimeType' | 'size' | 'mtime'
+>
+
+const loadedFileCache = new Map<string, LoadedFileSnapshot>()
+const pendingFileLoads = new Map<string, Promise<LoadedFileSnapshot>>()
+
+function isPathInWorkspace(filePath: string, workspacePath: string): boolean {
+  const normalizedFile = filePath.replace(/\\/g, '/').toLowerCase()
+  const normalizedWorkspace = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  return normalizedFile === normalizedWorkspace || normalizedFile.startsWith(`${normalizedWorkspace}/`)
+}
+
+export function invalidateEditorFileCache(workspacePath?: string): void {
+  if (!workspacePath) {
+    loadedFileCache.clear()
+    pendingFileLoads.clear()
+    return
+  }
+
+  for (const filePath of loadedFileCache.keys()) {
+    if (isPathInWorkspace(filePath, workspacePath)) {
+      loadedFileCache.delete(filePath)
+    }
+  }
+}
+
+function readResultError(result: unknown): string | null {
+  if (result && typeof result === 'object' && 'error' in result) {
+    const error = (result as { error?: unknown }).error
+    return typeof error === 'string' ? error : 'Failed to load file'
+  }
+  return null
+}
+
+async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): Promise<LoadedFileSnapshot> {
+  const pending = pendingFileLoads.get(absolutePath)
+  if (pending) return pending
+
+  const request = (async () => {
+    if (viewType === 'image') {
+      const result = (await window.electron.invoke('file:readBinary', absolutePath)) as {
+        base64?: string
+        mimeType?: string
+        size?: number
+        mtime?: number
+        error?: string
+      }
+      const error = readResultError(result)
+      if (error) throw new Error(error)
+      return {
+        viewType,
+        content: '',
+        base64: result.base64 ?? '',
+        mimeType: result.mimeType ?? 'application/octet-stream',
+        size: result.size,
+        mtime: result.mtime,
+      }
+    }
+
+    if (viewType === 'binary') {
+      const result = (await window.electron.invoke('file:stat', absolutePath)) as {
+        size?: number
+        mtime?: number
+        error?: string
+      }
+      const error = readResultError(result)
+      if (error) throw new Error(error)
+      return {
+        viewType,
+        content: '',
+        size: result.size,
+        mtime: result.mtime,
+      }
+    }
+
+    const result = (await window.electron.invoke('file:read', absolutePath)) as {
+      content?: string
+      size?: number
+      mtime?: number
+      error?: string
+    }
+    const error = readResultError(result)
+    if (error) throw new Error(error)
+    return {
+      viewType,
+      content: result.content ?? '',
+      size: result.size,
+      mtime: result.mtime,
+    }
+  })()
+
+  pendingFileLoads.set(absolutePath, request)
+  try {
+    const snapshot = await request
+    loadedFileCache.set(absolutePath, snapshot)
+    return snapshot
+  } finally {
+    pendingFileLoads.delete(absolutePath)
+  }
+}
+
 interface EditorStore {
   openFiles: OpenFile[]
   activeFileId: string | null
@@ -34,10 +137,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const viewType = getFileViewType(absolutePath)
     const name = getFileName(absolutePath)
     const relativePath = absolutePath.replace(workspacePath, '').replace(/^[\\/]/, '')
+    const cached = loadedFileCache.get(id)
 
     const newFile: OpenFile = {
       id, name, path: relativePath, absolutePath, viewType,
-      content: '', isDirty: false, isLoading: true,
+      content: cached?.content ?? '', isDirty: false, isLoading: !cached,
+      base64: cached?.base64, mimeType: cached?.mimeType,
+      size: cached?.size, mtime: cached?.mtime,
     }
 
     set(s => ({
@@ -46,29 +152,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       isVisible: true,
     }))
 
+    if (cached) return
+
     try {
-      if (viewType === 'image') {
-        const result = await window.electron.invoke('file:readBinary', absolutePath) as { base64: string, mimeType: string }
-        set(s => ({
-          openFiles: s.openFiles.map(f =>
-            f.id === id ? { ...f, base64: result.base64, mimeType: result.mimeType, isLoading: false } : f
-          ),
-        }))
-      } else if (viewType === 'binary') {
-        const result = await window.electron.invoke('file:stat', absolutePath) as { size: number }
-        set(s => ({
-          openFiles: s.openFiles.map(f =>
-            f.id === id ? { ...f, content: `Size: ${result.size} bytes`, isLoading: false } : f
-          ),
-        }))
-      } else {
-        const result = await window.electron.invoke('file:read', absolutePath) as { content: string }
-        set(s => ({
-          openFiles: s.openFiles.map(f =>
-            f.id === id ? { ...f, content: result.content, isLoading: false } : f
-          ),
-        }))
-      }
+      const snapshot = await loadFileSnapshot(absolutePath, viewType)
+      set(s => ({
+        openFiles: s.openFiles.map(f =>
+          f.id === id ? { ...f, ...snapshot, isLoading: false } : f
+        ),
+      }))
     } catch (err: any) {
       set(s => ({
         openFiles: s.openFiles.map(f =>
@@ -115,8 +207,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!file) return
     try {
       await window.electron.invoke('file:save', file.absolutePath, file.content)
+      loadedFileCache.set(file.absolutePath, {
+        viewType: file.viewType,
+        content: file.content,
+        base64: file.base64,
+        mimeType: file.mimeType,
+        size: file.size,
+        mtime: Date.now(),
+      })
       set(s => ({
-        openFiles: s.openFiles.map(f => f.id === id ? { ...f, isDirty: false } : f),
+        openFiles: s.openFiles.map(f => f.id === id ? { ...f, isDirty: false, mtime: Date.now() } : f),
       }))
     } catch (err: any) {
       console.error('Save failed:', err)

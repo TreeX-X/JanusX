@@ -380,7 +380,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const addTerminal = useWorkspaceStore((s) => s.addTerminal)
   const removeTerminal = useWorkspaceStore((s) => s.removeTerminal)
   const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
-  const addLog = useWorkspaceStore((s) => s.addLog)
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
 
@@ -705,6 +704,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       const terminalId = crypto.randomUUID()
       const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
       const autoCommand = resolveTerminalLaunchCommand(preset.type)
+      const telemetryStartedAt = Date.now()
       const terminal: Terminal = {
         id: terminalId,
         workspaceId: workspace.id,
@@ -714,11 +714,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         shell: defaultShell,
         autoCommand,
         pid: null,
-        status: 'idle'
+        status: 'idle',
+        updatedAt: telemetryStartedAt,
+        telemetryStartedAt
       }
 
       addTerminal(terminal)
-      addLog('info', `[蓝图] 为节点创建 ${preset.label} 终端 (${terminalId.slice(0, 8)})`)
       setLoadState('terminal-active')
       await waitForTerminalMount()
 
@@ -751,7 +752,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       setLoadState,
       setActiveTerminal,
       addTerminal,
-      addLog,
       removeTerminal,
       loadBlueprint,
       blueprintId,

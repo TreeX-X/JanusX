@@ -10,6 +10,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'workspace:delete',
   'terminal:create',
   'terminal:kill',
+  'runtime-telemetry:get',
   'dialog:openDirectory',
   'filetree:load',
   'filetree:children',

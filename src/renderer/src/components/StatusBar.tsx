@@ -26,7 +26,7 @@ export function StatusBar() {
       <div className="flex items-center gap-3.5">
         <div className="flex items-center gap-1.5">
           <div
-            className="w-[5px] h-[5px] rounded-full animate-pulse"
+            className="h-[5px] w-[5px] rounded-full animate-pulse"
             style={{
               background: '#ff7830',
               boxShadow: '0 0 6px rgba(255, 120, 48, 0.6)',

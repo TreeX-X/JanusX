@@ -1,0 +1,1394 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>agentmemory 仓库分析与 JanusX LLM-Wiki 方案</title>
+  <style>
+    :root {
+      --paper: #f7f4ed;
+      --ink: #181712;
+      --muted: #6b655b;
+      --line: #d8d1c4;
+      --panel: #fffdf7;
+      --panel-2: #f0eadf;
+      --teal: #0f766e;
+      --teal-soft: #d9eee9;
+      --rust: #a3482a;
+      --rust-soft: #f0d7ca;
+      --blue: #255f9f;
+      --blue-soft: #d9e7f5;
+      --olive: #5f6f2a;
+      --olive-soft: #e5ead2;
+      --plum: #60415f;
+      --plum-soft: #eadbe8;
+      --shadow: rgba(24, 23, 18, 0.08);
+      --mono: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      --sans: "Bricolage Grotesque", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --serif: "Instrument Serif", "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.72;
+      font-size: 16px;
+    }
+
+    a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+    .page {
+      width: min(1180px, calc(100vw - 40px));
+      margin: 0 auto;
+    }
+
+    .hero {
+      min-height: 84vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+      gap: 44px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--rust);
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(46px, 7vw, 92px);
+      line-height: 0.98;
+      font-weight: 620;
+      text-wrap: balance;
+    }
+
+    .hero .lead {
+      margin: 28px 0 0;
+      max-width: 760px;
+      color: #38342d;
+      font-size: 21px;
+      line-height: 1.64;
+      text-wrap: pretty;
+    }
+
+    .hero-meta {
+      margin-top: 34px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      background: color-mix(in oklch, var(--panel) 82%, transparent);
+    }
+
+    .metric {
+      padding: 18px 20px;
+      border-right: 1px solid var(--line);
+      min-height: 112px;
+    }
+
+    .metric:last-child { border-right: 0; }
+
+    .metric strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 36px;
+      line-height: 1;
+      font-weight: 680;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .system-map {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 24px 60px var(--shadow);
+      padding: 26px;
+    }
+
+    .map-title {
+      margin: 0 0 18px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stack-row {
+      display: grid;
+      grid-template-columns: 116px 1fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .stack-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      padding-top: 13px;
+    }
+
+    .stack-body {
+      border-left: 4px solid var(--teal);
+      background: var(--teal-soft);
+      padding: 12px 14px;
+      min-height: 54px;
+    }
+
+    .stack-row:nth-child(2) .stack-body { border-left-color: var(--blue); background: var(--blue-soft); }
+    .stack-row:nth-child(3) .stack-body { border-left-color: var(--rust); background: var(--rust-soft); }
+    .stack-row:nth-child(4) .stack-body { border-left-color: var(--olive); background: var(--olive-soft); }
+    .stack-row:nth-child(5) .stack-body { border-left-color: var(--plum); background: var(--plum-soft); }
+
+    .stack-body strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .stack-body span {
+      display: block;
+      color: #4d4a42;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    section {
+      padding: 72px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 44px;
+      margin-bottom: 32px;
+    }
+
+    .section-kicker {
+      font-family: var(--mono);
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(32px, 4vw, 58px);
+      line-height: 1.08;
+      font-weight: 650;
+      text-wrap: balance;
+    }
+
+    h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.25;
+      font-weight: 720;
+    }
+
+    p {
+      margin: 0 0 14px;
+      color: #343129;
+      text-wrap: pretty;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 24px;
+      min-height: 100%;
+    }
+
+    .panel.alt { background: var(--panel-2); }
+
+    .panel p:last-child { margin-bottom: 0; }
+
+    .note {
+      border-top: 4px solid var(--ink);
+      background: #fffdf7;
+      padding: 22px 24px;
+      margin-top: 24px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(130px, 1fr));
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .flow-step {
+      padding: 18px 16px;
+      border-right: 1px solid var(--line);
+      min-height: 160px;
+    }
+
+    .flow-step:last-child { border-right: 0; }
+
+    .flow-step .num {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--rust);
+      margin-bottom: 10px;
+    }
+
+    .flow-step strong {
+      display: block;
+      font-size: 17px;
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+
+    .flow-step span {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      background: #ece5d8;
+      font-weight: 600;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .fusion-matrix td:first-child {
+      width: 170px;
+    }
+
+    .fusion-matrix td:first-child code {
+      white-space: nowrap;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.92em;
+      background: #eee6d6;
+      padding: 1px 5px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .code-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .code-list code {
+      display: block;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      background: #1d1c18;
+      color: #efe8d8;
+      overflow-wrap: anywhere;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    .arch-band {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 20px;
+    }
+
+    .arch-band h3 {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .arch-item {
+      padding: 11px 0;
+      border-top: 1px solid var(--line);
+      font-size: 14px;
+    }
+
+    .timeline {
+      border-left: 2px solid var(--line);
+      margin-left: 8px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 28px;
+    }
+
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: -8px;
+      top: 9px;
+      width: 14px;
+      height: 14px;
+      background: var(--paper);
+      border: 2px solid var(--rust);
+    }
+
+    .timeline-item strong { display: block; margin-bottom: 4px; }
+
+    .quote {
+      font-family: var(--serif);
+      font-size: 29px;
+      line-height: 1.3;
+      color: var(--ink);
+      padding: 30px 0;
+      max-width: 900px;
+    }
+
+    .source {
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .source ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    .source li { margin: 5px 0; }
+
+    .split {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .decision {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      margin-bottom: 12px;
+    }
+
+    .decision .label {
+      padding: 15px;
+      border-right: 1px solid var(--line);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      background: #ece5d8;
+    }
+
+    .decision .body { padding: 15px 18px; }
+
+    .tag-system {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .tag-cloud {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-content: start;
+      min-height: 260px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      background: #fff9ed;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #332f27;
+    }
+
+    .tag.primary { background: var(--teal-soft); border-color: color-mix(in oklch, var(--teal) 40%, var(--line)); }
+    .tag.workspace { background: var(--blue-soft); border-color: color-mix(in oklch, var(--blue) 40%, var(--line)); }
+    .tag.flowtag { background: var(--rust-soft); border-color: color-mix(in oklch, var(--rust) 40%, var(--line)); }
+    .tag.lifecycle { background: var(--olive-soft); border-color: color-mix(in oklch, var(--olive) 40%, var(--line)); }
+    .tag.private { background: var(--plum-soft); border-color: color-mix(in oklch, var(--plum) 40%, var(--line)); }
+
+    .graph-board {
+      position: relative;
+      min-height: 430px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(to right, rgba(216, 209, 196, 0.45) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(216, 209, 196, 0.45) 1px, transparent 1px),
+        var(--panel);
+      background-size: 34px 34px;
+      overflow: hidden;
+    }
+
+    .graph-board svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .graph-node {
+      position: absolute;
+      width: 132px;
+      min-height: 62px;
+      padding: 10px;
+      background: #fffdf7;
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 30px var(--shadow);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .graph-node strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .graph-node span {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .n1 { left: 8%; top: 11%; border-top: 4px solid var(--teal); }
+    .n2 { left: 39%; top: 8%; border-top: 4px solid var(--blue); }
+    .n3 { left: 69%; top: 19%; border-top: 4px solid var(--rust); }
+    .n4 { left: 18%; top: 54%; border-top: 4px solid var(--olive); }
+    .n5 { left: 49%; top: 48%; border-top: 4px solid var(--plum); }
+    .n6 { left: 73%; top: 66%; border-top: 4px solid var(--ink); }
+
+    .mcp-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .mcp-cell {
+      padding: 20px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      min-height: 180px;
+    }
+
+    .mcp-cell:nth-child(4n) { border-right: 0; }
+    .mcp-cell:nth-last-child(-n + 4) { border-bottom: 0; }
+
+    .mcp-cell code {
+      display: inline-block;
+      margin-bottom: 10px;
+      background: #1d1c18;
+      color: #efe8d8;
+    }
+
+    .mcp-cell p {
+      font-size: 14px;
+      margin-bottom: 0;
+    }
+
+    .footer {
+      padding: 46px 0 70px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .section-head,
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding: 70px 0 46px;
+        min-height: auto;
+      }
+
+      .hero-meta,
+      .grid-2,
+      .grid-3,
+      .architecture,
+      .tag-system,
+      .mcp-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mcp-cell,
+      .mcp-cell:nth-child(4n),
+      .mcp-cell:nth-last-child(-n + 4) {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .mcp-cell:last-child { border-bottom: 0; }
+
+      .flow {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .flow-step {
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page { width: min(100vw - 24px, 1180px); }
+      .hero-meta { border-bottom: 0; }
+      .metric { border-right: 0; border-bottom: 1px solid var(--line); }
+      .flow { grid-template-columns: 1fr; }
+      .flow-step { border-right: 0; }
+      table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        white-space: normal;
+      }
+      th,
+      td {
+        min-width: 150px;
+      }
+      .decision { grid-template-columns: 1fr; }
+      .decision .label { border-right: 0; border-bottom: 1px solid var(--line); }
+      .graph-board { min-height: 620px; }
+      .graph-node { width: 145px; }
+      .n1 { left: 7%; top: 5%; }
+      .n2 { left: 48%; top: 18%; }
+      .n3 { left: 10%; top: 34%; }
+      .n4 { left: 48%; top: 48%; }
+      .n5 { left: 9%; top: 65%; }
+      .n6 { left: 48%; top: 78%; }
+      section { padding: 54px 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Repository Analysis · LLM-Wiki · JanusX</div>
+        <h1>把 agentmemory 的记忆系统，转译成 JanusX 的 LLM-Wiki 引擎</h1>
+        <p class="lead">
+          agentmemory 不是一个简单的“把聊天记录存起来”的项目。它的核心价值在于：保留原始事实源，把 LLM 作为抽取、压缩、归纳和图谱构建器，再用 BM25、向量和知识图谱三路检索把高价值上下文注入下一次工作。
+        </p>
+        <div class="hero-meta">
+          <div class="metric">
+            <strong>53</strong>
+            <span>MCP 工具，覆盖记忆写入、召回、图谱、治理、导出等操作面</span>
+          </div>
+          <div class="metric">
+            <strong>4</strong>
+            <span>工作记忆、情节记忆、语义记忆、程序记忆四层维护模型</span>
+          </div>
+          <div class="metric">
+            <strong>3</strong>
+            <span>BM25、Vector、Graph 三路检索，经 RRF 融合</span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="system-map">
+        <p class="map-title">agentmemory 的核心抽象</p>
+        <div class="stack">
+          <div class="stack-row">
+            <div class="stack-label">Capture</div>
+            <div class="stack-body">
+              <strong>Hooks / MCP / REST</strong>
+              <span>从工具调用、用户 prompt、session 生命周期自动捕获事件。</span>
+            </div>
+          </div>
+          <div class="stack-row">
+            <div class="stack-label">Fact Source</div>
+            <div class="stack-body">
+              <strong>Raw Observation</strong>
+              <span>原始观测先落库，后续摘要、索引、图谱都可重建。</span>
+            </div>
+          </div>
+          <div class="stack-row">
+            <div class="stack-label">LLM Jobs</div>
+            <div class="stack-body">
+              <strong>Compress / Summarize / Extract</strong>
+              <span>LLM 负责结构化，不直接成为唯一事实源。</span>
+            </div>
+          </div>
+          <div class="stack-row">
+            <div class="stack-label">Indexes</div>
+            <div class="stack-body">
+              <strong>BM25 + Vector + Graph</strong>
+              <span>关键词、语义、实体关系互补，避免单一检索失效。</span>
+            </div>
+          </div>
+          <div class="stack-row">
+            <div class="stack-label">Viewer</div>
+            <div class="stack-body">
+              <strong>Live Stream + Graph + Replay</strong>
+              <span>把记忆维护变成可观察、可审计、可修复的系统。</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </header>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">01 · Repository Reading</div>
+        <h2>这个仓库解决的不是“存储”，而是记忆生命周期</h2>
+      </div>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="num">01</div>
+          <strong>自动捕获</strong>
+          <span>PostToolUse、UserPromptSubmit、Stop、SessionStart 等 hook 把行为转成 observation。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">02</div>
+          <strong>去重与隐私过滤</strong>
+          <span>5 分钟窗口 SHA-256 去重，写入前剥离 secrets、API keys 和 private 标签。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">03</div>
+          <strong>原始观测落库</strong>
+          <span>先存 raw observation，再派生 synthetic 或 LLM compression。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">04</div>
+          <strong>LLM 压缩与总结</strong>
+          <span>输出 facts、concepts、files、narrative、importance，并支持 chunk map-reduce。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">05</div>
+          <strong>索引与图谱</strong>
+          <span>BM25、vector、graph nodes/edges 都是派生层，可重建、可迁移。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">06</div>
+          <strong>召回与注入</strong>
+          <span>SessionStart 或显式搜索按 token budget 注入最相关上下文。</span>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          这套设计最值得借鉴的点是“不可逆事实”和“可重算智能层”的分离。LLM 输出有概率错误，所以 agentmemory 没有把压缩结果当成唯一真相，而是让原始观测、派生摘要、图谱、索引、审计记录各自独立存在。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">02 · Strong Designs</div>
+        <h2>优秀设计特点：它把记忆工程化，而不是把 prompt 写长</h2>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>1. 多入口，单后端</h3>
+          <p>MCP、REST、hooks、CLI 都进入同一套函数注册体系。外部 Agent 的差异被压在适配层，记忆核心保持统一。</p>
+          <div class="code-list">
+            <code>src/mcp/server.ts</code>
+            <code>src/triggers/api.ts</code>
+            <code>src/hooks/*.ts</code>
+          </div>
+        </div>
+        <div class="panel alt">
+          <h3>2. LLM 可选，系统仍可用</h3>
+          <p>没有 LLM key 时仍走 synthetic compression 和 BM25；配置 provider 后才启用 LLM 压缩、总结、图谱提取。这比“强依赖云模型”更适合本地工具。</p>
+          <div class="code-list">
+            <code>src/functions/observe.ts</code>
+            <code>src/functions/compress-synthetic.ts</code>
+          </div>
+        </div>
+        <div class="panel alt">
+          <h3>3. 记忆有版本与替代关系</h3>
+          <p><code>mem::remember</code> 对相似内容做 Jaccard 检测，旧记忆标记为非 latest，新记忆记录 parent/supersedes。这让知识库能自然演化，而不是不断追加重复条目。</p>
+          <div class="code-list">
+            <code>src/functions/remember.ts</code>
+            <code>src/functions/cascade.ts</code>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>4. 图谱读取为可视化做了专门优化</h3>
+          <p>大图不再依赖全量 <code>kv.list</code>，而是维护 name index、edge key、degree 和 top-degree snapshot。viewer 常用路径读快照，避免 75K 节点级别的超时。</p>
+          <div class="code-list">
+            <code>src/functions/graph.ts</code>
+            <code>src/state/schema.ts</code>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>5. 检索不是单一路线</h3>
+          <p>BM25 负责精确词，向量负责语义相似，图谱负责实体邻近；最后用 RRF 融合，并保留每条结果的来源分数和图谱上下文。</p>
+          <div class="code-list">
+            <code>src/state/hybrid-search.ts</code>
+            <code>src/functions/smart-search.ts</code>
+          </div>
+        </div>
+        <div class="panel alt">
+          <h3>6. 可观测性是产品能力</h3>
+          <p>viewer 展示 live observation stream、session explorer、memory browser、graph visualization、health dashboard。记忆系统不再是黑箱。</p>
+          <div class="code-list">
+            <code>src/viewer/index.html</code>
+            <code>src/viewer/server.ts</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">03 · LLM-Wiki Principle</div>
+        <h2>你的理想机制可以成立，但要让 LLM 写“候选补丁”，不要让它直接改真相</h2>
+      </div>
+      <div class="split">
+        <div>
+          <p class="quote">LLM-Wiki 的关键不是让模型“记住一切”，而是让模型持续把事件提炼成可检索、可审计、可回滚的知识单元。</p>
+          <p>
+            JanusX 已经接入底层 LLM，因此不需要再引入一个外部记忆服务作为强依赖。更稳的路线是：吸收 agentmemory 的数据模型和维护机制，在 JanusX 主进程里实现本地知识库服务。
+          </p>
+        </div>
+        <div>
+          <div class="decision">
+            <div class="label">事实源</div>
+            <div class="body">保留 agent session、checkpoint、git diff、用户 prompt、LLM 响应、工具事件等原始记录。</div>
+          </div>
+          <div class="decision">
+            <div class="label">LLM 输出</div>
+            <div class="body">产出 <code>CandidateWikiPatch</code>、facts、entities、relations、confidence、source refs。</div>
+          </div>
+          <div class="decision">
+            <div class="label">应用策略</div>
+            <div class="body">高置信自动应用到 draft wiki；低置信进入 review queue；冲突项必须人工确认或二次验证。</div>
+          </div>
+          <div class="decision">
+            <div class="label">审计</div>
+            <div class="body">每次新增、修改、删除、合并都记录来源 observation、模型、prompt、时间和操作者。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">04 · JanusX Integration</div>
+        <h2>建议在 JanusX 里做一个本地 Knowledge Engine，而不是直接搬 agentmemory</h2>
+      </div>
+      <div class="architecture">
+        <div class="arch-band">
+          <h3>Main Process</h3>
+          <div class="arch-item"><code>KnowledgeCaptureService</code><br />接 AgentStreamManager、checkpoint、git analyzer、Janus chat。</div>
+          <div class="arch-item"><code>KnowledgeExtractService</code><br />调用现有 <code>LlmService</code> 做压缩、总结、实体关系抽取。</div>
+          <div class="arch-item"><code>KnowledgeStore</code><br />保存 observations、wiki pages、graph、audit、index metadata。</div>
+          <div class="arch-item"><code>KnowledgeSearchService</code><br />BM25 first；后续接 embedding 和 graph ranking。</div>
+        </div>
+        <div class="arch-band">
+          <h3>IPC Contract</h3>
+          <div class="arch-item"><code>knowledge:observe</code><br />写入原始事件或手动记忆。</div>
+          <div class="arch-item"><code>knowledge:extract</code><br />触发 LLM 归纳，返回候选补丁。</div>
+          <div class="arch-item"><code>knowledge:wiki:list/get/update</code><br />管理 Markdown wiki 页面。</div>
+          <div class="arch-item"><code>knowledge:graph/query/stats</code><br />图谱可视化与过滤。</div>
+          <div class="arch-item"><code>knowledge:search</code><br />统一召回接口，供 Janus Chat 和 Agent prompt builder 使用。</div>
+        </div>
+        <div class="arch-band">
+          <h3>Renderer</h3>
+          <div class="arch-item"><code>KnowledgeWorkbench</code><br />知识库主界面。</div>
+          <div class="arch-item"><code>MonacoViewer</code><br />Markdown / JSON patch 编辑与 diff。</div>
+          <div class="arch-item"><code>@xyflow/react</code><br />实体图谱、依赖关系、知识来源路径。</div>
+          <div class="arch-item"><code>ReactMarkdown</code><br />Wiki 预览与引用渲染。</div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          JanusX 已有 <code>packages/llm-core</code>、<code>src/main/llm/LlmService.ts</code>、<code>src/main/agent/stream-manager.ts</code>、checkpoint 子系统、<code>@xyflow/react</code>、Monaco 和 React Markdown。结合成本主要在数据模型、IPC 和维护队列，不在 LLM Provider 层。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">05 · Reference, Not Migration</div>
+        <h2>借鉴的是知识库设计原则，不是照搬它的运行时</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>agentmemory 的优秀设计</th>
+            <th>JanusX 应该吸收什么</th>
+            <th>JanusX 不应该照搬什么</th>
+            <th>高效实现方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Hooks 自动捕获工作过程</td>
+            <td>把终端、Agent、checkpoint、git analyzer、JanusChat 的关键事件统一成 knowledge observation。</td>
+            <td>不要另起一套 hook runtime；JanusX 已有 IPC、AgentStreamManager、TerminalManager、Analyzer。</td>
+            <td>新增 <code>KnowledgeCaptureService</code>，订阅现有事件并写入本地 JSONL。</td>
+          </tr>
+          <tr>
+            <td>Raw observation 与派生层分离</td>
+            <td>原始事件不可丢；facts、wiki、graph、index 都可重算。</td>
+            <td>不要让 LLM 直接覆盖 Markdown Wiki，把 Wiki 当唯一真相。</td>
+            <td>采用 <code>Observation -> Candidate -> Reviewed Fact/WikiPatch</code> 三段式。</td>
+          </tr>
+          <tr>
+            <td>LLM 压缩、总结、图谱抽取</td>
+            <td>复用 JanusX 现有 <code>LlmService</code> 和 AI SDK <code>generateObject</code> 路径。</td>
+            <td>不要引入新的 provider 配置、环境变量体系或模型调用层。</td>
+            <td>新增 <code>KnowledgeExtractService</code>，system prompt 与 schema 独立维护。</td>
+          </tr>
+          <tr>
+            <td>BM25 + Vector + Graph 融合检索</td>
+            <td>MVP 先做 BM25 + 标签过滤；确认使用频率后再加 embedding 和 graph ranking。</td>
+            <td>不要一开始做完整 RRF、reranker、graph traversal、query expansion。</td>
+            <td>用轻量倒排索引和 tag/workspace/file 过滤，接口保持可扩展。</td>
+          </tr>
+          <tr>
+            <td>Viewer 让记忆系统可观察</td>
+            <td>做进 JanusX 的面板：Knowledge Workbench、Graph、Tag Manager、Audit。</td>
+            <td>不要另起 Web viewer、端口、鉴权、CSP、代理层。</td>
+            <td>复用 Electron Renderer、Monaco、ReactMarkdown、<code>@xyflow/react</code>。</td>
+          </tr>
+          <tr>
+            <td>MCP 暴露记忆能力</td>
+            <td>给 Agent 工作流暴露少量高价值工具：capture、recall、context、patch、audit。</td>
+            <td>不要复制 53 个工具，工具面过大反而增加 Agent 选择成本。</td>
+            <td>先做 6-8 个核心 MCP tools + 2-3 个 resources/prompts。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <p>
+          评估结论：JanusX 的最佳方案是“内嵌式 Knowledge Engine”。它借鉴 agentmemory 的生命周期、派生层、审计、检索和可视化原则，但运行在 JanusX 已有主进程、IPC、LLM、Agent 和蓝图体系内。这样能避免双运行时、双配置、双 UI、双记忆模型。
+        </p>
+      </div>
+
+      <div class="flow" style="margin-top: 24px;">
+        <div class="flow-step">
+          <div class="num">A</div>
+          <strong>现有事件进入</strong>
+          <span>Terminal input、Agent event、checkpoint、git commit diff、Janus Analyzer result、用户手动保存。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">B</div>
+          <strong>规范化为 Observation</strong>
+          <span>补齐 workspace、repo、file、agent、blueprint node、source tags。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">C</div>
+          <strong>先写事实源</strong>
+          <span>追加到 <code>.janusX/knowledge/observations.jsonl</code>，不等待 LLM。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">D</div>
+          <strong>异步生成候选</strong>
+          <span>LLM 只产出 facts、tags、wiki patch、graph edges 的候选结果。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">E</div>
+          <strong>规则层应用</strong>
+          <span>高置信低风险自动入库；冲突、低置信、跨 workspace 影响进入 Inbox。</span>
+        </div>
+        <div class="flow-step">
+          <div class="num">F</div>
+          <strong>工作流消费</strong>
+          <span>JanusChat、xlocal、Analyzer、MCP tools 从统一 context builder 取上下文。</span>
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-top: 18px;">
+        <div class="panel">
+          <h3>最小核心</h3>
+          <p><code>KnowledgeStore</code>、<code>KnowledgeCaptureService</code>、<code>KnowledgeExtractService</code>、<code>KnowledgeSearchService</code> 四个服务足够启动闭环。</p>
+        </div>
+        <div class="panel alt">
+          <h3>存储取舍</h3>
+          <p>MVP 沿用 <code>.janusX</code> 目录约定：<code>observations.jsonl</code>、<code>facts.jsonl</code>、<code>wiki/*.md</code>、<code>index/*.json</code>。先不引入 SQLite。</p>
+        </div>
+        <div class="panel">
+          <h3>UI 取舍</h3>
+          <p>只做一个 Knowledge Workbench，不新增独立 viewer。先把 Inbox、Wiki、Tags、Graph、Audit 放成 tabs，避免多入口分散。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">06 · JanusX Fusion Slice</div>
+        <h2>把优秀设计压缩成 JanusX 里一个小而完整的知识闭环</h2>
+      </div>
+
+      <div class="quote">
+        推荐第一版只证明一件事：JanusX 能从真实工作流中捕获事实，用现有 LLM 生成候选知识，并把可追溯、可审核、可召回的上下文还给 Agent。
+      </div>
+
+      <table class="fusion-matrix">
+        <thead>
+          <tr>
+            <th>JanusX 融合点</th>
+            <th>应该借鉴 agentmemory 的设计</th>
+            <th>第一版实现边界</th>
+            <th>不做什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>KnowledgeStore</code></td>
+            <td>原始事实源与派生层分离，所有智能结果可重算。</td>
+            <td>只管理 <code>observations.jsonl</code>、<code>facts.jsonl</code>、<code>wiki/*.md</code>、<code>indexes/*.json</code>。</td>
+            <td>不引入数据库、不做多租户、不做服务端同步。</td>
+          </tr>
+          <tr>
+            <td><code>KnowledgeCaptureService</code></td>
+            <td>多入口归一化成 observation。</td>
+            <td>订阅 AgentStreamManager、checkpoint、Analyzer、JanusChat 的关键事件。</td>
+            <td>不新增 hook runtime，不改造现有 Agent 事件总线。</td>
+          </tr>
+          <tr>
+            <td><code>KnowledgeExtractService</code></td>
+            <td>LLM 做抽取、总结、关系候选，不直接改真相。</td>
+            <td>复用 <code>LlmService</code> 和结构化输出，产出 <code>CandidateFact</code>、<code>CandidateWikiPatch</code>、<code>CandidateGraphEdge</code>。</td>
+            <td>不复制 provider 配置，不接入第二套模型 SDK。</td>
+          </tr>
+          <tr>
+            <td><code>KnowledgeSearchService</code></td>
+            <td>检索层可以逐步演进。</td>
+            <td>先做 BM25 / 倒排索引 + workspace/tag/file 过滤 + source refs 返回。</td>
+            <td>不在 MVP 做 embedding、reranker、RRF、query expansion。</td>
+          </tr>
+          <tr>
+            <td><code>KnowledgeWorkbench</code></td>
+            <td>Viewer 的价值是可观察、可修正、可审计。</td>
+            <td>一个面板内放 Inbox、Wiki、Tags、Graph、Audit tabs。</td>
+            <td>不做独立 Web viewer，不开端口，不做第二套 UI shell。</td>
+          </tr>
+          <tr>
+            <td><code>KnowledgeMcpAdapter</code></td>
+            <td>MCP 让外部 Agent 读写记忆。</td>
+            <td>只暴露 capture、recall、context、patch、tag、graph、audit 等少量工具。</td>
+            <td>不复制大而全的工具面，不让 Agent 在 50+ 工具里选择。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="grid-3" style="margin-top: 18px;">
+        <div class="panel">
+          <h3>第一版目录建议</h3>
+          <p><code>src/main/knowledge/*</code> 放 store、capture、extract、search；<code>src/main/ipc/knowledge-handlers.ts</code> 放 IPC；renderer 只新增一个 Workbench 入口。</p>
+        </div>
+        <div class="panel alt">
+          <h3>工作流接入矩阵</h3>
+          <p><code>xunit</code> 只取当前文件/任务知识；<code>xlocal</code> 取当前模块和近期决策；<code>xwhole</code> 取跨模块图谱、历史架构约束和冲突队列。</p>
+        </div>
+        <div class="panel">
+          <h3>验收标准</h3>
+          <p>一次真实任务结束后，系统应能生成至少 1 条 fact 候选、1 个 wiki patch、可通过标签召回，并能从 UI 反查原始 observation。</p>
+        </div>
+      </div>
+
+      <div class="note">
+        <p>
+          这里的关键取舍是“嵌入 JanusX 主工作流”，不是“再造一个知识库产品”。只要 capture、candidate patch、review、recall 四件事闭环成立，后续图谱、向量和 MCP 增强都有清晰落点；如果一开始追求完整平台，反而会偏离 JanusX 的 Agent 工作流目标。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">07 · Data Model</div>
+        <h2>最小可行数据模型：先能维护，再追求智能</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>对象</th>
+            <th>核心字段</th>
+            <th>用途</th>
+            <th>是否由 LLM 直接写入</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Observation</code></td>
+            <td>id, source, sessionId, projectPath, eventType, payload, createdAt, privacyFlags</td>
+            <td>事实源，来自 agent stream、checkpoint、git diff、chat。</td>
+            <td>否</td>
+          </tr>
+          <tr>
+            <td><code>MemoryFact</code></td>
+            <td>id, content, concepts, files, tags, confidence, sourceObservationIds, version, supersedes</td>
+            <td>可检索事实，支撑 prompt 注入和 wiki 页面生成。</td>
+            <td>生成候选，规则层落库</td>
+          </tr>
+          <tr>
+            <td><code>KnowledgeTag</code></td>
+            <td>id, name, kind, aliases, color, createdBy, mergedInto, usageCount</td>
+            <td>标签字典，区分系统标签和用户标签，支持别名、合并和统计。</td>
+            <td>可建议，不自动重命名</td>
+          </tr>
+          <tr>
+            <td><code>WorkspaceScope</code></td>
+            <td>workspaceId, rootPath, repoRemote, defaultTags, visibility, trustLevel</td>
+            <td>记录知识来源工作区，控制跨工作区召回、权限和默认标签。</td>
+            <td>否</td>
+          </tr>
+          <tr>
+            <td><code>WikiPage</code></td>
+            <td>slug, title, markdown, sourceFactIds, updatedAt, status</td>
+            <td>LLM-Wiki 的可读层，供人和 Agent 消费。</td>
+            <td>生成 patch，不直接覆盖</td>
+          </tr>
+          <tr>
+            <td><code>GraphNode / GraphEdge</code></td>
+            <td>type, name, properties, sourceObservationIds, weight, confidence</td>
+            <td>可视化、跨页面跳转、图谱召回。</td>
+            <td>生成候选，合并器校验</td>
+          </tr>
+          <tr>
+            <td><code>AuditEvent</code></td>
+            <td>operation, targetId, actor, model, promptHash, before, after, createdAt</td>
+            <td>回滚、追责、解释“这个知识从哪来”。</td>
+            <td>否</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">08 · Tags & Workspaces</div>
+        <h2>知识单元必须跨工作区流动，但不能丢失标签语义</h2>
+      </div>
+      <div class="tag-system">
+        <div class="tag-cloud" aria-label="JanusX knowledge tag examples">
+          <span class="tag primary">#type/fact</span>
+          <span class="tag primary">#type/decision</span>
+          <span class="tag primary">#type/workflow</span>
+          <span class="tag primary">#type/preference</span>
+          <span class="tag workspace">#workspace/janusx</span>
+          <span class="tag workspace">#workspace/client-a</span>
+          <span class="tag workspace">#repo/packages-llm-core</span>
+          <span class="tag workspace">#file/src/main/llm</span>
+          <span class="tag flowtag">#agent/coderX</span>
+          <span class="tag flowtag">#mode/xlocal</span>
+          <span class="tag flowtag">#task/checkpoint</span>
+          <span class="tag lifecycle">#status/draft</span>
+          <span class="tag lifecycle">#status/verified</span>
+          <span class="tag lifecycle">#lifecycle/superseded</span>
+          <span class="tag lifecycle">#confidence/high</span>
+          <span class="tag private">#visibility/private</span>
+          <span class="tag private">#visibility/team</span>
+        </div>
+        <div class="panel">
+          <h3>标签不是装饰，而是召回和治理维度</h3>
+          <p>
+            JanusX 的知识单元应该允许来自任意工作区：项目 A 的 LLM Provider 经验、项目 B 的 Agent 流程、某个客户仓库的架构约束，都能沉淀到统一知识库。但每条知识必须带上工作区、来源、类型、置信度、生命周期和可见性标签。
+          </p>
+          <p>
+            推荐采用“系统标签 + 用户标签”双轨：系统标签由 JanusX 自动生成并参与权限、检索、过期和冲突判断；用户标签用于个人知识组织，保留 Obsidian 式自由度。
+          </p>
+          <div class="decision">
+            <div class="label">系统标签</div>
+            <div class="body"><code>#workspace/*</code>、<code>#repo/*</code>、<code>#type/*</code>、<code>#source/*</code>、<code>#confidence/*</code>、<code>#visibility/*</code>。</div>
+          </div>
+          <div class="decision">
+            <div class="label">用户标签</div>
+            <div class="body">例如 <code>#架构</code>、<code>#提示词</code>、<code>#复盘</code>、<code>#坑位</code>。允许别名、合并、重命名，但必须保留审计。</div>
+          </div>
+          <div class="decision">
+            <div class="label">召回策略</div>
+            <div class="body">默认优先当前 workspace；显式查询可跨 workspace；高风险知识必须同时匹配 workspace/repo/file 标签。</div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          一个合理的知识单元不是一段裸文本，而是 <code>content + tags + source refs + confidence + lifecycle</code>。标签让它能跨工作区复用，source refs 让它能被追溯，lifecycle 让它能被替代和清理。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">09 · Visual Management</div>
+        <h2>可视化管理不是附属 UI，而是知识库可靠性的控制台</h2>
+      </div>
+      <div class="grid-3">
+        <div class="panel">
+          <h3>Inbox</h3>
+          <p>展示未处理 observations、LLM 候选 facts、候选 wiki patch。按置信度、来源、项目、时间排序。</p>
+        </div>
+        <div class="panel alt">
+          <h3>Wiki Editor</h3>
+          <p>左侧页面树，中间 Markdown 编辑，右侧 provenance。所有 LLM 修改以 diff 形式呈现。</p>
+        </div>
+        <div class="panel">
+          <h3>Knowledge Graph</h3>
+          <p>用 <code>@xyflow/react</code> 呈现概念、文件、模块、决策、Agent、任务之间的关系。</p>
+        </div>
+        <div class="panel alt">
+          <h3>Conflict Queue</h3>
+          <p>当新事实与旧事实冲突、版本替代、文件 truth 不一致时进入人工确认队列。</p>
+        </div>
+        <div class="panel">
+          <h3>Search Lab</h3>
+          <p>展示 BM25、vector、graph 各自命中和融合结果，便于调权重、查召回失败。</p>
+        </div>
+        <div class="panel alt">
+          <h3>Maintenance</h3>
+          <p>提供重建索引、重跑抽取、合并重复、归档 stale 页面、导出 Markdown 的操作入口。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">10 · Obsidian Graph</div>
+        <h2>做像 Obsidian 的知识图谱，但节点语义要服务 Agent 工作流</h2>
+      </div>
+      <div class="split">
+        <div class="graph-board" aria-label="Obsidian style graph concept for JanusX">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M18 18 L48 16 L76 28 L57 58 L25 65 L18 18" fill="none" stroke="rgba(24,23,18,0.28)" stroke-width="0.35" />
+            <path d="M48 16 L57 58 L82 76" fill="none" stroke="rgba(24,23,18,0.24)" stroke-width="0.35" />
+            <path d="M25 65 L57 58 L76 28" fill="none" stroke="rgba(24,23,18,0.22)" stroke-width="0.35" />
+          </svg>
+          <div class="graph-node n1"><strong>LLM Provider</strong><span>#type/concept</span></div>
+          <div class="graph-node n2"><strong>JanusX</strong><span>#workspace/core</span></div>
+          <div class="graph-node n3"><strong>Checkpoint</strong><span>#type/workflow</span></div>
+          <div class="graph-node n4"><strong>LlmService</strong><span>#file/main</span></div>
+          <div class="graph-node n5"><strong>Vertex AI</strong><span>#provider</span></div>
+          <div class="graph-node n6"><strong>coderX</strong><span>#agent</span></div>
+        </div>
+        <div>
+          <div class="panel">
+            <h3>图谱节点类型</h3>
+            <p>建议至少区分 <code>WikiPage</code>、<code>Fact</code>、<code>Concept</code>、<code>File</code>、<code>Workspace</code>、<code>Agent</code>、<code>Task</code>、<code>Decision</code>、<code>Prompt</code>。不要只做“页面互链”，否则图谱只能看，不能驱动工作流。</p>
+          </div>
+          <div class="panel alt">
+            <h3>图谱边类型</h3>
+            <p>边应表达具体关系：<code>mentions</code>、<code>derived_from</code>、<code>supersedes</code>、<code>depends_on</code>、<code>implemented_in</code>、<code>owned_by</code>、<code>conflicts_with</code>、<code>used_by_agent</code>。</p>
+          </div>
+          <div class="panel">
+            <h3>交互能力</h3>
+            <p>支持标签过滤、workspace 过滤、时间滑块、置信度阈值、孤岛节点检测、冲突边高亮、从节点反查 source observation 和相关 prompt。</p>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          Obsidian 图谱的体验重点是“发现关系”。JanusX 图谱还要承担“给 Agent 提供上下文”的职责：选中图谱子图后，应能一键生成 prompt context、handoff context、review context 或 MCP resource。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">11 · MCP Surface</div>
+        <h2>MCP 扩展要把知识库变成 JanusX 工作流的一等能力</h2>
+      </div>
+      <div class="mcp-grid">
+        <div class="mcp-cell">
+          <code>knowledge_capture</code>
+          <p>Agent 在完成任务、读文件、遇到错误、做架构决策时主动写入 observation 或 fact candidate。</p>
+        </div>
+        <div class="mcp-cell">
+          <code>knowledge_recall</code>
+          <p>按 query、workspace、tags、files、agent role 召回相关知识，返回带引用的 compact context。</p>
+        </div>
+        <div class="mcp-cell">
+          <code>knowledge_context</code>
+          <p>为 <code>xwhole/xlocal/xunit</code> 自动生成上下文包：相关 wiki、历史决策、注意事项、最近冲突。</p>
+        </div>
+        <div class="mcp-cell">
+          <code>wiki_patch_propose</code>
+          <p>让 LLM 基于当前任务产出 Wiki patch，但进入 review queue，不直接覆盖页面。</p>
+        </div>
+        <div class="mcp-cell">
+          <code>wiki_patch_apply</code>
+          <p>应用已确认 patch，写入审计事件，更新 page version、tags、graph edges 和索引。</p>
+        </div>
+        <div class="mcp-cell">
+          <code>tag_query</code>
+          <p>按系统标签和用户标签查询知识单元，支持别名、合并历史和标签统计。</p>
+        </div>
+        <div class="mcp-cell">
+          <code>graph_query</code>
+          <p>查询 Obsidian 式子图，支持 entity、tag、workspace、depth、edge type、confidence 过滤。</p>
+        </div>
+        <div class="mcp-cell">
+          <code>knowledge_audit</code>
+          <p>查询某条知识从哪里来、被谁改过、由哪个模型生成、与哪些文件和任务相关。</p>
+        </div>
+      </div>
+      <div class="note">
+        <p>
+          这些 MCP 工具应同时暴露给 JanusX 内置 Agent、外部 Codex/Claude/Cursor、以及用户脚本。真正的集成不是“Agent 能搜索知识库”，而是每个工作流阶段都能自动读、写、更新、审计知识库。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">12 · Roadmap</div>
+        <h2>落地路线：先本地可控，再逐步增强检索和图谱</h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <strong>Phase 1 · 本地事实源、标签和 Wiki 草稿</strong>
+          <p>建立 <code>.janusX/knowledge</code> 存储；从 AgentStreamManager、checkpoint、git analyzer 写 observations；知识单元强制带 workspace/source/type 标签；用 LlmService 生成 facts 和 Wiki patch；只做 BM25 搜索。</p>
+        </div>
+        <div class="timeline-item">
+          <strong>Phase 2 · 可视化工作台</strong>
+          <p>实现 KnowledgeWorkbench：Inbox、Wiki Editor、Tag Manager、Provenance、Audit Log。让用户能看到并修正 LLM 的每一次知识更新。</p>
+        </div>
+        <div class="timeline-item">
+          <strong>Phase 3 · Obsidian 风格图谱与关系召回</strong>
+          <p>抽取实体与关系，接入 <code>@xyflow/react</code>；支持标签过滤、workspace 过滤和 source 反查；学习 agentmemory 的 side-index + snapshot 设计，不让图谱页面依赖全量扫描。</p>
+        </div>
+        <div class="timeline-item">
+          <strong>Phase 4 · 向量检索与混合排序</strong>
+          <p>复用 llm-core 的 embedding 能力或新增 embedding model；用 RRF 融合 BM25、vector、graph，展示每路得分。</p>
+        </div>
+        <div class="timeline-item">
+          <strong>Phase 5 · MCP 工作流闭环</strong>
+          <p>暴露 knowledge MCP tools/resources/prompts，让 <code>xwhole/xlocal/xunit</code> 自动读写知识；增加 TTL、访问强化、冲突检测、版本替代、定期摘要、Markdown 导出和项目间迁移。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">13 · Cautions</div>
+        <h2>直接集成 agentmemory 的风险，以及更适合 JanusX 的取舍</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>选择</th>
+            <th>收益</th>
+            <th>风险</th>
+            <th>建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>直接运行 agentmemory</td>
+            <td>功能完整，MCP/REST/viewer 现成。</td>
+            <td>引入 iii-engine、端口、进程、外部数据模型；与 JanusX LLM/agent/checkpoint 栈重复。</td>
+            <td>适合作为外部可选适配，不建议作为核心依赖。</td>
+          </tr>
+          <tr>
+            <td>移植核心机制</td>
+            <td>与 JanusX LlmService、Electron IPC、已有 UI 栈自然融合。</td>
+            <td>需要自己实现存储、索引、图谱维护和审计。</td>
+            <td>推荐。先做最小闭环，再补混合检索。</td>
+          </tr>
+          <tr>
+            <td>只做 Markdown Wiki</td>
+            <td>实现最快，人类可读。</td>
+            <td>缺少 provenance、冲突检测和检索质量；会退化成“LLM 乱改文档”。</td>
+            <td>可以作为消费层，但不能作为唯一存储层。</td>
+          </tr>
+          <tr>
+            <td>一开始做完整知识平台</td>
+            <td>规划看起来完整。</td>
+            <td>标签、图谱、向量、MCP、审计、自动维护同时开工，会拖慢 JanusX 主工作流并制造大量空接口。</td>
+            <td>不要做。先交付 observation + tags + candidate patch + BM25 + Workbench Inbox 的闭环。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-kicker">14 · Source References</div>
+        <h2>本报告依据的关键源码与文档</h2>
+      </div>
+      <div class="source">
+        <p>agentmemory 仓库当前浅克隆 commit：<code>f6f9e3c fix(website): portal mobile nav sheet to body and close breakpoint gap (#670)</code>。</p>
+        <ul>
+          <li><code>README.md</code>：How It Works、Search、Viewer、Configuration、API 段落。</li>
+          <li><code>src/functions/observe.ts</code>：去重、隐私过滤、raw observation、synthetic compression、viewer stream。</li>
+          <li><code>src/functions/remember.ts</code>：手工记忆、版本替代、TTL、索引更新、forget 审计。</li>
+          <li><code>src/functions/compress.ts</code> 与 <code>src/functions/summarize.ts</code>：LLM XML 输出、校验、质量评分、chunk summarize。</li>
+          <li><code>src/functions/graph.ts</code> 与 <code>src/state/schema.ts</code>：图谱抽取、name/edge/degree side indexes、snapshot、reset/rebuild。</li>
+          <li><code>src/state/hybrid-search.ts</code> 与 <code>src/functions/smart-search.ts</code>：BM25 + vector + graph RRF 融合检索。</li>
+          <li>JanusX 本地上下文：<code>packages/llm-core</code>、<code>src/main/llm/LlmService.ts</code>、<code>src/main/agent/stream-manager.ts</code>、<code>src/main/agent/checkpoint/*</code>、<code>@xyflow/react</code>、Monaco、React Markdown。</li>
+          <li><code>src/main/janus/analyzer.ts</code>：现有 Janus Analyzer 已采用 <code>llmService</code> + 结构化输出，并把新需求作为候选提议而非直接改结构，这与 Knowledge Engine 的 candidate patch 模式一致。</li>
+          <li><code>docs/janus/blueprint-design.html</code>：Janus 已定位为规划、记忆、分析、可视化系统；知识库设计应并入这条主线，而不是旁路实现一个独立产品。</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>生成位置：<code>doc/agentmemory-llm-wiki-analysis.html</code></p>
+      <p>结论：JanusX 应学习 agentmemory 的生命周期、派生层、审计和可视化设计；核心实现应内聚到 JanusX 的 LLM 与 Agent 基础设施中。</p>
+    </footer>
+  </main>
+</body>
+</html>

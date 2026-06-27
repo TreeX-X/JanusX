@@ -16,8 +16,11 @@ const MIME_MAP: Record<string, string> = {
 export function registerFileHandlers(): void {
   ipcMain.handle('file:read', async (_event, filePath: string) => {
     try {
-      const content = await readFile(filePath, 'utf-8')
-      return { content, encoding: 'utf-8' }
+      const [content, info] = await Promise.all([
+        readFile(filePath, 'utf-8'),
+        stat(filePath),
+      ])
+      return { content, encoding: 'utf-8', size: info.size, mtime: info.mtimeMs }
     } catch (err: any) {
       return { error: err.message || 'Failed to read file' }
     }
@@ -34,10 +37,10 @@ export function registerFileHandlers(): void {
 
   ipcMain.handle('file:readBinary', async (_event, filePath: string) => {
     try {
-      const buffer = await readFile(filePath)
+      const [buffer, info] = await Promise.all([readFile(filePath), stat(filePath)])
       const ext = extname(filePath).toLowerCase()
       const mimeType = MIME_MAP[ext] || 'application/octet-stream'
-      return { base64: buffer.toString('base64'), mimeType }
+      return { base64: buffer.toString('base64'), mimeType, size: info.size, mtime: info.mtimeMs }
     } catch (err: any) {
       return { error: err.message || 'Failed to read binary file' }
     }

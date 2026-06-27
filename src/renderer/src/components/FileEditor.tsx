@@ -77,6 +77,7 @@ function ViewerContent({ file }: { file: OpenFile }) {
         <BinaryInfo
           fileName={file.name}
           filePath={file.absolutePath}
+          size={file.size}
         />
       )
     default:

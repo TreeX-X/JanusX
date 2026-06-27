@@ -42,6 +42,14 @@ export interface Terminal {
   autoCommand?: string
   pid: number | null
   status: 'idle' | 'running' | 'exited'
+  updatedAt?: number
+  telemetryStartedAt?: number
+  exitCode?: number
+  detectedModel?: string
+  inputTokens?: number
+  outputTokens?: number
+  contextTokens?: number
+  contextWindowTokens?: number
 }
 
 export type AppLoadState = 'no-workspace' | 'workspace-loaded' | 'no-terminal' | 'terminal-active'
@@ -97,6 +105,8 @@ export interface OpenFile {
   content: string
   base64?: string
   mimeType?: string
+  size?: number
+  mtime?: number
   isDirty: boolean
   isLoading: boolean
   error?: string

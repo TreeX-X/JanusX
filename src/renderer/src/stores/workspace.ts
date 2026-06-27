@@ -1,12 +1,6 @@
 import { create } from 'zustand'
 import type { Workspace, Terminal, FileNode } from '@/types'
 
-export interface LogEntry {
-  time: number
-  level: 'info' | 'warn' | 'error'
-  message: string
-}
-
 interface WorkspaceStore {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
@@ -14,7 +8,6 @@ interface WorkspaceStore {
   activeTerminalId: string | null
   fileTree: FileNode[]
   activeFilePath: string | null
-  logs: LogEntry[]
 
   // 每个工作区的终端快照
   terminalSnapshots: Record<string, { terminals: Terminal[]; activeTerminalId: string | null }>
@@ -27,11 +20,10 @@ interface WorkspaceStore {
   addTerminal: (terminal: Terminal) => void
   removeTerminal: (id: string) => void
   setActiveTerminal: (id: string) => void
+  updateTerminal: (id: string, patch: Partial<Terminal>) => void
 
   updateFileTree: (nodes: FileNode[]) => void
   setActiveFilePath: (path: string | null) => void
-  addLog: (level: LogEntry['level'], message: string) => void
-  clearLogs: () => void
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
@@ -41,7 +33,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   activeTerminalId: null,
   fileTree: [],
   activeFilePath: null,
-  logs: [],
   terminalSnapshots: {},
 
   setWorkspaces: (workspaces) => set({ workspaces }),
@@ -78,10 +69,18 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   addTerminal: (terminal) =>
-    set((s) => ({
-      terminals: [...s.terminals, terminal],
-      activeTerminalId: terminal.id,
-    })),
+    set((s) => {
+      const now = Date.now()
+      const nextTerminal = {
+        ...terminal,
+        updatedAt: terminal.updatedAt ?? now,
+        telemetryStartedAt: terminal.telemetryStartedAt ?? now,
+      }
+      return {
+        terminals: [...s.terminals, nextTerminal],
+        activeTerminalId: terminal.id,
+      }
+    }),
   removeTerminal: (id) =>
     set((s) => ({
       terminals: s.terminals.filter((t) => t.id !== id),
@@ -91,13 +90,13 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
           : s.activeTerminalId,
     })),
   setActiveTerminal: (id) => set({ activeTerminalId: id }),
+  updateTerminal: (id, patch) =>
+    set((s) => ({
+      terminals: s.terminals.map((t) =>
+        t.id === id ? { ...t, ...patch, updatedAt: patch.updatedAt ?? Date.now() } : t
+      ),
+    })),
 
   updateFileTree: (fileTree) => set({ fileTree }),
   setActiveFilePath: (path) => set({ activeFilePath: path }),
-
-  addLog: (level, message) =>
-    set((s) => ({
-      logs: [...s.logs, { time: Date.now(), level, message }].slice(-200),
-    })),
-  clearLogs: () => set({ logs: [] }),
 }))

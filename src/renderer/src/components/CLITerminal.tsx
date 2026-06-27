@@ -7,15 +7,106 @@ import {
   hasWorkspaceFileDrag,
   readWorkspaceFileDragData,
 } from '@/lib/terminal-file-reference'
+import {
+  extractRuntimeTelemetry,
+  getEstimatedContextWindow,
+  type RuntimeTelemetryPatch,
+} from '@/lib/runtime-telemetry'
+import { useWorkspaceStore } from '@/stores/workspace'
+import type { Terminal as TerminalState } from '@/types'
 
 interface CLITerminalProps {
   terminalId: string
 }
 
+type RuntimeTelemetryHistorySnapshot = RuntimeTelemetryPatch & {
+  updatedAt?: number
+}
+
+const HISTORY_TELEMETRY_POLL_MS = 5_000
+
 export function CLITerminal({ terminalId }: CLITerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const [fileDragOver, setFileDragOver] = useState(false)
+  const pendingOutputRef = useRef('')
+  const telemetryFlushTimerRef = useRef<number | null>(null)
+
+  const applyTelemetryPatch = useCallback((telemetry: RuntimeTelemetryHistorySnapshot) => {
+    const store = useWorkspaceStore.getState()
+    const terminal = store.terminals.find((item) => item.id === terminalId)
+    if (!terminal) return
+
+    const detectedModel = telemetry.detectedModel ?? terminal.detectedModel
+    const patch: Partial<TerminalState> = {}
+
+    if (detectedModel && detectedModel !== terminal.detectedModel) {
+      patch.detectedModel = detectedModel
+      const estimatedWindow = getEstimatedContextWindow(terminal.preset, detectedModel)
+      if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
+    }
+
+    if (!terminal.contextWindowTokens && detectedModel && patch.contextWindowTokens === undefined) {
+      const estimatedWindow = getEstimatedContextWindow(terminal.preset, detectedModel)
+      if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
+    }
+
+    if (telemetry.contextWindowTokens !== undefined) patch.contextWindowTokens = telemetry.contextWindowTokens
+    if (telemetry.contextTokens !== undefined) patch.contextTokens = telemetry.contextTokens
+    if (telemetry.inputTokens !== undefined) patch.inputTokens = telemetry.inputTokens
+    if (telemetry.outputTokens !== undefined) patch.outputTokens = telemetry.outputTokens
+
+    if (Object.keys(patch).length === 0) return
+    store.updateTerminal(terminalId, { ...patch, updatedAt: telemetry.updatedAt ?? Date.now() })
+  }, [terminalId])
+
+  const updateTelemetry = useCallback((text: string) => {
+    if (!text) return
+    applyTelemetryPatch(extractRuntimeTelemetry(text))
+  }, [applyTelemetryPatch])
+
+  const scheduleOutputTelemetry = useCallback((data: string) => {
+    pendingOutputRef.current += data
+    if (telemetryFlushTimerRef.current !== null) return
+
+    telemetryFlushTimerRef.current = window.setTimeout(() => {
+      const pending = pendingOutputRef.current
+      pendingOutputRef.current = ''
+      telemetryFlushTimerRef.current = null
+      updateTelemetry(pending)
+    }, 800)
+  }, [updateTelemetry])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const pollHistoryTelemetry = async () => {
+      const terminal = useWorkspaceStore.getState().terminals.find((item) => item.id === terminalId)
+      if (!terminal || terminal.preset === 'shell') return
+
+      try {
+        const result = await window.electron.invoke('runtime-telemetry:get', {
+          preset: terminal.preset,
+          cwd: terminal.cwd,
+          startedAt: terminal.telemetryStartedAt,
+        })
+        if (cancelled || !result || typeof result !== 'object') return
+        applyTelemetryPatch(result as RuntimeTelemetryHistorySnapshot)
+      } catch {
+        // History telemetry is opportunistic; terminal rendering must not depend on it.
+      }
+    }
+
+    void pollHistoryTelemetry()
+    const timer = window.setInterval(() => {
+      void pollHistoryTelemetry()
+    }, HISTORY_TELEMETRY_POLL_MS)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [terminalId, applyTelemetryPatch])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -181,6 +272,7 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
         if (ch === '\r' || ch === '\n') {
           if (inputLine.length > 0) {
             window.electron.send('terminal:submit-line', { id: terminalId, text: inputLine })
+            updateTelemetry(inputLine)
           }
           inputLine = ''
           continue
@@ -204,6 +296,7 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
       const { id, data } = payload as { id: string; data: string }
       if (id === terminalId) {
         term.write(data)
+        scheduleOutputTelemetry(data)
       }
     })
 
@@ -212,6 +305,10 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     return () => {
       observer.disconnect()
       unsubscribe()
+      if (telemetryFlushTimerRef.current !== null) {
+        window.clearTimeout(telemetryFlushTimerRef.current)
+        telemetryFlushTimerRef.current = null
+      }
       term.dispose()
       termRef.current = null
     }
@@ -246,7 +343,7 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     }
 
     window.electron.send('terminal:input', { id: terminalId, data: reference })
-  }, [terminalId])
+  }, [terminalId, scheduleOutputTelemetry, updateTelemetry])
 
   return (
     <div

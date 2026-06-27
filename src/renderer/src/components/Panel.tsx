@@ -6,6 +6,7 @@ import { GitPanel } from '@/components/GitPanel'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
 import type { FileNode } from '@/types'
 import { setWorkspaceFileDragData } from '@/lib/terminal-file-reference'
+import { warmupEditorRuntime } from '@/lib/editor-warmup'
 
 type PanelView = 'files' | 'git' | 'checkpoints'
 
@@ -30,11 +31,13 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory
       setExpanded((v) => !v)
     } else {
       onSelect(node.path)
+      void warmupEditorRuntime()
     }
   }, [expanded, isFolder, node.loaded, node.path, onSelect, onToggleDirectory])
 
   const handleDoubleClick = useCallback(() => {
     if (!isFolder) {
+      void warmupEditorRuntime()
       const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
       const ws = workspaces.find(w => w.id === activeWorkspaceId)
       if (ws) {

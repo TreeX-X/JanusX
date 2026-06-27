@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import type { TerminalPreset, Terminal } from '@/types'
@@ -58,22 +58,9 @@ function TerminalOption({ preset, name, onClick }: TerminalOptionProps) {
 }
 
 export function TerminalSelector() {
-  const { activeWorkspaceId, addTerminal, removeTerminal, addLog } = useWorkspaceStore()
+  const { activeWorkspaceId, addTerminal, removeTerminal } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
-
-  // 监听 checkpoint 初始化事件（终端创建后由主进程发送）
-  useEffect(() => {
-    const unsub = window.electron.on('checkpoint:ready', (payload: unknown) => {
-      const { terminalId, success, error } = payload as { terminalId: string; success: boolean; error?: string }
-      if (success) {
-        addLog('info', `[还原点] 终端 ${terminalId.slice(0, 8)} checkpoint 系统就绪`)
-      } else {
-        addLog('error', `[还原点] 终端 ${terminalId.slice(0, 8)} 初始化失败: ${error}`)
-      }
-    })
-    return unsub
-  }, [addLog])
 
   const handleSelect = useCallback(
     async (preset: TerminalPreset) => {
@@ -89,6 +76,7 @@ export function TerminalSelector() {
       const terminalId = crypto.randomUUID()
       const presetMeta = getTerminalPresetMeta(preset)
       const autoCommand = resolveTerminalLaunchCommand(preset)
+      const telemetryStartedAt = Date.now()
       const terminal: Terminal = {
         id: terminalId,
         workspaceId: activeWorkspaceId,
@@ -99,10 +87,11 @@ export function TerminalSelector() {
         autoCommand,
         pid: null,
         status: 'idle',
+        updatedAt: telemetryStartedAt,
+        telemetryStartedAt,
       }
 
       addTerminal(terminal)
-      addLog('info', `[终端] 创建 ${presetMeta.name} 终端 (${terminalId.slice(0, 8)})，等待 checkpoint 初始化...`)
 
       // 先切换视图并等待 TerminalArea/CLITerminal 挂载，避免 PTY 首屏输出在监听注册前丢失。
       setBlueprintMode(false)
@@ -126,14 +115,13 @@ export function TerminalSelector() {
         }))
       } catch (err) {
         console.error('Failed to create terminal:', err)
-        addLog('error', `[终端] 创建失败: ${(err as Error).message}`)
         removeTerminal(terminalId)
         if (useWorkspaceStore.getState().terminals.length === 0) {
           setLoadState('no-terminal')
         }
       }
     },
-    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode, addLog]
+    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode]
   )
 
   return (

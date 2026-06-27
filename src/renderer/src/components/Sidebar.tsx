@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { Workspace, FileNode } from '@/types'
+import { invalidateEditorFileCache } from '@/stores/editor'
 
 export function Sidebar() {
   const longPressDuration = 450
@@ -47,6 +48,7 @@ export function Sidebar() {
 
       // 加载文件树
       try {
+        invalidateEditorFileCache(folderPath)
         const tree = (await window.electron.invoke('filetree:load', folderPath)) as FileNode[]
         useWorkspaceStore.setState({ fileTree: tree })
       } catch {
@@ -94,6 +96,7 @@ export function Sidebar() {
       try {
         const ws = workspaces.find((w) => w.id === id)
         if (ws) {
+          invalidateEditorFileCache(ws.path)
           const tree = (await window.electron.invoke('filetree:load', ws.path)) as FileNode[]
           useWorkspaceStore.setState({ fileTree: tree })
         }

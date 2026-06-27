@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCheckpointStore } from '@/stores/checkpoint'
+import { invalidateEditorFileCache } from '@/stores/editor'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalArea } from '@/components/TerminalArea'
@@ -10,7 +11,13 @@ import { Panel } from '@/components/Panel'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { BlueprintView } from '@/components/blueprint/BlueprintView'
+import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
+
+type IdleWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+  cancelIdleCallback?: (id: number) => void
+}
 
 function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): FileNode[] {
   const currentMap = new Map(currentNodes.map((node) => [node.path, node]))
@@ -98,6 +105,7 @@ export default function App() {
       if (!activeWorkspaceId) return
       const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
       if (!activeWorkspace || activeWorkspace.path !== workspacePath) return
+      invalidateEditorFileCache(workspacePath)
       await loadWorkspaceFileTree(workspacePath)
     })
     return typeof unsubscribe === 'function' ? unsubscribe : undefined
@@ -106,6 +114,21 @@ export default function App() {
   useEffect(() => {
     return subscribeToCheckpointEvents()
   }, [subscribeToCheckpointEvents])
+
+  useEffect(() => {
+    const idleWindow = window as IdleWindow
+    const runWarmup = () => {
+      void warmupEditorRuntime()
+    }
+
+    if (idleWindow.requestIdleCallback) {
+      const id = idleWindow.requestIdleCallback(runWarmup, { timeout: 2500 })
+      return () => idleWindow.cancelIdleCallback?.(id)
+    }
+
+    const id = window.setTimeout(runWarmup, 1200)
+    return () => window.clearTimeout(id)
+  }, [])
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg-app)', color: 'var(--text)' }}>

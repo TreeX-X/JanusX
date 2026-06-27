@@ -3,6 +3,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { CLITerminal } from './CLITerminal'
 import type { TerminalPreset, Terminal } from '@/types'
+import { getEstimatedContextWindow } from '@/lib/runtime-telemetry'
 import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../shared/terminalLaunch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
@@ -28,6 +29,84 @@ const PRESETS: { type: TerminalPreset; name: string; icon: string }[] = [
   createPreset('opencode'),
 ]
 
+function providerLabel(preset: TerminalPreset): string {
+  switch (preset) {
+    case 'claude':
+      return 'Claude'
+    case 'codex':
+      return 'Codex'
+    case 'opencode':
+      return 'OpenCode'
+    case 'shell':
+      return 'Shell'
+  }
+}
+
+function statusLabel(status: Terminal['status']): string {
+  switch (status) {
+    case 'running':
+      return 'running'
+    case 'exited':
+      return 'done'
+    default:
+      return 'idle'
+  }
+}
+
+function statusColor(status: Terminal['status']): string {
+  switch (status) {
+    case 'running':
+      return '#ff7830'
+    case 'exited':
+      return '#4ec9b0'
+    default:
+      return '#ff7830'
+  }
+}
+
+function accentColor(status: Terminal['status']): string {
+  return status === 'exited' ? '#4ec9b0' : status === 'running' ? '#ff7830' : '#58a6ff'
+}
+
+function formatAge(updatedAt?: number): string {
+  if (!updatedAt) return 'unknown'
+  const seconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))
+  if (seconds < 5) return 'now'
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  return `${Math.floor(minutes / 60)}h`
+}
+
+function formatTokenCount(value?: number): string {
+  if (!value) return '0'
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`
+  return String(value)
+}
+
+function modelLabel(terminal: Terminal): string {
+  if (terminal.preset === 'shell') return 'model n/a'
+  return terminal.detectedModel ?? 'detecting model'
+}
+
+function contextWindow(terminal: Terminal): number | undefined {
+  return terminal.contextWindowTokens ?? getEstimatedContextWindow(terminal.preset, terminal.detectedModel)
+}
+
+function contextRatio(terminal: Terminal): number | undefined {
+  const windowTokens = contextWindow(terminal)
+  if (!windowTokens || terminal.contextTokens === undefined) return undefined
+  return Math.min(1, terminal.contextTokens / windowTokens)
+}
+
+function contextLabel(terminal: Terminal): string {
+  if (terminal.contextTokens === undefined) return 'ctx unknown'
+  const used = terminal.contextTokens
+  const windowTokens = contextWindow(terminal)
+  if (!windowTokens) return `${formatTokenCount(used)} ctx`
+  return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} ctx`
+}
+
 function waitForTerminalMount(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
@@ -35,7 +114,7 @@ function waitForTerminalMount(): Promise<void> {
 }
 
 export function TerminalArea() {
-  const { terminals, activeTerminalId, activeWorkspaceId, addTerminal, setActiveTerminal, removeTerminal, logs, addLog, clearLogs } = useWorkspaceStore()
+  const { terminals, activeTerminalId, activeWorkspaceId, addTerminal, setActiveTerminal, removeTerminal, updateTerminal } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -58,34 +137,18 @@ export function TerminalArea() {
     return () => document.removeEventListener('mousedown', handler)
   }, [ringOpen])
 
-  // 监听 checkpoint 初始化事件 → 写入日志
   useEffect(() => {
-    const unsubReady = window.electron.on('checkpoint:ready', (payload: unknown) => {
-      const { terminalId, success, error } = payload as { terminalId: string; success: boolean; error?: string }
-      if (success) {
-        addLog('info', `[还原点] 终端 ${terminalId.slice(0, 8)} checkpoint 系统就绪`)
-      } else {
-        addLog('error', `[还原点] 终端 ${terminalId.slice(0, 8)} 初始化失败: ${error}`)
-      }
+    const unsubscribe = window.electron.on('terminal:exit', (payload: unknown) => {
+      const { id, exitCode } = payload as { id?: string; exitCode?: number }
+      if (!id) return
+      updateTerminal(id, {
+        status: 'exited',
+        exitCode,
+        updatedAt: Date.now(),
+      })
     })
-    const unsubEvent = window.electron.on('checkpoint:event', (payload: unknown) => {
-      const { type, checkpointId, terminalId, error } = payload as {
-        type: string
-        checkpointId?: string
-        terminalId?: string
-        error?: string
-      }
-      if (type === 'error') {
-        const prefix = terminalId ? `终端 ${terminalId.slice(0, 8)} ` : ''
-        addLog('error', `[还原点] ${prefix}创建失败: ${error ?? 'unknown error'}`)
-        return
-      }
-      if (checkpointId) {
-        addLog('info', `[还原点] ${type} — ${checkpointId.slice(0, 8)}`)
-      }
-    })
-    return () => { unsubReady(); unsubEvent() }
-  }, [addLog])
+    return unsubscribe
+  }, [updateTerminal])
 
   const handleClose = useCallback(
     async (id: string, e: React.MouseEvent) => {
@@ -116,6 +179,7 @@ export function TerminalArea() {
       const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
       const terminalId = crypto.randomUUID()
       const autoCommand = resolveTerminalLaunchCommand(preset.type)
+      const telemetryStartedAt = Date.now()
 
       const terminal: Terminal = {
         id: terminalId,
@@ -127,10 +191,12 @@ export function TerminalArea() {
         autoCommand,
         pid: null,
         status: 'idle',
+        updatedAt: telemetryStartedAt,
+        telemetryStartedAt,
+        contextWindowTokens: getEstimatedContextWindow(preset.type),
       }
 
       addTerminal(terminal)
-      addLog('info', `[终端] 创建 ${preset.name} 终端 (${terminalId.slice(0, 8)})，等待 checkpoint 初始化...`)
       setBlueprintMode(false)
       setLoadState('terminal-active')
       await waitForTerminalMount()
@@ -145,22 +211,24 @@ export function TerminalArea() {
           preset: preset.type,
         })) as { pid: number }
 
-        useWorkspaceStore.setState((s) => ({
-          terminals: s.terminals.map((t) =>
-            t.id === terminalId ? { ...t, pid: result.pid, status: 'running' as const } : t
-          ),
-        }))
+        updateTerminal(terminalId, { pid: result.pid, status: 'running', updatedAt: Date.now() })
       } catch (err) {
         console.error('Failed to create terminal:', err)
-        addLog('error', `[终端] 创建失败: ${(err as Error).message}`)
         removeTerminal(terminalId)
         if (useWorkspaceStore.getState().terminals.length === 0) {
           setLoadState('no-terminal')
         }
       }
     },
-    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode, addLog]
+    [activeWorkspaceId, addTerminal, removeTerminal, updateTerminal, setLoadState, setBlueprintMode]
   )
+
+  const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? terminals[0]
+  const otherTerminals = terminals.filter((t) => t.id !== activeTerminal?.id)
+  const activeRuntimeText = activeTerminal
+    ? `${providerLabel(activeTerminal.preset)} · ${statusLabel(activeTerminal.status)} · ${modelLabel(activeTerminal)} · ${contextLabel(activeTerminal)}`
+    : 'No terminal runtime'
+  const runtimeHealthColor = activeTerminal ? statusColor(activeTerminal.status) : '#555'
 
   return (
     <div
@@ -315,57 +383,233 @@ export function TerminalArea() {
         )}
       </div>
 
-      {/* 输出抽屉 */}
+      {/* 中部底部 Runtime 折叠栏 */}
       <div
-        className="flex-shrink-0 transition-all overflow-hidden"
+        className="flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
         style={{
-          background: 'rgba(12, 12, 12, 0.95)',
+          background: drawerOpen ? 'rgba(11, 12, 13, 0.98)' : 'rgba(9, 10, 11, 0.96)',
           borderTop: '1px solid var(--border)',
-          height: drawerOpen ? '180px' : '28px',
+          height: drawerOpen ? '210px' : '28px',
         }}
       >
-        <div
-          className="h-7 flex items-center justify-between px-3 cursor-pointer select-none hover:bg-[rgba(255,255,255,0.012)] transition-colors"
+        <button
+          type="button"
+          className="flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 px-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
           onClick={() => setDrawerOpen((v) => !v)}
+          aria-expanded={drawerOpen}
+          aria-label="展开或折叠 Runtime 状态栏"
         >
-          <div className="text-[11px] text-[#666] flex items-center gap-1.5">
-            <div
-              className="w-2 h-2 border-r-[1.5px] border-b-[1.5px] transition-transform"
+          <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
+            <span
+              className="inline-flex h-5 w-5 shrink-0 items-center justify-center border"
               style={{
-                borderColor: '#ff7830',
-                transform: drawerOpen ? 'rotate(45deg)' : 'rotate(-45deg)',
+                borderColor: 'rgba(255,120,48,0.22)',
+                background: 'rgba(255,120,48,0.055)',
               }}
-            />
-            <span>输出</span>
-          </div>
-          <span className="text-[10px] text-[#555]">
-            {drawerOpen ? '点击折叠' : '点击展开'}
-          </span>
-        </div>
-        {drawerOpen && (
-          <div className="flex-1 p-2.5 px-3 text-[11px] font-mono leading-relaxed overflow-y-auto" style={{ height: 'calc(100% - 28px)' }}>
-            {logs.length === 0 && (
-              <div style={{ color: '#444' }}>暂无日志</div>
+            >
+              <span
+                className="h-1.5 w-1.5 border-r-[1.5px] border-b-[1.5px] transition-transform"
+                style={{
+                  borderColor: '#ff7830',
+                  transform: drawerOpen ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
+                }}
+              />
+            </span>
+            <span
+              className="inline-flex h-5 shrink-0 items-center gap-1.5 border px-2 font-mono"
+              style={{
+                borderColor: 'rgba(255,120,48,0.18)',
+                background: 'rgba(255,120,48,0.055)',
+                color: '#ffb27d',
+              }}
+            >
+              <span
+                className="h-[6px] w-[6px] shrink-0 rounded-full"
+                style={{
+                  background: runtimeHealthColor,
+                  boxShadow: `0 0 8px ${runtimeHealthColor}66`,
+                }}
+              />
+              Runtime
+            </span>
+            {activeTerminal ? (
+              <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                <span
+                  className="inline-flex h-5 max-w-[92px] shrink-0 items-center border px-2 font-mono"
+                  style={{
+                    borderColor: 'rgba(255,255,255,0.055)',
+                    background: 'rgba(255,255,255,0.018)',
+                    color: '#d4d4d4',
+                  }}
+                >
+                  {providerLabel(activeTerminal.preset)}
+                </span>
+                <span
+                  className="inline-flex h-5 shrink-0 items-center border px-2 font-mono"
+                  style={{
+                    borderColor: `${accentColor(activeTerminal.status)}33`,
+                    background: `${accentColor(activeTerminal.status)}12`,
+                    color: accentColor(activeTerminal.status),
+                  }}
+                >
+                  {statusLabel(activeTerminal.status)}
+                </span>
+                <span
+                  className="inline-flex h-5 min-w-0 max-w-[190px] items-center border px-2 font-mono"
+                  style={{
+                    borderColor: 'rgba(255,255,255,0.055)',
+                    background: 'rgba(255,255,255,0.014)',
+                    color: '#8a8a8a',
+                  }}
+                >
+                  <span className="truncate">{modelLabel(activeTerminal)}</span>
+                </span>
+                <span
+                  className="hidden h-5 shrink-0 items-center border px-2 font-mono md:inline-flex"
+                  style={{
+                    borderColor: 'rgba(88,166,255,0.22)',
+                    background: 'rgba(88,166,255,0.07)',
+                    color: '#79b8ff',
+                  }}
+                >
+                  {contextLabel(activeTerminal)}
+                </span>
+              </span>
+            ) : (
+              <span className="truncate font-mono text-[#666]">{activeRuntimeText}</span>
             )}
-            {logs.map((log, i) => {
-              const time = new Date(log.time).toLocaleTimeString('zh-CN', { hour12: false })
-              const color = log.level === 'error' ? '#e06c75' : log.level === 'warn' ? '#e5c07b' : '#666'
-              return (
-                <div key={i} style={{ color, marginBottom: 2 }}>
-                  <span style={{ color: '#444', marginRight: 6 }}>{time}</span>
-                  {log.message}
-                </div>
-              )
-            })}
-            {logs.length > 0 && (
-              <button
-                onClick={(e) => { e.stopPropagation(); clearLogs() }}
-                className="mt-1 cursor-pointer"
-                style={{ background: 'none', border: 'none', color: '#444', fontSize: 10, padding: 0 }}
+            {activeTerminal && (
+              <span
+                className="hidden h-1 w-20 overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] md:inline-flex"
+                title={`Context estimate: ${contextLabel(activeTerminal)}`}
               >
-                清空日志
-              </button>
+                <span
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.round((contextRatio(activeTerminal) ?? 0) * 100)}%`,
+                    background: 'linear-gradient(90deg, #ff7830, #58a6ff)',
+                  }}
+                />
+              </span>
             )}
+          </div>
+          <div className="flex h-full shrink-0 items-center gap-2 text-[10px]">
+            <div className="hidden h-full items-center gap-1.5 md:flex">
+              {otherTerminals.slice(0, 3).map((terminal) => (
+                <span
+                  key={terminal.id}
+                  className="inline-flex h-5 max-w-[126px] items-center gap-1.5 overflow-hidden border px-1.5 font-mono"
+                  style={{
+                    borderColor: 'rgba(255,255,255,0.055)',
+                    background: 'rgba(255,255,255,0.018)',
+                    color: '#777',
+                  }}
+                  title={`${providerLabel(terminal.preset)} · ${statusLabel(terminal.status)} · ${modelLabel(terminal)} · ${contextLabel(terminal)}`}
+                >
+                  <span
+                    className="h-[5px] w-[5px] shrink-0 rounded-full"
+                    style={{ background: accentColor(terminal.status) }}
+                  />
+                  <span className="truncate">{providerLabel(terminal.preset)}</span>
+                </span>
+              ))}
+              {otherTerminals.length > 3 && (
+                <span className="inline-flex h-5 items-center border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[#555]">
+                  +{otherTerminals.length - 3}
+                </span>
+              )}
+            </div>
+            <span className="inline-flex h-5 items-center border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[#555]">
+              {drawerOpen ? 'collapse' : 'expand'}
+            </span>
+          </div>
+        </button>
+        {drawerOpen && (
+          <div
+            className="overflow-hidden px-3 pb-3 pt-2 text-[11px] font-mono"
+            style={{ height: 'calc(100% - 28px)' }}
+          >
+            <section
+              className="min-h-0 overflow-hidden border"
+              style={{
+                borderColor: 'rgba(255,120,48,0.12)',
+                background: 'linear-gradient(180deg, rgba(255,120,48,0.035), rgba(255,255,255,0.01))',
+              }}
+              aria-label="Runtime telemetry"
+            >
+              <div className="flex h-8 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,120,48,0.12)' }}>
+                <span className="text-[#ffb27d]">Terminal Runtime</span>
+                <span className="text-[#666]">{terminals.length} sessions</span>
+              </div>
+              <div className="max-h-[141px] overflow-auto">
+                {terminals.length === 0 ? (
+                  <div className="px-2.5 py-4 text-[#555]">暂无终端运行状态</div>
+                ) : (
+                  terminals.map((terminal) => (
+                    <button
+                      key={terminal.id}
+                      type="button"
+                      className="grid w-full cursor-pointer grid-cols-[92px_74px_minmax(140px,1fr)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,120,48,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.35)]"
+                      style={{
+                        borderColor: 'rgba(255,255,255,0.035)',
+                        background: terminal.id === activeTerminalId ? 'rgba(255,120,48,0.055)' : 'transparent',
+                      }}
+                      onClick={() => setActiveTerminal(terminal.id)}
+                      title={`${providerLabel(terminal.preset)} · ${terminal.cwd}`}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5 text-[#d4d4d4]">
+                        <span
+                          className="h-[6px] w-[6px] shrink-0 rounded-full"
+                          style={{
+                            background: accentColor(terminal.status),
+                            boxShadow: `0 0 8px ${accentColor(terminal.status)}66`,
+                          }}
+                        />
+                        <span className="truncate">{providerLabel(terminal.preset)}</span>
+                      </span>
+                      <span
+                        className="inline-flex h-5 w-fit items-center border px-2"
+                        style={{
+                          borderColor: `${accentColor(terminal.status)}33`,
+                          background: `${accentColor(terminal.status)}12`,
+                          color: accentColor(terminal.status),
+                        }}
+                      >
+                        {statusLabel(terminal.status)}
+                      </span>
+                      <span
+                        className="inline-flex h-5 min-w-0 items-center border px-2"
+                        style={{
+                          borderColor: 'rgba(255,255,255,0.055)',
+                          background: 'rgba(255,255,255,0.014)',
+                          color: '#8a8a8a',
+                        }}
+                      >
+                        <span className="truncate">{modelLabel(terminal)}</span>
+                      </span>
+                      <span className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-2">
+                        <span
+                          className="h-1 overflow-hidden rounded-full"
+                          style={{ background: 'rgba(255,255,255,0.06)' }}
+                        >
+                          <span
+                            className="block h-full rounded-full"
+                            style={{
+                              width: `${Math.round((contextRatio(terminal) ?? 0) * 100)}%`,
+                              background: 'linear-gradient(90deg, #ff7830, #58a6ff)',
+                            }}
+                          />
+                        </span>
+                        <span className="whitespace-nowrap text-[#79b8ff]">{contextLabel(terminal)}</span>
+                      </span>
+                      <span className="text-right text-[#555]" title={`input ${formatTokenCount(terminal.inputTokens)} · output ${formatTokenCount(terminal.outputTokens)}`}>
+                        {formatAge(terminal.updatedAt)}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </section>
           </div>
         )}
       </div>
