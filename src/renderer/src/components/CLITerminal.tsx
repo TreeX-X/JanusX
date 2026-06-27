@@ -1,7 +1,12 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useCallback, useState, type DragEvent } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import {
+  formatTerminalFileReference,
+  hasWorkspaceFileDrag,
+  readWorkspaceFileDragData,
+} from '@/lib/terminal-file-reference'
 
 interface CLITerminalProps {
   terminalId: string
@@ -10,6 +15,7 @@ interface CLITerminalProps {
 export function CLITerminal({ terminalId }: CLITerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
+  const [fileDragOver, setFileDragOver] = useState(false)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -211,5 +217,48 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     }
   }, [terminalId])
 
-  return <div ref={containerRef} className="w-full h-full" />
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!hasWorkspaceFileDrag(event.dataTransfer)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setFileDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setFileDragOver(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    const payload = readWorkspaceFileDragData(event.dataTransfer)
+    if (!payload) return
+
+    event.preventDefault()
+    setFileDragOver(false)
+
+    const reference = formatTerminalFileReference(payload.path)
+    const term = termRef.current
+    if (term) {
+      term.focus()
+      term.paste(reference)
+      return
+    }
+
+    window.electron.send('terminal:input', { id: terminalId, data: reference })
+  }, [terminalId])
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full transition-[box-shadow,background]"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      style={{
+        boxShadow: fileDragOver ? 'inset 0 0 0 1px rgba(255, 120, 48, 0.45)' : 'none',
+        background: fileDragOver ? 'rgba(255, 120, 48, 0.035)' : 'transparent',
+      }}
+    />
+  )
 }

@@ -48,6 +48,7 @@ import { BlueprintNodeCard, type BlueprintNodeData } from './BlueprintNodeCard'
 import { STATUS_VISUALS, STATUS_ORDER, NODE_TYPE_LABEL } from './blueprintStatus'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
+import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../../shared/terminalLaunch'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
@@ -58,13 +59,17 @@ const TERMINAL_PRESETS: {
   type: TerminalPreset
   label: string
   name: string
-  autoCommand?: string
 }[] = [
-  { type: 'shell', label: 'Shell', name: 'bash' },
-  { type: 'claude', label: 'Claude', name: 'claude', autoCommand: 'claude' },
-  { type: 'codex', label: 'Codex', name: 'codex', autoCommand: 'codex' },
-  { type: 'opencode', label: 'OpenCode', name: 'opencode', autoCommand: 'opencode' }
+  createTerminalPreset('shell'),
+  createTerminalPreset('claude'),
+  createTerminalPreset('codex'),
+  createTerminalPreset('opencode')
 ]
+
+function createTerminalPreset(type: TerminalPreset): { type: TerminalPreset; label: string; name: string } {
+  const meta = getTerminalPresetMeta(type)
+  return { type, label: meta.label, name: meta.name }
+}
 type TextItemField = 'positioning' | 'techSolution'
 type StatusFilter = BlueprintNodeStatus | 'all'
 const NODE_TYPE_ORDER: BlueprintNodeType[] = ['epic', 'feature', 'task', 'issue']
@@ -699,6 +704,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       const preset = getTerminalPreset(requestedPreset)
       const terminalId = crypto.randomUUID()
       const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
+      const autoCommand = resolveTerminalLaunchCommand(preset.type)
       const terminal: Terminal = {
         id: terminalId,
         workspaceId: workspace.id,
@@ -706,7 +712,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         preset: preset.type,
         cwd: workspace.path,
         shell: defaultShell,
-        autoCommand: preset.autoCommand,
+        autoCommand,
         pid: null,
         status: 'idle'
       }
@@ -722,7 +728,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           workspaceId: workspace.id,
           cwd: workspace.path,
           shell: defaultShell,
-          autoCommand: preset.autoCommand,
+          autoCommand,
           preset: preset.type
         })) as { pid: number }
 

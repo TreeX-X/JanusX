@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type DragEvent } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useEditorStore } from '@/stores/editor'
 import { GitPanel } from '@/components/GitPanel'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
 import type { FileNode } from '@/types'
+import { setWorkspaceFileDragData } from '@/lib/terminal-file-reference'
 
 type PanelView = 'files' | 'git' | 'checkpoints'
 
@@ -44,11 +45,25 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory
     }
   }, [isFolder, node.path])
 
+  const handleDragStart = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (isFolder) return
+      setWorkspaceFileDragData(event.dataTransfer, {
+        type: 'file',
+        name: node.name,
+        path: node.path,
+      })
+    },
+    [isFolder, node.name, node.path],
+  )
+
   return (
     <div>
       <div
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        draggable={!isFolder}
+        onDragStart={handleDragStart}
         className="py-[5px] px-2 mb-px rounded cursor-pointer transition-colors flex items-center gap-1.5 text-xs select-none"
         style={{
           paddingLeft: `${8 + depth * 16}px`,

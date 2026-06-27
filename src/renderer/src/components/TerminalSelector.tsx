@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import type { TerminalPreset, Terminal } from '@/types'
+import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../shared/terminalLaunch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -82,38 +83,26 @@ export function TerminalSelector() {
       const workspace = workspaces.find((w) => w.id === activeWorkspaceId)
       if (!workspace) return
 
-      const autoCommands: Record<TerminalPreset, string | undefined> = {
-        shell: undefined,
-        claude: 'claude',
-        codex: 'codex',
-        opencode: 'opencode',
-      }
-
-      const presetNames: Record<TerminalPreset, string> = {
-        shell: 'bash',
-        claude: 'claude',
-        codex: 'codex',
-        opencode: 'opencode',
-      }
-
       // 通过 IPC 获取系统默认 Shell
       const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
 
       const terminalId = crypto.randomUUID()
+      const presetMeta = getTerminalPresetMeta(preset)
+      const autoCommand = resolveTerminalLaunchCommand(preset)
       const terminal: Terminal = {
         id: terminalId,
         workspaceId: activeWorkspaceId,
-        name: presetNames[preset],
+        name: presetMeta.name,
         preset,
         cwd: workspace.path,
         shell: defaultShell,
-        autoCommand: autoCommands[preset],
+        autoCommand,
         pid: null,
         status: 'idle',
       }
 
       addTerminal(terminal)
-      addLog('info', `[终端] 创建 ${presetNames[preset]} 终端 (${terminalId.slice(0, 8)})，等待 checkpoint 初始化...`)
+      addLog('info', `[终端] 创建 ${presetMeta.name} 终端 (${terminalId.slice(0, 8)})，等待 checkpoint 初始化...`)
 
       // 先切换视图并等待 TerminalArea/CLITerminal 挂载，避免 PTY 首屏输出在监听注册前丢失。
       setBlueprintMode(false)
@@ -126,7 +115,7 @@ export function TerminalSelector() {
           workspaceId: activeWorkspaceId,
           cwd: workspace.path,
           shell: defaultShell,
-          autoCommand: autoCommands[preset],
+          autoCommand,
           preset,
         })) as { pid: number }
 

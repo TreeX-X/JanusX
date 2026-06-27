@@ -108,7 +108,7 @@ export function JanusChat({
   const [rows, setRows] = useState(1)
   const [showNewMessageBadge, setShowNewMessageBadge] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const isAtBottomRef = useRef(true)
 
@@ -211,12 +211,44 @@ export function JanusChat({
   if (!visible) return null
 
   const isNoProviderError = error === '未配置默认 LLM Provider'
+  const canClear = messages.length > 0 || !!pendingContent || !!error
+  const suggestions = [
+    '当前节点',
+    '运行状态',
+    '下一步'
+  ]
 
   return (
     <div
       className={`janus-chat${docked ? ' janus-chat--docked' : ''}`}
       onDoubleClick={(e) => e.stopPropagation()}
     >
+      <div className="janus-chat-toolbar">
+        <div>
+          <span className="janus-chat-toolbar-kicker">Thread</span>
+          <strong>Janus</strong>
+        </div>
+        <div className="janus-chat-toolbar-actions">
+          <button
+            className="janus-chat-tool-button"
+            onClick={handleOpenLlmConfig}
+            title="配置 LLM"
+            type="button"
+          >
+            模型
+          </button>
+          <button
+            className="janus-chat-tool-button danger"
+            onClick={handleClear}
+            disabled={!canClear}
+            title="清空对话"
+            type="button"
+          >
+            清空
+          </button>
+        </div>
+      </div>
+
       {/* 消息区域 */}
       <div
         ref={messagesContainerRef}
@@ -224,10 +256,22 @@ export function JanusChat({
         onScroll={handleScroll}
       >
         {messages.length === 0 && (
-          <div className="janus-chat-empty">
-            <div className="janus-chat-empty-icon">◎</div>
-            <div className="janus-chat-empty-text">与 Janus 对话</div>
-            <div className="janus-chat-empty-hint">输入问题开始交流</div>
+            <div className="janus-chat-empty">
+              <div className="janus-chat-empty-icon">◎</div>
+            <div className="janus-chat-empty-text">Janus</div>
+            <div className="janus-chat-empty-hint">从当前上下文开始</div>
+            <div className="janus-chat-suggestions">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => handleSend(suggestion)}
+                  disabled={isStreaming}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -274,7 +318,7 @@ export function JanusChat({
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+        <span ref={messagesEndRef} className="janus-chat-end-anchor" />
       </div>
 
       {showNewMessageBadge && (
@@ -292,45 +336,44 @@ export function JanusChat({
 
       {/* 输入区域 */}
       <div className="janus-chat-input-wrapper">
-        <textarea
-          ref={inputRef}
-          className="janus-chat-input"
-          rows={rows}
-          placeholder="询问 Janus..."
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          disabled={isStreaming}
-          style={{ '--accent-color': modeColor } as React.CSSProperties}
-        />
-        {isStreaming ? (
-          <button
-            className="janus-chat-stop"
-            onClick={handleStop}
+        <div className="janus-chat-composer-meta">
+          <span>Current workspace</span>
+          <span>{isStreaming ? 'Receiving' : 'Ready'}</span>
+        </div>
+        <div className="janus-chat-composer-row">
+          <textarea
+            ref={inputRef}
+            className="janus-chat-input"
+            rows={rows}
+            placeholder="输入指令或问题"
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            disabled={isStreaming}
             style={{ '--accent-color': modeColor } as React.CSSProperties}
-            title="停止生成"
-          >
-            ■
-          </button>
-        ) : (
-          <button
-            className="janus-chat-send"
-            onClick={() => handleSend()}
-            disabled={!input.trim() || isStreaming}
-            style={{ '--accent-color': modeColor } as React.CSSProperties}
-          >
-            ↑
-          </button>
-        )}
-        {messages.length > 0 && (
-          <button
-            className="janus-chat-clear"
-            onClick={handleClear}
-            title="清空对话"
-          >
-            ✕
-          </button>
-        )}
+          />
+          {isStreaming ? (
+            <button
+              className="janus-chat-stop"
+              onClick={handleStop}
+              style={{ '--accent-color': modeColor } as React.CSSProperties}
+              title="停止生成"
+              type="button"
+            >
+              停止
+            </button>
+          ) : (
+            <button
+              className="janus-chat-send"
+              onClick={() => handleSend()}
+              disabled={!input.trim() || isStreaming}
+              style={{ '--accent-color': modeColor } as React.CSSProperties}
+              type="button"
+            >
+              发送
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

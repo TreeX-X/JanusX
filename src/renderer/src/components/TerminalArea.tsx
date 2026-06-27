@@ -3,17 +3,29 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { CLITerminal } from './CLITerminal'
 import type { TerminalPreset, Terminal } from '@/types'
+import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../shared/terminalLaunch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
 import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 
-const PRESETS: { type: TerminalPreset; name: string; icon: string; autoCommand?: string }[] = [
-  { type: 'shell', name: 'Shell', icon: terminalIcon },
-  { type: 'claude', name: 'Claude', icon: claudeIcon, autoCommand: 'claude' },
-  { type: 'codex', name: 'Codex', icon: codexIcon, autoCommand: 'codex' },
-  { type: 'opencode', name: 'OpenCode', icon: opencodeIcon, autoCommand: 'opencode' },
+const PRESET_ICONS: Record<TerminalPreset, string> = {
+  shell: terminalIcon,
+  claude: claudeIcon,
+  codex: codexIcon,
+  opencode: opencodeIcon,
+}
+
+function createPreset(type: TerminalPreset): { type: TerminalPreset; name: string; icon: string } {
+  return { type, name: getTerminalPresetMeta(type).label, icon: PRESET_ICONS[type] }
+}
+
+const PRESETS: { type: TerminalPreset; name: string; icon: string }[] = [
+  createPreset('shell'),
+  createPreset('claude'),
+  createPreset('codex'),
+  createPreset('opencode'),
 ]
 
 function waitForTerminalMount(): Promise<void> {
@@ -103,6 +115,7 @@ export function TerminalArea() {
 
       const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
       const terminalId = crypto.randomUUID()
+      const autoCommand = resolveTerminalLaunchCommand(preset.type)
 
       const terminal: Terminal = {
         id: terminalId,
@@ -111,7 +124,7 @@ export function TerminalArea() {
         preset: preset.type,
         cwd: workspace.path,
         shell: defaultShell,
-        autoCommand: preset.autoCommand,
+        autoCommand,
         pid: null,
         status: 'idle',
       }
@@ -128,7 +141,7 @@ export function TerminalArea() {
           workspaceId: activeWorkspaceId,
           cwd: workspace.path,
           shell: defaultShell,
-          autoCommand: preset.autoCommand,
+          autoCommand,
           preset: preset.type,
         })) as { pid: number }
 
@@ -189,6 +202,13 @@ export function TerminalArea() {
               }
             }}
           >
+            <img
+              src={PRESET_ICONS[t.preset]}
+              alt=""
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0"
+              style={{ opacity: t.id === activeTerminalId ? 0.95 : 0.5 }}
+            />
             <span
               title={t.name}
               className="flex h-full min-w-0 flex-1 items-center overflow-hidden text-ellipsis whitespace-nowrap leading-none"

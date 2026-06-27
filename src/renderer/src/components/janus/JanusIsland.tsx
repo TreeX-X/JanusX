@@ -96,6 +96,8 @@ interface JanusIslandProps {
   onOpenLlmConfig: () => void
 }
 
+type JanusExpandedView = 'monitor' | 'chat'
+
 function faceClass(mode: 'sleep' | 'order' | 'analytics' | 'running'): string {
   if (mode === 'analytics') return 'mode-analytics'
   if (mode === 'running') return 'mode-running'
@@ -121,7 +123,7 @@ export function JanusIsland({
   const { mode, isSwitching, activeWorkspace, eyeContainerRef } = useJanusState()
   const { janusRunning, toggleRunning } = useProjectRunning(activeWorkspace)
   const shellRef = useRef<HTMLDivElement | null>(null)
-  const [view, setView] = useState<'dual' | 'vision' | 'chat'>('dual')
+  const [view, setView] = useState<JanusExpandedView>('monitor')
   const [particles, setParticles] = useState<Array<{ id: number; left: number; size: number; duration: number }>>([])
   const pidRef = useRef(0)
 
@@ -159,10 +161,6 @@ export function JanusIsland({
       onStepBack()
     }
   }, [onAdvance, onStepBack, stage])
-
-  const cycleView = useCallback(() => {
-    setView((prev) => (prev === 'dual' ? 'vision' : prev === 'vision' ? 'chat' : 'dual'))
-  }, [])
 
   const {
     islandRef,
@@ -217,10 +215,12 @@ export function JanusIsland({
       ? 'ANALYTICS // PROCESSING...'
       : 'ORDER // IDLE'
   const modeColor = activeVisual?.color ?? (mode === 'running' ? '#00ff88' : '#ff7830')
-  const nextViewLabel = view === 'dual' ? '◎ 仅视觉' : view === 'vision' ? '◎ 仅对话' : '◎ 双栏'
+  const activeNodeTitle = activeNode?.title || 'No active blueprint node'
+  const workspaceLabel = activeSession?.workspaceName ?? activeWorkspace?.name ?? 'Workspace'
+  const feedbackSummary = latestAnalysis?.result.summary || latestAnalysis?.error || statusText
 
   useEffect(() => {
-    if (stage === 'peek') setView('dual')
+    if (stage === 'peek') setView('monitor')
   }, [stage])
 
   useEffect(() => {
@@ -337,7 +337,21 @@ export function JanusIsland({
         <div className="janus-expanded-shell">
           <div className="janus-expanded-topbar">
             <div className="janus-expanded-brand island-title">
-              <span>◎</span> JANUS ENGINE
+              <span>◎</span> JANUS
+            </div>
+            <div className="janus-expanded-view-switch" aria-label="Janus expanded view">
+              {(['monitor', 'chat'] as JanusExpandedView[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className="janus-expanded-view-button"
+                  data-active={view === item}
+                  aria-pressed={view === item}
+                  onClick={() => setView(item)}
+                >
+                  {item === 'monitor' ? 'Monitor' : 'Chat'}
+                </button>
+              ))}
             </div>
             <div className="janus-expanded-meta">
               <span className="janus-expanded-meta-text">Esc / 双击收起</span>
@@ -346,7 +360,23 @@ export function JanusIsland({
           </div>
 
           <div className="janus-expanded-body">
-            <div className={`janus-crt ${janusRunning || activeNode ? 'running' : ''}${activeNode ? ' janus-crt--session' : ''}`}>
+            <div className="janus-feedback-panel">
+              <div className="janus-feedback-header">
+                <div>
+                  <span className="janus-feedback-eyebrow">State</span>
+                  <strong>{activeNode ? activeNodeTitle : statusText}</strong>
+                </div>
+                <div className="janus-feedback-status" style={{ color: modeColor }}>
+                  {modeLabel}
+                </div>
+              </div>
+              <div className="janus-feedback-chips">
+                <span>{workspaceLabel}</span>
+                <span>{janusRunning ? 'Runtime active' : 'Runtime idle'}</span>
+                <span>{activeNode ? `${Math.round(activeNode.progress)}%` : 'Ready'}</span>
+              </div>
+              <div className="janus-feedback-surface">
+                <div className={`janus-crt ${janusRunning || activeNode ? 'running' : ''}${activeNode ? ' janus-crt--session' : ''}`}>
               <div className={`warp-grid ${janusRunning ? 'running' : ''}`} />
               <div className={`scanline ${janusRunning ? 'running' : ''}`} />
               <div className="pixel-overlay" />
@@ -417,6 +447,12 @@ export function JanusIsland({
                   <div className="janus-status-text">{statusText}</div>
                 </>
               )}
+                </div>
+              </div>
+              <div className="janus-feedback-footer">
+                <span>Now</span>
+                <p>{feedbackSummary}</p>
+              </div>
             </div>
 
             <JanusChat
@@ -437,14 +473,9 @@ export function JanusIsland({
 
           <div className="janus-expanded-bottombar">
             <div className="janus-expanded-caption">
-              <span>神性协议终端</span>
+              <span>Janus</span>
               <span className="janus-expanded-caption-divider" />
               <span>{statusText}</span>
-            </div>
-            <div className="janus-expanded-actions">
-              <button className="janus-chat-toggle" onClick={cycleView} style={{ color: modeColor }}>
-                {nextViewLabel}
-              </button>
             </div>
           </div>
         </div>

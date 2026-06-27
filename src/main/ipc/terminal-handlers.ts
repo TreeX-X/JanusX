@@ -3,6 +3,7 @@ import { terminalManager } from '../terminal/manager'
 import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
 import type { CheckpointEngine } from '../agent/checkpoint/types'
 import { analyzer } from '../janus/analyzer'
+import { isTerminalPreset, resolveTerminalLaunchCommand } from '../../shared/terminalLaunch'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -103,10 +104,11 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       preset?: string
     }
 
-    const instance = terminalManager.create({ id, workspaceId: '', cwd, shell, autoCommand })
+    const resolvedAutoCommand = resolveTerminalLaunchCommand({ preset, autoCommand })
+    const instance = terminalManager.create({ id, workspaceId: '', cwd, shell, autoCommand: resolvedAutoCommand })
 
     const engine: CheckpointEngine =
-      preset === 'claude' || preset === 'codex' || preset === 'opencode' ? preset : 'shell'
+      isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
 
     terminalStates.set(id, {
       checkpointId: null,

@@ -1,40 +1,34 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../shared/terminalLaunch'
 import type { TerminalPreset, TerminalPresetConfig } from './types'
 
 const execAsync = promisify(exec)
 
+function createPresetConfig(
+  preset: TerminalPreset,
+  name: string,
+  description: string
+): TerminalPresetConfig {
+  const meta = getTerminalPresetMeta(preset)
+  return {
+    name,
+    preset,
+    command: meta.command,
+    args: meta.args,
+    description,
+  }
+}
+
 export const PRESETS: Record<TerminalPreset, TerminalPresetConfig> = {
-  shell: {
-    name: '普通终端',
-    preset: 'shell',
-    description: 'Bash / Zsh / PowerShell',
-  },
-  claude: {
-    name: 'Claude Code',
-    preset: 'claude',
-    command: 'claude',
-    description: '自动启动 Claude Code CLI',
-  },
-  codex: {
-    name: 'Codex',
-    preset: 'codex',
-    command: 'codex',
-    description: '自动启动 Codex CLI',
-  },
-  opencode: {
-    name: 'OpenCode',
-    preset: 'opencode',
-    command: 'opencode',
-    description: '自动启动 OpenCode CLI',
-  },
+  shell: createPresetConfig('shell', '普通终端', 'Bash / Zsh / PowerShell'),
+  claude: createPresetConfig('claude', 'Claude Code', '自动启动 Claude Code CLI'),
+  codex: createPresetConfig('codex', 'Codex', '自动启动 Codex CLI'),
+  opencode: createPresetConfig('opencode', 'OpenCode', '自动启动 OpenCode CLI'),
 }
 
 export function getAutoCommand(preset: TerminalPreset): string | undefined {
-  const config = PRESETS[preset]
-  if (!config?.command) return undefined
-  const args = config.args?.length ? ` ${config.args.join(' ')}` : ''
-  return `${config.command}${args}\n`
+  return resolveTerminalLaunchCommand(preset)
 }
 
 export function getPresetName(preset: TerminalPreset): string {
