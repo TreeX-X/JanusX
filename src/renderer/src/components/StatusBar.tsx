@@ -2,16 +2,19 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 
 export function StatusBar() {
-  const { terminals, activeWorkspaceId, workspaces } = useWorkspaceStore()
+  const { terminals, activeTerminalId, activeWorkspaceId, workspaces } = useWorkspaceStore()
   const { loadState, blueprintMode } = useAppStore()
 
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId)
+  const focusedTerminal = activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null
 
   const statusText: Record<string, string> = {
     'no-workspace': '等待加载工作区',
     'workspace-loaded': '已加载工作区',
     'no-terminal': '等待选择终端',
-    'terminal-active': `${terminals.length} 个终端`,
+    'terminal-active': focusedTerminal
+      ? `${focusedTerminal.name} · ${focusedTerminal.status}`
+      : `${terminals.length} 个终端 · 未聚焦`,
   }
 
   return (
@@ -36,9 +39,10 @@ export function StatusBar() {
         </div>
         <span>{blueprintMode ? '蓝图画布引擎运行中' : (statusText[loadState] ?? '就绪')}</span>
         {workspace && <span>{workspace.name}</span>}
+        {focusedTerminal && <span>{focusedTerminal.shell.split(/[/\\]/).pop() || focusedTerminal.shell}</span>}
       </div>
       <div className="flex items-center gap-2.5">
-        {workspace && <span>{workspace.path}</span>}
+        <span>{focusedTerminal?.cwd ?? workspace?.path ?? ''}</span>
         <span>v0.1.0</span>
       </div>
     </footer>

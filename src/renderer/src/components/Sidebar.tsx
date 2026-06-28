@@ -4,14 +4,49 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
-import type { Workspace, FileNode } from '@/types'
+import type { Workspace, FileNode, Terminal } from '@/types'
 import { invalidateEditorFileCache } from '@/stores/editor'
+
+function terminalStatusLabel(status: Terminal['status']): string {
+  switch (status) {
+    case 'running':
+      return 'running'
+    case 'exited':
+      return 'done'
+    default:
+      return 'idle'
+  }
+}
+
+function terminalStatusColor(status: Terminal['status']): string {
+  switch (status) {
+    case 'running':
+      return '#ff7830'
+    case 'exited':
+      return '#4ec9b0'
+    default:
+      return '#666'
+  }
+}
+
+function terminalPresetLabel(preset: Terminal['preset']): string {
+  switch (preset) {
+    case 'claude':
+      return 'Claude'
+    case 'codex':
+      return 'Codex'
+    case 'opencode':
+      return 'OpenCode'
+    default:
+      return 'Shell'
+  }
+}
 
 export function Sidebar() {
   const longPressDuration = 450
   const longPressVisualDelay = 120
   const longPressProgressDuration = Math.max(120, longPressDuration - longPressVisualDelay)
-  const { workspaces, activeWorkspaceId, setActiveWorkspace, addWorkspace, removeWorkspace } =
+  const { workspaces, activeWorkspaceId, terminals, activeTerminalId, terminalSnapshots, setActiveWorkspace, addWorkspace, removeWorkspace, setActiveTerminal } =
     useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
@@ -22,6 +57,7 @@ export function Sidebar() {
   const [longPressProgressId, setLongPressProgressId] = useState<string | null>(null)
   const [longPressCompletedId, setLongPressCompletedId] = useState<string | null>(null)
   const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
+  const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([])
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressVisualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -72,9 +108,17 @@ export function Sidebar() {
     try {
       await window.electron.invoke('workspace:delete', deleteTarget.id)
       removeWorkspace(deleteTarget.id)
+      setExpandedWorkspaceIds((current) => current.filter((id) => id !== deleteTarget.id))
       if (workspaces.length <= 1) {
         setLoadState('no-workspace')
-        useWorkspaceStore.setState({ fileTree: [], terminals: [], activeTerminalId: null })
+        useWorkspaceStore.setState({
+          fileTree: [],
+          terminals: [],
+          activeTerminalId: null,
+          paneTree: null,
+          focusedPaneId: null,
+          focusedTabId: null,
+        })
       }
     } catch (err) {
       console.error('Failed to delete workspace:', err)
@@ -82,17 +126,8 @@ export function Sidebar() {
     setDeleteTarget(null)
   }, [deleteTarget, removeWorkspace, workspaces.length, setLoadState])
 
-  const handleSelect = useCallback(
+  const loadWorkspaceFileTree = useCallback(
     async (id: string) => {
-      if (suppressClickRef.current === id) {
-        suppressClickRef.current = null
-        return
-      }
-      setActiveWorkspace(id)
-      // 根据目标工作区是否有终端来设置状态
-      const snapshot = useWorkspaceStore.getState().terminalSnapshots[id]
-      setLoadState(snapshot && snapshot.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
-      // 加载文件树
       try {
         const ws = workspaces.find((w) => w.id === id)
         if (ws) {
@@ -104,7 +139,45 @@ export function Sidebar() {
         console.error('Failed to load file tree:', err)
       }
     },
-    [setActiveWorkspace, setLoadState, workspaces]
+    [workspaces]
+  )
+
+  const handleSelect = useCallback(
+    async (id: string) => {
+      if (suppressClickRef.current === id) {
+        suppressClickRef.current = null
+        return
+      }
+      setActiveWorkspace(id)
+      // 根据目标工作区是否有终端来设置状态
+      const stateAfterSwitch = useWorkspaceStore.getState()
+      setLoadState(stateAfterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
+      // 加载文件树
+      await loadWorkspaceFileTree(id)
+    },
+    [loadWorkspaceFileTree, setActiveWorkspace, setLoadState]
+  )
+
+  const handleToggleWorkspaceExpand = useCallback((id: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    setExpandedWorkspaceIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    )
+  }, [])
+
+  const handleTerminalPreviewClick = useCallback(
+    async (workspaceId: string, terminalId: string, event: React.MouseEvent) => {
+      event.stopPropagation()
+      setActiveWorkspace(workspaceId)
+      setExpandedWorkspaceIds((current) => (current.includes(workspaceId) ? current : [...current, workspaceId]))
+      const stateAfterSwitch = useWorkspaceStore.getState()
+      setLoadState(stateAfterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
+      if (stateAfterSwitch.terminals.some((terminal) => terminal.id === terminalId)) {
+        setActiveTerminal(terminalId)
+      }
+      await loadWorkspaceFileTree(workspaceId)
+    },
+    [loadWorkspaceFileTree, setActiveTerminal, setActiveWorkspace, setLoadState]
   )
 
   const cancelLongPress = useCallback(() => {
@@ -229,72 +302,143 @@ export function Sidebar() {
                 const isLongPressing = longPressingId === ws.id
                 const isLongPressComplete = longPressCompletedId === ws.id
                 const showProgress = isLongPressing || isActive || isLongPressComplete
+                const workspaceTerminals = isActive ? terminals : terminalSnapshots[ws.id]?.terminals ?? []
+                const isExpanded = expandedWorkspaceIds.includes(ws.id)
+                const terminalCount = workspaceTerminals.length
 
                 return (
-                  <div
-                    key={ws.id}
-                    onClick={() => handleSelect(ws.id)}
-                    onPointerDown={(e) => handlePointerDown(ws, e)}
-                    onPointerUp={cancelLongPress}
-                    onPointerLeave={cancelLongPress}
-                    onPointerCancel={cancelLongPress}
-                    className={`ws p-[9px] px-3 mb-px rounded-md cursor-pointer transition-all flex items-center gap-2.5 text-[13px] relative group${isLongPressing ? ' long-pressing' : ''}`}
-                    style={{
-                      color: isActive ? '#fff' : '#999',
-                      background: isLongPressing
-                        ? isActive
-                          ? 'rgba(255, 120, 48, 0.11)'
-                          : 'rgba(255, 255, 255, 0.045)'
-                        : isActive
-                          ? 'var(--accent-soft)'
-                          : 'transparent',
-                      transform: isLongPressing ? 'scale(0.988)' : 'scale(1)',
-                      boxShadow: isLongPressing
-                        ? 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 8px 16px rgba(0,0,0,0.18)'
-                        : isLongPressComplete
-                          ? '0 0 0 1px rgba(255, 120, 48, 0.12), 0 0 14px rgba(255, 120, 48, 0.14)'
-                          : 'none',
-                    }}
-                  >
+                  <div key={ws.id} className="mb-px">
                     <div
-                      className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r-sm overflow-hidden pointer-events-none"
+                      onClick={() => handleSelect(ws.id)}
+                      onPointerDown={(e) => handlePointerDown(ws, e)}
+                      onPointerUp={cancelLongPress}
+                      onPointerLeave={cancelLongPress}
+                      onPointerCancel={cancelLongPress}
+                      className={`ws p-[9px] pl-2 pr-3 rounded-md cursor-pointer transition-all flex items-center gap-2 text-[13px] relative group${isLongPressing ? ' long-pressing' : ''}`}
                       style={{
-                        background: showProgress ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
+                        color: isActive ? '#fff' : '#999',
+                        background: isLongPressing
+                          ? isActive
+                            ? 'rgba(255, 120, 48, 0.11)'
+                            : 'rgba(255, 255, 255, 0.045)'
+                          : isActive
+                            ? 'var(--accent-soft)'
+                            : 'transparent',
+                        transform: isLongPressing ? 'scale(0.988)' : 'scale(1)',
+                        boxShadow: isLongPressing
+                          ? 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 8px 16px rgba(0,0,0,0.18)'
+                          : isLongPressComplete
+                            ? '0 0 0 1px rgba(255, 120, 48, 0.12), 0 0 14px rgba(255, 120, 48, 0.14)'
+                            : 'none',
                       }}
                     >
                       <div
-                        className="absolute inset-0 origin-bottom"
+                        className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r-sm overflow-hidden pointer-events-none"
                         style={{
-                          background: isLongPressComplete ? '#ffd2b8' : '#ff7830',
-                          opacity: isLongPressComplete ? 0.9 : showProgress ? 1 : 0,
-                          transform:
-                            isLongPressing && longPressProgressId === ws.id
-                              ? 'scaleY(1)'
-                              : showProgress
+                          background: showProgress ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
+                        }}
+                      >
+                        <div
+                          className="absolute inset-0 origin-bottom"
+                          style={{
+                            background: isLongPressComplete ? '#ffd2b8' : '#ff7830',
+                            opacity: isLongPressComplete ? 0.9 : showProgress ? 1 : 0,
+                            transform:
+                              isLongPressing && longPressProgressId === ws.id
                                 ? 'scaleY(1)'
-                                : 'scaleY(0)',
-                          transition: isLongPressing
-                            ? `transform ${longPressProgressDuration}ms linear, opacity 120ms ease`
-                            : 'opacity 120ms ease',
+                                : showProgress
+                                  ? 'scaleY(1)'
+                                  : 'scaleY(0)',
+                            transition: isLongPressing
+                              ? `transform ${longPressProgressDuration}ms linear, opacity 120ms ease`
+                              : 'opacity 120ms ease',
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={isExpanded ? `折叠 ${ws.name} 终端列表` : `展开 ${ws.name} 终端列表`}
+                        title={isExpanded ? '折叠终端列表' : '展开终端列表'}
+                        onClick={(event) => handleToggleWorkspaceExpand(ws.id, event)}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        className="flex h-[18px] w-[18px] shrink-0 cursor-pointer items-center justify-center rounded border-0 bg-transparent p-0 transition-colors hover:bg-[rgba(255,255,255,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.24)]"
+                      >
+                        <span
+                          className="h-[6px] w-[6px] border-r border-b transition-transform"
+                          style={{
+                            borderColor: isExpanded ? 'rgba(255,120,48,0.76)' : 'rgba(255,255,255,0.32)',
+                            transform: isExpanded ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
+                          }}
+                        />
+                      </button>
+                      <div
+                        className="w-1 h-1 rounded-full shrink-0"
+                        style={{
+                          background: isActive ? '#ff7830' : '#444',
+                          boxShadow: isActive ? '0 0 6px var(--accent-glow)' : 'none',
                         }}
                       />
+                      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {ws.name}
+                      </span>
+                      <span
+                        className="inline-flex h-4 min-w-[18px] items-center justify-center rounded-sm px-1 font-mono text-[10px]"
+                        style={{
+                          border: '1px solid rgba(255,255,255,0.055)',
+                          color: terminalCount > 0 ? '#888' : '#4d4d4d',
+                          background: terminalCount > 0 ? 'rgba(255,255,255,0.028)' : 'transparent',
+                        }}
+                      >
+                        {terminalCount}
+                      </span>
+                      <button
+                        onClick={(e) => handleDeleteClick(ws, e)}
+                        className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
+                      >
+                        ×
+                      </button>
                     </div>
-                    <div
-                      className="w-1 h-1 rounded-full shrink-0"
-                      style={{
-                        background: isActive ? '#ff7830' : '#444',
-                        boxShadow: isActive ? '0 0 6px var(--accent-glow)' : 'none',
-                      }}
-                    />
-                    <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                      {ws.name}
-                    </span>
-                    <button
-                      onClick={(e) => handleDeleteClick(ws, e)}
-                      className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
-                    >
-                      ×
-                    </button>
+                    {isExpanded && (
+                      <div
+                        className="ml-5 mr-1 overflow-hidden py-1"
+                        style={{ borderLeft: '1px solid rgba(255,255,255,0.045)' }}
+                      >
+                        {workspaceTerminals.length === 0 ? (
+                          <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">暂无终端</div>
+                        ) : (
+                          workspaceTerminals.map((terminal) => {
+                            const isFocusedTerminal = isActive && terminal.id === activeTerminalId
+                            return (
+                              <button
+                                key={terminal.id}
+                                type="button"
+                                onClick={(event) => handleTerminalPreviewClick(ws.id, terminal.id, event)}
+                                className="group/terminal mb-0.5 grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded px-2.5 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.22)]"
+                                style={{
+                                  background: isFocusedTerminal ? 'rgba(255,120,48,0.055)' : 'transparent',
+                                  color: isFocusedTerminal ? '#d8d8d8' : '#8a8a8a',
+                                }}
+                                title={`${terminalPresetLabel(terminal.preset)} · ${terminal.cwd}`}
+                              >
+                                <span
+                                  className="h-[6px] w-[6px] rounded-full"
+                                  style={{
+                                    background: terminalStatusColor(terminal.status),
+                                    boxShadow: isFocusedTerminal ? `0 0 6px ${terminalStatusColor(terminal.status)}66` : 'none',
+                                  }}
+                                />
+                                <span className="min-w-0 truncate font-mono text-[11px]">
+                                  {terminal.name || terminalPresetLabel(terminal.preset)}
+                                </span>
+                                <span className="font-mono text-[10px] text-[#5f5f5f]">
+                                  {terminalStatusLabel(terminal.status)}
+                                </span>
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })

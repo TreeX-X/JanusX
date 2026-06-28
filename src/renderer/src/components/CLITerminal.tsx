@@ -17,6 +17,7 @@ import type { Terminal as TerminalState } from '@/types'
 
 interface CLITerminalProps {
   terminalId: string
+  focused?: boolean
 }
 
 type RuntimeTelemetryHistorySnapshot = RuntimeTelemetryPatch & {
@@ -25,9 +26,10 @@ type RuntimeTelemetryHistorySnapshot = RuntimeTelemetryPatch & {
 
 const HISTORY_TELEMETRY_POLL_MS = 5_000
 
-export function CLITerminal({ terminalId }: CLITerminalProps) {
+export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
+  const focusedRef = useRef(focused)
   const [fileDragOver, setFileDragOver] = useState(false)
   const pendingOutputRef = useRef('')
   const telemetryFlushTimerRef = useRef<number | null>(null)
@@ -107,6 +109,13 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
       window.clearInterval(timer)
     }
   }, [terminalId, applyTelemetryPatch])
+
+  useEffect(() => {
+    focusedRef.current = focused
+    if (focused) {
+      termRef.current?.focus()
+    }
+  }, [focused])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -201,7 +210,9 @@ export function CLITerminal({ terminalId }: CLITerminalProps) {
     const fitAndSync = () => {
       try {
         fitAddon.fit()
-        term.focus()
+        if (focusedRef.current) {
+          term.focus()
+        }
         window.electron.send('terminal:resize', {
           id: terminalId,
           cols: term.cols,
