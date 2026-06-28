@@ -69,6 +69,79 @@ function createPaneId(prefix = 'pane'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
+type TerminalLookupState = {
+  terminals: Terminal[]
+  terminalSnapshots: Record<string, TerminalSnapshot>
+}
+
+function findTerminalInState(state: TerminalLookupState, terminalId: string): Terminal | null {
+  const activeTerminal = state.terminals.find((item) => item.id === terminalId)
+  if (activeTerminal) return activeTerminal
+
+  for (const snapshot of Object.values(state.terminalSnapshots)) {
+    const terminal = snapshot.terminals.find((item) => item.id === terminalId)
+    if (terminal) return terminal
+  }
+
+  return null
+}
+
+function ensureTerminalInCurrentView(terminals: Terminal[], terminal: Terminal): Terminal[] {
+  return terminals.some((item) => item.id === terminal.id) ? terminals : [...terminals, terminal]
+}
+
+function updateTerminalSnapshots(
+  snapshots: Record<string, TerminalSnapshot>,
+  terminalId: string,
+  patch: Partial<Terminal>
+): Record<string, TerminalSnapshot> {
+  let changed = false
+  const nextSnapshots = Object.fromEntries(
+    Object.entries(snapshots).map(([workspaceId, snapshot]) => {
+      let snapshotChanged = false
+      const terminals = snapshot.terminals.map((terminal) => {
+        if (terminal.id !== terminalId) return terminal
+        snapshotChanged = true
+        return { ...terminal, ...patch, updatedAt: patch.updatedAt ?? Date.now() }
+      })
+
+      if (!snapshotChanged) return [workspaceId, snapshot]
+      changed = true
+      return [workspaceId, { ...snapshot, terminals }]
+    })
+  )
+
+  return changed ? nextSnapshots : snapshots
+}
+
+function removeTerminalFromSnapshots(
+  snapshots: Record<string, TerminalSnapshot>,
+  terminalId: string
+): Record<string, TerminalSnapshot> {
+  let changed = false
+  const nextSnapshots = Object.fromEntries(
+    Object.entries(snapshots).map(([workspaceId, snapshot]) => {
+      if (!snapshot.terminals.some((terminal) => terminal.id === terminalId)) return [workspaceId, snapshot]
+
+      const paneTree = removeTerminalFromPaneTree(snapshot.paneTree, terminalId)
+      const focus = resolvePaneFocus(paneTree, snapshot.focusedPaneId, snapshot.focusedTabId)
+      changed = true
+      return [
+        workspaceId,
+        {
+          terminals: snapshot.terminals.filter((terminal) => terminal.id !== terminalId),
+          activeTerminalId: focus.terminalId,
+          paneTree,
+          focusedPaneId: focus.paneId,
+          focusedTabId: focus.tabId,
+        },
+      ]
+    })
+  )
+
+  return changed ? nextSnapshots : snapshots
+}
+
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   workspaces: [],
   activeWorkspaceId: null,
@@ -153,6 +226,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         paneTree,
         focusedPaneId: focus.paneId,
         focusedTabId: focus.tabId,
+        terminalSnapshots: removeTerminalFromSnapshots(s.terminalSnapshots, id),
       }
     }),
   setActiveTerminal: (id) =>
@@ -188,6 +262,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       terminals: s.terminals.map((t) =>
         t.id === id ? { ...t, ...patch, updatedAt: patch.updatedAt ?? Date.now() } : t
       ),
+      terminalSnapshots: updateTerminalSnapshots(s.terminalSnapshots, id, patch),
     })),
   setFocusedPane: (paneId) =>
     set((s) => {
@@ -256,8 +331,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   moveTerminalToPane: (terminalId, paneId) =>
     set((s) => {
-      const terminal = s.terminals.find((item) => item.id === terminalId)
+      const terminal = findTerminalInState(s, terminalId)
       if (!terminal) return {}
+      const terminals = ensureTerminalInCurrentView(s.terminals, terminal)
       const result = addTerminalToPaneTree(
         s.paneTree,
         paneId,
@@ -265,6 +341,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         createPaneId()
       )
       return {
+        terminals,
         paneTree: result.tree,
         focusedPaneId: result.focus.paneId,
         focusedTabId: result.focus.tabId,
@@ -273,8 +350,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   splitPaneWithTerminal: (terminalId, paneId, edge, ratio = 0.5) =>
     set((s) => {
-      const terminal = s.terminals.find((item) => item.id === terminalId)
+      const terminal = findTerminalInState(s, terminalId)
       if (!terminal) return {}
+      const terminals = ensureTerminalInCurrentView(s.terminals, terminal)
 
       const direction: PaneSplitDirection = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
       const placement = edge === 'left' || edge === 'top' ? 'before' : 'after'
@@ -291,6 +369,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       const targetPaneId = splitResult.focus.paneId
       if (!targetPaneId) {
         return {
+          terminals,
           paneTree: splitResult.tree,
           focusedPaneId: splitResult.focus.paneId,
           focusedTabId: splitResult.focus.tabId,
@@ -305,6 +384,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         createPaneId()
       )
       return {
+        terminals,
         paneTree: result.tree,
         focusedPaneId: result.focus.paneId,
         focusedTabId: result.focus.tabId,

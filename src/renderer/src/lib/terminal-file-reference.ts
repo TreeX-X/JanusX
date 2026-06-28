@@ -1,4 +1,7 @@
 export const WORKSPACE_FILE_DRAG_TYPE = 'application/x-janusx-workspace-file'
+export const TERMINAL_DRAG_TYPE = 'application/x-janusx-terminal-id'
+
+let activeTerminalDragId: string | null = null
 
 export interface WorkspaceFileDragPayload {
   type: 'file'
@@ -22,6 +25,30 @@ export function setWorkspaceFileDragData(
 
 export function hasWorkspaceFileDrag(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes(WORKSPACE_FILE_DRAG_TYPE)
+}
+
+export function setTerminalDragData(dataTransfer: DataTransfer, terminalId: string): void {
+  activeTerminalDragId = terminalId
+  dataTransfer.effectAllowed = 'move'
+  dataTransfer.setData(TERMINAL_DRAG_TYPE, terminalId)
+}
+
+export function hasTerminalDrag(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes(TERMINAL_DRAG_TYPE)
+}
+
+export function readTerminalDragData(dataTransfer: DataTransfer): string | null {
+  return dataTransfer.getData(TERMINAL_DRAG_TYPE) || null
+}
+
+export function getActiveTerminalDragId(): string | null {
+  return activeTerminalDragId
+}
+
+export function clearTerminalDragData(terminalId?: string): void {
+  if (!terminalId || activeTerminalDragId === terminalId) {
+    activeTerminalDragId = null
+  }
 }
 
 export function readWorkspaceFileDragData(dataTransfer: DataTransfer): WorkspaceFileDragPayload | null {

@@ -6,6 +6,7 @@ import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { Workspace, FileNode, Terminal } from '@/types'
 import { invalidateEditorFileCache } from '@/stores/editor'
+import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 
 function terminalStatusLabel(status: Terminal['status']): string {
   switch (status) {
@@ -15,17 +16,6 @@ function terminalStatusLabel(status: Terminal['status']): string {
       return 'done'
     default:
       return 'idle'
-  }
-}
-
-function terminalStatusColor(status: Terminal['status']): string {
-  switch (status) {
-    case 'running':
-      return '#ff7830'
-    case 'exited':
-      return '#4ec9b0'
-    default:
-      return '#666'
   }
 }
 
@@ -46,7 +36,7 @@ export function Sidebar() {
   const longPressDuration = 450
   const longPressVisualDelay = 120
   const longPressProgressDuration = Math.max(120, longPressDuration - longPressVisualDelay)
-  const { workspaces, activeWorkspaceId, terminals, activeTerminalId, terminalSnapshots, setActiveWorkspace, addWorkspace, removeWorkspace, setActiveTerminal } =
+  const { workspaces, activeWorkspaceId, terminals, activeTerminalId, terminalSnapshots, setActiveWorkspace, addWorkspace, removeWorkspace } =
     useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
@@ -165,19 +155,13 @@ export function Sidebar() {
     )
   }, [])
 
-  const handleTerminalPreviewClick = useCallback(
-    async (workspaceId: string, terminalId: string, event: React.MouseEvent) => {
+  const handleTerminalPreviewDragStart = useCallback(
+    (terminal: Terminal, event: React.DragEvent<HTMLDivElement>) => {
       event.stopPropagation()
-      setActiveWorkspace(workspaceId)
-      setExpandedWorkspaceIds((current) => (current.includes(workspaceId) ? current : [...current, workspaceId]))
-      const stateAfterSwitch = useWorkspaceStore.getState()
-      setLoadState(stateAfterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
-      if (stateAfterSwitch.terminals.some((terminal) => terminal.id === terminalId)) {
-        setActiveTerminal(terminalId)
-      }
-      await loadWorkspaceFileTree(workspaceId)
+      setTerminalDragData(event.dataTransfer, terminal.id)
+      event.dataTransfer.setDragImage(event.currentTarget, 12, 12)
     },
-    [loadWorkspaceFileTree, setActiveTerminal, setActiveWorkspace, setLoadState]
+    []
   )
 
   const cancelLongPress = useCallback(() => {
@@ -302,7 +286,9 @@ export function Sidebar() {
                 const isLongPressing = longPressingId === ws.id
                 const isLongPressComplete = longPressCompletedId === ws.id
                 const showProgress = isLongPressing || isActive || isLongPressComplete
-                const workspaceTerminals = isActive ? terminals : terminalSnapshots[ws.id]?.terminals ?? []
+                const workspaceTerminals = (isActive ? terminals : terminalSnapshots[ws.id]?.terminals ?? []).filter(
+                  (terminal) => terminal.workspaceId === ws.id
+                )
                 const isExpanded = expandedWorkspaceIds.includes(ws.id)
                 const terminalCount = workspaceTerminals.length
                 const maxLights = 6
@@ -367,11 +353,7 @@ export function Sidebar() {
                           event.stopPropagation()
                           handleToggleWorkspaceExpand(ws.id, event)
                         }}
-                        className="relative h-4 shrink-0 px-1 cursor-pointer rounded-full border-0 bg-transparent flex items-center justify-center gap-0.5 transition-all duration-150 focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.24)]"
-                        style={{
-                          transform: isExpanded ? 'scale(1.08)' : 'scale(1)',
-                          boxShadow: isExpanded ? '0 0 0 1px rgba(255,120,48,0.22)' : 'none',
-                        }}
+                        className="relative h-4 shrink-0 cursor-pointer border-0 bg-transparent flex items-center justify-center gap-0.5 transition-opacity duration-150 hover:opacity-90 focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)]"
                       >
                         <span className="relative z-10 flex items-center gap-0.5">
                           {terminalCount > 0
@@ -410,31 +392,30 @@ export function Sidebar() {
                           workspaceTerminals.map((terminal) => {
                             const isFocusedTerminal = isActive && terminal.id === activeTerminalId
                             return (
-                              <button
+                              <div
                                 key={terminal.id}
-                                type="button"
-                                onClick={(event) => handleTerminalPreviewClick(ws.id, terminal.id, event)}
-                                className="group/terminal mb-0.5 grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded px-2.5 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.22)]"
+                                draggable
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                }}
+                                onDragStart={(event) => handleTerminalPreviewDragStart(terminal, event)}
+                                onDragEnd={() => clearTerminalDragData(terminal.id)}
+                                className="group/terminal mb-0.5 grid w-full cursor-grab grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2.5 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] active:cursor-grabbing"
                                 style={{
                                   background: isFocusedTerminal ? 'rgba(255,120,48,0.055)' : 'transparent',
                                   color: isFocusedTerminal ? '#d8d8d8' : '#8a8a8a',
                                 }}
                                 title={`${terminalPresetLabel(terminal.preset)} · ${terminal.cwd}`}
                               >
-                                <span
-                                  className="h-[6px] w-[6px] rounded-full"
-                                  style={{
-                                    background: terminalStatusColor(terminal.status),
-                                    boxShadow: isFocusedTerminal ? `0 0 6px ${terminalStatusColor(terminal.status)}66` : 'none',
-                                  }}
-                                />
                                 <span className="min-w-0 truncate font-mono text-[11px]">
                                   {terminal.name || terminalPresetLabel(terminal.preset)}
                                 </span>
                                 <span className="font-mono text-[10px] text-[#5f5f5f]">
                                   {terminalStatusLabel(terminal.status)}
                                 </span>
-                              </button>
+                              </div>
                             )
                           })
                         )}
