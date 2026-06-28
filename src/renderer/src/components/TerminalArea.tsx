@@ -151,7 +151,7 @@ interface PaneTreeViewProps {
   showFocusChrome: boolean
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
-  onCloseTab: (paneId: string, tabId: string) => void
+  onCloseTab: (terminalId: string, e: React.MouseEvent) => void
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null) => void
   onResize: (splitId: string, ratio: number) => void
@@ -363,14 +363,13 @@ function LeafPane({
                 style={{ background: terminal ? accentColor(terminal.status) : '#666' }}
               />
               <span
-                role="button"
                 tabIndex={-1}
                 title="Close View"
-                className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-35 transition-[opacity,color,background] group-hover/tab:opacity-75 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
+                className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-35 transition-[opacity,color,background] group-hover/tab:opacity-75 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                 style={{ color: '#999' }}
                 onClick={(event) => {
                   event.stopPropagation()
-                  onCloseTab(leaf.id, tab.id)
+                  onCloseTab(tab.terminalId, event)
                 }}
               >
                 x
@@ -379,6 +378,13 @@ function LeafPane({
           )
         })}
         <div className="ml-auto flex h-8 shrink-0 items-center gap-1 pb-1">
+          <span
+            aria-hidden="true"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none font-mono"
+            style={{ color: '#999', visibility: 'hidden' }}
+          >
+            x
+          </span>
           <button
             type="button"
             title="New Terminal"
@@ -458,7 +464,6 @@ export function TerminalArea() {
     setPaneTab,
     collapsePaneLayout,
     resizePane,
-    closePaneTab: closePaneTabView,
     moveTerminalToPane,
     splitPaneWithTerminal,
   } = useWorkspaceStore()
@@ -684,14 +689,14 @@ export function TerminalArea() {
           focusedPaneId={focusedPaneId}
           activeTerminalId={activeTerminalId}
           showFocusChrome={paneCount > 1}
-          onPaneFocus={setFocusedPane}
-          onTabSelect={setPaneTab}
-          onCloseTab={closePaneTabView}
-          onKillTerminal={handleKillTerminal}
-          onTerminalDrop={handleTerminalDrop}
-          onResize={resizePane}
-          onOpenTerminalMenu={() => setRingOpen(true)}
-        />
+        onPaneFocus={setFocusedPane}
+        onTabSelect={setPaneTab}
+        onCloseTab={handleKillTerminal}
+        onKillTerminal={handleKillTerminal}
+        onTerminalDrop={handleTerminalDrop}
+        onResize={resizePane}
+        onOpenTerminalMenu={() => setRingOpen(true)}
+      />
       </div>
 
       {/* 中部底部 Runtime 折叠栏 */}
