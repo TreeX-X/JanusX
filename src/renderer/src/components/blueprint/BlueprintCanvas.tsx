@@ -1016,7 +1016,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         trigger: 'manual',
         commitLimit
       })
-      console.log('[BlueprintCanvas] analyze result', selectedId, res)
       if (res?.error) {
         setActionError(res.error)
       }

@@ -341,7 +341,6 @@ export function registerProjectHandlers() {
     }
   })
 
-  console.log('[ProjectManager] IPC handlers registered')
 }
 
 export { getProjectRunner }

@@ -296,11 +296,9 @@ export class VertexAIAdapter implements ProviderExtension {
   }
 
   async initialize(settings: ProviderSettings): Promise<void> {
-    console.log(`[VertexAIAdapter] 初始化: ${settings.vertexAI?.projectId}`)
   }
 
   async dispose(): Promise<void> {
-    console.log(`[VertexAIAdapter] 销毁`)
   }
 
   /**

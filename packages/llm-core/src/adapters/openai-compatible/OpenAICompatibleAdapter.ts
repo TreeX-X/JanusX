@@ -384,7 +384,6 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
    */
   async initialize(settings: ProviderSettings): Promise<void> {
     // OpenAI Compatible 无需特殊初始化
-    console.log(`[OpenAICompatibleAdapter] 初始化: ${settings.name}`)
   }
 
   /**
@@ -392,6 +391,5 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
    */
   async dispose(): Promise<void> {
     // 清理资源（如果有的话）
-    console.log(`[OpenAICompatibleAdapter] 销毁`)
   }
 }
