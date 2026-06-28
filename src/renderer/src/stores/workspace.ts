@@ -56,7 +56,7 @@ interface WorkspaceStore {
   resizePane: (splitId: string, ratio: number) => void
   closePaneTab: (paneId: string, tabId: string) => void
   moveTerminalToPane: (terminalId: string, paneId: string) => void
-  splitPaneWithTerminal: (terminalId: string, paneId: string, edge: PaneDropEdge) => void
+  splitPaneWithTerminal: (terminalId: string, paneId: string, edge: PaneDropEdge, ratio?: number) => void
 
   updateFileTree: (nodes: FileNode[]) => void
   setActiveFilePath: (path: string | null) => void
@@ -271,20 +271,22 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         activeTerminalId: result.focus.terminalId,
       }
     }),
-  splitPaneWithTerminal: (terminalId, paneId, edge) =>
+  splitPaneWithTerminal: (terminalId, paneId, edge, ratio = 0.5) =>
     set((s) => {
       const terminal = s.terminals.find((item) => item.id === terminalId)
       if (!terminal) return {}
 
       const direction: PaneSplitDirection = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
       const placement = edge === 'left' || edge === 'top' ? 'before' : 'after'
+      const clampedRatio = Math.min(0.85, Math.max(0.15, ratio))
       const splitResult = splitPaneTree(
         s.paneTree,
         paneId,
         direction,
         createPaneId('split'),
         createPaneId(),
-        placement
+        placement,
+        clampedRatio
       )
       const targetPaneId = splitResult.focus.paneId
       if (!targetPaneId) {

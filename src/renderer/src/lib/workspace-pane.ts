@@ -202,8 +202,35 @@ export function addTerminalToPaneTree(
   }
 
   const deduped = removeTerminalView(node, content.terminalId)
+  if (!deduped) {
+    const leaf = {
+      ...createEmptyPaneLeaf(fallbackPaneId),
+      tabs: [content],
+      activeTabId: content.id,
+    }
+    return {
+      tree: leaf,
+      focus: { paneId: leaf.id, tabId: content.id, terminalId: content.terminalId },
+    }
+  }
+
   const targetPane = findLeafPane(deduped, targetPaneId) ?? getLeafPanes(deduped)[0]
-  const tree = upsertTabInLeaf(deduped, targetPane.id, content)
+  if (!targetPane) {
+    return {
+      tree: deduped,
+      focus: {
+        paneId: null,
+        tabId: null,
+        terminalId: null,
+      },
+    }
+  }
+
+  const tree = pruneEmptyPanes(upsertTabInLeaf(deduped, targetPane.id, content)) ?? {
+    ...createEmptyPaneLeaf(fallbackPaneId),
+    tabs: [content],
+    activeTabId: content.id,
+  }
   return {
     tree,
     focus: { paneId: targetPane.id, tabId: content.id, terminalId: content.terminalId },
@@ -255,7 +282,8 @@ export function splitPaneTree(
   direction: PaneSplitDirection,
   newSplitId: string,
   newPaneId: string,
-  placement: PaneSplitPlacement = 'after'
+  placement: PaneSplitPlacement = 'after',
+  ratio = 0.5
 ): { tree: WorkspacePaneNode | null; focus: WorkspacePaneFocus } {
   if (!node) {
     const leaf = createEmptyPaneLeaf(newPaneId)
@@ -275,7 +303,7 @@ export function splitPaneTree(
         type: 'split',
         id: newSplitId,
         direction,
-        ratio: 0.5,
+        ratio,
         first: placement === 'before' ? newPane : current,
         second: placement === 'before' ? current : newPane,
       }

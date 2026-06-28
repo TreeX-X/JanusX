@@ -37,15 +37,21 @@ const PRESETS: { type: TerminalPreset; name: string; icon: string }[] = [
 ]
 
 const TERMINAL_DRAG_TYPE = 'application/x-janusx-terminal-id'
+const SPLIT_ZONE_MAX_PX = 240
+const SPLIT_ZONE_MIN_PX = 72
+
+type DragHintState = PaneDropEdge | 'center'
 
 function hasTerminalDrag(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes(TERMINAL_DRAG_TYPE)
 }
 
-function getPaneDropEdge(element: HTMLElement, clientX: number, clientY: number): PaneDropEdge | null {
+function getPaneDropHint(element: HTMLElement, clientX: number, clientY: number): DragHintState {
   const rect = element.getBoundingClientRect()
-  const thresholdX = Math.min(72, rect.width * 0.22)
-  const thresholdY = Math.min(64, rect.height * 0.22)
+  const maxZoneX = Math.max(0, rect.width * 0.45)
+  const maxZoneY = Math.max(0, rect.height * 0.45)
+  const thresholdX = Math.min(Math.max(rect.width * 0.34, SPLIT_ZONE_MIN_PX), SPLIT_ZONE_MAX_PX, maxZoneX)
+  const thresholdY = Math.min(Math.max(rect.height * 0.34, SPLIT_ZONE_MIN_PX), SPLIT_ZONE_MAX_PX, maxZoneY)
   const left = clientX - rect.left
   const top = clientY - rect.top
   const right = rect.right - clientX
@@ -56,7 +62,7 @@ function getPaneDropEdge(element: HTMLElement, clientX: number, clientY: number)
   if (nearest === right && right <= thresholdX) return 'right'
   if (nearest === top && top <= thresholdY) return 'top'
   if (nearest === bottom && bottom <= thresholdY) return 'bottom'
-  return null
+  return 'center'
 }
 
 function providerLabel(preset: TerminalPreset): string {
@@ -155,7 +161,7 @@ interface PaneTreeViewProps {
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null) => void
   onResize: (splitId: string, ratio: number) => void
-  onOpenTerminalMenu: () => void
+  onOpenTerminalMenu: (position: { x: number; y: number }) => void
 }
 
 function PaneTreeView(props: PaneTreeViewProps) {
@@ -251,12 +257,25 @@ function LeafPane({
   const activeTab = activeTabId ? leaf.tabs.find((tab) => tab.id === activeTabId) ?? null : null
   const activeTerminal = activeTab ? terminalsById.get(activeTab.terminalId) ?? null : null
 
+  const openMenu = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement> | React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const rect = event.currentTarget.getBoundingClientRect()
+      onOpenTerminalMenu({
+        x: rect.left,
+        y: rect.bottom,
+      })
+    },
+    [onOpenTerminalMenu]
+  )
+
   const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (!hasTerminalDrag(event.dataTransfer)) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
-    const edge = getPaneDropEdge(event.currentTarget, event.clientX, event.clientY)
+    const edge = getPaneDropHint(event.currentTarget, event.clientX, event.clientY)
     setDragHint(edge ?? 'center')
   }, [])
 
@@ -272,7 +291,8 @@ function LeafPane({
     event.stopPropagation()
     const terminalId = event.dataTransfer.getData(TERMINAL_DRAG_TYPE)
     if (!terminalId) return
-    const edge = getPaneDropEdge(event.currentTarget, event.clientX, event.clientY)
+    const hint = getPaneDropHint(event.currentTarget, event.clientX, event.clientY)
+    const edge = hint === 'center' ? null : hint
     setDragHint(null)
     onTerminalDrop(terminalId, leaf.id, edge)
   }, [leaf.id, onTerminalDrop])
@@ -359,10 +379,6 @@ function LeafPane({
                 {terminal?.name ?? tab.terminalId.slice(0, 8)}
               </span>
               <span
-                className="h-[6px] w-[6px] shrink-0 rounded-full"
-                style={{ background: terminal ? accentColor(terminal.status) : '#666' }}
-              />
-              <span
                 tabIndex={-1}
                 title="Close View"
                 className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-35 transition-[opacity,color,background] group-hover/tab:opacity-75 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
@@ -390,10 +406,8 @@ function LeafPane({
             title="New Terminal"
             className="flex h-6 w-7 items-center justify-center rounded border text-[12px] transition-colors hover:bg-[rgba(255,255,255,0.06)]"
             style={{ borderColor: 'rgba(255,255,255,0.08)', color: '#999' }}
-            onClick={(event) => {
-              event.stopPropagation()
-              onOpenTerminalMenu()
-            }}
+            onClick={openMenu}
+            onPointerDown={openMenu}
           >
             +
           </button>
@@ -433,10 +447,8 @@ function LeafPane({
             <div>Empty pane</div>
             <button
               type="button"
-              onClick={(event) => {
-                event.stopPropagation()
-                onOpenTerminalMenu()
-              }}
+              onClick={openMenu}
+              onPointerDown={openMenu}
               className="rounded border px-3 py-1.5 text-[11px] transition-colors hover:bg-[rgba(255,120,48,0.08)]"
               style={{ borderColor: 'rgba(255,120,48,0.22)', color: '#ffb27d' }}
             >
@@ -469,8 +481,10 @@ export function TerminalArea() {
   } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
+  const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [ringOpen, setRingOpen] = useState(false)
+  const [ringPosition, setRingPosition] = useState({ x: 0, y: 40 })
   const ringRef = useRef<HTMLDivElement>(null)
 
   // 点击外部关闭弹出环
@@ -533,6 +547,20 @@ export function TerminalArea() {
     },
     [moveTerminalToPane, splitPaneWithTerminal]
   )
+
+  const openTerminalMenu = useCallback((position: { x: number; y: number }) => {
+    const areaRect = terminalAreaRef.current?.getBoundingClientRect()
+    const xInArea = areaRect ? Math.max(0, position.x - areaRect.left) : position.x
+    const yInArea = areaRect ? Math.max(0, position.y - areaRect.top) : position.y
+    const menuWidth = 176
+    const menuHeight = 82
+    const margin = 8
+    setRingPosition({
+      x: Math.max(margin, Math.min(xInArea, (areaRect?.width ?? window.innerWidth) - menuWidth - margin)),
+      y: Math.max(margin, Math.min(yInArea, (areaRect?.height ?? window.innerHeight) - menuHeight - margin)),
+    })
+    setRingOpen(true)
+  }, [])
 
   const handlePresetSelect = useCallback(
     async (preset: typeof PRESETS[number]) => {
@@ -600,11 +628,12 @@ export function TerminalArea() {
   const runtimeHealthColor = activeTerminal ? statusColor(activeTerminal.status) : '#555'
 
   return (
-    <div
-      className="flex flex-col h-full relative overflow-hidden"
-      style={{
-        background: 'linear-gradient(180deg, rgba(16, 16, 18, 0.98) 0%, rgba(5, 5, 5, 1) 100%)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -24px 40px rgba(0,0,0,0.4)',
+      <div
+        ref={terminalAreaRef}
+        className="flex flex-col h-full relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(180deg, rgba(16, 16, 18, 0.98) 0%, rgba(5, 5, 5, 1) 100%)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -24px 40px rgba(0,0,0,0.4)',
       }}
     >
       {paneCount > 1 && (
@@ -628,10 +657,10 @@ export function TerminalArea() {
       {/* 终端类型选择弹出环 */}
       <div
         ref={ringRef}
-        className="absolute z-50 flex gap-1.5 px-3 py-2 transition-all"
+        className="absolute z-[120] flex gap-1.5 px-3 py-2 transition-all"
         style={{
-          top: '40px',
-          right: '8px',
+          top: `${ringPosition.y}px`,
+          left: `${ringPosition.x}px`,
           background: 'rgba(18, 18, 20, 0.85)',
           backdropFilter: 'blur(20px)',
           border: '1px solid var(--border)',
@@ -695,7 +724,7 @@ export function TerminalArea() {
         onKillTerminal={handleKillTerminal}
         onTerminalDrop={handleTerminalDrop}
         onResize={resizePane}
-        onOpenTerminalMenu={() => setRingOpen(true)}
+        onOpenTerminalMenu={openTerminalMenu}
       />
       </div>
 

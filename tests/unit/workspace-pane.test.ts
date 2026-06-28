@@ -24,7 +24,7 @@ describe('workspace pane tree', () => {
     )
 
     const leaves = getLeafPanes(moved.tree)
-    expect(leaves).toHaveLength(2)
+    expect(leaves).toHaveLength(1)
     expect(leaves.flatMap((leaf) => leaf.tabs.map((tab) => tab.terminalId))).toEqual(['terminal-1'])
     expect(moved.focus).toEqual({ paneId: 'pane-2', tabId: 'terminal:terminal-1', terminalId: 'terminal-1' })
   })
@@ -46,6 +46,12 @@ describe('workspace pane tree', () => {
 
     expect(split.focus).toEqual({ paneId: 'pane-2', tabId: null, terminalId: null })
     expect(getLeafPanes(split.tree).map((leaf) => leaf.id)).toEqual(['pane-2', 'pane-1'])
+  })
+
+  it('creates split with custom ratio', () => {
+    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2', 'after', 0.3)
+    expect((split.tree as any).ratio).toBe(0.3)
   })
 
   it('merges tabs into the sibling when unsplitting', () => {
@@ -70,6 +76,26 @@ describe('workspace pane tree', () => {
     expect(leaves).toHaveLength(1)
     expect(leaves[0].id).toBe('pane-1')
     expect(leaves[0].tabs.map((tab) => tab.terminalId)).toEqual(['terminal-1'])
+  })
+
+  it('prunes moved-from pane when terminal is moved into another pane', () => {
+    const top = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-top', 'workspace-1'), 'pane-top')
+    const leftBottom = splitPaneTree(top.tree, 'pane-top', 'horizontal', 'split-top', 'pane-bottom-left')
+    const right = splitPaneTree(leftBottom.tree, 'pane-top', 'vertical', 'split-right', 'pane-right')
+    const withRightTerminal = addTerminalToPaneTree(
+      right.tree,
+      'pane-right',
+      createTerminalPaneContent('terminal-right', 'workspace-1'),
+      'pane-right-fallback'
+    )
+    const moved = addTerminalToPaneTree(withRightTerminal.tree, 'pane-bottom-left', createTerminalPaneContent('terminal-top', 'workspace-1'), 'pane-recycle')
+
+    const leaves = getLeafPanes(moved.tree)
+    expect(leaves).toHaveLength(2)
+    const hasTopTerminal = leaves.some((leaf) => leaf.tabs.some((item) => item.terminalId === 'terminal-top'))
+    const hasBottomTerminal = leaves.some((leaf) => leaf.tabs.some((item) => item.terminalId === 'terminal-right'))
+    expect(hasTopTerminal).toBe(true)
+    expect(hasBottomTerminal).toBe(true)
   })
 
   it('prunes an empty pane after removing a terminal session', () => {
