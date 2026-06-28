@@ -3,6 +3,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { CLITerminal } from './CLITerminal'
 import type { TerminalPreset, Terminal } from '@/types'
+import { hasWorkspaceFileDrag } from '@/lib/terminal-file-reference'
 import {
   getLeafPanes,
   createTerminalPaneContent,
@@ -379,6 +380,8 @@ function LeafPane({
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (isPreview) return
+    if (hasWorkspaceFileDrag(event.dataTransfer)) return
+
     const dragTerminalId = event.dataTransfer.getData(TERMINAL_DRAG_TYPE) || activeDragTerminalId || activeDragTerminalRef.current
     if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId) return
     event.preventDefault()
@@ -403,6 +406,8 @@ function LeafPane({
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (isPreview) return
+    if (hasWorkspaceFileDrag(event.dataTransfer)) return
+
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
       setDragHint(null)
       onSplitPreview(null, null, null, 0.5)
@@ -411,6 +416,8 @@ function LeafPane({
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (isPreview) return
+    if (hasWorkspaceFileDrag(event.dataTransfer)) return
+
     const dragTerminalId = event.dataTransfer.getData(TERMINAL_DRAG_TYPE) || activeDragTerminalId || activeDragTerminalRef.current
     if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId) return
     event.preventDefault()
