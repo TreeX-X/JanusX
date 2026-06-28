@@ -305,6 +305,9 @@ export function Sidebar() {
                 const workspaceTerminals = isActive ? terminals : terminalSnapshots[ws.id]?.terminals ?? []
                 const isExpanded = expandedWorkspaceIds.includes(ws.id)
                 const terminalCount = workspaceTerminals.length
+                const maxLights = 6
+                const visibleLights = Math.min(terminalCount, maxLights)
+                const overflowLights = terminalCount - visibleLights
 
                 return (
                   <div key={ws.id} className="mb-px">
@@ -357,39 +360,37 @@ export function Sidebar() {
                       </div>
                       <button
                         type="button"
-                        aria-label={isExpanded ? `折叠 ${ws.name} 终端列表` : `展开 ${ws.name} 终端列表`}
-                        title={isExpanded ? '折叠终端列表' : '展开终端列表'}
-                        onClick={(event) => handleToggleWorkspaceExpand(ws.id, event)}
+                        aria-label={isExpanded ? `折叠 ${ws.name} 终端列表 (${terminalCount})` : `展开 ${ws.name} 终端列表 (${terminalCount})`}
+                        title={isExpanded ? `折叠终端列表 (${terminalCount})` : `展开终端列表 (${terminalCount})`}
                         onPointerDown={(event) => event.stopPropagation()}
-                        className="flex h-[18px] w-[18px] shrink-0 cursor-pointer items-center justify-center rounded border-0 bg-transparent p-0 transition-colors hover:bg-[rgba(255,255,255,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.24)]"
-                      >
-                        <span
-                          className="h-[6px] w-[6px] border-r border-b transition-transform"
-                          style={{
-                            borderColor: isExpanded ? 'rgba(255,120,48,0.76)' : 'rgba(255,255,255,0.32)',
-                            transform: isExpanded ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
-                          }}
-                        />
-                      </button>
-                      <div
-                        className="w-1 h-1 rounded-full shrink-0"
-                        style={{
-                          background: isActive ? '#ff7830' : '#444',
-                          boxShadow: isActive ? '0 0 6px var(--accent-glow)' : 'none',
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleToggleWorkspaceExpand(ws.id, event)
                         }}
-                      />
+                        className="relative h-4 shrink-0 px-1 cursor-pointer rounded-full border-0 bg-transparent flex items-center justify-center gap-0.5 transition-all duration-150 focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.24)]"
+                        style={{
+                          transform: isExpanded ? 'scale(1.08)' : 'scale(1)',
+                          boxShadow: isExpanded ? '0 0 0 1px rgba(255,120,48,0.22)' : 'none',
+                        }}
+                      >
+                        <span className="relative z-10 flex items-center gap-0.5">
+                          {terminalCount > 0
+                            ? Array.from({ length: visibleLights }).map((_, index) => (
+                              <span
+                                key={`${ws.id}-light-${index}`}
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{
+                                  background: 'rgba(255,120,48,0.96)',
+                                  boxShadow: '0 0 4px rgba(255,120,48,0.75)',
+                                }}
+                              />
+                            ))
+                            : <span className="h-1.5 w-1.5 rounded-full bg-[#5a5a5a]" />}
+                          {overflowLights > 0 ? <span className="text-[7px] leading-none font-mono text-[#ffc6a6]">+{overflowLights}</span> : null}
+                        </span>
+                      </button>
                       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                         {ws.name}
-                      </span>
-                      <span
-                        className="inline-flex h-4 min-w-[18px] items-center justify-center rounded-sm px-1 font-mono text-[10px]"
-                        style={{
-                          border: '1px solid rgba(255,255,255,0.055)',
-                          color: terminalCount > 0 ? '#888' : '#4d4d4d',
-                          background: terminalCount > 0 ? 'rgba(255,255,255,0.028)' : 'transparent',
-                        }}
-                      >
-                        {terminalCount}
                       </span>
                       <button
                         onClick={(e) => handleDeleteClick(ws, e)}
