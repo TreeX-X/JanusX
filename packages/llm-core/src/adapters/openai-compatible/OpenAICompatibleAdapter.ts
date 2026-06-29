@@ -382,7 +382,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
   /**
    * 生命周期钩子：初始化
    */
-  async initialize(settings: ProviderSettings): Promise<void> {
+  async initialize(_settings: ProviderSettings): Promise<void> {
     // OpenAI Compatible 无需特殊初始化
   }
 

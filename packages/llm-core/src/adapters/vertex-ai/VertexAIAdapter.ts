@@ -295,7 +295,7 @@ export class VertexAIAdapter implements ProviderExtension {
     return settings.modelId || 'gemini-2.5-flash'
   }
 
-  async initialize(settings: ProviderSettings): Promise<void> {
+  async initialize(_settings: ProviderSettings): Promise<void> {
   }
 
   async dispose(): Promise<void> {
