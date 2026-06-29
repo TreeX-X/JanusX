@@ -447,12 +447,6 @@ function LeafPane({
           : 'inset 0 1px 0 rgba(255,255,255,0.025)',
       }}
     >
-      {showFocus && (
-        <div
-          className="pointer-events-none absolute left-0 top-0 z-10 h-full w-px"
-          style={{ background: 'rgba(255,120,48,0.34)' }}
-        />
-      )}
       {dragHint && (
         <div
           className="pointer-events-none absolute inset-0 z-20"

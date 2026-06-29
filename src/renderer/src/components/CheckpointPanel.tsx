@@ -185,7 +185,7 @@ export function CheckpointPanel() {
         />
 
         {loading && (
-          <div className="flex items-center justify-center h-full text-[#555] text-xs">
+          <div className="pointer-events-none absolute right-3 top-3 z-[2] text-[#555] text-xs">
             加载中...
           </div>
         )}
