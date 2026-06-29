@@ -206,6 +206,9 @@ export function CheckpointPanel() {
           const isDiffExpanded = expandedDiffId === `${cp.id}:`
           const tagStyle = ENGINE_TAG_STYLES[cp.engine] ?? ENGINE_TAG_STYLES.opencode
           const isActive = cp.status === 'ready'
+          const isPromptExpanded = expandedPromptId === cp.id
+          const promptLineCount = cp.prompt.split(/\r\n|\r|\n/).length
+          const shouldShowPromptToggle = cp.prompt.length > 80 || promptLineCount > 3
 
           return (
             <div key={cp.id} className="flex gap-3 relative">
@@ -281,13 +284,13 @@ export function CheckpointPanel() {
                     marginBottom: 6,
                     wordBreak: 'break-all',
                     whiteSpace: 'pre-wrap',
-                    maxHeight: expandedPromptId === cp.id ? 'none' : 42,
+                    maxHeight: isPromptExpanded ? 'none' : 54,
                     overflow: 'hidden',
                     position: 'relative',
                   }}
                 >
                   {cp.prompt}
-                  {cp.prompt.length > 80 && expandedPromptId !== cp.id && (
+                  {shouldShowPromptToggle && !isPromptExpanded && (
                     <span
                       style={{
                         position: 'absolute',
@@ -315,7 +318,19 @@ export function CheckpointPanel() {
                     </span>
                   )}
                 </div>
-                {cp.prompt.length > 80 && expandedPromptId === cp.id && (
+                {(promptLineCount > 1 || cp.prompt.length > 80) && (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: '#666',
+                      fontFamily: "'SF Mono', monospace",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {promptLineCount} 行 · {cp.prompt.length} 字符
+                  </div>
+                )}
+                {shouldShowPromptToggle && isPromptExpanded && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -548,6 +563,7 @@ export function CheckpointPanel() {
                   border: '1px solid rgba(255,255,255,0.06)',
                   borderRadius: 6,
                   lineHeight: 1.4,
+                  whiteSpace: 'pre-wrap',
                 }}
               >
                 &ldquo;{restoreTarget.prompt}&rdquo;

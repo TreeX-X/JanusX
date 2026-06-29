@@ -12,7 +12,7 @@ interface TerminalCpState {
   engine: CheckpointEngine
   initialized: boolean         // whether checkpointManager.initialize() succeeded
   creating: boolean
-  pendingSubmitText: string | null
+  pendingSubmitTexts: string[]
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
@@ -22,9 +22,17 @@ function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unk
   mainWindow.webContents.send(channel, payload)
 }
 
-function createCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text: string): void {
-  const prompt = text.trim()
-  if (!prompt) return
+function normalizeSubmittedPrompt(text: string): string {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+    .trimEnd()
+}
+
+function enqueueCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text: string): void {
+  const prompt = normalizeSubmittedPrompt(text)
+  if (!prompt.trim()) return
 
   const state = terminalStates.get(id)
   if (!state) {
@@ -36,15 +44,16 @@ function createCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text:
     return
   }
 
-  if (!state.initialized) {
-    state.pendingSubmitText = prompt
-    return
-  }
+  state.pendingSubmitTexts.push(prompt)
+  processCheckpointQueue(mainWindow, id)
+}
 
-  if (state.creating) {
-    state.pendingSubmitText = prompt
-    return
-  }
+function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
+  const state = terminalStates.get(id)
+  if (!state || !state.initialized || state.creating) return
+
+  const prompt = state.pendingSubmitTexts.shift()
+  if (!prompt) return
 
   state.creating = true
 
@@ -81,11 +90,7 @@ function createCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text:
     })
   }).finally(() => {
     state.creating = false
-    const pending = state.pendingSubmitText
-    state.pendingSubmitText = null
-    if (pending && terminalStates.has(id)) {
-      createCheckpointFromSubmit(mainWindow, id, pending)
-    }
+    processCheckpointQueue(mainWindow, id)
   })
 }
 
@@ -116,7 +121,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       engine,
       initialized: false,
       creating: false,
-      pendingSubmitText: null,
+      pendingSubmitTexts: [],
     })
 
     // PTY output — just forward to renderer
@@ -150,9 +155,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       const state = terminalStates.get(id)
       if (state) {
         state.initialized = true
-        const pending = state.pendingSubmitText
-        state.pendingSubmitText = null
-        if (pending) createCheckpointFromSubmit(mainWindow, id, pending)
+        processCheckpointQueue(mainWindow, id)
       }
       sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: true })
     }).catch((err) => {
@@ -168,9 +171,9 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     terminalManager.write(id, data)
   })
 
-  // Submit-line handler — renderer sends clean user input on Enter
+  // Submit-line handler — renderer sends one complete user input transaction.
   ipcMain.on('terminal:submit-line', (_event, { id, text }: { id: string; text: string }) => {
-    createCheckpointFromSubmit(mainWindow, id, text)
+    enqueueCheckpointFromSubmit(mainWindow, id, text)
   })
 
   ipcMain.on('terminal:resize', (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {

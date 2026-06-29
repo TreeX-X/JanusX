@@ -8,6 +8,11 @@ import {
   readWorkspaceFileDragData,
 } from '@/lib/terminal-file-reference'
 import {
+  applyTerminalInputChunk,
+  createTerminalInputTransactionState,
+  normalizeTerminalInputPreviewText,
+} from '@/lib/terminal-input-transaction'
+import {
   extractRuntimeTelemetry,
   getEstimatedContextWindow,
   type RuntimeTelemetryPatch,
@@ -174,7 +179,19 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
 
+    let pendingSoftEnterCount = 0
+
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      if (e.type === 'keydown' && e.key === 'Enter' && (e.shiftKey || e.altKey)) {
+        pendingSoftEnterCount += 1
+        return true
+      }
+
+      if (e.type === 'keydown' && e.ctrlKey && e.key.toLowerCase() === 'j') {
+        pendingSoftEnterCount += 1
+        return true
+      }
+
       const isCtrl = e.ctrlKey || e.metaKey
       if (!isCtrl) return true
 
@@ -242,63 +259,27 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     observer.observe(containerRef.current)
 
     // 输入 → IPC
-    let inputLine = ''
-    let inEsc = false
-    let inCSI = false
+    let inputTransactionState = createTerminalInputTransactionState()
+
+    const commitSubmittedInput = () => {
+      const text = normalizeTerminalInputPreviewText(inputTransactionState.text)
+      inputTransactionState = { ...inputTransactionState, text: '' }
+      if (!text.trim()) return
+
+      window.electron.send('terminal:submit-line', { id: terminalId, text })
+      updateTelemetry(text)
+    }
 
     term.onData((data) => {
       window.electron.send('terminal:input', { id: terminalId, data })
 
-      // Track user input for checkpoint system (无论是否粘贴都要追踪)
-      for (const ch of data) {
-        const code = ch.charCodeAt(0)
-
-        // ESC — start of escape sequence
-        if (code === 0x1b) {
-          inEsc = true
-          inCSI = false
-          continue
-        }
-
-        // After ESC: '[' starts CSI, other byte ends the sequence
-        if (inEsc && !inCSI) {
-          if (code === 0x5b) {
-            inCSI = true
-          } else {
-            inEsc = false
-          }
-          continue
-        }
-
-        // Inside CSI — skip until final byte (0x40-0x7e, e.g. ~ for bracketed paste)
-        if (inCSI) {
-          if (code >= 0x40 && code <= 0x7e) {
-            inEsc = false
-            inCSI = false
-          }
-          continue
-        }
-
-        // Enter — submit the line
-        if (ch === '\r' || ch === '\n') {
-          if (inputLine.length > 0) {
-            window.electron.send('terminal:submit-line', { id: terminalId, text: inputLine })
-            updateTelemetry(inputLine)
-          }
-          inputLine = ''
-          continue
-        }
-
-        // Backspace
-        if (code === 0x7f || code === 0x08) {
-          inputLine = inputLine.slice(0, -1)
-          continue
-        }
-
-        // Regular character (including Chinese and all Unicode)
-        if (code >= 0x20) {
-          inputLine += ch
-        }
+      const result = applyTerminalInputChunk(inputTransactionState, data, {
+        softEnterCount: pendingSoftEnterCount,
+      })
+      inputTransactionState = result.state
+      pendingSoftEnterCount = result.softEnterCount
+      if (result.commitNow) {
+        commitSubmittedInput()
       }
     })
 
