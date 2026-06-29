@@ -20,6 +20,7 @@ export interface TerminalInputChunkOptions {
 const BRACKETED_PASTE_START = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const SOFT_ENTER_SEQUENCE = /^\x1b\[13;\d+u/
+const WIN32_CTRL_J_SEQUENCE = /^\x1b\[74;\d+;10;1;\d+;\d+_/
 
 export function createTerminalInputTransactionState(): TerminalInputTransactionState {
   return {
@@ -65,6 +66,14 @@ export function applyTerminalInputChunk(
         next.text += '\n'
         softEnterCount -= 1
         index += softEnterMatch[0].length - 1
+        continue
+      }
+
+      const win32CtrlJMatch = data.slice(index).match(WIN32_CTRL_J_SEQUENCE)
+      if (win32CtrlJMatch) {
+        next.text += '\n'
+        softEnterCount -= 1
+        index += win32CtrlJMatch[0].length - 1
         continue
       }
     }
@@ -127,6 +136,9 @@ export function applyTerminalInputChunk(
         softEnterCount -= 1
       } else if (next.inBracketedPaste || isBulkInput) {
         next.text += '\n'
+        if (softEnterCount > 0 && next.inBracketedPaste) {
+          softEnterCount -= 1
+        }
       } else {
         commitNow = true
       }

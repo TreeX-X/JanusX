@@ -82,6 +82,26 @@ describe('terminal input transaction parser', () => {
     expect(result.state.text).toBe('\n')
   })
 
+  it('tracks a soft newline sent through bracketed paste', () => {
+    const result = applyTerminalInputChunk(createTerminalInputTransactionState(), '\x1b[200~\r\x1b[201~', {
+      softEnterCount: 1,
+    })
+
+    expect(result.commitNow).toBe(false)
+    expect(result.softEnterCount).toBe(0)
+    expect(result.state.text).toBe('\n')
+  })
+
+  it('treats Win32 input mode Ctrl+J as multiline content', () => {
+    const result = applyTerminalInputChunk(createTerminalInputTransactionState(), '\x1b[74;36;10;1;8;1_', {
+      softEnterCount: 1,
+    })
+
+    expect(result.commitNow).toBe(false)
+    expect(result.softEnterCount).toBe(0)
+    expect(result.state.text).toBe('\n')
+  })
+
   it('ignores OSC color query responses before user text', () => {
     const data = '\x1b]10;rgb:d4d4/d4d4/d4d4\x1b\\\x1b]11;rgb:0505/0505/0505\x1b\\test'
     const result = applyTerminalInputChunk(createTerminalInputTransactionState(), data)

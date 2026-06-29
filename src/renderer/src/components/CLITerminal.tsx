@@ -180,6 +180,28 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     term.open(containerRef.current)
 
     let pendingSoftEnterCount = 0
+    let win32InputMode = false
+    let inputTransactionState = createTerminalInputTransactionState()
+
+    const commitSubmittedInput = () => {
+      const text = normalizeTerminalInputPreviewText(inputTransactionState.text)
+      inputTransactionState = { ...inputTransactionState, text: '' }
+      if (!text.trim()) return
+
+      window.electron.send('terminal:submit-line', { id: terminalId, text })
+      updateTelemetry(text)
+    }
+
+    const trackInputData = (data: string) => {
+      const result = applyTerminalInputChunk(inputTransactionState, data, {
+        softEnterCount: pendingSoftEnterCount,
+      })
+      inputTransactionState = result.state
+      pendingSoftEnterCount = result.softEnterCount
+      if (result.commitNow) {
+        commitSubmittedInput()
+      }
+    }
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type === 'keydown' && e.key === 'Enter' && (e.shiftKey || e.altKey)) {
@@ -189,6 +211,14 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
 
       if (e.type === 'keydown' && e.ctrlKey && e.key.toLowerCase() === 'j') {
         pendingSoftEnterCount += 1
+        const terminal = useWorkspaceStore.getState().terminals.find((item) => item.id === terminalId)
+        if (terminal?.preset === 'codex' && win32InputMode) {
+          const data = '\x1b[74;36;10;1;8;1_'
+          window.electron.send('terminal:input', { id: terminalId, data })
+          trackInputData(data)
+          e.preventDefault()
+          return false
+        }
         return true
       }
 
@@ -258,29 +288,25 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     })
     observer.observe(containerRef.current)
 
-    // 输入 → IPC
-    let inputTransactionState = createTerminalInputTransactionState()
+    const win32InputModeEnableDisposable = term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, (params) => {
+      if (params.some((param) => param === 9001 || (Array.isArray(param) && param.includes(9001)))) {
+        win32InputMode = true
+        return true
+      }
+      return false
+    })
 
-    const commitSubmittedInput = () => {
-      const text = normalizeTerminalInputPreviewText(inputTransactionState.text)
-      inputTransactionState = { ...inputTransactionState, text: '' }
-      if (!text.trim()) return
-
-      window.electron.send('terminal:submit-line', { id: terminalId, text })
-      updateTelemetry(text)
-    }
+    const win32InputModeDisableDisposable = term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, (params) => {
+      if (params.some((param) => param === 9001 || (Array.isArray(param) && param.includes(9001)))) {
+        win32InputMode = false
+        return true
+      }
+      return false
+    })
 
     term.onData((data) => {
       window.electron.send('terminal:input', { id: terminalId, data })
-
-      const result = applyTerminalInputChunk(inputTransactionState, data, {
-        softEnterCount: pendingSoftEnterCount,
-      })
-      inputTransactionState = result.state
-      pendingSoftEnterCount = result.softEnterCount
-      if (result.commitNow) {
-        commitSubmittedInput()
-      }
+      trackInputData(data)
     })
 
     // 输出 ← IPC
@@ -301,6 +327,8 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
         window.clearTimeout(telemetryFlushTimerRef.current)
         telemetryFlushTimerRef.current = null
       }
+      win32InputModeEnableDisposable.dispose()
+      win32InputModeDisableDisposable.dispose()
       term.dispose()
       termRef.current = null
     }
