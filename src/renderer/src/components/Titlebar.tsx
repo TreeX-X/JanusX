@@ -3,7 +3,7 @@ import appIcon from '@/assets/icons/app-icon.svg'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
-import { LlmConfigModal } from '@/components/LlmConfigModal'
+import { AppSettingsModal } from '@/components/AppSettingsModal'
 import { useJanusChat } from '@/components/janus/useJanusChat'
 import type { JanusMode } from '@/components/janus'
 
@@ -17,6 +17,7 @@ export function Titlebar() {
   const [islandStage, setIslandStage] = useState<'collapsed' | 'peek' | 'expanded'>('collapsed')
   const [isRunning, setIsRunning] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'notifications' | 'llm'>('notifications')
 
   const {
     messages,
@@ -64,6 +65,12 @@ export function Titlebar() {
   }, [])
 
   const handleSettingsTriggerClick = useCallback(() => {
+    setSettingsInitialTab('notifications')
+    setSettingsModalOpen(true)
+  }, [])
+
+  const handleOpenLlmConfig = useCallback(() => {
+    setSettingsInitialTab('llm')
     setSettingsModalOpen(true)
   }, [])
 
@@ -133,8 +140,11 @@ export function Titlebar() {
         </span>
       </div>
 
-      {/* LLM 配置模态框 */}
-      <LlmConfigModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
+      <AppSettingsModal
+        isOpen={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        initialTab={settingsInitialTab}
+      />
 
       {/* 灵动岛 */}
       <div
@@ -155,7 +165,7 @@ export function Titlebar() {
           onChatStop={handleChatStop}
           onChatRetry={handleChatRetry}
           onChatClear={handleChatClear}
-          onOpenLlmConfig={() => setSettingsModalOpen(true)}
+          onOpenLlmConfig={handleOpenLlmConfig}
         />
       </div>
 

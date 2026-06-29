@@ -2,6 +2,11 @@ import { app } from 'electron'
 import { join } from 'path'
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import type { GlobalConfig } from '../workspace/types'
+import {
+  DEFAULT_AGENT_NOTIFICATION_SETTINGS,
+  normalizeAgentNotificationSettings,
+  type AgentNotificationSettings,
+} from '../../shared/notifications'
 
 const DEFAULT_CONFIG: GlobalConfig = {
   theme: 'dark',
@@ -24,6 +29,7 @@ const DEFAULT_CONFIG: GlobalConfig = {
     },
   ],
   recentWorkspaces: [],
+  notificationSettings: DEFAULT_AGENT_NOTIFICATION_SETTINGS,
 }
 
 class ConfigService {
@@ -41,7 +47,12 @@ class ConfigService {
   async load(): Promise<GlobalConfig> {
     try {
       const data = await readFile(this.configPath, 'utf-8')
-      this.config = { ...DEFAULT_CONFIG, ...JSON.parse(data) }
+      const parsed = JSON.parse(data) as Partial<GlobalConfig>
+      this.config = {
+        ...DEFAULT_CONFIG,
+        ...parsed,
+        notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
+      }
     } catch {
       this.config = { ...DEFAULT_CONFIG }
       await this.save()
@@ -65,8 +76,28 @@ class ConfigService {
   async update(partial: Partial<GlobalConfig>): Promise<GlobalConfig> {
     const current = await this.get()
     this.config = { ...current, ...partial }
+    if (partial.notificationSettings) {
+      this.config.notificationSettings = normalizeAgentNotificationSettings({
+        ...current.notificationSettings,
+        ...partial.notificationSettings,
+      })
+    }
     await this.save()
     return this.config
+  }
+
+  async getNotificationSettings(): Promise<AgentNotificationSettings> {
+    const config = await this.get()
+    return normalizeAgentNotificationSettings(config.notificationSettings)
+  }
+
+  async updateNotificationSettings(
+    partial: Partial<AgentNotificationSettings>,
+  ): Promise<AgentNotificationSettings> {
+    const current = await this.getNotificationSettings()
+    const notificationSettings = normalizeAgentNotificationSettings({ ...current, ...partial })
+    await this.update({ notificationSettings })
+    return notificationSettings
   }
 
   async addRecentWorkspace(id: string): Promise<void> {

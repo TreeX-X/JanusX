@@ -7,8 +7,9 @@ import { getProviders, saveProvider, testConnection, removeProvider, setDefaultP
 import type { ProviderSettings } from '@janusx/llm-core'
 
 interface LlmConfigModalProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen?: boolean
+  onClose?: () => void
+  embedded?: boolean
 }
 
 const VERTEX_REGIONS = [
@@ -20,7 +21,7 @@ const VERTEX_REGIONS = [
 
 type ProviderType = 'openai-compatible' | 'vertex-ai'
 
-export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
+export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: LlmConfigModalProps) {
   const modalRootRef = useRef<HTMLDivElement | null>(null)
   const [providerType, setProviderType] = useState<ProviderType>('openai-compatible')
   const [providers, setProviders] = useState<ProviderSettings[]>([])
@@ -64,11 +65,11 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
   }, [])
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen || embedded) {
       loadProviders()
       resetForm()
     }
-  }, [isOpen, loadProviders])
+  }, [isOpen, embedded, loadProviders])
 
   const handleSetDefault = async (providerId: string) => {
     try {
@@ -158,7 +159,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
 
   const handleTest = async () => {
     try {
-      setTestStatus({ state: 'testing', message: 'Pinging API node...' })
+      setTestStatus({ state: 'testing', message: '正在测试连接 Ping...' })
       const settings = buildSettings()
       const testModel = providerType === 'vertex-ai'
         ? (vertexModel || 'gemini-2.5-flash')
@@ -169,19 +170,19 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
       if (result.success) {
         setTestStatus({
           state: 'success',
-          message: `Connection Established [${result.latency || 0}ms]`,
+          message: `连接成功 Connected [${result.latency || 0}ms]`,
           latency: result.latency
         })
       } else {
         setTestStatus({
           state: 'error',
-          message: `Failed: ${result.error || 'Unknown error'}`
+          message: `连接失败 Failed: ${result.error || 'Unknown error'}`
         })
       }
     } catch (error: any) {
       setTestStatus({
         state: 'error',
-        message: `Error: ${error.message || 'Network failed'}`
+        message: `错误 Error: ${error.message || 'Network failed'}`
       })
     }
   }
@@ -201,34 +202,35 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
         }, 500)
       } else {
         setSaveStatus('error')
-        setTestStatus({ state: 'error', message: `Save failed: ${result.error}` })
+        setTestStatus({ state: 'error', message: `保存失败 Save failed: ${result.error}` })
       }
     } catch (error: any) {
       setSaveStatus('error')
-      setTestStatus({ state: 'error', message: `Error: ${error.message}` })
+      setTestStatus({ state: 'error', message: `错误 Error: ${error.message}` })
     }
   }
 
   const getModalPortalContainer = useCallback(() => modalRootRef.current, [])
 
-  if (!isOpen) return null
+  if (!isOpen && !embedded) return null
 
-  return createPortal(
-    <div ref={modalRootRef} className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`}>
-      <div className={styles.llmConfigPanel}>
+  const panel = (
+      <div className={`${styles.llmConfigPanel} ${embedded ? styles.embeddedPanel : ''}`}>
         <div className={styles.configHeader}>
           <div className={styles.configTitle}>
             <i className={styles.statusDot}></i>
-            LLM Engine Settings
+            LLM 引擎设置 <span className={styles.titleMeta}>LLM Engine</span>
           </div>
-          <ModalCloseButton onClose={() => { onClose(); resetForm() }} />
+          {!embedded && onClose && (
+            <ModalCloseButton onClose={() => { onClose(); resetForm() }} />
+          )}
         </div>
 
         <div className={styles.configBody}>
           {/* 已配置列表 */}
           {providers.length > 0 && (
             <div className={styles.formGroup}>
-              <label>已配置 Providers</label>
+              <label>已配置服务 <span>Providers</span></label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {providers.map(p => (
                   <div
@@ -282,7 +284,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
 
           {/* Provider 类型选择 */}
           <div className={styles.formGroup}>
-            <label>{editingId ? '编辑 Provider' : '添加 Provider'}</label>
+            <label>{editingId ? '编辑服务 Provider' : '添加服务 Provider'}</label>
             <Select
               className={`${styles.configInput} ${styles.selectInput}`}
               value={providerType}
@@ -292,7 +294,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 setTestStatus({ state: 'idle', message: '' })
               }}
               options={[
-                { value: 'openai-compatible', label: 'OpenAI Compatible (URL + Key)' },
+                { value: 'openai-compatible', label: 'OpenAI 兼容接口 (URL + Key)' },
                 { value: 'vertex-ai', label: 'Google Vertex AI (GCP 认证)' }
               ]}
             />
@@ -302,7 +304,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
           {providerType === 'openai-compatible' && (
             <>
               <div className={styles.formGroup}>
-                <label>Provider Name</label>
+                <label>服务名称 <span>Provider Name</span></label>
                 <input
                   className={styles.configInput}
                   placeholder="My OpenAI Provider"
@@ -311,7 +313,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 />
               </div>
               <div className={styles.formGroup}>
-                <label>Base URL</label>
+                <label>接口地址 <span>Base URL</span></label>
                 <input
                   className={styles.configInput}
                   placeholder="https://api.openai.com/v1"
@@ -320,7 +322,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 />
               </div>
               <div className={styles.formGroup}>
-                <label>API Key</label>
+                <label>访问密钥 <span>API Key</span></label>
                 <input
                   type="password"
                   className={styles.configInput}
@@ -330,7 +332,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 />
               </div>
               <div className={styles.formGroup}>
-                <label>Default Model</label>
+                <label>默认模型 <span>Default Model</span></label>
                 <input
                   className={styles.configInput}
                   placeholder="gpt-4o, deepseek-chat..."
@@ -345,7 +347,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
           {providerType === 'vertex-ai' && (
             <>
               <div className={styles.formGroup}>
-                <label>Provider Name</label>
+                <label>服务名称 <span>Provider Name</span></label>
                 <input
                   className={styles.configInput}
                   placeholder="Vertex AI"
@@ -354,7 +356,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 />
               </div>
               <div className={styles.formGroup}>
-                <label>GCP Project ID</label>
+                <label>GCP 项目 ID <span>Project ID</span></label>
                 <input
                   className={styles.configInput}
                   placeholder="my-gcp-project"
@@ -363,7 +365,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 />
               </div>
               <div className={styles.formGroup}>
-                <label>Region</label>
+                <label>区域 <span>Region</span></label>
                 <Select
                   className={`${styles.configInput} ${styles.selectInput}`}
                   value={vertexRegion}
@@ -382,16 +384,16 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                     setVertexAuthMode(v as 'service-account' | 'adc' | 'json-paste')
                   }
                   options={[
-                    { value: 'service-account', label: 'Service Account (邮箱 + 密钥)' },
+                    { value: 'service-account', label: '服务账号 Service Account (邮箱 + 密钥)' },
                     { value: 'json-paste', label: '粘贴完整 JSON Key' },
-                    { value: 'adc', label: 'Application Default Credentials' }
+                    { value: 'adc', label: '应用默认凭证 ADC' }
                   ]}
                 />
               </div>
               {vertexAuthMode === 'service-account' && (
                 <>
                   <div className={styles.formGroup}>
-                    <label>Client Email</label>
+                    <label>客户端邮箱 <span>Client Email</span></label>
                     <input
                       className={styles.configInput}
                       placeholder="xxx@my-project.iam.gserviceaccount.com"
@@ -400,7 +402,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                     />
                   </div>
                   <div className={styles.formGroup}>
-                    <label>Private Key</label>
+                    <label>私钥 <span>Private Key</span></label>
                     <textarea
                       className={styles.configInput}
                       style={{ minHeight: 80, fontFamily: 'monospace', fontSize: 11, resize: 'vertical' }}
@@ -430,7 +432,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
               )}
               {vertexAuthMode === 'json-paste' && (
                 <div className={styles.formGroup}>
-                  <label>Service Account JSON</label>
+                  <label>服务账号 JSON <span>Service Account JSON</span></label>
                   <textarea
                     className={styles.configInput}
                     style={{ minHeight: 80, fontFamily: 'monospace', fontSize: 11, resize: 'vertical' }}
@@ -446,7 +448,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 </div>
               )}
               <div className={styles.formGroup}>
-                <label>HTTP Proxy (可选)</label>
+                <label>HTTP 代理 <span>Proxy，可选</span></label>
                 <input
                   className={styles.configInput}
                   placeholder="http://127.0.0.1:7890"
@@ -458,7 +460,7 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
                 </div>
               </div>
               <div className={styles.formGroup}>
-                <label>Default Model</label>
+                <label>默认模型 <span>Default Model</span></label>
                 <Select
                   className={`${styles.configInput} ${styles.selectInput}`}
                   value={vertexModel}
@@ -481,19 +483,32 @@ export function LlmConfigModal({ isOpen, onClose }: LlmConfigModalProps) {
             {testStatus.message}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className={`${styles.btn} ${styles.btnGhost}`} onClick={handleTest}>
-              Ping Network
+              <button className={`${styles.btn} ${styles.btnGhost}`} onClick={handleTest}>
+              测试连接 Ping
             </button>
             <button
               className={`${styles.btn} ${styles.btnPrimary}`}
               onClick={handleSave}
               disabled={saveStatus === 'saving'}
             >
-              {saveStatus === 'saving' ? 'Saving...' : editingId ? 'Update' : 'Save & Apply'}
+              {saveStatus === 'saving' ? '保存中...' : editingId ? '更新 Update' : '保存并应用 Save'}
             </button>
           </div>
         </div>
       </div>
+  )
+
+  if (embedded) {
+    return (
+      <div ref={modalRootRef} className={styles.embeddedRoot}>
+        {panel}
+      </div>
+    )
+  }
+
+  return createPortal(
+    <div ref={modalRootRef} className={`${styles.modalBackdrop} ${isOpen ? styles.show : ''}`}>
+      {panel}
     </div>,
     document.body
   )

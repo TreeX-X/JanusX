@@ -33,6 +33,21 @@
   overflow: hidden;
 }
 
+.embeddedRoot {
+  min-height: 0;
+  height: 100%;
+}
+
+.embeddedPanel {
+  width: 100%;
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  transform: none;
+}
+
 .modalBackdrop.show .llmConfigPanel {
   transform: translateY(0) scale(1);
 }
@@ -53,6 +68,13 @@
   align-items: center;
   gap: 8px;
   letter-spacing: 0.5px;
+}
+
+.titleMeta {
+  color: #71717a;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 10px;
+  font-weight: 500;
 }
 
 .statusDot {
@@ -84,6 +106,24 @@
   overflow-y: auto;
 }
 
+.embeddedPanel .configHeader {
+  padding: 0 0 16px;
+}
+
+.embeddedPanel .configBody {
+  padding: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.embeddedPanel .configFooter {
+  position: sticky;
+  bottom: 0;
+  margin: 16px -20px -20px;
+  padding: 14px 20px;
+  backdrop-filter: blur(16px);
+}
+
 .configBody::-webkit-scrollbar {
   width: 6px;
 }
@@ -113,6 +153,11 @@
   font-family: 'SF Mono', 'Consolas', monospace;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.formGroup label span {
+  color: #5f6368;
+  text-transform: none;
 }
 
 .configInput {

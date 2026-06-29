@@ -1,16 +1,38 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { agentStreamManager } from '../agent/stream-manager'
 import { notifyAgentEvent } from '../notifications/agent-notifier'
+import { configService } from '../config/service'
 import type { AgentSpawnOptions } from '../agent/types'
 
 export function registerAgentHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle('agent:start', async (_event, options: AgentSpawnOptions) => {
     const sessionId = await agentStreamManager.start(options)
+    const sessionStartedAt = agentStreamManager.getSession(sessionId)?.startedAt
 
     // Wire event forwarding to renderer
     agentStreamManager.onEvent(sessionId, (event) => {
       mainWindow.webContents.send('agent:event', { sessionId, event })
-      notifyAgentEvent(mainWindow, { sessionId, engine: options.engine }, event)
+      void configService
+        .getNotificationSettings()
+        .then((settings) => {
+          notifyAgentEvent(
+            mainWindow,
+            {
+              sessionId,
+              engine: options.engine,
+              startedAt: agentStreamManager.getSession(sessionId)?.startedAt ?? sessionStartedAt,
+            },
+            event,
+            settings,
+          )
+        })
+        .catch(() => {
+          notifyAgentEvent(mainWindow, {
+            sessionId,
+            engine: options.engine,
+            startedAt: agentStreamManager.getSession(sessionId)?.startedAt ?? sessionStartedAt,
+          }, event)
+        })
     })
 
     return { sessionId }

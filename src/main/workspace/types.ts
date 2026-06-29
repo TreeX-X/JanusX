@@ -1,3 +1,5 @@
+import type { AgentNotificationSettings } from '../../shared/notifications'
+
 export interface Workspace {
   id: string
   name: string
@@ -49,6 +51,7 @@ export interface GlobalConfig {
   defaultShell: string
   registeredCLIs: CLIRegistration[]
   recentWorkspaces: string[]
+  notificationSettings: AgentNotificationSettings
 }
 
 export interface CLIRegistration {

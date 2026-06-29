@@ -17,6 +17,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'system:getDefaultShell',
   'system:getPlatform',
   'system:which',
+  'settings:notifications:get',
+  'settings:notifications:update',
   'app:init',
   'window:minimize',
   'window:maximize',

@@ -12,6 +12,7 @@ import { registerProjectHandlers } from './ipc/project-handlers'
 import { registerLlmHandlers } from './ipc/llm-handlers'
 import { registerJanusHandlers } from './ipc/janus-handlers'
 import { registerRuntimeTelemetryHandlers } from './ipc/runtime-telemetry-handlers'
+import { registerSettingsHandlers } from './ipc/settings-handlers'
 import { terminalManager } from './terminal/manager'
 import { agentStreamManager } from './agent/stream-manager'
 
@@ -52,6 +53,7 @@ function createWindow(): void {
   registerLlmHandlers()
   registerJanusHandlers(mainWindow)
   registerRuntimeTelemetryHandlers()
+  registerSettingsHandlers()
 
   // 窗口控制 IPC
   ipcMain.handle('window:minimize', () => {

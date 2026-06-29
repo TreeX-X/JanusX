@@ -80,6 +80,56 @@ describe('notifyAgentEvent', () => {
     expect(electronMock.instances[0].show).toHaveBeenCalledTimes(1)
   })
 
+  it('skips notifications when desktop notifications are disabled', async () => {
+    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
+
+    notifyAgentEvent(
+      createWindowMock() as never,
+      { sessionId: 's1', engine: 'codex' },
+      {
+        type: 'done',
+        exitCode: 0,
+      },
+      {
+        desktopEnabled: false,
+        notifyOnSuccess: true,
+        notifyOnFailure: true,
+        minDurationSeconds: 0,
+        includeErrorMessage: false,
+        errorMessageMaxLength: 120,
+      },
+    )
+
+    expect(electronMock.instances).toHaveLength(0)
+  })
+
+  it('skips short tasks when a runtime threshold is configured', async () => {
+    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
+
+    notifyAgentEvent(
+      createWindowMock() as never,
+      {
+        sessionId: 's1',
+        engine: 'codex',
+        startedAt: new Date(Date.now() - 10_000).toISOString(),
+      },
+      {
+        type: 'done',
+        exitCode: 0,
+      },
+      {
+        desktopEnabled: true,
+        notifyOnSuccess: true,
+        notifyOnFailure: true,
+        minDurationSeconds: 30,
+        includeErrorMessage: false,
+        errorMessageMaxLength: 120,
+      },
+    )
+
+    expect(electronMock.instances).toHaveLength(0)
+  })
+
   it('shows a failure notification for error events', async () => {
     const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
 
@@ -91,6 +141,32 @@ describe('notifyAgentEvent', () => {
     expect(electronMock.instances[0].options).toEqual({
       title: 'JanusX - Agent 执行失败',
       body: 'claude 会话遇到问题，点击返回 JanusX 查看详情。',
+    })
+  })
+
+  it('can include a truncated failure message when configured', async () => {
+    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
+
+    notifyAgentEvent(
+      createWindowMock() as never,
+      { sessionId: 's1', engine: 'claude' },
+      {
+        type: 'error',
+        message: 'x'.repeat(80),
+      },
+      {
+        desktopEnabled: true,
+        notifyOnSuccess: true,
+        notifyOnFailure: true,
+        minDurationSeconds: 0,
+        includeErrorMessage: true,
+        errorMessageMaxLength: 40,
+      },
+    )
+
+    expect(electronMock.instances[0].options).toEqual({
+      title: 'JanusX - Agent 执行失败',
+      body: `claude 会话失败：${'x'.repeat(37)}...`,
     })
   })
 
