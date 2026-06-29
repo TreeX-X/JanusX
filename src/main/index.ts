@@ -15,6 +15,10 @@ import { registerRuntimeTelemetryHandlers } from './ipc/runtime-telemetry-handle
 import { terminalManager } from './terminal/manager'
 import { agentStreamManager } from './agent/stream-manager'
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.janusx.app')
+}
+
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {

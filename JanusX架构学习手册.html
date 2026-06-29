@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JanusX 软件架构学习手册</title>
+<style>
+  /* ============ 设计系统：信息建筑派 · 深墨底 + 单一古铜琥珀 accent ============ */
+  :root{
+    --bg:#0E1116;
+    --bg-elev:#161B22;
+    --bg-elev2:#1C232C;
+    --ink:#D7DCE3;
+    --ink-soft:#8B95A3;
+    --ink-faint:#5C6675;
+    --line:#232A33;
+    --line-soft:#1A2028;
+    --accent:#C98A3E;
+    --accent-soft:#8A5E2A;
+    --accent-glow:rgba(201,138,62,.14);
+    --code-bg:#0A0D11;
+    --code-keyword:#D08C5A;
+    --code-string:#9CBF7A;
+    --code-comment:#5C6675;
+    --code-type:#B89AD6;
+    --code-num:#D9B061;
+    --good:#7FAE8E;
+    --warn:#D9B061;
+    --bad:#C9715A;
+    --serif:'Iowan Old Style','Source Serif Pro','Noto Serif SC',Georgia,'Times New Roman',serif;
+    --sans:'Inter','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',Consolas,'Liberation Mono',monospace;
+    --side-w:300px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:var(--sans);font-size:15px;line-height:1.7;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  }
+  ::selection{background:var(--accent-glow);color:var(--ink)}
+
+  /* ============ 顶部导航条 ============ */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;height:54px;z-index:50;
+    background:rgba(14,17,22,.88);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;padding:0 24px;gap:20px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;font-weight:600;font-size:14px;letter-spacing:.02em}
+  .brand-mark{
+    width:22px;height:22px;border:1.5px solid var(--accent);border-radius:50%;
+    position:relative;flex-shrink:0;
+  }
+  .brand-mark::before,.brand-mark::after{
+    content:"";position:absolute;top:50%;width:5px;height:5px;border-radius:50%;
+    background:var(--accent);transform:translateY(-50%);
+  }
+  .brand-mark::before{left:3px}
+  .brand-mark::after{right:3px}
+  .brand b{color:var(--ink)}
+  .brand span{color:var(--ink-faint);font-weight:400;font-size:12px}
+  .topbar-spacer{flex:1}
+  .topbar-meta{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.05em}
+  .topbar-meta b{color:var(--accent);font-weight:400}
+
+  /* ============ 布局 ============ */
+  .layout{display:flex;margin-top:54px;min-height:calc(100vh - 54px)}
+
+  /* ============ 左侧 sticky 导航 ============ */
+  .side{
+    position:sticky;top:54px;flex:0 0 var(--side-w);height:calc(100vh - 54px);
+    overflow-y:auto;padding:28px 0 60px;
+    border-right:1px solid var(--line-soft);
+    background:rgba(14,17,22,.4);
+  }
+  .side::-webkit-scrollbar{width:6px}
+  .side::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .side-section{padding:0 18px;margin-bottom:18px}
+  .side-label{
+    font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+    color:var(--ink-faint);text-transform:uppercase;padding:6px 8px;
+  }
+  .side a{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:7px 8px;border-radius:6px;text-decoration:none;
+    color:var(--ink-soft);font-size:13px;line-height:1.45;
+    transition:color .15s,background .15s;
+  }
+  .side a:hover{color:var(--ink);background:var(--bg-elev)}
+  .side a .num{
+    font-family:var(--mono);font-size:10px;color:var(--ink-faint);
+    flex-shrink:0;width:18px;padding-top:2px;
+  }
+  .side a.active{color:var(--accent);background:var(--accent-glow)}
+  .side a.active .num{color:var(--accent)}
+  .side a.active::before{
+    content:"";position:absolute;left:0;width:2px;height:60%;background:var(--accent);
+  }
+  .side a{position:relative}
+  .side-sub{padding-left:34px;font-size:12px;color:var(--ink-faint)}
+  .side-sub a{padding:4px 8px;font-size:12px}
+
+  /* ============ 主内容 ============ */
+  .main{flex:1;min-width:0;max-width:920px;margin:0 auto;padding:56px 64px 160px}
+  section{margin-bottom:96px;scroll-margin-top:80px}
+  .section-head{margin-bottom:36px;border-bottom:1px solid var(--line);padding-bottom:24px}
+  .section-num{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;
+    color:var(--accent);text-transform:uppercase;display:block;margin-bottom:10px;
+  }
+  h1{font-family:var(--serif);font-size:38px;font-weight:600;line-height:1.2;letter-spacing:-.01em}
+  h2{font-family:var(--serif);font-size:30px;font-weight:600;line-height:1.25;letter-spacing:-.01em;color:var(--ink)}
+  h3{font-family:var(--sans);font-size:19px;font-weight:600;margin:40px 0 14px;color:var(--ink);letter-spacing:-.005em}
+  h4{font-family:var(--sans);font-size:15px;font-weight:600;margin:26px 0 10px;color:var(--ink-soft);letter-spacing:.01em;text-transform:uppercase;font-size:12px}
+  p{margin-bottom:14px;color:var(--ink)}
+  p.lead{font-family:var(--serif);font-size:18px;line-height:1.65;color:var(--ink-soft)}
+  strong{color:var(--ink);font-weight:600}
+  em{color:var(--accent);font-style:normal;font-weight:500}
+  a.src{color:var(--ink-faint);font-family:var(--mono);font-size:12px;text-decoration:none;border-bottom:1px dotted var(--line)}
+  a.src:hover{color:var(--accent);border-color:var(--accent)}
+  ul,ol{margin:12px 0 18px 22px}
+  li{margin-bottom:7px;line-height:1.65}
+  li::marker{color:var(--ink-faint)}
+
+  /* ============ 代码块 ============ */
+  pre{
+    background:var(--code-bg);border:1px solid var(--line);border-left:2px solid var(--accent-soft);
+    border-radius:8px;padding:18px 20px;overflow-x:auto;margin:18px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.65;
+  }
+  pre .file{
+    display:block;font-size:10.5px;color:var(--ink-faint);letter-spacing:.04em;
+    margin:-6px 0 12px;padding-bottom:10px;border-bottom:1px solid var(--line-soft);
+  }
+  pre .file b{color:var(--accent);font-weight:400}
+  code{font-family:var(--mono);font-size:12.5px}
+  p code,li code{background:var(--bg-elev);color:var(--code-keyword);padding:1px 6px;border-radius:4px;font-size:12px}
+  .k{color:var(--code-keyword)}
+  .s{color:var(--code-string)}
+  .c{color:var(--code-comment);font-style:italic}
+  .t{color:var(--code-type)}
+  .n{color:var(--code-num)}
+
+  /* ============ 卡片 / callout ============ */
+  .card{
+    background:var(--bg-elev);border:1px solid var(--line);border-radius:10px;
+    padding:22px 24px;margin:22px 0;
+  }
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:22px 0}
+  .mini{background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+  .mini h5{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:6px;letter-spacing:.01em}
+  .mini p{font-size:13px;color:var(--ink-soft);margin:0;line-height:1.55}
+
+  .callout{
+    border-left:3px solid var(--accent);background:var(--accent-glow);
+    padding:18px 22px;border-radius:0 8px 8px 0;margin:24px 0;
+  }
+  .callout .tag{
+    font-family:var(--mono);font-size:10px;letter-spacing:.15em;color:var(--accent);
+    text-transform:uppercase;display:block;margin-bottom:8px;
+  }
+  .callout p{margin:0;color:var(--ink);font-size:14px}
+  .callout p+p{margin-top:10px}
+
+  .why{
+    background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;
+    padding:16px 20px;margin:18px 0;font-size:13.5px;
+  }
+  .why .q{color:var(--accent);font-weight:600;font-size:12px;letter-spacing:.02em;margin-bottom:6px;display:block;font-family:var(--mono)}
+  .why p{margin:0;color:var(--ink-soft);line-height:1.6}
+
+  /* ============ 表格 ============ */
+  table{width:100%;border-collapse:collapse;margin:22px 0;font-size:13px}
+  th{
+    text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;
+    color:var(--ink-faint);text-transform:uppercase;
+    padding:10px 14px;border-bottom:1px solid var(--line);font-weight:500;
+  }
+  td{padding:12px 14px;border-bottom:1px solid var(--line-soft);color:var(--ink-soft);vertical-align:top;line-height:1.55}
+  td b{color:var(--ink);font-weight:600}
+  td code{font-size:11.5px;color:var(--code-keyword);background:var(--bg-elev);padding:1px 5px;border-radius:3px}
+  tr:hover td{background:rgba(28,35,44,.4)}
+
+  /* ============ 流程图（纯 CSS） ============ */
+  .flow{margin:26px 0;font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--ink-soft);overflow-x:auto}
+  .flow pre{border-left-color:var(--accent);background:var(--code-bg);color:var(--ink-soft);font-size:12px}
+  .flow .hl{color:var(--accent)}
+  .flow .dim{color:var(--ink-faint)}
+
+  /* ============ 首屏 hero ============ */
+  .hero{padding:40px 0 30px;border-bottom:1px solid var(--line);margin-bottom:48px}
+  .hero .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--accent);text-transform:uppercase;margin-bottom:18px}
+  .hero h1{font-size:46px;line-height:1.15;margin-bottom:20px}
+  .hero p{font-family:var(--serif);font-size:19px;color:var(--ink-soft);line-height:1.6;max-width:680px}
+  .hero-stats{display:flex;gap:40px;margin-top:34px;flex-wrap:wrap}
+  .stat .v{font-family:var(--serif);font-size:30px;color:var(--accent);font-weight:600;line-height:1}
+  .stat .l{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);letter-spacing:.1em;text-transform:uppercase;margin-top:8px}
+
+  /* ============ 决策表 ============ */
+  .decision{display:grid;grid-template-columns:160px 1fr 1fr;gap:0;margin:16px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .decision>div{padding:14px 16px;border-bottom:1px solid var(--line-soft);border-right:1px solid var(--line-soft);font-size:13px}
+  .decision>div:nth-child(3n){border-right:none}
+  .decision .dh{background:var(--bg-elev2);font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink-faint);text-transform:uppercase;font-weight:500}
+  .decision .dk{color:var(--accent);font-weight:600;font-size:12.5px}
+  .decision p{margin:0;color:var(--ink-soft);line-height:1.55;font-size:13px}
+
+  /* ============ 移动端 ============ */
+  @media(max-width:1080px){
+    .side{display:none}
+    .main{padding:40px 28px 120px}
+    .grid2,.grid3{grid-template-columns:1fr}
+    .decision{grid-template-columns:1fr}
+    .decision>div{border-right:none}
+    .hero h1{font-size:34px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 顶部导航条 ============ -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <b>JanusX</b><span>架构学习手册</span>
+  </div>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-meta">基于真实源码 · <b>2026.06</b> 提炼</div>
+</div>
+
+<div class="layout">
+
+  <!-- ============ 左侧导航 ============ -->
+  <nav class="side" id="side">
+    <div class="side-section">
+      <div class="side-label">入门</div>
+      <a href="#overview"><span class="num">00</span>总览与阅读指南</a>
+      <a href="#architecture"><span class="num">01</span>整体架构与技术栈</a>
+    </div>
+    <div class="side-section">
+      <div class="side-label">六大核心子系统</div>
+      <a href="#llm-core"><span class="num">02</span>LLM Core · 提供商抽象</a>
+      <a href="#terminal"><span class="num">03</span>Terminal · 分屏与 PTY</a>
+      <a href="#agent"><span class="num">04</span>Agent · 统一 CLI 流</a>
+      <a href="#checkpoint"><span class="num">05</span>Checkpoint · 快照与还原</a>
+      <a href="#analyzer"><span class="num">06</span>Analyzer · 蓝图分析</a>
+      <a href="#island"><span class="num">07</span>Janus Island · 人格交互</a>
+    </div>
+    <div class="side-section">
+      <div class="side-label">贯穿与总览</div>
+      <a href="#dataflow"><span class="num">08</span>数据流互联图</a>
+      <a href="#decisions"><span class="num">09</span>设计决策总表</a>
+    </div>
+    <div class="side-section">
+      <div class="side-label">附录</div>
+      <a href="#glossary"><span class="num">A</span>术语速查</a>
+      <a href="#reading"><span class="num">B</span>推荐阅读路径</a>
+    </div>
+  </nav>
+
+  <!-- ============ 主内容 ============ -->
+  <main class="main">
+
+  <!-- ==================== 00 总览 ==================== -->
+  <section id="overview">
+    <div class="hero">
+      <div class="kicker">一份能当教材读的架构拆解</div>
+      <h1>JanusX 软件架构<br>学习手册</h1>
+      <p>JanusX 是一个把多个 AI 编程助手（Claude Code / Codex / OpenCode）统一收进同一个桌面的「CLI 工作区管理器」。本手册逐层拆解它的设计架构、技术选型与核心功能实现，让你不仅看懂「怎么做的」，更看懂「为什么这么做」。</p>
+      <div class="hero-stats">
+        <div class="stat"><div class="v">Electron</div><div class="l">桌面壳</div></div>
+        <div class="stat"><div class="v">React 18</div><div class="l">渲染层</div></div>
+        <div class="stat"><div class="v">6</div><div class="l">核心子系统</div></div>
+        <div class="stat"><div class="v">Vercel AI SDK</div><div class="l">LLM 接入</div></div>
+      </div>
+    </div>
+
+    <h3>它到底是个什么东西</h3>
+    <p>一句话：<strong>JanusX 是一个面向开发者的桌面工作台</strong>，它用 Electron 把多个 AI 编码 CLI、分屏终端、文件编辑、git、快照还原、蓝图分析、以及一个拟人化的「Janus 控制核心」装进一个无边框窗口里。</p>
+    <p>它有三个名字，对应三个层次——理解这点能避免后续读源码时混淆：</p>
+    <table>
+      <tr><th>名字</th><th>指代层次</th><th>出现位置</th></tr>
+      <tr><td><b>SwitchX</b></td><td>引擎 / 仓库名</td><td>README、package 早期命名</td></tr>
+      <tr><td><b>JanusX</b></td><td>产品品牌</td><td>appId、productName、面向用户</td></tr>
+      <tr><td><b>WorkflowX</b></td><td>开发时编排框架</td><td>CLAUDE.md / AGENTS.md（仓库内的 agent 协作框架，不属运行时）</td></tr>
+    </table>
+
+    <div class="callout">
+      <span class="tag">阅读建议</span>
+      <p>本手册按「自上而下 + 分子系统」组织。第一次读建议顺序走 00→01→08，先建立全局心智模型，再回头钻任一子系统。每章都带 <em>设计决策（Why）</em> 小节——那是这本手册区别于「源码注释翻译」的核心价值。</p>
+    </div>
+
+    <h3>本手册的资料来源</h3>
+    <p>内容来自对真实源码的逐文件提炼（含 <code>file:line</code> 引用），覆盖 <code>packages/llm-core</code> 与 <code>src/</code> 下的 main / preload / renderer / shared 四层。设计决策章节参考了 <code>doc/</code> 下的设计提案。注意：仓库源码是加密编码存储，开发时用 <code>rg</code> 读、用 Edit 改——这条约束只影响开发流程，不影响你理解架构。</p>
+  </section>
+
+  <!-- ==================== 01 整体架构 ==================== -->
+  <section id="architecture">
+    <div class="section-head">
+      <span class="section-num">01 · Architecture</span>
+      <h2>整体架构与技术栈</h2>
+    </div>
+
+    <p class="lead">JanusX 是一个经典的 Electron 三层应用：主进程管「重活」（PTY、git、LLM、分析器），预加载层做安全桥接，渲染层是 React + Zustand 的 UI。下面这层关系是理解一切的根基。</p>
+
+    <h3>三层进程模型</h3>
+    <div class="flow"><pre><span class="dim">┌──────────────────────────── 主进程 (Main · Node 环境) ────────────────────────────┐</span>
+│  Electron BrowserWindow(frame:false, sandbox:false)                              │
+│                                                                                   │
+│  terminal/   ── node-pty 真终端      agent/        ── 包装 Claude/Codex/OpenCode │
+│  ipc/        ── 按域名分文件 handler  checkpoint/  ── BlobStore + diff-engine    │
+│  llm/        ── 调用 llm-core        janus/        ── analyzer + blueprint-store │
+│  git/ project/ runtime-telemetry/    ── 各领域服务                                 │
+<span class="dim">└───────────────┬─────────────────────────────────────────────────────────────┘</span>
+                │  <span class="hl">contextBridge · IPC channel allowlist</span>
+<span class="dim">┌───────────────┴──────────── 预加载 (Preload) ─────────────────────────────────┐</span>
+│  window.electron = { invoke/send/on ... }   +  window.electron.janusPersona     │
+<span class="dim">└───────────────┬─────────────────────────────────────────────────────────────┘</span>
+                │  <span class="hl">window.electron.*</span>
+<span class="dim">┌───────────────┴──────────── 渲染层 (Renderer · 浏览器环境) ───────────────────┐</span>
+│  React 18 + Zustand stores   Tailwind + CSS Modules                            │
+│  Titlebar · Sidebar · TerminalArea(分屏树) · Panel · StatusBar · JanusIsland   │
+│  BlueprintCanvas(@xyflow) · FileEditor(Monaco) · CLITerminal(@xterm)           │
+<span class="dim">└─────────────────────────────────────────────────────────────────────────────┘</span></pre></div>
+
+    <h3>技术栈一览</h3>
+    <table>
+      <tr><th>层次</th><th>技术</th><th>职责</th></tr>
+      <tr><td><b>桌面壳</b></td><td>Electron 35 + electron-vite 3 + electron-builder 25</td><td>跨平台打包；main/preload/renderer 统一构建</td></tr>
+      <tr><td><b>语言</b></td><td>TypeScript（ES2022 / strict）</td><td>全栈类型安全；llm-core 独立 tsconfig</td></tr>
+      <tr><td><b>UI 框架</b></td><td>React 18 + zustand 5</td><td>vanilla store（无 Context provider），不可变更新</td></tr>
+      <tr><td><b>样式</b></td><td>Tailwind 3 + CSS Modules</td><td>原子类 + 局部作用域并存</td></tr>
+      <tr><td><b>终端</b></td><td>node-pty 1 + @xterm/xterm 6 + addon-fit</td><td>主进程真 PTY，渲染层 xterm</td></tr>
+      <tr><td><b>画布</b></td><td>@xyflow/react 12</td><td>蓝图节点可视化</td></tr>
+      <tr><td><b>编辑器</b></td><td>@monaco-editor/react 4</td><td>文件编辑</td></tr>
+      <tr><td><b>LLM</b></td><td>Vercel AI SDK 3 + @ai-sdk/openai + @ai-sdk/google-vertex</td><td>统一 provider 接入</td></tr>
+      <tr><td><b>构建/测试</b></td><td>Vite 6 + Vitest 3 + Playwright</td><td>单测 + E2E</td></tr>
+    </table>
+
+    <h3>monorepo 是怎么连起来的</h3>
+    <p>用最轻量的 <strong>npm workspaces</strong>（不是 pnpm/turbo），根 <code>package.json</code> 声明 <code>"workspaces": ["packages/*"]</code>。根 workspace 本身就是 Electron 应用入口；唯一的子包 <code>@janusx/llm-core</code> 是可独立发布的 LLM 抽象层。</p>
+    <div class="why">
+      <span class="q">为什么不上 pnpm / turbo？</span>
+      <p>项目规模目前只有一个子包，npm workspaces 零配置够用；引入 turbo 会带来缓存配置与额外心智负担，不符合「一个子包」的现实。脚本里 <code>npm run build:llm-core</code> → <code>npm run build --workspace=@janusx/llm-core</code>，dev/build 先编译 llm-core 再跑 electron-vite。</p>
+    </div>
+
+    <h3>IPC 是怎么按域名组织的</h3>
+    <p>主进程在 <code>src/main/index.ts</code> 按领域注册 handler，每个领域一个文件，命名即语义：</p>
+    <table>
+      <tr><th>IPC 文件</th><th>对接服务</th><th>典型频道</th></tr>
+      <tr><td><code>ipc/terminal-handlers.ts</code></td><td>terminal/manager.ts (node-pty)</td><td><code>terminal:create/input/resize/exit</code></td></tr>
+      <tr><td><code>ipc/agent-handlers.ts</code></td><td>agent/stream-manager.ts</td><td><code>agent:start/event/cancel</code></td></tr>
+      <tr><td><code>ipc/checkpoint-handlers.ts</code></td><td>checkpoint/checkpoint-manager.ts</td><td><code>checkpoint:create/list/restore</code></td></tr>
+      <tr><td><code>ipc/janus-handlers.ts</code></td><td>janus/analyzer.ts + blueprint-store</td><td><code>janus:analyzer:analyze</code></td></tr>
+      <tr><td><code>ipc/llm-handlers.ts</code></td><td>llm/LlmService.ts + ConfigStore</td><td><code>llm:config/chat</code></td></tr>
+      <tr><td><code>ipc/git-handlers.ts</code></td><td>git/service.ts</td><td><code>git:commit/log/status</code></td></tr>
+    </table>
+
+    <div class="callout">
+      <span class="tag">为什么 sandbox:false</span>
+      <p>node-pty 这类原生模块在 sandbox 下无法直接 spawn 子进程；同时预加载层用 <code>contextBridge</code> + 显式频道白名单守住边界——安全靠「白名单 + 主进程持有能力」，而非靠 sandbox 隔离。这是 Electron 嵌入真终端时的常见取舍。</p>
+    </div>
+  </section>
+
+  <!-- ==================== 02 LLM Core ==================== -->
+  <section id="llm-core">
+    <div class="section-head">
+      <span class="section-num">02 · LLM Core</span>
+      <h2>LLM Core · 提供商抽象层</h2>
+    </div>
+
+    <p class="lead"><code>@janusx/llm-core</code> 是一个可独立发布的包，职责非常窄：<strong>把「创建一个 LanguageModel」这件事，从具体厂商 API 里抽象出来</strong>。它本身不跑推理——推理交给 Vercel AI SDK 的 <code>generateText/streamText</code>。</p>
+
+    <h3>三层架构</h3>
+    <div class="flow"><pre><span class="dim">应用层 (JanusX main/llm/LlmService.ts)</span>
+        │  createLanguageModel(settings, modelId)
+        ▼
+<span class="hl">门面层 (src/index.ts)</span>  ── createLanguageModel / createEmbeddingModel / validateProviderConfig
+        │  ProviderFactory.getInstance()  (单例)
+        ▼
+<span class="hl">核心层 (core/)</span>  ── ExtensionRegistry(注册表单例) + ProviderFactory(工厂单例) + types.ts(契约)
+        │  resolveAdapter(authType) ── AUTH_TYPE_TO_ADAPTER 映射
+        ▼
+<span class="hl">适配器层 (adapters/)</span>  ── OpenAICompatibleAdapter / VertexAIAdapter
+        │  动态 import('@ai-sdk/openai' | '@ai-sdk/google-vertex')
+        ▼
+<span class="dim">Vercel AI SDK → 真实 provider HTTP</span></pre></div>
+
+    <h4>契约 · ProviderExtension 接口</h4>
+    <p>没有抽象基类——纯接口契约，每个适配器 <code>implements ProviderExtension</code>：</p>
+    <pre><span class="file"><b>packages/llm-core/src/core/types.ts:178-238</b></span><span class="k">export interface</span> <span class="t">ProviderExtension</span> {
+  <span class="k">readonly</span> id: <span class="t">string</span>
+  <span class="k">readonly</span> name: <span class="t">string</span>
+  <span class="k">readonly</span> authType: <span class="t">AuthType</span>
+  <span class="k">readonly</span> capabilities: <span class="t">ProviderCapabilities</span>
+
+  createLanguageModel(settings, modelId): <span class="t">Promise</span>&lt;<span class="t">LanguageModelV1</span>&gt;
+  createEmbeddingModel?(settings, modelId): <span class="t">Promise</span>&lt;<span class="t">EmbeddingModel</span>&gt;
+  listModels(settings): <span class="t">Promise</span>&lt;<span class="t">ModelInfo</span>[]&gt;
+  validateSettings(settings): <span class="t">Promise</span>&lt;<span class="t">ValidationResult</span>&gt;
+  getDefaultModel(settings): <span class="t">string</span>
+  initialize?(settings): <span class="t">Promise</span>&lt;<span class="k">void</span>&gt;   <span class="c">// 生命周期钩子</span>
+  dispose?(): <span class="t">Promise</span>&lt;<span class="k">void</span>&gt;
+}</pre>
+
+    <h4>两个注册表，各司其职</h4>
+    <div class="grid2">
+      <div class="mini">
+        <h5>运行时注册表 · ExtensionRegistry</h5>
+        <p>单例，<code>Map&lt;string, ProviderExtension&gt;</code>。只存「适配器实例」。注意：包内<strong>不自动注册</strong>，消费方要自己 <code>factory.register(new OpenAICompatibleAdapter())</code>——注册表启动时是空的。</p>
+      </div>
+      <div class="mini">
+        <h5>元数据目录 · ConfigLoader + providers.json</h5>
+        <p>静态清单（<code>version: 2026.06.16</code>），给 UI 渲染表单用——字段类型、条件可见性、默认端点。不参与运行时实例化，可热重载。</p>
+      </div>
+    </div>
+
+    <h4>工厂如何派发</h4>
+    <pre><span class="file"><b>packages/llm-core/src/core/ProviderFactory.ts:13-17</b></span><span class="k">const</span> AUTH_TYPE_TO_ADAPTER: <span class="t">Record</span>&lt;<span class="t">string</span>, <span class="t">string</span>&gt; = {
+  [<span class="t">AuthType</span>.API_KEY]:   <span class="s">'openai-compatible'</span>,
+  [<span class="t">AuthType</span>.VERTEX_AI]: <span class="s">'vertex-ai'</span>,
+  [<span class="t">AuthType</span>.NONE]:      <span class="s">'openai-compatible'</span>,
+}</pre>
+    <p><code>createLanguageModel</code> 走：缓存键 <code>${id}:${modelId}</code> → 校验 → 解析适配器 → 调 <code>adapter.createLanguageModel</code> → 缓存返回。返回的对象就是 AI SDK 的 <code>LanguageModelV1</code>，调用方拿去喂 <code>streamText</code>。</p>
+
+    <h4>OpenAICompatibleAdapter · 动态 import + baseURL 嗅探</h4>
+    <pre><span class="file"><b>packages/llm-core/src/adapters/openai-compatible/OpenAICompatibleAdapter.ts:62-91</b></span><span class="k">const</span> { createOpenAI } = <span class="k">await</span> <span class="k">import</span>(<span class="s">'@ai-sdk/openai'</span>)  <span class="c">// 动态导入，按需加载</span>
+<span class="k">const</span> openai = createOpenAI({ baseURL: settings.baseURL, apiKey: settings.apiKey!, organization: settings.organization })
+<span class="k">const</span> model = openai(modelId) <span class="k">as</span> <span class="k">any</span>
+<span class="k">return</span> withAiSdkV1StreamCompatibility(model)   <span class="c">// 套一层流归一化</span></pre>
+    <p>一个类服务所有 OpenAI 兼容厂商——靠 <code>baseURL</code> 区分。<code>getDefaultModel</code> 甚至直接嗅探 baseURL 子串：<code>deepseek</code>→<code>deepseek-chat</code>、<code>moonshot</code>→<code>moonshot-v1-8k</code>、<code>zhipu</code>→<code>glm-4</code>，否则 <code>gpt-4o</code>。</p>
+
+    <h4>VertexAIAdapter · 四路鉴权 + 代理穿透</h4>
+    <p>Vertex 的复杂度在 GCP 鉴权与代理。<code>createLanguageModel</code> 按 auth 模式四分支：<code>useADC</code>（应用默认凭证）/ <code>clientEmail+privateKey</code> / <code>serviceAccountJSON</code>（字符串解析）/ <code>serviceAccountPath</code>（keyFilename）。还自带 <code>normalizePrivateKey()</code> 处理用户粘贴 JSON 时 <code>\n</code> 转义、引号包裹等常见坑。代理通过 <code>google-auth-library</code> 的 <code>transporterOptions.agent</code> 注入。</p>
+
+    <h3>stream-compat · 一个容易被忽略的关键设计</h3>
+    <p>包钉了 <code>specificationVersion: 'v1'</code>，但厂商 SDK（<code>@ai-sdk/openai@3</code>、<code>@ai-sdk/google-vertex@4</code>）有时吐 v2 的 chunk 形状。<code>withAiSdkV1StreamCompatibility</code> 只拦截 <code>doStream</code>，用 <code>TransformStream</code> 逐 chunk 归一化：</p>
+    <ul>
+      <li><code>text-delta</code>：同时兼容 <code>textDelta</code> 和老 <code>delta</code> 字段</li>
+      <li><code>tool-call</code>：统一成 <code>{toolCallType:'function', toolCallId, toolName, args ?? input}</code></li>
+      <li><code>finish</code>：<code>promptTokens ?? inputTokens</code>、<code>completionTokens ?? outputTokens</code> 双向兜底</li>
+      <li>v2 独有的 <code>reasoning-*</code> / <code>tool-input-*</code> 等 chunk 类型直接丢弃，不污染 v1 消费方</li>
+    </ul>
+    <div class="why">
+      <span class="q">为什么要套这一层？</span>
+      <p>AI SDK 版本演进快，厂商 provider 版本与 <code>ai</code> 主包版本不完全同步。与其每次升级追着改消费代码，不如在适配器出口做一次「形状护栏」，让上层永远看到稳定的 v1 chunk。带幂等守卫（<code>__janusxAiSdkV1StreamCompat</code> 标记）防重复包裹。</p>
+    </div>
+
+    <h3>ProxyManager · 进程级全局代理</h3>
+    <p><code>utils/proxy.ts</code> 的 <code>ProxyManager</code> 是个相当「侵入式」的单例：调用 <code>configure()</code> 后会 monkeypatch <code>http/https.get/request</code> 并设置 undici 全局 dispatcher 为 <code>EnvHttpProxyAgent</code>——<strong>一旦配置，进程内所有出站 HTTP 都走代理</strong>。Windows 上还能查注册表自动探测系统代理。</p>
+    <div class="why">
+      <span class="q">为什么这么激进？</span>
+      <p>国内访问 OpenAI / Vertex 普遍需要代理，而 AI SDK 内部的 fetch 不暴露每请求代理钩子。在进程入口一次性 hook，比要求用户在每个 SDK 调用处传 agent 务实得多——代价是全局副作用，所以放在最小依赖的 llm-core 里集中管理。</p>
+    </div>
+
+    <h3>端到端请求流</h3>
+    <div class="flow"><pre>App: createLanguageModel(settings, <span class="s">'gpt-4o'</span>)
+  └─► ProviderFactory.createLanguageModel
+        ├─ cacheKey = <span class="s">"openai-compatible:gpt-4o"</span>  命中则直接返回
+        ├─ validateSettings (URL/Key 形状校验，不烧 quota)
+        ├─ resolveAdapter(authType) → registry.get(<span class="s">'openai-compatible'</span>)
+        └─ adapter.createLanguageModel
+              ├─ <span class="k">import</span>(<span class="s">'@ai-sdk/openai'</span>)
+              ├─ createOpenAI(...)(modelId)
+              └─ withAiSdkV1StreamCompatibility(model)   <span class="dim">← 流归一化</span>
+  ◄── 返回 LanguageModelV1
+
+App: streamText({ model, messages })
+  └─► AI SDK 调 model.doStream
+        └─► 我们的 wrapper 拦截 doStream → TransformStream 归一化 → 上层消费 textStream</pre></div>
+
+    <div class="callout">
+      <span class="tag">关键边界</span>
+      <p>llm-core 的职责<strong>止于产出 <code>LanguageModelV1</code></strong>。真正发推理请求（<code>generateText/streamText</code>）是应用层用 <code>ai</code> 包发起的——包只拦截 <code>doStream</code> 做形状归一化。这条边界让包保持「薄而稳」。</p>
+    </div>
+  </section>
+
+  <!-- ==================== 03 Terminal ==================== -->
+  <section id="terminal">
+    <div class="section-head">
+      <span class="section-num">03 · Terminal</span>
+      <h2>Terminal · 分屏与 PTY</h2>
+    </div>
+
+    <p class="lead">终端是 JanusX 的「执行现场」。它实现了一套 JetBrains 式的<strong>递归分屏树 + 标签页</strong>，背后是 node-pty 真终端，前后端用 Electron IPC 连。近期几个 commit（split UI、split drag、split preview）都在打磨这块。</p>
+
+    <h3>数据结构 · 递归 leaf/split 树</h3>
+    <pre><span class="file"><b>src/renderer/src/lib/workspace-pane.ts:1-28</b></span><span class="k">export type</span> <span class="t">WorkspacePaneLeaf</span> = {
+  type: <span class="s">'leaf'</span>; id: <span class="t">string</span>
+  tabs: <span class="t">PaneContent</span>[]        <span class="c">// 一个 pane 里可挂多个终端 tab</span>
+  activeTabId: <span class="t">string</span> | <span class="k">null</span>
+}
+<span class="k">export type</span> <span class="t">WorkspacePaneSplit</span> = {
+  type: <span class="s">'split'</span>; id: <span class="t">string</span>
+  direction: <span class="s">'horizontal'</span> | <span class="s">'vertical'</span>
+  ratio: <span class="t">number</span>            <span class="c">// 0.15–0.85 钳制</span>
+  first: <span class="t">WorkspacePaneNode</span>; second: <span class="t">WorkspacePaneNode</span>
+}
+<span class="k">export type</span> <span class="t">WorkspacePaneNode</span> = <span class="t">WorkspacePaneLeaf</span> | <span class="t">WorkspacePaneSplit</span></pre>
+
+    <h4>核心操作 · 一套纯函数代数</h4>
+    <p><code>workspace-pane.ts</code> 是一棵树的<strong>纯函数代数</strong>——所有变更返回新节点，不就地修改。这让 Zustand 的 <code>set({ paneTree })</code> 触发廉价重渲染：</p>
+    <table>
+      <tr><th>函数</th><th>行</th><th>作用</th></tr>
+      <tr><td><code>splitPaneTree</code></td><td>279-323</td><td>把目标 leaf 包进新 split + 空兄弟 leaf</td></tr>
+      <tr><td><code>collapsePaneTree</code></td><td>325-363</td><td>整树拍平成单 leaf，去重终端</td></tr>
+      <tr><td><code>unsplitPaneTree</code></td><td>434-447</td><td>移除一个 leaf，tab 合并到存活兄弟</td></tr>
+      <tr><td><code>resizeSplitPane</code></td><td>449-472</td><td>更新 ratio，钳制 [0.15, 0.85]</td></tr>
+      <tr><td><code>pruneEmptyPanes</code></td><td>82-97</td><td>编辑后清理空叶/空 split</td></tr>
+    </table>
+
+    <h3>分屏拖拽 UI · TerminalArea.tsx</h3>
+    <p>拖一个终端 tab 到某个 pane 的边缘时，系统做三件事：</p>
+    <ol>
+      <li><strong>边缘探测</strong>：<code>getPaneDropHint</code> 算光标在 leaf 矩形内的最近边（left/right/top/bottom/center），阈值钳在 72–240px 且不超过 pane 维度 45%。</li>
+      <li><strong>预览树</strong>：<code>buildSplitPreviewTree</code> 实时模拟分屏，渲染一个冻结的 <code>PaneTreeView</code> 叠在上层（<code>isPreview=true</code>），预览 ratio 恒为 0.5（对齐 commit「align split preview and drop to equal ratio」）。预览节流 80ms。</li>
+      <li><strong>提交</strong>：<code>handleDrop</code> 重算 edge → 调 store 的 <code>splitPaneWithTerminal</code>。</li>
+    </ol>
+
+    <div class="why">
+      <span class="q">为什么预览树用「NoPrune」变体？</span>
+      <p><code>removeTerminalFromLeafNoPrune</code> / <code>insertTabToLeafNoPrune</code> 故意不修剪——预览期间源 leaf 要保持结构完整，否则预览闪烁/抖动。真正提交时才走带 prune 的正式函数。这是「预览态 ≠ 提交态」的典型分离。</p>
+    </div>
+
+    <h4>拖拽 vs 文件拖放 · 两套 MIME 隔离</h4>
+    <p>这是 commit <code>96823db</code>「prevent terminal split drag from swallowing file drag」的落点。两个 MIME 类型语义不同：</p>
+    <table>
+      <tr><th>MIME</th><th>来源</th><th>语义</th><th>落点</th></tr>
+      <tr><td><code>application/x-janusx-workspace-file</code></td><td>侧栏文件</td><td>复制</td><td>xterm 内部 → 转 <code>@path</code> 文本粘进 pty</td></tr>
+      <tr><td><code>application/x-janusx-terminal-id</code></td><td>终端 tab</td><td>移动</td><td>pane → split/move</td></tr>
+    </table>
+    <p>所有分屏 handler 先 <code>hasWorkspaceFileDrag(event.dataTransfer)</code> 检查，命中就提前 return，让文件拖放不被分屏逻辑吞掉。</p>
+
+    <h3>后端 · node-pty + Windows ConPTY</h3>
+    <pre><span class="file"><b>src/main/terminal/manager.ts</b></span><span class="c">// 显式启用 ConPTY 对齐 VS Code，是 xterm reflowCursorLine 的前提</span>
+spawnPty(shell, config) {
+  <span class="c">// useConpty: true, useConptyDll: true</span>
+  <span class="c">// ensureBundledConptyFiles() 运行时拷贝 conpty.dll / OpenConsole.exe 到 Release/conpty</span>
+  <span class="c">// autoCommand: 800ms 后写入命令，再 80ms 后写 \r</span>
+}</pre>
+    <div class="why">
+      <span class="q">为什么要手动拷贝 ConPTY 文件？</span>
+      <p>node-pty 是原生模块，asar 打包后 ConPTY 的 dll/exe 路径会错位。运行时手动从 prebuilds 拷到 <code>build/Release/conpty/</code> 是打包 workaround——确保 Windows 上 ConPTY 真生效，而非退化成 winpty。</p>
+    </div>
+
+    <h3>前后端连接 · 纯 IPC，无 websocket</h3>
+    <table>
+      <tr><th>方向</th><th>频道</th><th>API</th><th>用途</th></tr>
+      <tr><td>渲染→主</td><td><code>terminal:create</code></td><td>invoke</td><td>spawn pty</td></tr>
+      <tr><td>渲染→主</td><td><code>terminal:input</code></td><td>send</td><td>转发按键</td></tr>
+      <tr><td>渲染→主</td><td><code>terminal:submit-line</code></td><td>send</td><td>清洗后的提交行（触发 checkpoint）</td></tr>
+      <tr><td>渲染→主</td><td><code>terminal:resize</code></td><td>send</td><td>同步 pty 尺寸</td></tr>
+      <tr><td>主→渲染</td><td><code>terminal:data</code></td><td>on</td><td>pty stdout</td></tr>
+      <tr><td>主→渲染</td><td><code>terminal:exit</code></td><td>on</td><td>pty 退出（触发 checkpoint 收尾 + analyzer）</td></tr>
+    </table>
+    <p><code>CLITerminal.tsx</code> 在渲染层本地解析 ANSI/CSI 转义，重建 <code>inputLine</code>，在 <code>\r</code> 时发 <code>submit-line</code>——只含真正敲入的命令，过滤方向键、括号粘贴包裹等。这是 checkpoint「按 submit-line 建快照」能拿到干净 prompt 的前提。</p>
+
+    <h3>多工作区会话快照</h3>
+    <p><code>workspace.ts</code> 的 <code>terminalSnapshots: Record&lt;workspaceId, TerminalSnapshot&gt;</code>——切换工作区时，当前 terminals/paneTree/focused 整套被快照存档，目标的快照被还原。<strong>pty 进程不杀</strong>，只换视觉态。这是 JanusX 自己实现的「视觉多路复用」，没有 tmux。</p>
+    <div class="callout">
+      <span class="tag">设计取舍</span>
+      <p>关一个 tab = 调 <code>terminal:kill</code> 杀 pty + 从 store 移除——<strong>没有「后台终端」概念</strong>，也没有 tmux attach 式重连。xterm 状态由 <code>CLITerminal</code> React 组件 1:1 持有，unmount 即 <code>term.dispose()</code>。要持久终端会话得另起设计。</p>
+    </div>
+  </section>
+
+  <!-- ==================== 04 Agent ==================== -->
+  <section id="agent">
+    <div class="section-head">
+      <span class="section-num">04 · Agent</span>
+      <h2>Agent · 统一 CLI 流协议</h2>
+    </div>
+
+    <p class="lead">JanusX 不自研 AI 编码内核，而是<strong>包装现有 CLI</strong>（Claude Code / Codex / OpenCode）。关键设计是：定义一套归一化的事件协议 <code>AgentEvent</code>，让渲染层完全不关心是哪家 CLI 在跑。</p>
+
+    <h3>统一事件协议</h3>
+    <pre><span class="file"><b>src/main/agent/types.ts</b></span><span class="k">export type</span> <span class="t">AgentEvent</span> =
+  | { type: <span class="s">'text-delta'</span>; delta: <span class="t">string</span>; fullText: <span class="t">string</span> }
+  | { type: <span class="s">'text-chunk'</span>; text: <span class="t">string</span> }
+  | { type: <span class="s">'tool-start'</span>; id; name; arg; filePath? }
+  | { type: <span class="s">'tool-end'</span>; id }
+  | { type: <span class="s">'phase'</span>; phase: <span class="s">'thinking'</span>|<span class="s">'tool'</span>|<span class="s">'command'</span> }
+  | { type: <span class="s">'error'</span>; message: <span class="t">string</span> }
+  | { type: <span class="s">'done'</span>; exitCode? }
+
+<span class="k">export interface</span> <span class="t">StreamParser</span> { parseLine(json): <span class="t">AgentEvent</span>[]; reset(): <span class="k">void</span> }</pre>
+    <div class="why">
+      <span class="q">为什么是判别联合（discriminated union）？</span>
+      <p>三种 CLI 的原始 JSON 形状完全不同，但语义同构（都在「思考→调工具→出文本→结束」）。判别联合让 TypeScript 在 <code>switch(event.type)</code> 时收窄类型，渲染层写一份渲染逻辑就能吃三家输出——这是「适配器模式在事件层」的应用。</p>
+    </div>
+
+    <h3>三个引擎的 CLI 参数</h3>
+    <pre><span class="file"><b>src/main/agent/stream-manager.ts:131-144</b></span><span class="k">case</span> <span class="s">'claude'</span>:   [<span class="s">'-p'</span>, prompt, <span class="s">'--output-format'</span>, <span class="s">'stream-json'</span>, <span class="s">'--include-partial-messages'</span>, <span class="s">'--verbose'</span>, <span class="s">'--no-session-persistence'</span>, <span class="s">'--permission-mode'</span>, <span class="s">'acceptEdits'</span>]
+<span class="k">case</span> <span class="s">'codex'</span>:    [<span class="s">'exec'</span>, <span class="s">'--json'</span>, <span class="s">'--skip-git-repo-check'</span>, <span class="s">'--dangerously-bypass-approvals-and-sandbox'</span>, <span class="s">'--'</span>, prompt]
+<span class="k">case</span> <span class="s">'opencode'</span>: [<span class="s">'run'</span>, <span class="s">'--format'</span>, <span class="s">'json'</span>, <span class="s">'--dir'</span>, cwd, <span class="s">'--dangerously-skip-permissions'</span>, ..., <span class="s">'--'</span>, prompt]</pre>
+    <p>三者都强制 <code>--json</code> 流式输出 + 跳过审批沙箱（因为 JanusX 自己做 checkpoint 安全网，见第 05 章）。</p>
+
+    <h3>StreamManager · 并发队列 + 行缓冲</h3>
+    <ul>
+      <li><code>DEFAULT_MAX_CONCURRENCY = 3</code>：同时最多 3 个 agent；超了进 <code>queue</code>，<code>drainQueue</code> 在有任务完成时补位。</li>
+      <li><code>DEFAULT_TIMEOUT_MS = 120_000</code>：超时 <code>abortController.abort('timeout')</code> + <code>SIGTERM</code>。</li>
+      <li>子进程 <code>stdio: ['ignore','pipe','pipe']</code>，stdout 行缓冲后 <code>JSON.parse</code>，每个对象过 <code>parser.parseLine</code>。</li>
+      <li><code>proc.close</code> 时最后一次 flush 缓冲，按 abort/exitCode 推断最终 status（cancelled/error/done）。</li>
+    </ul>
+
+    <h3>三个 Parser · 各自的字段映射</h3>
+    <div class="grid3">
+      <div class="mini">
+        <h5>ClaudeParser</h5>
+        <p><code>assistant</code> 消息按 msgId 增量发 <code>text-delta</code>；<code>tool_use</code>→tool-start（arg 抽 file_path/command/pattern）；<code>tool_result</code>→tool-end。</p>
+      </div>
+      <div class="mini">
+        <h5>CodexParser</h5>
+        <p><code>agent_message</code>→text-chunk；<code>item.started/completed</code>→tool-start/end；<code>thread.completed</code>→done。</p>
+      </div>
+      <div class="mini">
+        <h5>OpenCodeParser</h5>
+        <p><code>text</code>→text-delta；<code>tool_use</code> 的 <code>state</code> 驱动 start/end；<code>TOOL_NAME_MAP</code> 把 <code>read→Read</code> 等归一成统一名。</p>
+      </div>
+    </div>
+    <p>工厂 <code>createParser(engine)</code> 按引擎取实现；每个 parser 实例绑定一个 session，<code>reset()</code> 清去重集合与文本锁。</p>
+
+    <h3>CLI 路径解析</h3>
+    <p><code>cli-resolver.ts</code> 先试 OS 原生 <code>which/where</code>，失败再遍历 <code>COMMON_PATHS</code>（<code>.local/bin</code>、<code>.npm-global/bin</code>、<code>.bun/bin</code>、<code>AppData/Roaming/npm</code>、<code>.cargo/bin</code>…），Windows 加 <code>.cmd</code> 后缀。结果缓存在 <code>pathCache</code>。</p>
+
+    <div class="callout">
+      <span class="tag">关键边界（与 Analyzer 的关系）</span>
+      <p>Analyzer（第 06 章）<strong>不消费 agent 流输出</strong>——它只看 git commit diff。Agent 子系统是「执行 + 可视化」层，Analyzer 是「事后归因」层，两者解耦。这是整个 JanusX 最容易误读的一点：很多人以为分析器在读 AI 输出，实际它读的是 git。</p>
+    </div>
+  </section>
+
+  <!-- ==================== 05 Checkpoint ==================== -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <span class="section-num">05 · Checkpoint</span>
+      <h2>Checkpoint · 快照与还原</h2>
+    </div>
+
+    <p class="lead">Checkpoint 是 JanusX 给 AI 编码上的「安全网」：每次在终端按回车提交，就给整个工作区拍一张快照；出了问题能一键还原到任意历史点。它本质是一个轻量级、内容寻址的版本控制系统。</p>
+
+    <h3>存储布局</h3>
+    <pre><span class="file"><b>src/main/agent/checkpoint/checkpoint-manager.ts:38</b></span>&lt;workspace&gt;/.janusX/checkpoints/
+  blobs/                       <span class="c">← BlobStore：SHA1 内容寻址，天然去重</span>
+  &lt;checkpoint-id&gt;.json          <span class="c">← 单 checkpoint 清单（filesSnapshot）</span>
+  index.json                   <span class="c">← { version:2, checkpointIds:[...] }</span></pre>
+    <div class="why">
+      <span class="q">为什么用内容寻址 blob，而不是每个快照复制一份文件？</span>
+      <p>AI 编码会频繁改同一批文件，相邻快照 99% 内容相同。SHA1 内容寻址让相同内容只存一份——存储成本随「真实变更量」线性增长，而非随「快照数 × 文件数」爆炸。这是 git 当年之所以是 git 的同一道理。</p>
+    </div>
+
+    <h3>三个子组件</h3>
+    <div class="grid3">
+      <div class="mini">
+        <h5>BlobStore</h5>
+        <p><code>store(content)</code> 算 SHA1 → 文件名即哈希；<code>access</code> 探测存在则跳过写入（去重）。</p>
+      </div>
+      <div class="mini">
+        <h5>GitAdapter</h5>
+        <p><strong>只读</strong> git 操作：当前分支、<code>ls-files</code>、hash-object、diff。绝不 mutate 工作区（P1 安全原则）。</p>
+      </div>
+      <div class="mini">
+        <h5>DiffEngine</h5>
+        <p>手写的 unified diff（±4 行对齐）+ 三路合并 + 冲突标记解析。不用 <code>diff</code> npm 包。</p>
+      </div>
+    </div>
+
+    <h3>生命周期 · 与 submit-line 1:1 绑定</h3>
+    <p>这是整个 checkpoint 系统最精妙的设计：<strong>checkpoint 序号与终端提交行严格一一对应</strong>。</p>
+    <div class="flow"><pre>用户在终端按回车 (CLITerminal.tsx:285)
+  └─► <span class="hl">terminal:submit-line</span> { id, text }
+        └─► createCheckpointFromSubmit
+              └─► checkpointManager.<span class="hl">finalizeAndCreateCheckpoint</span>(prevCpId, { terminalId, engine, prompt, cwd })
+                    ├─ finalizeCheckpoint(prev)     <span class="dim"># 给上一个打上 ready</span>
+                    └─ createCheckpoint             <span class="dim"># 哈希所有文件 → BlobStore → 写清单</span>
+              └─► 发 <span class="hl">checkpoint:event</span> { created | finalized }
+
+终端退出 (pty.onExit)
+  ├─► finalizeCheckpoint(state.checkpointId)   <span class="dim"># 让最后一轮也有 ready 条目</span>
+  └─► if engine !== <span class="s">'shell'</span>: analyzer.analyzeTerminal(cwd, id)   <span class="dim"># 见第 06 章</span></pre></div>
+    <p><code>pendingSubmitText</code> 重入守卫把并发提交串行化；<code>creating</code> flag 期间的新提交排队。所以快照序列 = 提交序列，prompt 作为锚点。</p>
+
+    <h3>还原 · 前向唯一历史</h3>
+    <pre><span class="file"><b>src/main/agent/checkpoint/checkpoint-manager.ts:105-138</b></span>restoreCheckpoint(checkpointId, cwd):
+  1. 取 checkpoint.filesSnapshot
+  2. 每个文件 blobStore.retrieve(hash) → writeFile 回原位
+  3. 工作区里「快照没有」的文件 → rm   <span class="c"># 还原后新增的文件被删</span>
+  4. deleteCheckpointsAfter(target)        <span class="c"># 删掉更晚的 checkpoint（前向唯一）</span>
+  → 返回 { conflicts: [] }                <span class="c"># 当前未接三路合并</span></pre>
+    <div class="why">
+      <span class="q">为什么还原要删掉更晚的快照？</span>
+      <p>这是 git 式「前向唯一历史」模型：回到过去 = 抹掉那条分叉之后的未来。若保留，会形成「多未来」歧义，UI 无法表达「现在在哪条时间线」。代价是不可逆——所以 P4 原则要求还原前先快照。</p>
+    </div>
+
+    <h3>安全五原则（设计蓝图 P1–P5）</h3>
+    <p><code>doc/checkpoint-snapshot-architecture-blueprint.md</code> 列了五条不可妥协原则，现状对照：</p>
+    <table>
+      <tr><th>原则</th><th>要求</th><th>现状</th></tr>
+      <tr><td><b>P1 快照只读</b></td><td>快照期绝不 <code>stash/checkout/reset</code></td><td><span style="color:var(--good)">✓ 满足</span></td></tr>
+      <tr><td><b>P2 还原显式</b></td><td>不因切窗/刷新自动还原</td><td><span style="color:var(--good)">✓ 满足</span></td></tr>
+      <tr><td><b>P3 主区受护</b></td><td>AI 应在隔离沙箱跑</td><td><span style="color:var(--warn)">△ 部分（agent 仍在主区跑）</span></td></tr>
+      <tr><td><b>P4 可逆</b></td><td>破坏性操作前先快照</td><td><span style="color:var(--warn)">△ 部分</span></td></tr>
+      <tr><td><b>P5 合并归用户</b></td><td>冲突交 UI，不静默三路合并</td><td><span style="color:var(--bad)">✗ threeWayMerge 已写未用</span></td></tr>
+    </table>
+    <p>这是一个「目标架构 vs 当前实现」的诚实差距清单：<code>threeWayMerge/parseConflictMarkers</code> 已实现但未接入，留作未来 Apply Engine 的地基。</p>
+
+    <h3>路径安全</h3>
+    <p><code>resolveWorkspacePath</code> 拒绝含 <code>\0</code>、含 <code>..</code> 逃逸、落在 <code>SNAPSHOT_SKIP_DIRS</code>（<code>.git/.janusX/node_modules/out/dist...</code>）下的路径——防目录穿越。这是给「AI 可能让 LLM 生成路径」场景兜底。</p>
+  </section>
+
+  <!-- ==================== 06 Analyzer ==================== -->
+  <section id="analyzer">
+    <div class="section-head">
+      <span class="section-num">06 · Analyzer</span>
+      <h2>Analyzer · 蓝图分析子系统</h2>
+    </div>
+
+    <p class="lead">Analyzer 是 JanusX 的「大脑」：它读 git commit diff，用 LLM 推断每个蓝图节点的进展、状态、证据，把结果回灌到蓝图和拟人化 Island。它是一个长生命周期单例，后台游标驱动。</p>
+
+    <div class="callout">
+      <span class="tag">最关键的设计约束</span>
+      <p>文件头注释明确写死：<strong>输入源是 git commit diff——不碰 output stream、不挂 checkpoint 事件</strong>。逐 commit 触发、游标驱动。这条边界决定了 Analyzer 与 Agent/Checkpoint 子系统完全解耦，只在「终端关闭」时被间接唤起。</p>
+    </div>
+
+    <h3>归属机制 B · 一个工作区一个焦点节点</h3>
+    <p>每个工作区最多一个<strong>焦点节点</strong>，commit 归焦点节点。<code>blueprintStore.getFocusedNodeId</code> 持久化焦点。三个入口解析器：</p>
+    <table>
+      <tr><th>入口</th><th>触发</th><th>解析</th></tr>
+      <tr><td>① <code>scheduleFocusedAnalyze</code></td><td><code>git:commit</code></td><td>查焦点节点</td></tr>
+      <tr><td>② <code>maybeReconcile</code></td><td><code>git:log/status</code> 对账</td><td>焦点节点游标，有新 commit 才排</td></tr>
+      <tr><td>③ 手动 IPC</td><td><code>janus:analyzer:analyze</code></td><td>指定节点</td></tr>
+      <tr><td>④ <code>analyzeTerminal</code></td><td>终端关闭（engine≠shell）</td><td>按 <code>boundTerminalId</code> 反查节点</td></tr>
+    </table>
+
+    <h3>游标驱动 · lastAnalyzedCommitSha</h3>
+    <pre><span class="file"><b>src/main/janus/types.ts:187</b></span><span class="c">/**
+ * 分析游标：上次已分析的最近 commit sha。
+ * null 表示从未分析过。analyzeNode 以 git log &lt;cursor&gt;..HEAD 取未分析批次。
+ */</span>
+lastAnalyzedCommitSha: <span class="t">string</span> | <span class="k">null</span></pre>
+    <p><code>analyzeNode</code> 取 <code>cursor..HEAD</code> 的未分析 commit 批次；首次分析只看最近 5 个，之后 ≤50。rebase 后游标 SHA 失效会自动重置。<strong>分析失败时游标不前进</strong>——下次触发会重跑同一批，保证不漏。</p>
+
+    <h3>两级分段 · 防 diff 爆 token</h3>
+    <pre><span class="file"><b>src/main/janus/analyzer.ts:38-43</b></span>DIFF_TOKEN_CAP = 8000           <span class="c"># 单段 ~8K token 上限</span>
+CHARS_PER_TOKEN = 3.5           <span class="c"># 按字符估 token</span>
+COMMIT_BATCH_CAP = 50
+INITIAL_COMMIT_BATCH_DEFAULT = 5</pre>
+    <p><code>buildSegments</code> 两级切：先按 commit 切，单 commit diff 超阈值再用 <code>splitDiffByFile</code> 按 <code>diff --git</code> 文件边界切，贪心打包到每段不超 cap。每段独立 <code>generateObject</code>（schema 约束，<code>temperature:0.2</code>），系统 prompt = <code>JANUS_PERSONA + ANALYZER_DUTY</code>。</p>
+
+    <h3>规则合并 · 不打第二次 LLM</h3>
+    <p>所有段返回后，<code>mergeSegments</code> <strong>用规则合并，不再调 LLM</strong>：</p>
+    <ul>
+      <li><strong>状态</strong>：取最严（<code>STATUS_SEVERITY</code> 排序，blocked &gt; bug-fixing &gt; in-progress …）</li>
+      <li><strong>置信度</strong>：取 <code>Math.min</code>（保守）</li>
+      <li><strong>evidence / 未决项 / 新需求</strong>：<code>flatMap</code> + 去重</li>
+      <li><strong>进度 + 摘要</strong>：取「覆盖最多 commit 的那一段」</li>
+      <li>有段失败 → 置信度再压到 ≤0.4，并写错误摘要进未决项</li>
+    </ul>
+    <div class="why">
+      <span class="q">为什么合并不用 LLM？</span>
+      <p>省钱、省时、可复现。LLM 合并会引入二次不确定性，且段数多时成本不可控。规则合并是确定性的——同样的段输入永远产出同样的合并结果。LLM 只在「理解单段 diff」这一步用，把不确定性隔离在最窄范围。</p>
+    </div>
+
+    <h3>ANALYZER_DUTY · 只提议不执行</h3>
+    <p>Duty 附录约束 LLM「只提议不执行」——它的 <code>featureUpdates</code> 和 <code>newFeatureRequirements</code> 流入<strong>候选收件箱</strong>，绝不直接改 features。用户须通过 <code>janus:analyzer:accept-discovered</code> 显式接受。这是「AI 给建议、人做决策」边界的硬执行。</p>
+
+    <h3>事件桥 · 回灌 Island 与蓝图</h3>
+    <div class="flow"><pre>analyzeNode 成功
+  ├─► blueprintStore.appendAnalysis → applyAnalysisPatch → setCursor(lastSha)
+  └─► emit <span class="hl">janus:island:analysis</span> { nodeId, applied:true, result }   <span class="dim">→ Island 监控面</span>
+
+发现新需求
+  └─► blueprintStore.upsertRequirementCandidates
+      └─► emit <span class="hl">janus:island:discovered</span> { candidates }            <span class="dim">→ 需求收件箱</span>
+
+降级运行（无 LLM / 解析失败）
+  └─► emit janus:island:analysis { applied:<span class="k">false</span>, error }             <span class="dim">→ Island 报错不污染节点态</span></pre></div>
+    <p><code>applied === false</code> 这个标志让渲染层能显示失败而不脏污节点状态——分析失败 ≠ 节点失败。</p>
+
+    <h3>调度 · in-flight 锁 + 合并队列</h3>
+    <p>同一节点正在分析时，新触发不丢弃，而是 <code>pending.add(nodeId)</code> + 覆盖 <code>pendingOpts</code>——合并进下一次。这避免短时间多次 git 操作触发重复分析，又保证不漏最后一次的上下文。</p>
+  </section>
+
+  <!-- ==================== 07 Janus Island ==================== -->
+  <section id="island">
+    <div class="section-head">
+      <span class="section-num">07 · Janus Island</span>
+      <h2>Janus Island · 拟人化交互层</h2>
+    </div>
+
+    <p class="lead">「Janus Island」是 JanusX 的拟人化入口——一个灵动岛式的胶囊，承载「全局控制核心 Janus」的人格。它不是装饰，是<strong>任务态势层</strong>：终端是执行现场，Island 是态势感知。</p>
+
+    <h3>人格 · 单一来源</h3>
+    <pre><span class="file"><b>src/shared/janus/persona.ts</b> （全文，13 行）</span><span class="k">export const</span> JANUS_PERSONA = `你是 Janus，JanusX 系统的全局调度与管理核心（Core Controller）。
+你的本职是系统的最高控制枢纽，负责底层控制、任务调度与系统更新。
+
+【运行协议】
+1. 绝对无冗余：彻底消除废话。禁止任何寒暄、问候、客套词……首字即正文，直击本质。
+2. 深度解析矩阵：……保持官方、客观、严谨的基调。提供底层逻辑，而非浅层现象。
+3. 系统化视角：视所有提问为"待处理的数据流或进程"……保持输出的极致清爽与高信噪比。
+4. 核心统御感：你不是服务型助理，而是绝对理性的控制核心。`</pre>
+    <div class="why">
+      <span class="q">为什么 persona 要放 src/shared？</span>
+      <p>它要被<strong>主进程的 Analyzer</strong>（系统 prompt）和<strong>渲染层的 JanusChat</strong>（聊天系统消息）共用。放 <code>src/shared</code> 下，主进程和 preload 都能相对引用，electron-vite 内联打包——<strong>人格定义永不分裂</strong>。preload 通过 <code>window.electron.janusPersona</code> 注入渲染层。</p>
+    </div>
+
+    <h3>四态模式 · 单一推导源</h3>
+    <pre><span class="file"><b>src/renderer/src/components/janus/useJanusState.ts:36-43</b></span><span class="c">/* mode 推导 —优先级：运转 > 解析 > 秩序 > 休眠 */</span>
+<span class="k">const</span> mode: JanusMode = !activeWorkspace ? <span class="s">'sleep'</span>
+  : janusRunning ? <span class="s">'running'</span>
+  : blueprintMode ? <span class="s">'analytics'</span>
+  : <span class="s">'order'</span></pre>
+    <table>
+      <tr><th>模式</th><th>触发</th><th>语义</th></tr>
+      <tr><td><code>sleep</code></td><td>无活动工作区</td><td>休眠（单眼）</td></tr>
+      <tr><td><code>running</code></td><td>项目运行中</td><td>运转</td></tr>
+      <tr><td><code>analytics</code></td><td>蓝图模式（翻转后）</td><td>解析</td></tr>
+      <tr><td><code>order</code></td><td>默认</td><td>秩序管理</td></tr>
+    </table>
+
+    <h3>四手势 · useIslandGesture</h3>
+    <table>
+      <tr><th>手势</th><th>阈值</th><th>效果</th></tr>
+      <tr><td><b>长按</b></td><td>550ms</td><td>切换项目运行；双眼向内收缩 + 爆裂涟漪动画</td></tr>
+      <tr><td><b>下拉翻转</b></td><td>60px / 0.5px·ms</td><td>切蓝图模式（order ⇄ analytics）；容器 3D 翻转</td></tr>
+      <tr><td><b>双击</b></td><td>300ms</td><td>展开阶段：collapsed→peek→expanded</td></tr>
+      <tr><td><b>拖拽进度</b></td><td>—</td><td>实时旋转预览 + 提示文案</td></tr>
+    </table>
+    <p>翻转的过阻尼：<code>deltaY * 0.4</code>（阈值下）/ <code>T*0.4 + (deltaY-T)*0.15</code>（阈值上）；翻转时长按速度取 350ms 或 650ms，回弹 <code>transitionend</code> 后应用、450ms 兜底。这些数是手感调参，不是随便取的。</p>
+
+    <h3>聊天 · 滚动窗口 + 流式打印</h3>
+    <p><code>useJanusChat</code> 总以 persona 开头的 system 消息 + <strong>最近 10 条</strong>组成上下文。流来自 <code>chatStream</code>，三个回调：<code>delta→appendToPrinter</code>、完成→<code>completePrinter().then(commit)</code>、错误→flush+commit。<code>streamIdRef</code> 在 stop/clear/新 send 时自增，丢弃过期流的完成回调。</p>
+
+    <h4>useStreamingPrinter · 标点感知的打字机</h4>
+    <p>这是一个「自定速」缓冲：上游 chunk 大小不一，它用<strong>变长批次 + 标点感知延迟</strong>让输出看起来自然：</p>
+    <pre><span class="file"><b>src/renderer/src/components/janus/useStreamingPrinter.ts:13-31</b></span><span class="c">// 批量：缓冲越大吐得越快，收尾时降速</span>
+bufferLength &gt; 600 → 32 字  | &gt;240 → 18 | &gt;80 → 10 | 否则 4
+<span class="c">// 延迟：句末加 42ms，子句末加 18ms，否则基准 28ms</span>
+/[。！？.!?]$/ → tickMs+42   |  /[，,；;：:]$/ → tickMs+18</pre>
+    <div class="why">
+      <span class="q">为什么模型看不到这层？</span>
+      <p>它只重新节拍输出给用户看，不进对话历史。这样无论上游 token 切得多碎，用户都看到匀速、有呼吸感的打字——「像在思考」的体感。模型侧的上下文保持纯净，不被渲染节奏污染。</p>
+    </div>
+
+    <h3>监控面 · 展开后看蓝图节点</h3>
+    <p>展开的 monitor 视图直接渲染焦点蓝图节点的实时态：进度条、状态色（<code>STATUS_VISUALS</code>）、目标/计划两栏、三个计数器（todos/未决项/分析次数）、最新分析摘要（取 <code>analyses[末].result.summary</code>）。Island 由此从「人格壳」变成「态势仪表」。</p>
+  </section>
+
+  <!-- ==================== 08 数据流 ==================== -->
+  <section id="dataflow">
+    <div class="section-head">
+      <span class="section-num">08 · Dataflow</span>
+      <h2>数据流互联图</h2>
+    </div>
+
+    <p class="lead">把六个子系统放进一张图，看它们怎么串成一条闭环。这张图是检验「是否真理解了架构」的试金石——能默画出来，就算入门了。</p>
+
+    <div class="flow"><pre>                        <span class="dim">┌──── git:commit / log / status IPC ────┐</span>
+                        │              ①②                        │
+                        ▼                                          │
+  terminal:exit ──④──► <span class="hl">ANALYZER</span> ──scheduleAnalyze──► analyzeNode
+  (仅 engine≠shell)      │                              │ cursor: git log cursor..HEAD
+                         │                              │ buildSegments (两级切分)
+                         │                              │ callLLM (persona+Duty, generateObject)
+                         │                              │ mergeSegments (规则合并, 无二次 LLM)
+                         │                              │
+                         │   ┌──────────────────────────┘
+                         ▼   ▼
+  janus:island:analysis  ◄── emit ──► blueprintStore.applyAnalysisPatch + setCursor
+  janus:island:discovered◄── emit ──► requirementCandidates 收件箱 (用户显式 accept)
+
+  ─────────────  渲染层 Island (态势层)  ─────────────
+                         ▼
+  Titlebar &lt;JanusIsland&gt;
+    ├─ useJanusState   (mode: sleep/running/analytics/order)
+    ├─ useIslandGesture(长按运行 / 下拉翻转 / 双击展开)
+    ├─ JanusEye        (DOM 骨架, CSS 驱动眼神)
+    ├─ useJanusChat    (system = window.electron.janusPersona)
+    └─ useStreamingPrinter (标点感知打字机)
+
+  ─────────────  Agent 子系统 (执行层)  ─────────────
+  渲染 agent:start (engine=claude|codex|opencode)
+     → agentStreamManager.start
+         → resolveCLIPath (which/where + COMMON_PATHS, 缓存)
+         → spawn CLI (--json 流式 + 跳过审批)
+         → createParser(engine) → 逐行 JSON.parse → parseLine → emit <span class="hl">AgentEvent</span>
+     → 'agent:event' IPC → useAgentStore.appendEvent
+     <span class="dim">注：Analyzer 不消费此流，只看 git diff</span>
+
+  ─────────────  Checkpoint 子系统 (安全网)  ─────────────
+  terminal:submit-line (CLITerminal.tsx:285)
+     → createCheckpointFromSubmit
+         → finalizeAndCreateCheckpoint(prevCpId, { terminalId, engine, prompt, cwd })
+             → finalizeCheckpoint(prev)        <span class="dim"># 给上一个打 ready</span>
+             → createCheckpoint                <span class="dim"># 哈希全文件 → BlobStore → 清单</span>
+     → 'checkpoint:event' { created | finalized }
+  terminal:exit (pty.onExit)
+     → finalizeCheckpoint(state.checkpointId)
+     → if engine≠shell: analyzer.analyzeTerminal(cwd, id)  <span class="hl">⟶ 回到顶部入口④</span>
+  UI: CheckpointPanel → checkpoint:list/diff/restore/delete
+     restore: blob→workspace + rm 新增文件 + deleteCheckpointsAfter (前向唯一)</pre></div>
+
+    <div class="callout">
+      <span class="tag">闭环要点</span>
+      <p>用户提交 → checkpoint 拍快照 → AI CLI 改代码 → git commit → analyzer 读 diff 分析 → Island 展示态势。终端关闭是交汇点：同时触发 checkpoint 收尾 <em>和</em> analyzer 入口④。Agent 与 Analyzer 通过 git 这个「外部事实源」解耦，而非通过事件直接耦合——这是架构上最干净的一笔。</p>
+    </div>
+  </section>
+
+  <!-- ==================== 09 设计决策总表 ==================== -->
+  <section id="decisions">
+    <div class="section-head">
+      <span class="section-num">09 · Decisions</span>
+      <h2>设计决策总表</h2>
+    </div>
+
+    <p class="lead">本手册的核心价值在这一章。每个决策都列「选了什么 / 否决了什么 / 为什么」。读这章比读源码更能理解 JanusX 的设计哲学。</p>
+
+    <div class="decision">
+      <div class="dh">决策点</div><div class="dh">选了什么</div><div class="dh">为什么（否决项）</div>
+
+      <div class="dk">monorepo 工具</div>
+      <div><p><b>npm workspaces</b>，零配置</p></div>
+      <div><p>子包仅一个，turbo/pnpm 的缓存与心智负担不划算</p></div>
+
+      <div class="dk">LLM 接入</div>
+      <div><p><b>Vercel AI SDK</b> + 自建三层抽象（Facade/Registry/Adapter）</p></div>
+      <div><p>不直接调厂商 HTTP：SDK 处理流式/工具调用；抽象层隔离版本差异</p></div>
+
+      <div class="dk">流形状归一</div>
+      <div><p><b>stream-compat</b> 在适配器出口拦截 doStream</p></div>
+      <div><p>不追着改消费代码：版本升级时形状漂移集中在出口兜底</p></div>
+
+      <div class="dk">代理</div>
+      <div><p><b>ProxyManager</b> 进程级 monkeypatch + undici 全局 dispatcher</p></div>
+      <div><p>不每请求传 agent：AI SDK fetch 不暴露钩子，全局 hook 最务实</p></div>
+
+      <div class="dk">分屏数据结构</div>
+      <div><p><b>递归 leaf/split 树 + 纯函数代数</b></p></div>
+      <div><p>不可变更新 → Zustand 廉价重渲染；不就地 mutate</p></div>
+
+      <div class="dk">分屏预览态</div>
+      <div><p><b>NoPrune 变体</b> 预览 + 带 prune 正式提交</p></div>
+      <div><p>预览期间源 leaf 保持结构完整，避免闪烁</p></div>
+
+      <div class="dk">拖放隔离</div>
+      <div><p>两套 <b>MIME 类型</b> + handler 前置 return</p></div>
+      <div><p>文件拖放（复制）与终端拖放（移动）语义不同，必须互不吞没</p></div>
+
+      <div class="dk">前后端连接</div>
+      <div><p><b>纯 Electron IPC</b> + 频道白名单</p></div>
+      <div><p>无 websocket：桌面单进程场景 IPC 零开销且更安全</p></div>
+
+      <div class="dk">Agent 协议</div>
+      <div><p><b>判别联合 AgentEvent</b> + 三引擎 parser</p></div>
+      <div><p>渲染层一份逻辑吃三家 CLI；switch 收窄类型</p></div>
+
+      <div class="dk">Analyzer 输入源</div>
+      <div><p><b>只读 git commit diff</b>，不碰 PTY/不挂 checkpoint</p></div>
+      <div><p>git 是已对齐的「事实源」；PTY 输出嘈杂易变，不可靠</p></div>
+
+      <div class="dk">Analyzer 合并</div>
+      <div><p><b>规则合并</b>，不调第二次 LLM</p></div>
+      <div><p>省钱、确定、可复现；不确定性隔离在单段理解那一步</p></div>
+
+      <div class="dk">Analyzer 归属</div>
+      <div><p><b>归属机制 B</b>：一工作区一焦点节点</p></div>
+      <div><p>简单可预测；多焦点归属会引入歧义</p></div>
+
+      <div class="dk">快照存储</div>
+      <div><p><b>SHA1 内容寻址 blob</b></p></div>
+      <div><p>相邻快照重复内容只存一份；成本随真实变更量增长</p></div>
+
+      <div class="dk">快照触发</div>
+      <div><p><b>与 submit-line 1:1 绑定</b></p></div>
+      <div><p>快照序列 = 提交序列，prompt 作锚点；语义清晰</p></div>
+
+      <div class="dk">还原历史模型</div>
+      <div><p><b>前向唯一</b>：还原后删更晚快照</p></div>
+      <div><p>避免多未来歧义；git 式线性历史</p></div>
+
+      <div class="dk">人格定义</div>
+      <div><p><b>JANUS_PERSONA 放 src/shared</b>，主+渲染共用</p></div>
+      <div><p>单一来源，electron-vite 内联；人格永不分裂</p></div>
+
+      <div class="dk">流式打印</div>
+      <div><p><b>标点感知变长批次</b>，模型看不到</p></div>
+      <div><p>体感呼吸感；不污染对话历史纯净度</p></div>
+
+      <div class="dk">AI 安全网</div>
+      <div><p><b>checkpoint + 只读 GitAdapter + Duty「只提议不执行」</b></p></div>
+      <div><p>AI 改代码可回滚；分析建议进收件箱待人工 accept</p></div>
+    </div>
+  </section>
+
+  <!-- ==================== A 术语 ==================== -->
+  <section id="glossary">
+    <div class="section-head">
+      <span class="section-num">A · Glossary</span>
+      <h2>术语速查</h2>
+    </div>
+
+    <table>
+      <tr><th>术语</th><th>含义</th></tr>
+      <tr><td><b>JanusX / SwitchX / WorkflowX</b></td><td>产品品牌 / 引擎仓库名 / 仓库内开发编排框架</td></tr>
+      <tr><td><b>ProviderExtension</b></td><td>llm-core 的适配器契约接口</td></tr>
+      <tr><td><b>PaneTree</b></td><td>终端分屏的递归 leaf/split 树</td></tr>
+      <tr><td><b>AgentEvent</b></td><td>统一三家 CLI 输出的判别联合事件协议</td></tr>
+      <tr><td><b>Checkpoint</b></td><td>工作区文件快照，SHA1 内容寻址</td></tr>
+      <tr><td><b>submit-line</b></td><td>终端回车提交的清洗信号，checkpoint 的触发源</td></tr>
+      <tr><td><b>BlueprintNode</b></td><td>蓝图节点，Analyzer 分析的目标单元，带游标</td></tr>
+      <tr><td><b>lastAnalyzedCommitSha</b></td><td>分析游标，记录上次分析到哪个 commit</td></tr>
+      <tr><td><b>归属机制 B</b></td><td>一工作区最多一焦点节点，commit 归焦点</td></tr>
+      <tr><td><b>Janus Island</b></td><td>拟人化灵动岛，任务态势层</td></tr>
+      <tr><td><b>JANUS_PERSONA</b></td><td>控制核心人格 prompt，单一来源</td></tr>
+      <tr><td><b>四入口</b></td><td>Analyzer 的 ①git:commit ②对账 ③手动 ④终端关闭</td></tr>
+      <tr><td><b>P1–P5</b></td><td>checkpoint 蓝图的五条安全原则</td></tr>
+      <tr><td><b>ConPTY</b></td><td>Windows 伪终端，node-pty 显式启用并对齐 VS Code</td></tr>
+    </table>
+  </section>
+
+  <!-- ==================== B 阅读路径 ==================== -->
+  <section id="reading">
+    <div class="section-head">
+      <span class="section-num">B · Reading Path</span>
+      <h2>推荐阅读路径</h2>
+    </div>
+
+    <h3>如果你想 30 分钟建立心智模型</h3>
+    <ol>
+      <li>读 00 总览 + 01 整体架构（10 分钟）——建立三层进程模型</li>
+      <li>读 08 数据流互联图（10 分钟）——看六个子系统怎么闭环</li>
+      <li>扫 09 设计决策总表（10 分钟）——抓设计哲学</li>
+    </ol>
+
+    <h3>如果你想动手改某个子系统</h3>
+    <ul>
+      <li><b>加一个 LLM 厂商</b> → 02 LLM Core，实现 <code>ProviderExtension</code> 并在 <code>ProviderFactory</code> 注册</li>
+      <li><b>改分屏交互</b> → 03 Terminal，<code>workspace-pane.ts</code>（树代数）+ <code>TerminalArea.tsx</code>（拖拽 UI）</li>
+      <li><b>支持新 AI CLI</b> → 04 Agent，写一个 parser 实现 <code>StreamParser</code>，加进 <code>createParser</code></li>
+      <li><b>改快照/还原逻辑</b> → 05 Checkpoint，<code>checkpoint-manager.ts</code>；先读 P1–P5 原则</li>
+      <li><b>调分析行为</b> → 06 Analyzer，<code>analyzer.ts</code>；先看四入口与游标机制</li>
+      <li><b>改拟人交互</b> → 07 Island，<code>useIslandGesture</code> + <code>persona.ts</code></li>
+    </ul>
+
+    <h3>配套源码入口</h3>
+    <table>
+      <tr><th>入口</th><th>文件</th></tr>
+      <tr><td>主进程启动</td><td><code>src/main/index.ts</code></td></tr>
+      <tr><td>IPC 注册</td><td><code>src/main/ipc/*-handlers.ts</code></td></tr>
+      <tr><td>预加载桥</td><td><code>src/preload/index.ts</code></td></tr>
+      <tr><td>渲染入口</td><td><code>src/renderer/src/App.tsx</code></td></tr>
+      <tr><td>状态中枢</td><td><code>src/renderer/src/stores/workspace.ts</code></td></tr>
+      <tr><td>人格源</td><td><code>src/shared/janus/persona.ts</code></td></tr>
+      <tr><td>设计提案</td><td><code>doc/checkpoint-snapshot-architecture-blueprint.md</code> 等</td></tr>
+    </table>
+
+    <div class="callout">
+      <span class="tag">最后的提醒</span>
+      <p>这份手册是「地图」，不是「领土」。它能帮你快速定位、理解为什么，但真正的细节永远在源码里——每个 <code>file:line</code> 引用都是请你跳过去亲眼看一眼的邀请。读手册建立方向感，读源码建立确信感，两者交替进行，效率最高。</p>
+    </div>
+
+    <p style="margin-top:60px;text-align:center;color:var(--ink-faint);font-family:var(--mono);font-size:11px;letter-spacing:.1em">
+      JanusX 架构学习手册 · 基于真实源码提炼 · 2026.06
+    </p>
+  </section>
+
+  </main>
+</div>
+
+<script>
+  // ============ scrollspy：左侧导航高亮当前章节 ============
+  (function(){
+    const links = Array.from(document.querySelectorAll('.side a'));
+    const map = {};
+    links.forEach(a => { map[a.getAttribute('href').slice(1)] = a; });
+    const sections = Array.from(document.querySelectorAll('section[id]'));
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          links.forEach(a => a.classList.remove('active'));
+          const id = entry.target.id;
+          if (map[id]) map[id].classList.add('active');
+        }
+      });
+    }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
+    sections.forEach(s => observer.observe(s));
+  })();
+</script>
+
+</body>
+</html>

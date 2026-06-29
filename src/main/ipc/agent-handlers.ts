@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { agentStreamManager } from '../agent/stream-manager'
+import { notifyAgentEvent } from '../notifications/agent-notifier'
 import type { AgentSpawnOptions } from '../agent/types'
 
 export function registerAgentHandlers(mainWindow: BrowserWindow): void {
@@ -9,6 +10,7 @@ export function registerAgentHandlers(mainWindow: BrowserWindow): void {
     // Wire event forwarding to renderer
     agentStreamManager.onEvent(sessionId, (event) => {
       mainWindow.webContents.send('agent:event', { sessionId, event })
+      notifyAgentEvent(mainWindow, { sessionId, engine: options.engine }, event)
     })
 
     return { sessionId }

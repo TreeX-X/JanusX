@@ -65,10 +65,7 @@ codex-*.diff
 CLAUDE.md
 
 # JanusX local runtime scratch
-.janusX/cache/
-.janusX/logs/
-.janusX/tmp/
-.janusX/sessions/
+.janusX/
 
 # Design & Documentation (prototypes, tech proposals)
 design-mockups/
