@@ -212,7 +212,6 @@ export function JanusChat({
 
   const isNoProviderError = error === '未配置默认 LLM Provider'
   const canClear = messages.length > 0 || !!pendingContent || !!error
-  const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
   const suggestions = [
     '当前节点',
     '运行状态',
@@ -259,7 +258,49 @@ export function JanusChat({
         {messages.length === 0 && (
           <div className="janus-chat-empty">
             <div className="janus-chat-wordmark" aria-label="JanusX">
-              <span className="janus-chat-wordmark-main">Janus</span>
+              <span className="janus-chat-wordmark-main">
+                <svg
+                  className="janus-chat-pixel-janus"
+                  viewBox="0 0 35 7"
+                  shapeRendering="crispEdges"
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  {/* J — 顶横 + 左下钩 + 右竖 (第 0-5 列) */}
+                  <rect x="0" y="0" width="5" height="1" fill="#f6f3ea" />
+                  <rect x="4" y="0" width="1" height="7" fill="#f6f3ea" />
+                  <rect x="0" y="5" width="1" height="2" fill="#f6f3ea" />
+                  <rect x="1" y="6" width="3" height="1" fill="#f6f3ea" />
+                  {/* 列 6 为字母间隔空列 */}
+                  {/* A — 两侧竖 + 中横 + 顶尖 (第 7-11 列) */}
+                  <rect x="7" y="0" width="1" height="7" fill="#f6f3ea" />
+                  <rect x="11" y="0" width="1" height="7" fill="#f6f3ea" />
+                  <rect x="7" y="0" width="5" height="1" fill="#f6f3ea" />
+                  <rect x="8" y="1" width="3" height="1" fill="#f6f3ea" />
+                  <rect x="7" y="3" width="5" height="1" fill="#f6f3ea" />
+                  {/* 列 12 为字母间隔空列 */}
+                  {/* N — 左竖 + 右竖 + 左上到右下对角 (第 13-17 列) */}
+                  <rect x="13" y="0" width="1" height="7" fill="#f6f3ea" />
+                  <rect x="17" y="0" width="1" height="7" fill="#f6f3ea" />
+                  <rect x="14" y="1" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="15" y="2" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="16" y="3" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="16" y="4" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="16" y="5" width="1" height="1" fill="#f6f3ea" />
+                  {/* 列 18 为字母间隔空列 */}
+                  {/* U — 两侧竖 + 底横 (第 19-23 列) */}
+                  <rect x="19" y="0" width="1" height="7" fill="#f6f3ea" />
+                  <rect x="23" y="0" width="1" height="7" fill="#f6f3ea" />
+                  <rect x="19" y="6" width="5" height="1" fill="#f6f3ea" />
+                  {/* 列 24 为字母间隔空列 */}
+                  {/* S — 顶横 + 中横 + 底横 + 左上竖 + 右下竖 (第 25-29 列) */}
+                  <rect x="25" y="0" width="5" height="1" fill="#f6f3ea" />
+                  <rect x="25" y="0" width="1" height="4" fill="#f6f3ea" />
+                  <rect x="25" y="3" width="5" height="1" fill="#f6f3ea" />
+                  <rect x="29" y="3" width="1" height="4" fill="#f6f3ea" />
+                  <rect x="25" y="6" width="5" height="1" fill="#f6f3ea" />
+                  {/* 列 30-34 与 X 同列连排；X 像素方阵由 wordmark-x 提供 */}
+                </svg>
+              </span>
               <span className="janus-chat-wordmark-x" aria-hidden="true">
                 <svg
                   className="janus-chat-pixel-x"
@@ -360,7 +401,7 @@ export function JanusChat({
         </button>
       )}
 
-      {/* 输入区域 — opencode 风格方框 composer：row 在上，meta footer 在下 */}
+      {/* 输入区域 — opencode 风格方框 composer：单行 prompt + textarea + 按钮 */}
       <div className="janus-chat-input-wrapper">
         <div className="janus-chat-composer-row">
           <span className="janus-chat-prompt-prefix" aria-hidden="true">janusx&gt;</span>
@@ -399,10 +440,6 @@ export function JanusChat({
               ↑
             </button>
           )}
-        </div>
-        <div className="janus-chat-composer-meta">
-          <span className="janus-chat-composer-chip">JanusX · {isStreaming ? 'STREAMING' : hasConversation ? 'FOLLOW-UP' : 'READY'}</span>
-          <span className="janus-chat-composer-hint">⏎ send · ⇧⏎ newline</span>
         </div>
       </div>
     </div>

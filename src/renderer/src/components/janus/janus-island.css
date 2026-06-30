@@ -3782,3 +3782,110 @@ body.is-running {
 .janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper:hover .janus-chat-clear {
   opacity: 0.9;
 }
+
+/* === JanusX v2 tweak: pixel JANUS + bg scanline + bare composer + monitor no input === */
+
+/* ── 1. Monitor 视图隐藏输入区 ─────────────────────────────────── */
+/* 让 monitor 视图只剩 CRT 反馈面板，底部不再有输入框 */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  display: none !important;
+}
+
+/* monitor 下 docked 收缩为 0 高度、无边框、无背景、无 padding */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+  display: none !important;
+}
+
+/* 让 feedback-surface 在 monitor 视图中占满 panel（grid 行只剩 1fr） */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-panel {
+  grid-row: 1 / -1 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+/* ── 2. 像素 JANUS + X 统一高度 ─────────────────────────────────── */
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus,
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+  display: inline-block;
+  height: 0.7em;
+  width: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  shape-rendering: crispEdges;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 10px rgba(255,122,26,0.24));
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus {
+  margin-right: 0.18em;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  gap: 0.05em;
+  letter-spacing: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-main {
+  display: inline-flex;
+  align-items: center;
+  font-size: inherit;
+  line-height: 1;
+}
+
+/* ── 3. 扫描线作为可见背景纹理 ─────────────────────────────────── */
+.janus-island-shell[data-stage="expanded"] .scanline {
+  opacity: 0.14 !important;
+  background: linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(255, 255, 255, 0.06) 3px 4px
+  ) !important;
+  background-size: 100% 4px !important;
+  animation: scan-crt 8s linear infinite !important;
+}
+
+/* monitor 视图下也保留可见扫描线，铺在 feedback-surface 黑底上 */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .scanline {
+  opacity: 0.14 !important;
+  z-index: 21 !important;
+  overflow: hidden;
+}
+
+/* ── 4. composer 去掉 footer 行，单行紧凑 ───────────────────────── */
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-composer-meta {
+  display: none !important;
+}
+
+/* input-wrapper 高度/padding 调整为单行紧凑（无 footer 分隔线） */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper {
+  padding: 0;
+  gap: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-row {
+  min-height: 44px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper {
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: #08080a;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (max-width: 560px) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus,
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+    height: 0.62em;
+  }
+}
