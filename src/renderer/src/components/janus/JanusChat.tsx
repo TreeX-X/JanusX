@@ -212,6 +212,7 @@ export function JanusChat({
 
   const isNoProviderError = error === '未配置默认 LLM Provider'
   const canClear = messages.length > 0 || !!pendingContent || !!error
+  const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
   const suggestions = [
     '当前节点',
     '运行状态',
@@ -256,9 +257,34 @@ export function JanusChat({
         onScroll={handleScroll}
       >
         {messages.length === 0 && (
-            <div className="janus-chat-empty">
-              <div className="janus-chat-empty-icon">◎</div>
-            <div className="janus-chat-empty-text">Janus</div>
+          <div className="janus-chat-empty">
+            <div className="janus-chat-wordmark" aria-label="JanusX">
+              <span className="janus-chat-wordmark-main">Janus</span>
+              <span className="janus-chat-wordmark-x" aria-hidden="true">
+                <svg
+                  className="janus-chat-pixel-x"
+                  viewBox="0 0 7 7"
+                  shapeRendering="crispEdges"
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  {/* 左上 → 右下：白 */}
+                  <rect x="0" y="0" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="1" y="1" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="2" y="2" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="3" y="3" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="4" y="4" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="5" y="5" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="6" y="6" width="1" height="1" fill="#f6f3ea" />
+                  {/* 右上 → 左下：橙（避开中心，让白线穿过交叉点） */}
+                  <rect x="6" y="0" width="1" height="1" fill="#ff7a1a" />
+                  <rect x="5" y="1" width="1" height="1" fill="#ff7a1a" />
+                  <rect x="4" y="2" width="1" height="1" fill="#ff7a1a" />
+                  <rect x="2" y="4" width="1" height="1" fill="#ff7a1a" />
+                  <rect x="1" y="5" width="1" height="1" fill="#ff7a1a" />
+                  <rect x="0" y="6" width="1" height="1" fill="#ff7a1a" />
+                </svg>
+              </span>
+            </div>
             <div className="janus-chat-empty-hint">从当前上下文开始</div>
             <div className="janus-chat-suggestions">
               {suggestions.map((suggestion) => (
@@ -334,18 +360,15 @@ export function JanusChat({
         </button>
       )}
 
-      {/* 输入区域 */}
+      {/* 输入区域 — opencode 风格方框 composer：row 在上，meta footer 在下 */}
       <div className="janus-chat-input-wrapper">
-        <div className="janus-chat-composer-meta">
-          <span>Current workspace</span>
-          <span>{isStreaming ? 'Receiving' : 'Ready'}</span>
-        </div>
         <div className="janus-chat-composer-row">
+          <span className="janus-chat-prompt-prefix" aria-hidden="true">janusx&gt;</span>
           <textarea
             ref={inputRef}
             className="janus-chat-input"
             rows={rows}
-            placeholder="输入指令或问题"
+            placeholder="Message JanusX or type /"
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
@@ -358,9 +381,10 @@ export function JanusChat({
               onClick={handleStop}
               style={{ '--accent-color': modeColor } as React.CSSProperties}
               title="停止生成"
+              aria-label="停止生成"
               type="button"
             >
-              停止
+              ■
             </button>
           ) : (
             <button
@@ -368,11 +392,17 @@ export function JanusChat({
               onClick={() => handleSend()}
               disabled={!input.trim() || isStreaming}
               style={{ '--accent-color': modeColor } as React.CSSProperties}
+              title="发送"
+              aria-label="发送"
               type="button"
             >
-              发送
+              ↑
             </button>
           )}
+        </div>
+        <div className="janus-chat-composer-meta">
+          <span className="janus-chat-composer-chip">JanusX · {isStreaming ? 'STREAMING' : hasConversation ? 'FOLLOW-UP' : 'READY'}</span>
+          <span className="janus-chat-composer-hint">⏎ send · ⇧⏎ newline</span>
         </div>
       </div>
     </div>

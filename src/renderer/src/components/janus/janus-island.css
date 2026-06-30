@@ -3447,3 +3447,338 @@ body.is-running {
     width: 100%;
   }
 }
+
+/* === JanusX pixel logo + opencode composer final pass === */
+/* 覆盖旧规则：像素 X、去除 monitor 方框、opencode 方框输入。只追加，不修改旧块。 */
+
+/* ── 1. 像素 logo：Janus 文字 + 像素方阵 X ───────────────────── */
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12em;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: clamp(44px, 8.5vw, 82px);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #f6f3ea;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.22), 0 14px 34px rgba(0,0,0,0.42);
+  image-rendering: pixelated;
+  text-rendering: geometricPrecision;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-main {
+  display: inline-block;
+  image-rendering: pixelated;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-x {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.72em;
+  height: 0.72em;
+  color: transparent;
+  font: inherit;
+  line-height: 1;
+  text-shadow: none;
+}
+
+/* 清除旧 clip-path 伪元素背景 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-x::before,
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-x::after {
+  content: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 10px rgba(255,122,26,0.28));
+}
+
+/* 空 wordmark-mark 默认在折叠态存在，这里显式隐藏避免与像素 logo 冲突 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-mark {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-empty-hint {
+  margin-top: 6px;
+  color: rgba(255,255,255,0.34);
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+}
+
+@media (max-width: 560px) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+    font-size: 42px;
+  }
+}
+
+/* ── 2. 去掉 monitor CRT 方框 ────────────────────────────────── */
+/* 让 CRT 内容融入面板黑底，无内嵌方框、无深陷阴影 */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-surface,
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface {
+  border-radius: 0;
+  background: #020203;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-surface .janus-crt,
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface .janus-crt,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-crt,
+.janus-island-shell[data-stage="expanded"] .janus-crt {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  background: #020203;
+  box-shadow: none;
+}
+
+/* running 脉冲光也别用 box-shadow 凹陷 */
+.janus-island-shell[data-stage="expanded"] .janus-crt.running {
+  animation: none;
+  box-shadow: none;
+}
+
+/* 扫描线极弱化，几乎不可见 */
+.janus-island-shell[data-stage="expanded"] .scanline {
+  opacity: 0.04;
+  background: linear-gradient(to bottom, transparent 70%, rgba(255,255,255,0.06) 71%);
+  background-size: 100% 12px;
+  animation-duration: 24s;
+}
+
+/* 像素降噪几乎贴黑色，弱化 */
+.janus-island-shell[data-stage="expanded"] .pixel-overlay {
+  opacity: 0.025;
+  background-image:
+    repeating-linear-gradient(transparent, transparent 7px, rgba(255,255,255,0.1) 7px, rgba(255,255,255,0.1) 8px),
+    repeating-linear-gradient(90deg, transparent, transparent 7px, rgba(255,255,255,0.07) 7px, rgba(255,255,255,0.07) 8px);
+}
+
+/* warp-grid 弱化，去掉方框感 */
+.janus-island-shell[data-stage="expanded"] .warp-grid,
+.janus-island-shell[data-stage="expanded"] .warp-grid.running {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  opacity: 0.18;
+}
+
+.janus-island-shell[data-stage="expanded"] .warp-grid.running {
+  background-image:
+    linear-gradient(rgba(0,255,136,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,136,0.05) 1px, transparent 1px);
+}
+
+/* ── 3. opencode 方框输入框 ──────────────────────────────────── */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--empty .janus-chat-input-wrapper,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: #08080a;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper:focus-within {
+  border-color: rgba(255,122,26,0.34);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.24), 0 0 0 1px rgba(255,122,26,0.08);
+}
+
+/* composer-row 在上 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-row {
+  order: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  min-height: 46px;
+  padding: 0;
+}
+
+/* prompt 前缀 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-prompt-prefix {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,122,26,0.78);
+  background: transparent;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-prompt-prefix::after {
+  content: none;
+}
+
+/* textarea 自适应 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input {
+  flex: 1 1 auto;
+  min-height: 46px;
+  max-height: 150px;
+  padding: 14px 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.9);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: none;
+  resize: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input:focus,
+.janus-island-shell[data-stage="expanded"] .janus-chat-input:focus-visible {
+  outline: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input::placeholder {
+  color: rgba(255,255,255,0.26);
+}
+
+/* 发送 / 停止按钮：方框，右侧 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop {
+  flex: 0 0 auto;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  margin: 4px 6px 4px 0;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.6);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: none;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+/* 发送：橙色填充（呼应 X 的橙） */
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send:not(:disabled) {
+  color: #0a0a0b;
+  background: #ff7a1a;
+  border-color: rgba(255,122,26,0.55);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:hover:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:hover:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send:hover:not(:disabled) {
+  color: #050505;
+  background: #ff8a2e;
+  border-color: rgba(255,138,46,0.6);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:disabled {
+  color: rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.05);
+  box-shadow: none;
+}
+
+/* 停止：暗灰 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop {
+  color: rgba(255,180,180,0.8);
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop:hover,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop:hover,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop:hover {
+  color: rgba(255,200,200,0.92);
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: none;
+}
+
+/* composer-meta footer：在下 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-composer-meta {
+  order: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.42);
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.32);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta .janus-chat-composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 3px;
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.62);
+  font-size: 9.5px;
+  letter-spacing: 0.4px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta .janus-chat-composer-hint {
+  color: rgba(255,255,255,0.28);
+  font-size: 9.5px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* monitor 视图的输入框在 docked 内，恢复一体形态 */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  width: 100%;
+  margin: 0;
+}
+
+/* 清掉折叠态旧阴影残留（仅在 expanded 下生效，不影响其它状态） */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper:hover .janus-chat-clear {
+  opacity: 0.9;
+}
