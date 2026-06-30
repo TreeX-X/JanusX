@@ -85,4 +85,32 @@ describe('BlobStore', () => {
     await store.initialize()
     expect(await store.exists('0000000000000000000000000000000000000000')).toBe(false)
   })
+
+  it('listHashes() returns stored blob hashes', async () => {
+    const { BlobStore } = await import('../../../src/main/agent/checkpoint/blob-store')
+    const store = new BlobStore(join(tmpDir, 'blobs'))
+    await store.initialize()
+    const hash = await store.store(Buffer.from('list test'))
+    expect(await store.listHashes()).toEqual([hash])
+  })
+
+  it('delete() removes a stored blob', async () => {
+    const { BlobStore } = await import('../../../src/main/agent/checkpoint/blob-store')
+    const store = new BlobStore(join(tmpDir, 'blobs'))
+    await store.initialize()
+    const hash = await store.store(Buffer.from('delete test'))
+    await store.delete(hash)
+    expect(await store.exists(hash)).toBe(false)
+  })
+
+  it('clear() removes all blobs and keeps the store usable', async () => {
+    const { BlobStore } = await import('../../../src/main/agent/checkpoint/blob-store')
+    const store = new BlobStore(join(tmpDir, 'blobs'))
+    await store.initialize()
+    await store.store(Buffer.from('clear test'))
+    await store.clear()
+    expect(await store.listHashes()).toEqual([])
+    const hash = await store.store(Buffer.from('after clear'))
+    expect(await store.exists(hash)).toBe(true)
+  })
 })

@@ -44,6 +44,15 @@ vi.mock('../../../src/main/agent/checkpoint/blob-store', () => {
       exists: vi.fn().mockImplementation(async (hash: string) => {
         return storedBlobs.has(hash)
       }),
+      listHashes: vi.fn().mockImplementation(async () => {
+        return Array.from(storedBlobs.keys())
+      }),
+      delete: vi.fn().mockImplementation(async (hash: string) => {
+        storedBlobs.delete(hash)
+      }),
+      clear: vi.fn().mockImplementation(async () => {
+        storedBlobs.clear()
+      }),
     })),
   }
 })
@@ -122,14 +131,14 @@ describe('CheckpointManager', () => {
     expect(checkpoint.terminalId).toBe('term-1')
     expect(checkpoint.engine).toBe('claude')
     expect(checkpoint.branch).toBe('main')
-    expect(checkpoint.status).toBe('pending')
+    expect(checkpoint.status).toBe('ready')
     expect(checkpoint.prompt).toBe('test prompt')
-    expect(checkpoint.stashRef).toBe('stash@{0}')
     expect(checkpoint.conversationIndex).toBe(1)
     expect(checkpoint.filesSnapshot).toBeDefined()
+    expect(checkpoint.schemaVersion).toBe(2)
   })
 
-  it('createCheckpoint() increments conversationIndex per terminal', async () => {
+  it('createCheckpoint() increments conversationIndex globally', async () => {
     await manager.createCheckpoint({
       terminalId: 'term-1',
       engine: 'claude',
@@ -154,7 +163,7 @@ describe('CheckpointManager', () => {
     const term2Cps = list.filter(cp => cp.terminalId === 'term-2')
     expect(term1Cps.find(cp => cp.prompt === 'first')?.conversationIndex).toBe(1)
     expect(term1Cps.find(cp => cp.prompt === 'second')?.conversationIndex).toBe(2)
-    expect(term2Cps[0].conversationIndex).toBe(1)
+    expect(term2Cps[0].conversationIndex).toBe(3)
   })
 
   it('createCheckpoint() snapshots tracked files', async () => {
@@ -168,18 +177,18 @@ describe('CheckpointManager', () => {
     expect(Object.keys(checkpoint.filesSnapshot)).toContain('README.md')
   })
 
-  it('finalizeCheckpoint() marks status as finalized', async () => {
+  it('finalizeCheckpoint() keeps ready checkpoints ready', async () => {
     const checkpoint = await manager.createCheckpoint({
       terminalId: 'term-1',
       engine: 'claude',
       prompt: 'finalize test',
       cwd: '/workspace',
     })
-    expect(checkpoint.status).toBe('pending')
+    expect(checkpoint.status).toBe('ready')
     await manager.finalizeCheckpoint(checkpoint.id, '/workspace')
     const list = await manager.listCheckpoints()
     const finalized = list.find(cp => cp.id === checkpoint.id)
-    expect(finalized?.status).toBe('finalized')
+    expect(finalized?.status).toBe('ready')
   })
 
   it('finalizeCheckpoint() throws for unknown id', async () => {
@@ -280,6 +289,34 @@ describe('CheckpointManager', () => {
     expect(after.length).toBe(0)
   })
 
+  it('deleteCheckpoint() removes unreferenced blobs', async () => {
+    const checkpoint = await manager.createCheckpoint({
+      terminalId: 'term-1',
+      engine: 'claude',
+      prompt: 'delete blobs',
+      cwd: '/workspace',
+    })
+    expect(storedBlobs.size).toBeGreaterThan(0)
+
+    await manager.deleteCheckpoint(checkpoint.id)
+
+    expect(storedBlobs.size).toBe(0)
+  })
+
+  it('clearAll() clears checkpoint blobs', async () => {
+    await manager.createCheckpoint({
+      terminalId: 'term-1',
+      engine: 'claude',
+      prompt: 'clear blobs',
+      cwd: '/workspace',
+    })
+    expect(storedBlobs.size).toBeGreaterThan(0)
+
+    await manager.clearAll()
+
+    expect(storedBlobs.size).toBe(0)
+  })
+
   it('deleteCheckpoint() is a no-op for unknown id', async () => {
     // Should not throw
     await manager.deleteCheckpoint('nonexistent-id')
@@ -295,14 +332,11 @@ describe('CheckpointManager', () => {
       cwd: '/workspace',
     })
 
-    // Inject a diff into the checkpoint's snapshot to test getDiff
-    const list = await manager.listCheckpoints()
-    const cp = list[0]
-    cp.filesSnapshot['src/index.ts'].diff = '--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1 +1 @@\n-old\n+new'
+    mockFiles[join('/workspace', 'src/index.ts')] = 'export const hello = "janus"'
 
-    const diff = await manager.getDiff(checkpoint.id, 'src/index.ts')
+    const diff = await manager.getDiff(checkpoint.id, 'src/index.ts', '/workspace')
     expect(diff).toContain('--- a/src/index.ts')
-    expect(diff).toContain('+new')
+    expect(diff).toContain('janus')
   })
 
   it('getDiff() returns empty string for unknown file', async () => {

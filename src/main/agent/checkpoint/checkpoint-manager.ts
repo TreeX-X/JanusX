@@ -41,11 +41,12 @@ export class CheckpointManager {
     this.storagePath = newPath
     this.workspacePath = workspacePath
 
-    await this.clearDiskCheckpoints()
+    this.checkpoints.clear()
     await mkdir(join(this.storagePath, 'blobs'), { recursive: true })
     this.blobStore = new BlobStore(join(this.storagePath, 'blobs'))
     await this.blobStore.initialize()
     await this.loadIndex()
+    await this.garbageCollectBlobs()
   }
 
   async createCheckpoint(options: CheckpointCreateOptions): Promise<ConversationCheckpoint> {
@@ -153,6 +154,7 @@ export class CheckpointManager {
       await unlink(join(this.storagePath, `${checkpointId}.json`))
     } catch {}
     await this.saveIndex().catch(() => {})
+    await this.garbageCollectBlobs().catch(() => {})
   }
 
   private nextConversationIndex(): number {
@@ -180,18 +182,6 @@ export class CheckpointManager {
     }
   }
 
-  private async clearDiskCheckpoints(): Promise<void> {
-    try {
-      const files = await readdir(this.storagePath)
-      for (const file of files) {
-        if (!file.endsWith('.json')) continue
-        try {
-          await unlink(join(this.storagePath, file))
-        } catch {}
-      }
-    } catch {}
-  }
-
   async clearAll(): Promise<void> {
     const all = Array.from(this.checkpoints.values())
     for (const cp of all) {
@@ -203,6 +193,7 @@ export class CheckpointManager {
     try {
       await unlink(join(this.storagePath, 'index.json'))
     } catch {}
+    await this.blobStore.clear()
   }
 
   async getDiff(checkpointId: string, filePath: string, cwd?: string): Promise<string> {
@@ -341,6 +332,24 @@ export class CheckpointManager {
       checkpointIds: Array.from(this.checkpoints.keys()),
     }
     await writeFile(join(this.storagePath, 'index.json'), JSON.stringify(index, null, 2))
+  }
+
+  private async garbageCollectBlobs(): Promise<void> {
+    if (!this.blobStore) return
+
+    const referenced = new Set<string>()
+    for (const checkpoint of this.checkpoints.values()) {
+      for (const entry of Object.values(checkpoint.filesSnapshot)) {
+        if (entry.hash) referenced.add(entry.hash)
+      }
+    }
+
+    const storedHashes = await this.blobStore.listHashes()
+    for (const hash of storedHashes) {
+      if (!referenced.has(hash)) {
+        await this.blobStore.delete(hash)
+      }
+    }
   }
 
   private async captureWorkspaceSnapshot(cwd: string): Promise<Record<string, SnapshotFileEntry>> {

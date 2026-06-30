@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { watch, type FSWatcher } from 'fs'
-import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'fs/promises'
+import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { join, relative, resolve } from 'path'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
@@ -26,6 +26,22 @@ function isPathWithinRoot(rootPath: string, targetPath: string): boolean {
   const resolvedRoot = resolve(rootPath)
   const resolvedTarget = resolve(targetPath)
   return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}\\`) || resolvedTarget.startsWith(`${resolvedRoot}/`)
+}
+
+function resolveWorkspacePath(rootPath: string, relativePathValue = ''): string | null {
+  const safeRelativePath = relativePathValue.replace(/^[/\\]+/, '')
+  const targetPath = resolve(rootPath, safeRelativePath)
+  return isPathWithinRoot(rootPath, targetPath) ? targetPath : null
+}
+
+function sanitizeEntryName(nameValue: string): string | null {
+  const name = nameValue.trim()
+  if (!name || name === '.' || name === '..' || /[/\\]/.test(name)) return null
+  return name
+}
+
+function fileTreeResult(success: boolean, error?: string, path?: string): { success: boolean; error?: string; path?: string } {
+  return { success, error, path }
 }
 
 async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<unknown[]> {
@@ -221,10 +237,8 @@ export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('filetree:children', async (_event, rootPath: string, relativePathValue: string) => {
-    const safeRelativePath = relativePathValue.replace(/^[/\\]+/, '')
-    const targetDir = resolve(rootPath, safeRelativePath)
-
-    if (!isPathWithinRoot(rootPath, targetDir)) return []
+    const targetDir = resolveWorkspacePath(rootPath, relativePathValue)
+    if (!targetDir) return []
 
     try {
       const info = await stat(targetDir)
@@ -235,5 +249,81 @@ export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
 
     registerWorkspaceWatcher(mainWindow, rootPath)
     return readDirectoryNodes(rootPath, targetDir)
+  })
+
+  ipcMain.handle('filetree:create-file', async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
+    const name = sanitizeEntryName(nameValue)
+    const parentDir = resolveWorkspacePath(rootPath, parentRelativePath)
+    if (!name || !parentDir) return fileTreeResult(false, 'Invalid file name')
+
+    const targetPath = resolve(parentDir, name)
+    if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
+
+    try {
+      const parentInfo = await stat(parentDir)
+      if (!parentInfo.isDirectory()) return fileTreeResult(false, 'Parent is not a directory')
+      await writeFile(targetPath, '', { encoding: 'utf-8', flag: 'wx' })
+      return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, targetPath))
+    } catch (err: any) {
+      return fileTreeResult(false, err.message || 'Failed to create file')
+    }
+  })
+
+  ipcMain.handle('filetree:create-directory', async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
+    const name = sanitizeEntryName(nameValue)
+    const parentDir = resolveWorkspacePath(rootPath, parentRelativePath)
+    if (!name || !parentDir) return fileTreeResult(false, 'Invalid folder name')
+
+    const targetPath = resolve(parentDir, name)
+    if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
+
+    try {
+      const parentInfo = await stat(parentDir)
+      if (!parentInfo.isDirectory()) return fileTreeResult(false, 'Parent is not a directory')
+      await mkdir(targetPath)
+      return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, targetPath))
+    } catch (err: any) {
+      return fileTreeResult(false, err.message || 'Failed to create folder')
+    }
+  })
+
+  ipcMain.handle('filetree:rename', async (_event, rootPath: string, relativePathValue: string, nameValue: string) => {
+    const name = sanitizeEntryName(nameValue)
+    const sourcePath = resolveWorkspacePath(rootPath, relativePathValue)
+    if (!name || !sourcePath || resolve(sourcePath) === resolve(rootPath)) {
+      return fileTreeResult(false, 'Invalid rename target')
+    }
+
+    const targetPath = resolve(sourcePath, '..', name)
+    if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
+
+    try {
+      await rename(sourcePath, targetPath)
+      return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, targetPath))
+    } catch (err: any) {
+      return fileTreeResult(false, err.message || 'Failed to rename item')
+    }
+  })
+
+  ipcMain.handle('filetree:delete', async (_event, rootPath: string, relativePathValue: string) => {
+    const targetPath = resolveWorkspacePath(rootPath, relativePathValue)
+    if (!targetPath || resolve(targetPath) === resolve(rootPath)) {
+      return fileTreeResult(false, 'Cannot delete workspace root')
+    }
+
+    try {
+      await rm(targetPath, { recursive: true, force: false })
+      return fileTreeResult(true)
+    } catch (err: any) {
+      return fileTreeResult(false, err.message || 'Failed to delete item')
+    }
+  })
+
+  ipcMain.handle('filetree:reveal', async (_event, rootPath: string, relativePathValue: string) => {
+    const targetPath = resolveWorkspacePath(rootPath, relativePathValue)
+    if (!targetPath) return fileTreeResult(false, 'Invalid target path')
+
+    shell.showItemInFolder(targetPath)
+    return fileTreeResult(true)
   })
 }

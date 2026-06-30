@@ -1,4 +1,5 @@
-import { useCallback, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useState, type DragEvent, type MouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useEditorStore } from '@/stores/editor'
@@ -10,15 +11,72 @@ import { warmupEditorRuntime } from '@/lib/editor-warmup'
 
 type PanelView = 'files' | 'git' | 'checkpoints'
 
+interface FileTreeOperationResult {
+  success?: boolean
+  error?: string
+  path?: string
+}
+
+interface FileTreeContextMenuTarget {
+  node: FileNode | null
+  name: string
+  path: string
+  type: 'file' | 'directory'
+}
+
+interface FileTreeContextMenuState {
+  x: number
+  y: number
+  target: FileTreeContextMenuTarget
+}
+
+const CONTEXT_MENU_WIDTH = 196
+const CONTEXT_MENU_HEIGHT = 320
+const CONTEXT_MENU_MARGIN = 8
+
+function getParentPath(path: string): string {
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
+  const index = normalized.lastIndexOf('/')
+  return index === -1 ? '' : normalized.slice(0, index)
+}
+
+function getAbsolutePath(workspacePath: string, relativePath: string): string {
+  if (!relativePath) return workspacePath
+  const separator = workspacePath.includes('\\') ? '\\' : '/'
+  return `${workspacePath.replace(/[\\/]+$/, '')}${separator}${relativePath.split('/').join(separator)}`
+}
+
+function isPathInScope(path: string, scope: string): boolean {
+  if (!scope) return path.length > 0
+  return path === scope || path.startsWith(`${scope}/`)
+}
+
+function isValidEntryName(name: string): boolean {
+  return Boolean(name) && name !== '.' && name !== '..' && !/[/\\]/.test(name)
+}
+
+function promptEntryName(message: string, defaultValue = ''): string | null {
+  const value = window.prompt(message, defaultValue)
+  if (value === null) return null
+
+  const name = value.trim()
+  if (!isValidEntryName(name)) {
+    window.alert('名称不能为空，且不能包含 / 或 \\')
+    return null
+  }
+  return name
+}
+
 interface FileTreeItemProps {
   node: FileNode
   depth: number
   activeFilePath: string | null
   onSelect: (path: string) => void
   onToggleDirectory: (path: string) => Promise<void>
+  onOpenContextMenu: (event: MouseEvent<HTMLDivElement>, node: FileNode) => void
 }
 
-function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory }: FileTreeItemProps) {
+function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory, onOpenContextMenu }: FileTreeItemProps) {
   const [expanded, setExpanded] = useState(false)
   const isFolder = node.type === 'directory'
   const isActive = activeFilePath === node.path
@@ -60,11 +118,22 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory
     [isFolder, node.name, node.path],
   )
 
+  const handleContextMenu = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!isFolder) onSelect(node.path)
+      onOpenContextMenu(event, node)
+    },
+    [isFolder, node, onOpenContextMenu, onSelect],
+  )
+
   return (
     <div>
       <div
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
         draggable={!isFolder}
         onDragStart={handleDragStart}
         className="py-[5px] px-2 mb-px rounded cursor-pointer transition-colors flex items-center gap-1.5 text-xs select-none"
@@ -128,6 +197,7 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory
               activeFilePath={activeFilePath}
               onSelect={onSelect}
               onToggleDirectory={onToggleDirectory}
+              onOpenContextMenu={onOpenContextMenu}
             />
           ))}
         </div>
@@ -143,8 +213,27 @@ export function Panel() {
   const setActiveFilePath = useWorkspaceStore((s) => s.setActiveFilePath)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
   const togglePanel = useAppStore((s) => s.togglePanel)
+  const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
 
-  const handleToggleDirectory = useCallback(async (path: string) => {
+  const reloadRootFileTree = useCallback(async () => {
+    const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
+    const workspace = workspaces.find((item) => item.id === activeWorkspaceId)
+    if (!workspace) return
+
+    try {
+      const tree = (await window.electron.invoke('filetree:load', workspace.path)) as FileNode[]
+      useWorkspaceStore.setState({ fileTree: tree })
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const reloadDirectory = useCallback(async (path: string) => {
+    if (!path) {
+      await reloadRootFileTree()
+      return
+    }
+
     const { workspaces, activeWorkspaceId, fileTree: currentTree } = useWorkspaceStore.getState()
     const workspace = workspaces.find((item) => item.id === activeWorkspaceId)
     if (!workspace) return
@@ -179,17 +268,209 @@ export function Panel() {
     } catch {
       // ignore
     }
+  }, [reloadRootFileTree])
+
+  const handleToggleDirectory = useCallback(
+    async (path: string) => {
+      await reloadDirectory(path)
+    },
+    [reloadDirectory],
+  )
+
+  const getActiveWorkspace = useCallback(() => {
+    const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
+    return workspaces.find((item) => item.id === activeWorkspaceId) ?? null
   }, [])
 
+  const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
+    const x = Math.max(
+      CONTEXT_MENU_MARGIN,
+      Math.min(event.clientX, window.innerWidth - CONTEXT_MENU_WIDTH - CONTEXT_MENU_MARGIN),
+    )
+    const y = Math.max(
+      CONTEXT_MENU_MARGIN,
+      Math.min(event.clientY, window.innerHeight - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_MARGIN),
+    )
+
+    setContextMenu({
+      x,
+      y,
+      target: node
+        ? {
+            node,
+            name: node.name,
+            path: node.path,
+            type: node.type,
+          }
+        : {
+            node: null,
+            name: '工作区',
+            path: '',
+            type: 'directory',
+          },
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!contextMenu) return
+
+    const close = () => setContextMenu(null)
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+
+    window.addEventListener('click', close)
+    window.addEventListener('contextmenu', close)
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('contextmenu', close)
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [contextMenu])
+
+  const contextBaseDirectory = contextMenu
+    ? contextMenu.target.type === 'directory'
+      ? contextMenu.target.path
+      : getParentPath(contextMenu.target.path)
+    : ''
+
+  const runFileTreeMutation = useCallback(
+    async (channel: string, ...args: unknown[]): Promise<FileTreeOperationResult | null> => {
+      try {
+        const result = (await window.electron.invoke(channel, ...args)) as FileTreeOperationResult
+        if (!result.success) {
+          window.alert(result.error || '文件操作失败')
+          return null
+        }
+        return result
+      } catch (err: any) {
+        window.alert(err.message || '文件操作失败')
+        return null
+      }
+    },
+    [],
+  )
+
+  const handleOpenContextTarget = useCallback(() => {
+    if (!contextMenu || contextMenu.target.type === 'directory') return
+    const workspace = getActiveWorkspace()
+    if (!workspace) return
+
+    const absolutePath = getAbsolutePath(workspace.path, contextMenu.target.path)
+    setActiveFilePath(contextMenu.target.path)
+    void warmupEditorRuntime()
+    void useEditorStore.getState().openFile(absolutePath, workspace.path)
+    setContextMenu(null)
+  }, [contextMenu, getActiveWorkspace, setActiveFilePath])
+
+  const handleCopyContextPath = useCallback(
+    async (mode: 'relative' | 'absolute') => {
+      if (!contextMenu) return
+      const workspace = getActiveWorkspace()
+      if (!workspace) return
+
+      const value =
+        mode === 'relative'
+          ? contextMenu.target.path || '.'
+          : getAbsolutePath(workspace.path, contextMenu.target.path)
+      await navigator.clipboard.writeText(value)
+      setContextMenu(null)
+    },
+    [contextMenu, getActiveWorkspace],
+  )
+
+  const handleRevealContextTarget = useCallback(async () => {
+    if (!contextMenu) return
+    const workspace = getActiveWorkspace()
+    if (!workspace) return
+
+    await runFileTreeMutation('filetree:reveal', workspace.path, contextMenu.target.path)
+    setContextMenu(null)
+  }, [contextMenu, getActiveWorkspace, runFileTreeMutation])
+
+  const handleCreateFileTreeItem = useCallback(
+    async (type: 'file' | 'directory') => {
+      if (!contextMenu) return
+      const workspace = getActiveWorkspace()
+      if (!workspace) return
+
+      const name = promptEntryName(type === 'file' ? '新建文件名' : '新建文件夹名')
+      if (!name) return
+
+      const result = await runFileTreeMutation(
+        type === 'file' ? 'filetree:create-file' : 'filetree:create-directory',
+        workspace.path,
+        contextBaseDirectory,
+        name,
+      )
+      if (!result) return
+
+      await reloadDirectory(contextBaseDirectory)
+      if (type === 'file' && result.path) setActiveFilePath(result.path)
+      setContextMenu(null)
+    },
+    [contextBaseDirectory, contextMenu, getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath],
+  )
+
+  const handleRenameContextTarget = useCallback(async () => {
+    if (!contextMenu || !contextMenu.target.node) return
+    const workspace = getActiveWorkspace()
+    if (!workspace) return
+
+    const name = promptEntryName('重命名', contextMenu.target.name)
+    if (!name || name === contextMenu.target.name) {
+      setContextMenu(null)
+      return
+    }
+
+    const parentPath = getParentPath(contextMenu.target.path)
+    const result = await runFileTreeMutation('filetree:rename', workspace.path, contextMenu.target.path, name)
+    if (!result) return
+
+    await reloadDirectory(parentPath)
+    if (activeFilePath === contextMenu.target.path && result.path) setActiveFilePath(result.path)
+    setContextMenu(null)
+  }, [activeFilePath, contextMenu, getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+
+  const handleDeleteContextTarget = useCallback(async () => {
+    if (!contextMenu || !contextMenu.target.node) return
+    const workspace = getActiveWorkspace()
+    if (!workspace) return
+
+    const ok = window.confirm(`确认删除「${contextMenu.target.name}」？此操作不可恢复。`)
+    if (!ok) {
+      setContextMenu(null)
+      return
+    }
+
+    const targetPath = contextMenu.target.path
+    const parentPath = getParentPath(targetPath)
+    const result = await runFileTreeMutation('filetree:delete', workspace.path, targetPath)
+    if (!result) return
+
+    const editor = useEditorStore.getState()
+    editor.openFiles
+      .filter((file) => isPathInScope(file.path.replace(/\\/g, '/'), targetPath))
+      .forEach((file) => editor.closeFile(file.id))
+    if (activeFilePath && isPathInScope(activeFilePath, targetPath)) setActiveFilePath(null)
+
+    await reloadDirectory(parentPath)
+    setContextMenu(null)
+  }, [activeFilePath, contextMenu, getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+
   return (
-    <aside
-      className="flex flex-col overflow-hidden"
-      style={{
-        background: 'var(--surface)',
-        backdropFilter: 'blur(20px)',
-        borderLeft: '1px solid var(--border)',
-      }}
-    >
+    <>
+      <aside
+        className="flex flex-col overflow-hidden"
+        style={{
+          background: 'var(--surface)',
+          backdropFilter: 'blur(20px)',
+          borderLeft: '1px solid var(--border)',
+        }}
+      >
       {/* 展开态 */}
       {!panelCollapsed && (
         <>
@@ -254,7 +535,13 @@ export function Panel() {
 
           {/* Content */}
           {activeView === 'files' ? (
-            <div className="flex-1 p-1.5 overflow-y-auto text-xs">
+            <div
+              className="flex-1 p-1.5 overflow-y-auto text-xs"
+              onContextMenu={(event) => {
+                event.preventDefault()
+                openContextMenu(event, null)
+              }}
+            >
               {fileTree.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3">
                   <div className="text-[#555]">未加载工作区</div>
@@ -268,6 +555,7 @@ export function Panel() {
                     activeFilePath={activeFilePath}
                     onSelect={setActiveFilePath}
                     onToggleDirectory={handleToggleDirectory}
+                    onOpenContextMenu={openContextMenu}
                   />
                 ))
               )}
@@ -316,6 +604,96 @@ export function Panel() {
           </span>
         </div>
       )}
-    </aside>
+      </aside>
+
+      {contextMenu
+        ? createPortal(
+            <div
+              className="fixed p-1 rounded-lg text-xs"
+              style={{
+                left: contextMenu.x,
+                top: contextMenu.y,
+                width: CONTEXT_MENU_WIDTH,
+                zIndex: 1000,
+                background: 'rgba(20, 20, 20, 0.98)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: '0 8px 28px rgba(0, 0, 0, 0.55)',
+                backdropFilter: 'blur(18px)',
+              }}
+              onClick={(event) => event.stopPropagation()}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+              }}
+            >
+              {contextMenu.target.type === 'file' && (
+                <button
+                  type="button"
+                  className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
+                  onClick={handleOpenContextTarget}
+                >
+                  打开
+                </button>
+              )}
+              <button
+                type="button"
+                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
+                onClick={() => void handleCreateFileTreeItem('file')}
+              >
+                新建文件
+              </button>
+              <button
+                type="button"
+                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
+                onClick={() => void handleCreateFileTreeItem('directory')}
+              >
+                新建文件夹
+              </button>
+              <div className="h-px my-1 mx-1.5 bg-[rgba(255,255,255,0.08)]" />
+              <button
+                type="button"
+                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
+                onClick={() => void handleCopyContextPath('relative')}
+              >
+                复制相对路径
+              </button>
+              <button
+                type="button"
+                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
+                onClick={() => void handleCopyContextPath('absolute')}
+              >
+                复制绝对路径
+              </button>
+              <button
+                type="button"
+                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
+                onClick={() => void handleRevealContextTarget()}
+              >
+                在资源管理器中显示
+              </button>
+              {contextMenu.target.node && (
+                <>
+                  <div className="h-px my-1 mx-1.5 bg-[rgba(255,255,255,0.08)]" />
+                  <button
+                    type="button"
+                    className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
+                    onClick={() => void handleRenameContextTarget()}
+                  >
+                    重命名
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full px-2.5 py-1.5 rounded text-left text-[#ff8a85] hover:bg-[rgba(255,95,87,0.18)]"
+                    onClick={() => void handleDeleteContextTarget()}
+                  >
+                    删除
+                  </button>
+                </>
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   )
 }

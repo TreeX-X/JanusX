@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { readFile, writeFile, mkdir, access } from 'fs/promises'
+import { readFile, writeFile, mkdir, access, readdir, unlink, rm } from 'fs/promises'
 import { join } from 'path'
 
 export class BlobStore {
@@ -40,5 +40,27 @@ export class BlobStore {
     } catch {
       return false
     }
+  }
+
+  async listHashes(): Promise<string[]> {
+    try {
+      const entries = await readdir(this.basePath, { withFileTypes: true })
+      return entries
+        .filter(entry => entry.isFile())
+        .map(entry => entry.name)
+    } catch {
+      return []
+    }
+  }
+
+  async delete(hash: string): Promise<void> {
+    try {
+      await unlink(join(this.basePath, hash))
+    } catch {}
+  }
+
+  async clear(): Promise<void> {
+    await rm(this.basePath, { recursive: true, force: true })
+    await mkdir(this.basePath, { recursive: true })
   }
 }
