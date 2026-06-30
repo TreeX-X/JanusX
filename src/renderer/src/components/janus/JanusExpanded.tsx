@@ -190,7 +190,7 @@ export function JanusExpanded({
         className={`janus-expanded ${expandedModeClass}${enteredFromCollapsed ? ' from-collapsed' : ''}${collapsing ? ' collapsing' : ''}`}
         data-stage={stage}
         data-view={view}
-        role="dialog"
+        role="region"
         aria-label="Janus Island"
         onDoubleClick={handleDoubleClick}
         onAnimationEnd={collapsing ? handleCollapseEnd : undefined}

@@ -24,6 +24,10 @@ OpenAI Codex does not support project-defined slash commands. Use these as natur
 - `xstatus [--output <path>]` — Generate styled HTML status report (huashu-design) and open in browser
 - `xprompt [raw prompt]` — Prompt optimization only, no workflow triggered
 
+## Agent Wiki Quickstart
+
+Before deep project analysis, read `wiki/README.md` first. The wiki is a maintained Agent-facing map of JanusX architecture, module ownership, runtime flows, file responsibilities, and update rules. Use it to narrow the reading scope, then verify current source with `rg` before making decisions.
+
 ## File Read/Write Rules (Mandatory)
 
 **Source files in this project use encrypted encoding. Direct Read on project files will show garbled output.** All file operations must follow these rules:

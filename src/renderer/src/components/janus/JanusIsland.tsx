@@ -123,6 +123,7 @@ export function JanusIsland({
   const { mode, isSwitching, activeWorkspace, eyeContainerRef } = useJanusState()
   const { janusRunning, toggleRunning } = useProjectRunning(activeWorkspace)
   const shellRef = useRef<HTMLDivElement | null>(null)
+  const conversationStartedRef = useRef(false)
   const [view, setView] = useState<JanusExpandedView>('monitor')
   const [particles, setParticles] = useState<Array<{ id: number; left: number; size: number; duration: number }>>([])
   const pidRef = useRef(0)
@@ -218,10 +219,19 @@ export function JanusIsland({
   const activeNodeTitle = activeNode?.title || 'No active blueprint node'
   const workspaceLabel = activeSession?.workspaceName ?? activeWorkspace?.name ?? 'Workspace'
   const feedbackSummary = latestAnalysis?.result.summary || latestAnalysis?.error || statusText
+  const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
 
   useEffect(() => {
     if (stage === 'peek') setView('monitor')
   }, [stage])
+
+  useEffect(() => {
+    const hadConversation = conversationStartedRef.current
+    conversationStartedRef.current = hasConversation
+    if (stage === 'expanded' && hasConversation && !hadConversation) {
+      setView('chat')
+    }
+  }, [hasConversation, stage])
 
   useEffect(() => {
     if (stage === 'collapsed') return
