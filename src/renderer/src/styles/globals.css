@@ -65,6 +65,16 @@ body {
   background: rgba(255, 120, 48, 0.18);
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 /* xterm.js 覆盖 */
 .xterm .xterm-viewport {
   background: transparent !important;

@@ -599,6 +599,7 @@ export function TerminalArea() {
     terminals,
     activeTerminalId,
     activeWorkspaceId,
+    workspaces,
     terminalSnapshots,
     paneTree,
     focusedPaneId,
@@ -800,6 +801,7 @@ export function TerminalArea() {
   const paneCount = useMemo(() => getLeafPanes(paneTree).length, [paneTree])
   const activeTerminal = activeTerminalId ? terminalsById.get(activeTerminalId) ?? null : null
   const otherTerminals = terminals.filter((terminal) => terminal.id !== activeTerminal?.id)
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
   const activeRuntimeText = activeTerminal
     ? `${providerLabel(activeTerminal.preset)} · ${statusLabel(activeTerminal.status)} · ${modelLabel(activeTerminal)} · ${contextLabel(activeTerminal)}`
     : 'No terminal runtime'
@@ -973,6 +975,23 @@ export function TerminalArea() {
                 }}
               />
             </span>
+            {activeWorkspace && (
+              <span
+                className="inline-flex h-5 max-w-[160px] shrink-0 items-center gap-1 border px-1.5 font-mono"
+                style={{
+                  borderColor: 'rgba(255,120,48,0.28)',
+                  background: 'rgba(255,120,48,0.1)',
+                  color: '#ffb27d',
+                }}
+                title={`工作区：${activeWorkspace.path}`}
+              >
+                <span
+                  className="h-[5px] w-[5px] shrink-0 rounded-full"
+                  style={{ background: '#ff7830', boxShadow: '0 0 5px rgba(255,120,48,0.6)' }}
+                />
+                <span className="truncate">{activeWorkspace.name}</span>
+              </span>
+            )}
             {activeTerminal ? (
               <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                 <span
@@ -996,7 +1015,7 @@ export function TerminalArea() {
                   {statusLabel(activeTerminal.status)}
                 </span>
                 <span
-                  className="inline-flex h-5 min-w-0 max-w-[190px] items-center border px-2 font-mono"
+                  className="inline-flex h-5 min-w-0 max-w-[120px] items-center border px-2 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
                     background: 'rgba(255,255,255,0.014)',
@@ -1087,7 +1106,7 @@ export function TerminalArea() {
                     <button
                       key={terminal.id}
                       type="button"
-                      className="grid w-full cursor-pointer grid-cols-[92px_74px_minmax(140px,1fr)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,120,48,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.35)]"
+                      className="grid w-full cursor-pointer grid-cols-[92px_74px_minmax(96px,140px)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,120,48,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.35)]"
                       style={{
                         borderColor: 'rgba(255,255,255,0.035)',
                         background: terminal.id === activeTerminalId ? 'rgba(255,120,48,0.055)' : 'transparent',

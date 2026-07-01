@@ -536,7 +536,7 @@ export function Panel() {
           {/* Content */}
           {activeView === 'files' ? (
             <div
-              className="flex-1 p-1.5 overflow-y-auto text-xs"
+              className="flex-1 p-1.5 overflow-y-auto text-xs no-scrollbar"
               onContextMenu={(event) => {
                 event.preventDefault()
                 openContextMenu(event, null)
