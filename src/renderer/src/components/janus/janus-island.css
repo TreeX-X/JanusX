@@ -3936,3 +3936,40 @@ body.is-running {
     animation: none;
   }
 }
+
+/* === JanusX v4: minecraft blocky wordmark === */
+/* 覆盖 v2/v3 规则：合并单 SVG、离散方块、清除网格/mask/闪烁，只留暖色微光。旧块不删。 */
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-logo {
+  display: block;
+  height: 0.95em;
+  width: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  shape-rendering: crispEdges;
+  animation: none !important;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  background: transparent !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  border-radius: 0;
+  filter: drop-shadow(0 2px 6px rgba(255, 160, 60, 0.25)) drop-shadow(0 0 14px rgba(255, 120, 40, 0.16));
+}
+
+@media (max-width: 560px) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-logo {
+    height: 0.7em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-logo {
+    animation: none;
+  }
+}

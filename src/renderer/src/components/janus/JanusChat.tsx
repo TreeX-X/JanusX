@@ -257,74 +257,112 @@ export function JanusChat({
       >
         {messages.length === 0 && (
           <div className="janus-chat-empty">
-            <div className="janus-chat-wordmark" aria-label="JanusX">
-              <span className="janus-chat-wordmark-main">
-                <svg
-                  className="janus-chat-pixel-janus"
-                  viewBox="0 0 35 7"
-                  shapeRendering="crispEdges"
-                  preserveAspectRatio="xMidYMid meet"
-                >
-                  {/* J — 顶横 + 左下钩 + 右竖 (第 0-5 列) */}
-                  <rect x="0" y="0" width="5" height="1" fill="#ffd089" />
-                  <rect x="4" y="0" width="1" height="7" fill="#ffd089" />
-                  <rect x="0" y="5" width="1" height="2" fill="#ffd089" />
-                  <rect x="1" y="6" width="3" height="1" fill="#ffd089" />
-                  {/* 列 6 为字母间隔空列 */}
-                  {/* A — 两侧竖 + 中横 + 顶尖 (第 7-11 列) */}
-                  <rect x="7" y="0" width="1" height="7" fill="#ffd089" />
-                  <rect x="11" y="0" width="1" height="7" fill="#ffd089" />
-                  <rect x="7" y="0" width="5" height="1" fill="#ffd089" />
-                  <rect x="8" y="1" width="3" height="1" fill="#ffd089" />
-                  <rect x="7" y="3" width="5" height="1" fill="#ffd089" />
-                  {/* 列 12 为字母间隔空列 */}
-                  {/* N — 左竖 + 右竖 + 左上到右下对角 (第 13-17 列) */}
-                  <rect x="13" y="0" width="1" height="7" fill="#ffd089" />
-                  <rect x="17" y="0" width="1" height="7" fill="#ffd089" />
-                  <rect x="14" y="1" width="1" height="1" fill="#ffd089" />
-                  <rect x="15" y="2" width="1" height="1" fill="#ffd089" />
-                  <rect x="16" y="3" width="1" height="1" fill="#ffd089" />
-                  <rect x="16" y="4" width="1" height="1" fill="#ffd089" />
-                  <rect x="16" y="5" width="1" height="1" fill="#ffd089" />
-                  {/* 列 18 为字母间隔空列 */}
-                  {/* U — 两侧竖 + 底横 (第 19-23 列) */}
-                  <rect x="19" y="0" width="1" height="7" fill="#ffd089" />
-                  <rect x="23" y="0" width="1" height="7" fill="#ffd089" />
-                  <rect x="19" y="6" width="5" height="1" fill="#ffd089" />
-                  {/* 列 24 为字母间隔空列 */}
-                  {/* S — 顶横 + 中横 + 底横 + 左上竖 + 右下竖 (第 25-29 列) */}
-                  <rect x="25" y="0" width="5" height="1" fill="#ffd089" />
-                  <rect x="25" y="0" width="1" height="4" fill="#ffd089" />
-                  <rect x="25" y="3" width="5" height="1" fill="#ffd089" />
-                  <rect x="29" y="3" width="1" height="4" fill="#ffd089" />
-                  <rect x="25" y="6" width="5" height="1" fill="#ffd089" />
-                  {/* 列 30-34 与 X 同列连排；X 像素方阵由 wordmark-x 提供 */}
-                </svg>
-              </span>
-              <span className="janus-chat-wordmark-x" aria-hidden="true">
-                <svg
-                  className="janus-chat-pixel-x"
-                  viewBox="0 0 7 7"
-                  shapeRendering="crispEdges"
-                  preserveAspectRatio="xMidYMid meet"
-                >
-                  {/* 左上 → 右下：LED 暖白 */}
-                  <rect x="0" y="0" width="1" height="1" fill="#fff3e0" />
-                  <rect x="1" y="1" width="1" height="1" fill="#fff3e0" />
-                  <rect x="2" y="2" width="1" height="1" fill="#fff3e0" />
-                  <rect x="3" y="3" width="1" height="1" fill="#fff3e0" />
-                  <rect x="4" y="4" width="1" height="1" fill="#fff3e0" />
-                  <rect x="5" y="5" width="1" height="1" fill="#fff3e0" />
-                  <rect x="6" y="6" width="1" height="1" fill="#fff3e0" />
-                  {/* 右上 → 左下：LED 橙（避开中心，让白线穿过交叉点） */}
-                  <rect x="6" y="0" width="1" height="1" fill="#ff7a1a" />
-                  <rect x="5" y="1" width="1" height="1" fill="#ff7a1a" />
-                  <rect x="4" y="2" width="1" height="1" fill="#ff7a1a" />
-                  <rect x="2" y="4" width="1" height="1" fill="#ff7a1a" />
-                  <rect x="1" y="5" width="1" height="1" fill="#ff7a1a" />
-                  <rect x="0" y="6" width="1" height="1" fill="#ff7a1a" />
-                </svg>
-              </span>
+            <div className="janus-chat-wordmark">
+              <svg
+                className="janus-chat-pixel-logo"
+                viewBox="0 0 37 7"
+                shapeRendering="crispEdges"
+                preserveAspectRatio="xMidYMid meet"
+                aria-label="JanusX"
+              >
+                {/* J — col 0-4 */}
+                <rect x="4.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="4.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="4.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="0.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="4.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="0.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="4.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="0.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="4.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="1.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="2.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="3.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                {/* A — col 6-10 */}
+                <rect x="7.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="8.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="9.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="6.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="10.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="6.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="10.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="6.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="7.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="8.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="9.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="10.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="6.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="10.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="6.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="10.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="6.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="10.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                {/* N — col 12-16 */}
+                <rect x="12.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="16.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="12.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="13.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="16.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="12.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="14.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="16.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="12.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="15.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="16.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="12.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="16.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="12.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="16.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="12.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="16.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                {/* U — col 18-22 */}
+                <rect x="18.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="22.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="18.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="22.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="18.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="22.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="18.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="22.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="18.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="22.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="18.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="22.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="19.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="20.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="21.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                {/* S — col 24-28 */}
+                <rect x="25.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="26.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="27.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="28.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="24.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="24.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="25.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="26.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="27.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="28.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="28.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="24.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="25.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="26.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                <rect x="27.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                {/* X — col 30-36, white diagonal TL→BR */}
+                <rect x="30.12" y="0.12" width="0.76" height="0.76" fill="#fff3e0" />
+                <rect x="31.12" y="1.12" width="0.76" height="0.76" fill="#fff3e0" />
+                <rect x="32.12" y="2.12" width="0.76" height="0.76" fill="#fff3e0" />
+                <rect x="33.12" y="3.12" width="0.76" height="0.76" fill="#fff3e0" />
+                <rect x="34.12" y="4.12" width="0.76" height="0.76" fill="#fff3e0" />
+                <rect x="35.12" y="5.12" width="0.76" height="0.76" fill="#fff3e0" />
+                <rect x="36.12" y="6.12" width="0.76" height="0.76" fill="#fff3e0" />
+                {/* X — orange diagonal TR→BL (避开中心) */}
+                <rect x="36.12" y="0.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                <rect x="35.12" y="1.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                <rect x="34.12" y="2.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                <rect x="32.12" y="4.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                <rect x="31.12" y="5.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                <rect x="30.12" y="6.12" width="0.76" height="0.76" fill="#ff7a1a" />
+              </svg>
             </div>
             <div className="janus-chat-empty-hint">从当前上下文开始</div>
             <div className="janus-chat-suggestions">
