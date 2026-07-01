@@ -221,6 +221,33 @@ function contextRatio(terminal: Terminal): number | undefined {
   return Math.min(1, terminal.contextTokens / windowTokens)
 }
 
+/** 上下文渐变颜色：用量越多越红，越接近满越警告。
+ *  0%   → 冷青蓝（#58a6ff，宽裕）
+ *  50%  → 暖橙（#ff7830，正常）
+ *  85%+ → 警告红（#ff5858，逼近上限） */
+function contextRatioColor(ratio: number | undefined): string {
+  if (ratio === undefined) return 'rgba(255,255,255,0.18)'
+  const r = Math.max(0, Math.min(1, ratio))
+  // 三段插值：[0,0.5] 青蓝→橙，[0.5,0.85] 橙→红，[0.85,1] 红加深
+  if (r <= 0.5) {
+    const t = r / 0.5
+    return mixColor([0x58, 0xa6, 0xff], [0xff, 0x78, 0x30], t)
+  }
+  if (r <= 0.85) {
+    const t = (r - 0.5) / 0.35
+    return mixColor([0xff, 0x78, 0x30], [0xff, 0x58, 0x58], t)
+  }
+  const t = (r - 0.85) / 0.15
+  return mixColor([0xff, 0x58, 0x58], [0xe0, 0x2b, 0x2b], t)
+}
+
+function mixColor(a: number[], b: number[], t: number): string {
+  const r = Math.round(a[0] + (b[0] - a[0]) * t)
+  const g = Math.round(a[1] + (b[1] - a[1]) * t)
+  const bl = Math.round(a[2] + (b[2] - a[2]) * t)
+  return `rgb(${r}, ${g}, ${bl})`
+}
+
 function contextLabel(terminal: Terminal): string {
   if (terminal.contextTokens === undefined) return 'ctx unknown'
   const used = terminal.contextTokens
@@ -1027,9 +1054,9 @@ export function TerminalArea() {
                 <span
                   className="hidden h-5 shrink-0 items-center border px-2 font-mono md:inline-flex"
                   style={{
-                    borderColor: 'rgba(88,166,255,0.22)',
-                    background: 'rgba(88,166,255,0.07)',
-                    color: '#79b8ff',
+                    borderColor: `${contextRatioColor(contextRatio(activeTerminal))}33`,
+                    background: `${contextRatioColor(contextRatio(activeTerminal))}12`,
+                    color: contextRatioColor(contextRatio(activeTerminal)),
                   }}
                 >
                   {contextLabel(activeTerminal)}
@@ -1044,10 +1071,10 @@ export function TerminalArea() {
                 title={`Context estimate: ${contextLabel(activeTerminal)}`}
               >
                 <span
-                  className="h-full rounded-full"
+                  className="h-full rounded-full transition-[width,background] duration-300"
                   style={{
                     width: `${Math.round((contextRatio(activeTerminal) ?? 0) * 100)}%`,
-                    background: 'linear-gradient(90deg, #ff7830, #58a6ff)',
+                    background: contextRatioColor(contextRatio(activeTerminal)),
                   }}
                 />
               </span>
@@ -1150,14 +1177,14 @@ export function TerminalArea() {
                           style={{ background: 'rgba(255,255,255,0.06)' }}
                         >
                           <span
-                            className="block h-full rounded-full"
+                            className="block h-full rounded-full transition-[width,background] duration-300"
                             style={{
                               width: `${Math.round((contextRatio(terminal) ?? 0) * 100)}%`,
-                              background: 'linear-gradient(90deg, #ff7830, #58a6ff)',
+                              background: contextRatioColor(contextRatio(terminal)),
                             }}
                           />
                         </span>
-                        <span className="whitespace-nowrap text-[#79b8ff]">{contextLabel(terminal)}</span>
+                        <span className="whitespace-nowrap" style={{ color: contextRatioColor(contextRatio(terminal)) }}>{contextLabel(terminal)}</span>
                       </span>
                       <span className="text-right text-[#555]" title={`input ${formatTokenCount(terminal.inputTokens)} · output ${formatTokenCount(terminal.outputTokens)}`}>
                         {formatAge(terminal.updatedAt)}
