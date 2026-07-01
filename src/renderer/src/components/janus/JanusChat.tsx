@@ -266,38 +266,38 @@ export function JanusChat({
                   preserveAspectRatio="xMidYMid meet"
                 >
                   {/* J — 顶横 + 左下钩 + 右竖 (第 0-5 列) */}
-                  <rect x="0" y="0" width="5" height="1" fill="#f6f3ea" />
-                  <rect x="4" y="0" width="1" height="7" fill="#f6f3ea" />
-                  <rect x="0" y="5" width="1" height="2" fill="#f6f3ea" />
-                  <rect x="1" y="6" width="3" height="1" fill="#f6f3ea" />
+                  <rect x="0" y="0" width="5" height="1" fill="#ffd089" />
+                  <rect x="4" y="0" width="1" height="7" fill="#ffd089" />
+                  <rect x="0" y="5" width="1" height="2" fill="#ffd089" />
+                  <rect x="1" y="6" width="3" height="1" fill="#ffd089" />
                   {/* 列 6 为字母间隔空列 */}
                   {/* A — 两侧竖 + 中横 + 顶尖 (第 7-11 列) */}
-                  <rect x="7" y="0" width="1" height="7" fill="#f6f3ea" />
-                  <rect x="11" y="0" width="1" height="7" fill="#f6f3ea" />
-                  <rect x="7" y="0" width="5" height="1" fill="#f6f3ea" />
-                  <rect x="8" y="1" width="3" height="1" fill="#f6f3ea" />
-                  <rect x="7" y="3" width="5" height="1" fill="#f6f3ea" />
+                  <rect x="7" y="0" width="1" height="7" fill="#ffd089" />
+                  <rect x="11" y="0" width="1" height="7" fill="#ffd089" />
+                  <rect x="7" y="0" width="5" height="1" fill="#ffd089" />
+                  <rect x="8" y="1" width="3" height="1" fill="#ffd089" />
+                  <rect x="7" y="3" width="5" height="1" fill="#ffd089" />
                   {/* 列 12 为字母间隔空列 */}
                   {/* N — 左竖 + 右竖 + 左上到右下对角 (第 13-17 列) */}
-                  <rect x="13" y="0" width="1" height="7" fill="#f6f3ea" />
-                  <rect x="17" y="0" width="1" height="7" fill="#f6f3ea" />
-                  <rect x="14" y="1" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="15" y="2" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="16" y="3" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="16" y="4" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="16" y="5" width="1" height="1" fill="#f6f3ea" />
+                  <rect x="13" y="0" width="1" height="7" fill="#ffd089" />
+                  <rect x="17" y="0" width="1" height="7" fill="#ffd089" />
+                  <rect x="14" y="1" width="1" height="1" fill="#ffd089" />
+                  <rect x="15" y="2" width="1" height="1" fill="#ffd089" />
+                  <rect x="16" y="3" width="1" height="1" fill="#ffd089" />
+                  <rect x="16" y="4" width="1" height="1" fill="#ffd089" />
+                  <rect x="16" y="5" width="1" height="1" fill="#ffd089" />
                   {/* 列 18 为字母间隔空列 */}
                   {/* U — 两侧竖 + 底横 (第 19-23 列) */}
-                  <rect x="19" y="0" width="1" height="7" fill="#f6f3ea" />
-                  <rect x="23" y="0" width="1" height="7" fill="#f6f3ea" />
-                  <rect x="19" y="6" width="5" height="1" fill="#f6f3ea" />
+                  <rect x="19" y="0" width="1" height="7" fill="#ffd089" />
+                  <rect x="23" y="0" width="1" height="7" fill="#ffd089" />
+                  <rect x="19" y="6" width="5" height="1" fill="#ffd089" />
                   {/* 列 24 为字母间隔空列 */}
                   {/* S — 顶横 + 中横 + 底横 + 左上竖 + 右下竖 (第 25-29 列) */}
-                  <rect x="25" y="0" width="5" height="1" fill="#f6f3ea" />
-                  <rect x="25" y="0" width="1" height="4" fill="#f6f3ea" />
-                  <rect x="25" y="3" width="5" height="1" fill="#f6f3ea" />
-                  <rect x="29" y="3" width="1" height="4" fill="#f6f3ea" />
-                  <rect x="25" y="6" width="5" height="1" fill="#f6f3ea" />
+                  <rect x="25" y="0" width="5" height="1" fill="#ffd089" />
+                  <rect x="25" y="0" width="1" height="4" fill="#ffd089" />
+                  <rect x="25" y="3" width="5" height="1" fill="#ffd089" />
+                  <rect x="29" y="3" width="1" height="4" fill="#ffd089" />
+                  <rect x="25" y="6" width="5" height="1" fill="#ffd089" />
                   {/* 列 30-34 与 X 同列连排；X 像素方阵由 wordmark-x 提供 */}
                 </svg>
               </span>
@@ -308,15 +308,15 @@ export function JanusChat({
                   shapeRendering="crispEdges"
                   preserveAspectRatio="xMidYMid meet"
                 >
-                  {/* 左上 → 右下：白 */}
-                  <rect x="0" y="0" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="1" y="1" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="2" y="2" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="3" y="3" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="4" y="4" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="5" y="5" width="1" height="1" fill="#f6f3ea" />
-                  <rect x="6" y="6" width="1" height="1" fill="#f6f3ea" />
-                  {/* 右上 → 左下：橙（避开中心，让白线穿过交叉点） */}
+                  {/* 左上 → 右下：LED 暖白 */}
+                  <rect x="0" y="0" width="1" height="1" fill="#fff3e0" />
+                  <rect x="1" y="1" width="1" height="1" fill="#fff3e0" />
+                  <rect x="2" y="2" width="1" height="1" fill="#fff3e0" />
+                  <rect x="3" y="3" width="1" height="1" fill="#fff3e0" />
+                  <rect x="4" y="4" width="1" height="1" fill="#fff3e0" />
+                  <rect x="5" y="5" width="1" height="1" fill="#fff3e0" />
+                  <rect x="6" y="6" width="1" height="1" fill="#fff3e0" />
+                  {/* 右上 → 左下：LED 橙（避开中心，让白线穿过交叉点） */}
                   <rect x="6" y="0" width="1" height="1" fill="#ff7a1a" />
                   <rect x="5" y="1" width="1" height="1" fill="#ff7a1a" />
                   <rect x="4" y="2" width="1" height="1" fill="#ff7a1a" />

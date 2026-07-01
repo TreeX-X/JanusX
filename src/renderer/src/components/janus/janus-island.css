@@ -3889,3 +3889,50 @@ body.is-running {
     height: 0.62em;
   }
 }
+
+/* === JanusX v3: digital pixel LED wordmark + grid backdrop === */
+/* 覆盖旧规则：LED 琥珀色调 + 点阵网格背景 + LED 发光光晕。只追加，不修改旧块。 */
+
+/* ── 1. LED 屏幕暗背板 + 网格底 grid（wordmark 容器） ────────────── */
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  position: relative;
+  padding: 0.16em 0.28em 0.18em;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.42);
+  /* 点阵 LED 网格底纹：等距圆点阵 */
+  background-image:
+    radial-gradient(circle, rgba(255, 180, 80, 0.16) 1px, transparent 1.3px);
+  background-size: 10px 10px;
+  background-position: center center;
+  /* 边缘虚化收边，避免硬矩形 grid */
+  -webkit-mask-image: radial-gradient(ellipse 78% 70% at center, #000 42%, transparent 88%);
+  mask-image: radial-gradient(ellipse 78% 70% at center, #000 42%, transparent 88%);
+}
+
+/* ── 2. JANUS 像素方阵：LED 暖橙 + 磷光光晕 ─────────────────────── */
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus {
+  filter: drop-shadow(0 0 6px rgba(255, 160, 60, 0.55));
+  animation: janus-led-flicker 4.2s ease-in-out infinite;
+}
+
+/* ── 3. X 像素方阵：白线 LED 暖白 + 橙线 LED 橙发光 ─────────────── */
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+  filter:
+    drop-shadow(0 0 5px rgba(255, 243, 224, 0.45))
+    drop-shadow(0 0 6px rgba(255, 122, 26, 0.55));
+  animation: janus-led-flicker 4.2s ease-in-out 0.6s infinite;
+}
+
+/* ── 4. LED 刷新微脉动（克制，opacity 0.92 → 1） ────────────────── */
+@keyframes janus-led-flicker {
+  0%, 100% { opacity: 1; }
+  47%      { opacity: 0.92; }
+  53%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus,
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+    animation: none;
+  }
+}
