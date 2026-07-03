@@ -13,6 +13,24 @@
   --janus-analytics-glow: rgba(255,120,48,0.6);
   --janus-running: #00ff88;
   --janus-running-glow: rgba(0,255,136,0.6);
+  --janus-failed: #ff4a4a;
+  --janus-failed-glow: rgba(255,74,74,0.6);
+  --janus-done: #ff7830;
+  --janus-done-glow: rgba(255,120,48,0.6);
+  --janus-role-main: #ff7830;
+  --janus-role-main-glow: rgba(255,120,48,0.6);
+  --janus-role-coder: #38bdf8;
+  --janus-role-coder-glow: rgba(56,189,248,0.6);
+  --janus-role-evaluator: #a78bfa;
+  --janus-role-evaluator-glow: rgba(167,139,250,0.6);
+  --janus-role-abstracter: #fbbf24;
+  --janus-role-abstracter-glow: rgba(251,191,36,0.6);
+  --janus-role-prompter: #f472b6;
+  --janus-role-prompter-glow: rgba(244,114,182,0.6);
+  --janus-role-teammate: #94a3b8;
+  --janus-role-teammate-glow: rgba(148,163,184,0.5);
+  --janus-role-subagent: #a9805a;
+  --janus-role-subagent-glow: rgba(169,128,90,0.55);
   --janus-hover-glow-soft: rgba(255,120,48,0.12);
   /* 全局当前色（展开面板 portal 继承自 body.is-running 覆盖） */
   --janus-current: var(--janus-order);
@@ -23,6 +41,315 @@ body.is-running {
   --janus-current: var(--janus-running);
   --janus-current-glow: var(--janus-running-glow);
   --janus-hover-glow-soft: rgba(0,255,136,0.12);
+}
+
+/* Janus identity library: shared SubAgent visual primitives */
+.janus-identity-core {
+  --c: var(--janus-identity-role-color, var(--janus-role-subagent));
+  --cg: var(--janus-identity-role-glow, var(--janus-role-subagent-glow));
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #111 0%, #000 100%);
+  box-shadow:
+    inset 0 0 24px rgba(0,0,0,0.94),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  overflow: visible;
+}
+
+.janus-identity-core[data-size="pod"] {
+  width: 44px;
+  height: 44px;
+}
+
+.janus-identity-core[data-size="lg"] {
+  width: 220px;
+  height: 220px;
+}
+
+.janus-identity-core[data-state="scanning"] {
+  --c: var(--janus-identity-state-color, var(--janus-analytics));
+  --cg: var(--janus-identity-state-glow, var(--janus-analytics-glow));
+}
+
+.janus-identity-core[data-state="running"] {
+  --c: var(--janus-running);
+  --cg: var(--janus-running-glow);
+}
+
+.janus-identity-core[data-state="done"] {
+  --c: var(--janus-done);
+  --cg: var(--janus-done-glow);
+}
+
+.janus-identity-core[data-state="failed"] {
+  --c: var(--janus-failed);
+  --cg: var(--janus-failed-glow);
+}
+
+.janus-identity-scanline {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.38) 51%);
+  background-size: 100% 3px;
+  opacity: 0.22;
+  animation: scan-crt 8s linear infinite;
+}
+
+.janus-identity-halo {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.janus-identity-ring-outer,
+.janus-identity-ring-inner {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.janus-identity-ring-outer {
+  inset: -5px;
+  border: 1px dashed var(--c);
+  opacity: 0.5;
+  box-shadow: 0 0 14px var(--cg);
+  animation: janus-identity-spin 30s linear infinite;
+}
+
+.janus-identity-ring-inner {
+  inset: 0;
+  border: 1px solid var(--c);
+  opacity: 0.34;
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px var(--cg);
+  animation: janus-identity-spin-reverse 20s linear infinite;
+}
+
+.janus-identity-face {
+  position: relative;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14%;
+}
+
+.janus-identity-eye {
+  display: block;
+  width: 11px;
+  height: 16px;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 0 0 6px #fff, 0 0 16px var(--c), 0 0 30px var(--cg);
+}
+
+.janus-identity-core[data-size="lg"] .janus-identity-eye {
+  width: 34px;
+  height: 48px;
+  box-shadow: 0 0 10px #fff, 0 0 30px var(--c), 0 0 60px var(--cg);
+}
+
+.janus-identity-core[data-role="coder"] .janus-identity-eye {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  background:
+    #06060a 0/100% 2px no-repeat,
+    #06060a 0/100% 100% no-repeat,
+    #06060a 50% 100%/2px 100% no-repeat,
+    linear-gradient(color-mix(in srgb, var(--c) 40%, #fff), color-mix(in srgb, var(--c) 40%, #fff));
+  box-shadow: 0 0 12px var(--c), inset 0 0 0 1px rgba(0,0,0,0.35);
+  filter: drop-shadow(0 0 4px var(--c));
+}
+
+.janus-identity-core[data-size="lg"][data-role="coder"] .janus-identity-eye {
+  width: 30px;
+  height: 30px;
+}
+
+.janus-identity-core[data-role="evaluator"] .janus-identity-eye:first-child {
+  width: 15px;
+  height: 2.5px;
+  background: var(--c);
+  box-shadow: 0 0 6px var(--c);
+  animation: janus-identity-data-scan 1s cubic-bezier(0.4,0,0.2,1) infinite alternate;
+}
+
+.janus-identity-core[data-role="evaluator"] .janus-identity-eye:last-child {
+  width: 12px;
+  height: 14px;
+  border-radius: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--c) 40%, #fff) 0,
+    color-mix(in srgb, var(--c) 40%, #fff) 3px,
+    transparent 3px,
+    transparent 5px
+  );
+  background-size: 100% 200%;
+  box-shadow: 0 0 12px var(--c);
+  animation: janus-identity-data-crunch 0.3s linear infinite;
+}
+
+.janus-identity-core[data-size="lg"][data-role="evaluator"] .janus-identity-eye:first-child {
+  width: 28px;
+  height: 3px;
+}
+
+.janus-identity-core[data-size="lg"][data-role="evaluator"] .janus-identity-eye:last-child {
+  width: 22px;
+  height: 26px;
+}
+
+.janus-identity-core[data-role="abstracter"] .janus-identity-eye {
+  width: 17px;
+  height: 17px;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--c) 30%, #fff) 0 32%, var(--c) 36%, color-mix(in srgb, var(--c) 25%, #000) 64%, #08070a 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  box-shadow: 0 0 14px var(--c), 0 0 30px var(--cg);
+  animation: janus-identity-breathe 3.2s ease-in-out infinite;
+}
+
+.janus-identity-core[data-size="lg"][data-role="abstracter"] .janus-identity-eye {
+  width: 26px;
+  height: 26px;
+}
+
+.janus-identity-core[data-role="abstracter"] .janus-identity-eye:last-child,
+.janus-identity-core[data-role="subagent"] .janus-identity-eye:last-child {
+  animation-delay: -1.6s;
+}
+
+.janus-identity-core[data-role="prompter"] .janus-identity-eye {
+  width: 2.5px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--c);
+  box-shadow: 0 0 8px var(--c), 0 0 16px var(--cg);
+  animation: janus-identity-breathe 3.5s ease-in-out infinite;
+}
+
+.janus-identity-core[data-size="lg"][data-role="prompter"] .janus-identity-eye {
+  width: 3px;
+  height: 24px;
+}
+
+.janus-identity-core[data-role="teammate"] .janus-identity-face::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  width: 46%;
+  height: 1.5px;
+  background: var(--c);
+  opacity: 0.6;
+  box-shadow: 0 0 4px var(--c);
+  transform: translate(-50%, -50%);
+}
+
+.janus-identity-core[data-role="teammate"] .janus-identity-eye {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 8px var(--c), 0 0 16px var(--cg);
+  animation: janus-identity-breathe 3s ease-in-out infinite;
+}
+
+.janus-identity-core[data-size="lg"][data-role="teammate"] .janus-identity-eye {
+  width: 10px;
+  height: 10px;
+}
+
+.janus-identity-core[data-role="subagent"] .janus-identity-eye {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--c);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 10px var(--c), 0 0 22px var(--cg), inset 0 0 6px rgba(0,0,0,0.6);
+  animation: janus-identity-breathe 3.2s ease-in-out infinite;
+}
+
+.janus-identity-core[data-size="lg"][data-role="subagent"] .janus-identity-eye {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+.janus-identity-core[data-state="running"] .janus-identity-face::before {
+  display: none;
+}
+
+.janus-identity-core[data-state="running"] .janus-identity-eye {
+  width: 6px;
+  height: 4px;
+  border: 0;
+  border-radius: 3px;
+  background: #fff;
+  clip-path: none;
+  box-shadow: 0 0 10px #fff, 0 0 20px var(--janus-running);
+  filter: none;
+  animation: janus-identity-eq-bounce 0.25s ease-in-out infinite alternate;
+}
+
+.janus-identity-core[data-state="running"] .janus-identity-eye:last-child {
+  animation: janus-identity-eq-bounce 0.35s ease-in-out infinite alternate-reverse;
+}
+
+.janus-identity-core[data-size="lg"][data-state="running"] .janus-identity-eye {
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  box-shadow: 0 0 30px #fff, 0 0 60px var(--janus-running);
+  animation: janus-identity-eq-bounce-lg 0.2s ease-in-out infinite alternate;
+}
+
+.janus-identity-core[data-size="lg"][data-state="running"] .janus-identity-eye:last-child {
+  animation: janus-identity-eq-bounce-lg 0.3s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes janus-identity-spin {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes janus-identity-spin-reverse {
+  100% { transform: rotate(-315deg); }
+}
+
+@keyframes janus-identity-data-scan {
+  0% { transform: translateY(-8px); }
+  100% { transform: translateY(8px); }
+}
+
+@keyframes janus-identity-data-crunch {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 -200%; }
+}
+
+@keyframes janus-identity-breathe {
+  0%, 100% { opacity: 0.6; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes janus-identity-eq-bounce {
+  0% { height: 4px; }
+  100% { height: 14px; }
+}
+
+@keyframes janus-identity-eq-bounce-lg {
+  0% { height: 16px; }
+  100% { height: 80px; }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -3971,5 +4298,672 @@ body.is-running {
 @media (prefers-reduced-motion: reduce) {
   .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-logo {
     animation: none;
+  }
+}
+
+/* === JanusX Dev Studio chat restore === */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) !important;
+  gap: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-panel {
+  display: none !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+  display: flex !important;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0 40px 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 20px 0 0;
+  gap: 24px;
+  scroll-behavior: smooth;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--empty .janus-chat-messages {
+  justify-content: center;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-empty {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 240px;
+  justify-content: center;
+  text-align: center;
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-wordmark {
+  margin-bottom: 24px;
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.5));
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo {
+  height: 28px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo rect[fill="#ffd089"],
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo rect[fill="#fff3e0"] {
+  fill: #71717a;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo rect[fill="#ff7a1a"] {
+  fill: #ff7830;
+}
+
+.janus-chat-empty-title {
+  margin-bottom: 8px;
+  color: rgba(255,255,255,0.94);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.janus-chat-empty-subtitle {
+  color: rgba(255,255,255,0.34);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 85%;
+  opacity: 0;
+  animation: message-in 0.34s ease forwards;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user {
+  align-self: flex-end;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant {
+  align-self: flex-start;
+  max-width: 85%;
+}
+
+.janus-chat-message-author {
+  color: rgba(255,255,255,0.32);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.janus-chat-message.user .janus-chat-message-author {
+  text-align: right;
+}
+
+.janus-chat-message.assistant .janus-chat-message-author {
+  color: rgba(255,120,48,0.84);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-content {
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: rgba(255,255,255,0.82);
+  font-size: 13px;
+  line-height: 1.62;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user .janus-chat-message-content {
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.9);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant .janus-chat-message-content {
+  padding: 4px 0 4px 16px;
+  border: 0;
+  border-left: 2px solid #ff7830;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.74);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-streaming-cursor {
+  background: #ff7830;
+  box-shadow: 0 0 8px rgba(255,120,48,0.6);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-loading {
+  justify-content: flex-start;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-error-card {
+  align-self: flex-start;
+  max-width: min(360px, 72%);
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,120,90,0.18);
+  border-left: 2px solid rgba(255,120,90,0.76);
+  border-radius: 8px;
+  background: rgba(80,22,18,0.22);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.24);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-error-text {
+  color: rgba(255,150,130,0.9);
+  font-size: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-error-actions {
+  justify-content: flex-start;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-retry,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-config-llm {
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.055);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: #08080a;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper:focus-within {
+  border-color: rgba(255,120,48,0.45);
+  box-shadow: 0 4px 16px rgba(255,120,48,0.15);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-row {
+  min-height: 48px;
+  align-items: flex-end;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-prompt-prefix {
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-right: 0;
+  color: #ff7830;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input {
+  min-height: 46px;
+  max-height: 160px;
+  padding: 13px 0;
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input::placeholder {
+  color: rgba(255,255,255,0.26);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  margin: 8px 8px 8px 10px;
+  border-radius: 6px;
+  color: rgba(255,255,255,0.72);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:not(:disabled) {
+  color: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:hover:not(:disabled) {
+  color: #ff7830;
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,120,48,0.32);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop {
+  color: rgba(255,150,150,0.86);
+}
+
+@media (max-width: 640px) {
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+    padding: 0 18px 16px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message,
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant {
+    max-width: 94%;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo {
+    height: 22px;
+  }
+}
+
+/* === JanusX Dev Studio monitor framework === */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) !important;
+  gap: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-panel {
+  display: block !important;
+  grid-row: 1 / -1 !important;
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.janus-monitor-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.janus-monitor-left,
+.janus-monitor-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.janus-monitor-left {
+  gap: 16px;
+}
+
+.janus-monitor-panel {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: #08080a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+}
+
+.janus-monitor-core-panel,
+.janus-runtime-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+}
+
+.janus-monitor-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 18px;
+  padding: 0 6px;
+  margin-bottom: 12px;
+  color: rgba(255,255,255,0.5);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.janus-monitor-section-title em {
+  color: rgba(255,255,255,0.26);
+  font-style: normal;
+}
+
+.janus-monitor-crt {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 180px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: #020203;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+}
+
+.janus-monitor-crt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%),
+    linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06));
+  background-size: 100% 4px, 6px 100%;
+}
+
+.janus-monitor-crt .warp-grid,
+.janus-monitor-crt .scanline,
+.janus-monitor-crt .pixel-overlay,
+.janus-monitor-crt .particle {
+  position: absolute;
+}
+
+.janus-monitor-crt .warp-grid {
+  inset: 0;
+  opacity: 0.58;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.janus-monitor-crt .scanline {
+  inset: 0;
+  z-index: 24;
+  opacity: 0.14 !important;
+}
+
+.janus-monitor-crt .pixel-overlay {
+  inset: 0;
+  z-index: 23;
+  opacity: 0.18;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1.4px);
+  background-size: 6px 6px;
+}
+
+.janus-monitor-crt .levitation-wrapper {
+  position: relative;
+  z-index: 30;
+}
+
+.janus-monitor-crt .janus-status-text {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 31;
+  color: rgba(255,255,255,0.36);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.janus-monitor-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.janus-monitor-stat {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+
+.janus-monitor-stat span {
+  display: block;
+  color: rgba(255,255,255,0.42);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.janus-monitor-stat strong {
+  display: block;
+  min-width: 0;
+  margin-top: 7px;
+  color: rgba(255,255,255,0.9);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-runtime-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.janus-runtime-placeholder {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 54px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.018);
+  overflow: hidden;
+}
+
+.janus-runtime-placeholder::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #71717a;
+}
+
+.janus-runtime-core {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 50%;
+  background: #000;
+}
+
+.janus-runtime-eye {
+  width: 5px;
+  height: 8px;
+  border-radius: 1px;
+  background: rgba(255,255,255,0.78);
+  box-shadow: 0 0 8px rgba(255,120,48,0.28);
+}
+
+.janus-runtime-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.janus-runtime-meta strong {
+  color: rgba(255,255,255,0.82);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.janus-runtime-meta span {
+  color: rgba(255,255,255,0.38);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+}
+
+.janus-runtime-slot {
+  height: 54px;
+  border: 1px dashed rgba(255,255,255,0.07);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.022), transparent 42%),
+    rgba(255,255,255,0.01);
+}
+
+.janus-runtime-run {
+  --janus-runtime-role-color: rgba(255,255,255,0.42);
+  --janus-runtime-role-glow: rgba(255,255,255,0.16);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--janus-runtime-role-color) 22%, rgba(255,255,255,0.08));
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--janus-runtime-role-color) 10%, transparent) 0%, transparent 34%),
+    rgba(255,255,255,0.018);
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.janus-runtime-run:hover {
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 30%, rgba(255,255,255,0.08));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--janus-runtime-role-color) 13%, transparent) 0%, transparent 38%),
+    rgba(255,255,255,0.026);
+}
+
+.janus-runtime-run[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 42%, rgba(255,255,255,0.08));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--janus-runtime-role-color) 16%, transparent) 0%, transparent 40%),
+    rgba(255,255,255,0.032);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--janus-runtime-role-color) 14%, transparent),
+    0 0 16px color-mix(in srgb, var(--janus-runtime-role-glow) 22%, transparent);
+}
+
+.janus-runtime-run[data-status="failed"],
+.janus-runtime-run[data-status="cancelled"] {
+  border-color: rgba(255,74,74,0.26);
+}
+
+.janus-runtime-run-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.janus-runtime-run-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+}
+
+.janus-runtime-run-title strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255,255,255,0.86);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-runtime-run-title span {
+  flex: 0 0 auto;
+  color: rgba(255,255,255,0.36);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.janus-runtime-run-event {
+  overflow: hidden;
+  color: rgba(255,255,255,0.42);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-runtime-run-side {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 4px;
+  color: rgba(255,255,255,0.32);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 9px;
+}
+
+.janus-runtime-run-status {
+  color: rgba(255,255,255,0.68);
+}
+
+.janus-runtime-run-side button {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(255,120,48,0.24);
+  border-radius: 5px;
+  background: rgba(255,120,48,0.08);
+  color: #ffb27d;
+  cursor: pointer;
+  font: inherit;
+}
+
+.janus-runtime-run-side button:hover {
+  border-color: rgba(255,120,48,0.42);
+  background: rgba(255,120,48,0.14);
+}
+
+.janus-runtime-overflow {
+  padding: 2px 4px;
+  color: rgba(255,255,255,0.34);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .janus-monitor-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    overflow: auto;
+  }
+
+  .janus-monitor-crt {
+    min-height: 160px;
   }
 }

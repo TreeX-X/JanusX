@@ -28,7 +28,7 @@ export const useGitStore = create<GitStore>((set) => ({
       const status = await window.electron.invoke('git:status', cwd)
       set({ status: status as GitStatus })
     } catch (err: any) {
-      set({ error: err.message })
+      set({ status: null, error: err.message })
     }
   },
 

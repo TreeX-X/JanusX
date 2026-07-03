@@ -37,7 +37,9 @@ function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): Fi
       hasChildren: node.hasChildren ?? existing.hasChildren,
       children:
         existing.loaded && currentChildren.length > 0
-          ? mergeFileTreeState(nextChildren, currentChildren)
+          ? nextChildren.length > 0
+            ? mergeFileTreeState(nextChildren, currentChildren)
+            : currentChildren
           : nextChildren,
     }
   })

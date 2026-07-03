@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState, type DragEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useEditorStore } from '@/stores/editor'
+import { useGitStore } from '@/stores/git'
 import { GitPanel } from '@/components/GitPanel'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
-import type { FileNode } from '@/types'
+import type { FileNode, GitFileChange } from '@/types'
 import { setWorkspaceFileDragData } from '@/lib/terminal-file-reference'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 
@@ -33,6 +34,54 @@ interface FileTreeContextMenuState {
 const CONTEXT_MENU_WIDTH = 196
 const CONTEXT_MENU_HEIGHT = 320
 const CONTEXT_MENU_MARGIN = 8
+
+const FILE_CHANGE_PRIORITY: Record<GitFileChange['status'], number> = {
+  UU: 0,
+  D: 1,
+  M: 2,
+  A: 3,
+  R: 4,
+  '??': 5,
+}
+
+const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; border: string; glow: string; pixels: [number, number, number, number] }> = {
+  M: {
+    label: 'M',
+    border: 'rgba(210,210,210,0.18)',
+    glow: 'rgba(185,185,185,0.12)',
+    pixels: [0.38, 0.86, 0.72, 0.28],
+  },
+  A: {
+    label: 'A',
+    border: 'rgba(235,235,235,0.2)',
+    glow: 'rgba(220,220,220,0.14)',
+    pixels: [0.72, 0.9, 0.82, 0.58],
+  },
+  D: {
+    label: 'D',
+    border: 'rgba(150,150,150,0.16)',
+    glow: 'rgba(130,130,130,0.08)',
+    pixels: [0.5, 0.2, 0.16, 0.42],
+  },
+  R: {
+    label: 'R',
+    border: 'rgba(220,220,220,0.18)',
+    glow: 'rgba(200,200,200,0.11)',
+    pixels: [0.78, 0.34, 0.34, 0.78],
+  },
+  '??': {
+    label: '?',
+    border: 'rgba(170,170,170,0.13)',
+    glow: 'rgba(150,150,150,0.06)',
+    pixels: [0.24, 0.46, 0.18, 0.3],
+  },
+  UU: {
+    label: '!',
+    border: 'rgba(255,255,255,0.24)',
+    glow: 'rgba(235,235,235,0.16)',
+    pixels: [0.92, 0.48, 0.48, 0.92],
+  },
+}
 
 function getParentPath(path: string): string {
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -71,27 +120,39 @@ interface FileTreeItemProps {
   node: FileNode
   depth: number
   activeFilePath: string | null
+  expanded: boolean
+  expandedPaths: Set<string>
+  fileChange: GitFileChange | null
+  fileChangeMap: Map<string, GitFileChange>
   onSelect: (path: string) => void
-  onToggleDirectory: (path: string) => Promise<void>
+  onToggleDirectory: (node: FileNode) => void
   onOpenContextMenu: (event: MouseEvent<HTMLDivElement>, node: FileNode) => void
 }
 
-function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory, onOpenContextMenu }: FileTreeItemProps) {
-  const [expanded, setExpanded] = useState(false)
+function FileTreeItem({
+  node,
+  depth,
+  activeFilePath,
+  expanded,
+  expandedPaths,
+  fileChange,
+  fileChangeMap,
+  onSelect,
+  onToggleDirectory,
+  onOpenContextMenu,
+}: FileTreeItemProps) {
   const isFolder = node.type === 'directory'
   const isActive = activeFilePath === node.path
+  const changeVisual = !isFolder && fileChange ? FILE_CHANGE_VISUALS[fileChange.status] : null
 
-  const handleClick = useCallback(async () => {
+  const handleClick = useCallback(() => {
     if (isFolder) {
-      if (!expanded && !node.loaded) {
-        await onToggleDirectory(node.path)
-      }
-      setExpanded((v) => !v)
+      void onToggleDirectory(node)
     } else {
       onSelect(node.path)
       void warmupEditorRuntime()
     }
-  }, [expanded, isFolder, node.loaded, node.path, onSelect, onToggleDirectory])
+  }, [isFolder, node, onSelect, onToggleDirectory])
 
   const handleDoubleClick = useCallback(() => {
     if (!isFolder) {
@@ -186,6 +247,30 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory
           )}
         </div>
         <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{node.name}</span>
+        {changeVisual && (
+          <span
+            className="ml-1.5 grid h-3 w-3 shrink-0 grid-cols-2 gap-px rounded-[3px] p-[2px]"
+            title={`${fileChange?.staged ? 'Staged' : 'Modified'} · ${fileChange?.status}`}
+            style={{
+              background: 'rgba(255,255,255,0.025)',
+              border: `1px solid ${changeVisual.border}`,
+              boxShadow: fileChange?.staged
+                ? `inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 8px ${changeVisual.glow}`
+                : `inset 0 1px 0 rgba(255,255,255,0.035), 0 0 5px ${changeVisual.glow}`,
+            }}
+          >
+            {changeVisual.pixels.map((opacity, index) => (
+              <span
+                key={index}
+                className="block h-[3px] w-[3px] rounded-[1px]"
+                style={{
+                  background: `rgba(230,230,230,${opacity})`,
+                  boxShadow: opacity > 0.7 ? '0 0 3px rgba(230,230,230,0.14)' : 'none',
+                }}
+              />
+            ))}
+          </span>
+        )}
       </div>
       {isFolder && node.children && expanded && (
         <div>
@@ -195,6 +280,10 @@ function FileTreeItem({ node, depth, activeFilePath, onSelect, onToggleDirectory
               node={child}
               depth={depth + 1}
               activeFilePath={activeFilePath}
+              expanded={expandedPaths.has(child.path)}
+              expandedPaths={expandedPaths}
+              fileChange={fileChangeMap.get(child.path) ?? null}
+              fileChangeMap={fileChangeMap}
               onSelect={onSelect}
               onToggleDirectory={onToggleDirectory}
               onOpenContextMenu={onOpenContextMenu}
@@ -211,9 +300,29 @@ export function Panel() {
   const fileTree = useWorkspaceStore((s) => s.fileTree)
   const activeFilePath = useWorkspaceStore((s) => s.activeFilePath)
   const setActiveFilePath = useWorkspaceStore((s) => s.setActiveFilePath)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const gitStatus = useGitStore((s) => s.status)
+  const fetchGitStatus = useGitStore((s) => s.fetchStatus)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
   const togglePanel = useAppStore((s) => s.togglePanel)
   const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
+  const activeWorkspacePath = useMemo(
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
+    [activeWorkspaceId, workspaces],
+  )
+  const fileChangeMap = useMemo(() => {
+    const map = new Map<string, GitFileChange>()
+    for (const change of gitStatus?.changes ?? []) {
+      const normalizedPath = change.path.replace(/\\/g, '/')
+      const existing = map.get(normalizedPath)
+      if (!existing || FILE_CHANGE_PRIORITY[change.status] < FILE_CHANGE_PRIORITY[existing.status] || (!existing.staged && change.staged)) {
+        map.set(normalizedPath, change)
+      }
+    }
+    return map
+  }, [gitStatus])
 
   const reloadRootFileTree = useCallback(async () => {
     const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
@@ -270,11 +379,48 @@ export function Panel() {
     }
   }, [reloadRootFileTree])
 
+  useEffect(() => {
+    if (!activeWorkspacePath) return
+    setExpandedPaths(new Set())
+    void fetchGitStatus(activeWorkspacePath)
+  }, [activeWorkspacePath, fetchGitStatus])
+
+  useEffect(() => {
+    if (!activeWorkspacePath) return
+
+    let disposed = false
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+    const unsubscribe = window.electron.on('filetree:changed', (workspacePath: unknown) => {
+      if (workspacePath !== activeWorkspacePath) return
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(() => {
+        if (!disposed) void fetchGitStatus(activeWorkspacePath)
+      }, 180)
+    })
+
+    return () => {
+      disposed = true
+      if (refreshTimer) clearTimeout(refreshTimer)
+      if (typeof unsubscribe === 'function') unsubscribe()
+    }
+  }, [activeWorkspacePath, fetchGitStatus])
+
   const handleToggleDirectory = useCallback(
-    async (path: string) => {
-      await reloadDirectory(path)
+    (node: FileNode) => {
+      const shouldExpand = !expandedPaths.has(node.path)
+      setExpandedPaths((current) => {
+        const next = new Set(current)
+        if (shouldExpand) next.add(node.path)
+        else next.delete(node.path)
+        return next
+      })
+
+      if (shouldExpand && !node.loaded) {
+        void reloadDirectory(node.path)
+      }
     },
-    [reloadDirectory],
+    [expandedPaths, reloadDirectory],
   )
 
   const getActiveWorkspace = useCallback(() => {
@@ -553,6 +699,10 @@ export function Panel() {
                     node={node}
                     depth={0}
                     activeFilePath={activeFilePath}
+                    expanded={expandedPaths.has(node.path)}
+                    expandedPaths={expandedPaths}
+                    fileChange={fileChangeMap.get(node.path) ?? null}
+                    fileChangeMap={fileChangeMap}
                     onSelect={setActiveFilePath}
                     onToggleDirectory={handleToggleDirectory}
                     onOpenContextMenu={openContextMenu}
