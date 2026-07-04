@@ -13,14 +13,21 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_META: Record<SettingsTab, { title: string; subtitle: string }> = {
+const TAB_META: Record<
+  SettingsTab,
+  { title: string; subtitle: string; nav: string; navMeta: string }
+> = {
   notifications: {
-    title: '通知设置',
-    subtitle: 'Notifications · Agent 终端任务提醒策略',
+    title: '通知提醒',
+    subtitle: 'Notifications · Agent 终端任务完成与失败提醒策略',
+    nav: '通知提醒',
+    navMeta: 'System reminders',
   },
   llm: {
     title: 'LLM 引擎',
-    subtitle: 'LLM Engine · Provider 凭证与默认模型',
+    subtitle: 'LLM Engine · Provider 凭证、默认模型与连接检测',
+    nav: 'LLM 引擎',
+    navMeta: 'Providers',
   },
 }
 
@@ -39,7 +46,10 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
     <div className={styles.backdrop}>
       <div className={styles.panel}>
         <aside className={styles.sidebar}>
-          <div className={styles.brand}>JanusX 设置</div>
+          <div className={styles.brand}>
+            <span className={styles.brandTitle}>JanusX</span>
+            <span className={styles.brandMeta}>设置中心</span>
+          </div>
           <button
             type="button"
             className={`${styles.tabButton} ${
@@ -47,14 +57,16 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
             }`}
             onClick={() => setActiveTab('notifications')}
           >
-            通知提醒
+            <span className={styles.tabLabel}>{TAB_META.notifications.nav}</span>
+            <span className={styles.tabMeta}>{TAB_META.notifications.navMeta}</span>
           </button>
           <button
             type="button"
             className={`${styles.tabButton} ${activeTab === 'llm' ? styles.tabButtonActive : ''}`}
             onClick={() => setActiveTab('llm')}
           >
-            LLM 引擎
+            <span className={styles.tabLabel}>{TAB_META.llm.nav}</span>
+            <span className={styles.tabMeta}>{TAB_META.llm.navMeta}</span>
           </button>
         </aside>
 

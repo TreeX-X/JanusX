@@ -92,21 +92,21 @@ export function NotificationSettingsPanel() {
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>桌面通知 Desktop Notifications</h3>
         <SettingSwitch
-          label="启用桌面通知 Desktop"
-          hint="Agent 终端任务结束后，可使用系统通知中心提醒。"
+          label="启用桌面通知"
+          hint="Agent 终端任务结束后，使用系统通知中心提醒。"
           checked={draft.desktopEnabled}
           disabled={isBusy}
           onChange={(checked) => updateDraft('desktopEnabled', checked)}
         />
         <SettingSwitch
-          label="任务完成时提醒 Success"
+          label="任务完成时提醒"
           hint="成功完成的 Agent 会话会在超过时长阈值后提醒。"
           checked={draft.notifyOnSuccess}
           disabled={isBusy || !draft.desktopEnabled}
           onChange={(checked) => updateDraft('notifyOnSuccess', checked)}
         />
         <SettingSwitch
-          label="任务失败时提醒 Failure"
+          label="任务失败时提醒"
           hint="失败提醒独立控制，适合保留更高优先级的异常提醒。"
           checked={draft.notifyOnFailure}
           disabled={isBusy || !draft.desktopEnabled}

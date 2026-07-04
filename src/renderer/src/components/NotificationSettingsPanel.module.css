@@ -1,14 +1,17 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 0;
+  min-height: 100%;
+  color: #f4f4f5;
 }
 
 .section {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding-bottom: 16px;
+  padding: 0 0 18px;
+  margin-bottom: 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -20,15 +23,17 @@
 .sectionTitle {
   margin: 0;
   color: #f4f4f5;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
   align-items: center;
+  min-height: 38px;
 }
 
 .label {
@@ -41,13 +46,15 @@
 .labelText {
   color: #d4d4d8;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .hint {
   color: #71717a;
   font-size: 11px;
   line-height: 1.5;
+  max-width: 560px;
 }
 
 .switch {
@@ -98,14 +105,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 132px;
 }
 
 .input {
   width: 88px;
-  height: 34px;
+  height: 36px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.035);
   color: #f4f4f5;
   font-size: 13px;
   padding: 0 10px;
@@ -123,11 +131,20 @@
 }
 
 .footer {
+  position: sticky;
+  bottom: -24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding-top: 2px;
+  margin-top: auto;
+  margin-right: -24px;
+  margin-bottom: -24px;
+  margin-left: -24px;
+  padding: 14px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(17, 17, 19, 0.92);
+  backdrop-filter: blur(16px);
 }
 
 .status {
@@ -150,12 +167,12 @@
 }
 
 .button {
-  height: 34px;
+  height: 36px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 0 14px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
@@ -176,10 +193,34 @@
 }
 
 .primaryButton {
-  background: #f4f4f5;
+  background: #ff7830;
+  border-color: #ff7830;
   color: #111;
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: #fff;
+  background: #ff8a4d;
+  border-color: #ff8a4d;
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .footer {
+    bottom: -16px;
+    flex-direction: column;
+    align-items: stretch;
+    margin-right: -16px;
+    margin-bottom: -16px;
+    margin-left: -16px;
+    padding: 12px 16px;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
 }

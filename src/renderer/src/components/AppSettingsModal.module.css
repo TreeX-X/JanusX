@@ -6,52 +6,68 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(8px);
 }
 
 .panel {
-  width: min(960px, calc(100vw - 48px));
-  height: min(720px, calc(100vh - 48px));
+  width: min(1040px, calc(100vw - 48px));
+  height: min(760px, calc(100vh - 48px));
   min-height: 0;
   display: grid;
-  grid-template-columns: 188px minmax(0, 1fr);
-  background: #111;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  background: #0f0f10;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
   overflow: hidden;
+  color: #f4f4f5;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.025);
+  gap: 10px;
+  padding: 18px 14px;
+  background: #0b0b0c;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
   min-height: 0;
 }
 
 .brand {
-  padding: 2px 2px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px 18px;
+}
+
+.brandTitle {
   color: #f4f4f5;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.brandMeta {
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .tabButton {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
   width: 100%;
-  height: 34px;
+  min-height: 54px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: #a1a1aa;
   cursor: pointer;
-  font-size: 12px;
-  padding: 0 10px;
+  padding: 0 12px;
   text-align: left;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
@@ -62,25 +78,44 @@
 }
 
 .tabButtonActive {
-  background: rgba(255, 120, 48, 0.12);
+  background: rgba(255, 120, 48, 0.11);
   border-color: rgba(255, 120, 48, 0.28);
   color: #ff7830;
+}
+
+.tabButtonActive .tabMeta {
+  color: rgba(255, 120, 48, 0.72);
+}
+
+.tabLabel {
+  width: 100%;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tabMeta {
+  width: 100%;
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .content {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr);
+  grid-template-rows: 72px minmax(0, 1fr);
+  background: #111113;
 }
 
 .header {
-  min-height: 58px;
+  min-height: 72px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 20px;
+  padding: 0 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -91,20 +126,34 @@
 .title {
   margin: 0;
   color: #f4f4f5;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .subtitle {
   margin-top: 4px;
   color: #71717a;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .body {
   min-height: 0;
   overflow-y: auto;
-  padding: 20px;
+  padding: 22px 24px 24px;
+}
+
+.body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
 }
 
 @media (max-width: 720px) {
@@ -123,18 +172,30 @@
     flex-direction: row;
     align-items: center;
     overflow-x: auto;
+    padding: 12px;
     border-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   .brand {
     white-space: nowrap;
-    padding: 0 8px 0 2px;
+    padding: 0 10px 0 2px;
+  }
+
+  .brandMeta {
+    display: none;
   }
 
   .tabButton {
     width: auto;
-    min-width: 92px;
-    justify-content: center;
+    min-width: 128px;
+  }
+
+  .header {
+    padding: 0 16px;
+  }
+
+  .body {
+    padding: 16px;
   }
 }
