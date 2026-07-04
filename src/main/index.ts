@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, shell } from 'electron'
+import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { nativeImage } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { registerWorkspaceHandlers } from './ipc/handlers'
 import { registerTerminalHandlers } from './ipc/terminal-handlers'
@@ -13,17 +13,66 @@ import { registerLlmHandlers } from './ipc/llm-handlers'
 import { registerJanusHandlers } from './ipc/janus-handlers'
 import { registerRuntimeTelemetryHandlers } from './ipc/runtime-telemetry-handlers'
 import { registerSettingsHandlers } from './ipc/settings-handlers'
+import { registerSubAgentRunHandlers } from './ipc/subagent-run-handlers'
 import { terminalManager } from './terminal/manager'
 import { agentStreamManager } from './agent/stream-manager'
+import { checkpointManager } from './agent/checkpoint/checkpoint-manager'
+import { isAgentHookClientInvocation, runAgentHookClient } from './notifications/agent-hook-client'
 
-if (process.platform === 'win32') {
-  app.setAppUserModelId('com.janusx.app')
+const isHookClient = isAgentHookClientInvocation()
+const WINDOWS_APP_USER_MODEL_ID = 'com.janusx.app'
+
+if (isHookClient) {
+  void runAgentHookClient()
+    .catch(() => {})
+    .finally(() => {
+      process.exit(0)
+    })
+}
+
+if (!isHookClient && process.platform === 'win32') {
+  app.setAppUserModelId(WINDOWS_APP_USER_MODEL_ID)
 }
 
 let mainWindow: BrowserWindow | null = null
+let checkpointCleanupComplete = false
+
+function ensureWindowsNotificationShortcut(): void {
+  if (process.platform !== 'win32') return
+
+  try {
+    const programsDir = join(
+      app.getPath('appData'),
+      'Microsoft',
+      'Windows',
+      'Start Menu',
+      'Programs',
+    )
+    const shortcutPath = join(programsDir, 'JanusX.lnk')
+    const appPath = app.getAppPath()
+    const iconPath = join(__dirname, '../../resources/icon.ico')
+    const details = {
+      target: process.execPath,
+      args: app.isPackaged ? '' : `"${appPath}"`,
+      description: 'JanusX',
+      appUserModelId: WINDOWS_APP_USER_MODEL_ID,
+      icon: existsSync(iconPath) ? iconPath : process.execPath,
+      iconIndex: 0,
+    }
+
+    mkdirSync(programsDir, { recursive: true })
+    const operation = existsSync(shortcutPath) ? 'replace' : 'create'
+    if (!shell.writeShortcutLink(shortcutPath, operation, details)) {
+      console.warn('Windows notification shortcut was not updated')
+    }
+  } catch (err) {
+    console.warn('Windows notification shortcut setup failed:', err)
+  }
+}
 
 function createWindow(): void {
-  const iconPath = join(__dirname, '../../resources/icon.png')
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  const iconPath = join(__dirname, '../../resources', iconFile)
   const appIcon = nativeImage.createFromPath(iconPath)
 
   mainWindow = new BrowserWindow({
@@ -54,6 +103,7 @@ function createWindow(): void {
   registerJanusHandlers(mainWindow)
   registerRuntimeTelemetryHandlers()
   registerSettingsHandlers()
+  registerSubAgentRunHandlers(mainWindow)
 
   // 窗口控制 IPC
   ipcMain.handle('window:minimize', () => {
@@ -76,19 +126,35 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
-  createWindow()
+if (!isHookClient) {
+  app.whenReady().then(() => {
+    ensureWindowsNotificationShortcut()
+    createWindow()
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
-})
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
 
-app.on('before-quit', () => {
-  terminalManager.killAll()
-  agentStreamManager.killAll()
-})
+  app.on('before-quit', (event) => {
+    terminalManager.killAll()
+    agentStreamManager.killAll()
+
+    if (checkpointCleanupComplete) return
+
+    event.preventDefault()
+    checkpointCleanupComplete = true
+    checkpointManager
+      .clearAllLoaded()
+      .catch((err) => {
+        console.error('Checkpoint cleanup failed:', err)
+      })
+      .finally(() => {
+        app.quit()
+      })
+  })
+}

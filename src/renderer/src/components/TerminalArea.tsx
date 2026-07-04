@@ -35,11 +35,13 @@ const PRESET_ICONS: Record<TerminalPreset, string> = {
   opencode: opencodeIcon,
 }
 
-function createPreset(type: TerminalPreset): { type: TerminalPreset; name: string; icon: string } {
+type TerminalPresetOption = { type: TerminalPreset; name: string; icon: string }
+
+function createPreset(type: TerminalPreset): TerminalPresetOption {
   return { type, name: getTerminalPresetMeta(type).label, icon: PRESET_ICONS[type] }
 }
 
-const PRESETS: { type: TerminalPreset; name: string; icon: string }[] = [
+const PRESETS: TerminalPresetOption[] = [
   createPreset('shell'),
   createPreset('claude'),
   createPreset('codex'),
@@ -51,6 +53,11 @@ const SPLIT_ZONE_MIN_PX = 72
 const SPLIT_RATIO_MIN = 0.15
 const SPLIT_RATIO_MAX = 0.85
 const SPLIT_RATIO_EQUAL = 0.5
+// 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
+const TERMINAL_MENU_COLLAPSED_SIZE = 24
+// 展开宽度与内容精确匹配: pl-2(8) + 4×28 图标 + 3×4 gap + pr-1(4) + 28 加号 + 2 边框
+const TERMINAL_MENU_EXPANDED_WIDTH = 166
+const TERMINAL_MENU_EXPANDED_HEIGHT = 28
 
 type DragHintState = PaneDropEdge | 'center'
 
@@ -271,7 +278,7 @@ interface PaneTreeViewProps {
   showFocusChrome: boolean
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
-  onCloseTab: (terminalId: string, e: React.MouseEvent) => void
+  onKillTerminalFromTab: (terminalId: string, e: React.MouseEvent) => void
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
   onSplitPreview: (terminalId: string | null, paneId: string | null, edge: PaneDropEdge | null, ratio: number) => void
@@ -280,7 +287,9 @@ interface PaneTreeViewProps {
   activeDragTerminalId: string | null
   activeDragTerminalRef: React.MutableRefObject<string | null>
   onResize: (splitId: string, ratio: number) => void
-  onOpenTerminalMenu: (position: { x: number; y: number }) => void
+  terminalMenuPaneId: string | null
+  onToggleTerminalMenu: (paneId: string) => void
+  onCreateTerminal: (preset: TerminalPresetOption) => void
 }
 
 function PaneTreeView(props: PaneTreeViewProps) {
@@ -356,6 +365,108 @@ function SplitPaneNode({ split, onResize, ...props }: PaneTreeViewProps & { spli
   )
 }
 
+function TerminalPresetCapsule({
+  open,
+  onToggle,
+  onSelect,
+}: {
+  open: boolean
+  onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onSelect: (preset: TerminalPresetOption) => void
+}) {
+  return (
+    <div
+      data-terminal-menu-root="true"
+      className="flex shrink-0 items-center overflow-hidden border font-mono"
+      onMouseDown={(event) => event.stopPropagation()}
+      style={{
+        width: open ? TERMINAL_MENU_EXPANDED_WIDTH : TERMINAL_MENU_COLLAPSED_SIZE,
+        height: open ? TERMINAL_MENU_EXPANDED_HEIGHT : TERMINAL_MENU_COLLAPSED_SIZE,
+        borderRadius: open ? 999 : 4,
+        borderColor: open ? 'rgba(255,120,48,0.28)' : 'rgba(255,255,255,0.08)',
+        background: open
+          ? 'linear-gradient(180deg, rgb(29, 28, 28) 0%, rgb(14, 14, 16) 100%)'
+          : 'rgb(18, 18, 20)',
+        boxShadow: open
+          ? '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+        transition:
+          'width 220ms cubic-bezier(0.2, 0.8, 0.2, 1), height 220ms cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 220ms cubic-bezier(0.2, 0.8, 0.2, 1), background 180ms ease, border-color 180ms ease, box-shadow 180ms ease',
+      }}
+    >
+      <div
+        className="flex min-w-0 flex-1 items-center justify-end gap-1"
+        style={{
+          // padding 受控:收起时归零,否则 12px 固定 padding 不参与 flex 收缩,会把加号挤出内腔
+          paddingLeft: open ? 8 : 0,
+          paddingRight: open ? 4 : 0,
+          opacity: open ? 1 : 0,
+          transform: open ? 'translateX(0)' : 'translateX(10px)',
+          pointerEvents: open ? 'auto' : 'none',
+          // 收回时淡出与宽度收缩同曲线,略先于收缩完成,避免图标被 overflow 硬裁切
+          transition: open
+            ? 'opacity 120ms ease 80ms, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1) 40ms, padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
+            : 'opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+        }}
+      >
+        {PRESETS.map((preset) => (
+          <button
+            key={preset.type}
+            type="button"
+            title={preset.name}
+            aria-label={`New ${preset.name} terminal`}
+            tabIndex={open ? 0 : -1}
+            className="flex h-6 w-7 shrink-0 items-center justify-center rounded-full border transition-[background,border-color,transform] hover:scale-[1.04] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.35)]"
+            style={{
+              borderColor: 'rgba(255,255,255,0.1)',
+              background: 'rgb(21, 21, 23)',
+            }}
+            onClick={(event) => {
+              event.stopPropagation()
+              onSelect(preset)
+            }}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.borderColor = 'rgba(255,120,48,0.46)'
+              event.currentTarget.style.background = 'rgb(36, 27, 21)'
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+              event.currentTarget.style.background = 'rgb(21, 21, 23)'
+            }}
+          >
+            <img src={preset.icon} alt="" aria-hidden="true" className="h-3.5 w-3.5" />
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        title={open ? 'Close terminal menu' : 'New Terminal'}
+        aria-label={open ? 'Close terminal menu' : 'New Terminal'}
+        className="flex h-full shrink-0 items-center justify-center border-0 bg-transparent hover:bg-[rgba(255,255,255,0.055)] focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[rgba(255,120,48,0.35)]"
+        style={{
+          // 收起态填满 24px 胶囊(扣除边框),展开态恢复 28px,与容器同曲线过渡
+          width: open ? 28 : TERMINAL_MENU_COLLAPSED_SIZE - 2,
+          color: open ? '#ffb27d' : '#999',
+          // hover 背景跟随胶囊圆角
+          borderRadius: 'inherit',
+          transition: 'width 220ms cubic-bezier(0.2, 0.8, 0.2, 1), color 180ms ease, background-color 150ms ease',
+        }}
+        onClick={onToggle}
+      >
+        {/* 用两条细条绘制 +,文本字形在行框内偏上,旋转 45° 后偏差会沿对角放大 */}
+        <span
+          aria-hidden="true"
+          className="relative block h-[9px] w-[9px] transition-transform duration-200 ease-out"
+          style={{ transform: open ? 'rotate(45deg)' : 'rotate(0deg)' }}
+        >
+          <span className="absolute left-0 top-[4px] h-px w-full bg-current" />
+          <span className="absolute left-[4px] top-0 h-full w-px bg-current" />
+        </span>
+      </button>
+    </div>
+  )
+}
+
 function LeafPane({
   leaf,
   terminalsById,
@@ -364,7 +475,7 @@ function LeafPane({
   showFocusChrome,
   onPaneFocus,
   onTabSelect,
-  onCloseTab,
+  onKillTerminalFromTab,
   onKillTerminal,
   onTerminalDrop,
   onSplitPreview,
@@ -372,7 +483,9 @@ function LeafPane({
   onTerminalDragEnd,
   activeDragTerminalId,
   activeDragTerminalRef,
-  onOpenTerminalMenu,
+  terminalMenuPaneId,
+  onToggleTerminalMenu,
+  onCreateTerminal,
   isPreview = false,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
   const [dragHint, setDragHint] = useState<PaneDropEdge | 'center' | null>(null)
@@ -382,18 +495,15 @@ function LeafPane({
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
   const activeTab = activeTabId ? leaf.tabs.find((tab) => tab.id === activeTabId) ?? null : null
   const activeTerminal = activeTab ? terminalsById.get(activeTab.terminalId) ?? null : null
+  const terminalMenuOpen = terminalMenuPaneId === leaf.id
 
   const openMenu = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement> | React.PointerEvent<HTMLButtonElement>) => {
+    (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
-      const rect = event.currentTarget.getBoundingClientRect()
-      onOpenTerminalMenu({
-        x: rect.left,
-        y: rect.bottom,
-      })
+      onToggleTerminalMenu(leaf.id)
     },
-    [onOpenTerminalMenu]
+    [leaf.id, onToggleTerminalMenu]
   )
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
@@ -540,12 +650,12 @@ function LeafPane({
               </span>
               <span
                 tabIndex={-1}
-                title="Close View"
+                title="Kill Terminal"
                 className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-35 transition-[opacity,color,background] group-hover/tab:opacity-75 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                 style={{ color: '#999' }}
                 onClick={(event) => {
                   event.stopPropagation()
-                  onCloseTab(tab.terminalId, event)
+                  onKillTerminalFromTab(tab.terminalId, event)
                 }}
               >
                 x
@@ -561,16 +671,7 @@ function LeafPane({
           >
             x
           </span>
-          <button
-            type="button"
-            title="New Terminal"
-            className="flex h-6 w-7 items-center justify-center rounded border text-[12px] transition-colors hover:bg-[rgba(255,255,255,0.06)]"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', color: '#999' }}
-            onClick={openMenu}
-            onPointerDown={openMenu}
-          >
-            +
-          </button>
+          <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} />
           <button
             type="button"
             aria-label="结束当前终端"
@@ -591,24 +692,20 @@ function LeafPane({
           background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.66) 0%, rgba(2, 2, 2, 0.88) 100%)',
         }}
       >
-        {leaf.tabs.map((tab) => {
-          const terminal = terminalsById.get(tab.terminalId)
-          if (!terminal) return null
-          const isActive = tab.id === activeTabId
-          const isFocusedTerminal = isFocused && terminal.id === activeTerminalId && isActive
-          return (
-            <div key={tab.id} className="absolute inset-0" style={{ display: isActive ? 'block' : 'none' }}>
-              <CLITerminal terminalId={terminal.id} focused={isFocusedTerminal} />
-            </div>
-          )
-        })}
+        {activeTab && activeTerminal && (
+          <div key={activeTab.id} className="absolute inset-0">
+            <CLITerminal
+              terminalId={activeTerminal.id}
+              focused={isFocused && activeTerminal.id === activeTerminalId}
+            />
+          </div>
+        )}
         {leaf.tabs.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center font-mono text-[12px] text-[#666]">
             <div>Empty pane</div>
             <button
               type="button"
               onClick={openMenu}
-              onPointerDown={openMenu}
               className="rounded border px-3 py-1.5 text-[11px] transition-colors hover:bg-[rgba(255,120,48,0.08)]"
               style={{ borderColor: 'rgba(255,120,48,0.22)', color: '#ffb27d' }}
             >
@@ -645,9 +742,7 @@ export function TerminalArea() {
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [ringOpen, setRingOpen] = useState(false)
-  const [ringPosition, setRingPosition] = useState({ x: 0, y: 40 })
-  const ringRef = useRef<HTMLDivElement>(null)
+  const [terminalMenuPaneId, setTerminalMenuPaneId] = useState<string | null>(null)
   const [previewTree, setPreviewTree] = useState<WorkspacePaneNode | null>(null)
   const [activeDragTerminalId, setActiveDragTerminalId] = useState<string | null>(null)
   const activeDragTerminalRef = useRef<string | null>(null)
@@ -665,17 +760,26 @@ export function TerminalArea() {
     return map
   }, [terminalSnapshots, terminals])
 
+  const closeTerminalMenu = useCallback(() => {
+    setTerminalMenuPaneId(null)
+  }, [])
+
+  const toggleTerminalMenu = useCallback((paneId: string) => {
+    setTerminalMenuPaneId((current) => (current === paneId ? null : paneId))
+  }, [])
+
   // 点击外部关闭弹出环
   useEffect(() => {
-    if (!ringOpen) return
+    if (!terminalMenuPaneId) return
     const handler = (e: MouseEvent) => {
-      if (ringRef.current && !ringRef.current.contains(e.target as Node)) {
-        setRingOpen(false)
+      const target = e.target as HTMLElement | null
+      if (!target?.closest('[data-terminal-menu-root="true"]')) {
+        closeTerminalMenu()
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [ringOpen])
+  }, [closeTerminalMenu, terminalMenuPaneId])
 
   useEffect(() => {
     const unsubscribe = window.electron.on('terminal:exit', (payload: unknown) => {
@@ -689,6 +793,32 @@ export function TerminalArea() {
     })
     return unsubscribe
   }, [updateTerminal])
+
+  useEffect(() => {
+    const unsubscribe = window.electron.on('terminal:focus', (payload: unknown) => {
+      const { id } = payload as { id?: string }
+      if (!id) return
+
+      const store = useWorkspaceStore.getState()
+      if (store.terminals.some((terminal) => terminal.id === id)) {
+        store.setActiveTerminal(id)
+        setLoadState('terminal-active')
+        return
+      }
+
+      const snapshotWorkspaceId = Object.entries(store.terminalSnapshots).find(([, snapshot]) =>
+        snapshot.terminals.some((terminal) => terminal.id === id),
+      )?.[0]
+
+      if (!snapshotWorkspaceId) return
+      store.setActiveWorkspace(snapshotWorkspaceId)
+      requestAnimationFrame(() => {
+        useWorkspaceStore.getState().setActiveTerminal(id)
+        setLoadState('terminal-active')
+      })
+    })
+    return unsubscribe
+  }, [setLoadState])
 
   useEffect(() => {
     if (paneTree) return
@@ -755,23 +885,9 @@ export function TerminalArea() {
     return () => window.removeEventListener('dragend', onDragEnd)
   }, [])
 
-  const openTerminalMenu = useCallback((position: { x: number; y: number }) => {
-    const areaRect = terminalAreaRef.current?.getBoundingClientRect()
-    const xInArea = areaRect ? Math.max(0, position.x - areaRect.left) : position.x
-    const yInArea = areaRect ? Math.max(0, position.y - areaRect.top) : position.y
-    const menuWidth = 176
-    const menuHeight = 82
-    const margin = 8
-    setRingPosition({
-      x: Math.max(margin, Math.min(xInArea, (areaRect?.width ?? window.innerWidth) - menuWidth - margin)),
-      y: Math.max(margin, Math.min(yInArea, (areaRect?.height ?? window.innerHeight) - menuHeight - margin)),
-    })
-    setRingOpen(true)
-  }, [])
-
   const handlePresetSelect = useCallback(
     async (preset: typeof PRESETS[number]) => {
-      setRingOpen(false)
+      closeTerminalMenu()
       if (!activeWorkspaceId) return
 
       const workspaces = useWorkspaceStore.getState().workspaces
@@ -822,7 +938,7 @@ export function TerminalArea() {
         }
       }
     },
-    [activeWorkspaceId, addTerminal, removeTerminal, updateTerminal, setLoadState, setBlueprintMode]
+    [activeWorkspaceId, addTerminal, removeTerminal, updateTerminal, setLoadState, setBlueprintMode, closeTerminalMenu]
   )
 
   const paneCount = useMemo(() => getLeafPanes(paneTree).length, [paneTree])
@@ -836,7 +952,7 @@ export function TerminalArea() {
   return (
       <div
         ref={terminalAreaRef}
-        className="flex flex-col h-full relative overflow-hidden"
+        className="flex h-full w-full min-w-0 flex-col relative overflow-hidden"
         style={{
           background: 'linear-gradient(180deg, rgba(16, 16, 18, 0.98) 0%, rgba(5, 5, 5, 1) 100%)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -24px 40px rgba(0,0,0,0.4)',
@@ -860,58 +976,9 @@ export function TerminalArea() {
         </div>
       )}
 
-      {/* 终端类型选择弹出环 */}
-      <div
-        ref={ringRef}
-        className="absolute z-[120] flex gap-1.5 px-3 py-2 transition-all"
-        style={{
-          top: `${ringPosition.y}px`,
-          left: `${ringPosition.x}px`,
-          background: 'rgba(18, 18, 20, 0.85)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid var(--border)',
-          borderRadius: '24px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.42)',
-          opacity: ringOpen ? 1 : 0,
-          pointerEvents: ringOpen ? 'auto' : 'none',
-          transform: ringOpen ? 'translateY(0)' : 'translateY(4px)',
-        }}
-      >
-        {PRESETS.map((preset) => (
-          <div
-            key={preset.type}
-            onClick={() => handlePresetSelect(preset)}
-            className="flex flex-col items-center gap-1 cursor-pointer transition-transform"
-            style={{ transform: 'translateY(0)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)' }}
-          >
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
-              style={{
-                border: '1.5px solid rgba(255, 255, 255, 0.08)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 120, 48, 0.4)'
-                e.currentTarget.style.background = 'rgba(255, 120, 48, 0.08)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
-                e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              <img src={preset.icon} alt={preset.name} className="w-4 h-4" />
-            </div>
-            <span className="text-[9px] tracking-wider" style={{ color: '#555', fontFamily: '-apple-system, sans-serif' }}>
-              {preset.name}
-            </span>
-          </div>
-        ))}
-      </div>
-
       {/* Pane tree */}
       <div
-        className="relative m-2 min-h-0 flex-1 overflow-hidden"
+        className="relative m-2 min-h-0 min-w-0 flex-1 overflow-hidden"
         style={{
           background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(2, 2, 2, 0.8) 100%)',
           border: '1px solid rgba(255, 255, 255, 0.03)',
@@ -926,7 +993,7 @@ export function TerminalArea() {
           showFocusChrome={paneCount > 1}
           onPaneFocus={setFocusedPane}
           onTabSelect={setPaneTab}
-          onCloseTab={handleKillTerminal}
+          onKillTerminalFromTab={handleKillTerminal}
           onKillTerminal={handleKillTerminal}
           onTerminalDrop={handleTerminalDrop}
           onTerminalDragStart={(terminalId) => {
@@ -943,7 +1010,9 @@ export function TerminalArea() {
           activeDragTerminalRef={activeDragTerminalRef}
           onSplitPreview={handleSplitPreview}
           onResize={resizePane}
-          onOpenTerminalMenu={openTerminalMenu}
+          terminalMenuPaneId={terminalMenuPaneId}
+          onToggleTerminalMenu={toggleTerminalMenu}
+          onCreateTerminal={handlePresetSelect}
         />
         {previewTree && (
           <div className="pointer-events-none absolute inset-0 z-40" style={{ background: 'rgba(2, 2, 2, 0.75)' }}>
@@ -956,7 +1025,7 @@ export function TerminalArea() {
               isPreview
               onPaneFocus={setFocusedPane}
               onTabSelect={setPaneTab}
-              onCloseTab={() => {}}
+              onKillTerminalFromTab={() => {}}
               onKillTerminal={() => {}}
               onTerminalDrop={() => {}}
               onTerminalDragStart={() => {}}
@@ -965,7 +1034,9 @@ export function TerminalArea() {
               activeDragTerminalRef={activeDragTerminalRef}
               onSplitPreview={() => {}}
               onResize={() => {}}
-              onOpenTerminalMenu={() => {}}
+              terminalMenuPaneId={null}
+              onToggleTerminalMenu={() => {}}
+              onCreateTerminal={() => {}}
             />
           </div>
         )}

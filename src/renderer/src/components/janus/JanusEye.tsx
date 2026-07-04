@@ -1,5 +1,7 @@
-/*-- Janus 眼睛模式 --*/
-export type JanusMode = 'sleep' | 'order' | 'analytics' | 'running'
+import type { Ref } from 'react'
+import { getJanusModeIdentity, type JanusMode } from './janusIdentity'
+
+export type { JanusMode } from './janusIdentity'
 
 export interface JanusEyeProps {
   mode: JanusMode
@@ -7,9 +9,9 @@ export interface JanusEyeProps {
   size?: number
   className?: string
   /** 左眼元素 ref — 用于长按蓄力时 translateX 靠拢 */
-  leftRef?: React.Ref<HTMLDivElement>
+  leftRef?: Ref<HTMLDivElement>
   /** 右眼元素 ref — 用于长按蓄力时 translateX 靠拢 */
-  rightRef?: React.Ref<HTMLDivElement>
+  rightRef?: Ref<HTMLDivElement>
 }
 
 /**
@@ -20,6 +22,8 @@ export interface JanusEyeProps {
  * 组件仅负责渲染正确的 DOM 结构与 data 属性。
  */
 export function JanusEye({ mode, size = 10, className, leftRef, rightRef }: JanusEyeProps) {
+  const identity = getJanusModeIdentity(mode)
+
   return (
     <div
       className={className}
@@ -33,7 +37,7 @@ export function JanusEye({ mode, size = 10, className, leftRef, rightRef }: Janu
       }}
       data-janus-mode={mode}
       role="img"
-      aria-label={`Janus eye - ${mode} mode`}
+      aria-label={`Janus eye - ${identity.label} mode`}
     >
       {mode === 'sleep' ? (
         <div className="janus-eye-mini" />

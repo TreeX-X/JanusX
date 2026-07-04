@@ -8,6 +8,7 @@ export interface TerminalConfig {
   cwd: string
   shell: string
   autoCommand?: string
+  env?: Record<string, string>
 }
 
 export interface TerminalInstance {
@@ -16,6 +17,8 @@ export interface TerminalInstance {
   config: TerminalConfig
   status: 'idle' | 'running' | 'exited'
   createdAt: number
+  outputBuffer: string
+  outputSeq: number
 }
 
 export interface TerminalPresetConfig {

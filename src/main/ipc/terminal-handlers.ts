@@ -4,11 +4,22 @@ import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
 import type { CheckpointEngine } from '../agent/checkpoint/types'
 import { analyzer } from '../janus/analyzer'
 import { isTerminalPreset, resolveTerminalLaunchCommand } from '../../shared/terminalLaunch'
+import { subAgentRunRegistry } from '../agent/subagent-run-registry'
+import type { SubAgentRunEngine } from '../../shared/subAgentRun'
+import { AgentHookBridge } from '../notifications/agent-hook-bridge'
+import { AgentHookConfigManager } from '../notifications/agent-hook-config'
+import { AgentHookCoordinator } from '../notifications/agent-hook-coordinator'
+import {
+  AgentHookDiagnostics,
+  summarizeCoordinatorEvent,
+  summarizeHookPayload,
+} from '../notifications/agent-hook-diagnostics'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
   checkpointId: string | null  // current pending checkpoint
   cwd: string
+  workspaceId: string
   engine: CheckpointEngine
   initialized: boolean         // whether checkpointManager.initialize() succeeded
   creating: boolean
@@ -95,14 +106,32 @@ function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
 }
 
 export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
+  const hookDiagnostics = new AgentHookDiagnostics()
+  const hookCoordinator = new AgentHookCoordinator(mainWindow, {
+    onEvent: (event) => {
+      hookDiagnostics.record(summarizeCoordinatorEvent(event))
+      sendToRenderer(mainWindow, 'agent-hook:event', event)
+    },
+  })
+  const hookBridge = new AgentHookBridge({
+    onPayload: (payload) => {
+      hookDiagnostics.record(summarizeHookPayload(payload))
+      hookCoordinator.handleHookPayload(payload)
+    },
+  })
+  const hookConfigManager = new AgentHookConfigManager()
+
   mainWindow.on('closed', () => {
     terminalManager.killAll()
     terminalStates.clear()
+    hookCoordinator.dispose()
+    void hookBridge.stop()
   })
 
-  ipcMain.handle('terminal:create', async (event, config) => {
+  ipcMain.handle('terminal:create', async (_event, config) => {
     const { id, cwd, shell, autoCommand, preset } = config as {
       id: string
+      workspaceId?: string
       cwd: string
       shell: string
       autoCommand?: string
@@ -110,31 +139,104 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     }
 
     const resolvedAutoCommand = resolveTerminalLaunchCommand({ preset, autoCommand })
-    const instance = terminalManager.create({ id, workspaceId: '', cwd, shell, autoCommand: resolvedAutoCommand })
-
+    const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
     const engine: CheckpointEngine =
       isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
+    let hookEnv: Record<string, string> | undefined
+
+    if (engine !== 'shell') {
+      try {
+        await hookBridge.start()
+        await hookConfigManager.ensureInstalled(engine)
+        hookEnv = hookConfigManager.buildTerminalEnv(
+          {
+            terminalId: id,
+            workspaceId,
+            engine,
+          },
+          hookBridge.getEnv(),
+        )
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('Agent hook setup failed:', err)
+        const event = {
+          type: 'ignored',
+          terminalId: id,
+          engine,
+          source: engine,
+          hookEvent: 'setup',
+          reason: message,
+          delivered: false,
+        } as const
+        hookDiagnostics.record(summarizeCoordinatorEvent(event))
+        sendToRenderer(mainWindow, 'agent-hook:event', event)
+      }
+    }
+
+    const instance = terminalManager.create({
+      id,
+      workspaceId,
+      cwd,
+      shell,
+      autoCommand: resolvedAutoCommand,
+      env: hookEnv,
+    })
+
+    if (engine !== 'shell') {
+      hookCoordinator.registerTerminal({
+        terminalId: id,
+        engine,
+        workspaceId,
+        cwd,
+      })
+
+      subAgentRunRegistry.upsertRun({
+        id: `terminal:${id}`,
+        terminalId: id,
+        rootRunId: `terminal:${id}`,
+        rootTerminalId: id,
+        missionId: id,
+        workspaceId,
+        workspacePath: cwd,
+        source: 'terminal',
+        engine: engine as SubAgentRunEngine,
+        role: 'main',
+        status: 'running',
+        title: `${engine} terminal`,
+        lastEvent: 'Terminal session started',
+      })
+    }
 
     terminalStates.set(id, {
       checkpointId: null,
       cwd,
+      workspaceId,
       engine,
       initialized: false,
       creating: false,
       pendingSubmitTexts: [],
     })
 
-    // PTY output — just forward to renderer
+    // PTY output: keep a bounded replay buffer so remounted terminals can recover
+    // after workspace switches, then forward live data to the renderer.
     instance.pty.onData((data: string) => {
-      sendToRenderer(mainWindow, 'terminal:data', { id, data })
+      const seq = terminalManager.appendOutput(id, data)
+      sendToRenderer(mainWindow, 'terminal:data', { id, data, seq: seq ?? undefined })
     })
 
-    // Terminal exit — finalize any pending checkpoint
+    // Terminal exit: finalize any pending checkpoint.
     instance.pty.onExit(({ exitCode }: { exitCode: number }) => {
       sendToRenderer(mainWindow, 'terminal:exit', { id, exitCode })
       terminalManager.kill(id)
 
       const state = terminalStates.get(id)
+      if (state?.engine && state.engine !== 'shell') {
+        subAgentRunRegistry.finishRun(
+          `terminal:${id}`,
+          exitCode === 0 ? 'done' : 'failed',
+          exitCode === 0 ? 'Terminal completed' : `Terminal exited with code ${exitCode}`
+        )
+      }
       if (state?.checkpointId) {
         const cpId = state.checkpointId
         checkpointManager.finalizeCheckpoint(cpId, state.cwd).then(() => {
@@ -144,11 +246,12 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
           })
         }).catch(err => console.error('Checkpoint finalize failed:', err))
       }
-      // Janus Analyzer 入口④：仅 AI CLI 工作终端关闭触发，普通 shell 不参与蓝图分析。
+      // Janus Analyzer runs only for AI CLI terminals.
       if (state && state.engine !== 'shell') {
         analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
       }
       terminalStates.delete(id)
+      hookCoordinator.unregisterTerminal(id)
     })
 
     checkpointManager.initialize(cwd).then(() => {
@@ -166,18 +269,22 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     return { pid: instance.pty.pid }
   })
 
-  // Input handler — just forward to PTY (no parsing)
+  // Input handler: forward to PTY only.
   ipcMain.on('terminal:input', (_event, { id, data }: { id: string; data: string }) => {
     terminalManager.write(id, data)
   })
 
-  // Submit-line handler — renderer sends one complete user input transaction.
+  // Submit-line handler: renderer sends one complete user input transaction.
   ipcMain.on('terminal:submit-line', (_event, { id, text }: { id: string; text: string }) => {
     enqueueCheckpointFromSubmit(mainWindow, id, text)
   })
 
   ipcMain.on('terminal:resize', (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {
     terminalManager.resize(id, cols, rows)
+  })
+
+  ipcMain.handle('terminal:replay', async (_event, { id }: { id: string }) => {
+    return terminalManager.getOutputReplay(id) ?? { data: '', seq: 0 }
   })
 
   ipcMain.handle('terminal:kill', async (_event, { id }: { id: string }) => {

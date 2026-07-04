@@ -61,11 +61,11 @@ export function CheckpointPanel() {
     fetchCheckpoints,
     createCheckpoint,
     restoreCheckpoint,
-    deleteCheckpoint,
     diffs,
     fetchAllDiffs,
     conflicts,
     clearConflicts,
+    clearWorkspaceScope,
   } = useCheckpointStore()
   const { activeWorkspaceId, workspaces } = useWorkspaceStore()
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
@@ -76,8 +76,18 @@ export function CheckpointPanel() {
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchCheckpoints(activeWorkspace?.path ? { cwd: activeWorkspace.path } : undefined)
-  }, [fetchCheckpoints, activeWorkspace?.path])
+    setExpandedDiffId(null)
+    setExpandedPromptId(null)
+    setRestoreTarget(null)
+    setShowModal(false)
+
+    if (!activeWorkspace?.path) {
+      clearWorkspaceScope()
+      return
+    }
+
+    fetchCheckpoints({ cwd: activeWorkspace.path })
+  }, [fetchCheckpoints, clearWorkspaceScope, activeWorkspace?.path])
 
   const filteredCheckpoints =
     filter === 'all' ? checkpoints : checkpoints.filter((cp) => cp.engine === filter)

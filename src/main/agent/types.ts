@@ -1,3 +1,5 @@
+import type { SubAgentRunRole, SubAgentRunSource } from '../../shared/subAgentRun'
+
 export type AgentEngine = 'claude' | 'codex' | 'opencode'
 
 export type AgentEvent =
@@ -31,4 +33,15 @@ export interface AgentSpawnOptions {
   cwd: string
   model?: string
   timeoutMs?: number
+  title?: string
+  role?: SubAgentRunRole
+  source?: SubAgentRunSource
+  parentRunId?: string
+  terminalId?: string
+  rootRunId?: string
+  rootTerminalId?: string
+  missionId?: string
+  nodeId?: string
+  workspaceId?: string
+  workspacePath?: string
 }

@@ -19,6 +19,7 @@ interface AppStore {
   setLoadState: (state: AppLoadState) => void
   toggleSidebar: () => void
   togglePanel: () => void
+  setPanelCollapsed: (collapsed: boolean) => void
   toggleBlueprint: () => void
   setBlueprintMode: (enabled: boolean) => void
   setFlipDuration: (ms: number) => void
@@ -41,6 +42,7 @@ export const useAppStore = create<AppStore>((set) => ({
   setLoadState: (loadState) => set({ loadState }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   togglePanel: () => set((s) => ({ panelCollapsed: !s.panelCollapsed })),
+  setPanelCollapsed: (panelCollapsed) => set({ panelCollapsed }),
   toggleBlueprint: () => set((s) => ({ blueprintMode: !s.blueprintMode })),
   setBlueprintMode: (blueprintMode) => set({ blueprintMode }),
   setFlipDuration: (ms) => set({ flipDuration: ms }),

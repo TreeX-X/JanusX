@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { join } from 'path'
+import { join, resolve } from 'path'
 
 // --- Mock infrastructure ---
 
@@ -7,6 +7,20 @@ const mockFiles: Record<string, string> = {}
 const storedBlobs = new Map<string, Buffer>()
 let storeCounter = 0
 let uuidCounter = 0
+const WORKSPACE_ROOTS = ['/workspace', '/workspace-a', '/workspace-b']
+
+function normalizeMockPath(path: string): string {
+  return path.replace(/\\/g, '/')
+}
+
+function isMockWorkspacePath(path: string): boolean {
+  const normalized = normalizeMockPath(path)
+  return WORKSPACE_ROOTS.some((root) => {
+    const direct = normalizeMockPath(root)
+    const resolved = normalizeMockPath(resolve(root))
+    return normalized === direct || normalized === resolved
+  })
+}
 
 vi.mock('crypto', () => {
   return {
@@ -74,11 +88,11 @@ vi.mock('fs/promises', () => {
     readdir: vi.fn().mockResolvedValue([]),
     unlink: vi.fn().mockResolvedValue(undefined),
     access: vi.fn().mockImplementation(async (path: string) => {
-      if (String(path) === '/workspace' || mockFiles[String(path)]) return
+      if (isMockWorkspacePath(String(path)) || mockFiles[String(path)]) return
       throw new Error('ENOENT')
     }),
     stat: vi.fn().mockImplementation(async (path: string) => {
-      if (String(path) !== '/workspace') {
+      if (!isMockWorkspacePath(String(path))) {
         throw new Error('ENOENT')
       }
 
@@ -86,6 +100,7 @@ vi.mock('fs/promises', () => {
         isDirectory: () => true,
       }
     }),
+    rm: vi.fn().mockResolvedValue(undefined),
   }
 })
 
@@ -102,8 +117,10 @@ describe('CheckpointManager', () => {
     uuidCounter = 0
 
     // Populate mockFiles with tracked file content (paths as the source code would resolve them)
-    mockFiles[join('/workspace', 'src/index.ts')] = 'export const hello = "world"'
-    mockFiles[join('/workspace', 'README.md')] = '# JanusX'
+    for (const root of WORKSPACE_ROOTS) {
+      mockFiles[join(root, 'src/index.ts')] = `export const workspace = "${root}"`
+      mockFiles[join(root, 'README.md')] = `# ${root}`
+    }
 
     const { CheckpointManager } = await import('../../../src/main/agent/checkpoint/checkpoint-manager')
     manager = new CheckpointManager()
@@ -138,7 +155,7 @@ describe('CheckpointManager', () => {
     expect(checkpoint.schemaVersion).toBe(2)
   })
 
-  it('createCheckpoint() increments conversationIndex globally', async () => {
+  it('createCheckpoint() increments conversationIndex within a workspace', async () => {
     await manager.createCheckpoint({
       terminalId: 'term-1',
       engine: 'claude',
@@ -164,6 +181,29 @@ describe('CheckpointManager', () => {
     expect(term1Cps.find(cp => cp.prompt === 'first')?.conversationIndex).toBe(1)
     expect(term1Cps.find(cp => cp.prompt === 'second')?.conversationIndex).toBe(2)
     expect(term2Cps[0].conversationIndex).toBe(3)
+  })
+
+  it('listCheckpoints() isolates checkpoints by workspace cwd', async () => {
+    await manager.createCheckpoint({
+      terminalId: 'term-a',
+      engine: 'claude',
+      prompt: 'workspace A',
+      cwd: '/workspace-a',
+    })
+    await manager.createCheckpoint({
+      terminalId: 'term-b',
+      engine: 'codex',
+      prompt: 'workspace B',
+      cwd: '/workspace-b',
+    })
+
+    const workspaceA = await manager.listCheckpoints({ cwd: '/workspace-a' })
+    const workspaceB = await manager.listCheckpoints({ cwd: '/workspace-b' })
+
+    expect(workspaceA.map(cp => cp.prompt)).toEqual(['workspace A'])
+    expect(workspaceB.map(cp => cp.prompt)).toEqual(['workspace B'])
+    expect(workspaceA[0].conversationIndex).toBe(1)
+    expect(workspaceB[0].conversationIndex).toBe(1)
   })
 
   it('createCheckpoint() snapshots tracked files', async () => {

@@ -1,21 +1,30 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useAppStore } from '@/stores/app'
 import { JanusEye } from './JanusEye'
 import { useIslandGesture } from './useIslandGesture'
 import { useJanusState } from './useJanusState'
 import { projectService, type ProjectConfig } from '@/services/project'
-import type { Workspace } from '@/types'
+import type { Terminal, Workspace } from '@/types'
 import { JanusChat } from './JanusChat'
 import type { Message } from './useJanusChat'
 import { useBlueprintStore } from '@/stores/blueprint'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useSubAgentRunStore } from '@/stores/subagent-run'
 import { STATUS_VISUALS } from '../blueprint/blueprintStatus'
+import { JanusIdentityCore } from './JanusIdentityCore'
+import {
+  getJanusAgentIdentity,
+  type JanusAgentIdentityId,
+  type JanusIdentityState,
+} from './janusIdentity'
+import type { SubAgentRun, SubAgentRunRole, SubAgentRunStatus } from '../../../../shared/subAgentRun'
 
 /* ════════════════════════════════════════════════════════════
-   JanusIsland — 52×26px 折叠态胶囊
-   状态由 useJanusState 统一管理，视觉由 data-mode 属性驱动
+   JanusIsland �?52×26px 折叠态胶�?
+   状态由 useJanusState 统一管理，视觉由 data-mode 属性驱�?
    ════════════════════════════════════════════════════════════ */
 
-/** useProjectRunning — 管理项目运行状态 */
+/** useProjectRunning �?管理项目运行状�?*/
 function useProjectRunning(activeWorkspace: Workspace | undefined) {
   const { janusRunning, setJanusRunning, setRunningProjects } = useAppStore()
   const [workspaceConfig, setWorkspaceConfig] = useState<ProjectConfig | null>(null)
@@ -98,6 +107,110 @@ interface JanusIslandProps {
 
 type JanusExpandedView = 'monitor' | 'chat'
 
+const SUBAGENT_STATUS_LABELS: Record<SubAgentRunStatus, string> = {
+  queued: 'queued',
+  running: 'running',
+  'waiting-approval': 'approval',
+  done: 'done',
+  failed: 'failed',
+  cancelled: 'cancelled',
+}
+
+function roleIdentity(role: SubAgentRunRole): JanusAgentIdentityId {
+  switch (role) {
+    case 'main':
+      return 'main'
+    case 'coder':
+      return 'coder'
+    case 'evaluator':
+      return 'evaluator'
+    case 'abstracter':
+      return 'abstracter'
+    case 'prompter':
+      return 'prompter'
+    case 'subagent':
+    case 'custom':
+      return 'subagent'
+  }
+}
+
+function runIdentityState(status: SubAgentRunStatus): JanusIdentityState {
+  switch (status) {
+    case 'running':
+      return 'running'
+    case 'waiting-approval':
+      return 'scanning'
+    case 'done':
+      return 'done'
+    case 'failed':
+    case 'cancelled':
+      return 'failed'
+    case 'queued':
+      return 'default'
+  }
+}
+
+function previewIdentityState(run: SubAgentRun | null): JanusIdentityState {
+  if (!run) return 'default'
+  if (run.role === 'main') {
+    if (run.status === 'waiting-approval') return 'scanning'
+    if (run.status === 'failed' || run.status === 'cancelled') return 'failed'
+    if (run.status === 'done') return 'done'
+    return 'default'
+  }
+  return runIdentityState(run.status)
+}
+
+function formatRunAge(value: string): string {
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) return 'unknown'
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+  if (seconds < 5) return 'now'
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  return `${Math.floor(minutes / 60)}h`
+}
+
+function terminalProviderLabel(preset: Terminal['preset']): string {
+  switch (preset) {
+    case 'claude':
+      return 'Claude'
+    case 'codex':
+      return 'Codex'
+    case 'opencode':
+      return 'OpenCode'
+    case 'shell':
+      return 'Shell'
+  }
+}
+
+function terminalStatusLabel(status: Terminal['status']): string {
+  switch (status) {
+    case 'running':
+      return 'running'
+    case 'exited':
+      return 'done'
+    case 'idle':
+      return 'idle'
+  }
+}
+
+function runEngineLabel(run: SubAgentRun): string {
+  return run.engine ? terminalProviderLabel(run.engine) : run.source
+}
+function runRoleLabel(role: SubAgentRunRole): string {
+  return getJanusAgentIdentity(roleIdentity(role)).roleTag
+}
+
+function runtimeRoleStyle(role: SubAgentRunRole): CSSProperties {
+  const identity = getJanusAgentIdentity(roleIdentity(role))
+  return {
+    '--janus-runtime-role-color': identity.color,
+    '--janus-runtime-role-glow': identity.glow,
+  } as CSSProperties
+}
+
 function faceClass(mode: 'sleep' | 'order' | 'analytics' | 'running'): string {
   if (mode === 'analytics') return 'mode-analytics'
   if (mode === 'running') return 'mode-running'
@@ -125,8 +238,14 @@ export function JanusIsland({
   const shellRef = useRef<HTMLDivElement | null>(null)
   const conversationStartedRef = useRef(false)
   const [view, setView] = useState<JanusExpandedView>('monitor')
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [particles, setParticles] = useState<Array<{ id: number; left: number; size: number; duration: number }>>([])
   const pidRef = useRef(0)
+  const subAgentRuns = useSubAgentRunStore((s) => s.runs)
+  const fetchSubAgentRuns = useSubAgentRunStore((s) => s.fetchRuns)
+  const subscribeToSubAgentRuns = useSubAgentRunStore((s) => s.subscribeToEvents)
+  const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
+  const terminals = useWorkspaceStore((s) => s.terminals)
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
@@ -186,9 +305,6 @@ export function JanusIsland({
     activeSession && currentBlueprint?.id === activeSession.blueprintId
       ? currentBlueprint.nodes[activeSession.nodeId] ?? activeSession.nodeSnapshot
       : activeSession?.nodeSnapshot ?? null
-  const latestAnalysis = activeNode?.analyses?.length
-    ? activeNode.analyses[activeNode.analyses.length - 1]
-    : null
   const activeVisual = activeNode ? STATUS_VISUALS[activeNode.status] ?? STATUS_VISUALS['not-started'] : null
 
   const peekTitle = useMemo(() => {
@@ -218,12 +334,97 @@ export function JanusIsland({
   const modeColor = activeVisual?.color ?? (mode === 'running' ? '#00ff88' : '#ff7830')
   const activeNodeTitle = activeNode?.title || 'No active blueprint node'
   const workspaceLabel = activeSession?.workspaceName ?? activeWorkspace?.name ?? 'Workspace'
-  const feedbackSummary = latestAnalysis?.result.summary || latestAnalysis?.error || statusText
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
+  const activeTerminal = useMemo(
+    () => activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null,
+    [activeTerminalId, terminals]
+  )
+  const runsById = useMemo(() => new Map(subAgentRuns.map((run) => [run.id, run])), [subAgentRuns])
+  const monitoredRun = useMemo(
+    () => activeTerminalId
+      ? subAgentRuns.find((run) => run.terminalId === activeTerminalId || run.rootTerminalId === activeTerminalId) ?? null
+      : null,
+    [activeTerminalId, subAgentRuns]
+  )
+  const activeMissionId = monitoredRun?.missionId ?? activeTerminalId ?? null
+  const activeRootRunId = monitoredRun?.rootRunId ?? monitoredRun?.id ?? (activeTerminalId ? `terminal:${activeTerminalId}` : null)
+  const missionSubAgentRuns = useMemo(() => {
+    if (!activeTerminalId) return []
+
+    const belongsToActiveMission = (run: SubAgentRun): boolean => {
+      if (run.terminalId === activeTerminalId || run.rootTerminalId === activeTerminalId) return true
+      if (activeMissionId && run.missionId === activeMissionId) return true
+      if (activeRootRunId && run.rootRunId === activeRootRunId) return true
+
+      const visited = new Set<string>()
+      let parentId = run.parentRunId
+      while (parentId && !visited.has(parentId)) {
+        visited.add(parentId)
+        const parent = runsById.get(parentId)
+        if (!parent) return false
+        if (parent.terminalId === activeTerminalId || parent.rootTerminalId === activeTerminalId) return true
+        if (activeMissionId && parent.missionId === activeMissionId) return true
+        if (activeRootRunId && (parent.id === activeRootRunId || parent.rootRunId === activeRootRunId)) return true
+        parentId = parent.parentRunId
+      }
+      return false
+    }
+
+    return subAgentRuns.filter(belongsToActiveMission)
+  }, [activeMissionId, activeRootRunId, activeTerminalId, runsById, subAgentRuns])
+  const visibleSubAgentRuns = useMemo(() => missionSubAgentRuns.slice(0, 6), [missionSubAgentRuns])
+  const mainMissionRun = useMemo(
+    () => missionSubAgentRuns.find((run) => run.role === 'main') ?? null,
+    [missionSubAgentRuns]
+  )
+  const defaultMonitorRun = useMemo(
+    () => mainMissionRun ?? monitoredRun ?? null,
+    [mainMissionRun, monitoredRun]
+  )
+  const selectedMonitorRun = useMemo(() => {
+    if (!selectedRunId) return null
+    return missionSubAgentRuns.find((run) => run.id === selectedRunId) ?? null
+  }, [missionSubAgentRuns, selectedRunId])
+  const previewRun = selectedMonitorRun ?? defaultMonitorRun
+  const previewIdentity = previewRun ? roleIdentity(previewRun.role) : 'main'
+  const previewState = previewIdentityState(previewRun)
+  const previewIdentitySpec = getJanusAgentIdentity(previewIdentity)
+  const monitorTitle = previewRun?.title ?? activeTerminal?.name ?? activeNodeTitle
+  const monitorStatusText = previewRun
+    ? `${runEngineLabel(previewRun)} // ${SUBAGENT_STATUS_LABELS[previewRun.status]}`
+    : activeTerminal
+      ? `${terminalProviderLabel(activeTerminal.preset)} // ${terminalStatusLabel(activeTerminal.status)}`
+      : statusText
+
+  const focusRunTerminal = useCallback((run: SubAgentRun) => {
+    if (!run.terminalId) return
+    const workspaceState = useWorkspaceStore.getState()
+    if (workspaceState.terminals.some((terminal) => terminal.id === run.terminalId)) {
+      workspaceState.setActiveTerminal(run.terminalId)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchSubAgentRuns()
+    return subscribeToSubAgentRuns()
+  }, [fetchSubAgentRuns, subscribeToSubAgentRuns])
+
+  useEffect(() => {
+    setSelectedRunId((current) => {
+      if (current && visibleSubAgentRuns.some((run) => run.id === current)) return current
+      return mainMissionRun?.id ?? monitoredRun?.id ?? null
+    })
+  }, [mainMissionRun, monitoredRun, visibleSubAgentRuns])
 
   useEffect(() => {
     if (stage === 'peek') setView('monitor')
   }, [stage])
+
+  useEffect(() => {
+    if (!selectedRunId) return
+    if (missionSubAgentRuns.some((run) => run.id === selectedRunId)) return
+    setSelectedRunId(null)
+  }, [missionSubAgentRuns, selectedRunId])
 
   useEffect(() => {
     const hadConversation = conversationStartedRef.current
@@ -347,7 +548,7 @@ export function JanusIsland({
         <div className="janus-expanded-shell">
           <div className="janus-expanded-topbar">
             <div className="janus-expanded-brand island-title">
-              <span>◎</span> JANUS
+              <span>*</span> JANUS
             </div>
             <div className="janus-expanded-view-switch" aria-label="Janus expanded view">
               {(['monitor', 'chat'] as JanusExpandedView[]).map((item) => (
@@ -371,97 +572,135 @@ export function JanusIsland({
 
           <div className="janus-expanded-body">
             <div className="janus-feedback-panel">
-              <div className="janus-feedback-header">
-                <div>
-                  <span className="janus-feedback-eyebrow">State</span>
-                  <strong>{activeNode ? activeNodeTitle : statusText}</strong>
-                </div>
-                <div className="janus-feedback-status" style={{ color: modeColor }}>
-                  {modeLabel}
-                </div>
-              </div>
-              <div className="janus-feedback-chips">
-                <span>{workspaceLabel}</span>
-                <span>{janusRunning ? 'Runtime active' : 'Runtime idle'}</span>
-                <span>{activeNode ? `${Math.round(activeNode.progress)}%` : 'Ready'}</span>
-              </div>
-              <div className="janus-feedback-surface">
-                <div className={`janus-crt ${janusRunning || activeNode ? 'running' : ''}${activeNode ? ' janus-crt--session' : ''}`}>
-              <div className={`warp-grid ${janusRunning ? 'running' : ''}`} />
-              <div className={`scanline ${janusRunning ? 'running' : ''}`} />
-              <div className="pixel-overlay" />
-              {particles.map(({ id, left, size, duration }) => (
-                <div
-                  key={id}
-                  className="particle"
-                  style={{ left: `${left}%`, width: size, height: size, animation: `float-up ${duration}s ease-in forwards` }}
-                />
-              ))}
-              {activeNode ? (
-                <div className="janus-work-session">
-                  <div className="janus-work-session__eyebrow">CURRENT BLUEPRINT NODE</div>
-                  <div className="janus-work-session__title">{activeNode.title || 'Untitled node'}</div>
-                  <div className="janus-work-session__meta">
-                    <span>{activeSession?.workspaceName ?? 'Workspace'}</span>
-                    <span style={{ color: activeVisual?.color }}>{activeVisual?.label ?? activeNode.status}</span>
-                  </div>
-                  <div className="janus-work-session__progress">
-                    <div className="janus-work-session__progress-head">
-                      <span>Janus reference</span>
-                      <strong>{Math.round(activeNode.progress)}%</strong>
+              <div className="janus-monitor-grid">
+                <div className="janus-monitor-left">
+                  <div className="janus-monitor-panel janus-monitor-core-panel">
+                    <div className="janus-monitor-section-title">
+                      <span>Core visualization</span>
+                      <em>{previewRun ? `${runRoleLabel(previewRun.role)} selected` : 'mission overview'}</em>
                     </div>
-                    <div className="janus-work-session__bar">
-                      <span style={{ width: `${Math.max(0, Math.min(100, activeNode.progress))}%`, background: activeVisual?.color }} />
-                    </div>
-                    <em>{activeNode.statusSource === 'janus' ? 'Updated by analysis' : 'Manual baseline'}</em>
-                  </div>
-                  {activeNode.description ? (
-                    <div className="janus-work-session__block">
-                      <span>Goal</span>
-                      <p>{activeNode.description}</p>
-                    </div>
-                  ) : null}
-                  {activeNode.techSolution ? (
-                    <div className="janus-work-session__block">
-                      <span>Plan</span>
-                      <p>{activeNode.techSolution}</p>
-                    </div>
-                  ) : null}
-                  <div className="janus-work-session__grid">
-                    <div>
-                      <span>Todos</span>
-                      <strong>{(activeNode.todos ?? []).filter((todo) => !todo.done).length}</strong>
-                    </div>
-                    <div>
-                      <span>Issues</span>
-                      <strong>{(activeNode.issues ?? []).filter((issue) => issue.status === 'open').length}</strong>
-                    </div>
-                    <div>
-                      <span>Analyses</span>
-                      <strong>{activeNode.analyses?.length ?? 0}</strong>
+                    <div className="janus-monitor-crt">
+                      <div className="warp-grid" />
+                      <div className="scanline" />
+                      <div className="pixel-overlay" />
+                      {particles.map(({ id, left, size, duration }) => (
+                        <div
+                          key={id}
+                          className="particle"
+                          style={{ left: `${left}%`, width: size, height: size, animation: `float-up ${duration}s ease-in forwards` }}
+                        />
+                      ))}
+                      <div className="levitation-wrapper">
+                        <JanusIdentityCore
+                          identity={previewIdentity}
+                          state={previewState}
+                          size="lg"
+                          className="janus-monitor-identity"
+                          aria-label={`${monitorTitle} monitor identity`}
+                        />
+                      </div>
+                      <div className="janus-status-text">{monitorTitle}</div>
                     </div>
                   </div>
-                  <div className="janus-work-session__analysis">
-                    <span>Latest analysis</span>
-                    <p>{latestAnalysis?.result.summary || latestAnalysis?.error || 'Waiting for commit evidence.'}</p>
+
+                  <div className="janus-monitor-stats">
+                    <div className="janus-monitor-stat">
+                      <span>IDENTITY</span>
+                      <strong style={{ color: previewRun ? previewIdentitySpec.color : undefined }}>
+                        {previewRun ? runRoleLabel(previewRun.role) : 'MAIN'}
+                      </strong>
+                    </div>
+                    <div className="janus-monitor-stat">
+                      <span>WORKSPACE</span>
+                      <strong>{workspaceLabel}</strong>
+                    </div>
+                    <div className="janus-monitor-stat">
+                      <span>STATUS</span>
+                      <strong>
+                        {previewRun
+                          ? SUBAGENT_STATUS_LABELS[previewRun.status].toUpperCase()
+                          : activeTerminal
+                            ? terminalStatusLabel(activeTerminal.status).toUpperCase()
+                            : modeLabel}
+                      </strong>
+                    </div>
+                    <div className="janus-monitor-stat">
+                      <span>ENGINE</span>
+                      <strong style={{ color: previewRun ? previewIdentitySpec.color : activeTerminal ? modeColor : undefined }}>
+                        {previewRun
+                          ? runEngineLabel(previewRun).toUpperCase()
+                          : activeTerminal
+                            ? terminalProviderLabel(activeTerminal.preset).toUpperCase()
+                            : monitorStatusText}
+                      </strong>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <>
-                  <div className="levitation-wrapper">
-                    <div className={`janus-face-lg ${faceClass(mode)}`}>
-                      <div className="janus-eye-lg left-eye-lg" />
-                      <div className="janus-eye-lg right-eye-lg" />
+                <div className="janus-monitor-right">
+                  <div className="janus-monitor-panel janus-runtime-panel">
+                    <div className="janus-monitor-section-title">
+                      <span>Subagent runtimes</span>
+                      <em>{activeTerminal ? 'focused terminal' : 'no terminal focus'}</em>
+                    </div>
+                    <div className="janus-runtime-list" aria-label="Subagent runtime framework">
+                      {visibleSubAgentRuns.length === 0 ? (
+                        <div className="janus-runtime-placeholder">
+                          <div className="janus-runtime-core">
+                            <span className="janus-runtime-eye" />
+                            <span className="janus-runtime-eye" />
+                          </div>
+                          <div className="janus-runtime-meta">
+                            <strong>No SubAgent runs</strong>
+                            <span>Focused terminal SubAgent runs will appear here</span>
+                          </div>
+                        </div>
+                      ) : (
+                        visibleSubAgentRuns.map((run) => (
+                          <button
+                            key={run.id}
+                            type="button"
+                            className="janus-runtime-run"
+                            data-status={run.status}
+                            data-selected={previewRun?.id === run.id}
+                            aria-pressed={previewRun?.id === run.id}
+                            style={runtimeRoleStyle(run.role)}
+                            onClick={() => setSelectedRunId(run.id)}
+                          >
+                            <JanusIdentityCore
+                              identity={roleIdentity(run.role)}
+                              state={previewIdentityState(run)}
+                              size="pod"
+                              aria-label={`${run.title} ${run.status}`}
+                            />
+                            <div className="janus-runtime-run-main">
+                              <div className="janus-runtime-run-title">
+                                <strong>{run.title}</strong>
+                                <span>{runEngineLabel(run)}</span>
+                              </div>
+                              <div className="janus-runtime-run-event">{run.lastEvent ?? 'Waiting for runtime event'}</div>
+                            </div>
+                            <div className="janus-runtime-run-side">
+                              <span className="janus-runtime-run-status">{SUBAGENT_STATUS_LABELS[run.status]}</span>
+                              <span>{formatRunAge(run.updatedAt)}</span>
+                              {run.terminalId ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    focusRunTerminal(run)
+                                  }}
+                                >
+                                  Focus
+                                </button>
+                              ) : null}
+                            </div>
+                          </button>
+                        ))
+                      )}
+
                     </div>
                   </div>
-                  <div className="janus-status-text">{statusText}</div>
-                </>
-              )}
                 </div>
-              </div>
-              <div className="janus-feedback-footer">
-                <span>Now</span>
-                <p>{feedbackSummary}</p>
               </div>
             </div>
 

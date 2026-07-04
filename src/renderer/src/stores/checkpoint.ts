@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useWorkspaceStore } from './workspace'
 
 export interface CheckpointSummary {
   id: string
@@ -19,6 +20,7 @@ export interface ConflictInfo {
 }
 
 interface CheckpointStore {
+  workspaceCwd: string | null
   checkpoints: CheckpointSummary[]
   selectedCheckpoint: CheckpointSummary | null
   diffs: Record<string, string>
@@ -31,13 +33,15 @@ interface CheckpointStore {
   restoreCheckpoint: (checkpointId: string, cwd: string) => Promise<void>
   fetchDiff: (checkpointId: string, filePath: string, cwd: string) => Promise<void>
   fetchAllDiffs: (checkpointId: string, cwd: string) => Promise<void>
-  deleteCheckpoint: (checkpointId: string) => Promise<void>
+  deleteCheckpoint: (checkpointId: string, cwd?: string) => Promise<void>
+  clearWorkspaceScope: () => void
   setSelected: (checkpoint: CheckpointSummary | null) => void
   clearConflicts: () => void
   subscribeToEvents: () => () => void
 }
 
 export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
+  workspaceCwd: null,
   checkpoints: [],
   selectedCheckpoint: null,
   diffs: {},
@@ -46,21 +50,55 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
   error: null,
 
   fetchCheckpoints: async (filter) => {
-    set({ loading: true, error: null })
+    const cwd = filter?.cwd?.trim() || null
+    if (!cwd) {
+      set({
+        workspaceCwd: null,
+        checkpoints: [],
+        selectedCheckpoint: null,
+        diffs: {},
+        conflicts: [],
+        loading: false,
+        error: null,
+      })
+      return
+    }
+
+    const previousCwd = get().workspaceCwd
+    set({
+      workspaceCwd: cwd,
+      loading: true,
+      error: null,
+      ...(previousCwd !== cwd
+        ? {
+            checkpoints: [],
+            selectedCheckpoint: null,
+            diffs: {},
+            conflicts: [],
+          }
+        : {}),
+    })
     try {
-      const cps = (await window.electron.invoke('checkpoint:list', filter)) as CheckpointSummary[]
+      const cps = (await window.electron.invoke('checkpoint:list', { ...filter, cwd })) as CheckpointSummary[]
+      if (get().workspaceCwd !== cwd) return
       set({ checkpoints: cps, loading: false })
     } catch (err) {
-      set({ error: (err as Error).message, loading: false })
+      if (get().workspaceCwd === cwd) {
+        set({ error: (err as Error).message, loading: false })
+      }
     }
   },
 
   createCheckpoint: async (options) => {
+    const cwd = options.cwd.trim()
+    if (!cwd) return
+
     set({ loading: true, error: null })
     try {
-      const cp = (await window.electron.invoke('checkpoint:create', options)) as CheckpointSummary
+      const cp = (await window.electron.invoke('checkpoint:create', { ...options, cwd })) as CheckpointSummary
       set((state) => ({
-        checkpoints: [cp, ...state.checkpoints],
+        workspaceCwd: cwd,
+        checkpoints: state.workspaceCwd && state.workspaceCwd !== cwd ? [cp] : [cp, ...state.checkpoints],
         loading: false,
       }))
     } catch (err) {
@@ -111,9 +149,9 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
     }
   },
 
-  deleteCheckpoint: async (checkpointId) => {
+  deleteCheckpoint: async (checkpointId, cwd) => {
     try {
-      await window.electron.invoke('checkpoint:delete', { checkpointId })
+      await window.electron.invoke('checkpoint:delete', { checkpointId, cwd })
       set((state) => ({
         checkpoints: state.checkpoints.filter((cp) => cp.id !== checkpointId),
         selectedCheckpoint:
@@ -123,6 +161,17 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
       set({ error: (err as Error).message })
     }
   },
+
+  clearWorkspaceScope: () =>
+    set({
+      workspaceCwd: null,
+      checkpoints: [],
+      selectedCheckpoint: null,
+      diffs: {},
+      conflicts: [],
+      loading: false,
+      error: null,
+    }),
 
   setSelected: (checkpoint) => set({ selectedCheckpoint: checkpoint }),
   clearConflicts: () => set({ conflicts: [] }),
@@ -134,8 +183,14 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
         set({ error: event.error ?? 'Checkpoint event failed' })
         return
       }
-      const state = get()
-      state.fetchCheckpoints()
+      const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
+      const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
+      if (!activeWorkspace?.path) {
+        get().clearWorkspaceScope()
+        return
+      }
+
+      get().fetchCheckpoints({ cwd: activeWorkspace.path })
     })
     return unsub
   },

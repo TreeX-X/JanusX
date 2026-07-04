@@ -6,6 +6,7 @@ import type { TerminalConfig, TerminalInstance } from './types'
 
 const require = createRequire(import.meta.url)
 const CONPTY_FILES = ['conpty.dll', 'OpenConsole.exe'] as const
+const TERMINAL_OUTPUT_BUFFER_LIMIT = 1_000_000
 
 function findConptySourceDir(packageRoot: string): string | null {
   const prebuildDir = join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'conpty')
@@ -63,7 +64,10 @@ class TerminalManager {
       cols: 80,
       rows: 30,
       cwd: config.cwd,
-      env: process.env as Record<string, string>,
+      env: {
+        ...(process.env as Record<string, string>),
+        ...(config.env ?? {}),
+      },
       /*-- 显式启用 ConPTY（build≥18309 默认开，显式更稳妥），Windows 有效，非 Windows 忽略 --*/
       useConpty: true,
     }
@@ -86,6 +90,8 @@ class TerminalManager {
       config,
       status: 'running',
       createdAt: Date.now(),
+      outputBuffer: '',
+      outputSeq: 0,
     }
 
     this.instances.set(config.id, instance)
@@ -114,6 +120,27 @@ class TerminalManager {
     const instance = this.instances.get(id)
     if (instance) {
       instance.pty.resize(cols, rows)
+    }
+  }
+
+  appendOutput(id: string, data: string): number | null {
+    const instance = this.instances.get(id)
+    if (!instance) return null
+
+    instance.outputSeq += 1
+    instance.outputBuffer += data
+    if (instance.outputBuffer.length > TERMINAL_OUTPUT_BUFFER_LIMIT) {
+      instance.outputBuffer = instance.outputBuffer.slice(-TERMINAL_OUTPUT_BUFFER_LIMIT)
+    }
+    return instance.outputSeq
+  }
+
+  getOutputReplay(id: string): { data: string; seq: number } | null {
+    const instance = this.instances.get(id)
+    if (!instance) return null
+    return {
+      data: instance.outputBuffer,
+      seq: instance.outputSeq,
     }
   }
 

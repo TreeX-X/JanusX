@@ -20,41 +20,82 @@ const SNAPSHOT_SKIP_DIRS = new Set([
   'coverage',
 ])
 
+interface WorkspaceCheckpointState {
+  workspacePath: string
+  storagePath: string
+  checkpoints: Map<string, ConversationCheckpoint>
+  blobStore: BlobStore
+}
+
 export class CheckpointManager {
-  private checkpoints = new Map<string, ConversationCheckpoint>()
-  private blobStore!: BlobStore
+  private workspaceStates = new Map<string, WorkspaceCheckpointState>()
   private gitAdapter = new GitAdapter()
-  private storagePath = ''
-  private workspacePath = ''
+  private activeWorkspaceKey = ''
 
   async initialize(workspacePath: string): Promise<void> {
+    const resolvedWorkspacePath = resolve(workspacePath)
+
     try {
-      const st = await stat(workspacePath)
+      const st = await stat(resolvedWorkspacePath)
       if (!st.isDirectory()) throw new Error(`Not a directory: ${workspacePath}`)
     } catch {
       throw new Error(`工作区路径不存在或不是目录: ${workspacePath}`)
     }
 
-    const newPath = join(workspacePath, '.janusX', 'checkpoints')
-    if (this.storagePath === newPath) return
+    const workspaceKey = this.getWorkspaceKey(resolvedWorkspacePath)
+    const existing = this.workspaceStates.get(workspaceKey)
+    if (existing) {
+      this.activeWorkspaceKey = workspaceKey
+      return
+    }
 
-    this.storagePath = newPath
-    this.workspacePath = workspacePath
+    const storagePath = join(resolvedWorkspacePath, '.janusX', 'checkpoints')
+    const blobStore = new BlobStore(join(storagePath, 'blobs'))
+    const state: WorkspaceCheckpointState = {
+      workspacePath: resolvedWorkspacePath,
+      storagePath,
+      checkpoints: new Map<string, ConversationCheckpoint>(),
+      blobStore,
+    }
 
-    this.checkpoints.clear()
-    await mkdir(join(this.storagePath, 'blobs'), { recursive: true })
-    this.blobStore = new BlobStore(join(this.storagePath, 'blobs'))
-    await this.blobStore.initialize()
-    await this.loadIndex()
-    await this.garbageCollectBlobs()
+    await mkdir(join(state.storagePath, 'blobs'), { recursive: true })
+    await state.blobStore.initialize()
+    await this.loadIndex(state)
+    await this.garbageCollectBlobs(state)
+
+    this.workspaceStates.set(workspaceKey, state)
+    this.activeWorkspaceKey = workspaceKey
+  }
+
+  private getWorkspaceKey(workspacePath: string): string {
+    return resolve(workspacePath)
+  }
+
+  private async getWorkspaceState(cwd?: string): Promise<WorkspaceCheckpointState> {
+    if (cwd) {
+      const workspaceKey = this.getWorkspaceKey(cwd)
+      let state = this.workspaceStates.get(workspaceKey)
+      if (!state) {
+        await this.initialize(cwd)
+        state = this.workspaceStates.get(workspaceKey)
+      } else {
+        this.activeWorkspaceKey = workspaceKey
+      }
+      if (state) return state
+    }
+
+    const activeState = this.workspaceStates.get(this.activeWorkspaceKey)
+    if (!activeState) throw new Error('Checkpoint manager is not initialized')
+    return activeState
   }
 
   async createCheckpoint(options: CheckpointCreateOptions): Promise<ConversationCheckpoint> {
+    const state = await this.getWorkspaceState(options.cwd)
     const id = randomUUID()
     const branch = await this.gitAdapter.getCurrentBranch(options.cwd).catch(() => 'unknown')
-    const currentIndex = this.nextConversationIndex()
+    const currentIndex = this.nextConversationIndex(state)
 
-    const filesSnapshot = await this.captureWorkspaceSnapshot(options.cwd)
+    const filesSnapshot = await this.captureWorkspaceSnapshot(state, options.cwd)
 
     const checkpoint: ConversationCheckpoint = {
       id,
@@ -69,9 +110,9 @@ export class CheckpointManager {
       schemaVersion: 2,
     }
 
-    this.checkpoints.set(id, checkpoint)
-    await this.saveCheckpoint(checkpoint)
-    this.pruneOldCheckpoints().catch(() => {})
+    state.checkpoints.set(id, checkpoint)
+    await this.saveCheckpoint(state, checkpoint)
+    this.pruneOldCheckpoints(state).catch(() => {})
     return checkpoint
   }
 
@@ -93,18 +134,20 @@ export class CheckpointManager {
     return { finalized, checkpoint }
   }
 
-  async finalizeCheckpoint(checkpointId: string, _cwd: string): Promise<void> {
-    const checkpoint = this.checkpoints.get(checkpointId)
+  async finalizeCheckpoint(checkpointId: string, cwd: string): Promise<void> {
+    const state = await this.getWorkspaceState(cwd)
+    const checkpoint = state.checkpoints.get(checkpointId)
     if (!checkpoint) throw new Error(`Checkpoint not found: ${checkpointId}`)
 
     if (checkpoint.status !== 'ready') {
       checkpoint.status = 'ready'
-      await this.saveCheckpoint(checkpoint)
+      await this.saveCheckpoint(state, checkpoint)
     }
   }
 
   async restoreCheckpoint(checkpointId: string, cwd: string): Promise<{ conflicts: ConflictInfo[] }> {
-    const checkpoint = this.checkpoints.get(checkpointId)
+    const state = await this.getWorkspaceState(cwd)
+    const checkpoint = state.checkpoints.get(checkpointId)
     if (!checkpoint) throw new Error(`Checkpoint not found: ${checkpointId}`)
 
     const targetPaths = new Set(Object.keys(checkpoint.filesSnapshot))
@@ -112,7 +155,7 @@ export class CheckpointManager {
 
     for (const path of targetPaths) {
       const entry = checkpoint.filesSnapshot[path]
-      const content = await this.blobStore.retrieve(entry.hash)
+      const content = await state.blobStore.retrieve(entry.hash)
       if (!content) {
         throw new Error(`Checkpoint blob missing for ${path}`)
       }
@@ -133,78 +176,100 @@ export class CheckpointManager {
       await rm(targetPath, { force: true })
     }
 
-    await this.deleteCheckpointsAfter(checkpoint)
+    await this.deleteCheckpointsAfter(state, checkpoint)
 
     return { conflicts: [] }
   }
 
-  async listCheckpoints(filter?: { terminalId?: string; engine?: CheckpointEngine }): Promise<ConversationCheckpoint[]> {
-    let results = Array.from(this.checkpoints.values())
+  async listCheckpoints(filter?: { terminalId?: string; engine?: CheckpointEngine; cwd?: string }): Promise<ConversationCheckpoint[]> {
+    const state = await this.getWorkspaceState(filter?.cwd)
+    let results = Array.from(state.checkpoints.values())
     if (filter?.terminalId) results = results.filter(cp => cp.terminalId === filter.terminalId)
     if (filter?.engine) results = results.filter(cp => cp.engine === filter.engine)
     return results.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }
 
-  async deleteCheckpoint(checkpointId: string): Promise<void> {
-    const checkpoint = this.checkpoints.get(checkpointId)
+  async deleteCheckpoint(checkpointId: string, cwd?: string): Promise<void> {
+    const state = await this.getWorkspaceState(cwd)
+    const checkpoint = state.checkpoints.get(checkpointId)
     if (!checkpoint) return
 
-    this.checkpoints.delete(checkpointId)
+    state.checkpoints.delete(checkpointId)
     try {
-      await unlink(join(this.storagePath, `${checkpointId}.json`))
+      await unlink(join(state.storagePath, `${checkpointId}.json`))
     } catch {}
-    await this.saveIndex().catch(() => {})
-    await this.garbageCollectBlobs().catch(() => {})
+    await this.saveIndex(state).catch(() => {})
+    await this.garbageCollectBlobs(state).catch(() => {})
   }
 
-  private nextConversationIndex(): number {
-    return Math.max(0, ...Array.from(this.checkpoints.values()).map(cp => cp.conversationIndex)) + 1
+  private nextConversationIndex(state: WorkspaceCheckpointState): number {
+    return Math.max(0, ...Array.from(state.checkpoints.values()).map(cp => cp.conversationIndex)) + 1
   }
 
-  private async deleteCheckpointsAfter(target: ConversationCheckpoint): Promise<void> {
-    const stale = Array.from(this.checkpoints.values()).filter(
+  private async deleteCheckpointsAfter(state: WorkspaceCheckpointState, target: ConversationCheckpoint): Promise<void> {
+    const stale = Array.from(state.checkpoints.values()).filter(
       cp => cp.conversationIndex > target.conversationIndex,
     )
     for (const cp of stale) {
-      await this.deleteCheckpoint(cp.id)
+      await this.deleteCheckpoint(cp.id, state.workspacePath)
     }
   }
 
-  private async pruneOldCheckpoints(): Promise<void> {
-    const checkpoints = Array.from(this.checkpoints.values())
+  private async pruneOldCheckpoints(state: WorkspaceCheckpointState): Promise<void> {
+    const checkpoints = Array.from(state.checkpoints.values())
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 
     const excess = checkpoints.length - MAX_CHECKPOINTS
     if (excess <= 0) return
 
     for (const cp of checkpoints.slice(0, excess)) {
-      await this.deleteCheckpoint(cp.id)
+      await this.deleteCheckpoint(cp.id, state.workspacePath)
     }
   }
 
-  async clearAll(): Promise<void> {
-    const all = Array.from(this.checkpoints.values())
+  async clearAll(cwd?: string): Promise<void> {
+    if (!cwd) {
+      await this.clearAllLoaded()
+      return
+    }
+
+    const state = await this.getWorkspaceState(cwd)
+    await this.clearState(state)
+  }
+
+  async clearAllLoaded(): Promise<void> {
+    const states = Array.from(this.workspaceStates.values())
+    for (const state of states) {
+      await this.clearState(state)
+    }
+    this.workspaceStates.clear()
+    this.activeWorkspaceKey = ''
+  }
+
+  private async clearState(state: WorkspaceCheckpointState): Promise<void> {
+    const all = Array.from(state.checkpoints.values())
     for (const cp of all) {
       try {
-        await unlink(join(this.storagePath, `${cp.id}.json`))
+        await unlink(join(state.storagePath, `${cp.id}.json`))
       } catch {}
     }
-    this.checkpoints.clear()
+    state.checkpoints.clear()
     try {
-      await unlink(join(this.storagePath, 'index.json'))
+      await unlink(join(state.storagePath, 'index.json'))
     } catch {}
-    await this.blobStore.clear()
+    await state.blobStore.clear()
   }
 
   async getDiff(checkpointId: string, filePath: string, cwd?: string): Promise<string> {
-    const checkpoint = this.checkpoints.get(checkpointId)
+    const state = await this.getWorkspaceState(cwd)
+    const checkpoint = state.checkpoints.get(checkpointId)
     if (!checkpoint) return ''
 
     const snapshot = checkpoint.filesSnapshot[filePath]
-    const targetContent = snapshot ? await this.blobStore.retrieve(snapshot.hash) : null
+    const targetContent = snapshot ? await state.blobStore.retrieve(snapshot.hash) : null
     if (snapshot && !targetContent) return ''
 
-    const currentContent = await this.safeReadWorkspaceFile(cwd ?? this.workspacePath, filePath)
+    const currentContent = await this.safeReadWorkspaceFile(cwd ?? state.workspacePath, filePath)
     if (!snapshot && !currentContent) return ''
 
     return generateUnifiedDiff(
@@ -215,7 +280,8 @@ export class CheckpointManager {
   }
 
   async getAllDiffs(checkpointId: string, cwd: string): Promise<string> {
-    const checkpoint = this.checkpoints.get(checkpointId)
+    const state = await this.getWorkspaceState(cwd)
+    const checkpoint = state.checkpoints.get(checkpointId)
     if (!checkpoint) return ''
 
     const parts: string[] = []
@@ -228,9 +294,10 @@ export class CheckpointManager {
   }
 
   async getChangedFileCount(checkpointId: string, cwd?: string): Promise<number> {
-    const checkpoint = this.checkpoints.get(checkpointId)
+    const state = await this.getWorkspaceState(cwd)
+    const checkpoint = state.checkpoints.get(checkpointId)
     if (!checkpoint) return 0
-    const changedPaths = await this.getChangedFilePaths(checkpoint, cwd ?? this.workspacePath)
+    const changedPaths = await this.getChangedFilePaths(checkpoint, cwd ?? state.workspacePath)
     return changedPaths.length
   }
 
@@ -238,8 +305,9 @@ export class CheckpointManager {
     checkpointIds: string[],
     cwd?: string,
   ): Promise<Record<string, number>> {
+    const state = await this.getWorkspaceState(cwd)
     const result: Record<string, number> = {}
-    const targetCwd = cwd ?? this.workspacePath
+    const targetCwd = cwd ?? state.workspacePath
     if (!targetCwd) {
       for (const id of checkpointIds) result[id] = 0
       return result
@@ -247,7 +315,7 @@ export class CheckpointManager {
 
     const currentFiles = await this.captureWorkspaceHashIndex(targetCwd)
     for (const id of checkpointIds) {
-      const checkpoint = this.checkpoints.get(id)
+      const checkpoint = state.checkpoints.get(id)
       result[id] = checkpoint ? this.getChangedFilePathsFromIndex(checkpoint, currentFiles).length : 0
     }
     return result
@@ -303,69 +371,71 @@ export class CheckpointManager {
     return files
   }
 
-  private async saveCheckpoint(checkpoint: ConversationCheckpoint): Promise<void> {
-    await mkdir(this.storagePath, { recursive: true })
+  private async saveCheckpoint(state: WorkspaceCheckpointState, checkpoint: ConversationCheckpoint): Promise<void> {
+    await mkdir(state.storagePath, { recursive: true })
     const data = JSON.stringify(checkpoint, null, 2)
-    await writeFile(join(this.storagePath, `${checkpoint.id}.json`), data)
-    await this.saveIndex()
+    await writeFile(join(state.storagePath, `${checkpoint.id}.json`), data)
+    await this.saveIndex(state)
   }
 
-  private async loadIndex(): Promise<void> {
+  private async loadIndex(state: WorkspaceCheckpointState): Promise<void> {
     try {
-      const files = await readdir(this.storagePath)
+      const files = await readdir(state.storagePath)
       for (const file of files) {
         if (!file.endsWith('.json') || file === 'index.json') continue
         try {
-          const data = await readFile(join(this.storagePath, file), 'utf-8')
+          const data = await readFile(join(state.storagePath, file), 'utf-8')
           const cp = this.normalizeCheckpoint(JSON.parse(data) as Partial<ConversationCheckpoint>)
           if (!cp) continue
-          this.checkpoints.set(cp.id, cp)
+          state.checkpoints.set(cp.id, cp)
         } catch {}
       }
     } catch {}
   }
 
-  private async saveIndex(): Promise<void> {
-    await mkdir(this.storagePath, { recursive: true })
+  private async saveIndex(state: WorkspaceCheckpointState): Promise<void> {
+    await mkdir(state.storagePath, { recursive: true })
     const index = {
       version: 2,
-      checkpointIds: Array.from(this.checkpoints.keys()),
+      checkpointIds: Array.from(state.checkpoints.keys()),
     }
-    await writeFile(join(this.storagePath, 'index.json'), JSON.stringify(index, null, 2))
+    await writeFile(join(state.storagePath, 'index.json'), JSON.stringify(index, null, 2))
   }
 
-  private async garbageCollectBlobs(): Promise<void> {
-    if (!this.blobStore) return
-
+  private async garbageCollectBlobs(state: WorkspaceCheckpointState): Promise<void> {
     const referenced = new Set<string>()
-    for (const checkpoint of this.checkpoints.values()) {
+    for (const checkpoint of state.checkpoints.values()) {
       for (const entry of Object.values(checkpoint.filesSnapshot)) {
         if (entry.hash) referenced.add(entry.hash)
       }
     }
 
-    const storedHashes = await this.blobStore.listHashes()
+    const storedHashes = await state.blobStore.listHashes()
     for (const hash of storedHashes) {
       if (!referenced.has(hash)) {
-        await this.blobStore.delete(hash)
+        await state.blobStore.delete(hash)
       }
     }
   }
 
-  private async captureWorkspaceSnapshot(cwd: string): Promise<Record<string, SnapshotFileEntry>> {
+  private async captureWorkspaceSnapshot(
+    state: WorkspaceCheckpointState,
+    cwd: string,
+  ): Promise<Record<string, SnapshotFileEntry>> {
     const files: Record<string, SnapshotFileEntry> = {}
     const filePaths = await this.listSnapshotFilePaths(cwd)
 
     for (const relPath of filePaths) {
       const absolutePath = this.resolveWorkspacePath(cwd, relPath)
       if (!absolutePath) continue
-      await this.addFileToSnapshot(files, cwd, absolutePath)
+      await this.addFileToSnapshot(state, files, cwd, absolutePath)
     }
 
     return files
   }
 
   private async addFileToSnapshot(
+    state: WorkspaceCheckpointState,
     files: Record<string, SnapshotFileEntry>,
     cwd: string,
     absolutePath: string,
@@ -374,7 +444,7 @@ export class CheckpointManager {
       const relPath = relative(cwd, absolutePath).replace(/\\/g, '/')
       if (this.shouldSkipSnapshotPath(relPath)) return
       const content = await readFile(absolutePath)
-      const hash = await this.blobStore.store(content)
+      const hash = await state.blobStore.store(content)
       files[relPath] = {
         path: relPath,
         hash,

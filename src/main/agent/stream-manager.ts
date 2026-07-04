@@ -21,14 +21,18 @@ export class AgentStreamManager {
   }
 
   async start(options: AgentSpawnOptions): Promise<string> {
-    const id = randomUUID()
+    return this.startWithId(randomUUID(), options)
+  }
 
+  async startWithId(id: string, options: AgentSpawnOptions): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const run = async () => {
         try {
           await this.runTask(id, options)
           resolve(id)
         } catch (err) {
+          this.running--
+          this.drainQueue()
           reject(err)
         }
       }
@@ -38,7 +42,7 @@ export class AgentStreamManager {
         return
       }
       this.running++
-      run().finally(() => this.drainQueue())
+      void run()
     })
   }
 

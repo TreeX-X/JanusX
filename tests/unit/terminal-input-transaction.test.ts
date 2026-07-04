@@ -82,6 +82,15 @@ describe('terminal input transaction parser', () => {
     expect(result.state.text).toBe('\n')
   })
 
+  it('commits accumulated input on CSI-u Enter', () => {
+    let state = applyTerminalInputChunk(createTerminalInputTransactionState(), 'test').state
+    const result = applyTerminalInputChunk(state, '\x1b[13;1u')
+
+    expect(result.commitNow).toBe(true)
+    expect(result.softEnterCount).toBe(0)
+    expect(result.state.text).toBe('test')
+  })
+
   it('tracks a soft newline sent through bracketed paste', () => {
     const result = applyTerminalInputChunk(createTerminalInputTransactionState(), '\x1b[200~\r\x1b[201~', {
       softEnterCount: 1,

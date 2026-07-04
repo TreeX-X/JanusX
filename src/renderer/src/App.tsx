@@ -10,6 +10,7 @@ import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel } from '@/components/Panel'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
+import { AgentNotificationHost } from '@/components/AgentNotificationHost'
 import { BlueprintView } from '@/components/blueprint/BlueprintView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
@@ -144,7 +145,7 @@ export default function App() {
         <Sidebar />
 
         {/*-- 中心区域：3D 翻转容器（正面=终端，背面=蓝图） --*/}
-        <main className="overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
+        <main className="min-w-0 overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
           <div
             ref={flipperElRef}
             style={{
@@ -170,7 +171,7 @@ export default function App() {
           >
             {/*-- 正面：终端视图 --*/}
             <div
-              className="absolute inset-0"
+              className="absolute inset-0 min-w-0"
               style={{
                 backfaceVisibility: 'hidden',
                 background: 'var(--bg-deep)',
@@ -200,6 +201,7 @@ export default function App() {
         <StatusBar />
       </div>
       <FileEditor />
+      <AgentNotificationHost />
     </div>
   )
 }

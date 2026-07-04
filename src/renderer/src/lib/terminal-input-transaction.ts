@@ -20,6 +20,7 @@ export interface TerminalInputChunkOptions {
 const BRACKETED_PASTE_START = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const SOFT_ENTER_SEQUENCE = /^\x1b\[13;\d+u/
+const ENTER_SEQUENCE = /^\x1b\[13;\d+u/
 const WIN32_CTRL_J_SEQUENCE = /^\x1b\[74;\d+;10;1;\d+;\d+_/
 
 export function createTerminalInputTransactionState(): TerminalInputTransactionState {
@@ -76,6 +77,13 @@ export function applyTerminalInputChunk(
         index += win32CtrlJMatch[0].length - 1
         continue
       }
+    }
+
+    const enterMatch = data.slice(index).match(ENTER_SEQUENCE)
+    if (enterMatch) {
+      commitNow = true
+      index += enterMatch[0].length - 1
+      continue
     }
 
     const ch = data[index]

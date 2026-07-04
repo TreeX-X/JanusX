@@ -97,13 +97,16 @@ export function registerCheckpointHandlers(): void {
     }
   )
 
-  ipcMain.handle('checkpoint:delete', async (_event, { checkpointId }: { checkpointId: string }) => {
-    await checkpointManager.deleteCheckpoint(checkpointId)
-    return { success: true }
-  })
+  ipcMain.handle(
+    'checkpoint:delete',
+    async (_event, { checkpointId, cwd }: { checkpointId: string; cwd?: string }) => {
+      await checkpointManager.deleteCheckpoint(checkpointId, cwd)
+      return { success: true }
+    }
+  )
 
-  ipcMain.handle('checkpoint:clearAll', async () => {
-    await checkpointManager.clearAll()
+  ipcMain.handle('checkpoint:clearAll', async (_event, filter?: { cwd?: string }) => {
+    await checkpointManager.clearAll(filter?.cwd)
     return { success: true }
   })
 }

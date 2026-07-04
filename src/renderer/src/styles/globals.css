@@ -367,3 +367,86 @@ body {
   transform: translateX(0) scale(1) !important;
 }
 
+.agent-notification-stack {
+  position: fixed;
+  top: 42px;
+  right: 14px;
+  z-index: 10000;
+  display: flex;
+  width: min(360px, calc(100vw - 28px));
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.agent-notification {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(16, 16, 18, 0.96);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  pointer-events: auto;
+}
+
+.agent-notification--completed {
+  border-color: rgba(78, 201, 176, 0.24);
+}
+
+.agent-notification--failed {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.agent-notification--attention {
+  border-color: rgba(255, 120, 48, 0.3);
+}
+
+.agent-notification__content {
+  display: flex;
+  min-width: 0;
+  cursor: pointer;
+  flex-direction: column;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.agent-notification__content:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.agent-notification__title {
+  overflow: hidden;
+  color: #e7e7e7;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-notification__body {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #9a9a9a;
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.agent-notification__close {
+  cursor: pointer;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  color: #777;
+  font-size: 12px;
+}
+
+.agent-notification__close:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #d4d4d4;
+}
+

@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JanusX Island Monitor Chat Extract</title>
+  <style>
+    :root {
+      --janus-sleep: #ff7830;
+      --janus-order: #ff7830;
+      --janus-order-glow: rgba(255, 120, 48, 0.6);
+      --janus-running: #00ff88;
+      --janus-current: var(--janus-order);
+      --janus-current-glow: var(--janus-order-glow);
+      --janus-hover-glow-soft: rgba(255, 120, 48, 0.12);
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 26%),
+        radial-gradient(circle at 50% 0%, rgba(255, 120, 48, 0.055), transparent 36%),
+        #111114;
+      color: rgba(255, 255, 255, 0.82);
+      overflow: hidden;
+    }
+
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    .desktop-context {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 64px 64px;
+      opacity: 0.08;
+    }
+
+    .janus-veil {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at top center, rgba(255,255,255,0.03), rgba(0,0,0,0.12) 28%, rgba(0,0,0,0.02) 55%, transparent 70%);
+    }
+
+    .janus-island-shell {
+      position: fixed;
+      left: 50%;
+      top: 12px;
+      z-index: 2001;
+      width: min(880px, calc(100vw - 72px));
+      height: min(560px, calc(100vh - 92px));
+      transform: translateX(-50%);
+      pointer-events: none;
+      -webkit-app-region: no-drag;
+    }
+
+    .janus-island {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 24px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.008)),
+        #030303;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.035),
+        0 22px 64px rgba(0,0,0,0.66);
+      pointer-events: auto;
+      overflow: visible;
+      isolation: isolate;
+    }
+
+    .janus-collapsed-core,
+    .janus-peek-shell {
+      display: none;
+    }
+
+    .janus-expanded-shell {
+      position: absolute;
+      inset: 18px;
+      display: flex;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      gap: 12px;
+      overflow: visible;
+    }
+
+    .janus-expanded-topbar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      min-height: 30px;
+      gap: 12px;
+      padding: 0;
+    }
+
+    .janus-expanded-brand {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255,255,255,0.64);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.8px;
+    }
+
+    .janus-expanded-brand span {
+      color: var(--janus-current);
+      opacity: 0.78;
+    }
+
+    .janus-expanded-view-switch {
+      display: inline-flex;
+      align-items: center;
+      justify-self: center;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid rgba(255,255,255,0.055);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.024);
+    }
+
+    .janus-expanded-view-button {
+      min-width: 72px;
+      height: 24px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: rgba(255,255,255,0.42);
+      font-size: 10px;
+      cursor: pointer;
+      transition: background 0.16s ease, color 0.16s ease;
+    }
+
+    .janus-expanded-view-button:hover {
+      color: rgba(255,255,255,0.72);
+      background: rgba(255,255,255,0.045);
+    }
+
+    .janus-expanded-view-button[data-active="true"] {
+      color: rgba(255,255,255,0.78);
+      background: rgba(255,255,255,0.062);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.035);
+    }
+
+    .janus-expanded-meta {
+      display: flex;
+      align-items: center;
+      justify-self: end;
+      gap: 10px;
+    }
+
+    .janus-expanded-meta-text {
+      display: none;
+    }
+
+    .janus-expanded-mode-pill {
+      display: inline-flex;
+      height: 22px;
+      align-items: center;
+      padding: 0 9px;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.025);
+      color: rgba(255,255,255,0.5);
+      font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+      font-size: 9px;
+      letter-spacing: 0.6px;
+    }
+
+    .janus-expanded-body {
+      position: relative;
+      display: grid;
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .janus-expanded-bottombar {
+      display: none;
+    }
+
+    .janus-feedback-panel {
+      display: flex;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      padding: 0;
+      border: 0;
+      border-radius: 20px;
+      background: transparent;
+      overflow: hidden;
+      transition: opacity 0.22s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .janus-feedback-header,
+    .janus-feedback-chips,
+    .janus-feedback-footer {
+      display: none;
+    }
+
+    .janus-feedback-surface {
+      height: 100%;
+      min-height: 0;
+      border-radius: 0;
+      background: #020203;
+      box-shadow: none;
+      overflow: hidden;
+    }
+
+    .janus-crt {
+      position: relative;
+      display: flex;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      background: #020203;
+      box-shadow: none;
+      contain: layout style paint;
+    }
+
+    .warp-grid {
+      position: absolute;
+      inset: -50%;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0.18;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 20px 20px;
+      transform: perspective(300px) rotateX(60deg) translateY(0);
+      animation: warp-flight 0.6s linear infinite;
+    }
+
+    @keyframes warp-flight {
+      100% { transform: perspective(300px) rotateX(60deg) translateY(20px); }
+    }
+
+    .scanline {
+      position: absolute;
+      inset: 0;
+      z-index: 21;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0.14;
+      background: linear-gradient(to bottom, transparent 0 3px, rgba(255,255,255,0.06) 3px 4px);
+      background-size: 100% 4px;
+      animation: scan-crt 8s linear infinite;
+    }
+
+    @keyframes scan-crt {
+      100% { background-position: 0 100vh; }
+    }
+
+    .pixel-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0.025;
+      background-image:
+        repeating-linear-gradient(transparent, transparent 7px, rgba(255,255,255,0.1) 7px, rgba(255,255,255,0.1) 8px),
+        repeating-linear-gradient(90deg, transparent, transparent 7px, rgba(255,255,255,0.07) 7px, rgba(255,255,255,0.07) 8px);
+    }
+
+    .particle {
+      position: absolute;
+      bottom: -10px;
+      z-index: 2;
+      background-color: var(--janus-current);
+      box-shadow: 0 0 10px var(--janus-current);
+      opacity: 0;
+      pointer-events: none;
+      animation: float-up var(--duration, 4s) ease-in infinite;
+      animation-delay: var(--delay, 0s);
+    }
+
+    @keyframes float-up {
+      0% { transform: translateY(0) scale(1); opacity: 0; }
+      20%, 80% { opacity: 0.65; }
+      100% { transform: translateY(-180px) scale(0.5); opacity: 0; }
+    }
+
+    .levitation-wrapper {
+      position: relative;
+      z-index: 18;
+      animation: levitate 6s ease-in-out infinite;
+    }
+
+    @keyframes levitate {
+      50% { transform: translateY(-8px); }
+    }
+
+    .janus-face-lg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      position: relative;
+    }
+
+    .mode-order .janus-eye-lg {
+      width: 36px;
+      height: 48px;
+      border-radius: 0;
+      background: #fff;
+      box-shadow: 0 0 10px #fff, 0 0 30px var(--janus-order), 0 0 60px var(--janus-order-glow);
+      animation: lg-idle 10s infinite cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes lg-idle {
+      0%, 15%, 35%, 100% { transform: translateX(0) scale(1); }
+      17%, 19% { transform: translateX(0) scaleY(0.05); }
+      21% { transform: translateX(0) scale(1); }
+      40%, 50% { transform: translateX(-6px) scale(0.95); }
+      55%, 65% { transform: translateX(6px) scale(0.95); }
+      70% { transform: translateX(0) scale(1); }
+      85% { transform: scale(1.15); }
+      90% { transform: scale(1); }
+    }
+
+    .janus-status-text {
+      position: absolute;
+      left: 16px;
+      bottom: 12px;
+      z-index: 25;
+      margin-top: 22px;
+      color: rgba(255,255,255,0.48);
+      font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-shadow: none;
+    }
+
+    .janus-chat {
+      display: flex;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      pointer-events: auto;
+    }
+
+    .janus-chat--docked {
+      position: relative;
+      z-index: auto;
+      width: 100%;
+      max-width: none;
+      height: auto;
+      overflow: hidden;
+    }
+
+    .janus-chat-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex: 0 0 auto;
+      padding: 0 0 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.045);
+    }
+
+    .janus-chat-toolbar-kicker {
+      display: none;
+    }
+
+    .janus-chat-toolbar strong {
+      color: rgba(255,255,255,0.72);
+      font-size: 12px;
+      font-weight: 560;
+      letter-spacing: 0.5px;
+    }
+
+    .janus-chat-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+
+    .janus-chat-tool-button,
+    .janus-chat-suggestions button {
+      height: 25px;
+      padding: 0 8px;
+      border: 1px solid rgba(255,255,255,0.045);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.018);
+      color: rgba(255,255,255,0.48);
+      cursor: pointer;
+      font-size: 10px;
+      transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+
+    .janus-chat-tool-button:hover,
+    .janus-chat-suggestions button:hover {
+      border-color: rgba(255,255,255,0.075);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.7);
+    }
+
+    .janus-chat-messages {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px 0;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .janus-chat-messages::-webkit-scrollbar {
+      display: none;
+    }
+
+    .janus-chat-empty {
+      display: flex;
+      height: 100%;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+    }
+
+    .janus-chat-wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      filter:
+        drop-shadow(0 2px 6px rgba(255,160,60,0.25))
+        drop-shadow(0 0 14px rgba(255,120,40,0.16));
+    }
+
+    .janus-chat-pixel-logo {
+      display: block;
+      width: auto;
+      height: 0.95em;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      shape-rendering: crispEdges;
+    }
+
+    .janus-chat-empty-hint {
+      margin-top: 6px;
+      color: rgba(255,255,255,0.34);
+      font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: 0.4px;
+    }
+
+    .janus-chat-suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      max-width: 520px;
+      margin-top: 12px;
+    }
+
+    .janus-chat-suggestions button {
+      height: 28px;
+      padding: 0 11px;
+      font-size: 11px;
+    }
+
+    .janus-chat-message {
+      max-width: 86%;
+      animation: message-in 0.3s ease-out;
+    }
+
+    .janus-chat-message.user {
+      align-self: flex-end;
+    }
+
+    .janus-chat-message.assistant {
+      max-width: 94%;
+      align-self: flex-start;
+    }
+
+    @keyframes message-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .janus-chat-message-content {
+      padding: 9px 12px;
+      border: 1px solid rgba(255,255,255,0.045);
+      border-radius: 15px;
+      background: rgba(255,255,255,0.028);
+      color: rgba(255,255,255,0.76);
+      font-size: 13px;
+      line-height: 1.62;
+      word-break: break-word;
+    }
+
+    .janus-chat-message-content p {
+      margin: 0;
+    }
+
+    .janus-chat-message.user .janus-chat-message-content {
+      background: rgba(255,255,255,0.075);
+      color: rgba(255,255,255,0.88);
+    }
+
+    .janus-chat-input-wrapper {
+      display: flex;
+      width: min(720px, 100%);
+      flex: 0 0 auto;
+      flex-direction: column;
+      gap: 0;
+      margin: 0 auto;
+      padding: 0;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+      background: #08080a;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+      overflow: hidden;
+    }
+
+    .janus-chat-input-wrapper:focus-within {
+      border-color: rgba(255,122,26,0.34);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.24), 0 0 0 1px rgba(255,122,26,0.08);
+    }
+
+    .janus-chat-composer-row {
+      display: flex;
+      min-height: 44px;
+      align-items: flex-end;
+      gap: 0;
+    }
+
+    .janus-chat-prompt-prefix {
+      display: flex;
+      min-height: 46px;
+      flex: 0 0 auto;
+      align-self: stretch;
+      align-items: center;
+      padding: 0 10px 0 12px;
+      border-right: 1px solid rgba(255,255,255,0.06);
+      color: rgba(255,122,26,0.78);
+      font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .janus-chat-input {
+      flex: 1 1 auto;
+      min-height: 46px;
+      max-height: 150px;
+      padding: 14px 12px;
+      border: 0;
+      border-radius: 0;
+      outline: 0;
+      background: transparent;
+      box-shadow: none;
+      color: rgba(255,255,255,0.9);
+      font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.45;
+      resize: none;
+    }
+
+    .janus-chat-input::placeholder {
+      color: rgba(255,255,255,0.26);
+    }
+
+    .janus-chat-send,
+    .janus-chat-stop {
+      display: flex;
+      width: 38px;
+      min-width: 38px;
+      height: 38px;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      margin: 4px 6px 4px 0;
+      padding: 0;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.04);
+      box-shadow: none;
+      color: rgba(255,255,255,0.6);
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 700;
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+    }
+
+    .janus-chat-send:not(:disabled) {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.07);
+      color: rgba(255,255,255,0.84);
+    }
+
+    .janus-chat-send:hover:not(:disabled) {
+      background: rgba(255,255,255,0.095);
+      border-color: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.92);
+    }
+
+    .janus-chat-send:disabled {
+      background: rgba(255,255,255,0.03);
+      border-color: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.22);
+      cursor: not-allowed;
+    }
+
+    .janus-chat-composer-meta {
+      display: none;
+    }
+
+    .janus-island-shell[data-view="monitor"] .janus-expanded-body {
+      grid-template-rows: minmax(0, 1fr);
+    }
+
+    .janus-island-shell[data-view="monitor"] .janus-feedback-panel {
+      grid-row: 1 / -1;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .janus-island-shell[data-view="monitor"] .janus-chat--docked,
+    .janus-island-shell[data-view="monitor"] .janus-chat-input-wrapper {
+      display: none;
+    }
+
+    .janus-island-shell[data-view="chat"] .janus-expanded-body {
+      grid-template-rows: minmax(0, 1fr);
+    }
+
+    .janus-island-shell[data-view="chat"] .janus-feedback-panel {
+      display: none;
+    }
+
+    .janus-island-shell[data-view="chat"] .janus-chat--docked {
+      grid-row: 1;
+      height: 100%;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    @media (max-width: 900px) {
+      .janus-island-shell {
+        width: min(calc(100vw - 24px), 720px);
+        height: min(calc(100vh - 72px), 620px);
+      }
+
+      .janus-expanded-topbar {
+        grid-template-columns: auto 1fr auto;
+      }
+
+      .janus-expanded-view-switch {
+        width: auto;
+        justify-self: center;
+      }
+
+      .janus-expanded-view-button {
+        min-width: 64px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .janus-island-shell {
+        top: 10px;
+        width: calc(100vw - 16px);
+        height: calc(100vh - 28px);
+      }
+
+      .janus-island {
+        padding: 12px;
+        border-radius: 20px;
+      }
+
+      .janus-expanded-shell {
+        inset: 14px;
+      }
+
+      .janus-expanded-brand,
+      .janus-expanded-mode-pill {
+        display: none;
+      }
+
+      .janus-expanded-topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .janus-expanded-view-switch {
+        justify-self: stretch;
+      }
+
+      .janus-expanded-view-button {
+        flex: 1;
+      }
+
+      .janus-chat-pixel-logo {
+        height: 0.7em;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="desktop-context" aria-hidden="true"></div>
+  <div class="janus-veil" aria-hidden="true"></div>
+
+  <div class="janus-island-shell mode-order" data-stage="expanded" data-view="monitor" data-mode="order">
+    <div class="pull-hint" aria-hidden="true"></div>
+    <div class="burst-ripple" aria-hidden="true"></div>
+
+    <div class="janus-island" data-mode="order" data-stage="expanded">
+      <div class="janus-collapsed-core">
+        <div class="janus-face-mini">
+          <div class="janus-eye-mini left-eye-mini"></div>
+          <div class="janus-eye-mini right-eye-mini"></div>
+        </div>
+      </div>
+
+      <div class="janus-peek-shell" aria-hidden="true">
+        <div class="janus-peek-orbit"></div>
+        <div class="janus-peek-core">
+          <div class="janus-peek-title">Ready</div>
+          <div class="janus-peek-subtitle">Double-click to open</div>
+        </div>
+      </div>
+
+      <div class="janus-expanded-shell">
+        <div class="janus-expanded-topbar">
+          <div class="janus-expanded-brand island-title"><span>◎</span> JANUS</div>
+
+          <div class="janus-expanded-view-switch" aria-label="Janus expanded view">
+            <button type="button" class="janus-expanded-view-button" data-target="monitor" data-active="true" aria-pressed="true">Monitor</button>
+            <button type="button" class="janus-expanded-view-button" data-target="chat" data-active="false" aria-pressed="false">Chat</button>
+          </div>
+
+          <div class="janus-expanded-meta">
+            <span class="janus-expanded-meta-text">Esc / 双击收起</span>
+            <span class="janus-expanded-mode-pill">ORDER</span>
+          </div>
+        </div>
+
+        <div class="janus-expanded-body">
+          <div class="janus-feedback-panel">
+            <div class="janus-feedback-header">
+              <div>
+                <span class="janus-feedback-eyebrow">State</span>
+                <strong>ORDER // IDLE</strong>
+              </div>
+              <div class="janus-feedback-status">ORDER</div>
+            </div>
+
+            <div class="janus-feedback-chips">
+              <span>Workspace</span>
+              <span>Runtime idle</span>
+              <span>Ready</span>
+            </div>
+
+            <div class="janus-feedback-surface">
+              <div class="janus-crt">
+                <div class="warp-grid"></div>
+                <div class="scanline"></div>
+                <div class="pixel-overlay"></div>
+                <div class="particle" style="left: 24%; width: 6px; height: 6px; --duration: 3.6s; --delay: -0.4s;"></div>
+                <div class="particle" style="left: 42%; width: 5px; height: 5px; --duration: 4.2s; --delay: -1.6s;"></div>
+                <div class="particle" style="left: 62%; width: 8px; height: 8px; --duration: 4.8s; --delay: -2.7s;"></div>
+                <div class="particle" style="left: 78%; width: 5px; height: 5px; --duration: 3.9s; --delay: -3.1s;"></div>
+
+                <div class="levitation-wrapper">
+                  <div class="janus-face-lg mode-order">
+                    <div class="janus-eye-lg left-eye-lg"></div>
+                    <div class="janus-eye-lg right-eye-lg"></div>
+                  </div>
+                </div>
+                <div class="janus-status-text">ORDER // IDLE</div>
+              </div>
+            </div>
+
+            <div class="janus-feedback-footer">
+              <span>Now</span>
+              <p>ORDER // IDLE</p>
+            </div>
+          </div>
+
+          <div class="janus-chat janus-chat--docked">
+            <div class="janus-chat-toolbar">
+              <div>
+                <span class="janus-chat-toolbar-kicker">Thread</span>
+                <strong>Janus</strong>
+              </div>
+              <div class="janus-chat-toolbar-actions">
+                <button class="janus-chat-tool-button" type="button">模型</button>
+                <button class="janus-chat-tool-button danger" type="button">清空</button>
+              </div>
+            </div>
+
+            <div class="janus-chat-messages">
+              <div class="janus-chat-empty">
+                <div class="janus-chat-wordmark">
+                  <svg class="janus-chat-pixel-logo" viewBox="0 0 37 7" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" aria-label="JanusX">
+                    <rect x="4.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="4.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="4.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="0.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="4.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="0.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="4.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="0.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="4.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="1.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="2.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="3.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="7.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="8.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="9.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="6.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="10.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="6.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="10.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="6.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="7.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="8.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="9.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="10.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="6.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="10.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="6.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="10.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="6.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="10.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="12.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="16.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="12.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="13.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="16.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="12.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="14.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="16.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="12.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="15.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="16.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="12.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="16.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="12.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="16.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="12.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="16.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="18.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="22.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="18.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="22.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="18.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="22.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="18.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="22.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="18.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="22.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="18.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="22.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="19.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="20.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="21.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="25.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="26.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="27.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="28.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="24.12" y="1.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="24.12" y="2.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="25.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="26.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="27.12" y="3.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="28.12" y="4.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="28.12" y="5.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="24.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="25.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="26.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="27.12" y="6.12" width="0.76" height="0.76" fill="#ffd089" />
+                    <rect x="30.12" y="0.12" width="0.76" height="0.76" fill="#fff3e0" />
+                    <rect x="31.12" y="1.12" width="0.76" height="0.76" fill="#fff3e0" />
+                    <rect x="32.12" y="2.12" width="0.76" height="0.76" fill="#fff3e0" />
+                    <rect x="33.12" y="3.12" width="0.76" height="0.76" fill="#fff3e0" />
+                    <rect x="34.12" y="4.12" width="0.76" height="0.76" fill="#fff3e0" />
+                    <rect x="35.12" y="5.12" width="0.76" height="0.76" fill="#fff3e0" />
+                    <rect x="36.12" y="6.12" width="0.76" height="0.76" fill="#fff3e0" />
+                    <rect x="36.12" y="0.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                    <rect x="35.12" y="1.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                    <rect x="34.12" y="2.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                    <rect x="32.12" y="4.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                    <rect x="31.12" y="5.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                    <rect x="30.12" y="6.12" width="0.76" height="0.76" fill="#ff7a1a" />
+                  </svg>
+                </div>
+                <div class="janus-chat-empty-hint">从当前上下文开始</div>
+                <div class="janus-chat-suggestions">
+                  <button type="button">当前节点</button>
+                  <button type="button">运行状态</button>
+                  <button type="button">下一步</button>
+                </div>
+              </div>
+
+              <span class="janus-chat-end-anchor"></span>
+            </div>
+
+            <div class="janus-chat-input-wrapper">
+              <div class="janus-chat-composer-row">
+                <span class="janus-chat-prompt-prefix" aria-hidden="true">janusx&gt;</span>
+                <textarea class="janus-chat-input" rows="1" placeholder="Message JanusX or type /"></textarea>
+                <button class="janus-chat-send" type="button" aria-label="发送">↑</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="janus-expanded-bottombar">
+          <div class="janus-expanded-caption">
+            <span>Janus</span>
+            <span class="janus-expanded-caption-divider"></span>
+            <span>ORDER // IDLE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const shell = document.querySelector('.janus-island-shell');
+    const buttons = document.querySelectorAll('.janus-expanded-view-button');
+
+    function setView(view) {
+      shell.dataset.view = view;
+      buttons.forEach((button) => {
+        const active = button.dataset.target === view;
+        button.dataset.active = String(active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => setView(button.dataset.target));
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === '1') setView('monitor');
+      if (event.key === '2') setView('chat');
+    });
+  </script>
+</body>
+</html>

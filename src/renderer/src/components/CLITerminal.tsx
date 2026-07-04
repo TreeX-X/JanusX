@@ -29,6 +29,17 @@ type RuntimeTelemetryHistorySnapshot = RuntimeTelemetryPatch & {
   updatedAt?: number
 }
 
+type TerminalDataPayload = {
+  id: string
+  data: string
+  seq?: number
+}
+
+type TerminalReplayPayload = {
+  data?: string
+  seq?: number
+}
+
 const HISTORY_TELEMETRY_POLL_MS = 5_000
 
 export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
@@ -236,12 +247,16 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       }
 
       // Ctrl+V — 从剪贴板粘贴，统一走 onData 转发到 PTY 并追踪提交行
-      if (e.key === 'v') {
+      if (e.key.toLowerCase() === 'v') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (e.type !== 'keydown') return false
+
         navigator.clipboard.readText().then((text) => {
           if (text) {
             term.paste(text)
           }
-        })
+        }).catch(() => {})
         return false
       }
 
@@ -271,7 +286,17 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     }
 
     // 延迟两帧确保容器完成布局，避免初次创建终端时 xterm 以 0 尺寸渲染。
+    const fitTimers: number[] = []
+    const scheduleFit = (delayMs: number) => {
+      const timer = window.setTimeout(fitAndSync, delayMs)
+      fitTimers.push(timer)
+    }
+
+    fitAndSync()
     requestAnimationFrame(() => requestAnimationFrame(fitAndSync))
+    scheduleFit(80)
+    scheduleFit(240)
+    scheduleFit(520)
 
     const observer = new ResizeObserver(() => {
       try {
@@ -310,18 +335,67 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     })
 
     // 输出 ← IPC
+    let replayReady = false
+    let replaySeq = 0
+    let disposed = false
+    const queuedLiveOutput: TerminalDataPayload[] = []
+
+    const writeLiveOutput = (data: string) => {
+      term.write(data)
+      scheduleOutputTelemetry(data)
+    }
+
+    const flushQueuedLiveOutput = () => {
+      for (const payload of queuedLiveOutput) {
+        if (payload.seq !== undefined && payload.seq <= replaySeq) continue
+        writeLiveOutput(payload.data)
+        if (payload.seq !== undefined) {
+          replaySeq = Math.max(replaySeq, payload.seq)
+        }
+      }
+      queuedLiveOutput.length = 0
+    }
+
     const unsubscribe = window.electron.on('terminal:data', (payload: unknown) => {
-      const { id, data } = payload as { id: string; data: string }
-      if (id === terminalId) {
-        term.write(data)
-        scheduleOutputTelemetry(data)
+      const { id, data, seq } = payload as TerminalDataPayload
+      if (id !== terminalId) return
+
+      if (!replayReady) {
+        queuedLiveOutput.push({ id, data, seq })
+        return
+      }
+      if (seq !== undefined && seq <= replaySeq) return
+      writeLiveOutput(data)
+      if (seq !== undefined) {
+        replaySeq = Math.max(replaySeq, seq)
       }
     })
+
+    void window.electron.invoke('terminal:replay', { id: terminalId })
+      .then((payload) => {
+        if (disposed) return
+        const replay = payload as TerminalReplayPayload
+        const data = typeof replay.data === 'string' ? replay.data : ''
+        replaySeq = typeof replay.seq === 'number' ? replay.seq : 0
+        if (data) {
+          term.write(data)
+        }
+        replayReady = true
+        flushQueuedLiveOutput()
+        requestAnimationFrame(() => requestAnimationFrame(fitAndSync))
+      })
+      .catch(() => {
+        if (disposed) return
+        replayReady = true
+        flushQueuedLiveOutput()
+      })
 
     termRef.current = term
 
     return () => {
+      disposed = true
       observer.disconnect()
+      fitTimers.forEach((timer) => window.clearTimeout(timer))
       unsubscribe()
       if (telemetryFlushTimerRef.current !== null) {
         window.clearTimeout(telemetryFlushTimerRef.current)
@@ -332,7 +406,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       term.dispose()
       termRef.current = null
     }
-  }, [terminalId])
+  }, [terminalId, updateTelemetry, scheduleOutputTelemetry])
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!hasWorkspaceFileDrag(event.dataTransfer)) return

@@ -86,6 +86,41 @@ function StreamingText({ content }: { content: string }) {
   )
 }
 
+function SendIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  )
+}
+
+function StopIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </svg>
+  )
+}
+
 /* ════════════════════════════════════════════════════════════
    JanusChat 组件
    ════════════════════════════════════════════════════════════ */
@@ -212,15 +247,11 @@ export function JanusChat({
 
   const isNoProviderError = error === '未配置默认 LLM Provider'
   const canClear = messages.length > 0 || !!pendingContent || !!error
-  const suggestions = [
-    '当前节点',
-    '运行状态',
-    '下一步'
-  ]
+  const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
 
   return (
     <div
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
       onDoubleClick={(e) => e.stopPropagation()}
     >
       <div className="janus-chat-toolbar">
@@ -263,7 +294,7 @@ export function JanusChat({
                 viewBox="0 0 37 7"
                 shapeRendering="crispEdges"
                 preserveAspectRatio="xMidYMid meet"
-                aria-label="JanusX"
+                aria-label="JANUSX"
               >
                 {/* J — col 0-4 */}
                 <rect x="4.12" y="0.12" width="0.76" height="0.76" fill="#ffd089" />
@@ -364,19 +395,8 @@ export function JanusChat({
                 <rect x="30.12" y="6.12" width="0.76" height="0.76" fill="#ff7a1a" />
               </svg>
             </div>
-            <div className="janus-chat-empty-hint">从当前上下文开始</div>
-            <div className="janus-chat-suggestions">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  onClick={() => handleSend(suggestion)}
-                  disabled={isStreaming}
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
+            <div className="janus-chat-empty-title">JANUSX Studio Ready.</div>
+            <div className="janus-chat-empty-subtitle">System initialized. Waiting for your command.</div>
           </div>
         )}
 
@@ -385,6 +405,9 @@ export function JanusChat({
             key={msg.id}
             className={`janus-chat-message ${msg.role}`}
           >
+            <div className="janus-chat-message-author">
+              {msg.role === 'user' ? 'You' : 'JANUSX'}
+            </div>
             <div className="janus-chat-message-content">
               <MarkdownContent content={msg.content} />
             </div>
@@ -393,6 +416,7 @@ export function JanusChat({
 
         {(isStreaming || pendingContent) && (
           <div className="janus-chat-message assistant streaming">
+            <div className="janus-chat-message-author">JANUSX</div>
             <div className="janus-chat-message-content">
               {pendingContent ? (
                 <StreamingText content={pendingContent} />
@@ -442,12 +466,12 @@ export function JanusChat({
       {/* 输入区域 — opencode 风格方框 composer：单行 prompt + textarea + 按钮 */}
       <div className="janus-chat-input-wrapper">
         <div className="janus-chat-composer-row">
-          <span className="janus-chat-prompt-prefix" aria-hidden="true">janusx&gt;</span>
+          <span className="janus-chat-prompt-prefix" aria-hidden="true">JANUSX&gt;</span>
           <textarea
             ref={inputRef}
             className="janus-chat-input"
             rows={rows}
-            placeholder="Message JanusX or type /"
+            placeholder="Message Janus or execute command..."
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
@@ -463,7 +487,7 @@ export function JanusChat({
               aria-label="停止生成"
               type="button"
             >
-              ■
+              <StopIcon />
             </button>
           ) : (
             <button
@@ -475,7 +499,7 @@ export function JanusChat({
               aria-label="发送"
               type="button"
             >
-              ↑
+              <SendIcon />
             </button>
           )}
         </div>
