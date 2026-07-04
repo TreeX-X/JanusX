@@ -329,7 +329,10 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       return false
     })
 
+    let suppressReplayResponses = false
+
     term.onData((data) => {
+      if (suppressReplayResponses) return
       window.electron.send('terminal:input', { id: terminalId, data })
       trackInputData(data)
     })
@@ -377,12 +380,20 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
         const replay = payload as TerminalReplayPayload
         const data = typeof replay.data === 'string' ? replay.data : ''
         replaySeq = typeof replay.seq === 'number' ? replay.seq : 0
-        if (data) {
-          term.write(data)
+        const finishReplay = () => {
+          suppressReplayResponses = false
+          replayReady = true
+          flushQueuedLiveOutput()
+          requestAnimationFrame(() => requestAnimationFrame(fitAndSync))
         }
-        replayReady = true
-        flushQueuedLiveOutput()
-        requestAnimationFrame(() => requestAnimationFrame(fitAndSync))
+
+        if (!data) {
+          finishReplay()
+          return
+        }
+
+        suppressReplayResponses = true
+        term.write(data, finishReplay)
       })
       .catch(() => {
         if (disposed) return

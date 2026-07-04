@@ -132,6 +132,19 @@ describe('terminal input transaction parser', () => {
     expect(result.state.text).toBe('test')
   })
 
+  it('ignores fragmented terminal query responses without ESC bytes', () => {
+    const data = [
+      '[?1;2c',
+      ']10;rgb:d4d4/d4d4/d4d4\\',
+      ']11;rgb:0505/0505/0505\\',
+      'test',
+    ].join('')
+    const result = applyTerminalInputChunk(createTerminalInputTransactionState(), data)
+
+    expect(result.state.text).toBe('test')
+    expect(result.commitNow).toBe(false)
+  })
+
   it('normalizes CRLF and CR for checkpoint previews', () => {
     expect(normalizeTerminalInputPreviewText('a\r\nb\rc')).toBe('a\nb\nc')
   })

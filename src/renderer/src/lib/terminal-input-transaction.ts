@@ -22,6 +22,8 @@ const BRACKETED_PASTE_END = '\x1b[201~'
 const SOFT_ENTER_SEQUENCE = /^\x1b\[13;\d+u/
 const ENTER_SEQUENCE = /^\x1b\[13;\d+u/
 const WIN32_CTRL_J_SEQUENCE = /^\x1b\[74;\d+;10;1;\d+;\d+_/
+const CSI_RESPONSE_FRAGMENT = /^\[\?[\d;]*[A-Za-z]/
+const OSC_RESPONSE_FRAGMENT = /^\]\d+;.*?(?:\x07|\\)/
 
 export function createTerminalInputTransactionState(): TerminalInputTransactionState {
   return {
@@ -49,6 +51,15 @@ export function applyTerminalInputChunk(
   let softEnterCount = options.softEnterCount ?? 0
 
   for (let index = 0; index < data.length; index += 1) {
+    if (isBulkInput && !next.inEsc && !next.inCSI && !next.inControlString) {
+      const terminalResponseFragment = data.slice(index).match(CSI_RESPONSE_FRAGMENT)
+        ?? data.slice(index).match(OSC_RESPONSE_FRAGMENT)
+      if (terminalResponseFragment) {
+        index += terminalResponseFragment[0].length - 1
+        continue
+      }
+    }
+
     if (data.startsWith(BRACKETED_PASTE_START, index)) {
       next.inBracketedPaste = true
       index += BRACKETED_PASTE_START.length - 1
