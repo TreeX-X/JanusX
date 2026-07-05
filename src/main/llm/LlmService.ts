@@ -29,10 +29,21 @@ class LlmService {
   private factory = ProviderFactory.getInstance()
   private registry = ExtensionRegistry.getInstance()
   private initialized = false
+  private initializePromise: Promise<void> | null = null
 
   private getAdapterForProvider(settings: ProviderSettings) {
     const adapterId = AUTH_TYPE_TO_ADAPTER[settings.authType] || settings.id
     return this.registry.get(adapterId)
+  }
+
+  private registerBuiltInAdapters(): void {
+    if (!this.registry.has('openai-compatible')) {
+      this.registry.register(new OpenAICompatibleAdapter())
+    }
+
+    if (!this.registry.has('vertex-ai')) {
+      this.registry.register(new VertexAIAdapter())
+    }
   }
 
   /**
@@ -64,21 +75,26 @@ class LlmService {
    */
   async initialize(): Promise<void> {
     if (this.initialized) return
+    if (this.initializePromise) return this.initializePromise
 
-    // 初始化全局代理管理器（自动检测系统代理）
-    const proxyManager = getProxyManager()
-    proxyManager.autoDetect()
+    this.initializePromise = (async () => {
+      const proxyManager = getProxyManager()
+      proxyManager.autoDetect()
 
-    // 设置 Electron session 代理
-    const proxyUrl = proxyManager.getProxyUrl()
-    if (proxyUrl) {
-      await this.setElectronProxy(proxyUrl)
+      const proxyUrl = proxyManager.getProxyUrl()
+      if (proxyUrl) {
+        await this.setElectronProxy(proxyUrl)
+      }
+
+      this.registerBuiltInAdapters()
+      this.initialized = true
+    })()
+
+    try {
+      await this.initializePromise
+    } finally {
+      this.initializePromise = null
     }
-
-    this.registry.register(new OpenAICompatibleAdapter())
-    this.registry.register(new VertexAIAdapter())
-
-    this.initialized = true
   }
 
   /**

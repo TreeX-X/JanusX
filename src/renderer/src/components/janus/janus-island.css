@@ -5350,6 +5350,20 @@ body.is-running {
   transform: none;
 }
 
+.janus-island-shell[data-stage="expanded"] .janus-expanded-shell,
+.janus-island-shell[data-stage="expanded"] .janus-expanded-body {
+  transform: none;
+  will-change: auto;
+  filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-collapsed-core,
+.janus-island-shell[data-stage="expanded"] .janus-peek-shell {
+  display: none;
+  transform: none;
+  filter: none;
+}
+
 @media (max-width: 900px) {
   .janus-island-shell[data-stage="expanded"] {
     left: 12px;

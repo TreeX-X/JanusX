@@ -61,7 +61,6 @@ export function TerminalSelector() {
   const { activeWorkspaceId, addTerminal, removeTerminal } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
-  const setPanelCollapsed = useAppStore((s) => s.setPanelCollapsed)
 
   const handleSelect = useCallback(
     async (preset: TerminalPreset) => {
@@ -96,7 +95,6 @@ export function TerminalSelector() {
 
       // 先切换视图并等待 TerminalArea/CLITerminal 挂载，避免 PTY 首屏输出在监听注册前丢失。
       setBlueprintMode(false)
-      setPanelCollapsed(true)
       setLoadState('terminal-active')
       await waitForTerminalMount()
 
@@ -123,7 +121,7 @@ export function TerminalSelector() {
         }
       }
     },
-    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode, setPanelCollapsed]
+    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode]
   )
 
   return (
