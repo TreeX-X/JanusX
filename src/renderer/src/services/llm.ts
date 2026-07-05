@@ -99,7 +99,8 @@ export function chatStream(
   messages: ChatMessage[],
   onDelta: (delta: string) => void,
   onDone: () => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  options?: { providerId?: string; modelId?: string }
 ): { abort: () => void } {
   const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
   let cleaned = false
@@ -140,10 +141,16 @@ export function chatStream(
     onError(p.error ?? '未知错误')
   })
 
-  getDefaultProvider()
+  const targetProvider = options?.providerId
+    ? Promise.resolve({ providerId: options.providerId, modelId: options.modelId })
+    : getDefaultProvider().then((def) =>
+        def ? { providerId: def.provider.id, modelId: def.modelId } : null
+      )
+
+  targetProvider
     .then((def) => {
       if (cleaned) return
-      if (!def?.provider.id) {
+      if (!def?.providerId) {
         cleanup()
         onError('未配置默认 LLM Provider')
         return
@@ -151,7 +158,7 @@ export function chatStream(
       window.electron.send('llm:chat-stream', {
         requestId,
         messages,
-        providerId: def.provider.id,
+        providerId: def.providerId,
         modelId: def.modelId
       })
     })

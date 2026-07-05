@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { chatStream, type ChatMessage } from '@/services/llm'
+import { chatStream, getDefaultProvider, getProviders, type ChatMessage } from '@/services/llm'
 import { useStreamingPrinter } from './useStreamingPrinter'
 
 export interface Message {
@@ -14,15 +14,29 @@ export interface Message {
   timestamp: number
 }
 
+export interface ChatModelOption {
+  providerId: string
+  providerName: string
+  modelId: string
+  label: string
+  isDefault: boolean
+}
+
 export interface UseJanusChatReturn {
   messages: Message[]
   pendingContent: string
   isStreaming: boolean
   error: string | null
+  modelOptions: ChatModelOption[]
+  activeModel: ChatModelOption | null
+  modelNotice: string | null
   send: (text: string) => void
   stop: () => void
   retry: () => void
   clear: () => void
+  cycleModel: () => void
+  selectModel: (providerId: string) => void
+  refreshModels: () => Promise<ChatModelOption[]>
 }
 
 const SYSTEM_PROMPT = window.electron.janusPersona
@@ -31,6 +45,9 @@ export function useJanusChat(): UseJanusChatReturn {
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [modelOptions, setModelOptions] = useState<ChatModelOption[]>([])
+  const [activeModel, setActiveModel] = useState<ChatModelOption | null>(null)
+  const [modelNotice, setModelNotice] = useState<string | null>(null)
   const {
     output: printedContent,
     append: appendToPrinter,
@@ -46,11 +63,105 @@ export function useJanusChat(): UseJanusChatReturn {
 
   const abortRef = useRef<(() => void) | null>(null)
   const streamIdRef = useRef(0)
+  const activeModelRef = useRef<ChatModelOption | null>(activeModel)
+
+  useEffect(() => {
+    activeModelRef.current = activeModel
+  }, [activeModel])
+
+  useEffect(() => {
+    if (!modelNotice) return
+    const timer = window.setTimeout(() => setModelNotice(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [modelNotice])
+
+  const loadConfiguredModels = useCallback(async (): Promise<ChatModelOption[]> => {
+    try {
+      const [providers, defaultProvider] = await Promise.all([getProviders(), getDefaultProvider()])
+      const options = providers
+        .filter((provider) => provider.enabled !== false)
+        .map((provider) => {
+          const modelId =
+            provider.modelId ||
+            (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')
+          return modelId
+            ? {
+                providerId: provider.id,
+                providerName: provider.name,
+                modelId,
+                label: `${provider.name} / ${modelId}`,
+                isDefault: defaultProvider?.provider.id === provider.id,
+              }
+            : null
+        })
+        .filter((option): option is ChatModelOption => option !== null)
+
+      const fallback =
+        options.length === 0 && defaultProvider
+          ? [{
+              providerId: defaultProvider.provider.id,
+              providerName: defaultProvider.provider.name,
+              modelId: defaultProvider.modelId,
+              label: `${defaultProvider.provider.name} / ${defaultProvider.modelId}`,
+              isDefault: true,
+            }]
+          : []
+      const nextOptions = options.length > 0 ? options : fallback
+
+      setModelOptions(nextOptions)
+      setActiveModel((current) => {
+        if (current && nextOptions.some((option) => option.providerId === current.providerId)) {
+          return nextOptions.find((option) => option.providerId === current.providerId) ?? current
+        }
+        return nextOptions.find((option) => option.isDefault) ?? nextOptions[0] ?? null
+      })
+      return nextOptions
+    } catch (err) {
+      console.error('Failed to load chat model options:', err)
+      setModelOptions([])
+      setActiveModel(null)
+      return []
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadConfiguredModels()
+  }, [loadConfiguredModels])
 
   const abortCurrentRequest = useCallback(() => {
     abortRef.current?.()
     abortRef.current = null
   }, [])
+
+  const selectModel = useCallback((providerId: string) => {
+    const next = modelOptions.find((option) => option.providerId === providerId)
+    if (!next) return
+    setActiveModel(next)
+    setModelNotice(`Model switched: ${next.modelId}`)
+  }, [modelOptions])
+
+  const cycleModel = useCallback(() => {
+    const switchFrom = (options: ChatModelOption[]) => {
+      if (options.length === 0) {
+        setModelNotice('No configured model')
+        return
+      }
+      const current = activeModelRef.current
+      const currentIndex = current
+        ? options.findIndex((option) => option.providerId === current.providerId)
+        : -1
+      const next = options[(currentIndex + 1) % options.length] ?? options[0]
+      setActiveModel(next)
+      setModelNotice(`Model switched: ${next.modelId}`)
+    }
+
+    if (modelOptions.length > 0) {
+      switchFrom(modelOptions)
+      return
+    }
+
+    void loadConfiguredModels().then(switchFrom)
+  }, [loadConfiguredModels, modelOptions])
 
   const commitAssistantMessage = useCallback((content: string) => {
     if (!content.trim()) return
@@ -125,7 +236,13 @@ export function useJanusChat(): UseJanusChatReturn {
           resetPrinter()
           commitAssistantMessage(final)
           setError(err)
-        }
+        },
+        activeModelRef.current
+          ? {
+              providerId: activeModelRef.current.providerId,
+              modelId: activeModelRef.current.modelId,
+            }
+          : undefined
       )
 
       abortRef.current = abort
@@ -149,5 +266,20 @@ export function useJanusChat(): UseJanusChatReturn {
     setError(null)
   }, [abortCurrentRequest, resetPrinter])
 
-  return { messages, pendingContent: printedContent, isStreaming, error, send, stop, retry, clear }
+  return {
+    messages,
+    pendingContent: printedContent,
+    isStreaming,
+    error,
+    modelOptions,
+    activeModel,
+    modelNotice,
+    send,
+    stop,
+    retry,
+    clear,
+    cycleModel,
+    selectModel,
+    refreshModels: loadConfiguredModels,
+  }
 }

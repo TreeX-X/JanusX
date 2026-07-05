@@ -6,7 +6,7 @@ import { useJanusState } from './useJanusState'
 import { projectService, type ProjectConfig } from '@/services/project'
 import type { Terminal, Workspace } from '@/types'
 import { JanusChat } from './JanusChat'
-import type { Message } from './useJanusChat'
+import type { ChatModelOption, Message } from './useJanusChat'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useSubAgentRunStore } from '@/stores/subagent-run'
@@ -98,6 +98,11 @@ interface JanusIslandProps {
   pendingContent: string
   isStreaming: boolean
   error: string | null
+  modelOptions: ChatModelOption[]
+  activeModel: ChatModelOption | null
+  modelNotice: string | null
+  onChatCycleModel: () => void
+  onChatSelectModel: (providerId: string) => void
   onChatSend: (text: string) => void
   onChatStop: () => void
   onChatRetry: () => void
@@ -227,6 +232,11 @@ export function JanusIsland({
   pendingContent,
   isStreaming,
   error,
+  modelOptions,
+  activeModel,
+  modelNotice,
+  onChatCycleModel,
+  onChatSelectModel,
   onChatSend,
   onChatStop,
   onChatRetry,
@@ -712,6 +722,11 @@ export function JanusIsland({
               pendingContent={pendingContent}
               isStreaming={isStreaming}
               error={error}
+              modelOptions={modelOptions}
+              activeModel={activeModel}
+              modelNotice={modelNotice}
+              onCycleModel={onChatCycleModel}
+              onSelectModel={onChatSelectModel}
               onSend={onChatSend}
               onStop={onChatStop}
               onRetry={onChatRetry}

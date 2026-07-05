@@ -24,10 +24,15 @@ export function Titlebar() {
     pendingContent,
     isStreaming,
     error,
+    modelOptions,
+    activeModel,
+    modelNotice,
     send: handleChatSend,
     stop: handleChatStop,
     retry: handleChatRetry,
     clear: handleChatClear,
+    cycleModel: handleChatCycleModel,
+    selectModel: handleChatSelectModel,
   } = useJanusChat()
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
@@ -158,7 +163,7 @@ export function Titlebar() {
 
       {/* 灵动�?*/}
       <div
-        className="absolute left-1/2 top-0 -translate-x-1/2 titlebar-no-drag"
+        className="absolute top-0 titlebar-no-drag"
         style={{ zIndex: 2000 }}
       >
         <JanusIsland
@@ -171,6 +176,11 @@ export function Titlebar() {
           pendingContent={pendingContent}
           isStreaming={isStreaming}
           error={error}
+          modelOptions={modelOptions}
+          activeModel={activeModel}
+          modelNotice={modelNotice}
+          onChatCycleModel={handleChatCycleModel}
+          onChatSelectModel={handleChatSelectModel}
           onChatSend={handleChatSend}
           onChatStop={handleChatStop}
           onChatRetry={handleChatRetry}
