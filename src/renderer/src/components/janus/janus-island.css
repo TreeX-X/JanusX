@@ -4746,6 +4746,28 @@ body.is-running {
   color: #e5e7eb;
 }
 
+.janus-chat-message.user .janus-chat-message-content,
+.janus-island-shell[data-stage="expanded"] .janus-chat-message.user .janus-chat-message-content,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user .janus-chat-message-content,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message.user .janus-chat-message-content {
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+  padding: 3px 0 6px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 120, 48, 0.62);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-message.user .janus-chat-message-content {
+  padding: 4px 0 7px;
+}
+
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-tag {
   display: inline-flex;
   align-items: center;

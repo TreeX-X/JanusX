@@ -20,6 +20,9 @@ type IdleWindow = Window & {
   cancelIdleCallback?: (id: number) => void
 }
 
+const SIDE_PANEL_WIDTH = 'clamp(240px, 14vw, 280px)'
+const SIDE_PANEL_COLLAPSED_WIDTH = '48px'
+
 function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): FileNode[] {
   const currentMap = new Map(currentNodes.map((node) => [node.path, node]))
 
@@ -139,7 +142,9 @@ export default function App() {
       <div
         className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden transition-[grid-template-columns] duration-200"
         style={{
-          gridTemplateColumns: `${sidebarCollapsed ? '48px' : '240px'} 1fr ${panelCollapsed ? '48px' : '280px'}`,
+          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} 1fr ${
+            panelCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH
+          }`,
         }}
       >
         <Sidebar />
