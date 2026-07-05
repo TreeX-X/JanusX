@@ -10,8 +10,8 @@ export type AgentHookLifecycle =
   | 'approval'
   | 'attention'
   | 'unmatched'
-  | 'native-shown'
-  | 'renderer-fallback'
+  | 'desktop-toast-shown'
+  | 'desktop-toast-failed'
   | 'ignored'
 
 export interface RegisteredHookTerminal {

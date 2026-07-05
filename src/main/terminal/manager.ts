@@ -1,8 +1,9 @@
 import { spawn, type IPty } from 'node-pty'
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import { createRequire } from 'module'
 import { dirname, join } from 'path'
 import type { TerminalConfig, TerminalInstance } from './types'
+import { logTerminalDiagnostic } from './diagnostics'
 
 const require = createRequire(import.meta.url)
 const CONPTY_FILES = ['conpty.dll', 'OpenConsole.exe'] as const
@@ -28,36 +29,32 @@ function findConptySourceDir(packageRoot: string): string | null {
   return null
 }
 
-function ensureBundledConptyFiles(): void {
-  if (process.platform !== 'win32') return
+function hasBundledConptyFiles(): boolean {
+  if (process.platform !== 'win32') return false
 
   const packageRoot = dirname(require.resolve('node-pty/package.json'))
+  const sourceDir = findConptySourceDir(packageRoot)
+  if (sourceDir) {
+    logTerminalDiagnostic('conpty source ready', { packageRoot, sourceDir })
+    return true
+  }
+
   const destDir = join(packageRoot, 'build', 'Release', 'conpty')
 
   if (CONPTY_FILES.every(file => existsSync(join(destDir, file)))) {
-    return
+    logTerminalDiagnostic('conpty build release ready', { packageRoot, destDir })
+    return true
   }
 
-  const sourceDir = findConptySourceDir(packageRoot)
-  if (!sourceDir) {
-    throw new Error('node-pty bundled conpty.dll is missing')
-  }
-
-  mkdirSync(destDir, { recursive: true })
-  for (const file of CONPTY_FILES) {
-    const source = join(sourceDir, file)
-    const dest = join(destDir, file)
-    if (!existsSync(dest)) {
-      copyFileSync(source, dest)
-    }
-  }
+  logTerminalDiagnostic('conpty files missing', { packageRoot, destDir })
+  return false
 }
 
 class TerminalManager {
   private instances = new Map<string, TerminalInstance>()
 
   private spawnPty(shell: string, config: TerminalConfig): IPty {
-    ensureBundledConptyFiles()
+    const useBundledConptyDll = hasBundledConptyFiles()
 
     const baseOptions = {
       name: 'xterm-256color',
@@ -72,11 +69,53 @@ class TerminalManager {
       useConpty: true,
     }
 
-    return spawn(shell, [], {
-      ...baseOptions,
-      /*-- 用 node-pty 自带新版 conpty.dll，启用 reflowCursorLine 的前提，对齐 VS Code --*/
-      useConptyDll: true,
-    })
+    try {
+      const pty = spawn(shell, [], {
+        ...baseOptions,
+        useConptyDll: useBundledConptyDll,
+      })
+      logTerminalDiagnostic('pty spawned', {
+        id: config.id,
+        cwd: config.cwd,
+        shell,
+        useConptyDll: useBundledConptyDll,
+        pid: pty.pid,
+      })
+      return pty
+    } catch (err) {
+      logTerminalDiagnostic('pty spawn failed', {
+        id: config.id,
+        cwd: config.cwd,
+        shell,
+        useConptyDll: useBundledConptyDll,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+      if (!useBundledConptyDll) throw err
+
+      try {
+        const fallbackPty = spawn(shell, [], {
+          ...baseOptions,
+          useConptyDll: false,
+        })
+        logTerminalDiagnostic('pty spawned with system conpty fallback', {
+          id: config.id,
+          cwd: config.cwd,
+          shell,
+          pid: fallbackPty.pid,
+        })
+        return fallbackPty
+      } catch (fallbackErr) {
+        logTerminalDiagnostic('pty system conpty fallback failed', {
+          id: config.id,
+          cwd: config.cwd,
+          shell,
+          error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+          stack: fallbackErr instanceof Error ? fallbackErr.stack : undefined,
+        })
+        throw fallbackErr
+      }
+    }
   }
 
   create(config: TerminalConfig): TerminalInstance {

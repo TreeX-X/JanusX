@@ -1,10 +1,11 @@
-import { BrowserWindow, Notification } from 'electron'
+import { BrowserWindow } from 'electron'
 import type { AgentEvent, AgentSpawnOptions } from '../agent/types'
 import {
   DEFAULT_AGENT_NOTIFICATION_SETTINGS,
   normalizeAgentNotificationSettings,
   type AgentNotificationSettings,
 } from '../../shared/notifications'
+import { desktopToastWindow, type DesktopToastPayload } from './desktop-toast-window'
 
 interface AgentNotificationContext {
   sessionId: string
@@ -15,15 +16,13 @@ interface AgentNotificationContext {
 
 interface AgentNotificationOptions {
   onClick?: () => void
-  onNativeShow?: () => void
-  onNativeFailure?: (error: string) => void
-  onRendererFallback?: (reason: string, delivered: boolean) => void
-  rendererFallbackDelayMs?: number
+  onDesktopToastShown?: () => void
+  onDesktopToastFailure?: (error: string) => void
   terminalId?: string
   workspaceId?: string
 }
 
-interface RendererNotificationPayload {
+interface AgentNotificationPayload {
   type: 'completed' | 'failed' | 'attention'
   engine: AgentNotificationContext['engine']
   title: string
@@ -31,8 +30,6 @@ interface RendererNotificationPayload {
   terminalId?: string
   workspaceId?: string
 }
-
-const DEFAULT_RENDERER_FALLBACK_DELAY_MS = 4000
 
 function getElapsedSeconds(startedAt?: string, endedAt?: string): number | null {
   if (!startedAt) return null
@@ -59,75 +56,45 @@ function focusMainWindow(mainWindow: BrowserWindow, options: AgentNotificationOp
 
 function sendRendererNotification(
   mainWindow: BrowserWindow,
-  payload: RendererNotificationPayload,
+  payload: DesktopToastPayload,
 ): boolean {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return false
 
   mainWindow.webContents.send('agent-notification:show', {
-    id: `${payload.type}:${payload.engine}:${Date.now()}`,
-    createdAt: new Date().toISOString(),
     ...payload,
   })
   return true
 }
 
-function showNotificationWithFallback(
+function createNotificationPayload(payload: AgentNotificationPayload): DesktopToastPayload {
+  return {
+    id: `${payload.type}:${payload.engine}:${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    ...payload,
+  }
+}
+
+function showLocalNotification(
   mainWindow: BrowserWindow,
-  payload: RendererNotificationPayload,
+  input: AgentNotificationPayload,
   options: AgentNotificationOptions,
 ): boolean {
-  const sendFallback = (reason: string): boolean => {
-    const delivered = sendRendererNotification(mainWindow, payload)
-    options.onRendererFallback?.(reason, delivered)
-    return delivered
-  }
+  const payload = createNotificationPayload(input)
+  let desktopShown = false
+  const sendRendererFallback = (): boolean => sendRendererNotification(mainWindow, payload)
+  const desktopDelivered = desktopToastWindow.show(payload, {
+    onClick: () => focusMainWindow(mainWindow, options),
+    onShown: () => {
+      desktopShown = true
+      options.onDesktopToastShown?.()
+    },
+    onError: (error) => {
+      options.onDesktopToastFailure?.(error)
+      if (!desktopShown) sendRendererFallback()
+    },
+  })
 
-  if (!Notification.isSupported()) {
-    return sendFallback('native-notification-unsupported')
-  }
-
-  let nativeSettled = false
-  let fallbackSent = false
-  let notification: Notification | null = null
-  const sendFallbackOnce = (reason: string): boolean => {
-    if (fallbackSent) return false
-    fallbackSent = true
-    return sendFallback(reason)
-  }
-
-  try {
-    notification = new Notification({ title: payload.title, body: payload.body })
-    notification.on('click', () => focusMainWindow(mainWindow, options))
-    notification.on('show', () => {
-      nativeSettled = true
-      options.onNativeShow?.()
-    })
-    notification.on('failed', (_event, error) => {
-      nativeSettled = true
-      options.onNativeFailure?.(error)
-      sendFallbackOnce(`native-notification-failed: ${error}`)
-    })
-    notification.show()
-  } catch (error) {
-    nativeSettled = true
-    const message = error instanceof Error ? error.message : String(error)
-    options.onNativeFailure?.(message)
-    sendFallbackOnce(`native-notification-threw: ${message}`)
-  }
-
-  const fallbackTimer = setTimeout(() => {
-    if (nativeSettled) return
-    nativeSettled = true
-    try {
-      notification?.close()
-    } catch {
-      // ignore native notification close errors; renderer fallback is the recovery path.
-    }
-    sendFallbackOnce('native-notification-show-timeout')
-  }, options.rendererFallbackDelayMs ?? DEFAULT_RENDERER_FALLBACK_DELAY_MS)
-  fallbackTimer.unref?.()
-
-  return true
+  return desktopDelivered || sendRendererFallback()
 }
 
 export function notifyAgentEvent(
@@ -170,7 +137,7 @@ export function notifyAgentEvent(
   const title = isFailure ? 'JanusX - Agent failed' : 'JanusX - Agent completed'
   const body = isFailure ? failureBody : `${context.engine} session completed. Click to return to JanusX.`
 
-  return showNotificationWithFallback(mainWindow, {
+  return showLocalNotification(mainWindow, {
     type: isFailure ? 'failed' : 'completed',
     engine: context.engine,
     title,
@@ -197,7 +164,7 @@ export function notifyAgentAttention(
     ? truncateMessage(message, resolvedSettings.errorMessageMaxLength)
     : `Click to return to JanusX and handle the ${context.engine} request.`
 
-  return showNotificationWithFallback(mainWindow, {
+  return showLocalNotification(mainWindow, {
     type: 'attention',
     engine: context.engine,
     title,

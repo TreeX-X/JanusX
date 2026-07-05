@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain, nativeImage, shell } from 'electron'
-import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { registerWorkspaceHandlers } from './ipc/handlers'
@@ -20,7 +19,6 @@ import { checkpointManager } from './agent/checkpoint/checkpoint-manager'
 import { isAgentHookClientInvocation, runAgentHookClient } from './notifications/agent-hook-client'
 
 const isHookClient = isAgentHookClientInvocation()
-const WINDOWS_APP_USER_MODEL_ID = 'com.janusx.app'
 
 if (isHookClient) {
   void runAgentHookClient()
@@ -30,46 +28,9 @@ if (isHookClient) {
     })
 }
 
-if (!isHookClient && process.platform === 'win32') {
-  app.setAppUserModelId(WINDOWS_APP_USER_MODEL_ID)
-}
-
 let mainWindow: BrowserWindow | null = null
 let checkpointCleanupComplete = false
 const editorWindows = new Map<string, BrowserWindow>()
-
-function ensureWindowsNotificationShortcut(): void {
-  if (process.platform !== 'win32') return
-
-  try {
-    const programsDir = join(
-      app.getPath('appData'),
-      'Microsoft',
-      'Windows',
-      'Start Menu',
-      'Programs',
-    )
-    const shortcutPath = join(programsDir, 'JanusX.lnk')
-    const appPath = app.getAppPath()
-    const iconPath = join(__dirname, '../../resources/icon.ico')
-    const details = {
-      target: process.execPath,
-      args: app.isPackaged ? '' : `"${appPath}"`,
-      description: 'JanusX',
-      appUserModelId: WINDOWS_APP_USER_MODEL_ID,
-      icon: existsSync(iconPath) ? iconPath : process.execPath,
-      iconIndex: 0,
-    }
-
-    mkdirSync(programsDir, { recursive: true })
-    const operation = existsSync(shortcutPath) ? 'replace' : 'create'
-    if (!shell.writeShortcutLink(shortcutPath, operation, details)) {
-      console.warn('Windows notification shortcut was not updated')
-    }
-  } catch (err) {
-    console.warn('Windows notification shortcut setup failed:', err)
-  }
-}
 
 function createWindow(): void {
   const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
@@ -185,7 +146,6 @@ function createWindow(): void {
 
 if (!isHookClient) {
   app.whenReady().then(() => {
-    ensureWindowsNotificationShortcut()
     createWindow()
 
     app.on('activate', () => {

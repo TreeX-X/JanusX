@@ -5,8 +5,11 @@ vi.mock('electron', () => ({
     getPath: vi.fn(() => '.'),
   },
   BrowserWindow: class BrowserWindow {},
-  Notification: class Notification {
-    static isSupported = vi.fn(() => true)
+}))
+
+vi.mock('../../src/main/notifications/desktop-toast-window', () => ({
+  desktopToastWindow: {
+    show: vi.fn(() => true),
   },
 }))
 

@@ -25,6 +25,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'system:which',
   'settings:notifications:get',
   'settings:notifications:update',
+  'settings:notifications:test-feishu',
   'app:init',
   'window:minimize',
   'window:maximize',
@@ -106,6 +107,8 @@ const ALLOWED_SEND_CHANNELS = [
   'terminal:input',
   'terminal:resize',
   'terminal:submit-line',
+  'desktop-toast:ready',
+  'desktop-toast:action',
   // LLM 流式请求（单向 send）
   'llm:chat-stream',
 ]
@@ -116,6 +119,7 @@ const ALLOWED_ON_CHANNELS = [
   'terminal:focus',
   'agent-hook:event',
   'agent-notification:show',
+  'desktop-toast:show',
   'filetree:changed',
   'workspace:updated',
   'app:init-state',

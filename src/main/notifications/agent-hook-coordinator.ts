@@ -1,6 +1,8 @@
 import type { BrowserWindow } from 'electron'
 import type { AgentEngine } from '../agent/types'
 import { configService } from '../config/service'
+import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
+import type { RemoteNotificationType } from '../remote-notifications/types'
 import { notifyAgentAttention, notifyAgentEvent } from './agent-notifier'
 import type {
   AgentHookCompletion,
@@ -102,6 +104,27 @@ function isFailureEvent(payload: AgentHookPayload): boolean {
 function isAttentionEvent(payload: AgentHookPayload): boolean {
   if (payload.source === 'opencode') return payload.event === 'permission.asked'
   return APPROVAL_EVENTS.has(payload.event) || isClaudeAttentionNotification(payload)
+}
+
+function isApprovalEvent(payload: AgentHookPayload): boolean {
+  return APPROVAL_EVENTS.has(payload.event) || payload.event === 'permission.asked'
+}
+
+function buildAttentionRemoteEventId(
+  payload: AgentHookPayload,
+  terminal: RegisteredHookTerminal,
+  type: RemoteNotificationType,
+): string {
+  const sessionId = payload.sessionId?.trim()
+  if (sessionId) return `${payload.source}:${type}:${sessionId}`
+
+  return [
+    terminal.terminalId,
+    type,
+    payload.event,
+    payload.timestamp ?? '',
+    payload.message ?? '',
+  ].join(':')
 }
 
 export class AgentHookCoordinator {
@@ -336,7 +359,7 @@ export class AgentHookCoordinator {
 
   private async defaultDeliverCompletion(completion: AgentHookCompletion): Promise<boolean> {
     const settings = await configService.getNotificationSettings()
-    return notifyAgentEvent(
+    const delivered = notifyAgentEvent(
       this.mainWindow,
       {
         sessionId: `terminal:${completion.terminalId}`,
@@ -351,9 +374,9 @@ export class AgentHookCoordinator {
       {
         terminalId: completion.terminalId,
         onClick: () => this.focusTerminal(completion.terminalId),
-        onNativeShow: () => {
+        onDesktopToastShown: () => {
           this.emit({
-            type: 'native-shown',
+            type: 'desktop-toast-shown',
             terminalId: completion.terminalId,
             turnId: completion.turnId,
             engine: completion.engine,
@@ -362,32 +385,40 @@ export class AgentHookCoordinator {
             delivered: true,
           })
         },
-        onNativeFailure: (error) => {
+        onDesktopToastFailure: (error) => {
           this.emit({
-            type: 'ignored',
+            type: 'desktop-toast-failed',
             terminalId: completion.terminalId,
             turnId: completion.turnId,
             engine: completion.engine,
             source: completion.source,
             hookEvent: completion.hookEvent,
-            reason: `native-notification-failed: ${error}`,
+            reason: `desktop-toast-failed: ${error}`,
             delivered: false,
-          })
-        },
-        onRendererFallback: (reason, delivered) => {
-          this.emit({
-            type: 'renderer-fallback',
-            terminalId: completion.terminalId,
-            turnId: completion.turnId,
-            engine: completion.engine,
-            source: completion.source,
-            hookEvent: completion.hookEvent,
-            reason,
-            delivered,
           })
         },
       },
     )
+
+    void remoteNotificationDispatcher.dispatch(
+      {
+        id: `${completion.turnId}:${completion.failed ? 'failed' : 'completed'}`,
+        engine: completion.engine,
+        type: completion.failed ? 'failed' : 'completed',
+        terminalId: completion.terminalId,
+        title: completion.failed ? 'JanusX - Agent failed' : 'JanusX - Agent completed',
+        body: completion.failed
+          ? completion.message ?? `${completion.engine} hook reported failure`
+          : `${completion.engine} session completed.`,
+        createdAt: completion.endedAt,
+        severity: completion.failed ? 'error' : 'success',
+        startedAt: completion.startedAt,
+        endedAt: completion.endedAt,
+      },
+      { settings: settings.remote },
+    )
+
+    return delivered
   }
 
   private async defaultDeliverAttention(
@@ -395,7 +426,7 @@ export class AgentHookCoordinator {
     terminal: RegisteredHookTerminal,
   ): Promise<boolean> {
     const settings = await configService.getNotificationSettings()
-    return notifyAgentAttention(
+    const delivered = notifyAgentAttention(
       this.mainWindow,
       {
         sessionId: `terminal:${terminal.terminalId}`,
@@ -407,9 +438,9 @@ export class AgentHookCoordinator {
         terminalId: terminal.terminalId,
         workspaceId: terminal.workspaceId,
         onClick: () => this.focusTerminal(terminal.terminalId),
-        onNativeShow: () => {
+        onDesktopToastShown: () => {
           this.emit({
-            type: 'native-shown',
+            type: 'desktop-toast-shown',
             terminalId: terminal.terminalId,
             engine: terminal.engine,
             source: payload.source,
@@ -417,30 +448,38 @@ export class AgentHookCoordinator {
             delivered: true,
           })
         },
-        onNativeFailure: (error) => {
+        onDesktopToastFailure: (error) => {
           this.emit({
-            type: 'ignored',
+            type: 'desktop-toast-failed',
             terminalId: terminal.terminalId,
             engine: terminal.engine,
             source: payload.source,
             hookEvent: payload.event,
-            reason: `native-notification-failed: ${error}`,
+            reason: `desktop-toast-failed: ${error}`,
             delivered: false,
-          })
-        },
-        onRendererFallback: (reason, delivered) => {
-          this.emit({
-            type: 'renderer-fallback',
-            terminalId: terminal.terminalId,
-            engine: terminal.engine,
-            source: payload.source,
-            hookEvent: payload.event,
-            reason,
-            delivered,
           })
         },
       },
     )
+
+    const type: RemoteNotificationType = isApprovalEvent(payload) ? 'approval' : 'attention'
+    void remoteNotificationDispatcher.dispatch(
+      {
+        id: buildAttentionRemoteEventId(payload, terminal, type),
+        engine: terminal.engine,
+        type,
+        terminalId: terminal.terminalId,
+        workspaceId: terminal.workspaceId,
+        workspacePath: terminal.cwd,
+        title: `JanusX - ${terminal.engine} needs attention`,
+        body: payload.message?.trim() || `Handle the ${terminal.engine} request in JanusX.`,
+        createdAt: payload.timestamp ?? new Date(this.now()).toISOString(),
+        severity: type === 'approval' ? 'warning' : 'info',
+      },
+      { settings: settings.remote },
+    )
+
+    return delivered
   }
 
   private focusTerminal(terminalId: string): void {

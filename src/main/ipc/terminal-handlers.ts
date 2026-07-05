@@ -14,6 +14,7 @@ import {
   summarizeCoordinatorEvent,
   summarizeHookPayload,
 } from '../notifications/agent-hook-diagnostics'
+import { logTerminalDiagnostic } from '../terminal/diagnostics'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -144,6 +145,16 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
     let hookEnv: Record<string, string> | undefined
 
+    logTerminalDiagnostic('terminal create requested', {
+      id,
+      workspaceId,
+      cwd,
+      shell,
+      preset,
+      engine,
+      hasAutoCommand: Boolean(resolvedAutoCommand),
+    })
+
     if (engine !== 'shell') {
       try {
         await hookBridge.start()
@@ -173,14 +184,28 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
-    const instance = terminalManager.create({
-      id,
-      workspaceId,
-      cwd,
-      shell,
-      autoCommand: resolvedAutoCommand,
-      env: hookEnv,
-    })
+    let instance
+    try {
+      instance = terminalManager.create({
+        id,
+        workspaceId,
+        cwd,
+        shell,
+        autoCommand: resolvedAutoCommand,
+        env: hookEnv,
+      })
+    } catch (err) {
+      logTerminalDiagnostic('terminal create failed', {
+        id,
+        workspaceId,
+        cwd,
+        shell,
+        preset,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+      throw err
+    }
 
     if (engine !== 'shell') {
       hookCoordinator.registerTerminal({

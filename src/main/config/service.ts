@@ -5,7 +5,9 @@ import type { GlobalConfig } from '../workspace/types'
 import {
   DEFAULT_AGENT_NOTIFICATION_SETTINGS,
   normalizeAgentNotificationSettings,
+  normalizeRemoteNotificationSettings,
   type AgentNotificationSettings,
+  type RemoteNotificationSettings,
 } from '../../shared/notifications'
 
 const DEFAULT_CONFIG: GlobalConfig = {
@@ -95,9 +97,29 @@ class ConfigService {
     partial: Partial<AgentNotificationSettings>,
   ): Promise<AgentNotificationSettings> {
     const current = await this.getNotificationSettings()
-    const notificationSettings = normalizeAgentNotificationSettings({ ...current, ...partial })
+    const notificationSettings = normalizeAgentNotificationSettings({
+      ...current,
+      ...partial,
+      remote: normalizeRemoteNotificationSettings({
+        ...current.remote,
+        ...partial.remote,
+        providers: {
+          ...current.remote.providers,
+          ...partial.remote?.providers,
+          feishu: {
+            ...current.remote.providers.feishu,
+            ...partial.remote?.providers?.feishu,
+          },
+        },
+      }),
+    })
     await this.update({ notificationSettings })
     return notificationSettings
+  }
+
+  async getRemoteNotificationSettings(): Promise<RemoteNotificationSettings> {
+    const settings = await this.getNotificationSettings()
+    return normalizeRemoteNotificationSettings(settings.remote)
   }
 
   async addRecentWorkspace(id: string): Promise<void> {

@@ -125,6 +125,39 @@
   box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.25);
 }
 
+.textInput {
+  width: min(360px, 42vw);
+}
+
+.select {
+  width: 160px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  color: #f4f4f5;
+  font-size: 13px;
+  padding: 0 10px;
+  outline: none;
+}
+
+.select:focus {
+  border-color: rgba(255, 120, 48, 0.65);
+  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.25);
+}
+
+.select option {
+  background: #18181b;
+  color: #f4f4f5;
+}
+
+.testRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+}
+
 .unit {
   color: #71717a;
   font-size: 12px;
@@ -222,5 +255,15 @@
 
   .actions {
     justify-content: flex-end;
+  }
+
+  .textInput,
+  .select {
+    width: 100%;
+  }
+
+  .testRow {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
