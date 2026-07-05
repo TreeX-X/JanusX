@@ -24,12 +24,13 @@ function TabItem({
 
   return (
     <div
-      className="py-1.5 px-3 text-xs cursor-pointer flex items-center gap-1.5 font-mono relative transition-colors select-none"
+      className="h-[30px] px-3 text-xs cursor-pointer flex items-center gap-1.5 font-mono relative transition-colors select-none rounded-t-[6px]"
       style={{
         color: isActive ? '#d4d4d4' : hovered ? '#999' : '#666',
-        background: isActive ? 'rgba(10, 10, 10, 0.95)' : 'transparent',
+        background: isActive ? 'rgba(10, 10, 10, 0.98)' : 'transparent',
       }}
       onClick={onSelect}
+      onMouseDown={(e) => e.stopPropagation()}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -82,6 +83,7 @@ export function FileEditor() {
   const saveFile = useEditorStore((s) => s.saveFile)
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
+  const canSave = activeFile && activeFile.viewType !== 'image' && activeFile.viewType !== 'binary'
 
   // Ctrl+S / Cmd+S save shortcut
   useEffect(() => {
@@ -119,16 +121,9 @@ export function FileEditor() {
       initialHeight={680}
       minWidth={720}
       minHeight={460}
-    >
-      {/* Tab bar */}
-      <div
-        className="flex overflow-x-auto shrink-0"
-        style={{
-          background: 'rgba(6, 6, 6, 0.95)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-        }}
-      >
-        {openFiles.map((file) => (
+      titlebarContent={
+        <div className="flex min-w-0 items-end overflow-x-auto no-scrollbar">
+          {openFiles.map((file) => (
             <TabItem
               key={file.id}
               file={file}
@@ -136,9 +131,28 @@ export function FileEditor() {
               onSelect={() => setActiveFile(file.id)}
               onClose={(e) => handleTabClose(file.id, e)}
             />
-        ))}
-      </div>
-
+          ))}
+        </div>
+      }
+      titlebarActions={
+        <div className="flex items-center gap-2">
+          {canSave && (
+            <button
+              type="button"
+              onClick={() => activeFileId && void saveFile(activeFileId)}
+              className="h-6 rounded px-3 text-[11px] transition-colors"
+              style={{
+                background: activeFile?.isDirty ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
+                border: activeFile?.isDirty ? '1px solid rgba(255, 120, 48, 0.24)' : '1px solid rgba(255, 255, 255, 0.08)',
+                color: activeFile?.isDirty ? '#ffb084' : '#777',
+              }}
+            >
+              Save
+            </button>
+          )}
+        </div>
+      }
+    >
       {/* Viewer area */}
       <div className="flex-1 overflow-hidden" style={{ background: '#0a0a0a', height: '100%', position: 'relative' }}>
         {activeFile && <ViewerContent file={activeFile} />}

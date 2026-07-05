@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useGitStore } from '@/stores/git'
+import { useEditorStore } from '@/stores/editor'
 import { GitPanel } from '@/components/GitPanel'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
 import type { FileNode, GitFileChange } from '@/types'
@@ -300,6 +301,7 @@ export function Panel() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const gitStatus = useGitStore((s) => s.status)
   const fetchGitStatus = useGitStore((s) => s.fetchStatus)
+  const openEditorFile = useEditorStore((s) => s.openFile)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
   const togglePanel = useAppStore((s) => s.togglePanel)
   const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
@@ -424,17 +426,14 @@ export function Panel() {
     return workspaces.find((item) => item.id === activeWorkspaceId) ?? null
   }, [])
 
-  const openFileInEditorWindow = useCallback((relativePath: string) => {
+  const openFileInEditorPanel = useCallback((relativePath: string) => {
     const workspace = getActiveWorkspace()
     if (!workspace) return
 
     const absolutePath = getAbsolutePath(workspace.path, relativePath)
     setActiveFilePath(relativePath)
-    void window.electron.invoke('editor-window:open', {
-      filePath: absolutePath,
-      workspacePath: workspace.path,
-    })
-  }, [getActiveWorkspace, setActiveFilePath])
+    void openEditorFile(absolutePath, workspace.path)
+  }, [getActiveWorkspace, openEditorFile, setActiveFilePath])
 
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
     const x = Math.max(
@@ -514,9 +513,9 @@ export function Panel() {
     if (!workspace) return
 
     void warmupEditorRuntime()
-    openFileInEditorWindow(contextMenu.target.path)
+    openFileInEditorPanel(contextMenu.target.path)
     setContextMenu(null)
-  }, [contextMenu, getActiveWorkspace, openFileInEditorWindow])
+  }, [contextMenu, getActiveWorkspace, openFileInEditorPanel])
 
   const handleCopyContextPath = useCallback(
     async (mode: 'relative' | 'absolute') => {
@@ -707,7 +706,7 @@ export function Panel() {
                     fileChangeMap={fileChangeMap}
                     onSelect={setActiveFilePath}
                     onToggleDirectory={handleToggleDirectory}
-                    onOpenFile={openFileInEditorWindow}
+                    onOpenFile={openFileInEditorPanel}
                     onOpenContextMenu={openContextMenu}
                   />
                 ))

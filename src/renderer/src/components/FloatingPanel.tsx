@@ -5,6 +5,8 @@ interface FloatingPanelProps {
   title: string
   onClose: () => void
   children: React.ReactNode
+  titlebarContent?: React.ReactNode
+  titlebarActions?: React.ReactNode
   initialWidth?: number
   initialHeight?: number
   minWidth?: number
@@ -16,6 +18,8 @@ export function FloatingPanel({
   title,
   onClose,
   children,
+  titlebarContent,
+  titlebarActions,
   initialWidth = 700,
   initialHeight = 500,
   minWidth = 400,
@@ -24,13 +28,14 @@ export function FloatingPanel({
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [initialized, setInitialized] = useState(false)
+  const [isMaximized, setIsMaximized] = useState(false)
 
   const dragging = useRef(false)
   const resizing = useRef<'none' | 'right' | 'bottom' | 'corner'>('none')
   const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0, width: 0, height: 0 })
+  const restoreBounds = useRef({ x: 0, y: 0, width: initialWidth, height: initialHeight })
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // Initialize position on first show
   useEffect(() => {
     if (visible && !initialized) {
       const x = window.innerWidth - 280 - initialWidth - 16
@@ -41,7 +46,6 @@ export function FloatingPanel({
     }
   }, [visible, initialized, initialWidth, initialHeight])
 
-  // ESC key handler
   useEffect(() => {
     if (!visible) return
     const handler = (e: KeyboardEvent) => {
@@ -53,8 +57,8 @@ export function FloatingPanel({
     return () => document.removeEventListener('keydown', handler)
   }, [visible, onClose])
 
-  // Drag handlers
   const handleDragStart = useCallback((e: React.MouseEvent) => {
+    if (isMaximized) return
     dragging.current = true
     dragStart.current = {
       x: e.clientX,
@@ -65,10 +69,11 @@ export function FloatingPanel({
       height: 0,
     }
     document.body.style.userSelect = 'none'
-  }, [position])
+  }, [isMaximized, position])
 
   const handleResizeStart = useCallback((e: React.MouseEvent, edge: 'right' | 'bottom' | 'corner') => {
     e.stopPropagation()
+    if (isMaximized) return
     resizing.current = edge
     dragStart.current = {
       x: e.clientX,
@@ -79,9 +84,26 @@ export function FloatingPanel({
       height: size.height,
     }
     document.body.style.userSelect = 'none'
-  }, [position, size])
+  }, [isMaximized, position, size])
 
-  // Global mouse handlers
+  const handleToggleMaximize = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isMaximized) {
+      setPosition({ x: restoreBounds.current.x, y: restoreBounds.current.y })
+      setSize({ width: restoreBounds.current.width, height: restoreBounds.current.height })
+      setIsMaximized(false)
+      return
+    }
+
+    restoreBounds.current = { x: position.x, y: position.y, width: size.width, height: size.height }
+    setPosition({ x: 8, y: 44 })
+    setSize({
+      width: Math.max(minWidth, window.innerWidth - 16),
+      height: Math.max(minHeight, window.innerHeight - 56),
+    })
+    setIsMaximized(true)
+  }, [isMaximized, minHeight, minWidth, position, size])
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (dragging.current) {
@@ -143,68 +165,81 @@ export function FloatingPanel({
         overflow: 'hidden',
       }}
     >
-      {/* Title bar */}
       <div
-        className="flex items-center px-3 shrink-0"
+        className="flex items-center gap-3 px-3 shrink-0"
         style={{
-          height: 36,
+          height: 38,
           background: 'rgba(16, 16, 16, 0.95)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-          cursor: 'move',
+          cursor: isMaximized ? 'default' : 'move',
         }}
         onMouseDown={handleDragStart}
       >
-        <span
-          className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono"
-          style={{ fontSize: 12, color: '#d4d4d4' }}
-        >
-          {title}
-        </span>
-        <button
-          className="ml-2 shrink-0 transition-colors"
-          style={{ fontSize: 16, color: '#666', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#ff5858' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#666' }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={onClose}
-        >
-          ×
-        </button>
+        <div className="flex shrink-0 gap-2" onMouseDown={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            aria-label="Close panel"
+            onClick={onClose}
+            className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
+          />
+          <button
+            type="button"
+            aria-label="Minimize panel"
+            onClick={onClose}
+            className="h-3 w-3 rounded-full bg-[#ffbd2e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
+          />
+          <button
+            type="button"
+            aria-label={isMaximized ? 'Restore panel' : 'Maximize panel'}
+            onClick={handleToggleMaximize}
+            className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
+          />
+        </div>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          {titlebarContent ?? (
+            <span
+              className="block overflow-hidden text-ellipsis whitespace-nowrap font-mono"
+              style={{ fontSize: 12, color: '#d4d4d4' }}
+            >
+              {title}
+            </span>
+          )}
+        </div>
+        {titlebarActions && (
+          <div className="shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+            {titlebarActions}
+          </div>
+        )}
       </div>
 
-      {/* Content area */}
       <div className="flex-1 overflow-hidden" style={{ height: '100%' }}>
         {children}
       </div>
 
-      {/* Resize handles */}
-      {/* Right edge */}
       <div
         className="absolute top-0 right-0"
         style={{
           width: 2,
           height: '100%',
-          cursor: 'ew-resize',
+          cursor: isMaximized ? 'default' : 'ew-resize',
         }}
         onMouseDown={(e) => handleResizeStart(e, 'right')}
       />
-      {/* Bottom edge */}
       <div
         className="absolute bottom-0 left-0"
         style={{
           width: '100%',
           height: 4,
-          cursor: 'ns-resize',
+          cursor: isMaximized ? 'default' : 'ns-resize',
         }}
         onMouseDown={(e) => handleResizeStart(e, 'bottom')}
       />
-      {/* Right-bottom corner */}
       <div
         className="absolute bottom-0 right-0"
         style={{
           width: 8,
           height: 8,
-          cursor: 'nwse-resize',
+          cursor: isMaximized ? 'default' : 'nwse-resize',
         }}
         onMouseDown={(e) => handleResizeStart(e, 'corner')}
       />
