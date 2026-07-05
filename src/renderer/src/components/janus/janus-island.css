@@ -1432,9 +1432,12 @@ body.is-running {
 }
 
 .janus-island-shell[data-stage="expanded"] {
+  left: max(36px, calc((100vw - 900px) / 2));
+  right: max(36px, calc((100vw - 900px) / 2));
   top: 12px;
-  width: min(860px, calc(100vw - 72px));
+  width: auto;
   height: min(460px, calc(100vh - 90px));
+  transform: none;
 }
 
 .janus-island-shell > .pull-hint,
@@ -1605,8 +1608,11 @@ body.is-running {
 
 @media (max-width: 900px) {
   .janus-island-shell[data-stage="expanded"] {
-    width: min(calc(100vw - 24px), 720px);
+    left: 12px;
+    right: 12px;
+    width: auto;
     height: min(calc(100vh - 72px), 540px);
+    transform: none;
   }
 
   .janus-island-shell[data-stage="expanded"] .janus-expanded-shell {
@@ -5333,5 +5339,22 @@ body.is-running {
 
   .janus-monitor-crt {
     min-height: 160px;
+  }
+}
+
+/* Expanded clarity override: avoid rasterizing the full panel through translate centering. */
+.janus-island-shell[data-stage="expanded"] {
+  left: max(36px, calc((100vw - 900px) / 2));
+  right: max(36px, calc((100vw - 900px) / 2));
+  width: auto;
+  transform: none;
+}
+
+@media (max-width: 900px) {
+  .janus-island-shell[data-stage="expanded"] {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    transform: none;
   }
 }
