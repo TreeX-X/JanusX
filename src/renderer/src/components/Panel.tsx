@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEv
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
-import { useEditorStore } from '@/stores/editor'
 import { useGitStore } from '@/stores/git'
 import { GitPanel } from '@/components/GitPanel'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
@@ -126,6 +125,7 @@ interface FileTreeItemProps {
   fileChangeMap: Map<string, GitFileChange>
   onSelect: (path: string) => void
   onToggleDirectory: (node: FileNode) => void
+  onOpenFile: (path: string) => void
   onOpenContextMenu: (event: MouseEvent<HTMLDivElement>, node: FileNode) => void
 }
 
@@ -139,6 +139,7 @@ function FileTreeItem({
   fileChangeMap,
   onSelect,
   onToggleDirectory,
+  onOpenFile,
   onOpenContextMenu,
 }: FileTreeItemProps) {
   const isFolder = node.type === 'directory'
@@ -157,15 +158,9 @@ function FileTreeItem({
   const handleDoubleClick = useCallback(() => {
     if (!isFolder) {
       void warmupEditorRuntime()
-      const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
-      const ws = workspaces.find(w => w.id === activeWorkspaceId)
-      if (ws) {
-        const separator = ws.path.includes('\\') ? '\\' : '/'
-        const absolutePath = ws.path + separator + node.path.split('/').join(separator)
-        useEditorStore.getState().openFile(absolutePath, ws.path)
-      }
+      onOpenFile(node.path)
     }
-  }, [isFolder, node.path])
+  }, [isFolder, node.path, onOpenFile])
 
   const handleDragStart = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -286,6 +281,7 @@ function FileTreeItem({
               fileChangeMap={fileChangeMap}
               onSelect={onSelect}
               onToggleDirectory={onToggleDirectory}
+              onOpenFile={onOpenFile}
               onOpenContextMenu={onOpenContextMenu}
             />
           ))}
@@ -428,6 +424,18 @@ export function Panel() {
     return workspaces.find((item) => item.id === activeWorkspaceId) ?? null
   }, [])
 
+  const openFileInEditorWindow = useCallback((relativePath: string) => {
+    const workspace = getActiveWorkspace()
+    if (!workspace) return
+
+    const absolutePath = getAbsolutePath(workspace.path, relativePath)
+    setActiveFilePath(relativePath)
+    void window.electron.invoke('editor-window:open', {
+      filePath: absolutePath,
+      workspacePath: workspace.path,
+    })
+  }, [getActiveWorkspace, setActiveFilePath])
+
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
     const x = Math.max(
       CONTEXT_MENU_MARGIN,
@@ -505,12 +513,10 @@ export function Panel() {
     const workspace = getActiveWorkspace()
     if (!workspace) return
 
-    const absolutePath = getAbsolutePath(workspace.path, contextMenu.target.path)
-    setActiveFilePath(contextMenu.target.path)
     void warmupEditorRuntime()
-    void useEditorStore.getState().openFile(absolutePath, workspace.path)
+    openFileInEditorWindow(contextMenu.target.path)
     setContextMenu(null)
-  }, [contextMenu, getActiveWorkspace, setActiveFilePath])
+  }, [contextMenu, getActiveWorkspace, openFileInEditorWindow])
 
   const handleCopyContextPath = useCallback(
     async (mode: 'relative' | 'absolute') => {
@@ -597,10 +603,6 @@ export function Panel() {
     const result = await runFileTreeMutation('filetree:delete', workspace.path, targetPath)
     if (!result) return
 
-    const editor = useEditorStore.getState()
-    editor.openFiles
-      .filter((file) => isPathInScope(file.path.replace(/\\/g, '/'), targetPath))
-      .forEach((file) => editor.closeFile(file.id))
     if (activeFilePath && isPathInScope(activeFilePath, targetPath)) setActiveFilePath(null)
 
     await reloadDirectory(parentPath)
@@ -705,6 +707,7 @@ export function Panel() {
                     fileChangeMap={fileChangeMap}
                     onSelect={setActiveFilePath}
                     onToggleDirectory={handleToggleDirectory}
+                    onOpenFile={openFileInEditorWindow}
                     onOpenContextMenu={openContextMenu}
                   />
                 ))

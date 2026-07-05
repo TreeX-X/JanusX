@@ -29,6 +29,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'window:minimize',
   'window:maximize',
   'window:close',
+  'editor-window:open',
   'git:status',
   'git:log',
   'git:stage',

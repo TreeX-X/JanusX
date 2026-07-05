@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
 
 interface MarkdownViewerProps {
   content: string
@@ -10,6 +11,7 @@ interface MarkdownViewerProps {
 
 export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
   const [splitRatio, setSplitRatio] = useState(50)
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -64,10 +66,29 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
     }
   }, [])
 
+  const showEditor = previewMode !== 'preview'
+  const showPreview = previewMode !== 'editor'
+  const isSplit = previewMode === 'split'
+
   return (
-    <div ref={containerRef} className="flex flex-1 overflow-hidden" style={{ background: '#0a0a0a', height: '100%' }}>
+    <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden" style={{ background: '#0a0a0a', height: '100%' }}>
+      <div
+        className="shrink-0 flex items-center justify-between select-none"
+        style={{
+          padding: '6px 10px',
+          background: 'rgba(6, 6, 6, 0.95)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+        }}
+      >
+        <span className="uppercase tracking-wider" style={{ fontSize: 10, color: '#555' }}>
+          MARKDOWN
+        </span>
+        <PreviewModeToggle value={previewMode} onChange={setPreviewMode} />
+      </div>
+      <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>
       {/* Left: Editor */}
-      <div className="flex flex-col overflow-hidden" style={{ width: `${splitRatio}%`, height: '100%' }}>
+      {showEditor && (
+      <div className="flex flex-col overflow-hidden" style={{ width: isSplit ? `${splitRatio}%` : '100%', height: '100%' }}>
         <div
           className="shrink-0 uppercase tracking-wider select-none"
           style={{
@@ -102,8 +123,10 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
           />
         </div>
       </div>
+      )}
 
       {/* Divider */}
+      {isSplit && (
       <div
         className="shrink-0 h-full transition-colors"
         style={{
@@ -121,9 +144,11 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
           }
         }}
       />
+      )}
 
       {/* Right: Preview */}
-      <div className="flex flex-col overflow-hidden" style={{ width: `${100 - splitRatio}%`, height: '100%' }}>
+      {showPreview && (
+      <div className="flex flex-col overflow-hidden" style={{ width: isSplit ? `${100 - splitRatio}%` : '100%', height: '100%' }}>
         <div
           className="shrink-0 uppercase tracking-wider select-none"
           style={{
@@ -293,6 +318,8 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
             </ReactMarkdown>
           </div>
         </div>
+      </div>
+      )}
       </div>
     </div>
   )

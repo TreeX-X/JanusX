@@ -1,88 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useEditorStore } from '@/stores/editor'
 import { FloatingPanel } from '@/components/FloatingPanel'
-import { MonacoViewer, MarkdownViewer, HtmlViewer, ImageViewer, BinaryInfo } from '@/components/viewers'
-import { getMonacoLanguage } from '@/lib/file-utils'
+import { FileViewerContent } from '@/components/FileViewerContent'
 import type { OpenFile } from '@/types'
 
 function ViewerContent({ file }: { file: OpenFile }) {
   const updateContent = useEditorStore((s) => s.updateContent)
-
-  if (file.isLoading) {
-    return (
-      <div
-        className="flex items-center justify-center flex-1"
-        style={{ background: '#0a0a0a', minHeight: 0 }}
-      >
-        <div className="flex items-center gap-2">
-          <span style={{ color: '#555', fontSize: 12 }}>Loading</span>
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{
-              background: '#ff7830',
-              animation: 'pulse-dot 1.2s ease-in-out infinite',
-            }}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (file.error) {
-    return (
-      <div
-        className="flex flex-col items-center justify-center flex-1 gap-2"
-        style={{ background: '#0a0a0a', minHeight: 0 }}
-      >
-        <span style={{ color: '#ff5858', fontSize: 13 }}>Error</span>
-        <span style={{ color: '#666', fontSize: 11 }}>{file.error}</span>
-        <span style={{ color: '#444', fontSize: 10 }}>Try closing and reopening the file</span>
-      </div>
-    )
-  }
-
-  switch (file.viewType) {
-    case 'code':
-      return (
-        <MonacoViewer
-          content={file.content}
-          language={getMonacoLanguage(file.path)}
-          onChange={(c) => updateContent(file.id, c)}
-        />
-      )
-    case 'markdown':
-      return (
-        <MarkdownViewer
-          content={file.content}
-          onChange={(c) => updateContent(file.id, c)}
-        />
-      )
-    case 'html':
-      return (
-        <HtmlViewer
-          content={file.content}
-          onChange={(c) => updateContent(file.id, c)}
-        />
-      )
-    case 'image':
-      return (
-        <ImageViewer
-          base64={file.base64!}
-          mimeType={file.mimeType!}
-          fileName={file.name}
-        />
-      )
-    case 'binary':
-      return (
-        <BinaryInfo
-          fileName={file.name}
-          filePath={file.absolutePath}
-          size={file.size}
-        />
-      )
-    default:
-      return null
-  }
+  return <FileViewerContent file={file} onContentChange={(content) => updateContent(file.id, content)} />
 }
 
 function TabItem({
@@ -191,8 +115,10 @@ export function FileEditor() {
       visible={isVisible}
       title={title}
       onClose={handleClose}
-      initialWidth={700}
-      initialHeight={500}
+      initialWidth={980}
+      initialHeight={680}
+      minWidth={720}
+      minHeight={460}
     >
       {/* Tab bar */}
       <div

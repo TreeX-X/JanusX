@@ -36,6 +36,7 @@ if (!isHookClient && process.platform === 'win32') {
 
 let mainWindow: BrowserWindow | null = null
 let checkpointCleanupComplete = false
+const editorWindows = new Map<string, BrowserWindow>()
 
 function ensureWindowsNotificationShortcut(): void {
   if (process.platform !== 'win32') return
@@ -117,6 +118,62 @@ function createWindow(): void {
   })
   ipcMain.handle('window:close', () => {
     BrowserWindow.getFocusedWindow()?.close()
+  })
+
+  ipcMain.handle('editor-window:open', (_event, payload: { filePath?: string; workspacePath?: string }) => {
+    if (!payload.filePath || !payload.workspacePath) {
+      return { success: false, error: 'Missing editor window payload' }
+    }
+
+    const existing = editorWindows.get(payload.filePath)
+    if (existing && !existing.isDestroyed()) {
+      existing.focus()
+      return { success: true }
+    }
+
+    const editorWindow = new BrowserWindow({
+      width: 1100,
+      height: 760,
+      minWidth: 820,
+      minHeight: 520,
+      title: 'JanusX Editor',
+      backgroundColor: '#0a0a0a',
+      frame: false,
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.mjs'),
+        sandbox: false,
+      },
+    })
+
+    editorWindow.on('closed', () => {
+      editorWindows.delete(payload.filePath!)
+    })
+
+    editorWindow.webContents.setWindowOpenHandler((details) => {
+      shell.openExternal(details.url)
+      return { action: 'deny' }
+    })
+
+    editorWindows.set(payload.filePath, editorWindow)
+
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      const url = new URL(process.env['ELECTRON_RENDERER_URL'])
+      url.searchParams.set('editorWindow', '1')
+      url.searchParams.set('editorFile', payload.filePath)
+      url.searchParams.set('workspacePath', payload.workspacePath)
+      editorWindow.loadURL(url.toString())
+    } else {
+      editorWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+        query: {
+          editorWindow: '1',
+          editorFile: payload.filePath,
+          workspacePath: payload.workspacePath,
+        },
+      })
+    }
+
+    return { success: true }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
