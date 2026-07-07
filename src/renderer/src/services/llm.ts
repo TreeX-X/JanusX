@@ -62,7 +62,8 @@ export interface ChatMessage {
 export async function chat(
   messages: ChatMessage[],
   providerId?: string,
-  modelId?: string
+  modelId?: string,
+  options?: { sourceTag?: 'janus-chat'; workspaceId?: string; workspacePath?: string }
 ): Promise<string> {
   const targetProvider = providerId || (await getDefaultProvider())?.provider.id
   if (!targetProvider) throw new Error('未配置 LLM Provider')
@@ -70,7 +71,10 @@ export async function chat(
   return window.electron.invoke('llm:chat', {
     messages,
     providerId: targetProvider,
-    modelId
+    modelId,
+    sourceTag: options?.sourceTag,
+    workspaceId: options?.workspaceId,
+    workspacePath: options?.workspacePath,
   }) as Promise<string>
 }
 
@@ -100,7 +104,13 @@ export function chatStream(
   onDelta: (delta: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
-  options?: { providerId?: string; modelId?: string }
+  options?: {
+    providerId?: string
+    modelId?: string
+    sourceTag?: 'janus-chat'
+    workspaceId?: string
+    workspacePath?: string
+  }
 ): { abort: () => void } {
   const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
   let cleaned = false
@@ -159,7 +169,10 @@ export function chatStream(
         requestId,
         messages,
         providerId: def.providerId,
-        modelId: def.modelId
+        modelId: def.modelId,
+        sourceTag: options?.sourceTag,
+        workspaceId: options?.workspaceId,
+        workspacePath: options?.workspacePath,
       })
     })
     .catch((err: unknown) => {

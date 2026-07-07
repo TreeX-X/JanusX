@@ -13,6 +13,7 @@ import { registerJanusHandlers } from './ipc/janus-handlers'
 import { registerRuntimeTelemetryHandlers } from './ipc/runtime-telemetry-handlers'
 import { registerSettingsHandlers } from './ipc/settings-handlers'
 import { registerSubAgentRunHandlers } from './ipc/subagent-run-handlers'
+import { registerKnowledgeHandlers } from './ipc/knowledge-handlers'
 import { terminalManager } from './terminal/manager'
 import { agentStreamManager } from './agent/stream-manager'
 import { checkpointManager } from './agent/checkpoint/checkpoint-manager'
@@ -66,6 +67,7 @@ function createWindow(): void {
   registerRuntimeTelemetryHandlers()
   registerSettingsHandlers()
   registerSubAgentRunHandlers(mainWindow)
+  registerKnowledgeHandlers()
 
   // 窗口控制 IPC
   ipcMain.handle('window:minimize', () => {

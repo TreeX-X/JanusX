@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ModalCloseButton } from './ModalCloseButton'
 import { NotificationSettingsPanel } from './NotificationSettingsPanel'
+import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
 import styles from './AppSettingsModal.module.css'
 
-type SettingsTab = 'notifications' | 'llm'
+type SettingsTab = 'notifications' | 'knowledge' | 'llm'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -22,6 +23,12 @@ const TAB_META: Record<
     subtitle: 'Notifications · Agent 终端任务完成与失败提醒策略',
     nav: '通知提醒',
     navMeta: 'System reminders',
+  },
+  knowledge: {
+    title: '知识库',
+    subtitle: 'Knowledge Engine · 采集开关与 observation 记录策略',
+    nav: '知识库',
+    navMeta: '记忆采集',
   },
   llm: {
     title: 'LLM 引擎',
@@ -62,6 +69,16 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
           </button>
           <button
             type="button"
+            className={`${styles.tabButton} ${
+              activeTab === 'knowledge' ? styles.tabButtonActive : ''
+            }`}
+            onClick={() => setActiveTab('knowledge')}
+          >
+            <span className={styles.tabLabel}>{TAB_META.knowledge.nav}</span>
+            <span className={styles.tabMeta}>{TAB_META.knowledge.navMeta}</span>
+          </button>
+          <button
+            type="button"
             className={`${styles.tabButton} ${activeTab === 'llm' ? styles.tabButtonActive : ''}`}
             onClick={() => setActiveTab('llm')}
           >
@@ -81,6 +98,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
 
           <main className={styles.body}>
             {activeTab === 'notifications' && <NotificationSettingsPanel />}
+            {activeTab === 'knowledge' && <KnowledgeSettingsPanel />}
             {activeTab === 'llm' && <LlmConfigModal embedded />}
           </main>
         </section>

@@ -1,5 +1,4 @@
 import { useRef, useEffect, useCallback, useState, type DragEvent } from 'react'
-import { createPortal } from 'react-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -45,11 +44,9 @@ const HISTORY_TELEMETRY_POLL_MS = 5_000
 
 export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const dragCursorRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const focusedRef = useRef(focused)
   const [fileDragOver, setFileDragOver] = useState(false)
-  const [isScrollbarCursorVisible, setIsScrollbarCursorVisible] = useState(false)
   const pendingOutputRef = useRef('')
   const telemetryFlushTimerRef = useRef<number | null>(null)
 
@@ -193,17 +190,6 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
 
-    const updateDragCursorPosition = (clientX: number, clientY: number) => {
-      const cursor = dragCursorRef.current
-      if (!cursor) return
-      cursor.style.transform = `translate(${clientX}px, ${clientY}px)`
-    }
-
-    const setScrollbarCursorActive = (active: boolean) => {
-      document.body.classList.toggle('terminal-scrollbar-cursor-active', active)
-      setIsScrollbarCursorVisible(active)
-    }
-
     const scrollbarElement = containerRef.current.querySelector(
       '.xterm .xterm-scrollable-element > .scrollbar.vertical'
     )
@@ -216,48 +202,24 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     }
 
     let draggingScrollbar = false
-    let hoveringScrollbar = false
 
     const stopScrollbarDrag = () => {
       if (!draggingScrollbar) return
       draggingScrollbar = false
-      setScrollbarCursorActive(hoveringScrollbar)
-      window.removeEventListener('pointermove', handleScrollbarPointerMove)
+      document.body.classList.remove('terminal-scrollbar-dragging')
       window.removeEventListener('pointerup', stopScrollbarDrag)
       window.removeEventListener('blur', stopScrollbarDrag)
       window.removeEventListener('dragend', stopScrollbarDrag)
     }
 
-    const handleScrollbarPointerMove = (event: PointerEvent) => {
-      updateDragCursorPosition(event.clientX, event.clientY)
-    }
-
-    const handleScrollbarPointerEnter = (event: PointerEvent) => {
-      hoveringScrollbar = true
-      updateDragCursorPosition(event.clientX, event.clientY)
-      setScrollbarCursorActive(true)
-    }
-
-    const handleScrollbarPointerLeave = () => {
-      hoveringScrollbar = false
-      if (!draggingScrollbar) {
-        setScrollbarCursorActive(false)
-      }
-    }
-
-    const handleScrollbarPointerDown = (event: PointerEvent) => {
+    const handleScrollbarPointerDown = () => {
       draggingScrollbar = true
-      updateDragCursorPosition(event.clientX, event.clientY)
-      setScrollbarCursorActive(true)
-      window.addEventListener('pointermove', handleScrollbarPointerMove)
+      document.body.classList.add('terminal-scrollbar-dragging')
       window.addEventListener('pointerup', stopScrollbarDrag)
       window.addEventListener('blur', stopScrollbarDrag)
       window.addEventListener('dragend', stopScrollbarDrag)
     }
 
-    scrollbarElement.addEventListener('pointerenter', handleScrollbarPointerEnter)
-    scrollbarElement.addEventListener('pointermove', handleScrollbarPointerMove)
-    scrollbarElement.addEventListener('pointerleave', handleScrollbarPointerLeave)
     scrollbarElement.addEventListener('pointerdown', handleScrollbarPointerDown, true)
 
     let pendingSoftEnterCount = 0
@@ -475,11 +437,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
 
     return () => {
       disposed = true
-      scrollbarElement.removeEventListener('pointerenter', handleScrollbarPointerEnter)
-      scrollbarElement.removeEventListener('pointermove', handleScrollbarPointerMove)
-      scrollbarElement.removeEventListener('pointerleave', handleScrollbarPointerLeave)
       scrollbarElement.removeEventListener('pointerdown', handleScrollbarPointerDown, true)
-      setScrollbarCursorActive(false)
       stopScrollbarDrag()
       observer.disconnect()
       fitTimers.forEach((timer) => window.clearTimeout(timer))
@@ -527,28 +485,16 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
   }, [terminalId, scheduleOutputTelemetry, updateTelemetry])
 
   return (
-    <>
-      <div
-        ref={containerRef}
-        className="w-full h-full transition-[box-shadow,background]"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        style={{
-          boxShadow: fileDragOver ? 'inset 0 0 0 1px rgba(255, 120, 48, 0.45)' : 'none',
-          background: fileDragOver ? 'rgba(255, 120, 48, 0.035)' : 'transparent',
-        }}
-      />
-      {typeof document !== 'undefined' && document.body
-        ? createPortal(
-            <div
-              ref={dragCursorRef}
-              aria-hidden="true"
-              className={`terminal-scrollbar-drag-cursor${isScrollbarCursorVisible ? ' is-visible' : ''}`}
-            />,
-            document.body
-          )
-        : null}
-    </>
+    <div
+      ref={containerRef}
+      className="w-full h-full transition-[box-shadow,background]"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      style={{
+        boxShadow: fileDragOver ? 'inset 0 0 0 1px rgba(255, 120, 48, 0.45)' : 'none',
+        background: fileDragOver ? 'rgba(255, 120, 48, 0.035)' : 'transparent',
+      }}
+    />
   )
 }

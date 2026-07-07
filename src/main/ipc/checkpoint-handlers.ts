@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { access } from 'fs/promises'
 import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
 import type { CheckpointEngine } from '../agent/checkpoint/types'
+import { knowledgeObservationService } from '../knowledge/observation-service'
 
 export function registerCheckpointHandlers(): void {
   ipcMain.handle(
@@ -27,6 +28,22 @@ export function registerCheckpointHandlers(): void {
       await checkpointManager.initialize(cwd)
 
       const cp = await checkpointManager.createCheckpoint({ ...options, cwd })
+      void knowledgeObservationService.capture({
+        workspacePath: cwd,
+        source: 'checkpoint',
+        type: 'checkpoint-event',
+        content: options.prompt,
+        summary: `Checkpoint created: ${cp.id}`,
+        tags: ['checkpoint-create'],
+        actor: options.engine,
+        correlationId: cp.id,
+        metadata: {
+          checkpointId: cp.id,
+          terminalId: cp.terminalId,
+          branch: cp.branch,
+          conversationIndex: cp.conversationIndex,
+        },
+      }).catch(() => {})
       return {
         id: cp.id,
         terminalId: cp.terminalId,
@@ -46,6 +63,16 @@ export function registerCheckpointHandlers(): void {
     'checkpoint:finalize',
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
       await checkpointManager.finalizeCheckpoint(checkpointId, cwd)
+      void knowledgeObservationService.capture({
+        workspacePath: cwd,
+        source: 'checkpoint',
+        type: 'checkpoint-event',
+        content: `Checkpoint finalized: ${checkpointId}`,
+        summary: `Checkpoint finalized: ${checkpointId}`,
+        tags: ['checkpoint-finalize'],
+        actor: 'system',
+        correlationId: checkpointId,
+      }).catch(() => {})
       return { success: true }
     }
   )
@@ -53,7 +80,18 @@ export function registerCheckpointHandlers(): void {
   ipcMain.handle(
     'checkpoint:restore',
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
-      return checkpointManager.restoreCheckpoint(checkpointId, cwd)
+      const result = await checkpointManager.restoreCheckpoint(checkpointId, cwd)
+      void knowledgeObservationService.capture({
+        workspacePath: cwd,
+        source: 'checkpoint',
+        type: 'checkpoint-event',
+        content: `Checkpoint restored: ${checkpointId}`,
+        summary: `Checkpoint restored: ${checkpointId}`,
+        tags: ['checkpoint-restore'],
+        actor: 'system',
+        correlationId: checkpointId,
+      }).catch(() => {})
+      return result
     }
   )
 

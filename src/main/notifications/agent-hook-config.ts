@@ -367,6 +367,10 @@ function buildWindowsHookScript(): string {
 )
 
 $ErrorActionPreference = "Stop"
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$OutputEncoding = $utf8NoBom
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
 
 function Write-Diagnostic($Status, $Detail) {
   try {
@@ -441,8 +445,9 @@ try {
   }
 
   $json = $payload | ConvertTo-Json -Depth 32 -Compress
+  $bodyBytes = $utf8NoBom.GetBytes($json)
   $headers = @{ Authorization = "Bearer $token" }
-  Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/agent-hook" -Headers $headers -ContentType "application/json" -Body $json | Out-Null
+  Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/agent-hook" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes | Out-Null
   Write-Diagnostic "posted" "ok"
 } catch {
   Write-Diagnostic "error" $_.Exception.Message

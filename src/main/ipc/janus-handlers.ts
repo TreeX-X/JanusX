@@ -12,6 +12,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { blueprintStore } from '../janus/blueprint-store'
 import { analyzer } from '../janus/analyzer'
+import { knowledgeObservationService } from '../knowledge/observation-service'
 import type {
   BlueprintFeatureStatus,
   BlueprintNode,
@@ -183,11 +184,33 @@ export function registerJanusHandlers(mainWindow: BrowserWindow): void {
     ) => {
       const trigger = payload.trigger ?? 'manual'
       // 手动入口直接 await，IPC 返回分析结果
-      return analyzer.analyzeNode(payload.nodeId, {
+      const result = await analyzer.analyzeNode(payload.nodeId, {
         workspacePath: payload.workspacePath,
         trigger,
         commitLimit: payload.commitLimit
       })
+      if (payload.workspacePath && result) {
+        void knowledgeObservationService.capture({
+          workspacePath: payload.workspacePath,
+          source: 'git-analyzer',
+          type: 'analysis-result',
+          content: result.result.summary || `Janus analysis for ${payload.nodeId}`,
+          summary: `Janus analyzer: ${trigger}`,
+          tags: ['janus-analysis', trigger],
+          actor: 'janus-analyzer',
+          correlationId: result.id,
+          metadata: {
+            nodeId: payload.nodeId,
+            trigger,
+            applied: result.applied,
+            error: result.error,
+            confidence: result.result.confidence,
+            progress: result.result.progress,
+            status: result.result.status,
+          },
+        }).catch(() => {})
+      }
+      return result
     }
   )
 

@@ -23,6 +23,13 @@ interface AgentNotificationToast extends Required<Pick<AgentNotificationPayload,
 const TOAST_TTL_MS = 8_000
 const MAX_TOASTS = 3
 
+function getNotificationKicker(toast: AgentNotificationToast): string {
+  if (toast.engine) return toast.engine
+  if (toast.type === 'completed') return 'Janus Engine'
+  if (toast.type === 'failed') return 'System Daemon'
+  return 'Janus Protocol'
+}
+
 function normalizePayload(payload: unknown): AgentNotificationToast | null {
   if (!payload || typeof payload !== 'object') return null
   const record = payload as AgentNotificationPayload
@@ -96,6 +103,10 @@ export function AgentNotificationHost() {
               dismiss(toast.id)
             }}
           >
+            <span className="agent-notification__meta">
+              <span className="agent-notification__led" />
+              <span className="agent-notification__kicker">{getNotificationKicker(toast)}</span>
+            </span>
             <span className="agent-notification__title">{toast.title}</span>
             <span className="agent-notification__body">{toast.body}</span>
           </button>
@@ -105,7 +116,7 @@ export function AgentNotificationHost() {
             aria-label="Dismiss notification"
             onClick={() => dismiss(toast.id)}
           >
-            x
+            &times;
           </button>
         </div>
       ))}

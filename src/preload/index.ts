@@ -26,6 +26,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'settings:notifications:get',
   'settings:notifications:update',
   'settings:notifications:test-feishu',
+  'settings:knowledge:get',
+  'settings:knowledge:update',
   'app:init',
   'window:minimize',
   'window:maximize',
@@ -101,6 +103,16 @@ const ALLOWED_INVOKE_CHANNELS = [
   'janus:requirements:accept-candidate',
   'janus:requirements:reject-candidate',
   'janus:analyzer:accept-discovered',
+  'knowledge:contracts:get',
+  'knowledge:bootstrap',
+  'knowledge:observe',
+  'knowledge:observations:list',
+  'knowledge:observations:prune',
+  // Phase 6: 候选知识提炼 + 候选读取
+  'knowledge:extract',
+  'knowledge:candidates:list',
+  'knowledge:candidates:list-graph',
+  'knowledge:candidates:list-wiki-patches',
 ]
 
 const ALLOWED_SEND_CHANNELS = [

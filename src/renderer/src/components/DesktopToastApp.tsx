@@ -74,6 +74,7 @@ export function DesktopToastApp() {
   return (
     <div className={styles.viewport}>
       <section className={`${styles.toast} ${styles[toast.type]} ${closing ? styles.closing : ''}`}>
+        <div className={styles.filamentSpine} />
         <button
           type="button"
           className={styles.content}
@@ -84,12 +85,14 @@ export function DesktopToastApp() {
           <span className={styles.title}>{toast.title}</span>
           <span className={styles.body}>{toast.body}</span>
         </button>
-        <button
-          type="button"
-          className={styles.close}
-          aria-label="Dismiss notification"
-          onClick={() => sendAction('dismiss')}
-        />
+        <div className={styles.controlColumn}>
+          <button
+            type="button"
+            className={styles.close}
+            aria-label="Dismiss notification"
+            onClick={() => sendAction('dismiss')}
+          />
+        </div>
       </section>
     </div>
   )

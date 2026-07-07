@@ -9,6 +9,11 @@ import {
   type AgentNotificationSettings,
   type RemoteNotificationSettings,
 } from '../../shared/notifications'
+import {
+  DEFAULT_KNOWLEDGE_SETTINGS,
+  normalizeKnowledgeSettings,
+  type KnowledgeSettings,
+} from '../../shared/knowledge-settings'
 
 const DEFAULT_CONFIG: GlobalConfig = {
   theme: 'dark',
@@ -32,6 +37,7 @@ const DEFAULT_CONFIG: GlobalConfig = {
   ],
   recentWorkspaces: [],
   notificationSettings: DEFAULT_AGENT_NOTIFICATION_SETTINGS,
+  knowledgeSettings: DEFAULT_KNOWLEDGE_SETTINGS,
 }
 
 class ConfigService {
@@ -54,6 +60,7 @@ class ConfigService {
         ...DEFAULT_CONFIG,
         ...parsed,
         notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
+        knowledgeSettings: normalizeKnowledgeSettings(parsed.knowledgeSettings),
       }
     } catch {
       this.config = { ...DEFAULT_CONFIG }
@@ -82,6 +89,12 @@ class ConfigService {
       this.config.notificationSettings = normalizeAgentNotificationSettings({
         ...current.notificationSettings,
         ...partial.notificationSettings,
+      })
+    }
+    if (partial.knowledgeSettings) {
+      this.config.knowledgeSettings = normalizeKnowledgeSettings({
+        ...current.knowledgeSettings,
+        ...partial.knowledgeSettings,
       })
     }
     await this.save()
@@ -120,6 +133,21 @@ class ConfigService {
   async getRemoteNotificationSettings(): Promise<RemoteNotificationSettings> {
     const settings = await this.getNotificationSettings()
     return normalizeRemoteNotificationSettings(settings.remote)
+  }
+
+  async getKnowledgeSettings(): Promise<KnowledgeSettings> {
+    const config = await this.get()
+    return normalizeKnowledgeSettings(config.knowledgeSettings)
+  }
+
+  async updateKnowledgeSettings(partial: Partial<KnowledgeSettings>): Promise<KnowledgeSettings> {
+    const current = await this.getKnowledgeSettings()
+    const knowledgeSettings = normalizeKnowledgeSettings({
+      ...current,
+      ...partial,
+    })
+    await this.update({ knowledgeSettings })
+    return knowledgeSettings
   }
 
   async addRecentWorkspace(id: string): Promise<void> {

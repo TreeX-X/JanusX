@@ -6,6 +6,7 @@
 import { ipcMain } from 'electron'
 import { llmService } from '../llm/LlmService'
 import type { ProviderSettings } from '@janusx/llm-core'
+import { knowledgeObservationService } from '../knowledge/observation-service'
 
 /** 对话消息类型 */
 interface ChatMessage {
@@ -18,6 +19,9 @@ interface ChatRequest {
   messages: ChatMessage[]
   providerId: string
   modelId?: string
+  sourceTag?: 'janus-chat'
+  workspaceId?: string
+  workspacePath?: string
 }
 
 /** 流式对话请求参数 */
@@ -26,6 +30,9 @@ interface ChatStreamRequest {
   messages: ChatMessage[]
   providerId: string
   modelId?: string
+  sourceTag?: 'janus-chat'
+  workspaceId?: string
+  workspacePath?: string
 }
 
 /**
@@ -117,7 +124,7 @@ export function registerLlmHandlers(): void {
   // 对话请求（非流式）
   ipcMain.handle('llm:chat', async (_, request: ChatRequest) => {
     try {
-      const { messages, providerId, modelId } = request
+      const { messages, providerId, modelId, sourceTag, workspaceId, workspacePath } = request
 
       const settings = await llmService.getProviderSettings(providerId)
       if (!settings) {
@@ -146,6 +153,36 @@ export function registerLlmHandlers(): void {
         })),
       })
 
+      if (sourceTag === 'janus-chat' && workspacePath) {
+        const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')
+        if (userMessage) {
+          await knowledgeObservationService.capture({
+            workspaceId,
+            workspacePath,
+            source: 'janus-chat',
+            type: 'conversation-turn',
+            content: userMessage.content,
+            summary: 'Janus Chat user message',
+            tags: ['janus-chat', 'user'],
+            actor: 'user',
+          })
+        }
+        await knowledgeObservationService.capture({
+          workspaceId,
+          workspacePath,
+          source: 'janus-chat',
+          type: 'conversation-turn',
+          content: result.text || '',
+          summary: 'Janus Chat assistant response',
+          tags: ['janus-chat', 'assistant'],
+          actor: 'assistant',
+          metadata: {
+            providerId,
+            modelId: actualModelId,
+          },
+        })
+      }
+
       return result.text || ''
     } catch (error: any) {
       console.error('[IPC] llm:chat error:', error.message)
@@ -157,8 +194,9 @@ export function registerLlmHandlers(): void {
   const abortControllers = new Map<string, AbortController>()
 
   ipcMain.on('llm:chat-stream', async (event, request: ChatStreamRequest) => {
-    const { requestId, messages, providerId, modelId } = request
+    const { requestId, messages, providerId, modelId, sourceTag, workspaceId, workspacePath } = request
     const controller = new AbortController()
+    let streamedText = ''
     abortControllers.set(requestId, controller)
 
     const sendEvent = (channel: 'llm:chat:delta' | 'llm:chat:done' | 'llm:chat:error', payload: any) => {
@@ -200,6 +238,39 @@ export function registerLlmHandlers(): void {
       for await (const delta of result.textStream) {
         if (controller.signal.aborted) break
         sendEvent('llm:chat:delta', { requestId, delta, done: false })
+        streamedText += delta
+      }
+
+      if (sourceTag === 'janus-chat' && workspacePath) {
+        const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')
+        if (userMessage) {
+          await knowledgeObservationService.capture({
+            workspaceId,
+            workspacePath,
+            source: 'janus-chat',
+            type: 'conversation-turn',
+            content: userMessage.content,
+            summary: 'Janus Chat user message',
+            tags: ['janus-chat', 'user'],
+            actor: 'user',
+            correlationId: requestId,
+          })
+        }
+        await knowledgeObservationService.capture({
+          workspaceId,
+          workspacePath,
+          source: 'janus-chat',
+          type: 'conversation-turn',
+          content: streamedText,
+          summary: 'Janus Chat assistant response',
+          tags: ['janus-chat', 'assistant'],
+          actor: 'assistant',
+          correlationId: requestId,
+          metadata: {
+            providerId,
+            modelId: actualModelId,
+          },
+        })
       }
 
       sendEvent('llm:chat:delta', { requestId, delta: '', done: true })

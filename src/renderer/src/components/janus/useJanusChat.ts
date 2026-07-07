@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { chatStream, getDefaultProvider, getProviders, type ChatMessage } from '@/services/llm'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { useStreamingPrinter } from './useStreamingPrinter'
 
 export interface Message {
@@ -42,6 +43,9 @@ export interface UseJanusChatReturn {
 const SYSTEM_PROMPT = window.electron.janusPersona
 
 export function useJanusChat(): UseJanusChatReturn {
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -241,13 +245,29 @@ export function useJanusChat(): UseJanusChatReturn {
           ? {
               providerId: activeModelRef.current.providerId,
               modelId: activeModelRef.current.modelId,
+              sourceTag: 'janus-chat',
+              workspaceId: activeWorkspace?.id,
+              workspacePath: activeWorkspace?.path,
             }
-          : undefined
+          : {
+              sourceTag: 'janus-chat',
+              workspaceId: activeWorkspace?.id,
+              workspacePath: activeWorkspace?.path,
+            }
       )
 
       abortRef.current = abort
     },
-    [appendToPrinter, commitAssistantMessage, completePrinter, flushPrinter, isStreaming, resetPrinter]
+    [
+      activeWorkspace?.id,
+      activeWorkspace?.path,
+      appendToPrinter,
+      commitAssistantMessage,
+      completePrinter,
+      flushPrinter,
+      isStreaming,
+      resetPrinter,
+    ]
   )
 
   const retry = useCallback(() => {

@@ -1,4 +1,5 @@
 import type { AgentNotificationSettings } from '../../shared/notifications'
+import type { KnowledgeSettings } from '../../shared/knowledge-settings'
 
 export interface Workspace {
   id: string
@@ -52,6 +53,7 @@ export interface GlobalConfig {
   registeredCLIs: CLIRegistration[]
   recentWorkspaces: string[]
   notificationSettings: AgentNotificationSettings
+  knowledgeSettings: KnowledgeSettings
 }
 
 export interface CLIRegistration {

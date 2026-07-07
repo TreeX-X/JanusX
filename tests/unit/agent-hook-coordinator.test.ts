@@ -25,6 +25,7 @@ function createCoordinator(now: () => number) {
   const completions: AgentHookCompletion[] = []
   const attentionPayloads: AgentHookPayload[] = []
   const events: AgentHookCoordinatorEvent[] = []
+  const resolvedPayloads: AgentHookPayload[] = []
 
   const coordinator = new AgentHookCoordinator({} as never, {
     now,
@@ -37,9 +38,10 @@ function createCoordinator(now: () => number) {
       return true
     },
     onEvent: (event) => events.push(event),
+    onResolvedPayload: (payload) => resolvedPayloads.push(payload),
   })
 
-  return { coordinator, completions, attentionPayloads, events }
+  return { coordinator, completions, attentionPayloads, events, resolvedPayloads }
 }
 
 const codexTerminal: RegisteredHookTerminal = {
@@ -109,6 +111,26 @@ describe('AgentHookCoordinator', () => {
       startedAt: undefined,
       failed: false,
     })
+  })
+
+  it('emits normalized payloads after terminal resolution', () => {
+    const { coordinator, resolvedPayloads } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal(codexTerminal)
+    coordinator.handleHookPayload({
+      source: 'codex',
+      event: 'Stop',
+    })
+
+    expect(resolvedPayloads).toEqual([
+      expect.objectContaining({
+        source: 'codex',
+        event: 'Stop',
+        terminalId: 'term-1',
+        workspaceId: 'workspace-1',
+        cwd: 'C:/repo',
+      }),
+    ])
   })
 
   it('delivers approval notifications immediately', async () => {

@@ -25,6 +25,7 @@ interface AgentHookCoordinatorOptions {
   deliverCompletion?: (completion: AgentHookCompletion) => Promise<boolean> | boolean
   deliverAttention?: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => Promise<boolean> | boolean
   onEvent?: (event: AgentHookCoordinatorEvent) => void
+  onResolvedPayload?: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => void
 }
 
 interface TerminalResolution {
@@ -134,6 +135,7 @@ export class AgentHookCoordinator {
   private readonly deliverCompletion: (completion: AgentHookCompletion) => Promise<boolean> | boolean
   private readonly deliverAttention: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => Promise<boolean> | boolean
   private readonly onEvent?: (event: AgentHookCoordinatorEvent) => void
+  private readonly onResolvedPayload?: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => void
 
   constructor(
     private readonly mainWindow: BrowserWindow,
@@ -143,6 +145,7 @@ export class AgentHookCoordinator {
     this.deliverCompletion = options.deliverCompletion ?? ((completion) => this.defaultDeliverCompletion(completion))
     this.deliverAttention = options.deliverAttention ?? ((payload, terminal) => this.defaultDeliverAttention(payload, terminal))
     this.onEvent = options.onEvent
+    this.onResolvedPayload = options.onResolvedPayload
   }
 
   registerTerminal(terminal: RegisteredHookTerminal): void {
@@ -191,6 +194,7 @@ export class AgentHookCoordinator {
       workspaceId: terminal.workspaceId,
       cwd: payload.cwd ?? terminal.cwd,
     }
+    this.onResolvedPayload?.(normalizedPayload, terminal)
 
     if (isStartEvent(normalizedPayload)) {
       this.startTurn(normalizedPayload, terminal)

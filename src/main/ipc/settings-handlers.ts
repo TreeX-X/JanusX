@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { configService } from '../config/service'
 import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
+import type { KnowledgeSettings } from '../../shared/knowledge-settings'
 import type { AgentNotificationSettings, RemoteNotificationSettings } from '../../shared/notifications'
 
 export function registerSettingsHandlers(): void {
@@ -19,6 +20,17 @@ export function registerSettingsHandlers(): void {
     'settings:notifications:test-feishu',
     async (_event, settings?: RemoteNotificationSettings) => {
       return remoteNotificationDispatcher.testFeishu(settings)
+    },
+  )
+
+  ipcMain.handle('settings:knowledge:get', async () => {
+    return configService.getKnowledgeSettings()
+  })
+
+  ipcMain.handle(
+    'settings:knowledge:update',
+    async (_event, settings: Partial<KnowledgeSettings>) => {
+      return configService.updateKnowledgeSettings(settings ?? {})
     },
   )
 }

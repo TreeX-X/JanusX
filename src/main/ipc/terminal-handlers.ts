@@ -15,6 +15,7 @@ import {
   summarizeHookPayload,
 } from '../notifications/agent-hook-diagnostics'
 import { logTerminalDiagnostic } from '../terminal/diagnostics'
+import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -108,10 +109,25 @@ function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
 
 export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   const hookDiagnostics = new AgentHookDiagnostics()
+  agentTurnRecorder.setEventSink((event) => {
+    hookDiagnostics.record({
+      stage: `knowledge-${event.type}`,
+      source: event.engine,
+      event: event.hookEvent,
+      terminalId: event.terminalId,
+      workspaceId: event.workspaceId,
+      engine: event.engine,
+      reason: event.reason,
+      detail: event.observationId ?? event.workspacePath,
+    })
+  })
   const hookCoordinator = new AgentHookCoordinator(mainWindow, {
     onEvent: (event) => {
       hookDiagnostics.record(summarizeCoordinatorEvent(event))
       sendToRenderer(mainWindow, 'agent-hook:event', event)
+    },
+    onResolvedPayload: (payload) => {
+      agentTurnRecorder.handleHookPayload(payload)
     },
   })
   const hookBridge = new AgentHookBridge({
@@ -126,6 +142,8 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     terminalManager.killAll()
     terminalStates.clear()
     hookCoordinator.dispose()
+    agentTurnRecorder.dispose()
+    agentTurnRecorder.setEventSink(undefined)
     void hookBridge.stop()
   })
 
@@ -214,6 +232,12 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         workspaceId,
         cwd,
       })
+      agentTurnRecorder.registerTerminal({
+        terminalId: id,
+        engine,
+        workspaceId,
+        cwd,
+      })
 
       subAgentRunRegistry.upsertRun({
         id: `terminal:${id}`,
@@ -277,6 +301,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       }
       terminalStates.delete(id)
       hookCoordinator.unregisterTerminal(id)
+      agentTurnRecorder.unregisterTerminal(id)
     })
 
     checkpointManager.initialize(cwd).then(() => {
