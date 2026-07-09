@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 import type { AppLoadState } from '@/types'
 
+export type ActiveWorkbench = 'blueprint' | 'knowledge' | null
+
 interface AppStore {
   loadState: AppLoadState
   sidebarCollapsed: boolean
   panelCollapsed: boolean
   blueprintMode: boolean
+  activeWorkbench: ActiveWorkbench
   /** 翻转动画时长（ms），快甩 350 / 慢拖 650 */
   flipDuration: number
   /** 灵动岛是否正在拖拽中（App.tsx 据此禁用 transition） */
@@ -22,6 +25,8 @@ interface AppStore {
   setPanelCollapsed: (collapsed: boolean) => void
   toggleBlueprint: () => void
   setBlueprintMode: (enabled: boolean) => void
+  setActiveWorkbench: (workbench: ActiveWorkbench) => void
+  toggleWorkbench: (workbench: Exclude<ActiveWorkbench, null>) => void
   setFlipDuration: (ms: number) => void
   setIsIslandDragging: (v: boolean) => void
   setDragFlipProgress: (v: number) => void
@@ -34,6 +39,7 @@ export const useAppStore = create<AppStore>((set) => ({
   sidebarCollapsed: false,
   panelCollapsed: false,
   blueprintMode: false,
+  activeWorkbench: null,
   flipDuration: 650,
   isIslandDragging: false,
   dragFlipProgress: 0,
@@ -45,6 +51,8 @@ export const useAppStore = create<AppStore>((set) => ({
   setPanelCollapsed: (panelCollapsed) => set({ panelCollapsed }),
   toggleBlueprint: () => set((s) => ({ blueprintMode: !s.blueprintMode })),
   setBlueprintMode: (blueprintMode) => set({ blueprintMode }),
+  setActiveWorkbench: (activeWorkbench) => set({ activeWorkbench }),
+  toggleWorkbench: (workbench) => set((s) => ({ activeWorkbench: s.activeWorkbench === workbench ? null : workbench })),
   setFlipDuration: (ms) => set({ flipDuration: ms }),
   setIsIslandDragging: (v) => set({ isIslandDragging: v }),
   setDragFlipProgress: (v) => set({ dragFlipProgress: v }),

@@ -108,11 +108,16 @@ const ALLOWED_INVOKE_CHANNELS = [
   'knowledge:observe',
   'knowledge:observations:list',
   'knowledge:observations:prune',
+  'knowledge:observations:resolve-content',
+  'knowledge:retention:stats',
+  'knowledge:audit:list',
+  'knowledge:audit:stats',
   // Phase 6: 候选知识提炼 + 候选读取
   'knowledge:extract',
   'knowledge:candidates:list',
   'knowledge:candidates:list-graph',
   'knowledge:candidates:list-wiki-patches',
+  'knowledge:search',
 ]
 
 const ALLOWED_SEND_CHANNELS = [

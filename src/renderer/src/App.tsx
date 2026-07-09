@@ -11,7 +11,7 @@ import { Panel } from '@/components/Panel'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
-import { BlueprintView } from '@/components/blueprint/BlueprintView'
+import { BlueprintFocusView } from '@/components/blueprint/BlueprintFocusView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
 
@@ -197,7 +197,7 @@ export default function App() {
                 background: 'radial-gradient(circle at center, #111 0%, var(--bg-deep) 100%)',
               }}
             >
-              <BlueprintView />
+              <BlueprintFocusView />
             </div>
           </div>
         </main>

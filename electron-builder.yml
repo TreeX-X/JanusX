@@ -1,5 +1,6 @@
 appId: com.janusx.app
 productName: JanusX
+npmRebuild: false
 directories:
   output: release/${version}
   buildResources: resources

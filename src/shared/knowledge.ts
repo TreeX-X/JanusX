@@ -282,3 +282,55 @@ export interface KnowledgeContractsSnapshot {
   storage: KnowledgeStorageLayout
   writePolicy: KnowledgeWritePolicy
 }
+
+export type KnowledgeSearchDocumentType =
+  | 'observation'
+  | 'fact-candidate'
+  | 'wiki-patch'
+  | 'graph-candidate'
+  | 'memory-fact'
+
+export interface KnowledgeSearchQuery {
+  query: string
+  limit?: number
+  workspaceId?: string
+  workspaceName?: string
+  workspacePath?: string
+  tags?: string[]
+  files?: string[]
+  source?: KnowledgeSource
+  types?: KnowledgeSearchDocumentType[]
+}
+
+export interface KnowledgeSearchHit {
+  id: string
+  type: KnowledgeSearchDocumentType
+  title: string
+  content: string
+  score: number
+  bm25Score: number
+  workspaceId: string
+  workspaceName: string
+  workspacePath: string
+  source: KnowledgeSource
+  tags: string[]
+  fileRefs: string[]
+  sourceObservationIds: string[]
+  createdAt: string
+  confidence?: number
+  status?: CandidateStatus | 'active'
+}
+
+export interface KnowledgeSearchIndexStats {
+  documentCount: number
+  termCount: number
+  averageDocumentLength: number
+}
+
+export interface KnowledgeSearchResult {
+  query: KnowledgeSearchQuery
+  hits: KnowledgeSearchHit[]
+  compactContext: string
+  indexStats: KnowledgeSearchIndexStats
+  degraded?: { reason: string; detail?: string }
+}

@@ -1793,6 +1793,35 @@ body.is-running {
   padding-right: 2px;
 }
 
+.janus-island-shell[data-stage="expanded"] .janus-expanded-action-button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 120, 48, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 120, 48, 0.08);
+  color: #ffb27d;
+  cursor: pointer;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-action-button:hover {
+  color: #fff1e7;
+  border-color: rgba(255, 120, 48, 0.46);
+  background: rgba(255, 120, 48, 0.14);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-action-button:active {
+  transform: scale(0.96);
+}
+
 .janus-island-shell[data-stage="expanded"] .janus-crt {
   border-radius: 12px;
   margin: 0;

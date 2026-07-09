@@ -3,8 +3,10 @@ import { knowledgeContractService } from '../knowledge/contract-service'
 import { knowledgeAuditService, type AuditQuery } from '../knowledge/audit-service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeExtractService, type ExtractInput } from '../knowledge/extract-service'
+import { knowledgeSearchService } from '../knowledge/search-service'
 import type {
   CaptureObservationInput,
+  KnowledgeSearchQuery,
   Observation,
   ObservationPruneQuery,
   ObservationQuery,
@@ -87,5 +89,9 @@ export function registerKnowledgeHandlers(): void {
 
   ipcMain.handle('knowledge:candidates:list-wiki-patches', async () => {
     return knowledgeExtractService.listWikiPatchCandidates()
+  })
+
+  ipcMain.handle('knowledge:search', async (_event, query: KnowledgeSearchQuery) => {
+    return knowledgeSearchService.search(query)
   })
 }

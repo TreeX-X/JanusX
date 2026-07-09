@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import appIcon from '@/assets/icons/app-icon.svg'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
 import { AppSettingsModal } from '@/components/AppSettingsModal'
+import { KnowledgeWorkbench } from '@/components/knowledge'
+import { BlueprintWorkbench } from '@/components/blueprint/BlueprintWorkbench'
+import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
 import { useJanusChat } from '@/components/janus/useJanusChat'
 import type { JanusMode } from '@/components/janus'
 
@@ -36,6 +38,8 @@ export function Titlebar() {
   } = useJanusChat()
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
+  const activeWorkbench = useAppStore((s) => s.activeWorkbench)
+  const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
@@ -159,6 +163,19 @@ export function Titlebar() {
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
         initialTab={settingsInitialTab}
+      />
+
+      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 titlebar-no-drag">
+        <WorkbenchSwitcher />
+      </div>
+
+      <BlueprintWorkbench
+        isOpen={activeWorkbench === 'blueprint'}
+        onClose={() => setActiveWorkbench(null)}
+      />
+      <KnowledgeWorkbench
+        isOpen={activeWorkbench === 'knowledge'}
+        onClose={() => setActiveWorkbench(null)}
       />
 
       {/* 灵动�?*/}

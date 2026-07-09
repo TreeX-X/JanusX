@@ -259,6 +259,7 @@ export function JanusIsland({
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
+  const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
 
   const handleLongPress = useCallback(async () => {
     await toggleRunning()
@@ -277,6 +278,10 @@ export function JanusIsland({
   const handleSwipeFlip = useCallback(() => {
     setBlueprintMode(!blueprintMode)
   }, [blueprintMode, setBlueprintMode])
+
+  const handleOpenBlueprintWorkbench = useCallback(() => {
+    setActiveWorkbench('blueprint')
+  }, [setActiveWorkbench])
 
   const handleDragProgress = useCallback((_deltaY: number, progress: number) => {
     useAppStore.getState().setDragFlipProgress(progress)
@@ -740,6 +745,11 @@ export function JanusIsland({
               <span>Janus</span>
               <span className="janus-expanded-caption-divider" />
               <span>{statusText}</span>
+            </div>
+            <div className="janus-expanded-actions">
+              <button type="button" className="janus-expanded-action-button" onClick={handleOpenBlueprintWorkbench}>
+                Open Blueprint
+              </button>
             </div>
           </div>
         </div>

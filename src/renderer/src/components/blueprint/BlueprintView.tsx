@@ -39,7 +39,11 @@ interface CandidateDraft {
   parentId: string
 }
 
-export function BlueprintView() {
+interface BlueprintViewProps {
+  density?: 'embedded' | 'workbench'
+}
+
+export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
@@ -257,7 +261,7 @@ export function BlueprintView() {
     : [{ value: '', label: '按建议父节点' }]
 
   return (
-    <div className="blueprint-view">
+    <div className={`blueprint-view blueprint-view--${density}`}>
       {/* 顶部：选择 / 新建 */}
       <div className="blueprint-toolbar">
         <span className="blueprint-toolbar__title">蓝图</span>
