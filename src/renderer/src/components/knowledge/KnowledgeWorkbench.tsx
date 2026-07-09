@@ -137,6 +137,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
           <div className={styles.brand}>
             <div className={styles.mark} />
             <div>
+              <div className={styles.windowLabel}>Auxiliary Window</div>
               <div className={styles.title}>Knowledge Engine</div>
               <div className={styles.subtitle}>
                 Candidate review · provenance · retrieval console
@@ -168,8 +169,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
             <button type="button" className={styles.iconButton} onClick={() => void refresh()} title="Refresh">
               R
             </button>
-            <button type="button" className={styles.closeButton} onClick={onClose} title="Close">
-              ×
+            <button type="button" className={styles.closeButton} onClick={onClose} title="Close" aria-label="Close Knowledge Engine">
+              <span aria-hidden="true" />
             </button>
           </div>
         </header>

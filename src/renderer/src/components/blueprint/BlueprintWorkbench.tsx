@@ -40,6 +40,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
           <div className="blueprint-workbench-brand">
             <div className="blueprint-workbench-mark" />
             <div className="blueprint-workbench-titleblock">
+              <div className="blueprint-workbench-window-label">Auxiliary Window</div>
               <div className="blueprint-workbench-title">Blueprint Workbench</div>
               <div className="blueprint-workbench-subtitle">
                 Plan graph / node execution / Janus reconciliation
@@ -66,8 +67,14 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
             </div>
           </div>
 
-          <button type="button" className="blueprint-workbench-close" onClick={onClose} title="Close Blueprint Workbench">
-            Close
+          <button
+            type="button"
+            className="blueprint-workbench-close"
+            onClick={onClose}
+            aria-label="Close Blueprint Workbench"
+            title="Close Blueprint Workbench"
+          >
+            <span aria-hidden="true" />
           </button>
         </header>
 

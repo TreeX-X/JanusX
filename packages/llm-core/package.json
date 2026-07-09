@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./model-registry": {
+      "types": "./dist/registry/model-registry.d.ts",
+      "import": "./dist/registry/model-registry.js",
+      "require": "./dist/registry/model-registry.js"
     }
   },
   "scripts": {

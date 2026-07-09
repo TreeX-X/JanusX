@@ -89,6 +89,17 @@ describe('OpenAICompatibleAdapter', () => {
       expect(gpt4?.capabilities.chat).toBe(true)
       expect(gpt4?.contextWindow).toBeDefined()
     })
+
+    it('OpenRouter endpoint 应该返回注册表模型列表', async () => {
+      const models = await adapter.listModels({
+        ...mockSettings,
+        baseURL: 'https://openrouter.ai/api/v1'
+      })
+
+      expect(models.length).toBeGreaterThan(0)
+      expect(models.every(model => model.providerId === 'openai-compatible')).toBe(true)
+      expect(models.some(model => model.contextWindow && model.contextWindow > 0)).toBe(true)
+    })
   })
 
   describe('getDefaultModel()', () => {

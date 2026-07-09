@@ -105,6 +105,83 @@ async function bootstrapApp(): Promise<void> {
   let checkpointCleanupComplete = false
   const editorWindows = new Map<string, BrowserWindow>()
 
+  async function resolveDevRendererUrl(rawUrl: string): Promise<string> {
+    const baseUrl = new URL(rawUrl)
+    const candidates = buildDevRendererUrlCandidates(baseUrl)
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      for (const candidate of candidates) {
+        if (await canReachRenderer(candidate)) return candidate
+      }
+      await delay(250)
+    }
+
+    return rawUrl
+  }
+
+  function buildDevRendererUrlCandidates(baseUrl: URL): string[] {
+    const candidates = new Set<string>([baseUrl.toString()])
+    const basePort = Number(baseUrl.port)
+    if (!Number.isFinite(basePort) || basePort <= 0) return Array.from(candidates)
+
+    for (let port = basePort; port <= basePort + 5; port++) {
+      const candidate = new URL(baseUrl.toString())
+      if (candidate.hostname === 'localhost') candidate.hostname = '127.0.0.1'
+      candidate.port = String(port)
+      candidate.pathname = '/'
+      candidate.search = ''
+      candidate.hash = ''
+      candidates.add(candidate.toString())
+    }
+
+    return Array.from(candidates)
+  }
+
+  async function canReachRenderer(url: string): Promise<boolean> {
+    try {
+      const response = await fetch(url, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(1_000),
+      })
+      return response.status < 500
+    } catch {
+      return false
+    }
+  }
+
+  function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  async function loadRendererWindow(
+    window: BrowserWindow,
+    configureUrl?: (url: URL) => void
+  ): Promise<void> {
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      const resolvedUrl = await resolveDevRendererUrl(process.env['ELECTRON_RENDERER_URL'])
+      const url = new URL(resolvedUrl)
+      configureUrl?.(url)
+      await loadUrlWithRetry(window, url.toString())
+      return
+    }
+
+    await window.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+
+  async function loadUrlWithRetry(window: BrowserWindow, url: string): Promise<void> {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        await window.loadURL(url)
+        return
+      } catch (error) {
+        lastError = error
+        await delay(250)
+      }
+    }
+    console.error(`Failed to load renderer URL after retries: ${url}`, lastError)
+  }
+
   function createWindow(): void {
     const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
     const iconPath = join(__dirname, '../../resources', iconFile)
@@ -193,11 +270,11 @@ async function bootstrapApp(): Promise<void> {
       editorWindows.set(payload.filePath, editorWindow)
 
       if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-        const url = new URL(process.env['ELECTRON_RENDERER_URL'])
-        url.searchParams.set('editorWindow', '1')
-        url.searchParams.set('editorFile', payload.filePath)
-        url.searchParams.set('workspacePath', payload.workspacePath)
-        editorWindow.loadURL(url.toString())
+        void loadRendererWindow(editorWindow, (url) => {
+          url.searchParams.set('editorWindow', '1')
+          url.searchParams.set('editorFile', payload.filePath!)
+          url.searchParams.set('workspacePath', payload.workspacePath!)
+        })
       } else {
         editorWindow.loadFile(join(__dirname, '../renderer/index.html'), {
           query: {
@@ -211,11 +288,7 @@ async function bootstrapApp(): Promise<void> {
       return { success: true }
     })
 
-    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-      mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-    } else {
-      mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-    }
+    void loadRendererWindow(mainWindow)
   }
 
   const hasSingleInstanceLock = app.requestSingleInstanceLock()

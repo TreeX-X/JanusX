@@ -81,15 +81,13 @@ async function scanCodexHistory(cwd: string, startedAt?: number): Promise<Runtim
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_CODEX_CANDIDATES)
 
-  let fallback: RuntimeTelemetrySnapshot | null = null
   for (const file of files) {
     const snapshot = await parseCodexSession(file, cwd, startedAt)
     if (!snapshot) continue
     if (snapshotMatchesCwd(snapshot, cwd)) return snapshot
-    fallback ??= snapshot
   }
 
-  return fallback
+  return null
 }
 
 async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Promise<RuntimeTelemetrySnapshot | null> {
@@ -211,7 +209,7 @@ async function parseCodexSession(file: SessionFileRef, cwd: string, startedAt?: 
   }
 
   if (snapshot.cwd && !pathsEqual(snapshot.cwd, cwd)) {
-    return hasTelemetry(snapshot) ? snapshot : null
+    return null
   }
   return hasTelemetry(snapshot) ? snapshot : null
 }

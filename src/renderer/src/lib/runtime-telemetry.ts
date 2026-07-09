@@ -1,4 +1,5 @@
 import type { TerminalPreset } from '@/types'
+import { matchAiModel } from '@janusx/llm-core/model-registry'
 
 export interface RuntimeTelemetryPatch {
   detectedModel?: string
@@ -36,6 +37,9 @@ export function detectModelFromText(text: string): string | undefined {
 }
 
 export function getEstimatedContextWindow(preset: TerminalPreset, model?: string): number | undefined {
+  const registryWindow = getRegistryContextWindow(model)
+  if (registryWindow !== undefined) return registryWindow
+
   const normalized = model?.toLowerCase() ?? ''
 
   if (/\[1m\]|\b1m\b/.test(normalized)) return 1_000_000
@@ -58,6 +62,32 @@ export function getEstimatedContextWindow(preset: TerminalPreset, model?: string
     case 'shell':
       return undefined
   }
+}
+
+export function getRegistryContextWindow(model?: string): number | undefined {
+  if (!model) return undefined
+
+  const result = matchAiModel(model)
+  if (
+    result.match &&
+    result.confidence !== 'low' &&
+    result.confidence !== 'none'
+  ) {
+    return result.match.effectiveContextWindow
+  }
+
+  return undefined
+}
+
+export function stabilizeContextTokens(
+  current: number | undefined,
+  next: number | undefined
+): number | undefined {
+  if (next === undefined) return undefined
+  if (current === undefined || current <= 0) return next
+  if (next >= current) return next
+
+  return current
 }
 
 export function extractRuntimeTelemetry(text: string): RuntimeTelemetryPatch {

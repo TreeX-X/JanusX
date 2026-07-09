@@ -17,6 +17,7 @@ import { AuthType } from '../../core/types'
 import { validateApiKeySettings } from '../../utils/validation'
 import { ModelCreationError, wrapError } from '../../utils/errors'
 import { withAiSdkV1StreamCompatibility } from '../../utils/stream-compat'
+import { applyModelMetadata, getOpenRouterModelInfos } from '../../registry/model-registry'
 
 /* ════════════════════════════════════════════════════════════
    OpenAI Compatible Adapter 实现
@@ -135,7 +136,11 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
    * OpenAI Compatible 适配器返回常见模型列表
    * 实际可用模型取决于服务提供商
    */
-  async listModels(): Promise<ModelInfo[]> {
+  async listModels(settings?: ProviderSettings): Promise<ModelInfo[]> {
+    if (isOpenRouterEndpoint(settings?.baseURL)) {
+      return getOpenRouterModelInfos(this.id)
+    }
+
     // 常见的 OpenAI 兼容模型
     const commonModels: ModelInfo[] = [
       // GPT-4 系列
@@ -234,7 +239,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
     // TODO: 未来可以调用 OpenAI API 的 /models 端点动态获取
     // 但需要处理不同服务商返回格式不一致的问题
 
-    return commonModels
+    return commonModels.map(model => applyModelMetadata(model))
   }
 
   /**
@@ -392,4 +397,8 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
   async dispose(): Promise<void> {
     // 清理资源（如果有的话）
   }
+}
+
+function isOpenRouterEndpoint(baseURL: string | undefined): boolean {
+  return baseURL?.toLowerCase().includes('openrouter.ai') ?? false
 }

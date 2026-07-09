@@ -40,7 +40,7 @@ export interface UseJanusChatReturn {
   refreshModels: () => Promise<ChatModelOption[]>
 }
 
-const SYSTEM_PROMPT = window.electron.janusPersona
+const SYSTEM_PROMPT = (window as Partial<Window>).electron?.janusPersona ?? ''
 
 export function useJanusChat(): UseJanusChatReturn {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)

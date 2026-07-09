@@ -87,6 +87,23 @@ export {
   getProviderMetadata
 } from './registry/loader'
 
+export type {
+  AiModelRegistryDocument,
+  AiModelRegistryEntry,
+  AiModelMatchResult,
+  AiModelMatchConfidence
+} from './registry/model-types'
+
+export {
+  applyModelMetadata,
+  getAiModelRegistryMetadata,
+  getAllAiModels,
+  getOpenRouterModelInfos,
+  matchAiModel,
+  openRouterRecordToRegistryEntry,
+  registryEntryToModelInfo
+} from './registry/model-registry'
+
 /* ════════════════════════════════════════════════════════════
    便捷函数（Facade 模式）
    ════════════════════════════════════════════════════════════ */

@@ -20,7 +20,7 @@ import {
   type WorkspacePaneNode,
   type WorkspacePaneSplit,
 } from '@/lib/workspace-pane'
-import { getEstimatedContextWindow } from '@/lib/runtime-telemetry'
+import { getEstimatedContextWindow, getRegistryContextWindow } from '@/lib/runtime-telemetry'
 import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../shared/terminalLaunch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
@@ -219,7 +219,11 @@ function modelLabel(terminal: Terminal): string {
 }
 
 function contextWindow(terminal: Terminal): number | undefined {
-  return terminal.contextWindowTokens ?? getEstimatedContextWindow(terminal.preset, terminal.detectedModel)
+  return (
+    getRegistryContextWindow(terminal.detectedModel) ??
+    terminal.contextWindowTokens ??
+    getEstimatedContextWindow(terminal.preset, terminal.detectedModel)
+  )
 }
 
 function contextRatio(terminal: Terminal): number | undefined {

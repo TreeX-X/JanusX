@@ -19,11 +19,13 @@
     background 160ms ease;
 }
 
+.switcher:hover,
+.switcher:focus-within,
 .switcher:has(.button:hover),
 .switcher:has(.button:focus-visible) {
-  width: 145px;
-  border-color: rgba(255, 255, 255, 0.055);
-  background: rgba(255, 255, 255, 0.035);
+  width: 154px;
+  border-color: rgba(255, 120, 48, 0.18);
+  background: rgba(255, 120, 48, 0.045);
 }
 
 .button {
@@ -53,14 +55,16 @@
     background 150ms ease;
 }
 
+.switcher:hover .button,
 .button:hover,
 .button:focus-visible {
   width: 106px;
 }
 
+.switcher:hover .button,
 .button:hover {
-  color: #f5f5f6;
-  background: rgba(255, 255, 255, 0.045);
+  color: #ff7830;
+  background: rgba(255, 120, 48, 0.085);
 }
 
 .button:active {
@@ -95,6 +99,7 @@
     width 180ms ease;
 }
 
+.switcher:hover .button .led,
 .button:hover .led,
 .button:focus-visible .led {
   left: 7px;
@@ -135,6 +140,7 @@
     color 160ms ease;
 }
 
+.switcher:hover .button .initial,
 .button:hover .initial,
 .button:focus-visible .initial {
   width: 0;
@@ -157,10 +163,12 @@
     opacity 120ms ease;
 }
 
+.switcher:hover .button .label,
 .button:hover .label,
 .button:focus-visible .label {
   max-width: 82px;
   opacity: 1;
+  color: #ff7830;
 }
 
 .badge {
@@ -185,6 +193,7 @@
     transform 180ms ease;
 }
 
+.switcher:hover .button .badge,
 .button:hover .badge,
 .button:focus-visible .badge {
   right: 5px;

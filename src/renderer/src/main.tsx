@@ -3,8 +3,11 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { DesktopToastApp } from './components/DesktopToastApp'
 import { StandaloneFileEditor } from './components/StandaloneFileEditor'
+import { installElectronApiFallback } from './lib/electron-api-fallback'
 import './styles/globals.css'
 import './components/janus/janus-island.css'
+
+installElectronApiFallback()
 
 const searchParams = new URLSearchParams(window.location.search)
 const isEditorWindow = searchParams.get('editorWindow') === '1'
