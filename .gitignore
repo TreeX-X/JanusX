@@ -63,6 +63,7 @@ codex-*.patch
 codex-*.diff
 .hybrid/
 CLAUDE.md
+AGENTS.md
 
 # JanusX local runtime scratch
 .janusX/
