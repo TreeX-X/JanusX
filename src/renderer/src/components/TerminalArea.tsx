@@ -182,17 +182,6 @@ function providerLabel(preset: TerminalPreset): string {
   }
 }
 
-function statusLabel(status: Terminal['status']): string {
-  switch (status) {
-    case 'running':
-      return 'running'
-    case 'exited':
-      return 'done'
-    default:
-      return 'idle'
-  }
-}
-
 function accentColor(status: Terminal['status']): string {
   return status === 'exited' ? '#4ec9b0' : status === 'running' ? '#ff7830' : '#58a6ff'
 }
@@ -950,7 +939,7 @@ export function TerminalArea() {
   const otherTerminals = terminals.filter((terminal) => terminal.id !== activeTerminal?.id)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
   const activeRuntimeText = activeTerminal
-    ? `${providerLabel(activeTerminal.preset)} · ${statusLabel(activeTerminal.status)} · ${modelLabel(activeTerminal)} · ${contextLabel(activeTerminal)}`
+    ? `${providerLabel(activeTerminal.preset)} · ${modelLabel(activeTerminal)} · ${contextLabel(activeTerminal)}`
     : 'No terminal runtime'
 
   return (
@@ -1107,16 +1096,6 @@ export function TerminalArea() {
                   {providerLabel(activeTerminal.preset)}
                 </span>
                 <span
-                  className="inline-flex h-5 shrink-0 items-center border px-2 font-mono"
-                  style={{
-                    borderColor: `${accentColor(activeTerminal.status)}33`,
-                    background: `${accentColor(activeTerminal.status)}12`,
-                    color: accentColor(activeTerminal.status),
-                  }}
-                >
-                  {statusLabel(activeTerminal.status)}
-                </span>
-                <span
                   className="inline-flex h-5 min-w-0 max-w-[120px] items-center border px-2 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
@@ -1166,7 +1145,7 @@ export function TerminalArea() {
                     background: 'rgba(255,255,255,0.018)',
                     color: '#777',
                   }}
-                  title={`${providerLabel(terminal.preset)} · ${statusLabel(terminal.status)} · ${modelLabel(terminal)} · ${contextLabel(terminal)}`}
+                  title={`${providerLabel(terminal.preset)} · ${modelLabel(terminal)} · ${contextLabel(terminal)}`}
                 >
                   <span
                     className="h-[5px] w-[5px] shrink-0 rounded-full"
@@ -1208,7 +1187,7 @@ export function TerminalArea() {
                     <button
                       key={terminal.id}
                       type="button"
-                      className="grid w-full cursor-pointer grid-cols-[92px_74px_minmax(96px,140px)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,120,48,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.35)]"
+                      className="grid w-full cursor-pointer grid-cols-[92px_minmax(96px,140px)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,120,48,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.35)]"
                       style={{
                         borderColor: 'rgba(255,255,255,0.035)',
                         background: terminal.id === activeTerminalId ? 'rgba(255,120,48,0.055)' : 'transparent',
@@ -1225,16 +1204,6 @@ export function TerminalArea() {
                           }}
                         />
                         <span className="truncate">{providerLabel(terminal.preset)}</span>
-                      </span>
-                      <span
-                        className="inline-flex h-5 w-fit items-center border px-2"
-                        style={{
-                          borderColor: `${accentColor(terminal.status)}33`,
-                          background: `${accentColor(terminal.status)}12`,
-                          color: accentColor(terminal.status),
-                        }}
-                      >
-                        {statusLabel(terminal.status)}
                       </span>
                       <span
                         className="inline-flex h-5 min-w-0 items-center border px-2"

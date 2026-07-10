@@ -65,6 +65,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
   const [candidateDrafts, setCandidateDrafts] = useState<Record<string, CandidateDraft>>({})
   const [candidateLoading, setCandidateLoading] = useState(false)
   const [noticeError, setNoticeError] = useState<string | null>(null)
+  const [inboxExpanded, setInboxExpanded] = useState(false)
 
   const loadCandidates = useCallback(
     async (
@@ -144,6 +145,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
       setDiscoveredNotice(event)
       setNoticeError(null)
       setCandidateStatus('pending')
+      setInboxExpanded(true)
       void loadCandidates(event.blueprintId, 'pending', event.workspacePath)
     })
     return () => {
@@ -197,6 +199,9 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
     setSelectedId(next?.id ?? null)
     if (next) loadBlueprint(next.id)
   }
+
+  const pendingCandidateCount =
+    currentBlueprint?.requirementCandidates?.filter((c) => c.status === 'pending').length ?? 0
 
   const handleAcceptCandidate = async (candidate: BlueprintRequirementCandidate) => {
     const draft = candidateDrafts[candidate.id] ?? {
@@ -262,25 +267,26 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
 
   return (
     <div className={`blueprint-view blueprint-view--${density}`}>
-      {/* 顶部：选择 / 新建 */}
+      {/* 顶部：蓝图选择 / 新建 / 删除 */}
       <div className="blueprint-toolbar">
-        <span className="blueprint-toolbar__title">蓝图</span>
-        <Select
-          value={selectedId ?? ''}
-          onChange={handleSelect}
-          disabled={blueprints.length === 0}
-          placeholder="（暂无蓝图）"
-          options={
-            blueprints.length === 0
-              ? [{ value: '', label: '（暂无蓝图）' }]
-              : blueprints.map((b) => ({ value: b.id, label: b.name }))
-          }
-          className="blueprint-select blueprint-select--toolbar"
-        />
-        <button className="blueprint-btn blueprint-btn--primary" onClick={handleCreate}>+ 新建蓝图</button>
-        <button className="blueprint-btn blueprint-btn--danger" onClick={handleDelete} disabled={!selectedId}>
-          删除蓝图
-        </button>
+        <div className="blueprint-toolbar__group blueprint-toolbar__group--manager">
+          <Select
+            value={selectedId ?? ''}
+            onChange={handleSelect}
+            disabled={blueprints.length === 0}
+            placeholder="（暂无蓝图）"
+            options={
+              blueprints.length === 0
+                ? [{ value: '', label: '（暂无蓝图）' }]
+                : blueprints.map((b) => ({ value: b.id, label: b.name }))
+            }
+            className="blueprint-select blueprint-select--toolbar"
+          />
+          <button className="blueprint-btn blueprint-btn--primary" onClick={handleCreate}>+ 新建</button>
+          <button className="blueprint-btn blueprint-btn--danger" onClick={handleDelete} disabled={!selectedId}>
+            删除
+          </button>
+        </div>
         <div className="blueprint-toolbar__spacer" />
         {loading ? <span className="blueprint-toolbar__loading">加载中…</span> : null}
         {error ? <span className="blueprint-toolbar__error">{error}</span> : null}
@@ -318,12 +324,23 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
       ) : null}
 
       {currentBlueprint ? (
-        <div className="bp-candidate-inbox">
+        <div className="bp-candidate-inbox" data-expanded={inboxExpanded ? 'true' : 'false'}>
           <div className="bp-candidate-inbox__head">
-            <div>
+            <button
+              type="button"
+              className="bp-candidate-inbox__toggle"
+              onClick={() => setInboxExpanded((v) => !v)}
+              aria-expanded={inboxExpanded}
+              data-attention={pendingCandidateCount > 0 ? 'true' : 'false'}
+              aria-label={inboxExpanded ? '收起候选需求列表' : '展开候选需求列表'}
+            >
+              <span className={`bp-candidate-inbox__chevron${inboxExpanded ? ' bp-candidate-inbox__chevron--open' : ''}`} aria-hidden="true" />
               <strong>候选需求 Inbox</strong>
-              <span>{candidateLoading ? '刷新中...' : `${candidates.length} 条${CANDIDATE_STATUS_LABEL[candidateStatus]}`}</span>
-            </div>
+              {pendingCandidateCount > 0 ? <span className="bp-candidate-inbox__dot" aria-hidden="true" /> : null}
+            </button>
+            <span className="bp-candidate-inbox__count">
+              {candidateLoading ? '刷新中...' : `${candidates.length} 条${CANDIDATE_STATUS_LABEL[candidateStatus]}`}
+            </span>
             <div className="bp-candidate-inbox__tools">
               <Select
                 value={candidateStatus}
@@ -337,76 +354,80 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
             </div>
           </div>
 
-          {!candidateLoading && candidates.length === 0 ? (
-            <div className="bp-candidate-inbox__empty">暂无{CANDIDATE_STATUS_LABEL[candidateStatus]}候选</div>
-          ) : null}
-          {noticeError ? <div className="bp-candidate-inbox__error">{noticeError}</div> : null}
+          {inboxExpanded ? (
+            <>
+              {!candidateLoading && candidates.length === 0 ? (
+                <div className="bp-candidate-inbox__empty">暂无{CANDIDATE_STATUS_LABEL[candidateStatus]}候选</div>
+              ) : null}
+              {noticeError ? <div className="bp-candidate-inbox__error">{noticeError}</div> : null}
 
-          {candidates.length > 0 ? (
-            <div className="bp-candidate-list">
-              {candidates.map((candidate) => {
-                const draft = candidateDrafts[candidate.id] ?? {
-                  title: candidate.title,
-                  description: candidate.description,
-                  parentId: candidate.suggestedParentId ?? ''
-                }
-                const editable = candidate.status === 'pending'
-                const sourceNode = currentBlueprint.nodes[candidate.sourceNodeId]
-                return (
-                  <div className="bp-candidate-card" key={candidate.id}>
-                    <div className="bp-candidate-card__meta">
-                      <span>{CANDIDATE_STATUS_LABEL[candidate.status]}</span>
-                      <span>{Math.round(candidate.confidence * 100)}%</span>
-                      <span>来源：{sourceNode?.title ?? candidate.sourceNodeId}</span>
-                    </div>
-
-                    {editable ? (
-                      <input
-                        className="bp-candidate-card__input"
-                        value={draft.title}
-                        onChange={(event) => updateCandidateDraft(candidate.id, { title: event.currentTarget.value })}
-                      />
-                    ) : (
-                      <strong className="bp-candidate-card__title">{candidate.title}</strong>
-                    )}
-
-                    {editable ? (
-                      <textarea
-                        className="bp-candidate-card__textarea"
-                        value={draft.description}
-                        onChange={(event) => updateCandidateDraft(candidate.id, { description: event.currentTarget.value })}
-                      />
-                    ) : (
-                      <p>{candidate.description}</p>
-                    )}
-
-                    <div className="bp-candidate-card__footer">
-                      <Select
-                        value={editable ? draft.parentId : candidate.suggestedParentId ?? ''}
-                        onChange={(value) => updateCandidateDraft(candidate.id, { parentId: value })}
-                        options={candidateParentOptions}
-                        disabled={!editable}
-                        className="blueprint-select bp-candidate-card__parent"
-                      />
-                      {editable ? (
-                        <div className="bp-candidate-card__actions">
-                          <button className="blueprint-btn blueprint-btn--primary" onClick={() => handleAcceptCandidate(candidate)}>
-                            接受
-                          </button>
-                          <button className="blueprint-btn" onClick={() => handleRejectCandidate(candidate)}>
-                            拒绝
-                          </button>
+              {candidates.length > 0 ? (
+                <div className="bp-candidate-list">
+                  {candidates.map((candidate) => {
+                    const draft = candidateDrafts[candidate.id] ?? {
+                      title: candidate.title,
+                      description: candidate.description,
+                      parentId: candidate.suggestedParentId ?? ''
+                    }
+                    const editable = candidate.status === 'pending'
+                    const sourceNode = currentBlueprint.nodes[candidate.sourceNodeId]
+                    return (
+                      <div className="bp-candidate-card" key={candidate.id}>
+                        <div className="bp-candidate-card__meta">
+                          <span>{CANDIDATE_STATUS_LABEL[candidate.status]}</span>
+                          <span>{Math.round(candidate.confidence * 100)}%</span>
+                          <span>来源：{sourceNode?.title ?? candidate.sourceNodeId}</span>
                         </div>
-                      ) : (
-                        <span className="bp-candidate-card__decision">
-                          {candidate.acceptedNodeId ? `节点 ${candidate.acceptedNodeId.slice(0, 8)}` : candidate.decisionNote || '已留痕'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+
+                        {editable ? (
+                          <input
+                            className="bp-candidate-card__input"
+                            value={draft.title}
+                            onChange={(event) => updateCandidateDraft(candidate.id, { title: event.currentTarget.value })}
+                          />
+                        ) : (
+                          <strong className="bp-candidate-card__title">{candidate.title}</strong>
+                        )}
+
+                        {editable ? (
+                          <textarea
+                            className="bp-candidate-card__textarea"
+                            value={draft.description}
+                            onChange={(event) => updateCandidateDraft(candidate.id, { description: event.currentTarget.value })}
+                          />
+                        ) : (
+                          <p>{candidate.description}</p>
+                        )}
+
+                        <div className="bp-candidate-card__footer">
+                          <Select
+                            value={editable ? draft.parentId : candidate.suggestedParentId ?? ''}
+                            onChange={(value) => updateCandidateDraft(candidate.id, { parentId: value })}
+                            options={candidateParentOptions}
+                            disabled={!editable}
+                            className="blueprint-select bp-candidate-card__parent"
+                          />
+                          {editable ? (
+                            <div className="bp-candidate-card__actions">
+                              <button className="blueprint-btn blueprint-btn--primary" onClick={() => handleAcceptCandidate(candidate)}>
+                                接受
+                              </button>
+                              <button className="blueprint-btn" onClick={() => handleRejectCandidate(candidate)}>
+                                拒绝
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="bp-candidate-card__decision">
+                              {candidate.acceptedNodeId ? `节点 ${candidate.acceptedNodeId.slice(0, 8)}` : candidate.decisionNote || '已留痕'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
       ) : null}

@@ -44,25 +44,24 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
               <span className="blueprint-workbench-bc-sep">/</span>
               <span className="blueprint-workbench-bc-current">Blueprint Workbench</span>
             </nav>
-            <span className="blueprint-workbench-subtitle">Plan graph / node execution / Janus reconciliation</span>
           </div>
 
           <div className="blueprint-workbench-metrics" aria-label="Blueprint summary">
             <div className="blueprint-workbench-metric">
-              <span>Blueprints</span>
-              <strong>{Math.max(blueprints.length, currentBlueprint ? 1 : 0)}</strong>
+              <span className="blueprint-workbench-metric__label">Blueprints</span>
+              <strong className="blueprint-workbench-metric__value">{Math.max(blueprints.length, currentBlueprint ? 1 : 0)}</strong>
             </div>
             <div className="blueprint-workbench-metric">
-              <span>Nodes</span>
-              <strong>{nodeCount}</strong>
+              <span className="blueprint-workbench-metric__label">Nodes</span>
+              <strong className="blueprint-workbench-metric__value">{nodeCount}</strong>
             </div>
-            <div data-attention={pendingCandidateCount > 0 ? 'true' : 'false'} className="blueprint-workbench-metric">
-              <span>Inbox</span>
-              <strong>{pendingCandidateCount}</strong>
+            <div className="blueprint-workbench-metric" data-attention={pendingCandidateCount > 0 ? 'true' : 'false'}>
+              <span className="blueprint-workbench-metric__label">Inbox</span>
+              <strong className="blueprint-workbench-metric__value">{pendingCandidateCount}</strong>
             </div>
-            <div data-attention={focusedTitle ? 'true' : 'false'} className="blueprint-workbench-metric blueprint-workbench-focus-metric">
-              <span>Focus</span>
-              <strong>{focusedTitle || 'None'}</strong>
+            <div className="blueprint-workbench-metric blueprint-workbench-metric--focus" data-attention={focusedTitle ? 'true' : 'false'}>
+              <span className="blueprint-workbench-metric__label">Focus</span>
+              <strong className="blueprint-workbench-metric__value" title={focusedTitle || undefined}>{focusedTitle || '—'}</strong>
             </div>
           </div>
 

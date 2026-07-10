@@ -19,8 +19,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 12px;
-  min-height: 43px;
+  padding: 9px 14px;
+  min-height: 44px;
   background: var(--chrome-bg, rgba(12, 12, 12, 0.85));
   border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.04));
   backdrop-filter: blur(20px);
@@ -31,7 +31,13 @@
   flex-direction: column;
   align-items: stretch;
   flex-wrap: nowrap;
-  min-height: 50px;
+  min-height: 44px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.blueprint-toolbar__group--manager {
+  gap: 8px;
 }
 
 .blueprint-toolbar__main {
@@ -75,6 +81,8 @@
 .blueprint-toolbar__group--primary {
   flex-wrap: wrap;
   justify-content: flex-end;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .blueprint-toolbar__group--utility {
@@ -108,21 +116,21 @@
 }
 
 .blueprint-select {
-  height: 30px;
+  height: 28px;
   min-width: 0;
   font-size: 12px;
 }
 
 .blueprint-select--toolbar {
-  width: 180px;
-  height: 26px;
-  flex: 0 0 180px;
+  width: 200px;
+  height: 28px;
+  flex: 0 0 auto;
 }
 
 .blueprint-select--status-filter {
-  width: 112px;
-  height: 26px;
-  flex: 0 0 112px;
+  width: 116px;
+  height: 28px;
+  flex: 0 0 116px;
 }
 
 .blueprint-toolbar__search {
@@ -131,8 +139,8 @@
 }
 
 .blueprint-btn {
-  height: 26px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 12px;
   font-size: 12px;
   color: #d4d4d4;
   background: rgba(255, 255, 255, 0.05);
@@ -371,35 +379,89 @@
 
 .bp-candidate-inbox {
   flex: 0 0 auto;
-  max-height: 240px;
-  padding: 10px 12px;
+  max-height: 280px;
+  padding: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(8, 8, 8, 0.68);
+  background: rgba(8, 8, 9, 0.72);
   overflow: auto;
   z-index: 4;
+  transition: padding 0.2s ease;
+}
+
+.bp-candidate-inbox[data-expanded='false'] {
+  max-height: 44px;
+  overflow: hidden;
 }
 
 .bp-candidate-inbox__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  margin-bottom: 0;
+}
+
+.bp-candidate-inbox__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  border-radius: 4px;
+}
+
+.bp-candidate-inbox__toggle:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.55);
+  outline-offset: 2px;
+}
+
+.bp-candidate-inbox__chevron {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #6b6b73;
+  transition: transform 0.2s ease;
+  flex: 0 0 auto;
+}
+
+.bp-candidate-inbox__chevron--open {
+  transform: rotate(180deg);
+}
+
+.bp-candidate-inbox__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff7830;
+  box-shadow: 0 0 6px rgba(255, 120, 48, 0.5);
+  flex: 0 0 auto;
+}
+
+.bp-candidate-inbox__toggle[data-attention='true'] .bp-candidate-inbox__chevron {
+  border-top-color: #ff7830;
 }
 
 .bp-candidate-inbox__head strong,
 .bp-candidate-inbox__head span {
-  display: block;
+  display: inline-block;
 }
 
-.bp-candidate-inbox__head strong {
-  color: #f0f0f0;
+.bp-candidate-inbox__toggle strong {
+  color: #e0e0e2;
   font-size: 12px;
-  margin-bottom: 2px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.bp-candidate-inbox__head span {
-  color: #8f8f8f;
+.bp-candidate-inbox__count {
+  color: #71717a;
   font-size: 11px;
 }
 
@@ -407,28 +469,30 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 .bp-candidate-inbox__select {
-  width: 112px;
+  width: 116px;
 }
 
 .bp-candidate-inbox__empty {
   color: #777;
   font-size: 12px;
-  padding: 8px 0 2px;
+  padding: 8px 14px 4px;
 }
 
 .bp-candidate-inbox__error {
   color: #ff8a65;
   font-size: 11px;
-  margin: 0 0 8px;
+  margin: 0 14px 8px;
 }
 
 .bp-candidate-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 8px;
+  padding: 10px 14px 12px;
 }
 
 .bp-candidate-card {
@@ -1448,39 +1512,55 @@
 .blueprint-workbench-metrics {
   display: flex;
   align-items: center;
-  gap: 12px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  overflow: hidden;
 }
 
 .blueprint-workbench-metric {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 14px;
   min-width: 0;
-  max-width: 180px;
+  max-width: 200px;
 }
 
-.blueprint-workbench-metrics .blueprint-workbench-metric > span {
-  color: #4b4b52;
+.blueprint-workbench-metric + .blueprint-workbench-metric {
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.blueprint-workbench-metric--focus {
+  max-width: 260px;
+}
+
+.blueprint-workbench-metric__label {
+  color: #51515a;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 9px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
-.blueprint-workbench-metrics .blueprint-workbench-metric > strong {
+.blueprint-workbench-metric__value {
   min-width: 0;
   overflow: hidden;
-  color: #71717a;
-  font-size: 11px;
+  color: #9a9aa2;
+  font-size: 12px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.blueprint-workbench-metric[data-attention='true'] > strong {
+.blueprint-workbench-metric[data-attention='true'] .blueprint-workbench-metric__value {
   color: #ff7830;
 }
 
 .blueprint-workbench-focus-metric {
-  /* i.e. focus column */
+  /* legacy alias kept for safety; --focus modifier supersedes */
 }
 
 .blueprint-workbench-close {
@@ -1539,8 +1619,12 @@
 }
 
 .blueprint-view--workbench .bp-candidate-inbox {
-  max-height: 220px;
+  max-height: 260px;
   background: rgba(8, 8, 9, 0.72);
+}
+
+.blueprint-view--workbench .bp-candidate-inbox[data-expanded='false'] {
+  max-height: 44px;
 }
 
 @keyframes blueprint-workbench-in {
@@ -1807,7 +1891,7 @@
     grid-template-columns: minmax(220px, 1fr) auto;
   }
 
-  .blueprint-workbench-metrics {
+  .blueprint-workbench-metric--focus {
     display: none;
   }
 
