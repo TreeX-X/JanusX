@@ -9,6 +9,17 @@ export interface RuntimeTelemetryPatch {
   outputTokens?: number
 }
 
+export type RuntimeTelemetrySource = 'live' | 'history'
+
+export type RuntimeTelemetrySnapshot = RuntimeTelemetryPatch & {
+  updatedAt?: number
+}
+
+export type RuntimeTelemetryState = RuntimeTelemetryPatch & {
+  preset: TerminalPreset
+  updatedAt?: number
+}
+
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
 const MODEL_FIELD_PATTERN =
   /(?:^|[\s{,])(?:model|model_id|modelId|model_name|modelName|selected model|using model)\s*[:=]\s*["'`]?([a-z0-9][a-z0-9_.:/+-]{1,80})/i
@@ -88,6 +99,59 @@ export function stabilizeContextTokens(
   if (next >= current) return next
 
   return current
+}
+
+export function mergeRuntimeTelemetrySnapshot(
+  current: RuntimeTelemetryState,
+  telemetry: RuntimeTelemetrySnapshot,
+  source: RuntimeTelemetrySource = 'live'
+): RuntimeTelemetrySnapshot {
+  const isHistory = source === 'history'
+  const isNewer = telemetry.updatedAt !== undefined && (!current.updatedAt || telemetry.updatedAt >= current.updatedAt)
+  const detectedModel = telemetry.detectedModel ?? current.detectedModel
+  const registryWindow = getRegistryContextWindow(detectedModel)
+  const patch: RuntimeTelemetrySnapshot = {}
+
+  if (detectedModel && detectedModel !== current.detectedModel && (!isHistory || !current.detectedModel)) {
+    patch.detectedModel = detectedModel
+    const estimatedWindow = registryWindow ?? getEstimatedContextWindow(current.preset, detectedModel)
+    if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
+  }
+
+  if (!current.contextWindowTokens && detectedModel && patch.contextWindowTokens === undefined) {
+    const estimatedWindow = registryWindow ?? getEstimatedContextWindow(current.preset, detectedModel)
+    if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
+  }
+
+  if (registryWindow !== undefined) {
+    if (registryWindow !== current.contextWindowTokens && (!isHistory || !current.contextWindowTokens)) {
+      patch.contextWindowTokens = registryWindow
+    }
+  } else if (telemetry.contextWindowTokens !== undefined) {
+    if (
+      telemetry.contextWindowTokens !== current.contextWindowTokens &&
+      (!isHistory || !current.contextWindowTokens)
+    ) {
+      patch.contextWindowTokens = telemetry.contextWindowTokens
+    }
+  }
+
+  const stableContextTokens = stabilizeContextTokens(current.contextTokens, telemetry.contextTokens)
+  if (stableContextTokens !== undefined && stableContextTokens !== current.contextTokens) {
+    patch.contextTokens = stableContextTokens
+  }
+
+  const inputTokens = mergeUsageTokens(current.inputTokens, telemetry.inputTokens, isHistory, isNewer)
+  if (inputTokens !== undefined) patch.inputTokens = inputTokens
+
+  const outputTokens = mergeUsageTokens(current.outputTokens, telemetry.outputTokens, isHistory, isNewer)
+  if (outputTokens !== undefined) patch.outputTokens = outputTokens
+
+  if (Object.keys(patch).length > 0) {
+    patch.updatedAt = telemetry.updatedAt ?? Date.now()
+  }
+
+  return patch
 }
 
 export function extractRuntimeTelemetry(text: string): RuntimeTelemetryPatch {
@@ -190,6 +254,17 @@ function mergeTelemetryPatch(target: RuntimeTelemetryPatch, source: RuntimeTelem
   if (source.contextWindowTokens !== undefined) target.contextWindowTokens = source.contextWindowTokens
   if (source.inputTokens !== undefined) target.inputTokens = source.inputTokens
   if (source.outputTokens !== undefined) target.outputTokens = source.outputTokens
+}
+
+function mergeUsageTokens(
+  current: number | undefined,
+  next: number | undefined,
+  isHistory: boolean,
+  isNewer: boolean
+): number | undefined {
+  if (next === undefined || next === current) return undefined
+  if (!isHistory || current === undefined || next > current || isNewer) return next
+  return undefined
 }
 
 function parseTokenAmount(raw: string): number | undefined {

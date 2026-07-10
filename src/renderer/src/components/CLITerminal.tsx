@@ -14,24 +14,16 @@ import {
 } from '@/lib/terminal-input-transaction'
 import {
   extractRuntimeTelemetry,
-  getEstimatedContextWindow,
-  getRegistryContextWindow,
-  stabilizeContextTokens,
-  type RuntimeTelemetryPatch,
+  mergeRuntimeTelemetrySnapshot,
+  type RuntimeTelemetrySnapshot,
+  type RuntimeTelemetrySource,
 } from '@/lib/runtime-telemetry'
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { Terminal as TerminalState } from '@/types'
 
 interface CLITerminalProps {
   terminalId: string
   focused?: boolean
 }
-
-type RuntimeTelemetryHistorySnapshot = RuntimeTelemetryPatch & {
-  updatedAt?: number
-}
-
-type RuntimeTelemetrySource = 'live' | 'history'
 
 type TerminalDataPayload = {
   id: string
@@ -55,58 +47,17 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
   const telemetryFlushTimerRef = useRef<number | null>(null)
 
   const applyTelemetryPatch = useCallback((
-    telemetry: RuntimeTelemetryHistorySnapshot,
+    telemetry: RuntimeTelemetrySnapshot,
     source: RuntimeTelemetrySource = 'live'
   ) => {
     const store = useWorkspaceStore.getState()
     const terminal = store.terminals.find((item) => item.id === terminalId)
     if (!terminal) return
 
-    const isHistory = source === 'history'
-    const detectedModel = telemetry.detectedModel ?? terminal.detectedModel
-    const registryWindow = getRegistryContextWindow(detectedModel)
-    const patch: Partial<TerminalState> = {}
-
-    if (detectedModel && detectedModel !== terminal.detectedModel && (!isHistory || !terminal.detectedModel)) {
-      patch.detectedModel = detectedModel
-      const estimatedWindow = registryWindow ?? getEstimatedContextWindow(terminal.preset, detectedModel)
-      if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
-    }
-
-    if (!terminal.contextWindowTokens && detectedModel && patch.contextWindowTokens === undefined) {
-      const estimatedWindow = registryWindow ?? getEstimatedContextWindow(terminal.preset, detectedModel)
-      if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
-    }
-
-    if (registryWindow !== undefined) {
-      if (registryWindow !== terminal.contextWindowTokens && (!isHistory || !terminal.contextWindowTokens)) {
-        patch.contextWindowTokens = registryWindow
-      }
-    } else if (telemetry.contextWindowTokens !== undefined) {
-      if (
-        telemetry.contextWindowTokens !== terminal.contextWindowTokens &&
-        (!isHistory || !terminal.contextWindowTokens)
-      ) {
-        patch.contextWindowTokens = telemetry.contextWindowTokens
-      }
-    }
-
-    const stableContextTokens = isHistory && terminal.contextTokens !== undefined
-      ? undefined
-      : stabilizeContextTokens(terminal.contextTokens, telemetry.contextTokens)
-    if (stableContextTokens !== undefined && stableContextTokens !== terminal.contextTokens) {
-      patch.contextTokens = stableContextTokens
-    }
-
-    if (telemetry.inputTokens !== undefined && (!isHistory || terminal.inputTokens === undefined)) {
-      patch.inputTokens = telemetry.inputTokens
-    }
-    if (telemetry.outputTokens !== undefined && (!isHistory || terminal.outputTokens === undefined)) {
-      patch.outputTokens = telemetry.outputTokens
-    }
+    const patch = mergeRuntimeTelemetrySnapshot(terminal, telemetry, source)
 
     if (Object.keys(patch).length === 0) return
-    store.updateTerminal(terminalId, { ...patch, updatedAt: telemetry.updatedAt ?? Date.now() })
+    store.updateTerminal(terminalId, patch)
   }, [terminalId])
 
   const updateTelemetry = useCallback((text: string) => {
@@ -140,7 +91,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
           startedAt: terminal.telemetryStartedAt,
         })
         if (cancelled || !result || typeof result !== 'object') return
-        applyTelemetryPatch(result as RuntimeTelemetryHistorySnapshot, 'history')
+        applyTelemetryPatch(result as RuntimeTelemetrySnapshot, 'history')
       } catch {
         // History telemetry is opportunistic; terminal rendering must not depend on it.
       }

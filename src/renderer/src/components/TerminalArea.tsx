@@ -202,6 +202,10 @@ function formatTokenCount(value?: number): string {
   return String(value)
 }
 
+function formatExactTokenCount(value?: number): string {
+  return value === undefined ? 'unknown' : value.toLocaleString('en-US')
+}
+
 function modelLabel(terminal: Terminal): string {
   if (terminal.preset === 'shell') return 'model n/a'
   return terminal.detectedModel ?? 'detecting model'
@@ -254,6 +258,62 @@ function contextLabel(terminal: Terminal): string {
   const windowTokens = contextWindow(terminal)
   if (!windowTokens) return `${formatTokenCount(used)} ctx`
   return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} ctx`
+}
+
+function contextPercentLabel(terminal: Terminal): string {
+  const ratio = contextRatio(terminal)
+  return ratio === undefined ? 'unknown' : `${(ratio * 100).toFixed(1)}%`
+}
+
+function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
+  const windowTokens = contextWindow(terminal)
+  const rows = [
+    ['Input', formatExactTokenCount(terminal.inputTokens)],
+    ['Output', formatExactTokenCount(terminal.outputTokens)],
+    ['Updated', formatAge(terminal.updatedAt)],
+  ]
+
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none fixed bottom-10 left-1/2 z-50 hidden w-[270px] -translate-x-1/2 overflow-hidden rounded-[10px] border px-3.5 py-3 text-left font-mono text-[12px] shadow-[0_18px_42px_rgba(0,0,0,0.48)] group-hover:block"
+      style={{
+        borderColor: 'rgba(255,255,255,0.12)',
+        background: 'rgb(15, 15, 17)',
+        color: '#e8e8e8',
+      }}
+    >
+      <span className="mb-2 flex items-end justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">Context</span>
+          <span className="mt-0.5 block truncate text-[13px] text-[#f2f2f2]">
+            {formatExactTokenCount(terminal.contextTokens)} / {formatExactTokenCount(windowTokens)}
+          </span>
+        </span>
+        <span
+          className="shrink-0 text-[18px] leading-none"
+          style={{ color: contextRatioColor(contextRatio(terminal)) }}
+        >
+          {contextPercentLabel(terminal)}
+        </span>
+      </span>
+      <span className="mb-2 block h-1.5 overflow-hidden rounded-full bg-[rgba(255,255,255,0.07)]">
+        <span
+          className="block h-full rounded-full"
+          style={{
+            width: `${Math.round((contextRatio(terminal) ?? 0) * 100)}%`,
+            background: contextRatioColor(contextRatio(terminal)),
+          }}
+        />
+      </span>
+      {rows.map(([label, value]) => (
+        <span key={label} className="flex min-w-0 items-center justify-between gap-3 py-1">
+          <span className="shrink-0 text-[#8b8b8b]">{label}</span>
+          <span className="min-w-0 truncate text-right text-[#f4f4f4]">{value}</span>
+        </span>
+      ))}
+    </span>
+  )
 }
 
 function waitForTerminalMount(): Promise<void> {
@@ -1084,7 +1144,7 @@ export function TerminalArea() {
               </span>
             )}
             {activeTerminal ? (
-              <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+              <span className="flex min-w-0 items-center gap-1.5">
                 <span
                   className="inline-flex h-5 max-w-[92px] shrink-0 items-center border px-2 font-mono"
                   style={{
@@ -1106,7 +1166,7 @@ export function TerminalArea() {
                   <span className="truncate">{modelLabel(activeTerminal)}</span>
                 </span>
                 <span
-                  className="hidden h-5 shrink-0 items-center border px-2 font-mono md:inline-flex"
+                  className="group relative hidden h-5 shrink-0 items-center border px-2 font-mono md:inline-flex"
                   style={{
                     borderColor: `${contextRatioColor(contextRatio(activeTerminal))}33`,
                     background: `${contextRatioColor(contextRatio(activeTerminal))}12`,
@@ -1114,6 +1174,7 @@ export function TerminalArea() {
                   }}
                 >
                   {contextLabel(activeTerminal)}
+                  <ContextUsagePopover terminal={activeTerminal} />
                 </span>
               </span>
             ) : (
@@ -1121,16 +1182,21 @@ export function TerminalArea() {
             )}
             {activeTerminal && (
               <span
-                className="hidden h-1 w-20 overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] md:inline-flex"
-                title={`Context estimate: ${contextLabel(activeTerminal)}`}
+                className="group relative hidden h-5 w-20 items-center md:inline-flex"
+                title={`Context: ${contextLabel(activeTerminal)}`}
               >
                 <span
-                  className="h-full rounded-full transition-[width,background] duration-300"
-                  style={{
-                    width: `${Math.round((contextRatio(activeTerminal) ?? 0) * 100)}%`,
-                    background: contextRatioColor(contextRatio(activeTerminal)),
-                  }}
-                />
+                  className="h-1 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)]"
+                >
+                  <span
+                    className="block h-full rounded-full transition-[width,background] duration-300"
+                    style={{
+                      width: `${Math.round((contextRatio(activeTerminal) ?? 0) * 100)}%`,
+                      background: contextRatioColor(contextRatio(activeTerminal)),
+                    }}
+                  />
+                </span>
+                <ContextUsagePopover terminal={activeTerminal} />
               </span>
             )}
           </div>
@@ -1215,7 +1281,7 @@ export function TerminalArea() {
                       >
                         <span className="truncate">{modelLabel(terminal)}</span>
                       </span>
-                      <span className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-2">
+                      <span className="group relative grid min-w-0 grid-cols-[1fr_auto] items-center gap-2">
                         <span
                           className="h-1 overflow-hidden rounded-full"
                           style={{ background: 'rgba(255,255,255,0.06)' }}
@@ -1229,6 +1295,7 @@ export function TerminalArea() {
                           />
                         </span>
                         <span className="whitespace-nowrap" style={{ color: contextRatioColor(contextRatio(terminal)) }}>{contextLabel(terminal)}</span>
+                        <ContextUsagePopover terminal={terminal} />
                       </span>
                       <span className="text-right text-[#555]" title={`input ${formatTokenCount(terminal.inputTokens)} · output ${formatTokenCount(terminal.outputTokens)}`}>
                         {formatAge(terminal.updatedAt)}
