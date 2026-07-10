@@ -41,16 +41,17 @@ export function WorkbenchSwitcher() {
           <button
             key={item.id}
             type="button"
-            className={`${styles.button} ${isActive ? styles.buttonActive : ''}`}
+            className={`${styles.capsule} ${isActive ? styles.capsuleActive : ''}`}
+            data-id={item.id}
             data-status={status}
             aria-pressed={isActive}
             aria-label={title}
             title={title}
             onClick={() => toggleWorkbench(item.id)}
           >
-            <span className={styles.led} />
-            <span className={styles.initial} aria-hidden="true">{item.initial}</span>
+            <span className={styles.dot} aria-hidden="true">{item.initial}</span>
             <span className={styles.label}>{item.label}</span>
+            <span className={styles.led} />
             {badge > 0 ? <span className={styles.badge} title={`${badge} pending requirement${badge > 1 ? 's' : ''}`}>{badge > 9 ? '9+' : badge}</span> : null}
           </button>
         )

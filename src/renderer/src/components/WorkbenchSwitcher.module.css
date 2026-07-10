@@ -1,180 +1,204 @@
+/* ==========================================================================
+     WorkbenchSwitcher — 独立胶囊悬浮控件
+     参考高保真原型 .independent-ctrl：默认只有字母的圆点，悬停优雅滑出为胶囊
+     颜色优化：放弃原型生硬蓝调，统一暖橙品牌色，用分层径向辉光替代平涂,
+     折叠时静默，展开时由内发光质感的层次推进
+     ========================================================================== */
+
 .switcher {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 5px;
-  width: 69px;
-  height: 28px;
-  padding: 3px;
-  overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.018);
-  box-shadow: none;
-  backdrop-filter: blur(12px);
-  transform-origin: right center;
-  transition:
-    width 180ms cubic-bezier(0.2, 0.9, 0.2, 1),
-    border-color 160ms ease,
-    background 160ms ease;
+  gap: 8px;
 }
 
-.switcher:hover,
-.switcher:focus-within,
-.switcher:has(.button:hover),
-.switcher:has(.button:focus-visible) {
-  width: 154px;
-  border-color: rgba(255, 120, 48, 0.18);
-  background: rgba(255, 120, 48, 0.045);
-}
-
-.button {
+/* 独立胶囊按钮：默认完美圆形 */
+.capsule {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  width: 28px;
-  min-width: 28px;
-  height: 22px;
+  height: 24px;
+  width: 24px;
   padding: 0;
   overflow: hidden;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #8a8a91;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0;
+  /* iOS 级阻尼曲线 */
   transition:
-    width 180ms cubic-bezier(0.2, 0.9, 0.2, 1),
-    color 150ms ease,
-    transform 150ms ease,
-    background 150ms ease;
+    width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    padding 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.switcher:hover .button,
-.button:hover,
-.button:focus-visible {
-  width: 106px;
-}
-
-.switcher:hover .button,
-.button:hover {
-  color: #ff7830;
-  background: rgba(255, 120, 48, 0.085);
-}
-
-.button:active {
-  transform: scale(0.96);
-}
-
-.button:focus-visible {
-  outline: 1px solid rgba(255, 120, 48, 0.6);
+.capsule:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.55);
   outline-offset: 1px;
 }
 
-.buttonActive {
-  color: #ffb27d;
-  background: rgba(255, 120, 48, 0.075);
-  box-shadow: inset 0 -1px 0 rgba(255, 120, 48, 0.52);
+/* 展开为胶囊 */
+.capsule:hover,
+.capsule:focus-within {
+  width: 104px;
 }
 
-.led {
+/* Blueprint：暖橙辉光（调浅一档，更柔和的内透质感） */
+.capsule[data-id='blueprint']:hover,
+.capsule[data-id='blueprint']:focus-within {
+  border-color: rgba(255, 120, 48, 0.18);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 120, 48, 0.10), transparent 62%),
+    linear-gradient(90deg, rgba(255, 120, 48, 0.05), rgba(255, 120, 48, 0.015) 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 10px rgba(255, 120, 48, 0.08);
+}
+
+/* Knowledge：蓝调（调浅一档，与展开态整体明度统一） */
+.capsule[data-id='knowledge']:hover,
+.capsule[data-id='knowledge']:focus-within {
+  border-color: rgba(59, 130, 246, 0.18);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.10), transparent 62%),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.015) 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 10px rgba(59, 130, 246, 0.08);
+}
+
+/* 字母圆点 / 全字母：两者共享同一中心点交叉淡入淡出
+   收缩 -> 单字母圆点；展开 -> 全字母标签，互斥显示 */
+.dot {
   position: absolute;
   left: 50%;
-  bottom: 4px;
-  width: 5px;
-  height: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  transform: translateX(-50%);
-  transition:
-    background 160ms ease,
-    box-shadow 160ms ease,
-    left 180ms ease,
-    transform 160ms ease,
-    width 180ms ease;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: transparent;
+  color: #71717a;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  opacity: 1;
+  transition: opacity 0.26s ease,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.switcher:hover .button .led,
-.button:hover .led,
-.button:focus-visible .led {
-  left: 7px;
+/* 展开时圆点退场（缩小 + 淡出），让位给全字母标签 */
+.capsule:hover .dot,
+.capsule:focus-within .dot {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.6);
+}
+
+/* 收缩态聚焦时圆点提亮，提示可点击 */
+.capsule[data-id='blueprint']:focus-visible .dot {
+  color: #ff9a5c;
+}
+
+.capsule[data-id='knowledge']:focus-visible .dot {
+  color: #93c2ff;
+}
+
+/* 展开文字标签：与圆点共享中心点，展开时淡入接管 */
+.label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  color: inherit;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.86);
+  transform-origin: center;
+  transition: opacity 0.28s ease,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.3s ease;
+}
+
+.capsule:hover .label,
+.capsule:focus-within .label {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* 展开态标签色：调浅一档以便与更柔和的展开底色呼应 */
+.capsule[data-id='blueprint'] .label {
+  color: #ff9a5c;
+}
+
+.capsule[data-id='knowledge'] .label {
+  color: #93c2ff;
+}
+
+/* 状态呼吸灯（右内侧，展开时显示） */
+.led {
+  position: absolute;
+  right: 9px;
+  top: 50%;
   width: 4px;
   height: 4px;
-  transform: translateX(0);
-}
-
-.button[data-status='active'] .led {
-  background: #ff7830;
-  box-shadow: 0 0 6px rgba(255, 120, 48, 0.36);
-  transform: translateX(-50%) scale(1.06);
-}
-
-.button[data-status='active']:hover .led,
-.button[data-status='active']:focus-visible .led {
-  transform: translateX(0) scale(1.06);
-}
-
-.button[data-status='attention'] .led {
-  background: #ff7830;
-  box-shadow: 0 0 7px rgba(255, 120, 48, 0.44);
-}
-
-.initial {
-  width: 20px;
-  flex: 0 0 20px;
-  overflow: hidden;
-  text-align: center;
-  line-height: 1;
-  opacity: 1;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
-  transition:
-    width 150ms ease,
-    flex-basis 150ms ease,
-    opacity 110ms ease,
-    transform 160ms ease,
-    color 160ms ease;
-}
-
-.switcher:hover .button .initial,
-.button:hover .initial,
-.button:focus-visible .initial {
-  width: 0;
-  flex-basis: 0;
+  border-radius: 50%;
+  background: transparent;
+  transform: translateY(-50%);
   opacity: 0;
-  transform: translateX(-4px);
+  transition: opacity 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
 }
 
-.label {
-  max-width: 0;
-  overflow: hidden;
-  color: inherit;
-  font-size: 9px;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-  opacity: 0;
-  transition:
-    max-width 180ms cubic-bezier(0.2, 0.9, 0.2, 1),
-    opacity 120ms ease;
-}
-
-.switcher:hover .button .label,
-.button:hover .label,
-.button:focus-visible .label {
-  max-width: 82px;
+.capsule:hover .led,
+.capsule:focus-within .led {
   opacity: 1;
-  color: #ff7830;
 }
 
+.capsule[data-status='active'] .led,
+.capsule[data-status='attention'] .led {
+  opacity: 1;
+  background: #ff7830;
+}
+
+.capsule[data-status='active'] .led {
+  box-shadow: 0 0 6px rgba(255, 120, 48, 0.45);
+}
+
+.capsule[data-status='attention'] .led {
+  box-shadow: 0 0 8px rgba(255, 120, 48, 0.6);
+}
+
+.capsule[data-id='knowledge'][data-status='active'] .led {
+  background: #6ba6ff;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.45);
+}
+
+/* 激活态：未悬停也保留微弱底色，让用户知道哪个在开 */
+.capsuleActive[data-id='blueprint'] {
+  border-color: rgba(255, 120, 48, 0.22);
+  background: rgba(255, 120, 48, 0.06);
+}
+
+.capsuleActive[data-id='knowledge'] {
+  border-color: rgba(59, 130, 246, 0.22);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+/* 待审角标 */
 .badge {
   position: absolute;
-  right: 2px;
-  top: 2px;
+  right: -3px;
+  top: -3px;
   min-width: 13px;
   height: 13px;
   display: inline-flex;
@@ -182,20 +206,20 @@
   justify-content: center;
   padding: 0 3px;
   border-radius: 999px;
-  background: rgba(255, 120, 48, 0.14);
-  color: #ffb27d;
+  background: #ff7830;
+  color: #1a0f07;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 8px;
+  font-weight: 800;
   letter-spacing: 0;
-  transform: scale(0.88);
-  transform-origin: top right;
-  transition:
-    right 180ms ease,
-    transform 180ms ease;
+  box-shadow: 0 0 8px rgba(255, 120, 48, 0.5);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.switcher:hover .button .badge,
-.button:hover .badge,
-.button:focus-visible .badge {
-  right: 5px;
-  transform: scale(1);
+.capsule:hover .badge {
+  transform: scale(0.88);
+}
+
+.capsule:active {
+  transform: scale(0.95);
 }

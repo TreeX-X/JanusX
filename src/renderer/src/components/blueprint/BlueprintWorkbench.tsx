@@ -37,31 +37,30 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
     <div className="blueprint-workbench-backdrop">
       <section className="blueprint-workbench-shell" aria-label="Blueprint Workbench">
         <header className="blueprint-workbench-header">
-          <div className="blueprint-workbench-brand">
-            <div className="blueprint-workbench-mark" />
-            <div className="blueprint-workbench-titleblock">
-              <div className="blueprint-workbench-window-label">Auxiliary Window</div>
-              <div className="blueprint-workbench-title">Blueprint Workbench</div>
-              <div className="blueprint-workbench-subtitle">
-                Plan graph / node execution / Janus reconciliation
-              </div>
-            </div>
+          <div className="blueprint-workbench-header-left">
+            <div className="blueprint-workbench-icon-badge" aria-hidden="true">B</div>
+            <nav className="blueprint-workbench-breadcrumb" aria-label="Breadcrumb">
+              <span className="blueprint-workbench-bc-parent">JanusX</span>
+              <span className="blueprint-workbench-bc-sep">/</span>
+              <span className="blueprint-workbench-bc-current">Blueprint Workbench</span>
+            </nav>
+            <span className="blueprint-workbench-subtitle">Plan graph / node execution / Janus reconciliation</span>
           </div>
 
           <div className="blueprint-workbench-metrics" aria-label="Blueprint summary">
-            <div>
+            <div className="blueprint-workbench-metric">
               <span>Blueprints</span>
               <strong>{Math.max(blueprints.length, currentBlueprint ? 1 : 0)}</strong>
             </div>
-            <div>
+            <div className="blueprint-workbench-metric">
               <span>Nodes</span>
               <strong>{nodeCount}</strong>
             </div>
-            <div data-attention={pendingCandidateCount > 0 ? 'true' : 'false'}>
+            <div data-attention={pendingCandidateCount > 0 ? 'true' : 'false'} className="blueprint-workbench-metric">
               <span>Inbox</span>
               <strong>{pendingCandidateCount}</strong>
             </div>
-            <div data-attention={focusedTitle ? 'true' : 'false'} className="blueprint-workbench-focus-metric">
+            <div data-attention={focusedTitle ? 'true' : 'false'} className="blueprint-workbench-metric blueprint-workbench-focus-metric">
               <span>Focus</span>
               <strong>{focusedTitle || 'None'}</strong>
             </div>

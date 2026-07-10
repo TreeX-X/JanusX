@@ -134,15 +134,13 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
     <div className={styles.backdrop}>
       <section className={styles.shell}>
         <header className={styles.header}>
-          <div className={styles.brand}>
-            <div className={styles.mark} />
-            <div>
-              <div className={styles.windowLabel}>Auxiliary Window</div>
-              <div className={styles.title}>Knowledge Engine</div>
-              <div className={styles.subtitle}>
-                Candidate review · provenance · retrieval console
-              </div>
-            </div>
+          <div className={styles.headerLeft}>
+            <div className={styles.iconBadge} aria-hidden="true">K</div>
+            <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+              <span className={styles.bcParent}>JanusX</span>
+              <span className={styles.bcSep}>/</span>
+              <span className={styles.bcCurrent}>Knowledge Engine</span>
+            </nav>
             {snapshot?.usingDemoData && <span className={styles.badge}>DEMO DATA</span>}
           </div>
 
