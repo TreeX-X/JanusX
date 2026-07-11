@@ -92,13 +92,13 @@
 }
 
 .switch input:checked + .switchTrack {
-  background: rgba(255, 120, 48, 0.24);
-  border-color: rgba(255, 120, 48, 0.45);
+  background: rgba(var(--so-accent-rgb), 0.22);
+  border-color: rgba(var(--so-accent-rgb), 0.42);
 }
 
 .switch input:checked + .switchTrack::after {
   transform: translateX(20px);
-  background: #ff7830;
+  background: var(--so-accent);
 }
 
 .numberControl {
@@ -121,8 +121,8 @@
 }
 
 .input:focus {
-  border-color: rgba(255, 120, 48, 0.65);
-  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.25);
+  border-color: rgba(var(--so-accent-rgb), 0.58);
+  box-shadow: 0 0 0 1px rgba(var(--so-accent-rgb), 0.22);
 }
 
 .textInput {
@@ -142,8 +142,8 @@
 }
 
 .select:focus {
-  border-color: rgba(255, 120, 48, 0.65);
-  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.25);
+  border-color: rgba(var(--so-accent-rgb), 0.58);
+  box-shadow: 0 0 0 1px rgba(var(--so-accent-rgb), 0.22);
 }
 
 .select option {
@@ -226,14 +226,14 @@
 }
 
 .primaryButton {
-  background: #ff7830;
-  border-color: #ff7830;
-  color: #111;
+  background: rgba(var(--so-accent-rgb), 0.14);
+  border-color: rgba(var(--so-accent-rgb), 0.42);
+  color: var(--so-accent-ink);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: #ff8a4d;
-  border-color: #ff8a4d;
+  background: rgba(var(--so-accent-rgb), 0.22);
+  border-color: rgba(var(--so-accent-rgb), 0.6);
 }
 
 @media (max-width: 720px) {

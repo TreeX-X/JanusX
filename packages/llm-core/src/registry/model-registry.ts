@@ -25,8 +25,21 @@ import {
   tokenizeModelName
 } from './model-normalize'
 
+/**
+ * OpenRouter "always points at newest" alias entries:
+ * - `~provider/...` dynamic latest namespace
+ * - ids ending in `-latest` / `:latest` (e.g. `openai/gpt-chat-latest`)
+ */
+export function isOpenRouterLatestAlias(model: { id?: string }): boolean {
+  const id = model.id
+  if (!id) return false
+  if (id.startsWith('~')) return true
+  return /[:/-]latest$/i.test(id)
+}
+
 export function openRouterRecordToRegistryEntry(record: OpenRouterModelRecord): AiModelRegistryEntry | null {
   if (!record.id || !record.name) return null
+  if (isOpenRouterLatestAlias(record)) return null
 
   const providerContextLength = readPositiveNumber(record.top_provider?.context_length)
   const contextLength = readPositiveNumber(record.context_length)
@@ -264,4 +277,4 @@ const legacy = legacyOverrides as AiModelRegistryOverridesDocument
 const registryModels = mergeOverrides(
   generated.models,
   [...overrides.overrides, ...legacy.overrides]
-)
+).filter((model) => !isOpenRouterLatestAlias(model))

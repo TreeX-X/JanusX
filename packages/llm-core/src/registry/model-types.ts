@@ -42,6 +42,21 @@ export interface AiModelRegistryDocument {
   models: AiModelRegistryEntry[]
 }
 
+export type ModelCatalogSource = 'bundled' | 'cache'
+
+export interface ModelCatalogSnapshot {
+  models: AiModelRegistryEntry[]
+  updatedAt: string
+  source: ModelCatalogSource
+  isStale: boolean
+}
+
+export interface ModelCatalogRefreshResult {
+  success: boolean
+  catalog: ModelCatalogSnapshot
+  error?: string
+}
+
 export interface AiModelRegistryOverride {
   id: string
   source?: ModelRegistrySource

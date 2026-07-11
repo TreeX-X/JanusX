@@ -91,7 +91,11 @@ export type {
   AiModelRegistryDocument,
   AiModelRegistryEntry,
   AiModelMatchResult,
-  AiModelMatchConfidence
+  AiModelMatchConfidence,
+  ModelCatalogRefreshResult,
+  ModelCatalogSnapshot,
+  ModelCatalogSource,
+  OpenRouterModelRecord
 } from './registry/model-types'
 
 export {
@@ -99,6 +103,7 @@ export {
   getAiModelRegistryMetadata,
   getAllAiModels,
   getOpenRouterModelInfos,
+  isOpenRouterLatestAlias,
   matchAiModel,
   openRouterRecordToRegistryEntry,
   registryEntryToModelInfo

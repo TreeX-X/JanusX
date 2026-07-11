@@ -16,6 +16,7 @@ import {
 } from '../notifications/agent-hook-diagnostics'
 import { logTerminalDiagnostic } from '../terminal/diagnostics'
 import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
+import { appShutdown } from '../shutdown/AppShutdown'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -29,6 +30,27 @@ interface TerminalCpState {
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
+
+/** Finalize current pending checkpoints for all terminals (best-effort, no wipe). */
+export async function finalizePendingTerminalCheckpoints(): Promise<void> {
+  const pending = Array.from(terminalStates.entries())
+    .filter(([, state]) => Boolean(state.checkpointId))
+    .map(([id, state]) => ({ id, checkpointId: state.checkpointId!, cwd: state.cwd }))
+
+  await Promise.all(
+    pending.map(async ({ id, checkpointId, cwd }) => {
+      try {
+        await checkpointManager.finalizeCheckpoint(checkpointId, cwd)
+        const state = terminalStates.get(id)
+        if (state?.checkpointId === checkpointId) {
+          state.checkpointId = null
+        }
+      } catch (err) {
+        console.error('Checkpoint finalize on shutdown failed:', err)
+      }
+    }),
+  )
+}
 
 function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
@@ -138,13 +160,36 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   })
   const hookConfigManager = new AgentHookConfigManager()
 
+  // Register terminal/hook cleanup into the unified shutdown path.
+  // Window close without full quit still needs local cleanup.
+  appShutdown.configure({
+    finalizePendingCheckpoints: () => finalizePendingTerminalCheckpoints(),
+    stopHookBridge: () => hookBridge.stop(),
+    disposeTerminalSession: () => {
+      terminalStates.clear()
+      hookCoordinator.dispose()
+      agentTurnRecorder.dispose()
+      agentTurnRecorder.setEventSink(undefined)
+    },
+  })
+
   mainWindow.on('closed', () => {
-    terminalManager.killAll()
-    terminalStates.clear()
-    hookCoordinator.dispose()
-    agentTurnRecorder.dispose()
-    agentTurnRecorder.setEventSink(undefined)
-    void hookBridge.stop()
+    if (appShutdown.isQuitting) return
+    // Non-darwin: index mainWindow.closed triggers app.quit -> AppShutdown.
+    // Keep terminal state until finalizePendingCheckpoints runs there.
+    if (process.platform !== 'darwin') return
+
+    // Darwin keeps the app process alive after the last window closes.
+    void finalizePendingTerminalCheckpoints()
+      .catch((err) => console.error('Checkpoint finalize on window close failed:', err))
+      .finally(() => {
+        terminalManager.killAll()
+        terminalStates.clear()
+        hookCoordinator.dispose()
+        agentTurnRecorder.dispose()
+        agentTurnRecorder.setEventSink(undefined)
+        void hookBridge.stop()
+      })
   })
 
   ipcMain.handle('terminal:create', async (_event, config) => {

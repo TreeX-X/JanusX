@@ -158,6 +158,17 @@ class DesktopToastWindow {
     this.currentOptions = null
   }
 
+  /** Destroy the toast window so it cannot keep the app alive on quit. */
+  destroy(): void {
+    this.hide()
+    const win = this.toastWindow
+    this.toastWindow = null
+    this.rendererReady = false
+    if (win && !win.isDestroyed()) {
+      win.destroy()
+    }
+  }
+
   private handleReady = (event: IpcMainEvent): void => {
     const win = this.toastWindow
     if (!win || win.isDestroyed() || event.sender !== win.webContents) return

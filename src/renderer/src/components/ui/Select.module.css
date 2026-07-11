@@ -26,7 +26,7 @@
 .triggerOpen,
 .trigger:focus-visible {
   border-color: var(--janus-order, #ff7830);
-  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.4);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--janus-order, #ff7830) 40%, transparent);
 }
 
 .trigger:disabled {
@@ -102,13 +102,13 @@
 }
 
 .option:hover {
-  background: rgba(255, 120, 48, 0.18);
+  background: color-mix(in srgb, var(--janus-order, #ff7830) 18%, transparent);
 }
 
 .optionSelected {
-  background: rgba(255, 120, 48, 0.12);
+  background: color-mix(in srgb, var(--janus-order, #ff7830) 12%, transparent);
   font-weight: 600;
-  color: #ff9a52;
+  color: var(--janus-order, #ff7830);
 }
 
 .optionSelected::before {

@@ -65,14 +65,14 @@ if (isHookClient) {
 async function bootstrapApp(): Promise<void> {
   const [
     { is },
-    { registerWorkspaceHandlers },
+    { registerWorkspaceHandlers, disposeWorkspaceWatchers },
     { registerTerminalHandlers },
     { registerGitHandlers },
     { registerAgentHandlers },
     { registerCheckpointHandlers },
     { registerFileHandlers },
-    { registerProjectHandlers },
-    { registerLlmHandlers },
+    { registerProjectHandlers, stopAllProjects },
+    { registerLlmHandlers, abortAllChatStreams },
     { registerJanusHandlers },
     { registerRuntimeTelemetryHandlers },
     { registerSettingsHandlers },
@@ -80,7 +80,9 @@ async function bootstrapApp(): Promise<void> {
     { registerKnowledgeHandlers },
     { terminalManager },
     { agentStreamManager },
-    { checkpointManager },
+    { analyzer },
+    { desktopToastWindow },
+    { appShutdown },
   ] = await Promise.all([
     import('@electron-toolkit/utils'),
     import('./ipc/handlers'),
@@ -98,12 +100,29 @@ async function bootstrapApp(): Promise<void> {
     import('./ipc/knowledge-handlers'),
     import('./terminal/manager'),
     import('./agent/stream-manager'),
-    import('./agent/checkpoint/checkpoint-manager'),
+    import('./janus/analyzer'),
+    import('./notifications/desktop-toast-window'),
+    import('./shutdown/AppShutdown'),
   ])
 
   let mainWindow: BrowserWindow | null = null
-  let checkpointCleanupComplete = false
   const editorWindows = new Map<string, BrowserWindow>()
+
+  appShutdown.configure({
+    abortChatStreams: () => abortAllChatStreams(),
+    cancelAnalyzer: () => analyzer.cancelAll(),
+    killTerminals: () => terminalManager.killAll(),
+    killAgents: () => agentStreamManager.killAll(),
+    stopProjects: () => stopAllProjects(),
+    disposeWatchers: () => disposeWorkspaceWatchers(),
+    destroyToast: () => desktopToastWindow.destroy(),
+    closeEditors: () => {
+      for (const window of editorWindows.values()) {
+        if (!window.isDestroyed()) window.destroy()
+      }
+      editorWindows.clear()
+    },
+  })
 
   async function resolveDevRendererUrl(rawUrl: string): Promise<string> {
     const baseUrl = new URL(rawUrl)
@@ -201,6 +220,15 @@ async function bootstrapApp(): Promise<void> {
         preload: join(__dirname, '../preload/index.mjs'),
         sandbox: false,
       },
+    })
+
+    // Toast/editor keep-alive windows mean window-all-closed may never fire.
+    // Non-darwin: main window close must enter the unified quit path.
+    mainWindow.on('closed', () => {
+      mainWindow = null
+      if (process.platform === 'darwin') return
+      if (appShutdown.isQuitting) return
+      app.quit()
     })
 
     // 注册 IPC handlers
@@ -315,25 +343,16 @@ async function bootstrapApp(): Promise<void> {
     })
 
     app.on('window-all-closed', () => {
-      if (process.platform !== 'darwin') app.quit()
+      // Keep macOS app alive until explicit quit; other platforms exit.
+      if (process.platform === 'darwin') return
+      if (appShutdown.isQuitting) return
+      app.quit()
     })
 
     app.on('before-quit', (event) => {
-      terminalManager.killAll()
-      agentStreamManager.killAll()
-
-      if (checkpointCleanupComplete) return
-
+      if (appShutdown.isQuitting) return
       event.preventDefault()
-      checkpointCleanupComplete = true
-      checkpointManager
-        .clearAllLoaded()
-        .catch((err) => {
-          console.error('Checkpoint cleanup failed:', err)
-        })
-        .finally(() => {
-          app.quit()
-        })
+      void appShutdown.beginQuit({ reason: 'before-quit' })
     })
   }
 }

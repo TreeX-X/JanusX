@@ -344,3 +344,9 @@ export function registerProjectHandlers() {
 }
 
 export { getProjectRunner }
+
+/** Best-effort stop for app shutdown; no-op if runner never started. */
+export async function stopAllProjects(timeout: number = 1500): Promise<void> {
+  if (!projectRunner) return
+  await projectRunner.stopAll(timeout)
+}

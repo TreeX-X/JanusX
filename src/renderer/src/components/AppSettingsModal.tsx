@@ -4,9 +4,10 @@ import { ModalCloseButton } from './ModalCloseButton'
 import { NotificationSettingsPanel } from './NotificationSettingsPanel'
 import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
+import { ModelCatalogPanel } from './ModelCatalogPanel'
 import styles from './AppSettingsModal.module.css'
 
-type SettingsTab = 'notifications' | 'knowledge' | 'llm'
+type SettingsTab = 'notifications' | 'knowledge' | 'llm' | 'models'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -35,6 +36,12 @@ const TAB_META: Record<
     subtitle: 'LLM Engine · Provider 凭证、默认模型与连接检测',
     nav: 'LLM 引擎',
     navMeta: 'Providers',
+  },
+  models: {
+    title: '模型目录',
+    subtitle: 'Model Catalog · 浏览模型能力、价格与上下文信息',
+    nav: '模型目录',
+    navMeta: 'Models',
   },
 }
 
@@ -85,6 +92,14 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
             <span className={styles.tabLabel}>{TAB_META.llm.nav}</span>
             <span className={styles.tabMeta}>{TAB_META.llm.navMeta}</span>
           </button>
+          <button
+            type="button"
+            className={`${styles.tabButton} ${activeTab === 'models' ? styles.tabButtonActive : ''}`}
+            onClick={() => setActiveTab('models')}
+          >
+            <span className={styles.tabLabel}>{TAB_META.models.nav}</span>
+            <span className={styles.tabMeta}>{TAB_META.models.navMeta}</span>
+          </button>
         </aside>
 
         <section className={styles.content}>
@@ -100,6 +115,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
             {activeTab === 'notifications' && <NotificationSettingsPanel />}
             {activeTab === 'knowledge' && <KnowledgeSettingsPanel />}
             {activeTab === 'llm' && <LlmConfigModal embedded />}
+            {activeTab === 'models' && <ModelCatalogPanel />}
           </main>
         </section>
       </div>

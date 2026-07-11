@@ -1,12 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import {
   getAllAiModels,
+  isOpenRouterLatestAlias,
   matchAiModel,
   openRouterRecordToRegistryEntry,
   registryEntryToModelInfo
 } from '../src/registry/model-registry'
 
 describe('model registry', () => {
+  it('detects OpenRouter latest aliases without matching concrete models', () => {
+    expect(isOpenRouterLatestAlias({ id: '~anthropic/claude-fable-latest' })).toBe(true)
+    expect(isOpenRouterLatestAlias({ id: 'openai/gpt-chat-latest' })).toBe(true)
+    expect(isOpenRouterLatestAlias({ id: 'provider/model:latest' })).toBe(true)
+    expect(isOpenRouterLatestAlias({ id: 'provider/latest' })).toBe(true)
+    expect(isOpenRouterLatestAlias({ id: 'anthropic/claude-fable-5' })).toBe(false)
+    expect(isOpenRouterLatestAlias({ id: 'openai/gpt-5.2' })).toBe(false)
+    expect(isOpenRouterLatestAlias({ id: 'vendor/latest-preview' })).toBe(false)
+  })
+
+  it('drops latest aliases when converting OpenRouter records', () => {
+    expect(openRouterRecordToRegistryEntry({
+      id: '~openai/gpt-latest',
+      name: 'GPT Latest',
+      created: 1744560000,
+      context_length: 128000
+    })).toBeNull()
+
+    expect(openRouterRecordToRegistryEntry({
+      id: 'openai/gpt-chat-latest',
+      name: 'GPT Chat Latest',
+      created: 1744560000,
+      context_length: 128000
+    })).toBeNull()
+  })
+
   it('converts OpenRouter records into registry entries', () => {
     const entry = openRouterRecordToRegistryEntry({
       id: 'openai/gpt-4.1-mini',
@@ -75,9 +102,11 @@ describe('model registry', () => {
     expect(result.candidates.length).toBeGreaterThan(0)
   })
 
-  it('exports generated OpenRouter models as ModelInfo records', () => {
+  it('exports generated OpenRouter models as ModelInfo records without latest aliases', () => {
     const registryModels = getAllAiModels()
     expect(registryModels.length).toBeGreaterThan(0)
+    expect(registryModels.some((model) => isOpenRouterLatestAlias(model))).toBe(false)
+    expect(registryModels.some((model) => model.id === 'anthropic/claude-fable-5')).toBe(true)
 
     const modelInfo = registryEntryToModelInfo(registryModels[0]!, 'openai-compatible')
     expect(modelInfo.providerId).toBe('openai-compatible')

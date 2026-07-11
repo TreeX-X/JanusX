@@ -75,6 +75,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'llm:remove-provider',
   'llm:set-default-provider',
   'llm:list-models',
+  'llm:model-catalog:get',
+  'llm:model-catalog:refresh',
   'llm:get-adapters',
   'llm:get-default-provider',
   'llm:chat',

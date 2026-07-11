@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "source": "openrouter",
-  "updatedAt": "2026-07-09T13:08:46.117Z",
-  "cutoffCreatedAt": "2025-07-09T00:00:00.000Z",
-  "modelCount": 229,
+  "updatedAt": "2026-07-10T10:59:14.445Z",
+  "cutoffCreatedAt": "2025-07-10T00:00:00.000Z",
+  "modelCount": 231,
   "models": [
     {
       "id": "~anthropic/claude-fable-latest",
@@ -32,6 +32,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -134,6 +135,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -185,6 +187,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -236,6 +239,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -289,6 +293,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -357,7 +362,7 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.00000065",
+      "promptPricePerToken": "0.00000066",
       "completionPricePerToken": "0.00000341",
       "aliases": [
         "MoonshotAI Kimi Latest",
@@ -399,6 +404,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -447,6 +453,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -497,6 +504,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -865,6 +873,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1063,6 +1072,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1114,6 +1124,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1161,6 +1172,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1209,6 +1221,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1257,6 +1270,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1355,6 +1369,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1406,6 +1421,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1646,6 +1662,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1695,6 +1712,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -1765,50 +1783,6 @@
         "bytedanceuitars7b",
         "ui tars 1 5 7 b",
         "uitars157b"
-      ]
-    },
-    {
-      "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-      "canonicalSlug": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
-      "name": "Venice: Uncensored (free)",
-      "description": "Venice Uncensored Dolphin Mistral 24B Venice Edition is a fine-tuned variant of Mistral-Small-24B-Instruct-2501, developed by dphn.ai in collaboration with Venice.ai. This model is designed as an “uncensored” instruct-tuned LLM, preserving...",
-      "source": "openrouter",
-      "providerAuthor": "cognitivecomputations",
-      "createdAt": "2025-07-09T21:02:46.000Z",
-      "createdUnix": 1752094966,
-      "contextLength": 32768,
-      "providerContextLength": 32768,
-      "effectiveContextWindow": 32768,
-      "inputModalities": [
-        "text"
-      ],
-      "outputModalities": [
-        "text"
-      ],
-      "tokenizer": "Other",
-      "supportedParameters": [
-        "frequency_penalty",
-        "max_tokens",
-        "presence_penalty",
-        "response_format",
-        "stop",
-        "structured_outputs",
-        "temperature",
-        "top_k",
-        "top_p"
-      ],
-      "promptPricePerToken": "0",
-      "completionPricePerToken": "0",
-      "aliases": [
-        "Venice: Uncensored (free)",
-        "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-        "dolphin-mistral-24b-venice-edition"
-      ],
-      "normalizedKeys": [
-        "dolphin mistral 24 b venice edition",
-        "dolphinmistral24bveniceedition",
-        "venice uncensored (free)",
-        "veniceuncensored(free)"
       ]
     },
     {
@@ -2057,8 +2031,8 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.0000002288",
-      "completionPricePerToken": "0.0000003432",
+      "promptPricePerToken": "0.0000002145",
+      "completionPricePerToken": "0.00000032175",
       "aliases": [
         "DeepSeek: DeepSeek V3.2",
         "deepseek-v3.2",
@@ -2155,6 +2129,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -2210,6 +2185,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -2333,57 +2309,6 @@
       ]
     },
     {
-      "id": "google/gemini-2.5-flash-lite-preview-09-2025",
-      "canonicalSlug": "google/gemini-2.5-flash-lite-preview-09-2025",
-      "name": "Google: Gemini 2.5 Flash Lite Preview 09-2025",
-      "description": "Gemini 2.5 Flash-Lite is a lightweight reasoning model in the Gemini 2.5 family, optimized for ultra-low latency and cost efficiency. It offers improved throughput, faster token generation, and better performance...",
-      "source": "openrouter",
-      "providerAuthor": "google",
-      "createdAt": "2025-09-25T17:01:26.000Z",
-      "createdUnix": 1758819686,
-      "contextLength": 1048576,
-      "providerContextLength": 1048576,
-      "effectiveContextWindow": 1048576,
-      "maxOutputTokens": 65535,
-      "inputModalities": [
-        "text",
-        "image",
-        "file",
-        "audio",
-        "video"
-      ],
-      "outputModalities": [
-        "text"
-      ],
-      "tokenizer": "Gemini",
-      "supportedParameters": [
-        "include_reasoning",
-        "max_tokens",
-        "reasoning",
-        "response_format",
-        "seed",
-        "stop",
-        "structured_outputs",
-        "temperature",
-        "tool_choice",
-        "tools",
-        "top_p"
-      ],
-      "promptPricePerToken": "0.0000001",
-      "completionPricePerToken": "0.0000004",
-      "aliases": [
-        "Google: Gemini 2.5 Flash Lite Preview 09-2025",
-        "gemini-2.5-flash-lite-preview-09-2025",
-        "google/gemini-2.5-flash-lite-preview-09-2025"
-      ],
-      "normalizedKeys": [
-        "gemini 2 5 flash lite 09 2025",
-        "gemini25flashlite092025",
-        "google gemini 2 5 flash lite 09 2025",
-        "googlegemini25flashlite092025"
-      ]
-    },
-    {
       "id": "google/gemini-3-flash-preview",
       "canonicalSlug": "google/gemini-3-flash-preview",
       "name": "Google: Gemini 3 Flash Preview",
@@ -2411,6 +2336,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -2556,6 +2482,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -2602,6 +2529,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -2650,6 +2578,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -2699,6 +2628,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "temperature",
@@ -2746,6 +2676,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -2797,6 +2728,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -2848,6 +2780,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -2898,6 +2831,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -3351,6 +3285,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "stop",
         "structured_outputs",
@@ -3500,6 +3435,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -3845,7 +3781,6 @@
         "parallel_tool_calls",
         "presence_penalty",
         "reasoning",
-        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -3858,8 +3793,8 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.00000012",
-      "completionPricePerToken": "0.00000048",
+      "promptPricePerToken": "0.00000015",
+      "completionPricePerToken": "0.0000009",
       "aliases": [
         "MiniMax: MiniMax M2.5",
         "minimax-m2.5",
@@ -3913,8 +3848,8 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.00000018",
-      "completionPricePerToken": "0.00000072",
+      "promptPricePerToken": "0.00000024",
+      "completionPricePerToken": "0.00000096",
       "aliases": [
         "MiniMax: MiniMax M2.7",
         "minimax-m2.7",
@@ -3937,9 +3872,9 @@
       "createdAt": "2026-05-31T16:36:14.000Z",
       "createdUnix": 1780245374,
       "contextLength": 1048576,
-      "providerContextLength": 524288,
-      "effectiveContextWindow": 524288,
-      "maxOutputTokens": 512000,
+      "providerContextLength": 1000000,
+      "effectiveContextWindow": 1000000,
+      "maxOutputTokens": 131072,
       "inputModalities": [
         "text",
         "image",
@@ -4303,6 +4238,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -4400,6 +4336,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -4719,7 +4656,7 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.00000065",
+      "promptPricePerToken": "0.00000066",
       "completionPricePerToken": "0.00000341",
       "aliases": [
         "MoonshotAI: Kimi K2.6",
@@ -4745,7 +4682,7 @@
       "contextLength": 262144,
       "providerContextLength": 262144,
       "effectiveContextWindow": 262144,
-      "maxOutputTokens": 16384,
+      "maxOutputTokens": 262144,
       "inputModalities": [
         "text",
         "image"
@@ -4764,7 +4701,6 @@
         "parallel_tool_calls",
         "presence_penalty",
         "reasoning",
-        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -4777,8 +4713,8 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.00000074",
-      "completionPricePerToken": "0.0000035",
+      "promptPricePerToken": "0.00000072",
+      "completionPricePerToken": "0.00000349",
       "aliases": [
         "MoonshotAI: Kimi K2.7 Code",
         "kimi-k2.7-code",
@@ -5203,6 +5139,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -5253,6 +5190,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -5303,6 +5241,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -5352,6 +5291,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "seed",
         "temperature",
         "tool_choice",
@@ -5533,6 +5473,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -5773,6 +5714,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -5819,6 +5761,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -5865,6 +5808,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -5912,6 +5856,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6003,6 +5948,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6049,6 +5995,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6095,6 +6042,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6142,6 +6090,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6233,6 +6182,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6279,6 +6229,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6371,6 +6322,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6418,6 +6370,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6469,6 +6422,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -6516,6 +6470,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6563,6 +6518,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6610,6 +6566,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6657,6 +6614,7 @@
         "max_completion_tokens",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6703,6 +6661,7 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -6721,6 +6680,294 @@
         "gpt55pro",
         "openai gpt 5 5 pro",
         "openaigpt55pro"
+      ]
+    },
+    {
+      "id": "openai/gpt-5.6-luna",
+      "canonicalSlug": "openai/gpt-5.6-luna",
+      "name": "OpenAI: GPT-5.6 Luna",
+      "description": "GPT-5.6 Luna is a fast, cost-efficient model in OpenAI's GPT-5.6 series. It is suited for high-volume, latency-sensitive tasks such as chat, classification, and lightweight agentic workflows, providing capable reasoning for...",
+      "source": "openrouter",
+      "providerAuthor": "openai",
+      "createdAt": "2026-07-09T09:54:24.000Z",
+      "createdUnix": 1783590864,
+      "contextLength": 1050000,
+      "providerContextLength": 1050000,
+      "effectiveContextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "inputModalities": [
+        "file",
+        "image",
+        "text"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tokenizer": "GPT",
+      "supportedParameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "promptPricePerToken": "0.000001",
+      "completionPricePerToken": "0.000006",
+      "aliases": [
+        "OpenAI: GPT-5.6 Luna",
+        "gpt-5.6-luna",
+        "openai/gpt-5.6-luna"
+      ],
+      "normalizedKeys": [
+        "gpt 5 6 luna",
+        "gpt56luna",
+        "openai gpt 5 6 luna",
+        "openaigpt56luna"
+      ]
+    },
+    {
+      "id": "openai/gpt-5.6-luna-pro",
+      "canonicalSlug": "openai/gpt-5.6-luna-pro",
+      "name": "OpenAI: GPT-5.6 Luna Pro",
+      "description": "GPT-5.6 Luna Pro is the same underlying model as [GPT-5.6 Luna](https://openrouter.ai/openai/gpt-5.6-luna), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+      "source": "openrouter",
+      "providerAuthor": "openai",
+      "createdAt": "2026-07-09T09:54:27.000Z",
+      "createdUnix": 1783590867,
+      "contextLength": 1050000,
+      "providerContextLength": 1050000,
+      "effectiveContextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "inputModalities": [
+        "file",
+        "image",
+        "text"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tokenizer": "GPT",
+      "supportedParameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "promptPricePerToken": "0.000001",
+      "completionPricePerToken": "0.000006",
+      "aliases": [
+        "OpenAI: GPT-5.6 Luna Pro",
+        "gpt-5.6-luna-pro",
+        "openai/gpt-5.6-luna-pro"
+      ],
+      "normalizedKeys": [
+        "gpt 5 6 luna pro",
+        "gpt56lunapro",
+        "openai gpt 5 6 luna pro",
+        "openaigpt56lunapro"
+      ]
+    },
+    {
+      "id": "openai/gpt-5.6-sol",
+      "canonicalSlug": "openai/gpt-5.6-sol",
+      "name": "OpenAI: GPT-5.6 Sol",
+      "description": "GPT-5.6 Sol is the flagship model in OpenAI's GPT-5.6 series. It is suited for complex reasoning, coding, and agentic workflows, and is particularly strong at command-line and multi-step coding tasks...",
+      "source": "openrouter",
+      "providerAuthor": "openai",
+      "createdAt": "2026-07-09T09:54:10.000Z",
+      "createdUnix": 1783590850,
+      "contextLength": 1050000,
+      "providerContextLength": 1050000,
+      "effectiveContextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "inputModalities": [
+        "file",
+        "image",
+        "text"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tokenizer": "GPT",
+      "supportedParameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "promptPricePerToken": "0.000005",
+      "completionPricePerToken": "0.00003",
+      "aliases": [
+        "OpenAI: GPT-5.6 Sol",
+        "gpt-5.6-sol",
+        "openai/gpt-5.6-sol"
+      ],
+      "normalizedKeys": [
+        "gpt 5 6 sol",
+        "gpt56sol",
+        "openai gpt 5 6 sol",
+        "openaigpt56sol"
+      ]
+    },
+    {
+      "id": "openai/gpt-5.6-sol-pro",
+      "canonicalSlug": "openai/gpt-5.6-sol-pro",
+      "name": "OpenAI: GPT-5.6 Sol Pro",
+      "description": "GPT-5.6 Sol Pro is the same underlying model as [GPT-5.6 Sol](https://openrouter.ai/openai/gpt-5.6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+      "source": "openrouter",
+      "providerAuthor": "openai",
+      "createdAt": "2026-07-09T09:54:14.000Z",
+      "createdUnix": 1783590854,
+      "contextLength": 1050000,
+      "providerContextLength": 1050000,
+      "effectiveContextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "inputModalities": [
+        "file",
+        "image",
+        "text"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tokenizer": "GPT",
+      "supportedParameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "promptPricePerToken": "0.000005",
+      "completionPricePerToken": "0.00003",
+      "aliases": [
+        "OpenAI: GPT-5.6 Sol Pro",
+        "gpt-5.6-sol-pro",
+        "openai/gpt-5.6-sol-pro"
+      ],
+      "normalizedKeys": [
+        "gpt 5 6 sol pro",
+        "gpt56solpro",
+        "openai gpt 5 6 sol pro",
+        "openaigpt56solpro"
+      ]
+    },
+    {
+      "id": "openai/gpt-5.6-terra",
+      "canonicalSlug": "openai/gpt-5.6-terra",
+      "name": "OpenAI: GPT-5.6 Terra",
+      "description": "GPT-5.6 Terra is a balanced model in OpenAI's GPT-5.6 series, positioned between the flagship Sol tier and the cost-efficient Luna tier. It is suited for everyday coding, reasoning, and agentic...",
+      "source": "openrouter",
+      "providerAuthor": "openai",
+      "createdAt": "2026-07-09T09:54:17.000Z",
+      "createdUnix": 1783590857,
+      "contextLength": 1050000,
+      "providerContextLength": 1050000,
+      "effectiveContextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "inputModalities": [
+        "file",
+        "image",
+        "text"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tokenizer": "GPT",
+      "supportedParameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "promptPricePerToken": "0.0000025",
+      "completionPricePerToken": "0.000015",
+      "aliases": [
+        "OpenAI: GPT-5.6 Terra",
+        "gpt-5.6-terra",
+        "openai/gpt-5.6-terra"
+      ],
+      "normalizedKeys": [
+        "gpt 5 6 terra",
+        "gpt56terra",
+        "openai gpt 5 6 terra",
+        "openaigpt56terra"
+      ]
+    },
+    {
+      "id": "openai/gpt-5.6-terra-pro",
+      "canonicalSlug": "openai/gpt-5.6-terra-pro",
+      "name": "OpenAI: GPT-5.6 Terra Pro",
+      "description": "GPT-5.6 Terra Pro is the same underlying model as [GPT-5.6 Terra](https://openrouter.ai/openai/gpt-5.6-terra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+      "source": "openrouter",
+      "providerAuthor": "openai",
+      "createdAt": "2026-07-09T09:54:21.000Z",
+      "createdUnix": 1783590861,
+      "contextLength": 1050000,
+      "providerContextLength": 1050000,
+      "effectiveContextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "inputModalities": [
+        "file",
+        "image",
+        "text"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tokenizer": "GPT",
+      "supportedParameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "promptPricePerToken": "0.0000025",
+      "completionPricePerToken": "0.000015",
+      "aliases": [
+        "OpenAI: GPT-5.6 Terra Pro",
+        "gpt-5.6-terra-pro",
+        "openai/gpt-5.6-terra-pro"
+      ],
+      "normalizedKeys": [
+        "gpt 5 6 terra pro",
+        "gpt56terrapro",
+        "openai gpt 5 6 terra pro",
+        "openaigpt56terrapro"
       ]
     },
     {
@@ -6888,7 +7135,6 @@
       "contextLength": 131072,
       "providerContextLength": 131072,
       "effectiveContextWindow": 131072,
-      "maxOutputTokens": 131072,
       "inputModalities": [
         "text"
       ],
@@ -6905,6 +7151,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -6918,8 +7165,8 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.00000003",
-      "completionPricePerToken": "0.00000015",
+      "promptPricePerToken": "0.000000036",
+      "completionPricePerToken": "0.00000018",
       "aliases": [
         "OpenAI: gpt-oss-120b",
         "gpt-oss-120b",
@@ -6957,6 +7204,7 @@
         "max_tokens",
         "min_p",
         "reasoning",
+        "reasoning_effort",
         "seed",
         "stop",
         "temperature",
@@ -7008,6 +7256,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -7062,6 +7311,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -7303,6 +7553,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -7654,90 +7905,6 @@
         "lagunaxs21",
         "poolside laguna xs 2 1 (free)",
         "poolsidelagunaxs21(free)"
-      ]
-    },
-    {
-      "id": "poolside/laguna-xs.2",
-      "canonicalSlug": "poolside/laguna-xs.2",
-      "name": "Poolside: Laguna XS.2",
-      "description": "Laguna XS.2 is the second-generation model in the XS size class from [Poolside](https://poolside.ai/), their efficient coding agent series. It combines tool calling and reasoning capabilities with a compact footprint, offering...",
-      "source": "openrouter",
-      "providerAuthor": "poolside",
-      "createdAt": "2026-04-28T15:20:04.000Z",
-      "createdUnix": 1777389604,
-      "contextLength": 262144,
-      "providerContextLength": 262144,
-      "effectiveContextWindow": 262144,
-      "maxOutputTokens": 32768,
-      "inputModalities": [
-        "text"
-      ],
-      "outputModalities": [
-        "text"
-      ],
-      "tokenizer": "Other",
-      "supportedParameters": [
-        "include_reasoning",
-        "max_tokens",
-        "reasoning",
-        "temperature",
-        "tool_choice",
-        "tools"
-      ],
-      "promptPricePerToken": "0.0000001",
-      "completionPricePerToken": "0.0000002",
-      "aliases": [
-        "Poolside: Laguna XS.2",
-        "laguna-xs.2",
-        "poolside/laguna-xs.2"
-      ],
-      "normalizedKeys": [
-        "laguna xs 2",
-        "lagunaxs2",
-        "poolside laguna xs 2",
-        "poolsidelagunaxs2"
-      ]
-    },
-    {
-      "id": "poolside/laguna-xs.2:free",
-      "canonicalSlug": "poolside/laguna-xs.2",
-      "name": "Poolside: Laguna XS.2 (free)",
-      "description": "Laguna XS.2 is the second-generation model in the XS size class from [Poolside](https://poolside.ai/), their efficient coding agent series. It combines tool calling and reasoning capabilities with a compact footprint, offering...",
-      "source": "openrouter",
-      "providerAuthor": "poolside",
-      "createdAt": "2026-04-28T15:20:04.000Z",
-      "createdUnix": 1777389604,
-      "contextLength": 262144,
-      "providerContextLength": 262144,
-      "effectiveContextWindow": 262144,
-      "maxOutputTokens": 32768,
-      "inputModalities": [
-        "text"
-      ],
-      "outputModalities": [
-        "text"
-      ],
-      "tokenizer": "Other",
-      "supportedParameters": [
-        "include_reasoning",
-        "max_tokens",
-        "reasoning",
-        "temperature",
-        "tool_choice",
-        "tools"
-      ],
-      "promptPricePerToken": "0",
-      "completionPricePerToken": "0",
-      "aliases": [
-        "Poolside: Laguna XS.2 (free)",
-        "laguna-xs.2",
-        "poolside/laguna-xs.2:free"
-      ],
-      "normalizedKeys": [
-        "laguna xs 2",
-        "lagunaxs2",
-        "poolside laguna xs 2 (free)",
-        "poolsidelagunaxs2(free)"
       ]
     },
     {
@@ -9916,6 +10083,7 @@
       "supportedParameters": [
         "include_reasoning",
         "reasoning",
+        "reasoning_effort",
         "structured_outputs",
         "tool_choice",
         "tools",
@@ -10011,6 +10179,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -10064,6 +10233,7 @@
         "min_p",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "response_format",
         "seed",
@@ -10114,6 +10284,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "seed",
         "stop",
         "temperature",
@@ -10162,6 +10333,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "repetition_penalty",
         "seed",
         "stop",
@@ -10395,6 +10567,7 @@
         "logprobs",
         "max_tokens",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "structured_outputs",
@@ -10444,6 +10617,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -10496,6 +10670,7 @@
         "max_tokens",
         "presence_penalty",
         "reasoning",
+        "reasoning_effort",
         "response_format",
         "seed",
         "stop",
@@ -11217,7 +11392,7 @@
       "contextLength": 1048576,
       "providerContextLength": 1048576,
       "effectiveContextWindow": 1048576,
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 131072,
       "inputModalities": [
         "text"
       ],
@@ -11248,8 +11423,8 @@
         "top_logprobs",
         "top_p"
       ],
-      "promptPricePerToken": "0.00000093",
-      "completionPricePerToken": "0.000003",
+      "promptPricePerToken": "0.00000077",
+      "completionPricePerToken": "0.00000242",
       "aliases": [
         "Z.ai: GLM 5.2",
         "glm-5.2",

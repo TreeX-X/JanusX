@@ -130,7 +130,7 @@ function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: stri
   }
 }
 
-function disposeWorkspaceWatchers(): void {
+export function disposeWorkspaceWatchers(): void {
   for (const [workspacePath, watcher] of watcherRegistry.entries()) {
     watcher.close()
     watcherRegistry.delete(workspacePath)
@@ -143,6 +143,7 @@ function disposeWorkspaceWatchers(): void {
 }
 
 export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
+  // Also disposed from AppShutdown; function is idempotent.
   mainWindow.on('closed', disposeWorkspaceWatchers)
 
   ipcMain.handle('app:init', async () => {

@@ -3,7 +3,12 @@
  * @description 通过 IPC 调用主进程 LLM 功能
  */
 
-import type { ProviderSettings, ModelInfo } from '@janusx/llm-core'
+import type {
+  ProviderSettings,
+  ModelInfo,
+  ModelCatalogRefreshResult,
+  ModelCatalogSnapshot,
+} from '@janusx/llm-core'
 
 /* ════════════════════════════════════════════════════════════
    IPC 调用封装
@@ -37,6 +42,14 @@ export async function setDefaultProvider(providerId: string): Promise<{ success:
 /** 获取可用模型列表 */
 export async function listModels(providerId: string): Promise<ModelInfo[]> {
   return window.electron.invoke('llm:list-models', providerId) as Promise<ModelInfo[]>
+}
+
+export async function getModelCatalog(): Promise<ModelCatalogSnapshot> {
+  return window.electron.invoke('llm:model-catalog:get') as Promise<ModelCatalogSnapshot>
+}
+
+export async function refreshModelCatalog(): Promise<ModelCatalogRefreshResult> {
+  return window.electron.invoke('llm:model-catalog:refresh') as Promise<ModelCatalogRefreshResult>
 }
 
 /** 获取可用适配器类型 */

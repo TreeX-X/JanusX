@@ -176,6 +176,24 @@ export class ProjectRunner extends EventEmitter {
   }
 
   /**
+   * Stop every running project. Best-effort for app shutdown.
+   */
+  async stopAll(timeout: number = 1500): Promise<void> {
+    const ids = Array.from(this.runningProjects.keys())
+    if (ids.length === 0) return
+
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          await this.stop(id, timeout)
+        } catch {
+          // ignore missing/racy entries during shutdown
+        }
+      }),
+    )
+  }
+
+  /**
    * 获取运行中的项目
    */
   getRunning(projectId: string): ProcessHandle | null {

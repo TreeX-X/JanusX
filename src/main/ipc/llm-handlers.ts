@@ -7,6 +7,7 @@ import { ipcMain } from 'electron'
 import { llmService } from '../llm/LlmService'
 import type { ProviderSettings } from '@janusx/llm-core'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { getModelCatalogService } from '../llm/ModelCatalogService'
 
 /** 对话消息类型 */
 interface ChatMessage {
@@ -35,10 +36,28 @@ interface ChatStreamRequest {
   workspacePath?: string
 }
 
+/** Active streaming chat abort controllers (module-scoped for shutdown). */
+const abortControllers = new Map<string, AbortController>()
+
+/** Abort every in-flight LLM chat stream. Safe to call repeatedly. */
+export function abortAllChatStreams(): void {
+  for (const controller of abortControllers.values()) {
+    try {
+      controller.abort()
+    } catch {
+      // ignore
+    }
+  }
+  abortControllers.clear()
+}
+
 /**
  * 注册 LLM 相关的 IPC handlers
  */
 export function registerLlmHandlers(): void {
+  ipcMain.handle('llm:model-catalog:get', () => getModelCatalogService().getCatalog())
+  ipcMain.handle('llm:model-catalog:refresh', () => getModelCatalogService().refresh())
+
   // 获取所有 Provider 配置
   ipcMain.handle('llm:get-providers', async () => {
     try {
@@ -191,8 +210,6 @@ export function registerLlmHandlers(): void {
   })
 
   // 流式对话请求（单向 send/on 模式，确保事件可靠送达渲染端）
-  const abortControllers = new Map<string, AbortController>()
-
   ipcMain.on('llm:chat-stream', async (event, request: ChatStreamRequest) => {
     const { requestId, messages, providerId, modelId, sourceTag, workspaceId, workspacePath } = request
     const controller = new AbortController()

@@ -10,6 +10,12 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.24s ease;
+  /* Light-orange settings palette (covers standalone modal + portaled Select dropdown) */
+  --so-accent: #ff9a52;
+  --so-accent-ink: #ffaf7a;
+  --so-accent-hover: #ffbf94;
+  --so-accent-rgb: 255, 120, 48;
+  --janus-order: var(--so-accent);
 }
 
 .modalBackdrop.show {
@@ -80,9 +86,9 @@
 .statusDot {
   width: 8px;
   height: 8px;
-  background: #ff7830;
+  background: var(--so-accent);
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(255, 120, 48, 0.4);
+  box-shadow: 0 0 8px rgba(var(--so-accent-rgb), 0.36);
 }
 
 .configBody {
@@ -164,8 +170,8 @@
 
 .configInput:focus {
   background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 120, 48, 0.65);
-  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.25);
+  border-color: rgba(var(--so-accent-rgb), 0.58);
+  box-shadow: 0 0 0 1px rgba(var(--so-accent-rgb), 0.22);
 }
 
 .configInput::placeholder {
@@ -206,8 +212,8 @@
 }
 
 .providerItemActive {
-  background: rgba(255, 120, 48, 0.1);
-  border-color: rgba(255, 120, 48, 0.28);
+  background: rgba(var(--so-accent-rgb), 0.11);
+  border-color: rgba(var(--so-accent-rgb), 0.3);
 }
 
 .providerMeta {
@@ -229,8 +235,8 @@
   height: 18px;
   padding: 0 6px;
   border-radius: 4px;
-  background: rgba(255, 120, 48, 0.16);
-  color: #ff7830;
+  background: rgba(var(--so-accent-rgb), 0.16);
+  color: var(--so-accent-ink);
   font-size: 10px;
   font-weight: 650;
 }
@@ -263,7 +269,7 @@
 
 .notice {
   padding: 9px 10px;
-  border-left: 2px solid #ff7830;
+  border-left: 2px solid var(--so-accent);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.035);
   color: #a1a1aa;
@@ -272,7 +278,7 @@
 }
 
 .notice code {
-  color: #ff7830;
+  color: var(--so-accent-ink);
   font-family: 'SF Mono', Consolas, monospace;
 }
 
@@ -352,7 +358,7 @@
 }
 
 .btnAccent {
-  color: #ff7830;
+  color: var(--so-accent-ink);
 }
 
 .btnDanger {
@@ -360,14 +366,14 @@
 }
 
 .btnPrimary {
-  background: #ff7830;
-  border-color: #ff7830;
-  color: #111;
+  background: rgba(var(--so-accent-rgb), 0.14);
+  border-color: rgba(var(--so-accent-rgb), 0.42);
+  color: var(--so-accent-ink);
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: #ff8a4d;
-  border-color: #ff8a4d;
+  background: rgba(var(--so-accent-rgb), 0.22);
+  border-color: rgba(var(--so-accent-rgb), 0.6);
 }
 
 @media (max-width: 720px) {

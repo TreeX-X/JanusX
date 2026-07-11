@@ -440,6 +440,7 @@ class JanusAnalyzer {
   private inflight = new Map<string, Promise<BlueprintAnalysis | null>>()
   private pending = new Set<string>()
   private pendingOpts = new Map<string, AnalyzeOptions>()
+  private cancelled = false
 
   setMainWindow(win: BrowserWindow | null): void {
     this.mainWindow = win
@@ -452,6 +453,7 @@ class JanusAnalyzer {
 
   /** 投队列 + 去重，最终聚到 analyzeNode。所有触发入口都走这里。 */
   scheduleAnalyze(nodeId: string, opts: AnalyzeOptions): void {
+    if (this.cancelled) return
     if (this.inflight.has(nodeId)) {
       this.pending.add(nodeId)
       this.pendingOpts.set(nodeId, opts) // 合并进下一次
@@ -464,6 +466,11 @@ class JanusAnalyzer {
       })
       .finally(() => {
         this.inflight.delete(nodeId)
+        if (this.cancelled) {
+          this.pending.delete(nodeId)
+          this.pendingOpts.delete(nodeId)
+          return
+        }
         if (this.pending.has(nodeId)) {
           this.pending.delete(nodeId)
           const next = this.pendingOpts.get(nodeId)
@@ -477,6 +484,16 @@ class JanusAnalyzer {
   /** 等待某 nodeId 的当前分析完成（供测试/IPC 同步返回）。 */
   awaitInflight(nodeId: string): Promise<BlueprintAnalysis | null> | null {
     return this.inflight.get(nodeId) ?? null
+  }
+
+  /**
+   * Cancel pending work and ignore late inflight completions on app quit.
+   * In-flight promises may still settle; their finally handlers will not re-schedule.
+   */
+  cancelAll(): void {
+    this.cancelled = true
+    this.pending.clear()
+    this.pendingOpts.clear()
   }
 
   /** 对账补漏：取焦点节点游标，有未分析 commit 则入队。 */
