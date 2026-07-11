@@ -3,6 +3,10 @@ import { knowledgeContractService } from '../knowledge/contract-service'
 import { knowledgeAuditService, type AuditQuery } from '../knowledge/audit-service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeExtractService, type ExtractInput } from '../knowledge/extract-service'
+import {
+  knowledgeReviewService,
+  type ReviewCandidateInput,
+} from '../knowledge/review-service'
 import { knowledgeSearchService } from '../knowledge/search-service'
 import type {
   CaptureObservationInput,
@@ -90,6 +94,21 @@ export function registerKnowledgeHandlers(): void {
   ipcMain.handle('knowledge:candidates:list-wiki-patches', async () => {
     return knowledgeExtractService.listWikiPatchCandidates()
   })
+
+  // MVP review loop: reject / apply (approve+apply combined)
+  ipcMain.handle(
+    'knowledge:candidates:reject',
+    async (_event, input: ReviewCandidateInput) => {
+      return knowledgeReviewService.rejectCandidate(input)
+    },
+  )
+
+  ipcMain.handle(
+    'knowledge:candidates:apply',
+    async (_event, input: ReviewCandidateInput) => {
+      return knowledgeReviewService.applyCandidate(input)
+    },
+  )
 
   ipcMain.handle('knowledge:search', async (_event, query: KnowledgeSearchQuery) => {
     return knowledgeSearchService.search(query)

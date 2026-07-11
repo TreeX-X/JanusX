@@ -709,6 +709,19 @@
   background: rgba(255, 255, 255, 0.035);
   color: #666;
   font-size: 11px;
+  cursor: not-allowed;
+}
+
+.actionRow button:not(:disabled) {
+  border-color: rgba(255, 120, 48, 0.28);
+  background: rgba(255, 120, 48, 0.12);
+  color: #f0d2bf;
+  cursor: pointer;
+}
+
+.actionRow button:not(:disabled):hover {
+  border-color: rgba(255, 120, 48, 0.42);
+  background: rgba(255, 120, 48, 0.18);
 }
 
 .demoNotice {

@@ -119,6 +119,9 @@ const ALLOWED_INVOKE_CHANNELS = [
   'knowledge:candidates:list',
   'knowledge:candidates:list-graph',
   'knowledge:candidates:list-wiki-patches',
+  // MVP review: reject / apply
+  'knowledge:candidates:reject',
+  'knowledge:candidates:apply',
   'knowledge:search',
 ]
 

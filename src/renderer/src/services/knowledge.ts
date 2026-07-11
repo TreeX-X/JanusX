@@ -252,3 +252,23 @@ export async function searchKnowledge(
 ): Promise<KnowledgeSearchResult> {
   return window.electron.invoke('knowledge:search', query) as Promise<KnowledgeSearchResult>
 }
+
+export type KnowledgeReviewCandidateType = 'fact' | 'wiki-patch' | 'graph-edge'
+
+export interface KnowledgeReviewCandidateInput {
+  type: KnowledgeReviewCandidateType
+  id: string
+  reviewNotes?: string
+}
+
+export async function rejectKnowledgeCandidate(
+  input: KnowledgeReviewCandidateInput,
+): Promise<unknown> {
+  return window.electron.invoke('knowledge:candidates:reject', input)
+}
+
+export async function applyKnowledgeCandidate(
+  input: KnowledgeReviewCandidateInput,
+): Promise<unknown> {
+  return window.electron.invoke('knowledge:candidates:apply', input)
+}

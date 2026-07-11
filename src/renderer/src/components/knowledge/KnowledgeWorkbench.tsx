@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  applyKnowledgeCandidate,
   loadKnowledgeWorkbenchSnapshot,
+  rejectKnowledgeCandidate,
   searchKnowledge,
+  type KnowledgeReviewCandidateType,
   type KnowledgeWorkbenchSnapshot,
 } from '@/services/knowledge'
 import type {
   AuditEvent,
   CandidateFact,
   CandidateGraphEdge,
+  CandidateStatus,
   CandidateWikiPatch,
   KnowledgeSearchHit,
   Observation,
@@ -34,6 +38,8 @@ interface SelectedRecord {
   fileRefs: string[]
   actor?: string
   createdAt?: string
+  status?: CandidateStatus
+  reviewType?: KnowledgeReviewCandidateType
 }
 
 const TAB_LABELS: Record<KnowledgeTab, string> = {
@@ -53,6 +59,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
   const [searchModeLabel, setSearchModeLabel] = useState('Local preview')
   const [selectedId, setSelectedId] = useState<string>('')
   const [error, setError] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewError, setReviewError] = useState('')
 
   const refresh = async () => {
     setStatus('loading')
@@ -60,7 +68,10 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
     try {
       const next = await loadKnowledgeWorkbenchSnapshot()
       setSnapshot(next)
-      setSelectedId((current) => current || next.factCandidates[0]?.id || next.wikiPatches[0]?.id || '')
+      setSelectedId((current) => {
+        if (current && findSelectedRecord(next, current)) return current
+        return next.factCandidates[0]?.id || next.wikiPatches[0]?.id || next.graphCandidates[0]?.id || ''
+      })
       setStatus('idle')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Knowledge workbench load failed')
@@ -88,6 +99,25 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
     if (!snapshot) return null
     return findSelectedRecord(snapshot, selectedId)
   }, [snapshot, selectedId])
+
+  const handleReview = async (action: 'apply' | 'reject') => {
+    if (!selected?.reviewType || selected.status !== 'proposed' || snapshot?.usingDemoData) return
+    setReviewBusy(true)
+    setReviewError('')
+    try {
+      const input = { type: selected.reviewType, id: selected.id }
+      if (action === 'apply') {
+        await applyKnowledgeCandidate(input)
+      } else {
+        await rejectKnowledgeCandidate(input)
+      }
+      await refresh()
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : `${action} failed`)
+    } finally {
+      setReviewBusy(false)
+    }
+  }
 
   const searchResults = useMemo(() => {
     if (!snapshot) return []
@@ -208,7 +238,14 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
           </section>
 
           <aside className={styles.rightPane}>
-            <Inspector record={selected} snapshot={snapshot} />
+            <Inspector
+              record={selected}
+              snapshot={snapshot}
+              reviewBusy={reviewBusy}
+              reviewError={reviewError}
+              onApprove={() => void handleReview('apply')}
+              onReject={() => void handleReview('reject')}
+            />
           </aside>
         </main>
       </section>
@@ -546,11 +583,25 @@ function AuditView({
 function Inspector({
   record,
   snapshot,
+  reviewBusy,
+  reviewError,
+  onApprove,
+  onReject,
 }: {
   record: SelectedRecord | null
   snapshot: KnowledgeWorkbenchSnapshot | null
+  reviewBusy: boolean
+  reviewError: string
+  onApprove: () => void
+  onReject: () => void
 }) {
   if (!record) return <StateBlock title="Select a knowledge record" compact />
+
+  const canReview =
+    Boolean(record.reviewType) &&
+    record.status === 'proposed' &&
+    !snapshot?.usingDemoData &&
+    !reviewBusy
 
   return (
     <div className={styles.inspector}>
@@ -558,16 +609,26 @@ function Inspector({
       <div className={styles.inspectorTitle}>{record.title}</div>
       <p>{record.body}</p>
       {record.confidence !== undefined && <Metric label="Confidence" value={formatConfidence(record.confidence)} />}
+      {record.status && <KeyValue label="Status" value={record.status} />}
       <TagRow tags={record.tags} />
       <KeyValue label="Actor" value={record.actor ?? 'unknown'} />
       <KeyValue label="Created" value={formatDate(record.createdAt)} />
       <KeyValue label="Source Refs" value={record.sourceIds.join(', ') || 'none'} />
       <KeyValue label="Files" value={record.fileRefs.join(', ') || 'none'} />
       <div className={styles.actionRow}>
-        <button type="button" disabled>Approve</button>
-        <button type="button" disabled>Reject</button>
+        <button type="button" disabled={!canReview} onClick={onApprove}>
+          {reviewBusy ? 'Working…' : 'Approve'}
+        </button>
+        <button type="button" disabled={!canReview} onClick={onReject}>
+          Reject
+        </button>
       </div>
-      {snapshot?.usingDemoData && <div className={styles.demoNotice}>Showing demo fallback because no real knowledge records were returned.</div>}
+      {reviewError && <div className={styles.demoNotice}>{reviewError}</div>}
+      {snapshot?.usingDemoData && (
+        <div className={styles.demoNotice}>
+          Demo fallback is read-only. Capture or extract real knowledge records to enable Approve/Reject.
+        </div>
+      )}
     </div>
   )
 }
@@ -636,6 +697,8 @@ function recordFromFact(candidate: CandidateFact): SelectedRecord {
     fileRefs: candidate.fact.provenance.fileRefs,
     actor: candidate.fact.provenance.actor,
     createdAt: candidate.fact.provenance.createdAt,
+    status: candidate.status,
+    reviewType: 'fact',
   }
 }
 
@@ -651,6 +714,8 @@ function recordFromWikiPatch(patch: CandidateWikiPatch): SelectedRecord {
     fileRefs: patch.provenance.fileRefs,
     actor: patch.provenance.actor,
     createdAt: patch.provenance.createdAt,
+    status: patch.status,
+    reviewType: 'wiki-patch',
   }
 }
 
@@ -665,6 +730,8 @@ function recordFromGraph(candidate: CandidateGraphEdge): SelectedRecord {
     sourceIds: candidate.edge.sourceFactIds,
     fileRefs: [],
     createdAt: candidate.edge.createdAt,
+    status: candidate.status,
+    reviewType: 'graph-edge',
   }
 }
 
