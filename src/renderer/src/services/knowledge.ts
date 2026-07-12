@@ -3,11 +3,20 @@ import type {
   CandidateFact,
   CandidateGraphEdge,
   CandidateWikiPatch,
+  KnowledgeCard,
+  KnowledgeContextRequest,
+  KnowledgeContextResult,
   KnowledgeSearchQuery,
   KnowledgeSearchResult,
+  KnowledgeTruthSnapshot,
   Observation,
   RetentionStats,
 } from '../../../shared/knowledge'
+import {
+  sortKnowledgeCards,
+  toKnowledgeCards,
+  truthSnapshotToKnowledgeCards,
+} from '../../../shared/knowledge-card'
 
 export interface KnowledgeWorkbenchSnapshot {
   observations: Observation[]
@@ -16,6 +25,7 @@ export interface KnowledgeWorkbenchSnapshot {
   graphCandidates: CandidateGraphEdge[]
   auditEvents: AuditEvent[]
   retentionStats: RetentionStats | null
+  libraryCards: KnowledgeCard[]
   loadedAt: string
   usingDemoData: boolean
   errors: string[]
@@ -200,6 +210,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     graphCandidates,
     auditEvents,
     retentionStats,
+    truth,
   ] = await Promise.all([
     invokeOrEmpty<Observation[]>('knowledge:observations:list', [], { scope: 'global', limit: 40 }),
     invokeOrEmpty<CandidateFact[]>('knowledge:candidates:list', []),
@@ -207,42 +218,29 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     invokeOrEmpty<CandidateGraphEdge[]>('knowledge:candidates:list-graph', []),
     invokeOrEmpty<AuditEvent[]>('knowledge:audit:list', [], { limit: 30 }),
     invokeOrEmpty<RetentionStats | null>('knowledge:retention:stats', null),
+    invokeOrEmpty<KnowledgeTruthSnapshot>('knowledge:truth:list', {
+      facts: [],
+      wikiPages: [],
+      graphEdges: [],
+    }),
   ])
 
-  const realRecordCount =
-    observations.length +
-    factCandidates.length +
-    wikiPatches.length +
-    graphCandidates.length +
-    auditEvents.length
+  const libraryCards = truthSnapshotToKnowledgeCards(truth)
 
   if (!retentionStats) {
     errors.push('retention stats unavailable')
   }
 
-  if (realRecordCount > 0) {
-    return {
-      observations,
-      factCandidates,
-      wikiPatches,
-      graphCandidates,
-      auditEvents,
-      retentionStats,
-      loadedAt: new Date().toISOString(),
-      usingDemoData: false,
-      errors,
-    }
-  }
-
   return {
-    observations: demoObservations,
-    factCandidates: demoFactCandidates,
-    wikiPatches: demoWikiPatches,
-    graphCandidates: demoGraphCandidates,
-    auditEvents: demoAuditEvents,
-    retentionStats: demoRetentionStats,
+    observations,
+    factCandidates,
+    wikiPatches,
+    graphCandidates,
+    auditEvents,
+    retentionStats,
+    libraryCards,
     loadedAt: new Date().toISOString(),
-    usingDemoData: true,
+    usingDemoData: false,
     errors,
   }
 }
@@ -251,6 +249,20 @@ export async function searchKnowledge(
   query: KnowledgeSearchQuery,
 ): Promise<KnowledgeSearchResult> {
   return window.electron.invoke('knowledge:search', query) as Promise<KnowledgeSearchResult>
+}
+
+/** Search then map hits to unified KnowledgeCards (does not change KnowledgeSearchResult). */
+export async function searchKnowledgeCards(
+  query: KnowledgeSearchQuery,
+): Promise<KnowledgeCard[]> {
+  const result = await searchKnowledge(query)
+  return sortKnowledgeCards(toKnowledgeCards(result.hits))
+}
+
+export async function getKnowledgeContext(
+  request: KnowledgeContextRequest,
+): Promise<KnowledgeContextResult> {
+  return window.electron.invoke('knowledge:context', request) as Promise<KnowledgeContextResult>
 }
 
 export type KnowledgeReviewCandidateType = 'fact' | 'wiki-patch' | 'graph-edge'

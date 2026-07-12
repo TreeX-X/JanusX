@@ -123,6 +123,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'knowledge:candidates:reject',
   'knowledge:candidates:apply',
   'knowledge:search',
+  'knowledge:truth:list',
+  'knowledge:context',
 ]
 
 const ALLOWED_SEND_CHANNELS = [
@@ -154,6 +156,7 @@ const ALLOWED_ON_CHANNELS = [
   'llm:chat:delta',
   'llm:chat:done',
   'llm:chat:error',
+  'llm:chat:recall-trace',
   // Janus Island 通知（主进程 -> 渲染）
   'janus:island:analysis',
   'janus:island:discovered',

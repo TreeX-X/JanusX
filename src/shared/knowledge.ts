@@ -199,6 +199,80 @@ export interface GraphEdge {
   createdAt: string
 }
 
+export interface KnowledgeTruthSnapshot {
+  facts: MemoryFact[]
+  wikiPages: WikiPage[]
+  graphEdges: GraphEdge[]
+}
+
+export type KnowledgeContextKind = 'fact' | 'wiki' | 'graph'
+
+export interface KnowledgeContextRequest {
+  query: string
+  workspaceId?: string
+  workspacePath?: string
+  /** Explicitly allow recall across every workspace. */
+  allowGlobal?: boolean
+  maxItems?: number
+  maxChars?: number
+}
+
+export interface KnowledgeContextSourceRefs {
+  observationIds: string[]
+  factIds: string[]
+  fileRefs: string[]
+}
+
+export interface KnowledgeContextProvenance extends KnowledgeContextSourceRefs {
+  source?: KnowledgeSource
+  actor?: string
+  createdAt: string
+}
+
+export interface KnowledgeContextItem {
+  id: string
+  kind: KnowledgeContextKind
+  title: string
+  content: string
+  score: number
+  workspaceId: string
+  workspacePath?: string
+  provenance: KnowledgeContextProvenance
+}
+
+export interface KnowledgeContextResult {
+  items: KnowledgeContextItem[]
+  compactContext: string
+  truncated: boolean
+  eligibleCount: number
+  maxItems: number
+  maxChars: number
+  degraded?: { reason: 'empty-query' | 'missing-workspace' }
+}
+
+export type KnowledgeRecallTraceStatus = 'recalled' | 'empty' | 'degraded' | 'error'
+
+export interface KnowledgeRecallTraceTopHit {
+  id: string
+  kind: KnowledgeContextKind
+  title: string
+  score: number
+  provenance: KnowledgeContextSourceRefs
+}
+
+export interface KnowledgeRecallTrace {
+  requestId: string
+  status: KnowledgeRecallTraceStatus
+  query: string
+  recalledCount: number
+  eligibleCount: number
+  truncated: boolean
+  maxItems: number
+  maxChars: number
+  topHit?: KnowledgeRecallTraceTopHit
+  reason?: string
+}
+
 export interface AuditEvent {
   id: string
   action: AuditAction
@@ -289,6 +363,8 @@ export type KnowledgeSearchDocumentType =
   | 'wiki-patch'
   | 'graph-candidate'
   | 'memory-fact'
+  | 'wiki-page'
+  | 'graph-edge'
 
 export interface KnowledgeSearchQuery {
   query: string
@@ -333,4 +409,28 @@ export interface KnowledgeSearchResult {
   compactContext: string
   indexStats: KnowledgeSearchIndexStats
   degraded?: { reason: string; detail?: string }
+}
+
+/** Unified card view-model for Island / side panel / MCP consumers. */
+export type KnowledgeCardKind = 'fact' | 'wiki' | 'observation' | 'graph'
+
+export interface KnowledgeCardSourceRefs {
+  observationIds: string[]
+  fileRefs: string[]
+}
+
+export interface KnowledgeCard {
+  id: string
+  kind: KnowledgeCardKind
+  title: string
+  summary: string
+  score: number
+  tags: string[]
+  workspaceId?: string
+  workspacePath?: string
+  sourceRefs: KnowledgeCardSourceRefs
+  createdAt?: string
+  status?: CandidateStatus | 'active'
+  /** Original search document type before kind mapping. */
+  rawType?: KnowledgeSearchDocumentType
 }

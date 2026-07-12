@@ -7,6 +7,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { chatStream, getDefaultProvider, getProviders, type ChatMessage } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useStreamingPrinter } from './useStreamingPrinter'
+import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 
 export interface Message {
   id: string
@@ -31,6 +32,7 @@ export interface UseJanusChatReturn {
   modelOptions: ChatModelOption[]
   activeModel: ChatModelOption | null
   modelNotice: string | null
+  latestRecallTrace: KnowledgeRecallTrace | null
   send: (text: string) => void
   stop: () => void
   retry: () => void
@@ -52,6 +54,7 @@ export function useJanusChat(): UseJanusChatReturn {
   const [modelOptions, setModelOptions] = useState<ChatModelOption[]>([])
   const [activeModel, setActiveModel] = useState<ChatModelOption | null>(null)
   const [modelNotice, setModelNotice] = useState<string | null>(null)
+  const [latestRecallTrace, setLatestRecallTrace] = useState<KnowledgeRecallTrace | null>(null)
   const {
     output: printedContent,
     append: appendToPrinter,
@@ -248,11 +251,13 @@ export function useJanusChat(): UseJanusChatReturn {
               sourceTag: 'janus-chat',
               workspaceId: activeWorkspace?.id,
               workspacePath: activeWorkspace?.path,
+              onRecallTrace: setLatestRecallTrace,
             }
           : {
               sourceTag: 'janus-chat',
               workspaceId: activeWorkspace?.id,
               workspacePath: activeWorkspace?.path,
+              onRecallTrace: setLatestRecallTrace,
             }
       )
 
@@ -284,6 +289,7 @@ export function useJanusChat(): UseJanusChatReturn {
     resetPrinter()
     setIsStreaming(false)
     setError(null)
+    setLatestRecallTrace(null)
   }, [abortCurrentRequest, resetPrinter])
 
   return {
@@ -294,6 +300,7 @@ export function useJanusChat(): UseJanusChatReturn {
     modelOptions,
     activeModel,
     modelNotice,
+    latestRecallTrace,
     send,
     stop,
     retry,

@@ -9,6 +9,7 @@ import type {
   ModelCatalogRefreshResult,
   ModelCatalogSnapshot,
 } from '@janusx/llm-core'
+import type { KnowledgeRecallTrace } from '../../../shared/knowledge'
 
 /* ════════════════════════════════════════════════════════════
    IPC 调用封装
@@ -123,6 +124,7 @@ export function chatStream(
     sourceTag?: 'janus-chat'
     workspaceId?: string
     workspacePath?: string
+    onRecallTrace?: (trace: KnowledgeRecallTrace) => void
   }
 ): { abort: () => void } {
   const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
@@ -135,6 +137,7 @@ export function chatStream(
     unsubDelta()
     unsubDone()
     unsubError()
+    unsubRecallTrace()
   }
 
   const filterByRequest = (payload: unknown): ChatStreamEvent | null => {
@@ -162,6 +165,12 @@ export function chatStream(
     console.error('[chatStream] error accepted:', p.error)
     cleanup()
     onError(p.error ?? '未知错误')
+  })
+
+  const unsubRecallTrace = window.electron.on('llm:chat:recall-trace', (payload: unknown) => {
+    const trace = payload as KnowledgeRecallTrace | undefined
+    if (trace?.requestId !== requestId) return
+    options?.onRecallTrace?.(trace)
   })
 
   const targetProvider = options?.providerId

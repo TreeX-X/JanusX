@@ -8,8 +8,11 @@ import {
   type ReviewCandidateInput,
 } from '../knowledge/review-service'
 import { knowledgeSearchService } from '../knowledge/search-service'
+import { knowledgeTruthService } from '../knowledge/truth-service'
+import { knowledgeContextService } from '../knowledge/context-service'
 import type {
   CaptureObservationInput,
+  KnowledgeContextRequest,
   KnowledgeSearchQuery,
   Observation,
   ObservationPruneQuery,
@@ -112,5 +115,13 @@ export function registerKnowledgeHandlers(): void {
 
   ipcMain.handle('knowledge:search', async (_event, query: KnowledgeSearchQuery) => {
     return knowledgeSearchService.search(query)
+  })
+
+  ipcMain.handle('knowledge:truth:list', async () => {
+    return knowledgeTruthService.list()
+  })
+
+  ipcMain.handle('knowledge:context', async (_event, request: KnowledgeContextRequest) => {
+    return knowledgeContextService.search(request)
   })
 }

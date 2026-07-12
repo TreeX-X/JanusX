@@ -9,8 +9,9 @@ import { CheckpointPanel } from '@/components/CheckpointPanel'
 import type { FileNode, GitFileChange } from '@/types'
 import { setWorkspaceFileDragData } from '@/lib/terminal-file-reference'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
+import { KnowledgeAssist } from '@/components/knowledge'
 
-type PanelView = 'files' | 'git' | 'checkpoints'
+type PanelView = 'files' | 'git' | 'checkpoints' | 'assist'
 
 interface FileTreeOperationResult {
   success?: boolean
@@ -627,7 +628,7 @@ export function Panel() {
             style={{ borderBottom: '1px solid var(--border)' }}
           >
             <div className="flex-1 flex">
-              {(['files', 'git', 'checkpoints'] as const).map((view) => (
+              {(['files', 'git', 'checkpoints', 'assist'] as const).map((view) => (
                 <button
                   key={view}
                   onClick={() => setActiveView(view)}
@@ -636,7 +637,7 @@ export function Panel() {
                     color: activeView === view ? '#fff' : '#555',
                   }}
                 >
-                  {view === 'files' ? '文件' : view === 'git' ? 'Git' : '还原点'}
+                  {view === 'assist' ? 'Assist' : view === 'files' ? '文件' : view === 'git' ? 'Git' : '还原点'}
                   {activeView === view && (
                     <div
                       className="absolute bottom-0 left-2 right-2 h-px"
@@ -714,8 +715,10 @@ export function Panel() {
             </div>
           ) : activeView === 'git' ? (
             <GitPanel />
-          ) : (
+          ) : activeView === 'checkpoints' ? (
             <CheckpointPanel />
+          ) : (
+            <KnowledgeAssist workspaceId={activeWorkspaceId} workspacePath={activeWorkspacePath} />
           )}
         </>
       )}
@@ -752,7 +755,7 @@ export function Panel() {
               color: 'rgba(255, 255, 255, 0.2)',
             }}
           >
-            {activeView === 'files' ? '文件' : activeView === 'git' ? 'Git' : '还原点'}
+            {activeView === 'assist' ? 'Assist' : activeView === 'files' ? '文件' : activeView === 'git' ? 'Git' : '还原点'}
           </span>
         </div>
       )}

@@ -18,6 +18,9 @@ import {
   type JanusIdentityState,
 } from './janusIdentity'
 import type { SubAgentRun, SubAgentRunRole, SubAgentRunStatus } from '../../../../shared/subAgentRun'
+import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
+import { formatKnowledgeMatch } from './islandKnowledgePeek'
+import { getDoubleActivationAction, getSingleActivationAction } from './islandInteraction'
 
 /* ════════════════════════════════════════════════════════════
    JanusIsland �?52×26px 折叠态胶�?
@@ -90,9 +93,9 @@ function useProjectRunning(activeWorkspace: Workspace | undefined) {
 
 interface JanusIslandProps {
   stage?: 'collapsed' | 'peek' | 'expanded'
-  onAdvance: () => void
-  onCollapse: () => void
-  onStepBack: () => void
+  onSingleActivate: () => void
+  onDoubleActivate: () => void
+  onDismiss: () => void
   onRunningChange?: (isRunning: boolean) => void
   messages: Message[]
   pendingContent: string
@@ -108,6 +111,9 @@ interface JanusIslandProps {
   onChatRetry: () => void
   onChatClear: () => void
   onOpenLlmConfig: () => void
+  knowledgeTrace?: KnowledgeRecallTrace | null
+  knowledgePeekActive?: boolean
+  knowledgePeekEmpty?: boolean
 }
 
 type JanusExpandedView = 'monitor' | 'chat'
@@ -224,9 +230,9 @@ function faceClass(mode: 'sleep' | 'order' | 'analytics' | 'running'): string {
 
 export function JanusIsland({
   stage = 'collapsed',
-  onAdvance,
-  onCollapse,
-  onStepBack,
+  onSingleActivate,
+  onDoubleActivate,
+  onDismiss,
   onRunningChange,
   messages,
   pendingContent,
@@ -242,6 +248,9 @@ export function JanusIsland({
   onChatRetry,
   onChatClear,
   onOpenLlmConfig,
+  knowledgeTrace = null,
+  knowledgePeekActive = false,
+  knowledgePeekEmpty = false,
 }: JanusIslandProps) {
   const { mode, isSwitching, activeWorkspace, eyeContainerRef } = useJanusState()
   const { janusRunning, toggleRunning } = useProjectRunning(activeWorkspace)
@@ -265,15 +274,20 @@ export function JanusIsland({
     await toggleRunning()
   }, [toggleRunning])
 
-  const handleDoubleTap = useCallback(() => { onAdvance() }, [onAdvance])
+  const handleDoubleTap = useCallback(() => {
+    onDoubleActivate()
+  }, [onDoubleActivate])
+  const handleSingleTap = useCallback(() => {
+    onSingleActivate()
+  }, [onSingleActivate])
 
   const handleIslandKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (stage !== 'collapsed' || event.repeat) return
+    if (event.repeat) return
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
     event.stopPropagation()
-    onAdvance()
-  }, [onAdvance, stage])
+    handleSingleTap()
+  }, [handleSingleTap])
 
   const handleSwipeFlip = useCallback(() => {
     setBlueprintMode(!blueprintMode)
@@ -286,16 +300,6 @@ export function JanusIsland({
   const handleDragProgress = useCallback((_deltaY: number, progress: number) => {
     useAppStore.getState().setDragFlipProgress(progress)
   }, [])
-
-  const handleShellDoubleClick = useCallback(() => {
-    if (stage === 'peek') {
-      onAdvance()
-      return
-    }
-    if (stage === 'expanded') {
-      onStepBack()
-    }
-  }, [onAdvance, onStepBack, stage])
 
   const {
     islandRef,
@@ -310,8 +314,10 @@ export function JanusIsland({
     onLongPress: handleLongPress,
     onSwipeFlip: handleSwipeFlip,
     onDoubleTap: handleDoubleTap,
+    onSingleTap: handleSingleTap,
     onDragProgress: handleDragProgress,
     isRunning: janusRunning,
+    enableComplexGestures: stage !== 'expanded',
   })
 
   const activeSession = useBlueprintStore((s) => s.activeSession)
@@ -322,24 +328,23 @@ export function JanusIsland({
       : activeSession?.nodeSnapshot ?? null
   const activeVisual = activeNode ? STATUS_VISUALS[activeNode.status] ?? STATUS_VISUALS['not-started'] : null
 
-  const peekTitle = useMemo(() => {
-    if (activeNode) return 'Working'
-    if (janusRunning) return 'Running'
-    if (mode === 'analytics') return 'Analyzing'
-    if (mode === 'sleep') return 'Idle'
-    return 'Ready'
-  }, [activeNode, janusRunning, mode])
+  const peekTitle = useMemo(() => knowledgePeekEmpty ? 'Knowledge' : knowledgePeekActive && knowledgeTrace ? 'Knowledge recalled' : '', [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace])
 
   const peekSubtitle = useMemo(() => {
-    if (activeNode) return activeNode.title || 'Blueprint node active'
-    if (janusRunning) return 'Workspace active'
-    if (mode === 'analytics') return 'Blueprint view engaged'
-    if (mode === 'sleep') return 'No workspace selected'
-    return 'Double-click to open'
-  }, [activeNode, janusRunning, mode])
+    if (knowledgePeekEmpty) return 'No knowledge match'
+    if (knowledgePeekActive && knowledgeTrace?.topHit) {
+      const count = String(knowledgeTrace.recalledCount) + ' item' + (knowledgeTrace.recalledCount === 1 ? '' : 's')
+      return count + ' | ' + formatKnowledgeMatch(knowledgeTrace.topHit.score) + ' | ' + knowledgeTrace.topHit.kind + ': ' + knowledgeTrace.topHit.title
+    }
+    return ''
+  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace])
 
   const modeLabel = activeNode ? 'BLUEPRINT' : mode === 'analytics' ? 'ANALYTICS' : mode === 'running' ? 'RUNNING' : 'ORDER'
-  const statusText = activeNode
+  const statusText = knowledgePeekEmpty
+    ? 'KNOWLEDGE // NO MATCH'
+    : knowledgePeekActive && knowledgeTrace
+    ? 'KNOWLEDGE // ' + (knowledgeTrace.truncated ? 'TRUNCATED' : 'READY')
+    : activeNode
     ? 'BLUEPRINT // FOCUSED'
     : janusRunning
     ? 'RUNNING // ACTIVE'
@@ -455,13 +460,11 @@ export function JanusIsland({
       const target = event.target as Node | null
       const shell = shellRef.current
       if (!shell || !target || shell.contains(target)) return
-      if (stage === 'expanded') onStepBack()
-      else onCollapse()
+      onDismiss()
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      if (stage === 'expanded') onStepBack()
-      else onCollapse()
+      onDismiss()
     }
     document.addEventListener('pointerdown', handlePointerDown, true)
     document.addEventListener('keydown', handleKeyDown)
@@ -469,7 +472,7 @@ export function JanusIsland({
       document.removeEventListener('pointerdown', handlePointerDown, true)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onCollapse, onStepBack, stage])
+  }, [onDismiss, stage])
 
   useEffect(() => {
     if (stage !== 'expanded') {
@@ -503,11 +506,9 @@ export function JanusIsland({
       data-stage={stage}
       data-view={view}
       data-mode={mode}
+      data-peek-kind="knowledge"
       onMouseDown={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => {
-        e.stopPropagation()
-        if (stage !== 'collapsed') handleShellDoubleClick()
-      }}
+      onDoubleClick={(e) => e.stopPropagation()}
     >
       {stage === 'expanded' && <div className="janus-veil" />}
       <div ref={pullHintRef} className="pull-hint" />
@@ -517,14 +518,14 @@ export function JanusIsland({
         data-mode={mode}
         data-stage={stage}
         className={`janus-island${isSwitching ? ' switching' : ''}`}
-        role={stage === 'collapsed' ? 'button' : undefined}
-        tabIndex={stage === 'collapsed' ? 0 : undefined}
-        aria-label={stage === 'collapsed' ? 'Open Janus Island' : undefined}
-        onKeyDown={stage === 'collapsed' ? handleIslandKeyDown : undefined}
-        onPointerDown={stage === 'collapsed' ? handlePointerDown : undefined}
-        onPointerMove={stage === 'collapsed' ? handlePointerMove : undefined}
-        onPointerUp={stage === 'collapsed' ? handlePointerUp : undefined}
-        onPointerCancel={stage === 'collapsed' ? handlePointerCancel : undefined}
+        role={stage !== 'expanded' ? 'button' : undefined}
+        tabIndex={stage !== 'expanded' ? 0 : undefined}
+        aria-label={stage === 'peek' ? 'Close knowledge peek' : stage === 'collapsed' ? 'Open Janus Island' : undefined}
+        onKeyDown={stage !== 'expanded' ? handleIslandKeyDown : undefined}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
       >
         <div className="janus-collapsed-core">
           <div ref={(el) => { eyeContainerRef.current = el }} className="janus-face-mini">

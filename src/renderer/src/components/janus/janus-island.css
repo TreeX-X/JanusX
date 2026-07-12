@@ -1421,9 +1421,9 @@ body.is-running {
   pointer-events: none;
   -webkit-app-region: no-drag;
   transition:
-    width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
-    height 0.26s cubic-bezier(0.22, 1, 0.36, 1),
-    top 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    width 0.34s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
+    height 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    top 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .janus-island-shell[data-stage="peek"] {
@@ -1432,12 +1432,13 @@ body.is-running {
 }
 
 .janus-island-shell[data-stage="expanded"] {
-  left: max(36px, calc((100vw - 900px) / 2));
-  right: max(36px, calc((100vw - 900px) / 2));
   top: 12px;
-  width: auto;
+  width: min(900px, calc(100vw - 72px));
   height: min(460px, calc(100vh - 90px));
-  transform: none;
+  transition:
+    width 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+    height 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.07s,
+    top 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.07s;
 }
 
 .janus-island-shell > .pull-hint,
@@ -1454,7 +1455,7 @@ body.is-running {
   border-radius: 13px;
   pointer-events: auto;
   transition:
-    border-radius 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 0.38s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.26s ease,
     border-color 0.26s ease,
     background 0.26s ease,
@@ -1515,13 +1516,23 @@ body.is-running {
 .janus-expanded-shell {
   position: absolute;
   inset: 0;
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  visibility: hidden;
+  transition:
+    opacity 0.12s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    inset 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 0.38s;
 }
 
 .janus-collapsed-core {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.janus-island-shell[data-stage="collapsed"] .janus-collapsed-core {
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .janus-peek-shell {
@@ -1550,6 +1561,8 @@ body.is-running {
 .janus-island-shell[data-stage="peek"] .janus-peek-shell {
   opacity: 1;
   transform: scale(1);
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .janus-island-shell[data-stage="expanded"] .janus-collapsed-core,
@@ -1564,19 +1577,8 @@ body.is-running {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-expanded-shell {
-  display: none;
-}
-
-.janus-island-shell[data-stage="collapsed"] .janus-peek-shell,
-.janus-island-shell[data-stage="collapsed"] .janus-expanded-shell {
-  display: none;
-}
-
-.janus-island-shell[data-stage="expanded"] .janus-peek-shell {
-  display: none;
+  visibility: visible;
+  transition-delay: 0.16s, 0.13s, 0.07s, 0s;
 }
 
 .janus-island-shell .janus-expanded-body {
@@ -1608,11 +1610,8 @@ body.is-running {
 
 @media (max-width: 900px) {
   .janus-island-shell[data-stage="expanded"] {
-    left: 12px;
-    right: 12px;
-    width: auto;
+    width: calc(100vw - 24px);
     height: min(calc(100vh - 72px), 540px);
-    transform: none;
   }
 
   .janus-island-shell[data-stage="expanded"] .janus-expanded-shell {
@@ -5393,14 +5392,7 @@ body.is-running {
   }
 }
 
-/* Expanded clarity override: avoid rasterizing the full panel through translate centering. */
-.janus-island-shell[data-stage="expanded"] {
-  left: max(36px, calc((100vw - 900px) / 2));
-  right: max(36px, calc((100vw - 900px) / 2));
-  width: auto;
-  transform: none;
-}
-
+/* Keep expanded content sharp without changing the host's centering geometry. */
 .janus-island-shell[data-stage="expanded"] .janus-expanded-shell,
 .janus-island-shell[data-stage="expanded"] .janus-expanded-body {
   transform: none;
@@ -5410,16 +5402,28 @@ body.is-running {
 
 .janus-island-shell[data-stage="expanded"] .janus-collapsed-core,
 .janus-island-shell[data-stage="expanded"] .janus-peek-shell {
-  display: none;
   transform: none;
   filter: none;
 }
 
-@media (max-width: 900px) {
-  .janus-island-shell[data-stage="expanded"] {
-    left: 12px;
-    right: 12px;
-    width: auto;
-    transform: none;
+/* Knowledge recall presentation within the existing level-one peek. */
+.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] {
+  width: min(420px, calc(100vw - 24px));
+}
+
+.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-copy {
+  max-width: 250px;
+}
+
+.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-subtitle {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-statusline {
+    display: none;
   }
 }

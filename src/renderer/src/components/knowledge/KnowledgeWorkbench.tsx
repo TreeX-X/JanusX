@@ -4,31 +4,28 @@ import {
   applyKnowledgeCandidate,
   loadKnowledgeWorkbenchSnapshot,
   rejectKnowledgeCandidate,
-  searchKnowledge,
+  searchKnowledgeCards,
   type KnowledgeReviewCandidateType,
   type KnowledgeWorkbenchSnapshot,
-} from '@/services/knowledge'
+} from '../../services/knowledge'
 import type {
-  AuditEvent,
   CandidateFact,
   CandidateGraphEdge,
   CandidateStatus,
   CandidateWikiPatch,
-  KnowledgeSearchHit,
-  Observation,
+  KnowledgeCard,
 } from '../../../../shared/knowledge'
 import styles from './KnowledgeWorkbench.module.css'
 
-type KnowledgeTab = 'inbox' | 'wiki' | 'graph' | 'search' | 'audit'
-type SelectedKind = 'fact' | 'wiki' | 'graph' | 'observation' | 'audit'
+export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit'
+type Candidate = CandidateFact | CandidateWikiPatch | CandidateGraphEdge
 
-interface KnowledgeWorkbenchProps {
+interface Props {
   isOpen: boolean
   onClose: () => void
 }
 
-interface SelectedRecord {
-  kind: SelectedKind
+export interface InspectorRecord {
   id: string
   title: string
   body: string
@@ -36,129 +33,127 @@ interface SelectedRecord {
   tags: string[]
   sourceIds: string[]
   fileRefs: string[]
-  actor?: string
   createdAt?: string
-  status?: CandidateStatus
+  status?: CandidateStatus | 'active'
   reviewType?: KnowledgeReviewCandidateType
 }
 
-const TAB_LABELS: Record<KnowledgeTab, string> = {
+const LABELS: Record<KnowledgeWorkbenchTab, string> = {
   inbox: 'Inbox',
+  library: 'Library',
   wiki: 'Wiki',
   graph: 'Graph',
   search: 'Search Lab',
   audit: 'Audit',
 }
 
-export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps) {
-  const [activeTab, setActiveTab] = useState<KnowledgeTab>('inbox')
+export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
+  const [tab, setTab] = useState<KnowledgeWorkbenchTab>('inbox')
   const [snapshot, setSnapshot] = useState<KnowledgeWorkbenchSnapshot | null>(null)
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [loadError, setLoadError] = useState('')
+  const [selectedId, setSelectedId] = useState('')
+  const [selectedSearch, setSelectedSearch] = useState<InspectorRecord | null>(null)
   const [query, setQuery] = useState('')
-  const [backendSearchRecords, setBackendSearchRecords] = useState<SelectedRecord[]>([])
-  const [searchModeLabel, setSearchModeLabel] = useState('Local preview')
-  const [selectedId, setSelectedId] = useState<string>('')
-  const [error, setError] = useState('')
+  const [searchCards, setSearchCards] = useState<KnowledgeCard[]>([])
+  const [searchState, setSearchState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewError, setReviewError] = useState('')
 
   const refresh = async () => {
-    setStatus('loading')
-    setError('')
+    setSelectedSearch(null)
+    setLoadState('loading')
+    setLoadError('')
     try {
       const next = await loadKnowledgeWorkbenchSnapshot()
       setSnapshot(next)
-      setSelectedId((current) => {
-        if (current && findSelectedRecord(next, current)) return current
-        return next.factCandidates[0]?.id || next.wikiPatches[0]?.id || next.graphCandidates[0]?.id || ''
-      })
-      setStatus('idle')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Knowledge workbench load failed')
-      setStatus('error')
+      setSelectedId((current) => selectionIdForTab(next, tab, current))
+      setLoadState('idle')
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Knowledge workbench load failed')
+      setLoadState('error')
     }
   }
 
   useEffect(() => {
-    if (!isOpen) return
-    void refresh()
+    if (isOpen) void refresh()
   }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    const onKeyDown = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [isOpen, onClose])
 
-  const selected = useMemo(() => {
-    if (!snapshot) return null
-    return findSelectedRecord(snapshot, selectedId)
-  }, [snapshot, selectedId])
+  useEffect(() => {
+    if (!isOpen || tab !== 'search') return
+    const term = query.trim()
+    setSelectedSearch(null)
+    if (!term) {
+      setSearchCards([])
+      setSearchState('idle')
+      return
+    }
 
-  const handleReview = async (action: 'apply' | 'reject') => {
+    let cancelled = false
+    setSearchState('loading')
+    setSearchCards([])
+    searchKnowledgeCards({ query: term, limit: 12 })
+      .then((cards) => {
+        if (cancelled) return
+        setSearchCards(cards)
+        setSearchState('idle')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSelectedSearch(null)
+        setSearchCards([])
+        setSearchState('unavailable')
+      })
+    return () => { cancelled = true }
+  }, [isOpen, query, tab])
+
+  const selected = useMemo(
+    () => tab === 'search' || tab === 'audit'
+      ? selectedSearch
+      : snapshot ? resolveRecordForTab(snapshot, tab, selectedId) : null,
+    [selectedId, selectedSearch, snapshot, tab],
+  )
+
+  const activateTab = (nextTab: KnowledgeWorkbenchTab) => {
+    setTab(nextTab)
+    setSelectedSearch(null)
+    if (snapshot) {
+      setSelectedId((current) => selectionIdForTab(snapshot, nextTab, current))
+    }
+  }
+
+  const selectCandidate = (id: string) => {
+    setSelectedSearch(null)
+    setSelectedId(id)
+  }
+
+  const review = async (action: 'apply' | 'reject') => {
     if (!selected?.reviewType || selected.status !== 'proposed' || snapshot?.usingDemoData) return
     setReviewBusy(true)
     setReviewError('')
     try {
-      const input = { type: selected.reviewType, id: selected.id }
-      if (action === 'apply') {
-        await applyKnowledgeCandidate(input)
-      } else {
-        await rejectKnowledgeCandidate(input)
-      }
+      const input = { id: selected.id, type: selected.reviewType }
+      if (action === 'apply') await applyKnowledgeCandidate(input)
+      else await rejectKnowledgeCandidate(input)
       await refresh()
-    } catch (err) {
-      setReviewError(err instanceof Error ? err.message : `${action} failed`)
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : `${action} failed`)
     } finally {
       setReviewBusy(false)
     }
   }
 
-  const searchResults = useMemo(() => {
-    if (!snapshot) return []
-    return buildSearchRecords(snapshot).filter((record) => {
-      const needle = query.trim().toLowerCase()
-      if (!needle) return true
-      return `${record.title} ${record.body} ${record.tags.join(' ')} ${record.fileRefs.join(' ')}`
-        .toLowerCase()
-        .includes(needle)
-    })
-  }, [query, snapshot])
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'search') return
-    const trimmed = query.trim()
-    if (!trimmed) {
-      setBackendSearchRecords([])
-      setSearchModeLabel('Local preview')
-      return
-    }
-
-    let cancelled = false
-    setSearchModeLabel('BM25 loading')
-    searchKnowledge({ query: trimmed, limit: 12 })
-      .then((result) => {
-        if (cancelled) return
-        setBackendSearchRecords(result.hits.map(recordFromSearchHit))
-        setSearchModeLabel(`BM25 · ${result.indexStats.documentCount} docs`)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setBackendSearchRecords([])
-        setSearchModeLabel('BM25 unavailable')
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [activeTab, isOpen, query])
-
   if (!isOpen) return null
+
+  const sidebarCards = snapshot ? cardsForTab(snapshot, tab) : []
+  const paneTitle = tab === 'inbox' ? 'Proposed Candidates' : tab === 'library' ? 'Knowledge Library' : LABELS[tab]
 
   return createPortal(
     <div className={styles.backdrop}>
@@ -166,87 +161,35 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
         <header className={styles.header}>
           <div className={styles.headerLeft}>
             <div className={styles.iconBadge} aria-hidden="true">K</div>
-            <nav className={styles.breadcrumb} aria-label="Breadcrumb">
-              <span className={styles.bcParent}>JanusX</span>
-              <span className={styles.bcSep}>/</span>
-              <span className={styles.bcCurrent}>Knowledge Engine</span>
-            </nav>
+            <nav className={styles.breadcrumb} aria-label="Breadcrumb"><span className={styles.bcParent}>JanusX</span><span className={styles.bcSep}>/</span><span className={styles.bcCurrent}>Knowledge Engine</span></nav>
             {snapshot?.usingDemoData && <span className={styles.badge}>DEMO DATA</span>}
           </div>
-
           <nav className={styles.tabs}>
-            {(Object.keys(TAB_LABELS) as KnowledgeTab[]).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                className={`${styles.tabButton} ${activeTab === tab ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {TAB_LABELS[tab]}
-              </button>
-            ))}
+            {(Object.keys(LABELS) as KnowledgeWorkbenchTab[]).map((item) => <button key={item} type="button" className={`${styles.tabButton} ${tab === item ? styles.tabActive : ''}`} onClick={() => activateTab(item)}>{LABELS[item]}</button>)}
           </nav>
-
           <div className={styles.headerActions}>
-            <input
-              className={styles.searchInput}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter knowledge..."
-            />
-            <button type="button" className={styles.iconButton} onClick={() => void refresh()} title="Refresh">
-              R
-            </button>
-            <button type="button" className={styles.closeButton} onClick={onClose} title="Close" aria-label="Close Knowledge Engine">
-              <span aria-hidden="true" />
-            </button>
+            <button type="button" className={styles.iconButton} onClick={() => void refresh()} title="Refresh">R</button>
+            <button type="button" className={styles.closeButton} onClick={onClose} title="Close" aria-label="Close Knowledge Engine"><span aria-hidden="true" /></button>
           </div>
         </header>
-
         <main className={styles.grid}>
           <aside className={styles.leftPane}>
-            <div className={styles.paneTitle}>Review Queue</div>
-            <RecordList snapshot={snapshot} selectedId={selectedId} onSelect={setSelectedId} />
+            <div className={styles.paneTitle}>{paneTitle}</div>
+            {(tab === 'inbox' || tab === 'library') ? <CardList cards={sidebarCards} selectedId={selectedId} onSelect={selectCandidate} /> : <StateBlock title="Use the active view to browse these records" compact />}
           </aside>
-
           <section className={styles.stage}>
-            {status === 'loading' && <StateBlock title="Loading knowledge records" />}
-            {status === 'error' && <StateBlock title="Workbench unavailable" detail={error} />}
-            {status !== 'loading' && status !== 'error' && snapshot && (
-              <>
-                {activeTab === 'inbox' && (
-                  <InboxView snapshot={snapshot} selectedId={selectedId} onSelect={setSelectedId} />
-                )}
-                {activeTab === 'wiki' && (
-                  <WikiView patches={snapshot.wikiPatches} selectedId={selectedId} onSelect={setSelectedId} />
-                )}
-                {activeTab === 'graph' && (
-                  <GraphView snapshot={snapshot} selectedId={selectedId} onSelect={setSelectedId} />
-                )}
-                {activeTab === 'search' && (
-                  <SearchLabView
-                    query={query}
-                    onQueryChange={setQuery}
-                    records={query.trim() ? backendSearchRecords : searchResults}
-                    modeLabel={searchModeLabel}
-                    onSelect={setSelectedId}
-                  />
-                )}
-                {activeTab === 'audit' && <AuditView events={snapshot.auditEvents} onSelect={setSelectedId} />}
-              </>
-            )}
+            {loadState === 'loading' && <StateBlock title="Loading knowledge records" />}
+            {loadState === 'error' && <StateBlock title="Workbench unavailable" detail={loadError} />}
+            {loadState === 'idle' && snapshot && <>
+              {tab === 'inbox' && <CardCollection title="No proposed candidates" detail="Run extraction after a task to populate the review queue." cards={candidatesForTab(snapshot, 'inbox').map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
+              {tab === 'library' && <CardCollection title="Library is empty" detail="Accepted knowledge will appear here after review." cards={snapshot.libraryCards} selectedId={selectedId} onSelect={selectCandidate} />}
+              {tab === 'search' && <SearchLab query={query} onQueryChange={setQuery} cards={searchCards} state={searchState} selectedId={selectedId} onSelect={(card) => { setSelectedSearch(recordFromCard(card)); setSelectedId(card.id) }} />}
+              {tab === 'wiki' && <CardCollection title="No wiki patches" detail="Extraction has not proposed any wiki changes." cards={snapshot.wikiPatches.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
+              {tab === 'graph' && <CardCollection title="No graph candidates" detail="Extraction has not proposed any graph relationships." cards={snapshot.graphCandidates.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
+              {tab === 'audit' && <AuditList events={snapshot.auditEvents} selectedId={selectedId} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} />}
+            </>}
           </section>
-
-          <aside className={styles.rightPane}>
-            <Inspector
-              record={selected}
-              snapshot={snapshot}
-              reviewBusy={reviewBusy}
-              reviewError={reviewError}
-              onApprove={() => void handleReview('apply')}
-              onReject={() => void handleReview('reject')}
-            />
-          </aside>
+          <aside className={styles.rightPane}><Inspector record={selected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={() => void review('apply')} onReject={() => void review('reject')} /></aside>
         </main>
       </section>
     </div>,
@@ -254,549 +197,96 @@ export function KnowledgeWorkbench({ isOpen, onClose }: KnowledgeWorkbenchProps)
   )
 }
 
-function RecordList({
-  snapshot,
-  selectedId,
-  onSelect,
-}: {
-  snapshot: KnowledgeWorkbenchSnapshot | null
-  selectedId: string
-  onSelect: (id: string) => void
-}) {
-  if (!snapshot) return <StateBlock title="No snapshot" compact />
-
-  const records = [
-    ...snapshot.factCandidates.map((candidate) => ({
-      id: candidate.id,
-      title: candidate.fact.content,
-      meta: `Fact · ${formatConfidence(candidate.fact.confidence)}`,
-    })),
-    ...snapshot.wikiPatches.map((patch) => ({
-      id: patch.id,
-      title: patch.title,
-      meta: `Wiki patch · ${formatConfidence(patch.confidence)}`,
-    })),
-    ...snapshot.observations.slice(0, 8).map((observation) => ({
-      id: observation.id,
-      title: observation.summary || observation.content,
-      meta: `${observation.source} · ${observation.retentionClass ?? 'evidence'}`,
-    })),
-  ]
-
-  if (records.length === 0) return <StateBlock title="Queue empty" compact />
-
-  return (
-    <div className={styles.recordList}>
-      {records.map((record) => (
-        <button
-          key={record.id}
-          type="button"
-          className={`${styles.recordButton} ${selectedId === record.id ? styles.recordActive : ''}`}
-          onClick={() => onSelect(record.id)}
-        >
-          <span className={styles.recordTitle}>{record.title}</span>
-          <span className={styles.recordMeta}>{record.meta}</span>
-        </button>
-      ))}
-    </div>
-  )
+function candidatesForTab(snapshot: KnowledgeWorkbenchSnapshot, tab: KnowledgeWorkbenchTab): Candidate[] {
+  const candidates: Candidate[] = [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates]
+  return tab === 'inbox' ? candidates.filter((candidate) => candidate.status === 'proposed') : []
 }
 
-function InboxView({
-  snapshot,
-  selectedId,
-  onSelect,
-}: {
-  snapshot: KnowledgeWorkbenchSnapshot
-  selectedId: string
-  onSelect: (id: string) => void
-}) {
-  const candidates = [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates]
+function cardsForTab(snapshot: KnowledgeWorkbenchSnapshot, tab: KnowledgeWorkbenchTab): KnowledgeCard[] {
+  return tab === 'library'
+    ? snapshot.libraryCards
+    : candidatesForTab(snapshot, tab).map(cardFromCandidate)
+}
 
-  if (candidates.length === 0) {
-    return <StateBlock title="No proposed candidates" detail="Run extraction after a task to populate the review queue." />
+export function resolveRecordForTab(
+  snapshot: KnowledgeWorkbenchSnapshot,
+  tab: KnowledgeWorkbenchTab,
+  id: string,
+): InspectorRecord | null {
+  if (tab === 'library') {
+    const card = snapshot.libraryCards.find((item) => item.id === id)
+    return card ? recordFromCard(card) : null
   }
 
-  return (
-    <div className={styles.viewStack}>
-      <div className={styles.metricsRow}>
-        <Metric label="Facts" value={snapshot.factCandidates.length} />
-        <Metric label="Wiki Patches" value={snapshot.wikiPatches.length} />
-        <Metric label="Graph Edges" value={snapshot.graphCandidates.length} />
-        <Metric label="Evidence" value={snapshot.retentionStats?.evidence ?? snapshot.observations.length} />
-      </div>
-      <div className={styles.cardGrid}>
-        {snapshot.factCandidates.map((candidate) => (
-          <FactCandidateCard
-            key={candidate.id}
-            candidate={candidate}
-            active={selectedId === candidate.id}
-            onSelect={onSelect}
-          />
-        ))}
-        {snapshot.wikiPatches.map((patch) => (
-          <WikiPatchCard key={patch.id} patch={patch} active={selectedId === patch.id} onSelect={onSelect} />
-        ))}
-        {snapshot.graphCandidates.map((edge) => (
-          <GraphCandidateCard key={edge.id} edge={edge} active={selectedId === edge.id} onSelect={onSelect} />
-        ))}
-      </div>
-    </div>
-  )
+  const candidates: Candidate[] = tab === 'inbox'
+    ? candidatesForTab(snapshot, tab)
+    : tab === 'wiki'
+      ? snapshot.wikiPatches
+      : tab === 'graph'
+        ? snapshot.graphCandidates
+        : []
+  return recordFromCandidate(candidates.find((candidate) => candidate.id === id) ?? null)
 }
 
-function FactCandidateCard({
-  candidate,
-  active,
-  onSelect,
-}: {
-  candidate: CandidateFact
-  active: boolean
-  onSelect: (id: string) => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`}
-      onClick={() => onSelect(candidate.id)}
-    >
-      <div className={styles.cardTopline}>
-        <span>FACT</span>
-        <span>{formatConfidence(candidate.fact.confidence)}</span>
-      </div>
-      <strong>{candidate.fact.content}</strong>
-      <TagRow tags={candidate.fact.tags} />
-      <div className={styles.cardFoot}>{candidate.fact.provenance.sourceObservationIds.length} source refs</div>
-    </button>
-  )
+export function selectionIdForTab(
+  snapshot: KnowledgeWorkbenchSnapshot,
+  tab: KnowledgeWorkbenchTab,
+  currentId: string,
+): string {
+  if (resolveRecordForTab(snapshot, tab, currentId)) return currentId
+  if (tab === 'library') return snapshot.libraryCards[0]?.id ?? ''
+  if (tab === 'inbox') return candidatesForTab(snapshot, tab)[0]?.id ?? ''
+  if (tab === 'wiki') return snapshot.wikiPatches[0]?.id ?? ''
+  if (tab === 'graph') return snapshot.graphCandidates[0]?.id ?? ''
+  return ''
 }
 
-function WikiPatchCard({
-  patch,
-  active,
-  onSelect,
-}: {
-  patch: CandidateWikiPatch
-  active: boolean
-  onSelect: (id: string) => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`}
-      onClick={() => onSelect(patch.id)}
-    >
-      <div className={styles.cardTopline}>
-        <span>WIKI PATCH</span>
-        <span>{formatConfidence(patch.confidence)}</span>
-      </div>
-      <strong>{patch.title}</strong>
-      <p>{patch.rationale}</p>
-      <div className={styles.cardFoot}>{patch.pageSlug}</div>
-    </button>
-  )
+function CardList({ cards, selectedId, onSelect }: { cards: KnowledgeCard[]; selectedId: string; onSelect: (id: string) => void }) {
+  if (!cards.length) return <StateBlock title="No knowledge in this view" compact />
+  return <div className={styles.recordList}>{cards.map((card) => <button key={card.id} type="button" className={`${styles.recordButton} ${selectedId === card.id ? styles.recordActive : ''}`} onClick={() => onSelect(card.id)}><span className={styles.recordTitle}>{card.title}</span><span className={styles.recordMeta}>{card.kind} - {card.status ?? 'accepted'}</span></button>)}</div>
 }
 
-function GraphCandidateCard({
-  edge,
-  active,
-  onSelect,
-}: {
-  edge: CandidateGraphEdge
-  active: boolean
-  onSelect: (id: string) => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`}
-      onClick={() => onSelect(edge.id)}
-    >
-      <div className={styles.cardTopline}>
-        <span>GRAPH EDGE</span>
-        <span>{formatConfidence(edge.edge.confidence)}</span>
-      </div>
-      <strong>
-        {edge.edge.from} → {edge.edge.to}
-      </strong>
-      <p>{edge.edge.type}</p>
-      <div className={styles.cardFoot}>{edge.edge.sourceFactIds.length} fact refs</div>
-    </button>
-  )
+function CardCollection({ title, detail, cards, selectedId, onSelect }: { title: string; detail: string; cards: KnowledgeCard[]; selectedId: string; onSelect: (id: string) => void }) {
+  if (!cards.length) return <StateBlock title={title} detail={detail} />
+  return <div className={styles.cardGrid}>{cards.map((card) => <KnowledgeCardTile key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card.id)} />)}</div>
 }
 
-function WikiView({
-  patches,
-  selectedId,
-  onSelect,
-}: {
-  patches: CandidateWikiPatch[]
-  selectedId: string
-  onSelect: (id: string) => void
-}) {
-  const active = patches.find((patch) => patch.id === selectedId) ?? patches[0]
-
-  return (
-    <div className={styles.wikiLayout}>
-      <div className={styles.wikiList}>
-        <div className={styles.paneTitle}>Draft Pages</div>
-        {patches.map((patch) => (
-          <button
-            key={patch.id}
-            type="button"
-            className={`${styles.wikiPageButton} ${active?.id === patch.id ? styles.recordActive : ''}`}
-            onClick={() => onSelect(patch.id)}
-          >
-            <span>{patch.title}</span>
-            <small>{patch.pageSlug}</small>
-          </button>
-        ))}
-      </div>
-      <article className={styles.markdownPreview}>
-        {active ? (
-          <>
-            <div className={styles.cardTopline}>
-              <span>PROPOSED PATCH</span>
-              <span>{formatConfidence(active.confidence)}</span>
-            </div>
-            <h2>{active.title}</h2>
-            <pre>{active.patchMarkdown}</pre>
-          </>
-        ) : (
-          <StateBlock title="No wiki patch" compact />
-        )}
-      </article>
-    </div>
-  )
+function AuditList({ events, selectedId, onSelect }: { events: KnowledgeWorkbenchSnapshot['auditEvents']; selectedId: string; onSelect: (record: InspectorRecord) => void }) {
+  if (!events.length) return <StateBlock title="No audit events" detail="Governance actions will appear here when they occur." />
+  return <div className={styles.timeline}>{events.map((event) => <button key={event.id} type="button" className={styles.auditEvent} onClick={() => onSelect({ id: event.id, title: event.action, body: `${event.targetType}:${event.targetId}`, tags: [event.targetType], sourceIds: event.provenance.sourceObservationIds, fileRefs: event.provenance.fileRefs, createdAt: event.provenance.createdAt })}><span className={styles.auditDot} /><span><strong>{event.action}</strong><small>{event.targetType} - {event.targetId}</small></span><time>{formatDate(event.provenance.createdAt)}</time></button>)}</div>
 }
 
-function GraphView({
-  snapshot,
-  selectedId,
-  onSelect,
-}: {
-  snapshot: KnowledgeWorkbenchSnapshot
-  selectedId: string
-  onSelect: (id: string) => void
-}) {
-  const nodes = buildGraphNodes(snapshot)
-
-  return (
-    <div className={styles.graphCanvas}>
-      <svg className={styles.graphLines} viewBox="0 0 100 100" preserveAspectRatio="none">
-        <path d="M18 22 C40 8 62 16 82 25" />
-        <path d="M24 72 C42 50 62 46 78 68" />
-        <path d="M19 28 C30 48 42 58 56 74" />
-        <path d="M50 18 C54 36 58 50 78 68" />
-      </svg>
-      {nodes.map((node) => (
-        <button
-          key={node.id}
-          type="button"
-          className={`${styles.graphNode} ${selectedId === node.id ? styles.graphNodeActive : ''}`}
-          style={{ left: `${node.x}%`, top: `${node.y}%` }}
-          onClick={() => onSelect(node.id)}
-        >
-          <span>{node.label}</span>
-          <small>{node.kind}</small>
-        </button>
-      ))}
-    </div>
-  )
+function SearchLab({ query, onQueryChange, cards, state, selectedId, onSelect }: { query: string; onQueryChange: (value: string) => void; cards: KnowledgeCard[]; state: 'idle' | 'loading' | 'unavailable'; selectedId: string; onSelect: (card: KnowledgeCard) => void }) {
+  return <div className={styles.searchLab}><div className={styles.searchPanel}><div className={styles.cardTopline}><span>CONTROLLED RECALL</span><span>BM25</span></div><input className={styles.largeInput} value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search facts, wiki patches, observations..." /></div><div className={styles.searchResults}>{!query.trim() && <StateBlock title="Enter a query to search the knowledge index" compact />}{query.trim() && state === 'loading' && <StateBlock title="Searching the knowledge index" compact />}{query.trim() && state === 'unavailable' && <StateBlock title="Knowledge search unavailable" detail="No local preview is shown when the index cannot be reached." compact />}{query.trim() && state === 'idle' && !cards.length && <StateBlock title="No matching knowledge cards" detail="Try a broader term or capture more knowledge first." compact />}{cards.map((card) => <KnowledgeCardTile key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card)} />)}</div></div>
 }
 
-function SearchLabView({
-  query,
-  onQueryChange,
-  records,
-  modeLabel,
-  onSelect,
-}: {
-  query: string
-  onQueryChange: (query: string) => void
-  records: SelectedRecord[]
-  modeLabel: string
-  onSelect: (id: string) => void
-}) {
-  return (
-    <div className={styles.searchLab}>
-      <div className={styles.searchPanel}>
-        <div className={styles.cardTopline}>
-          <span>CONTROLLED RECALL</span>
-          <span>{modeLabel}</span>
-        </div>
-        <input
-          className={styles.largeInput}
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search facts, wiki patches, observations..."
-        />
-        <div className={styles.filterRow}>
-          <span>workspace</span>
-          <span>tag</span>
-          <span>file</span>
-          <span>source</span>
-        </div>
-      </div>
-      <div className={styles.searchResults}>
-        {records.map((record) => (
-          <button
-            key={record.id}
-            type="button"
-            className={styles.resultRow}
-            onClick={() => onSelect(record.id)}
-          >
-            <span>{record.title}</span>
-            <small>{record.kind} · {record.sourceIds.length} refs</small>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
+function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; active?: boolean; onSelect: () => void }) {
+  return <button type="button" className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}><div className={styles.cardTopline}><span>{card.kind.toUpperCase()}</span><span>{formatConfidence(card.score)}</span></div><strong>{card.title}</strong>{card.summary && <p>{card.summary}</p>}<TagRow tags={card.tags} /><div className={styles.cardFoot}>{card.status ?? 'active'} - {card.sourceRefs.observationIds.length} source refs</div></button>
 }
 
-function AuditView({
-  events,
-  onSelect,
-}: {
-  events: AuditEvent[]
-  onSelect: (id: string) => void
-}) {
-  if (events.length === 0) return <StateBlock title="No audit events" />
-
-  return (
-    <div className={styles.timeline}>
-      {events.map((event) => (
-        <button key={event.id} type="button" className={styles.auditEvent} onClick={() => onSelect(event.id)}>
-          <span className={styles.auditDot} />
-          <span>
-            <strong>{event.action}</strong>
-            <small>{event.targetType} · {event.targetId}</small>
-          </span>
-          <time>{formatDate(event.provenance.createdAt)}</time>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function Inspector({
-  record,
-  snapshot,
-  reviewBusy,
-  reviewError,
-  onApprove,
-  onReject,
-}: {
-  record: SelectedRecord | null
-  snapshot: KnowledgeWorkbenchSnapshot | null
-  reviewBusy: boolean
-  reviewError: string
-  onApprove: () => void
-  onReject: () => void
-}) {
+function Inspector({ record, snapshot, busy, error, onApprove, onReject }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: () => void; onReject: () => void }) {
   if (!record) return <StateBlock title="Select a knowledge record" compact />
-
-  const canReview =
-    Boolean(record.reviewType) &&
-    record.status === 'proposed' &&
-    !snapshot?.usingDemoData &&
-    !reviewBusy
-
-  return (
-    <div className={styles.inspector}>
-      <div className={styles.paneTitle}>Provenance</div>
-      <div className={styles.inspectorTitle}>{record.title}</div>
-      <p>{record.body}</p>
-      {record.confidence !== undefined && <Metric label="Confidence" value={formatConfidence(record.confidence)} />}
-      {record.status && <KeyValue label="Status" value={record.status} />}
-      <TagRow tags={record.tags} />
-      <KeyValue label="Actor" value={record.actor ?? 'unknown'} />
-      <KeyValue label="Created" value={formatDate(record.createdAt)} />
-      <KeyValue label="Source Refs" value={record.sourceIds.join(', ') || 'none'} />
-      <KeyValue label="Files" value={record.fileRefs.join(', ') || 'none'} />
-      <div className={styles.actionRow}>
-        <button type="button" disabled={!canReview} onClick={onApprove}>
-          {reviewBusy ? 'Working…' : 'Approve'}
-        </button>
-        <button type="button" disabled={!canReview} onClick={onReject}>
-          Reject
-        </button>
-      </div>
-      {reviewError && <div className={styles.demoNotice}>{reviewError}</div>}
-      {snapshot?.usingDemoData && (
-        <div className={styles.demoNotice}>
-          Demo fallback is read-only. Capture or extract real knowledge records to enable Approve/Reject.
-        </div>
-      )}
-    </div>
-  )
+  const canReview = Boolean(record.reviewType) && record.status === 'proposed' && !snapshot?.usingDemoData && !busy
+  return <div className={styles.inspector}><div className={styles.paneTitle}>Provenance</div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{record.confidence !== undefined && <Metric label="Confidence" value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label="Status" value={record.status} />}<TagRow tags={record.tags} /><KeyValue label="Created" value={formatDate(record.createdAt)} /><KeyValue label="Source Refs" value={record.sourceIds.join(', ') || 'none'} /><KeyValue label="Files" value={record.fileRefs.join(', ') || 'none'} /><div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={onApprove}>{busy ? 'Working...' : 'Approve'}</button><button type="button" disabled={!canReview} onClick={onReject}>Reject</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>Demo fallback is read-only. Capture or extract real knowledge records to enable review.</div>}</div>
 }
 
-function Metric({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className={styles.metric}>
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </div>
-  )
+function cardFromCandidate(candidate: Candidate): KnowledgeCard {
+  if (candidate.type === 'fact') return { id: candidate.id, kind: 'fact', title: candidate.fact.content, summary: candidate.fact.concepts.join(' - '), score: candidate.fact.confidence, tags: candidate.fact.tags, workspaceId: candidate.fact.provenance.workspaceId, workspacePath: candidate.fact.provenance.workspacePath, sourceRefs: { observationIds: candidate.fact.provenance.sourceObservationIds, fileRefs: candidate.fact.provenance.fileRefs }, createdAt: candidate.fact.provenance.createdAt, status: candidate.status, rawType: 'fact-candidate' }
+  if (candidate.type === 'wiki-patch') return { id: candidate.id, kind: 'wiki', title: candidate.title, summary: candidate.rationale, score: candidate.confidence, tags: [candidate.pageSlug], workspaceId: candidate.provenance.workspaceId, workspacePath: candidate.provenance.workspacePath, sourceRefs: { observationIds: candidate.provenance.sourceObservationIds, fileRefs: candidate.provenance.fileRefs }, createdAt: candidate.provenance.createdAt, status: candidate.status, rawType: 'wiki-patch' }
+  return { id: candidate.id, kind: 'graph', title: `${candidate.edge.from} -> ${candidate.edge.to}`, summary: candidate.edge.type, score: candidate.edge.confidence, tags: [candidate.edge.type], workspaceId: candidate.edge.workspaceId, sourceRefs: { observationIds: candidate.edge.sourceFactIds, fileRefs: [] }, createdAt: candidate.edge.createdAt, status: candidate.status, rawType: 'graph-candidate' }
 }
 
-function KeyValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className={styles.keyValue}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
+function recordFromCandidate(candidate: Candidate | null): InspectorRecord | null {
+  return candidate ? recordFromCard(cardFromCandidate(candidate), candidate.type === 'fact' ? 'fact' : candidate.type === 'wiki-patch' ? 'wiki-patch' : 'graph-edge') : null
 }
 
-function TagRow({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return null
-  return (
-    <div className={styles.tags}>
-      {tags.slice(0, 5).map((tag) => (
-        <span key={tag}>{tag}</span>
-      ))}
-    </div>
-  )
+function recordFromCard(card: KnowledgeCard, reviewType?: KnowledgeReviewCandidateType): InspectorRecord {
+  return { id: card.id, title: card.title, body: card.summary, confidence: card.score, tags: card.tags, sourceIds: card.sourceRefs.observationIds, fileRefs: card.sourceRefs.fileRefs, createdAt: card.createdAt, status: card.status, reviewType }
 }
 
-function StateBlock({ title, detail, compact }: { title: string; detail?: string; compact?: boolean }) {
-  return (
-    <div className={`${styles.stateBlock} ${compact ? styles.stateBlockCompact : ''}`}>
-      <strong>{title}</strong>
-      {detail && <span>{detail}</span>}
-    </div>
-  )
-}
-
-function findSelectedRecord(snapshot: KnowledgeWorkbenchSnapshot, id: string): SelectedRecord | null {
-  return buildSearchRecords(snapshot).find((record) => record.id === id) ?? null
-}
-
-function buildSearchRecords(snapshot: KnowledgeWorkbenchSnapshot): SelectedRecord[] {
-  return [
-    ...snapshot.factCandidates.map(recordFromFact),
-    ...snapshot.wikiPatches.map(recordFromWikiPatch),
-    ...snapshot.graphCandidates.map(recordFromGraph),
-    ...snapshot.observations.map(recordFromObservation),
-    ...snapshot.auditEvents.map(recordFromAudit),
-  ]
-}
-
-function recordFromFact(candidate: CandidateFact): SelectedRecord {
-  return {
-    kind: 'fact',
-    id: candidate.id,
-    title: candidate.fact.content,
-    body: candidate.fact.concepts.join(' · '),
-    confidence: candidate.fact.confidence,
-    tags: candidate.fact.tags,
-    sourceIds: candidate.fact.provenance.sourceObservationIds,
-    fileRefs: candidate.fact.provenance.fileRefs,
-    actor: candidate.fact.provenance.actor,
-    createdAt: candidate.fact.provenance.createdAt,
-    status: candidate.status,
-    reviewType: 'fact',
-  }
-}
-
-function recordFromWikiPatch(patch: CandidateWikiPatch): SelectedRecord {
-  return {
-    kind: 'wiki',
-    id: patch.id,
-    title: patch.title,
-    body: patch.rationale,
-    confidence: patch.confidence,
-    tags: [patch.pageSlug],
-    sourceIds: patch.provenance.sourceObservationIds,
-    fileRefs: patch.provenance.fileRefs,
-    actor: patch.provenance.actor,
-    createdAt: patch.provenance.createdAt,
-    status: patch.status,
-    reviewType: 'wiki-patch',
-  }
-}
-
-function recordFromGraph(candidate: CandidateGraphEdge): SelectedRecord {
-  return {
-    kind: 'graph',
-    id: candidate.id,
-    title: `${candidate.edge.from} -> ${candidate.edge.to}`,
-    body: candidate.edge.type,
-    confidence: candidate.edge.confidence,
-    tags: [candidate.edge.type],
-    sourceIds: candidate.edge.sourceFactIds,
-    fileRefs: [],
-    createdAt: candidate.edge.createdAt,
-    status: candidate.status,
-    reviewType: 'graph-edge',
-  }
-}
-
-function recordFromObservation(observation: Observation): SelectedRecord {
-  return {
-    kind: 'observation',
-    id: observation.id,
-    title: observation.summary || observation.content,
-    body: observation.content,
-    tags: observation.tags,
-    sourceIds: [observation.id],
-    fileRefs: observation.fileRefs,
-    actor: observation.actor,
-    createdAt: observation.createdAt,
-  }
-}
-
-function recordFromAudit(event: AuditEvent): SelectedRecord {
-  return {
-    kind: 'audit',
-    id: event.id,
-    title: event.action,
-    body: `${event.targetType}:${event.targetId}`,
-    tags: [event.targetType],
-    sourceIds: event.provenance.sourceObservationIds,
-    fileRefs: event.provenance.fileRefs,
-    actor: event.provenance.actor,
-    createdAt: event.provenance.createdAt,
-  }
-}
-
-function recordFromSearchHit(hit: KnowledgeSearchHit): SelectedRecord {
-  return {
-    kind: hit.type === 'memory-fact' ? 'fact' : hit.type === 'wiki-patch' ? 'wiki' : hit.type === 'graph-candidate' ? 'graph' : 'observation',
-    id: hit.id,
-    title: hit.title,
-    body: `${hit.content}\nscore=${hit.score.toFixed(3)}`,
-    confidence: hit.confidence,
-    tags: hit.tags,
-    sourceIds: hit.sourceObservationIds,
-    fileRefs: hit.fileRefs,
-    actor: hit.source,
-    createdAt: hit.createdAt,
-  }
-}
-
-function buildGraphNodes(snapshot: KnowledgeWorkbenchSnapshot) {
-  const base = [
-    { id: snapshot.factCandidates[0]?.id ?? 'fact-node', label: 'Candidate Fact', kind: 'fact', x: 18, y: 22 },
-    { id: snapshot.wikiPatches[0]?.id ?? 'wiki-node', label: 'Wiki Patch', kind: 'wiki', x: 50, y: 18 },
-    { id: snapshot.graphCandidates[0]?.id ?? 'edge-node', label: 'Graph Edge', kind: 'graph', x: 82, y: 25 },
-    { id: snapshot.observations[0]?.id ?? 'obs-node', label: 'Observation', kind: 'evidence', x: 24, y: 72 },
-    { id: snapshot.factCandidates[1]?.id ?? 'search-node', label: 'BM25 Recall', kind: 'search', x: 78, y: 68 },
-  ]
-
-  return base
-}
-
-function formatConfidence(value: number): string {
-  return `${Math.round(value * 100)}%`
-}
-
-function formatDate(value?: string): string {
-  if (!value) return 'unknown'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString()
-}
+function Metric({ label, value }: { label: string; value: string | number }) { return <div className={styles.metric}><strong>{value}</strong><span>{label}</span></div> }
+function KeyValue({ label, value }: { label: string; value: string }) { return <div className={styles.keyValue}><span>{label}</span><strong>{value}</strong></div> }
+function TagRow({ tags }: { tags: string[] }) { return tags.length ? <div className={styles.tags}>{tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}</div> : null }
+function StateBlock({ title, detail, compact }: { title: string; detail?: string; compact?: boolean }) { return <div className={`${styles.stateBlock} ${compact ? styles.stateBlockCompact : ''}`}><strong>{title}</strong>{detail && <span>{detail}</span>}</div> }
+function formatConfidence(value: number) { return `${Math.round(value * 100)}%` }
+function formatDate(value?: string) { if (!value) return 'unknown'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString() }

@@ -8,7 +8,8 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/main/index.ts')
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'knowledge-mcp': resolve(__dirname, 'src/main/knowledge/knowledge-mcp.ts')
         }
       }
     }

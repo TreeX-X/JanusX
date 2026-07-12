@@ -14,6 +14,7 @@
     "build": "npm run build:llm-core && electron-vite build",
     "build:llm-core": "npm run build --workspace=@janusx/llm-core",
     "preview": "electron-vite preview",
+    "mcp:knowledge": "node out/main/knowledge-mcp.js",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
     "test:llm-core": "npm test --workspace=@janusx/llm-core",
@@ -27,6 +28,7 @@
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@monaco-editor/react": "^4.7.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
@@ -38,6 +40,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "zod": "^3.25.76",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useReducer, useRef } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
@@ -8,6 +8,8 @@ import { BlueprintWorkbench } from '@/components/blueprint/BlueprintWorkbench'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
 import { useJanusChat } from '@/components/janus/useJanusChat'
 import type { JanusMode } from '@/components/janus'
+import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
+import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController } from '@/components/janus/islandController'
 
 /* ════════════════════════════════════════════════════════════
    Titlebar �?标题栏（简化版�?
@@ -16,7 +18,8 @@ import type { JanusMode } from '@/components/janus'
    ════════════════════════════════════════════════════════════ */
 
 export function Titlebar() {
-  const [islandStage, setIslandStage] = useState<'collapsed' | 'peek' | 'expanded'>('collapsed')
+  const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
+  const { stage: islandStage, knowledge: knowledgePeek } = island
   const [isRunning, setIsRunning] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'notifications' | 'llm'>('notifications')
@@ -29,6 +32,7 @@ export function Titlebar() {
     modelOptions,
     activeModel,
     modelNotice,
+    latestRecallTrace,
     send: handleChatSend,
     stop: handleChatStop,
     retry: handleChatRetry,
@@ -44,6 +48,26 @@ export function Titlebar() {
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
+  const previousActiveWorkspaceId = useRef(activeWorkspaceId)
+
+  useEffect(() => {
+    dispatchIsland({ type: 'trace', trace: latestRecallTrace })
+  }, [latestRecallTrace])
+
+  useEffect(() => {
+    if (previousActiveWorkspaceId.current === activeWorkspaceId) return
+    previousActiveWorkspaceId.current = activeWorkspaceId
+    dispatchIsland({ type: 'invalidate' })
+  }, [activeWorkspaceId])
+
+  useEffect(() => {
+    if (islandStage !== 'peek' || knowledgePeek.presentation === 'hidden') return
+    const version = knowledgePeek.version
+    const timer = window.setTimeout(() => {
+      dispatchIsland({ type: 'timeout', version })
+    }, KNOWLEDGE_PEEK_TIMEOUT_MS)
+    return () => window.clearTimeout(timer)
+  }, [islandStage, knowledgePeek.presentation, knowledgePeek.version])
 
   /*-- Janus 模式 --*/
   const janusMode: JanusMode = !activeWorkspace
@@ -54,27 +78,20 @@ export function Titlebar() {
         ? 'analytics'
         : 'order'
 
-  const handleIslandAdvance = useCallback(() => {
-    setIslandStage((prev) => {
-      if (prev === 'collapsed') return 'peek'
-      if (prev === 'peek') return 'expanded'
-      return prev
-    })
-  }, [])
+  const handleIslandSingleActivate = useCallback(() => dispatchIsland({ type: 'single-activate' }), [])
+  const handleIslandDoubleActivate = useCallback(() => dispatchIsland({ type: 'double-activate' }), [])
+  const handleIslandDismiss = useCallback(() => dispatchIsland({ type: 'dismiss' }), [])
 
-  const handleIslandCollapse = useCallback(() => {
-    setIslandStage('collapsed')
-  }, [])
-
-  const handleIslandStepBack = useCallback(() => {
-    setIslandStage((prev) => (prev === 'expanded' ? 'peek' : 'collapsed'))
-  }, [])
+  const handleChatClearAndInvalidatePeek = useCallback(() => {
+    handleChatClear()
+    dispatchIsland({ type: 'invalidate' })
+  }, [handleChatClear])
 
   const previousActiveTerminalId = useRef(activeTerminalId)
   useEffect(() => {
     if (previousActiveTerminalId.current !== activeTerminalId) {
       previousActiveTerminalId.current = activeTerminalId
-      setIslandStage((prev) => (prev === 'expanded' ? 'peek' : prev))
+      dispatchIsland({ type: 'terminal-changed' })
     }
   }, [activeTerminalId])
 
@@ -185,9 +202,9 @@ export function Titlebar() {
       >
         <JanusIsland
           stage={islandStage}
-          onAdvance={handleIslandAdvance}
-          onCollapse={handleIslandCollapse}
-          onStepBack={handleIslandStepBack}
+          onSingleActivate={handleIslandSingleActivate}
+          onDoubleActivate={handleIslandDoubleActivate}
+          onDismiss={handleIslandDismiss}
           onRunningChange={handleRunningChange}
           messages={messages}
           pendingContent={pendingContent}
@@ -201,8 +218,11 @@ export function Titlebar() {
           onChatSend={handleChatSend}
           onChatStop={handleChatStop}
           onChatRetry={handleChatRetry}
-          onChatClear={handleChatClear}
+          onChatClear={handleChatClearAndInvalidatePeek}
           onOpenLlmConfig={handleOpenLlmConfig}
+          knowledgeTrace={knowledgePeek.trace}
+          knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
+          knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}
         />
       </div>
 
