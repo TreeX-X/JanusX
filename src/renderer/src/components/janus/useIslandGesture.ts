@@ -273,10 +273,10 @@ export function useIslandGesture({
             hint.style.opacity = String(Math.min(deltaY / 30, 1))
             hint.style.transform = `translate(-50%, ${offset}px)` // 跟随岛屿向下移动
             if (deltaY >= T) {
-              hint.textContent = '松开立即翻转'
+              hint.textContent = 'Release to flip'
               hint.style.color = '#fff'
             } else {
-              hint.textContent = '�?继续下拉切换视图'
+              hint.textContent = 'Keep pulling to switch view'
               hint.style.color = '#888'
             }
           } else {
