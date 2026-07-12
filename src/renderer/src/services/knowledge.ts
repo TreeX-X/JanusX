@@ -9,6 +9,9 @@ import type {
   KnowledgeSearchQuery,
   KnowledgeSearchResult,
   KnowledgeTruthSnapshot,
+  KnowledgeConflict,
+  KnowledgeFeedbackInput,
+  KnowledgeFeedbackSummary,
   Observation,
   RetentionStats,
 } from '../../../shared/knowledge'
@@ -26,6 +29,7 @@ export interface KnowledgeWorkbenchSnapshot {
   auditEvents: AuditEvent[]
   retentionStats: RetentionStats | null
   libraryCards: KnowledgeCard[]
+  conflicts: KnowledgeConflict[]
   loadedAt: string
   usingDemoData: boolean
   errors: string[]
@@ -226,6 +230,14 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
   ])
 
   const libraryCards = truthSnapshotToKnowledgeCards(truth)
+  const workspaceIds = [...new Set([
+    ...factCandidates.map((item) => item.fact.provenance.workspaceId),
+    ...wikiPatches.map((item) => item.provenance.workspaceId),
+    ...graphCandidates.map((item) => item.edge.workspaceId),
+  ].filter(Boolean))]
+  const conflicts = (await Promise.all(
+    workspaceIds.map((workspaceId) => invokeOrEmpty<KnowledgeConflict[]>('knowledge:conflicts:list', [], workspaceId)),
+  )).flat()
 
   if (!retentionStats) {
     errors.push('retention stats unavailable')
@@ -239,6 +251,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     auditEvents,
     retentionStats,
     libraryCards,
+    conflicts,
     loadedAt: new Date().toISOString(),
     usingDemoData: false,
     errors,
@@ -283,4 +296,26 @@ export async function applyKnowledgeCandidate(
   input: KnowledgeReviewCandidateInput,
 ): Promise<unknown> {
   return window.electron.invoke('knowledge:candidates:apply', input)
+}
+
+export async function revokeKnowledgeTruth(input: {
+  kind: 'fact' | 'graph' | 'wiki'
+  id: string
+  workspaceId: string
+}): Promise<void> {
+  await window.electron.invoke('knowledge:truth:revoke', input)
+}
+
+export async function listKnowledgeConflicts(workspaceId: string): Promise<KnowledgeConflict[]> {
+  return window.electron.invoke('knowledge:conflicts:list', workspaceId) as Promise<KnowledgeConflict[]>
+}
+
+export async function recordKnowledgeFeedback(input: KnowledgeFeedbackInput): Promise<void> {
+  await window.electron.invoke('knowledge:feedback:record', input)
+}
+
+export async function getKnowledgeFeedbackSummary(
+  workspaceId?: string,
+): Promise<KnowledgeFeedbackSummary> {
+  return window.electron.invoke('knowledge:feedback:summary', workspaceId) as Promise<KnowledgeFeedbackSummary>
 }

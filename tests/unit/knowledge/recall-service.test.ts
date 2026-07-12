@@ -204,4 +204,22 @@ describe('KnowledgeRecallService', () => {
       contextResult.items.map((item) => item.id),
     )
   })
+
+  it('ranks an exact title phrase ahead of incidental body repetition', async () => {
+    const recall = new KnowledgeRecallService(sources({
+      facts: [fact('body-heavy', 'release protocol release protocol release protocol incidental detail')],
+      wikiPages: [{
+        slug: 'release-protocol', title: 'Release Protocol', markdown: 'short operational guide',
+        tags: [], status: 'published', sourceFactIds: [], updatedAt: '2026-07-12T00:00:00.000Z',
+        version: 1, workspaceId: 'workspace-a',
+      }],
+      graphEdges: [],
+    }))
+
+    const result = await recall.recall({ query: 'release protocol', layer: 'truth', workspaceId: 'workspace-a' })
+
+    expect(result.documents[0]?.hit.id).toBe('release-protocol')
+    expect(result.documents[0]?.scoreExplanation.exactTitle).toBe(3)
+    expect(result.documents[0]?.scoreExplanation.bodyPhrase).toBe(0)
+  })
 })

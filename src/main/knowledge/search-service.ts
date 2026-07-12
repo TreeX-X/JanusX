@@ -64,10 +64,11 @@ export class KnowledgeSearchService {
     await knowledgeContractService.bootstrapWorkspace(normalizedQuery.workspacePath)
 
     const recalled = await this.recallService.recall({ ...normalizedQuery, layer: 'governance' })
-    const hits = recalled.documents.slice(0, clampLimit(query.limit)).map(({ hit, score }) => ({
+    const hits = recalled.documents.slice(0, clampLimit(query.limit)).map(({ hit, score, scoreExplanation }) => ({
       ...hit,
-      bm25Score: score,
+      bm25Score: scoreExplanation.bm25,
       score,
+      scoreExplanation,
     }))
     return {
       query: normalizedQuery,

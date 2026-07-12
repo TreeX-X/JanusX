@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -252,5 +252,61 @@ describe('KnowledgeReviewService', () => {
     await expect(
       knowledgeReviewService.rejectCandidate({ type: 'fact', id: 'cand-b' }),
     ).rejects.toThrow(/not proposed/i)
+  })
+
+  it('treats repeated reject as an idempotent no-op', async () => {
+    const candidate = makeFactCandidate()
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const { knowledgeReviewService } = await loadService()
+
+    const first = await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
+    const second = await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
+
+    expect(first.candidate.status).toBe('rejected')
+    expect(second.candidate.status).toBe('rejected')
+    expect(second.auditEvents).toEqual([])
+  })
+
+  it('serializes concurrent fact apply calls without duplicating truth', async () => {
+    const candidate = makeFactCandidate()
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const { knowledgeReviewService } = await loadService()
+
+    const results = await Promise.all([
+      knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id }),
+      knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id }),
+    ])
+
+    const facts = await readJsonl<MemoryFact>('facts/facts.jsonl')
+    expect(facts.filter((fact) => fact.id === candidate.fact.id)).toHaveLength(1)
+    expect(results.map((result) => result.auditEvents.length).sort()).toEqual([0, 2])
+  })
+
+  it('does not duplicate an already materialized wiki patch on retry', async () => {
+    const candidate = makeWikiCandidate()
+    await seedJsonl('wiki/patches.jsonl', [candidate])
+    const pagePath = join(knowledgeRoot, 'wiki', 'pages', `${candidate.pageSlug}.md`)
+    await mkdir(join(pagePath, '..'), { recursive: true })
+    await writeFile(pagePath, `# ${candidate.title}\n\n${candidate.patchMarkdown}\n`, 'utf8')
+    const { knowledgeReviewService } = await loadService()
+
+    await knowledgeReviewService.applyCandidate({ type: 'wiki-patch', id: candidate.id })
+
+    const markdown = await readFile(pagePath, 'utf8')
+    expect(markdown.split(candidate.patchMarkdown)).toHaveLength(2)
+  })
+
+  it('restores candidate and truth when required audit persistence fails', async () => {
+    const candidate = makeFactCandidate()
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const { knowledgeReviewService } = await loadService()
+    const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
+    vi.spyOn(knowledgeAuditService, 'recordBatch').mockRejectedValueOnce(new Error('audit unavailable'))
+
+    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('audit unavailable')
+
+    expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0]?.status).toBe('proposed')
+    expect(await readJsonl<MemoryFact>('facts/facts.jsonl')).toEqual([])
+    vi.restoreAllMocks()
   })
 })

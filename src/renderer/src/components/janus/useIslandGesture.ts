@@ -63,9 +63,11 @@ export function useIslandGesture({
   const lastTapTime = useRef(0)
   const lastTapPoint = useRef<TapPoint | null>(null)
   const pendingSingleTapTimer = useRef<number | null>(null)
-  const consumedPointerUp = useRef<number | null>(null)
+  const singleTapCallbackRef = useRef(onSingleTap)
   const DOUBLE_TAP_DELAY = 420
   const DOUBLE_TAP_TOLERANCE = 18
+
+  singleTapCallbackRef.current = onSingleTap
 
   /*-- 清理 --*/
   useEffect(() => {
@@ -178,7 +180,6 @@ export function useIslandGesture({
         }
         lastTapTime.current = 0
         lastTapPoint.current = null
-        consumedPointerUp.current = e.pointerId
         onDoubleTap()
         return
       }
@@ -290,10 +291,6 @@ export function useIslandGesture({
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
-      if (consumedPointerUp.current === e.pointerId) {
-        consumedPointerUp.current = null
-        return
-      }
       if (!isPointerDown.current) return
       isPointerDown.current = false
       e.currentTarget.releasePointerCapture(e.pointerId)
@@ -406,7 +403,7 @@ export function useIslandGesture({
                 pendingSingleTapTimer.current = null
                 lastTapTime.current = 0
                 lastTapPoint.current = null
-                onSingleTap()
+                singleTapCallbackRef.current?.()
               }, DOUBLE_TAP_DELAY)
             }
           }
@@ -427,7 +424,6 @@ export function useIslandGesture({
       flipFallbackTimerRef.current = null
     }
     isPointerDown.current = false
-    consumedPointerUp.current = null
     isDragging.current = false
     cancelLongPressProgress()
     useAppStore.getState().setIsIslandDragging(false)

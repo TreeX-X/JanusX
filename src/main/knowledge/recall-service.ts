@@ -38,7 +38,10 @@ export interface KnowledgeRecallDocument {
 }
 
 export interface KnowledgeRecallResult {
-  documents: Array<KnowledgeRecallDocument & { score: number }>
+  documents: Array<KnowledgeRecallDocument & {
+    score: number
+    scoreExplanation: NonNullable<KnowledgeSearchHit['scoreExplanation']>
+  }>
   indexStats: KnowledgeSearchIndexStats
   degraded?: { reason: 'empty-query' | 'missing-workspace' }
 }
@@ -86,6 +89,22 @@ function searchText(hit: KnowledgeSearchHit): string {
     hit.fileRefs.join(' '),
     hit.sourceObservationIds.join(' '),
   ].join('\n')
+}
+
+function normalizedPhrase(value: string): string {
+  return value.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+function lexicalExplanation(hit: KnowledgeSearchHit, query: string, bm25: number) {
+  const phrase = normalizedPhrase(query)
+  const title = normalizedPhrase(hit.title)
+  const body = normalizedPhrase(hit.content)
+  return {
+    bm25,
+    exactTitle: title === phrase ? 3 : 0,
+    titlePhrase: title !== phrase && title.includes(phrase) ? 1.5 : 0,
+    bodyPhrase: body.includes(phrase) ? 0.5 : 0,
+  }
 }
 
 function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRecallRequest): boolean {
@@ -381,10 +400,14 @@ export class KnowledgeRecallService {
     const byKey = new Map(documents.map((document) => [document.key, document]))
     const ranked = index.search(query)
       .sort((left, right) => right.score - left.score || compareText(left.id, right.id))
-      .flatMap(({ id, score }) => {
+      .flatMap(({ id, score: bm25 }) => {
         const document = byKey.get(id)
-        return document ? [{ ...document, score }] : []
+        if (!document) return []
+        const scoreExplanation = lexicalExplanation(document.hit, query, bm25)
+        const score = Object.values(scoreExplanation).reduce((total, value) => total + value, 0)
+        return [{ ...document, score, scoreExplanation }]
       })
+      .sort((left, right) => right.score - left.score || compareText(left.key, right.key))
     return { documents: ranked, indexStats: index.stats() }
   }
 

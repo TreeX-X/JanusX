@@ -4,6 +4,7 @@ import {
   applyKnowledgeCandidate,
   loadKnowledgeWorkbenchSnapshot,
   rejectKnowledgeCandidate,
+  revokeKnowledgeTruth,
   searchKnowledgeCards,
   type KnowledgeReviewCandidateType,
   type KnowledgeWorkbenchSnapshot,
@@ -34,8 +35,10 @@ export interface InspectorRecord {
   sourceIds: string[]
   fileRefs: string[]
   createdAt?: string
-  status?: CandidateStatus | 'active'
+  status?: CandidateStatus | 'active' | 'archived'
   reviewType?: KnowledgeReviewCandidateType
+  kind?: KnowledgeCard['kind']
+  workspaceId?: string
 }
 
 const LABELS: Record<KnowledgeWorkbenchTab, string> = {
@@ -150,6 +153,18 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     }
   }
 
+  const revoke = async () => {
+    if (!selected?.workspaceId || !selected.kind || selected.kind === 'observation') return
+    setReviewBusy(true)
+    setReviewError('')
+    try {
+      await revokeKnowledgeTruth({ kind: selected.kind, id: selected.id, workspaceId: selected.workspaceId })
+      await refresh()
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : 'Revoke failed')
+    } finally { setReviewBusy(false) }
+  }
+
   if (!isOpen) return null
 
   const sidebarCards = snapshot ? cardsForTab(snapshot, tab) : []
@@ -189,7 +204,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               {tab === 'audit' && <AuditList events={snapshot.auditEvents} selectedId={selectedId} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} />}
             </>}
           </section>
-          <aside className={styles.rightPane}><Inspector record={selected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={() => void review('apply')} onReject={() => void review('reject')} /></aside>
+          <aside className={styles.rightPane}><Inspector record={selected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={() => void review('apply')} onReject={() => void review('reject')} onRevoke={() => void revoke()} /></aside>
         </main>
       </section>
     </div>,
@@ -264,10 +279,12 @@ function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; ac
   return <button type="button" className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}><div className={styles.cardTopline}><span>{card.kind.toUpperCase()}</span><span>{formatConfidence(card.score)}</span></div><strong>{card.title}</strong>{card.summary && <p>{card.summary}</p>}<TagRow tags={card.tags} /><div className={styles.cardFoot}>{card.status ?? 'active'} - {card.sourceRefs.observationIds.length} source refs</div></button>
 }
 
-function Inspector({ record, snapshot, busy, error, onApprove, onReject }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: () => void; onReject: () => void }) {
+function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevoke }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: () => void; onReject: () => void; onRevoke: () => void }) {
   if (!record) return <StateBlock title="Select a knowledge record" compact />
   const canReview = Boolean(record.reviewType) && record.status === 'proposed' && !snapshot?.usingDemoData && !busy
-  return <div className={styles.inspector}><div className={styles.paneTitle}>Provenance</div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{record.confidence !== undefined && <Metric label="Confidence" value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label="Status" value={record.status} />}<TagRow tags={record.tags} /><KeyValue label="Created" value={formatDate(record.createdAt)} /><KeyValue label="Source Refs" value={record.sourceIds.join(', ') || 'none'} /><KeyValue label="Files" value={record.fileRefs.join(', ') || 'none'} /><div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={onApprove}>{busy ? 'Working...' : 'Approve'}</button><button type="button" disabled={!canReview} onClick={onReject}>Reject</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>Demo fallback is read-only. Capture or extract real knowledge records to enable review.</div>}</div>
+  const conflicts = snapshot?.conflicts.filter((item) => item.candidateId === record.id || item.targetId === record.id) ?? []
+  const canRevoke = record.status === 'active' && record.kind !== 'observation' && Boolean(record.workspaceId) && !busy
+  return <div className={styles.inspector}><div className={styles.paneTitle}>Provenance</div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{record.confidence !== undefined && <Metric label="Confidence" value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label="Status" value={record.status} />}<TagRow tags={record.tags} /><KeyValue label="Created" value={formatDate(record.createdAt)} /><KeyValue label="Source Refs" value={record.sourceIds.join(', ') || 'none'} /><KeyValue label="Files" value={record.fileRefs.join(', ') || 'none'} />{conflicts.length > 0 && <div className={styles.demoNotice}>Conflict: {conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ')}</div>}<div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={onApprove}>{busy ? 'Working...' : 'Approve'}</button><button type="button" disabled={!canReview} onClick={onReject}>Reject</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>Archive</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>Demo fallback is read-only. Capture or extract real knowledge records to enable review.</div>}</div>
 }
 
 function cardFromCandidate(candidate: Candidate): KnowledgeCard {
@@ -281,7 +298,7 @@ function recordFromCandidate(candidate: Candidate | null): InspectorRecord | nul
 }
 
 function recordFromCard(card: KnowledgeCard, reviewType?: KnowledgeReviewCandidateType): InspectorRecord {
-  return { id: card.id, title: card.title, body: card.summary, confidence: card.score, tags: card.tags, sourceIds: card.sourceRefs.observationIds, fileRefs: card.sourceRefs.fileRefs, createdAt: card.createdAt, status: card.status, reviewType }
+  return { id: card.id, title: card.title, body: card.summary, confidence: card.score, tags: card.tags, sourceIds: card.sourceRefs.observationIds, fileRefs: card.sourceRefs.fileRefs, createdAt: card.createdAt, status: card.status, reviewType, kind: card.kind, workspaceId: card.workspaceId }
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) { return <div className={styles.metric}><strong>{value}</strong><span>{label}</span></div> }

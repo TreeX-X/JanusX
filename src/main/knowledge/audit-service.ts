@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { appendFile, mkdir, readFile } from 'fs/promises'
+import { appendFile, mkdir, readFile, rename, writeFile, unlink } from 'fs/promises'
 import { dirname, join } from 'path'
 import type { AuditAction, AuditEvent, KnowledgeProvenance } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
@@ -10,6 +10,15 @@ const MAX_LIMIT = 200
 
 /** Caller-supplied audit event; the service assigns `id`. */
 export type AuditEventInput = Omit<AuditEvent, 'id'>
+let auditQueue = Promise.resolve()
+
+async function serialized<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = auditQueue
+  let release!: () => void
+  auditQueue = new Promise<void>((resolve) => { release = resolve })
+  await previous
+  try { return await operation() } finally { release() }
+}
 
 export interface AuditQuery {
   action?: AuditAction
@@ -55,10 +64,25 @@ function parseAuditLine(line: string): AuditEvent | null {
  */
 export class KnowledgeAuditService {
   async record(input: AuditEventInput): Promise<AuditEvent> {
-    const event: AuditEvent = { id: randomUUID(), ...input }
-    const absolutePath = await ensureAuditFile()
-    await appendFile(absolutePath, `${JSON.stringify(event)}\n`, 'utf8')
-    return event
+    return (await this.recordBatch([input]))[0]!
+  }
+
+  async recordBatch(inputs: AuditEventInput[]): Promise<AuditEvent[]> {
+    if (!inputs.length) return []
+    return serialized(async () => {
+      const events = inputs.map((input): AuditEvent => ({ id: randomUUID(), ...input }))
+      const absolutePath = await ensureAuditFile()
+      const previous = await readFile(absolutePath, 'utf8')
+      const tempPath = `${absolutePath}.tmp-${process.pid}-${Date.now()}`
+      try {
+        await writeFile(tempPath, `${previous}${events.map((event) => JSON.stringify(event)).join('\n')}\n`, 'utf8')
+        await rename(tempPath, absolutePath)
+      } catch (error) {
+        await unlink(tempPath).catch(() => undefined)
+        throw error
+      }
+      return events
+    })
   }
 
   async list(query: AuditQuery = {}): Promise<AuditEvent[]> {

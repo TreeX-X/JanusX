@@ -51,6 +51,9 @@ export type AuditAction =
   | 'candidate_applied'
   | 'wiki_updated'
   | 'fact_superseded'
+  | 'truth_revoked'
+  | 'knowledge_conflict'
+  | 'knowledge_feedback'
   | 'reindex'
   // Phase 5: lifecycle audit actions for observations.
   | 'observation_pruned'
@@ -172,7 +175,7 @@ export interface MemoryFact {
   confidence: number
   version: number
   supersedes?: string
-  status: CandidateStatus | 'active'
+  status: CandidateStatus | 'active' | 'archived'
   provenance: KnowledgeProvenance
 }
 
@@ -197,6 +200,32 @@ export interface GraphEdge {
   sourceFactIds: string[]
   workspaceId: string
   createdAt: string
+  status?: 'active' | 'archived'
+}
+
+export type KnowledgeFeedbackAction = 'open' | 'copy' | 'apply' | 'reject' | 'dismiss'
+export type KnowledgeFeedbackOutcome = 'success' | 'empty' | 'error'
+export interface KnowledgeFeedbackInput {
+  action: KnowledgeFeedbackAction
+  resultKind: KnowledgeContextKind | 'none'
+  workspaceId: string
+  outcome: KnowledgeFeedbackOutcome
+}
+export interface KnowledgeFeedbackSummary {
+  total: number
+  byAction: Record<KnowledgeFeedbackAction, number>
+  byOutcome: Record<KnowledgeFeedbackOutcome, number>
+  byKind: Record<KnowledgeContextKind | 'none', number>
+}
+
+export interface KnowledgeConflict {
+  id: string
+  workspaceId: string
+  kind: KnowledgeContextKind
+  targetId: string
+  candidateId: string
+  reason: 'duplicate-id' | 'content-mismatch'
+  provenance: KnowledgeProvenance
 }
 
 export interface KnowledgeTruthSnapshot {
@@ -385,6 +414,12 @@ export interface KnowledgeSearchHit {
   content: string
   score: number
   bm25Score: number
+  scoreExplanation?: {
+    bm25: number
+    exactTitle: number
+    titlePhrase: number
+    bodyPhrase: number
+  }
   workspaceId: string
   workspaceName: string
   workspacePath: string
@@ -394,7 +429,7 @@ export interface KnowledgeSearchHit {
   sourceObservationIds: string[]
   createdAt: string
   confidence?: number
-  status?: CandidateStatus | 'active'
+  status?: CandidateStatus | 'active' | 'archived'
 }
 
 export interface KnowledgeSearchIndexStats {
@@ -430,7 +465,7 @@ export interface KnowledgeCard {
   workspacePath?: string
   sourceRefs: KnowledgeCardSourceRefs
   createdAt?: string
-  status?: CandidateStatus | 'active'
+  status?: CandidateStatus | 'active' | 'archived'
   /** Original search document type before kind mapping. */
   rawType?: KnowledgeSearchDocumentType
 }

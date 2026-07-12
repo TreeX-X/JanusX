@@ -10,10 +10,12 @@ import {
 import { knowledgeSearchService } from '../knowledge/search-service'
 import { knowledgeTruthService } from '../knowledge/truth-service'
 import { knowledgeContextService } from '../knowledge/context-service'
+import { knowledgeOperationsService, type RevokeTruthInput } from '../knowledge/operations-service'
 import type {
   CaptureObservationInput,
   KnowledgeContextRequest,
   KnowledgeSearchQuery,
+  KnowledgeFeedbackInput,
   Observation,
   ObservationPruneQuery,
   ObservationQuery,
@@ -119,6 +121,22 @@ export function registerKnowledgeHandlers(): void {
 
   ipcMain.handle('knowledge:truth:list', async () => {
     return knowledgeTruthService.list()
+  })
+
+  ipcMain.handle('knowledge:truth:revoke', async (_event, input: RevokeTruthInput) => {
+    return knowledgeOperationsService.revoke(input)
+  })
+
+  ipcMain.handle('knowledge:conflicts:list', async (_event, workspaceId: string) => {
+    return knowledgeOperationsService.listConflicts(workspaceId)
+  })
+
+  ipcMain.handle('knowledge:feedback:record', async (_event, input: KnowledgeFeedbackInput) => {
+    return knowledgeOperationsService.recordFeedback(input)
+  })
+
+  ipcMain.handle('knowledge:feedback:summary', async (_event, workspaceId?: string) => {
+    return knowledgeOperationsService.feedbackSummary(workspaceId)
   })
 
   ipcMain.handle('knowledge:context', async (_event, request: KnowledgeContextRequest) => {

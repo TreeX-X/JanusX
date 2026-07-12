@@ -7,7 +7,7 @@
  *  - 候选 JSONL 小体量：整文件读 → 改 status → 原子 rewrite。
  *  - 不触碰 extract 提示词、search 算法、vector/MCP。
  */
-import { rename, writeFile, mkdir, readFile, appendFile } from 'fs/promises'
+import { rename, writeFile, mkdir, readFile, unlink } from 'fs/promises'
 import { dirname, join } from 'path'
 import type {
   AuditEvent,
@@ -125,14 +125,34 @@ async function writeJsonlAtomic(relativePath: string, records: unknown[]): Promi
   const body = records.map((record) => JSON.stringify(record)).join('\n')
   const next = body.length > 0 ? `${body}\n` : ''
   const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`
-  await writeFile(tempPath, next, 'utf8')
-  await rename(tempPath, filePath)
+  try {
+    await writeFile(tempPath, next, 'utf8')
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await unlink(tempPath).catch(() => undefined)
+    throw error
+  }
 }
 
-async function appendJsonl(relativePath: string, record: unknown): Promise<void> {
-  const filePath = absolute(relativePath)
-  await ensureParent(filePath)
-  await appendFile(filePath, `${JSON.stringify(record)}\n`, 'utf8')
+const mutationQueues = new Map<string, Promise<void>>()
+
+async function withMutationLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = mutationQueues.get(key) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => { release = resolve })
+  const queued = previous.then(() => current)
+  mutationQueues.set(key, queued)
+  await previous
+  try {
+    return await operation()
+  } finally {
+    release()
+    if (mutationQueues.get(key) === queued) mutationQueues.delete(key)
+  }
+}
+
+async function restoreJsonl(relativePath: string, records: unknown[]): Promise<void> {
+  await writeJsonlAtomic(relativePath, records)
 }
 
 function findCandidateIndex(
@@ -213,8 +233,26 @@ async function writeWikiIndex(index: WikiPagesIndex): Promise<void> {
   const filePath = absolute(WIKI_PAGES_INDEX)
   await ensureParent(filePath)
   const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`
-  await writeFile(tempPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
-  await rename(tempPath, filePath)
+  try {
+    await writeFile(tempPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await unlink(tempPath).catch(() => undefined)
+    throw error
+  }
+}
+
+async function writeTextAtomic(relativePath: string, content: string): Promise<void> {
+  const filePath = absolute(relativePath)
+  await ensureParent(filePath)
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`
+  try {
+    await writeFile(tempPath, content, 'utf8')
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await unlink(tempPath).catch(() => undefined)
+    throw error
+  }
 }
 
 async function readWikiMarkdown(relativePath: string): Promise<string | null> {
@@ -236,6 +274,10 @@ function mergeWikiMarkdown(existing: string | null, title: string, patchMarkdown
 
 export class KnowledgeReviewService {
   async rejectCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
+    return withMutationLock(candidateRelativePath(input.type), () => this.rejectLocked(input))
+  }
+
+  private async rejectLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
     const { type, id, reviewNotes } = input
     const relativePath = candidateRelativePath(type)
     const records = await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(
@@ -247,6 +289,9 @@ export class KnowledgeReviewService {
     }
 
     const current = records[index]!
+    if (current.status === 'rejected') {
+      return { candidate: current, auditEvents: [] }
+    }
     requireProposed(current.status, id)
 
     const updated = {
@@ -258,19 +303,26 @@ export class KnowledgeReviewService {
     await writeJsonlAtomic(relativePath, records)
 
     const provenance = provenanceFromCandidate(updated)
-    const audit = await knowledgeAuditService.record({
-      action: 'candidate_rejected',
-      targetType: auditTargetType(type),
-      targetId: id,
-      before: { status: current.status },
-      after: { status: 'rejected', reviewNotes: reviewNotes ?? null },
-      provenance,
-    })
+    let audit: AuditEvent
+    try {
+      audit = await knowledgeAuditService.record({
+        action: 'candidate_rejected', targetType: auditTargetType(type), targetId: id,
+        before: { status: current.status }, after: { status: 'rejected', reviewNotes: reviewNotes ?? null }, provenance,
+      })
+    } catch (error) {
+      records[index] = current
+      await writeJsonlAtomic(relativePath, records)
+      throw error
+    }
 
     return { candidate: updated, auditEvents: [audit] }
   }
 
   async applyCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
+    return withMutationLock(candidateRelativePath(input.type), () => this.applyLocked(input))
+  }
+
+  private async applyLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
     const { type, id, reviewNotes } = input
     const relativePath = candidateRelativePath(type)
     const records = await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(
@@ -282,15 +334,25 @@ export class KnowledgeReviewService {
     }
 
     const current = records[index]!
+    if (current.status === 'applied') {
+      return { candidate: current, auditEvents: [] }
+    }
     requireProposed(current.status, id)
 
     let applied: ReviewResult['applied']
+    let rollback: () => Promise<void>
     if (type === 'fact') {
-      applied = { fact: await this.applyFact(current as CandidateFact) }
+      const transaction = await this.applyFact(current as CandidateFact)
+      applied = { fact: transaction.value }
+      rollback = transaction.rollback
     } else if (type === 'graph-edge') {
-      applied = { edge: await this.applyGraphEdge(current as CandidateGraphEdge) }
+      const transaction = await this.applyGraphEdge(current as CandidateGraphEdge)
+      applied = { edge: transaction.value }
+      rollback = transaction.rollback
     } else {
-      applied = { page: await this.applyWikiPatch(current as CandidateWikiPatch) }
+      const transaction = await this.applyWikiPatch(current as CandidateWikiPatch)
+      applied = { page: transaction.value }
+      rollback = transaction.rollback
     }
 
     const updated = {
@@ -299,23 +361,27 @@ export class KnowledgeReviewService {
       ...(reviewNotes !== undefined ? { reviewNotes } : {}),
     }
     records[index] = updated
-    await writeJsonlAtomic(relativePath, records)
+    try {
+      await writeJsonlAtomic(relativePath, records)
+    } catch (error) {
+      await rollback!()
+      throw error
+    }
 
     const provenance = provenanceFromCandidate(updated)
     const targetType = auditTargetType(type)
-    const approved = await knowledgeAuditService.record({
+    try {
+    const auditInputs: Parameters<typeof knowledgeAuditService.recordBatch>[0] = [{
       action: 'candidate_approved',
       targetType,
       targetId: id,
       before: { status: current.status },
       after: { status: 'applied', reviewNotes: reviewNotes ?? null },
       provenance,
-    })
-
-    const auditEvents: AuditEvent[] = [approved]
+    }]
 
     if (type === 'wiki-patch' && applied?.page) {
-      const wikiAudit = await knowledgeAuditService.record({
+      auditInputs.push({
         action: 'wiki_updated',
         targetType: 'wiki',
         targetId: applied.page.slug,
@@ -327,10 +393,9 @@ export class KnowledgeReviewService {
         },
         provenance,
       })
-      auditEvents.push(wikiAudit)
     }
 
-    const appliedAudit = await knowledgeAuditService.record({
+    auditInputs.push({
       action: 'candidate_applied',
       targetType,
       targetId: id,
@@ -345,40 +410,64 @@ export class KnowledgeReviewService {
       },
       provenance,
     })
-    auditEvents.push(appliedAudit)
+    const auditEvents: AuditEvent[] = await knowledgeAuditService.recordBatch(auditInputs)
 
     return { candidate: updated, auditEvents, applied }
+    } catch (error) {
+      records[index] = current
+      await writeJsonlAtomic(relativePath, records)
+      await rollback!()
+      throw error
+    }
   }
 
-  private async applyFact(candidate: CandidateFact): Promise<MemoryFact> {
+  private async applyFact(candidate: CandidateFact): Promise<{
+    value: MemoryFact
+    rollback: () => Promise<void>
+  }> {
     const fact: MemoryFact = {
       ...candidate.fact,
       status: 'active',
       version: candidate.fact.version || 1,
     }
-    await appendJsonl(FACTS_FILE, fact)
-    return fact
+    const previous = await readJsonl<MemoryFact>(FACTS_FILE)
+    const next = [...previous.filter((item) => item.id !== fact.id), fact]
+    await writeJsonlAtomic(FACTS_FILE, next)
+    return { value: fact, rollback: () => restoreJsonl(FACTS_FILE, previous) }
   }
 
-  private async applyGraphEdge(candidate: CandidateGraphEdge): Promise<GraphEdge> {
+  private async applyGraphEdge(candidate: CandidateGraphEdge): Promise<{
+    value: GraphEdge
+    rollback: () => Promise<void>
+  }> {
     const edge: GraphEdge = { ...candidate.edge }
-    await appendJsonl(EDGES_FILE, edge)
-    return edge
+    const previous = await readJsonl<GraphEdge>(EDGES_FILE)
+    const next = [...previous.filter((item) => item.id !== edge.id), edge]
+    await writeJsonlAtomic(EDGES_FILE, next)
+    return { value: edge, rollback: () => restoreJsonl(EDGES_FILE, previous) }
   }
 
-  private async applyWikiPatch(candidate: CandidateWikiPatch): Promise<WikiPage> {
+  private async applyWikiPatch(candidate: CandidateWikiPatch): Promise<{
+    value: WikiPage
+    rollback: () => Promise<void>
+  }> {
     const slug = sanitizePageSlug(candidate.pageSlug)
     const relativePath = wikiPageRelativePath(slug)
     const existingMarkdown = await readWikiMarkdown(relativePath)
-    const markdown = mergeWikiMarkdown(existingMarkdown, candidate.title, candidate.patchMarkdown)
-    const filePath = absolute(relativePath)
-    await ensureParent(filePath)
-    await writeFile(filePath, markdown, 'utf8')
+    const patch = candidate.patchMarkdown.trim()
+    const alreadyMaterialized = existingMarkdown?.includes(patch) ?? false
+    const markdown = alreadyMaterialized && existingMarkdown !== null
+      ? existingMarkdown
+      : mergeWikiMarkdown(existingMarkdown, candidate.title, patch)
+    await writeTextAtomic(relativePath, markdown)
 
     const index = await readWikiIndex()
+    const previousIndex = { version: 1 as const, pages: [...index.pages] }
     const now = new Date().toISOString()
     const existingEntry = index.pages.find((page) => page.slug === slug)
-    const version = (existingEntry?.version ?? 0) + 1
+    const version = alreadyMaterialized && existingEntry
+      ? existingEntry.version
+      : (existingEntry?.version ?? 0) + 1
     const entry: WikiPageIndexEntry = {
       slug,
       title: candidate.title || existingEntry?.title || slug,
@@ -391,9 +480,18 @@ export class KnowledgeReviewService {
       workspaceId: candidate.provenance.workspaceId,
     }
     index.pages = [...index.pages.filter((page) => page.slug !== slug), entry]
-    await writeWikiIndex(index)
+    try {
+      await writeWikiIndex(index)
+    } catch (error) {
+      if (existingMarkdown === null) {
+        await unlink(absolute(relativePath)).catch(() => undefined)
+      } else {
+        await writeTextAtomic(relativePath, existingMarkdown)
+      }
+      throw error
+    }
 
-    return {
+    const page = {
       slug,
       title: entry.title,
       markdown,
@@ -403,6 +501,17 @@ export class KnowledgeReviewService {
       updatedAt: entry.updatedAt,
       version: entry.version,
       workspaceId: entry.workspaceId,
+    }
+    return {
+      value: page,
+      rollback: async () => {
+        if (existingMarkdown === null) {
+          await unlink(absolute(relativePath)).catch(() => undefined)
+        } else {
+          await writeTextAtomic(relativePath, existingMarkdown)
+        }
+        await writeWikiIndex(previousIndex)
+      },
     }
   }
 }

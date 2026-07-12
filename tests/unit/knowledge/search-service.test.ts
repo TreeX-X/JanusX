@@ -87,6 +87,12 @@ describe('KnowledgeSearchService', () => {
     expect(result.indexStats.documentCount).toBeGreaterThanOrEqual(2)
     expect(result.hits[0]?.id).toBe(target.id)
     expect(result.hits[0]?.bm25Score).toBeGreaterThan(0)
+    expect(result.hits[0]?.scoreExplanation).toEqual(expect.objectContaining({
+      bm25: expect.any(Number),
+      exactTitle: expect.any(Number),
+      titlePhrase: expect.any(Number),
+      bodyPhrase: expect.any(Number),
+    }))
     expect(result.hits[0]?.sourceObservationIds).toEqual([target.id])
     expect(result.hits[0]?.fileRefs).toContain('src/main/knowledge/search-service.ts')
     expect(result.compactContext).toContain(`refs=${target.id}`)

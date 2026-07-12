@@ -124,6 +124,10 @@ const ALLOWED_INVOKE_CHANNELS = [
   'knowledge:candidates:apply',
   'knowledge:search',
   'knowledge:truth:list',
+  'knowledge:truth:revoke',
+  'knowledge:conflicts:list',
+  'knowledge:feedback:record',
+  'knowledge:feedback:summary',
   'knowledge:context',
 ]
 
