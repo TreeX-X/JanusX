@@ -1182,17 +1182,12 @@ export function TerminalArea() {
           aria-label="切换 Runtime 状态面板"
         >
           <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
-            <span
-              className="inline-flex h-5 w-5 shrink-0 items-center justify-center border"
-              style={{
-                borderColor: 'rgba(255,120,48,0.22)',
-                background: 'rgba(255,120,48,0.055)',
-              }}
-            >
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
               <span
-                className="h-1.5 w-1.5 border-r-[1.5px] border-b-[1.5px] transition-transform"
+                className="h-[7px] w-[7px] transition-transform"
                 style={{
-                  borderColor: '#ff7830',
+                  borderRight: '1.5px solid rgba(255, 255, 255, 0.2)',
+                  borderBottom: '1.5px solid rgba(255, 255, 255, 0.2)',
                   transform: drawerOpen ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
                 }}
               />
