@@ -9,6 +9,17 @@ const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
 const watcherRegistry = new Map<string, FSWatcher>()
 const watcherTimers = new Map<string, NodeJS.Timeout>()
 
+type SaveFileExtension = 'md' | 'txt' | 'html'
+
+export function resolveSaveFileDialogOptions(input: unknown) {
+  if (!input || typeof input !== 'object') throw new Error('Invalid save file options')
+  const { defaultName, extension } = input as { defaultName?: unknown; extension?: unknown }
+  if (typeof defaultName !== 'string' || !defaultName.trim()) throw new Error('Invalid save file defaultName')
+  if (extension !== 'md' && extension !== 'txt' && extension !== 'html') throw new Error('Unsupported save file extension')
+  const labels: Record<SaveFileExtension, string> = { md: 'Markdown', txt: 'Plain Text', html: 'HTML' }
+  return { defaultPath: defaultName, filters: [{ name: labels[extension], extensions: [extension] }] }
+}
+
 function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
   mainWindow.webContents.send(channel, payload)
@@ -221,6 +232,11 @@ export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
     return dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
     })
+  })
+
+  ipcMain.handle('dialog:saveFile', async (_event, options: unknown) => {
+    const result = await dialog.showSaveDialog(mainWindow, resolveSaveFileDialogOptions(options))
+    return { canceled: result.canceled, ...(result.filePath ? { filePath: result.filePath } : {}) }
   })
 
   ipcMain.handle('system:getDefaultShell', () => {

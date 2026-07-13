@@ -70,6 +70,42 @@ test('double activation collapses expanded Island exactly once', async ({ page }
   await expect(harness(page)).toHaveAttribute('data-single-count', '0')
 })
 
+test('expanded Chat remains clickable while Island background double activation still collapses', async ({ page }) => {
+  const island = page.locator('.janus-island')
+  await tap(island, { x: 100, y: 20 })
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+
+  await page.evaluate(() => {
+    document.addEventListener('pointerdown', (event) => {
+      const target = event.target as Element | null
+      if (!target?.closest('.janus-expanded-view-button')) return
+      const islandElement = target.closest('.janus-island')
+      ;(window as typeof window & { chatPointerState?: unknown }).chatPointerState = {
+        defaultPrevented: event.defaultPrevented,
+        pointerCaptured: islandElement?.hasPointerCapture(event.pointerId) ?? false,
+      }
+    }, { once: true })
+  })
+
+  await page.getByRole('button', { name: 'Chat' }).click()
+  await expect(page.locator('.janus-island-shell')).toHaveAttribute('data-view', 'chat')
+  await expect(page.locator('.janus-chat')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { chatPointerState?: unknown }
+  ).chatPointerState)).toEqual({ defaultPrevented: false, pointerCaptured: false })
+
+  await tap(island, { x: 110, y: 25 })
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 114, y: 27, pointerId: 3 })
+  await pointer(island, 'pointerup', { x: 114, y: 27, pointerId: 3 })
+
+  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
+  await expect(harness(page)).toHaveAttribute('data-double-count', '2')
+})
+
 test('cancelled and non-primary pointers do not activate Island', async ({ page }) => {
   const island = page.locator('.janus-island')
   await pointer(island, 'pointerdown')

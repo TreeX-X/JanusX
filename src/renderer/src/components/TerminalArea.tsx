@@ -1,7 +1,11 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
+import { QuickNote } from './note/QuickNote'
+import { applyTerminalNoteLifecycle, DRAWER_VIEWS, DrawerViewTabs, getDrawerHeight, getDrawerPanelAttributes, type DrawerView } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
+import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
   clearTerminalDragData,
@@ -266,6 +270,10 @@ function contextPercentLabel(terminal: Terminal): string {
 }
 
 function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
+  const markerRef = useRef<HTMLSpanElement | null>(null)
+  const popoverRef = useRef<HTMLSpanElement | null>(null)
+  const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
+  const [popoverSize, setPopoverSize] = useState<PopoverSize>({ width: 270, height: 160 })
   const windowTokens = contextWindow(terminal)
   const rows = [
     ['Input', formatExactTokenCount(terminal.inputTokens)],
@@ -273,11 +281,53 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
     ['Updated', formatAge(terminal.updatedAt)],
   ]
 
-  return (
+  useEffect(() => {
+    const trigger = markerRef.current?.parentElement
+    if (!trigger) return
+    const show = () => {
+      const rect = trigger.getBoundingClientRect()
+      setAnchorRect({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width })
+    }
+    const hide = () => setAnchorRect(null)
+    trigger.addEventListener('mouseenter', show)
+    trigger.addEventListener('mouseleave', hide)
+    return () => {
+      trigger.removeEventListener('mouseenter', show)
+      trigger.removeEventListener('mouseleave', hide)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!anchorRect || !popoverRef.current) return
+    const rect = popoverRef.current.getBoundingClientRect()
+    if (rect.width !== popoverSize.width || rect.height !== popoverSize.height) {
+      setPopoverSize({ width: rect.width, height: rect.height })
+    }
+  }, [anchorRect, popoverSize.height, popoverSize.width])
+
+  useEffect(() => {
+    if (!anchorRect) return
+    const hide = () => setAnchorRect(null)
+    window.addEventListener('resize', hide)
+    window.addEventListener('scroll', hide, true)
+    return () => {
+      window.removeEventListener('resize', hide)
+      window.removeEventListener('scroll', hide, true)
+    }
+  }, [anchorRect])
+
+  const position = anchorRect
+    ? getContextPopoverPosition(anchorRect, popoverSize, { width: window.innerWidth, height: window.innerHeight })
+    : null
+
+  const popover = position && createPortal(
     <span
+      ref={popoverRef}
       role="tooltip"
-      className="pointer-events-none fixed bottom-10 left-1/2 z-50 hidden w-[270px] -translate-x-1/2 overflow-hidden rounded-[10px] border px-3.5 py-3 text-left font-mono text-[12px] shadow-[0_18px_42px_rgba(0,0,0,0.48)] group-hover:block"
+      className="pointer-events-none fixed z-50 w-[270px] overflow-hidden rounded-[10px] border px-3.5 py-3 text-left font-mono text-[12px] shadow-[0_18px_42px_rgba(0,0,0,0.48)]"
       style={{
+        top: position.top,
+        left: position.left,
         borderColor: 'rgba(255,255,255,0.12)',
         background: 'rgb(15, 15, 17)',
         color: '#e8e8e8',
@@ -312,7 +362,15 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
           <span className="min-w-0 truncate text-right text-[#f4f4f4]">{value}</span>
         </span>
       ))}
-    </span>
+    </span>,
+    document.body,
+  )
+
+  return (
+    <>
+      <span ref={markerRef} className="hidden" aria-hidden="true" />
+      {popover}
+    </>
   )
 }
 
@@ -795,6 +853,7 @@ export function TerminalArea() {
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerView, setDrawerView] = useState<DrawerView>('runtime')
   const [terminalMenuPaneId, setTerminalMenuPaneId] = useState<string | null>(null)
   const [previewTree, setPreviewTree] = useState<WorkspacePaneNode | null>(null)
   const [activeDragTerminalId, setActiveDragTerminalId] = useState<string | null>(null)
@@ -891,12 +950,24 @@ export function TerminalArea() {
         // ignore
       }
       removeTerminal(id)
+      applyTerminalNoteLifecycle('kill-removed', id)
       if (useWorkspaceStore.getState().terminals.length === 0) {
         setLoadState('no-terminal')
       }
     },
     [removeTerminal, setLoadState]
   )
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== 'n') return
+      event.preventDefault()
+      setDrawerView('note')
+      setDrawerOpen(true)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const handleTerminalDrop = useCallback(
     (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
@@ -1096,16 +1167,16 @@ export function TerminalArea() {
       </div>
 
       <div
-        className="flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
+        className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
         style={{
           background: drawerOpen ? 'rgba(11, 12, 13, 0.98)' : 'rgba(9, 10, 11, 0.96)',
           borderTop: '1px solid var(--border)',
-          height: drawerOpen ? '210px' : '28px',
+          height: getDrawerHeight(drawerOpen, drawerView),
         }}
       >
         <button
           type="button"
-          className="flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 px-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
+          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)] ${drawerOpen ? 'pr-32' : 'pr-3'}`}
           onClick={() => setDrawerOpen((value) => !value)}
           aria-expanded={drawerOpen}
           aria-label="切换 Runtime 状态面板"
@@ -1128,7 +1199,7 @@ export function TerminalArea() {
             </span>
             {activeWorkspace && (
               <span
-                className="inline-flex h-5 max-w-[160px] shrink-0 items-center gap-1 border px-1.5 font-mono"
+                className="inline-flex h-5 max-w-[160px] shrink-0 items-center gap-1 rounded border px-1.5 font-mono"
                 style={{
                   borderColor: 'rgba(255,120,48,0.28)',
                   background: 'rgba(255,120,48,0.1)',
@@ -1146,7 +1217,7 @@ export function TerminalArea() {
             {activeTerminal ? (
               <span className="flex min-w-0 items-center gap-1.5">
                 <span
-                  className="inline-flex h-5 max-w-[92px] shrink-0 items-center border px-2 font-mono"
+                  className="inline-flex h-5 max-w-[92px] shrink-0 items-center rounded border px-2 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
                     background: 'rgba(255,255,255,0.018)',
@@ -1156,7 +1227,7 @@ export function TerminalArea() {
                   {providerLabel(activeTerminal.preset)}
                 </span>
                 <span
-                  className="inline-flex h-5 min-w-0 max-w-[120px] items-center border px-2 font-mono"
+                  className="inline-flex h-5 min-w-0 max-w-[120px] items-center rounded border px-2 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
                     background: 'rgba(255,255,255,0.014)',
@@ -1166,7 +1237,7 @@ export function TerminalArea() {
                   <span className="truncate">{modelLabel(activeTerminal)}</span>
                 </span>
                 <span
-                  className="group relative hidden h-5 shrink-0 items-center border px-2 font-mono md:inline-flex"
+                  className="group relative hidden h-5 shrink-0 items-center rounded border px-2 font-mono md:inline-flex"
                   style={{
                     borderColor: `${contextRatioColor(contextRatio(activeTerminal))}33`,
                     background: `${contextRatioColor(contextRatio(activeTerminal))}12`,
@@ -1205,7 +1276,7 @@ export function TerminalArea() {
               {otherTerminals.slice(0, 3).map((terminal) => (
                 <span
                   key={terminal.id}
-                  className="inline-flex h-5 max-w-[126px] items-center gap-1.5 overflow-hidden border px-1.5 font-mono"
+                  className="inline-flex h-5 max-w-[126px] items-center gap-1.5 overflow-hidden rounded border px-1.5 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
                     background: 'rgba(255,255,255,0.018)',
@@ -1221,26 +1292,43 @@ export function TerminalArea() {
                 </span>
               ))}
               {otherTerminals.length > 3 && (
-                <span className="inline-flex h-5 items-center border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[#555]">
+                <span className="inline-flex h-5 items-center rounded border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[#555]">
                   +{otherTerminals.length - 3}
                 </span>
               )}
             </div>
           </div>
         </button>
-        {drawerOpen && (
+        <DrawerViewTabs
+          open={drawerOpen}
+          activeView={drawerView}
+          onSelect={setDrawerView}
+        />
+        {DRAWER_VIEWS.map((view) => (
           <div
+            key={view}
+            {...getDrawerPanelAttributes(view)}
+            hidden={!drawerOpen || drawerView !== view}
             className="overflow-hidden px-3 pb-3 pt-2 text-[11px] font-mono"
             style={{ height: 'calc(100% - 28px)' }}
           >
-            <section
-              className="min-h-0 overflow-hidden border"
-              style={{
-                borderColor: 'rgba(255,120,48,0.12)',
-                background: 'linear-gradient(180deg, rgba(255,120,48,0.035), rgba(255,255,255,0.01))',
-              }}
-              aria-label="Runtime telemetry"
-            >
+            {drawerOpen && drawerView === view && (
+              view === 'note' ? activeTerminalId ? (
+              <QuickNote
+                terminalId={activeTerminalId}
+                onPasteToTerminal={(data) => window.electron.send('terminal:input', { id: activeTerminalId, data })}
+              />
+            ) : (
+              <div className="grid h-full place-items-center text-[#666]">No active terminal</div>
+            ) : (
+              <section
+                className="min-h-0 overflow-hidden border"
+                style={{
+                  borderColor: 'rgba(255,120,48,0.12)',
+                  background: 'linear-gradient(180deg, rgba(255,120,48,0.035), rgba(255,255,255,0.01))',
+                }}
+                aria-label="Runtime telemetry"
+              >
               <div className="flex h-8 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,120,48,0.12)' }}>
                 <span className="text-[#ffb27d]">Terminal Runtime</span>
                 <span className="text-[#666]">{terminals.length} sessions</span>
@@ -1304,9 +1392,11 @@ export function TerminalArea() {
                   ))
                 )}
               </div>
-            </section>
+              </section>
+              )
+            )}
           </div>
-        )}
+        ))}
       </div>
 
     </div>

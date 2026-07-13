@@ -1,6 +1,32 @@
 export type IslandStage = 'collapsed' | 'peek' | 'expanded'
 export type IslandInteractionAction = 'replay-knowledge' | 'collapse' | 'expand' | 'none'
 
+const INTERACTIVE_DESCENDANT_SELECTOR = [
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'a[href]',
+  '[contenteditable]:not([contenteditable="false"])',
+  '[role="button"]',
+  '[role="checkbox"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[role="option"]',
+  '[role="radio"]',
+  '[role="slider"]',
+  '[role="spinbutton"]',
+  '[role="switch"]',
+  '[role="tab"]',
+  '[role="textbox"]',
+].join(',')
+
+export function isInteractiveIslandDescendant(target: EventTarget | null, island: Element): boolean {
+  if (!(target instanceof Element)) return false
+  const interactiveElement = target.closest(INTERACTIVE_DESCENDANT_SELECTOR)
+  return interactiveElement !== null && interactiveElement !== island && island.contains(interactiveElement)
+}
+
 export function getSingleActivationAction(stage: IslandStage): IslandInteractionAction {
   if (stage === 'collapsed') return 'replay-knowledge'
   if (stage === 'peek') return 'collapse'

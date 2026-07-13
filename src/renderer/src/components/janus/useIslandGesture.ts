@@ -1,6 +1,10 @@
 import { useRef, useCallback, useEffect } from 'react'
 import { useAppStore } from '@/stores/app'
-import { isDoubleTapWithinTolerance, type TapPoint } from './islandInteraction'
+import {
+  isDoubleTapWithinTolerance,
+  isInteractiveIslandDescendant,
+  type TapPoint,
+} from './islandInteraction'
 
 /* ════════════════════════════════════════════════════════════
    useIslandGesture �?灵动岛手势识�?Hook
@@ -162,6 +166,7 @@ export function useIslandGesture({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!e.isPrimary || e.button !== 0) return
+      if (isInteractiveIslandDescendant(e.target, e.currentTarget)) return
       e.preventDefault()
 
       const now = Date.now()

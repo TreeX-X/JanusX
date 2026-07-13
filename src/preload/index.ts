@@ -13,6 +13,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'terminal:kill',
   'runtime-telemetry:get',
   'dialog:openDirectory',
+  'dialog:saveFile',
   'filetree:load',
   'filetree:children',
   'filetree:create-file',
