@@ -436,6 +436,26 @@ export function Panel() {
     void openEditorFile(absolutePath, workspace.path)
   }, [getActiveWorkspace, openEditorFile, setActiveFilePath])
 
+  const openFileInDetachedEditor = useCallback(async (relativePath: string) => {
+    const workspace = getActiveWorkspace()
+    if (!workspace) return
+
+    const absolutePath = getAbsolutePath(workspace.path, relativePath)
+    setActiveFilePath(relativePath)
+
+    try {
+      const result = (await window.electron.invoke('editor-window:open', {
+        filePath: absolutePath,
+        workspacePath: workspace.path,
+      })) as { success?: boolean }
+      if (result?.success) return
+    } catch {
+      // Fall back to the in-app editor when the native window cannot be opened.
+    }
+
+    void openEditorFile(absolutePath, workspace.path)
+  }, [getActiveWorkspace, openEditorFile, setActiveFilePath])
+
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
     const x = Math.max(
       CONTEXT_MENU_MARGIN,
@@ -707,7 +727,7 @@ export function Panel() {
                     fileChangeMap={fileChangeMap}
                     onSelect={setActiveFilePath}
                     onToggleDirectory={handleToggleDirectory}
-                    onOpenFile={openFileInEditorPanel}
+                    onOpenFile={openFileInDetachedEditor}
                     onOpenContextMenu={openContextMenu}
                   />
                 ))
