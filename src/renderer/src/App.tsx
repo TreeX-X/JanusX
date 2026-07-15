@@ -3,11 +3,13 @@ import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCheckpointStore } from '@/stores/checkpoint'
 import { invalidateEditorFileCache } from '@/stores/editor'
+import { useOfficeStore } from '@/stores/office'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalArea } from '@/components/TerminalArea'
 import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel } from '@/components/Panel'
+import { OfficePreviewPanel } from '@/components/office/OfficePreviewPanel'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
@@ -22,6 +24,7 @@ type IdleWindow = Window & {
 
 const SIDE_PANEL_WIDTH = 'clamp(240px, 14vw, 280px)'
 const SIDE_PANEL_COLLAPSED_WIDTH = '48px'
+const OFFICE_PREVIEW_WIDTH = 'clamp(300px, 30vw, 480px)'
 
 function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): FileNode[] {
   const currentMap = new Map(currentNodes.map((node) => [node.path, node]))
@@ -52,6 +55,13 @@ function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): Fi
 export default function App() {
   const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
+  const officeVisible = visibleOfficeWorkspaceId !== null && visibleOfficeWorkspaceId === activeWorkspaceId
+
+  useEffect(() => {
+    if (officeVisible) useAppStore.getState().setPanelCollapsed(true)
+  }, [officeVisible])
 
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
   const flipperElRef = useRef<HTMLDivElement | null>(null)
@@ -142,9 +152,9 @@ export default function App() {
       <div
         className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden transition-[grid-template-columns] duration-200"
         style={{
-          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} 1fr ${
-            panelCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH
-          }`,
+          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(0, 1fr) ${
+            officeVisible ? `${OFFICE_PREVIEW_WIDTH} ` : ''
+          }${panelCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH}`,
         }}
       >
         <Sidebar />
@@ -202,8 +212,18 @@ export default function App() {
           </div>
         </main>
 
+        {officeVisible && (
+          <section className="min-w-0 overflow-hidden border-l border-white/[0.08]" aria-label="Office preview workspace">
+            <OfficePreviewPanel
+              workspaceId={visibleOfficeWorkspaceId}
+              onClose={() => useOfficeStore.getState().closeOfficeSpace()}
+            />
+          </section>
+        )}
         <Panel />
-        <StatusBar />
+        <div className="col-span-full min-w-0 [&>footer]:h-full">
+          <StatusBar />
+        </div>
       </div>
       <FileEditor />
       <AgentNotificationHost />

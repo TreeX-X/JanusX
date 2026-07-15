@@ -19,6 +19,7 @@ import {
 } from './janusIdentity'
 import type { SubAgentRun, SubAgentRunRole, SubAgentRunStatus } from '../../../../shared/subAgentRun'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
+import type { OfficeFileEntry } from '../../../../shared/office'
 import { formatKnowledgeMatch } from './islandKnowledgePeek'
 import { getDoubleActivationAction, getSingleActivationAction } from './islandInteraction'
 
@@ -114,6 +115,9 @@ interface JanusIslandProps {
   knowledgeTrace?: KnowledgeRecallTrace | null
   knowledgePeekActive?: boolean
   knowledgePeekEmpty?: boolean
+  officeNotice?: OfficeFileEntry | null
+  officeArtifacts?: OfficeFileEntry[]
+  onOpenOfficeArtifact?: (relPath: string) => void
 }
 
 type JanusExpandedView = 'monitor' | 'chat'
@@ -251,6 +255,9 @@ export function JanusIsland({
   knowledgeTrace = null,
   knowledgePeekActive = false,
   knowledgePeekEmpty = false,
+  officeNotice = null,
+  officeArtifacts = [],
+  onOpenOfficeArtifact,
 }: JanusIslandProps) {
   const { mode, isSwitching, activeWorkspace, eyeContainerRef } = useJanusState()
   const { janusRunning, toggleRunning } = useProjectRunning(activeWorkspace)
@@ -328,19 +335,22 @@ export function JanusIsland({
       : activeSession?.nodeSnapshot ?? null
   const activeVisual = activeNode ? STATUS_VISUALS[activeNode.status] ?? STATUS_VISUALS['not-started'] : null
 
-  const peekTitle = useMemo(() => knowledgePeekEmpty ? 'Knowledge' : knowledgePeekActive && knowledgeTrace ? 'Knowledge recalled' : '', [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace])
+  const peekTitle = useMemo(() => officeNotice ? 'Office file ready' : knowledgePeekEmpty ? 'Knowledge' : knowledgePeekActive && knowledgeTrace ? 'Knowledge recalled' : '', [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, officeNotice])
 
   const peekSubtitle = useMemo(() => {
+    if (officeNotice) return `${officeNotice.relPath} | ${officeNotice.ext.slice(1)}`
     if (knowledgePeekEmpty) return 'No knowledge match'
     if (knowledgePeekActive && knowledgeTrace?.topHit) {
       const count = String(knowledgeTrace.recalledCount) + ' item' + (knowledgeTrace.recalledCount === 1 ? '' : 's')
       return count + ' | ' + formatKnowledgeMatch(knowledgeTrace.topHit.score) + ' | ' + knowledgeTrace.topHit.kind + ': ' + knowledgeTrace.topHit.title
     }
     return ''
-  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace])
+  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, officeNotice])
 
   const modeLabel = activeNode ? 'BLUEPRINT' : mode === 'analytics' ? 'ANALYTICS' : mode === 'running' ? 'RUNNING' : 'ORDER'
-  const statusText = knowledgePeekEmpty
+  const statusText = officeNotice
+    ? 'OFFICE // OPEN PREVIEW'
+    : knowledgePeekEmpty
     ? 'KNOWLEDGE // NO MATCH'
     : knowledgePeekActive && knowledgeTrace
     ? 'KNOWLEDGE // ' + (knowledgeTrace.truncated ? 'TRUNCATED' : 'READY')
@@ -506,7 +516,7 @@ export function JanusIsland({
       data-stage={stage}
       data-view={view}
       data-mode={mode}
-      data-peek-kind="knowledge"
+      data-peek-kind={officeNotice ? 'office' : 'knowledge'}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
@@ -520,7 +530,7 @@ export function JanusIsland({
         className={`janus-island${isSwitching ? ' switching' : ''}`}
         role={stage !== 'expanded' ? 'button' : undefined}
         tabIndex={stage !== 'expanded' ? 0 : undefined}
-        aria-label={stage === 'peek' ? 'Close knowledge peek' : stage === 'collapsed' ? 'Open Janus Island' : undefined}
+        aria-label={stage === 'peek' ? officeNotice ? `Open Office preview for ${officeNotice.relPath}` : 'Close knowledge peek' : stage === 'collapsed' ? 'Open Janus Island' : undefined}
         onKeyDown={stage !== 'expanded' ? handleIslandKeyDown : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -653,6 +663,22 @@ export function JanusIsland({
                   </div>
                 </div>
                 <div className="janus-monitor-right">
+                  {officeArtifacts.length > 0 && (
+                    <div className="janus-monitor-panel janus-office-artifacts">
+                      <div className="janus-monitor-section-title">
+                        <span>Office artifacts</span>
+                        <em>{officeArtifacts.length} available</em>
+                      </div>
+                      <div className="janus-office-artifact-list">
+                        {officeArtifacts.map((entry) => (
+                          <button key={entry.relPath} type="button" onClick={() => onOpenOfficeArtifact?.(entry.relPath)}>
+                            <span>{entry.relPath}</span>
+                            <em>{entry.ext.slice(1)}</em>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="janus-monitor-panel janus-runtime-panel">
                     <div className="janus-monitor-section-title">
                       <span>Subagent runtimes</span>

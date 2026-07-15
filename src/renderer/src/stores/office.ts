@@ -1,5 +1,5 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
-import type { OfficeErrorCode } from '../../../shared/office'
+import type { OfficeErrorCode, OfficeFileEntry } from '../../../shared/office'
 import { officeService, type OfficeService } from '../services/office'
 
 export type OfficeTabStatus = 'starting' | 'ready' | 'reloading' | 'error'
@@ -15,10 +15,24 @@ export interface OfficePreviewTab {
   reloadRequestId?: number
 }
 
+export interface OfficeArtifactNotice {
+  workspaceId: string
+  entry: OfficeFileEntry
+}
+
 interface OfficeStoreState {
   tabs: OfficePreviewTab[]
   activeTabIds: Record<string, string | undefined>
   requestEpochs: Record<string, number>
+  artifactsByWorkspace: Record<string, OfficeFileEntry[]>
+  artifactNotice: OfficeArtifactNotice | null
+  visibleWorkspaceId: string | null
+  initializeArtifacts: (workspaceId: string, entries: OfficeFileEntry[]) => void
+  reconcileArtifacts: (workspaceId: string, entries: OfficeFileEntry[]) => void
+  consumeArtifactNotice: () => void
+  showOfficeSpace: (workspaceId: string) => void
+  closeOfficeSpace: () => void
+  clearWorkspaceUi: (workspaceId: string) => void
   openPreview: (workspaceId: string, relPath: string) => Promise<void>
   activateTab: (workspaceId: string, tabId: string) => void
   closeTab: (tabId: string) => Promise<void>
@@ -49,6 +63,45 @@ export function createOfficeStore(
     tabs: [],
     activeTabIds: {},
     requestEpochs: {},
+    artifactsByWorkspace: {},
+    artifactNotice: null,
+    visibleWorkspaceId: null,
+
+    initializeArtifacts: (workspaceId, entries) => {
+      set((state) => ({
+        artifactsByWorkspace: { ...state.artifactsByWorkspace, [workspaceId]: entries },
+        artifactNotice: state.artifactNotice?.workspaceId === workspaceId ? null : state.artifactNotice,
+      }))
+    },
+
+    reconcileArtifacts: (workspaceId, entries) => {
+      set((state) => {
+        const previousPaths = new Set((state.artifactsByWorkspace[workspaceId] ?? []).map((entry) => entry.relPath))
+        const added = entries.find((entry) => !previousPaths.has(entry.relPath))
+        const currentNotice = state.artifactNotice?.workspaceId === workspaceId
+          && !entries.some((entry) => entry.relPath === state.artifactNotice?.entry.relPath)
+          ? null
+          : state.artifactNotice
+        return {
+          artifactsByWorkspace: { ...state.artifactsByWorkspace, [workspaceId]: entries },
+          artifactNotice: added ? { workspaceId, entry: added } : currentNotice,
+        }
+      })
+    },
+
+    consumeArtifactNotice: () => set({ artifactNotice: null }),
+    showOfficeSpace: (workspaceId) => set({ visibleWorkspaceId: workspaceId }),
+    closeOfficeSpace: () => set({ visibleWorkspaceId: null }),
+    clearWorkspaceUi: (workspaceId) => {
+      set((state) => {
+        const { [workspaceId]: _, ...artifactsByWorkspace } = state.artifactsByWorkspace
+        return {
+          artifactsByWorkspace,
+          artifactNotice: state.artifactNotice?.workspaceId === workspaceId ? null : state.artifactNotice,
+          visibleWorkspaceId: state.visibleWorkspaceId === workspaceId ? null : state.visibleWorkspaceId,
+        }
+      })
+    },
 
     openPreview: async (workspaceId, relPath) => {
       const existing = get().tabs.find((tab) => tab.workspaceId === workspaceId && tab.relPath === relPath)

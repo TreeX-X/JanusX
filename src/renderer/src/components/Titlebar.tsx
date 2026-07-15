@@ -9,7 +9,10 @@ import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
 import { useJanusChat } from '@/components/janus/useJanusChat'
 import type { JanusMode } from '@/components/janus'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
-import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController } from '@/components/janus/islandController'
+import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentOfficeNotice } from '@/components/janus/islandController'
+import { officeService } from '@/services/office'
+import { startOfficeDiscovery } from '@/components/office/officeDiscovery'
+import { useOfficeStore } from '@/stores/office'
 
 /* ════════════════════════════════════════════════════════════
    Titlebar �?标题栏（简化版�?
@@ -49,6 +52,10 @@ export function Titlebar() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
   const previousActiveWorkspaceId = useRef(activeWorkspaceId)
+  const officeDiscoveryGeneration = useRef(0)
+  const artifactNotice = useOfficeStore((state) => state.artifactNotice)
+  const artifactsByWorkspace = useOfficeStore((state) => state.artifactsByWorkspace)
+  const officeArtifacts = activeWorkspaceId ? artifactsByWorkspace[activeWorkspaceId] ?? [] : []
 
   useEffect(() => {
     dispatchIsland({ type: 'trace', trace: latestRecallTrace })
@@ -56,9 +63,29 @@ export function Titlebar() {
 
   useEffect(() => {
     if (previousActiveWorkspaceId.current === activeWorkspaceId) return
+    const previousWorkspaceId = previousActiveWorkspaceId.current
     previousActiveWorkspaceId.current = activeWorkspaceId
     dispatchIsland({ type: 'invalidate' })
+    if (previousWorkspaceId) {
+      useOfficeStore.getState().clearWorkspaceUi(previousWorkspaceId)
+      void useOfficeStore.getState().releaseWorkspace(previousWorkspaceId)
+    }
   }, [activeWorkspaceId])
+
+  useEffect(() => {
+    const generation = ++officeDiscoveryGeneration.current
+    if (!activeWorkspaceId) return
+    return startOfficeDiscovery(activeWorkspaceId, officeService, {
+      initialize: (entries) => useOfficeStore.getState().initializeArtifacts(activeWorkspaceId, entries),
+      reconcile: (entries) => useOfficeStore.getState().reconcileArtifacts(activeWorkspaceId, entries),
+      isCurrent: () => generation === officeDiscoveryGeneration.current
+        && useWorkspaceStore.getState().activeWorkspaceId === activeWorkspaceId,
+    })
+  }, [activeWorkspaceId])
+
+  useEffect(() => {
+    if (shouldPresentOfficeNotice(islandStage, artifactNotice?.workspaceId ?? null, activeWorkspaceId)) dispatchIsland({ type: 'office-notice' })
+  }, [activeWorkspaceId, artifactNotice, islandStage])
 
   useEffect(() => {
     if (islandStage !== 'peek' || knowledgePeek.presentation === 'hidden') return
@@ -69,6 +96,15 @@ export function Titlebar() {
     return () => window.clearTimeout(timer)
   }, [islandStage, knowledgePeek.presentation, knowledgePeek.version])
 
+  useEffect(() => {
+    if (islandStage !== 'peek' || artifactNotice?.workspaceId !== activeWorkspaceId) return
+    const timer = window.setTimeout(() => {
+      useOfficeStore.getState().consumeArtifactNotice()
+      dispatchIsland({ type: 'office-consume' })
+    }, KNOWLEDGE_PEEK_TIMEOUT_MS)
+    return () => window.clearTimeout(timer)
+  }, [activeWorkspaceId, artifactNotice, islandStage])
+
   /*-- Janus 模式 --*/
   const janusMode: JanusMode = !activeWorkspace
     ? 'sleep'
@@ -78,9 +114,30 @@ export function Titlebar() {
         ? 'analytics'
         : 'order'
 
-  const handleIslandSingleActivate = useCallback(() => dispatchIsland({ type: 'single-activate' }), [])
-  const handleIslandDoubleActivate = useCallback(() => dispatchIsland({ type: 'double-activate' }), [])
-  const handleIslandDismiss = useCallback(() => dispatchIsland({ type: 'dismiss' }), [])
+  const openOfficeArtifact = useCallback((relPath: string) => {
+    if (!activeWorkspaceId) return
+    const office = useOfficeStore.getState()
+    office.consumeArtifactNotice()
+    office.showOfficeSpace(activeWorkspaceId)
+    void office.openPreview(activeWorkspaceId, relPath)
+    dispatchIsland({ type: 'dismiss' })
+  }, [activeWorkspaceId])
+
+  const handleIslandSingleActivate = useCallback(() => {
+    if (islandStage === 'peek' && artifactNotice?.workspaceId === activeWorkspaceId) {
+      openOfficeArtifact(artifactNotice.entry.relPath)
+      return
+    }
+    dispatchIsland({ type: 'single-activate' })
+  }, [activeWorkspaceId, artifactNotice, islandStage, openOfficeArtifact])
+  const handleIslandDoubleActivate = useCallback(() => {
+    useOfficeStore.getState().consumeArtifactNotice()
+    dispatchIsland({ type: 'double-activate' })
+  }, [])
+  const handleIslandDismiss = useCallback(() => {
+    useOfficeStore.getState().consumeArtifactNotice()
+    dispatchIsland({ type: 'dismiss' })
+  }, [])
 
   const handleChatClearAndInvalidatePeek = useCallback(() => {
     handleChatClear()
@@ -223,6 +280,9 @@ export function Titlebar() {
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
           knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}
+          officeNotice={artifactNotice?.workspaceId === activeWorkspaceId ? artifactNotice.entry : null}
+          officeArtifacts={officeArtifacts}
+          onOpenOfficeArtifact={openOfficeArtifact}
         />
       </div>
 

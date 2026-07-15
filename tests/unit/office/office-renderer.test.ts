@@ -7,6 +7,7 @@ import { createOfficeStore } from '../../../src/renderer/src/stores/office'
 import { buildOfficePreviewUrl, getOfficeErrorCopy, OfficePreviewFrame } from '../../../src/renderer/src/components/office/OfficePreviewFrame'
 import { visibleOfficeFileState } from '../../../src/renderer/src/components/office/OfficeFileList'
 import { canPasteOfficePrompt, isOfficePromptContextCurrent, type OfficePromptContext } from '../../../src/renderer/src/components/office/OfficePromptPreview'
+import { startOfficeDiscovery } from '../../../src/renderer/src/components/office/officeDiscovery'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -18,6 +19,85 @@ function mockService(overrides: Partial<OfficeService> = {}): OfficeService {
 }
 
 describe('Office renderer lifecycle', () => {
+  it('notifies an initialization-time addition exactly once across catch-up and queued snapshots', async () => {
+    const baseline = deferred<any>()
+    const catchup = deferred<any>()
+    let listener: ((event: any) => void) | undefined
+    const existing = { relPath: 'existing.docx', ext: '.docx' as const, size: 1, mtimeMs: 1 }
+    const added = { relPath: 'deck.pptx', ext: '.pptx' as const, size: 2, mtimeMs: 2 }
+    const service = mockService({
+      listFiles: vi.fn().mockReturnValueOnce(baseline.promise).mockReturnValueOnce(catchup.promise),
+      onFilesChanged: vi.fn((callback) => { listener = callback; return vi.fn() }),
+    })
+    const store = createOfficeStore(service)
+    let noticeCount = 0
+    let previousNotice = store.getState().artifactNotice
+    const unsubscribeStore = store.subscribe((state) => {
+      if (state.artifactNotice && state.artifactNotice !== previousNotice) noticeCount += 1
+      previousNotice = state.artifactNotice
+    })
+    const stop = startOfficeDiscovery('workspace', service, {
+      initialize: (entries) => store.getState().initializeArtifacts('workspace', entries),
+      reconcile: (entries) => store.getState().reconcileArtifacts('workspace', entries),
+      isCurrent: () => true,
+    })
+
+    baseline.resolve({ ok: true, value: [existing] })
+    await vi.waitFor(() => expect(service.listFiles).toHaveBeenCalledTimes(2))
+    expect(store.getState().artifactNotice).toBeNull()
+    expect(listener).toBeTypeOf('function')
+    listener?.({ workspaceId: 'workspace', entries: [added, existing], reason: 'watch' })
+    catchup.resolve({ ok: true, value: [added, existing] })
+    await vi.waitFor(() => {
+      expect(store.getState().artifactNotice).toEqual({ workspaceId: 'workspace', entry: added })
+    })
+    expect(noticeCount).toBe(1)
+    unsubscribeStore()
+    stop()
+  })
+
+  it('drops late baseline, catch-up, and event publications after a workspace switch', async () => {
+    const lateBaseline = deferred<any>()
+    const baselineService = mockService({ listFiles: vi.fn(() => lateBaseline.promise) })
+    const baselineStore = createOfficeStore(baselineService)
+    const stopBaseline = startOfficeDiscovery('old', baselineService, {
+      initialize: (entries) => baselineStore.getState().initializeArtifacts('old', entries),
+      reconcile: (entries) => baselineStore.getState().reconcileArtifacts('old', entries),
+      isCurrent: () => false,
+    })
+    stopBaseline()
+    lateBaseline.resolve({ ok: true, value: [{ relPath: 'late.docx', ext: '.docx', size: 1, mtimeMs: 1 }] })
+    await Promise.resolve()
+    expect(baselineStore.getState().artifactsByWorkspace.old).toBeUndefined()
+
+    const catchup = deferred<any>()
+    let listener: ((event: any) => void) | undefined
+    let current = true
+    const service = mockService({
+      listFiles: vi.fn()
+        .mockResolvedValueOnce({ ok: true, value: [] })
+        .mockReturnValueOnce(catchup.promise),
+      onFilesChanged: vi.fn((callback) => { listener = callback; return vi.fn() }),
+    })
+    const store = createOfficeStore(service)
+    const stop = startOfficeDiscovery('old', service, {
+      initialize: (entries) => store.getState().initializeArtifacts('old', entries),
+      reconcile: (entries) => store.getState().reconcileArtifacts('old', entries),
+      isCurrent: () => current,
+    })
+    await vi.waitFor(() => expect(service.listFiles).toHaveBeenCalledTimes(2))
+    expect(listener).toBeTypeOf('function')
+    current = false
+    stop()
+    store.getState().clearWorkspaceUi('old')
+    listener?.({ workspaceId: 'old', entries: [{ relPath: 'event.docx', ext: '.docx', size: 1, mtimeMs: 2 }], reason: 'watch' })
+    catchup.resolve({ ok: true, value: [{ relPath: 'catchup.docx', ext: '.docx', size: 1, mtimeMs: 3 }] })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store.getState().artifactsByWorkspace.old).toBeUndefined()
+    expect(store.getState().artifactNotice).toBeNull()
+  })
+
   it('deduplicates a pending workspace and path open', async () => {
     const start = deferred<any>()
     const service = mockService({ startPreview: vi.fn(() => start.promise) })
@@ -111,6 +191,32 @@ describe('Office renderer lifecycle', () => {
     const previous = { workspaceId: 'old', entries: [{ relPath: 'old.docx', ext: '.docx' as const, size: 1, mtimeMs: 1 }], errorCode: 'IO' as const }
     expect(visibleOfficeFileState(previous, 'new')).toEqual({ workspaceId: 'new', entries: [] })
   })
+  it('baselines existing artifacts and notifies only newly added paths', () => {
+    const store = createOfficeStore(mockService())
+    const existing = { relPath: 'existing.docx', ext: '.docx' as const, size: 1, mtimeMs: 1 }
+    store.getState().initializeArtifacts('workspace', [existing])
+    expect(store.getState().artifactNotice).toBeNull()
+
+    store.getState().reconcileArtifacts('workspace', [{ ...existing, mtimeMs: 2 }])
+    expect(store.getState().artifactNotice).toBeNull()
+
+    const added = { relPath: 'deck.pptx', ext: '.pptx' as const, size: 2, mtimeMs: 3 }
+    store.getState().reconcileArtifacts('workspace', [added, { ...existing, mtimeMs: 2 }])
+    expect(store.getState().artifactNotice).toEqual({ workspaceId: 'workspace', entry: added })
+
+    store.getState().reconcileArtifacts('workspace', [{ ...existing, mtimeMs: 2 }])
+    expect(store.getState().artifactNotice).toBeNull()
+  })
+  it('clears notice, artifacts, and the visible Office space for a switched workspace', () => {
+    const store = createOfficeStore(mockService())
+    const entry = { relPath: 'deck.pptx', ext: '.pptx' as const, size: 2, mtimeMs: 3 }
+    store.getState().initializeArtifacts('workspace', [])
+    store.getState().reconcileArtifacts('workspace', [entry])
+    store.getState().showOfficeSpace('workspace')
+    store.getState().clearWorkspaceUi('workspace')
+    expect(store.getState()).toMatchObject({ artifactNotice: null, visibleWorkspaceId: null })
+    expect(store.getState().artifactsByWorkspace.workspace).toBeUndefined()
+  })
   it('binds prompt paste to the captured workspace, file, terminal, and preset', () => {
     const context: OfficePromptContext = { requestId: 1, workspaceId: 'workspace', relPath: 'doc.docx', terminalId: 'terminal', terminalPreset: 'codex' }
     const terminal = { id: 'terminal', workspaceId: 'workspace', preset: 'codex', status: 'running', name: '', cwd: '', shell: '', pid: 1 } as const
@@ -151,8 +257,12 @@ describe('Office renderer lifecycle', () => {
     expect(copy).toContain('手动安装')
     expect(copy).toContain('download；verify')
   })
-  it('shows Office in the collapsed Panel label', () => {
-    const source = readFileSync(new URL('../../../src/renderer/src/components/Panel.tsx', import.meta.url), 'utf8')
-    expect(source).toContain("activeView === 'office' ? 'Office'")
+  it('keeps Office out of the fixed Panel and inserts its conditional workspace before it', () => {
+    const panel = readFileSync(new URL('../../../src/renderer/src/components/Panel.tsx', import.meta.url), 'utf8')
+    const app = readFileSync(new URL('../../../src/renderer/src/App.tsx', import.meta.url), 'utf8')
+    expect(panel).not.toContain("setActiveView('office')")
+    expect(panel).not.toContain('OfficePreviewPanel')
+    expect(app.indexOf('<OfficePreviewPanel')).toBeLessThan(app.indexOf('<Panel />'))
+    expect(app).toContain('setPanelCollapsed(true)')
   })
 })

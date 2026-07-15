@@ -5185,6 +5185,50 @@ body.is-running {
   overflow: hidden;
 }
 
+.janus-office-artifacts {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.janus-office-artifact-list {
+  display: flex;
+  max-height: 112px;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.janus-office-artifact-list button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font: 10px/1.35 var(--font-mono, monospace);
+  text-align: left;
+}
+
+.janus-office-artifact-list button:hover {
+  background: rgba(255, 120, 48, 0.08);
+  color: #fff;
+}
+
+.janus-office-artifact-list button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-office-artifact-list button em {
+  flex: 0 0 auto;
+  color: #ff7830;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
 .janus-runtime-placeholder {
   position: relative;
   display: flex;

@@ -17,6 +17,7 @@ import {
 import {
   INITIAL_ISLAND_CONTROLLER_STATE,
   reduceIslandController,
+  shouldPresentOfficeNotice,
 } from '../../../src/renderer/src/components/janus/islandController'
 
 function recalledTrace(requestId: string, score = 0.8): KnowledgeRecallTrace {
@@ -181,5 +182,31 @@ describe('Island knowledge peek state', () => {
     expect(invalidated.stage).toBe('expanded')
     expect(invalidated.knowledge.trace).toBeNull()
     expect(reduceIslandController(invalidated, { type: 'terminal-changed' }).stage).toBe('collapsed')
+  })
+
+  it('presents and consumes Office notices without stealing an expanded Island', () => {
+    const peek = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'office-notice' })
+    expect(peek.stage).toBe('peek')
+    expect(reduceIslandController(peek, { type: 'office-consume' }).stage).toBe('collapsed')
+
+    const expanded = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'double-activate' })
+    expect(reduceIslandController(expanded, { type: 'office-notice' })).toBe(expanded)
+  })
+
+  it('re-presents a pending Office notice after expanded state collapses', () => {
+    const expanded = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'double-activate' })
+    const pending = reduceIslandController(expanded, { type: 'office-notice' })
+    const collapsed = reduceIslandController(pending, { type: 'terminal-changed' })
+    expect(collapsed.stage).toBe('collapsed')
+    expect(reduceIslandController(collapsed, { type: 'office-notice' }).stage).toBe('peek')
+
+    const consumed = reduceIslandController(
+      reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'office-notice' }),
+      { type: 'office-consume' },
+    )
+    expect(consumed.stage).toBe('collapsed')
+    expect(shouldPresentOfficeNotice('collapsed', 'workspace', 'workspace')).toBe(true)
+    expect(shouldPresentOfficeNotice('expanded', 'workspace', 'workspace')).toBe(false)
+    expect(shouldPresentOfficeNotice('collapsed', null, 'workspace')).toBe(false)
   })
 })

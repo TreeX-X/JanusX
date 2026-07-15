@@ -10,9 +10,8 @@ import type { FileNode, GitFileChange } from '@/types'
 import { setWorkspaceFileDragData } from '@/lib/terminal-file-reference'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { KnowledgeAssist } from '@/components/knowledge'
-import { OfficePreviewPanel } from '@/components/office/OfficePreviewPanel'
 
-type PanelView = 'files' | 'git' | 'checkpoints' | 'assist' | 'office'
+type PanelView = 'files' | 'git' | 'checkpoints' | 'assist'
 
 interface FileTreeOperationResult {
   success?: boolean
@@ -667,16 +666,6 @@ export function Panel() {
                   )}
                 </button>
               ))}
-              <button
-                onClick={() => setActiveView('office')}
-                className="px-3 py-2 text-[11px] transition-colors relative"
-                style={{ color: activeView === 'office' ? '#fff' : '#555' }}
-              >
-                Office
-                {activeView === 'office' && (
-                  <div className="absolute bottom-0 left-2 right-2 h-px" style={{ background: '#ff7830' }} />
-                )}
-              </button>
             </div>
             <div className="flex gap-1 items-center pr-2">
               <button
@@ -748,10 +737,8 @@ export function Panel() {
             <GitPanel />
           ) : activeView === 'checkpoints' ? (
             <CheckpointPanel />
-          ) : activeView === 'assist' ? (
-            <KnowledgeAssist workspaceId={activeWorkspaceId} workspacePath={activeWorkspacePath} />
           ) : (
-            <OfficePreviewPanel workspaceId={activeWorkspaceId} />
+            <KnowledgeAssist workspaceId={activeWorkspaceId} workspacePath={activeWorkspacePath} />
           )}
         </>
       )}
@@ -788,7 +775,7 @@ export function Panel() {
               color: 'rgba(255, 255, 255, 0.2)',
             }}
           >
-            {activeView === 'assist' ? 'Assist' : activeView === 'office' ? 'Office' : activeView === 'files' ? '文件' : activeView === 'git' ? 'Git' : '还原点'}
+            {activeView === 'assist' ? 'Assist' : activeView === 'files' ? '文件' : activeView === 'git' ? 'Git' : '还原点'}
           </span>
         </div>
       )}
