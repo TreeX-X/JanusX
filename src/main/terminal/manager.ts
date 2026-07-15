@@ -1,13 +1,22 @@
 import { spawn, type IPty } from 'node-pty'
 import { existsSync, readdirSync } from 'fs'
 import { createRequire } from 'module'
-import { dirname, join } from 'path'
+import { delimiter, dirname, join } from 'path'
 import type { TerminalConfig, TerminalInstance } from './types'
 import { logTerminalDiagnostic } from './diagnostics'
 
 const require = createRequire(import.meta.url)
 const CONPTY_FILES = ['conpty.dll', 'OpenConsole.exe'] as const
 const TERMINAL_OUTPUT_BUFFER_LIMIT = 1_000_000
+
+function withPathPrepend(env: Record<string, string>, directory?: string): Record<string, string> {
+  if (!directory) return env
+  const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'PATH'
+  return {
+    ...env,
+    [pathKey]: env[pathKey] ? `${directory}${delimiter}${env[pathKey]}` : directory,
+  }
+}
 
 function findConptySourceDir(packageRoot: string): string | null {
   const prebuildDir = join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'conpty')
@@ -50,10 +59,10 @@ function hasBundledConptyFiles(): boolean {
   return false
 }
 
-class TerminalManager {
+export class TerminalManager {
   private instances = new Map<string, TerminalInstance>()
 
-  private spawnPty(shell: string, config: TerminalConfig): IPty {
+  private spawnPty(shell: string, config: TerminalConfig, officecliPathDir?: string): IPty {
     const useBundledConptyDll = hasBundledConptyFiles()
 
     const baseOptions = {
@@ -61,10 +70,10 @@ class TerminalManager {
       cols: 80,
       rows: 30,
       cwd: config.cwd,
-      env: {
+      env: withPathPrepend({
         ...(process.env as Record<string, string>),
         ...(config.env ?? {}),
-      },
+      }, officecliPathDir),
       /*-- 显式启用 ConPTY（build≥18309 默认开，显式更稳妥），Windows 有效，非 Windows 忽略 --*/
       useConpty: true,
     }
@@ -118,10 +127,10 @@ class TerminalManager {
     }
   }
 
-  create(config: TerminalConfig): TerminalInstance {
+  create(config: TerminalConfig, officecliPathDir?: string): TerminalInstance {
     const shell = config.shell || (process.platform === 'win32' ? 'powershell.exe' : 'bash')
 
-    const pty = this.spawnPty(shell, config)
+    const pty = this.spawnPty(shell, config, officecliPathDir)
 
     const instance: TerminalInstance = {
       id: config.id,

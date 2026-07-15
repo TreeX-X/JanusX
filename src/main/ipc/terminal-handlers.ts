@@ -17,6 +17,7 @@ import {
 import { logTerminalDiagnostic } from '../terminal/diagnostics'
 import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
 import { appShutdown } from '../shutdown/AppShutdown'
+import { officecliManager } from '../office/officecli-manager'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -249,6 +250,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
 
     let instance
     try {
+      const officecliPathDir = await officecliManager.refreshAgentPathDir()
       instance = terminalManager.create({
         id,
         workspaceId,
@@ -256,7 +258,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         shell,
         autoCommand: resolvedAutoCommand,
         env: hookEnv,
-      })
+      }, officecliPathDir)
     } catch (err) {
       logTerminalDiagnostic('terminal create failed', {
         id,

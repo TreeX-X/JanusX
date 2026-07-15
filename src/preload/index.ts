@@ -1,8 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import os from 'os'
 import { JANUS_PERSONA } from '../shared/janus/persona'
+import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS } from '../shared/office'
 
 const ALLOWED_INVOKE_CHANNELS = [
+  ...Object.values(OFFICE_INVOKE_CHANNELS),
   'workspace:list',
   'workspace:load',
   'workspace:create',
@@ -143,6 +145,7 @@ const ALLOWED_SEND_CHANNELS = [
 ]
 
 const ALLOWED_ON_CHANNELS = [
+  ...Object.values(OFFICE_EVENT_CHANNELS),
   'terminal:data',
   'terminal:exit',
   'terminal:focus',

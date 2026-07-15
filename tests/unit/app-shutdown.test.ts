@@ -49,6 +49,8 @@ describe('AppShutdown', () => {
     const killTerminals = vi.fn()
     const killAgents = vi.fn()
     const stopProjects = vi.fn()
+    const stopOfficeWatches = vi.fn()
+    const disposeOfficeArtifactIndexes = vi.fn()
     const disposeWatchers = vi.fn()
     const destroyToast = vi.fn()
     const closeEditors = vi.fn()
@@ -64,6 +66,8 @@ describe('AppShutdown', () => {
       killTerminals,
       killAgents,
       stopProjects,
+      stopOfficeWatches,
+      disposeOfficeArtifactIndexes,
       disposeWatchers,
       destroyToast,
       closeEditors,
@@ -80,6 +84,8 @@ describe('AppShutdown', () => {
     expect(killTerminals).toHaveBeenCalledTimes(1)
     expect(killAgents).toHaveBeenCalledTimes(1)
     expect(stopProjects).toHaveBeenCalledTimes(1)
+    expect(stopOfficeWatches).toHaveBeenCalledTimes(1)
+    expect(disposeOfficeArtifactIndexes).toHaveBeenCalledTimes(1)
     expect(disposeWatchers).toHaveBeenCalledTimes(1)
     expect(destroyToast).toHaveBeenCalledTimes(1)
     expect(closeEditors).toHaveBeenCalledTimes(1)
@@ -116,7 +122,9 @@ describe('AppShutdown', () => {
     const destroyToast = track('destroyToast')
     const closeEditors = track('closeEditors')
     const finalizePendingCheckpoints = track('finalizePendingCheckpoints')
+    const stopOfficeWatches = track('stopOfficeWatches')
     const killTerminals = track('killTerminals')
+    const disposeOfficeArtifactIndexes = track('disposeOfficeArtifactIndexes')
     const disposeTerminalSession = track('disposeTerminalSession')
     const abortChatStreams = track('abortChatStreams')
 
@@ -126,7 +134,9 @@ describe('AppShutdown', () => {
       closeEditors,
       abortChatStreams,
       finalizePendingCheckpoints,
+      stopOfficeWatches,
       killTerminals,
+      disposeOfficeArtifactIndexes,
       disposeTerminalSession,
     })
 
@@ -135,6 +145,8 @@ describe('AppShutdown', () => {
     expect(order.indexOf('destroyToast')).toBeLessThan(order.indexOf('abortChatStreams'))
     expect(order.indexOf('closeEditors')).toBeLessThan(order.indexOf('abortChatStreams'))
     expect(order.indexOf('finalizePendingCheckpoints')).toBeLessThan(order.indexOf('killTerminals'))
+    expect(order.indexOf('stopOfficeWatches')).toBeLessThan(order.indexOf('killTerminals'))
+    expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('disposeOfficeArtifactIndexes'))
     expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('disposeTerminalSession'))
   })
 })

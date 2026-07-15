@@ -1,8 +1,30 @@
-import { app, BrowserWindow, ipcMain, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, shell, type Session } from 'electron'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdirSync, unlinkSync, writeFileSync } from 'fs'
 import { isAgentHookClientInvocation, runAgentHookClient } from './notifications/agent-hook-client'
+import { OFFICE_EVENT_CHANNELS } from '../shared/office'
+
+const OFFICE_FRAME_CSP = "frame-src 'self' http://127.0.0.1:*; object-src 'none'; base-uri 'self'"
+const cspSessions = new WeakSet<Session>()
+
+function installProductionCsp(session: Session): void {
+  if (!app.isPackaged || cspSessions.has(session)) return
+  cspSessions.add(session)
+
+  session.webRequest.onHeadersReceived((details, callback) => {
+    if (details.resourceType !== 'mainFrame' || !details.url.startsWith('file:')) {
+      callback({ responseHeaders: details.responseHeaders })
+      return
+    }
+
+    const responseHeaders = { ...details.responseHeaders }
+    for (const header of Object.keys(responseHeaders)) {
+      if (header.toLowerCase() === 'content-security-policy') delete responseHeaders[header]
+    }
+    callback({ responseHeaders: { ...responseHeaders, 'Content-Security-Policy': [OFFICE_FRAME_CSP] } })
+  })
+}
 
 const isHookClient = isAgentHookClientInvocation()
 
@@ -65,7 +87,7 @@ if (isHookClient) {
 async function bootstrapApp(): Promise<void> {
   const [
     { is },
-    { registerWorkspaceHandlers, disposeWorkspaceWatchers },
+    { registerWorkspaceHandlers, disposeWorkspaceWatchers, subscribeWorkspaceWatcher },
     { registerTerminalHandlers },
     { registerGitHandlers },
     { registerAgentHandlers },
@@ -78,6 +100,12 @@ async function bootstrapApp(): Promise<void> {
     { registerSettingsHandlers },
     { registerSubAgentRunHandlers },
     { registerKnowledgeHandlers },
+    { registerOfficeHandlers },
+    { createRegisteredWorkspaceRootResolver },
+    { initializeOfficecliProvider },
+    { OfficeWatchPool },
+    { OfficeArtifactIndex },
+    { createProductionOfficeOperations },
     { terminalManager },
     { agentStreamManager },
     { analyzer },
@@ -98,6 +126,12 @@ async function bootstrapApp(): Promise<void> {
     import('./ipc/settings-handlers'),
     import('./ipc/subagent-run-handlers'),
     import('./ipc/knowledge-handlers'),
+    import('./ipc/office-handlers'),
+    import('./office/office-workspace-guard'),
+    import('./office/officecli-manager'),
+    import('./office/office-watch-pool'),
+    import('./office/office-artifact-index'),
+    import('./office/office-handler-operations'),
     import('./terminal/manager'),
     import('./agent/stream-manager'),
     import('./janus/analyzer'),
@@ -107,6 +141,32 @@ async function bootstrapApp(): Promise<void> {
 
   let mainWindow: BrowserWindow | null = null
   const editorWindows = new Map<string, BrowserWindow>()
+  const resolveOfficeWorkspaceRoot = createRegisteredWorkspaceRootResolver(
+    join(app.getPath('userData'), 'janusx', 'workspaces'),
+  )
+  const getOfficeWindows = (): BrowserWindow[] => [
+    ...(mainWindow && !mainWindow.isDestroyed() ? [mainWindow] : []),
+    ...Array.from(editorWindows.values()).filter((window) => !window.isDestroyed()),
+  ]
+  const officeWatchPool = new OfficeWatchPool(resolveOfficeWorkspaceRoot, {
+    onEvicted: (event) => {
+      for (const window of getOfficeWindows()) {
+        if (!window.webContents.isDestroyed()) {
+          window.webContents.send(OFFICE_EVENT_CHANNELS.watchEvicted, event)
+        }
+      }
+    },
+  })
+  const officeArtifactIndex = new OfficeArtifactIndex(resolveOfficeWorkspaceRoot, {
+    subscribe: subscribeWorkspaceWatcher,
+    onChanged: (event) => {
+      for (const window of getOfficeWindows()) {
+        if (!window.webContents.isDestroyed()) {
+          window.webContents.send(OFFICE_EVENT_CHANNELS.filesChanged, event)
+        }
+      }
+    },
+  })
 
   appShutdown.configure({
     abortChatStreams: () => abortAllChatStreams(),
@@ -114,6 +174,8 @@ async function bootstrapApp(): Promise<void> {
     killTerminals: () => terminalManager.killAll(),
     killAgents: () => agentStreamManager.killAll(),
     stopProjects: () => stopAllProjects(),
+    stopOfficeWatches: () => officeWatchPool.stopAll(),
+    disposeOfficeArtifactIndexes: () => officeArtifactIndex.disposeAll(),
     disposeWatchers: () => disposeWorkspaceWatchers(),
     destroyToast: () => desktopToastWindow.destroy(),
     closeEditors: () => {
@@ -219,12 +281,16 @@ async function bootstrapApp(): Promise<void> {
       webPreferences: {
         preload: join(__dirname, '../preload/index.mjs'),
         sandbox: false,
+        webSecurity: true,
+        webviewTag: false,
       },
     })
+    installProductionCsp(mainWindow.webContents.session)
 
     // Toast/editor keep-alive windows mean window-all-closed may never fire.
     // Non-darwin: main window close must enter the unified quit path.
     mainWindow.on('closed', () => {
+      officeArtifactIndex.disposeAll()
       mainWindow = null
       if (process.platform === 'darwin') return
       if (appShutdown.isQuitting) return
@@ -232,7 +298,12 @@ async function bootstrapApp(): Promise<void> {
     })
 
     // 注册 IPC handlers
-    registerWorkspaceHandlers(mainWindow)
+    registerWorkspaceHandlers(mainWindow, {
+      beforeWorkspaceDelete: async (workspaceId) => {
+        await officeWatchPool.stopUnderRoot(workspaceId)
+        officeArtifactIndex.dispose(workspaceId)
+      },
+    })
     registerTerminalHandlers(mainWindow)
     registerGitHandlers()
     registerAgentHandlers(mainWindow)
@@ -245,6 +316,14 @@ async function bootstrapApp(): Promise<void> {
     registerSettingsHandlers()
     registerSubAgentRunHandlers(mainWindow)
     registerKnowledgeHandlers()
+    registerOfficeHandlers({
+      getAllowedWindows: getOfficeWindows,
+      resolveWorkspaceRoot: resolveOfficeWorkspaceRoot,
+      operations: createProductionOfficeOperations({
+        artifactIndex: officeArtifactIndex,
+        watchPool: officeWatchPool,
+      }),
+    })
 
     // 窗口控制 IPC
     ipcMain.handle('window:minimize', () => {
@@ -283,6 +362,8 @@ async function bootstrapApp(): Promise<void> {
         webPreferences: {
           preload: join(__dirname, '../preload/index.mjs'),
           sandbox: false,
+          webSecurity: true,
+          webviewTag: false,
         },
       })
 
@@ -334,7 +415,8 @@ async function bootstrapApp(): Promise<void> {
       mainWindow.focus()
     })
 
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
+      await initializeOfficecliProvider()
       createWindow()
 
       app.on('activate', () => {

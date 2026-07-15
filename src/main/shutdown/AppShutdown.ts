@@ -10,6 +10,8 @@ export interface AppShutdownDeps {
   killTerminals?: ShutdownStep
   killAgents?: ShutdownStep
   stopProjects?: ShutdownStep
+  stopOfficeWatches?: ShutdownStep
+  disposeOfficeArtifactIndexes?: ShutdownStep
   disposeWatchers?: ShutdownStep
   destroyToast?: ShutdownStep
   closeEditors?: ShutdownStep
@@ -21,8 +23,8 @@ export interface BeginQuitOptions {
   timeoutMs?: number
 }
 
-const DEFAULT_TIMEOUT_MS = 2500
-const STEP_TIMEOUT_MS = 800
+const DEFAULT_TIMEOUT_MS = 15000
+const STEP_TIMEOUT_MS = 4000
 
 /**
  * Single-flight app exit coordinator.
@@ -89,9 +91,11 @@ export class AppShutdown {
       ['cancelAnalyzer', this.deps.cancelAnalyzer],
       ['stopHookBridge', this.deps.stopHookBridge],
       ['finalizePendingCheckpoints', this.deps.finalizePendingCheckpoints],
+      ['stopOfficeWatches', this.deps.stopOfficeWatches],
       ['killTerminals', this.deps.killTerminals],
       ['killAgents', this.deps.killAgents],
       ['stopProjects', this.deps.stopProjects],
+      ['disposeOfficeArtifactIndexes', this.deps.disposeOfficeArtifactIndexes],
       ['disposeWatchers', this.deps.disposeWatchers],
       ['disposeTerminalSession', this.deps.disposeTerminalSession],
     ]

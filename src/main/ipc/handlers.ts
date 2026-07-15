@@ -8,6 +8,18 @@ const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
 const watcherRegistry = new Map<string, FSWatcher>()
 const watcherTimers = new Map<string, NodeJS.Timeout>()
+const watcherWindows = new Map<string, Set<BrowserWindow>>()
+const watcherSubscribers = new Map<string, Set<WorkspaceWatcherSubscriber>>()
+const watcherRecoveryTimers = new Map<string, NodeJS.Timeout>()
+
+export type WorkspaceWatcherSubscriber = (
+  eventType: 'change' | 'rename' | 'error',
+  filename: string | Buffer | null,
+) => void
+
+export interface WorkspaceHandlerOptions {
+  beforeWorkspaceDelete?: (workspaceId: string) => Promise<void> | void
+}
 
 type SaveFileExtension = 'md' | 'txt' | 'html'
 
@@ -104,14 +116,31 @@ async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<
   }
 }
 
-function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: string): void {
+function closeWorkspaceWatcher(workspacePath: string): void {
+  watcherRegistry.get(workspacePath)?.close()
+  watcherRegistry.delete(workspacePath)
+  const timer = watcherTimers.get(workspacePath)
+  if (timer) clearTimeout(timer)
+  watcherTimers.delete(workspacePath)
+  const recoveryTimer = watcherRecoveryTimers.get(workspacePath)
+  if (recoveryTimer) clearTimeout(recoveryTimer)
+  watcherRecoveryTimers.delete(workspacePath)
+}
+
+function ensureWorkspaceWatcher(workspacePath: string): void {
   if (watcherRegistry.has(workspacePath)) return
 
   try {
     const watcher = watch(
       workspacePath,
       { recursive: process.platform === 'win32' || process.platform === 'darwin' },
-      () => {
+      (eventType, filename) => {
+        for (const subscriber of watcherSubscribers.get(workspacePath) ?? []) {
+          subscriber(eventType, filename)
+        }
+
+        const windows = watcherWindows.get(workspacePath)
+        if (!windows?.size) return
         const existingTimer = watcherTimers.get(workspacePath)
         if (existingTimer) clearTimeout(existingTimer)
 
@@ -119,19 +148,26 @@ function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: stri
           workspacePath,
           setTimeout(() => {
             watcherTimers.delete(workspacePath)
-            sendToRenderer(mainWindow, 'filetree:changed', workspacePath)
+            for (const window of windows) {
+              sendToRenderer(window, 'filetree:changed', workspacePath)
+            }
           }, 150),
         )
       },
     )
 
     watcher.on('error', () => {
-      watcher.close()
-      watcherRegistry.delete(workspacePath)
-      const timer = watcherTimers.get(workspacePath)
-      if (timer) {
-        clearTimeout(timer)
-        watcherTimers.delete(workspacePath)
+      for (const subscriber of watcherSubscribers.get(workspacePath) ?? []) {
+        subscriber('error', null)
+      }
+      closeWorkspaceWatcher(workspacePath)
+      if (watcherSubscribers.has(workspacePath) || watcherWindows.get(workspacePath)?.size) {
+        const recoveryTimer = setTimeout(() => {
+          watcherRecoveryTimers.delete(workspacePath)
+          ensureWorkspaceWatcher(workspacePath)
+        }, 150)
+        recoveryTimer.unref?.()
+        watcherRecoveryTimers.set(workspacePath, recoveryTimer)
       }
     })
 
@@ -141,19 +177,52 @@ function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: stri
   }
 }
 
-export function disposeWorkspaceWatchers(): void {
-  for (const [workspacePath, watcher] of watcherRegistry.entries()) {
-    watcher.close()
-    watcherRegistry.delete(workspacePath)
-    const timer = watcherTimers.get(workspacePath)
-    if (timer) {
-      clearTimeout(timer)
-      watcherTimers.delete(workspacePath)
+function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: string): void {
+  const windows = watcherWindows.get(workspacePath) ?? new Set<BrowserWindow>()
+  windows.add(mainWindow)
+  watcherWindows.set(workspacePath, windows)
+  ensureWorkspaceWatcher(workspacePath)
+}
+
+export function subscribeWorkspaceWatcher(
+  workspacePath: string,
+  subscriber: WorkspaceWatcherSubscriber,
+): () => void {
+  const subscribers = watcherSubscribers.get(workspacePath) ?? new Set<WorkspaceWatcherSubscriber>()
+  subscribers.add(subscriber)
+  watcherSubscribers.set(workspacePath, subscribers)
+  ensureWorkspaceWatcher(workspacePath)
+  return () => {
+    subscribers.delete(subscriber)
+    if (subscribers.size === 0) watcherSubscribers.delete(workspacePath)
+    if (!watcherSubscribers.has(workspacePath) && !watcherWindows.get(workspacePath)?.size) {
+      closeWorkspaceWatcher(workspacePath)
     }
   }
 }
 
-export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
+export function disposeWorkspaceWatcher(workspacePath: string): void {
+  closeWorkspaceWatcher(workspacePath)
+  watcherWindows.delete(workspacePath)
+  watcherSubscribers.delete(workspacePath)
+}
+
+export function disposeWorkspaceWatchers(): void {
+  const workspacePaths = new Set([
+    ...watcherRegistry.keys(),
+    ...watcherRecoveryTimers.keys(),
+    ...watcherWindows.keys(),
+    ...watcherSubscribers.keys(),
+  ])
+  for (const workspacePath of workspacePaths) {
+    disposeWorkspaceWatcher(workspacePath)
+  }
+}
+
+export function registerWorkspaceHandlers(
+  mainWindow: BrowserWindow,
+  options: WorkspaceHandlerOptions = {},
+): void {
   // Also disposed from AppShutdown; function is idempotent.
   mainWindow.on('closed', disposeWorkspaceWatchers)
 
@@ -221,7 +290,11 @@ export function registerWorkspaceHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('workspace:delete', async (_event, id: string) => {
     try {
-      await unlink(join(WORKSPACES_DIR, `${id}.json`))
+      const recordPath = join(WORKSPACES_DIR, `${id}.json`)
+      const record = JSON.parse(await readFile(recordPath, 'utf-8')) as { path?: unknown }
+      await options.beforeWorkspaceDelete?.(id)
+      await unlink(recordPath)
+      if (typeof record.path === 'string') disposeWorkspaceWatcher(record.path)
       return { success: true }
     } catch {
       return { success: false }
