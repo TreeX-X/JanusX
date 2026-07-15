@@ -198,7 +198,8 @@ describe('OfficecliManager', () => {
   it('keeps manual installation auditable and automatic mutation disabled', () => {
     expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.targetVersion).toBe('1.0.135')
     expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.repository).toMatch(/^https:\/\/github\.com\/iOfficeAI\/OfficeCLI$/)
-    expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.integrity).toContain('No repository-verified SHA256 or signature')
+    expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.integrity).toContain('937db176b585e874aa5bff48d536bce78037665cd862b5deefe56e79977e6588')
+    expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.integrity).toContain('c818013023f83d3c9ec3dcba4dabaf824bdf861da6fa925d0557f508d3b11558')
     expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.automaticInstallEnabled).toBe(false)
     expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.automaticUninstallEnabled).toBe(false)
     expect(OFFICECLI_MANUAL_INSTALL_GUIDANCE.windows.join(' ')).not.toMatch(/irm|iex|curl|bash|latest|main/i)

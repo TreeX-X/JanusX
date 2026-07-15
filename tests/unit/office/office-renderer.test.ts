@@ -8,6 +8,14 @@ import { buildOfficePreviewUrl, getOfficeErrorCopy, OfficePreviewFrame } from '.
 import { visibleOfficeFileState } from '../../../src/renderer/src/components/office/OfficeFileList'
 import { canPasteOfficePrompt, isOfficePromptContextCurrent, type OfficePromptContext } from '../../../src/renderer/src/components/office/OfficePromptPreview'
 import { startOfficeDiscovery } from '../../../src/renderer/src/components/office/officeDiscovery'
+import {
+  clampOfficePreviewWidth,
+  CENTER_WORKSPACE_MIN_WIDTH,
+  getOfficePreviewMaxWidth,
+  OFFICE_PREVIEW_MAX_WIDTH,
+  OFFICE_PREVIEW_MIN_WIDTH,
+  reconcileOfficePreviewWidth,
+} from '../../../src/renderer/src/components/office/officeResize'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -19,6 +27,26 @@ function mockService(overrides: Partial<OfficeService> = {}): OfficeService {
 }
 
 describe('Office renderer lifecycle', () => {
+  it('clamps Office resizing while preserving the center workspace', () => {
+    const availableWidth = OFFICE_PREVIEW_MAX_WIDTH + CENTER_WORKSPACE_MIN_WIDTH
+    expect(clampOfficePreviewWidth(650, 1000, availableWidth)).toBe(350)
+    expect(clampOfficePreviewWidth(900, 1000, availableWidth)).toBe(OFFICE_PREVIEW_MIN_WIDTH)
+    expect(clampOfficePreviewWidth(0, 1000, availableWidth)).toBe(OFFICE_PREVIEW_MAX_WIDTH)
+    expect(clampOfficePreviewWidth(0, 1000, OFFICE_PREVIEW_MIN_WIDTH + CENTER_WORKSPACE_MIN_WIDTH + 40)).toBe(OFFICE_PREVIEW_MIN_WIDTH + 40)
+    expect(getOfficePreviewMaxWidth(OFFICE_PREVIEW_MIN_WIDTH + CENTER_WORKSPACE_MIN_WIDTH + 40)).toBe(OFFICE_PREVIEW_MIN_WIDTH + 40)
+    expect(reconcileOfficePreviewWidth(OFFICE_PREVIEW_MAX_WIDTH, 480, 680)).toEqual({
+      width: 360,
+      maxWidth: 360,
+    })
+    expect(reconcileOfficePreviewWidth(null, 375, 800)).toEqual({
+      width: 375,
+      maxWidth: OFFICE_PREVIEW_MAX_WIDTH,
+    })
+    expect(reconcileOfficePreviewWidth(360, 360, 800)).toEqual({
+      width: 360,
+      maxWidth: OFFICE_PREVIEW_MAX_WIDTH,
+    })
+  })
   it('notifies an initialization-time addition exactly once across catch-up and queued snapshots', async () => {
     const baseline = deferred<any>()
     const catchup = deferred<any>()
@@ -109,6 +137,94 @@ describe('Office renderer lifecycle', () => {
     await Promise.all([first, second])
     expect(store.getState().tabs).toHaveLength(1)
     expect(store.getState().tabs[0]).toMatchObject({ status: 'ready', previewLeaseId: 'lease-1', port: 4123 })
+  })
+  it('converts rejected start and reload IPC requests into retryable errors', async () => {
+    const rejectedStart = createOfficeStore(mockService({
+      startPreview: vi.fn(async () => { throw new Error('ipc closed') }),
+    }))
+    await expect(rejectedStart.getState().openPreview('workspace', 'deck.pptx')).resolves.toBeUndefined()
+    expect(rejectedStart.getState().tabs[0]).toMatchObject({ status: 'error', errorCode: 'START_FAILED' })
+
+    const rejectedReload = createOfficeStore(mockService({
+      startPreview: vi.fn(async () => ({ ok: true, value: { previewLeaseId: 'lease', port: 4123, relPath: 'deck.pptx' } })),
+      reloadPreview: vi.fn(async () => { throw new Error('ipc closed') }),
+    }))
+    await rejectedReload.getState().openPreview('workspace', 'deck.pptx')
+    await expect(rejectedReload.getState().reloadTab(rejectedReload.getState().tabs[0].tabId)).resolves.toBeUndefined()
+    expect(rejectedReload.getState().tabs[0]).toMatchObject({ status: 'error', errorCode: 'START_FAILED', previewLeaseId: undefined, port: undefined, reloadRequestId: undefined })
+    expect(rejectedReload.getState().tabs[0].previewLeaseId).toBeUndefined()
+    expect(rejectedReload.getState().tabs[0].port).toBeUndefined()
+  })
+  it('retires the old lease after a structured reload failure', async () => {
+    const service = mockService({
+      startPreview: vi.fn(async () => ({ ok: true, value: { previewLeaseId: 'old', port: 4123, relPath: 'deck.pptx' } })),
+      reloadPreview: vi.fn(async () => ({ ok: false, error: { code: 'PORT_TIMEOUT', message: 'timeout' } })),
+    })
+    const store = createOfficeStore(service)
+    await store.getState().openPreview('workspace', 'deck.pptx')
+    await store.getState().reloadTab(store.getState().tabs[0].tabId)
+    expect(store.getState().tabs[0]).toMatchObject({ status: 'error', errorCode: 'PORT_TIMEOUT' })
+    expect(store.getState().tabs[0].previewLeaseId).toBeUndefined()
+    expect(store.getState().tabs[0].port).toBeUndefined()
+    expect(service.stopPreview).toHaveBeenCalledTimes(1)
+    expect(service.stopPreview).toHaveBeenCalledWith({ workspaceId: 'workspace', relPath: 'deck.pptx', previewLeaseId: 'old' })
+  })
+  it('bounds a hanging start and stops a successful lease that arrives after timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const start = deferred<any>()
+      const service = mockService({ startPreview: vi.fn(() => start.promise) })
+      const store = createOfficeStore(service, vi.fn(), 20)
+      const opening = store.getState().openPreview('workspace', 'deck.pptx')
+      await vi.advanceTimersByTimeAsync(20)
+      await opening
+      expect(store.getState().tabs[0]).toMatchObject({ status: 'error', errorCode: 'PORT_TIMEOUT' })
+
+      start.resolve({ ok: true, value: { previewLeaseId: 'late', port: 4123, relPath: 'deck.pptx' } })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(service.stopPreview).toHaveBeenCalledWith({ workspaceId: 'workspace', relPath: 'deck.pptx', previewLeaseId: 'late' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('recovers a timed-out reload through a fresh start without reusing either retired lease', async () => {
+    vi.useFakeTimers()
+    try {
+      const reload = deferred<any>()
+      const service = mockService({
+        startPreview: vi.fn()
+          .mockResolvedValueOnce({ ok: true, value: { previewLeaseId: 'old', port: 4123, relPath: 'deck.pptx' } })
+          .mockResolvedValueOnce({ ok: true, value: { previewLeaseId: 'fresh', port: 4125, relPath: 'deck.pptx' } }),
+        reloadPreview: vi.fn(() => reload.promise),
+      })
+      const store = createOfficeStore(service, vi.fn(), 20)
+      await store.getState().openPreview('workspace', 'deck.pptx')
+      const reloadRequest = store.getState().reloadTab(store.getState().tabs[0].tabId)
+      await vi.advanceTimersByTimeAsync(20)
+      await reloadRequest
+
+      const failedTab = store.getState().tabs[0]
+      expect(failedTab).toMatchObject({ status: 'error', errorCode: 'PORT_TIMEOUT' })
+      expect(failedTab.previewLeaseId).toBeUndefined()
+      expect(failedTab.port).toBeUndefined()
+      expect(service.stopPreview).toHaveBeenCalledWith({ workspaceId: 'workspace', relPath: 'deck.pptx', previewLeaseId: 'old' })
+
+      reload.resolve({ ok: true, value: { previewLeaseId: 'late', port: 4124, relPath: 'deck.pptx' } })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(service.stopPreview).toHaveBeenCalledWith({ workspaceId: 'workspace', relPath: 'deck.pptx', previewLeaseId: 'late' })
+
+      await store.getState().closeTab(failedTab.tabId)
+      await store.getState().openPreview('workspace', failedTab.relPath)
+      expect(store.getState().tabs[0]).toMatchObject({ status: 'ready', previewLeaseId: 'fresh', port: 4125 })
+      expect(service.startPreview).toHaveBeenCalledTimes(2)
+      expect(service.reloadPreview).toHaveBeenCalledTimes(1)
+      expect(service.stopPreview).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(service.stopPreview).mock.calls.map(([request]) => request.previewLeaseId)).toEqual(['old', 'late'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
   it('stops a start lease that resolves after workspace release', async () => {
     const start = deferred<any>()
@@ -264,5 +380,31 @@ describe('Office renderer lifecycle', () => {
     expect(panel).not.toContain('OfficePreviewPanel')
     expect(app.indexOf('<OfficePreviewPanel')).toBeLessThan(app.indexOf('<Panel />'))
     expect(app).toContain('setPanelCollapsed(true)')
+    expect(app).toContain('role="separator"')
+    expect(app).toContain('aria-label="Resize Office preview"')
+    expect(app).toContain('aria-valuenow={Math.round(officeMeasuredWidth)}')
+    expect(app).toContain('new ResizeObserver')
+    expect(app).toContain('observer.observe(centerWorkspace)')
+    expect(app).toContain('observer.observe(officeWorkspace)')
+    expect(app).toContain('observer.disconnect()')
+    expect(app).toContain('window.cancelAnimationFrame(frameId)')
+    expect(app).toContain('ArrowLeft:')
+    expect(app).toContain('onLostPointerCapture=')
+    expect(app).toContain('setPointerCapture(event.pointerId)')
+    expect(app).toContain('finishOfficeResize(false)')
+    expect(app).toContain("officeResizing\n            ? 'none'")
+    expect(app).not.toContain('addEventListener(\'pointermove\'')
+  })
+  it('uses an unclipped fixed hit target and source-safe close icon', () => {
+    const source = readFileSync(new URL('../../../src/renderer/src/components/office/OfficePreviewPanel.tsx', import.meta.url), 'utf8')
+    const start = source.indexOf('aria-label="Close Office preview"')
+    const closeControl = source.slice(start, start + 900)
+    expect(start).toBeGreaterThan(0)
+    expect(closeControl).toContain('h-8 w-8 shrink-0')
+    expect(closeControl).toContain('overflow-visible')
+    expect(closeControl.match(/bg-current/g)).toHaveLength(2)
+    expect(closeControl).not.toContain('�')
+    expect(source).toContain('onRetry={retryActiveTab}')
+    expect(source).toContain('if (activeTab.previewLeaseId)')
   })
 })

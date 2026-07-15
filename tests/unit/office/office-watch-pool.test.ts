@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MAX_CONCURRENT_WATCHES,
   OfficeWatchPool,
+  isOfficeWatchProcessRunning,
+  stopOfficeWatchProcess,
   type OfficeWatchPoolError,
 } from '../../../src/main/office/office-watch-pool'
 import type { TrustedOfficeFile } from '../../../src/main/office/office-workspace-guard'
@@ -119,6 +121,41 @@ function codeOf(error: unknown): string | undefined {
 }
 
 describe('OfficeWatchPool', () => {
+  it('uses the full execa lifecycle and signals only a healthy running child before awaiting exit', async () => {
+    const healthy = { exitCode: null, signalCode: null, killed: false, kill: vi.fn() }
+    const killed = { exitCode: null, signalCode: null, killed: true, kill: vi.fn() }
+    const signaled = { exitCode: null, signalCode: 'SIGTERM', killed: true, kill: vi.fn() }
+    const exitedProcess = { exitCode: 0, signalCode: null, killed: false, kill: vi.fn() }
+    expect(isOfficeWatchProcessRunning(healthy)).toBe(true)
+    expect(isOfficeWatchProcessRunning(killed)).toBe(false)
+    expect(isOfficeWatchProcessRunning(signaled)).toBe(false)
+    expect(isOfficeWatchProcessRunning(exitedProcess)).toBe(false)
+
+    let finishExit!: () => void
+    const exited = new Promise<void>((resolveExit) => { finishExit = resolveExit })
+    let stopSettled = false
+    const stop = stopOfficeWatchProcess(healthy, exited).finally(() => { stopSettled = true })
+    expect(healthy.kill).toHaveBeenCalledOnce()
+    expect(healthy.kill).toHaveBeenCalledWith('SIGTERM')
+    await Promise.resolve()
+    expect(stopSettled).toBe(false)
+    finishExit()
+    await expect(stop).resolves.toBeUndefined()
+
+    for (const stopped of [killed, signaled, exitedProcess]) {
+      let finishStopped!: () => void
+      const stoppedExit = new Promise<void>((resolveExit) => { finishStopped = resolveExit })
+      let stoppedSettled = false
+      const stoppedStop = stopOfficeWatchProcess(stopped, stoppedExit).finally(() => { stoppedSettled = true })
+      expect(stopped.kill).not.toHaveBeenCalled()
+      await Promise.resolve()
+      expect(stoppedSettled).toBe(false)
+      finishStopped()
+      await expect(stoppedStop).resolves.toBeUndefined()
+    }
+    expect(exitedProcess.kill).not.toHaveBeenCalled()
+  })
+
   it('uses the documented production cap', () => {
     expect(MAX_CONCURRENT_WATCHES).toBe(32)
   })

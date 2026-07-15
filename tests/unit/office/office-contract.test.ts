@@ -26,6 +26,9 @@ describe('Office shared contract', () => {
     expect(validateOfficeInvokeRequest(OFFICE_INVOKE_CHANNELS.stopPreview, { workspaceId: 'workspace_1', relPath: 'a.docx' }).ok).toBe(false)
     expect(validateOfficeInvokeRequest(OFFICE_INVOKE_CHANNELS.buildPrompt, { workspaceId: 'workspace_1', relPath: 'a.docx', terminalPreset: 'codex' }).ok).toBe(true)
     expect(validateOfficeInvokeRequest(OFFICE_INVOKE_CHANNELS.buildPrompt, { workspaceId: 'workspace_1', relPath: 'a.docx', terminalPreset: 'other' }).ok).toBe(false)
+    expect(validateOfficeInvokeRequest(OFFICE_INVOKE_CHANNELS.installerStart, { workspaceId: 'workspace_1', confirmed: true }).ok).toBe(true)
+    expect(validateOfficeInvokeRequest(OFFICE_INVOKE_CHANNELS.installerStart, { workspaceId: 'workspace_1', confirmed: false }).ok).toBe(false)
+    expect(validateOfficeInvokeRequest(OFFICE_INVOKE_CHANNELS.installerRemove, { workspaceId: 'workspace_1', confirmed: true, path: 'C:\\evil' }).ok).toBe(false)
   })
 
   it('accepts only the promoted core OfficeCLI skill ids', () => {

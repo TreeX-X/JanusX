@@ -8,6 +8,7 @@ type Handler = (...args: any[]) => unknown
 const handlers = new Map<string, Handler>()
 const temporaryDirectories: string[] = []
 const officecliDetect = vi.hoisted(() => vi.fn())
+const configureManagedBinaryPath = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -17,7 +18,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../../src/main/office/officecli-manager', () => ({
-  officecliManager: { detect: officecliDetect },
+  officecliManager: { detect: officecliDetect, configureManagedBinaryPath },
 }))
 
 import { registerOfficeHandlers } from '../../../src/main/ipc/office-handlers'
@@ -33,6 +34,7 @@ describe('Office IPC handlers', () => {
   beforeEach(() => {
     handlers.clear()
     officecliDetect.mockReset()
+    configureManagedBinaryPath.mockReset()
   })
 
   afterEach(async () => {
@@ -83,6 +85,31 @@ describe('Office IPC handlers', () => {
       ok: true,
       value: { installed: true, compatible: true, version: '1.2.3', source: 'path' },
     })
+  })
+
+  it('authorizes and validates explicit installer operations before mutation', async () => {
+    const sender = { isDestroyed: () => false }
+    const root = await makeTemporaryDirectory()
+    const installer = {
+      status: vi.fn(async () => ({ state: 'not-installed' as const, location: 'managed' })),
+      start: vi.fn(async () => ({ state: 'ready' as const, location: 'managed', version: '1.0.135' })),
+      cancel: vi.fn(),
+      remove: vi.fn(async () => ({ state: 'not-installed' as const, location: 'managed' })),
+      getManagedBinary: vi.fn(async () => 'C:\\private\\officecli.exe'),
+    }
+    officecliDetect.mockResolvedValue({ installed: true, compatible: true })
+    registerOfficeHandlers({
+      getAllowedWindows: () => [{ isDestroyed: () => false, webContents: sender } as any],
+      resolveWorkspaceRoot: async () => root,
+      installer,
+    })
+    const handler = handlers.get(OFFICE_INVOKE_CHANNELS.installerStart)!
+    await expect(handler({ sender: {} }, { workspaceId: 'trusted', confirmed: true })).resolves.toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } })
+    await expect(handler({ sender }, { workspaceId: 'trusted', confirmed: false })).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
+    await expect(handler({ sender }, { workspaceId: 'trusted', confirmed: true, executable: 'C:\\evil.exe' })).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
+    await expect(handler({ sender }, { workspaceId: 'trusted', confirmed: true })).resolves.toMatchObject({ ok: true, value: { state: 'ready' } })
+    expect(installer.start).toHaveBeenCalledWith(true)
+    expect(configureManagedBinaryPath).toHaveBeenCalledWith('C:\\private\\officecli.exe')
   })
 
   it('uses the production singleton and exposes safe unavailable guidance', async () => {

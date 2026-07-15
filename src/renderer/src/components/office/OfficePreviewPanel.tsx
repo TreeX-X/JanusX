@@ -6,6 +6,7 @@ import { useOfficeStore } from '@/stores/office'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { OfficeFileList } from './OfficeFileList'
 import { OfficePreviewFrame } from './OfficePreviewFrame'
+import { OfficeSetupGate } from './OfficeSetupGate'
 import {
   canPasteOfficePrompt,
   isOfficePromptContextCurrent,
@@ -27,6 +28,7 @@ export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: stri
   const activeTerminalId = useWorkspaceStore((state) => state.activeTerminalId)
   const [promptPreview, setPromptPreview] = useState<OfficePromptPreviewState | null>(null)
   const [manualInstall, setManualInstall] = useState<OfficecliManualInstallGuidance>()
+  const [setupOpen, setSetupOpen] = useState(false)
   const previousWorkspace = useRef<string | null>(null)
   const promptRequestId = useRef(0)
   const workspaceTabs = useMemo(() => tabs.filter((tab) => tab.workspaceId === workspaceId), [tabs, workspaceId])
@@ -85,6 +87,18 @@ export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: stri
     window.electron.send('terminal:input', { id: terminal.id, data: encodeTerminalPaste(text) })
     return true
   }
+  const retryActiveTab = () => {
+    if (!activeTab || !workspaceId) return
+    if (activeTab.previewLeaseId) {
+      void reloadTab(activeTab.tabId)
+      return
+    }
+    const { tabId, relPath } = activeTab
+    void closeTab(tabId).then(() => openPreview(workspaceId, relPath))
+  }
+  useEffect(() => {
+    if (activeTab?.errorCode === 'NOT_INSTALLED' || activeTab?.errorCode === 'INCOMPATIBLE') setSetupOpen(true)
+  }, [activeTab?.errorCode])
   if (!workspaceId) return <div className="flex h-full items-center justify-center text-xs text-[#666]">请选择工作区</div>
 
   return <div className="relative flex h-full min-h-0 flex-col bg-[var(--bg-deep)]">
@@ -92,7 +106,18 @@ export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: stri
       <div className="min-w-0">
         <span className="text-[10px] font-semibold tracking-[0.14em] text-[#ff7830]">OFFICE PREVIEW</span>
       </div>
-      <button type="button" aria-label="Close Office preview" className="px-2 py-1 text-sm text-[#777] hover:text-white" onClick={onClose}>�</button>
+      <button type="button" className="ml-auto mr-1 text-[9px] text-[#777] hover:text-white" onClick={() => setSetupOpen(true)}>OFFICECLI</button>
+      <button
+        type="button"
+        aria-label="Close Office preview"
+        className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-visible text-[#777] hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#ff7830]"
+        onClick={onClose}
+      >
+        <span aria-hidden="true" className="relative block h-3 w-3">
+          <span className="absolute left-1/2 top-1/2 h-px w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-current" />
+          <span className="absolute left-1/2 top-1/2 h-px w-3 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-current" />
+        </span>
+      </button>
     </div>
     <div className="border-b border-white/[0.06] px-3 py-2 text-[10px] leading-4 text-[#777]">实时刷新仅适用于 OfficeCLI 写入；其他修改请从磁盘重新加载。</div>
     <OfficeFileList workspaceId={workspaceId} onOpen={(relPath) => void openPreview(workspaceId, relPath)} />
@@ -107,8 +132,9 @@ export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: stri
         <button className="text-[10px] text-[#888] hover:text-white disabled:opacity-30" onClick={() => void showPrompt()}>插入 OfficeCLI 用法</button>
         <button className="text-[10px] text-[#888] hover:text-white disabled:opacity-30" disabled={!activeTab.previewLeaseId || activeTab.status === 'reloading'} onClick={() => void reloadTab(activeTab.tabId)}>从磁盘重新加载</button>
       </div>
-      <div className="min-h-0 flex-1"><OfficePreviewFrame port={activeTab.port} status={activeTab.status} errorCode={activeTab.errorCode} manualInstall={manualInstall} onRetry={() => activeTab.previewLeaseId ? void reloadTab(activeTab.tabId) : void closeTab(activeTab.tabId).then(() => openPreview(workspaceId, activeTab.relPath))} onClose={() => void closeTab(activeTab.tabId)} /></div>
+      <div className="min-h-0 flex-1"><OfficePreviewFrame port={activeTab.port} status={activeTab.status} errorCode={activeTab.errorCode} manualInstall={manualInstall} onRetry={retryActiveTab} onClose={() => void closeTab(activeTab.tabId)} /></div>
     </> : <div className="flex min-h-32 flex-1 items-center justify-center text-xs text-[#666]">从上方列表选择 Office 文档</div>}
     {promptPreview && <OfficePromptPreview preview={promptPreview} terminal={activeTerminal} onPaste={pastePrompt} onClose={() => setPromptPreview(null)} />}
+    {setupOpen && <OfficeSetupGate workspaceId={workspaceId} onClose={() => setSetupOpen(false)} onReady={() => { setSetupOpen(false); if (activeTab?.status === 'error') retryActiveTab() }} />}
   </div>
 }

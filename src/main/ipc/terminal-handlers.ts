@@ -18,6 +18,8 @@ import { logTerminalDiagnostic } from '../terminal/diagnostics'
 import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
 import { appShutdown } from '../shutdown/AppShutdown'
 import { officecliManager } from '../office/officecli-manager'
+import { resolve } from 'path'
+import { buildOfficeAgentSession, mergeOfficeAgentEnv } from '../office/office-agent-policy'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -251,6 +253,13 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     let instance
     try {
       const officecliPathDir = await officecliManager.refreshAgentPathDir()
+      const officecli = await officecliManager.resolveBinary()
+      const officeMcpEntry = resolve(__dirname, '..', 'office-mcp.js')
+      const officeSession = buildOfficeAgentSession(engine, cwd, officecli?.path, officeMcpEntry)
+      if (officeSession.limitation) {
+        logTerminalDiagnostic('Office automation policy-only mode', { engine, limitation: officeSession.limitation })
+      }
+      hookEnv = mergeOfficeAgentEnv(hookEnv, officeSession)
       instance = terminalManager.create({
         id,
         workspaceId,

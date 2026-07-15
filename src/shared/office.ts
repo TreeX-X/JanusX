@@ -8,6 +8,10 @@ export const OFFICE_INVOKE_CHANNELS = {
   stopPreview: 'office:preview:stop',
   reloadPreview: 'office:preview:reload',
   buildPrompt: 'office:prompt:build',
+  installerStatus: 'office:installer:status',
+  installerStart: 'office:installer:start',
+  installerCancel: 'office:installer:cancel',
+  installerRemove: 'office:installer:remove',
 } as const
 
 export const OFFICE_EVENT_CHANNELS = {
@@ -59,7 +63,7 @@ export interface OfficecliPublicInfo {
   installed: boolean
   compatible: boolean
   version?: string
-  source?: 'path' | 'known-location'
+  source?: 'path' | 'known-location' | 'managed'
   manualInstall?: OfficecliManualInstallGuidance
   existingTerminalNotice?: string
 }
@@ -121,6 +125,26 @@ export interface OfficeWatchEvictedEvent {
 export interface OfficeInstallerProgressEvent {
   stage: 'idle' | 'downloading' | 'verifying' | 'installing' | 'complete' | 'failed'
   percent?: number
+  message?: string
+}
+
+export interface OfficeManagedInstallStatus {
+  state: 'not-installed' | 'ready' | 'busy' | 'failed'
+  version?: string
+  sha256?: string
+  source?: string
+  location: string
+  existingTerminalNotice?: string
+  error?: string
+}
+
+export interface OfficeInstallerStartRequest extends OfficeWorkspaceRequest {
+  confirmed: true
+  repair?: boolean
+}
+
+export interface OfficeInstallerRemoveRequest extends OfficeWorkspaceRequest {
+  confirmed: true
 }
 
 export type OfficeInvokeRequestMap = {
@@ -130,6 +154,10 @@ export type OfficeInvokeRequestMap = {
   [OFFICE_INVOKE_CHANNELS.stopPreview]: OfficeStopPreviewRequest
   [OFFICE_INVOKE_CHANNELS.reloadPreview]: OfficeReloadPreviewRequest
   [OFFICE_INVOKE_CHANNELS.buildPrompt]: OfficeBuildPromptRequest
+  [OFFICE_INVOKE_CHANNELS.installerStatus]: OfficeWorkspaceRequest
+  [OFFICE_INVOKE_CHANNELS.installerStart]: OfficeInstallerStartRequest
+  [OFFICE_INVOKE_CHANNELS.installerCancel]: OfficeWorkspaceRequest
+  [OFFICE_INVOKE_CHANNELS.installerRemove]: OfficeInstallerRemoveRequest
 }
 
 export type OfficeInvokeResultMap = {
@@ -139,6 +167,10 @@ export type OfficeInvokeResultMap = {
   [OFFICE_INVOKE_CHANNELS.stopPreview]: null
   [OFFICE_INVOKE_CHANNELS.reloadPreview]: OfficePreviewLease
   [OFFICE_INVOKE_CHANNELS.buildPrompt]: OfficePrompt
+  [OFFICE_INVOKE_CHANNELS.installerStatus]: OfficeManagedInstallStatus
+  [OFFICE_INVOKE_CHANNELS.installerStart]: OfficeManagedInstallStatus
+  [OFFICE_INVOKE_CHANNELS.installerCancel]: OfficeManagedInstallStatus
+  [OFFICE_INVOKE_CHANNELS.installerRemove]: OfficeManagedInstallStatus
 }
 
 type ValidationResult<T> = { ok: true; value: T } | { ok: false }
@@ -167,6 +199,25 @@ export function validateOfficeInvokeRequest<C extends OfficeInvokeChannel>(
   input: unknown,
 ): ValidationResult<OfficeInvokeRequestMap[C]> {
   if (!isRecord(input) || !isWorkspaceId(input.workspaceId)) return { ok: false }
+
+  if (channel === OFFICE_INVOKE_CHANNELS.installerStatus || channel === OFFICE_INVOKE_CHANNELS.installerCancel) {
+    return hasOnlyKeys(input, ['workspaceId'])
+      ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
+      : { ok: false }
+  }
+
+  if (channel === OFFICE_INVOKE_CHANNELS.installerStart) {
+    return hasOnlyKeys(input, ['workspaceId', 'confirmed', 'repair']) && input.confirmed === true &&
+      (input.repair === undefined || typeof input.repair === 'boolean')
+      ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
+      : { ok: false }
+  }
+
+  if (channel === OFFICE_INVOKE_CHANNELS.installerRemove) {
+    return hasOnlyKeys(input, ['workspaceId', 'confirmed']) && input.confirmed === true
+      ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
+      : { ok: false }
+  }
 
   if (channel === OFFICE_INVOKE_CHANNELS.detect || channel === OFFICE_INVOKE_CHANNELS.listFiles) {
     return hasOnlyKeys(input, ['workspaceId'])

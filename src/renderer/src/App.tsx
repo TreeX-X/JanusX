@@ -1,4 +1,12 @@
-import { useEffect, useRef, useCallback } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCheckpointStore } from '@/stores/checkpoint'
@@ -10,6 +18,13 @@ import { TerminalArea } from '@/components/TerminalArea'
 import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel } from '@/components/Panel'
 import { OfficePreviewPanel } from '@/components/office/OfficePreviewPanel'
+import {
+  clampOfficePreviewWidth,
+  getOfficePreviewMaxWidth,
+  OFFICE_PREVIEW_MAX_WIDTH,
+  OFFICE_PREVIEW_MIN_WIDTH,
+  reconcileOfficePreviewWidth,
+} from '@/components/office/officeResize'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
@@ -25,6 +40,15 @@ type IdleWindow = Window & {
 const SIDE_PANEL_WIDTH = 'clamp(240px, 14vw, 280px)'
 const SIDE_PANEL_COLLAPSED_WIDTH = '48px'
 const OFFICE_PREVIEW_WIDTH = 'clamp(300px, 30vw, 480px)'
+const OFFICE_CLOSE_DURATION_MS = 200
+const OFFICE_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
+
+interface OfficeResizeSession {
+  pointerId: number
+  target: HTMLDivElement
+  officeRightEdge: number
+  resizableWorkspaceWidth: number
+}
 
 function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): FileNode[] {
   const currentMap = new Map(currentNodes.map((node) => [node.path, node]))
@@ -58,6 +82,150 @@ export default function App() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
   const officeVisible = visibleOfficeWorkspaceId !== null && visibleOfficeWorkspaceId === activeWorkspaceId
+  const [officeClosing, setOfficeClosing] = useState(false)
+  const [officeWidth, setOfficeWidth] = useState<number | null>(null)
+  const [officeMeasuredWidth, setOfficeMeasuredWidth] = useState(OFFICE_PREVIEW_MIN_WIDTH)
+  const [officeMaxWidth, setOfficeMaxWidth] = useState(OFFICE_PREVIEW_MAX_WIDTH)
+  const [officeResizing, setOfficeResizing] = useState(false)
+  const officeCloseTimerRef = useRef<number | null>(null)
+  const centerWorkspaceRef = useRef<HTMLElement | null>(null)
+  const officeWorkspaceRef = useRef<HTMLElement | null>(null)
+  const officeResizeSessionRef = useRef<OfficeResizeSession | null>(null)
+  const bodyInteractionStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
+  const officeRendered = officeVisible || officeClosing
+
+  const reconcileOfficeLayout = useCallback(() => {
+    if (!officeVisible || officeClosing || !centerWorkspaceRef.current || !officeWorkspaceRef.current) return
+    const officeRect = officeWorkspaceRef.current.getBoundingClientRect()
+    const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
+    const resizableWorkspaceWidth = officeRect.width + centerRect.width
+    const maxWidth = getOfficePreviewMaxWidth(resizableWorkspaceWidth)
+
+    setOfficeMeasuredWidth((current) => Math.abs(current - officeRect.width) < 0.5 ? current : officeRect.width)
+    setOfficeMaxWidth((current) => Math.abs(current - maxWidth) < 0.5 ? current : maxWidth)
+    setOfficeWidth((current) => {
+      const { width } = reconcileOfficePreviewWidth(current, officeRect.width, resizableWorkspaceWidth)
+      return current !== null && Math.abs(current - width) < 0.5 ? current : width
+    })
+  }, [officeClosing, officeVisible])
+
+  useLayoutEffect(() => {
+    if (!officeVisible || officeClosing || !centerWorkspaceRef.current || !officeWorkspaceRef.current) return
+    const centerWorkspace = centerWorkspaceRef.current
+    const officeWorkspace = officeWorkspaceRef.current
+    let frameId: number | null = null
+    const observer = new ResizeObserver(() => {
+      if (frameId !== null) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null
+        reconcileOfficeLayout()
+      })
+    })
+
+    reconcileOfficeLayout()
+    observer.observe(centerWorkspace)
+    observer.observe(officeWorkspace)
+    return () => {
+      observer.disconnect()
+      if (frameId !== null) window.cancelAnimationFrame(frameId)
+    }
+  }, [officeClosing, officeVisible, reconcileOfficeLayout])
+
+  const finishOfficeResize = useCallback((updateState = true) => {
+    const session = officeResizeSessionRef.current
+    if (session?.target.hasPointerCapture(session.pointerId)) {
+      session.target.releasePointerCapture(session.pointerId)
+    }
+    officeResizeSessionRef.current = null
+    if (updateState) setOfficeResizing(false)
+    if (bodyInteractionStyleRef.current) {
+      document.body.style.cursor = bodyInteractionStyleRef.current.cursor
+      document.body.style.userSelect = bodyInteractionStyleRef.current.userSelect
+      bodyInteractionStyleRef.current = null
+    }
+  }, [])
+
+  const handleOfficeResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (officeClosing || event.button !== 0 || !centerWorkspaceRef.current || !officeWorkspaceRef.current) return
+
+    finishOfficeResize()
+    const officeRect = officeWorkspaceRef.current.getBoundingClientRect()
+    const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
+    officeResizeSessionRef.current = {
+      pointerId: event.pointerId,
+      target: event.currentTarget,
+      officeRightEdge: officeRect.right,
+      resizableWorkspaceWidth: officeRect.width + centerRect.width,
+    }
+    setOfficeMaxWidth(getOfficePreviewMaxWidth(officeRect.width + centerRect.width))
+    bodyInteractionStyleRef.current = {
+      cursor: document.body.style.cursor,
+      userSelect: document.body.style.userSelect,
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setOfficeWidth(officeRect.width)
+    setOfficeResizing(true)
+    event.preventDefault()
+  }, [finishOfficeResize, officeClosing])
+
+  const handleOfficeResizeMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const session = officeResizeSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    setOfficeWidth(clampOfficePreviewWidth(
+      event.clientX,
+      session.officeRightEdge,
+      session.resizableWorkspaceWidth,
+    ))
+  }, [])
+
+  const handleOfficeResizeEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (officeResizeSessionRef.current?.pointerId !== event.pointerId) return
+    finishOfficeResize()
+  }, [finishOfficeResize])
+
+  const handleOfficeResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!centerWorkspaceRef.current || !officeWorkspaceRef.current) return
+    const officeRect = officeWorkspaceRef.current.getBoundingClientRect()
+    const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
+    const maxWidth = getOfficePreviewMaxWidth(officeRect.width + centerRect.width)
+    const widthByKey: Partial<Record<string, number>> = {
+      ArrowLeft: Math.min(maxWidth, officeRect.width + 16),
+      ArrowRight: Math.max(OFFICE_PREVIEW_MIN_WIDTH, officeRect.width - 16),
+      Home: OFFICE_PREVIEW_MIN_WIDTH,
+      End: maxWidth,
+    }
+    const nextWidth = widthByKey[event.key]
+    if (nextWidth === undefined) return
+    setOfficeMaxWidth(maxWidth)
+    setOfficeWidth(nextWidth)
+    event.preventDefault()
+  }, [])
+
+  const handleCloseOffice = useCallback(() => {
+    if (officeCloseTimerRef.current !== null || visibleOfficeWorkspaceId === null) return
+
+    finishOfficeResize()
+    const closingWorkspaceId = visibleOfficeWorkspaceId
+    setOfficeClosing(true)
+    officeCloseTimerRef.current = window.setTimeout(() => {
+      officeCloseTimerRef.current = null
+      if (useOfficeStore.getState().visibleWorkspaceId === closingWorkspaceId) {
+        useOfficeStore.getState().closeOfficeSpace()
+      }
+      setOfficeClosing(false)
+    }, OFFICE_CLOSE_DURATION_MS)
+  }, [finishOfficeResize, visibleOfficeWorkspaceId])
+
+  useEffect(() => {
+    return () => {
+      if (officeCloseTimerRef.current !== null) {
+        window.clearTimeout(officeCloseTimerRef.current)
+      }
+      finishOfficeResize(false)
+    }
+  }, [finishOfficeResize])
 
   useEffect(() => {
     if (officeVisible) useAppStore.getState().setPanelCollapsed(true)
@@ -150,17 +318,20 @@ export default function App() {
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg-app)', color: 'var(--text)' }}>
       <Titlebar />
       <div
-        className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden transition-[grid-template-columns] duration-200"
+        className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden"
         style={{
           gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(0, 1fr) ${
-            officeVisible ? `${OFFICE_PREVIEW_WIDTH} ` : ''
+            officeRendered ? `${officeClosing ? '0px' : officeWidth === null ? OFFICE_PREVIEW_WIDTH : `${officeWidth}px`} ` : ''
           }${panelCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH}`,
+          transition: officeResizing
+            ? 'none'
+            : `grid-template-columns ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
         }}
       >
         <Sidebar />
 
         {/*-- 中心区域：3D 翻转容器（正面=终端，背面=蓝图） --*/}
-        <main className="min-w-0 overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
+        <main ref={centerWorkspaceRef} className="min-w-0 overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
           <div
             ref={flipperElRef}
             style={{
@@ -212,11 +383,39 @@ export default function App() {
           </div>
         </main>
 
-        {officeVisible && (
-          <section className="min-w-0 overflow-hidden border-l border-white/[0.08]" aria-label="Office preview workspace">
+        {officeRendered && (
+          <section
+            ref={officeWorkspaceRef}
+            className="relative min-w-0 overflow-hidden border-l border-white/[0.08]"
+            aria-label="Office preview workspace"
+            {...(officeClosing ? { inert: '' } : {})}
+            style={{
+              opacity: officeClosing ? 0 : 1,
+              pointerEvents: officeClosing ? 'none' : 'auto',
+              transition: `opacity ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
+            }}
+          >
+            {!officeClosing && (
+              <div
+                role="separator"
+                aria-label="Resize Office preview"
+                aria-orientation="vertical"
+                aria-valuemin={OFFICE_PREVIEW_MIN_WIDTH}
+                aria-valuemax={Math.round(officeMaxWidth)}
+                aria-valuenow={Math.round(officeMeasuredWidth)}
+                tabIndex={0}
+                className="absolute inset-y-0 left-0 z-20 w-2 cursor-col-resize touch-none outline-none hover:bg-[#ff7830]/20 focus-visible:bg-[#ff7830]/30"
+                onPointerDown={handleOfficeResizeStart}
+                onPointerMove={handleOfficeResizeMove}
+                onPointerUp={handleOfficeResizeEnd}
+                onPointerCancel={handleOfficeResizeEnd}
+                onLostPointerCapture={handleOfficeResizeEnd}
+                onKeyDown={handleOfficeResizeKeyDown}
+              />
+            )}
             <OfficePreviewPanel
               workspaceId={visibleOfficeWorkspaceId}
-              onClose={() => useOfficeStore.getState().closeOfficeSpace()}
+              onClose={handleCloseOffice}
             />
           </section>
         )}

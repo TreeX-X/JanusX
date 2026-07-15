@@ -4,6 +4,10 @@
   "type": "module",
   "description": "CLI 工作区管理器 - 统一管理多个 AI 编程助手",
   "main": "out/main/index.js",
+  "bin": {
+    "janusx-office": "out/main/office-launcher.js",
+    "janusx-office-mcp": "out/main/office-mcp.js"
+  },
   "author": "Tree",
   "license": "MIT",
   "workspaces": [
@@ -15,6 +19,8 @@
     "build:llm-core": "npm run build --workspace=@janusx/llm-core",
     "preview": "electron-vite preview",
     "mcp:knowledge": "node out/main/knowledge-mcp.js",
+    "mcp:office": "node out/main/office-mcp.js",
+    "office:launcher": "node out/main/office-launcher.js",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:island": "playwright test tests/e2e/island-interaction.spec.ts",

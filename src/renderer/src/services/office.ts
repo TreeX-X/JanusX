@@ -13,6 +13,10 @@ import {
   type OfficeWatchEvictedEvent,
   type OfficeWorkspaceRequest,
   type OfficecliPublicInfo,
+  type OfficeInstallerProgressEvent,
+  type OfficeInstallerRemoveRequest,
+  type OfficeInstallerStartRequest,
+  type OfficeManagedInstallStatus,
 } from '../../../shared/office'
 
 export interface OfficeService {
@@ -22,6 +26,11 @@ export interface OfficeService {
   stopPreview(request: OfficeStopPreviewRequest): Promise<OfficeResult<null>>
   reloadPreview(request: OfficeReloadPreviewRequest): Promise<OfficeResult<OfficePreviewLease>>
   buildPrompt(request: OfficeBuildPromptRequest): Promise<OfficeResult<OfficePrompt>>
+  installerStatus(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerStart(request: OfficeInstallerStartRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerCancel(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerRemove(request: OfficeInstallerRemoveRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  onInstallerProgress(listener: (event: OfficeInstallerProgressEvent) => void): () => void
   onFilesChanged(listener: (event: OfficeFilesChangedEvent) => void): () => void
   onWatchEvicted(listener: (event: OfficeWatchEvictedEvent) => void): () => void
 }
@@ -37,6 +46,11 @@ export const officeService: OfficeService = {
   stopPreview: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.stopPreview, request),
   reloadPreview: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.reloadPreview, request),
   buildPrompt: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.buildPrompt, request),
+  installerStatus: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerStatus, request),
+  installerStart: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerStart, request),
+  installerCancel: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerCancel, request),
+  installerRemove: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerRemove, request),
+  onInstallerProgress: (listener) => window.electron.on(OFFICE_EVENT_CHANNELS.installerProgress, (event) => listener(event as OfficeInstallerProgressEvent)),
   onFilesChanged: (listener) => window.electron.on(OFFICE_EVENT_CHANNELS.filesChanged, (event) => listener(event as OfficeFilesChangedEvent)),
   onWatchEvicted: (listener) => window.electron.on(OFFICE_EVENT_CHANNELS.watchEvicted, (event) => listener(event as OfficeWatchEvictedEvent)),
 }

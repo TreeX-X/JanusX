@@ -102,7 +102,9 @@ async function bootstrapApp(): Promise<void> {
     { registerKnowledgeHandlers },
     { registerOfficeHandlers },
     { createRegisteredWorkspaceRootResolver },
-    { initializeOfficecliProvider },
+    { initializeOfficecliProvider, officecliManager },
+    { OfficecliInstaller },
+    { resolveOfficecliManagedRoot },
     { OfficeWatchPool },
     { OfficeArtifactIndex },
     { createProductionOfficeOperations },
@@ -129,6 +131,8 @@ async function bootstrapApp(): Promise<void> {
     import('./ipc/office-handlers'),
     import('./office/office-workspace-guard'),
     import('./office/officecli-manager'),
+    import('./office/officecli-installer'),
+    import('./office/office-managed-root'),
     import('./office/office-watch-pool'),
     import('./office/office-artifact-index'),
     import('./office/office-handler-operations'),
@@ -148,6 +152,15 @@ async function bootstrapApp(): Promise<void> {
     ...(mainWindow && !mainWindow.isDestroyed() ? [mainWindow] : []),
     ...Array.from(editorWindows.values()).filter((window) => !window.isDestroyed()),
   ]
+  const officecliInstaller = new OfficecliInstaller(
+    resolveOfficecliManagedRoot({ userDataDir: app.getPath('userData') }),
+    (event) => {
+      for (const window of getOfficeWindows()) {
+        if (!window.webContents.isDestroyed()) window.webContents.send(OFFICE_EVENT_CHANNELS.installerProgress, event)
+      }
+    },
+    { verifyBinary: (binary, signal) => officecliManager.verifyManagedBinary(binary, signal) },
+  )
   const officeWatchPool = new OfficeWatchPool(resolveOfficeWorkspaceRoot, {
     onEvicted: (event) => {
       for (const window of getOfficeWindows()) {
@@ -323,6 +336,7 @@ async function bootstrapApp(): Promise<void> {
         artifactIndex: officeArtifactIndex,
         watchPool: officeWatchPool,
       }),
+      installer: officecliInstaller,
     })
 
     // 窗口控制 IPC
@@ -416,6 +430,7 @@ async function bootstrapApp(): Promise<void> {
     })
 
     app.whenReady().then(async () => {
+      officecliManager.configureManagedBinaryPath(await officecliInstaller.getManagedBinary())
       await initializeOfficecliProvider()
       createWindow()
 

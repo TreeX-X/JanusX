@@ -3,6 +3,40 @@ import type { OfficeErrorCode, OfficeFileEntry } from '../../../shared/office'
 import { officeService, type OfficeService } from '../services/office'
 
 export type OfficeTabStatus = 'starting' | 'ready' | 'reloading' | 'error'
+export const OFFICE_RENDERER_REQUEST_TIMEOUT_MS = 12_000
+
+type BoundedRequestResult<T> =
+  | { kind: 'result'; value: T }
+  | { kind: 'rejected' }
+  | { kind: 'timeout' }
+
+function boundedRequest<T>(
+  request: Promise<T>,
+  timeoutMs: number,
+  onLateResult: (value: T) => void,
+): Promise<BoundedRequestResult<T>> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      settled = true
+      resolve({ kind: 'timeout' })
+    }, timeoutMs)
+    request.then((value) => {
+      if (settled) {
+        onLateResult(value)
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      resolve({ kind: 'result', value })
+    }, () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({ kind: 'rejected' })
+    })
+  })
+}
 
 export interface OfficePreviewTab {
   tabId: string
@@ -49,6 +83,7 @@ const nextActiveTab = (tabs: OfficePreviewTab[], workspaceId: string) => tabs.fi
 export function createOfficeStore(
   service: OfficeService = officeService,
   reportStopFailure: (message: string, detail: unknown) => void = (message, detail) => console.error(message, detail),
+  requestTimeoutMs = OFFICE_RENDERER_REQUEST_TIMEOUT_MS,
 ): UseBoundStore<StoreApi<OfficeStoreState>> {
   const stopSafely = async (workspaceId: string, relPath: string, previewLeaseId: string) => {
     try {
@@ -115,7 +150,20 @@ export function createOfficeStore(
         tabs: [...state.tabs, { tabId, workspaceId, relPath, status: 'starting' }],
         activeTabIds: { ...state.activeTabIds, [workspaceId]: tabId },
       }))
-      const result = await service.startPreview({ workspaceId, relPath })
+      const outcome = await boundedRequest(
+        service.startPreview({ workspaceId, relPath }),
+        requestTimeoutMs,
+        (lateResult) => {
+          if (lateResult.ok) void stopSafely(workspaceId, relPath, lateResult.value.previewLeaseId)
+        },
+      )
+      if (outcome.kind !== 'result') {
+        set((state) => ({ tabs: state.tabs.map((tab) => tab.tabId === tabId
+          ? { ...tab, status: 'error', errorCode: outcome.kind === 'timeout' ? 'PORT_TIMEOUT' : 'START_FAILED' }
+          : tab) }))
+        return
+      }
+      const result = outcome.value
       if (!result.ok) {
         set((state) => ({ tabs: state.tabs.map((tab) => tab.tabId === tabId ? { ...tab, status: 'error', errorCode: result.error.code } : tab) }))
         return
@@ -156,14 +204,40 @@ export function createOfficeStore(
     reloadTab: async (tabId) => {
       const tab = get().tabs.find((item) => item.tabId === tabId)
       if (!tab?.previewLeaseId || tab.status === 'reloading') return
+      const previousLeaseId = tab.previewLeaseId
       const epoch = get().requestEpochs[tab.workspaceId] ?? 0
       const reloadRequestId = ++nextReloadRequestId
+      const retireFailedReload = async (errorCode: OfficeErrorCode) => {
+        let retired = false
+        set((state) => ({ tabs: state.tabs.map((item) => {
+          if (item.tabId !== tabId || item.reloadRequestId !== reloadRequestId) return item
+          retired = true
+          return {
+            ...item,
+            previewLeaseId: undefined,
+            port: undefined,
+            status: 'error',
+            errorCode,
+            reloadRequestId: undefined,
+          }
+        }) }))
+        if (retired) await stopSafely(tab.workspaceId, tab.relPath, previousLeaseId)
+      }
       set((state) => ({ tabs: state.tabs.map((item) => item.tabId === tabId ? { ...item, status: 'reloading', errorCode: undefined, reloadRequestId } : item) }))
-      const result = await service.reloadPreview({ workspaceId: tab.workspaceId, relPath: tab.relPath, previewLeaseId: tab.previewLeaseId })
+      const outcome = await boundedRequest(
+        service.reloadPreview({ workspaceId: tab.workspaceId, relPath: tab.relPath, previewLeaseId: previousLeaseId }),
+        requestTimeoutMs,
+        (lateResult) => {
+          if (lateResult.ok) void stopSafely(tab.workspaceId, tab.relPath, lateResult.value.previewLeaseId)
+        },
+      )
+      if (outcome.kind !== 'result') {
+        await retireFailedReload(outcome.kind === 'timeout' ? 'PORT_TIMEOUT' : 'START_FAILED')
+        return
+      }
+      const result = outcome.value
       if (!result.ok) {
-        set((state) => ({ tabs: state.tabs.map((item) => item.tabId === tabId && item.reloadRequestId === reloadRequestId
-          ? { ...item, status: 'error', errorCode: result.error.code, reloadRequestId: undefined }
-          : item) }))
+        await retireFailedReload(result.error.code)
         return
       }
       const current = get()

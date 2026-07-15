@@ -88,14 +88,27 @@ function spawnWatch(binary: string, filePath: string, port: number): WatchChild 
     stdout: subprocess.stdout!,
     stderr: subprocess.stderr!,
     exited,
-    isAlive: () => subprocess.exitCode === undefined && !subprocess.killed,
-    stop: async () => {
-      if (subprocess.exitCode === undefined) {
-        subprocess.kill('SIGTERM')
-      }
-      await exited
-    },
+    isAlive: () => isOfficeWatchProcessRunning(subprocess),
+    stop: () => stopOfficeWatchProcess(subprocess, exited),
   }
+}
+
+export interface OfficeWatchProcessState {
+  exitCode: number | null
+  signalCode: string | null
+  killed: boolean
+}
+
+export function isOfficeWatchProcessRunning(subprocess: OfficeWatchProcessState): boolean {
+  return subprocess.exitCode === null && subprocess.signalCode === null && !subprocess.killed
+}
+
+export async function stopOfficeWatchProcess(
+  subprocess: OfficeWatchProcessState & { kill(signal: 'SIGTERM'): unknown },
+  exited: Promise<void>,
+): Promise<void> {
+  if (isOfficeWatchProcessRunning(subprocess)) subprocess.kill('SIGTERM')
+  await exited
 }
 
 async function defaultReach(port: number): Promise<boolean> {

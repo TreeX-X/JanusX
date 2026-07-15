@@ -12,7 +12,7 @@ export const OFFICECLI_MANUAL_INSTALL_GUIDANCE: OfficecliManualInstallGuidance =
   repository: 'https://github.com/iOfficeAI/OfficeCLI',
   release: `https://github.com/iOfficeAI/OfficeCLI/releases/tag/v${SUPPORTED_VERSION}`,
   targetVersion: SUPPORTED_VERSION,
-  integrity: 'No repository-verified SHA256 or signature is recorded; verify the tagged release before installing.',
+  integrity: 'Pinned official SHA256: x64 937db176b585e874aa5bff48d536bce78037665cd862b5deefe56e79977e6588; arm64 c818013023f83d3c9ec3dcba4dabaf824bdf861da6fa925d0557f508d3b11558.',
   windows: [
     'Download the Windows binary from the tagged official release after verifying its published integrity metadata.',
     'Run: Copy-Item .\\officecli.exe "$env:LOCALAPPDATA\\OfficeCLI\\officecli.exe"',
@@ -38,12 +38,12 @@ interface OfficecliManagerDependencies {
   platform: NodeJS.Platform
   homeDir: string
   isRegularFile(path: string): Promise<boolean>
-  run(binary: string, args: readonly string[]): Promise<CommandResult>
+  run(binary: string, args: readonly string[], signal?: AbortSignal): Promise<CommandResult>
 }
 
 interface ResolvedBinary {
   path: string
-  source: 'path' | 'known-location'
+  source: 'path' | 'known-location' | 'managed'
 }
 
 function defaultBinaryNames(platform: NodeJS.Platform): readonly string[] {
@@ -82,12 +82,13 @@ function unavailableInfo(info: OfficecliInfo): OfficecliInfo {
   }
 }
 
-async function defaultRun(binary: string, args: readonly string[]): Promise<CommandResult> {
+async function defaultRun(binary: string, args: readonly string[], signal?: AbortSignal): Promise<CommandResult> {
   try {
     const result = await execa(binary, args, {
       timeout: PROBE_TIMEOUT_MS,
       reject: false,
       windowsHide: true,
+      cancelSignal: signal,
     })
     return { exitCode: result.exitCode ?? 1, stdout: result.stdout, stderr: result.stderr }
   } catch (error) {
@@ -111,8 +112,14 @@ const defaultDependencies: OfficecliManagerDependencies = {
 
 export class OfficecliManager {
   private verifiedBinary?: ResolvedBinary
+  private managedBinaryPath?: string
 
   constructor(private readonly deps: OfficecliManagerDependencies = defaultDependencies) {}
+
+  configureManagedBinaryPath(path: string | undefined): void {
+    this.managedBinaryPath = path
+    this.verifiedBinary = undefined
+  }
 
   async resolveBinary(): Promise<ResolvedBinary | undefined> {
     if (!this.verifiedBinary) await this.detect()
@@ -120,6 +127,9 @@ export class OfficecliManager {
   }
 
   private async findCandidate(): Promise<ResolvedBinary | undefined> {
+    if (this.managedBinaryPath && await this.isRegularAbsoluteFile(this.managedBinaryPath)) {
+      return { path: resolve(this.managedBinaryPath), source: 'managed' }
+    }
     const names = defaultBinaryNames(this.deps.platform)
     const pathValue = Object.entries(this.deps.env).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? ''
     const pathCandidates = pathValue
@@ -136,13 +146,22 @@ export class OfficecliManager {
     return undefined
   }
 
-  async verifyCapabilities(binary: string): Promise<boolean> {
+  async verifyCapabilities(binary: string, signal?: AbortSignal): Promise<boolean> {
     if (!(await this.isRegularAbsoluteFile(binary))) return false
     for (const capability of REQUIRED_CAPABILITIES) {
-      const result = await this.deps.run(binary, [capability, '--help'])
+      signal?.throwIfAborted()
+      const result = await this.deps.run(binary, [capability, '--help'], signal)
       if (result.exitCode !== 0) return false
     }
     return true
+  }
+
+  async verifyManagedBinary(binary: string, signal?: AbortSignal): Promise<boolean> {
+    if (!(await this.isRegularAbsoluteFile(binary))) return false
+    signal?.throwIfAborted()
+    const result = await this.deps.run(binary, ['--version'], signal)
+    return result.exitCode === 0 && parseVersion(`${result.stdout}\n${result.stderr}`) === SUPPORTED_VERSION &&
+      this.verifyCapabilities(binary, signal)
   }
 
   async detect(): Promise<OfficecliInfo> {
