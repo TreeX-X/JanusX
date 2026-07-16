@@ -21,6 +21,10 @@ function harness(page: Page) {
   return page.getByTestId('harness')
 }
 
+function islandExpandedChatButton(page: Page) {
+  return page.locator('.janus-island .janus-expanded-view-button', { hasText: /^Chat$/ })
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('.janus-island')).toBeVisible()
@@ -90,7 +94,7 @@ test('expanded Chat remains clickable while Island background double activation 
     }, { once: true })
   })
 
-  await page.getByRole('button', { name: 'Chat' }).click()
+  await islandExpandedChatButton(page).click()
   await expect(page.locator('.janus-island-shell')).toHaveAttribute('data-view', 'chat')
   await expect(page.locator('.janus-chat')).toBeVisible()
   await expect.poll(() => page.evaluate(() => (
@@ -104,6 +108,50 @@ test('expanded Chat remains clickable while Island background double activation 
 
   await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
   await expect(harness(page)).toHaveAttribute('data-double-count', '2')
+})
+
+test('Island Chat action docks the shared presentation and closes only its workspace view', async ({ page }) => {
+  const island = page.locator('.janus-island')
+  await tap(island, { x: 100, y: 20 })
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+  await islandExpandedChatButton(page).click()
+
+  const islandChat = page.locator('.janus-island .janus-chat')
+  await expect(islandChat.getByText('Shared controller message')).toBeVisible()
+  await expect(islandChat.getByText('Shared pending stream')).toBeVisible()
+  await islandChat.getByRole('button', { name: 'Add Chat to workspace' }).click()
+
+  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
+  const workspaceChat = page.getByTestId('workspace-chat')
+  await expect(workspaceChat).toBeVisible()
+  await expect(workspaceChat.getByText('Shared controller message')).toBeVisible()
+  await expect(workspaceChat.getByText('Shared pending stream')).toBeVisible()
+  await page.getByTestId('toggle-streaming').click()
+  await workspaceChat.locator('textarea').click()
+  await expect(workspaceChat.locator('textarea')).toBeFocused()
+
+  await page.keyboard.press('Control+P')
+  await expect(harness(page)).toHaveAttribute('data-cycle-count', '1')
+
+  await page.getByTestId('reopen-island').click()
+  await islandExpandedChatButton(page).click()
+  await expect(page.locator('.janus-chat')).toHaveCount(2)
+  await expect(page.locator('.janus-island .janus-chat').getByText('Shared controller message')).toBeVisible()
+  await workspaceChat.locator('textarea').click()
+  await expect(page.locator('.janus-island .janus-chat textarea')).not.toBeFocused()
+  await page.keyboard.press('Control+P')
+  await expect(harness(page)).toHaveAttribute('data-cycle-count', '2')
+
+  await page.getByTestId('toggle-streaming').click()
+  await page.getByTestId('close-workspace-chat').click()
+  await expect(workspaceChat).toHaveCount(0)
+  await expect(harness(page)).toHaveAttribute('data-clear-count', '0')
+  await expect(harness(page)).toHaveAttribute('data-stop-count', '0')
+  await expect(harness(page)).toHaveAttribute('data-terminal-tab-count', '1')
+  await expect(page.locator('.janus-island .janus-chat').getByText('Shared controller message')).toBeVisible()
 })
 
 test('cancelled and non-primary pointers do not activate Island', async ({ page }) => {

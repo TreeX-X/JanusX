@@ -112,6 +112,7 @@ interface JanusIslandProps {
   onChatRetry: () => void
   onChatClear: () => void
   onOpenLlmConfig: () => void
+  onAddChatToWorkspace: () => void
   knowledgeTrace?: KnowledgeRecallTrace | null
   knowledgePeekActive?: boolean
   knowledgePeekEmpty?: boolean
@@ -252,6 +253,7 @@ export function JanusIsland({
   onChatRetry,
   onChatClear,
   onOpenLlmConfig,
+  onAddChatToWorkspace,
   knowledgeTrace = null,
   knowledgePeekActive = false,
   knowledgePeekEmpty = false,
@@ -271,6 +273,7 @@ export function JanusIsland({
   const fetchSubAgentRuns = useSubAgentRunStore((s) => s.fetchRuns)
   const subscribeToSubAgentRuns = useSubAgentRunStore((s) => s.subscribeToEvents)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
+  const focusedTabId = useWorkspaceStore((s) => s.focusedTabId)
   const terminals = useWorkspaceStore((s) => s.terminals)
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
@@ -749,6 +752,7 @@ export function JanusIsland({
             <JanusChat
               visible
               docked
+              focused={focusedTabId !== 'janus-chat'}
               modeColor={modeColor}
               messages={messages}
               pendingContent={pendingContent}
@@ -764,6 +768,7 @@ export function JanusIsland({
               onRetry={onChatRetry}
               onClear={onChatClear}
               onOpenLlmConfig={onOpenLlmConfig}
+              onAddToWorkspace={onAddChatToWorkspace}
             />
           </div>
 

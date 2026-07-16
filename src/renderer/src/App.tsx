@@ -28,6 +28,7 @@ import {
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
+import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
 import { BlueprintFocusView } from '@/components/blueprint/BlueprintFocusView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
@@ -315,6 +316,7 @@ export default function App() {
   }, [])
 
   return (
+    <JanusChatProvider>
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg-app)', color: 'var(--text)' }}>
       <Titlebar />
       <div
@@ -427,6 +429,7 @@ export default function App() {
       <FileEditor />
       <AgentNotificationHost />
     </div>
+    </JanusChatProvider>
   )
 }
 

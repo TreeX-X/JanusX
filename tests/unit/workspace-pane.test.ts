@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addPaneContentToTree,
   addTerminalToPaneTree,
   closePaneTab,
   collapsePaneTree,
+  createJanusChatPaneContent,
   createTerminalPaneContent,
   getLeafPanes,
   removeTerminalFromPaneTree,
@@ -136,5 +138,31 @@ describe('workspace pane tree', () => {
     expect(getLeafPanes(collapsed.tree)).toHaveLength(1)
     expect(getLeafPanes(collapsed.tree)[0].tabs.map((tab) => tab.terminalId)).toEqual(['terminal-1', 'terminal-2'])
     expect(collapsed.focus).toEqual({ paneId: 'pane-1', tabId: 'terminal:terminal-2', terminalId: 'terminal-2' })
+  })
+
+  it('adds one Janus Chat view to a split and focuses the existing view on repeat', () => {
+    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const split = splitPaneTree(terminal.tree, 'pane-1', 'horizontal', 'split-1', 'pane-chat', 'after', 0.62)
+    const first = addPaneContentToTree(split.tree, 'pane-chat', createJanusChatPaneContent(), 'pane-fallback')
+    const repeated = addPaneContentToTree(first.tree, 'pane-1', createJanusChatPaneContent(), 'pane-fallback')
+
+    expect(getLeafPanes(repeated.tree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'janus-chat')).toHaveLength(1)
+    expect(repeated.focus).toEqual({ paneId: 'pane-chat', tabId: 'janus-chat', terminalId: null })
+    expect((repeated.tree as Extract<WorkspacePaneNode, { type: 'split' }>).ratio).toBe(0.62)
+  })
+
+  it('closes only the Janus Chat presentation and keeps the terminal tab', () => {
+    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const withChat = addPaneContentToTree(terminal.tree, 'pane-1', createJanusChatPaneContent(), 'pane-fallback')
+    const closed = closePaneTab(withChat.tree, 'pane-1', 'janus-chat')
+
+    expect(getLeafPanes(closed)).toEqual([
+      {
+        type: 'leaf',
+        id: 'pane-1',
+        tabs: [createTerminalPaneContent('terminal-1', 'workspace-1')],
+        activeTabId: 'terminal:terminal-1',
+      },
+    ])
   })
 })

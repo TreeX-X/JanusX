@@ -6,7 +6,7 @@ import { AppSettingsModal } from '@/components/AppSettingsModal'
 import { KnowledgeWorkbench } from '@/components/knowledge'
 import { BlueprintWorkbench } from '@/components/blueprint/BlueprintWorkbench'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
-import { useJanusChat } from '@/components/janus/useJanusChat'
+import { useJanusChatController } from '@/components/janus/JanusChatProvider'
 import type { JanusMode } from '@/components/janus'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
 import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentOfficeNotice } from '@/components/janus/islandController'
@@ -42,7 +42,7 @@ export function Titlebar() {
     clear: handleChatClear,
     cycleModel: handleChatCycleModel,
     selectModel: handleChatSelectModel,
-  } = useJanusChat()
+  } = useJanusChatController()
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
@@ -167,6 +167,16 @@ export function Titlebar() {
     setSettingsModalOpen(true)
   }, [])
 
+  useEffect(() => {
+    window.addEventListener('janus:open-llm-settings', handleOpenLlmConfig)
+    return () => window.removeEventListener('janus:open-llm-settings', handleOpenLlmConfig)
+  }, [handleOpenLlmConfig])
+
+  const handleAddChatToWorkspace = useCallback(() => {
+    useWorkspaceStore.getState().openJanusChatInWorkspace()
+    dispatchIsland({ type: 'dismiss' })
+  }, [])
+
   return (
     <div
       className="h-[38px] flex items-center px-3.5 select-none titlebar-drag relative overflow-visible"
@@ -277,6 +287,7 @@ export function Titlebar() {
           onChatRetry={handleChatRetry}
           onChatClear={handleChatClearAndInvalidatePeek}
           onOpenLlmConfig={handleOpenLlmConfig}
+          onAddChatToWorkspace={handleAddChatToWorkspace}
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
           knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}

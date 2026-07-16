@@ -2,10 +2,14 @@ import { create } from 'zustand'
 import type { Workspace, Terminal, FileNode } from '@/types'
 import {
   activatePaneTab,
+  addPaneContentToTree,
   addTerminalToPaneTree,
   closePaneTab,
   collapsePaneTree,
+  createJanusChatPaneContent,
   createTerminalPaneContent,
+  findLeafPane,
+  findPaneContent,
   findTerminalPane,
   removeTerminalFromPaneTree,
   resizeSplitPane,
@@ -50,6 +54,7 @@ interface WorkspaceStore {
   updateTerminal: (id: string, patch: Partial<Terminal>) => void
   setFocusedPane: (paneId: string) => void
   setPaneTab: (paneId: string, tabId: string) => void
+  openJanusChatInWorkspace: () => void
   splitPane: (paneId: string | null, direction: PaneSplitDirection) => void
   unsplitPane: (paneId: string | null) => void
   collapsePaneLayout: () => void
@@ -282,6 +287,48 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: focus.paneId,
         focusedTabId: focus.tabId,
         activeTerminalId: focus.terminalId,
+      }
+    }),
+  openJanusChatInWorkspace: () =>
+    set((s) => {
+      const existing = findPaneContent(s.paneTree, 'janus-chat')
+      if (existing.paneId && existing.tabId) {
+        return {
+          paneTree: activatePaneTab(s.paneTree, existing.paneId, existing.tabId),
+          focusedPaneId: existing.paneId,
+          focusedTabId: existing.tabId,
+          activeTerminalId: null,
+        }
+      }
+
+      const focusedPane = findLeafPane(s.paneTree, s.focusedPaneId)
+      let paneTree = s.paneTree
+      let targetPaneId = focusedPane?.id ?? null
+      if (focusedPane && focusedPane.tabs.length > 0) {
+        const split = splitPaneTree(
+          paneTree,
+          focusedPane.id,
+          'horizontal',
+          createPaneId('split'),
+          createPaneId(),
+          'after',
+          0.62
+        )
+        paneTree = split.tree
+        targetPaneId = split.focus.paneId
+      }
+
+      const result = addPaneContentToTree(
+        paneTree,
+        targetPaneId,
+        createJanusChatPaneContent(),
+        createPaneId()
+      )
+      return {
+        paneTree: result.tree,
+        focusedPaneId: result.focus.paneId,
+        focusedTabId: result.focus.tabId,
+        activeTerminalId: null,
       }
     }),
   splitPane: (paneId, direction) =>

@@ -1,6 +1,6 @@
 /**
- * @file JanusChat �?虚幻模糊风格的对话组�?
- * @description �?Janus 数字形象风格一致的对话界面
+ * @file JanusChat �?虚幻模糊风格的对话组�?
+ * @description �?Janus 数字形象风格一致的对话界面
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -17,11 +17,15 @@ interface JanusChatProps {
   visible: boolean
   /** 停靠态：作为右侧 flex 列，而非绝对浮层 */
   docked?: boolean
+  /** Fill a central workspace pane instead of using Island geometry. */
+  workspace?: boolean
+  /** Only the focused presentation owns input focus and global shortcuts. */
+  focused?: boolean
   /** 当前模式颜色 */
   modeColor: string
   /** 消息列表 */
   messages: Message[]
-  /** 当前正在流式接收的内�?*/
+  /** 当前正在流式接收的内�?*/
   pendingContent: string
   /** 是否正在流式输出 */
   isStreaming: boolean
@@ -32,20 +36,21 @@ interface JanusChatProps {
   modelNotice?: string | null
   onCycleModel?: () => void
   onSelectModel?: (providerId: string) => void
-  /** 发送一条用户消�?*/
+  /** 发送一条用户消�?*/
   onSend: (text: string) => void
   /** 停止当前流式输出 */
   onStop: () => void
-  /** 重试最后一条用户消�?*/
+  /** 重试最后一条用户消�?*/
   onRetry: () => void
   /** 清空对话 */
   onClear: () => void
   /** 打开 LLM 配置面板 */
   onOpenLlmConfig: () => void
+  onAddToWorkspace?: () => void
 }
 
 /* ════════════════════════════════════════════════════════════
-   Markdown 渲染组件（内联代�?+ 代码块复制）
+   Markdown 渲染组件（内联代�?+ 代码块复制）
    ════════════════════════════════════════════════════════════ */
 
 function MarkdownContent({ content }: { content: string }) {
@@ -161,6 +166,8 @@ function JanusXTerminalBanner() {
 export function JanusChat({
   visible,
   docked = false,
+  workspace = false,
+  focused = true,
   modeColor,
   messages,
   pendingContent,
@@ -175,7 +182,8 @@ export function JanusChat({
   onStop,
   onRetry,
   onClear,
-  onOpenLlmConfig
+  onOpenLlmConfig,
+  onAddToWorkspace,
 }: JanusChatProps) {
   const [input, setInput] = useState('')
   const [rows, setRows] = useState(1)
@@ -189,7 +197,7 @@ export function JanusChat({
   // 聚焦定时器句柄，effect 清理时清除，避免视图可见性变化打断流
   const focusTimerRef = useRef<number | null>(null)
 
-  // 滚动到底�?
+  // 滚动到底�?
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior })
   }, [])
@@ -206,7 +214,7 @@ export function JanusChat({
     }
   }, [])
 
-  // 消息/流式内容变化时自动滚动（仅当用户已在底部�?
+  // 消息/流式内容变化时自动滚动（仅当用户已在底部�?
   useEffect(() => {
     if (isAtBottomRef.current) {
       scrollToBottom(pendingContent ? 'auto' : 'smooth')
@@ -215,9 +223,9 @@ export function JanusChat({
     }
   }, [messages, pendingContent, scrollToBottom])
 
-  // 聚焦输入框；流的实际生命周期�?useJanusChat 持有，视图可见性变化不�?abort �?
+  // 聚焦输入框；流的实际生命周期�?useJanusChat 持有，视图可见性变化不�?abort �?
   useEffect(() => {
-    if (visible) {
+    if (visible && focused) {
       focusTimerRef.current = window.setTimeout(() => inputRef.current?.focus(), 100)
     }
     return () => {
@@ -226,9 +234,9 @@ export function JanusChat({
         focusTimerRef.current = null
       }
     }
-  }, [visible])
+  }, [focused, visible])
 
-  // 发送消息（支持重试传入指定文本�?
+  // 发送消息（支持重试传入指定文本�?
   const handleSend = useCallback(
     (textOverride?: string) => {
       const text = (textOverride ?? input).trim()
@@ -244,7 +252,7 @@ export function JanusChat({
     [input, isStreaming, onSend, scrollToBottom]
   )
 
-  // 输入变化与自动增高（最�?4 行）
+  // 输入变化与自动增高（最�?4 行）
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     setInput(value)
@@ -256,6 +264,7 @@ export function JanusChat({
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
       e.preventDefault()
+      e.stopPropagation()
       onCycleModel()
       setShowModelMenu(false)
       return
@@ -267,7 +276,7 @@ export function JanusChat({
   }, [handleSend, onCycleModel])
 
   useEffect(() => {
-    if (!visible) return
+    if (!visible || !focused) return
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'p') return
       event.preventDefault()
@@ -276,19 +285,19 @@ export function JanusChat({
     }
     document.addEventListener('keydown', handleGlobalKeyDown)
     return () => document.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [onCycleModel, visible])
+  }, [focused, onCycleModel, visible])
 
   // 停止生成
   const handleStop = useCallback(() => {
     onStop()
   }, [onStop])
 
-  // 重试：重新发送最后一条用户消�?
+  // 重试：重新发送最后一条用户消�?
   const handleRetry = useCallback(() => {
     onRetry()
   }, [onRetry])
 
-  // 打开 LLM 配置面板（由 Titlebar 透传回调控制�?
+  // 打开 LLM 配置面板（由 Titlebar 透传回调控制�?
   const handleOpenLlmConfig = useCallback(() => {
     onOpenLlmConfig()
   }, [onOpenLlmConfig])
@@ -302,22 +311,49 @@ export function JanusChat({
 
   if (!visible) return null
 
-  const isNoProviderError = error === '未配置默�?LLM Provider'
+  const isNoProviderError = error === '未配置默�?LLM Provider'
   const canClear = messages.length > 0 || !!pendingContent || !!error
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
   const activeModelLabel = activeModel?.modelId ?? 'No model configured'
 
   return (
     <div
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
       onDoubleClick={(e) => e.stopPropagation()}
     >
+      {onAddToWorkspace && (
+        <button
+          className="janus-chat-workspace-action"
+          onClick={onAddToWorkspace}
+          aria-label="Add Chat to workspace"
+          title="Add Chat to workspace"
+          type="button"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M9 4v16" />
+            <path d="M14 10h5M16.5 7.5 19 10l-2.5 2.5" />
+          </svg>
+        </button>
+      )}
       <div className="janus-chat-toolbar">
         <div>
           <span className="janus-chat-toolbar-kicker">Thread</span>
           <strong>Janus</strong>
         </div>
         <div className="janus-chat-toolbar-actions">
+
           <button
             className="janus-chat-tool-button"
             onClick={handleOpenLlmConfig}
@@ -409,11 +445,11 @@ export function JanusChat({
             scrollToBottom('smooth')
           }}
         >
-          �?新消�?
+          �?新消�?
         </button>
       )}
 
-      {/* 输入区域 �?opencode 风格方框 composer：单�?prompt + textarea + 按钮 */}
+      {/* 输入区域 �?opencode 风格方框 composer：单�?prompt + textarea + 按钮 */}
       <div className="janus-chat-input-wrapper" data-has-input={input.length > 0}>
         <div className="janus-chat-composer-row">
           <textarea

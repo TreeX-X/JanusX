@@ -2,12 +2,21 @@ export type PaneSplitDirection = 'horizontal' | 'vertical'
 export type PaneSplitPlacement = 'before' | 'after'
 export type PaneDropEdge = 'left' | 'right' | 'top' | 'bottom'
 
-export type PaneContent = {
+export type TerminalPaneContent = {
   type: 'terminal'
   id: string
   terminalId: string
   workspaceId: string
 }
+
+export type JanusChatPaneContent = {
+  type: 'janus-chat'
+  id: 'janus-chat'
+  terminalId?: never
+  workspaceId?: never
+}
+
+export type PaneContent = TerminalPaneContent | JanusChatPaneContent
 
 export type WorkspacePaneLeaf = {
   type: 'leaf'
@@ -33,13 +42,17 @@ export type WorkspacePaneFocus = {
   terminalId: string | null
 }
 
-export function createTerminalPaneContent(terminalId: string, workspaceId: string): PaneContent {
+export function createTerminalPaneContent(terminalId: string, workspaceId: string): TerminalPaneContent {
   return {
     type: 'terminal',
     id: `terminal:${terminalId}`,
     terminalId,
     workspaceId,
   }
+}
+
+export function createJanusChatPaneContent(): JanusChatPaneContent {
+  return { type: 'janus-chat', id: 'janus-chat' }
 }
 
 export function createEmptyPaneLeaf(id: string): WorkspacePaneLeaf {
@@ -71,7 +84,7 @@ export function findTerminalPane(
   terminalId: string
 ): WorkspacePaneFocus {
   for (const leaf of getLeafPanes(node)) {
-    const tab = leaf.tabs.find((item) => item.terminalId === terminalId)
+    const tab = leaf.tabs.find((item) => item.type === 'terminal' && item.terminalId === terminalId)
     if (tab) {
       return { paneId: leaf.id, tabId: tab.id, terminalId }
     }
@@ -116,7 +129,7 @@ export function resolvePaneFocus(
   return {
     paneId: fallbackPane.id,
     tabId: tab?.id ?? null,
-    terminalId: tab?.terminalId ?? null,
+    terminalId: tab?.type === 'terminal' ? tab.terminalId : null,
   }
 }
 
@@ -141,7 +154,7 @@ export function activatePaneTab(
 
 function removeTerminalView(node: WorkspacePaneNode, terminalId: string): WorkspacePaneNode {
   if (node.type === 'leaf') {
-    const tabs = node.tabs.filter((item) => item.terminalId !== terminalId)
+    const tabs = node.tabs.filter((item) => item.type !== 'terminal' || item.terminalId !== terminalId)
     const activeTabStillExists = tabs.some((item) => item.id === node.activeTabId)
     return {
       ...node,
@@ -186,7 +199,7 @@ function upsertTabInLeaf(
 export function addTerminalToPaneTree(
   node: WorkspacePaneNode | null,
   targetPaneId: string | null,
-  content: PaneContent,
+  content: TerminalPaneContent,
   fallbackPaneId: string
 ): { tree: WorkspacePaneNode; focus: WorkspacePaneFocus } {
   if (!node) {
@@ -234,6 +247,50 @@ export function addTerminalToPaneTree(
   return {
     tree,
     focus: { paneId: targetPane.id, tabId: content.id, terminalId: content.terminalId },
+  }
+}
+
+export function findPaneContent(
+  node: WorkspacePaneNode | null,
+  contentId: string
+): WorkspacePaneFocus {
+  for (const leaf of getLeafPanes(node)) {
+    const tab = leaf.tabs.find((item) => item.id === contentId)
+    if (tab) {
+      return {
+        paneId: leaf.id,
+        tabId: tab.id,
+        terminalId: tab.type === 'terminal' ? tab.terminalId : null,
+      }
+    }
+  }
+  return { paneId: null, tabId: null, terminalId: null }
+}
+
+export function addPaneContentToTree(
+  node: WorkspacePaneNode | null,
+  targetPaneId: string | null,
+  content: PaneContent,
+  fallbackPaneId: string
+): { tree: WorkspacePaneNode; focus: WorkspacePaneFocus } {
+  const existing = findPaneContent(node, content.id)
+  if (existing.paneId && existing.tabId) {
+    return {
+      tree: activatePaneTab(node, existing.paneId, existing.tabId)!,
+      focus: existing,
+    }
+  }
+
+  const base = node ?? createEmptyPaneLeaf(fallbackPaneId)
+  const targetPane = findLeafPane(base, targetPaneId) ?? getLeafPanes(base)[0]
+  const tree = upsertTabInLeaf(base, targetPane.id, content)
+  return {
+    tree,
+    focus: {
+      paneId: targetPane.id,
+      tabId: content.id,
+      terminalId: content.type === 'terminal' ? content.terminalId : null,
+    },
   }
 }
 
@@ -340,11 +397,11 @@ export function collapsePaneTree(
   const tabs = leaves
     .flatMap((leaf) => leaf.tabs)
     .filter((tab) => {
-      if (seenTerminalIds.has(tab.terminalId)) return false
-      seenTerminalIds.add(tab.terminalId)
+      if (seenTerminalIds.has(tab.id)) return false
+      seenTerminalIds.add(tab.id)
       return true
     })
-  const activeTab = tabs.find((tab) => tab.terminalId === preferredTerminalId) ?? tabs[0] ?? null
+  const activeTab = tabs.find((tab) => tab.type === 'terminal' && tab.terminalId === preferredTerminalId) ?? tabs[0] ?? null
   const tree: WorkspacePaneLeaf = {
     type: 'leaf',
     id: targetLeaf.id,
@@ -357,7 +414,7 @@ export function collapsePaneTree(
     focus: {
       paneId: tree.id,
       tabId: activeTab?.id ?? null,
-      terminalId: activeTab?.terminalId ?? null,
+      terminalId: activeTab?.type === 'terminal' ? activeTab.terminalId : null,
     },
   }
 }
@@ -380,7 +437,7 @@ function appendTabsToFirstLeaf(
       focus: {
         paneId: nextNode.id,
         tabId: activeTab?.id ?? null,
-        terminalId: activeTab?.terminalId ?? null,
+        terminalId: activeTab?.type === 'terminal' ? activeTab.terminalId : null,
       },
     }
   }

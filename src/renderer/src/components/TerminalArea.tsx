@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/app'
 import { QuickNote } from './note/QuickNote'
 import { applyTerminalNoteLifecycle, DRAWER_VIEWS, DrawerViewTabs, getDrawerHeight, getDrawerPanelAttributes, type DrawerView } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
+import { JanusChatPane } from './janus/JanusChatPane'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
@@ -390,6 +391,7 @@ interface PaneTreeViewProps {
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
   onKillTerminalFromTab: (terminalId: string, e: React.MouseEvent) => void
+  onClosePaneTab: (paneId: string, tabId: string) => void
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
   onSplitPreview: (terminalId: string | null, paneId: string | null, edge: PaneDropEdge | null, ratio: number) => void
@@ -457,16 +459,17 @@ function SplitPaneNode({ split, onResize, ...props }: PaneTreeViewProps & { spli
       <div className="min-h-0 min-w-0" style={{ flexBasis: `${split.ratio * 100}%`, flexGrow: 0, flexShrink: 0 }}>
         <PaneTreeView {...props} node={split.first} onResize={onResize} />
       </div>
+      {/* Soft gutter between cards; transparent hit strip keeps resize easy */}
       <div
         role="separator"
         aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
         onPointerDown={props.isPreview ? undefined : handlePointerDown}
-        className="shrink-0 transition-colors hover:bg-[rgba(255,120,48,0.28)]"
+        className="shrink-0 transition-colors hover:bg-[rgba(255,120,48,0.2)]"
         style={{
-          width: isHorizontal ? 6 : '100%',
-          height: isHorizontal ? '100%' : 6,
+          width: isHorizontal ? 8 : '100%',
+          height: isHorizontal ? '100%' : 8,
           cursor: isHorizontal ? 'col-resize' : 'row-resize',
-          background: 'rgba(255,255,255,0.045)',
+          background: 'transparent',
         }}
       />
       <div className="min-h-0 min-w-0 flex-1">
@@ -587,6 +590,7 @@ function LeafPane({
   onPaneFocus,
   onTabSelect,
   onKillTerminalFromTab,
+  onClosePaneTab,
   onKillTerminal,
   onTerminalDrop,
   onSplitPreview,
@@ -605,7 +609,7 @@ function LeafPane({
   const showFocus = showFocusChrome && isFocused
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
   const activeTab = activeTabId ? leaf.tabs.find((tab) => tab.id === activeTabId) ?? null : null
-  const activeTerminal = activeTab ? terminalsById.get(activeTab.terminalId) ?? null : null
+  const activeTerminal = activeTab?.type === 'terminal' ? terminalsById.get(activeTab.terminalId) ?? null : null
   const terminalMenuOpen = terminalMenuPaneId === leaf.id
 
   const openMenu = useCallback(
@@ -682,17 +686,22 @@ function LeafPane({
 
   return (
       <section
-      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden transition-[border-color,box-shadow,background]"
+      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden transition-[border-color,box-shadow,background,border-radius]"
       onPointerDownCapture={() => onPaneFocus(leaf.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       style={{
+        // Multi-pane: rounded card chrome with gap-friendly silhouette.
+        // Single-pane: lighter radius so it stays intentional without double-framing.
+        borderRadius: showFocusChrome ? 11 : 8,
         background: showFocus ? 'rgba(24, 24, 26, 0.96)' : 'rgba(14, 14, 16, 0.92)',
-        border: showFocus ? '1px solid rgba(255,120,48,0.26)' : '1px solid rgba(255,255,255,0.055)',
+        border: showFocus ? '1px solid rgba(255,120,48,0.28)' : '1px solid rgba(255,255,255,0.06)',
         boxShadow: showFocus
-          ? 'inset 0 0 0 1px rgba(255,120,48,0.055)'
-          : 'inset 0 1px 0 rgba(255,255,255,0.025)',
+          ? '0 0 0 1px rgba(255,120,48,0.08), inset 0 0 0 1px rgba(255,120,48,0.05), 0 6px 18px rgba(0,0,0,0.28)'
+          : showFocusChrome
+            ? '0 1px 0 rgba(255,255,255,0.035), 0 6px 16px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.03)'
+            : 'inset 0 1px 0 rgba(255,255,255,0.025)',
       }}
     >
       {dragHint && (
@@ -722,14 +731,15 @@ function LeafPane({
         }}
       >
         {leaf.tabs.map((tab) => {
-          const terminal = terminalsById.get(tab.terminalId)
+          const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
           const isActive = tab.id === activeTabId
           return (
             <button
               key={tab.id}
               type="button"
-              draggable
+              draggable={tab.type === 'terminal'}
               onDragStart={(event) => {
+                if (tab.type !== 'terminal') return
                 setTerminalDragData(event.dataTransfer, tab.terminalId)
                 onTerminalDragStart(tab.terminalId)
               }}
@@ -747,6 +757,7 @@ function LeafPane({
               }}
               title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.terminalId}
             >
+              {tab.type === 'janus-chat' && <span aria-hidden="true" style={{ color: '#ff7830' }}>J</span>}
               {terminal && (
                 <img
                   src={PRESET_ICONS[terminal.preset]}
@@ -757,16 +768,17 @@ function LeafPane({
                 />
               )}
               <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? '#ffb27d' : 'inherit' }}>
-                {terminal?.name ?? tab.terminalId.slice(0, 8)}
+                {tab.type === 'janus-chat' ? 'Janus Chat' : terminal?.name ?? tab.terminalId.slice(0, 8)}
               </span>
               <span
                 tabIndex={-1}
-                title="Kill Terminal"
+                title={tab.type === 'terminal' ? 'Kill Terminal' : 'Close Chat'}
                 className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-35 transition-[opacity,color,background] group-hover/tab:opacity-75 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                 style={{ color: '#999' }}
                 onClick={(event) => {
                   event.stopPropagation()
-                  onKillTerminalFromTab(tab.terminalId, event)
+                  if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId, event)
+                  else onClosePaneTab(leaf.id, tab.id)
                 }}
               >
                 x
@@ -803,7 +815,12 @@ function LeafPane({
           background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.66) 0%, rgba(2, 2, 2, 0.88) 100%)',
         }}
       >
-        {activeTab && activeTerminal && (
+        {activeTab?.type === 'janus-chat' && (
+          <div key={activeTab.id} className="absolute inset-0">
+            <JanusChatPane focused={isFocused} />
+          </div>
+        )}
+        {activeTab?.type === 'terminal' && activeTerminal && (
           <div key={activeTab.id} className="absolute inset-0">
             <CLITerminal
               terminalId={activeTerminal.id}
@@ -848,6 +865,7 @@ export function TerminalArea() {
     resizePane,
     moveTerminalToPane,
     splitPaneWithTerminal,
+    closePaneTab,
   } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
@@ -1100,14 +1118,23 @@ export function TerminalArea() {
         </div>
       )}
 
-      {/* Pane tree */}
+      {/* Pane tree — multi-pane host stays soft so leaf cards read as floating surfaces */}
       <div
         className="relative m-2 min-h-0 min-w-0 flex-1 overflow-hidden"
-        style={{
-          background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(2, 2, 2, 0.8) 100%)',
-          border: '1px solid rgba(255, 255, 255, 0.03)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
-        }}
+        style={
+          paneCount > 1
+            ? {
+                background: 'transparent',
+                border: '1px solid transparent',
+                boxShadow: 'none',
+              }
+            : {
+                background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(2, 2, 2, 0.8) 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.03)',
+                borderRadius: 10,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
+              }
+        }
       >
         <PaneTreeView
           node={paneTree}
@@ -1118,6 +1145,7 @@ export function TerminalArea() {
           onPaneFocus={setFocusedPane}
           onTabSelect={setPaneTab}
           onKillTerminalFromTab={handleKillTerminal}
+          onClosePaneTab={closePaneTab}
           onKillTerminal={handleKillTerminal}
           onTerminalDrop={handleTerminalDrop}
           onTerminalDragStart={(terminalId) => {
@@ -1150,6 +1178,7 @@ export function TerminalArea() {
               onPaneFocus={setFocusedPane}
               onTabSelect={setPaneTab}
               onKillTerminalFromTab={() => {}}
+              onClosePaneTab={() => {}}
               onKillTerminal={() => {}}
               onTerminalDrop={() => {}}
               onTerminalDragStart={() => {}}
