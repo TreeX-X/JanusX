@@ -18,7 +18,8 @@ vi.mock('node-pty', () => {
 describe('Terminal Presets', () => {
   it('should return correct auto command for claude preset', async () => {
     const { getAutoCommand } = await import('../../src/main/terminal/presets')
-    expect(getAutoCommand('claude')).toBe('claude\n')
+    // Enter is injected separately after resize; command itself has no trailing newline.
+    expect(getAutoCommand('claude')).toBe('claude')
   })
 
   it('should return undefined for shell preset', async () => {

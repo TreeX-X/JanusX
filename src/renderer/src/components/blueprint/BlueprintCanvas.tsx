@@ -26,7 +26,7 @@ import '@xyflow/react/dist/style.css'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
-import type { Terminal, TerminalPreset } from '@/types'
+import type { TerminalPreset } from '@/types'
 import {
   createNode as createNodeIPC,
   updateBlueprint as updateBlueprintIPC,
@@ -48,7 +48,8 @@ import { BlueprintNodeCard, type BlueprintNodeData } from './BlueprintNodeCard'
 import { STATUS_VISUALS, STATUS_ORDER, NODE_TYPE_LABEL } from './blueprintStatus'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
-import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../../shared/terminalLaunch'
+import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
+import { launchTerminalPreset } from '@/lib/terminal-launch'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
@@ -249,12 +250,6 @@ function collectDescendantIds(nodes: Record<string, BlueprintNode>, nodeId: stri
   return out
 }
 
-function waitForTerminalMount(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  })
-}
-
 /* Tree layout */
 const NODE_W = 240
 const NODE_H = 110
@@ -377,8 +372,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const refreshAfterAnalysis = useBlueprintStore((s) => s.refreshAfterAnalysis)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
-  const addTerminal = useWorkspaceStore((s) => s.addTerminal)
-  const removeTerminal = useWorkspaceStore((s) => s.removeTerminal)
   const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
@@ -701,48 +694,29 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       }
 
       const preset = getTerminalPreset(requestedPreset)
-      const terminalId = crypto.randomUUID()
-      const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
-      const autoCommand = resolveTerminalLaunchCommand(preset.type)
-      const telemetryStartedAt = Date.now()
-      const terminal: Terminal = {
-        id: terminalId,
-        workspaceId: workspace.id,
-        name: preset.name,
+      const launched = await launchTerminalPreset({
         preset: preset.type,
-        cwd: workspace.path,
-        shell: defaultShell,
-        autoCommand,
-        pid: null,
-        status: 'idle',
-        updatedAt: telemetryStartedAt,
-        telemetryStartedAt
+        workspaceId: workspace.id,
+        workspacePath: workspace.path,
+        name: preset.name,
+        includeContextWindow: false,
+      })
+
+      if (!launched) {
+        setActionError('终端创建失败')
+        return
       }
 
-      addTerminal(terminal)
-      setLoadState('terminal-active')
-      await waitForTerminalMount()
+      if (!launched.ok) {
+        setActionError(`终端创建失败: ${launched.error}`)
+        return
+      }
 
       try {
-        const result = (await window.electron.invoke('terminal:create', {
-          id: terminalId,
-          workspaceId: workspace.id,
-          cwd: workspace.path,
-          shell: defaultShell,
-          autoCommand,
-          preset: preset.type
-        })) as { pid: number }
-
-        useWorkspaceStore.setState((s) => ({
-          terminals: s.terminals.map((t) =>
-            t.id === terminalId ? { ...t, pid: result.pid, status: 'running' as const } : t
-          )
-        }))
-        await bindTerminalIPC(workspace.path, node.id, terminalId)
+        await bindTerminalIPC(workspace.path, node.id, launched.terminalId)
         await loadBlueprint(blueprintId)
       } catch (err) {
-        removeTerminal(terminalId)
-        setActionError(`终端创建失败: ${(err as Error).message}`)
+        setActionError(`终端绑定失败: ${(err as Error).message}`)
       }
     },
     [
@@ -751,8 +725,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       setBlueprintMode,
       setLoadState,
       setActiveTerminal,
-      addTerminal,
-      removeTerminal,
       loadBlueprint,
       blueprintId,
       terminalPreset

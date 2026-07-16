@@ -7,7 +7,11 @@ export interface TerminalConfig {
   workspaceId: string
   cwd: string
   shell: string
-  autoCommand?: string
+  /** When set, spawn this program directly instead of a shell. */
+  program?: string
+  programArgs?: string[]
+  cols?: number
+  rows?: number
   env?: Record<string, string>
 }
 
@@ -19,6 +23,8 @@ export interface TerminalInstance {
   createdAt: number
   outputBuffer: string
   outputSeq: number
+  lastCols?: number
+  lastRows?: number
 }
 
 export interface TerminalPresetConfig {

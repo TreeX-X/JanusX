@@ -32,6 +32,8 @@ export interface LayoutPosition {
 
 export type TerminalPreset = 'shell' | 'claude' | 'codex' | 'opencode'
 
+export type TerminalStatus = 'idle' | 'starting' | 'running' | 'exited' | 'error'
+
 export interface Terminal {
   id: string
   workspaceId: string
@@ -41,10 +43,11 @@ export interface Terminal {
   shell: string
   autoCommand?: string
   pid: number | null
-  status: 'idle' | 'running' | 'exited'
+  status: TerminalStatus
   updatedAt?: number
   telemetryStartedAt?: number
   exitCode?: number
+  errorMessage?: string
   detectedModel?: string
   inputTokens?: number
   outputTokens?: number

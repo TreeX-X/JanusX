@@ -14,6 +14,10 @@ function terminalStatusLabel(status: Terminal['status']): string {
       return 'running'
     case 'exited':
       return 'done'
+    case 'starting':
+      return 'starting'
+    case 'error':
+      return 'error'
     default:
       return 'idle'
   }

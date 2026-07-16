@@ -39,4 +39,31 @@ describe('TerminalManager OfficeCLI PATH integration', () => {
     expect(firstEnv.PATH).toBe('C:\\user-bin')
     expect(process.env.PATH).toBe(originalProcessPath)
   })
+
+  it('spawns agent CLI program directly without shell auto-command typing', async () => {
+    const { TerminalManager } = await import('../../src/main/terminal/manager')
+    const manager = new TerminalManager()
+
+    manager.create({
+      id: 'codex-1',
+      workspaceId: 'workspace',
+      cwd: process.cwd(),
+      shell: 'powershell.exe',
+      program: 'codex',
+      programArgs: [],
+      cols: 120,
+      rows: 40,
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      'codex',
+      [],
+      expect.objectContaining({
+        cols: 120,
+        rows: 40,
+      }),
+    )
+    const instance = manager.getInstance('codex-1')
+    expect(instance?.pty.write).not.toHaveBeenCalled()
+  })
 })

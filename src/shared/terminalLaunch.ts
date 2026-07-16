@@ -71,6 +71,42 @@ export function resolveTerminalLaunchCommand(input: TerminalLaunchInput): string
   return composeTerminalCommand(input.command, input.args) ?? normalizeTerminalCommand(input.autoCommand)
 }
 
+/** Program + args for direct PTY spawn (agent CLIs). Shell preset returns undefined. */
+export function resolveTerminalLaunchProgram(
+  input: TerminalLaunchInput
+): { command: string; args: string[] } | undefined {
+  if (!input) return undefined
+
+  if (typeof input === 'string') {
+    if (!isTerminalPreset(input) || input === 'shell') return undefined
+    const meta = getTerminalPresetMeta(input)
+    const command = normalizeTerminalCommand(meta.command)
+    if (!command) return undefined
+    return {
+      command,
+      args: meta.args?.map(normalizeTerminalCommand).filter((arg): arg is string => Boolean(arg)) ?? [],
+    }
+  }
+
+  if (isTerminalPreset(input.preset)) {
+    if (input.preset === 'shell') return undefined
+    const meta = getTerminalPresetMeta(input.preset)
+    const command = normalizeTerminalCommand(meta.command)
+    if (!command) return undefined
+    return {
+      command,
+      args: meta.args?.map(normalizeTerminalCommand).filter((arg): arg is string => Boolean(arg)) ?? [],
+    }
+  }
+
+  const command = normalizeTerminalCommand(input.command)
+  if (!command) return undefined
+  return {
+    command,
+    args: input.args?.map(normalizeTerminalCommand).filter((arg): arg is string => Boolean(arg)) ?? [],
+  }
+}
+
 function composeTerminalCommand(command?: string, args?: string[]): string | undefined {
   const normalizedCommand = normalizeTerminalCommand(command)
   if (!normalizedCommand) return undefined

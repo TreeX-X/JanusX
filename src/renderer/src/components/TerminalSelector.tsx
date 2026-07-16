@@ -1,8 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useAppStore } from '@/stores/app'
-import type { TerminalPreset, Terminal } from '@/types'
-import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../shared/terminalLaunch'
+import type { TerminalPreset } from '@/types'
+import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
+import { launchTerminalPreset, warmDefaultShellCache } from '@/lib/terminal-launch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -16,112 +16,76 @@ const ICONS: Record<TerminalPreset, string> = {
   opencode: opencodeIcon,
 }
 
-function waitForTerminalMount(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  })
-}
-
 interface TerminalOptionProps {
   preset: TerminalPreset
   name: string
+  busy: boolean
   onClick: () => void
 }
 
-function TerminalOption({ preset, name, onClick }: TerminalOptionProps) {
+function TerminalOption({ preset, name, busy, onClick }: TerminalOptionProps) {
   return (
     <div
-      onClick={onClick}
-      className="w-full rounded-lg cursor-pointer transition-all flex flex-col items-center justify-center gap-3 px-4 py-5 min-h-[132px]"
+      onClick={busy ? undefined : onClick}
+      className="w-full rounded-lg transition-all flex flex-col items-center justify-center gap-3 px-4 py-5 min-h-[132px]"
       style={{
         background: 'rgba(18, 18, 20, 0.85)',
-        border: '1px solid var(--border)',
+        border: busy ? '1px solid rgba(255, 120, 48, 0.35)' : '1px solid var(--border)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
+        cursor: busy ? 'wait' : 'pointer',
+        opacity: busy ? 0.72 : 1,
       }}
       onMouseEnter={(e) => {
+        if (busy) return
         e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
         e.currentTarget.style.borderColor = 'rgba(255, 120, 48, 0.3)'
         e.currentTarget.style.transform = 'translateY(-2px)'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = 'rgba(18, 18, 20, 0.85)'
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.04)'
+        e.currentTarget.style.borderColor = busy
+          ? 'rgba(255, 120, 48, 0.35)'
+          : 'rgba(255, 255, 255, 0.04)'
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
       <div className="w-12 h-12 flex items-center justify-center">
         <img src={ICONS[preset]} alt={name} className="w-9 h-9" />
       </div>
-      <div className="text-[13px] font-medium text-[#d4d4d4] leading-none text-center">{name}</div>
+      <div className="text-[13px] font-medium text-[#d4d4d4] leading-none text-center">
+        {busy ? 'Starting…' : name}
+      </div>
     </div>
   )
 }
 
 export function TerminalSelector() {
-  const { activeWorkspaceId, addTerminal, removeTerminal } = useWorkspaceStore()
-  const setLoadState = useAppStore((s) => s.setLoadState)
-  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const [launchingPreset, setLaunchingPreset] = useState<TerminalPreset | null>(null)
+
+  useEffect(() => {
+    warmDefaultShellCache()
+  }, [])
 
   const handleSelect = useCallback(
     async (preset: TerminalPreset) => {
-      if (!activeWorkspaceId) return
+      if (!activeWorkspaceId || launchingPreset) return
 
-      const workspaces = useWorkspaceStore.getState().workspaces
-      const workspace = workspaces.find((w) => w.id === activeWorkspaceId)
+      const workspace = useWorkspaceStore.getState().workspaces.find((w) => w.id === activeWorkspaceId)
       if (!workspace) return
 
-      // 通过 IPC 获取系统默认 Shell
-      const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
-
-      const terminalId = crypto.randomUUID()
-      const presetMeta = getTerminalPresetMeta(preset)
-      const autoCommand = resolveTerminalLaunchCommand(preset)
-      const telemetryStartedAt = Date.now()
-      const terminal: Terminal = {
-        id: terminalId,
-        workspaceId: activeWorkspaceId,
-        name: presetMeta.name,
-        preset,
-        cwd: workspace.path,
-        shell: defaultShell,
-        autoCommand,
-        pid: null,
-        status: 'idle',
-        updatedAt: telemetryStartedAt,
-        telemetryStartedAt,
-      }
-
-      addTerminal(terminal)
-
-      // 先切换视图并等待 TerminalArea/CLITerminal 挂载，避免 PTY 首屏输出在监听注册前丢失。
-      setBlueprintMode(false)
-      setLoadState('terminal-active')
-      await waitForTerminalMount()
-
+      setLaunchingPreset(preset)
       try {
-        const result = (await window.electron.invoke('terminal:create', {
-          id: terminalId,
-          workspaceId: activeWorkspaceId,
-          cwd: workspace.path,
-          shell: defaultShell,
-          autoCommand,
+        await launchTerminalPreset({
           preset,
-        })) as { pid: number }
-
-        useWorkspaceStore.setState((s) => ({
-          terminals: s.terminals.map((t) =>
-            t.id === terminalId ? { ...t, pid: result.pid, status: 'running' as const } : t
-          ),
-        }))
-      } catch (err) {
-        console.error('Failed to create terminal:', err)
-        removeTerminal(terminalId)
-        if (useWorkspaceStore.getState().terminals.length === 0) {
-          setLoadState('no-terminal')
-        }
+          workspaceId: activeWorkspaceId,
+          workspacePath: workspace.path,
+        })
+      } finally {
+        setLaunchingPreset(null)
       }
     },
-    [activeWorkspaceId, addTerminal, removeTerminal, setLoadState, setBlueprintMode]
+    [activeWorkspaceId, launchingPreset]
   )
 
   return (
@@ -143,10 +107,15 @@ export function TerminalSelector() {
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 148px), 1fr))',
         }}
       >
-        <TerminalOption preset="shell" name="Shell" onClick={() => handleSelect('shell')} />
-        <TerminalOption preset="claude" name="Claude" onClick={() => handleSelect('claude')} />
-        <TerminalOption preset="codex" name="Codex" onClick={() => handleSelect('codex')} />
-        <TerminalOption preset="opencode" name="OpenCode" onClick={() => handleSelect('opencode')} />
+        {(['shell', 'claude', 'codex', 'opencode'] as TerminalPreset[]).map((preset) => (
+          <TerminalOption
+            key={preset}
+            preset={preset}
+            name={getTerminalPresetMeta(preset).label}
+            busy={launchingPreset === preset}
+            onClick={() => handleSelect(preset)}
+          />
+        ))}
       </div>
     </div>
   )

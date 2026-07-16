@@ -8,6 +8,8 @@ import { logTerminalDiagnostic } from './diagnostics'
 const require = createRequire(import.meta.url)
 const CONPTY_FILES = ['conpty.dll', 'OpenConsole.exe'] as const
 const TERMINAL_OUTPUT_BUFFER_LIMIT = 1_000_000
+const DEFAULT_COLS = 120
+const DEFAULT_ROWS = 40
 
 function withPathPrepend(env: Record<string, string>, directory?: string): Record<string, string> {
   if (!directory) return env
@@ -62,13 +64,20 @@ function hasBundledConptyFiles(): boolean {
 export class TerminalManager {
   private instances = new Map<string, TerminalInstance>()
 
-  private spawnPty(shell: string, config: TerminalConfig, officecliPathDir?: string): IPty {
+  private spawnPty(
+    file: string,
+    args: string[],
+    config: TerminalConfig,
+    officecliPathDir?: string,
+  ): IPty {
     const useBundledConptyDll = hasBundledConptyFiles()
+    const cols = Math.max(2, Math.floor(config.cols ?? DEFAULT_COLS))
+    const rows = Math.max(1, Math.floor(config.rows ?? DEFAULT_ROWS))
 
     const baseOptions = {
       name: 'xterm-256color',
-      cols: 80,
-      rows: 30,
+      cols,
+      rows,
       cwd: config.cwd,
       env: withPathPrepend({
         ...(process.env as Record<string, string>),
@@ -79,14 +88,17 @@ export class TerminalManager {
     }
 
     try {
-      const pty = spawn(shell, [], {
+      const pty = spawn(file, args, {
         ...baseOptions,
         useConptyDll: useBundledConptyDll,
       })
       logTerminalDiagnostic('pty spawned', {
         id: config.id,
         cwd: config.cwd,
-        shell,
+        file,
+        args,
+        cols,
+        rows,
         useConptyDll: useBundledConptyDll,
         pid: pty.pid,
       })
@@ -95,7 +107,8 @@ export class TerminalManager {
       logTerminalDiagnostic('pty spawn failed', {
         id: config.id,
         cwd: config.cwd,
-        shell,
+        file,
+        args,
         useConptyDll: useBundledConptyDll,
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
@@ -103,14 +116,15 @@ export class TerminalManager {
       if (!useBundledConptyDll) throw err
 
       try {
-        const fallbackPty = spawn(shell, [], {
+        const fallbackPty = spawn(file, args, {
           ...baseOptions,
           useConptyDll: false,
         })
         logTerminalDiagnostic('pty spawned with system conpty fallback', {
           id: config.id,
           cwd: config.cwd,
-          shell,
+          file,
+          args,
           pid: fallbackPty.pid,
         })
         return fallbackPty
@@ -118,7 +132,8 @@ export class TerminalManager {
         logTerminalDiagnostic('pty system conpty fallback failed', {
           id: config.id,
           cwd: config.cwd,
-          shell,
+          file,
+          args,
           error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
           stack: fallbackErr instanceof Error ? fallbackErr.stack : undefined,
         })
@@ -129,31 +144,26 @@ export class TerminalManager {
 
   create(config: TerminalConfig, officecliPathDir?: string): TerminalInstance {
     const shell = config.shell || (process.platform === 'win32' ? 'powershell.exe' : 'bash')
+    const file = config.program || shell
+    const args = config.program ? (config.programArgs ?? []) : []
+    const cols = Math.max(2, Math.floor(config.cols ?? DEFAULT_COLS))
+    const rows = Math.max(1, Math.floor(config.rows ?? DEFAULT_ROWS))
 
-    const pty = this.spawnPty(shell, config, officecliPathDir)
+    const pty = this.spawnPty(file, args, { ...config, shell, cols, rows }, officecliPathDir)
 
     const instance: TerminalInstance = {
       id: config.id,
       pty,
-      config,
+      config: { ...config, shell, cols, rows },
       status: 'running',
       createdAt: Date.now(),
       outputBuffer: '',
       outputSeq: 0,
+      lastCols: cols,
+      lastRows: rows,
     }
 
     this.instances.set(config.id, instance)
-
-    // 自动执行预设命令
-    if (config.autoCommand) {
-      setTimeout(() => {
-        // 先输入命令文本
-        pty.write(config.autoCommand!)
-        // 再发送回车键触发执行
-        setTimeout(() => pty.write('\r'), 80)
-      }, 800)
-    }
-
     return instance
   }
 
@@ -166,9 +176,17 @@ export class TerminalManager {
 
   resize(id: string, cols: number, rows: number): void {
     const instance = this.instances.get(id)
-    if (instance) {
-      instance.pty.resize(cols, rows)
+    if (!instance) return
+
+    const nextCols = Math.max(2, Math.floor(cols))
+    const nextRows = Math.max(1, Math.floor(rows))
+    if (instance.lastCols === nextCols && instance.lastRows === nextRows) {
+      return
     }
+
+    instance.lastCols = nextCols
+    instance.lastRows = nextRows
+    instance.pty.resize(nextCols, nextRows)
   }
 
   appendOutput(id: string, data: string): number | null {

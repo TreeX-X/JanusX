@@ -26,7 +26,12 @@ import {
   type WorkspacePaneSplit,
 } from '@/lib/workspace-pane'
 import { getEstimatedContextWindow, getRegistryContextWindow } from '@/lib/runtime-telemetry'
-import { getTerminalPresetMeta, resolveTerminalLaunchCommand } from '../../../shared/terminalLaunch'
+import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
+import {
+  launchTerminalPreset,
+  retryTerminalCreate,
+  warmDefaultShellCache,
+} from '@/lib/terminal-launch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -188,7 +193,11 @@ function providerLabel(preset: TerminalPreset): string {
 }
 
 function accentColor(status: Terminal['status']): string {
-  return status === 'exited' ? '#4ec9b0' : status === 'running' ? '#ff7830' : '#58a6ff'
+  if (status === 'exited') return '#4ec9b0'
+  if (status === 'running') return '#ff7830'
+  if (status === 'error') return '#ff5858'
+  if (status === 'starting') return '#e5c07b'
+  return '#58a6ff'
 }
 
 function formatAge(updatedAt?: number): string {
@@ -373,12 +382,6 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
       {popover}
     </>
   )
-}
-
-function waitForTerminalMount(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  })
 }
 
 interface PaneTreeViewProps {
@@ -815,19 +818,80 @@ function LeafPane({
           background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.66) 0%, rgba(2, 2, 2, 0.88) 100%)',
         }}
       >
-        {activeTab?.type === 'janus-chat' && (
-          <div key={activeTab.id} className="absolute inset-0">
-            <JanusChatPane focused={isFocused} />
-          </div>
-        )}
-        {activeTab?.type === 'terminal' && activeTerminal && (
-          <div key={activeTab.id} className="absolute inset-0">
-            <CLITerminal
-              terminalId={activeTerminal.id}
-              focused={isFocused && activeTerminal.id === activeTerminalId}
-            />
-          </div>
-        )}
+        {leaf.tabs.map((tab) => {
+          if (tab.type === 'janus-chat') {
+            const isActive = tab.id === activeTabId
+            return (
+              <div
+                key={tab.id}
+                className="absolute inset-0"
+                style={{
+                  visibility: isActive ? 'visible' : 'hidden',
+                  pointerEvents: isActive ? 'auto' : 'none',
+                  zIndex: isActive ? 1 : 0,
+                }}
+                aria-hidden={!isActive}
+              >
+                <JanusChatPane focused={isFocused && isActive} />
+              </div>
+            )
+          }
+
+          if (tab.type !== 'terminal') return null
+          const terminal = terminalsById.get(tab.terminalId)
+          if (!terminal) return null
+          const isActive = tab.id === activeTabId
+
+          return (
+            <div
+              key={tab.id}
+              className="absolute inset-0"
+              style={{
+                visibility: isActive ? 'visible' : 'hidden',
+                pointerEvents: isActive ? 'auto' : 'none',
+                zIndex: isActive ? 1 : 0,
+              }}
+              aria-hidden={!isActive}
+            >
+              <CLITerminal
+                terminalId={terminal.id}
+                focused={isFocused && isActive}
+              />
+              {terminal.status === 'error' && (
+                <div
+                  className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+                  style={{ background: 'rgba(8, 8, 10, 0.72)' }}
+                >
+                  <div
+                    className="pointer-events-auto flex max-w-[320px] flex-col items-center gap-3 rounded-lg border px-5 py-4 text-center font-mono"
+                    style={{
+                      borderColor: 'rgba(255, 88, 88, 0.28)',
+                      background: 'rgba(14, 14, 16, 0.92)',
+                      boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
+                    }}
+                  >
+                    <div className="text-[12px]" style={{ color: '#ff8585' }}>
+                      Terminal failed to start
+                    </div>
+                    <div className="text-[11px] leading-relaxed text-[#8a8a8a]">
+                      {terminal.errorMessage || 'Unknown error'}
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded border px-3 py-1.5 text-[11px] transition-colors hover:bg-[rgba(255,120,48,0.08)]"
+                      style={{ borderColor: 'rgba(255,120,48,0.28)', color: '#ffb27d' }}
+                      onClick={() => {
+                        void retryTerminalCreate(terminal.id)
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
         {leaf.tabs.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center font-mono text-[12px] text-[#666]">
             <div>Empty pane</div>
@@ -855,7 +919,6 @@ export function TerminalArea() {
     terminalSnapshots,
     paneTree,
     focusedPaneId,
-    addTerminal,
     setActiveTerminal,
     removeTerminal,
     updateTerminal,
@@ -868,7 +931,6 @@ export function TerminalArea() {
     closePaneTab,
   } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
-  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerView, setDrawerView] = useState<DrawerView>('runtime')
@@ -1032,56 +1094,22 @@ export function TerminalArea() {
       closeTerminalMenu()
       if (!activeWorkspaceId) return
 
-      const workspaces = useWorkspaceStore.getState().workspaces
-      const workspace = workspaces.find((w) => w.id === activeWorkspaceId)
+      const workspace = useWorkspaceStore.getState().workspaces.find((w) => w.id === activeWorkspaceId)
       if (!workspace) return
 
-      const defaultShell = (await window.electron.invoke('system:getDefaultShell')) as string
-      const terminalId = crypto.randomUUID()
-      const autoCommand = resolveTerminalLaunchCommand(preset.type)
-      const telemetryStartedAt = Date.now()
-
-      const terminal: Terminal = {
-        id: terminalId,
-        workspaceId: activeWorkspaceId,
-        name: preset.name.toLowerCase(),
+      await launchTerminalPreset({
         preset: preset.type,
-        cwd: workspace.path,
-        shell: defaultShell,
-        autoCommand,
-        pid: null,
-        status: 'idle',
-        updatedAt: telemetryStartedAt,
-        telemetryStartedAt,
-        contextWindowTokens: getEstimatedContextWindow(preset.type),
-      }
-
-      addTerminal(terminal)
-      setBlueprintMode(false)
-      setLoadState('terminal-active')
-      await waitForTerminalMount()
-
-      try {
-        const result = (await window.electron.invoke('terminal:create', {
-          id: terminalId,
-          workspaceId: activeWorkspaceId,
-          cwd: workspace.path,
-          shell: defaultShell,
-          autoCommand,
-          preset: preset.type,
-        })) as { pid: number }
-
-        updateTerminal(terminalId, { pid: result.pid, status: 'running', updatedAt: Date.now() })
-      } catch (err) {
-        console.error('Failed to create terminal:', err)
-        removeTerminal(terminalId)
-        if (useWorkspaceStore.getState().terminals.length === 0) {
-          setLoadState('no-terminal')
-        }
-      }
+        workspaceId: activeWorkspaceId,
+        workspacePath: workspace.path,
+        name: preset.name.toLowerCase(),
+      })
     },
-    [activeWorkspaceId, addTerminal, removeTerminal, updateTerminal, setLoadState, setBlueprintMode, closeTerminalMenu]
+    [activeWorkspaceId, closeTerminalMenu]
   )
+
+  useEffect(() => {
+    warmDefaultShellCache()
+  }, [])
 
   const paneCount = useMemo(() => getLeafPanes(paneTree).length, [paneTree])
   const activeTerminal = activeTerminalId ? terminalsById.get(activeTerminalId) ?? null : null

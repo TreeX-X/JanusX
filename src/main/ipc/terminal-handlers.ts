@@ -3,7 +3,8 @@ import { terminalManager } from '../terminal/manager'
 import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
 import type { CheckpointEngine } from '../agent/checkpoint/types'
 import { analyzer } from '../janus/analyzer'
-import { isTerminalPreset, resolveTerminalLaunchCommand } from '../../shared/terminalLaunch'
+import { isTerminalPreset, resolveTerminalLaunchProgram } from '../../shared/terminalLaunch'
+import { resolveCLIPath } from '../agent/cli-resolver'
 import { subAgentRunRegistry } from '../agent/subagent-run-registry'
 import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
@@ -18,7 +19,8 @@ import { logTerminalDiagnostic } from '../terminal/diagnostics'
 import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
 import { appShutdown } from '../shutdown/AppShutdown'
 import { officecliManager } from '../office/officecli-manager'
-import { resolve } from 'path'
+import { existsSync } from 'fs'
+import { extname, resolve } from 'path'
 import { buildOfficeAgentSession, mergeOfficeAgentEnv } from '../office/office-agent-policy'
 
 // Track checkpoint state per terminal
@@ -196,16 +198,38 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('terminal:create', async (_event, config) => {
-    const { id, cwd, shell, autoCommand, preset } = config as {
+    const { id, cwd, shell, preset, command, args, cols, rows } = config as {
       id: string
       workspaceId?: string
       cwd: string
       shell: string
-      autoCommand?: string
       preset?: string
+      command?: string
+      args?: string[]
+      cols?: number
+      rows?: number
     }
 
-    const resolvedAutoCommand = resolveTerminalLaunchCommand({ preset, autoCommand })
+    const launchProgram = resolveTerminalLaunchProgram(
+      isTerminalPreset(preset) ? preset : { command, args },
+    )
+    let resolvedProgram = launchProgram
+    if (launchProgram) {
+      try {
+        const resolved = await resolveCLIPath(launchProgram.command)
+        // Never pass a non-existent or extensionless Windows path to node-pty.
+        // Fall back to the bare command so CreateProcess can still search PATHEXT.
+        if (
+          resolved &&
+          (process.platform !== 'win32' ||
+            (existsSync(resolved) && Boolean(extname(resolved))))
+        ) {
+          resolvedProgram = { command: resolved, args: launchProgram.args }
+        }
+      } catch {
+        // Fall back to bare command; PATH-based spawn may still succeed.
+      }
+    }
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
     const engine: CheckpointEngine =
       isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
@@ -218,7 +242,8 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       shell,
       preset,
       engine,
-      hasAutoCommand: Boolean(resolvedAutoCommand),
+      program: resolvedProgram?.command,
+      programArgs: resolvedProgram?.args,
     })
 
     if (engine !== 'shell') {
@@ -265,7 +290,10 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         workspaceId,
         cwd,
         shell,
-        autoCommand: resolvedAutoCommand,
+        program: resolvedProgram?.command,
+        programArgs: resolvedProgram?.args,
+        cols: typeof cols === 'number' ? cols : undefined,
+        rows: typeof rows === 'number' ? rows : undefined,
         env: hookEnv,
       }, officecliPathDir)
     } catch (err) {
