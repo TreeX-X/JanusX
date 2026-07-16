@@ -413,9 +413,11 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     }
 
     // Immediate force fit on mount — do not wait for layoutStable when host already has size.
+    // Early forced passes (0/16/50ms) so launch geometry wait can resolve before create.
     fitAndSync({ force: true, source: 'mount' })
     scheduleFitFrame()
     scheduleFit(0, true)
+    scheduleFit(16, true)
     scheduleFit(50, true)
     scheduleFit(120, true)
     scheduleFit(240)

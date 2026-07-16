@@ -134,6 +134,26 @@ function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
   })
 }
 
+const AGENT_CLI_COMMANDS = ['claude', 'codex', 'opencode'] as const
+type WarmupEngine = (typeof AGENT_CLI_COMMANDS)[number]
+
+function isWarmupEngine(value: string): value is WarmupEngine {
+  return (AGENT_CLI_COMMANDS as readonly string[]).includes(value)
+}
+
+async function resolveOfficecliLaunchAssets(): Promise<{
+  pathDir: string | undefined
+  binaryPath: string | undefined
+}> {
+  // Prefer session cache (resolveBinary only detect()s when verifiedBinary is empty).
+  // Do not call refreshAgentPathDir() on every create — full capability probes are expensive.
+  const binary = await officecliManager.resolveBinary()
+  return {
+    pathDir: officecliManager.resolveAgentPathDir(),
+    binaryPath: binary?.path,
+  }
+}
+
 export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   const hookDiagnostics = new AgentHookDiagnostics()
   agentTurnRecorder.setEventSink((event) => {
@@ -164,6 +184,23 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     },
   })
   const hookConfigManager = new AgentHookConfigManager()
+  /** Per-session gate so second+ Claude/Codex/OpenCode creates skip hook file IO. */
+  const hooksInstalledThisSession = new Set<Exclude<CheckpointEngine, 'shell' | 'manual'>>()
+
+  async function ensureHooksInstalled(engine: Exclude<CheckpointEngine, 'shell' | 'manual'>): Promise<void> {
+    if (hooksInstalledThisSession.has(engine)) return
+    await hookConfigManager.ensureInstalled(engine)
+    hooksInstalledThisSession.add(engine)
+  }
+
+  // Fire-and-forget: first create should not wait on listen() or cold where.exe.
+  void hookBridge.start().catch((err) => {
+    console.error('Agent hook bridge prestart failed:', err)
+  })
+  for (const command of AGENT_CLI_COMMANDS) {
+    void resolveCLIPath(command).catch(() => undefined)
+  }
+  void officecliManager.resolveBinary().catch(() => undefined)
 
   // Register terminal/hook cleanup into the unified shutdown path.
   // Window close without full quit still needs local cleanup.
@@ -172,6 +209,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     stopHookBridge: () => hookBridge.stop(),
     disposeTerminalSession: () => {
       terminalStates.clear()
+      hooksInstalledThisSession.clear()
       hookCoordinator.dispose()
       agentTurnRecorder.dispose()
       agentTurnRecorder.setEventSink(undefined)
@@ -190,11 +228,33 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       .finally(() => {
         terminalManager.killAll()
         terminalStates.clear()
+        hooksInstalledThisSession.clear()
         hookCoordinator.dispose()
         agentTurnRecorder.dispose()
         agentTurnRecorder.setEventSink(undefined)
         void hookBridge.stop()
       })
+  })
+
+  ipcMain.handle('terminal:warmup', async (_event, payload?: { engines?: string[] }) => {
+    const requested = Array.isArray(payload?.engines)
+      ? payload.engines.filter((engine): engine is WarmupEngine => typeof engine === 'string' && isWarmupEngine(engine))
+      : [...AGENT_CLI_COMMANDS]
+
+    await Promise.all([
+      hookBridge.start().catch(() => undefined),
+      officecliManager.resolveBinary().catch(() => undefined),
+      ...requested.map((engine) => resolveCLIPath(engine).catch(() => null)),
+      ...requested.map(async (engine) => {
+        try {
+          await ensureHooksInstalled(engine)
+        } catch {
+          // Warmup is best-effort; create path still retries setup.
+        }
+      }),
+    ])
+
+    return { ok: true as const }
   })
 
   ipcMain.handle('terminal:create', async (_event, config) => {
@@ -210,11 +270,15 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       rows?: number
     }
 
+    const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
+    const engine: CheckpointEngine =
+      isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
     const launchProgram = resolveTerminalLaunchProgram(
       isTerminalPreset(preset) ? preset : { command, args },
     )
-    let resolvedProgram = launchProgram
-    if (launchProgram) {
+
+    const resolveProgramPromise = (async () => {
+      if (!launchProgram) return undefined
       try {
         const resolved = await resolveCLIPath(launchProgram.command)
         // Never pass a non-existent or extensionless Windows path to node-pty.
@@ -224,33 +288,20 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
           (process.platform !== 'win32' ||
             (existsSync(resolved) && Boolean(extname(resolved))))
         ) {
-          resolvedProgram = { command: resolved, args: launchProgram.args }
+          return { command: resolved, args: launchProgram.args }
         }
       } catch {
         // Fall back to bare command; PATH-based spawn may still succeed.
       }
-    }
-    const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
-    const engine: CheckpointEngine =
-      isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
-    let hookEnv: Record<string, string> | undefined
+      return launchProgram
+    })()
 
-    logTerminalDiagnostic('terminal create requested', {
-      id,
-      workspaceId,
-      cwd,
-      shell,
-      preset,
-      engine,
-      program: resolvedProgram?.command,
-      programArgs: resolvedProgram?.args,
-    })
-
-    if (engine !== 'shell') {
+    const hookEnvPromise = (async (): Promise<Record<string, string> | undefined> => {
+      if (engine === 'shell') return undefined
       try {
         await hookBridge.start()
-        await hookConfigManager.ensureInstalled(engine)
-        hookEnv = hookConfigManager.buildTerminalEnv(
+        await ensureHooksInstalled(engine)
+        return hookConfigManager.buildTerminalEnv(
           {
             terminalId: id,
             workspaceId,
@@ -272,19 +323,37 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         } as const
         hookDiagnostics.record(summarizeCoordinatorEvent(event))
         sendToRenderer(mainWindow, 'agent-hook:event', event)
+        return undefined
       }
-    }
+    })()
+
+    const officePromise = resolveOfficecliLaunchAssets()
+
+    const [resolvedProgram, hookEnvBase, office] = await Promise.all([
+      resolveProgramPromise,
+      hookEnvPromise,
+      officePromise,
+    ])
+
+    logTerminalDiagnostic('terminal create requested', {
+      id,
+      workspaceId,
+      cwd,
+      shell,
+      preset,
+      engine,
+      program: resolvedProgram?.command,
+      programArgs: resolvedProgram?.args,
+    })
 
     let instance
     try {
-      const officecliPathDir = await officecliManager.refreshAgentPathDir()
-      const officecli = await officecliManager.resolveBinary()
       const officeMcpEntry = resolve(__dirname, '..', 'office-mcp.js')
-      const officeSession = buildOfficeAgentSession(engine, cwd, officecli?.path, officeMcpEntry)
+      const officeSession = buildOfficeAgentSession(engine, cwd, office.binaryPath, officeMcpEntry)
       if (officeSession.limitation) {
         logTerminalDiagnostic('Office automation policy-only mode', { engine, limitation: officeSession.limitation })
       }
-      hookEnv = mergeOfficeAgentEnv(hookEnv, officeSession)
+      const hookEnv = mergeOfficeAgentEnv(hookEnvBase, officeSession)
       instance = terminalManager.create({
         id,
         workspaceId,
@@ -295,7 +364,11 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         cols: typeof cols === 'number' ? cols : undefined,
         rows: typeof rows === 'number' ? rows : undefined,
         env: hookEnv,
-      }, officecliPathDir)
+      }, office.pathDir)
+      // Only soft-revalidate when create had no officecli cache; avoid clearing a warm cache mid-flight.
+      if (!office.pathDir && !office.binaryPath) {
+        void officecliManager.refreshAgentPathDir().catch(() => undefined)
+      }
     } catch (err) {
       logTerminalDiagnostic('terminal create failed', {
         id,

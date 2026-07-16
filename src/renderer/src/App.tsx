@@ -31,6 +31,7 @@ import { AgentNotificationHost } from '@/components/AgentNotificationHost'
 import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
 import { BlueprintFocusView } from '@/components/blueprint/BlueprintFocusView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
+import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
 import type { AppLoadState, Workspace, FileNode } from '@/types'
 
 type IdleWindow = Window & {
@@ -304,6 +305,8 @@ export default function App() {
     const idleWindow = window as IdleWindow
     const runWarmup = () => {
       void warmupEditorRuntime()
+      warmDefaultShellCache()
+      warmTerminalCreatePath()
     }
 
     if (idleWindow.requestIdleCallback) {

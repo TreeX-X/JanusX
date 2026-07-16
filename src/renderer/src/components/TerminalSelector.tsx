@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { TerminalPreset } from '@/types'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
-import { launchTerminalPreset, warmDefaultShellCache } from '@/lib/terminal-launch'
+import {
+  launchTerminalPreset,
+  warmDefaultShellCache,
+  warmTerminalCreatePath,
+} from '@/lib/terminal-launch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -21,9 +25,10 @@ interface TerminalOptionProps {
   name: string
   busy: boolean
   onClick: () => void
+  onHover?: () => void
 }
 
-function TerminalOption({ preset, name, busy, onClick }: TerminalOptionProps) {
+function TerminalOption({ preset, name, busy, onClick, onHover }: TerminalOptionProps) {
   return (
     <div
       onClick={busy ? undefined : onClick}
@@ -37,6 +42,7 @@ function TerminalOption({ preset, name, busy, onClick }: TerminalOptionProps) {
       }}
       onMouseEnter={(e) => {
         if (busy) return
+        onHover?.()
         e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
         e.currentTarget.style.borderColor = 'rgba(255, 120, 48, 0.3)'
         e.currentTarget.style.transform = 'translateY(-2px)'
@@ -65,6 +71,7 @@ export function TerminalSelector() {
 
   useEffect(() => {
     warmDefaultShellCache()
+    warmTerminalCreatePath()
   }, [])
 
   const handleSelect = useCallback(
@@ -87,6 +94,14 @@ export function TerminalSelector() {
     },
     [activeWorkspaceId, launchingPreset]
   )
+
+  const handleHover = useCallback((preset: TerminalPreset) => {
+    if (preset === 'shell') {
+      warmDefaultShellCache()
+      return
+    }
+    warmTerminalCreatePath([preset])
+  }, [])
 
   return (
     <div
@@ -114,6 +129,7 @@ export function TerminalSelector() {
             name={getTerminalPresetMeta(preset).label}
             busy={launchingPreset === preset}
             onClick={() => handleSelect(preset)}
+            onHover={() => handleHover(preset)}
           />
         ))}
       </div>

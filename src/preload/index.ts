@@ -11,6 +11,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'workspace:update',
   'workspace:delete',
   'terminal:create',
+  'terminal:warmup',
   'terminal:replay',
   'terminal:kill',
   'runtime-telemetry:get',

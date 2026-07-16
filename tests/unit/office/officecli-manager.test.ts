@@ -70,6 +70,24 @@ describe('OfficecliManager', () => {
     expect(manager.resolveAgentPathDir()).toBe(dirname(pathBinary))
   })
 
+  it('reuses verified binary without re-probing on resolveBinary', async () => {
+    const pathBinary = resolve('C:\\tools\\officecli.exe')
+    const { manager, run } = createHarness({
+      files: [pathBinary],
+      path: dirname(pathBinary),
+    })
+
+    await manager.detect()
+    run.mockClear()
+
+    await expect(manager.resolveBinary()).resolves.toEqual({
+      path: pathBinary,
+      source: 'path',
+    })
+    expect(manager.resolveAgentPathDir()).toBe(dirname(pathBinary))
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('falls back to the known user installation location', async () => {
     const knownBinary = resolve('C:\\Users\\test\\OfficeCLI\\officecli.exe')
     const { manager } = createHarness({ files: [knownBinary], localAppData: 'C:\\Users\\test' })

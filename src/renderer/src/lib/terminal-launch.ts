@@ -55,6 +55,22 @@ export function warmDefaultShellCache(): void {
   void ensureDefaultShell()
 }
 
+/**
+ * Fire-and-forget main-process prewarm for terminal:create:
+ * CLI path cache, hook bridge/config install, officecli binary cache.
+ */
+export function warmTerminalCreatePath(
+  engines?: Array<Exclude<TerminalPreset, 'shell'> | 'shell'>,
+): void {
+  if (!window.electron?.invoke) return
+  const list = engines
+    ?.filter((engine): engine is Exclude<TerminalPreset, 'shell'> => engine !== 'shell')
+  void window.electron.invoke(
+    'terminal:warmup',
+    list?.length ? { engines: list } : undefined,
+  ).catch(() => undefined)
+}
+
 export function waitForTerminalMount(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {

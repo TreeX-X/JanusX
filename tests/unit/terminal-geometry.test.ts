@@ -63,6 +63,13 @@ describe('terminal-geometry', () => {
     await expect(pending).resolves.toBeNull()
   })
 
+  it('falls back to last good geometry from another terminal on timeout', async () => {
+    reportTerminalGeometry('prev', 132, 44)
+    const pending = waitForTerminalGeometry('next', { timeoutMs: 100 })
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(pending).resolves.toEqual({ cols: 132, rows: 44 })
+  })
+
   it('clears geometry and force-fit handlers', () => {
     const handler = vi.fn()
     reportTerminalGeometry('t1', 80, 24)

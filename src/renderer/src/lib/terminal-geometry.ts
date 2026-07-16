@@ -12,6 +12,12 @@ export interface WaitForTerminalGeometryOptions {
 const geometryById = new Map<string, TerminalGeometry>()
 const waitersById = new Map<string, Set<(geometry: TerminalGeometry) => void>>()
 const forceFitHandlers = new Map<string, () => void>()
+/** Last acceptable geometry from any terminal — better create fallback than fixed 120x40. */
+let lastGoodGeometry: TerminalGeometry | null = null
+
+const DEFAULT_GEOMETRY_TIMEOUT_MS = 300
+const DEFAULT_MIN_COLS = 40
+const DEFAULT_MIN_ROWS = 10
 
 function normalizeGeometry(cols: number, rows: number): TerminalGeometry | null {
   if (!Number.isFinite(cols) || !Number.isFinite(rows)) return null
@@ -34,6 +40,9 @@ export function reportTerminalGeometry(id: string, cols: number, rows: number): 
   if (!next) return
 
   geometryById.set(id, next)
+  if (isAcceptable(next, DEFAULT_MIN_COLS, DEFAULT_MIN_ROWS)) {
+    lastGoodGeometry = next
+  }
   const waiters = waitersById.get(id)
   if (!waiters) return
   for (const resolve of waiters) resolve(next)
@@ -41,6 +50,10 @@ export function reportTerminalGeometry(id: string, cols: number, rows: number): 
 
 export function getTerminalGeometry(id: string): TerminalGeometry | null {
   return geometryById.get(id) ?? null
+}
+
+export function getLastGoodTerminalGeometry(): TerminalGeometry | null {
+  return lastGoodGeometry
 }
 
 export function clearTerminalGeometry(id: string): void {
@@ -51,15 +64,15 @@ export function clearTerminalGeometry(id: string): void {
 
 /**
  * Wait until CLITerminal reports a usable FitAddon geometry.
- * On timeout, returns the latest reported size (even if below min) or null.
+ * On timeout, returns latest for this id, else last good geometry from any prior terminal, else null.
  */
 export function waitForTerminalGeometry(
   id: string,
   options: WaitForTerminalGeometryOptions = {},
 ): Promise<TerminalGeometry | null> {
-  const timeoutMs = options.timeoutMs ?? 800
-  const minCols = options.minCols ?? 40
-  const minRows = options.minRows ?? 10
+  const timeoutMs = options.timeoutMs ?? DEFAULT_GEOMETRY_TIMEOUT_MS
+  const minCols = options.minCols ?? DEFAULT_MIN_COLS
+  const minRows = options.minRows ?? DEFAULT_MIN_ROWS
 
   const existing = geometryById.get(id)
   if (existing && isAcceptable(existing, minCols, minRows)) {
@@ -93,7 +106,7 @@ export function waitForTerminalGeometry(
     waiters.add(onGeometry)
 
     const timer = setTimeout(() => {
-      finish(geometryById.get(id) ?? null)
+      finish(geometryById.get(id) ?? lastGoodGeometry)
     }, timeoutMs)
   })
 }
@@ -127,4 +140,5 @@ export function __resetTerminalGeometryForTests(): void {
   geometryById.clear()
   waitersById.clear()
   forceFitHandlers.clear()
+  lastGoodGeometry = null
 }

@@ -31,6 +31,7 @@ import {
   launchTerminalPreset,
   retryTerminalCreate,
   warmDefaultShellCache,
+  warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
@@ -1109,6 +1110,7 @@ export function TerminalArea() {
 
   useEffect(() => {
     warmDefaultShellCache()
+    warmTerminalCreatePath()
   }, [])
 
   const paneCount = useMemo(() => getLeafPanes(paneTree).length, [paneTree])

@@ -97,6 +97,17 @@ describe('terminal-launch', () => {
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 
+  it('warms terminal create path via terminal:warmup', async () => {
+    const invoke = window.electron.invoke as ReturnType<typeof vi.fn>
+    invoke.mockResolvedValue({ ok: true })
+
+    const { warmTerminalCreatePath } = await import('../../src/renderer/src/lib/terminal-launch')
+    warmTerminalCreatePath(['claude'])
+    await Promise.resolve()
+
+    expect(invoke).toHaveBeenCalledWith('terminal:warmup', { engines: ['claude'] })
+  })
+
   it('launches optimistically with starting status before create resolves', async () => {
     const invoke = window.electron.invoke as ReturnType<typeof vi.fn>
     let resolveCreate: ((value: { pid: number }) => void) | null = null
