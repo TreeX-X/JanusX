@@ -10,11 +10,10 @@ import type {
   MemoryFact,
   GraphEdge,
 } from '../../shared/knowledge'
+import type { RevokeTruthInput } from '../../shared/ipc/knowledge'
+export type { RevokeTruthInput, TruthKind } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
-
-export type TruthKind = 'fact' | 'graph' | 'wiki'
-export interface RevokeTruthInput { kind: TruthKind; id: string; workspaceId: string }
 
 const paths = {
   fact: join('facts', 'facts.jsonl'),

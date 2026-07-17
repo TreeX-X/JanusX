@@ -19,6 +19,7 @@ vi.mock('../../../src/main/knowledge/truth-service', () => ({ knowledgeTruthServ
 
 import { registerKnowledgeHandlers } from '../../../src/main/ipc/knowledge-handlers'
 import { getKnowledgeContext } from '../../../src/renderer/src/services/knowledge'
+import { KNOWLEDGE_CHANNELS } from '../../../src/shared/ipc/knowledge'
 
 describe('knowledge context IPC adapter', () => {
   beforeEach(() => {
@@ -34,7 +35,7 @@ describe('knowledge context IPC adapter', () => {
     const expected = { items: [], compactContext: '', truncated: false, eligibleCount: 0, maxItems: 8, maxChars: 4000 }
     search.mockResolvedValue(expected)
     registerKnowledgeHandlers()
-    const registration = handle.mock.calls.find(([channel]) => channel === 'knowledge:context')
+    const registration = handle.mock.calls.find(([channel]) => channel === KNOWLEDGE_CHANNELS.context)
     const request = { query: 'context', workspaceId: 'workspace-a' }
 
     await expect(registration?.[1]({}, request)).resolves.toBe(expected)
@@ -43,11 +44,11 @@ describe('knowledge context IPC adapter', () => {
 
   it('exposes one typed renderer invocation without transforming the request', async () => {
     const expected = { items: [], compactContext: '', truncated: false, eligibleCount: 0, maxItems: 8, maxChars: 4000 }
-    const invoke = vi.fn(async () => expected)
-    vi.stubGlobal('window', { electron: { invoke } })
+    const context = vi.fn(async () => expected)
+    vi.stubGlobal('window', { electron: { knowledge: { context } } })
     const request = { query: 'context', workspaceId: 'workspace-a', maxItems: 2 }
 
     await expect(getKnowledgeContext(request)).resolves.toBe(expected)
-    expect(invoke).toHaveBeenCalledWith('knowledge:context', request)
+    expect(context).toHaveBeenCalledWith(request)
   })
 })

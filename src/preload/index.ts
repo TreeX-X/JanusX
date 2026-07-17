@@ -17,6 +17,7 @@ import {
   type TerminalAPI,
 } from '../shared/ipc/terminal'
 import { PROJECT_CHANNELS, type ProjectAPI } from '../shared/ipc/project'
+import { KNOWLEDGE_CHANNELS, type KnowledgeAPI } from '../shared/ipc/knowledge'
 
 const ALLOWED_INVOKE_CHANNELS = [
   ...Object.values(OFFICE_INVOKE_CHANNELS),
@@ -29,8 +30,6 @@ const ALLOWED_INVOKE_CHANNELS = [
   'settings:notifications:get',
   'settings:notifications:update',
   'settings:notifications:test-feishu',
-  'settings:knowledge:get',
-  'settings:knowledge:update',
   'window:minimize',
   'window:maximize',
   'window:close',
@@ -92,30 +91,6 @@ const ALLOWED_INVOKE_CHANNELS = [
   'janus:requirements:accept-candidate',
   'janus:requirements:reject-candidate',
   'janus:analyzer:accept-discovered',
-  'knowledge:contracts:get',
-  'knowledge:bootstrap',
-  'knowledge:observe',
-  'knowledge:observations:list',
-  'knowledge:observations:prune',
-  'knowledge:observations:resolve-content',
-  'knowledge:retention:stats',
-  'knowledge:audit:list',
-  'knowledge:audit:stats',
-  // Phase 6: 候选知识提炼 + 候选读取
-  'knowledge:extract',
-  'knowledge:candidates:list',
-  'knowledge:candidates:list-graph',
-  'knowledge:candidates:list-wiki-patches',
-  // MVP review: reject / apply
-  'knowledge:candidates:reject',
-  'knowledge:candidates:apply',
-  'knowledge:search',
-  'knowledge:truth:list',
-  'knowledge:truth:revoke',
-  'knowledge:conflicts:list',
-  'knowledge:feedback:record',
-  'knowledge:feedback:summary',
-  'knowledge:context',
 ]
 
 const ALLOWED_SEND_CHANNELS = [
@@ -214,6 +189,34 @@ const projectAPI: ProjectAPI = {
   schemas: () => ipcRenderer.invoke(PROJECT_CHANNELS.schemas),
 }
 
+const knowledgeAPI: KnowledgeAPI = {
+  contracts: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.contracts),
+  bootstrap: (workspacePath) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.bootstrap, workspacePath),
+  observe: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.observe, input),
+  listObservations: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listObservations, query),
+  pruneObservations: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.pruneObservations, query),
+  resolveObservationContent: (observation) =>
+    ipcRenderer.invoke(KNOWLEDGE_CHANNELS.resolveObservationContent, observation),
+  retentionStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.retentionStats),
+  listAudit: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listAudit, query),
+  auditStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.auditStats),
+  extract: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.extract, input),
+  listCandidates: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listCandidates),
+  listGraphCandidates: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listGraphCandidates),
+  listWikiPatchCandidates: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listWikiPatchCandidates),
+  rejectCandidate: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.rejectCandidate, input),
+  applyCandidate: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.applyCandidate, input),
+  search: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.search, query),
+  listTruth: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listTruth),
+  revokeTruth: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.revokeTruth, input),
+  listConflicts: (workspaceId) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listConflicts, workspaceId),
+  recordFeedback: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.recordFeedback, input),
+  feedbackSummary: (workspaceId) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.feedbackSummary, workspaceId),
+  context: (request) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.context, request),
+  getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
+  updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
+}
+
 contextBridge.exposeInMainWorld('electron', {
   /*-- 同步暴露平台与 Windows build 号，供渲染端构造 xterm windowsPty 用 --*/
   /*-- preload 在 Node 环境，可同步读取；os.release() 形如 "10.0.22621"，第三段为 build 号 --*/
@@ -228,6 +231,7 @@ contextBridge.exposeInMainWorld('electron', {
   file: fileAPI,
   terminal: terminalAPI,
   project: projectAPI,
+  knowledge: knowledgeAPI,
 
   invoke: (channel: string, ...args: unknown[]) => {
     if (ALLOWED_INVOKE_CHANNELS.includes(channel)) {

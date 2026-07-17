@@ -1,20 +1,14 @@
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import type { KnowledgeContractsSnapshot } from '../../shared/knowledge'
+import type { KnowledgeBootstrapResult } from '../../shared/ipc/knowledge'
+export type { KnowledgeBootstrapResult } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
 import { getKnowledgeContractsSnapshot, KNOWLEDGE_STORAGE_LAYOUT } from './contracts'
 
 interface ContractFileSpec {
   relativePath: string
   content: string
-}
-
-export interface KnowledgeBootstrapResult {
-  workspacePath?: string
-  knowledgeRoot: string
-  createdDirectories: string[]
-  createdFiles: string[]
-  contracts: KnowledgeContractsSnapshot
 }
 
 function buildReadme(): string {

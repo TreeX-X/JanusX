@@ -1,16 +1,22 @@
 import { ipcMain } from 'electron'
 import { knowledgeContractService } from '../knowledge/contract-service'
-import { knowledgeAuditService, type AuditQuery } from '../knowledge/audit-service'
+import { knowledgeAuditService } from '../knowledge/audit-service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
-import { knowledgeExtractService, type ExtractInput } from '../knowledge/extract-service'
+import { knowledgeExtractService } from '../knowledge/extract-service'
 import {
   knowledgeReviewService,
-  type ReviewCandidateInput,
 } from '../knowledge/review-service'
 import { knowledgeSearchService } from '../knowledge/search-service'
 import { knowledgeTruthService } from '../knowledge/truth-service'
 import { knowledgeContextService } from '../knowledge/context-service'
-import { knowledgeOperationsService, type RevokeTruthInput } from '../knowledge/operations-service'
+import { knowledgeOperationsService } from '../knowledge/operations-service'
+import {
+  KNOWLEDGE_CHANNELS,
+  type AuditQuery,
+  type ExtractInput,
+  type ReviewCandidateInput,
+  type RevokeTruthInput,
+} from '../../shared/ipc/knowledge'
 import type {
   CaptureObservationInput,
   KnowledgeContextRequest,
@@ -22,27 +28,27 @@ import type {
 } from '../../shared/knowledge'
 
 export function registerKnowledgeHandlers(): void {
-  ipcMain.handle('knowledge:contracts:get', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.contracts, async () => {
     return knowledgeContractService.getContracts()
   })
 
-  ipcMain.handle('knowledge:bootstrap', async (_event, workspacePath?: string) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.bootstrap, async (_event, workspacePath?: string) => {
     return knowledgeContractService.bootstrapWorkspace(workspacePath)
   })
 
-  ipcMain.handle('knowledge:observe', async (_event, input: CaptureObservationInput) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.observe, async (_event, input: CaptureObservationInput) => {
     return knowledgeObservationService.capture(input)
   })
 
-  ipcMain.handle('knowledge:observations:list', async (_event, query: ObservationQuery) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.listObservations, async (_event, query: ObservationQuery) => {
     return knowledgeObservationService.list(query)
   })
 
-  ipcMain.handle('knowledge:observations:prune', async (_event, query: ObservationPruneQuery) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.pruneObservations, async (_event, query: ObservationPruneQuery) => {
     return knowledgeObservationService.prune(query)
   })
 
-  ipcMain.handle('knowledge:observations:resolve-content', async (_event, observation: Observation) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.resolveObservationContent, async (_event, observation: Observation) => {
     return knowledgeObservationService.resolveContent(observation)
   })
 
@@ -50,16 +56,16 @@ export function registerKnowledgeHandlers(): void {
     return knowledgeObservationService.autoPrune(nowMs)
   })
 
-  ipcMain.handle('knowledge:retention:stats', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.retentionStats, async () => {
     return knowledgeObservationService.stats()
   })
 
   // Phase 5: audit + archive + compact handlers (additive only).
-  ipcMain.handle('knowledge:audit:list', async (_event, query?: AuditQuery) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.listAudit, async (_event, query?: AuditQuery) => {
     return knowledgeAuditService.list(query ?? {})
   })
 
-  ipcMain.handle('knowledge:audit:stats', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.auditStats, async () => {
     return knowledgeAuditService.stats()
   })
 
@@ -84,62 +90,62 @@ export function registerKnowledgeHandlers(): void {
   )
 
   // Phase 6: candidate extraction via LLM structured output (no-default-LLM degrades safely).
-  ipcMain.handle('knowledge:extract', async (_event, input?: ExtractInput) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.extract, async (_event, input?: ExtractInput) => {
     return knowledgeExtractService.extract(input ?? {})
   })
 
-  ipcMain.handle('knowledge:candidates:list', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.listCandidates, async () => {
     return knowledgeExtractService.listFactCandidates()
   })
 
-  ipcMain.handle('knowledge:candidates:list-graph', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.listGraphCandidates, async () => {
     return knowledgeExtractService.listGraphCandidates()
   })
 
-  ipcMain.handle('knowledge:candidates:list-wiki-patches', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.listWikiPatchCandidates, async () => {
     return knowledgeExtractService.listWikiPatchCandidates()
   })
 
   // MVP review loop: reject / apply (approve+apply combined)
   ipcMain.handle(
-    'knowledge:candidates:reject',
+    KNOWLEDGE_CHANNELS.rejectCandidate,
     async (_event, input: ReviewCandidateInput) => {
       return knowledgeReviewService.rejectCandidate(input)
     },
   )
 
   ipcMain.handle(
-    'knowledge:candidates:apply',
+    KNOWLEDGE_CHANNELS.applyCandidate,
     async (_event, input: ReviewCandidateInput) => {
       return knowledgeReviewService.applyCandidate(input)
     },
   )
 
-  ipcMain.handle('knowledge:search', async (_event, query: KnowledgeSearchQuery) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.search, async (_event, query: KnowledgeSearchQuery) => {
     return knowledgeSearchService.search(query)
   })
 
-  ipcMain.handle('knowledge:truth:list', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.listTruth, async () => {
     return knowledgeTruthService.list()
   })
 
-  ipcMain.handle('knowledge:truth:revoke', async (_event, input: RevokeTruthInput) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.revokeTruth, async (_event, input: RevokeTruthInput) => {
     return knowledgeOperationsService.revoke(input)
   })
 
-  ipcMain.handle('knowledge:conflicts:list', async (_event, workspaceId: string) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.listConflicts, async (_event, workspaceId: string) => {
     return knowledgeOperationsService.listConflicts(workspaceId)
   })
 
-  ipcMain.handle('knowledge:feedback:record', async (_event, input: KnowledgeFeedbackInput) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.recordFeedback, async (_event, input: KnowledgeFeedbackInput) => {
     return knowledgeOperationsService.recordFeedback(input)
   })
 
-  ipcMain.handle('knowledge:feedback:summary', async (_event, workspaceId?: string) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.feedbackSummary, async (_event, workspaceId?: string) => {
     return knowledgeOperationsService.feedbackSummary(workspaceId)
   })
 
-  ipcMain.handle('knowledge:context', async (_event, request: KnowledgeContextRequest) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.context, async (_event, request: KnowledgeContextRequest) => {
     return knowledgeContextService.search(request)
   })
 }

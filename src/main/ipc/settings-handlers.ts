@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { configService } from '../config/service'
 import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
 import type { KnowledgeSettings } from '../../shared/knowledge-settings'
+import { KNOWLEDGE_CHANNELS } from '../../shared/ipc/knowledge'
 import type { AgentNotificationSettings, RemoteNotificationSettings } from '../../shared/notifications'
 
 export function registerSettingsHandlers(): void {
@@ -23,12 +24,12 @@ export function registerSettingsHandlers(): void {
     },
   )
 
-  ipcMain.handle('settings:knowledge:get', async () => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.getSettings, async () => {
     return configService.getKnowledgeSettings()
   })
 
   ipcMain.handle(
-    'settings:knowledge:update',
+    KNOWLEDGE_CHANNELS.updateSettings,
     async (_event, settings: Partial<KnowledgeSettings>) => {
       return configService.updateKnowledgeSettings(settings ?? {})
     },

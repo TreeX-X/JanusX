@@ -31,6 +31,7 @@ Last analyzed: 2026-07-17
 | File/editor UI | `components/FileEditor.tsx`, `components/viewers/*`, `stores/editor.ts` | Monaco/Markdown/HTML/Image/Binary viewers |
 | Sidebar/status/titlebar | `components/Sidebar.tsx`, `StatusBar.tsx`, `Titlebar.tsx` | shell navigation and top controls |
 | Project launcher | `components/ProjectLauncher.tsx`, `ProjectSettings.tsx`, `ProjectRunningList.tsx`, `ProjectConfigForm/*`, `services/project.ts` | typed detect/configure/run client, lifecycle-safe actions, and guarded polling |
+| Knowledge workbench | `components/knowledge/*`, `services/knowledge.ts`, `services/knowledge-settings.ts` | typed workbench/search/context/review/truth/feedback/settings client with isolated read fallbacks |
 | LLM config/chat service | `components/LlmConfigModal.tsx`, `services/llm.ts` | provider CRUD, test, chat, streaming chat subscription |
 | Blueprint UI | `components/blueprint/*`, `stores/blueprint.ts`, `services/blueprint.ts` | React Flow canvas, node cards, analysis history, candidates |
 | Janus island/chat | `components/janus/*` | titlebar island, animated state, chat panel, streaming printer |
@@ -44,6 +45,7 @@ Last analyzed: 2026-07-17
 | `src/shared/ipc/workspace.ts` | Workspace/File/FileTree channel constants, DTOs, result/event types, and preload domain API contract |
 | `src/shared/ipc/terminal.ts` | Terminal command/event constants, payload/result types, and preload domain API contract |
 | `src/shared/ipc/project.ts` | Project command constants, clone-safe DTOs/results, and the 11-operation preload domain API contract |
+| `src/shared/ipc/knowledge.ts` | 24 public Knowledge/Settings command constants, clone-safe request/result types, and preload domain API contract |
 | `src/shared/terminalLaunch.ts` | canonical terminal presets: `shell`, `claude`, `codex`, `opencode`; builds auto commands |
 | `src/shared/notifications.ts` | notification settings type/defaults/normalization |
 | `src/shared/janus/persona.ts` | Janus system persona exposed through preload as `janusPersona` |

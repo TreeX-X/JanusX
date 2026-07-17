@@ -8,13 +8,17 @@ import type {
   KnowledgeContextResult,
   KnowledgeSearchQuery,
   KnowledgeSearchResult,
-  KnowledgeTruthSnapshot,
   KnowledgeConflict,
   KnowledgeFeedbackInput,
   KnowledgeFeedbackSummary,
   Observation,
   RetentionStats,
 } from '../../../shared/knowledge'
+import type {
+  ReviewCandidateInput,
+  ReviewCandidateType,
+  RevokeTruthInput,
+} from '../../../shared/ipc/knowledge'
 import {
   sortKnowledgeCards,
   toKnowledgeCards,
@@ -35,9 +39,9 @@ export interface KnowledgeWorkbenchSnapshot {
   errors: string[]
 }
 
-async function invokeOrEmpty<T>(channel: string, fallback: T, ...args: unknown[]): Promise<T> {
+async function invokeOrEmpty<T>(operation: () => Promise<T>, fallback: T): Promise<T> {
   try {
-    return (await window.electron.invoke(channel, ...args)) as T
+    return await operation()
   } catch {
     return fallback
   }
@@ -54,13 +58,13 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     retentionStats,
     truth,
   ] = await Promise.all([
-    invokeOrEmpty<Observation[]>('knowledge:observations:list', [], { scope: 'global', limit: 40 }),
-    invokeOrEmpty<CandidateFact[]>('knowledge:candidates:list', []),
-    invokeOrEmpty<CandidateWikiPatch[]>('knowledge:candidates:list-wiki-patches', []),
-    invokeOrEmpty<CandidateGraphEdge[]>('knowledge:candidates:list-graph', []),
-    invokeOrEmpty<AuditEvent[]>('knowledge:audit:list', [], { limit: 30 }),
-    invokeOrEmpty<RetentionStats | null>('knowledge:retention:stats', null),
-    invokeOrEmpty<KnowledgeTruthSnapshot>('knowledge:truth:list', {
+    invokeOrEmpty(() => window.electron.knowledge.listObservations({ scope: 'global', limit: 40 }), []),
+    invokeOrEmpty(() => window.electron.knowledge.listCandidates(), []),
+    invokeOrEmpty(() => window.electron.knowledge.listWikiPatchCandidates(), []),
+    invokeOrEmpty(() => window.electron.knowledge.listGraphCandidates(), []),
+    invokeOrEmpty(() => window.electron.knowledge.listAudit({ limit: 30 }), []),
+    invokeOrEmpty<RetentionStats | null>(() => window.electron.knowledge.retentionStats(), null),
+    invokeOrEmpty(() => window.electron.knowledge.listTruth(), {
       facts: [],
       wikiPages: [],
       graphEdges: [],
@@ -74,7 +78,9 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     ...graphCandidates.map((item) => item.edge.workspaceId),
   ].filter(Boolean))]
   const conflicts = (await Promise.all(
-    workspaceIds.map((workspaceId) => invokeOrEmpty<KnowledgeConflict[]>('knowledge:conflicts:list', [], workspaceId)),
+    workspaceIds.map((workspaceId) =>
+      invokeOrEmpty(() => window.electron.knowledge.listConflicts(workspaceId), []),
+    ),
   )).flat()
 
   if (!retentionStats) {
@@ -99,7 +105,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
 export async function searchKnowledge(
   query: KnowledgeSearchQuery,
 ): Promise<KnowledgeSearchResult> {
-  return window.electron.invoke('knowledge:search', query) as Promise<KnowledgeSearchResult>
+  return window.electron.knowledge.search(query)
 }
 
 /** Search then map hits to unified KnowledgeCards (does not change KnowledgeSearchResult). */
@@ -113,47 +119,38 @@ export async function searchKnowledgeCards(
 export async function getKnowledgeContext(
   request: KnowledgeContextRequest,
 ): Promise<KnowledgeContextResult> {
-  return window.electron.invoke('knowledge:context', request) as Promise<KnowledgeContextResult>
+  return window.electron.knowledge.context(request)
 }
 
-export type KnowledgeReviewCandidateType = 'fact' | 'wiki-patch' | 'graph-edge'
-
-export interface KnowledgeReviewCandidateInput {
-  type: KnowledgeReviewCandidateType
-  id: string
-  reviewNotes?: string
-}
+export type KnowledgeReviewCandidateType = ReviewCandidateType
+export type KnowledgeReviewCandidateInput = ReviewCandidateInput
 
 export async function rejectKnowledgeCandidate(
   input: KnowledgeReviewCandidateInput,
 ): Promise<unknown> {
-  return window.electron.invoke('knowledge:candidates:reject', input)
+  return window.electron.knowledge.rejectCandidate(input)
 }
 
 export async function applyKnowledgeCandidate(
   input: KnowledgeReviewCandidateInput,
 ): Promise<unknown> {
-  return window.electron.invoke('knowledge:candidates:apply', input)
+  return window.electron.knowledge.applyCandidate(input)
 }
 
-export async function revokeKnowledgeTruth(input: {
-  kind: 'fact' | 'graph' | 'wiki'
-  id: string
-  workspaceId: string
-}): Promise<void> {
-  await window.electron.invoke('knowledge:truth:revoke', input)
+export async function revokeKnowledgeTruth(input: RevokeTruthInput): Promise<void> {
+  await window.electron.knowledge.revokeTruth(input)
 }
 
 export async function listKnowledgeConflicts(workspaceId: string): Promise<KnowledgeConflict[]> {
-  return window.electron.invoke('knowledge:conflicts:list', workspaceId) as Promise<KnowledgeConflict[]>
+  return window.electron.knowledge.listConflicts(workspaceId)
 }
 
 export async function recordKnowledgeFeedback(input: KnowledgeFeedbackInput): Promise<void> {
-  await window.electron.invoke('knowledge:feedback:record', input)
+  await window.electron.knowledge.recordFeedback(input)
 }
 
 export async function getKnowledgeFeedbackSummary(
   workspaceId?: string,
 ): Promise<KnowledgeFeedbackSummary> {
-  return window.electron.invoke('knowledge:feedback:summary', workspaceId) as Promise<KnowledgeFeedbackSummary>
+  return window.electron.knowledge.feedbackSummary(workspaceId)
 }

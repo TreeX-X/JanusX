@@ -52,6 +52,32 @@ export function installElectronApiFallback(): void {
       get: () => unavailableProjectResult(),
       schemas: () => unavailableProjectResult(),
     },
+    knowledge: {
+      contracts: () => unavailableKnowledge(),
+      bootstrap: () => unavailableKnowledge(),
+      observe: () => unavailableKnowledge(),
+      listObservations: () => unavailableKnowledge(),
+      pruneObservations: () => unavailableKnowledge(),
+      resolveObservationContent: () => unavailableKnowledge(),
+      retentionStats: () => unavailableKnowledge(),
+      listAudit: () => unavailableKnowledge(),
+      auditStats: () => unavailableKnowledge(),
+      extract: () => unavailableKnowledge(),
+      listCandidates: () => unavailableKnowledge(),
+      listGraphCandidates: () => unavailableKnowledge(),
+      listWikiPatchCandidates: () => unavailableKnowledge(),
+      rejectCandidate: () => unavailableKnowledge(),
+      applyCandidate: () => unavailableKnowledge(),
+      search: () => unavailableKnowledge(),
+      listTruth: () => unavailableKnowledge(),
+      revokeTruth: () => unavailableKnowledge(),
+      listConflicts: () => unavailableKnowledge(),
+      recordFeedback: () => unavailableKnowledge(),
+      feedbackSummary: () => unavailableKnowledge(),
+      context: () => unavailableKnowledge(),
+      getSettings: () => unavailableKnowledge(),
+      updateSettings: () => unavailableKnowledge(),
+    },
     invoke: () => Promise.resolve(undefined),
     send: () => {},
     on: () => () => {},
@@ -61,6 +87,10 @@ export function installElectronApiFallback(): void {
 
 function unavailableProjectResult(): Promise<{ success: false; error: string }> {
   return Promise.resolve({ success: false, error: 'Electron project API is unavailable' })
+}
+
+function unavailableKnowledge(): Promise<never> {
+  return Promise.reject(new Error('Electron knowledge API is unavailable'))
 }
 
 function inferPlatform(): NodeJS.Platform {

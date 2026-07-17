@@ -21,7 +21,7 @@ Migrated domains use a typed path:
 
 ```text
 Renderer component/store/service
--> window.electron.workspace/fileTree/file/terminal
+-> window.electron.workspace/fileTree/file/terminal/project/knowledge
 -> fixed preload adapter
 -> shared channel constant + typed payload
 -> src/main/ipc/* handler or main event producer
@@ -42,7 +42,7 @@ When adding IPC:
 4. Use the typed domain API from renderer components/stores/services.
 5. Add contract tests for registration, argument order, generic rejection, and event unsubscribe behavior.
 
-Workspace/File/FileTree, Terminal, and Project request/response operations follow this design today. Knowledge, Janus, LLM, Office, agent, checkpoint, settings, and other domains remain incremental migration work.
+Workspace/File/FileTree, Terminal, Project, and public Knowledge request/response operations follow this design today. Janus/Blueprint, LLM, Office, agent, checkpoint, notification settings, and other domains remain incremental migration work.
 
 ## Terminal Creation And Checkpointing
 
@@ -153,3 +153,16 @@ Key concepts from `src/main/janus/types.ts`:
 - `BlueprintRequirementCandidate`: AI-discovered requirement that must be accepted/rejected by user.
 
 Analyzer input source is git commit diffs. The source comment states it does not consume terminal output streams or checkpoint events directly.
+
+## Knowledge Workbench And Context
+
+```text
+KnowledgeWorkbench / KnowledgeSettingsPanel / Janus context consumers
+-> renderer Knowledge service exports
+-> window.electron.knowledge fixed typed API
+-> shared Knowledge channel and clone-safe DTO contract
+-> Knowledge/settings handlers
+-> contract, observation, search, context, review, truth, operations, or config service
+```
+
+Workbench reads preserve independent fallbacks so one unavailable source does not erase successful parallel results. Direct search, context, review, truth, conflict, feedback, and settings calls propagate failures. Auto-prune, archive, and compact remain main-internal and are not renderer capabilities.

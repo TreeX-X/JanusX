@@ -1,7 +1,9 @@
 import { randomUUID } from 'crypto'
 import { appendFile, mkdir, readFile, rename, writeFile, unlink } from 'fs/promises'
 import { dirname, join } from 'path'
-import type { AuditAction, AuditEvent, KnowledgeProvenance } from '../../shared/knowledge'
+import type { AuditEvent, KnowledgeProvenance } from '../../shared/knowledge'
+import type { AuditQuery, AuditStats } from '../../shared/ipc/knowledge'
+export type { AuditQuery, AuditStats } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
 
 const AUDIT_FILE = join('audit', 'audit.jsonl')
@@ -18,18 +20,6 @@ async function serialized<T>(operation: () => Promise<T>): Promise<T> {
   auditQueue = new Promise<void>((resolve) => { release = resolve })
   await previous
   try { return await operation() } finally { release() }
-}
-
-export interface AuditQuery {
-  action?: AuditAction
-  targetType?: AuditEvent['targetType']
-  targetId?: string
-  limit?: number
-}
-
-export interface AuditStats {
-  total: number
-  byAction: Record<string, number>
 }
 
 function clampLimit(limit?: number): number {

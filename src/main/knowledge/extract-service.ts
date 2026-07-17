@@ -19,11 +19,11 @@ import type {
   CandidateWikiPatch,
   GraphRelationType,
   KnowledgeProvenance,
-  KnowledgeSource,
   MemoryFact,
   Observation,
-  ObservationQuery,
 } from '../../shared/knowledge'
+import type { ExtractInput, ExtractOutput } from '../../shared/ipc/knowledge'
+export type { ExtractInput, ExtractOutput } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
@@ -82,33 +82,6 @@ const extractSchema = z.object({
     .default([]),
 })
 type ExtractResult = z.infer<typeof extractSchema>
-
-export interface ExtractInput {
-  /** 直接喂入的 evidence observation 批次；若未提供则按 query 从 observation-service 拉取。 */
-  observations?: Observation[]
-  /** 从 observation-service.list 拉取 observations 用的查询。 */
-  query?: ObservationQuery
-  /** query 模式下最大返回条数（默认 20，上限 50）。 */
-  limit?: number
-  /** 覆盖 provenance.workspaceId（缺省从首条 observation 推导）。 */
-  workspaceId?: string
-  workspaceName?: string
-  workspacePath?: string
-  /** provenance.source（默认 'system'）。 */
-  source?: KnowledgeSource
-  actor?: string
-  correlationId?: string
-}
-
-export interface ExtractOutput {
-  facts: CandidateFact[]
-  wikiPatches: CandidateWikiPatch[]
-  graphEdges: CandidateGraphEdge[]
-  /** 降级成功时给出原因（未抛错）。 */
-  degraded?: { reason: string; detail?: string }
-  /** 写入的 audit event id（无候选或降级时缺省）。 */
-  auditEventId?: string
-}
 
 /**
  * 从 observation 推导出 batch 共享 provenance 的 workspace 三元组。

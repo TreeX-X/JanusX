@@ -23,24 +23,16 @@ import type {
 } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
-
-export type ReviewCandidateType = 'fact' | 'wiki-patch' | 'graph-edge'
-
-export interface ReviewCandidateInput {
-  type: ReviewCandidateType
-  id: string
-  reviewNotes?: string
-}
-
-export interface ReviewResult {
-  candidate: CandidateFact | CandidateWikiPatch | CandidateGraphEdge
-  auditEvents: AuditEvent[]
-  applied?: {
-    fact?: MemoryFact
-    edge?: GraphEdge
-    page?: WikiPage
-  }
-}
+import type {
+  ReviewCandidateInput,
+  ReviewCandidateType,
+  ReviewResult,
+} from '../../shared/ipc/knowledge'
+export type {
+  ReviewCandidateInput,
+  ReviewCandidateType,
+  ReviewResult,
+} from '../../shared/ipc/knowledge'
 
 const FACT_CANDIDATES_FILE = join('facts', 'candidates.jsonl')
 const FACTS_FILE = join('facts', 'facts.jsonl')

@@ -42,6 +42,15 @@ export type GraphRelationType =
  */
 export type CompactionStatus = 'active' | 'compacted' | 'summarized'
 
+export type StructuredCloneValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | StructuredCloneValue[]
+  | { [key: string]: StructuredCloneValue }
+
 export type AuditAction =
   | 'capture'
   | 'extract'
@@ -89,7 +98,7 @@ export interface Observation {
   actor: string
   createdAt: string
   correlationId?: string
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, StructuredCloneValue>
   // Phase 3/4: retention classification (missing defaults to 'evidence').
   retentionClass?: RetentionClass
   retentionReason?: string
@@ -119,7 +128,7 @@ export interface CaptureObservationInput {
   visibility?: KnowledgeVisibility
   actor?: string
   correlationId?: string
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, StructuredCloneValue>
 }
 
 export interface ObservationQuery {
@@ -307,8 +316,8 @@ export interface AuditEvent {
   action: AuditAction
   targetType: 'observation' | 'fact' | 'wiki' | 'graph' | 'index'
   targetId: string
-  before?: Record<string, unknown> | null
-  after?: Record<string, unknown> | null
+  before?: Record<string, StructuredCloneValue> | null
+  after?: Record<string, StructuredCloneValue> | null
   provenance: KnowledgeProvenance
 }
 

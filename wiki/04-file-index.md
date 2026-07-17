@@ -42,6 +42,7 @@ Use this as a lookup table before opening source.
 | `src/shared/ipc/workspace.ts` | typed Workspace/File/FileTree constants, DTOs, results, events, and preload domain APIs |
 | `src/shared/ipc/terminal.ts` | typed Terminal commands/events, payloads/results, and preload domain API |
 | `src/shared/ipc/project.ts` | typed Project commands, clone-safe DTOs/results, and preload domain API |
+| `src/shared/ipc/knowledge.ts` | typed public Knowledge/Settings commands, clone-safe DTOs/results, and preload domain API |
 | `src/preload/index.ts` | fixed typed adapters for migrated domains plus temporary generic allowlists for remaining domains |
 | `src/renderer/src/types/electron.d.ts` | renderer declaration of the exposed preload API |
 
@@ -95,6 +96,18 @@ Use this as a lookup table before opening source.
 | `src/renderer/src/components/CheckpointPanel.tsx` | checkpoint list/diff/restore UI |
 | `tests/unit/agent/*` | parser, stream manager, checkpoint, blob, diff tests |
 
+## Knowledge
+
+| File | Function |
+|---|---|
+| `src/shared/knowledge.ts` | canonical Knowledge entities and structured-clone-safe extensible values |
+| `src/shared/ipc/knowledge.ts` | public 24-operation Knowledge/Settings IPC contract |
+| `src/main/ipc/knowledge-handlers.ts` | public Knowledge handlers plus internal maintenance registration |
+| `src/main/knowledge/*` | contracts, observation, audit, extraction, search, context, review, truth, and operations services |
+| `src/renderer/src/services/knowledge.ts` | sole typed renderer Knowledge client with isolated workbench fallbacks |
+| `src/renderer/src/services/knowledge-settings.ts` | typed Knowledge Settings client |
+| `src/renderer/src/components/knowledge/*` | Knowledge workbench views |
+
 ## LLM
 
 | File | Function |
@@ -136,6 +149,7 @@ Use this as a lookup table before opening source.
 | Package boundary | `tests/unit/package-boundary.test.ts` |
 | Project config compatibility | `tests/unit/project-config-contract.test.ts` |
 | Project IPC and renderer synchronization | `tests/unit/project-ipc-contract.test.ts`, `tests/unit/project-service.test.ts` |
+| Knowledge IPC and workbench behavior | `tests/unit/knowledge-ipc-contract.test.ts`, `tests/unit/knowledge/workbench-service.test.ts`, `tests/unit/knowledge/knowledge-context-ipc.test.ts` |
 | Pane tree | `tests/unit/workspace-pane.test.ts` |
 | Agent parsers/stream | `tests/unit/agent/*parser.test.ts`, `stream-manager.test.ts` |
 | Checkpoint | `tests/unit/agent/checkpoint-manager.test.ts`, `blob-store.test.ts`, `diff-engine.test.ts` |

@@ -49,6 +49,7 @@ On app quit, `terminalManager.killAll()` is called.
 - Workspace/File/FileTree contracts live in `src/shared/ipc/workspace.ts` and are exposed as `window.electron.workspace`, `fileTree`, and `file`.
 - Terminal contracts live in `src/shared/ipc/terminal.ts` and are exposed as `window.electron.terminal`.
 - Project request/response contracts live in `src/shared/ipc/project.ts` and are exposed as `window.electron.project`; `services/project.ts` is the sole renderer client.
+- Knowledge and Knowledge Settings contracts live in `src/shared/ipc/knowledge.ts` and are exposed as `window.electron.knowledge`; existing renderer service exports delegate only to that API.
 - Migrated channels are not accepted by the generic `invoke/send/on` allowlists.
 - Unmigrated domains temporarily continue through the generic allowlists until their own shared contract slice is introduced.
 - Typed event adapters hide Electron event objects and remove the exact registered listener on unsubscribe.
@@ -56,6 +57,8 @@ On app quit, `terminalManager.killAll()` is called.
 For migrated domains, add or change the shared contract first, then update the main handler/producer, fixed preload method, renderer caller, and contract tests together. For an unmigrated domain, the legacy allowlist path remains a compatibility boundary rather than the target design.
 
 Project running state and output currently synchronize by guarded polling. `ProjectRunner` lifecycle events remain main-internal until a product decision defines a renderer event contract.
+
+Knowledge auto-prune, archive, and compact handlers remain main-internal maintenance capabilities. They are intentionally absent from the shared public API, preload bridge, and renderer.
 
 ## Renderer State Pattern
 
