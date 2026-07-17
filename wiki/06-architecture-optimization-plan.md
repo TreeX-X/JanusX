@@ -2,7 +2,7 @@
 
 Status: Implemented — Phases 1–5 are complete. Build artifacts are isolated, all renderer IPC uses fixed typed domain APIs, the main composition root and renderer controllers have explicit boundaries, and the unified release gate remains active.
 
-Evidence verified: 2026-07-16
+Evidence verified: 2026-07-17
 
 Implementation reviewed: 2026-07-17
 
@@ -75,13 +75,13 @@ The target still uses Electron IPC. The change is ownership and type safety: cha
 
 - src/main/index.ts: Lifecycle coordinator only. Session/CSP, services, IPC registration, renderer loading, and window construction live under `bootstrap/`, `ipc/register.ts`, and `windows/`.
 - src/preload/index.ts: Security boundary exposing fixed typed domain APIs only; no generic channel bridge or manually maintained allowlist remains.
-- src/renderer/src/App.tsx: Application shell plus initialization, workspace file-tree refresh, Office preview layout, and panel behavior. It should remain a shell after data-loading actions move into stores/services.
+- src/renderer/src/App.tsx: Top-level layout/provider shell. Workspace initialization and file-tree refresh now live in `features/workspace/`; Office preview and panel behavior remain composed by the shell.
 - src/renderer/src/components/blueprint/BlueprintCanvas.tsx: React Flow view composition; layout derivation and analysis orchestration now live in `features/blueprint/`.
 - src/renderer/src/components/TerminalArea.tsx: Pane/tab/layout view composition; terminal creation and lifecycle subscriptions now live in `lib/terminal-launch.ts` and `features/terminal/`.
-- src/renderer/src/components/Panel.tsx and Sidebar.tsx: Both perform workspace/file-tree operations that should be owned by a workspace action layer.
+- src/renderer/src/components/Panel.tsx and Sidebar.tsx: Workspace/file-tree mutations delegate to the shared action layer under `features/workspace/`.
 - src/main/ipc/project-handlers.ts: Empty event subscriptions were removed; the runner still emits project lifecycle events pending a product decision about live renderer consumption.
 - src/renderer/src/services/knowledge.ts: Unused demo datasets were removed; the remaining service is live knowledge IPC integration.
-- electron-builder.yml: Uses explicit runtime globs. `out/*.png` remains an archive-policy concern but is excluded from packages by configuration and the package-boundary gate.
+- electron-builder.yml: Uses explicit runtime globs. Historical root screenshots were moved to the ignored `artifacts/screenshots/architecture-review-2026-07/` archive, and the `out/` root is clean.
 
 ## Verified Pre-Implementation Risks and Current Status
 
@@ -116,7 +116,7 @@ The target still uses Electron IPC. The change is ownership and type safety: cha
 | Item | Why Confirmation Is Needed | Decision Needed |
 |---|---|---|
 | design/ directory | No runtime source references, but it contains design prototypes and may be source material | Keep in this repository, move to a design archive/repository, or store large binaries with LFS |
-| knowledge:observations:auto-prune | It is currently unreachable from the renderer but represents a tested capability | Schedule it as a background maintenance task, expose a typed admin action, or remove the IPC/service entry point |
+| knowledge:observations:auto-prune | It was unreachable from the renderer at plan baseline but represented a tested capability | Resolved: retained as an explicit typed maintenance API; automatic scheduling remains a product decision |
 | Project runner started/output/ready/exit/error events | Empty forwarding subscriptions were removed, but `ProjectRunner` still emits lifecycle events without a renderer event contract or consumer | Define a typed event contract and UI consumer, or retain/remove the unused external event surface after confirming product intent |
 
 Maintenance rule: strict-unused is currently zero. Review any future diagnostic individually; do not bulk-delete declarations without checking feature intent and public contracts.
@@ -125,10 +125,10 @@ Maintenance rule: strict-unused is currently zero. Review any future diagnostic 
 
 - packages/llm-core and its generated model registry: imported, built, and covered by package tests.
 - resources/: used by Electron packaging and icons.
-- out/main, out/preload, and out/renderer: required generated application output. Only the unrelated top-level screenshots must leave out.
+- out/main, out/preload, and out/renderer: required generated application output. The unrelated top-level screenshots identified at baseline were moved to the ignored artifact archive.
 - tests/: currently provide meaningful coverage for terminal, agent, checkpoint, office, knowledge, and package behavior.
 
-## Optimization Suggestions
+## Implemented Optimization Decisions
 
 ### 1. Establish Build-Artifact Hygiene
 
@@ -136,7 +136,7 @@ Maintenance rule: strict-unused is currently zero. Review any future diagnostic 
 - Change Cost: Low.
 - Applicable Scope: out/, electron-builder.yml, screenshot tooling, and .gitignore.
 
-Actions:
+Implemented actions:
 
 1. Reserve out exclusively for electron-vite output.
 2. Move screenshots to a dedicated artifact or design archive directory outside out.
@@ -154,13 +154,13 @@ Acceptance criteria:
 - Change Cost: Medium; migrate by domain.
 - Applicable Scope: src/shared, src/preload, src/main/ipc, src/renderer/src/services, and selected stores/components.
 
-Recommended design:
+Implemented design:
 
-1. Add src/shared/ipc/contracts.ts plus domain files such as workspace.ts, terminal.ts, project.ts, and knowledge.ts.
-2. Define request, response, and event types there; use existing Zod for runtime validation of write-capable payloads.
-3. Expose `window.electron.workspace`, `fileTree`, `file`, `terminal`, and similar typed domain clients from preload.
-4. Register handlers through a small typed main-side helper or domain registry.
-5. Keep the generic bridge temporarily only as a deprecated compatibility seam; delete it once all domains migrate.
+1. Domain contracts live under `src/shared/ipc/` rather than a monolithic contract file.
+2. Request, response, and event types are shared; existing validation remains at write-capable boundaries.
+3. Preload exposes fixed `window.electron` domain clients for every renderer-accessible capability.
+4. `src/main/ipc/register.ts` owns ordered application handler registration.
+5. The temporary generic bridge and channel allowlists were deleted after all domains migrated.
 
 Migration order:
 
@@ -168,7 +168,7 @@ Migration order:
 2. Terminal: consolidate create, input, resize, replay, and lifecycle events.
 3. Project runner: request/response migration is complete; polling remains the renderer synchronization contract while live events await a product decision.
 4. Knowledge and Blueprint/Janus migrations and Blueprint layout/analysis controller extraction are complete.
-5. LLM and Office: preserve their existing typed shared constants where useful, but align them with the same contract model.
+5. LLM, Office, Agent, Checkpoint, Git, Settings, System, telemetry, and Subagent domains are aligned with the same contract model.
 
 Acceptance criteria:
 
@@ -183,7 +183,7 @@ Acceptance criteria:
 - Change Cost: Medium to high; execute one feature at a time.
 - Applicable Scope: Blueprint, terminal, workspace/file tree, and application shell.
 
-Target feature layout:
+Guiding feature layout:
 
 ```text
 src/renderer/src/features/
@@ -204,8 +204,8 @@ Initial cuts:
 
 | Current File | First Extraction | Keep in Original File |
 |---|---|---|
-| BlueprintCanvas.tsx | useBlueprintAnalysisActions, useBlueprintTerminalBinding, dialog state/view components | React Flow composition and graph-specific rendering |
-| TerminalArea.tsx | terminal creation action, terminal lifecycle subscription hook, pane toolbar view | pane layout composition |
+| BlueprintCanvas.tsx | `canvas-layout.ts`, `useBlueprintAnalysisActions.ts` | React Flow composition, terminal binding, dialogs, and graph-specific rendering |
+| TerminalArea.tsx | shared terminal creation action and `useTerminalLifecycle.ts` | pane/tab layout and toolbar composition |
 | Panel.tsx and Sidebar.tsx | workspace file-tree actions and workspace switching commands | their distinct visual navigation/layout responsibilities |
 | App.tsx | initialization and file-tree refresh actions | top-level layout and provider composition |
 
@@ -221,9 +221,9 @@ Acceptance criteria:
 - Change Cost: Medium.
 - Applicable Scope: src/main/index.ts and new bootstrap/windows modules.
 
-Recommended target modules:
+Implemented target modules:
 
-| Planned Module | Ownership |
+| Implemented Module | Ownership |
 |---|---|
 | src/main/bootstrap/session.ts | Session paths, production CSP, and startup prerequisites |
 | src/main/bootstrap/services.ts | Explicit construction of service graph and shutdown dependencies |
@@ -231,7 +231,7 @@ Recommended target modules:
 | src/main/windows/main-window.ts | Main window creation and navigation policy |
 | src/main/windows/editor-window.ts | Secondary editor window lifecycle and deduplication |
 
-Do not reuse the current src/main/window.ts as-is. Delete it first or replace it only after its security settings, preload artifact path, and external-link policy match the current implementation.
+The obsolete `src/main/window.ts` was deleted; the active window modules preserve the current security settings, preload artifact path, and external-link policy.
 
 Acceptance criteria:
 
@@ -264,12 +264,12 @@ Use staged adoption for noUnusedLocals and noUnusedParameters: resolve the curre
 - Change Cost: Low.
 - Applicable Scope: README.md and wiki/.
 
-Immediate documentation tasks:
+Completed documentation tasks:
 
-1. Replace the root README SwitchX title with JanusX and document install, dev, test, build, and package commands.
-2. Remove src/main/window.ts from Wiki entry-point tables when the file is deleted.
-3. Update the Wiki IPC section after typed contracts are introduced.
-4. Update file index and runtime flows in the same change set as each moved module.
+1. Replaced the root README SwitchX title with JanusX and documented development, verification, packaging, and architecture entry points.
+2. Removed `src/main/window.ts` from Wiki entry-point tables after deletion.
+3. Updated the Wiki IPC sections for the completed typed contract boundary.
+4. Updated the file index and runtime flows with the extracted modules.
 
 ## Execution Roadmap
 
@@ -328,9 +328,9 @@ Exit criteria: composition and controller responsibilities are explicit; major f
 
 Scope: Remaining IPC domains, quality scripts, release smoke coverage, and documentation.
 
-- Continue after completed Project, public Knowledge, and Blueprint/Janus slices with LLM, Office, agent, checkpoint, and remaining settings domains.
-- Decide and implement or remove currently incomplete project/knowledge event paths.
-- Keep strict unused checks and the Windows `verify` workflow blocking while remaining typed IPC domains migrate.
+- Completed LLM, Office, Agent, Checkpoint, Git, Settings, System, telemetry, and Subagent contract migration after the earlier slices.
+- Retained Knowledge auto-prune as an explicit typed maintenance API and kept Project lifecycle events main-internal pending a product decision.
+- Kept strict unused checks and the Windows `verify` workflow blocking after migration completion.
 
 Exit criteria: one source of truth for IPC contracts, green release gate, and current Wiki/README documentation.
 

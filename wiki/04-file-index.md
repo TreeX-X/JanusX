@@ -14,7 +14,7 @@ Use this as a lookup table before opening source.
 | `electron-builder.yml` | explicit runtime package allowlist |
 | `scripts/check-package-boundary.mjs` | fail-closed verification for Builder patterns and required outputs |
 | `vitest.config.ts` | root unit test config |
-| `AGENTS.md`, `CLAUDE.md` | project-specific Agent workflow and file operation rules |
+| `AGENTS.md`, `.codex/config.toml`, `.codex/agents/`, `.codex/skills/` | project-specific Codex workflow, routing, subagent, and skill rules |
 
 ## Main Process
 
@@ -35,8 +35,13 @@ Use this as a lookup table before opening source.
 | `src/main/ipc/checkpoint-handlers.ts` | checkpoint create/finalize/restore/list/diff/delete IPC |
 | `src/main/ipc/llm-handlers.ts` | LLM provider/chat/stream IPC |
 | `src/main/ipc/janus-handlers.ts` | Blueprint and Janus analysis IPC |
+| `src/main/ipc/knowledge-handlers.ts` | Knowledge workbench, settings, and explicit maintenance IPC |
+| `src/main/ipc/office-handlers.ts` | guarded Office artifact, CLI, watcher, and export IPC |
+| `src/main/ipc/subagent-run-handlers.ts` | Subagent run lifecycle and event IPC |
 | `src/main/ipc/runtime-telemetry-handlers.ts` | runtime telemetry IPC |
 | `src/main/ipc/settings-handlers.ts` | notification settings IPC |
+| `src/main/shutdown/AppShutdown.ts` | coordinated bounded application shutdown |
+| `src/main/notifications/*` | Agent hooks, remote notification delivery, desktop toast windows, and notifier policy |
 
 ## Shared IPC Contracts
 
@@ -46,9 +51,21 @@ Use this as a lookup table before opening source.
 | `src/shared/ipc/terminal.ts` | typed Terminal commands/events, payloads/results, and preload domain API |
 | `src/shared/ipc/project.ts` | typed Project commands, clone-safe DTOs/results, and preload domain API |
 | `src/shared/ipc/knowledge.ts` | typed public Knowledge/Settings commands, clone-safe DTOs/results, and preload domain API |
+| `src/shared/ipc/agent.ts`, `checkpoint.ts`, `git.ts`, `llm.ts`, `settings.ts`, `system.ts` | remaining fixed domain contracts, clone-safe DTOs, events, and preload APIs |
+| `src/shared/office.ts` | shared Office artifact, operation, and result models |
 | `src/shared/janus/types.ts`, `src/shared/ipc/janus.ts` | shared Blueprint/Janus models plus typed command/event API |
 | `src/preload/index.ts` | fixed typed adapters for all public renderer domains; no generic bridge |
 | `src/renderer/src/types/electron.d.ts` | renderer declaration of the exposed preload API |
+
+## Renderer Feature Boundaries
+
+| File / Directory | Function |
+|---|---|
+| `src/renderer/src/features/workspace/actions.ts` | shared workspace selection, file-tree refresh, and mutation actions |
+| `src/renderer/src/features/workspace/useWorkspaceBootstrap.ts` | application workspace initialization and refresh lifecycle |
+| `src/renderer/src/features/terminal/useTerminalLifecycle.ts` | terminal event subscription and cleanup boundary |
+| `src/renderer/src/features/blueprint/canvas-layout.ts` | pure Blueprint graph layout derivation |
+| `src/renderer/src/features/blueprint/useBlueprintAnalysisActions.ts` | Blueprint analysis, apply, and candidate action orchestration |
 
 ## Terminal
 
@@ -85,7 +102,7 @@ Use this as a lookup table before opening source.
 
 | File | Function |
 |---|---|
-| `src/main/agent/types.ts` | shared agent event/session/spawn types |
+| `src/main/agent/types.ts` | main Agent parser/session types plus compatibility re-exports of shared Agent DTOs |
 | `src/main/agent/cli-resolver.ts` | resolves CLI commands across PATH/common folders |
 | `src/main/agent/stream-manager.ts` | queue/concurrency/spawn/event/cancel manager |
 | `src/main/agent/parsers/claude-parser.ts` | Claude JSON event parser |
@@ -106,7 +123,6 @@ Use this as a lookup table before opening source.
 |---|---|
 | `src/shared/knowledge.ts` | canonical Knowledge entities and structured-clone-safe extensible values |
 | `src/shared/ipc/knowledge.ts` | public 25-operation Knowledge/Settings IPC contract including explicit auto-prune maintenance |
-| `src/renderer/src/features/` | Workspace actions/bootstrap, Terminal lifecycle, and Blueprint layout/analysis controllers |
 | `src/main/ipc/knowledge-handlers.ts` | public Knowledge handlers plus internal maintenance registration |
 | `src/main/knowledge/*` | contracts, observation, audit, extraction, search, context, review, truth, and operations services |
 | `src/renderer/src/services/knowledge.ts` | sole typed renderer Knowledge client with isolated workbench fallbacks |
@@ -156,6 +172,8 @@ Use this as a lookup table before opening source.
 | Project IPC and renderer synchronization | `tests/unit/project-ipc-contract.test.ts`, `tests/unit/project-service.test.ts` |
 | Knowledge IPC and workbench behavior | `tests/unit/knowledge-ipc-contract.test.ts`, `tests/unit/knowledge/workbench-service.test.ts`, `tests/unit/knowledge/knowledge-context-ipc.test.ts` |
 | Blueprint/Janus IPC and producers | `tests/unit/janus-ipc-contract.test.ts`, `tests/unit/janus-service.test.ts`, `tests/unit/janus-analyzer-events.test.ts` |
+| Remaining typed IPC domains | `tests/unit/remaining-ipc-contract.test.ts`, `tests/unit/office/office-preload.test.ts` |
+| Blueprint layout boundary | `tests/unit/blueprint-canvas-layout.test.ts` |
 | Built desktop critical path | `tests/e2e/desktop-smoke.spec.ts`, `playwright.desktop.config.ts` |
 | Island browser interaction | `tests/e2e/island-interaction.spec.ts`, `playwright.config.ts` |
 | Windows release gate | `.github/workflows/verify.yml`, `package.json` |

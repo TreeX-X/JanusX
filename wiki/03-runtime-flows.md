@@ -7,32 +7,27 @@ Last analyzed: 2026-07-17
 ```text
 electron-vite main entry
 -> src/main/index.ts
--> create BrowserWindow
--> create bootstrap services and windows
+-> configure session paths and dynamically compose application services
+-> configure coordinated application shutdown
+-> create main window through src/main/windows/main-window.ts
 -> register IPC domains through src/main/ipc/register.ts
 -> load renderer URL/file
 -> renderer uses preload window.electron bridge
 ```
 
-Key files: `electron.vite.config.ts`, `src/main/index.ts`, `src/preload/index.ts`, `src/renderer/src/main.tsx`.
+Key files: `electron.vite.config.ts`, `src/main/index.ts`, `src/main/bootstrap/{session,services}.ts`, `src/main/windows/*`, `src/main/ipc/register.ts`, `src/preload/index.ts`, and `src/renderer/src/main.tsx`.
 
 ## IPC Flow
 
-Migrated domains use a typed path:
+All renderer-accessible domains use the typed path:
 
 ```text
 Renderer component/store/service
--> window.electron.workspace/fileTree/file/terminal/project/knowledge/janus
+-> fixed window.electron domain API
 -> fixed preload adapter
 -> shared channel constant + typed payload
 -> src/main/ipc/* handler or main event producer
 -> result/event back through the typed domain API
-```
-
-Other domains temporarily retain the legacy path:
-
-```text
-Renderer feature/service -> fixed window.electron domain API -> shared contract -> main handler
 ```
 
 When adding IPC:
@@ -43,7 +38,7 @@ When adding IPC:
 4. Use the typed domain API from renderer components/stores/services.
 5. Add contract tests for registration, argument order, absence of generic bridges, and event unsubscribe behavior.
 
-Workspace/File/FileTree, Terminal, Project, public Knowledge, and Blueprint/Janus operations follow this design today. LLM, Office, agent, checkpoint, notification settings, and other domains remain incremental migration work.
+Workspace/File/FileTree, Terminal, Project, Knowledge, Blueprint/Janus, LLM, Office, Agent, Checkpoint, Git, settings, telemetry, Subagent, and System/Window/Dialog operations follow this design. No generic renderer bridge or preload channel allowlist remains.
 
 ## Terminal Creation And Checkpointing
 
@@ -107,13 +102,13 @@ Supported project types include Next.js, Vite, Electron Vite, CRA, Remix, Rust, 
 ## Agent CLI Streaming
 
 ```text
-agent:start IPC
+window.electron.agent.start
 -> AgentStreamManager.start
 -> resolveCLIPath
 -> spawn claude/codex/opencode
 -> parse stdout JSON lines through engine parser
--> agent:event sent to renderer
--> agent:listSessions / cancel / cancelAll
+-> typed Agent event sent to renderer
+-> window.electron.agent list/cancel operations
 ```
 
 Concurrency defaults to 3 sessions. Parsers normalize engine-specific JSON into shared `AgentEvent` shapes.
@@ -123,12 +118,12 @@ Concurrency defaults to 3 sessions. Parsers normalize engine-specific JSON into 
 ```text
 Janus chat or service caller
 -> services/llm.ts chat/chatStream
--> llm:chat or llm:chat-stream IPC
+-> window.electron.llm.chat or chatStream
 -> LlmService
 -> @janusx/llm-core ProviderFactory
 -> adapter language model
 -> ai SDK generate/stream calls
--> llm:chat:delta/done/error events for stream mode
+-> typed delta/done/error events for stream mode
 ```
 
 Provider settings live in `{userData}/janusx/llm-config.json`. Main process supports OpenAI-compatible and Vertex AI adapters through `packages/llm-core`.
@@ -147,7 +142,7 @@ BlueprintView / BlueprintCanvas
 -> optional apply patch / accept discovered requirement
 ```
 
-Key concepts from `src/main/janus/types.ts`:
+Key concepts from `src/shared/janus/types.ts`:
 
 - `Blueprint`: global planning graph with nodes and canvas layout.
 - `BlueprintNode`: epic/feature/task/issue node with status, progress, features, issues, activities, analyses, workspace binding, terminal history.
@@ -186,4 +181,4 @@ KnowledgeWorkbench / KnowledgeSettingsPanel / Janus context consumers
 -> contract, observation, search, context, review, truth, operations, or config service
 ```
 
-Workbench reads preserve independent fallbacks so one unavailable source does not erase successful parallel results. Direct search, context, review, truth, conflict, feedback, and settings calls propagate failures. Auto-prune, archive, and compact remain main-internal and are not renderer capabilities.
+Workbench reads preserve independent fallbacks so one unavailable source does not erase successful parallel results. Direct search, context, review, truth, conflict, feedback, and settings calls propagate failures. Auto-prune is an explicit typed maintenance API; archive and compact remain main-internal capabilities.

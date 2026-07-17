@@ -39,8 +39,11 @@ Renderer alias `@` maps to `src/renderer/src`.
 | `registerJanusHandlers` | Blueprint CRUD, Janus focus/bind/analyze/apply/candidates |
 | `registerRuntimeTelemetryHandlers` | runtime context/model telemetry |
 | `registerSettingsHandlers` | notification settings |
+| `registerSubAgentRunHandlers` | Subagent run lifecycle and streamed events |
+| `registerKnowledgeHandlers` | Knowledge workbench, context, review, truth, feedback, and maintenance operations |
+| `registerOfficeHandlers` | guarded Office artifact, CLI, watcher, and export operations |
 
-On app quit, `terminalManager.killAll()` is called.
+On app quit, `AppShutdown` coordinates chat-stream abort, Janus analysis cancellation, terminal/Agent/project shutdown, Office watcher and artifact cleanup, workspace watcher disposal, toast destruction, and editor-window closure.
 
 ## IPC Boundary
 
@@ -61,7 +64,7 @@ Project running state and output currently synchronize by guarded polling. `Proj
 
 Knowledge auto-prune is retained as an explicit typed maintenance API. Archive and compact remain main-internal maintenance capabilities.
 
-`services/blueprint.ts` remains the renderer facade for Blueprint/Janus. The shared ownership change removes the former renderer-to-main type dependency; it does not yet split `BlueprintCanvas` controller responsibilities.
+`services/blueprint.ts` remains the renderer facade for Blueprint/Janus. Canonical models are shared, while `features/blueprint/canvas-layout.ts` and `useBlueprintAnalysisActions.ts` own layout derivation and analysis orchestration outside `BlueprintCanvas`.
 
 ## Verification Boundary
 

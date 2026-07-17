@@ -1,6 +1,6 @@
 # Wiki Maintenance
 
-Last analyzed: 2026-06-30
+Last analyzed: 2026-07-17
 
 ## Purpose
 
@@ -35,7 +35,7 @@ Run these inspections before updating:
 ```bash
 rg --files
 rg -n "register.*Handlers|ipcMain\\.handle|ipcMain\\.on" src/main
-rg -n "window\.electron\.(invoke|send|on)|ALLOWED_.*CHANNELS" src tests
+rg -n "window\.electron\.(invoke|send|on)|ALLOWED_.*CHANNELS" src tests # regression check; expected result is empty
 rg -n "export function|export class|export interface|export type" src/main src/renderer/src packages/llm-core/src
 rg -n "describe\\(" tests packages/llm-core/tests
 ```
@@ -48,14 +48,15 @@ Then update:
 - `03-runtime-flows.md` if behavior or IPC flow changed.
 - `04-file-index.md` if files moved or new key files appeared.
 
-## Known Gaps To Verify Later
+## Pending Decisions And Optional Follow-ups
 
-| Gap | Why It Matters |
+| Item | Why It Matters |
 |---|---|
-| Root `README.md` is minimal and still named SwitchX | New human contributors may not get current JanusX context |
-| No e2e test files were observed despite `test:e2e` script | Confirm whether Playwright coverage exists elsewhere before relying on it |
-| Blueprint renderer imports types from `src/main/janus/types.ts` | Safe while type-only/pure; risky if Node/Electron runtime imports are added |
-| Large UI orchestration in `BlueprintCanvas.tsx` | High change risk; consider splitting only when a real feature requires it |
+| Decide whether `design/` prototypes remain in the primary repository | Keeps source ownership and archive policy explicit |
+| Decide whether Knowledge auto-prune becomes scheduled | It is currently an explicit typed maintenance operation, not an automatic task |
+| Decide whether Project lifecycle events need a renderer consumer | Events remain main-internal while renderer synchronization uses guarded polling |
+| Confirm whether root distribution needs an explicit LLM Core workspace dependency | Current build and built-Electron smoke pass, but packaged-release layout should be confirmed |
+| Large cohesive Blueprint/Terminal views | Named controller boundaries exist; extract more only when a new responsibility warrants it |
 
 ## Suggested Agent Opening Prompt
 

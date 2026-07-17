@@ -1,6 +1,6 @@
 # Start Here
 
-Last analyzed: 2026-06-30
+Last analyzed: 2026-07-17
 
 ## Project Identity
 
@@ -15,7 +15,7 @@ JanusX is a desktop workspace manager for AI-assisted development. It combines:
 - LLM provider configuration,
 - Janus chat and Blueprint planning/analysis.
 
-The root `README.md` currently only says `# SwitchX`, while `package.json` identifies the app as `janusx` version `0.5.0` with description `CLI 工作区管理器 - 统一管理多个 AI 编程助手`.
+The root `README.md` identifies the application as JanusX and documents development, unified verification, focused E2E, packaging, and architecture entry points. `package.json` identifies the app as `janusx` version `0.5.0`.
 
 ## Commands
 
@@ -30,11 +30,16 @@ Use these root commands:
 | `npm run test:llm-core` | run `packages/llm-core` tests |
 | `npm run typecheck` | TypeScript check for root `src` |
 | `npm run typecheck:llm-core` | TypeScript check for LLM package |
+| `npm run typecheck:strict-unused` | no-emit unused-symbol regression check |
+| `npm run check:package-boundary` | fail-closed Electron package input/output validation |
+| `npm run test:e2e:desktop` | built-Electron Workspace/Terminal/Project smoke |
+| `npm run test:e2e:island` | browser-only Janus Island interaction spec |
+| `npm run verify` | unified release gate: type checks, tests, strict-unused, build, package boundary, and desktop smoke |
 | `npm run package:win/mac/linux` | build distributable packages |
 
 ## File Operation Constraints
 
-This repo has a project-specific rule: source files may use encrypted encoding. Agents should inspect source with `rg` and avoid direct ordinary reads. For edits, use precise replacements and avoid whole-file overwrites of source files.
+Use normal file tools by default. If a direct source read fails, is garbled, or the file is known to have encoding/encryption issues, fall back to `rg` and precise replacements. Avoid whole-file rewrites of affected encoded source.
 
 Safe examples:
 
@@ -51,17 +56,17 @@ rg -n "export function|export class|ipcMain.handle" src/main/ipc
 | `src/main` | Electron lifecycle, bootstrap services, windows, IPC composition, and domain services |
 | `src/preload` | preload bridge exposing fixed typed domain APIs to renderer |
 | `src/renderer/src` | React renderer app, stores, services, UI components |
-| `src/shared` | code shared across Electron sides, currently terminal launch metadata and Janus persona/notifications |
+| `src/shared` | pure cross-process models, terminal metadata, notifications, Office DTOs, and typed IPC contracts |
 | `packages/llm-core` | separate TypeScript workspace package for Provider abstraction/adapters |
-| `tests/unit` | root unit tests for workspace, terminal, panes, checkpoints, parsers, stream manager |
+| `tests/unit` | root unit and contract coverage for IPC domains, workspace, terminal, project, Knowledge, Office, Blueprint, checkpoints, and Agent behavior |
 | `packages/llm-core/tests` | LLM core tests |
 | `design` | HTML prototypes, icon docs, visual assets |
-| `.claude` | WorkflowX agent definitions, skills, command docs |
+| `.codex` | WorkflowX Codex configuration, subagent definitions, and skills |
 | `wiki` | this Agent-facing project map |
 
 ## Development Risk Notes
 
-- `src/renderer/src/components/blueprint/BlueprintCanvas.tsx` is a large orchestration component. Treat changes there as high blast radius.
-- `src/main/janus/types.ts` is imported by renderer services as a type-only bridge. If it gains runtime Electron/Node imports, move shared Blueprint types to `src/shared`.
+- `BlueprintCanvas.tsx` and `TerminalArea.tsx` remain large cohesive views, but Blueprint layout/analysis and Terminal lifecycle responsibilities now live under `src/renderer/src/features/`. Split further only when responsibilities actually diverge.
+- Canonical Blueprint/Janus models live in `src/shared/janus/types.ts`; `src/main/janus/types.ts` is a compatibility re-export and must not become the renderer contract owner again.
 - Terminal checkpoints are coupled to `terminal:submit-line` and terminal lifecycle in `src/main/ipc/terminal-handlers.ts`.
 - Runtime data is split between workspace `.janusX` folders and Electron `userData/janusx`.
