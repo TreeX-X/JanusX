@@ -12,13 +12,16 @@ npm run dev
 ## Verification
 
 ```bash
-npm run typecheck
-npm run typecheck:strict-unused
-npm run test:unit -- --run
-npm run typecheck:llm-core
-npm run test:llm-core
-npm run build
-npm run check:package-boundary
+npm run verify
+```
+
+The unified gate runs both workspace type checks and test suites, strict unused-symbol checks, a production build, the package-boundary check, and a real built-Electron desktop smoke on Windows. The desktop smoke covers startup plus Workspace, Terminal, and Project typed APIs.
+
+Focused end-to-end commands remain separate:
+
+```bash
+npm run test:e2e:desktop
+npm run test:e2e:island
 ```
 
 ## Packaging

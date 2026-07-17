@@ -63,6 +63,12 @@ Knowledge auto-prune, archive, and compact handlers remain main-internal mainten
 
 `services/blueprint.ts` remains the renderer facade for Blueprint/Janus. The shared ownership change removes the former renderer-to-main type dependency; it does not yet split `BlueprintCanvas` controller responsibilities.
 
+## Verification Boundary
+
+`npm run verify` is the release gate enforced by `.github/workflows/verify.yml` on Windows. It runs both workspace type checks and test suites, strict unused-symbol validation, one production build, package-boundary validation, and the already-built Electron desktop smoke.
+
+`playwright.desktop.config.ts` launches `out/main/index.js` without a web server and exercises the fixed Workspace, Terminal, and Project preload APIs using isolated temporary state. The existing `playwright.config.ts` remains the browser-only Island harness; each configuration explicitly collects only its own test surface.
+
 ## Renderer State Pattern
 
 Renderer code generally follows:

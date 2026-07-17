@@ -1,6 +1,6 @@
 # Architecture Optimization and Cleanup Plan
 
-Status: Partially implemented — Phases 1–3 plus public Knowledge and Blueprint/Janus Phase 5 slices are complete; screenshot archival, Phase 4, and remaining Phase 5 domains remain planned.
+Status: Partially implemented — Phases 1–3, the public Knowledge and Blueprint/Janus slices, and the unified release gate are complete; screenshot archival, Phase 4, remaining IPC domains, and product decisions remain planned.
 
 Evidence verified: 2026-07-16
 
@@ -32,9 +32,9 @@ Implementation reviewed: 2026-07-17
 | Phase 2 — package isolation | Complete for release safety | Electron Builder includes only `out/main/**`, `out/preload/**`, `out/renderer/**`, and `package.json`; a fail-closed package-boundary gate is covered by adversarial tests. The 31 ignored root screenshots remain untouched pending an archive-location decision. |
 | Phase 3 — typed IPC slices | Complete | Workspace/File/FileTree, Terminal, and Project request/response operations use pure shared contracts, fixed preload domain APIs, typed main handlers/producers, and migrated renderer callers. No generic string-channel call remains for those domains. |
 | Phase 4 | Pending | Main/renderer controller extraction remains planned. |
-| Phase 5 | In progress | Public Knowledge/Settings and Blueprint/Janus command/event migrations are complete; remaining IPC domains, broader E2E smoke coverage, CI release gate, and product decisions remain. |
+| Phase 5 | In progress | Public Knowledge/Settings and Blueprint/Janus migrations plus the Windows verify/desktop-smoke gate are complete; remaining IPC domains and product decisions remain. |
 
-Current verification: `npm run typecheck`, `npm run typecheck:strict-unused`, 81 unit test files / 602 tests, LLM Core typecheck / 63 tests, production build, package-boundary gate, and `git diff --check` all pass.
+Current verification: `npm run verify` passes both type checks, 81 root unit files / 602 tests, 5 LLM Core files / 63 tests, strict-unused, production build, package-boundary validation, and the real built-Electron desktop smoke (1/1). `git diff --check` also passes.
 
 ## Engineering Structure and Module Responsibilities
 
@@ -45,7 +45,7 @@ Current verification: `npm run typecheck`, `npm run typecheck:strict-unused`, 81
 | src/renderer/src | React UI, state, services, desktop interaction | App.tsx, components/, stores/, services/ | Move repeated UI orchestration and direct IPC calls into domain services and hooks. |
 | src/shared | Cross-process pure types and constants | knowledge.ts, office.ts, terminalLaunch.ts | Become the home of IPC contract definitions; do not import runtime main-process modules here. |
 | packages/llm-core | Provider abstraction, adapters, registry, model metadata | core/, adapters/, registry/ | Preserve as an independent workspace package; do not delete generated model registry data. |
-| tests | Unit coverage and a focused Island E2E test | tests/unit/, tests/e2e/ | Add broad workflow smoke coverage, not more low-value component-only tests. |
+| tests | Unit coverage, a focused Island browser E2E, and a built-Electron critical-path smoke | tests/unit/, tests/e2e/ | Extend workflow coverage only where it protects a real release or architecture boundary. |
 | design and wiki | Prototypes and engineering documentation | design/, wiki/ | Separate runtime assets from design archives; keep architecture documents synchronized with code. |
 
 ## Core Implementation and Workflow
@@ -93,7 +93,7 @@ The target still uses Electron IPC. The change is ownership and type safety: cha
 | Dead or invalid tracked files | Root bundle, invalid image payloads, unused icon/window helper | Resolved: confirmed dead tracked files removed and verified | High |
 | Stale duplicated window implementation | Unused `src/main/window.ts` with conflicting preload/security assumptions | Resolved: file deleted and Wiki indexes repaired | Medium |
 | Unused declarations hidden by the default root check | 35 plan-baseline candidates; 37 at implementation start | Resolved: strict-unused diagnostics are 0 and the check is scripted | Medium |
-| Limited end-to-end breadth | One focused Island E2E spec | Open: unit coverage grew, but startup/terminal/workspace/project smoke E2E remains pending | Medium |
+| Limited end-to-end breadth | One focused Island E2E spec | Release path resolved: a separate built-Electron smoke now covers startup plus Workspace/Terminal/Project fixed APIs; broader UI workflows remain selective | Medium |
 | Documentation drift | README identified SwitchX and Wiki listed the old window helper | Resolved for current cleanup/typed slices; future migrations must update docs in the same change | Medium |
 
 ## Confirmed Cleanup Manifest
@@ -254,6 +254,8 @@ Add a verify script that runs, in order:
 5. Strict unused-symbol check after the existing backlog is resolved.
 6. A packaged or production-build desktop smoke test.
 
+Implemented 2026-07-17: `npm run verify` runs the complete sequence once and is enforced by a `windows-latest` workflow. The final step launches the built Electron entry with isolated user data, exercises Workspace, Terminal, and Project critical paths, and performs bounded failure-safe cleanup. The Island browser harness remains separate.
+
 Use staged adoption for noUnusedLocals and noUnusedParameters: resolve the current baseline first, then make the setting blocking. Do not introduce a permanently ignored error list.
 
 ### 6. Repair Documentation as Part of Each Migration
@@ -328,7 +330,7 @@ Scope: Remaining IPC domains, quality scripts, release smoke coverage, and docum
 
 - Continue after completed Project, public Knowledge, and Blueprint/Janus slices with LLM, Office, agent, checkpoint, and remaining settings domains.
 - Decide and implement or remove currently incomplete project/knowledge event paths.
-- Enable strict unused checks and enforce verify in CI.
+- Keep strict unused checks and the Windows `verify` workflow blocking while remaining typed IPC domains migrate.
 
 Exit criteria: one source of truth for IPC contracts, green release gate, and current Wiki/README documentation.
 
@@ -357,7 +359,7 @@ Track these before and after each phase:
 | Renderer direct bridge files | 29 files / about 150 calls | No generic migrated-domain calls remain | Only typed domain-client implementations |
 | BlueprintCanvas and TerminalArea | 1701 / 1428 lines | Controller extraction not started | Reduced by responsibility extraction; no artificial line-count target |
 | Unit coverage | 67 files / 520 tests at plan baseline | 81 files / 602 tests | Maintain green domain and contract coverage |
-| E2E workflow coverage | 1 focused spec | Unchanged | At least startup plus terminal/workspace/project critical-path smoke coverage |
+| E2E workflow coverage | 1 focused spec | Separate Island browser spec plus 1 built-Electron startup/Workspace/Terminal/Project smoke | Maintain the release smoke and add only high-value workflow coverage |
 
 ## Pending Confirmation
 
@@ -370,5 +372,5 @@ Track these before and after each phase:
 ## Conclusion and Next Steps
 
 - Conclusion: JanusX has a sound modular-monolith foundation. The priority is slimming and boundary repair, not a rewrite.
-- Recommended Priority Actions: Continue Phase 5 contract migration one domain at a time, then extract the main composition root and renderer controllers in small behavior-preserving commits. Add startup and critical terminal/workspace/project E2E smoke coverage before broader structural work.
+- Recommended Priority Actions: Continue Phase 5 contract migration one domain at a time under the new release gate, then extract the main composition root and renderer controllers in small behavior-preserving commits. Resolve screenshot/design archive and internal event lifecycle decisions separately.
 - Definition of Success: The repository has no known invalid/dead tracked assets, out is clean build output, IPC is domain-typed, major renderer files have explicit controller/view boundaries, and a unified verification command blocks regressions.

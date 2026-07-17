@@ -4,6 +4,7 @@ const islandPort = 41731
 
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: 'desktop-smoke.spec.ts',
   timeout: 20_000,
   expect: { timeout: 5_000 },
   use: {

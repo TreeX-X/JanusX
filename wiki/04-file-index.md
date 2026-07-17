@@ -152,6 +152,9 @@ Use this as a lookup table before opening source.
 | Project IPC and renderer synchronization | `tests/unit/project-ipc-contract.test.ts`, `tests/unit/project-service.test.ts` |
 | Knowledge IPC and workbench behavior | `tests/unit/knowledge-ipc-contract.test.ts`, `tests/unit/knowledge/workbench-service.test.ts`, `tests/unit/knowledge/knowledge-context-ipc.test.ts` |
 | Blueprint/Janus IPC and producers | `tests/unit/janus-ipc-contract.test.ts`, `tests/unit/janus-service.test.ts`, `tests/unit/janus-analyzer-events.test.ts` |
+| Built desktop critical path | `tests/e2e/desktop-smoke.spec.ts`, `playwright.desktop.config.ts` |
+| Island browser interaction | `tests/e2e/island-interaction.spec.ts`, `playwright.config.ts` |
+| Windows release gate | `.github/workflows/verify.yml`, `package.json` |
 | Pane tree | `tests/unit/workspace-pane.test.ts` |
 | Agent parsers/stream | `tests/unit/agent/*parser.test.ts`, `stream-manager.test.ts` |
 | Checkpoint | `tests/unit/agent/checkpoint-manager.test.ts`, `blob-store.test.ts`, `diff-engine.test.ts` |

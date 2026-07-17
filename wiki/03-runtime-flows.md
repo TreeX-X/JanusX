@@ -157,6 +157,22 @@ Analyzer input source is git commit diffs. The source comment states it does not
 
 Both Island events are produced with shared channel constants. Preload subscriptions hide Electron event objects and remove the exact listener on unsubscribe.
 
+## Release Verification Flow
+
+```text
+npm run verify
+-> root and LLM Core type checks
+-> root and LLM Core unit tests
+-> strict unused-symbol check
+-> production Electron build
+-> package-boundary validation
+-> Playwright launches out/main/index.js
+-> fixed Workspace / Terminal / Project API smoke
+-> bounded Electron and temporary-state cleanup
+```
+
+The desktop smoke uses its own Playwright configuration with no Vite server. Island interaction E2E remains a separate browser harness and is not collected by the release smoke.
+
 ## Knowledge Workbench And Context
 
 ```text
