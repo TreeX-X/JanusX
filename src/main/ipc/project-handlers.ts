@@ -13,7 +13,7 @@ import ProjectDetector from '../project/detector/detector'
 import ProjectRunner from '../project/runner/runner'
 import ProjectConfig from '../project/config/project-config'
 import { getProjectTypes } from '../project/config/project-schemas'
-import type { LaunchConfig, DetectResult } from '../project/types'
+import type { LaunchConfig, ProjectType } from '../project/types'
 
 // 全局 ProjectRunner 实例（单例）
 let projectRunner: ProjectRunner | null = null
@@ -25,25 +25,6 @@ function getProjectRunner(): ProjectRunner {
   if (!projectRunner) {
     projectRunner = new ProjectRunner(5) // 最多 5 个并行项目
 
-    // 转发项目运行器的事件到前端
-    projectRunner.on('project:started', (event) => {
-      // 可选：广播到所有窗口
-    })
-
-    projectRunner.on('project:output', (event) => {
-      // 实时推送日志到前端
-      // mainWindow.webContents.send('project:output', event)
-    })
-
-    projectRunner.on('project:ready', (event) => {
-      // 项目启动成功，检测到端口
-      // mainWindow.webContents.send('project:ready', event)
-    })
-
-    projectRunner.on('project:exit', (event) => {
-      // 项目退出
-      // mainWindow.webContents.send('project:exit', event)
-    })
   }
 
   return projectRunner
@@ -160,11 +141,12 @@ export function registerProjectHandlers() {
    */
   ipcMain.handle(
     'project:config:create-default',
-    async (_, projectPath: string, projectType: string, projectName: string) => {
+    async (_, ...args: [projectPath: string, projectType: ProjectType, projectName: string]) => {
       try {
+        const [projectPath, projectType, projectName] = args
         const config = ProjectConfig.createDefault(
           projectPath,
-          projectType as any,
+          projectType,
           projectName
         )
         return {

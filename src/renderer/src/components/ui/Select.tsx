@@ -48,8 +48,6 @@ export function Select({
   const [pos, setPos] = useState<DropdownPos | null>(null)
 
   const selected = options.find((o) => o.value === value)
-  const displayLabel = selected ? selected.label : placeholder ?? ''
-
   // 计算浮层位置：向下展开，空间不够则向上
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return

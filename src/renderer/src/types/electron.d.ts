@@ -1,3 +1,6 @@
+import type { FileAPI, FileTreeAPI, WorkspaceAPI } from '../../../shared/ipc/workspace'
+import type { TerminalAPI } from '../../../shared/ipc/terminal'
+
 interface ElectronAPI {
   /*-- 同步平台信息，构造 xterm windowsPty 用 --*/
   platform: NodeJS.Platform
@@ -5,6 +8,10 @@ interface ElectronAPI {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
   send: (channel: string, ...args: unknown[]) => void
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void
+  workspace: WorkspaceAPI
+  fileTree: FileTreeAPI
+  file: FileAPI
+  terminal: TerminalAPI
   janusPersona: string
 }
 

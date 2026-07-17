@@ -6,7 +6,6 @@ import { basename, join, resolve } from 'path'
 import type {
   AuditAction,
   CaptureObservationInput,
-  KnowledgeProvenance,
   Observation,
   ObservationArchiveResult,
   ObservationCompactResult,

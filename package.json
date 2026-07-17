@@ -27,11 +27,13 @@
     "test:llm-core": "npm test --workspace=@janusx/llm-core",
     "models:update:openrouter": "node scripts/update-openrouter-model-registry.mjs",
     "typecheck": "tsc --noEmit",
+    "typecheck:strict-unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "typecheck:llm-core": "npm run typecheck --workspace=@janusx/llm-core",
     "lint": "eslint src --ext .ts,.tsx",
-    "package:win": "npm run build && electron-builder --win",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:linux": "npm run build && electron-builder --linux"
+    "check:package-boundary": "node scripts/check-package-boundary.mjs",
+    "package:win": "npm run build && npm run check:package-boundary && electron-builder --win",
+    "package:mac": "npm run build && npm run check:package-boundary && electron-builder --mac",
+    "package:linux": "npm run build && npm run check:package-boundary && electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

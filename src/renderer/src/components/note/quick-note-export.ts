@@ -40,7 +40,7 @@ export async function exportNoteCard(card: NoteCard, format: QuickNoteExportForm
   const base = (card.title.trim() || `Note-${card.id.slice(0, 8)}`).replace(/[\\/:"*?<>|]/g, '-').trim()
   const dialog = await window.electron.invoke('dialog:saveFile', { defaultName: `${base}.${format}`, extension: format }) as { canceled: boolean; filePath?: string }
   if (dialog.canceled || !dialog.filePath) return 'canceled'
-  const result = await window.electron.invoke('file:save', dialog.filePath, mdToPayload(card.content, format)) as { success?: boolean; error?: string }
+  const result = await window.electron.file.save(dialog.filePath, mdToPayload(card.content, format))
   if (result?.error) throw new Error(result.error)
   return 'saved'
 }

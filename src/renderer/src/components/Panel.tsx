@@ -329,7 +329,7 @@ export function Panel() {
     if (!workspace) return
 
     try {
-      const tree = (await window.electron.invoke('filetree:load', workspace.path)) as FileNode[]
+      const tree = await window.electron.fileTree.load(workspace.path)
       useWorkspaceStore.setState({ fileTree: tree })
     } catch {
       // ignore
@@ -347,11 +347,7 @@ export function Panel() {
     if (!workspace) return
 
     try {
-      const children = (await window.electron.invoke(
-        'filetree:children',
-        workspace.path,
-        path,
-      )) as FileNode[]
+      const children = await window.electron.fileTree.children(workspace.path, path)
 
       const injectChildren = (nodes: FileNode[]): FileNode[] =>
         nodes.map((node) => {
@@ -390,7 +386,7 @@ export function Panel() {
     let disposed = false
     let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
-    const unsubscribe = window.electron.on('filetree:changed', (workspacePath: unknown) => {
+    const unsubscribe = window.electron.fileTree.onChanged((workspacePath) => {
       if (workspacePath !== activeWorkspacePath) return
       if (refreshTimer) clearTimeout(refreshTimer)
       refreshTimer = setTimeout(() => {
@@ -401,7 +397,7 @@ export function Panel() {
     return () => {
       disposed = true
       if (refreshTimer) clearTimeout(refreshTimer)
-      if (typeof unsubscribe === 'function') unsubscribe()
+      unsubscribe()
     }
   }, [activeWorkspacePath, fetchGitStatus])
 
@@ -512,9 +508,9 @@ export function Panel() {
     : ''
 
   const runFileTreeMutation = useCallback(
-    async (channel: string, ...args: unknown[]): Promise<FileTreeOperationResult | null> => {
+    async (operation: () => Promise<FileTreeOperationResult>): Promise<FileTreeOperationResult | null> => {
       try {
-        const result = (await window.electron.invoke(channel, ...args)) as FileTreeOperationResult
+        const result = await operation()
         if (!result.success) {
           window.alert(result.error || '文件操作失败')
           return null
@@ -559,7 +555,7 @@ export function Panel() {
     const workspace = getActiveWorkspace()
     if (!workspace) return
 
-    await runFileTreeMutation('filetree:reveal', workspace.path, contextMenu.target.path)
+    await runFileTreeMutation(() => window.electron.fileTree.reveal(workspace.path, contextMenu.target.path))
     setContextMenu(null)
   }, [contextMenu, getActiveWorkspace, runFileTreeMutation])
 
@@ -572,11 +568,10 @@ export function Panel() {
       const name = promptEntryName(type === 'file' ? '新建文件名' : '新建文件夹名')
       if (!name) return
 
-      const result = await runFileTreeMutation(
-        type === 'file' ? 'filetree:create-file' : 'filetree:create-directory',
-        workspace.path,
-        contextBaseDirectory,
-        name,
+      const result = await runFileTreeMutation(() =>
+        type === 'file'
+          ? window.electron.fileTree.createFile(workspace.path, contextBaseDirectory, name)
+          : window.electron.fileTree.createDirectory(workspace.path, contextBaseDirectory, name),
       )
       if (!result) return
 
@@ -599,7 +594,9 @@ export function Panel() {
     }
 
     const parentPath = getParentPath(contextMenu.target.path)
-    const result = await runFileTreeMutation('filetree:rename', workspace.path, contextMenu.target.path, name)
+    const result = await runFileTreeMutation(() =>
+      window.electron.fileTree.rename(workspace.path, contextMenu.target.path, name),
+    )
     if (!result) return
 
     await reloadDirectory(parentPath)
@@ -620,7 +617,7 @@ export function Panel() {
 
     const targetPath = contextMenu.target.path
     const parentPath = getParentPath(targetPath)
-    const result = await runFileTreeMutation('filetree:delete', workspace.path, targetPath)
+    const result = await runFileTreeMutation(() => window.electron.fileTree.delete(workspace.path, targetPath))
     if (!result) return
 
     if (activeFilePath && isPathInScope(activeFilePath, targetPath)) setActiveFilePath(null)

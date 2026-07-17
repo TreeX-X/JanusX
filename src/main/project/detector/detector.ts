@@ -8,12 +8,11 @@
  * 3. 返回检测结果和推荐配置
  */
 
-import { readdirSync, existsSync, readFileSync } from 'fs'
+import { readdirSync, existsSync } from 'fs'
 import { join, resolve } from 'path'
 import type { DetectResult, LaunchConfiguration } from '../types'
 import { ProjectType } from '../types'
 import { detectByFeatures, getProjectSchema } from '../config/project-schemas'
-import ProjectConfig from '../config/project-config'
 
 export interface DetectionContext {
   projectPath: string
@@ -61,7 +60,6 @@ export class ProjectDetector {
     const candidates = detectByFeatures(context.files)
     const detectedType = candidates.length > 0 ? candidates[0] : ProjectType.Unknown
 
-    const schema = getProjectSchema(detectedType)
     const confidence = this.calculateConfidence(detectedType, context)
 
     return {
@@ -263,38 +261,6 @@ export class ProjectDetector {
     return ports[type] || 0
   }
 
-  /**
-   * 读取 package.json，获取项目信息
-   * （可选的增强检测）
-   */
-  private static tryReadPackageJson(projectPath: string): Record<string, any> | null {
-    try {
-      const pkgPath = join(projectPath, 'package.json')
-      if (!existsSync(pkgPath)) return null
-
-      const content = readFileSync(pkgPath, 'utf-8')
-      return JSON.parse(content)
-    } catch {
-      return null
-    }
-  }
-
-  /**
-   * 读取 Cargo.toml，获取 Rust 项目信息
-   */
-  private static tryReadCargoToml(projectPath: string): Record<string, any> | null {
-    try {
-      const cargoPath = join(projectPath, 'Cargo.toml')
-      if (!existsSync(cargoPath)) return null
-
-      // 简单的 TOML 解析，提取 [package] 部分
-      const content = readFileSync(cargoPath, 'utf-8')
-      const match = content.match(/\[package\]([\s\S]*?)(?:\[|$)/)
-      return match ? { raw: match[1] } : null
-    } catch {
-      return null
-    }
-  }
 }
 
 export default ProjectDetector

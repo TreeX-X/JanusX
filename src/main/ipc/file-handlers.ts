@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { readFile, writeFile, stat } from 'fs/promises'
 import { extname } from 'path'
+import { FILE_CHANNELS } from '../../shared/ipc/workspace'
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -14,7 +15,7 @@ const MIME_MAP: Record<string, string> = {
 }
 
 export function registerFileHandlers(): void {
-  ipcMain.handle('file:read', async (_event, filePath: string) => {
+  ipcMain.handle(FILE_CHANNELS.read, async (_event, filePath: string) => {
     try {
       const [content, info] = await Promise.all([
         readFile(filePath, 'utf-8'),
@@ -26,7 +27,7 @@ export function registerFileHandlers(): void {
     }
   })
 
-  ipcMain.handle('file:save', async (_event, filePath: string, content: string) => {
+  ipcMain.handle(FILE_CHANNELS.save, async (_event, filePath: string, content: string) => {
     try {
       await writeFile(filePath, content, 'utf-8')
       return { success: true }
@@ -35,7 +36,7 @@ export function registerFileHandlers(): void {
     }
   })
 
-  ipcMain.handle('file:readBinary', async (_event, filePath: string) => {
+  ipcMain.handle(FILE_CHANNELS.readBinary, async (_event, filePath: string) => {
     try {
       const [buffer, info] = await Promise.all([readFile(filePath), stat(filePath)])
       const ext = extname(filePath).toLowerCase()
@@ -46,7 +47,7 @@ export function registerFileHandlers(): void {
     }
   })
 
-  ipcMain.handle('file:stat', async (_event, filePath: string) => {
+  ipcMain.handle(FILE_CHANNELS.stat, async (_event, filePath: string) => {
     try {
       const s = await stat(filePath)
       return { size: s.size, mtime: s.mtimeMs, isFile: s.isFile() }

@@ -76,7 +76,6 @@ export function FileViewerContent({ file, onContentChange }: FileViewerContentPr
       return (
         <BinaryInfo
           fileName={file.name}
-          filePath={file.absolutePath}
           size={file.size}
         />
       )

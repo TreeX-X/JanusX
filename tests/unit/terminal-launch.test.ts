@@ -63,6 +63,10 @@ describe('terminal-launch', () => {
         electron: {
           platform: 'win32',
           invoke: vi.fn(),
+          terminal: {
+            warmup: vi.fn(),
+            create: vi.fn(),
+          },
         },
       },
     })
@@ -98,28 +102,27 @@ describe('terminal-launch', () => {
   })
 
   it('warms terminal create path via terminal:warmup', async () => {
-    const invoke = window.electron.invoke as ReturnType<typeof vi.fn>
-    invoke.mockResolvedValue({ ok: true })
+    const warmup = window.electron.terminal.warmup as ReturnType<typeof vi.fn>
+    warmup.mockResolvedValue({ ok: true })
 
     const { warmTerminalCreatePath } = await import('../../src/renderer/src/lib/terminal-launch')
     warmTerminalCreatePath(['claude'])
     await Promise.resolve()
 
-    expect(invoke).toHaveBeenCalledWith('terminal:warmup', { engines: ['claude'] })
+    expect(warmup).toHaveBeenCalledWith({ engines: ['claude'] })
   })
 
   it('launches optimistically with starting status before create resolves', async () => {
     const invoke = window.electron.invoke as ReturnType<typeof vi.fn>
+    const create = window.electron.terminal.create as ReturnType<typeof vi.fn>
     let resolveCreate: ((value: { pid: number }) => void) | null = null
     invoke.mockImplementation((channel: string) => {
       if (channel === 'system:getDefaultShell') return Promise.resolve('powershell.exe')
-      if (channel === 'terminal:create') {
-        return new Promise((resolve) => {
-          resolveCreate = resolve
-        })
-      }
       return Promise.resolve(null)
     })
+    create.mockImplementation(() => new Promise((resolve) => {
+      resolveCreate = resolve
+    }))
 
     const {
       __resetDefaultShellCacheForTests,
@@ -152,8 +155,7 @@ describe('terminal-launch', () => {
     })
 
     expect(waitForTerminalGeometry).toHaveBeenCalledWith(terminal.id)
-    expect(invoke).toHaveBeenCalledWith(
-      'terminal:create',
+    expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         id: terminal.id,
         preset: 'claude',
@@ -181,11 +183,12 @@ describe('terminal-launch', () => {
 
   it('keeps terminal on create failure with recoverable error state', async () => {
     const invoke = window.electron.invoke as ReturnType<typeof vi.fn>
+    const create = window.electron.terminal.create as ReturnType<typeof vi.fn>
     invoke.mockImplementation((channel: string) => {
       if (channel === 'system:getDefaultShell') return Promise.resolve('powershell.exe')
-      if (channel === 'terminal:create') return Promise.reject(new Error('spawn failed'))
       return Promise.resolve(null)
     })
+    create.mockRejectedValue(new Error('spawn failed'))
 
     const {
       __resetDefaultShellCacheForTests,

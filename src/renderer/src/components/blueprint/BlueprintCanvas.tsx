@@ -950,25 +950,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     [blueprintId, getAnalysisWorkspacePath, loadAnalysisHistory, loadBlueprint]
   )
 
-  const applyAnalysisPatch = useCallback(
-    async (nodeId: string, patch: { progress?: number; status?: BlueprintNodeStatus }) => {
-      const node = currentBlueprint?.nodes[nodeId]
-      const workspace = node?.workspaceId ? workspaces.find((item) => item.id === node.workspaceId) : null
-      if (!workspace) {
-        setActionError('请先为节点绑定可用工作区')
-        return
-      }
-      await window.electron.invoke('janus:analyzer:apply-patch', {
-        workspacePath: workspace.path,
-        blueprintId,
-        nodeId,
-        patch
-      })
-      await loadBlueprint(blueprintId)
-    },
-    [blueprintId, currentBlueprint, loadBlueprint, workspaces]
-  )
-
   const analyzeSelected = useCallback(async () => {
     if (!selectedId) return
     const node = currentBlueprint?.nodes[selectedId]

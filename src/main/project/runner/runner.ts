@@ -11,8 +11,7 @@
 
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
-import type { LaunchConfiguration, LaunchConfig, ProcessHandle, ProcessEvent } from '../types'
-import { ProjectType } from '../types'
+import type { ProcessHandle } from '../types'
 import ProjectConfig from '../config/project-config'
 import CommandBuilder from './command-builder'
 import PortExtractor from '../utils/port-extractor'
@@ -115,7 +114,7 @@ export class ProjectRunner extends EventEmitter {
     }
 
     // 6. 设置事件监听
-    this.setupProcessListeners(processId, runningProject, projectPath)
+    this.setupProcessListeners(processId, runningProject)
 
     this.runningProjects.set(processId, runningProject)
     this.activeCount++
@@ -259,8 +258,7 @@ export class ProjectRunner extends EventEmitter {
    */
   private setupProcessListeners(
     projectId: string,
-    running: RunningProject,
-    projectPath: string
+    running: RunningProject
   ): void {
     const { process: child } = running
 

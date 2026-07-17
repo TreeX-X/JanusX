@@ -17,8 +17,7 @@ import {
   focusNode as focusNodeIPC,
   type Blueprint,
   type BlueprintCreateInput,
-  type BlueprintNode,
-  type NodeCreateInput
+  type BlueprintNode
 } from '@/services/blueprint'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'

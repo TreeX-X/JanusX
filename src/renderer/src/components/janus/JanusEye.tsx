@@ -5,8 +5,6 @@ export type { JanusMode } from './janusIdentity'
 
 export interface JanusEyeProps {
   mode: JanusMode
-  /** 尺寸基准（px），默认 10。预留缩放能力，当前视觉由 CSS 固定 */
-  size?: number
   className?: string
   /** 左眼元素 ref — 用于长按蓄力时 translateX 靠拢 */
   leftRef?: Ref<HTMLDivElement>
@@ -21,7 +19,7 @@ export interface JanusEyeProps {
  * .mode-{mode} .janus-eye-mini / .left-eye-mini / .right-eye-mini 规则控制。
  * 组件仅负责渲染正确的 DOM 结构与 data 属性。
  */
-export function JanusEye({ mode, size = 10, className, leftRef, rightRef }: JanusEyeProps) {
+export function JanusEye({ mode, className, leftRef, rightRef }: JanusEyeProps) {
   const identity = getJanusModeIdentity(mode)
 
   return (

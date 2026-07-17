@@ -632,7 +632,7 @@ export function getProjectTypes(): ProjectTypeSchema[] {
 export function detectByFeatures(featureFiles: string[]): ProjectType[] {
   const candidates: { type: ProjectType; matchCount: number }[] = []
 
-  for (const [type, schema] of Object.entries(PROJECT_SCHEMAS)) {
+  for (const schema of Object.values(PROJECT_SCHEMAS)) {
     if (schema.type === ProjectType.Unknown || schema.type === ProjectType.Custom) {
       continue
     }

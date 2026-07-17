@@ -26,21 +26,11 @@ import {
 } from '@/lib/terminal-geometry'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
+import type { TerminalDataEvent, TerminalReplayResult } from '../../../shared/ipc/terminal'
 
 interface CLITerminalProps {
   terminalId: string
   focused?: boolean
-}
-
-type TerminalDataPayload = {
-  id: string
-  data: string
-  seq?: number
-}
-
-type TerminalReplayPayload = {
-  data?: string
-  seq?: number
 }
 
 const HISTORY_TELEMETRY_POLL_MS = 5_000
@@ -240,7 +230,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       inputTransactionState = { ...inputTransactionState, text: '' }
       if (!text.trim()) return
 
-      window.electron.send('terminal:submit-line', { id: terminalId, text })
+      window.electron.terminal.submitLine(terminalId, text)
       updateTelemetry(text)
     }
 
@@ -266,7 +256,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
         const terminal = useWorkspaceStore.getState().terminals.find((item) => item.id === terminalId)
         if (terminal?.preset === 'codex' && win32InputMode) {
           const data = '\x1b[74;36;10;1;8;1_'
-          window.electron.send('terminal:input', { id: terminalId, data })
+          window.electron.terminal.input(terminalId, data)
           trackInputData(data)
           e.preventDefault()
           return false
@@ -367,11 +357,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
         if (sizeChanged || options?.force) {
           lastSyncedCols = cols
           lastSyncedRows = rows
-          window.electron.send('terminal:resize', {
-            id: terminalId,
-            cols,
-            rows,
-          })
+          window.electron.terminal.resize(terminalId, cols, rows)
         }
 
         if (!layoutStable && (options?.force || stableFitCount >= 2) && cols >= 40 && rows >= 10) {
@@ -403,7 +389,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     }
 
     // Delayed passes cover panel/grid transitions that ResizeObserver can miss mid-animation.
-    // Early force fits so first-open TUI can measure before terminal:create, not only on tab focus.
+    // Early force fits so first-open TUI can measure before terminal creation, not only on tab focus.
     const fitTimers: number[] = []
     const scheduleFit = (delayMs: number, force = false) => {
       const timer = window.setTimeout(() => {
@@ -457,7 +443,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
 
     term.onData((data) => {
       if (suppressReplayResponses) return
-      window.electron.send('terminal:input', { id: terminalId, data })
+      window.electron.terminal.input(terminalId, data)
       trackInputData(data)
     })
 
@@ -465,7 +451,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     let replayReady = false
     let replaySeq = 0
     let disposed = false
-    const queuedLiveOutput: TerminalDataPayload[] = []
+    const queuedLiveOutput: TerminalDataEvent[] = []
 
     const writeLiveOutput = (data: string) => {
       term.write(data)
@@ -483,8 +469,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       queuedLiveOutput.length = 0
     }
 
-    const unsubscribe = window.electron.on('terminal:data', (payload: unknown) => {
-      const { id, data, seq } = payload as TerminalDataPayload
+    const unsubscribe = window.electron.terminal.onData(({ id, data, seq }) => {
       if (id !== terminalId) return
 
       if (!replayReady) {
@@ -498,10 +483,10 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       }
     })
 
-    void window.electron.invoke('terminal:replay', { id: terminalId })
+    void window.electron.terminal.replay(terminalId)
       .then((payload) => {
         if (disposed) return
-        const replay = payload as TerminalReplayPayload
+        const replay = payload as TerminalReplayResult
         const data = typeof replay.data === 'string' ? replay.data : ''
         replaySeq = typeof replay.seq === 'number' ? replay.seq : 0
         const finishReplay = () => {
@@ -580,7 +565,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       return
     }
 
-    window.electron.send('terminal:input', { id: terminalId, data: reference })
+    window.electron.terminal.input(terminalId, reference)
   }, [terminalId, scheduleOutputTelemetry, updateTelemetry])
 
   return (

@@ -1,36 +1,14 @@
-export interface Workspace {
-  id: string
-  name: string
-  path: string
-  clis: CLIConfig[]
-  layout: LayoutConfig
-  lastTerminalType?: TerminalPreset
-  createdAt: string
-  updatedAt: string
-}
+export type {
+  AppLoadState,
+  CLIConfig,
+  FileNode,
+  LayoutConfig,
+  LayoutPosition,
+  TerminalPreset,
+  Workspace,
+} from '../../../shared/ipc/workspace'
 
-export interface CLIConfig {
-  id: string
-  type: string
-  command: string
-  args: string[]
-  env: Record<string, string>
-}
-
-export interface LayoutConfig {
-  mode: 'grid' | 'tabs'
-  positions: LayoutPosition[]
-}
-
-export interface LayoutPosition {
-  id: string
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-export type TerminalPreset = 'shell' | 'claude' | 'codex' | 'opencode'
+import type { TerminalPreset } from '../../../shared/ipc/workspace'
 
 export type TerminalStatus = 'idle' | 'starting' | 'running' | 'exited' | 'error'
 
@@ -53,17 +31,6 @@ export interface Terminal {
   outputTokens?: number
   contextTokens?: number
   contextWindowTokens?: number
-}
-
-export type AppLoadState = 'no-workspace' | 'workspace-loaded' | 'no-terminal' | 'terminal-active'
-
-export interface FileNode {
-  name: string
-  path: string
-  type: 'file' | 'directory'
-  children?: FileNode[]
-  hasChildren?: boolean
-  loaded?: boolean
 }
 
 // ── Git types ──

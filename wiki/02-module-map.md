@@ -1,12 +1,12 @@
 # Module Map
 
-Last analyzed: 2026-06-30
+Last analyzed: 2026-07-17
 
 ## Main Process Modules
 
 | Module | Primary Files | Responsibility |
 |---|---|---|
-| App shell | `src/main/index.ts`, `src/main/window.ts` | Electron lifecycle, BrowserWindow creation, IPC registration |
+| App shell | `src/main/index.ts` | Electron lifecycle, BrowserWindow creation, IPC registration |
 | Workspace config | `src/main/config/service.ts`, `src/main/workspace/types.ts` | global config, recent workspaces, CLI registrations |
 | Workspace/files IPC | `src/main/ipc/handlers.ts`, `src/main/ipc/file-handlers.ts` | workspace persistence, file tree, file content operations |
 | Terminal backend | `src/main/terminal/manager.ts`, `src/main/terminal/presets.ts`, `src/main/terminal/health.ts` | pty lifecycle, default shells, preset metadata, health checks |
@@ -41,6 +41,8 @@ Last analyzed: 2026-06-30
 
 | File | Purpose |
 |---|---|
+| `src/shared/ipc/workspace.ts` | Workspace/File/FileTree channel constants, DTOs, result/event types, and preload domain API contract |
+| `src/shared/ipc/terminal.ts` | Terminal command/event constants, payload/result types, and preload domain API contract |
 | `src/shared/terminalLaunch.ts` | canonical terminal presets: `shell`, `claude`, `codex`, `opencode`; builds auto commands |
 | `src/shared/notifications.ts` | notification settings type/defaults/normalization |
 | `src/shared/janus/persona.ts` | Janus system persona exposed through preload as `janusPersona` |
@@ -56,4 +58,3 @@ Last analyzed: 2026-06-30
 | `packages/llm-core/src/adapters/vertex-ai` | Google Vertex AI provider |
 | `packages/llm-core/src/registry/loader.ts` | metadata loader for providers |
 | `packages/llm-core/src/utils/*` | validation, proxy, errors, AI SDK stream compatibility |
-

@@ -6,7 +6,9 @@ directories:
   buildResources: resources
 
 files:
-  - out
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
   - package.json
 
 asarUnpack:

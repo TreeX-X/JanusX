@@ -589,7 +589,6 @@ function LeafPane({
   leaf,
   terminalsById,
   focusedPaneId,
-  activeTerminalId,
   showFocusChrome,
   onPaneFocus,
   onTabSelect,
@@ -975,9 +974,7 @@ export function TerminalArea() {
   }, [closeTerminalMenu, terminalMenuPaneId])
 
   useEffect(() => {
-    const unsubscribe = window.electron.on('terminal:exit', (payload: unknown) => {
-      const { id, exitCode } = payload as { id?: string; exitCode?: number }
-      if (!id) return
+    const unsubscribe = window.electron.terminal.onExit(({ id, exitCode }) => {
       updateTerminal(id, {
         status: 'exited',
         exitCode,
@@ -988,9 +985,7 @@ export function TerminalArea() {
   }, [updateTerminal])
 
   useEffect(() => {
-    const unsubscribe = window.electron.on('terminal:focus', (payload: unknown) => {
-      const { id } = payload as { id?: string }
-      if (!id) return
+    const unsubscribe = window.electron.terminal.onFocus(({ id }) => {
 
       const store = useWorkspaceStore.getState()
       if (store.terminals.some((terminal) => terminal.id === id)) {
@@ -1026,7 +1021,7 @@ export function TerminalArea() {
     async (id: string, e?: React.MouseEvent) => {
       e?.stopPropagation()
       try {
-        await window.electron.invoke('terminal:kill', { id })
+        await window.electron.terminal.kill(id)
       } catch {
         // ignore
       }
@@ -1370,7 +1365,7 @@ export function TerminalArea() {
               view === 'note' ? activeTerminalId ? (
               <QuickNote
                 terminalId={activeTerminalId}
-                onPasteToTerminal={(data) => window.electron.send('terminal:input', { id: activeTerminalId, data })}
+                onPasteToTerminal={(data) => window.electron.terminal.input(activeTerminalId, data)}
               />
             ) : (
               <div className="grid h-full place-items-center text-[#666]">No active terminal</div>

@@ -29,9 +29,6 @@ export class ProjectConfig {
       const content = await readFile(configPath, 'utf-8')
       const config = JSON.parse(content) as LaunchConfig
 
-      // 验证配置版本兼容性
-      this.ensureCompatibility(config)
-
       return config
     } catch (error) {
       throw new Error(`Failed to read config from ${configPath}: ${error}`)
@@ -66,15 +63,12 @@ export class ProjectConfig {
 
   /**
    * 创建默认配置
-   * @param projectPath 项目根目录
+   * @param projectPath 项目根目录（保留用于公开 API 位置兼容）
    * @param projectType 项目类型
    * @param projectName 项目名称
    */
-  static createDefault(
-    projectPath: string,
-    projectType: ProjectType,
-    projectName: string,
-  ): LaunchConfig {
+  static createDefault(...args: [projectPath: string, projectType: ProjectType, projectName: string]): LaunchConfig {
+    const [, projectType, projectName] = args
     const defaultConfig = this.getDefaultConfigForType(projectType)
 
     return {
@@ -220,14 +214,6 @@ export class ProjectConfig {
     }
 
     return errors
-  }
-
-  /**
-   * 迁移旧版本的配置到新版本
-   */
-  private static ensureCompatibility(config: LaunchConfig): void {
-    // 版本 0.1.0 是初始版本，暂无迁移需要
-    // 未来如果有版本变更，在此处理迁移逻辑
   }
 
   /**

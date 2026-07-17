@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { TERMINAL_EVENT_CHANNELS } from '../../shared/ipc/terminal'
 import type { AgentEngine } from '../agent/types'
 import { configService } from '../config/service'
 import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
@@ -488,7 +489,7 @@ export class AgentHookCoordinator {
 
   private focusTerminal(terminalId: string): void {
     if (this.mainWindow.isDestroyed() || this.mainWindow.webContents.isDestroyed()) return
-    this.mainWindow.webContents.send('terminal:focus', { id: terminalId })
+    this.mainWindow.webContents.send(TERMINAL_EVENT_CHANNELS.focus, { id: terminalId })
   }
 
   private emit(event: AgentHookCoordinatorEvent): void {

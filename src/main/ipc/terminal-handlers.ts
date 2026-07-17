@@ -22,6 +22,16 @@ import { officecliManager } from '../office/officecli-manager'
 import { existsSync } from 'fs'
 import { extname, resolve } from 'path'
 import { buildOfficeAgentSession, mergeOfficeAgentEnv } from '../office/office-agent-policy'
+import {
+  TERMINAL_EVENT_CHANNELS,
+  TERMINAL_INVOKE_CHANNELS,
+  TERMINAL_SEND_CHANNELS,
+  type TerminalCreateRequest,
+  type TerminalInputPayload,
+  type TerminalResizePayload,
+  type TerminalSubmitLinePayload,
+  type TerminalWarmupRequest,
+} from '../../shared/ipc/terminal'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -236,7 +246,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       })
   })
 
-  ipcMain.handle('terminal:warmup', async (_event, payload?: { engines?: string[] }) => {
+  ipcMain.handle(TERMINAL_INVOKE_CHANNELS.warmup, async (_event, payload?: TerminalWarmupRequest) => {
     const requested = Array.isArray(payload?.engines)
       ? payload.engines.filter((engine): engine is WarmupEngine => typeof engine === 'string' && isWarmupEngine(engine))
       : [...AGENT_CLI_COMMANDS]
@@ -257,18 +267,8 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     return { ok: true as const }
   })
 
-  ipcMain.handle('terminal:create', async (_event, config) => {
-    const { id, cwd, shell, preset, command, args, cols, rows } = config as {
-      id: string
-      workspaceId?: string
-      cwd: string
-      shell: string
-      preset?: string
-      command?: string
-      args?: string[]
-      cols?: number
-      rows?: number
-    }
+  ipcMain.handle(TERMINAL_INVOKE_CHANNELS.create, async (_event, config: TerminalCreateRequest) => {
+    const { id, cwd, shell, preset, command, args, cols, rows } = config
 
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
     const engine: CheckpointEngine =
@@ -427,12 +427,12 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     // after workspace switches, then forward live data to the renderer.
     instance.pty.onData((data: string) => {
       const seq = terminalManager.appendOutput(id, data)
-      sendToRenderer(mainWindow, 'terminal:data', { id, data, seq: seq ?? undefined })
+      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.data, { id, data, seq: seq ?? undefined })
     })
 
     // Terminal exit: finalize any pending checkpoint.
     instance.pty.onExit(({ exitCode }: { exitCode: number }) => {
-      sendToRenderer(mainWindow, 'terminal:exit', { id, exitCode })
+      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.exit, { id, exitCode })
       terminalManager.kill(id)
 
       const state = terminalStates.get(id)
@@ -477,24 +477,24 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   })
 
   // Input handler: forward to PTY only.
-  ipcMain.on('terminal:input', (_event, { id, data }: { id: string; data: string }) => {
+  ipcMain.on(TERMINAL_SEND_CHANNELS.input, (_event, { id, data }: TerminalInputPayload) => {
     terminalManager.write(id, data)
   })
 
   // Submit-line handler: renderer sends one complete user input transaction.
-  ipcMain.on('terminal:submit-line', (_event, { id, text }: { id: string; text: string }) => {
+  ipcMain.on(TERMINAL_SEND_CHANNELS.submitLine, (_event, { id, text }: TerminalSubmitLinePayload) => {
     enqueueCheckpointFromSubmit(mainWindow, id, text)
   })
 
-  ipcMain.on('terminal:resize', (_event, { id, cols, rows }: { id: string; cols: number; rows: number }) => {
+  ipcMain.on(TERMINAL_SEND_CHANNELS.resize, (_event, { id, cols, rows }: TerminalResizePayload) => {
     terminalManager.resize(id, cols, rows)
   })
 
-  ipcMain.handle('terminal:replay', async (_event, { id }: { id: string }) => {
+  ipcMain.handle(TERMINAL_INVOKE_CHANNELS.replay, async (_event, { id }: { id: string }) => {
     return terminalManager.getOutputReplay(id) ?? { data: '', seq: 0 }
   })
 
-  ipcMain.handle('terminal:kill', async (_event, { id }: { id: string }) => {
+  ipcMain.handle(TERMINAL_INVOKE_CHANNELS.kill, async (_event, { id }: { id: string }) => {
     terminalManager.kill(id)
     return { success: true }
   })

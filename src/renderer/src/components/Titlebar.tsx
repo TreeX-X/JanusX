@@ -7,7 +7,6 @@ import { KnowledgeWorkbench } from '@/components/knowledge'
 import { BlueprintWorkbench } from '@/components/blueprint/BlueprintWorkbench'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
 import { useJanusChatController } from '@/components/janus/JanusChatProvider'
-import type { JanusMode } from '@/components/janus'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
 import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentOfficeNotice } from '@/components/janus/islandController'
 import { officeService } from '@/services/office'
@@ -23,7 +22,6 @@ import { useOfficeStore } from '@/stores/office'
 export function Titlebar() {
   const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const { stage: islandStage, knowledge: knowledgePeek } = island
-  const [isRunning, setIsRunning] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'notifications' | 'llm'>('notifications')
 
@@ -44,13 +42,10 @@ export function Titlebar() {
     selectModel: handleChatSelectModel,
   } = useJanusChatController()
 
-  const blueprintMode = useAppStore((s) => s.blueprintMode)
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
-  const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
   const previousActiveWorkspaceId = useRef(activeWorkspaceId)
   const officeDiscoveryGeneration = useRef(0)
   const artifactNotice = useOfficeStore((state) => state.artifactNotice)
@@ -105,15 +100,6 @@ export function Titlebar() {
     return () => window.clearTimeout(timer)
   }, [activeWorkspaceId, artifactNotice, islandStage])
 
-  /*-- Janus 模式 --*/
-  const janusMode: JanusMode = !activeWorkspace
-    ? 'sleep'
-    : isRunning
-      ? 'running'
-      : blueprintMode
-        ? 'analytics'
-        : 'order'
-
   const openOfficeArtifact = useCallback((relPath: string) => {
     if (!activeWorkspaceId) return
     const office = useOfficeStore.getState()
@@ -152,10 +138,6 @@ export function Titlebar() {
     }
   }, [activeTerminalId])
 
-
-  const handleRunningChange = useCallback((running: boolean) => {
-    setIsRunning(running)
-  }, [])
 
   const handleSettingsTriggerClick = useCallback(() => {
     setSettingsInitialTab('notifications')
@@ -272,7 +254,6 @@ export function Titlebar() {
           onSingleActivate={handleIslandSingleActivate}
           onDoubleActivate={handleIslandDoubleActivate}
           onDismiss={handleIslandDismiss}
-          onRunningChange={handleRunningChange}
           messages={messages}
           pendingContent={pendingContent}
           isStreaming={isStreaming}

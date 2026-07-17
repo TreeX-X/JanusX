@@ -21,7 +21,6 @@ import type { SubAgentRun, SubAgentRunRole, SubAgentRunStatus } from '../../../.
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import type { OfficeFileEntry } from '../../../../shared/office'
 import { formatKnowledgeMatch } from './islandKnowledgePeek'
-import { getDoubleActivationAction, getSingleActivationAction } from './islandInteraction'
 
 /* ════════════════════════════════════════════════════════════
    JanusIsland �?52×26px 折叠态胶�?
@@ -97,7 +96,6 @@ interface JanusIslandProps {
   onSingleActivate: () => void
   onDoubleActivate: () => void
   onDismiss: () => void
-  onRunningChange?: (isRunning: boolean) => void
   messages: Message[]
   pendingContent: string
   isStreaming: boolean
@@ -242,7 +240,6 @@ export function JanusIsland({
   onSingleActivate,
   onDoubleActivate,
   onDismiss,
-  onRunningChange,
   messages,
   pendingContent,
   isStreaming,
@@ -511,10 +508,9 @@ export function JanusIsland({
   }, [activeNode, janusRunning, mode, stage])
 
   useEffect(() => {
-    onRunningChange?.(janusRunning)
     document.body.classList.toggle('is-running', janusRunning)
     return () => { document.body.classList.remove('is-running') }
-  }, [janusRunning, onRunningChange])
+  }, [janusRunning])
 
   return (
     <div
@@ -546,7 +542,7 @@ export function JanusIsland({
       >
         <div className="janus-collapsed-core">
           <div ref={(el) => { eyeContainerRef.current = el }} className="janus-face-mini">
-            <JanusEye mode={mode} size={10} leftRef={eyeLeftRef} rightRef={eyeRightRef} />
+            <JanusEye mode={mode} leftRef={eyeLeftRef} rightRef={eyeRightRef} />
           </div>
         </div>
 

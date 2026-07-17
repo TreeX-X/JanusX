@@ -1,6 +1,5 @@
 interface BinaryInfoProps {
   fileName: string
-  filePath: string
   size?: number
 }
 
@@ -11,7 +10,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
 }
 
-export function BinaryInfo({ fileName, filePath, size }: BinaryInfoProps) {
+export function BinaryInfo({ fileName, size }: BinaryInfoProps) {
   return (
     <div
       className="flex flex-col items-center justify-center flex-1 gap-3"

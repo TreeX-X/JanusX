@@ -3,6 +3,13 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { watch, type FSWatcher } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { join, relative, resolve } from 'path'
+import {
+  FILE_TREE_CHANNELS,
+  WORKSPACE_CHANNELS,
+  type FileNode,
+  type WorkspaceCreateInput,
+  type WorkspaceUpdates,
+} from '../../shared/ipc/workspace'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
@@ -67,7 +74,7 @@ function fileTreeResult(success: boolean, error?: string, path?: string): { succ
   return { success, error, path }
 }
 
-async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<unknown[]> {
+async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<FileNode[]> {
   try {
     const entries = await readdir(targetDir, { withFileTypes: true })
     const nodes = await Promise.all(
@@ -104,7 +111,7 @@ async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<
         }),
     )
 
-    nodes.sort((a: any, b: any) => {
+    nodes.sort((a, b) => {
       if (a.type === 'directory' && b.type !== 'directory') return -1
       if (a.type !== 'directory' && b.type === 'directory') return 1
       return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
@@ -149,7 +156,7 @@ function ensureWorkspaceWatcher(workspacePath: string): void {
           setTimeout(() => {
             watcherTimers.delete(workspacePath)
             for (const window of windows) {
-              sendToRenderer(window, 'filetree:changed', workspacePath)
+              sendToRenderer(window, FILE_TREE_CHANNELS.changed, workspacePath)
             }
           }, 150),
         )
@@ -226,7 +233,7 @@ export function registerWorkspaceHandlers(
   // Also disposed from AppShutdown; function is idempotent.
   mainWindow.on('closed', disposeWorkspaceWatchers)
 
-  ipcMain.handle('app:init', async () => {
+  ipcMain.handle(WORKSPACE_CHANNELS.initialize, async () => {
     try {
       await ensureDir(WORKSPACES_DIR)
       const files = await readdir(WORKSPACES_DIR)
@@ -247,7 +254,7 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle('workspace:list', async () => {
+  ipcMain.handle(WORKSPACE_CHANNELS.list, async () => {
     await ensureDir(WORKSPACES_DIR)
     const files = await readdir(WORKSPACES_DIR)
     const workspaces = []
@@ -260,12 +267,12 @@ export function registerWorkspaceHandlers(
     return workspaces
   })
 
-  ipcMain.handle('workspace:load', async (_event, id: string) => {
+  ipcMain.handle(WORKSPACE_CHANNELS.load, async (_event, id: string) => {
     const data = await readFile(join(WORKSPACES_DIR, `${id}.json`), 'utf-8')
     return JSON.parse(data)
   })
 
-  ipcMain.handle('workspace:create', async (_event, dto: { name: string; path: string }) => {
+  ipcMain.handle(WORKSPACE_CHANNELS.create, async (_event, dto: WorkspaceCreateInput) => {
     await ensureDir(WORKSPACES_DIR)
     const workspace = {
       id: randomUUID(),
@@ -280,7 +287,7 @@ export function registerWorkspaceHandlers(
     return workspace
   })
 
-  ipcMain.handle('workspace:update', async (_event, id: string, updates: Record<string, unknown>) => {
+  ipcMain.handle(WORKSPACE_CHANNELS.update, async (_event, id: string, updates: WorkspaceUpdates) => {
     const filePath = join(WORKSPACES_DIR, `${id}.json`)
     const data = JSON.parse(await readFile(filePath, 'utf-8'))
     const updated = { ...data, ...updates, updatedAt: new Date().toISOString() }
@@ -288,7 +295,7 @@ export function registerWorkspaceHandlers(
     return updated
   })
 
-  ipcMain.handle('workspace:delete', async (_event, id: string) => {
+  ipcMain.handle(WORKSPACE_CHANNELS.delete, async (_event, id: string) => {
     try {
       const recordPath = join(WORKSPACES_DIR, `${id}.json`)
       const record = JSON.parse(await readFile(recordPath, 'utf-8')) as { path?: unknown }
@@ -321,12 +328,12 @@ export function registerWorkspaceHandlers(
     return process.platform
   })
 
-  ipcMain.handle('filetree:load', async (_event, rootPath: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.load, async (_event, rootPath: string) => {
     registerWorkspaceWatcher(mainWindow, rootPath)
     return readDirectoryNodes(rootPath, rootPath)
   })
 
-  ipcMain.handle('filetree:children', async (_event, rootPath: string, relativePathValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.children, async (_event, rootPath: string, relativePathValue: string) => {
     const targetDir = resolveWorkspacePath(rootPath, relativePathValue)
     if (!targetDir) return []
 
@@ -341,7 +348,7 @@ export function registerWorkspaceHandlers(
     return readDirectoryNodes(rootPath, targetDir)
   })
 
-  ipcMain.handle('filetree:create-file', async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.createFile, async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
     const name = sanitizeEntryName(nameValue)
     const parentDir = resolveWorkspacePath(rootPath, parentRelativePath)
     if (!name || !parentDir) return fileTreeResult(false, 'Invalid file name')
@@ -359,7 +366,7 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle('filetree:create-directory', async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.createDirectory, async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
     const name = sanitizeEntryName(nameValue)
     const parentDir = resolveWorkspacePath(rootPath, parentRelativePath)
     if (!name || !parentDir) return fileTreeResult(false, 'Invalid folder name')
@@ -377,7 +384,7 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle('filetree:rename', async (_event, rootPath: string, relativePathValue: string, nameValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.rename, async (_event, rootPath: string, relativePathValue: string, nameValue: string) => {
     const name = sanitizeEntryName(nameValue)
     const sourcePath = resolveWorkspacePath(rootPath, relativePathValue)
     if (!name || !sourcePath || resolve(sourcePath) === resolve(rootPath)) {
@@ -395,7 +402,7 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle('filetree:delete', async (_event, rootPath: string, relativePathValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.delete, async (_event, rootPath: string, relativePathValue: string) => {
     const targetPath = resolveWorkspacePath(rootPath, relativePathValue)
     if (!targetPath || resolve(targetPath) === resolve(rootPath)) {
       return fileTreeResult(false, 'Cannot delete workspace root')
@@ -409,7 +416,7 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle('filetree:reveal', async (_event, rootPath: string, relativePathValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.reveal, async (_event, rootPath: string, relativePathValue: string) => {
     const targetPath = resolveWorkspacePath(rootPath, relativePathValue)
     if (!targetPath) return fileTreeResult(false, 'Invalid target path')
 

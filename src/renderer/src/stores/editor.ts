@@ -44,13 +44,7 @@ async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): P
 
   const request = (async () => {
     if (viewType === 'image') {
-      const result = (await window.electron.invoke('file:readBinary', absolutePath)) as {
-        base64?: string
-        mimeType?: string
-        size?: number
-        mtime?: number
-        error?: string
-      }
+      const result = await window.electron.file.readBinary(absolutePath)
       const error = readResultError(result)
       if (error) throw new Error(error)
       return {
@@ -64,11 +58,7 @@ async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): P
     }
 
     if (viewType === 'binary') {
-      const result = (await window.electron.invoke('file:stat', absolutePath)) as {
-        size?: number
-        mtime?: number
-        error?: string
-      }
+      const result = await window.electron.file.stat(absolutePath)
       const error = readResultError(result)
       if (error) throw new Error(error)
       return {
@@ -79,12 +69,7 @@ async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): P
       }
     }
 
-    const result = (await window.electron.invoke('file:read', absolutePath)) as {
-      content?: string
-      size?: number
-      mtime?: number
-      error?: string
-    }
+    const result = await window.electron.file.read(absolutePath)
     const error = readResultError(result)
     if (error) throw new Error(error)
     return {
@@ -206,7 +191,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const file = get().openFiles.find(f => f.id === id)
     if (!file) return
     try {
-      await window.electron.invoke('file:save', file.absolutePath, file.content)
+      await window.electron.file.save(file.absolutePath, file.content)
       loadedFileCache.set(file.absolutePath, {
         viewType: file.viewType,
         content: file.content,

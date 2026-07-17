@@ -32,7 +32,7 @@ import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
 import { BlueprintFocusView } from '@/components/blueprint/BlueprintFocusView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
-import type { AppLoadState, Workspace, FileNode } from '@/types'
+import type { FileNode } from '@/types'
 
 type IdleWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
@@ -238,7 +238,7 @@ export default function App() {
 
   const loadWorkspaceFileTree = useCallback(async (workspacePath: string) => {
     try {
-      const tree = (await window.electron.invoke('filetree:load', workspacePath)) as FileNode[]
+      const tree = await window.electron.fileTree.load(workspacePath)
       const currentTree = useWorkspaceStore.getState().fileTree
       useWorkspaceStore.setState({ fileTree: mergeFileTreeState(tree, currentTree) })
     } catch {
@@ -249,11 +249,7 @@ export default function App() {
   useEffect(() => {
     const initApp = async () => {
       try {
-        const state = (await window.electron.invoke('app:init')) as {
-          loadState: AppLoadState
-          workspaces: Workspace[]
-          activeWorkspaceId: string | null
-        } | null
+        const state = await window.electron.workspace.initialize()
 
         if (state && state.workspaces) {
           useWorkspaceStore.setState({
@@ -285,8 +281,7 @@ export default function App() {
   }, [loadWorkspaceFileTree])
 
   useEffect(() => {
-    const unsubscribe = window.electron.on('filetree:changed', async (workspacePath: unknown) => {
-      if (typeof workspacePath !== 'string') return
+    const unsubscribe = window.electron.fileTree.onChanged(async (workspacePath) => {
       const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
       if (!activeWorkspaceId) return
       const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
@@ -294,7 +289,7 @@ export default function App() {
       invalidateEditorFileCache(workspacePath)
       await loadWorkspaceFileTree(workspacePath)
     })
-    return typeof unsubscribe === 'function' ? unsubscribe : undefined
+    return unsubscribe
   }, [loadWorkspaceFileTree])
 
   useEffect(() => {
@@ -449,10 +444,10 @@ function EmptyWorkspace() {
       if (result.canceled || !result.filePaths[0]) return
 
       const folderPath = result.filePaths[0]
-      const workspace = (await window.electron.invoke('workspace:create', {
+      const workspace = await window.electron.workspace.create({
         name: folderPath.split(/[/\\]/).pop() || 'Workspace',
         path: folderPath,
-      })) as Workspace
+      })
 
       addWorkspace(workspace)
       setActiveWorkspace(workspace.id)
@@ -460,7 +455,7 @@ function EmptyWorkspace() {
 
       // 加载文件树
       try {
-        const tree = (await window.electron.invoke('filetree:load', folderPath)) as FileNode[]
+        const tree = await window.electron.fileTree.load(folderPath)
         useWorkspaceStore.setState({ fileTree: tree })
       } catch {
         // ignore

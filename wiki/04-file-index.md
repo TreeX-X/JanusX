@@ -1,6 +1,6 @@
 # File Index
 
-Last analyzed: 2026-06-30
+Last analyzed: 2026-07-17
 
 Use this as a lookup table before opening source.
 
@@ -8,10 +8,11 @@ Use this as a lookup table before opening source.
 
 | File | Function |
 |---|---|
-| `package.json` | root scripts, dependencies, workspace declaration |
+| `package.json` | root scripts, strict-unused/package-boundary gates, dependencies, workspace declaration |
 | `electron.vite.config.ts` | main/preload/renderer build entries and renderer alias |
 | `tsconfig.json` | strict TS config, renderer alias, `ai` package path aliases |
-| `electron-builder.yml` | packaging config |
+| `electron-builder.yml` | explicit runtime package allowlist |
+| `scripts/check-package-boundary.mjs` | fail-closed verification for Builder patterns and required outputs |
 | `vitest.config.ts` | root unit test config |
 | `AGENTS.md`, `CLAUDE.md` | project-specific Agent workflow and file operation rules |
 
@@ -20,7 +21,6 @@ Use this as a lookup table before opening source.
 | File / Directory | Function |
 |---|---|
 | `src/main/index.ts` | main Electron entry; creates window; registers all IPC handlers |
-| `src/main/window.ts` | reusable BrowserWindow factory |
 | `src/main/config/service.ts` | global config persistence in `userData/janusx/config.json` |
 | `src/main/workspace/types.ts` | workspace/global config types |
 | `src/main/ipc/handlers.ts` | workspace and file tree handlers |
@@ -34,6 +34,15 @@ Use this as a lookup table before opening source.
 | `src/main/ipc/janus-handlers.ts` | Blueprint and Janus analysis IPC |
 | `src/main/ipc/runtime-telemetry-handlers.ts` | runtime telemetry IPC |
 | `src/main/ipc/settings-handlers.ts` | notification settings IPC |
+
+## Shared IPC Contracts
+
+| File | Function |
+|---|---|
+| `src/shared/ipc/workspace.ts` | typed Workspace/File/FileTree constants, DTOs, results, events, and preload domain APIs |
+| `src/shared/ipc/terminal.ts` | typed Terminal commands/events, payloads/results, and preload domain API |
+| `src/preload/index.ts` | fixed typed adapters for migrated domains plus temporary generic allowlists for remaining domains |
+| `src/renderer/src/types/electron.d.ts` | renderer declaration of the exposed preload API |
 
 ## Terminal
 
@@ -120,10 +129,13 @@ Use this as a lookup table before opening source.
 | Area | Files |
 |---|---|
 | Root workspace/config | `tests/unit/workspace.test.ts` |
+| Workspace IPC contract | `tests/unit/workspace-ipc-contract.test.ts` |
 | Terminal | `tests/unit/terminal.test.ts`, `tests/unit/terminal-input-transaction.test.ts` |
+| Terminal IPC contract | `tests/unit/terminal-ipc-contract.test.ts` |
+| Package boundary | `tests/unit/package-boundary.test.ts` |
+| Project config compatibility | `tests/unit/project-config-contract.test.ts` |
 | Pane tree | `tests/unit/workspace-pane.test.ts` |
 | Agent parsers/stream | `tests/unit/agent/*parser.test.ts`, `stream-manager.test.ts` |
 | Checkpoint | `tests/unit/agent/checkpoint-manager.test.ts`, `blob-store.test.ts`, `diff-engine.test.ts` |
 | Notifications | `tests/unit/agent-notifier.test.ts` |
 | LLM core | `packages/llm-core/tests/*.test.ts` |
-

@@ -52,7 +52,7 @@ export function GitPanel() {
     let disposed = false
     let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
-    const unsubscribe = window.electron.on('filetree:changed', (workspacePath: unknown) => {
+    const unsubscribe = window.electron.fileTree.onChanged((workspacePath) => {
       if (workspacePath !== cwd) return
       if (refreshTimer) clearTimeout(refreshTimer)
       refreshTimer = setTimeout(() => {
@@ -65,7 +65,7 @@ export function GitPanel() {
     return () => {
       disposed = true
       if (refreshTimer) clearTimeout(refreshTimer)
-      if (typeof unsubscribe === 'function') unsubscribe()
+      unsubscribe()
     }
   }, [cwd, refreshGitData])
 

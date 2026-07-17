@@ -84,7 +84,7 @@ export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: stri
     const office = useOfficeStore.getState()
     const tab = office.tabs.find((item) => item.tabId === office.activeTabIds[context.workspaceId])
     if (!isOfficePromptContextCurrent(context, workspace.activeWorkspaceId, tab?.relPath, terminal) || !canPasteOfficePrompt(context, terminal)) return false
-    window.electron.send('terminal:input', { id: terminal.id, data: encodeTerminalPaste(text) })
+    window.electron.terminal.input(terminal.id, encodeTerminalPaste(text))
     return true
   }
   const retryActiveTab = () => {

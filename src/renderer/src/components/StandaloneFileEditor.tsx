@@ -70,13 +70,7 @@ export function StandaloneFileEditor() {
       const viewType = getFileViewType(editorParams.filePath)
       try {
         if (viewType === 'image') {
-          const result = (await window.electron.invoke('file:readBinary', editorParams.filePath)) as {
-            base64?: string
-            mimeType?: string
-            size?: number
-            mtime?: number
-            error?: string
-          }
+          const result = await window.electron.file.readBinary(editorParams.filePath)
           if (disposed) return
           if (result.error) throw new Error(result.error)
           setFile((current) =>
@@ -96,11 +90,7 @@ export function StandaloneFileEditor() {
         }
 
         if (viewType === 'binary') {
-          const result = (await window.electron.invoke('file:stat', editorParams.filePath)) as {
-            size?: number
-            mtime?: number
-            error?: string
-          }
+          const result = await window.electron.file.stat(editorParams.filePath)
           if (disposed) return
           if (result.error) throw new Error(result.error)
           setFile((current) =>
@@ -117,12 +107,7 @@ export function StandaloneFileEditor() {
           return
         }
 
-        const result = (await window.electron.invoke('file:read', editorParams.filePath)) as {
-          content?: string
-          size?: number
-          mtime?: number
-          error?: string
-        }
+        const result = await window.electron.file.read(editorParams.filePath)
         if (disposed) return
         if (result.error) throw new Error(result.error)
         setFile((current) =>
@@ -159,7 +144,7 @@ export function StandaloneFileEditor() {
 
   const saveFile = useCallback(async () => {
     if (!file || file.isLoading || file.viewType === 'image' || file.viewType === 'binary') return
-    await window.electron.invoke('file:save', file.absolutePath, file.content)
+    await window.electron.file.save(file.absolutePath, file.content)
     setFile((current) => (current ? { ...current, isDirty: false, mtime: Date.now() } : current))
   }, [file])
 

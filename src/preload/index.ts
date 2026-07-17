@@ -2,28 +2,26 @@ import { contextBridge, ipcRenderer } from 'electron'
 import os from 'os'
 import { JANUS_PERSONA } from '../shared/janus/persona'
 import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS } from '../shared/office'
+import {
+  FILE_CHANNELS,
+  FILE_TREE_CHANNELS,
+  WORKSPACE_CHANNELS,
+  type FileAPI,
+  type FileTreeAPI,
+  type WorkspaceAPI,
+} from '../shared/ipc/workspace'
+import {
+  TERMINAL_EVENT_CHANNELS,
+  TERMINAL_INVOKE_CHANNELS,
+  TERMINAL_SEND_CHANNELS,
+  type TerminalAPI,
+} from '../shared/ipc/terminal'
 
 const ALLOWED_INVOKE_CHANNELS = [
   ...Object.values(OFFICE_INVOKE_CHANNELS),
-  'workspace:list',
-  'workspace:load',
-  'workspace:create',
-  'workspace:update',
-  'workspace:delete',
-  'terminal:create',
-  'terminal:warmup',
-  'terminal:replay',
-  'terminal:kill',
   'runtime-telemetry:get',
   'dialog:openDirectory',
   'dialog:saveFile',
-  'filetree:load',
-  'filetree:children',
-  'filetree:create-file',
-  'filetree:create-directory',
-  'filetree:rename',
-  'filetree:delete',
-  'filetree:reveal',
   'system:getDefaultShell',
   'system:getPlatform',
   'system:which',
@@ -32,7 +30,6 @@ const ALLOWED_INVOKE_CHANNELS = [
   'settings:notifications:test-feishu',
   'settings:knowledge:get',
   'settings:knowledge:update',
-  'app:init',
   'window:minimize',
   'window:maximize',
   'window:close',
@@ -57,10 +54,6 @@ const ALLOWED_INVOKE_CHANNELS = [
   'checkpoint:diff:all',
   'checkpoint:delete',
   'checkpoint:clearAll',
-  'file:read',
-  'file:save',
-  'file:readBinary',
-  'file:stat',
   'project:detect',
   'project:detect-with-details',
   'project:config:read',
@@ -136,9 +129,6 @@ const ALLOWED_INVOKE_CHANNELS = [
 ]
 
 const ALLOWED_SEND_CHANNELS = [
-  'terminal:input',
-  'terminal:resize',
-  'terminal:submit-line',
   'desktop-toast:ready',
   'desktop-toast:action',
   // LLM 流式请求（单向 send）
@@ -147,13 +137,9 @@ const ALLOWED_SEND_CHANNELS = [
 
 const ALLOWED_ON_CHANNELS = [
   ...Object.values(OFFICE_EVENT_CHANNELS),
-  'terminal:data',
-  'terminal:exit',
-  'terminal:focus',
   'agent-hook:event',
   'agent-notification:show',
   'desktop-toast:show',
-  'filetree:changed',
   'workspace:updated',
   'app:init-state',
   'agent:event',
@@ -171,6 +157,58 @@ const ALLOWED_ON_CHANNELS = [
   'janus:island:discovered',
 ]
 
+const workspaceAPI: WorkspaceAPI = {
+  initialize: () => ipcRenderer.invoke(WORKSPACE_CHANNELS.initialize),
+  list: () => ipcRenderer.invoke(WORKSPACE_CHANNELS.list),
+  load: (id) => ipcRenderer.invoke(WORKSPACE_CHANNELS.load, id),
+  create: (input) => ipcRenderer.invoke(WORKSPACE_CHANNELS.create, input),
+  update: (id, updates) => ipcRenderer.invoke(WORKSPACE_CHANNELS.update, id, updates),
+  delete: (id) => ipcRenderer.invoke(WORKSPACE_CHANNELS.delete, id),
+}
+
+const fileTreeAPI: FileTreeAPI = {
+  load: (rootPath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.load, rootPath),
+  children: (rootPath, relativePath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.children, rootPath, relativePath),
+  createFile: (rootPath, parentRelativePath, name) =>
+    ipcRenderer.invoke(FILE_TREE_CHANNELS.createFile, rootPath, parentRelativePath, name),
+  createDirectory: (rootPath, parentRelativePath, name) =>
+    ipcRenderer.invoke(FILE_TREE_CHANNELS.createDirectory, rootPath, parentRelativePath, name),
+  rename: (rootPath, relativePath, name) => ipcRenderer.invoke(FILE_TREE_CHANNELS.rename, rootPath, relativePath, name),
+  delete: (rootPath, relativePath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.delete, rootPath, relativePath),
+  reveal: (rootPath, relativePath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.reveal, rootPath, relativePath),
+  onChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, workspacePath: string) => callback(workspacePath)
+    ipcRenderer.on(FILE_TREE_CHANNELS.changed, handler)
+    return () => ipcRenderer.removeListener(FILE_TREE_CHANNELS.changed, handler)
+  },
+}
+
+const fileAPI: FileAPI = {
+  read: (filePath) => ipcRenderer.invoke(FILE_CHANNELS.read, filePath),
+  save: (filePath, content) => ipcRenderer.invoke(FILE_CHANNELS.save, filePath, content),
+  readBinary: (filePath) => ipcRenderer.invoke(FILE_CHANNELS.readBinary, filePath),
+  stat: (filePath) => ipcRenderer.invoke(FILE_CHANNELS.stat, filePath),
+}
+
+function subscribeTerminalEvent<T>(channel: string, callback: (event: T) => void): () => void {
+  const handler = (_event: Electron.IpcRendererEvent, payload: T) => callback(payload)
+  ipcRenderer.on(channel, handler)
+  return () => ipcRenderer.removeListener(channel, handler)
+}
+
+const terminalAPI: TerminalAPI = {
+  warmup: (request) => ipcRenderer.invoke(TERMINAL_INVOKE_CHANNELS.warmup, request),
+  create: (request) => ipcRenderer.invoke(TERMINAL_INVOKE_CHANNELS.create, request),
+  replay: (id) => ipcRenderer.invoke(TERMINAL_INVOKE_CHANNELS.replay, { id }),
+  kill: (id) => ipcRenderer.invoke(TERMINAL_INVOKE_CHANNELS.kill, { id }),
+  input: (id, data) => ipcRenderer.send(TERMINAL_SEND_CHANNELS.input, { id, data }),
+  resize: (id, cols, rows) => ipcRenderer.send(TERMINAL_SEND_CHANNELS.resize, { id, cols, rows }),
+  submitLine: (id, text) => ipcRenderer.send(TERMINAL_SEND_CHANNELS.submitLine, { id, text }),
+  onData: (callback) => subscribeTerminalEvent(TERMINAL_EVENT_CHANNELS.data, callback),
+  onExit: (callback) => subscribeTerminalEvent(TERMINAL_EVENT_CHANNELS.exit, callback),
+  onFocus: (callback) => subscribeTerminalEvent(TERMINAL_EVENT_CHANNELS.focus, callback),
+}
+
 contextBridge.exposeInMainWorld('electron', {
   /*-- 同步暴露平台与 Windows build 号，供渲染端构造 xterm windowsPty 用 --*/
   /*-- preload 在 Node 环境，可同步读取；os.release() 形如 "10.0.22621"，第三段为 build 号 --*/
@@ -180,6 +218,10 @@ contextBridge.exposeInMainWorld('electron', {
 
   /*-- Janus 人格 prompt 单一来源：主进程 Analyzer 与渲染层 JanusChat 共用 --*/
   janusPersona: JANUS_PERSONA,
+  workspace: workspaceAPI,
+  fileTree: fileTreeAPI,
+  file: fileAPI,
+  terminal: terminalAPI,
 
   invoke: (channel: string, ...args: unknown[]) => {
     if (ALLOWED_INVOKE_CHANNELS.includes(channel)) {

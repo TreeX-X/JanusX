@@ -105,7 +105,7 @@ export class CommandBuilder {
       command: pm,
       args: ['run', ...args],
       displayName: `${pm} run ${script}`,
-      preCommand: this.shouldInstallDependencies(config) ? {
+      preCommand: this.shouldInstallDependencies() ? {
         command: pm,
         args: ['install'],
       } : undefined,
@@ -312,7 +312,7 @@ export class CommandBuilder {
   /**
    * 判断是否需要在启动前安装依赖
    */
-  private static shouldInstallDependencies(config: LaunchConfiguration): boolean {
+  private static shouldInstallDependencies(): boolean {
     // 这里可以检查 node_modules 是否存在等
     return false // 暂时禁用自动安装，由用户手动执行
   }

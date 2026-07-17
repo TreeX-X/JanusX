@@ -1,6 +1,6 @@
 # Runtime Flows
 
-Last analyzed: 2026-06-30
+Last analyzed: 2026-07-17
 
 ## App Boot
 
@@ -17,33 +17,43 @@ Key files: `electron.vite.config.ts`, `src/main/index.ts`, `src/preload/index.ts
 
 ## IPC Flow
 
+Migrated domains use a typed path:
+
 ```text
 Renderer component/store/service
--> window.electron.invoke/send/on
--> preload channel allowlist
--> src/main/ipc/* handler
--> main-side service
--> result/event back to renderer
+-> window.electron.workspace/fileTree/file/terminal
+-> fixed preload adapter
+-> shared channel constant + typed payload
+-> src/main/ipc/* handler or main event producer
+-> result/event back through the typed domain API
+```
+
+Other domains temporarily retain the legacy path:
+
+```text
+Renderer wrapper -> window.electron.invoke/send/on -> preload allowlist -> main handler
 ```
 
 When adding IPC:
 
-1. Add or update `src/main/ipc/<subsystem>-handlers.ts`.
-2. Register it in `src/main/index.ts` if it is a new handler module.
-3. Add channel to `src/preload/index.ts` allowlist.
-4. Add renderer service/store wrapper.
-5. Add tests if logic is pure or high risk.
+1. Add or update a pure contract under `src/shared/ipc/`.
+2. Register the main handler/listener or producer with shared channel constants.
+3. Expose fixed typed methods/events from `src/preload/index.ts`; do not add migrated channels to generic allowlists.
+4. Use the typed domain API from renderer components/stores/services.
+5. Add contract tests for registration, argument order, generic rejection, and event unsubscribe behavior.
+
+Workspace/File/FileTree and Terminal follow this design today. Project, knowledge, Janus, LLM, Office, agent, checkpoint, settings, and other domains remain incremental migration work.
 
 ## Terminal Creation And Checkpointing
 
 ```text
 TerminalArea preset click
 -> shared resolveTerminalLaunchCommand
--> terminal:create IPC
+-> window.electron.terminal.create
 -> TerminalManager.create
 -> node-pty spawn
--> terminal:data / terminal:exit events
--> terminal:submit-line records user prompt
+-> typed terminal data / exit events
+-> window.electron.terminal.submitLine records user prompt
 -> CheckpointManager.finalizeAndCreateCheckpoint
 -> checkpoint:event / checkpoint:ready
 ```
@@ -139,4 +149,3 @@ Key concepts from `src/main/janus/types.ts`:
 - `BlueprintRequirementCandidate`: AI-discovered requirement that must be accepted/rejected by user.
 
 Analyzer input source is git commit diffs. The source comment states it does not consume terminal output streams or checkpoint events directly.
-

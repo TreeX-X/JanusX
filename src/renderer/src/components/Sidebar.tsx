@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
-import type { Workspace, FileNode, Terminal } from '@/types'
+import type { Workspace, Terminal } from '@/types'
 import { invalidateEditorFileCache } from '@/stores/editor'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 
@@ -67,10 +67,10 @@ export function Sidebar() {
       if (result.canceled || !result.filePaths[0]) return
 
       const folderPath = result.filePaths[0]
-      const workspace = (await window.electron.invoke('workspace:create', {
+      const workspace = await window.electron.workspace.create({
         name: folderPath.split(/[/\\]/).pop() || 'Workspace',
         path: folderPath,
-      })) as Workspace
+      })
 
       addWorkspace(workspace)
       setActiveWorkspace(workspace.id)
@@ -79,7 +79,7 @@ export function Sidebar() {
       // 加载文件树
       try {
         invalidateEditorFileCache(folderPath)
-        const tree = (await window.electron.invoke('filetree:load', folderPath)) as FileNode[]
+        const tree = await window.electron.fileTree.load(folderPath)
         useWorkspaceStore.setState({ fileTree: tree })
       } catch {
         // ignore
@@ -100,7 +100,7 @@ export function Sidebar() {
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
-      await window.electron.invoke('workspace:delete', deleteTarget.id)
+      await window.electron.workspace.delete(deleteTarget.id)
       removeWorkspace(deleteTarget.id)
       setExpandedWorkspaceIds((current) => current.filter((id) => id !== deleteTarget.id))
       if (workspaces.length <= 1) {
@@ -126,7 +126,7 @@ export function Sidebar() {
         const ws = workspaces.find((w) => w.id === id)
         if (ws) {
           invalidateEditorFileCache(ws.path)
-          const tree = (await window.electron.invoke('filetree:load', ws.path)) as FileNode[]
+          const tree = await window.electron.fileTree.load(ws.path)
           useWorkspaceStore.setState({ fileTree: tree })
         }
       } catch (err) {

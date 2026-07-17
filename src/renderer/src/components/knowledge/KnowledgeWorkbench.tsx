@@ -201,7 +201,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               {tab === 'search' && <SearchLab query={query} onQueryChange={setQuery} cards={searchCards} state={searchState} selectedId={selectedId} onSelect={(card) => { setSelectedSearch(recordFromCard(card)); setSelectedId(card.id) }} />}
               {tab === 'wiki' && <CardCollection title="No wiki patches" detail="Extraction has not proposed any wiki changes." cards={snapshot.wikiPatches.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'graph' && <CardCollection title="No graph candidates" detail="Extraction has not proposed any graph relationships." cards={snapshot.graphCandidates.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
-              {tab === 'audit' && <AuditList events={snapshot.auditEvents} selectedId={selectedId} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} />}
+              {tab === 'audit' && <AuditList events={snapshot.auditEvents} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} />}
             </>}
           </section>
           <aside className={styles.rightPane}><Inspector record={selected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={() => void review('apply')} onReject={() => void review('reject')} onRevoke={() => void revoke()} /></aside>
@@ -266,7 +266,7 @@ function CardCollection({ title, detail, cards, selectedId, onSelect }: { title:
   return <div className={styles.cardGrid}>{cards.map((card) => <KnowledgeCardTile key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card.id)} />)}</div>
 }
 
-function AuditList({ events, selectedId, onSelect }: { events: KnowledgeWorkbenchSnapshot['auditEvents']; selectedId: string; onSelect: (record: InspectorRecord) => void }) {
+function AuditList({ events, onSelect }: { events: KnowledgeWorkbenchSnapshot['auditEvents']; onSelect: (record: InspectorRecord) => void }) {
   if (!events.length) return <StateBlock title="No audit events" detail="Governance actions will appear here when they occur." />
   return <div className={styles.timeline}>{events.map((event) => <button key={event.id} type="button" className={styles.auditEvent} onClick={() => onSelect({ id: event.id, title: event.action, body: `${event.targetType}:${event.targetId}`, tags: [event.targetType], sourceIds: event.provenance.sourceObservationIds, fileRefs: event.provenance.fileRefs, createdAt: event.provenance.createdAt })}><span className={styles.auditDot} /><span><strong>{event.action}</strong><small>{event.targetType} - {event.targetId}</small></span><time>{formatDate(event.provenance.createdAt)}</time></button>)}</div>
 }

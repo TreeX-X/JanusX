@@ -1,6 +1,6 @@
 # Architecture
 
-Last analyzed: 2026-06-30
+Last analyzed: 2026-07-17
 
 ## Layer Model
 
@@ -8,10 +8,10 @@ JanusX follows a standard Electron split:
 
 | Layer | Key Files | Responsibility |
 |---|---|---|
-| Main process | `src/main/index.ts`, `src/main/window.ts` | App lifecycle, BrowserWindow, IPC registration, Node-side services |
-| Preload bridge | `src/preload/index.ts` | Exposes `window.electron` with channel allowlists for invoke/send/on |
+| Main process | `src/main/index.ts` | App lifecycle, BrowserWindow, IPC registration, Node-side services |
+| Preload bridge | `src/preload/index.ts` | Exposes typed domain APIs for migrated IPC plus temporary generic allowlists for remaining domains |
 | Renderer | `src/renderer/src` | React UI, Zustand state, IPC service wrappers |
-| Shared | `src/shared` | small pure utilities/types reused by main and renderer |
+| Shared | `src/shared`, `src/shared/ipc/*` | pure cross-process utilities, DTOs, channel constants, and typed domain API contracts |
 | Package workspace | `packages/llm-core` | provider abstraction and LLM adapters consumed by main process |
 
 `electron.vite.config.ts` declares three build inputs:
@@ -44,21 +44,22 @@ On app quit, `terminalManager.killAll()` is called.
 
 ## IPC Boundary
 
-`src/preload/index.ts` is the security boundary. It contains:
+`src/preload/index.ts` remains the security boundary, but the migration is incremental:
 
-- `ALLOWED_INVOKE_CHANNELS` for request/response calls,
-- `ALLOWED_SEND_CHANNELS` for fire-and-forget events,
-- `ALLOWED_ON_CHANNELS` for renderer subscriptions,
-- `contextBridge.exposeInMainWorld('electron', ...)`.
+- Workspace/File/FileTree contracts live in `src/shared/ipc/workspace.ts` and are exposed as `window.electron.workspace`, `fileTree`, and `file`.
+- Terminal contracts live in `src/shared/ipc/terminal.ts` and are exposed as `window.electron.terminal`.
+- Migrated channels are not accepted by the generic `invoke/send/on` allowlists.
+- Unmigrated domains temporarily continue through the generic allowlists until their own shared contract slice is introduced.
+- Typed event adapters hide Electron event objects and remove the exact registered listener on unsubscribe.
 
-Any new renderer-to-main IPC must be added both to a main handler and to the relevant preload allowlist.
+For migrated domains, add or change the shared contract first, then update the main handler/producer, fixed preload method, renderer caller, and contract tests together. For an unmigrated domain, the legacy allowlist path remains a compatibility boundary rather than the target design.
 
 ## Renderer State Pattern
 
 Renderer code generally follows:
 
 ```text
-Component -> Zustand store or service wrapper -> window.electron IPC -> main handler -> main service
+Component -> Zustand store or service wrapper -> typed window.electron domain API -> main handler -> main service
 ```
 
 Examples:
@@ -95,4 +96,3 @@ Examples:
 - validation, proxy, stream compatibility, and error utilities.
 
 Main process code uses it through `src/main/llm/LlmService.ts`.
-

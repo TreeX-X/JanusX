@@ -285,7 +285,7 @@ class BlueprintStore {
     const idx = await this.loadIndex(workspace)
     const out: Blueprint[] = []
     for (const id of idx.blueprints) {
-      const bp = this.cache.get(id) ?? (await this.readBlueprintFile(workspace, id))
+      const bp = this.cache.get(id) ?? (await this.readBlueprintFile(id))
       if (bp) {
         this.cache.set(id, bp)
         out.push(bp)
@@ -294,7 +294,7 @@ class BlueprintStore {
     return out
   }
 
-  private async readBlueprintFile(workspace: string, id: string): Promise<Blueprint | null> {
+  private async readBlueprintFile(id: string): Promise<Blueprint | null> {
     const bp = await readJson<Blueprint>(blueprintFile(id))
     if (bp) {
       let changed = false
@@ -341,10 +341,12 @@ class BlueprintStore {
     return bp
   }
 
-  async loadBlueprint(workspace: string, id: string): Promise<Blueprint | null> {
+  async loadBlueprint(...args: [workspace: string, id: string]): Promise<Blueprint | null> {
+    // Keep the workspace-first public contract; persisted blueprint files are keyed globally by id.
+    const id = args[1]
     const cached = this.cache.get(id)
     if (cached) return cached
-    const bp = await this.readBlueprintFile(workspace, id)
+    const bp = await this.readBlueprintFile(id)
     if (bp) this.cache.set(id, bp)
     return bp
   }

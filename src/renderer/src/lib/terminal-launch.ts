@@ -56,19 +56,16 @@ export function warmDefaultShellCache(): void {
 }
 
 /**
- * Fire-and-forget main-process prewarm for terminal:create:
+ * Fire-and-forget main-process prewarm for terminal creation:
  * CLI path cache, hook bridge/config install, officecli binary cache.
  */
 export function warmTerminalCreatePath(
   engines?: Array<Exclude<TerminalPreset, 'shell'> | 'shell'>,
 ): void {
-  if (!window.electron?.invoke) return
+  if (!window.electron?.terminal) return
   const list = engines
     ?.filter((engine): engine is Exclude<TerminalPreset, 'shell'> => engine !== 'shell')
-  void window.electron.invoke(
-    'terminal:warmup',
-    list?.length ? { engines: list } : undefined,
-  ).catch(() => undefined)
+  void window.electron.terminal.warmup(list?.length ? { engines: list } : undefined).catch(() => undefined)
 }
 
 export function waitForTerminalMount(): Promise<void> {
@@ -173,7 +170,7 @@ export async function launchTerminalPreset(
 
   try {
     const launchProgram = resolveTerminalLaunchProgram(preset)
-    const result = (await window.electron.invoke('terminal:create', {
+    const result = await window.electron.terminal.create({
       id: terminalId,
       workspaceId,
       cwd: workspacePath,
@@ -183,7 +180,7 @@ export async function launchTerminalPreset(
       command: launchProgram?.command,
       args: launchProgram?.args,
       ...(geometry ? { cols: geometry.cols, rows: geometry.rows } : {}),
-    })) as { pid: number }
+    })
 
     useWorkspaceStore.getState().updateTerminal(terminalId, {
       pid: result.pid,
@@ -207,7 +204,7 @@ export async function launchTerminalPreset(
   }
 }
 
-/** Re-invoke terminal:create for a failed/starting terminal without leaving the pane. */
+/** Retry creation for a failed/starting terminal without leaving the pane. */
 export async function retryTerminalCreate(terminalId: string): Promise<boolean> {
   const terminal = useWorkspaceStore.getState().terminals.find((item) => item.id === terminalId)
   if (!terminal) return false
@@ -225,7 +222,7 @@ export async function retryTerminalCreate(terminalId: string): Promise<boolean> 
 
   try {
     const launchProgram = resolveTerminalLaunchProgram(terminal.preset)
-    const result = (await window.electron.invoke('terminal:create', {
+    const result = await window.electron.terminal.create({
       id: terminalId,
       workspaceId: terminal.workspaceId,
       cwd: terminal.cwd,
@@ -235,7 +232,7 @@ export async function retryTerminalCreate(terminalId: string): Promise<boolean> 
       command: launchProgram?.command,
       args: launchProgram?.args,
       ...(geometry ? { cols: geometry.cols, rows: geometry.rows } : {}),
-    })) as { pid: number }
+    })
 
     useWorkspaceStore.getState().updateTerminal(terminalId, {
       pid: result.pid,
