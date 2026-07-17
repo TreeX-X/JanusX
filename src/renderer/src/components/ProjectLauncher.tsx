@@ -5,8 +5,14 @@
  * 集成项目检测、配置管理、启动运行的完整流程
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type { LaunchConfig } from '@/types/project'
+import {
+  createLatestRequestGuard,
+  executeCurrentTask,
+  getProjectLauncherMode,
+  projectService,
+} from '@/services/project'
 import ProjectSettings from './ProjectSettings'
 import ProjectRunningList from './ProjectRunningList'
 import styles from './ProjectLauncher.module.css'
@@ -26,34 +32,28 @@ export function ProjectLauncher({ projectPath }: ProjectLauncherProps) {
   const [config, setConfig] = useState<LaunchConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const loadGuardRef = useRef(createLatestRequestGuard())
 
   // 加载现有配置
   useEffect(() => {
-    loadConfig()
+    const isCurrent = loadGuardRef.current.begin()
+    void loadConfig(isCurrent)
+    return loadGuardRef.current.cancel
   }, [projectPath])
 
-  async function loadConfig() {
+  async function loadConfig(isCurrent = loadGuardRef.current.begin()) {
     setLoading(true)
     setError(null)
-
-    try {
-      const result = await window.electron.invoke(
-        'project:config:read',
-        projectPath
-      ) as any
-
-      if (result.success) {
-        setConfig(result.data)
-        setMode('running')
-      } else {
-        // 没有配置，进入设置模式进行初始配置
-        setMode('settings')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load config')
-    } finally {
-      setLoading(false)
-    }
+    await executeCurrentTask(isCurrent, () => projectService.readConfig(projectPath), {
+      onSuccess: (loadedConfig) => {
+        setConfig(loadedConfig)
+        setMode(getProjectLauncherMode(loadedConfig))
+      },
+      onError: (err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load config')
+      },
+      onFinally: () => setLoading(false),
+    })
   }
 
   const handleConfigSaved = useCallback((newConfig: LaunchConfig) => {

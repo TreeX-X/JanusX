@@ -39,11 +39,28 @@ export function installElectronApiFallback(): void {
       onExit: () => () => {},
       onFocus: () => () => {},
     },
+    project: {
+      detect: () => unavailableProjectResult(),
+      detectWithDetails: () => unavailableProjectResult(),
+      readConfig: () => unavailableProjectResult(),
+      writeConfig: () => unavailableProjectResult(),
+      createDefaultConfig: () => unavailableProjectResult(),
+      validateConfig: () => unavailableProjectResult(),
+      run: () => unavailableProjectResult(),
+      stop: () => unavailableProjectResult(),
+      list: () => unavailableProjectResult(),
+      get: () => unavailableProjectResult(),
+      schemas: () => unavailableProjectResult(),
+    },
     invoke: () => Promise.resolve(undefined),
     send: () => {},
     on: () => () => {},
     janusPersona: '',
   }
+}
+
+function unavailableProjectResult(): Promise<{ success: false; error: string }> {
+  return Promise.resolve({ success: false, error: 'Electron project API is unavailable' })
 }
 
 function inferPlatform(): NodeJS.Platform {

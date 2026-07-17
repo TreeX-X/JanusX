@@ -6,23 +6,21 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import type { LaunchConfig } from '@/types/project'
+import type { LaunchConfig, RunningProjectSummary } from '@/types/project'
+import {
+  createLatestRequestGuard,
+  createProjectErrorTracker,
+  executeCurrentTask,
+  getRunningProjectFailureState,
+  projectService,
+  startProjectPolling,
+} from '@/services/project'
 import styles from './ProjectRunningList.module.css'
 
 interface ProjectRunningListProps {
   projectPath: string
   config: LaunchConfig | null
   onEditSettings: () => void
-}
-
-interface RunningProject {
-  id: string
-  name: string
-  type: string
-  port?: number
-  pid: number
-  uptime: number
-  output: string[]
 }
 
 /**
@@ -34,105 +32,142 @@ export function ProjectRunningList({
   config,
   onEditSettings,
 }: ProjectRunningListProps) {
-  const [projects, setProjects] = useState<RunningProject[]>([])
+  const [projects, setProjects] = useState<RunningProjectSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   /*-- 用于追踪已选中项目的输出日志 --*/
   const [selectedOutput, setSelectedOutput] = useState<string[]>([])
   const selectedProjectIdRef = useRef<string | null>(null)
+  const listRequestGuardRef = useRef(createLatestRequestGuard())
+  const outputRequestGuardRef = useRef(createLatestRequestGuard())
+  const actionGuardRef = useRef(createLatestRequestGuard())
+  const errorTrackerRef = useRef(createProjectErrorTracker())
 
   /*-- 同步 ref --*/
   useEffect(() => {
     selectedProjectIdRef.current = selectedProjectId
   }, [selectedProjectId])
 
+  const loadProjects = useCallback(async (isCurrent: () => boolean = () => true) => {
+    const isLatest = listRequestGuardRef.current.begin()
+    const errorCheckpoint = errorTrackerRef.current.checkpoint('list')
+    try {
+      const filtered = await projectService.listByWorkspace(projectPath)
+      if (!isCurrent() || !isLatest()) return
+      setProjects(filtered)
+      if (errorTrackerRef.current.clear(errorCheckpoint)) setError(null)
+
+      const currentId = selectedProjectIdRef.current
+      const nextId = currentId && filtered.some((project) => project.id === currentId)
+        ? currentId
+        : filtered[0]?.id ?? null
+      if (nextId !== currentId) {
+        selectedProjectIdRef.current = nextId
+        setSelectedProjectId(nextId)
+        setSelectedOutput([])
+      }
+    } catch (err) {
+      if (!isCurrent() || !isLatest()) return
+      const failure = getRunningProjectFailureState(
+        err instanceof Error ? err.message : 'Failed to load projects',
+        [],
+      )
+      errorTrackerRef.current.record('list')
+      setError(failure.error)
+      setProjects(failure.projects)
+      selectedProjectIdRef.current = null
+      setSelectedProjectId(failure.selectedProjectId)
+      setSelectedOutput(failure.selectedOutput)
+    }
+  }, [projectPath])
+
+  /*-- 获取选中项目的详细信息（包含 output） --*/
+  const fetchSelectedOutput = useCallback(async (id: string, isCurrent: () => boolean = () => true) => {
+    const isLatest = outputRequestGuardRef.current.begin()
+    const errorCheckpoint = errorTrackerRef.current.checkpoint('output')
+    try {
+      const project = await projectService.get(id)
+      if (!isCurrent() || !isLatest() || selectedProjectIdRef.current !== id) return
+      setSelectedOutput(project.output)
+      if (errorTrackerRef.current.clear(errorCheckpoint)) setError(null)
+    } catch (err) {
+      if (!isCurrent() || !isLatest() || selectedProjectIdRef.current !== id) return
+      const error = err instanceof Error ? err.message : 'Failed to load project output'
+      const failure = getRunningProjectFailureState(error, [], id)
+      errorTrackerRef.current.record('output')
+      setError(failure.error)
+      setProjects((current) => getRunningProjectFailureState(error, current, id).projects)
+      selectedProjectIdRef.current = null
+      setSelectedProjectId(failure.selectedProjectId)
+      setSelectedOutput(failure.selectedOutput)
+    }
+  }, [])
+
   // 加载运行中的项目列表（2s 轮询）
   useEffect(() => {
-    loadProjects()
-    const interval = setInterval(loadProjects, 2000)
-    return () => clearInterval(interval)
-  }, [projectPath])
+    actionGuardRef.current.cancel()
+    errorTrackerRef.current.reset()
+    setProjects([])
+    selectedProjectIdRef.current = null
+    setSelectedProjectId(null)
+    setSelectedOutput([])
+    setError(null)
+    setLoading(false)
+    const stopPolling = startProjectPolling((isCurrent) => loadProjects(isCurrent))
+    return () => {
+      stopPolling()
+      actionGuardRef.current.cancel()
+      errorTrackerRef.current.reset()
+    }
+  }, [loadProjects])
 
   /*-- 对选中项目单独轮询 output（2s 间隔） --*/
   useEffect(() => {
+    setSelectedOutput([])
     if (!selectedProjectId) return
-    fetchSelectedOutput()
-    const interval = setInterval(fetchSelectedOutput, 2000)
-    return () => clearInterval(interval)
-  }, [selectedProjectId])
 
-  async function loadProjects() {
-    try {
-      const result = await window.electron.invoke('project:list') as any
-
-      if (result.success) {
-        const filtered = result.data.filter((p: any) =>
-          p.id.startsWith(projectPath)
-        )
-        setProjects(filtered)
-
-        if (filtered.length > 0 && !selectedProjectIdRef.current) {
-          setSelectedProjectId(filtered[0].id)
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load projects:', err)
-    }
-  }
-
-  /*-- 获取选中项目的详细信息（包含 output） --*/
-  async function fetchSelectedOutput() {
-    const id = selectedProjectIdRef.current
-    if (!id) return
-    try {
-      const result = await window.electron.invoke('project:get', id) as any
-      if (result.success && result.data.output) {
-        setSelectedOutput(result.data.output)
-      }
-    } catch {
-      /*-- 静默失败，项目可能已退出 --*/
-    }
-  }
+    return startProjectPolling((isCurrent) => fetchSelectedOutput(selectedProjectId, isCurrent))
+  }, [fetchSelectedOutput, selectedProjectId])
 
   // 启动项目
   const handleRun = useCallback(async (configName: string = 'dev') => {
+    const isCurrent = actionGuardRef.current.begin()
+    const errorCheckpoint = errorTrackerRef.current.checkpoint('run')
     setLoading(true)
-    setError(null)
-
-    try {
-      const result = await window.electron.invoke(
-        'project:run',
-        projectPath,
-        configName
-      ) as any
-
-      if (result.success) {
-        await loadProjects()
-      } else {
-        setError(result.error)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run project')
-    } finally {
-      setLoading(false)
-    }
-  }, [projectPath])
+    await executeCurrentTask(isCurrent, async (taskIsCurrent) => {
+      await projectService.start(projectPath, configName)
+      if (taskIsCurrent()) await loadProjects(taskIsCurrent)
+    }, {
+      onSuccess: () => {
+        if (errorTrackerRef.current.clear(errorCheckpoint)) setError(null)
+      },
+      onError: (err) => {
+        errorTrackerRef.current.record('run')
+        setError(err instanceof Error ? err.message : 'Failed to run project')
+      },
+      onFinally: () => setLoading(false),
+    })
+  }, [loadProjects, projectPath])
 
   // 停止项目
   const handleStop = useCallback(async (projectId: string) => {
-    try {
-      const result = await window.electron.invoke('project:stop', projectId) as any
-
-      if (result.success) {
-        await loadProjects()
-      } else {
-        setError(result.error)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to stop project')
-    }
-  }, [])
+    const isCurrent = actionGuardRef.current.begin()
+    const errorCheckpoint = errorTrackerRef.current.checkpoint('stop')
+    await executeCurrentTask(isCurrent, async (taskIsCurrent) => {
+      await projectService.stop(projectId)
+      if (taskIsCurrent()) await loadProjects(taskIsCurrent)
+    }, {
+      onSuccess: () => {
+        if (errorTrackerRef.current.clear(errorCheckpoint)) setError(null)
+      },
+      onError: (err) => {
+        errorTrackerRef.current.record('stop')
+        setError(err instanceof Error ? err.message : 'Failed to stop project')
+      },
+      onFinally: () => setLoading(false),
+    })
+  }, [loadProjects])
 
   const selectedProject = projects.find(p => p.id === selectedProjectId)
 

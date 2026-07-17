@@ -42,7 +42,7 @@ When adding IPC:
 4. Use the typed domain API from renderer components/stores/services.
 5. Add contract tests for registration, argument order, generic rejection, and event unsubscribe behavior.
 
-Workspace/File/FileTree and Terminal follow this design today. Project, knowledge, Janus, LLM, Office, agent, checkpoint, settings, and other domains remain incremental migration work.
+Workspace/File/FileTree, Terminal, and Project request/response operations follow this design today. Knowledge, Janus, LLM, Office, agent, checkpoint, settings, and other domains remain incremental migration work.
 
 ## Terminal Creation And Checkpointing
 
@@ -87,15 +87,19 @@ Core files:
 
 ```text
 ProjectLauncher / ProjectSettings
--> project:detect-with-details
+-> projectService
+-> window.electron.project typed preload API
+-> shared Project channel and result contract
 -> ProjectDetector reads feature files/package manifests
 -> ProjectConfig creates/validates .janusX/janusX.launch.json
--> ProjectRunningList project:run
+-> ProjectRunningList guarded run/list/get/stop polling
 -> ProjectRunner
 -> CommandBuilder
 -> child process spawn
--> project started/output/ready/exit events
+-> serialized list/output polling back to renderer state
 ```
+
+`ProjectRunner` started/output/ready/exit/error events remain internal to main. The renderer does not subscribe to a parallel event protocol; polling is immediate, non-overlapping, lifecycle-cancelled, and guarded against stale path/action completions.
 
 Supported project types include Next.js, Vite, Electron Vite, CRA, Remix, Rust, Go, C++ CMake, C++ Make, Django, Flask, FastAPI, Laravel, Unknown, and Custom.
 

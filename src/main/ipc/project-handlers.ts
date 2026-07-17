@@ -13,7 +13,11 @@ import ProjectDetector from '../project/detector/detector'
 import ProjectRunner from '../project/runner/runner'
 import ProjectConfig from '../project/config/project-config'
 import { getProjectTypes } from '../project/config/project-schemas'
-import type { LaunchConfig, ProjectType } from '../project/types'
+import {
+  PROJECT_CHANNELS,
+  type LaunchConfig,
+  type ProjectType,
+} from '../../shared/ipc/project'
 
 // 全局 ProjectRunner 实例（单例）
 let projectRunner: ProjectRunner | null = null
@@ -54,7 +58,7 @@ export function registerProjectHandlers() {
    * @param projectPath 项目根目录
    * @returns 项目类型
    */
-  ipcMain.handle('project:detect', async (_, projectPath: string) => {
+  ipcMain.handle(PROJECT_CHANNELS.detect, async (_, projectPath: string) => {
     try {
       const type = await ProjectDetector.detect(projectPath)
       return {
@@ -74,7 +78,7 @@ export function registerProjectHandlers() {
    * @param projectPath 项目根目录
    * @returns 检测结果（包括置信度、特征文件、推荐配置）
    */
-  ipcMain.handle('project:detect-with-details', async (_, projectPath: string) => {
+  ipcMain.handle(PROJECT_CHANNELS.detectWithDetails, async (_, projectPath: string) => {
     try {
       const result = await ProjectDetector.detectWithDetails(projectPath)
       return {
@@ -98,7 +102,7 @@ export function registerProjectHandlers() {
    * @param projectPath 项目根目录
    * @returns .janusX/janusX.launch.json 配置，若不存在返回 null
    */
-  ipcMain.handle('project:config:read', async (_, projectPath: string) => {
+  ipcMain.handle(PROJECT_CHANNELS.readConfig, async (_, projectPath: string) => {
     try {
       const config = await ProjectConfig.read(projectPath)
       return {
@@ -118,7 +122,7 @@ export function registerProjectHandlers() {
    * @param projectPath 项目根目录
    * @param config 配置对象
    */
-  ipcMain.handle('project:config:write', async (_, projectPath: string, config: LaunchConfig) => {
+  ipcMain.handle(PROJECT_CHANNELS.writeConfig, async (_, projectPath: string, config: LaunchConfig) => {
     try {
       await ProjectConfig.write(projectPath, config)
       return {
@@ -140,7 +144,7 @@ export function registerProjectHandlers() {
    * @returns 创建的配置
    */
   ipcMain.handle(
-    'project:config:create-default',
+    PROJECT_CHANNELS.createDefaultConfig,
     async (_, ...args: [projectPath: string, projectType: ProjectType, projectName: string]) => {
       try {
         const [projectPath, projectType, projectName] = args
@@ -167,7 +171,7 @@ export function registerProjectHandlers() {
    * @param config 配置对象
    * @returns 验证结果
    */
-  ipcMain.handle('project:config:validate', async (_, config: LaunchConfig) => {
+  ipcMain.handle(PROJECT_CHANNELS.validateConfig, async (_, config: LaunchConfig) => {
     try {
       const result = ProjectConfig.validate(config)
       return {
@@ -193,7 +197,7 @@ export function registerProjectHandlers() {
    * @returns 进程信息
    */
   ipcMain.handle(
-    'project:run',
+    PROJECT_CHANNELS.run,
     async (_, projectPath: string, configName: string = 'dev') => {
       try {
         const runner = getProjectRunner()
@@ -220,7 +224,7 @@ export function registerProjectHandlers() {
    * 停止项目
    * @param projectId 项目 ID（通常是项目路径）
    */
-  ipcMain.handle('project:stop', async (_, projectId: string) => {
+  ipcMain.handle(PROJECT_CHANNELS.stop, async (_, projectId: string) => {
     try {
       const runner = getProjectRunner()
       await runner.stop(projectId)
@@ -240,7 +244,7 @@ export function registerProjectHandlers() {
    * 获取运行中的项目列表
    * @returns 所有运行中的项目
    */
-  ipcMain.handle('project:list', async () => {
+  ipcMain.handle(PROJECT_CHANNELS.list, async () => {
     try {
       const runner = getProjectRunner()
       const running = runner.getAllRunning()
@@ -271,7 +275,7 @@ export function registerProjectHandlers() {
    * 获取单个运行中的项目信息
    * @param projectId 项目 ID
    */
-  ipcMain.handle('project:get', async (_, projectId: string) => {
+  ipcMain.handle(PROJECT_CHANNELS.get, async (_, projectId: string) => {
     try {
       const runner = getProjectRunner()
       const handle = runner.getRunning(projectId)
@@ -309,7 +313,7 @@ export function registerProjectHandlers() {
    * 获取所有项目类型 Schema
    * @returns 所有支持的项目类型 Schema 列表
    */
-  ipcMain.handle('project:schemas', async () => {
+  ipcMain.handle(PROJECT_CHANNELS.schemas, async () => {
     try {
       return {
         success: true,

@@ -16,6 +16,7 @@ import {
   TERMINAL_SEND_CHANNELS,
   type TerminalAPI,
 } from '../shared/ipc/terminal'
+import { PROJECT_CHANNELS, type ProjectAPI } from '../shared/ipc/project'
 
 const ALLOWED_INVOKE_CHANNELS = [
   ...Object.values(OFFICE_INVOKE_CHANNELS),
@@ -54,17 +55,6 @@ const ALLOWED_INVOKE_CHANNELS = [
   'checkpoint:diff:all',
   'checkpoint:delete',
   'checkpoint:clearAll',
-  'project:detect',
-  'project:detect-with-details',
-  'project:config:read',
-  'project:config:write',
-  'project:config:create-default',
-  'project:config:validate',
-  'project:run',
-  'project:stop',
-  'project:list',
-  'project:get',
-  'project:schemas',
   // LLM 相关频道
   'llm:get-providers',
   'llm:save-provider',
@@ -209,6 +199,21 @@ const terminalAPI: TerminalAPI = {
   onFocus: (callback) => subscribeTerminalEvent(TERMINAL_EVENT_CHANNELS.focus, callback),
 }
 
+const projectAPI: ProjectAPI = {
+  detect: (projectPath) => ipcRenderer.invoke(PROJECT_CHANNELS.detect, projectPath),
+  detectWithDetails: (projectPath) => ipcRenderer.invoke(PROJECT_CHANNELS.detectWithDetails, projectPath),
+  readConfig: (projectPath) => ipcRenderer.invoke(PROJECT_CHANNELS.readConfig, projectPath),
+  writeConfig: (projectPath, config) => ipcRenderer.invoke(PROJECT_CHANNELS.writeConfig, projectPath, config),
+  createDefaultConfig: (projectPath, projectType, projectName) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.createDefaultConfig, projectPath, projectType, projectName),
+  validateConfig: (config) => ipcRenderer.invoke(PROJECT_CHANNELS.validateConfig, config),
+  run: (projectPath, configName) => ipcRenderer.invoke(PROJECT_CHANNELS.run, projectPath, configName),
+  stop: (projectId) => ipcRenderer.invoke(PROJECT_CHANNELS.stop, projectId),
+  list: () => ipcRenderer.invoke(PROJECT_CHANNELS.list),
+  get: (projectId) => ipcRenderer.invoke(PROJECT_CHANNELS.get, projectId),
+  schemas: () => ipcRenderer.invoke(PROJECT_CHANNELS.schemas),
+}
+
 contextBridge.exposeInMainWorld('electron', {
   /*-- 同步暴露平台与 Windows build 号，供渲染端构造 xterm windowsPty 用 --*/
   /*-- preload 在 Node 环境，可同步读取；os.release() 形如 "10.0.22621"，第三段为 build 号 --*/
@@ -222,6 +227,7 @@ contextBridge.exposeInMainWorld('electron', {
   fileTree: fileTreeAPI,
   file: fileAPI,
   terminal: terminalAPI,
+  project: projectAPI,
 
   invoke: (channel: string, ...args: unknown[]) => {
     if (ALLOWED_INVOKE_CHANNELS.includes(channel)) {

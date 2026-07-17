@@ -1,5 +1,6 @@
 import type { FileAPI, FileTreeAPI, WorkspaceAPI } from '../../../shared/ipc/workspace'
 import type { TerminalAPI } from '../../../shared/ipc/terminal'
+import type { ProjectAPI } from '../../../shared/ipc/project'
 
 interface ElectronAPI {
   /*-- 同步平台信息，构造 xterm windowsPty 用 --*/
@@ -12,6 +13,7 @@ interface ElectronAPI {
   fileTree: FileTreeAPI
   file: FileAPI
   terminal: TerminalAPI
+  project: ProjectAPI
   janusPersona: string
 }
 

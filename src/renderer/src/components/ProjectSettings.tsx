@@ -5,9 +5,14 @@
  * 集成：项目类型选择 + 配置表单 + JSON 编辑
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ProjectType } from '@/types/project'
 import type { LaunchConfig, DetectResult, ProjectTypeSchema } from '@/types/project'
+import {
+  createLatestRequestGuard,
+  getProjectValidationError,
+  projectService,
+} from '@/services/project'
 import ProjectTypeSelector from './ProjectTypeSelector'
 import QuickConfigForm from './ProjectConfigForm/QuickConfigForm'
 import JsonEditor from './ProjectConfigForm/JsonEditor'
@@ -34,52 +39,57 @@ export function ProjectSettings({ projectPath, onSave, onCancel }: ProjectSettin
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const initializationGuardRef = useRef(createLatestRequestGuard())
+  const saveGuardRef = useRef(createLatestRequestGuard())
 
   // 初始化：检测项目并创建默认配置
   useEffect(() => {
-    initializeSettings()
+    saveGuardRef.current.cancel()
+    setSaving(false)
+    const isCurrent = initializationGuardRef.current.begin()
+    void initializeSettingsForRequest(isCurrent)
+    return () => {
+      initializationGuardRef.current.cancel()
+      saveGuardRef.current.cancel()
+    }
   }, [projectPath])
 
   async function initializeSettings() {
+    saveGuardRef.current.cancel()
+    setSaving(false)
+    await initializeSettingsForRequest(initializationGuardRef.current.begin())
+  }
+
+  async function initializeSettingsForRequest(isCurrent: () => boolean) {
     setLoading(true)
     setError(null)
 
     try {
       // 1. 并行：详细检测项目 + 获取所有 Schema
-      const [detectionResult, schemasResult] = await Promise.all([
-        window.electron.invoke('project:detect-with-details', projectPath) as Promise<any>,
-        window.electron.invoke('project:schemas') as Promise<any>,
+      const [detectionResult, availableSchemas] = await Promise.all([
+        projectService.detectWithDetails(projectPath),
+        projectService.schemas(),
       ])
-
-      if (!detectionResult.success) {
-        throw new Error(detectionResult.error)
-      }
-
-      setDetection(detectionResult.data)
-
-      if (schemasResult.success) {
-        setSchemas(schemasResult.data)
-      }
+      if (!isCurrent()) return
+      setDetection(detectionResult)
+      setSchemas(availableSchemas)
 
       // 2. 尝试读取现有配置
-      const configResult = await window.electron.invoke(
-        'project:config:read',
-        projectPath
-      ) as any
+      const existingConfig = await projectService.readConfig(projectPath)
+      if (!isCurrent()) return
 
-      if (configResult.success && configResult.data) {
-        const existingConfig = configResult.data
+      if (existingConfig) {
         // 如果已有配置是自动检测的，但类型与当前检测不一致，用检测结果更新
         if (
           existingConfig.metadata?.autoDetected &&
-          existingConfig.projectType !== detectionResult.data.type
+          existingConfig.projectType !== detectionResult.type
         ) {
           const updatedConfig = {
             ...existingConfig,
-            projectType: detectionResult.data.type,
-            configurations: existingConfig.configurations.map((cfg: any) => ({
+            projectType: detectionResult.type,
+            configurations: existingConfig.configurations.map((cfg) => ({
               ...cfg,
-              type: detectionResult.data.type,
+              type: detectionResult.type,
             })),
           }
           setConfig(updatedConfig)
@@ -90,29 +100,27 @@ export function ProjectSettings({ projectPath, onSave, onCancel }: ProjectSettin
       } else {
         // 3. 创建默认配置
         const projectName = projectPath.split(/[/\\]/).pop() || 'app'
-        const defaultResult = await window.electron.invoke(
-          'project:config:create-default',
+        const defaultConfig = await projectService.createDefaultConfig(
           projectPath,
-          detectionResult.data.type,
-          projectName
-        ) as any
-
-        if (defaultResult.success) {
-          setConfig(defaultResult.data)
-        } else {
-          throw new Error(defaultResult.error)
-        }
+          detectionResult.type,
+          projectName,
+        )
+        if (!isCurrent()) return
+        setConfig(defaultConfig)
       }
     } catch (err) {
+      if (!isCurrent()) return
       setError(err instanceof Error ? err.message : 'Failed to initialize')
     } finally {
-      setLoading(false)
+      if (isCurrent()) setLoading(false)
     }
   }
 
   // 处理项目类型切换
   const handleTypeChange = useCallback((newType: ProjectType) => {
     if (!config || !detection) return
+    saveGuardRef.current.cancel()
+    setSaving(false)
 
     const updatedConfig: LaunchConfig = {
       ...config,
@@ -130,6 +138,8 @@ export function ProjectSettings({ projectPath, onSave, onCancel }: ProjectSettin
   // 处理配置更改
   const handleConfigChange = useCallback((updates: Partial<LaunchConfig>) => {
     if (!config) return
+    saveGuardRef.current.cancel()
+    setSaving(false)
 
     const updatedConfig: LaunchConfig = {
       ...config,
@@ -142,6 +152,8 @@ export function ProjectSettings({ projectPath, onSave, onCancel }: ProjectSettin
 
   // 处理 JSON 编辑
   const handleJsonChange = useCallback((jsonString: string) => {
+    saveGuardRef.current.cancel()
+    setSaving(false)
     try {
       const parsed = JSON.parse(jsonString) as LaunchConfig
       setConfig(parsed)
@@ -156,40 +168,29 @@ export function ProjectSettings({ projectPath, onSave, onCancel }: ProjectSettin
   const handleSave = useCallback(async () => {
     if (!config) return
 
+    const isCurrent = saveGuardRef.current.begin()
+    const configToSave = config
     setSaving(true)
     setError(null)
 
     try {
       // 验证配置
-      const validation = await window.electron.invoke(
-        'project:config:validate',
-        config
-      ) as any
+      const validation = await projectService.validateConfig(configToSave)
+      if (!isCurrent()) return
 
-      if (!validation.success) {
-        const errorMessages = validation.data.errors
-          .map((e: any) => e.message)
-          .join('; ')
-        throw new Error(`Validation failed: ${errorMessages}`)
-      }
+      const validationError = getProjectValidationError(validation)
+      if (validationError) throw new Error(validationError)
 
       // 保存配置
-      const saveResult = await window.electron.invoke(
-        'project:config:write',
-        projectPath,
-        config
-      ) as any
-
-      if (saveResult.success) {
-        setUnsavedChanges(false)
-        onSave(config)
-      } else {
-        throw new Error(saveResult.error)
-      }
+      await projectService.writeConfig(projectPath, configToSave)
+      if (!isCurrent()) return
+      setUnsavedChanges(false)
+      onSave(configToSave)
     } catch (err) {
+      if (!isCurrent()) return
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
-      setSaving(false)
+      if (isCurrent()) setSaving(false)
     }
   }, [config, projectPath, onSave])
 

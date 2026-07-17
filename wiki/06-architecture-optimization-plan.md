@@ -30,7 +30,7 @@ Implementation reviewed: 2026-07-17
 |---|---|---|
 | Phase 1 — proven redundancy | Complete | Five dead tracked paths removed; unused declarations resolved individually; strict-unused diagnostics reduced to 0; affected Wiki entries repaired. |
 | Phase 2 — package isolation | Complete for release safety | Electron Builder includes only `out/main/**`, `out/preload/**`, `out/renderer/**`, and `package.json`; a fail-closed package-boundary gate is covered by adversarial tests. The 31 ignored root screenshots remain untouched pending an archive-location decision. |
-| Phase 3 — first typed IPC slice | Complete | Workspace/File/FileTree and Terminal use pure shared contracts, fixed preload domain APIs, typed main handlers/producers, and migrated renderer callers. No generic string-channel call remains for those migrated domains. |
+| Phase 3 — typed IPC slices | Complete | Workspace/File/FileTree, Terminal, and Project request/response operations use pure shared contracts, fixed preload domain APIs, typed main handlers/producers, and migrated renderer callers. No generic string-channel call remains for those domains. |
 | Phases 4–5 | Pending | Main/renderer controller extraction, remaining IPC domains, broader E2E smoke coverage, CI release gate, and product decisions remain. |
 
 Current verification: `npm run typecheck`, `npm run typecheck:strict-unused`, 75 unit test files / 561 tests, LLM Core typecheck / 63 tests, production build, package-boundary gate, and `git diff --check` all pass.
@@ -52,7 +52,7 @@ Current verification: `npm run typecheck`, `npm run typecheck:strict-unused`, 75
 ### Current Runtime Flow
 
 1. Electron starts from src/main/index.ts, creates windows, initializes services, and registers domain IPC handlers.
-2. Migrated Workspace/File/FileTree and Terminal callers use fixed `window.electron` domain APIs; remaining domains still use generic invoke/send/on during the incremental migration.
+2. Migrated Workspace/File/FileTree, Terminal, and Project callers use fixed `window.electron` domain APIs; remaining domains still use generic invoke/send/on during the incremental migration.
 3. Fixed preload adapters forward migrated calls with shared types; the generic compatibility path still checks manually maintained allowlists and forwards string channels for unmigrated domains.
 4. Main-process IPC handlers delegate to terminal, project, agent, knowledge, office, LLM, or Janus services.
 5. Renderer components, stores, and services render results and maintain UI state.
@@ -73,7 +73,7 @@ The target still uses Electron IPC. The change is ownership and type safety: cha
 ## Key Code Interpretation
 
 - src/main/index.ts: Current composition root. It configures session paths and CSP, builds the main and editor windows, registers fourteen IPC areas, and owns shutdown wiring. The role is valid; the accumulated responsibilities are too broad for a single file.
-- src/preload/index.ts: Security boundary with typed Workspace/File/FileTree/Terminal domain APIs plus temporary generic allowlists for remaining domains. The remaining generic API still prevents compile-time agreement outside migrated slices.
+- src/preload/index.ts: Security boundary with typed Workspace/File/FileTree/Terminal/Project domain APIs plus temporary generic allowlists for remaining domains. The remaining generic API still prevents compile-time agreement outside migrated slices.
 - src/renderer/src/App.tsx: Application shell plus initialization, workspace file-tree refresh, Office preview layout, and panel behavior. It should remain a shell after data-loading actions move into stores/services.
 - src/renderer/src/components/blueprint/BlueprintCanvas.tsx: A 1654-line graph, dialog, analysis, and terminal orchestration component. It is the highest renderer refactoring priority.
 - src/renderer/src/components/TerminalArea.tsx: A 1453-line terminal layout and lifecycle component. Terminal launch is centralized in `lib/terminal-launch.ts`; pane, tab, layout, lifecycle, and view orchestration remain concentrated here.
@@ -87,7 +87,7 @@ The target still uses Electron IPC. The change is ownership and type safety: cha
 | Risk Item | Pre-Implementation Evidence | Current Status | Priority |
 |---|---|---|---|
 | Mixed build output and screenshots | 31 top-level PNGs / 3.69 MB were inside broadly packaged `out` | Release risk resolved by explicit globs and gate; archive location remains pending | High |
-| Generic IPC bridge and contract drift | 122 allowed invoke channels plus known handler/producer gaps | Resolved for Workspace/File/FileTree/Terminal; remaining generic domains and known drift require incremental migration | High |
+| Generic IPC bridge and contract drift | 122 allowed invoke channels plus known handler/producer gaps | Resolved for Workspace/File/FileTree/Terminal/Project request-response operations; remaining generic domains require incremental migration | High |
 | Renderer god components | BlueprintCanvas 1701 lines; TerminalArea 1428; Panel 874 | Open: current files remain 1654 / 1453 / 871 lines and need responsibility-based extraction | High |
 | Dead or invalid tracked files | Root bundle, invalid image payloads, unused icon/window helper | Resolved: confirmed dead tracked files removed and verified | High |
 | Stale duplicated window implementation | Unused `src/main/window.ts` with conflicting preload/security assumptions | Resolved: file deleted and Wiki indexes repaired | Medium |
@@ -165,7 +165,7 @@ Migration order:
 
 1. Workspace and file tree: repeated calls in App, Sidebar, and Panel give immediate duplication reduction.
 2. Terminal: consolidate create, input, resize, replay, and lifecycle events.
-3. Project runner: decide whether live events are a supported feature before exposing them.
+3. Project runner: request/response migration is complete; polling remains the renderer synchronization contract while live events await a product decision.
 4. Knowledge and Blueprint: migrate after their planned cleanup because their channel counts are larger.
 5. LLM and Office: preserve their existing typed shared constants where useful, but align them with the same contract model.
 
@@ -301,11 +301,11 @@ Scope: out and package configuration.
 
 Exit criteria: no screenshot/debug PNG is present in the application package.
 
-### Phase 3 — Migrate Workspace and Terminal IPC
+### Phase 3 — Migrate Workspace, Terminal, and Project IPC
 
-Scope: First typed contract slice.
+Scope: First three typed domain slices.
 
-- Add shared contracts and typed preload APIs for workspace/file tree and terminal operations.
+- Add shared contracts and typed preload APIs for workspace/file tree, terminal, and Project request/response operations.
 - Consolidate duplicate file-tree loads and terminal creation.
 - Add IPC contract and renderer integration tests for the migrated domains.
 
@@ -350,12 +350,12 @@ Track these before and after each phase:
 | Metric | Baseline | Current | Target |
 |---|---|---|---|
 | Top-level non-build files in out | 31 PNG files / 3.69 MB | Unchanged on disk; excluded from packages | 0 after archive location is confirmed |
-| Generic preload invoke channels | 122 | Workspace/File/FileTree and Terminal removed from generic bridge | 0 after complete domain migration |
+| Generic preload invoke channels | 122 | Workspace/File/FileTree, Terminal, and Project removed from generic bridge | 0 after complete domain migration |
 | Main/preload contract drift | At least 4 observed inconsistencies | 0 in migrated domains | 0 across all domains |
 | Strict unused-symbol diagnostics | 35 baseline candidates, excluding current user WIP | 0 | 0, with CI enforcement |
 | Renderer direct bridge files | 29 files / about 150 calls | No generic migrated-domain calls remain | Only typed domain-client implementations |
 | BlueprintCanvas and TerminalArea | 1701 / 1428 lines | Controller extraction not started | Reduced by responsibility extraction; no artificial line-count target |
-| Unit coverage | 67 files / 520 tests at plan baseline | 75 files / 561 tests | Maintain green domain and contract coverage |
+| Unit coverage | 67 files / 520 tests at plan baseline | 77 files / 580 tests | Maintain green domain and contract coverage |
 | E2E workflow coverage | 1 focused spec | Unchanged | At least startup plus terminal/workspace/project critical-path smoke coverage |
 
 ## Pending Confirmation
