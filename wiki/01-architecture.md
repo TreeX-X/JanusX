@@ -65,7 +65,7 @@ Knowledge auto-prune, archive, and compact handlers remain main-internal mainten
 
 ## Verification Boundary
 
-`npm run verify` is the release gate enforced by `.github/workflows/verify.yml` on Windows. It runs both workspace type checks and test suites, strict unused-symbol validation, one production build, package-boundary validation, and the already-built Electron desktop smoke.
+`npm run verify` is the release gate enforced by `.github/workflows/verify.yml` on Windows. Root typecheck resolves LLM Core from source so it works before generated output exists; after both type checks, the gate materializes the LLM Core package required by root runtime tests. It then runs both test suites, strict unused-symbol validation, one production build, package-boundary validation, and the already-built Electron desktop smoke.
 
 `playwright.desktop.config.ts` launches `out/main/index.js` without a web server and exercises the fixed Workspace, Terminal, and Project preload APIs using isolated temporary state. The existing `playwright.config.ts` remains the browser-only Island harness; each configuration explicitly collects only its own test surface.
 

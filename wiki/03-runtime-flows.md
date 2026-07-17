@@ -162,6 +162,7 @@ Both Island events are produced with shared channel constants. Preload subscript
 ```text
 npm run verify
 -> root and LLM Core type checks
+-> build LLM Core package for root runtime-test resolution
 -> root and LLM Core unit tests
 -> strict unused-symbol check
 -> production Electron build

@@ -32,7 +32,7 @@
     "typecheck:llm-core": "npm run typecheck --workspace=@janusx/llm-core",
     "lint": "eslint src --ext .ts,.tsx",
     "check:package-boundary": "node scripts/check-package-boundary.mjs",
-    "verify": "npm run typecheck && npm run typecheck:llm-core && npm run test:unit -- --run && npm run test:llm-core && npm run typecheck:strict-unused && npm run build && npm run check:package-boundary && npm run test:e2e:desktop",
+    "verify": "npm run typecheck && npm run typecheck:llm-core && npm run build:llm-core && npm run test:unit -- --run && npm run test:llm-core && npm run typecheck:strict-unused && npm run build && npm run check:package-boundary && npm run test:e2e:desktop",
     "package:win": "npm run build && npm run check:package-boundary && electron-builder --win",
     "package:mac": "npm run build && npm run check:package-boundary && electron-builder --mac",
     "package:linux": "npm run build && npm run check:package-boundary && electron-builder --linux"

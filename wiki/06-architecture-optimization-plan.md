@@ -254,7 +254,7 @@ Add a verify script that runs, in order:
 5. Strict unused-symbol check after the existing backlog is resolved.
 6. A packaged or production-build desktop smoke test.
 
-Implemented 2026-07-17: `npm run verify` runs the complete sequence once and is enforced by a `windows-latest` workflow. The final step launches the built Electron entry with isolated user data, exercises Workspace, Terminal, and Project critical paths, and performs bounded failure-safe cleanup. The Island browser harness remains separate.
+Implemented 2026-07-17: `npm run verify` is enforced by a `windows-latest` workflow. Root TypeScript resolves LLM Core from source in a clean checkout; after both type checks, the gate builds the workspace package required by root runtime tests. The final step launches the built Electron entry with isolated user data, exercises Workspace, Terminal, and Project critical paths, and performs bounded failure-safe cleanup. The Island browser harness remains separate.
 
 Use staged adoption for noUnusedLocals and noUnusedParameters: resolve the current baseline first, then make the setting blocking. Do not introduce a permanently ignored error list.
 
