@@ -17,50 +17,50 @@ import type { KnowledgeRecallTrace } from '../../../shared/knowledge'
 
 /** 获取所有 Provider 配置 */
 export async function getProviders(): Promise<ProviderSettings[]> {
-  return window.electron.invoke('llm:get-providers') as Promise<ProviderSettings[]>
+  return window.electron.llm.getProviders()
 }
 
 /** 保存 Provider 配置 */
 export async function saveProvider(settings: ProviderSettings): Promise<{ success: boolean; error?: string }> {
-  return window.electron.invoke('llm:save-provider', settings) as Promise<{ success: boolean; error?: string }>
+  return window.electron.llm.saveProvider(settings)
 }
 
 /** 测试连接 */
 export async function testConnection(settings: ProviderSettings & { testModel?: string }): Promise<{ success: boolean; latency?: number; error?: string }> {
-  return window.electron.invoke('llm:test-connection', settings) as Promise<{ success: boolean; latency?: number; error?: string }>
+  return window.electron.llm.testConnection(settings)
 }
 
 /** 删除 Provider */
 export async function removeProvider(providerId: string): Promise<{ success: boolean; error?: string }> {
-  return window.electron.invoke('llm:remove-provider', providerId) as Promise<{ success: boolean; error?: string }>
+  return window.electron.llm.removeProvider(providerId)
 }
 
 /** 设置默认 Provider */
 export async function setDefaultProvider(providerId: string): Promise<{ success: boolean }> {
-  return window.electron.invoke('llm:set-default-provider', providerId) as Promise<{ success: boolean }>
+  return window.electron.llm.setDefaultProvider(providerId)
 }
 
 /** 获取可用模型列表 */
 export async function listModels(providerId: string): Promise<ModelInfo[]> {
-  return window.electron.invoke('llm:list-models', providerId) as Promise<ModelInfo[]>
+  return window.electron.llm.listModels(providerId)
 }
 
 export async function getModelCatalog(): Promise<ModelCatalogSnapshot> {
-  return window.electron.invoke('llm:model-catalog:get') as Promise<ModelCatalogSnapshot>
+  return window.electron.llm.getModelCatalog()
 }
 
 export async function refreshModelCatalog(): Promise<ModelCatalogRefreshResult> {
-  return window.electron.invoke('llm:model-catalog:refresh') as Promise<ModelCatalogRefreshResult>
+  return window.electron.llm.refreshModelCatalog()
 }
 
 /** 获取可用适配器类型 */
 export async function getAdapters(): Promise<Array<{ id: string; name: string; authType: string }>> {
-  return window.electron.invoke('llm:get-adapters') as Promise<Array<{ id: string; name: string; authType: string }>>
+  return window.electron.llm.getAdapters()
 }
 
 /** 获取默认 Provider */
 export async function getDefaultProvider(): Promise<{ provider: ProviderSettings; modelId: string } | null> {
-  return window.electron.invoke('llm:get-default-provider') as Promise<{ provider: ProviderSettings; modelId: string } | null>
+  return window.electron.llm.getDefaultProvider()
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -82,14 +82,14 @@ export async function chat(
   const targetProvider = providerId || (await getDefaultProvider())?.provider.id
   if (!targetProvider) throw new Error('未配置 LLM Provider')
 
-  return window.electron.invoke('llm:chat', {
+  return window.electron.llm.chat({
     messages,
     providerId: targetProvider,
     modelId,
     sourceTag: options?.sourceTag,
     workspaceId: options?.workspaceId,
     workspacePath: options?.workspacePath,
-  }) as Promise<string>
+  })
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -145,13 +145,13 @@ export function chatStream(
     return p?.requestId === requestId ? p : null
   }
 
-  const unsubDelta = window.electron.on('llm:chat:delta', (payload: unknown) => {
+  const unsubDelta = window.electron.llm.onDelta((payload) => {
     const p = filterByRequest(payload)
     if (!p || p.done) return
     onDelta(p.delta ?? '')
   })
 
-  const unsubDone = window.electron.on('llm:chat:done', (payload: unknown) => {
+  const unsubDone = window.electron.llm.onDone((payload) => {
     const p = filterByRequest(payload)
     if (!p || doneCalled) return
     doneCalled = true
@@ -159,7 +159,7 @@ export function chatStream(
     onDone()
   })
 
-  const unsubError = window.electron.on('llm:chat:error', (payload: unknown) => {
+  const unsubError = window.electron.llm.onError((payload) => {
     const p = filterByRequest(payload)
     if (!p) return
     console.error('[chatStream] error accepted:', p.error)
@@ -167,7 +167,7 @@ export function chatStream(
     onError(p.error ?? '未知错误')
   })
 
-  const unsubRecallTrace = window.electron.on('llm:chat:recall-trace', (payload: unknown) => {
+  const unsubRecallTrace = window.electron.llm.onRecallTrace((payload) => {
     const trace = payload as KnowledgeRecallTrace | undefined
     if (trace?.requestId !== requestId) return
     options?.onRecallTrace?.(trace)
@@ -187,7 +187,7 @@ export function chatStream(
         onError('未配置默认 LLM Provider')
         return
       }
-      window.electron.send('llm:chat-stream', {
+      window.electron.llm.startChatStream({
         requestId,
         messages,
         providerId: def.providerId,
@@ -206,7 +206,7 @@ export function chatStream(
   return {
     abort: () => {
       cleanup()
-      window.electron.invoke('llm:chat:abort', requestId).catch(() => {})
+      window.electron.llm.abortChat(requestId).catch(() => {})
     }
   }
 }

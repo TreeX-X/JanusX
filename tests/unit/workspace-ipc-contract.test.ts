@@ -13,7 +13,6 @@ const on = vi.fn()
 const removeListener = vi.fn()
 const handle = vi.fn()
 let exposedApi: {
-  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
   workspace: WorkspaceAPI
   fileTree: FileTreeAPI
   file: FileAPI
@@ -85,10 +84,9 @@ describe('Workspace/File IPC contract', () => {
     expect(removeListener).toHaveBeenCalledWith(FILE_TREE_CHANNELS.changed, handler)
   })
 
-  it('does not expose migrated channels through the generic bridge', async () => {
-    await expect(exposedApi.invoke(WORKSPACE_CHANNELS.list)).rejects.toThrow('is not allowed')
-    await expect(exposedApi.invoke(FILE_TREE_CHANNELS.load, 'C:\\workspace')).rejects.toThrow('is not allowed')
-    await expect(exposedApi.invoke(FILE_CHANNELS.read, 'C:\\workspace\\file.txt')).rejects.toThrow('is not allowed')
-    expect(invoke).not.toHaveBeenCalled()
+  it('does not expose a generic bridge', () => {
+    expect(exposedApi).not.toHaveProperty('invoke')
+    expect(exposedApi).not.toHaveProperty('send')
+    expect(exposedApi).not.toHaveProperty('on')
   })
 })

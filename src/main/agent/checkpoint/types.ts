@@ -1,6 +1,5 @@
-import type { AgentEngine } from '../types'
-
-export type CheckpointEngine = AgentEngine | 'shell' | 'manual'
+import type { CheckpointEngine } from '../../../shared/ipc/checkpoint'
+export type { CheckpointEngine } from '../../../shared/ipc/checkpoint'
 
 export interface SnapshotFileEntry {
   path: string

@@ -20,7 +20,10 @@ Use this as a lookup table before opening source.
 
 | File / Directory | Function |
 |---|---|
-| `src/main/index.ts` | main Electron entry; creates window; registers all IPC handlers |
+| `src/main/index.ts` | compact Electron lifecycle coordinator |
+| `src/main/bootstrap/session.ts`, `services.ts` | Chromium/CSP setup and application service graph |
+| `src/main/windows/` | renderer loading, main/editor window construction, and window IPC |
+| `src/main/ipc/register.ts` | ordered application IPC composition |
 | `src/main/config/service.ts` | global config persistence in `userData/janusx/config.json` |
 | `src/main/workspace/types.ts` | workspace/global config types |
 | `src/main/ipc/handlers.ts` | workspace and file tree handlers |
@@ -44,7 +47,7 @@ Use this as a lookup table before opening source.
 | `src/shared/ipc/project.ts` | typed Project commands, clone-safe DTOs/results, and preload domain API |
 | `src/shared/ipc/knowledge.ts` | typed public Knowledge/Settings commands, clone-safe DTOs/results, and preload domain API |
 | `src/shared/janus/types.ts`, `src/shared/ipc/janus.ts` | shared Blueprint/Janus models plus typed command/event API |
-| `src/preload/index.ts` | fixed typed adapters for migrated domains plus temporary generic allowlists for remaining domains |
+| `src/preload/index.ts` | fixed typed adapters for all public renderer domains; no generic bridge |
 | `src/renderer/src/types/electron.d.ts` | renderer declaration of the exposed preload API |
 
 ## Terminal
@@ -102,7 +105,8 @@ Use this as a lookup table before opening source.
 | File | Function |
 |---|---|
 | `src/shared/knowledge.ts` | canonical Knowledge entities and structured-clone-safe extensible values |
-| `src/shared/ipc/knowledge.ts` | public 24-operation Knowledge/Settings IPC contract |
+| `src/shared/ipc/knowledge.ts` | public 25-operation Knowledge/Settings IPC contract including explicit auto-prune maintenance |
+| `src/renderer/src/features/` | Workspace actions/bootstrap, Terminal lifecycle, and Blueprint layout/analysis controllers |
 | `src/main/ipc/knowledge-handlers.ts` | public Knowledge handlers plus internal maintenance registration |
 | `src/main/knowledge/*` | contracts, observation, audit, extraction, search, context, review, truth, and operations services |
 | `src/renderer/src/services/knowledge.ts` | sole typed renderer Knowledge client with isolated workbench fallbacks |

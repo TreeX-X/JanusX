@@ -10,6 +10,7 @@ import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { getModelCatalogService } from '../llm/ModelCatalogService'
 import type { KnowledgeContextResult, KnowledgeRecallTrace } from '../../shared/knowledge'
+import { LLM_CHANNELS } from '../../shared/ipc/llm'
 
 /** 对话消息类型 */
 interface ChatMessage {
@@ -174,11 +175,11 @@ export function abortAllChatStreams(): void {
  * 注册 LLM 相关的 IPC handlers
  */
 export function registerLlmHandlers(): void {
-  ipcMain.handle('llm:model-catalog:get', () => getModelCatalogService().getCatalog())
-  ipcMain.handle('llm:model-catalog:refresh', () => getModelCatalogService().refresh())
+  ipcMain.handle(LLM_CHANNELS.getCatalog, () => getModelCatalogService().getCatalog())
+  ipcMain.handle(LLM_CHANNELS.refreshCatalog, () => getModelCatalogService().refresh())
 
   // 获取所有 Provider 配置
-  ipcMain.handle('llm:get-providers', async () => {
+  ipcMain.handle(LLM_CHANNELS.getProviders, async () => {
     try {
       return await llmService.getAllProviders()
     } catch (error: any) {
@@ -188,7 +189,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 保存 Provider 配置
-  ipcMain.handle('llm:save-provider', async (_, settings: ProviderSettings) => {
+  ipcMain.handle(LLM_CHANNELS.saveProvider, async (_, settings: ProviderSettings) => {
     try {
       return await llmService.saveProvider(settings)
     } catch (error: any) {
@@ -198,7 +199,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 测试连接
-  ipcMain.handle('llm:test-connection', async (_, payload: ProviderSettings & { testModel?: string }) => {
+  ipcMain.handle(LLM_CHANNELS.testConnection, async (_, payload: ProviderSettings & { testModel?: string }) => {
     try {
       return await llmService.testConnection(payload, payload.testModel)
     } catch (error: any) {
@@ -208,7 +209,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 删除 Provider
-  ipcMain.handle('llm:remove-provider', async (_, providerId: string) => {
+  ipcMain.handle(LLM_CHANNELS.removeProvider, async (_, providerId: string) => {
     try {
       await llmService.removeProvider(providerId)
       return { success: true }
@@ -219,7 +220,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 设置默认 Provider
-  ipcMain.handle('llm:set-default-provider', async (_, providerId: string) => {
+  ipcMain.handle(LLM_CHANNELS.setDefaultProvider, async (_, providerId: string) => {
     try {
       await llmService.setDefaultProvider(providerId)
       return { success: true }
@@ -230,7 +231,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 获取可用模型列表
-  ipcMain.handle('llm:list-models', async (_, providerId: string) => {
+  ipcMain.handle(LLM_CHANNELS.listModels, async (_, providerId: string) => {
     try {
       return await llmService.listModels(providerId)
     } catch (error: any) {
@@ -240,7 +241,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 获取可用适配器类型
-  ipcMain.handle('llm:get-adapters', async () => {
+  ipcMain.handle(LLM_CHANNELS.getAdapters, async () => {
     try {
       return llmService.getAvailableAdapters()
     } catch (error: any) {
@@ -250,7 +251,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 获取默认 Provider
-  ipcMain.handle('llm:get-default-provider', async () => {
+  ipcMain.handle(LLM_CHANNELS.getDefaultProvider, async () => {
     try {
       return await llmService.getDefaultModel()
     } catch (error: any) {
@@ -260,7 +261,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 对话请求（非流式）
-  ipcMain.handle('llm:chat', async (_, request: ChatRequest) => {
+  ipcMain.handle(LLM_CHANNELS.chat, async (_, request: ChatRequest) => {
     try {
       const { messages, providerId, modelId, sourceTag, workspaceId, workspacePath } = request
 
@@ -338,18 +339,18 @@ export function registerLlmHandlers(): void {
   })
 
   // 流式对话请求（单向 send/on 模式，确保事件可靠送达渲染端）
-  ipcMain.on('llm:chat-stream', async (event, request: ChatStreamRequest) => {
+  ipcMain.on(LLM_CHANNELS.chatStream, async (event, request: ChatStreamRequest) => {
     const { requestId, messages, providerId, modelId, sourceTag, workspaceId, workspacePath } = request
     const controller = new AbortController()
     let streamedText = ''
     abortControllers.set(requestId, controller)
 
-    const sendEvent = (channel: 'llm:chat:delta' | 'llm:chat:done' | 'llm:chat:error' | 'llm:chat:recall-trace', payload: any) => {
+    const sendEvent = (channel: typeof LLM_CHANNELS.delta | typeof LLM_CHANNELS.done | typeof LLM_CHANNELS.error | typeof LLM_CHANNELS.recallTrace, payload: any) => {
       event.reply(channel, payload)
     }
 
     const sendError = (message: string) => {
-      sendEvent('llm:chat:error', { requestId, error: message })
+      sendEvent(LLM_CHANNELS.error, { requestId, error: message })
     }
 
     try {
@@ -376,7 +377,7 @@ export function registerLlmHandlers(): void {
           workspacePath,
         )
         formattedMessages = recall.messages
-        sendEvent('llm:chat:recall-trace', recall.trace)
+        sendEvent(LLM_CHANNELS.recallTrace, recall.trace)
       }
 
       const model = await llmService.getLanguageModel(providerId, actualModelId)
@@ -393,7 +394,7 @@ export function registerLlmHandlers(): void {
 
       for await (const delta of result.textStream) {
         if (controller.signal.aborted) break
-        sendEvent('llm:chat:delta', { requestId, delta, done: false })
+        sendEvent(LLM_CHANNELS.delta, { requestId, delta, done: false })
         streamedText += delta
       }
 
@@ -429,12 +430,12 @@ export function registerLlmHandlers(): void {
         })
       }
 
-      sendEvent('llm:chat:delta', { requestId, delta: '', done: true })
-      sendEvent('llm:chat:done', { requestId })
+      sendEvent(LLM_CHANNELS.delta, { requestId, delta: '', done: true })
+      sendEvent(LLM_CHANNELS.done, { requestId })
     } catch (error: any) {
       // 用户主动取消时不作为错误上报
       if (controller.signal.aborted || error?.name === 'AbortError') {
-        sendEvent('llm:chat:done', { requestId })
+        sendEvent(LLM_CHANNELS.done, { requestId })
         return
       }
       console.error('[IPC] llm:chat-stream error:', error.message || error)
@@ -445,7 +446,7 @@ export function registerLlmHandlers(): void {
   })
 
   // 中止流式请求
-  ipcMain.handle('llm:chat:abort', async (_, requestId: string) => {
+  ipcMain.handle(LLM_CHANNELS.abort, async (_, requestId: string) => {
     abortControllers.get(requestId)?.abort()
     return { success: true }
   })

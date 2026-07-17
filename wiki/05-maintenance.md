@@ -35,7 +35,7 @@ Run these inspections before updating:
 ```bash
 rg --files
 rg -n "register.*Handlers|ipcMain\\.handle|ipcMain\\.on" src/main
-rg -n "ALLOWED_.*CHANNELS|exposeInMainWorld" src/preload/index.ts
+rg -n "window\.electron\.(invoke|send|on)|ALLOWED_.*CHANNELS" src tests
 rg -n "export function|export class|export interface|export type" src/main src/renderer/src packages/llm-core/src
 rg -n "describe\\(" tests packages/llm-core/tests
 ```
@@ -64,4 +64,3 @@ When starting a new JanusX task, ask the Agent to read:
 ```text
 Read wiki/README.md, then only the wiki pages relevant to this task. Verify current source with rg before editing. Follow AGENTS.md file operation rules.
 ```
-

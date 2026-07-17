@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { loadWorkspaceFileTree } from '@/features/workspace/actions'
 import { useAppStore } from '@/stores/app'
 import { useGitStore } from '@/stores/git'
 import { useEditorStore } from '@/stores/editor'
@@ -328,12 +329,7 @@ export function Panel() {
     const workspace = workspaces.find((item) => item.id === activeWorkspaceId)
     if (!workspace) return
 
-    try {
-      const tree = await window.electron.fileTree.load(workspace.path)
-      useWorkspaceStore.setState({ fileTree: tree })
-    } catch {
-      // ignore
-    }
+    await loadWorkspaceFileTree(workspace.path).catch(() => {})
   }, [])
 
   const reloadDirectory = useCallback(async (path: string) => {
@@ -440,10 +436,10 @@ export function Panel() {
     setActiveFilePath(relativePath)
 
     try {
-      const result = (await window.electron.invoke('editor-window:open', {
+      const result = await window.electron.window.openEditor({
         filePath: absolutePath,
         workspacePath: workspace.path,
-      })) as { success?: boolean }
+      })
       if (result?.success) return
     } catch {
       // Fall back to the in-app editor when the native window cannot be opened.

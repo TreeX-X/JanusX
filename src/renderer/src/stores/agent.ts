@@ -1,24 +1,6 @@
 import { create } from 'zustand'
 
-interface AgentSessionInfo {
-  id: string
-  engine: string
-  startedAt: string
-  status: string
-}
-
-interface AgentEvent {
-  type: string
-  delta?: string
-  fullText?: string
-  text?: string
-  id?: string
-  name?: string
-  arg?: string
-  filePath?: string
-  message?: string
-  exitCode?: number
-}
+import type { AgentEvent, AgentSessionInfo } from '../../../shared/ipc/agent'
 
 interface AgentStore {
   sessions: AgentSessionInfo[]
@@ -40,7 +22,7 @@ export const useAgentStore = create<AgentStore>((set) => ({
   fetchSessions: async () => {
     set({ loading: true, error: null })
     try {
-      const sessions = (await window.electron.invoke('agent:listSessions')) as AgentSessionInfo[]
+      const sessions = await window.electron.agent.listSessions()
       set({ sessions, loading: false })
     } catch (err) {
       set({ error: (err as Error).message, loading: false })

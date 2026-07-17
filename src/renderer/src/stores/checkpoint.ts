@@ -1,23 +1,8 @@
 import { create } from 'zustand'
 import { useWorkspaceStore } from './workspace'
+import type { CheckpointConflict as ConflictInfo, CheckpointSummary } from '../../../shared/ipc/checkpoint'
 
-export interface CheckpointSummary {
-  id: string
-  terminalId: string
-  engine: string
-  conversationIndex: number
-  createdAt: string
-  branch: string
-  prompt: string
-  fileCount: number
-  changedFileCount: number
-  status: 'ready'
-}
-
-export interface ConflictInfo {
-  filePath: string
-  resolution: 'snapshot'
-}
+export type { CheckpointSummary, ConflictInfo }
 
 interface CheckpointStore {
   workspaceCwd: string | null
@@ -79,7 +64,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
         : {}),
     })
     try {
-      const cps = (await window.electron.invoke('checkpoint:list', { ...filter, cwd })) as CheckpointSummary[]
+      const cps = await window.electron.checkpoint.list({ ...filter, cwd })
       if (get().workspaceCwd !== cwd) return
       set({ checkpoints: cps, loading: false })
     } catch (err) {
@@ -95,7 +80,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
 
     set({ loading: true, error: null })
     try {
-      const cp = (await window.electron.invoke('checkpoint:create', { ...options, cwd })) as CheckpointSummary
+      const cp = await window.electron.checkpoint.create({ ...options, cwd })
       set((state) => ({
         workspaceCwd: cwd,
         checkpoints: state.workspaceCwd && state.workspaceCwd !== cwd ? [cp] : [cp, ...state.checkpoints],
@@ -109,10 +94,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
   restoreCheckpoint: async (checkpointId, cwd) => {
     set({ loading: true, error: null, conflicts: [] })
     try {
-      const result = (await window.electron.invoke('checkpoint:restore', {
-        checkpointId,
-        cwd,
-      })) as { conflicts: ConflictInfo[] }
+      const result = await window.electron.checkpoint.restore(checkpointId, cwd)
       set({ loading: false, conflicts: result.conflicts })
       await get().fetchCheckpoints({ cwd })
     } catch (err) {
@@ -122,11 +104,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
 
   fetchDiff: async (checkpointId, filePath, cwd) => {
     try {
-      const diff = (await window.electron.invoke('checkpoint:diff', {
-        checkpointId,
-        filePath,
-        cwd,
-      })) as string
+      const diff = await window.electron.checkpoint.diff(checkpointId, filePath, cwd)
       set((state) => ({
         diffs: { ...state.diffs, [`${checkpointId}:${filePath}`]: diff },
       }))
@@ -137,10 +115,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
 
   fetchAllDiffs: async (checkpointId, cwd) => {
     try {
-      const diff = (await window.electron.invoke('checkpoint:diff:all', {
-        checkpointId,
-        cwd,
-      })) as string
+      const diff = await window.electron.checkpoint.diffAll(checkpointId, cwd)
       set((state) => ({
         diffs: { ...state.diffs, [`${checkpointId}:`]: diff },
       }))
@@ -151,7 +126,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
 
   deleteCheckpoint: async (checkpointId, cwd) => {
     try {
-      await window.electron.invoke('checkpoint:delete', { checkpointId, cwd })
+      await window.electron.checkpoint.delete(checkpointId, cwd)
       set((state) => ({
         checkpoints: state.checkpoints.filter((cp) => cp.id !== checkpointId),
         selectedCheckpoint:
@@ -177,8 +152,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
   clearConflicts: () => set({ conflicts: [] }),
 
   subscribeToEvents: () => {
-    const unsub = window.electron.on('checkpoint:event', (payload: unknown) => {
-      const event = payload as { type?: string; error?: string }
+    const unsub = window.electron.checkpoint.onEvent((event) => {
       if (event.type === 'error') {
         set({ error: event.error ?? 'Checkpoint event failed' })
         return

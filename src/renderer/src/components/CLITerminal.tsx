@@ -85,7 +85,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       if (!terminal || terminal.preset === 'shell') return
 
       try {
-        const result = await window.electron.invoke('runtime-telemetry:get', {
+        const result = await window.electron.system.getRuntimeTelemetry({
           preset: terminal.preset,
           cwd: terminal.cwd,
           startedAt: terminal.telemetryStartedAt,

@@ -5,8 +5,9 @@ import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { Workspace, Terminal } from '@/types'
-import { invalidateEditorFileCache } from '@/stores/editor'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
+import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
+import { invalidateEditorFileCache } from '@/stores/editor'
 
 function terminalStatusLabel(status: Terminal['status']): string {
   switch (status) {
@@ -60,30 +61,11 @@ export function Sidebar() {
 
   const handleAddWorkspace = useCallback(async () => {
     try {
-      const result = (await window.electron.invoke('dialog:openDirectory')) as {
-        canceled: boolean
-        filePaths: string[]
-      }
-      if (result.canceled || !result.filePaths[0]) return
-
-      const folderPath = result.filePaths[0]
-      const workspace = await window.electron.workspace.create({
-        name: folderPath.split(/[/\\]/).pop() || 'Workspace',
-        path: folderPath,
-      })
-
+      const workspace = await chooseAndCreateWorkspace()
+      if (!workspace) return
       addWorkspace(workspace)
       setActiveWorkspace(workspace.id)
       setLoadState('no-terminal')
-
-      // 加载文件树
-      try {
-        invalidateEditorFileCache(folderPath)
-        const tree = await window.electron.fileTree.load(folderPath)
-        useWorkspaceStore.setState({ fileTree: tree })
-      } catch {
-        // ignore
-      }
     } catch (err) {
       console.error('Failed to create workspace:', err)
     }

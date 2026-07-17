@@ -8,7 +8,8 @@ Last analyzed: 2026-07-17
 electron-vite main entry
 -> src/main/index.ts
 -> create BrowserWindow
--> register IPC handlers
+-> create bootstrap services and windows
+-> register IPC domains through src/main/ipc/register.ts
 -> load renderer URL/file
 -> renderer uses preload window.electron bridge
 ```
@@ -31,16 +32,16 @@ Renderer component/store/service
 Other domains temporarily retain the legacy path:
 
 ```text
-Renderer wrapper -> window.electron.invoke/send/on -> preload allowlist -> main handler
+Renderer feature/service -> fixed window.electron domain API -> shared contract -> main handler
 ```
 
 When adding IPC:
 
 1. Add or update a pure contract under `src/shared/ipc/`.
 2. Register the main handler/listener or producer with shared channel constants.
-3. Expose fixed typed methods/events from `src/preload/index.ts`; do not add migrated channels to generic allowlists.
+3. Expose fixed typed methods/events from `src/preload/index.ts`; generic bridges are forbidden.
 4. Use the typed domain API from renderer components/stores/services.
-5. Add contract tests for registration, argument order, generic rejection, and event unsubscribe behavior.
+5. Add contract tests for registration, argument order, absence of generic bridges, and event unsubscribe behavior.
 
 Workspace/File/FileTree, Terminal, Project, public Knowledge, and Blueprint/Janus operations follow this design today. LLM, Office, agent, checkpoint, notification settings, and other domains remain incremental migration work.
 

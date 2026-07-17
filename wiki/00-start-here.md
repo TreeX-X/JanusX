@@ -48,8 +48,8 @@ rg -n "export function|export class|ipcMain.handle" src/main/ipc
 
 | Path | Purpose |
 |---|---|
-| `src/main` | Electron main process, IPC handlers, terminal/project/agent/LLM/Janus services |
-| `src/preload` | preload bridge exposing whitelisted IPC access to renderer |
+| `src/main` | Electron lifecycle, bootstrap services, windows, IPC composition, and domain services |
+| `src/preload` | preload bridge exposing fixed typed domain APIs to renderer |
 | `src/renderer/src` | React renderer app, stores, services, UI components |
 | `src/shared` | code shared across Electron sides, currently terminal launch metadata and Janus persona/notifications |
 | `packages/llm-core` | separate TypeScript workspace package for Provider abstraction/adapters |
@@ -65,4 +65,3 @@ rg -n "export function|export class|ipcMain.handle" src/main/ipc
 - `src/main/janus/types.ts` is imported by renderer services as a type-only bridge. If it gains runtime Electron/Node imports, move shared Blueprint types to `src/shared`.
 - Terminal checkpoints are coupled to `terminal:submit-line` and terminal lifecycle in `src/main/ipc/terminal-handlers.ts`.
 - Runtime data is split between workspace `.janusX` folders and Electron `userData/janusx`.
-

@@ -8,7 +8,7 @@ describe('quick note export', () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
-      value: { electron: { invoke: vi.fn(), file: { save: vi.fn() } } },
+      value: { electron: { dialog: { saveFile: vi.fn() }, file: { save: vi.fn() } } },
     })
   })
   it('preserves markdown and strips common markers for text', () => {
@@ -24,31 +24,31 @@ describe('quick note export', () => {
     expect(html).toContain('<pre><code>const x = 1\n</code></pre>')
   })
   it('uses dialog then positional file save and treats cancellation silently', async () => {
-    const invoke = vi.mocked(window.electron.invoke)
+    const saveFile = vi.mocked(window.electron.dialog.saveFile)
     const save = vi.mocked(window.electron.file.save)
-    invoke.mockResolvedValueOnce({ canceled: false, filePath: 'C:/Release-Note.md' })
+    saveFile.mockResolvedValueOnce({ canceled: false, filePath: 'C:/Release-Note.md' })
     save.mockResolvedValueOnce({ success: true })
     await expect(exportNoteCard(card, 'md')).resolves.toBe('saved')
-    expect(invoke).toHaveBeenCalledWith('dialog:saveFile', { defaultName: 'Release-Note.md', extension: 'md' })
+    expect(saveFile).toHaveBeenCalledWith({ defaultName: 'Release-Note.md', extension: 'md' })
     expect(save).toHaveBeenCalledWith('C:/Release-Note.md', card.content)
-    invoke.mockReset().mockResolvedValueOnce({ canceled: true })
+    saveFile.mockReset().mockResolvedValueOnce({ canceled: true })
     save.mockReset()
     await expect(exportNoteCard(card, 'txt')).resolves.toBe('canceled')
-    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(saveFile).toHaveBeenCalledTimes(1)
     expect(save).not.toHaveBeenCalled()
-    invoke.mockReset().mockResolvedValueOnce({ canceled: false })
+    saveFile.mockReset().mockResolvedValueOnce({ canceled: false })
     await expect(exportNoteCard(card, 'html')).resolves.toBe('canceled')
-    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(saveFile).toHaveBeenCalledTimes(1)
     expect(save).not.toHaveBeenCalled()
   })
   it('surfaces save errors for the view to display', async () => {
-    const invoke = vi.mocked(window.electron.invoke)
+    const saveFile = vi.mocked(window.electron.dialog.saveFile)
     const save = vi.mocked(window.electron.file.save)
-    invoke.mockResolvedValueOnce({ canceled: false, filePath: 'C:/Release-Note.txt' })
+    saveFile.mockResolvedValueOnce({ canceled: false, filePath: 'C:/Release-Note.txt' })
     save.mockResolvedValueOnce({ error: 'disk full' })
     await expect(exportNoteCard(card, 'txt')).rejects.toThrow('disk full')
 
-    invoke.mockReset().mockRejectedValueOnce(new Error('dialog unavailable'))
+    saveFile.mockReset().mockRejectedValueOnce(new Error('dialog unavailable'))
     await expect(exportNoteCard(card, 'html')).rejects.toThrow('dialog unavailable')
   })
 })

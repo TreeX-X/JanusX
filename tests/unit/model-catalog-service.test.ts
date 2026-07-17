@@ -122,6 +122,7 @@ describe('ModelCatalogService', () => {
     await vi.waitFor(() => expect(fetchModels).toHaveBeenCalledOnce())
     expect(first.models[0].id).toBe('bundled/model')
     expect(second.models[0].id).toBe('bundled/model')
+    await service.refresh()
   })
 
   it('preserves the last valid catalog when refresh fails', async () => {

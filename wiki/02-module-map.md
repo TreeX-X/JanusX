@@ -6,7 +6,7 @@ Last analyzed: 2026-07-17
 
 | Module | Primary Files | Responsibility |
 |---|---|---|
-| App shell | `src/main/index.ts` | Electron lifecycle, BrowserWindow creation, IPC registration |
+| App shell | `src/main/index.ts`, `src/main/bootstrap/`, `src/main/windows/`, `src/main/ipc/register.ts` | Electron lifecycle, service graph, window creation, and IPC composition |
 | Workspace config | `src/main/config/service.ts`, `src/main/workspace/types.ts` | global config, recent workspaces, CLI registrations |
 | Workspace/files IPC | `src/main/ipc/handlers.ts`, `src/main/ipc/file-handlers.ts` | workspace persistence, file tree, file content operations |
 | Terminal backend | `src/main/terminal/manager.ts`, `src/main/terminal/presets.ts`, `src/main/terminal/health.ts` | pty lifecycle, default shells, preset metadata, health checks |
@@ -45,7 +45,8 @@ Last analyzed: 2026-07-17
 | `src/shared/ipc/workspace.ts` | Workspace/File/FileTree channel constants, DTOs, result/event types, and preload domain API contract |
 | `src/shared/ipc/terminal.ts` | Terminal command/event constants, payload/result types, and preload domain API contract |
 | `src/shared/ipc/project.ts` | Project command constants, clone-safe DTOs/results, and the 11-operation preload domain API contract |
-| `src/shared/ipc/knowledge.ts` | 24 public Knowledge/Settings command constants, clone-safe request/result types, and preload domain API contract |
+| `src/shared/ipc/knowledge.ts` | 25 public Knowledge/Settings command constants, clone-safe request/result types, and preload domain API contract |
+| `src/shared/ipc/agent.ts`, `checkpoint.ts`, `git.ts`, `llm.ts`, `settings.ts`, `system.ts` | Remaining fixed domain contracts and preload APIs |
 | `src/shared/janus/types.ts`, `src/shared/ipc/janus.ts` | canonical Blueprint/Janus models plus 22 command and two event contracts |
 | `src/shared/terminalLaunch.ts` | canonical terminal presets: `shell`, `claude`, `codex`, `opencode`; builds auto commands |
 | `src/shared/notifications.ts` | notification settings type/defaults/normalization |

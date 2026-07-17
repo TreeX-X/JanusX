@@ -32,6 +32,8 @@ import {
   type TerminalSubmitLinePayload,
   type TerminalWarmupRequest,
 } from '../../shared/ipc/terminal'
+import { AGENT_CHANNELS } from '../../shared/ipc/agent'
+import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -86,7 +88,7 @@ function enqueueCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text
 
   const state = terminalStates.get(id)
   if (!state) {
-    sendToRenderer(mainWindow, 'checkpoint:event', {
+    sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
       type: 'error',
       terminalId: id,
       error: 'Terminal checkpoint state not found',
@@ -117,14 +119,14 @@ function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
     cwd: state.cwd,
   }).then(({ finalized, checkpoint }) => {
     if (finalized && previousCpId) {
-      sendToRenderer(mainWindow, 'checkpoint:event', {
+      sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
         type: 'finalized',
         terminalId: id,
         checkpointId: previousCpId,
       })
     }
     state.checkpointId = checkpoint.id
-    sendToRenderer(mainWindow, 'checkpoint:event', {
+    sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
       type: 'created',
       terminalId: id,
       checkpointId: checkpoint.id,
@@ -133,7 +135,7 @@ function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
     state.checkpointId = previousCpId
     const message = err instanceof Error ? err.message : String(err)
     console.error('Checkpoint lifecycle failed:', err)
-    sendToRenderer(mainWindow, 'checkpoint:event', {
+    sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
       type: 'error',
       terminalId: id,
       error: message,
@@ -181,7 +183,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   const hookCoordinator = new AgentHookCoordinator(mainWindow, {
     onEvent: (event) => {
       hookDiagnostics.record(summarizeCoordinatorEvent(event))
-      sendToRenderer(mainWindow, 'agent-hook:event', event)
+      sendToRenderer(mainWindow, AGENT_CHANNELS.hookEvent, event)
     },
     onResolvedPayload: (payload) => {
       agentTurnRecorder.handleHookPayload(payload)
@@ -322,7 +324,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
           delivered: false,
         } as const
         hookDiagnostics.record(summarizeCoordinatorEvent(event))
-        sendToRenderer(mainWindow, 'agent-hook:event', event)
+        sendToRenderer(mainWindow, AGENT_CHANNELS.hookEvent, event)
         return undefined
       }
     })()
@@ -446,7 +448,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       if (state?.checkpointId) {
         const cpId = state.checkpointId
         checkpointManager.finalizeCheckpoint(cpId, state.cwd).then(() => {
-          sendToRenderer(mainWindow, 'checkpoint:event', {
+          sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
             type: 'finalized',
             checkpointId: cpId,
           })
@@ -467,10 +469,10 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         state.initialized = true
         processCheckpointQueue(mainWindow, id)
       }
-      sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: true })
+      sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.ready, { terminalId: id, success: true })
     }).catch((err) => {
       console.error('Checkpoint init failed:', err)
-      sendToRenderer(mainWindow, 'checkpoint:ready', { terminalId: id, success: false, error: String(err) })
+      sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.ready, { terminalId: id, success: false, error: String(err) })
     })
 
     return { pid: instance.pty.pid }

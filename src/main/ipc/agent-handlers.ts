@@ -8,6 +8,7 @@ import { subAgentRunRegistry } from '../agent/subagent-run-registry'
 import type { AgentEvent } from '../agent/types'
 import type { CaptureObservationInput } from '../../shared/knowledge'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { AGENT_CHANNELS } from '../../shared/ipc/agent'
 
 function summarizeAgentEvent(event: AgentEvent): string {
   switch (event.type) {
@@ -121,7 +122,7 @@ function toObservationPayload(
 }
 
 export function registerAgentHandlers(mainWindow: BrowserWindow): void {
-  ipcMain.handle('agent:start', async (_event, options: AgentSpawnOptions) => {
+  ipcMain.handle(AGENT_CHANNELS.start, async (_event, options: AgentSpawnOptions) => {
     const sessionId = randomUUID()
     const startedAt = new Date().toISOString()
 
@@ -166,7 +167,7 @@ export function registerAgentHandlers(mainWindow: BrowserWindow): void {
 
     // Wire event forwarding to renderer
     agentStreamManager.onEvent(sessionId, (event) => {
-      mainWindow.webContents.send('agent:event', { sessionId, event })
+      mainWindow.webContents.send(AGENT_CHANNELS.event, { sessionId, event })
       subAgentRunRegistry.updateRun(sessionId, {
         status: statusFromAgentEvent(event),
         lastEvent: summarizeAgentEvent(event),
@@ -218,13 +219,13 @@ export function registerAgentHandlers(mainWindow: BrowserWindow): void {
     return { sessionId }
   })
 
-  ipcMain.handle('agent:cancel', async (_event, { sessionId }: { sessionId: string }) => {
+  ipcMain.handle(AGENT_CHANNELS.cancel, async (_event, { sessionId }: { sessionId: string }) => {
     agentStreamManager.cancel(sessionId)
     subAgentRunRegistry.finishRun(sessionId, 'cancelled', 'Cancelled')
     return { success: true }
   })
 
-  ipcMain.handle('agent:cancelAll', async () => {
+  ipcMain.handle(AGENT_CHANNELS.cancelAll, async () => {
     agentStreamManager.cancelAll()
     for (const run of subAgentRunRegistry.listRuns()) {
       if (run.source === 'headless' && (run.status === 'queued' || run.status === 'running')) {
@@ -234,7 +235,7 @@ export function registerAgentHandlers(mainWindow: BrowserWindow): void {
     return { success: true }
   })
 
-  ipcMain.handle('agent:listSessions', async () => {
+  ipcMain.handle(AGENT_CHANNELS.listSessions, async () => {
     return agentStreamManager.listSessions().map(s => ({
       id: s.id,
       engine: s.engine,

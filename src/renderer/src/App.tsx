@@ -10,7 +10,6 @@ import {
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCheckpointStore } from '@/stores/checkpoint'
-import { invalidateEditorFileCache } from '@/stores/editor'
 import { useOfficeStore } from '@/stores/office'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
@@ -32,7 +31,8 @@ import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
 import { BlueprintFocusView } from '@/components/blueprint/BlueprintFocusView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
-import type { FileNode } from '@/types'
+import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
+import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 
 type IdleWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
@@ -52,33 +52,8 @@ interface OfficeResizeSession {
   resizableWorkspaceWidth: number
 }
 
-function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): FileNode[] {
-  const currentMap = new Map(currentNodes.map((node) => [node.path, node]))
-
-  return nextNodes.map((node) => {
-    const existing = currentMap.get(node.path)
-    if (!existing || node.type !== 'directory') {
-      return node
-    }
-
-    const currentChildren = existing.children ?? []
-    const nextChildren = node.children ?? []
-
-    return {
-      ...node,
-      loaded: existing.loaded ?? false,
-      hasChildren: node.hasChildren ?? existing.hasChildren,
-      children:
-        existing.loaded && currentChildren.length > 0
-          ? nextChildren.length > 0
-            ? mergeFileTreeState(nextChildren, currentChildren)
-            : currentChildren
-          : nextChildren,
-    }
-  })
-}
-
 export default function App() {
+  useWorkspaceBootstrap()
   const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -236,62 +211,6 @@ export default function App() {
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
   const flipperElRef = useRef<HTMLDivElement | null>(null)
 
-  const loadWorkspaceFileTree = useCallback(async (workspacePath: string) => {
-    try {
-      const tree = await window.electron.fileTree.load(workspacePath)
-      const currentTree = useWorkspaceStore.getState().fileTree
-      useWorkspaceStore.setState({ fileTree: mergeFileTreeState(tree, currentTree) })
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  useEffect(() => {
-    const initApp = async () => {
-      try {
-        const state = await window.electron.workspace.initialize()
-
-        if (state && state.workspaces) {
-          useWorkspaceStore.setState({
-            workspaces: state.workspaces,
-            activeWorkspaceId: state.activeWorkspaceId,
-          })
-
-          // 有工作区时直接进入 no-terminal 状态
-          if (state.workspaces.length > 0) {
-            useAppStore.setState({ loadState: 'no-terminal' })
-            // 加载活跃工作区的文件树
-            if (state.activeWorkspaceId) {
-              const ws = state.workspaces.find((w) => w.id === state.activeWorkspaceId)
-              if (ws) {
-                await loadWorkspaceFileTree(ws.path)
-              }
-            }
-          } else {
-            useAppStore.setState({ loadState: 'no-workspace' })
-          }
-        } else {
-          useAppStore.setState({ loadState: 'no-workspace' })
-        }
-      } catch {
-        useAppStore.setState({ loadState: 'no-workspace' })
-      }
-    }
-    initApp()
-  }, [loadWorkspaceFileTree])
-
-  useEffect(() => {
-    const unsubscribe = window.electron.fileTree.onChanged(async (workspacePath) => {
-      const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
-      if (!activeWorkspaceId) return
-      const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
-      if (!activeWorkspace || activeWorkspace.path !== workspacePath) return
-      invalidateEditorFileCache(workspacePath)
-      await loadWorkspaceFileTree(workspacePath)
-    })
-    return unsubscribe
-  }, [loadWorkspaceFileTree])
-
   useEffect(() => {
     return subscribeToCheckpointEvents()
   }, [subscribeToCheckpointEvents])
@@ -437,29 +356,11 @@ function EmptyWorkspace() {
 
   const handleAdd = async () => {
     try {
-      const result = (await window.electron.invoke('dialog:openDirectory')) as {
-        canceled: boolean
-        filePaths: string[]
-      }
-      if (result.canceled || !result.filePaths[0]) return
-
-      const folderPath = result.filePaths[0]
-      const workspace = await window.electron.workspace.create({
-        name: folderPath.split(/[/\\]/).pop() || 'Workspace',
-        path: folderPath,
-      })
-
+      const workspace = await chooseAndCreateWorkspace()
+      if (!workspace) return
       addWorkspace(workspace)
       setActiveWorkspace(workspace.id)
       setLoadState('no-terminal')
-
-      // 加载文件树
-      try {
-        const tree = await window.electron.fileTree.load(folderPath)
-        useWorkspaceStore.setState({ fileTree: tree })
-      } catch {
-        // ignore
-      }
     } catch (err) {
       console.error('Failed to create workspace:', err)
     }

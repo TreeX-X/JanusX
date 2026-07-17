@@ -6,6 +6,7 @@ import {
   type AgentNotificationSettings,
 } from '../../shared/notifications'
 import { desktopToastWindow, type DesktopToastPayload } from './desktop-toast-window'
+import { AGENT_CHANNELS } from '../../shared/ipc/agent'
 
 interface AgentNotificationContext {
   sessionId: string
@@ -60,7 +61,7 @@ function sendRendererNotification(
 ): boolean {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return false
 
-  mainWindow.webContents.send('agent-notification:show', {
+  mainWindow.webContents.send(AGENT_CHANNELS.notification, {
     ...payload,
   })
   return true

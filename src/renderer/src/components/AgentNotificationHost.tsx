@@ -78,7 +78,7 @@ export function AgentNotificationHost() {
   }, [])
 
   useEffect(() => {
-    const unsubscribe = window.electron.on('agent-notification:show', (payload: unknown) => {
+    const unsubscribe = window.electron.agent.onNotification((payload) => {
       const toast = normalizePayload(payload)
       if (!toast) return
 

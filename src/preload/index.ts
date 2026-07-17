@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import os from 'os'
 import { JANUS_PERSONA } from '../shared/janus/persona'
-import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS } from '../shared/office'
+import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS, type OfficeAPI } from '../shared/office'
 import {
   FILE_CHANNELS,
   FILE_TREE_CHANNELS,
@@ -23,85 +23,12 @@ import {
   JANUS_EVENT_CHANNELS,
   type JanusAPI
 } from '../shared/ipc/janus'
-
-const ALLOWED_INVOKE_CHANNELS = [
-  ...Object.values(OFFICE_INVOKE_CHANNELS),
-  'runtime-telemetry:get',
-  'dialog:openDirectory',
-  'dialog:saveFile',
-  'system:getDefaultShell',
-  'system:getPlatform',
-  'system:which',
-  'settings:notifications:get',
-  'settings:notifications:update',
-  'settings:notifications:test-feishu',
-  'window:minimize',
-  'window:maximize',
-  'window:close',
-  'editor-window:open',
-  'git:status',
-  'git:log',
-  'git:stage',
-  'git:unstage',
-  'git:commit',
-  'git:push',
-  'git:pull',
-  'agent:start',
-  'agent:cancel',
-  'agent:cancelAll',
-  'agent:listSessions',
-  'subagent-run:list',
-  'checkpoint:create',
-  'checkpoint:finalize',
-  'checkpoint:restore',
-  'checkpoint:list',
-  'checkpoint:diff',
-  'checkpoint:diff:all',
-  'checkpoint:delete',
-  'checkpoint:clearAll',
-  // LLM 相关频道
-  'llm:get-providers',
-  'llm:save-provider',
-  'llm:test-connection',
-  'llm:remove-provider',
-  'llm:set-default-provider',
-  'llm:list-models',
-  'llm:model-catalog:get',
-  'llm:model-catalog:refresh',
-  'llm:get-adapters',
-  'llm:get-default-provider',
-  'llm:chat',
-  // stream 请求改为单向 send
-  'llm:chat:abort',
-  // 蓝图与 Janus Analyzer 频道
-]
-
-const ALLOWED_SEND_CHANNELS = [
-  'desktop-toast:ready',
-  'desktop-toast:action',
-  // LLM 流式请求（单向 send）
-  'llm:chat-stream',
-]
-
-const ALLOWED_ON_CHANNELS = [
-  ...Object.values(OFFICE_EVENT_CHANNELS),
-  'agent-hook:event',
-  'agent-notification:show',
-  'desktop-toast:show',
-  'workspace:updated',
-  'app:init-state',
-  'agent:event',
-  'subagent-run:updated',
-  'subagent-run:removed',
-  'checkpoint:event',
-  'checkpoint:ready',
-  // LLM 流式频道
-  'llm:chat:delta',
-  'llm:chat:done',
-  'llm:chat:error',
-  'llm:chat:recall-trace',
-  // Janus Island 通知（主进程 -> 渲染）
-]
+import { AGENT_CHANNELS, SUBAGENT_RUN_CHANNELS, type AgentAPI, type SubAgentRunAPI } from '../shared/ipc/agent'
+import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
+import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
+import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
+import { NOTIFICATION_SETTINGS_CHANNELS, type NotificationSettingsAPI } from '../shared/ipc/settings'
+import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 
 const workspaceAPI: WorkspaceAPI = {
   initialize: () => ipcRenderer.invoke(WORKSPACE_CHANNELS.initialize),
@@ -176,6 +103,7 @@ const knowledgeAPI: KnowledgeAPI = {
   observe: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.observe, input),
   listObservations: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listObservations, query),
   pruneObservations: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.pruneObservations, query),
+  autoPruneObservations: (nowMs) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.autoPruneObservations, nowMs),
   resolveObservationContent: (observation) =>
     ipcRenderer.invoke(KNOWLEDGE_CHANNELS.resolveObservationContent, observation),
   retentionStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.retentionStats),
@@ -237,6 +165,108 @@ const janusAPI: JanusAPI = {
   onDiscovered: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.discovered, callback),
 }
 
+const officeAPI: OfficeAPI = {
+  detect: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.detect, request),
+  listFiles: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.listFiles, request),
+  startPreview: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.startPreview, request),
+  stopPreview: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.stopPreview, request),
+  reloadPreview: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.reloadPreview, request),
+  buildPrompt: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.buildPrompt, request),
+  installerStatus: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerStatus, request),
+  installerStart: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerStart, request),
+  installerCancel: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerCancel, request),
+  installerRemove: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerRemove, request),
+  onInstallerProgress: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.installerProgress, callback),
+  onFilesChanged: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.filesChanged, callback),
+  onWatchEvicted: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.watchEvicted, callback),
+}
+
+const llmAPI: LlmAPI = {
+  getProviders: () => ipcRenderer.invoke(LLM_CHANNELS.getProviders),
+  saveProvider: (settings) => ipcRenderer.invoke(LLM_CHANNELS.saveProvider, settings),
+  testConnection: (settings) => ipcRenderer.invoke(LLM_CHANNELS.testConnection, settings),
+  removeProvider: (providerId) => ipcRenderer.invoke(LLM_CHANNELS.removeProvider, providerId),
+  setDefaultProvider: (providerId) => ipcRenderer.invoke(LLM_CHANNELS.setDefaultProvider, providerId),
+  listModels: (providerId) => ipcRenderer.invoke(LLM_CHANNELS.listModels, providerId),
+  getModelCatalog: () => ipcRenderer.invoke(LLM_CHANNELS.getCatalog),
+  refreshModelCatalog: () => ipcRenderer.invoke(LLM_CHANNELS.refreshCatalog),
+  getAdapters: () => ipcRenderer.invoke(LLM_CHANNELS.getAdapters),
+  getDefaultProvider: () => ipcRenderer.invoke(LLM_CHANNELS.getDefaultProvider),
+  chat: (request) => ipcRenderer.invoke(LLM_CHANNELS.chat, request),
+  startChatStream: (request) => ipcRenderer.send(LLM_CHANNELS.chatStream, request),
+  abortChat: (requestId) => ipcRenderer.invoke(LLM_CHANNELS.abort, requestId),
+  onDelta: (callback) => subscribeIpcEvent(LLM_CHANNELS.delta, callback),
+  onDone: (callback) => subscribeIpcEvent(LLM_CHANNELS.done, callback),
+  onError: (callback) => subscribeIpcEvent(LLM_CHANNELS.error, callback),
+  onRecallTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.recallTrace, callback),
+}
+
+const agentAPI: AgentAPI = {
+  start: (options) => ipcRenderer.invoke(AGENT_CHANNELS.start, options),
+  cancel: (sessionId) => ipcRenderer.invoke(AGENT_CHANNELS.cancel, { sessionId }),
+  cancelAll: () => ipcRenderer.invoke(AGENT_CHANNELS.cancelAll),
+  listSessions: () => ipcRenderer.invoke(AGENT_CHANNELS.listSessions),
+  onEvent: (callback) => subscribeIpcEvent(AGENT_CHANNELS.event, callback),
+  onNotification: (callback) => subscribeIpcEvent(AGENT_CHANNELS.notification, callback),
+  onHookEvent: (callback) => subscribeIpcEvent(AGENT_CHANNELS.hookEvent, callback),
+}
+
+const checkpointAPI: CheckpointAPI = {
+  create: (input) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.create, input),
+  finalize: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.finalize, { checkpointId, cwd }),
+  restore: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.restore, { checkpointId, cwd }),
+  list: (filter) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.list, filter),
+  diff: (checkpointId, filePath, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.diff, { checkpointId, filePath, cwd }),
+  diffAll: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.diffAll, { checkpointId, cwd }),
+  delete: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.delete, { checkpointId, cwd }),
+  clearAll: (cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.clearAll, cwd ? { cwd } : undefined),
+  onEvent: (callback) => subscribeIpcEvent(CHECKPOINT_CHANNELS.event, callback),
+  onReady: (callback) => subscribeIpcEvent(CHECKPOINT_CHANNELS.ready, callback),
+}
+
+const gitAPI: GitAPI = {
+  status: (cwd) => ipcRenderer.invoke(GIT_CHANNELS.status, cwd),
+  log: (cwd, maxCount) => ipcRenderer.invoke(GIT_CHANNELS.log, cwd, maxCount),
+  stage: (cwd, paths) => ipcRenderer.invoke(GIT_CHANNELS.stage, cwd, paths),
+  unstage: (cwd, paths) => ipcRenderer.invoke(GIT_CHANNELS.unstage, cwd, paths),
+  commit: (cwd, message) => ipcRenderer.invoke(GIT_CHANNELS.commit, cwd, message),
+  push: (cwd) => ipcRenderer.invoke(GIT_CHANNELS.push, cwd),
+  pull: (cwd) => ipcRenderer.invoke(GIT_CHANNELS.pull, cwd),
+}
+
+const notificationSettingsAPI: NotificationSettingsAPI = {
+  get: () => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.get),
+  update: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.update, settings),
+  testFeishu: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.testFeishu, settings),
+}
+
+const subAgentRunAPI: SubAgentRunAPI = {
+  list: () => ipcRenderer.invoke(SUBAGENT_RUN_CHANNELS.list),
+  onUpdated: (callback) => subscribeIpcEvent(SUBAGENT_RUN_CHANNELS.updated, callback),
+  onRemoved: (callback) => subscribeIpcEvent(SUBAGENT_RUN_CHANNELS.removed, callback),
+}
+
+const dialogAPI: DialogAPI = {
+  openDirectory: () => ipcRenderer.invoke(SYSTEM_CHANNELS.openDirectory),
+  saveFile: (options) => ipcRenderer.invoke(SYSTEM_CHANNELS.saveFile, options),
+}
+const windowAPI: WindowAPI = {
+  minimize: () => ipcRenderer.invoke(SYSTEM_CHANNELS.minimize),
+  maximize: () => ipcRenderer.invoke(SYSTEM_CHANNELS.maximize),
+  close: () => ipcRenderer.invoke(SYSTEM_CHANNELS.close),
+  openEditor: (payload) => ipcRenderer.invoke(SYSTEM_CHANNELS.openEditor, payload),
+}
+const systemAPI: SystemAPI = {
+  getDefaultShell: () => ipcRenderer.invoke(SYSTEM_CHANNELS.defaultShell),
+  getPlatform: () => ipcRenderer.invoke(SYSTEM_CHANNELS.platform),
+  getRuntimeTelemetry: (request) => ipcRenderer.invoke(SYSTEM_CHANNELS.runtimeTelemetry, request),
+}
+const desktopToastAPI: DesktopToastAPI = {
+  ready: () => ipcRenderer.send(SYSTEM_CHANNELS.toastReady),
+  action: (action) => ipcRenderer.send(SYSTEM_CHANNELS.toastAction, { action }),
+  onShow: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.toastShow, callback),
+}
+
 contextBridge.exposeInMainWorld('electron', {
   /*-- 同步暴露平台与 Windows build 号，供渲染端构造 xterm windowsPty 用 --*/
   /*-- preload 在 Node 环境，可同步读取；os.release() 形如 "10.0.22621"，第三段为 build 号 --*/
@@ -253,30 +283,15 @@ contextBridge.exposeInMainWorld('electron', {
   project: projectAPI,
   knowledge: knowledgeAPI,
   janus: janusAPI,
-
-  invoke: (channel: string, ...args: unknown[]) => {
-    if (ALLOWED_INVOKE_CHANNELS.includes(channel)) {
-      return ipcRenderer.invoke(channel, ...args)
-    }
-    return Promise.reject(new Error(`Channel ${channel} is not allowed`))
-  },
-
-  send: (channel: string, ...args: unknown[]) => {
-    if (ALLOWED_SEND_CHANNELS.includes(channel)) {
-      ipcRenderer.send(channel, ...args)
-    }
-  },
-
-  on: (channel: string, callback: (...args: unknown[]) => void) => {
-    if (ALLOWED_ON_CHANNELS.includes(channel)) {
-      const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => {
-        callback(...args)
-      }
-      ipcRenderer.on(channel, handler)
-      return () => {
-        ipcRenderer.removeListener(channel, handler)
-      }
-    }
-    return () => {}
-  },
+  office: officeAPI,
+  llm: llmAPI,
+  agent: agentAPI,
+  checkpoint: checkpointAPI,
+  git: gitAPI,
+  notificationSettings: notificationSettingsAPI,
+  subAgentRun: subAgentRunAPI,
+  dialog: dialogAPI,
+  window: windowAPI,
+  system: systemAPI,
+  desktopToast: desktopToastAPI,
 })

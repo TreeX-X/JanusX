@@ -172,15 +172,15 @@ export function Titlebar() {
       {/* 红绿�?*/}
       <div className="flex gap-2 titlebar-no-drag">
         <div
-          onClick={() => window.electron.invoke('window:close')}
+          onClick={() => window.electron.window.close()}
           className="w-3 h-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] cursor-pointer hover:brightness-110 active:brightness-90"
         />
         <div
-          onClick={() => window.electron.invoke('window:minimize')}
+          onClick={() => window.electron.window.minimize()}
           className="w-3 h-3 rounded-full bg-[#ffbd2e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] cursor-pointer hover:brightness-110 active:brightness-90"
         />
         <div
-          onClick={() => window.electron.invoke('window:maximize')}
+          onClick={() => window.electron.window.maximize()}
           className="w-3 h-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] cursor-pointer hover:brightness-110 active:brightness-90"
         />
       </div>

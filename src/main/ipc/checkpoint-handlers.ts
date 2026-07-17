@@ -3,10 +3,11 @@ import { access } from 'fs/promises'
 import { checkpointManager } from '../agent/checkpoint/checkpoint-manager'
 import type { CheckpointEngine } from '../agent/checkpoint/types'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
 
 export function registerCheckpointHandlers(): void {
   ipcMain.handle(
-    'checkpoint:create',
+    CHECKPOINT_CHANNELS.create,
     async (
       _event,
       options: {
@@ -60,7 +61,7 @@ export function registerCheckpointHandlers(): void {
   )
 
   ipcMain.handle(
-    'checkpoint:finalize',
+    CHECKPOINT_CHANNELS.finalize,
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
       await checkpointManager.finalizeCheckpoint(checkpointId, cwd)
       void knowledgeObservationService.capture({
@@ -78,7 +79,7 @@ export function registerCheckpointHandlers(): void {
   )
 
   ipcMain.handle(
-    'checkpoint:restore',
+    CHECKPOINT_CHANNELS.restore,
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
       const result = await checkpointManager.restoreCheckpoint(checkpointId, cwd)
       void knowledgeObservationService.capture({
@@ -96,7 +97,7 @@ export function registerCheckpointHandlers(): void {
   )
 
   ipcMain.handle(
-    'checkpoint:list',
+    CHECKPOINT_CHANNELS.list,
     async (_event, filter?: { terminalId?: string; engine?: CheckpointEngine; cwd?: string }) => {
       const cps = await checkpointManager.listCheckpoints(filter)
       const changedCounts = await checkpointManager.getChangedFileCounts(
@@ -119,7 +120,7 @@ export function registerCheckpointHandlers(): void {
   )
 
   ipcMain.handle(
-    'checkpoint:diff',
+    CHECKPOINT_CHANNELS.diff,
     async (
       _event,
       { checkpointId, filePath, cwd }: { checkpointId: string; filePath: string; cwd: string }
@@ -129,21 +130,21 @@ export function registerCheckpointHandlers(): void {
   )
 
   ipcMain.handle(
-    'checkpoint:diff:all',
+    CHECKPOINT_CHANNELS.diffAll,
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
       return checkpointManager.getAllDiffs(checkpointId, cwd)
     }
   )
 
   ipcMain.handle(
-    'checkpoint:delete',
+    CHECKPOINT_CHANNELS.delete,
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd?: string }) => {
       await checkpointManager.deleteCheckpoint(checkpointId, cwd)
       return { success: true }
     }
   )
 
-  ipcMain.handle('checkpoint:clearAll', async (_event, filter?: { cwd?: string }) => {
+  ipcMain.handle(CHECKPOINT_CHANNELS.clearAll, async (_event, filter?: { cwd?: string }) => {
     await checkpointManager.clearAll(filter?.cwd)
     return { success: true }
   })

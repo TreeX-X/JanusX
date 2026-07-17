@@ -3,9 +3,10 @@ import {
   getRuntimeTelemetrySnapshot,
   type RuntimeTelemetryRequest,
 } from '../runtime-telemetry/history'
+import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 
 export function registerRuntimeTelemetryHandlers(): void {
-  ipcMain.handle('runtime-telemetry:get', async (_event, request: RuntimeTelemetryRequest) => {
+  ipcMain.handle(SYSTEM_CHANNELS.runtimeTelemetry, async (_event, request: RuntimeTelemetryRequest) => {
     return getRuntimeTelemetrySnapshot(request)
   })
 }

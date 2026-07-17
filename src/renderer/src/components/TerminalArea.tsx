@@ -33,6 +33,7 @@ import {
   warmDefaultShellCache,
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
+import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -911,6 +912,7 @@ function LeafPane({
 }
 
 export function TerminalArea() {
+  useTerminalLifecycle()
   const {
     terminals,
     activeTerminalId,
@@ -921,7 +923,6 @@ export function TerminalArea() {
     focusedPaneId,
     setActiveTerminal,
     removeTerminal,
-    updateTerminal,
     setFocusedPane,
     setPaneTab,
     collapsePaneLayout,
@@ -972,41 +973,6 @@ export function TerminalArea() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [closeTerminalMenu, terminalMenuPaneId])
-
-  useEffect(() => {
-    const unsubscribe = window.electron.terminal.onExit(({ id, exitCode }) => {
-      updateTerminal(id, {
-        status: 'exited',
-        exitCode,
-        updatedAt: Date.now(),
-      })
-    })
-    return unsubscribe
-  }, [updateTerminal])
-
-  useEffect(() => {
-    const unsubscribe = window.electron.terminal.onFocus(({ id }) => {
-
-      const store = useWorkspaceStore.getState()
-      if (store.terminals.some((terminal) => terminal.id === id)) {
-        store.setActiveTerminal(id)
-        setLoadState('terminal-active')
-        return
-      }
-
-      const snapshotWorkspaceId = Object.entries(store.terminalSnapshots).find(([, snapshot]) =>
-        snapshot.terminals.some((terminal) => terminal.id === id),
-      )?.[0]
-
-      if (!snapshotWorkspaceId) return
-      store.setActiveWorkspace(snapshotWorkspaceId)
-      requestAnimationFrame(() => {
-        useWorkspaceStore.getState().setActiveTerminal(id)
-        setLoadState('terminal-active')
-      })
-    })
-    return unsubscribe
-  }, [setLoadState])
 
   useEffect(() => {
     if (paneTree) return

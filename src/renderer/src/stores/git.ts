@@ -25,8 +25,8 @@ export const useGitStore = create<GitStore>((set) => ({
   fetchStatus: async (cwd) => {
     set({ error: null })
     try {
-      const status = await window.electron.invoke('git:status', cwd)
-      set({ status: status as GitStatus })
+      const status = await window.electron.git.status(cwd)
+      set({ status })
     } catch (err: any) {
       set({ status: null, error: err.message })
     }
@@ -34,8 +34,8 @@ export const useGitStore = create<GitStore>((set) => ({
 
   fetchLog: async (cwd, maxCount) => {
     try {
-      const commits = await window.electron.invoke('git:log', cwd, maxCount)
-      set({ commits: commits as GitCommit[] })
+      const commits = await window.electron.git.log(cwd, maxCount)
+      set({ commits })
     } catch (err: any) {
       set({ error: err.message })
     }
@@ -44,8 +44,8 @@ export const useGitStore = create<GitStore>((set) => ({
   stageFiles: async (cwd, paths) => {
     set({ loading: true, error: null })
     try {
-      const status = await window.electron.invoke('git:stage', cwd, paths)
-      set({ status: status as GitStatus, loading: false })
+      const status = await window.electron.git.stage(cwd, paths)
+      set({ status, loading: false })
     } catch (err: any) {
       set({ error: err.message, loading: false })
     }
@@ -54,8 +54,8 @@ export const useGitStore = create<GitStore>((set) => ({
   unstageFiles: async (cwd, paths) => {
     set({ loading: true, error: null })
     try {
-      const status = await window.electron.invoke('git:unstage', cwd, paths)
-      set({ status: status as GitStatus, loading: false })
+      const status = await window.electron.git.unstage(cwd, paths)
+      set({ status, loading: false })
     } catch (err: any) {
       set({ error: err.message, loading: false })
     }
@@ -64,8 +64,8 @@ export const useGitStore = create<GitStore>((set) => ({
   commitChanges: async (cwd, message) => {
     set({ loading: true, error: null })
     try {
-      const status = await window.electron.invoke('git:commit', cwd, message)
-      set({ status: status as GitStatus, loading: false })
+      const status = await window.electron.git.commit(cwd, message)
+      set({ status, loading: false })
     } catch (err: any) {
       set({ error: err.message, loading: false })
     }
@@ -74,9 +74,9 @@ export const useGitStore = create<GitStore>((set) => ({
   pushChanges: async (cwd) => {
     set({ loading: true, error: null })
     try {
-      await window.electron.invoke('git:push', cwd)
-      const status = await window.electron.invoke('git:status', cwd)
-      set({ status: status as GitStatus, loading: false })
+      await window.electron.git.push(cwd)
+      const status = await window.electron.git.status(cwd)
+      set({ status, loading: false })
     } catch (err: any) {
       set({ error: err.message, loading: false })
     }
@@ -85,9 +85,9 @@ export const useGitStore = create<GitStore>((set) => ({
   pullChanges: async (cwd) => {
     set({ loading: true, error: null })
     try {
-      await window.electron.invoke('git:pull', cwd)
-      const status = await window.electron.invoke('git:status', cwd)
-      set({ status: status as GitStatus, loading: false })
+      await window.electron.git.pull(cwd)
+      const status = await window.electron.git.status(cwd)
+      set({ status, loading: false })
     } catch (err: any) {
       set({ error: err.message, loading: false })
     }

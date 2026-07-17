@@ -8,8 +8,8 @@ JanusX follows a standard Electron split:
 
 | Layer | Key Files | Responsibility |
 |---|---|---|
-| Main process | `src/main/index.ts` | App lifecycle, BrowserWindow, IPC registration, Node-side services |
-| Preload bridge | `src/preload/index.ts` | Exposes typed domain APIs for migrated IPC plus temporary generic allowlists for remaining domains |
+| Main process | `src/main/index.ts`, `src/main/bootstrap/`, `src/main/windows/`, `src/main/ipc/register.ts` | App lifecycle coordination, service composition, window policy, and domain IPC registration |
+| Preload bridge | `src/preload/index.ts` | Exposes fixed typed domain APIs; no generic channel bridge |
 | Renderer | `src/renderer/src` | React UI, Zustand state, IPC service wrappers |
 | Shared | `src/shared`, `src/shared/ipc/*` | pure cross-process utilities, DTOs, channel constants, and typed domain API contracts |
 | Package workspace | `packages/llm-core` | provider abstraction and LLM adapters consumed by main process |
@@ -24,7 +24,7 @@ Renderer alias `@` maps to `src/renderer/src`.
 
 ## Main Process Composition
 
-`src/main/index.ts` creates the main window and registers these IPC modules:
+`src/main/index.ts` coordinates lifecycle; window construction and ordered IPC registration are delegated to `src/main/windows/` and `src/main/ipc/register.ts`:
 
 | Registrar | Subsystem |
 |---|---|
@@ -44,22 +44,22 @@ On app quit, `terminalManager.killAll()` is called.
 
 ## IPC Boundary
 
-`src/preload/index.ts` remains the security boundary, but the migration is incremental:
+`src/preload/index.ts` is the completed typed security boundary:
 
 - Workspace/File/FileTree contracts live in `src/shared/ipc/workspace.ts` and are exposed as `window.electron.workspace`, `fileTree`, and `file`.
 - Terminal contracts live in `src/shared/ipc/terminal.ts` and are exposed as `window.electron.terminal`.
 - Project request/response contracts live in `src/shared/ipc/project.ts` and are exposed as `window.electron.project`; `services/project.ts` is the sole renderer client.
 - Knowledge and Knowledge Settings contracts live in `src/shared/ipc/knowledge.ts` and are exposed as `window.electron.knowledge`; existing renderer service exports delegate only to that API.
 - Blueprint/Janus models live in `src/shared/janus/types.ts`; 22 commands and two Island events are declared in `src/shared/ipc/janus.ts` and exposed as `window.electron.janus`.
-- Migrated channels are not accepted by the generic `invoke/send/on` allowlists.
-- Unmigrated domains temporarily continue through the generic allowlists until their own shared contract slice is introduced.
+- The generic `invoke/send/on` surface and allowlists have been removed.
+- Every renderer-accessible domain has shared channel constants/types and a fixed API.
 - Typed event adapters hide Electron event objects and remove the exact registered listener on unsubscribe.
 
-For migrated domains, add or change the shared contract first, then update the main handler/producer, fixed preload method, renderer caller, and contract tests together. For an unmigrated domain, the legacy allowlist path remains a compatibility boundary rather than the target design.
+Add or change the shared contract first, then update the main handler/producer, fixed preload method, renderer caller, and contract tests together. Never reintroduce a generic string bridge.
 
 Project running state and output currently synchronize by guarded polling. `ProjectRunner` lifecycle events remain main-internal until a product decision defines a renderer event contract.
 
-Knowledge auto-prune, archive, and compact handlers remain main-internal maintenance capabilities. They are intentionally absent from the shared public API, preload bridge, and renderer.
+Knowledge auto-prune is retained as an explicit typed maintenance API. Archive and compact remain main-internal maintenance capabilities.
 
 `services/blueprint.ts` remains the renderer facade for Blueprint/Janus. The shared ownership change removes the former renderer-to-main type dependency; it does not yet split `BlueprintCanvas` controller responsibilities.
 

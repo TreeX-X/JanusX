@@ -6,6 +6,7 @@ import type {
   SubAgentRunUpdateInput,
   SubAgentRunUpdatedEvent,
 } from '../../shared/subAgentRun'
+import { SUBAGENT_RUN_CHANNELS } from '../../shared/ipc/agent'
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -97,7 +98,7 @@ export class SubAgentRunRegistry {
   removeRun(id: string): void {
     if (!this.runs.delete(id)) return
     const payload: SubAgentRunRemovedEvent = { id }
-    sendToRenderer(this.mainWindow, 'subagent-run:removed', payload)
+    sendToRenderer(this.mainWindow, SUBAGENT_RUN_CHANNELS.removed, payload)
   }
 
   clear(): void {
@@ -109,7 +110,7 @@ export class SubAgentRunRegistry {
 
   private emitUpdated(run: SubAgentRun): void {
     const payload: SubAgentRunUpdatedEvent = { run }
-    sendToRenderer(this.mainWindow, 'subagent-run:updated', payload)
+    sendToRenderer(this.mainWindow, SUBAGENT_RUN_CHANNELS.updated, payload)
   }
 }
 

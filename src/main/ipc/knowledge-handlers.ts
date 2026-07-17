@@ -52,7 +52,7 @@ export function registerKnowledgeHandlers(): void {
     return knowledgeObservationService.resolveContent(observation)
   })
 
-  ipcMain.handle('knowledge:observations:auto-prune', async (_event, nowMs?: number) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.autoPruneObservations, async (_event, nowMs?: number) => {
     return knowledgeObservationService.autoPrune(nowMs)
   })
 

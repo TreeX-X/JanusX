@@ -26,8 +26,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 let janusApi: JanusAPI
-let genericInvoke: (channel: string, ...args: unknown[]) => Promise<unknown>
-let genericOn: (channel: string, callback: (...args: unknown[]) => void) => () => void
 const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
 
 vi.mock('electron', () => ({
@@ -36,13 +34,9 @@ vi.mock('electron', () => ({
       _name: string,
       api: {
         janus: JanusAPI
-        invoke: typeof genericInvoke
-        on: typeof genericOn
       }
     ) => {
       janusApi = api.janus
-      genericInvoke = api.invoke
-      genericOn = api.on
       mocks.expose(api)
     },
   },
@@ -454,15 +448,10 @@ describe('Janus IPC contract', () => {
     ])
   })
 
-  it('rejects all migrated command and event channels through generic bridges', async () => {
-    for (const channel of Object.values(JANUS_COMMAND_CHANNELS)) {
-      await expect(genericInvoke(channel)).rejects.toThrow('is not allowed')
-    }
-    for (const channel of Object.values(JANUS_EVENT_CHANNELS)) {
-      genericOn(channel, vi.fn())()
-    }
-
-    expect(mocks.invoke).not.toHaveBeenCalled()
-    expect(mocks.on).not.toHaveBeenCalled()
+  it('does not expose generic bridges', () => {
+    const exposed = mocks.expose.mock.calls[0]?.[0]
+    expect(exposed).not.toHaveProperty('invoke')
+    expect(exposed).not.toHaveProperty('send')
+    expect(exposed).not.toHaveProperty('on')
   })
 })

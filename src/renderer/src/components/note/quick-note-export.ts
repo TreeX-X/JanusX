@@ -38,7 +38,7 @@ export function mdToPayload(markdown: string, format: QuickNoteExportFormat): st
 
 export async function exportNoteCard(card: NoteCard, format: QuickNoteExportFormat): Promise<'saved' | 'canceled'> {
   const base = (card.title.trim() || `Note-${card.id.slice(0, 8)}`).replace(/[\\/:"*?<>|]/g, '-').trim()
-  const dialog = await window.electron.invoke('dialog:saveFile', { defaultName: `${base}.${format}`, extension: format }) as { canceled: boolean; filePath?: string }
+  const dialog = await window.electron.dialog.saveFile({ defaultName: `${base}.${format}`, extension: format })
   if (dialog.canceled || !dialog.filePath) return 'canceled'
   const result = await window.electron.file.save(dialog.filePath, mdToPayload(card.content, format))
   if (result?.error) throw new Error(result.error)

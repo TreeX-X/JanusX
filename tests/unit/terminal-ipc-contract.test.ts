@@ -17,14 +17,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 let terminalApi: TerminalAPI
-let genericInvoke: (channel: string, ...args: unknown[]) => Promise<unknown>
 
 vi.mock('electron', () => ({
   BrowserWindow: class {},
   contextBridge: {
-    exposeInMainWorld: (_name: string, api: { terminal: TerminalAPI; invoke: typeof genericInvoke }) => {
+    exposeInMainWorld: (_name: string, api: { terminal: TerminalAPI }) => {
       terminalApi = api.terminal
-      genericInvoke = api.invoke
       mocks.expose(api)
     },
   },
@@ -109,8 +107,7 @@ describe('Terminal IPC contract', () => {
     expect(mocks.removeListener).toHaveBeenCalledWith(TERMINAL_EVENT_CHANNELS.data, handler)
   })
 
-  it('rejects migrated commands through the generic bridge', async () => {
-    await expect(genericInvoke(TERMINAL_INVOKE_CHANNELS.create, {})).rejects.toThrow('is not allowed')
-    expect(mocks.invoke).not.toHaveBeenCalled()
+  it('does not expose a generic bridge', () => {
+    expect(mocks.expose.mock.calls[0]?.[0]).not.toHaveProperty('invoke')
   })
 })

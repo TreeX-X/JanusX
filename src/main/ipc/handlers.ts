@@ -10,6 +10,7 @@ import {
   type WorkspaceCreateInput,
   type WorkspaceUpdates,
 } from '../../shared/ipc/workspace'
+import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
@@ -308,23 +309,23 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle('dialog:openDirectory', async () => {
+  ipcMain.handle(SYSTEM_CHANNELS.openDirectory, async () => {
     return dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
     })
   })
 
-  ipcMain.handle('dialog:saveFile', async (_event, options: unknown) => {
+  ipcMain.handle(SYSTEM_CHANNELS.saveFile, async (_event, options: unknown) => {
     const result = await dialog.showSaveDialog(mainWindow, resolveSaveFileDialogOptions(options))
     return { canceled: result.canceled, ...(result.filePath ? { filePath: result.filePath } : {}) }
   })
 
-  ipcMain.handle('system:getDefaultShell', () => {
+  ipcMain.handle(SYSTEM_CHANNELS.defaultShell, () => {
     if (process.platform === 'win32') return 'powershell.exe'
     return process.env.SHELL || '/bin/bash'
   })
 
-  ipcMain.handle('system:getPlatform', () => {
+  ipcMain.handle(SYSTEM_CHANNELS.platform, () => {
     return process.platform
   })
 

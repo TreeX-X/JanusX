@@ -8,13 +8,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 let projectApi: ProjectAPI
-let genericInvoke: (channel: string, ...args: unknown[]) => Promise<unknown>
 
 vi.mock('electron', () => ({
   contextBridge: {
-    exposeInMainWorld: (_name: string, api: { project: ProjectAPI; invoke: typeof genericInvoke }) => {
+    exposeInMainWorld: (_name: string, api: { project: ProjectAPI }) => {
       projectApi = api.project
-      genericInvoke = api.invoke
       mocks.expose(api)
     },
   },
@@ -80,8 +78,7 @@ describe('Project IPC contract', () => {
     ])
   })
 
-  it('rejects migrated commands through the generic bridge', async () => {
-    await expect(genericInvoke(PROJECT_CHANNELS.list)).rejects.toThrow('is not allowed')
-    expect(mocks.invoke).not.toHaveBeenCalled()
+  it('does not expose a generic bridge', () => {
+    expect(mocks.expose.mock.calls[0]?.[0]).not.toHaveProperty('invoke')
   })
 })

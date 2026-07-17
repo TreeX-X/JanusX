@@ -33,8 +33,8 @@ export function ensureDefaultShell(): Promise<string> {
   if (cachedDefaultShell) return Promise.resolve(cachedDefaultShell)
   if (shellFetchPromise) return shellFetchPromise
 
-  shellFetchPromise = window.electron
-    .invoke('system:getDefaultShell')
+  shellFetchPromise = window.electron.system
+    .getDefaultShell()
     .then((shell) => {
       cachedDefaultShell = typeof shell === 'string' && shell.length > 0 ? shell : fallbackShell()
       return cachedDefaultShell

@@ -24,13 +24,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 let knowledgeApi: KnowledgeAPI
-let genericInvoke: (channel: string, ...args: unknown[]) => Promise<unknown>
 
 vi.mock('electron', () => ({
   contextBridge: {
-    exposeInMainWorld: (_name: string, api: { knowledge: KnowledgeAPI; invoke: typeof genericInvoke }) => {
+    exposeInMainWorld: (_name: string, api: { knowledge: KnowledgeAPI }) => {
       knowledgeApi = api.knowledge
-      genericInvoke = api.invoke
       mocks.expose(api)
     },
   },
@@ -82,7 +80,7 @@ describe('Knowledge IPC contract', () => {
 
   it('defines and registers exactly the public channel set without maintenance exposure', () => {
     const channels = Object.values(KNOWLEDGE_CHANNELS)
-    expect(channels).toHaveLength(24)
+    expect(channels).toHaveLength(25)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -113,6 +111,7 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.observe(captureInput)
     await knowledgeApi.listObservations({ scope: 'global', limit: 10 })
     await knowledgeApi.pruneObservations({ scope: 'workspace', confirm: true })
+    await knowledgeApi.autoPruneObservations(123)
     await knowledgeApi.resolveObservationContent(observation)
     await knowledgeApi.retentionStats()
     await knowledgeApi.listAudit({ limit: 5 })
@@ -139,6 +138,7 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.observe, captureInput],
       [KNOWLEDGE_CHANNELS.listObservations, { scope: 'global', limit: 10 }],
       [KNOWLEDGE_CHANNELS.pruneObservations, { scope: 'workspace', confirm: true }],
+      [KNOWLEDGE_CHANNELS.autoPruneObservations, 123],
       [KNOWLEDGE_CHANNELS.resolveObservationContent, observation],
       [KNOWLEDGE_CHANNELS.retentionStats],
       [KNOWLEDGE_CHANNELS.listAudit, { limit: 5 }],
@@ -161,11 +161,8 @@ describe('Knowledge IPC contract', () => {
     ])
   })
 
-  it('rejects every migrated channel through the generic bridge', async () => {
-    for (const channel of Object.values(KNOWLEDGE_CHANNELS)) {
-      await expect(genericInvoke(channel)).rejects.toThrow('is not allowed')
-    }
-    expect(mocks.invoke).not.toHaveBeenCalled()
+  it('does not expose a generic bridge', () => {
+    expect(mocks.expose.mock.calls[0]?.[0]).not.toHaveProperty('invoke')
   })
 
   it('preserves Knowledge Settings service values, arguments, and failures', async () => {
@@ -267,6 +264,7 @@ describe('Knowledge IPC contract', () => {
       () => api.observe({ workspacePath: 'C:\\work', source: 'manual', type: 'user-note', content: 'content' }),
       () => api.listObservations({ scope: 'global' }),
       () => api.pruneObservations({ scope: 'workspace', confirm: true }),
+      () => api.autoPruneObservations(),
       () => api.resolveObservationContent(observation),
       () => api.retentionStats(),
       () => api.listAudit({ limit: 1 }),
@@ -288,8 +286,8 @@ describe('Knowledge IPC contract', () => {
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(24)
-    expect(calls).toHaveLength(24)
+    expect(Object.keys(api)).toHaveLength(25)
+    expect(calls).toHaveLength(25)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

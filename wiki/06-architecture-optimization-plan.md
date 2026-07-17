@@ -1,6 +1,6 @@
 # Architecture Optimization and Cleanup Plan
 
-Status: Partially implemented — Phases 1–3, the public Knowledge and Blueprint/Janus slices, and the unified release gate are complete; screenshot archival, Phase 4, remaining IPC domains, and product decisions remain planned.
+Status: Implemented — Phases 1–5 are complete. Build artifacts are isolated, all renderer IPC uses fixed typed domain APIs, the main composition root and renderer controllers have explicit boundaries, and the unified release gate remains active.
 
 Evidence verified: 2026-07-16
 
@@ -29,12 +29,12 @@ Implementation reviewed: 2026-07-17
 | Roadmap Area | Status | Verified Result |
 |---|---|---|
 | Phase 1 — proven redundancy | Complete | Five dead tracked paths removed; unused declarations resolved individually; strict-unused diagnostics reduced to 0; affected Wiki entries repaired. |
-| Phase 2 — package isolation | Complete for release safety | Electron Builder includes only `out/main/**`, `out/preload/**`, `out/renderer/**`, and `package.json`; a fail-closed package-boundary gate is covered by adversarial tests. The 31 ignored root screenshots remain untouched pending an archive-location decision. |
+| Phase 2 — package isolation | Complete | Electron Builder includes only `out/main/**`, `out/preload/**`, `out/renderer/**`, and `package.json`; the 31 root screenshots moved to the ignored local archive under `artifacts/screenshots/architecture-review-2026-07/`; the fail-closed boundary gate remains covered. |
 | Phase 3 — typed IPC slices | Complete | Workspace/File/FileTree, Terminal, and Project request/response operations use pure shared contracts, fixed preload domain APIs, typed main handlers/producers, and migrated renderer callers. No generic string-channel call remains for those domains. |
-| Phase 4 | Pending | Main/renderer controller extraction remains planned. |
-| Phase 5 | In progress | Public Knowledge/Settings and Blueprint/Janus migrations plus the Windows verify/desktop-smoke gate are complete; remaining IPC domains and product decisions remain. |
+| Phase 4 — composition and controllers | Complete | `src/main/index.ts` is a 131-line lifecycle coordinator; session, services, IPC registration, renderer loading, main/editor windows, Workspace actions/bootstrap, Terminal lifecycle, and Blueprint layout/analysis actions have explicit modules. |
+| Phase 5 — complete contracts and gate | Complete | The generic preload bridge is removed. LLM, Office, Agent, Checkpoint, Git, notification settings, runtime telemetry, Subagent, Dialog/Window/System, and desktop toast now use shared contracts and fixed preload APIs. |
 
-Current verification: `npm run verify` passes both type checks, 81 root unit files / 602 tests, 5 LLM Core files / 63 tests, strict-unused, production build, package-boundary validation, and the real built-Electron desktop smoke (1/1). `git diff --check` also passes.
+Current verification: `npm run verify` passes both type checks, 83 root unit files / 606 tests, 5 LLM Core files / 63 tests, strict-unused, production build, package-boundary validation, and the real built-Electron desktop smoke (1/1).
 
 ## Engineering Structure and Module Responsibilities
 
@@ -53,8 +53,8 @@ Current verification: `npm run verify` passes both type checks, 81 root unit fil
 ### Current Runtime Flow
 
 1. Electron starts from src/main/index.ts, creates windows, initializes services, and registers domain IPC handlers.
-2. Migrated Workspace/File/FileTree, Terminal, Project, public Knowledge, and Blueprint/Janus callers use fixed `window.electron` domain APIs; remaining domains still use generic invoke/send/on during the incremental migration.
-3. Fixed preload adapters forward migrated calls with shared types; the generic compatibility path still checks manually maintained allowlists and forwards string channels for unmigrated domains.
+2. Every renderer caller uses a fixed `window.electron` domain API; generic invoke/send/on is no longer exposed.
+3. Fixed preload adapters forward calls using shared channel constants and request/response/event types.
 4. Main-process IPC handlers delegate to terminal, project, agent, knowledge, office, LLM, or Janus services.
 5. Renderer components, stores, and services render results and maintain UI state.
 
@@ -73,11 +73,11 @@ The target still uses Electron IPC. The change is ownership and type safety: cha
 
 ## Key Code Interpretation
 
-- src/main/index.ts: Current composition root. It configures session paths and CSP, builds the main and editor windows, registers fourteen IPC areas, and owns shutdown wiring. The role is valid; the accumulated responsibilities are too broad for a single file.
-- src/preload/index.ts: Security boundary with typed Workspace/File/FileTree/Terminal/Project/Knowledge/Janus domain APIs plus temporary generic allowlists for remaining domains. The remaining generic API still prevents compile-time agreement outside migrated slices.
+- src/main/index.ts: Lifecycle coordinator only. Session/CSP, services, IPC registration, renderer loading, and window construction live under `bootstrap/`, `ipc/register.ts`, and `windows/`.
+- src/preload/index.ts: Security boundary exposing fixed typed domain APIs only; no generic channel bridge or manually maintained allowlist remains.
 - src/renderer/src/App.tsx: Application shell plus initialization, workspace file-tree refresh, Office preview layout, and panel behavior. It should remain a shell after data-loading actions move into stores/services.
-- src/renderer/src/components/blueprint/BlueprintCanvas.tsx: A 1654-line graph, dialog, analysis, and terminal orchestration component. It is the highest renderer refactoring priority.
-- src/renderer/src/components/TerminalArea.tsx: A 1453-line terminal layout and lifecycle component. Terminal launch is centralized in `lib/terminal-launch.ts`; pane, tab, layout, lifecycle, and view orchestration remain concentrated here.
+- src/renderer/src/components/blueprint/BlueprintCanvas.tsx: React Flow view composition; layout derivation and analysis orchestration now live in `features/blueprint/`.
+- src/renderer/src/components/TerminalArea.tsx: Pane/tab/layout view composition; terminal creation and lifecycle subscriptions now live in `lib/terminal-launch.ts` and `features/terminal/`.
 - src/renderer/src/components/Panel.tsx and Sidebar.tsx: Both perform workspace/file-tree operations that should be owned by a workspace action layer.
 - src/main/ipc/project-handlers.ts: Empty event subscriptions were removed; the runner still emits project lifecycle events pending a product decision about live renderer consumption.
 - src/renderer/src/services/knowledge.ts: Unused demo datasets were removed; the remaining service is live knowledge IPC integration.
@@ -87,9 +87,9 @@ The target still uses Electron IPC. The change is ownership and type safety: cha
 
 | Risk Item | Pre-Implementation Evidence | Current Status | Priority |
 |---|---|---|---|
-| Mixed build output and screenshots | 31 top-level PNGs / 3.69 MB were inside broadly packaged `out` | Release risk resolved by explicit globs and gate; archive location remains pending | High |
-| Generic IPC bridge and contract drift | 122 allowed invoke channels plus known handler/producer gaps | Resolved for Workspace/File/FileTree/Terminal/Project/public Knowledge/Blueprint/Janus operations; remaining generic domains require incremental migration | High |
-| Renderer god components | BlueprintCanvas 1701 lines; TerminalArea 1428; Panel 874 | Open: current files remain 1654 / 1453 / 871 lines and need responsibility-based extraction | High |
+| Mixed build output and screenshots | 31 top-level PNGs / 3.69 MB were inside broadly packaged `out` | Resolved: archived under ignored `artifacts/screenshots/architecture-review-2026-07/`; `out` root is clean | High |
+| Generic IPC bridge and contract drift | 122 allowed invoke channels plus known handler/producer gaps | Resolved: the generic bridge is removed and all public renderer domains use shared contracts and fixed APIs | High |
+| Renderer god components | BlueprintCanvas 1701 lines; TerminalArea 1428; Panel 874 | Controller boundaries implemented: Blueprint layout/analysis, Terminal lifecycle, and Workspace bootstrap/actions are extracted; views remain intentionally cohesive | High |
 | Dead or invalid tracked files | Root bundle, invalid image payloads, unused icon/window helper | Resolved: confirmed dead tracked files removed and verified | High |
 | Stale duplicated window implementation | Unused `src/main/window.ts` with conflicting preload/security assumptions | Resolved: file deleted and Wiki indexes repaired | Medium |
 | Unused declarations hidden by the default root check | 35 plan-baseline candidates; 37 at implementation start | Resolved: strict-unused diagnostics are 0 and the check is scripted | Medium |
@@ -167,7 +167,7 @@ Migration order:
 1. Workspace and file tree: repeated calls in App, Sidebar, and Panel give immediate duplication reduction.
 2. Terminal: consolidate create, input, resize, replay, and lifecycle events.
 3. Project runner: request/response migration is complete; polling remains the renderer synchronization contract while live events await a product decision.
-4. Knowledge and Blueprint/Janus migrations are complete; BlueprintCanvas controller extraction remains a separate Phase 4 concern.
+4. Knowledge and Blueprint/Janus migrations and Blueprint layout/analysis controller extraction are complete.
 5. LLM and Office: preserve their existing typed shared constants where useful, but align them with the same contract model.
 
 Acceptance criteria:
@@ -352,25 +352,24 @@ Track these before and after each phase:
 
 | Metric | Baseline | Current | Target |
 |---|---|---|---|
-| Top-level non-build files in out | 31 PNG files / 3.69 MB | Unchanged on disk; excluded from packages | 0 after archive location is confirmed |
-| Generic preload invoke channels | 122 | Workspace/File/FileTree, Terminal, Project, public Knowledge, and Blueprint/Janus removed from generic bridge | 0 after complete domain migration |
+| Top-level non-build files in out | 31 PNG files / 3.69 MB | 0; historical images archived outside `out` | 0 |
+| Generic preload invoke channels | 122 | 0; generic bridge removed | 0 |
 | Main/preload contract drift | At least 4 observed inconsistencies | 0 in migrated domains | 0 across all domains |
 | Strict unused-symbol diagnostics | 35 baseline candidates, excluding current user WIP | 0 | 0, with CI enforcement |
-| Renderer direct bridge files | 29 files / about 150 calls | No generic migrated-domain calls remain | Only typed domain-client implementations |
-| BlueprintCanvas and TerminalArea | 1701 / 1428 lines | Controller extraction not started | Reduced by responsibility extraction; no artificial line-count target |
-| Unit coverage | 67 files / 520 tests at plan baseline | 81 files / 602 tests | Maintain green domain and contract coverage |
+| Renderer direct bridge files | 29 files / about 150 calls | 0 generic calls | Only typed domain-client implementations |
+| BlueprintCanvas and TerminalArea | 1701 / 1428 lines | 1444 / 1419 with named controller/model boundaries | Reduced by responsibility extraction; no artificial line-count target |
+| Unit coverage | 67 files / 520 tests at plan baseline | 83 files / 606 tests | Maintain green domain and contract coverage |
 | E2E workflow coverage | 1 focused spec | Separate Island browser spec plus 1 built-Electron startup/Workspace/Terminal/Project smoke | Maintain the release smoke and add only high-value workflow coverage |
 
 ## Pending Confirmation
 
 - Whether design prototypes must remain in the primary source repository.
-- Whether auto-prune should run automatically, be user-triggered, or be removed.
-- Whether live project output, ready, and exit events are a current product requirement.
-- Which screenshot artifacts are intentionally retained and where their canonical archive belongs.
+- Whether Knowledge auto-prune should later be scheduled automatically; it is currently retained as an explicit typed maintenance API.
+- Whether Project lifecycle events should later gain a renderer consumer; they currently remain internal runner events rather than an unused public IPC surface.
 - Whether the root package distribution needs an explicit workspace dependency declaration after a packaged release smoke test. Current builds bundle the LLM implementation, but packaging behavior should be confirmed rather than assumed.
 
 ## Conclusion and Next Steps
 
-- Conclusion: JanusX has a sound modular-monolith foundation. The priority is slimming and boundary repair, not a rewrite.
-- Recommended Priority Actions: Continue Phase 5 contract migration one domain at a time under the new release gate, then extract the main composition root and renderer controllers in small behavior-preserving commits. Resolve screenshot/design archive and internal event lifecycle decisions separately.
+- Conclusion: The planned modular-monolith boundary repair is implemented without a framework rewrite.
+- Recommended Priority Actions: Keep the release gate blocking, add only high-value controller extractions when responsibilities actually diverge, and prevent new generic IPC or mixed build artifacts through the existing tests.
 - Definition of Success: The repository has no known invalid/dead tracked assets, out is clean build output, IPC is domain-typed, major renderer files have explicit controller/view boundaries, and a unified verification command blocks regressions.

@@ -13,23 +13,17 @@ export type {
 }
 
 export async function getNotificationSettings(): Promise<AgentNotificationSettings> {
-  return window.electron.invoke('settings:notifications:get') as Promise<AgentNotificationSettings>
+  return window.electron.notificationSettings.get()
 }
 
 export async function updateNotificationSettings(
   settings: Partial<AgentNotificationSettings>,
 ): Promise<AgentNotificationSettings> {
-  return window.electron.invoke(
-    'settings:notifications:update',
-    settings,
-  ) as Promise<AgentNotificationSettings>
+  return window.electron.notificationSettings.update(settings)
 }
 
 export async function testFeishuNotification(
   settings: RemoteNotificationSettings,
 ): Promise<RemoteSendResult> {
-  return window.electron.invoke(
-    'settings:notifications:test-feishu',
-    settings,
-  ) as Promise<RemoteSendResult>
+  return window.electron.notificationSettings.testFeishu(settings)
 }

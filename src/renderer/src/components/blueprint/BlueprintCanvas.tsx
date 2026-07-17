@@ -30,12 +30,7 @@ import type { TerminalPreset } from '@/types'
 import {
   createNode as createNodeIPC,
   updateBlueprint as updateBlueprintIPC,
-  analyze as analyzeIPC,
   bindTerminal as bindTerminalIPC,
-  listAnalyses as listAnalysesIPC,
-  applyAnalysis as applyAnalysisIPC,
-  type Blueprint,
-  type BlueprintAnalysis,
   type BlueprintFeatureItem,
   type BlueprintIssue,
   type BlueprintIssueSeverity,
@@ -50,12 +45,15 @@ import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
 import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
 import { launchTerminalPreset } from '@/lib/terminal-launch'
+import { deriveBlueprintFlow } from '@/features/blueprint/canvas-layout'
+import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
-const ANALYSIS_COMMIT_LIMIT_DEFAULT = 5
 const ANALYSIS_COMMIT_LIMIT_MIN = 1
 const ANALYSIS_COMMIT_LIMIT_MAX = 50
+const NODE_W = 240
+const NODE_H = 110
 const TERMINAL_PRESETS: {
   type: TerminalPreset
   label: string
@@ -126,12 +124,6 @@ function serializeItems(items: string[]): string {
 
 function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase()
-}
-
-function normalizeAnalysisCommitLimit(value: string): number {
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed)) return ANALYSIS_COMMIT_LIMIT_DEFAULT
-  return Math.max(ANALYSIS_COMMIT_LIMIT_MIN, Math.min(ANALYSIS_COMMIT_LIMIT_MAX, parsed))
 }
 
 function buildNodeSearchText(node: BlueprintNode): string {
@@ -250,103 +242,6 @@ function collectDescendantIds(nodes: Record<string, BlueprintNode>, nodeId: stri
   return out
 }
 
-/* Tree layout */
-const NODE_W = 240
-const NODE_H = 110
-const X_GAP = 32
-const Y_GAP = 64
-
-/** 计算所有节点位置：树形递归 + canvasLayout 覆盖 */
-function computeLayout(
-  nodes: Record<string, BlueprintNode>,
-  rootNodeId: string,
-  canvasLayout: Blueprint['canvasLayout']
-): Record<string, { x: number; y: number }> {
-  const childrenOf: Record<string, string[]> = {}
-  const roots: string[] = []
-  for (const id of Object.keys(nodes)) {
-    const n = nodes[id]
-    const p = n.parentId
-    if (p && nodes[p]) {
-      ;(childrenOf[p] ??= []).push(id)
-    } else {
-      roots.push(id)
-    }
-  }
-  // 主根优先
-  roots.sort((a, b) => (a === rootNodeId ? -1 : b === rootNodeId ? 1 : 0))
-
-  const positions: Record<string, { x: number; y: number }> = {}
-  let cursor = 0
-  const place = (id: string, depth: number): number => {
-    const kids = childrenOf[id] ?? []
-    if (kids.length === 0) {
-      const x = cursor * (NODE_W + X_GAP)
-      cursor++
-      positions[id] = { x, y: depth * (NODE_H + Y_GAP) }
-      return x
-    }
-    const childXs = kids.map((k) => place(k, depth + 1))
-    const x = childXs.reduce((a, b) => a + b, 0) / childXs.length
-    positions[id] = { x, y: depth * (NODE_H + Y_GAP) }
-    return x
-  }
-  for (const r of roots) {
-    place(r, 0)
-    cursor += 0.5
-  }
-  // 显式保存的画布坐标覆盖自动布局
-  for (const id of Object.keys(canvasLayout)) {
-    if (nodes[id] && canvasLayout[id]) positions[id] = canvasLayout[id]
-  }
-  return positions
-}
-
-/** 从 Blueprint 派生 RF nodes / edges（保留已有位置） */
-function deriveRF(
-  bp: Blueprint,
-  existing: Record<string, { x: number; y: number }>,
-  workspaceNameById: Record<string, string>,
-  focusedNodeIds: Set<string>,
-  focusActive: boolean
-): { nodes: Node<BlueprintNodeData, 'blueprint'>[]; edges: Edge[] } {
-  const layout = computeLayout(bp.nodes, bp.rootNodeId, bp.canvasLayout ?? {})
-  const nodes: Node<BlueprintNodeData, 'blueprint'>[] = bp.nodeIds
-    .filter((id) => bp.nodes[id])
-    .map((id) => {
-      const n = bp.nodes[id]
-      const isFocused = focusedNodeIds.has(id)
-      return {
-        id,
-        type: 'blueprint',
-        position: existing[id] ?? layout[id] ?? { x: 0, y: 0 },
-        data: {
-          title: n.title,
-          status: n.status,
-          nodeType: n.type,
-          progress: n.progress,
-          workspaceName: n.workspaceId ? workspaceNameById[n.workspaceId] ?? n.workspaceSnapshot?.name ?? null : null,
-          boundTerminalId: n.boundTerminalId,
-          searchMatched: focusActive && isFocused,
-          searchDimmed: focusActive && !isFocused
-        }
-      }
-    })
-  const edges: Edge[] = bp.nodeIds
-    .filter((id) => {
-      const n = bp.nodes[id]
-      return n && n.parentId && bp.nodes[n.parentId]
-    })
-    .map((id) => ({
-      id: `e-${bp.nodes[id].parentId}->${id}`,
-      source: bp.nodes[id].parentId as string,
-      target: id,
-      type: 'smoothstep',
-      style: { stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1.5 }
-    }))
-  return { nodes, edges }
-}
-
 /* Context menu */
 interface ContextMenu {
   x: number
@@ -369,7 +264,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const updateNode = useBlueprintStore((s) => s.updateNode)
   const deleteNode = useBlueprintStore((s) => s.deleteNode)
   const focusNodeSession = useBlueprintStore((s) => s.focusNode)
-  const refreshAfterAnalysis = useBlueprintStore((s) => s.refreshAfterAnalysis)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
   const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
@@ -380,19 +274,28 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const [rfEdges, setRFEdges] = useState<Edge[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [analyzing, setAnalyzing] = useState(false)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [analysisCommitLimit, setAnalysisCommitLimit] = useState(String(ANALYSIS_COMMIT_LIMIT_DEFAULT))
   const [actionError, setActionError] = useState<string | null>(null)
-  const [analysisHistoryOpen, setAnalysisHistoryOpen] = useState(false)
-  const [analysisHistory, setAnalysisHistory] = useState<BlueprintAnalysis[]>([])
-  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null)
-  const [analysisHistoryLoading, setAnalysisHistoryLoading] = useState(false)
-  const [applyingAnalysisId, setApplyingAnalysisId] = useState<string | null>(null)
+  const {
+    analyzing,
+    analysisCommitLimit,
+    setAnalysisCommitLimit,
+    analysisHistoryOpen,
+    analysisHistory,
+    selectedAnalysisId,
+    setSelectedAnalysisId,
+    analysisHistoryLoading,
+    applyingAnalysisId,
+    loadAnalysisHistory,
+    toggleAnalysisHistory,
+    reapplyAnalysis,
+    analyzeSelected,
+    normalizeAnalysisCommitLimit,
+  } = useBlueprintAnalysisActions({ blueprintId, selectedId, detailNodeId, setActionError })
   const [promptState, setPromptState] = useState<
     | { kind: 'child'; parentId: string }
     | { kind: 'root' }
@@ -493,7 +396,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
 
   useEffect(() => {
     if (!currentBlueprint) return
-    const { nodes, edges } = deriveRF(currentBlueprint, positionsRef.current, workspaceNameById, focusedNodeIds, focusActive)
+    const { nodes, edges } = deriveBlueprintFlow(currentBlueprint, positionsRef.current, workspaceNameById, focusedNodeIds, focusActive)
     // 记录最新位置（含自动布局）
     positionsRef.current = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
     setRFNodes(nodes)
@@ -866,119 +769,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       todos: []
     })
   }, [detailNode, persistNodePatch])
-
-  useEffect(() => {
-    setAnalysisHistoryOpen(false)
-    setAnalysisHistory([])
-    setSelectedAnalysisId(null)
-    setAnalysisHistoryLoading(false)
-    setApplyingAnalysisId(null)
-  }, [detailNodeId])
-
-  const getAnalysisWorkspacePath = useCallback(
-    (node: BlueprintNode): string => {
-      const workspace = node.workspaceId ? workspaces.find((item) => item.id === node.workspaceId) : null
-      return workspace?.path ?? GLOBAL_BLUEPRINT_SCOPE
-    },
-    [workspaces]
-  )
-
-  const loadAnalysisHistory = useCallback(
-    async (node: BlueprintNode) => {
-      setAnalysisHistoryLoading(true)
-      setActionError(null)
-      try {
-        const items = await listAnalysesIPC({
-          workspacePath: getAnalysisWorkspacePath(node),
-          blueprintId,
-          nodeId: node.id
-        })
-        const fallback = [...(node.analyses ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        const next = items.length ? items : fallback
-        setAnalysisHistory(next)
-        setSelectedAnalysisId((current) => current && next.some((item) => item.id === current) ? current : next[0]?.id ?? null)
-      } catch (err) {
-        const fallback = [...(node.analyses ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        setAnalysisHistory(fallback)
-        setSelectedAnalysisId(fallback[0]?.id ?? null)
-        setActionError(`分析历史加载失败: ${(err as Error).message}`)
-      } finally {
-        setAnalysisHistoryLoading(false)
-      }
-    },
-    [blueprintId, getAnalysisWorkspacePath]
-  )
-
-  const toggleAnalysisHistory = useCallback(
-    async (node: BlueprintNode) => {
-      const nextOpen = !analysisHistoryOpen
-      setAnalysisHistoryOpen(nextOpen)
-      if (nextOpen) {
-        await loadAnalysisHistory(node)
-      }
-    },
-    [analysisHistoryOpen, loadAnalysisHistory]
-  )
-
-  const reapplyAnalysis = useCallback(
-    async (node: BlueprintNode, analysis: BlueprintAnalysis) => {
-      if (!analysis.applied) {
-        setActionError('失败或未应用的分析不能重新应用')
-        return
-      }
-      setApplyingAnalysisId(analysis.id)
-      setActionError(null)
-      try {
-        const updated = await applyAnalysisIPC({
-          workspacePath: getAnalysisWorkspacePath(node),
-          blueprintId,
-          nodeId: node.id,
-          analysisId: analysis.id
-        })
-        if (!updated) {
-          setActionError('无法重新应用该分析')
-          return
-        }
-        await loadBlueprint(blueprintId)
-        await loadAnalysisHistory(updated)
-      } catch (err) {
-        setActionError(`重新应用分析失败: ${(err as Error).message}`)
-      } finally {
-        setApplyingAnalysisId(null)
-      }
-    },
-    [blueprintId, getAnalysisWorkspacePath, loadAnalysisHistory, loadBlueprint]
-  )
-
-  const analyzeSelected = useCallback(async () => {
-    if (!selectedId) return
-    const node = currentBlueprint?.nodes[selectedId]
-    const workspace = node?.workspaceId ? workspaces.find((w) => w.id === node.workspaceId) : null
-    if (!node || !workspace) {
-      setActionError('请先为选中节点绑定可用工作区')
-      return
-    }
-    setAnalyzing(true)
-    setActionError(null)
-    try {
-      const commitLimit = normalizeAnalysisCommitLimit(analysisCommitLimit)
-      setAnalysisCommitLimit(String(commitLimit))
-      const res = await analyzeIPC({
-        nodeId: selectedId,
-        workspacePath: workspace.path,
-        trigger: 'manual',
-        commitLimit
-      })
-      if (res?.error) {
-        setActionError(res.error)
-      }
-      await refreshAfterAnalysis()
-    } catch (err) {
-      setActionError(`分析失败: ${(err as Error).message}`)
-    } finally {
-      setAnalyzing(false)
-    }
-  }, [selectedId, currentBlueprint, workspaces, analysisCommitLimit, refreshAfterAnalysis])
 
   const fitView = useCallback(() => {
     rfInstanceRef.current?.fitView({ padding: 0.2, duration: 200 })

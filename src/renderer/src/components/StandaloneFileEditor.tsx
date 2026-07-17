@@ -37,19 +37,19 @@ function WindowTrafficLights() {
       <button
         type="button"
         aria-label="Close"
-        onClick={() => window.electron.invoke('window:close')}
+        onClick={() => window.electron.window.close()}
         className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
       />
       <button
         type="button"
         aria-label="Minimize"
-        onClick={() => window.electron.invoke('window:minimize')}
+        onClick={() => window.electron.window.minimize()}
         className="h-3 w-3 rounded-full bg-[#ffbd2e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
       />
       <button
         type="button"
         aria-label="Maximize"
-        onClick={() => window.electron.invoke('window:maximize')}
+        onClick={() => window.electron.window.maximize()}
         className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
       />
     </div>

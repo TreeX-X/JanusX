@@ -1,6 +1,4 @@
 import {
-  OFFICE_EVENT_CHANNELS,
-  OFFICE_INVOKE_CHANNELS,
   type OfficeBuildPromptRequest,
   type OfficeFileEntry,
   type OfficeFileRequest,
@@ -35,22 +33,18 @@ export interface OfficeService {
   onWatchEvicted(listener: (event: OfficeWatchEvictedEvent) => void): () => void
 }
 
-function invokeOffice<T>(channel: string, request: unknown): Promise<OfficeResult<T>> {
-  return window.electron.invoke(channel, request) as Promise<OfficeResult<T>>
-}
-
 export const officeService: OfficeService = {
-  detect: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.detect, request),
-  listFiles: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.listFiles, request),
-  startPreview: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.startPreview, request),
-  stopPreview: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.stopPreview, request),
-  reloadPreview: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.reloadPreview, request),
-  buildPrompt: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.buildPrompt, request),
-  installerStatus: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerStatus, request),
-  installerStart: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerStart, request),
-  installerCancel: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerCancel, request),
-  installerRemove: (request) => invokeOffice(OFFICE_INVOKE_CHANNELS.installerRemove, request),
-  onInstallerProgress: (listener) => window.electron.on(OFFICE_EVENT_CHANNELS.installerProgress, (event) => listener(event as OfficeInstallerProgressEvent)),
-  onFilesChanged: (listener) => window.electron.on(OFFICE_EVENT_CHANNELS.filesChanged, (event) => listener(event as OfficeFilesChangedEvent)),
-  onWatchEvicted: (listener) => window.electron.on(OFFICE_EVENT_CHANNELS.watchEvicted, (event) => listener(event as OfficeWatchEvictedEvent)),
+  detect: (request) => window.electron.office.detect(request),
+  listFiles: (request) => window.electron.office.listFiles(request),
+  startPreview: (request) => window.electron.office.startPreview(request),
+  stopPreview: (request) => window.electron.office.stopPreview(request),
+  reloadPreview: (request) => window.electron.office.reloadPreview(request),
+  buildPrompt: (request) => window.electron.office.buildPrompt(request),
+  installerStatus: (request) => window.electron.office.installerStatus(request),
+  installerStart: (request) => window.electron.office.installerStart(request),
+  installerCancel: (request) => window.electron.office.installerCancel(request),
+  installerRemove: (request) => window.electron.office.installerRemove(request),
+  onInstallerProgress: (listener) => window.electron.office.onInstallerProgress(listener),
+  onFilesChanged: (listener) => window.electron.office.onFilesChanged(listener),
+  onWatchEvicted: (listener) => window.electron.office.onWatchEvicted(listener),
 }

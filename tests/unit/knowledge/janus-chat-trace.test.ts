@@ -11,13 +11,20 @@ describe('Janus Chat recall trace adapter', () => {
     const listeners = new Map<string, (payload: unknown) => void>()
     const unsubscribers = new Map<string, ReturnType<typeof vi.fn>>()
     const send = vi.fn()
-    const on = vi.fn((channel: string, callback: (payload: unknown) => void) => {
+    const subscribe = (channel: string, callback: (payload: never) => void) => {
       listeners.set(channel, callback)
       const unsubscribe = vi.fn(() => listeners.delete(channel))
       unsubscribers.set(channel, unsubscribe)
       return unsubscribe
-    })
-    vi.stubGlobal('window', { electron: { on, send, invoke: vi.fn() } })
+    }
+    vi.stubGlobal('window', { electron: { llm: {
+      onDelta: (callback: (payload: never) => void) => subscribe('llm:chat:delta', callback),
+      onDone: (callback: (payload: never) => void) => subscribe('llm:chat:done', callback),
+      onError: (callback: (payload: never) => void) => subscribe('llm:chat:error', callback),
+      onRecallTrace: (callback: (payload: never) => void) => subscribe('llm:chat:recall-trace', callback),
+      startChatStream: send,
+      abortChat: vi.fn(),
+    } } })
     const onRecallTrace = vi.fn()
 
     chatStream([], vi.fn(), vi.fn(), vi.fn(), {
@@ -26,7 +33,7 @@ describe('Janus Chat recall trace adapter', () => {
       onRecallTrace,
     })
     await Promise.resolve()
-    const requestId = send.mock.calls[0]?.[1].requestId as string
+    const requestId = send.mock.calls[0]?.[0].requestId as string
     const trace: KnowledgeRecallTrace = {
       requestId,
       status: 'empty',

@@ -1,15 +1,15 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS } from '../../../src/shared/office'
+import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS, type OfficeAPI } from '../../../src/shared/office'
 
 const invoke = vi.fn()
 const send = vi.fn()
 const on = vi.fn()
 const removeListener = vi.fn()
-let exposedApi: Record<string, (...args: unknown[]) => unknown>
+let exposedApi: { office: OfficeAPI }
 
 vi.mock('electron', () => ({
   contextBridge: {
-    exposeInMainWorld: (_name: string, api: Record<string, (...args: unknown[]) => unknown>) => {
+    exposeInMainWorld: (_name: string, api: { office: OfficeAPI }) => {
       exposedApi = api
     },
   },
@@ -21,22 +21,21 @@ beforeAll(async () => {
 })
 
 describe('Office preload channels', () => {
-  it('allows Office commands only through invoke', async () => {
+  it('routes Office commands through the fixed API', async () => {
     invoke.mockResolvedValue({ ok: true, value: null })
-    await exposedApi.invoke(OFFICE_INVOKE_CHANNELS.detect, { workspaceId: 'trusted' })
-    exposedApi.send(OFFICE_INVOKE_CHANNELS.detect, { workspaceId: 'trusted' })
+    await exposedApi.office.detect({ workspaceId: 'trusted' })
 
     expect(invoke).toHaveBeenCalledWith(OFFICE_INVOKE_CHANNELS.detect, { workspaceId: 'trusted' })
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('rejects unknown invoke channels', async () => {
-    await expect(exposedApi.invoke('office:unknown')).rejects.toThrow('is not allowed')
+  it('does not expose a generic bridge', () => {
+    expect(exposedApi).not.toHaveProperty('invoke')
   })
 
   it('subscribes to Office events and returns an unsubscribe function', () => {
     const callback = vi.fn()
-    const unsubscribe = exposedApi.on(OFFICE_EVENT_CHANNELS.filesChanged, callback) as () => void
+    const unsubscribe = exposedApi.office.onFilesChanged(callback)
     const handler = on.mock.calls.at(-1)?.[1]
 
     handler({}, { workspaceId: 'trusted', entries: [], reason: 'watch' })

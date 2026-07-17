@@ -1,8 +1,6 @@
 import { create } from 'zustand'
 import type {
   SubAgentRun,
-  SubAgentRunRemovedEvent,
-  SubAgentRunUpdatedEvent,
 } from '../../../shared/subAgentRun'
 
 interface SubAgentRunStore {
@@ -40,7 +38,7 @@ export const useSubAgentRunStore = create<SubAgentRunStore>((set, get) => ({
   fetchRuns: async () => {
     set({ loading: true, error: null })
     try {
-      const runs = (await window.electron.invoke('subagent-run:list')) as SubAgentRun[]
+      const runs = await window.electron.subAgentRun.list()
       set({ runs: sortRuns(runs), loading: false })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err), loading: false })
@@ -62,12 +60,10 @@ export const useSubAgentRunStore = create<SubAgentRunStore>((set, get) => ({
   },
 
   subscribeToEvents: () => {
-    const unsubscribeUpdated = window.electron.on('subagent-run:updated', (payload: unknown) => {
-      const event = payload as SubAgentRunUpdatedEvent
+    const unsubscribeUpdated = window.electron.subAgentRun.onUpdated((event) => {
       if (event.run) get().upsertRun(event.run)
     })
-    const unsubscribeRemoved = window.electron.on('subagent-run:removed', (payload: unknown) => {
-      const event = payload as SubAgentRunRemovedEvent
+    const unsubscribeRemoved = window.electron.subAgentRun.onRemoved((event) => {
       if (event.id) get().removeRun(event.id)
     })
 

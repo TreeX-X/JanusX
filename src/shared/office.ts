@@ -23,6 +23,22 @@ export const OFFICE_EVENT_CHANNELS = {
 export type OfficeInvokeChannel = (typeof OFFICE_INVOKE_CHANNELS)[keyof typeof OFFICE_INVOKE_CHANNELS]
 export type OfficeEventChannel = (typeof OFFICE_EVENT_CHANNELS)[keyof typeof OFFICE_EVENT_CHANNELS]
 
+export interface OfficeAPI {
+  detect(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficecliPublicInfo>>
+  listFiles(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeFileEntry[]>>
+  startPreview(request: OfficeFileRequest): Promise<OfficeResult<OfficePreviewLease>>
+  stopPreview(request: OfficeStopPreviewRequest): Promise<OfficeResult<null>>
+  reloadPreview(request: OfficeReloadPreviewRequest): Promise<OfficeResult<OfficePreviewLease>>
+  buildPrompt(request: OfficeBuildPromptRequest): Promise<OfficeResult<OfficePrompt>>
+  installerStatus(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerStart(request: OfficeInstallerStartRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerCancel(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerRemove(request: OfficeInstallerRemoveRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  onInstallerProgress(listener: (event: OfficeInstallerProgressEvent) => void): () => void
+  onFilesChanged(listener: (event: OfficeFilesChangedEvent) => void): () => void
+  onWatchEvicted(listener: (event: OfficeWatchEvictedEvent) => void): () => void
+}
+
 export const OFFICE_WATCH_ERROR_CODES = [
   'NOT_INSTALLED',
   'INCOMPATIBLE',

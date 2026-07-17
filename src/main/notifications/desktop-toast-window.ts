@@ -1,6 +1,7 @@
 import { BrowserWindow, app, ipcMain, screen, type IpcMainEvent } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { join } from 'path'
+import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 
 export interface DesktopToastPayload {
   id: string
@@ -33,8 +34,8 @@ class DesktopToastWindow {
   private hideTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor() {
-    ipcMain.on('desktop-toast:ready', this.handleReady)
-    ipcMain.on('desktop-toast:action', this.handleAction)
+    ipcMain.on(SYSTEM_CHANNELS.toastReady, this.handleReady)
+    ipcMain.on(SYSTEM_CHANNELS.toastAction, this.handleAction)
   }
 
   show(payload: DesktopToastPayload, options: DesktopToastOptions = {}): boolean {
@@ -136,7 +137,7 @@ class DesktopToastWindow {
       this.hideTimer = null
     }
 
-    win.webContents.send('desktop-toast:show', this.currentPayload)
+    win.webContents.send(SYSTEM_CHANNELS.toastShow, this.currentPayload)
     this.positionWindow(win)
     win.showInactive()
     this.currentOptions?.onShown?.()

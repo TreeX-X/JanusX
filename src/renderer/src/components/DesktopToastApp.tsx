@@ -46,7 +46,7 @@ export function DesktopToastApp() {
   const sendAction = useCallback((action: 'activate' | 'dismiss') => {
     setClosing(true)
     window.setTimeout(() => {
-      window.electron.send('desktop-toast:action', { action })
+      window.electron.desktopToast.action(action)
       setToast(null)
       setClosing(false)
     }, 120)
@@ -54,9 +54,9 @@ export function DesktopToastApp() {
 
   useEffect(() => {
     document.body.classList.add('desktop-toast-body')
-    window.electron.send('desktop-toast:ready')
+    window.electron.desktopToast.ready()
 
-    const unsubscribe = window.electron.on('desktop-toast:show', (payload: unknown) => {
+    const unsubscribe = window.electron.desktopToast.onShow((payload) => {
       const nextToast = normalizePayload(payload)
       if (!nextToast) return
       setClosing(false)

@@ -58,6 +58,7 @@ export function installElectronApiFallback(): void {
       observe: () => unavailableKnowledge(),
       listObservations: () => unavailableKnowledge(),
       pruneObservations: () => unavailableKnowledge(),
+      autoPruneObservations: () => unavailableKnowledge(),
       resolveObservationContent: () => unavailableKnowledge(),
       retentionStats: () => unavailableKnowledge(),
       listAudit: () => unavailableKnowledge(),
@@ -104,9 +105,38 @@ export function installElectronApiFallback(): void {
       onAnalysisResult: () => () => {},
       onDiscovered: () => () => {},
     },
-    invoke: () => Promise.resolve(undefined),
-    send: () => {},
-    on: () => () => {},
+    office: {
+      detect: unavailable, listFiles: unavailable, startPreview: unavailable, stopPreview: unavailable,
+      reloadPreview: unavailable, buildPrompt: unavailable, installerStatus: unavailable,
+      installerStart: unavailable, installerCancel: unavailable, installerRemove: unavailable,
+      onInstallerProgress: () => () => {}, onFilesChanged: () => () => {}, onWatchEvicted: () => () => {},
+    },
+    llm: {
+      getProviders: unavailable, saveProvider: unavailable, testConnection: unavailable,
+      removeProvider: unavailable, setDefaultProvider: unavailable, listModels: unavailable,
+      getModelCatalog: unavailable, refreshModelCatalog: unavailable, getAdapters: unavailable,
+      getDefaultProvider: unavailable, chat: unavailable, startChatStream: () => {}, abortChat: unavailable,
+      onDelta: () => () => {}, onDone: () => () => {}, onError: () => () => {}, onRecallTrace: () => () => {},
+    },
+    agent: {
+      start: unavailable, cancel: unavailable, cancelAll: unavailable, listSessions: unavailable,
+      onEvent: () => () => {}, onNotification: () => () => {}, onHookEvent: () => () => {},
+    },
+    checkpoint: {
+      create: unavailable, finalize: unavailable, restore: unavailable, list: unavailable,
+      diff: unavailable, diffAll: unavailable, delete: unavailable, clearAll: unavailable,
+      onEvent: () => () => {}, onReady: () => () => {},
+    },
+    git: {
+      status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,
+      commit: unavailable, push: unavailable, pull: unavailable,
+    },
+    notificationSettings: { get: unavailable, update: unavailable, testFeishu: unavailable },
+    subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
+    dialog: { openDirectory: unavailable, saveFile: unavailable },
+    window: { minimize: unavailable, maximize: unavailable, close: unavailable, openEditor: unavailable },
+    system: { getDefaultShell: unavailable, getPlatform: unavailable, getRuntimeTelemetry: unavailable },
+    desktopToast: { ready: () => {}, action: () => {}, onShow: () => () => {} },
     janusPersona: '',
   }
 }
@@ -121,6 +151,10 @@ function unavailableKnowledge(): Promise<never> {
 
 function unavailableJanus(): Promise<never> {
   return Promise.reject(new Error('Electron Janus API is unavailable'))
+}
+
+function unavailable(): Promise<never> {
+  return Promise.reject(new Error('Electron API is unavailable'))
 }
 
 function inferPlatform(): NodeJS.Platform {
