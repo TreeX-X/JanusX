@@ -78,6 +78,32 @@ export function installElectronApiFallback(): void {
       getSettings: () => unavailableKnowledge(),
       updateSettings: () => unavailableKnowledge(),
     },
+    janus: {
+      listBlueprints: () => unavailableJanus(),
+      loadBlueprint: () => unavailableJanus(),
+      createBlueprint: () => unavailableJanus(),
+      updateBlueprint: () => unavailableJanus(),
+      deleteBlueprint: () => unavailableJanus(),
+      createNode: () => unavailableJanus(),
+      updateNode: () => unavailableJanus(),
+      deleteNode: () => unavailableJanus(),
+      replaceNodeFeatures: () => unavailableJanus(),
+      addNodeFeature: () => unavailableJanus(),
+      updateNodeFeature: () => unavailableJanus(),
+      deleteNodeFeature: () => unavailableJanus(),
+      focusNode: () => unavailableJanus(),
+      bindTerminal: () => unavailableJanus(),
+      analyze: () => unavailableJanus(),
+      applyAnalysisPatch: () => unavailableJanus(),
+      listAnalyses: () => unavailableJanus(),
+      applyAnalysis: () => unavailableJanus(),
+      listRequirementCandidates: () => unavailableJanus(),
+      acceptRequirementCandidate: () => unavailableJanus(),
+      rejectRequirementCandidate: () => unavailableJanus(),
+      acceptDiscovered: () => unavailableJanus(),
+      onAnalysisResult: () => () => {},
+      onDiscovered: () => () => {},
+    },
     invoke: () => Promise.resolve(undefined),
     send: () => {},
     on: () => () => {},
@@ -91,6 +117,10 @@ function unavailableProjectResult(): Promise<{ success: false; error: string }> 
 
 function unavailableKnowledge(): Promise<never> {
   return Promise.reject(new Error('Electron knowledge API is unavailable'))
+}
+
+function unavailableJanus(): Promise<never> {
+  return Promise.reject(new Error('Electron Janus API is unavailable'))
 }
 
 function inferPlatform(): NodeJS.Platform {

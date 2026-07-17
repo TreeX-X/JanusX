@@ -50,6 +50,7 @@ On app quit, `terminalManager.killAll()` is called.
 - Terminal contracts live in `src/shared/ipc/terminal.ts` and are exposed as `window.electron.terminal`.
 - Project request/response contracts live in `src/shared/ipc/project.ts` and are exposed as `window.electron.project`; `services/project.ts` is the sole renderer client.
 - Knowledge and Knowledge Settings contracts live in `src/shared/ipc/knowledge.ts` and are exposed as `window.electron.knowledge`; existing renderer service exports delegate only to that API.
+- Blueprint/Janus models live in `src/shared/janus/types.ts`; 22 commands and two Island events are declared in `src/shared/ipc/janus.ts` and exposed as `window.electron.janus`.
 - Migrated channels are not accepted by the generic `invoke/send/on` allowlists.
 - Unmigrated domains temporarily continue through the generic allowlists until their own shared contract slice is introduced.
 - Typed event adapters hide Electron event objects and remove the exact registered listener on unsubscribe.
@@ -59,6 +60,8 @@ For migrated domains, add or change the shared contract first, then update the m
 Project running state and output currently synchronize by guarded polling. `ProjectRunner` lifecycle events remain main-internal until a product decision defines a renderer event contract.
 
 Knowledge auto-prune, archive, and compact handlers remain main-internal maintenance capabilities. They are intentionally absent from the shared public API, preload bridge, and renderer.
+
+`services/blueprint.ts` remains the renderer facade for Blueprint/Janus. The shared ownership change removes the former renderer-to-main type dependency; it does not yet split `BlueprintCanvas` controller responsibilities.
 
 ## Renderer State Pattern
 

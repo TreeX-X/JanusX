@@ -18,6 +18,11 @@ import {
 } from '../shared/ipc/terminal'
 import { PROJECT_CHANNELS, type ProjectAPI } from '../shared/ipc/project'
 import { KNOWLEDGE_CHANNELS, type KnowledgeAPI } from '../shared/ipc/knowledge'
+import {
+  JANUS_COMMAND_CHANNELS,
+  JANUS_EVENT_CHANNELS,
+  type JanusAPI
+} from '../shared/ipc/janus'
 
 const ALLOWED_INVOKE_CHANNELS = [
   ...Object.values(OFFICE_INVOKE_CHANNELS),
@@ -69,28 +74,6 @@ const ALLOWED_INVOKE_CHANNELS = [
   // stream 请求改为单向 send
   'llm:chat:abort',
   // 蓝图与 Janus Analyzer 频道
-  'blueprint:list',
-  'blueprint:load',
-  'blueprint:create',
-  'blueprint:update',
-  'blueprint:delete',
-  'blueprint:node:create',
-  'blueprint:node:update',
-  'blueprint:node:delete',
-  'blueprint:node:features',
-  'blueprint:node:feature:add',
-  'blueprint:node:feature:update',
-  'blueprint:node:feature:delete',
-  'janus:node:focus',
-  'janus:terminal:bind',
-  'janus:analyzer:analyze',
-  'janus:analyzer:apply-patch',
-  'janus:analysis:list',
-  'janus:analysis:apply',
-  'janus:requirements:list-candidates',
-  'janus:requirements:accept-candidate',
-  'janus:requirements:reject-candidate',
-  'janus:analyzer:accept-discovered',
 ]
 
 const ALLOWED_SEND_CHANNELS = [
@@ -118,8 +101,6 @@ const ALLOWED_ON_CHANNELS = [
   'llm:chat:error',
   'llm:chat:recall-trace',
   // Janus Island 通知（主进程 -> 渲染）
-  'janus:island:analysis',
-  'janus:island:discovered',
 ]
 
 const workspaceAPI: WorkspaceAPI = {
@@ -155,7 +136,7 @@ const fileAPI: FileAPI = {
   stat: (filePath) => ipcRenderer.invoke(FILE_CHANNELS.stat, filePath),
 }
 
-function subscribeTerminalEvent<T>(channel: string, callback: (event: T) => void): () => void {
+function subscribeIpcEvent<T>(channel: string, callback: (event: T) => void): () => void {
   const handler = (_event: Electron.IpcRendererEvent, payload: T) => callback(payload)
   ipcRenderer.on(channel, handler)
   return () => ipcRenderer.removeListener(channel, handler)
@@ -169,9 +150,9 @@ const terminalAPI: TerminalAPI = {
   input: (id, data) => ipcRenderer.send(TERMINAL_SEND_CHANNELS.input, { id, data }),
   resize: (id, cols, rows) => ipcRenderer.send(TERMINAL_SEND_CHANNELS.resize, { id, cols, rows }),
   submitLine: (id, text) => ipcRenderer.send(TERMINAL_SEND_CHANNELS.submitLine, { id, text }),
-  onData: (callback) => subscribeTerminalEvent(TERMINAL_EVENT_CHANNELS.data, callback),
-  onExit: (callback) => subscribeTerminalEvent(TERMINAL_EVENT_CHANNELS.exit, callback),
-  onFocus: (callback) => subscribeTerminalEvent(TERMINAL_EVENT_CHANNELS.focus, callback),
+  onData: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.data, callback),
+  onExit: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.exit, callback),
+  onFocus: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.focus, callback),
 }
 
 const projectAPI: ProjectAPI = {
@@ -217,6 +198,45 @@ const knowledgeAPI: KnowledgeAPI = {
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }
 
+const janusAPI: JanusAPI = {
+  listBlueprints: (cwd) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.listBlueprints, cwd),
+  loadBlueprint: (cwd, id) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.loadBlueprint, cwd, id),
+  createBlueprint: (cwd, input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.createBlueprint, cwd, input),
+  updateBlueprint: (cwd, id, patch) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.updateBlueprint, cwd, id, patch),
+  deleteBlueprint: (cwd, id) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.deleteBlueprint, cwd, id),
+  createNode: (cwd, blueprintId, input, parentId) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.createNode, cwd, blueprintId, input, parentId),
+  updateNode: (cwd, blueprintId, nodeId, patch) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.updateNode, cwd, blueprintId, nodeId, patch),
+  deleteNode: (cwd, blueprintId, nodeId) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.deleteNode, cwd, blueprintId, nodeId),
+  replaceNodeFeatures: (cwd, blueprintId, nodeId, features) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.replaceNodeFeatures, cwd, blueprintId, nodeId, features),
+  addNodeFeature: (cwd, blueprintId, nodeId, feature) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.addNodeFeature, cwd, blueprintId, nodeId, feature),
+  updateNodeFeature: (cwd, blueprintId, nodeId, featureId, patch) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.updateNodeFeature, cwd, blueprintId, nodeId, featureId, patch),
+  deleteNodeFeature: (cwd, blueprintId, nodeId, featureId) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.deleteNodeFeature, cwd, blueprintId, nodeId, featureId),
+  focusNode: (payload) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.focusNode, payload.workspacePath, payload.nodeId),
+  bindTerminal: (cwd, nodeId, terminalId) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.bindTerminal, cwd, nodeId, terminalId),
+  analyze: (payload) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.analyze, payload),
+  applyAnalysisPatch: (payload) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.applyAnalysisPatch, payload),
+  listAnalyses: (payload) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.listAnalyses, payload),
+  applyAnalysis: (payload) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.applyAnalysis, payload),
+  listRequirementCandidates: (payload) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.listRequirementCandidates, payload),
+  acceptRequirementCandidate: (payload) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.acceptRequirementCandidate, payload),
+  rejectRequirementCandidate: (payload) =>
+    ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.rejectRequirementCandidate, payload),
+  acceptDiscovered: (payload) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.acceptDiscovered, payload),
+  onAnalysisResult: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.analysis, callback),
+  onDiscovered: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.discovered, callback),
+}
+
 contextBridge.exposeInMainWorld('electron', {
   /*-- 同步暴露平台与 Windows build 号，供渲染端构造 xterm windowsPty 用 --*/
   /*-- preload 在 Node 环境，可同步读取；os.release() 形如 "10.0.22621"，第三段为 build 号 --*/
@@ -232,6 +252,7 @@ contextBridge.exposeInMainWorld('electron', {
   terminal: terminalAPI,
   project: projectAPI,
   knowledge: knowledgeAPI,
+  janus: janusAPI,
 
   invoke: (channel: string, ...args: unknown[]) => {
     if (ALLOWED_INVOKE_CHANNELS.includes(channel)) {

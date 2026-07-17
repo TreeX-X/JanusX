@@ -25,6 +25,11 @@ import {
 import { blueprintStore } from './blueprint-store'
 import { JANUS_PERSONA } from '../../shared/janus/persona'
 import {
+  JANUS_EVENT_CHANNELS,
+  type IslandAnalysisEvent,
+  type IslandDiscoveredEvent
+} from '../../shared/ipc/janus'
+import {
   ANALYSIS_SCHEMA_VERSION,
   type AnalysisResult,
   type BlueprintAnalysis,
@@ -706,7 +711,7 @@ class JanusAnalyzer {
     workspacePath: string
   ): void {
     try {
-      this.mainWindow?.webContents.send('janus:island:analysis', {
+      const event: IslandAnalysisEvent = {
         blueprintId,
         workspacePath,
         nodeId: analysis.nodeId,
@@ -715,7 +720,8 @@ class JanusAnalyzer {
         error: analysis.error,
         result: analysis.result,
         createdAt: analysis.createdAt
-      })
+      }
+      this.mainWindow?.webContents.send(JANUS_EVENT_CHANNELS.analysis, event)
     } catch (err) {
       console.error('[JanusAnalyzer] emit analysis failed:', err)
     }
@@ -728,7 +734,7 @@ class JanusAnalyzer {
     candidates: BlueprintRequirementCandidate[]
   ): void {
     try {
-      this.mainWindow?.webContents.send('janus:island:discovered', {
+      const event: IslandDiscoveredEvent = {
         blueprintId,
         workspacePath,
         nodeId: node.id,
@@ -742,7 +748,8 @@ class JanusAnalyzer {
           confidence: candidate.confidence
         })),
         createdAt: new Date().toISOString()
-      })
+      }
+      this.mainWindow?.webContents.send(JANUS_EVENT_CHANNELS.discovered, event)
     } catch (err) {
       console.error('[JanusAnalyzer] emit discovered failed:', err)
     }

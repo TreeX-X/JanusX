@@ -43,6 +43,7 @@ Use this as a lookup table before opening source.
 | `src/shared/ipc/terminal.ts` | typed Terminal commands/events, payloads/results, and preload domain API |
 | `src/shared/ipc/project.ts` | typed Project commands, clone-safe DTOs/results, and preload domain API |
 | `src/shared/ipc/knowledge.ts` | typed public Knowledge/Settings commands, clone-safe DTOs/results, and preload domain API |
+| `src/shared/janus/types.ts`, `src/shared/ipc/janus.ts` | shared Blueprint/Janus models plus typed command/event API |
 | `src/preload/index.ts` | fixed typed adapters for migrated domains plus temporary generic allowlists for remaining domains |
 | `src/renderer/src/types/electron.d.ts` | renderer declaration of the exposed preload API |
 
@@ -127,10 +128,10 @@ Use this as a lookup table before opening source.
 | File | Function |
 |---|---|
 | `src/shared/janus/persona.ts` | Janus system persona |
-| `src/main/janus/types.ts` | Blueprint domain model |
+| `src/main/janus/types.ts` | compatibility re-export for shared Blueprint/Janus models |
 | `src/main/janus/blueprint-store.ts` | Blueprint persistence, migration, CRUD, node updates, candidates |
 | `src/main/janus/analyzer.ts` | commit-diff segmentation, LLM analysis, result merge/apply |
-| `src/renderer/src/services/blueprint.ts` | renderer IPC wrapper for Blueprint/Janus |
+| `src/renderer/src/services/blueprint.ts` | sole typed renderer client for Blueprint/Janus commands and Island events |
 | `src/renderer/src/stores/blueprint.ts` | Blueprint Zustand state |
 | `src/renderer/src/components/blueprint/BlueprintView.tsx` | Blueprint list, candidates, notices |
 | `src/renderer/src/components/blueprint/BlueprintCanvas.tsx` | graph canvas and node work-session orchestration |
@@ -150,6 +151,7 @@ Use this as a lookup table before opening source.
 | Project config compatibility | `tests/unit/project-config-contract.test.ts` |
 | Project IPC and renderer synchronization | `tests/unit/project-ipc-contract.test.ts`, `tests/unit/project-service.test.ts` |
 | Knowledge IPC and workbench behavior | `tests/unit/knowledge-ipc-contract.test.ts`, `tests/unit/knowledge/workbench-service.test.ts`, `tests/unit/knowledge/knowledge-context-ipc.test.ts` |
+| Blueprint/Janus IPC and producers | `tests/unit/janus-ipc-contract.test.ts`, `tests/unit/janus-service.test.ts`, `tests/unit/janus-analyzer-events.test.ts` |
 | Pane tree | `tests/unit/workspace-pane.test.ts` |
 | Agent parsers/stream | `tests/unit/agent/*parser.test.ts`, `stream-manager.test.ts` |
 | Checkpoint | `tests/unit/agent/checkpoint-manager.test.ts`, `blob-store.test.ts`, `diff-engine.test.ts` |

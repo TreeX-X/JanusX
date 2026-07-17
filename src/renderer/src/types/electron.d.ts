@@ -2,6 +2,7 @@ import type { FileAPI, FileTreeAPI, WorkspaceAPI } from '../../../shared/ipc/wor
 import type { TerminalAPI } from '../../../shared/ipc/terminal'
 import type { ProjectAPI } from '../../../shared/ipc/project'
 import type { KnowledgeAPI } from '../../../shared/ipc/knowledge'
+import type { JanusAPI } from '../../../shared/ipc/janus'
 
 interface ElectronAPI {
   /*-- 同步平台信息，构造 xterm windowsPty 用 --*/
@@ -16,6 +17,7 @@ interface ElectronAPI {
   terminal: TerminalAPI
   project: ProjectAPI
   knowledge: KnowledgeAPI
+  janus: JanusAPI
   janusPersona: string
 }
 

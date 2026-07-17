@@ -21,7 +21,7 @@ Migrated domains use a typed path:
 
 ```text
 Renderer component/store/service
--> window.electron.workspace/fileTree/file/terminal/project/knowledge
+-> window.electron.workspace/fileTree/file/terminal/project/knowledge/janus
 -> fixed preload adapter
 -> shared channel constant + typed payload
 -> src/main/ipc/* handler or main event producer
@@ -42,7 +42,7 @@ When adding IPC:
 4. Use the typed domain API from renderer components/stores/services.
 5. Add contract tests for registration, argument order, generic rejection, and event unsubscribe behavior.
 
-Workspace/File/FileTree, Terminal, Project, and public Knowledge request/response operations follow this design today. Janus/Blueprint, LLM, Office, agent, checkpoint, notification settings, and other domains remain incremental migration work.
+Workspace/File/FileTree, Terminal, Project, public Knowledge, and Blueprint/Janus operations follow this design today. LLM, Office, agent, checkpoint, notification settings, and other domains remain incremental migration work.
 
 ## Terminal Creation And Checkpointing
 
@@ -137,7 +137,8 @@ Provider settings live in `{userData}/janusx/llm-config.json`. Main process supp
 ```text
 BlueprintView / BlueprintCanvas
 -> services/blueprint.ts
--> janus/blueprint IPC
+-> window.electron.janus fixed typed API
+-> shared Blueprint/Janus command or Island event contract
 -> BlueprintStore JSON persistence
 -> JanusAnalyzer for commit-diff analysis
 -> LLM structured result
@@ -153,6 +154,8 @@ Key concepts from `src/main/janus/types.ts`:
 - `BlueprintRequirementCandidate`: AI-discovered requirement that must be accepted/rejected by user.
 
 Analyzer input source is git commit diffs. The source comment states it does not consume terminal output streams or checkpoint events directly.
+
+Both Island events are produced with shared channel constants. Preload subscriptions hide Electron event objects and remove the exact listener on unsubscribe.
 
 ## Knowledge Workbench And Context
 
