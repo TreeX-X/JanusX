@@ -64,27 +64,35 @@ export class CompanionDedupe {
         result: INDETERMINATE_RESULT,
       })
       await this.persist()
-      const execution = operation()
-      this.pendingEvents.set(key, execution)
-      return { kind: 'started' as const, execution }
+      const transaction = operation().then(async (result) => {
+        try {
+          await this.exclusive(async () => {
+            const receipt = this.events.get(key)
+            if (receipt) receipt.result = result
+            await this.persist()
+          })
+          return result
+        } catch {
+          // A completed side effect whose receipt cannot be finalized must never
+          // be replayed as successful in this process.
+          await this.exclusive(() => {
+            const receipt = this.events.get(key)
+            if (receipt) receipt.result = INDETERMINATE_RESULT
+            return Promise.resolve()
+          })
+          return INDETERMINATE_RESULT
+        }
+      }).finally(() => {
+        this.pendingEvents.delete(key)
+      })
+      this.pendingEvents.set(key, transaction)
+      return { kind: 'started' as const, transaction }
     })
 
     if (reservation.kind === 'receipt') return reservation.result
     if (reservation.kind === 'collision') return collision()
     if (reservation.kind === 'pending') return { ...(await reservation.pending), replayed: true }
-
-    const execution = reservation.execution
-    try {
-      const result = await execution
-      await this.exclusive(async () => {
-        const receipt = this.events.get(key)
-        if (receipt) receipt.result = result
-        await this.persist()
-      })
-      return result
-    } finally {
-      this.pendingEvents.delete(key)
-    }
+    return reservation.transaction
   }
 
   async consumeAction(jti: string, expiresAt: number): Promise<boolean> {

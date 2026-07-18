@@ -62,10 +62,10 @@ export class FeishuInboundRuntime {
       if (this.client && key === this.configKey) return
       await this.stopClient()
       this.configKey = key
-      this.gateway = this.createGateway(config, this.mainWindow)
       let channel: FeishuInboundChannel | null = null
       let client: FeishuInboundClient | null = null
       try {
+        this.gateway = this.createGateway(config, this.mainWindow)
         channel = this.channelFactory({ appId: config.appId.trim(), appSecret: config.appSecret.trim() })
         client = new FeishuInboundClient(
           channel,
@@ -80,7 +80,7 @@ export class FeishuInboundRuntime {
         console.error('[FeishuInbound] connection failed:', message)
         if (client && this.client === client) this.client = null
         this.configKey = ''
-        if (client) await client.stop()
+        if (client) await client.stop().catch(() => undefined)
         else if (channel) await channel.disconnect().catch(() => undefined)
         this.gateway = null
         this.updateStatus({ state: 'failed', error: message })

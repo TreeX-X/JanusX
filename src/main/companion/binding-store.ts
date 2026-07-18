@@ -37,8 +37,16 @@ export class CompanionBindingStore {
   async bind(binding: CompanionBinding): Promise<void> {
     await this.ready
     await this.exclusive(async () => {
-      this.bindings.set(scopeKey(binding), binding)
-      await this.persist()
+      const key = scopeKey(binding)
+      const previous = this.bindings.get(key)
+      this.bindings.set(key, binding)
+      try {
+        await this.persist()
+      } catch (error) {
+        if (previous) this.bindings.set(key, previous)
+        else this.bindings.delete(key)
+        throw error
+      }
     })
   }
 
@@ -55,7 +63,12 @@ export class CompanionBindingStore {
       if (!binding) return { status: 'missing' }
       if (binding.expiresAt > this.now()) return { status: 'active', binding }
       this.bindings.delete(key)
-      await this.persist()
+      try {
+        await this.persist()
+      } catch (error) {
+        this.bindings.set(key, binding)
+        throw error
+      }
       return { status: 'expired', binding }
     })
   }
@@ -67,7 +80,12 @@ export class CompanionBindingStore {
       const binding = this.bindings.get(key) ?? null
       if (binding) {
         this.bindings.delete(key)
-        await this.persist()
+        try {
+          await this.persist()
+        } catch (error) {
+          this.bindings.set(key, binding)
+          throw error
+        }
       }
       return binding
     })

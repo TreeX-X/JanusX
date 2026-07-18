@@ -3,7 +3,8 @@ import type { RemoteNotificationSettings } from '../../src/shared/notifications'
 import { FEISHU_CONTROL_DEFAULTS } from '../../src/shared/notifications'
 import type { FeishuInboundChannel } from '../../src/main/remote-notifications/feishu-inbound/types'
 
-vi.mock('electron', () => ({ app: { getPath: () => '.' } }))
+const { getUserDataPath } = vi.hoisted(() => ({ getUserDataPath: vi.fn(() => '.') }))
+vi.mock('electron', () => ({ app: { getPath: getUserDataPath } }))
 vi.mock('../../src/main/ipc/terminal-handlers', () => ({ submitCompanionTerminalLine: vi.fn() }))
 
 import { FeishuInboundRuntime } from '../../src/main/remote-notifications/feishu-inbound/runtime'
@@ -26,6 +27,8 @@ describe('FeishuInboundRuntime', () => {
   let factory: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
+    getUserDataPath.mockReset()
+    getUserDataPath.mockReturnValue('.')
     channels = []
     factory = vi.fn(() => {
       const channel: FeishuInboundChannel = {
@@ -84,6 +87,21 @@ describe('FeishuInboundRuntime', () => {
     runtime.configure({} as never)
     await expect(runtime.reconfigure(settings())).resolves.toBeUndefined()
     expect(runtime.getStatus()).toEqual({ state: 'failed', error: 'network unavailable' })
+  })
+
+  it('contains gateway construction failure and retries the same configuration', async () => {
+    getUserDataPath.mockImplementationOnce(() => { throw new Error('secret gateway failed') })
+    const runtime = new FeishuInboundRuntime(factory)
+    runtime.configure({} as never)
+
+    await expect(runtime.reconfigure(settings())).resolves.toBeUndefined()
+    expect(factory).not.toHaveBeenCalled()
+    expect(runtime.getStatus()).toEqual({ state: 'failed', error: '[redacted] gateway failed' })
+    expect(runtime.getControlStatus()).toMatchObject({ state: 'error', error: '[redacted] gateway failed' })
+
+    await expect(runtime.reconfigure(settings())).resolves.toBeUndefined()
+    expect(factory).toHaveBeenCalledOnce()
+    expect(runtime.getStatus()).toEqual({ state: 'connected' })
   })
 
   it('contains factory and partial listener-construction failures', async () => {

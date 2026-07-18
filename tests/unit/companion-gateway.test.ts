@@ -212,6 +212,65 @@ describe('CompanionGateway', () => {
     expect(interrupt).toHaveBeenCalledOnce()
   })
 
+  it('fails closed when final receipt persistence fails and replays the failure', async () => {
+    const dedupe = new CompanionDedupe(join(directory, 'receipt-failure.json'), 60_000, () => NOW)
+    const persist = vi.spyOn(dedupe as unknown as { persist: () => Promise<void> }, 'persist')
+    persist.mockImplementationOnce(async () => undefined).mockRejectedValueOnce(new Error('disk unavailable'))
+    const identity = {
+      provider: 'feishu' as const,
+      eventId: 'receipt-failure',
+      operatorOpenId: 'operator-1',
+      chatId: 'chat-1',
+      command: 'status' as const,
+      commandFingerprint: 'fingerprint',
+    }
+    const operation = vi.fn(async () => ({ ok: true, code: 'ok' as const, message: 'done' }))
+
+    const first = await dedupe.runEvent(identity, operation, async () => ({
+      ok: false, code: 'invalid-request', message: 'collision',
+    }))
+    const replay = await dedupe.runEvent(identity, operation, async () => ({
+      ok: false, code: 'invalid-request', message: 'collision',
+    }))
+
+    expect(first).toMatchObject({ ok: false, code: 'execution-failed' })
+    expect(replay).toMatchObject({ ok: false, code: 'execution-failed', replayed: true })
+    expect(operation).toHaveBeenCalledOnce()
+  })
+
+  it('coalesces concurrent delivery through failed receipt finalization', async () => {
+    const dedupe = new CompanionDedupe(join(directory, 'concurrent-receipt-failure.json'), 60_000, () => NOW)
+    const persist = vi.spyOn(dedupe as unknown as { persist: () => Promise<void> }, 'persist')
+    let rejectFinalization!: (reason: Error) => void
+    let finalizationStarted!: () => void
+    const finalizationPending = new Promise<void>((resolve) => { finalizationStarted = resolve })
+    persist.mockImplementationOnce(async () => undefined).mockImplementationOnce(() => new Promise((_, reject) => {
+      rejectFinalization = reject
+      finalizationStarted()
+    }))
+    const identity = {
+      provider: 'feishu' as const,
+      eventId: 'concurrent-receipt-failure',
+      operatorOpenId: 'operator-1',
+      chatId: 'chat-1',
+      command: 'status' as const,
+      commandFingerprint: 'fingerprint',
+    }
+    const operation = vi.fn(async () => ({ ok: true, code: 'ok' as const, message: 'done' }))
+    const collision = async () => ({
+      ok: false as const, code: 'invalid-request' as const, message: 'collision',
+    })
+
+    const first = dedupe.runEvent(identity, operation, collision)
+    await finalizationPending
+    const duplicate = dedupe.runEvent(identity, operation, collision)
+    rejectFinalization(new Error('disk unavailable'))
+
+    await expect(first).resolves.toMatchObject({ ok: false, code: 'execution-failed' })
+    await expect(duplicate).resolves.toMatchObject({ ok: false, code: 'execution-failed', replayed: true })
+    expect(operation).toHaveBeenCalledOnce()
+  })
+
   it('reloads consumed action tokens after restart', async () => {
     await bind()
     const token = gateway.issueActionToken(context(), 'term-1', 'stop', NOW + 10_000)
@@ -315,6 +374,28 @@ describe('CompanionGateway', () => {
     await Promise.all(bindings.map(async (binding) => {
       await expect(reloaded.get(binding)).resolves.toMatchObject(binding)
     }))
+  })
+
+  it('rolls back binding mutations when persistence fails', async () => {
+    const filePath = join(directory, 'rollback-bindings.json')
+    const store = new CompanionBindingStore(filePath, () => NOW)
+    const original = {
+      provider: 'feishu' as const,
+      chatId: 'chat-1',
+      terminalId: 'term-1',
+      createdBy: 'operator-1',
+      createdAt: NOW,
+      expiresAt: NOW + 10_000,
+    }
+    await store.bind(original)
+    const persist = vi.spyOn(store as unknown as { persist: () => Promise<void> }, 'persist')
+    persist.mockRejectedValueOnce(new Error('disk unavailable'))
+    await expect(store.bind({ ...original, terminalId: 'term-2' })).rejects.toThrow('disk unavailable')
+    await expect(store.get(original)).resolves.toMatchObject(original)
+
+    persist.mockRejectedValueOnce(new Error('disk unavailable'))
+    await expect(store.unbind(original)).rejects.toThrow('disk unavailable')
+    await expect(store.get(original)).resolves.toMatchObject(original)
   })
 
   it('serializes retention compaction and concurrent audit appends', async () => {
