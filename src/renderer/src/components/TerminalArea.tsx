@@ -917,7 +917,6 @@ export function TerminalArea() {
     terminals,
     activeTerminalId,
     activeWorkspaceId,
-    workspaces,
     terminalSnapshots,
     paneTree,
     focusedPaneId,
@@ -1077,10 +1076,6 @@ export function TerminalArea() {
   const paneCount = useMemo(() => getLeafPanes(paneTree).length, [paneTree])
   const activeTerminal = activeTerminalId ? terminalsById.get(activeTerminalId) ?? null : null
   const otherTerminals = terminals.filter((terminal) => terminal.id !== activeTerminal?.id)
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
-  const activeRuntimeText = activeTerminal
-    ? `${providerLabel(activeTerminal.preset)} · ${modelLabel(activeTerminal)} · ${contextLabel(activeTerminal)}`
-    : 'No terminal runtime'
 
   return (
       <div
@@ -1212,37 +1207,10 @@ export function TerminalArea() {
                 }}
               />
             </span>
-            {activeWorkspace && (
-              <span
-                className="inline-flex h-5 max-w-[160px] shrink-0 items-center gap-1 rounded border px-1.5 font-mono"
-                style={{
-                  borderColor: 'rgba(255,120,48,0.28)',
-                  background: 'rgba(255,120,48,0.1)',
-                  color: '#ffb27d',
-                }}
-                title={`工作区：${activeWorkspace.path}`}
-              >
-                <span
-                  className="h-[5px] w-[5px] shrink-0 rounded-full"
-                  style={{ background: '#ff7830', boxShadow: '0 0 5px rgba(255,120,48,0.6)' }}
-                />
-                <span className="truncate">{activeWorkspace.name}</span>
-              </span>
-            )}
             {activeTerminal ? (
               <span className="flex min-w-0 items-center gap-1.5">
                 <span
-                  className="inline-flex h-5 max-w-[92px] shrink-0 items-center rounded border px-2 font-mono"
-                  style={{
-                    borderColor: 'rgba(255,255,255,0.055)',
-                    background: 'rgba(255,255,255,0.018)',
-                    color: '#d4d4d4',
-                  }}
-                >
-                  {providerLabel(activeTerminal.preset)}
-                </span>
-                <span
-                  className="inline-flex h-5 min-w-0 max-w-[120px] items-center rounded border px-2 font-mono"
+                  className="inline-flex h-5 min-w-0 max-w-[180px] items-center rounded border px-2 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
                     background: 'rgba(255,255,255,0.014)',
@@ -1252,7 +1220,7 @@ export function TerminalArea() {
                   <span className="truncate">{modelLabel(activeTerminal)}</span>
                 </span>
                 <span
-                  className="group relative hidden h-5 shrink-0 items-center rounded border px-2 font-mono md:inline-flex"
+                  className="group relative inline-flex h-5 shrink-0 items-center rounded border px-2 font-mono"
                   style={{
                     borderColor: `${contextRatioColor(contextRatio(activeTerminal))}33`,
                     background: `${contextRatioColor(contextRatio(activeTerminal))}12`,
@@ -1264,7 +1232,7 @@ export function TerminalArea() {
                 </span>
               </span>
             ) : (
-              <span className="truncate font-mono text-[#666]">{activeRuntimeText}</span>
+              <span className="truncate font-mono text-[#666]">No model or context data</span>
             )}
             {activeTerminal && (
               <span

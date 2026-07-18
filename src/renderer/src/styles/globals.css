@@ -142,6 +142,28 @@ body.terminal-scrollbar-dragging .xterm .xterm-scrollable-element > .scrollbar.v
   transition: width 120ms ease, right 120ms ease, background 120ms ease !important;
 }
 
+/*
+ * Full-screen TUIs (Claude/OpenCode) use xterm's alternate buffer. That buffer
+ * deliberately has no scrollback, so xterm sizes its thumb to the full track
+ * and it reads as a border instead of a scrollbar. Keep the native TUI intact
+ * while presenting the track as a relative scroll control. Dragging the thumb
+ * is translated to wheel input that the child TUI handles itself; the thumb
+ * position is therefore interaction feedback, not an absolute history offset.
+ */
+.cli-terminal[data-buffer-type='alternate']
+  .xterm .xterm-scrollable-element > .scrollbar.vertical {
+  cursor: ns-resize !important;
+}
+
+.cli-terminal[data-buffer-type='alternate']
+  .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  top: 36% !important;
+  height: 28% !important;
+  min-height: 44px !important;
+  max-height: 140px !important;
+  cursor: ns-resize !important;
+}
+
 .xterm .xterm-scrollable-element > .scrollbar.vertical:hover > .slider,
 .xterm .xterm-scrollable-element > .scrollbar.vertical:active > .slider,
 body.terminal-scrollbar-dragging .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {

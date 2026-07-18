@@ -192,26 +192,93 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
 
     const hostElement = containerRef.current
     const hostParent = hostElement.parentElement
+    let activeBufferType: 'normal' | 'alternate' = term.buffer.active.type
+
+    const syncBufferType = (type: 'normal' | 'alternate') => {
+      activeBufferType = type
+      hostElement.dataset.bufferType = type
+      if (type === 'normal') {
+        const slider = hostElement.querySelector<HTMLElement>(
+          '.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider'
+        )
+        slider?.style.removeProperty('top')
+      }
+    }
+    syncBufferType(term.buffer.active.type)
+    const bufferChangeDisposable = term.buffer.onBufferChange((buffer) => {
+      syncBufferType(buffer.type)
+    })
 
     // Scrollbar is optional for terminal operation; never skip fit/resize when missing.
     const scrollbarElement = hostElement.querySelector(
       '.xterm .xterm-scrollable-element > .scrollbar.vertical'
     )
+    const xtermElement = hostElement.querySelector<HTMLElement>('.xterm')
+    const scrollbarSlider = scrollbarElement?.querySelector<HTMLElement>('.slider')
 
     let draggingScrollbar = false
+    let lastScrollbarPointerY = 0
+    let pendingAlternateDragDelta = 0
+
+    const dispatchAlternateBufferWheel = (direction: -1 | 1) => {
+      if (!xtermElement) return
+      const rect = xtermElement.getBoundingClientRect()
+      xtermElement.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+        deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+        deltaY: direction * 100,
+      }))
+    }
+
+    const handleAlternateScrollbarDrag = (event: PointerEvent) => {
+      const delta = event.clientY - lastScrollbarPointerY
+      lastScrollbarPointerY = event.clientY
+      pendingAlternateDragDelta += delta
+
+      if (scrollbarElement instanceof HTMLElement && scrollbarSlider) {
+        const trackRect = scrollbarElement.getBoundingClientRect()
+        const thumbHeight = scrollbarSlider.getBoundingClientRect().height
+        const nextTop = Math.max(
+          0,
+          Math.min(trackRect.height - thumbHeight, event.clientY - trackRect.top - thumbHeight / 2)
+        )
+        scrollbarSlider.style.setProperty('top', `${nextTop}px`, 'important')
+      }
+
+      const steps = Math.min(8, Math.floor(Math.abs(pendingAlternateDragDelta) / 8))
+      if (steps === 0) return
+      const direction = pendingAlternateDragDelta < 0 ? -1 : 1
+      for (let step = 0; step < steps; step += 1) {
+        dispatchAlternateBufferWheel(direction)
+      }
+      pendingAlternateDragDelta -= direction * steps * 8
+    }
 
     const stopScrollbarDrag = () => {
       if (!draggingScrollbar) return
       draggingScrollbar = false
+      pendingAlternateDragDelta = 0
       document.body.classList.remove('terminal-scrollbar-dragging')
+      window.removeEventListener('pointermove', handleAlternateScrollbarDrag)
       window.removeEventListener('pointerup', stopScrollbarDrag)
       window.removeEventListener('blur', stopScrollbarDrag)
       window.removeEventListener('dragend', stopScrollbarDrag)
     }
 
-    const handleScrollbarPointerDown = () => {
+    const handleScrollbarPointerDown = (event: PointerEvent) => {
       draggingScrollbar = true
       document.body.classList.add('terminal-scrollbar-dragging')
+      if (activeBufferType === 'alternate') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        term.focus()
+        lastScrollbarPointerY = event.clientY
+        pendingAlternateDragDelta = 0
+        window.addEventListener('pointermove', handleAlternateScrollbarDrag)
+      }
       window.addEventListener('pointerup', stopScrollbarDrag)
       window.addEventListener('blur', stopScrollbarDrag)
       window.addEventListener('dragend', stopScrollbarDrag)
@@ -517,6 +584,8 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       disposed = true
       unregisterTerminalForceFit(terminalId)
       clearTerminalGeometry(terminalId)
+      bufferChangeDisposable.dispose()
+      delete hostElement.dataset.bufferType
       if (scrollbarElement instanceof HTMLElement) {
         scrollbarElement.removeEventListener('pointerdown', handleScrollbarPointerDown, true)
       }
@@ -571,7 +640,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full transition-[box-shadow,background]"
+      className="cli-terminal w-full h-full transition-[box-shadow,background]"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
