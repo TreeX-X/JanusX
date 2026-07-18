@@ -23,6 +23,7 @@ import {
 } from '@/services/blueprint'
 import { BlueprintCanvas } from './BlueprintCanvas'
 import { PromptDialog } from './PromptDialog'
+import { RefreshIconButton } from '../ui/RefreshIconButton'
 import { Select } from '../ui/Select'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
@@ -58,6 +59,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [analysisNotice, setAnalysisNotice] = useState<IslandAnalysisEvent | null>(null)
   const [discoveredNotice, setDiscoveredNotice] = useState<IslandDiscoveredEvent | null>(null)
   const [candidateStatus, setCandidateStatus] = useState<BlueprintRequirementCandidateStatus>('pending')
@@ -188,12 +190,16 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
     }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!selectedId) return
     const target = blueprints.find((b) => b.id === selectedId)
-    const ok = window.confirm(`确认删除蓝图「${target?.name ?? selectedId}」？此操作不可恢复。`)
-    if (!ok) return
-    const deleted = await deleteBlueprint(selectedId)
+    setDeleteTarget({ id: selectedId, name: target?.name ?? selectedId })
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    const deleted = await deleteBlueprint(deleteTarget.id)
+    setDeleteTarget(null)
     if (!deleted) return
     const next = useBlueprintStore.getState().blueprints[0]
     setSelectedId(next?.id ?? null)
@@ -264,9 +270,10 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         }))
       ]
     : [{ value: '', label: '按建议父节点' }]
+  const isBlueprintEmpty = !currentBlueprint || currentBlueprint.nodeIds.length === 0
 
   return (
-    <div className={`blueprint-view blueprint-view--${density}`}>
+    <div className={`blueprint-view blueprint-view--${density}${isBlueprintEmpty ? ' blueprint-view--empty' : ''}`}>
       {/* 顶部：蓝图选择 / 新建 / 删除 */}
       <div className="blueprint-toolbar">
         <div className="blueprint-toolbar__group blueprint-toolbar__group--manager">
@@ -348,9 +355,12 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
                 options={candidateStatusOptions}
                 className="blueprint-select bp-candidate-inbox__select"
               />
-              <button className="blueprint-btn" onClick={() => loadCandidates()} disabled={candidateLoading}>
-                刷新
-              </button>
+              <RefreshIconButton
+                accent="orange"
+                label="刷新候选需求"
+                loading={candidateLoading}
+                onClick={() => void loadCandidates()}
+              />
             </div>
           </div>
 
@@ -452,6 +462,16 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         defaultValue={`蓝图-${new Date().toLocaleDateString()}`}
         onConfirm={handleCreateConfirm}
         onCancel={() => setCreateDialogOpen(false)}
+      />
+      <PromptDialog
+        open={deleteTarget !== null}
+        title="删除蓝图"
+        description={<>确认删除蓝图「<strong className="prompt-dialog__emphasis">{deleteTarget?.name}</strong>」吗？此操作不可恢复。</>}
+        confirmOnly
+        confirmText="删除"
+        tone="danger"
+        onConfirm={() => void handleDeleteConfirm()}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   )

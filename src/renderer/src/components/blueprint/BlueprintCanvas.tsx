@@ -301,6 +301,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     | { kind: 'root' }
     | null
   >(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ nodeId: string; message: string } | null>(null)
 
   const rfInstanceRef = useRef<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>(null)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
@@ -518,8 +519,17 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         : isRoot
           ? `确认删除根节点“${node.title || nodeId}”？其子节点会提升为根节点。`
           : `确认删除节点“${node.title || nodeId}”？其子节点会挂载到上级节点。`
-      if (!window.confirm(message)) return
-      const ok = await deleteNode(blueprintId, nodeId)
+      setContextMenu(null)
+      setDeleteTarget({ nodeId, message })
+    },
+    [currentBlueprint]
+  )
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return
+    const { nodeId } = deleteTarget
+    const ok = await deleteNode(blueprintId, nodeId)
+    setDeleteTarget(null)
       if (ok) {
         setSelectedId((current) => (current === nodeId ? null : current))
         setDetailNodeId((current) => (current === nodeId ? null : current))
@@ -528,7 +538,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         setActionError('无法删除最后一个节点，请直接删除蓝图')
       }
     },
-    [blueprintId, currentBlueprint, deleteNode]
+    [blueprintId, deleteNode, deleteTarget]
   )
 
   const markStatus = useCallback(
@@ -1438,6 +1448,16 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         placeholder="输入标题"
         onConfirm={handlePromptConfirm}
         onCancel={() => setPromptState(null)}
+      />
+      <PromptDialog
+        open={deleteTarget !== null}
+        title="删除蓝图节点"
+        description={deleteTarget?.message}
+        confirmOnly
+        confirmText="删除"
+        tone="danger"
+        onConfirm={() => void handleDeleteConfirm()}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   )

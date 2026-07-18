@@ -34,9 +34,9 @@
 }
 
 .header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   padding: 0 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -46,6 +46,7 @@
 .headerLeft {
   display: flex;
   align-items: center;
+  justify-self: start;
   gap: 12px;
   min-width: 0;
 }
@@ -93,6 +94,7 @@
 .tabs {
   display: flex;
   align-items: center;
+  justify-self: center;
   gap: 4px;
   padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.055);
@@ -119,13 +121,14 @@
 }
 
 .tabActive {
-  color: #ff7830;
-  background: rgba(255, 120, 48, 0.12);
+  color: #6ba6ff;
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .headerActions {
   display: flex;
   justify-content: flex-end;
+  justify-self: end;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -156,11 +159,11 @@
 
 .searchInput:focus,
 .largeInput:focus {
-  border-color: rgba(255, 120, 48, 0.38);
+  border-color: rgba(59, 130, 246, 0.42);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   background: rgba(255, 255, 255, 0.05);
 }
 
-.iconButton,
 .closeButton {
   width: 30px;
   height: 30px;
@@ -201,12 +204,6 @@
   color: #5c0000;
   opacity: 0;
   transition: opacity 0.2s ease;
-}
-
-.iconButton:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.07);
 }
 
 .closeButton:hover {
@@ -267,6 +264,26 @@
   text-transform: uppercase;
 }
 
+.paneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paneCount {
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #7eafff;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .recordList,
 .viewStack,
 .timeline,
@@ -313,8 +330,8 @@
 }
 
 .recordActive {
-  border-color: rgba(255, 120, 48, 0.28);
-  background: rgba(255, 120, 48, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.1);
   color: #fff;
 }
 
@@ -399,8 +416,8 @@
 }
 
 .reviewCardActive {
-  border-color: rgba(255, 120, 48, 0.36);
-  background: rgba(255, 120, 48, 0.09);
+  border-color: rgba(59, 130, 246, 0.38);
+  background: rgba(59, 130, 246, 0.09);
 }
 
 .reviewCard strong {
@@ -427,7 +444,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: #ff995f;
+  color: #7eafff;
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 9px;
   font-weight: 700;
@@ -515,7 +532,7 @@
   background:
     linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    radial-gradient(circle at 50% 50%, rgba(255, 120, 48, 0.12), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.12), transparent 42%),
     rgba(255, 255, 255, 0.018);
   background-size: 42px 42px, 42px 42px, auto, auto;
 }
@@ -530,7 +547,7 @@
 
 .graphLines path {
   fill: none;
-  stroke: rgba(255, 120, 48, 0.24);
+  stroke: rgba(59, 130, 246, 0.24);
   stroke-width: 0.32;
 }
 
@@ -557,15 +574,15 @@
 }
 
 .graphNode small {
-  color: #ff995f;
+  color: #7eafff;
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 9px;
 }
 
 .graphNodeActive,
 .graphNode:hover {
-  border-color: rgba(255, 120, 48, 0.42);
-  background: rgba(255, 120, 48, 0.12);
+  border-color: rgba(59, 130, 246, 0.42);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .searchLab {
@@ -628,8 +645,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #ff7830;
-  box-shadow: 0 0 10px rgba(255, 120, 48, 0.4);
+  background: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
 }
 
 .auditEvent span:not(.auditDot) {
@@ -713,15 +730,25 @@
 }
 
 .actionRow button:not(:disabled) {
-  border-color: rgba(255, 120, 48, 0.28);
-  background: rgba(255, 120, 48, 0.12);
-  color: #f0d2bf;
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.12);
+  color: #cfe0ff;
   cursor: pointer;
 }
 
 .actionRow button:not(:disabled):hover {
-  border-color: rgba(255, 120, 48, 0.42);
-  background: rgba(255, 120, 48, 0.18);
+  border-color: rgba(59, 130, 246, 0.44);
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.tabButton:focus-visible,
+.recordButton:focus-visible,
+.reviewCard:focus-visible,
+.auditEvent:focus-visible,
+.graphNode:focus-visible,
+.actionRow button:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.68);
+  outline-offset: 2px;
 }
 
 .demoNotice {
@@ -782,7 +809,6 @@
   }
 
   .header {
-    flex-wrap: wrap;
     gap: 10px;
   }
 

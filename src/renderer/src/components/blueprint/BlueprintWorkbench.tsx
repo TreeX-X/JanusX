@@ -40,8 +40,6 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
           <div className="blueprint-workbench-header-left">
             <div className="blueprint-workbench-icon-badge" aria-hidden="true">B</div>
             <nav className="blueprint-workbench-breadcrumb" aria-label="Breadcrumb">
-              <span className="blueprint-workbench-bc-parent">JanusX</span>
-              <span className="blueprint-workbench-bc-sep">/</span>
               <span className="blueprint-workbench-bc-current">Blueprint Workbench</span>
             </nav>
           </div>

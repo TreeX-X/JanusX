@@ -6,7 +6,7 @@
  *  样式见 ./blueprint.css（.prompt-dialog 前缀）。
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 export interface PromptDialogProps {
   open: boolean
@@ -14,6 +14,9 @@ export interface PromptDialogProps {
   label?: string
   placeholder?: string
   defaultValue?: string
+  description?: ReactNode
+  confirmOnly?: boolean
+  tone?: 'primary' | 'danger'
   confirmText?: string
   cancelText?: string
   onConfirm: (value: string) => void
@@ -27,6 +30,9 @@ export function PromptDialog({
   label,
   placeholder,
   defaultValue,
+  description,
+  confirmOnly = false,
+  tone = 'primary',
   confirmText = '确定',
   cancelText = '取消',
   onConfirm,
@@ -58,7 +64,7 @@ export function PromptDialog({
 
   const trimmed = value.trim()
   const validationMsg = validate ? validate(trimmed) : null
-  const canConfirm = trimmed.length > 0 && !validationMsg
+  const canConfirm = confirmOnly || (trimmed.length > 0 && !validationMsg)
 
   const submit = () => {
     if (!canConfirm) return
@@ -85,17 +91,20 @@ export function PromptDialog({
       <div className="prompt-dialog" role="dialog" aria-modal="true" aria-label={title}>
         <div className="prompt-dialog__title">{title}</div>
 
-        {label ? <label className="prompt-dialog__label">{label}</label> : null}
+        {description ? <div className="prompt-dialog__description">{description}</div> : null}
+        {!confirmOnly && label ? <label className="prompt-dialog__label">{label}</label> : null}
 
-        <input
-          ref={inputRef}
-          className="prompt-dialog__input"
-          type="text"
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
+        {!confirmOnly ? (
+          <input
+            ref={inputRef}
+            className="prompt-dialog__input"
+            type="text"
+            value={value}
+            placeholder={placeholder}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={onKeyDown}
+          />
+        ) : null}
 
         {validationMsg ? <div className="prompt-dialog__error">{validationMsg}</div> : null}
 
@@ -104,7 +113,7 @@ export function PromptDialog({
             {cancelText}
           </button>
           <button
-            className="blueprint-btn blueprint-btn--primary"
+            className={`blueprint-btn ${tone === 'danger' ? 'blueprint-btn--danger' : 'blueprint-btn--primary'}`}
             onClick={submit}
             disabled={!canConfirm}
           >

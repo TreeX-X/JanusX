@@ -16,6 +16,7 @@ import type {
   CandidateWikiPatch,
   KnowledgeCard,
 } from '../../../../shared/knowledge'
+import { RefreshIconButton } from '../ui/RefreshIconButton'
 import styles from './KnowledgeWorkbench.module.css'
 
 export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit'
@@ -169,27 +170,43 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
 
   const sidebarCards = snapshot ? cardsForTab(snapshot, tab) : []
   const paneTitle = tab === 'inbox' ? 'Proposed Candidates' : tab === 'library' ? 'Knowledge Library' : LABELS[tab]
+  const paneCount = {
+    inbox: sidebarCards.length,
+    library: sidebarCards.length,
+    wiki: snapshot?.wikiPatches.length ?? 0,
+    graph: snapshot?.graphCandidates.length ?? 0,
+    search: searchCards.length,
+    audit: snapshot?.auditEvents.length ?? 0,
+  }[tab]
 
   return createPortal(
     <div className={styles.backdrop}>
-      <section className={styles.shell}>
+      <section className={styles.shell} aria-label="Knowledge Engine">
         <header className={styles.header}>
           <div className={styles.headerLeft}>
             <div className={styles.iconBadge} aria-hidden="true">K</div>
-            <nav className={styles.breadcrumb} aria-label="Breadcrumb"><span className={styles.bcParent}>JanusX</span><span className={styles.bcSep}>/</span><span className={styles.bcCurrent}>Knowledge Engine</span></nav>
+            <nav className={styles.breadcrumb} aria-label="Breadcrumb"><span className={styles.bcCurrent}>Knowledge Engine</span></nav>
             {snapshot?.usingDemoData && <span className={styles.badge}>DEMO DATA</span>}
           </div>
           <nav className={styles.tabs}>
             {(Object.keys(LABELS) as KnowledgeWorkbenchTab[]).map((item) => <button key={item} type="button" className={`${styles.tabButton} ${tab === item ? styles.tabActive : ''}`} onClick={() => activateTab(item)}>{LABELS[item]}</button>)}
           </nav>
           <div className={styles.headerActions}>
-            <button type="button" className={styles.iconButton} onClick={() => void refresh()} title="Refresh">R</button>
+            <RefreshIconButton
+              accent="blue"
+              label="Refresh Knowledge Engine"
+              loading={loadState === 'loading'}
+              onClick={() => void refresh()}
+            />
             <button type="button" className={styles.closeButton} onClick={onClose} title="Close" aria-label="Close Knowledge Engine"><span aria-hidden="true" /></button>
           </div>
         </header>
         <main className={styles.grid}>
           <aside className={styles.leftPane}>
-            <div className={styles.paneTitle}>{paneTitle}</div>
+            <div className={styles.paneHeader}>
+              <div className={styles.paneTitle}>{paneTitle}</div>
+              <span className={styles.paneCount} aria-label={`${paneTitle} count`}>{paneCount}</span>
+            </div>
             {(tab === 'inbox' || tab === 'library') ? <CardList cards={sidebarCards} selectedId={selectedId} onSelect={selectCandidate} /> : <StateBlock title="Use the active view to browse these records" compact />}
           </aside>
           <section className={styles.stage}>
