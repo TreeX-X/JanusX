@@ -131,7 +131,12 @@ export function installElectronApiFallback(): void {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,
       commit: unavailable, push: unavailable, pull: unavailable,
     },
-    notificationSettings: { get: unavailable, update: unavailable, testFeishu: unavailable },
+    notificationSettings: {
+      get: unavailable,
+      update: unavailable,
+      testFeishu: unavailable,
+      getFeishuControlStatus: unavailable,
+    },
     subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
     dialog: { openDirectory: unavailable, saveFile: unavailable },
     window: { minimize: unavailable, maximize: unavailable, close: unavailable, openEditor: unavailable },

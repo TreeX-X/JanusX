@@ -34,6 +34,7 @@ import {
 } from '../../shared/ipc/terminal'
 import { AGENT_CHANNELS } from '../../shared/ipc/agent'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
+import { companionSessionState } from '../companion/session-state'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -98,6 +99,12 @@ function enqueueCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text
 
   state.pendingSubmitTexts.push(prompt)
   processCheckpointQueue(mainWindow, id)
+}
+
+/** Remote control uses the same checkpoint transaction as renderer submit-line. */
+export function submitCompanionTerminalLine(mainWindow: BrowserWindow, id: string, text: string): void {
+  terminalManager.write(id, `${text}\r`)
+  enqueueCheckpointFromSubmit(mainWindow, id, text)
 }
 
 function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
@@ -186,6 +193,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       sendToRenderer(mainWindow, AGENT_CHANNELS.hookEvent, event)
     },
     onResolvedPayload: (payload) => {
+      companionSessionState.handleHookPayload(payload)
       agentTurnRecorder.handleHookPayload(payload)
     },
   })
@@ -223,6 +231,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       terminalStates.clear()
       hooksInstalledThisSession.clear()
       hookCoordinator.dispose()
+      companionSessionState.clear()
       agentTurnRecorder.dispose()
       agentTurnRecorder.setEventSink(undefined)
     },
@@ -242,6 +251,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         terminalStates.clear()
         hooksInstalledThisSession.clear()
         hookCoordinator.dispose()
+        companionSessionState.clear()
         agentTurnRecorder.dispose()
         agentTurnRecorder.setEventSink(undefined)
         void hookBridge.stop()
@@ -391,6 +401,12 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         workspaceId,
         cwd,
       })
+      companionSessionState.registerTerminal({
+        terminalId: id,
+        engine,
+        workspaceId,
+        cwd,
+      })
       agentTurnRecorder.registerTerminal({
         terminalId: id,
         engine,
@@ -459,6 +475,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
       }
       terminalStates.delete(id)
+      companionSessionState.unregisterTerminal(id)
       hookCoordinator.unregisterTerminal(id)
       agentTurnRecorder.unregisterTerminal(id)
     })

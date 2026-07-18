@@ -1,6 +1,7 @@
 import type {
   FeishuRemoteProviderConfig,
 } from '../../../shared/notifications'
+import type { CompanionCommand, CompanionRequestContext } from '../../companion/contracts'
 import type {
   RemoteNotificationEvent,
   RemoteNotificationProvider,
@@ -8,6 +9,19 @@ import type {
 } from '../types'
 
 const FEISHU_OPEN_API_BASE = 'https://open.feishu.cn/open-apis'
+
+type ActionTokenIssuer = (
+  context: Pick<CompanionRequestContext, 'provider' | 'operatorOpenId' | 'chatId' | 'threadId'>,
+  terminalId: string,
+  action: CompanionCommand['type'],
+  expiresAt: number,
+) => string | undefined
+
+let actionTokenIssuer: ActionTokenIssuer | undefined
+
+export function configureFeishuCardActionTokenIssuer(issuer?: ActionTokenIssuer): void {
+  actionTokenIssuer = issuer
+}
 
 interface FeishuApiResponse {
   code?: number
@@ -24,7 +38,7 @@ export class FeishuRemoteNotificationProvider implements RemoteNotificationProvi
     options: RemoteProviderSendOptions,
   ): Promise<void> {
     validateConfig(config)
-    const card = buildFeishuCard(event)
+    const card = buildFeishuCard(event, config)
 
     if (config.mode === 'app') {
       await this.sendAppMessage(config, card, options)
@@ -143,7 +157,11 @@ async function postJson<T = unknown>(
   }
 }
 
-function buildFeishuCard(event: RemoteNotificationEvent): Record<string, unknown> {
+export function buildFeishuCard(
+  event: RemoteNotificationEvent,
+  config: FeishuRemoteProviderConfig,
+): Record<string, unknown> {
+  const actions = buildCardActions(event, config)
   return {
     config: {
       wide_screen_mode: true,
@@ -163,6 +181,7 @@ function buildFeishuCard(event: RemoteNotificationEvent): Record<string, unknown
           content: buildMarkdown(event),
         },
       },
+      ...(actions.length ? [{ tag: 'action', actions }] : []),
       {
         tag: 'hr',
       },
@@ -177,6 +196,48 @@ function buildFeishuCard(event: RemoteNotificationEvent): Record<string, unknown
       },
     ],
   }
+}
+
+function buildCardActions(
+  event: RemoteNotificationEvent,
+  config: FeishuRemoteProviderConfig,
+): Record<string, unknown>[] {
+  if (
+    config.mode !== 'app'
+    || !config.inboundControlEnabled
+    || config.receiveIdType !== 'chat_id'
+    || !config.receiveId.trim()
+    || !event.terminalId
+    || !actionTokenIssuer
+    || config.allowedOpenIds.length !== 1
+  ) return []
+
+  const actionNames: Array<'bind' | 'stop' | 'approve' | 'reject'> = event.type === 'approval'
+    ? ['bind', 'approve', 'reject', 'stop']
+    : ['bind', 'stop']
+  return actionNames.flatMap((action) => {
+    const token = actionTokenIssuer?.(
+      {
+        provider: 'feishu',
+        operatorOpenId: config.allowedOpenIds[0],
+        chatId: config.receiveId.trim(),
+      },
+      event.terminalId!,
+      action,
+      Date.now() + config.actionTokenTtlMinutes * 60 * 1000,
+    )
+    if (!token) return []
+    return [{
+      tag: 'button',
+      text: { tag: 'plain_text', content: actionLabel(action) },
+      type: action === 'reject' || action === 'stop' ? 'danger' : action === 'approve' ? 'primary' : 'default',
+      value: { janusx: 1, action, terminalId: event.terminalId, token },
+    }]
+  })
+}
+
+function actionLabel(action: 'bind' | 'stop' | 'approve' | 'reject'): string {
+  return { bind: 'Bind', stop: 'Stop', approve: 'Approve', reject: 'Reject' }[action]
 }
 
 function headerTemplate(event: RemoteNotificationEvent): string {

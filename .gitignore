@@ -71,4 +71,7 @@ AGENTS.md
 
 # Design & Documentation (prototypes, tech proposals)
 design-mockups/
-docs/
+docs/*
+!docs/06-外部集成/
+docs/06-外部集成/*
+!docs/06-外部集成/飞书双向控制使用指南.md

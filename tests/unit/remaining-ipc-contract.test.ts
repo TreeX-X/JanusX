@@ -52,6 +52,7 @@ describe('remaining typed IPC contracts', () => {
     await api.git.status('C:\\repo')
     await api.llm.getProviders()
     await api.notificationSettings.get()
+    await api.notificationSettings.getFeishuControlStatus()
     await api.subAgentRun.list()
     await api.dialog.openDirectory()
     await api.window.minimize()
@@ -63,6 +64,7 @@ describe('remaining typed IPC contracts', () => {
       [GIT_CHANNELS.status, 'C:\\repo'],
       [LLM_CHANNELS.getProviders],
       [NOTIFICATION_SETTINGS_CHANNELS.get],
+      [NOTIFICATION_SETTINGS_CHANNELS.feishuControlStatus],
       [SUBAGENT_RUN_CHANNELS.list],
       [SYSTEM_CHANNELS.openDirectory],
       [SYSTEM_CHANNELS.minimize],

@@ -6,6 +6,8 @@ import {
   DEFAULT_AGENT_NOTIFICATION_SETTINGS,
   normalizeAgentNotificationSettings,
   normalizeRemoteNotificationSettings,
+  isValidFeishuGroupPrefix,
+  validateFeishuControlConfig,
   type AgentNotificationSettings,
   type RemoteNotificationSettings,
 } from '../../shared/notifications'
@@ -40,7 +42,7 @@ const DEFAULT_CONFIG: GlobalConfig = {
   knowledgeSettings: DEFAULT_KNOWLEDGE_SETTINGS,
 }
 
-class ConfigService {
+export class ConfigService {
   private configPath: string
   private config: GlobalConfig | null = null
 
@@ -110,6 +112,13 @@ class ConfigService {
     partial: Partial<AgentNotificationSettings>,
   ): Promise<AgentNotificationSettings> {
     const current = await this.getNotificationSettings()
+    const requestedSecret = partial.remote?.providers?.feishu?.appSecret
+    const requestedFeishu = partial.remote?.providers?.feishu
+    if (
+      requestedFeishu?.groupPromptPrefix !== undefined
+      && !isValidFeishuGroupPrefix(requestedFeishu.groupPromptPrefix)
+    ) throw new Error('Group prompt prefix must be a non-reserved /name value')
+
     const notificationSettings = normalizeAgentNotificationSettings({
       ...current,
       ...partial,
@@ -122,10 +131,22 @@ class ConfigService {
           feishu: {
             ...current.remote.providers.feishu,
             ...partial.remote?.providers?.feishu,
+            appSecret: requestedSecret?.trim()
+              ? requestedSecret
+              : current.remote.providers.feishu.appSecret,
           },
         },
       }),
     })
+    const feishu = notificationSettings.remote.providers.feishu
+    if (
+      requestedFeishu?.enabled === false
+      || requestedFeishu?.mode === 'webhook'
+      || (Array.isArray(requestedFeishu?.allowedOpenIds) && feishu.allowedOpenIds.length === 0
+        && current.remote.providers.feishu.inboundControlEnabled)
+    ) feishu.inboundControlEnabled = false
+    const validationError = validateFeishuControlConfig(feishu)
+    if (validationError) throw new Error(validationError)
     await this.update({ notificationSettings })
     return notificationSettings
   }

@@ -129,6 +129,34 @@
   width: min(360px, 42vw);
 }
 
+.textArea {
+  width: min(360px, 42vw);
+  height: auto;
+  min-height: 76px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.controlStatus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-left: 2px solid rgba(var(--so-accent-rgb), 0.5);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.controlNotice {
+  margin: 0;
+  color: #a1a1aa;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 .select {
   width: 160px;
   height: 36px;
@@ -258,6 +286,7 @@
   }
 
   .textInput,
+  .textArea,
   .select {
     width: 100%;
   }

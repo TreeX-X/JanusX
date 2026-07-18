@@ -1,0 +1,64 @@
+.button {
+  --refresh-accent: 148, 163, 184;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #96969d;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.button[data-accent='blue'] {
+  --refresh-accent: 59, 130, 246;
+}
+
+.button[data-accent='orange'] {
+  --refresh-accent: 255, 120, 48;
+}
+
+.button:hover:not(:disabled) {
+  color: rgb(var(--refresh-accent));
+  border-color: rgba(var(--refresh-accent), 0.34);
+  background: rgba(var(--refresh-accent), 0.1);
+}
+
+.button:focus-visible {
+  outline: 2px solid rgba(var(--refresh-accent), 0.72);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  color: rgba(150, 150, 157, 0.56);
+  cursor: wait;
+}
+
+.icon {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.button[data-loading='true'] .icon {
+  animation: refresh-icon-spin 800ms linear infinite;
+}
+
+@keyframes refresh-icon-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button[data-loading='true'] .icon {
+    animation: none;
+  }
+}

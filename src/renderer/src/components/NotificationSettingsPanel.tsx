@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react'
 import {
   getNotificationSettings,
+  getFeishuControlStatus,
   testFeishuNotification,
   updateNotificationSettings,
   type AgentNotificationSettings,
   type FeishuRemoteProviderConfig,
   type RemoteNotificationSettings,
 } from '@/services/notification-settings'
-import { DEFAULT_AGENT_NOTIFICATION_SETTINGS } from '../../../shared/notifications'
+import {
+  DEFAULT_AGENT_NOTIFICATION_SETTINGS,
+  FEISHU_CONTROL_LIMITS,
+  type FeishuControlStatus,
+} from '../../../shared/notifications'
+import { RefreshIconButton } from './ui/RefreshIconButton'
 import styles from './NotificationSettingsPanel.module.css'
 
 type StatusState = 'idle' | 'loading' | 'saving' | 'saved' | 'error'
@@ -24,6 +30,25 @@ export function NotificationSettingsPanel() {
   const [testStatus, setTestStatus] = useState<TestStatusState>('idle')
   const [error, setError] = useState('')
   const [testMessage, setTestMessage] = useState('')
+  const [controlStatus, setControlStatus] = useState<FeishuControlStatus | null>(null)
+  const [statusRefreshing, setStatusRefreshing] = useState(false)
+
+  const refreshControlStatus = async () => {
+    setStatusRefreshing(true)
+    try {
+      setControlStatus(await getFeishuControlStatus())
+    } catch {
+      setControlStatus({
+        state: 'error',
+        enabled: false,
+        configured: false,
+        error: 'Unable to read Feishu control status',
+        updatedAt: Date.now(),
+      })
+    } finally {
+      setStatusRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +66,7 @@ export function NotificationSettingsPanel() {
         setError(err instanceof Error ? err.message : 'Failed to load notification settings')
         setStatus('error')
       })
+    void refreshControlStatus()
 
     return () => {
       cancelled = true
@@ -96,6 +122,22 @@ export function NotificationSettingsPanel() {
     updateRemoteDraft(key, Number(value))
   }
 
+  const handleFeishuNumberChange = (
+    key: 'bindingTtlMinutes' | 'actionTokenTtlMinutes' | 'auditRetentionDays' | 'maxPromptLength',
+    value: string,
+  ) => updateFeishuDraft(key, Number(value))
+
+  const handleFeishuModeChange = (mode: 'webhook' | 'app') => {
+    updateRemoteDraft('providers', {
+      ...draft.remote.providers,
+      feishu: {
+        ...draft.remote.providers.feishu,
+        mode,
+        ...(mode === 'webhook' ? { inboundControlEnabled: false } : {}),
+      },
+    })
+  }
+
   const handleReset = () => {
     setDraft(settings)
     setStatus('idle')
@@ -112,6 +154,7 @@ export function NotificationSettingsPanel() {
       setSettings(next)
       setDraft(next)
       setStatus('saved')
+      void refreshControlStatus()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save notification settings')
       setStatus('error')
@@ -344,7 +387,7 @@ export function NotificationSettingsPanel() {
             className={styles.select}
             value={draft.remote.providers.feishu.mode}
             disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-            onChange={(event) => updateFeishuDraft('mode', event.target.value === 'app' ? 'app' : 'webhook')}
+            onChange={(event) => handleFeishuModeChange(event.target.value === 'app' ? 'app' : 'webhook')}
           >
             <option value="webhook">Webhook</option>
             <option value="app">App</option>
@@ -369,7 +412,7 @@ export function NotificationSettingsPanel() {
             />
             <TextInputRow
               label="App Secret"
-              hint="当前版本保存在本地配置文件；后续可迁移到系统 keychain。"
+              hint="留空表示保留已保存的 secret；只有输入新值时才会替换。"
               type="password"
               value={draft.remote.providers.feishu.appSecret}
               disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
@@ -402,6 +445,90 @@ export function NotificationSettingsPanel() {
               disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
               onChange={(value) => updateFeishuDraft('receiveId', value)}
             />
+            <SettingSwitch
+              label="启用飞书双向控制"
+              hint="仅 App 模式可用；消息和签名卡片动作只接受白名单 open_id。"
+              checked={draft.remote.providers.feishu.inboundControlEnabled}
+              disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+              onChange={(checked) => updateFeishuDraft('inboundControlEnabled', checked)}
+            />
+            <TextAreaRow
+              label="操作者 open_id 白名单"
+              hint="每行一个 ou_...；保存时自动移除空值、无效值和重复值。"
+              value={draft.remote.providers.feishu.allowedOpenIds.join('\n')}
+              disabled={isBusy || !draft.remote.providers.feishu.enabled}
+              onChange={(value) => updateFeishuDraft(
+                'allowedOpenIds',
+                value.split(/[\s,]+/).filter(Boolean),
+              )}
+            />
+            <TextInputRow
+              label="群聊 prompt 前缀"
+              hint="群聊必须 @机器人或使用这个非保留 /name 前缀。"
+              value={draft.remote.providers.feishu.groupPromptPrefix}
+              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+              onChange={(value) => updateFeishuDraft('groupPromptPrefix', value)}
+            />
+            <ControlNumberRow
+              label="绑定有效期"
+              hint="飞书会话到终端的绑定到期后自动失效。"
+              value={draft.remote.providers.feishu.bindingTtlMinutes}
+              min={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.min}
+              max={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.max}
+              unit="min"
+              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+              onChange={(value) => handleFeishuNumberChange('bindingTtlMinutes', value)}
+            />
+            <ControlNumberRow
+              label="卡片动作有效期"
+              hint="签名按钮超过该时间后不可再使用。"
+              value={draft.remote.providers.feishu.actionTokenTtlMinutes}
+              min={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.min}
+              max={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.max}
+              unit="min"
+              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+              onChange={(value) => handleFeishuNumberChange('actionTokenTtlMinutes', value)}
+            />
+            <ControlNumberRow
+              label="审计保留期"
+              hint="超过该时间的 Companion 审计 JSONL 记录会被清理。"
+              value={draft.remote.providers.feishu.auditRetentionDays}
+              min={FEISHU_CONTROL_LIMITS.auditRetentionDays.min}
+              max={FEISHU_CONTROL_LIMITS.auditRetentionDays.max}
+              unit="days"
+              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+              onChange={(value) => handleFeishuNumberChange('auditRetentionDays', value)}
+            />
+            <ControlNumberRow
+              label="最大 follow-up 长度"
+              hint="超过限制的 prompt 会在提交终端前被拒绝。"
+              value={draft.remote.providers.feishu.maxPromptLength}
+              min={FEISHU_CONTROL_LIMITS.maxPromptLength.min}
+              max={FEISHU_CONTROL_LIMITS.maxPromptLength.max}
+              unit="chars"
+              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+              onChange={(value) => handleFeishuNumberChange('maxPromptLength', value)}
+            />
+            <div className={styles.controlStatus}>
+              <div className={styles.label}>
+                <span className={styles.labelText}>入站连接状态</span>
+                <span className={styles.hint}>
+                  {controlStatus
+                    ? `${controlStatus.state} / ${controlStatus.configured ? 'configured' : 'not configured'} / ${new Date(controlStatus.updatedAt).toLocaleString()}`
+                    : 'Status unavailable'}
+                </span>
+                {controlStatus?.error && <span className={styles.statusError}>{controlStatus.error}</span>}
+              </div>
+              <RefreshIconButton
+                accent="orange"
+                label="Refresh Feishu control status"
+                loading={statusRefreshing}
+                onClick={() => { void refreshControlStatus() }}
+              />
+            </div>
+            <p className={styles.controlNotice}>
+              Webhook 仅支持通知。直接文本必须先绑定终端；群聊必须 @机器人或使用前缀。远程控制不会暴露任意 shell。
+            </p>
           </>
         )}
         <div className={styles.testRow}>
@@ -485,6 +612,77 @@ function TextInputRow({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       />
+    </div>
+  )
+}
+
+function TextAreaRow({
+  label,
+  hint,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string
+  hint: string
+  value: string
+  disabled?: boolean
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className={styles.row}>
+      <div className={styles.label}>
+        <span className={styles.labelText}>{label}</span>
+        <span className={styles.hint}>{hint}</span>
+      </div>
+      <textarea
+        className={`${styles.input} ${styles.textArea}`}
+        rows={3}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  )
+}
+
+function ControlNumberRow({
+  label,
+  hint,
+  value,
+  min,
+  max,
+  unit,
+  disabled,
+  onChange,
+}: {
+  label: string
+  hint: string
+  value: number
+  min: number
+  max: number
+  unit: string
+  disabled?: boolean
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className={styles.row}>
+      <div className={styles.label}>
+        <span className={styles.labelText}>{label}</span>
+        <span className={styles.hint}>{hint}</span>
+      </div>
+      <div className={styles.numberControl}>
+        <input
+          className={styles.input}
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span className={styles.unit}>{unit}</span>
+      </div>
     </div>
   )
 }

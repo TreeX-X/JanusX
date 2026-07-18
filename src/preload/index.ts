@@ -238,6 +238,7 @@ const notificationSettingsAPI: NotificationSettingsAPI = {
   get: () => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.get),
   update: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.update, settings),
   testFeishu: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.testFeishu, settings),
+  getFeishuControlStatus: () => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.feishuControlStatus),
 }
 
 const subAgentRunAPI: SubAgentRunAPI = {

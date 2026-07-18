@@ -32,6 +32,7 @@ async function bootstrapApp(): Promise<void> {
     { EditorWindowManager },
     { createMainWindow },
     { registerWindowIpc },
+    { feishuInboundRuntime },
   ] = await Promise.all([
     import('./ipc/handlers'),
     import('./ipc/project-handlers'),
@@ -47,6 +48,7 @@ async function bootstrapApp(): Promise<void> {
     import('./windows/editor-window'),
     import('./windows/main-window'),
     import('./windows/register-window-ipc'),
+    import('./remote-notifications/feishu-inbound/runtime'),
   ])
 
   let mainWindow: BrowserWindow | null = null
@@ -69,11 +71,13 @@ async function bootstrapApp(): Promise<void> {
     disposeWatchers: () => disposeWorkspaceWatchers(),
     destroyToast: () => desktopToastWindow.destroy(),
     closeEditors: () => editorWindows.closeAll(),
+    stopCompanion: () => feishuInboundRuntime.stop(),
   })
 
   function createWindow(): void {
     mainWindow = createMainWindow(() => {
       officeArtifactIndex.disposeAll()
+      void feishuInboundRuntime.stop()
       mainWindow = null
       if (process.platform === 'darwin') return
       if (appShutdown.isQuitting) return
@@ -88,6 +92,8 @@ async function bootstrapApp(): Promise<void> {
       officecliInstaller,
     })
     registerWindowIpc(editorWindows)
+    feishuInboundRuntime.configure(mainWindow)
+    void feishuInboundRuntime.reconfigure()
   }
 
   const hasSingleInstanceLock = app.requestSingleInstanceLock()

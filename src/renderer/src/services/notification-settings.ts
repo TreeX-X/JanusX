@@ -3,6 +3,8 @@ import type {
   FeishuRemoteProviderConfig,
   RemoteNotificationSettings,
   RemoteSendResult,
+  AgentNotificationSettingsView,
+  FeishuControlStatus,
 } from '../../../shared/notifications'
 
 export type {
@@ -13,17 +15,32 @@ export type {
 }
 
 export async function getNotificationSettings(): Promise<AgentNotificationSettings> {
-  return window.electron.notificationSettings.get()
+  return hydrateSettings(await window.electron.notificationSettings.get())
 }
 
 export async function updateNotificationSettings(
   settings: Partial<AgentNotificationSettings>,
 ): Promise<AgentNotificationSettings> {
-  return window.electron.notificationSettings.update(settings)
+  return hydrateSettings(await window.electron.notificationSettings.update(settings))
+}
+
+function hydrateSettings(settings: AgentNotificationSettingsView): AgentNotificationSettings {
+  const { appSecretConfigured: _configured, ...feishu } = settings.remote.providers.feishu
+  return {
+    ...settings,
+    remote: {
+      ...settings.remote,
+      providers: { feishu: { ...feishu, appSecret: '' } },
+    },
+  }
 }
 
 export async function testFeishuNotification(
   settings: RemoteNotificationSettings,
 ): Promise<RemoteSendResult> {
   return window.electron.notificationSettings.testFeishu(settings)
+}
+
+export async function getFeishuControlStatus(): Promise<FeishuControlStatus> {
+  return window.electron.notificationSettings.getFeishuControlStatus()
 }
