@@ -101,6 +101,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       mkdir(join(projectPath, 'src'), { recursive: true }),
     ])
     await Promise.all([
+      writeFile(join(workspacePath, 'dock-file.txt'), 'dock fixture\n'),
       writeFile(
         join(projectPath, 'package.json'),
         JSON.stringify({ name: 'desktop-smoke-vite', scripts: { dev: 'vite' }, devDependencies: { vite: '^6.0.0' } }),
@@ -148,6 +149,104 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       workspace.id,
     )
     expect(loaded).toEqual(workspace)
+
+    await page.setViewportSize({ width: 1200, height: 800 })
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    const dock = page.locator('[aria-label="右侧工具 Dock"]')
+    const rail = page.getByRole('toolbar', { name: '右侧工具' })
+    const panelShell = page.getByTestId('right-tool-panel-shell')
+    await expect(dock).toBeVisible()
+    await expect(rail).toBeVisible()
+    expect((await rail.boundingBox())?.width).toBe(48)
+    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+
+    const filesRailButton = page.getByRole('button', { name: /打开文件工具/ })
+    if (
+      !(await filesRailButton.getAttribute('aria-label'))?.includes('当前') ||
+      await panelShell.isHidden()
+    ) {
+      await filesRailButton.click()
+    }
+    await expect(filesRailButton).toHaveAttribute('aria-label', /当前/)
+    await expect(panelShell).toBeVisible()
+    const filesPanel = page.locator('#right-tool-panel-files')
+    const fileExplorerContent = filesPanel.getByTestId('file-explorer-content')
+    await expect(filesPanel).toHaveAttribute('aria-hidden', 'false')
+    await expect(fileExplorerContent).toBeVisible()
+    const originalFilesPanel = await filesPanel.elementHandle()
+    await filesRailButton.click()
+    await expect(panelShell).toBeHidden()
+    expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(true)
+    await filesRailButton.click()
+    await expect(panelShell).toBeVisible()
+
+    await fileExplorerContent.click({ button: 'right', position: { x: 16, y: 16 } })
+    await expect(page.getByRole('button', { name: '新建文件', exact: true })).toBeVisible()
+    await filesRailButton.click()
+    await expect(panelShell).toBeHidden()
+    await expect(page.getByRole('button', { name: '新建文件', exact: true })).toHaveCount(0)
+    expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(true)
+    await filesRailButton.click()
+    await expect(panelShell).toBeVisible()
+
+    await expect(filesPanel).toHaveAttribute('aria-hidden', 'false')
+    await expect(fileExplorerContent).toBeVisible()
+    await fileExplorerContent.click({ button: 'right', position: { x: 16, y: 16 } })
+    await expect(page.getByRole('button', { name: '新建文件', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /打开 Git 工具/ }).click()
+    await expect(page.getByRole('button', { name: '新建文件', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Push', exact: true }).click()
+    await expect(page.getByRole('button', { name: '取消', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /打开文件工具/ }).evaluate((element: HTMLElement) => element.click())
+    await expect(page.getByRole('button', { name: '取消', exact: true })).toHaveCount(0)
+
+    await page.getByRole('button', { name: '关闭 Git' }).click()
+    await page.getByRole('button', { name: '关闭 文件' }).click()
+    expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(false)
+    await expect(panelShell).toBeVisible()
+    await page.getByRole('button', { name: /打开文件工具，已关闭/ }).click()
+    await expect(panelShell).toBeVisible()
+
+    const separator = page.getByRole('separator', { name: '调整右侧工具面板宽度' })
+    await separator.focus()
+    await separator.press('Home')
+    await expect(separator).toHaveAttribute('aria-valuenow', '240')
+    await separator.press('End')
+    const maximumWidth = Number(await separator.getAttribute('aria-valuemax'))
+    expect(Number(await separator.getAttribute('aria-valuenow'))).toBe(maximumWidth)
+    const separatorBox = await separator.boundingBox()
+    if (!separatorBox) throw new Error('Right Dock separator has no layout box')
+    await page.mouse.move(separatorBox.x + separatorBox.width / 2, separatorBox.y + 40)
+    await page.mouse.down()
+    await page.mouse.move(separatorBox.x - 24, separatorBox.y + 40)
+    await page.mouse.up()
+    expect(await page.evaluate(() => ({ cursor: document.body.style.cursor, userSelect: document.body.style.userSelect }))).toEqual({ cursor: '', userSelect: '' })
+
+    await page.setViewportSize({ width: 680, height: 800 })
+    await expect(panelShell).toBeHidden()
+    await expect(rail).toBeVisible()
+    await page.getByRole('button', { name: /打开文件工具，当前/ }).click()
+    await page.setViewportSize({ width: 1200, height: 800 })
+    await expect(panelShell).toBeVisible()
+    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+
+    await page.getByTitle('收起侧栏').click()
+    await expect(rail).toBeVisible()
+    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    await page.locator('main').getByText('Shell', { exact: true }).click()
+    const terminalInput = page.locator('.xterm-helper-textarea').first()
+    await expect(terminalInput).toBeAttached({ timeout: 15_000 })
+    const terminalScreen = page.locator('.xterm-screen').first()
+    await expect(terminalScreen).toBeVisible()
+    const terminalBox = await terminalScreen.boundingBox()
+    const centerBox = await page.locator('main').boundingBox()
+    expect(terminalBox?.width).toBeGreaterThan(0)
+    expect(terminalBox?.width).toBeLessThanOrEqual(centerBox?.width ?? 0)
+    await terminalInput.focus()
+    await terminalInput.pressSequentially('echo JANUSX_DOCK_FIT')
+    await terminalInput.press('Enter')
+    await expect(page.locator('.xterm-rows')).toContainText('JANUSX_DOCK_FIT', { timeout: 10_000 })
 
     const shell = process.platform === 'win32' ? process.env.ComSpec ?? 'cmd.exe' : process.env.SHELL ?? '/bin/sh'
     terminalId = `desktop-smoke-${process.pid}`

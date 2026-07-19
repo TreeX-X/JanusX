@@ -11,11 +11,13 @@ import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCheckpointStore } from '@/stores/checkpoint'
 import { useOfficeStore } from '@/stores/office'
+import { useRightToolStore } from '@/stores/right-tools'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalArea } from '@/components/TerminalArea'
 import { TerminalSelector } from '@/components/TerminalSelector'
-import { Panel } from '@/components/Panel'
+import { Panel, RightDockLayoutProvider } from '@/components/Panel'
+import { getRightDockLayout } from '@/components/right-tools/layout'
 import { OfficePreviewPanel } from '@/components/office/OfficePreviewPanel'
 import {
   clampOfficePreviewWidth,
@@ -58,18 +60,44 @@ export default function App() {
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
+  const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
   const officeVisible = visibleOfficeWorkspaceId !== null && visibleOfficeWorkspaceId === activeWorkspaceId
   const [officeClosing, setOfficeClosing] = useState(false)
   const [officeWidth, setOfficeWidth] = useState<number | null>(null)
   const [officeMeasuredWidth, setOfficeMeasuredWidth] = useState(OFFICE_PREVIEW_MIN_WIDTH)
   const [officeMaxWidth, setOfficeMaxWidth] = useState(OFFICE_PREVIEW_MAX_WIDTH)
   const [officeResizing, setOfficeResizing] = useState(false)
+  const [rightDockResizing, setRightDockResizing] = useState(false)
   const officeCloseTimerRef = useRef<number | null>(null)
+  const appGridRef = useRef<HTMLDivElement | null>(null)
   const centerWorkspaceRef = useRef<HTMLElement | null>(null)
   const officeWorkspaceRef = useRef<HTMLElement | null>(null)
   const officeResizeSessionRef = useRef<OfficeResizeSession | null>(null)
   const bodyInteractionStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const officeRendered = officeVisible || officeClosing
+  const [appGridWidth, setAppGridWidth] = useState(() => window.innerWidth)
+  const sidebarWidth = sidebarCollapsed
+    ? 48
+    : Math.min(280, Math.max(240, appGridWidth * 0.14))
+  const officeColumnWidth = officeRendered && !officeClosing
+    ? officeWidth ?? officeMeasuredWidth
+    : 0
+  const rightDockLayout = getRightDockLayout({
+    availableWidth: appGridWidth - sidebarWidth - officeColumnWidth,
+    panelCollapsed,
+    officeRendered,
+    panelWidth: rightToolPanelWidth,
+  })
+
+  useLayoutEffect(() => {
+    const grid = appGridRef.current
+    if (!grid) return
+    const updateWidth = () => setAppGridWidth(grid.getBoundingClientRect().width)
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [])
 
   const reconcileOfficeLayout = useCallback(() => {
     if (!officeVisible || officeClosing || !centerWorkspaceRef.current || !officeWorkspaceRef.current) return
@@ -237,14 +265,17 @@ export default function App() {
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg-app)', color: 'var(--text)' }}>
       <Titlebar />
       <div
+        ref={appGridRef}
         className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden"
         style={{
-          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(0, 1fr) ${
+          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${
             officeRendered ? `${officeClosing ? '0px' : officeWidth === null ? OFFICE_PREVIEW_WIDTH : `${officeWidth}px`} ` : ''
-          }${panelCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH}`,
+          }${rightDockLayout.dockWidth}px`,
           transition: officeResizing
             ? 'none'
-            : `grid-template-columns ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
+            : rightDockResizing
+              ? 'none'
+              : `grid-template-columns ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
         }}
       >
         <Sidebar />
@@ -338,7 +369,14 @@ export default function App() {
             />
           </section>
         )}
-        <Panel />
+        <RightDockLayoutProvider
+          effectiveCollapsed={rightDockLayout.effectiveCollapsed}
+          effectiveMaxWidth={rightDockLayout.effectiveMaxWidth}
+          forcedCollapsed={officeRendered || rightDockLayout.responsiveAutoCollapsed}
+          onResizingChange={setRightDockResizing}
+        >
+          <Panel />
+        </RightDockLayoutProvider>
         <div className="col-span-full min-w-0 [&>footer]:h-full">
           <StatusBar />
         </div>

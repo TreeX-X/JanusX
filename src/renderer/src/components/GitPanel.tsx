@@ -25,11 +25,15 @@ const REMOTE_ACTION_META: Record<
   },
 }
 
-export function GitPanel() {
+export function GitPanel({ active = true }: { active?: boolean }) {
   const { status, commits, loading, error, fetchStatus, fetchLog, stageFiles, unstageFiles, commitChanges, pushChanges, pullChanges } = useGitStore()
   const { activeWorkspaceId, workspaces } = useWorkspaceStore()
   const [commitMsg, setCommitMsg] = useState('')
   const [confirmAction, setConfirmAction] = useState<GitRemoteAction | null>(null)
+
+  useEffect(() => {
+    if (!active) setConfirmAction(null)
+  }, [active])
 
   const cwd = workspaces.find((w) => w.id === activeWorkspaceId)?.path
   const refreshGitData = useCallback(async (includeLog = true) => {
@@ -333,7 +337,7 @@ export function GitPanel() {
         </div>
       </div>
     </div>
-    {confirmMeta && createPortal(
+    {active && confirmMeta && createPortal(
       <div
         className="fixed inset-0 flex items-center justify-center"
         style={{
