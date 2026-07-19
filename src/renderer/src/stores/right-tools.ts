@@ -36,10 +36,11 @@ const defaults = createDefaultRightToolPreferences()
 export function selectPersistedRightToolPreferences(
   state: RightToolPreferencesV1,
 ): RightToolPreferencesV1 {
+  // Only display preferences survive restarts; every launch starts rail-only.
   return {
     schemaVersion: state.schemaVersion,
-    openToolIds: [...state.openToolIds],
-    activeToolId: state.activeToolId,
+    openToolIds: [],
+    activeToolId: null,
     panelWidth: state.panelWidth,
   }
 }
@@ -87,9 +88,12 @@ export const useRightToolStore = create<RightToolStore>()(
       storage: createSafeRightToolStorage(() => localStorage),
       partialize: selectPersistedRightToolPreferences,
       migrate: () => createDefaultRightToolPreferences(),
+      // Force rail-only on launch regardless of legacy persisted open sets.
       merge: (persistedState, currentState) => ({
         ...currentState,
         ...reconcileRightToolPreferences(persistedState),
+        openToolIds: [],
+        activeToolId: null,
       }),
     },
   ),

@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { addTerminal, updateTerminal, setBlueprintMode, setLoadState } = vi.hoisted(() => ({
+const { addTerminal, updateTerminal, setBlueprintMode, setLoadState, workspaceTerminals } = vi.hoisted(() => ({
   addTerminal: vi.fn(),
   updateTerminal: vi.fn(),
   setBlueprintMode: vi.fn(),
   setLoadState: vi.fn(),
+  workspaceTerminals: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('@/stores/workspace', () => ({
@@ -14,7 +15,7 @@ vi.mock('@/stores/workspace', () => ({
       getState: () => ({
         addTerminal,
         updateTerminal,
-        terminals: [],
+        terminals: workspaceTerminals,
       }),
     },
   ),
@@ -56,6 +57,7 @@ describe('terminal-launch', () => {
     waitForTerminalGeometry.mockReset()
     waitForTerminalGeometry.mockResolvedValue({ cols: 120, rows: 40 })
     requestTerminalForceFitBurst.mockReset()
+    workspaceTerminals.length = 0
 
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
@@ -207,6 +209,41 @@ describe('terminal-launch', () => {
         status: 'error',
         errorMessage: 'spawn failed',
       }),
+    )
+  })
+
+  it('retries with measured geometry before requesting the post-create fit burst', async () => {
+    const getDefaultShell = window.electron.system.getDefaultShell as ReturnType<typeof vi.fn>
+    const create = window.electron.terminal.create as ReturnType<typeof vi.fn>
+    getDefaultShell.mockResolvedValue('powershell.exe')
+    create.mockResolvedValue({ pid: 5252 })
+    workspaceTerminals.push({
+      id: 'retry-terminal',
+      workspaceId: 'ws-1',
+      cwd: 'C:/repo',
+      shell: 'powershell.exe',
+      autoCommand: 'opencode',
+      preset: 'opencode',
+      status: 'error',
+    })
+
+    const {
+      __resetDefaultShellCacheForTests,
+      retryTerminalCreate,
+    } = await import('../../src/renderer/src/lib/terminal-launch')
+
+    __resetDefaultShellCacheForTests()
+    await expect(retryTerminalCreate('retry-terminal')).resolves.toBe(true)
+
+    expect(waitForTerminalGeometry).toHaveBeenCalledWith('retry-terminal')
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'retry-terminal',
+      cols: 120,
+      rows: 40,
+    }))
+    expect(requestTerminalForceFitBurst).toHaveBeenCalledWith('retry-terminal')
+    expect(create.mock.invocationCallOrder[0]).toBeLessThan(
+      requestTerminalForceFitBurst.mock.invocationCallOrder[0],
     )
   })
 })

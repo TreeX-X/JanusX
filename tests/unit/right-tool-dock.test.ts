@@ -26,6 +26,7 @@ describe('right dock layout', () => {
       panelCollapsed: false,
       officeRendered: false,
       panelWidth: 280,
+      hasActiveTool: true,
     })).toMatchObject({
       effectiveCollapsed: false,
       responsiveAutoCollapsed: false,
@@ -40,6 +41,7 @@ describe('right dock layout', () => {
       panelCollapsed: false,
       officeRendered: false,
       panelWidth: 420,
+      hasActiveTool: true,
     })).toMatchObject({ panelWidth: 332, dockWidth: 380 })
 
     expect(getRightDockLayout({
@@ -47,6 +49,7 @@ describe('right dock layout', () => {
       panelCollapsed: false,
       officeRendered: false,
       panelWidth: 420,
+      hasActiveTool: true,
     })).toMatchObject({
       effectiveCollapsed: true,
       responsiveAutoCollapsed: true,
@@ -60,16 +63,28 @@ describe('right dock layout', () => {
       panelCollapsed: true,
       officeRendered: false,
       panelWidth: 360,
+      hasActiveTool: true,
     })
     const office = getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: false,
       officeRendered: true,
       panelWidth: 360,
+      hasActiveTool: true,
     })
 
     expect(manual).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
     expect(office).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
+  })
+
+  it('renders rail-only when no tool is active even if the panel is not collapsed', () => {
+    expect(getRightDockLayout({
+      availableWidth: 1000,
+      panelCollapsed: false,
+      officeRendered: false,
+      panelWidth: 360,
+      hasActiveTool: false,
+    })).toMatchObject({ effectiveCollapsed: false, dockWidth: 48, panelWidth: 360 })
   })
 })
 

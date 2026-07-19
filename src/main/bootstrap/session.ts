@@ -22,6 +22,14 @@ export function installProductionCsp(session: Session): void {
   })
 }
 
+export function configureApplicationProfile(isHookClient: boolean, argv: string[] = process.argv): void {
+  const hasExplicitUserDataDir = argv.some(
+    (argument) => argument === '--user-data-dir' || argument.startsWith('--user-data-dir=')
+  )
+  if (isHookClient || app.isPackaged || hasExplicitUserDataDir) return
+  app.setPath('userData', join(app.getPath('appData'), 'JanusX-Dev'))
+}
+
 function canWriteDirectory(directory: string): boolean {
   try {
     mkdirSync(directory, { recursive: true })

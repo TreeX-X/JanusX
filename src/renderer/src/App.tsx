@@ -61,6 +61,7 @@ export default function App() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
+  const rightToolActiveId = useRightToolStore((s) => s.activeToolId)
   const officeVisible = visibleOfficeWorkspaceId !== null && visibleOfficeWorkspaceId === activeWorkspaceId
   const [officeClosing, setOfficeClosing] = useState(false)
   const [officeWidth, setOfficeWidth] = useState<number | null>(null)
@@ -87,6 +88,7 @@ export default function App() {
     panelCollapsed,
     officeRendered,
     panelWidth: rightToolPanelWidth,
+    hasActiveTool: rightToolActiveId !== null,
   })
 
   useLayoutEffect(() => {

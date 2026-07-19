@@ -204,7 +204,8 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('button', { name: '关闭 Git' }).click()
     await page.getByRole('button', { name: '关闭 文件' }).click()
     expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(false)
-    await expect(panelShell).toBeVisible()
+    await expect(panelShell).toBeHidden()
+    await expect(rail).toBeVisible()
     await page.getByRole('button', { name: /打开文件工具，已关闭/ }).click()
     await expect(panelShell).toBeVisible()
 

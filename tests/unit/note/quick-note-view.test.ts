@@ -86,6 +86,27 @@ describe('Quick Note view behavior', () => {
     expect(source).toContain("drawerOpen ? 'pr-32' : 'pr-3'")
   })
 
+  it('keeps the production terminal tree mounted independently from drawer state', () => {
+    const source = readFileSync(new URL('../../../src/renderer/src/components/TerminalArea.tsx', import.meta.url), 'utf8')
+    const leafStart = source.indexOf('function LeafPane(')
+    const terminalAreaStart = source.indexOf('export function TerminalArea()')
+    const leafSource = source.slice(leafStart, terminalAreaStart)
+    const terminalAreaSource = source.slice(terminalAreaStart)
+    const liveTreeNodeIndex = terminalAreaSource.indexOf('node={paneTree}')
+    const liveTreeIndex = terminalAreaSource.lastIndexOf('<PaneTreeView', liveTreeNodeIndex)
+    const drawerIndex = terminalAreaSource.indexOf('className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"')
+
+    expect(leafStart).toBeGreaterThanOrEqual(0)
+    expect(liveTreeIndex).toBeGreaterThanOrEqual(0)
+    expect(drawerIndex).toBeGreaterThan(liveTreeIndex)
+    expect(leafSource).toContain('{leaf.tabs.map((tab) => {')
+    expect(leafSource).toContain('key={tab.id}')
+    expect(leafSource).toContain('<CLITerminal')
+    expect(leafSource).not.toContain('drawerOpen')
+    expect(leafSource).not.toContain('drawerView')
+    expect(terminalAreaSource).toContain('height: getDrawerHeight(drawerOpen, drawerView)')
+  })
+
   it('supports arrow, Home, and End navigation with wrapping', () => {
     expect(getNextDrawerView('runtime', 'ArrowRight')).toBe('note')
     expect(getNextDrawerView('note', 'ArrowRight')).toBe('runtime')

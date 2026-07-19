@@ -1,9 +1,10 @@
 import { app, BrowserWindow } from 'electron'
 import { isAgentHookClientInvocation, runAgentHookClient } from './notifications/agent-hook-client'
-import { configureChromiumSessionPaths } from './bootstrap/session'
+import { configureApplicationProfile, configureChromiumSessionPaths } from './bootstrap/session'
 
 const isHookClient = isAgentHookClientInvocation()
 
+configureApplicationProfile(isHookClient)
 configureChromiumSessionPaths(isHookClient)
 
 if (isHookClient) {

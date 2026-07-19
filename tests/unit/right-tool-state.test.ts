@@ -160,7 +160,7 @@ describe('right tool persistence contract', () => {
     expect('panelCollapsed' in (persisted as object)).toBe(false)
   })
 
-  it('hydrates and reconciles a v1 persisted envelope', async () => {
+  it('hydrates a v1 persisted envelope rail-only, keeping only the clamped width', async () => {
     const { useRightToolStore } = (
       await loadStores(
         envelope({
@@ -175,9 +175,47 @@ describe('right tool persistence contract', () => {
     expect(useRightToolStore.persist.hasHydrated()).toBe(true)
     expect(pickPreferences(useRightToolStore.getState())).toEqual({
       schemaVersion: 1,
-      openToolIds: ['files', 'git', 'assist'],
-      activeToolId: 'files',
+      openToolIds: [],
+      activeToolId: null,
       panelWidth: 420,
+    })
+  })
+
+  it('ignores a legacy all-open envelope and launches rail-only with its width', async () => {
+    const { useRightToolStore } = (
+      await loadStores(
+        envelope({
+          schemaVersion: 1,
+          openToolIds: ['files', 'git', 'checkpoints', 'assist'],
+          activeToolId: 'files',
+          panelWidth: 300,
+        }),
+      )
+    ).storeModule
+
+    expect(pickPreferences(useRightToolStore.getState())).toEqual({
+      schemaVersion: 1,
+      openToolIds: [],
+      activeToolId: null,
+      panelWidth: 300,
+    })
+  })
+
+  it('persists an open session as rail-only so the next launch starts closed', async () => {
+    const { storeModule } = await loadStores()
+    const { useRightToolStore } = storeModule
+
+    useRightToolStore.getState().openTool('git')
+    useRightToolStore.getState().setPanelWidth(320)
+    const persisted = useRightToolStore.persist
+      .getOptions()
+      .partialize!(useRightToolStore.getState())
+
+    expect(persisted).toEqual({
+      schemaVersion: 1,
+      openToolIds: [],
+      activeToolId: null,
+      panelWidth: 320,
     })
   })
 
