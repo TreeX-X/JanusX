@@ -142,6 +142,7 @@ describe('semantic file icon', () => {
       expanded: false,
       expandedPaths: new Set<string>(),
       fileChangeMap: new Map<string, GitFileChange>(),
+      changedDirs: new Set<string>(),
       onSelect: vi.fn(),
       onToggleDirectory: vi.fn(),
       onOpenFile: vi.fn(),
@@ -190,5 +191,34 @@ describe('semantic file icon', () => {
     expect(fileNameTag).toBeDefined()
     expect(fileNameTag).not.toContain('style=')
     expect(defaultMarkup).not.toContain('data-git-status=')
+  })
+
+  it('marks folders containing git changes with an aggregate dot', () => {
+    const baseProps = {
+      node: { name: 'src', path: 'src', type: 'directory' } as FileNode,
+      depth: 0,
+      activeFilePath: null,
+      expanded: false,
+      expandedPaths: new Set<string>(),
+      fileChange: null,
+      fileChangeMap: new Map<string, GitFileChange>(),
+      onSelect: vi.fn(),
+      onToggleDirectory: vi.fn(),
+      onOpenFile: vi.fn(),
+      onOpenContextMenu: vi.fn(),
+    }
+
+    const dirtyMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
+      ...baseProps,
+      changedDirs: new Set(['src']),
+    }))
+    const cleanMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
+      ...baseProps,
+      changedDirs: new Set<string>(),
+    }))
+
+    expect(dirtyMarkup).toContain('data-git-dirty')
+    expect(dirtyMarkup).not.toContain('data-git-status=')
+    expect(cleanMarkup).not.toContain('data-git-dirty')
   })
 })

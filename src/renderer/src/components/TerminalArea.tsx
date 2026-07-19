@@ -18,8 +18,6 @@ import {
 } from '@/lib/terminal-file-reference'
 import {
   getLeafPanes,
-  createTerminalPaneContent,
-  splitPaneTree,
   type PaneDropEdge,
   type WorkspacePaneLeaf,
   type WorkspacePaneNode,
@@ -62,8 +60,6 @@ const PRESETS: TerminalPresetOption[] = [
 
 const SPLIT_ZONE_MAX_PX = 240
 const SPLIT_ZONE_MIN_PX = 72
-const SPLIT_RATIO_MIN = 0.15
-const SPLIT_RATIO_MAX = 0.85
 const SPLIT_RATIO_EQUAL = 0.5
 // 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
 const TERMINAL_MENU_COLLAPSED_SIZE = 24
@@ -99,86 +95,6 @@ function getSplitRatioForDrag(
   _clientY?: number
 ): number {
   return SPLIT_RATIO_EQUAL
-}
-
-function buildSplitPreviewTree(
-  tree: WorkspacePaneNode | null,
-  terminal: Terminal,
-  paneId: string,
-  edge: PaneDropEdge,
-  ratio: number
-): WorkspacePaneNode | null {
-  if (!tree) return null
-
-  const direction: 'horizontal' | 'vertical' = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
-  const placement = edge === 'left' || edge === 'top' ? 'before' : 'after'
-  const clampedRatio = Math.min(SPLIT_RATIO_MAX, Math.max(SPLIT_RATIO_MIN, ratio))
-  const splitResult = splitPaneTree(
-    tree,
-    paneId,
-    direction,
-    '__preview-split',
-    '__preview-pane',
-    placement,
-    clampedRatio
-  )
-  if (!splitResult.tree) return tree
-
-  const withSource = removeTerminalFromLeafNoPrune(
-    splitResult.tree,
-    paneId,
-    terminal.id
-  )
-  const content = createTerminalPaneContent(terminal.id, terminal.workspaceId)
-  const targetPaneId = splitResult.focus.paneId ?? paneId
-  return insertTabToLeafNoPrune(withSource, targetPaneId, content)
-}
-
-function insertTabToLeafNoPrune(
-  node: WorkspacePaneNode,
-  leafId: string,
-  content: ReturnType<typeof createTerminalPaneContent>
-): WorkspacePaneNode {
-  if (node.type === 'leaf') {
-    if (node.id !== leafId) return node
-    const existingIndex = node.tabs.findIndex((item) => item.id === content.id)
-    const tabs =
-      existingIndex >= 0
-        ? node.tabs.map((item) => (item.id === content.id ? content : item))
-        : [...node.tabs, content]
-    return {
-      ...node,
-      tabs,
-      activeTabId: content.id,
-    }
-  }
-
-  return {
-    ...node,
-    first: insertTabToLeafNoPrune(node.first, leafId, content),
-    second: insertTabToLeafNoPrune(node.second, leafId, content),
-  }
-}
-
-function removeTerminalFromLeafNoPrune(
-  node: WorkspacePaneNode,
-  leafId: string,
-  terminalId: string
-): WorkspacePaneNode {
-  if (node.type === 'leaf') {
-    if (node.id !== leafId) return node
-    return {
-      ...node,
-      tabs: node.tabs.filter((item) => item.terminalId !== terminalId),
-      activeTabId: node.tabs.find((item) => item.id !== node.activeTabId)?.id ?? node.tabs[0]?.id ?? null,
-    }
-  }
-
-  return {
-    ...node,
-    first: removeTerminalFromLeafNoPrune(node.first, leafId, terminalId),
-    second: removeTerminalFromLeafNoPrune(node.second, leafId, terminalId),
-  }
 }
 
 function providerLabel(preset: TerminalPreset): string {
@@ -391,7 +307,6 @@ interface PaneTreeViewProps {
   terminalsById: Map<string, Terminal>
   focusedPaneId: string | null
   activeTerminalId: string | null
-  isPreview?: boolean
   showFocusChrome: boolean
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
@@ -399,7 +314,6 @@ interface PaneTreeViewProps {
   onClosePaneTab: (paneId: string, tabId: string) => void
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
-  onSplitPreview: (terminalId: string | null, paneId: string | null, edge: PaneDropEdge | null, ratio: number) => void
   onTerminalDragStart: (terminalId: string) => void
   onTerminalDragEnd: () => void
   activeDragTerminalId: string | null
@@ -468,7 +382,7 @@ function SplitPaneNode({ split, onResize, ...props }: PaneTreeViewProps & { spli
       <div
         role="separator"
         aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
-        onPointerDown={props.isPreview ? undefined : handlePointerDown}
+        onPointerDown={handlePointerDown}
         className="shrink-0 transition-colors hover:bg-[rgba(255,120,48,0.2)]"
         style={{
           width: isHorizontal ? 8 : '100%',
@@ -597,7 +511,6 @@ function LeafPane({
   onClosePaneTab,
   onKillTerminal,
   onTerminalDrop,
-  onSplitPreview,
   onTerminalDragStart,
   onTerminalDragEnd,
   activeDragTerminalId,
@@ -605,10 +518,8 @@ function LeafPane({
   terminalMenuPaneId,
   onToggleTerminalMenu,
   onCreateTerminal,
-  isPreview = false,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
   const [dragHint, setDragHint] = useState<PaneDropEdge | 'center' | null>(null)
-  const lastPreviewRef = useRef(0)
   const isFocused = leaf.id === focusedPaneId
   const showFocus = showFocusChrome && isFocused
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
@@ -626,7 +537,6 @@ function LeafPane({
   )
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
-    if (isPreview) return
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
 
     const dragTerminalId =
@@ -639,34 +549,19 @@ function LeafPane({
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
     const edge = getPaneDropHint(event.currentTarget, event.clientX, event.clientY)
-    setDragHint(edge ?? 'center')
-    const terminalId = dragTerminalId
-    const ratio = edge === 'center' || !terminalId
-      ? 0.5
-      : getSplitRatioForDrag(event.currentTarget, edge, event.clientX, event.clientY)
-    const now = performance.now()
-    if (now - lastPreviewRef.current < 80) return
-    lastPreviewRef.current = now
-    onSplitPreview(
-      edge === 'center' ? null : terminalId,
-      edge === 'center' ? null : leaf.id,
-      edge === 'center' ? null : edge,
-      ratio
-    )
-  }, [activeDragTerminalId, isPreview, leaf.id, onSplitPreview])
+    const nextHint = edge ?? 'center'
+    setDragHint((current) => (current === nextHint ? current : nextHint))
+  }, [activeDragTerminalId])
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLElement>) => {
-    if (isPreview) return
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
 
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
       setDragHint(null)
-      onSplitPreview(null, null, null, 0.5)
     }
-  }, [isPreview, onSplitPreview])
+  }, [])
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLElement>) => {
-    if (isPreview) return
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
 
     const dragTerminalId =
@@ -680,13 +575,15 @@ function LeafPane({
     const terminalId = dragTerminalId
     if (!terminalId) return
     const hint = getPaneDropHint(event.currentTarget, event.clientX, event.clientY)
-    if (hint === 'center') return
+    if (hint === 'center') {
+      setDragHint(null)
+      return
+    }
     const edge: PaneDropEdge = hint
     const ratio = getSplitRatioForDrag(event.currentTarget, edge, event.clientX, event.clientY)
     setDragHint(null)
-    onSplitPreview(null, null, null, 0.5)
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
-  }, [activeDragTerminalId, leaf.id, onTerminalDrop, onSplitPreview])
+  }, [activeDragTerminalId, leaf.id, onTerminalDrop])
 
   return (
       <section
@@ -710,19 +607,17 @@ function LeafPane({
     >
       {dragHint && (
         <div
-          className="pointer-events-none absolute inset-0 z-20"
+          className="pointer-events-none absolute z-20"
           style={{
-            background: dragHint === 'center' ? 'rgba(255,255,255,0.025)' : 'transparent',
-            boxShadow:
-              dragHint === 'left'
-                ? 'inset 2px 0 0 rgba(255,120,48,0.55)'
-                : dragHint === 'right'
-                  ? 'inset -2px 0 0 rgba(255,120,48,0.55)'
-                  : dragHint === 'top'
-                    ? 'inset 0 2px 0 rgba(255,120,48,0.55)'
-                    : dragHint === 'bottom'
-                      ? 'inset 0 -2px 0 rgba(255,120,48,0.55)'
-                      : 'inset 0 0 0 1px rgba(255,255,255,0.08)',
+            top: dragHint === 'bottom' ? '50%' : 0,
+            right: dragHint === 'left' ? '50%' : 0,
+            bottom: dragHint === 'top' ? '50%' : 0,
+            left: dragHint === 'right' ? '50%' : 0,
+            background: dragHint === 'center' ? 'rgba(255,255,255,0.025)' : 'rgba(255,120,48,0.12)',
+            border: dragHint === 'center'
+              ? '1px solid rgba(255,255,255,0.08)'
+              : '1px solid rgba(255,120,48,0.58)',
+            boxShadow: dragHint === 'center' ? 'none' : 'inset 0 0 22px rgba(255,120,48,0.08)',
           }}
         />
       )}
@@ -749,7 +644,6 @@ function LeafPane({
               }}
               onDragEnd={() => {
                 setDragHint(null)
-                onSplitPreview(null, null, null, 0.5)
                 onTerminalDragEnd()
               }}
               onClick={() => onTabSelect(leaf.id, tab.id)}
@@ -935,7 +829,6 @@ export function TerminalArea() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerView, setDrawerView] = useState<DrawerView>('runtime')
   const [terminalMenuPaneId, setTerminalMenuPaneId] = useState<string | null>(null)
-  const [previewTree, setPreviewTree] = useState<WorkspacePaneNode | null>(null)
   const [activeDragTerminalId, setActiveDragTerminalId] = useState<string | null>(null)
   const activeDragTerminalRef = useRef<string | null>(null)
 
@@ -1021,27 +914,8 @@ export function TerminalArea() {
     [moveTerminalToPane, splitPaneWithTerminal]
   )
 
-  const handleSplitPreview = useCallback(
-    (terminalId: string | null, paneId: string | null, edge: PaneDropEdge | null, ratio: number) => {
-      if (!terminalId || !paneId || !edge) {
-        setPreviewTree(null)
-        return
-      }
-
-      const terminal = terminalsById.get(terminalId)
-      if (!terminal) {
-        setPreviewTree(null)
-        return
-      }
-
-      setPreviewTree(buildSplitPreviewTree(paneTree, terminal, paneId, edge, ratio))
-    },
-    [paneTree, terminalsById]
-  )
-
   useEffect(() => {
     const onDragEnd = () => {
-      setPreviewTree(null)
       activeDragTerminalRef.current = null
       setActiveDragTerminalId(null)
       clearTerminalDragData()
@@ -1141,44 +1015,15 @@ export function TerminalArea() {
           onTerminalDragEnd={() => {
             activeDragTerminalRef.current = null
             setActiveDragTerminalId(null)
-            setPreviewTree(null)
             clearTerminalDragData()
           }}
           activeDragTerminalId={activeDragTerminalId}
           activeDragTerminalRef={activeDragTerminalRef}
-          onSplitPreview={handleSplitPreview}
           onResize={resizePane}
           terminalMenuPaneId={terminalMenuPaneId}
           onToggleTerminalMenu={toggleTerminalMenu}
           onCreateTerminal={handlePresetSelect}
         />
-        {previewTree && (
-          <div className="pointer-events-none absolute inset-0 z-40" style={{ background: 'rgba(2, 2, 2, 0.75)' }}>
-            <PaneTreeView
-              node={previewTree}
-              terminalsById={terminalsById}
-              focusedPaneId={focusedPaneId}
-              activeTerminalId={activeTerminalId}
-              showFocusChrome={paneCount > 1}
-              isPreview
-              onPaneFocus={setFocusedPane}
-              onTabSelect={setPaneTab}
-              onKillTerminalFromTab={() => {}}
-              onClosePaneTab={() => {}}
-              onKillTerminal={() => {}}
-              onTerminalDrop={() => {}}
-              onTerminalDragStart={() => {}}
-              onTerminalDragEnd={() => {}}
-              activeDragTerminalId={null}
-              activeDragTerminalRef={activeDragTerminalRef}
-              onSplitPreview={() => {}}
-              onResize={() => {}}
-              terminalMenuPaneId={null}
-              onToggleTerminalMenu={() => {}}
-              onCreateTerminal={() => {}}
-            />
-          </div>
-        )}
       </div>
 
       <div

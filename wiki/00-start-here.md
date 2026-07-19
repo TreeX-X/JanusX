@@ -66,6 +66,7 @@ rg -n "export function|export class|ipcMain.handle" src/main/ipc
 
 ## Development Risk Notes
 
+- Packaged JanusX uses its existing application profile, while `npm run dev` uses `%APPDATA%/JanusX-Dev`. They can run concurrently, but their application settings and cached workspace metadata are intentionally isolated.
 - `BlueprintCanvas.tsx` and `TerminalArea.tsx` remain large cohesive views, but Blueprint layout/analysis and Terminal lifecycle responsibilities now live under `src/renderer/src/features/`. Split further only when responsibilities actually diverge.
 - Canonical Blueprint/Janus models live in `src/shared/janus/types.ts`; `src/main/janus/types.ts` is a compatibility re-export and must not become the renderer contract owner again.
 - Terminal checkpoints are coupled to `terminal:submit-line` and terminal lifecycle in `src/main/ipc/terminal-handlers.ts`.

@@ -95,14 +95,18 @@
   transition: color 140ms ease, background 140ms ease;
 }
 
-.tab:hover {
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.03);
+.tab:hover:not([data-active='true']) {
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.tab:active:not([data-active='true']) {
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .tab[data-active='true'] {
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 120, 48, 0.09);
 }
 
 .tab[data-active='true']::after {
@@ -209,8 +213,33 @@
   outline: none;
 }
 
-.resizeHandle:hover,
-.resizeHandle:focus-visible { background: rgba(255, 120, 48, 0.22); }
+.resizeHandle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: #ff7830;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 150ms ease;
+  content: '';
+}
+
+.resizeHandle:hover::after {
+  opacity: 0.5;
+  transition-delay: 100ms;
+}
+
+.resizeHandle:focus-visible::after {
+  opacity: 0.5;
+  transition-delay: 0ms;
+}
+
+.resizeHandle[data-resizing='true']::after {
+  opacity: 1;
+  transition-delay: 0ms;
+}
 
 .rail {
   display: flex;

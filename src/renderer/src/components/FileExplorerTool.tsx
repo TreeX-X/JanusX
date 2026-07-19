@@ -43,44 +43,24 @@ const FILE_CHANGE_PRIORITY: Record<GitFileChange['status'], number> = {
   '??': 5,
 }
 
-const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; border: string; glow: string; pixels: [number, number, number, number] }> = {
-  M: {
-    label: 'M',
-    border: 'rgba(210,210,210,0.18)',
-    glow: 'rgba(185,185,185,0.12)',
-    pixels: [0.38, 0.86, 0.72, 0.28],
-  },
-  A: {
-    label: 'A',
-    border: 'rgba(235,235,235,0.2)',
-    glow: 'rgba(220,220,220,0.14)',
-    pixels: [0.72, 0.9, 0.82, 0.58],
-  },
-  D: {
-    label: 'D',
-    border: 'rgba(150,150,150,0.16)',
-    glow: 'rgba(130,130,130,0.08)',
-    pixels: [0.5, 0.2, 0.16, 0.42],
-  },
-  R: {
-    label: 'R',
-    border: 'rgba(220,220,220,0.18)',
-    glow: 'rgba(200,200,200,0.11)',
-    pixels: [0.78, 0.34, 0.34, 0.78],
-  },
-  '??': {
-    label: '?',
-    border: 'rgba(170,170,170,0.13)',
-    glow: 'rgba(150,150,150,0.06)',
-    pixels: [0.24, 0.46, 0.18, 0.3],
-  },
-  UU: {
-    label: '!',
-    border: 'rgba(255,255,255,0.24)',
-    glow: 'rgba(235,235,235,0.16)',
-    pixels: [0.92, 0.48, 0.48, 0.92],
-  },
+const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; color: string }> = {
+  M: { label: 'M', color: '#d99a4e' },
+  A: { label: 'A', color: '#7fae7f' },
+  D: { label: 'D', color: '#c96a5f' },
+  R: { label: 'R', color: '#7ba3bd' },
+  '??': { label: '?', color: '#9a9a9a' },
+  UU: { label: '!', color: '#e05f4a' },
 }
+
+const GIT_MARKER_STYLE = `
+@keyframes git-marker-in {
+  from { opacity: 0; transform: scale(0.6); }
+}
+.git-marker {
+  animation: git-marker-in 140ms ease-out;
+  transition: color 140ms ease-out, background-color 140ms ease-out, opacity 140ms ease-out;
+}
+`
 
 function getParentPath(path: string): string {
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -123,6 +103,7 @@ export interface FileTreeItemProps {
   expandedPaths: Set<string>
   fileChange: GitFileChange | null
   fileChangeMap: Map<string, GitFileChange>
+  changedDirs: Set<string>
   onSelect: (path: string) => void
   onToggleDirectory: (node: FileNode) => void
   onOpenFile: (path: string) => void
@@ -137,6 +118,7 @@ export function FileTreeItem({
   expandedPaths,
   fileChange,
   fileChangeMap,
+  changedDirs,
   onSelect,
   onToggleDirectory,
   onOpenFile,
@@ -235,26 +217,24 @@ export function FileTreeItem({
         {changeVisual && (
           <span
             data-git-status={fileChange?.status}
-            className="ml-1.5 grid h-3 w-3 shrink-0 grid-cols-2 gap-px rounded-[3px] p-[2px]"
+            className="git-marker ml-1.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] font-mono text-[10px] font-semibold leading-none"
             title={`${fileChange?.staged ? 'Staged' : 'Modified'} · ${fileChange?.status}`}
             style={{
-              background: 'rgba(255,255,255,0.025)',
-              border: `1px solid ${changeVisual.border}`,
-              boxShadow: fileChange?.staged
-                ? `inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 8px ${changeVisual.glow}`
-                : `inset 0 1px 0 rgba(255,255,255,0.035), 0 0 5px ${changeVisual.glow}`,
+              color: changeVisual.color,
+              opacity: fileChange?.staged ? 1 : 0.85,
+              background: fileChange?.staged ? `${changeVisual.color}24` : 'transparent',
             }}
           >
-            {changeVisual.pixels.map((opacity, index) => (
-              <span
-                key={index}
-                className="block h-[3px] w-[3px] rounded-[1px]"
-                style={{
-                  background: `rgba(230,230,230,${opacity})`,
-                  boxShadow: opacity > 0.7 ? '0 0 3px rgba(230,230,230,0.14)' : 'none',
-                }}
-              />
-            ))}
+            {changeVisual.label}
+          </span>
+        )}
+        {isFolder && changedDirs.has(node.path) && (
+          <span
+            data-git-dirty
+            className="git-marker ml-1.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center"
+            title="包含改动"
+          >
+            <span className="h-[5px] w-[5px] rounded-full" style={{ background: 'rgba(255,120,48,0.55)' }} />
           </span>
         )}
       </div>
@@ -270,6 +250,7 @@ export function FileTreeItem({
               expandedPaths={expandedPaths}
               fileChange={fileChangeMap.get(child.path) ?? null}
               fileChangeMap={fileChangeMap}
+              changedDirs={changedDirs}
               onSelect={onSelect}
               onToggleDirectory={onToggleDirectory}
               onOpenFile={onOpenFile}
@@ -308,6 +289,15 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     }
     return map
   }, [gitStatus])
+
+  const changedDirs = useMemo(() => {
+    const dirs = new Set<string>()
+    for (const path of fileChangeMap.keys()) {
+      // Walk from the change path itself so directory entries (e.g. untracked 'dir/') mark their own row.
+      for (let dir = path.replace(/\/+$/, ''); dir; dir = getParentPath(dir)) dirs.add(dir)
+    }
+    return dirs
+  }, [fileChangeMap])
 
   const reloadRootFileTree = useCallback(async () => {
     const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
@@ -613,6 +603,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
   return (
     <>
+      <style>{GIT_MARKER_STYLE}</style>
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <div className="p-2">
           <input
@@ -650,6 +641,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                 expandedPaths={expandedPaths}
                 fileChange={fileChangeMap.get(node.path) ?? null}
                 fileChangeMap={fileChangeMap}
+                changedDirs={changedDirs}
                 onSelect={setActiveFilePath}
                 onToggleDirectory={handleToggleDirectory}
                 onOpenFile={openFileInDetachedEditor}

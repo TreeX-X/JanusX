@@ -34,7 +34,7 @@ Implementation reviewed: 2026-07-17
 | Phase 4 — composition and controllers | Complete | `src/main/index.ts` is a 131-line lifecycle coordinator; session, services, IPC registration, renderer loading, main/editor windows, Workspace actions/bootstrap, Terminal lifecycle, and Blueprint layout/analysis actions have explicit modules. |
 | Phase 5 — complete contracts and gate | Complete | The generic preload bridge is removed. LLM, Office, Agent, Checkpoint, Git, notification settings, runtime telemetry, Subagent, Dialog/Window/System, and desktop toast now use shared contracts and fixed preload APIs. |
 
-Current verification: `npm run verify` passes both type checks, 83 root unit files / 606 tests, 5 LLM Core files / 63 tests, strict-unused, production build, package-boundary validation, and the real built-Electron desktop smoke (1/1).
+Current verification: `npm run verify` passes both type checks, 84 root unit files / 609 tests, 5 LLM Core files / 63 tests, strict-unused, production build, package-boundary validation, and the real built-Electron desktop smoke (1/1).
 
 ## Engineering Structure and Module Responsibilities
 
@@ -358,7 +358,7 @@ Track these before and after each phase:
 | Strict unused-symbol diagnostics | 35 baseline candidates, excluding current user WIP | 0 | 0, with CI enforcement |
 | Renderer direct bridge files | 29 files / about 150 calls | 0 generic calls | Only typed domain-client implementations |
 | BlueprintCanvas and TerminalArea | 1701 / 1428 lines | 1444 / 1419 with named controller/model boundaries | Reduced by responsibility extraction; no artificial line-count target |
-| Unit coverage | 67 files / 520 tests at plan baseline | 83 files / 606 tests | Maintain green domain and contract coverage |
+| Unit coverage | 67 files / 520 tests at plan baseline | 84 files / 609 tests | Maintain green domain and contract coverage |
 | E2E workflow coverage | 1 focused spec | Separate Island browser spec plus 1 built-Electron startup/Workspace/Terminal/Project smoke | Maintain the release smoke and add only high-value workflow coverage |
 
 ## Pending Confirmation

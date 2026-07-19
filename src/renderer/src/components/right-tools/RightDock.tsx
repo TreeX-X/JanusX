@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useState,
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
@@ -51,6 +52,7 @@ export function RightDock({
   const workspaces = useWorkspaceStore((state) => state.workspaces)
   const resizeSessionRef = useRef<ResizeSession | null>(null)
   const bodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
+  const [resizing, setResizing] = useState(false)
   const workspacePath = workspaces.find(({ id }) => id === activeWorkspaceId)?.path ?? null
   const contentVisible = !effectiveCollapsed && activeToolId !== null
   const maximum = Math.max(RIGHT_TOOL_PANEL_MIN_WIDTH, effectiveMaxWidth)
@@ -68,7 +70,10 @@ export function RightDock({
       session.target.releasePointerCapture(session.pointerId)
     }
     resizeSessionRef.current = null
-    if (session) onResizingChange(false)
+    if (session) {
+      onResizingChange(false)
+      setResizing(false)
+    }
     if (bodyStyleRef.current) {
       document.body.style.cursor = bodyStyleRef.current.cursor
       document.body.style.userSelect = bodyStyleRef.current.userSelect
@@ -99,6 +104,7 @@ export function RightDock({
     document.body.style.userSelect = 'none'
     event.currentTarget.setPointerCapture(event.pointerId)
     onResizingChange(true)
+    setResizing(true)
     event.preventDefault()
   }
 
@@ -143,6 +149,7 @@ export function RightDock({
       >
           <div
             className={styles.resizeHandle}
+            data-resizing={resizing}
             role="separator"
             aria-label="调整右侧工具面板宽度"
             aria-orientation="vertical"

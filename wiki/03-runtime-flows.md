@@ -7,6 +7,7 @@ Last analyzed: 2026-07-17
 ```text
 electron-vite main entry
 -> src/main/index.ts
+-> use the isolated JanusX-Dev profile for non-packaged development runs
 -> configure session paths and dynamically compose application services
 -> configure coordinated application shutdown
 -> create main window through src/main/windows/main-window.ts
@@ -16,6 +17,8 @@ electron-vite main entry
 ```
 
 Key files: `electron.vite.config.ts`, `src/main/index.ts`, `src/main/bootstrap/{session,services}.ts`, `src/main/windows/*`, `src/main/ipc/register.ts`, `src/preload/index.ts`, and `src/renderer/src/main.tsx`.
+
+Packaged JanusX keeps the existing production profile. Development runs use `%APPDATA%/JanusX-Dev` before Chromium session setup and `requestSingleInstanceLock()`, so one packaged instance and one development instance can coexist while each profile remains single-instance.
 
 ## IPC Flow
 
