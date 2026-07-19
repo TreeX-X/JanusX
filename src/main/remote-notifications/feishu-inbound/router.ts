@@ -2,8 +2,9 @@ import type { CompanionCommand, CompanionRequest } from '../../companion/contrac
 import type { CompanionGateway } from '../../companion/gateway'
 import type { FeishuInboundEvent, FeishuInboundMessage, FeishuReceiptSender } from './types'
 import { receiptText } from './types'
+import { buildFeishuTerminalDiscoveryCard } from '../providers/feishu-provider'
 
-const HELP = 'Commands: /status, /bind <terminal-id>, /unbind, /stop, /p <text>'
+const HELP = 'Commands: /terminals, /status, /bind <terminal-id>, /unbind, /stop, /p <text>'
 
 export class FeishuInboundRouter {
   constructor(
@@ -24,6 +25,39 @@ export class FeishuInboundRouter {
       return
     }
     const result = await this.gateway.execute(request)
+    if (request.command.type === 'create-terminal' && result.ok && this.receipts.sendCard) {
+      const listing = await this.gateway.execute({
+        context: { ...event.context, eventId: `${event.context.eventId}:refresh` },
+        command: { type: 'terminals' },
+      })
+      if (!listing.ok) {
+        await this.safeReceipt(event, 'Failed: terminal was created but discovery refresh failed')
+        return
+      }
+      try {
+        await this.receipts.sendCard(event.context.chatId, event.messageId, buildFeishuTerminalDiscoveryCard(
+          Array.isArray(listing.data?.terminals) ? listing.data.terminals : [],
+          event.context,
+          Array.isArray(listing.data?.workspaces) ? listing.data.workspaces : [],
+        ))
+      } catch {
+        await this.safeReceipt(event, 'Failed: terminal was created but the refreshed card could not be sent')
+      }
+      return
+    }
+    if (request.command.type === 'terminals' && result.ok && this.receipts.sendCard) {
+      const terminals = Array.isArray(result.data?.terminals) ? result.data.terminals : []
+      try {
+        await this.receipts.sendCard(
+          event.context.chatId,
+          event.messageId,
+          buildFeishuTerminalDiscoveryCard(terminals, event.context, Array.isArray(result.data?.workspaces) ? result.data.workspaces : []),
+        )
+      } catch {
+        await this.safeReceipt(event, 'Failed: terminal discovery card could not be sent')
+      }
+      return
+    }
     await this.safeReceipt(event, receiptText(result))
   }
 
@@ -55,6 +89,7 @@ export function parseCommand(
 ): CompanionCommand | null {
   const value = text.trim()
   if (value === '/status') return { type: 'status' }
+  if (value === '/terminals') return { type: 'terminals' }
   if (value === '/unbind') return { type: 'unbind' }
   if (value === '/stop') return { type: 'stop' }
   const bind = /^\/bind ([^\s]+)$/.exec(value)

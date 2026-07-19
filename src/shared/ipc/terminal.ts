@@ -15,6 +15,7 @@ export const TERMINAL_EVENT_CHANNELS = {
   data: 'terminal:data',
   exit: 'terminal:exit',
   focus: 'terminal:focus',
+  created: 'terminal:created',
 } as const
 
 export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode'
@@ -70,6 +71,14 @@ export interface TerminalExitEvent {
 export interface TerminalFocusEvent {
   id: string
 }
+export interface TerminalCreatedEvent {
+  id: string
+  workspaceId: string
+  cwd: string
+  preset: TerminalAgentEngine
+  shell: string
+  pid: number
+}
 
 export interface TerminalReplayResult {
   data: string
@@ -87,4 +96,5 @@ export interface TerminalAPI {
   onData(callback: (event: TerminalDataEvent) => void): () => void
   onExit(callback: (event: TerminalExitEvent) => void): () => void
   onFocus(callback: (event: TerminalFocusEvent) => void): () => void
+  onCreated(callback: (event: TerminalCreatedEvent) => void): () => void
 }

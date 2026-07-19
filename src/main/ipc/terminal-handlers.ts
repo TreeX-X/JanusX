@@ -35,6 +35,7 @@ import {
 import { AGENT_CHANNELS } from '../../shared/ipc/agent'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
 import { companionSessionState } from '../companion/session-state'
+import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -48,6 +49,12 @@ interface TerminalCpState {
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
+let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null
+
+export function createCompanionTerminal(config: TerminalCreateRequest): Promise<{ pid: number }> {
+  if (!companionTerminalCreator) throw new Error('Terminal lifecycle is not available')
+  return companionTerminalCreator(config)
+}
 
 /** Finalize current pending checkpoints for all terminals (best-effort, no wipe). */
 export async function finalizePendingTerminalCheckpoints(): Promise<void> {
@@ -279,7 +286,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     return { ok: true as const }
   })
 
-  ipcMain.handle(TERMINAL_INVOKE_CHANNELS.create, async (_event, config: TerminalCreateRequest) => {
+  const createTerminalLifecycle = async (config: TerminalCreateRequest) => {
     const { id, cwd, shell, preset, command, args, cols, rows } = config
 
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
@@ -394,6 +401,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       throw err
     }
 
+    try {
     if (engine !== 'shell') {
       hookCoordinator.registerTerminal({
         terminalId: id,
@@ -492,8 +500,26 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.ready, { terminalId: id, success: false, error: String(err) })
     })
 
+    sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.created, {
+      id, workspaceId, cwd, preset: engine, shell, pid: instance.pty.pid,
+    })
     return { pid: instance.pty.pid }
-  })
+    } catch (error) {
+      rollbackTerminalCreation({
+        clearState: () => { terminalStates.delete(id) },
+        unregisterCompanion: () => companionSessionState.unregisterTerminal(id),
+        unregisterHook: () => hookCoordinator.unregisterTerminal(id),
+        unregisterRecorder: () => agentTurnRecorder.unregisterTerminal(id),
+        removeRun: () => subAgentRunRegistry.removeRun(`terminal:${id}`),
+        killPty: () => terminalManager.kill(id),
+      })
+      throw error
+    }
+  }
+  companionTerminalCreator = createTerminalLifecycle
+  ipcMain.handle(TERMINAL_INVOKE_CHANNELS.create, async (_event, config: TerminalCreateRequest) => (
+    createTerminalLifecycle(config)
+  ))
 
   // Input handler: forward to PTY only.
   ipcMain.on(TERMINAL_SEND_CHANNELS.input, (_event, { id, data }: TerminalInputPayload) => {

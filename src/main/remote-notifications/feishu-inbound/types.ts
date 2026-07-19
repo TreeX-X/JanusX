@@ -22,6 +22,7 @@ export type FeishuInboundEvent = FeishuInboundMessage | FeishuInboundCardAction
 
 export interface FeishuReceiptSender {
   send(chatId: string, messageId: string, text: string): Promise<void>
+  sendCard?(chatId: string, messageId: string, card: Record<string, unknown>): Promise<void>
 }
 
 export interface FeishuInboundChannel {

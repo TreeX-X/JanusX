@@ -26,8 +26,10 @@ const cardSchema = z.object({
 
 const actionValueSchema = z.object({
   janusx: z.literal(1),
-  action: z.enum(['bind', 'stop', 'approve', 'reject']),
-  terminalId: z.string().min(1).max(256),
+  action: z.enum(['bind', 'stop', 'approve', 'reject', 'create-terminal']),
+  terminalId: z.string().min(1).max(256).optional(),
+  workspaceId: z.string().min(1).max(256).optional(),
+  engine: z.enum(['claude', 'codex', 'opencode']).optional(),
   token: z.string().min(1).max(4096),
   threadId: z.string().min(1).max(256).optional(),
 })
@@ -59,9 +61,13 @@ export function normalizeFeishuCardAction(raw: unknown, now = Date.now): FeishuI
   if (!card.success) return null
   const value = actionValueSchema.safeParse(card.data.action.value)
   if (!value.success) return null
+  if (value.data.action === 'create-terminal' && (!value.data.workspaceId || !value.data.engine)) return null
+  if (value.data.action === 'bind' && !value.data.terminalId) return null
   const command: CompanionCommand = value.data.action === 'bind'
-    ? { type: 'bind', terminalId: value.data.terminalId }
-    : { type: value.data.action }
+    ? { type: 'bind', terminalId: value.data.terminalId! }
+    : value.data.action === 'create-terminal' && value.data.workspaceId && value.data.engine
+      ? { type: 'create-terminal', workspaceId: value.data.workspaceId, engine: value.data.engine }
+    : { type: value.data.action as 'stop' | 'approve' | 'reject' }
   return {
     kind: 'card-action',
     context: {

@@ -3,6 +3,7 @@ import { companionSessionState, type CompanionSessionState, type CompanionTermin
 
 export interface CompanionTerminalControl {
   getTerminal(terminalId: string): CompanionTerminalMetadata | undefined
+  listTerminals?(): CompanionTerminalMetadata[]
   submitLine(terminalId: string, text: string): Promise<void> | void
   interrupt(terminalId: string): Promise<void> | void
   hasPendingApproval(terminalId: string): boolean
@@ -19,6 +20,10 @@ export class MainProcessTerminalControl implements CompanionTerminalControl {
   getTerminal(terminalId: string): CompanionTerminalMetadata | undefined {
     if (!terminalManager.getInstance(terminalId)) return undefined
     return this.sessions.getTerminal(terminalId)
+  }
+
+  listTerminals(): CompanionTerminalMetadata[] {
+    return this.sessions.listTerminals().filter((terminal) => terminalManager.getInstance(terminal.terminalId))
   }
 
   submitLine(terminalId: string, text: string): void {

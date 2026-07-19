@@ -29,7 +29,7 @@ describe('Feishu SDK channel adapter', () => {
     expect(createLarkChannel).toHaveBeenCalledWith({
       appId: ' app-id ', appSecret: 'secret', transport: 'websocket', includeRawEvent: false,
       policy: { dmMode: 'open', requireMention: false, respondToMentionAll: false },
-      safety: { dedup: { ttl: 0 }, staleMessageWindowMs: 0 }, loggerLevel: 'warn',
+      safety: { dedup: { ttl: 0 }, staleMessageWindowMs: 30 * 60 * 1000 }, loggerLevel: 'warn',
       handshakeTimeoutMs: 10_000, source: 'janusx-companion',
     })
 

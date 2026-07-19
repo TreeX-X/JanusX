@@ -2,6 +2,8 @@ import type {
   FeishuRemoteProviderConfig,
 } from '../../../shared/notifications'
 import type { CompanionCommand, CompanionRequestContext } from '../../companion/contracts'
+import type { CompanionTerminalMetadata } from '../../companion/session-state'
+import { basename } from 'path'
 import type {
   RemoteNotificationEvent,
   RemoteNotificationProvider,
@@ -18,9 +20,13 @@ type ActionTokenIssuer = (
 ) => string | undefined
 
 let actionTokenIssuer: ActionTokenIssuer | undefined
+let workspaceActionTokenIssuer: ((context: Pick<CompanionRequestContext, 'provider' | 'operatorOpenId' | 'chatId' | 'threadId'>, workspaceId: string, engine: 'claude' | 'codex' | 'opencode', expiresAt: number) => string | undefined) | undefined
 
 export function configureFeishuCardActionTokenIssuer(issuer?: ActionTokenIssuer): void {
   actionTokenIssuer = issuer
+}
+export function configureFeishuWorkspaceActionTokenIssuer(issuer?: typeof workspaceActionTokenIssuer): void {
+  workspaceActionTokenIssuer = issuer
 }
 
 interface FeishuApiResponse {
@@ -196,6 +202,51 @@ export function buildFeishuCard(
       },
     ],
   }
+}
+
+/** Card used by /terminals. Metadata is intentionally bounded and paths are reduced to a safe display form. */
+export function buildFeishuTerminalDiscoveryCard(
+  input: unknown[],
+  context: Pick<CompanionRequestContext, 'provider' | 'operatorOpenId' | 'chatId' | 'threadId'>,
+  workspaces: Array<{ id: string; name: string; path: string }> = [],
+): Record<string, unknown> {
+  const terminals = input.filter(isTerminalMetadata).slice(0, 50)
+  const groups = new Map<string, CompanionTerminalMetadata[]>()
+  for (const terminal of terminals) groups.set(terminal.workspaceId, [...(groups.get(terminal.workspaceId) ?? []), terminal])
+  for (const workspace of workspaces) if (!groups.has(workspace.id)) groups.set(workspace.id, [])
+  const elements: Record<string, unknown>[] = []
+  if (!terminals.length) elements.push({ tag: 'div', text: { tag: 'plain_text', content: 'No live CLI terminals found.' } })
+  for (const [workspaceId, entries] of groups) {
+    const workspace = workspaces.find((item) => item.id === workspaceId)
+    elements.push({ tag: 'div', text: { tag: 'lark_md', content: `**Workspace** ${workspace?.name ?? workspaceId}\n${safeWorkspace(workspace?.path ?? entries[0]?.cwd ?? workspaceId)}` } })
+    const actions = entries.flatMap((terminal) => {
+      const token = actionTokenIssuer?.(context, terminal.terminalId, 'bind', Date.now() + 10 * 60 * 1000)
+      if (!token) return []
+      return [{ tag: 'button', type: 'primary', text: { tag: 'plain_text', content: `Bind ${terminal.engine} (running)` }, value: {
+        janusx: 1, action: 'bind', terminalId: terminal.terminalId, token, ...(context.threadId ? { threadId: context.threadId } : {}),
+      } }]
+    })
+    const createActions = workspace ? (['claude', 'codex', 'opencode'] as const).flatMap((engine) => {
+      const token = workspaceActionTokenIssuer?.(context, workspaceId, engine, Date.now() + 10 * 60 * 1000)
+      if (!token) return []
+      return [{ tag: 'button', text: { tag: 'plain_text', content: `New ${engine}` }, value: {
+        janusx: 1, action: 'create-terminal', workspaceId, engine, token,
+      } }]
+    }) : []
+    elements.push({ tag: 'action', actions: [...actions, ...createActions] })
+  }
+  return { config: { wide_screen_mode: true }, header: { template: 'blue', title: { tag: 'plain_text', content: 'JanusX terminals' } }, elements }
+}
+
+function isTerminalMetadata(value: unknown): value is CompanionTerminalMetadata {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Record<string, unknown>
+  return ['terminalId', 'engine', 'workspaceId', 'cwd'].every((key) => typeof item[key] === 'string' && String(item[key]).length > 0)
+    && ['claude', 'codex', 'opencode'].includes(String(item.engine))
+}
+
+function safeWorkspace(cwd: string): string {
+  return basename(cwd.replace(/[\\/]+$/, '')) || 'workspace'
 }
 
 function buildCardActions(

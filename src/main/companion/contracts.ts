@@ -1,3 +1,5 @@
+import type { CompanionEngine } from './session-state'
+
 export type CompanionProvider = 'feishu'
 
 export interface CompanionRequestContext {
@@ -11,6 +13,8 @@ export interface CompanionRequestContext {
 
 export type CompanionCommand =
   | { type: 'status' }
+  | { type: 'terminals' }
+  | { type: 'create-terminal'; workspaceId: string; engine: CompanionEngine }
   | { type: 'bind'; terminalId: string }
   | { type: 'unbind' }
   | { type: 'follow-up'; text: string }

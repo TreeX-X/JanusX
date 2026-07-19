@@ -26,6 +26,10 @@ export class CompanionSessionState {
     return this.terminals.get(terminalId)
   }
 
+  listTerminals(): CompanionTerminalMetadata[] {
+    return [...this.terminals.values()]
+  }
+
   setPendingApproval(terminalId: string): void {
     if (this.terminals.has(terminalId)) this.pendingApprovals.add(terminalId)
   }

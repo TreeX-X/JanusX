@@ -80,6 +80,7 @@ const terminalAPI: TerminalAPI = {
   onData: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.data, callback),
   onExit: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.exit, callback),
   onFocus: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.focus, callback),
+  onCreated: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.created, callback),
 }
 
 const projectAPI: ProjectAPI = {

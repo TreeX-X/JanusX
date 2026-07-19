@@ -49,6 +49,7 @@ interface WorkspaceStore {
   setActiveWorkspace: (id: string) => void
 
   addTerminal: (terminal: Terminal) => void
+  addTerminalForWorkspace: (terminal: Terminal) => void
   removeTerminal: (id: string) => void
   setActiveTerminal: (id: string) => void
   updateTerminal: (id: string, patch: Partial<Terminal>) => void
@@ -220,6 +221,23 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedTabId: result.focus.tabId,
       }
     }),
+  addTerminalForWorkspace: (terminal) => {
+    if (get().activeWorkspaceId === terminal.workspaceId) {
+      get().addTerminal(terminal)
+      return
+    }
+    set((s) => {
+      const snapshot = s.terminalSnapshots[terminal.workspaceId] ?? {
+        terminals: [], activeTerminalId: null, paneTree: null, focusedPaneId: null, focusedTabId: null,
+      }
+      if (snapshot.terminals.some((item) => item.id === terminal.id)) return {}
+      const result = addTerminalToPaneTree(snapshot.paneTree, snapshot.focusedPaneId, createTerminalPaneContent(terminal.id, terminal.workspaceId), createPaneId())
+      return { terminalSnapshots: { ...s.terminalSnapshots, [terminal.workspaceId]: {
+        ...snapshot, terminals: [...snapshot.terminals, terminal], activeTerminalId: terminal.id,
+        paneTree: result.tree, focusedPaneId: result.focus.paneId, focusedTabId: result.focus.tabId,
+      } } }
+    })
+  },
   removeTerminal: (id) =>
     set((s) => {
       const terminals = s.terminals.filter((t) => t.id !== id)

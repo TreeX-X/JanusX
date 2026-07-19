@@ -10,7 +10,9 @@ export interface CompanionActionClaims {
   operatorOpenId: string
   chatId: string
   threadId?: string
-  terminalId: string
+  terminalId?: string
+  workspaceId?: string
+  engine?: 'claude' | 'codex' | 'opencode'
   action: TokenAction
   exp: number
 }
@@ -44,12 +46,19 @@ export class CompanionActionTokens {
     try {
       const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as CompanionActionClaims
       if (claims.v !== 1 || !claims.jti || !Number.isFinite(claims.exp)) return { ok: false, reason: 'invalid-token' }
+      const workspaceAction = claims.action === 'create-terminal'
+      if (workspaceAction !== Boolean(claims.workspaceId) || workspaceAction === Boolean(claims.terminalId)) {
+        return { ok: false, reason: 'invalid-token' }
+      }
+      if (workspaceAction !== Boolean(claims.engine)) return { ok: false, reason: 'invalid-token' }
       if (claims.exp <= this.now()) return { ok: false, reason: 'expired-token' }
       const matches = claims.provider === expected.provider
         && claims.operatorOpenId === expected.operatorOpenId
         && claims.chatId === expected.chatId
         && (claims.threadId ?? '') === (expected.threadId ?? '')
-        && claims.terminalId === expected.terminalId
+        && (claims.terminalId ?? '') === (expected.terminalId ?? '')
+        && (claims.workspaceId ?? '') === (expected.workspaceId ?? '')
+        && (claims.engine ?? '') === (expected.engine ?? '')
         && claims.action === expected.action
       return matches ? { ok: true, claims } : { ok: false, reason: 'token-scope-mismatch' }
     } catch {

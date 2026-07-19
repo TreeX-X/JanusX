@@ -27,4 +27,14 @@ export function useTerminalLifecycle(): void {
       setLoadState('terminal-active')
     })
   }), [setLoadState])
+
+  useEffect(() => window.electron.terminal.onCreated((event) => {
+    const store = useWorkspaceStore.getState()
+    if (store.terminals.some((terminal) => terminal.id === event.id)) return
+    store.addTerminalForWorkspace({
+      id: event.id, workspaceId: event.workspaceId, cwd: event.cwd, preset: event.preset,
+      shell: event.shell, name: `${event.preset} terminal`, autoCommand: event.preset,
+      pid: event.pid, status: 'running', updatedAt: Date.now(),
+    })
+  }), [])
 }

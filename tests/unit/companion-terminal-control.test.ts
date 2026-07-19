@@ -38,4 +38,11 @@ describe('MainProcessTerminalControl', () => {
     expect(write).toHaveBeenNthCalledWith(2, 'term-1', 'y\r')
     expect(control.hasPendingApproval('term-1')).toBe(false)
   })
+
+  it('omits registered metadata when the PTY is no longer live', () => {
+    const sessions = new CompanionSessionState()
+    sessions.registerTerminal({ terminalId: 'term-stale', engine: 'codex', workspaceId: 'ws', cwd: 'C:/repo' })
+    getInstance.mockReturnValueOnce(undefined)
+    expect(new MainProcessTerminalControl(vi.fn(), sessions).listTerminals()).toEqual([])
+  })
 })

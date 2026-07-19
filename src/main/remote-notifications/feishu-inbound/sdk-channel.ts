@@ -7,6 +7,9 @@ import {
 } from '@larksuiteoapi/node-sdk'
 import type { FeishuInboundChannel } from './types'
 
+/** 0 means drop almost all messages in SDK isStale(); keep a positive window. */
+const STALE_MESSAGE_WINDOW_MS = 30 * 60 * 1000
+
 export interface FeishuSdkChannelConfig {
   appId: string
   appSecret: string
@@ -19,7 +22,7 @@ export function createFeishuSdkChannel(config: FeishuSdkChannelConfig): FeishuIn
     transport: 'websocket',
     includeRawEvent: false,
     policy: { dmMode: 'open', requireMention: false, respondToMentionAll: false },
-    safety: { dedup: { ttl: 0 }, staleMessageWindowMs: 0 },
+    safety: { dedup: { ttl: 0 }, staleMessageWindowMs: STALE_MESSAGE_WINDOW_MS },
     loggerLevel: LoggerLevel.warn,
     handshakeTimeoutMs: 10_000,
     source: 'janusx-companion',
@@ -31,6 +34,9 @@ class LarkChannelAdapter implements FeishuInboundChannel {
   readonly receipts = {
     send: async (chatId: string, messageId: string, text: string): Promise<void> => {
       await this.channel.send(chatId, { text }, { replyTo: messageId })
+    },
+    sendCard: async (chatId: string, messageId: string, card: Record<string, unknown>): Promise<void> => {
+      await this.channel.send(chatId, { card }, { replyTo: messageId })
     },
   }
 

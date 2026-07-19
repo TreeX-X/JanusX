@@ -36,6 +36,7 @@ export function installElectronApiFallback(): void {
       resize: () => {},
       submitLine: () => {},
       onData: () => () => {},
+      onCreated: () => () => {},
       onExit: () => () => {},
       onFocus: () => () => {},
     },

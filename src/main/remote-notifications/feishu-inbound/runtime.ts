@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { app, type BrowserWindow } from 'electron'
 import { join } from 'path'
+import { randomUUID } from 'crypto'
 import type {
   FeishuControlStatus,
   FeishuRemoteProviderConfig,
@@ -15,8 +16,9 @@ import {
   CompanionGateway,
   MainProcessTerminalControl,
 } from '../../companion'
-import { submitCompanionTerminalLine } from '../../ipc/terminal-handlers'
-import { configureFeishuCardActionTokenIssuer } from '../providers/feishu-provider'
+import { createCompanionTerminal, submitCompanionTerminalLine } from '../../ipc/terminal-handlers'
+import { listRegisteredWorkspaces, resolveRegisteredWorkspace } from '../../companion/workspace-registry'
+import { configureFeishuCardActionTokenIssuer, configureFeishuWorkspaceActionTokenIssuer } from '../providers/feishu-provider'
 import { redactErrorText } from '../secret-redaction'
 import { FeishuInboundClient } from './client'
 import { createFeishuSdkChannel, type FeishuSdkChannelConfig } from './sdk-channel'
@@ -41,6 +43,9 @@ export class FeishuInboundRuntime {
     this.mainWindow = mainWindow
     configureFeishuCardActionTokenIssuer((context, terminalId, action, expiresAt) => (
       this.gateway?.issueActionToken(context, terminalId, action, expiresAt)
+    ))
+    configureFeishuWorkspaceActionTokenIssuer((context, workspaceId, engine, expiresAt) => (
+      this.gateway?.issueWorkspaceActionToken(context, workspaceId, engine, expiresAt)
     ))
   }
 
@@ -150,6 +155,24 @@ export class FeishuInboundRuntime {
         config.auditRetentionDays * 24 * 60 * 60 * 1000,
       ),
       terminals: new MainProcessTerminalControl((id, text) => submitCompanionTerminalLine(mainWindow, id, text)),
+      createTerminal: async (workspaceId, engine) => {
+        const rootDir = join(app.getPath('userData'), 'janusx', 'workspaces')
+        const record = await resolveRegisteredWorkspace(rootDir, workspaceId)
+        const workspacePath = record.path
+        const terminalId = randomUUID()
+        await createCompanionTerminal({
+          id: terminalId,
+          workspaceId,
+          cwd: workspacePath,
+          shell: process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/bash'),
+          preset: engine,
+        })
+        return terminalId
+      },
+      listWorkspaces: async () => {
+        const rootDir = join(app.getPath('userData'), 'janusx', 'workspaces')
+        return listRegisteredWorkspaces(rootDir)
+      },
       bindingTtlMs: config.bindingTtlMinutes * 60 * 1000,
     })
   }

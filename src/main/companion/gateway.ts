@@ -23,6 +23,8 @@ export interface CompanionGatewayOptions {
   dedupe: CompanionDedupe
   audit: CompanionAuditStore
   terminals: CompanionTerminalControl
+  createTerminal?: (workspaceId: string, engine: 'claude' | 'codex' | 'opencode') => Promise<string>
+  listWorkspaces?: () => Promise<Array<{ id: string; name: string; path: string }>>
   bindingTtlMs?: number
   now?: () => number
 }
@@ -95,6 +97,15 @@ export class CompanionGateway {
     return this.options.tokens.issue({ ...context, terminalId, action, exp: expiresAt })
   }
 
+  issueWorkspaceActionToken(
+    context: Pick<CompanionRequestContext, 'provider' | 'operatorOpenId' | 'chatId' | 'threadId'>,
+    workspaceId: string,
+    engine: 'claude' | 'codex' | 'opencode',
+    expiresAt: number,
+  ): string {
+    return this.options.tokens.issue({ ...context, workspaceId, engine, action: 'create-terminal', exp: expiresAt })
+  }
+
   private validateContext(context: CompanionRequestContext): CompanionResult | null {
     const policy = this.options.policy()
     if (!policy.enabled || policy.mode !== 'app') return denied('disabled', 'Inbound control is disabled')
@@ -114,6 +125,23 @@ export class CompanionGateway {
   }
 
   private async executeOnce(request: CompanionRequest): Promise<CompanionResult> {
+    if (request.command.type === 'terminals') {
+      return allowed('Live terminals listed', undefined, {
+        terminals: (this.options.terminals.listTerminals?.() ?? []).slice(0, 50),
+        workspaces: (await this.options.listWorkspaces?.() ?? []).slice(0, 25),
+      })
+    }
+    if (request.command.type === 'create-terminal') {
+      if (!this.options.createTerminal) return denied('execution-failed', 'Terminal creation is unavailable')
+      const tokenError = await this.verifyWorkspaceActionToken(request, request.command.workspaceId, request.command.engine)
+      if (tokenError) return tokenError
+      try {
+        const terminalId = await this.options.createTerminal(request.command.workspaceId, request.command.engine)
+        return allowed('Terminal created', terminalId)
+      } catch {
+        return denied('execution-failed', 'Terminal creation failed')
+      }
+    }
     if (request.command.type === 'bind') {
       return this.bind(request.context, request.command, request.actionToken)
     }
@@ -214,6 +242,20 @@ export class CompanionGateway {
     return null
   }
 
+  private async verifyWorkspaceActionToken(request: CompanionRequest, workspaceId: string, engine: 'claude' | 'codex' | 'opencode'): Promise<CompanionResult | null> {
+    if (!request.actionToken) return denied('invalid-token', 'A signed workspace action token is required')
+    const verification = this.options.tokens.verify(request.actionToken, {
+      provider: request.context.provider, operatorOpenId: request.context.operatorOpenId,
+      chatId: request.context.chatId, threadId: request.context.threadId,
+      workspaceId, engine, action: 'create-terminal',
+    })
+    if (!verification.ok) return denied(verification.reason, 'Action token is invalid for this request')
+    if (!await this.options.dedupe.consumeAction(verification.claims.jti, verification.claims.exp)) {
+      return denied('token-replayed', 'Action token has already been used')
+    }
+    return null
+  }
+
   private async recordResult(request: CompanionRequest, result: CompanionResult): Promise<CompanionResult> {
     try {
       await this.options.audit.record(request.context, request.command, result)
@@ -231,6 +273,8 @@ function isIdentity(value: string): boolean {
 function fingerprintCommand(command: CompanionCommand): string {
   const payload = command.type === 'bind'
     ? `${command.type}\u0000${command.terminalId}`
+    : command.type === 'create-terminal'
+      ? `${command.type}\u0000${command.workspaceId}\u0000${command.engine}`
     : command.type === 'follow-up'
       ? `${command.type}\u0000${command.text}`
       : command.type
