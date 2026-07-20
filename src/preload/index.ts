@@ -257,6 +257,9 @@ const windowAPI: WindowAPI = {
   maximize: () => ipcRenderer.invoke(SYSTEM_CHANNELS.maximize),
   close: () => ipcRenderer.invoke(SYSTEM_CHANNELS.close),
   openEditor: (payload) => ipcRenderer.invoke(SYSTEM_CHANNELS.openEditor, payload),
+  embedEditor: (payload) => ipcRenderer.invoke(SYSTEM_CHANNELS.embedEditor, payload),
+  setAlwaysOnTop: (value) => ipcRenderer.invoke(SYSTEM_CHANNELS.setAlwaysOnTop, value),
+  onEditorEmbedded: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.editorEmbedded, callback),
 }
 const systemAPI: SystemAPI = {
   getDefaultShell: () => ipcRenderer.invoke(SYSTEM_CHANNELS.defaultShell),

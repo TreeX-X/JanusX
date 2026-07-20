@@ -12,12 +12,13 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useCheckpointStore } from '@/stores/checkpoint'
 import { useOfficeStore } from '@/stores/office'
 import { useRightToolStore } from '@/stores/right-tools'
+import { useEditorStore } from '@/stores/editor'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalArea } from '@/components/TerminalArea'
 import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel, RightDockLayoutProvider } from '@/components/Panel'
-import { getRightDockLayout } from '@/components/right-tools/layout'
+import { getRightDockLayout, CENTER_WORKSPACE_MIN_WIDTH } from '@/components/right-tools/layout'
 import { OfficePreviewPanel } from '@/components/office/OfficePreviewPanel'
 import {
   clampOfficePreviewWidth,
@@ -33,6 +34,7 @@ import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
 import { BlueprintFocusView } from '@/components/blueprint/BlueprintFocusView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
+import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 
@@ -46,12 +48,24 @@ const SIDE_PANEL_COLLAPSED_WIDTH = '48px'
 const OFFICE_PREVIEW_WIDTH = 'clamp(300px, 30vw, 480px)'
 const OFFICE_CLOSE_DURATION_MS = 200
 const OFFICE_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
+const EMBEDDED_EDITOR_MIN_WIDTH = 360
+
+function clampEmbeddedEditorWidth(width: number, maxWidth: number): number {
+  return Math.max(EMBEDDED_EDITOR_MIN_WIDTH, Math.min(maxWidth, width))
+}
 
 interface OfficeResizeSession {
   pointerId: number
   target: HTMLDivElement
   officeRightEdge: number
   resizableWorkspaceWidth: number
+}
+
+interface EditorResizeSession {
+  pointerId: number
+  target: HTMLDivElement
+  editorRightEdge: number
+  maxWidth: number
 }
 
 export default function App() {
@@ -62,6 +76,8 @@ export default function App() {
   const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
   const rightToolActiveId = useRightToolStore((s) => s.activeToolId)
+  const isEditorEmbedded = useEditorStore((s) => s.isEmbedded && s.isVisible)
+  const embeddedEditorWidth = useEditorStore((s) => s.embeddedWidth)
   const officeVisible = visibleOfficeWorkspaceId !== null && visibleOfficeWorkspaceId === activeWorkspaceId
   const [officeClosing, setOfficeClosing] = useState(false)
   const [officeWidth, setOfficeWidth] = useState<number | null>(null)
@@ -69,12 +85,16 @@ export default function App() {
   const [officeMaxWidth, setOfficeMaxWidth] = useState(OFFICE_PREVIEW_MAX_WIDTH)
   const [officeResizing, setOfficeResizing] = useState(false)
   const [rightDockResizing, setRightDockResizing] = useState(false)
+  const [editorResizing, setEditorResizing] = useState(false)
   const officeCloseTimerRef = useRef<number | null>(null)
   const appGridRef = useRef<HTMLDivElement | null>(null)
   const centerWorkspaceRef = useRef<HTMLElement | null>(null)
   const officeWorkspaceRef = useRef<HTMLElement | null>(null)
+  const editorWorkspaceRef = useRef<HTMLElement | null>(null)
   const officeResizeSessionRef = useRef<OfficeResizeSession | null>(null)
+  const editorResizeSessionRef = useRef<EditorResizeSession | null>(null)
   const bodyInteractionStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
+  const editorBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const officeRendered = officeVisible || officeClosing
   const [appGridWidth, setAppGridWidth] = useState(() => window.innerWidth)
   const sidebarWidth = sidebarCollapsed
@@ -84,12 +104,18 @@ export default function App() {
     ? officeWidth ?? officeMeasuredWidth
     : 0
   const rightDockLayout = getRightDockLayout({
-    availableWidth: appGridWidth - sidebarWidth - officeColumnWidth,
+    availableWidth: appGridWidth - sidebarWidth - officeColumnWidth
+      - (isEditorEmbedded ? EMBEDDED_EDITOR_MIN_WIDTH : 0),
     panelCollapsed,
     officeRendered,
     panelWidth: rightToolPanelWidth,
     hasActiveTool: rightToolActiveId !== null,
   })
+  const editorMaxWidth = appGridWidth - sidebarWidth - officeColumnWidth
+    - rightDockLayout.dockWidth - CENTER_WORKSPACE_MIN_WIDTH
+  const editorColumnWidth = isEditorEmbedded
+    ? clampEmbeddedEditorWidth(embeddedEditorWidth, editorMaxWidth)
+    : 0
 
   useLayoutEffect(() => {
     const grid = appGridRef.current
@@ -210,6 +236,69 @@ export default function App() {
     event.preventDefault()
   }, [])
 
+  const finishEditorResize = useCallback((updateState = true) => {
+    const session = editorResizeSessionRef.current
+    if (session?.target.hasPointerCapture(session.pointerId)) {
+      session.target.releasePointerCapture(session.pointerId)
+    }
+    editorResizeSessionRef.current = null
+    if (updateState) setEditorResizing(false)
+    if (editorBodyStyleRef.current) {
+      document.body.style.cursor = editorBodyStyleRef.current.cursor
+      document.body.style.userSelect = editorBodyStyleRef.current.userSelect
+      editorBodyStyleRef.current = null
+    }
+  }, [])
+
+  const handleEditorResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !centerWorkspaceRef.current || !editorWorkspaceRef.current) return
+
+    finishEditorResize()
+    const editorRect = editorWorkspaceRef.current.getBoundingClientRect()
+    const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
+    editorResizeSessionRef.current = {
+      pointerId: event.pointerId,
+      target: event.currentTarget,
+      editorRightEdge: editorRect.right,
+      maxWidth: editorRect.width + centerRect.width - CENTER_WORKSPACE_MIN_WIDTH,
+    }
+    editorBodyStyleRef.current = {
+      cursor: document.body.style.cursor,
+      userSelect: document.body.style.userSelect,
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setEditorResizing(true)
+    event.preventDefault()
+  }, [finishEditorResize])
+
+  const handleEditorResizeMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const session = editorResizeSessionRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    useEditorStore.getState().setEmbeddedWidth(
+      clampEmbeddedEditorWidth(session.editorRightEdge - event.clientX, session.maxWidth),
+    )
+  }, [])
+
+  const handleEditorResizeEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (editorResizeSessionRef.current?.pointerId !== event.pointerId) return
+    finishEditorResize()
+  }, [finishEditorResize])
+
+  const handleEditorResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const widthByKey: Partial<Record<string, number>> = {
+      ArrowLeft: editorColumnWidth + 16,
+      ArrowRight: editorColumnWidth - 16,
+      Home: EMBEDDED_EDITOR_MIN_WIDTH,
+      End: editorMaxWidth,
+    }
+    const nextWidth = widthByKey[event.key]
+    if (nextWidth === undefined) return
+    useEditorStore.getState().setEmbeddedWidth(clampEmbeddedEditorWidth(nextWidth, editorMaxWidth))
+    event.preventDefault()
+  }, [editorColumnWidth, editorMaxWidth])
+
   const handleCloseOffice = useCallback(() => {
     if (officeCloseTimerRef.current !== null || visibleOfficeWorkspaceId === null) return
 
@@ -231,8 +320,9 @@ export default function App() {
         window.clearTimeout(officeCloseTimerRef.current)
       }
       finishOfficeResize(false)
+      finishEditorResize(false)
     }
-  }, [finishOfficeResize])
+  }, [finishEditorResize, finishOfficeResize])
 
   useEffect(() => {
     if (officeVisible) useAppStore.getState().setPanelCollapsed(true)
@@ -244,6 +334,16 @@ export default function App() {
   useEffect(() => {
     return subscribeToCheckpointEvents()
   }, [subscribeToCheckpointEvents])
+
+  useEffect(() => window.electron.window.onEditorEmbedded(async (payload) => {
+    const editor = useEditorStore.getState()
+    const loading = editor.openFile(payload.filePath, payload.workspacePath)
+    useEditorStore.getState().setEmbedded(true)
+    await loading
+    if (payload.isDirty && payload.content !== undefined) {
+      useEditorStore.getState().updateContent(payload.filePath, payload.content)
+    }
+  }), [])
 
   useEffect(() => {
     const idleWindow = window as IdleWindow
@@ -264,7 +364,13 @@ export default function App() {
 
   return (
     <JanusChatProvider>
-    <div className="h-screen flex flex-col" style={{ background: 'var(--bg-app)', color: 'var(--text)' }}>
+    <div
+      className="h-screen flex flex-col"
+      style={{
+        background: 'var(--bg-app)',
+        color: 'var(--text)',
+      }}
+    >
       <Titlebar />
       <div
         ref={appGridRef}
@@ -272,12 +378,10 @@ export default function App() {
         style={{
           gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${
             officeRendered ? `${officeClosing ? '0px' : officeWidth === null ? OFFICE_PREVIEW_WIDTH : `${officeWidth}px`} ` : ''
-          }${rightDockLayout.dockWidth}px`,
-          transition: officeResizing
+          }${isEditorEmbedded ? `${editorColumnWidth}px ` : ''}${rightDockLayout.dockWidth}px`,
+          transition: officeResizing || rightDockResizing || editorResizing
             ? 'none'
-            : rightDockResizing
-              ? 'none'
-              : `grid-template-columns ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
+            : `grid-template-columns ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
         }}
       >
         <Sidebar />
@@ -356,7 +460,8 @@ export default function App() {
                 aria-valuemax={Math.round(officeMaxWidth)}
                 aria-valuenow={Math.round(officeMeasuredWidth)}
                 tabIndex={0}
-                className="absolute inset-y-0 left-0 z-20 w-2 cursor-col-resize touch-none outline-none hover:bg-[#ff7830]/20 focus-visible:bg-[#ff7830]/30"
+                className={dockStyles.resizeHandle}
+                data-resizing={officeResizing}
                 onPointerDown={handleOfficeResizeStart}
                 onPointerMove={handleOfficeResizeMove}
                 onPointerUp={handleOfficeResizeEnd}
@@ -371,6 +476,33 @@ export default function App() {
             />
           </section>
         )}
+        {isEditorEmbedded && (
+          <section
+            ref={editorWorkspaceRef}
+            className="relative min-w-0 overflow-hidden border-l border-white/[0.08]"
+            aria-label="Embedded file editor"
+          >
+            <div
+              role="separator"
+              aria-label="Resize embedded editor"
+              aria-orientation="vertical"
+              aria-valuemin={EMBEDDED_EDITOR_MIN_WIDTH}
+              aria-valuemax={Math.round(Math.max(EMBEDDED_EDITOR_MIN_WIDTH, editorMaxWidth))}
+              aria-valuenow={Math.round(editorColumnWidth)}
+              tabIndex={0}
+              className={dockStyles.resizeHandle}
+              data-resizing={editorResizing}
+              style={{ zIndex: 60 }}
+              onPointerDown={handleEditorResizeStart}
+              onPointerMove={handleEditorResizeMove}
+              onPointerUp={handleEditorResizeEnd}
+              onPointerCancel={handleEditorResizeEnd}
+              onLostPointerCapture={handleEditorResizeEnd}
+              onKeyDown={handleEditorResizeKeyDown}
+            />
+            <FileEditor />
+          </section>
+        )}
         <RightDockLayoutProvider
           effectiveCollapsed={rightDockLayout.effectiveCollapsed}
           effectiveMaxWidth={rightDockLayout.effectiveMaxWidth}
@@ -383,7 +515,7 @@ export default function App() {
           <StatusBar />
         </div>
       </div>
-      <FileEditor />
+      {!isEditorEmbedded && <FileEditor />}
       <AgentNotificationHost />
     </div>
     </JanusChatProvider>

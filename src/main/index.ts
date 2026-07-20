@@ -92,7 +92,7 @@ async function bootstrapApp(): Promise<void> {
       officeArtifactIndex,
       officecliInstaller,
     })
-    registerWindowIpc(editorWindows)
+    registerWindowIpc(editorWindows, () => mainWindow)
     feishuInboundRuntime.configure(mainWindow)
     void feishuInboundRuntime.reconfigure()
   }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { getFileName, getFileViewType } from '@/lib/file-utils'
 import type { OpenFile } from '@/types'
+import { PanelRightOpen, Pin, PinOff, Save } from 'lucide-react'
 
 interface EditorWindowParams {
   filePath: string
@@ -61,6 +62,7 @@ export function StandaloneFileEditor() {
   const [file, setFile] = useState<OpenFile | null>(() =>
     editorParams ? createLoadingFile(editorParams.filePath, editorParams.workspacePath) : null,
   )
+  const [isPinned, setIsPinned] = useState(false)
 
   useEffect(() => {
     if (!editorParams) return
@@ -168,6 +170,21 @@ export function StandaloneFileEditor() {
     setFile((current) => (current ? { ...current, content, isDirty: true } : current))
   }, [])
 
+  const togglePinned = useCallback(async () => {
+    const result = await window.electron.window.setAlwaysOnTop(!isPinned)
+    setIsPinned(result.value)
+  }, [isPinned])
+
+  const embedInWorkspace = useCallback(async () => {
+    if (!file || !editorParams) return
+    await window.electron.window.embedEditor({
+      filePath: file.absolutePath,
+      workspacePath: editorParams.workspacePath,
+      content: file.content,
+      isDirty: file.isDirty,
+    })
+  }, [editorParams, file])
+
   if (!file) {
     return (
       <div className="h-screen flex items-center justify-center" style={{ background: '#0a0a0a', color: '#666' }}>
@@ -196,11 +213,42 @@ export function StandaloneFileEditor() {
           {file.isDirty ? '* ' : ''}
           {file.path || file.name}
         </span>
+        <div className="flex shrink-0 items-center gap-1.5" style={noDrag}>
+          <button
+            type="button"
+            aria-pressed={isPinned}
+            aria-label={isPinned ? '\u53d6\u6d88\u7a97\u53e3\u7f6e\u9876' : '\u9501\u5b9a\u7a97\u53e3\u7f6e\u9876'}
+            title={isPinned ? '\u53d6\u6d88\u7a97\u53e3\u7f6e\u9876' : '\u9501\u5b9a\u7a97\u53e3\u7f6e\u9876'}
+            onClick={() => void togglePinned()}
+            onMouseDown={(event) => event.stopPropagation()}
+            className="flex h-7 w-7 items-center justify-center rounded transition-colors"
+            style={{
+              background: isPinned ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
+              border: isPinned ? '1px solid rgba(255, 120, 48, 0.28)' : '1px solid rgba(255, 255, 255, 0.08)',
+              color: isPinned ? '#ff9b64' : '#888',
+            }}
+          >
+            {isPinned ? <PinOff size={14} strokeWidth={1.8} /> : <Pin size={14} strokeWidth={1.8} />}
+          </button>
+          <button
+            type="button"
+            aria-label={'\u5d4c\u5165\u4e3b\u7a97\u53e3\u5de5\u4f5c\u533a'}
+            title={'\u5d4c\u5165\u4e3b\u7a97\u53e3\u5de5\u4f5c\u533a'}
+            onClick={() => void embedInWorkspace()}
+            onMouseDown={(event) => event.stopPropagation()}
+            className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
+          >
+            <PanelRightOpen size={14} strokeWidth={1.8} />
+          </button>
+        </div>
         {canSave && (
           <button
             type="button"
             onClick={() => void saveFile()}
-            className="h-6 rounded px-3 text-[11px] transition-colors"
+            aria-label={'\u4fdd\u5b58'}
+            title={'\u4fdd\u5b58'}
+            onMouseDown={(event) => event.stopPropagation()}
+            className="flex h-7 w-7 items-center justify-center rounded transition-colors"
             style={{
               ...noDrag,
               background: file.isDirty ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
@@ -208,7 +256,7 @@ export function StandaloneFileEditor() {
               color: file.isDirty ? '#ffb084' : '#777',
             }}
           >
-            保存
+            <Save size={14} strokeWidth={1.8} />
           </button>
         )}
       </div>

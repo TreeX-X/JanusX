@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useEditorStore } from '@/stores/editor'
 import { FloatingPanel } from '@/components/FloatingPanel'
 import { FileViewerContent } from '@/components/FileViewerContent'
+import { useWorkspaceStore } from '@/stores/workspace'
 import type { OpenFile } from '@/types'
+import { PanelRightClose, Save } from 'lucide-react'
 
 function ViewerContent({ file }: { file: OpenFile }) {
   const updateContent = useEditorStore((s) => s.updateContent)
@@ -81,6 +83,11 @@ export function FileEditor() {
   const closeFile = useEditorStore((s) => s.closeFile)
   const hidePanel = useEditorStore((s) => s.hidePanel)
   const saveFile = useEditorStore((s) => s.saveFile)
+  const isEmbedded = useEditorStore((s) => s.isEmbedded)
+  const setEmbedded = useEditorStore((s) => s.setEmbedded)
+  const activeWorkspacePath = useWorkspaceStore((s) =>
+    s.workspaces.find((workspace) => workspace.id === s.activeWorkspaceId)?.path ?? null,
+  )
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
   const canSave = activeFile && activeFile.viewType !== 'image' && activeFile.viewType !== 'binary'
@@ -108,6 +115,19 @@ export function FileEditor() {
     closeFile(id)
   }, [closeFile])
 
+  const detachEditor = useCallback(async () => {
+    if (!activeFile || !activeWorkspacePath) return
+    if (activeFile.isDirty && canSave) await saveFile(activeFile.id)
+    const result = await window.electron.window.openEditor({
+      filePath: activeFile.absolutePath,
+      workspacePath: activeWorkspacePath,
+    })
+    if (result.success) {
+      setEmbedded(false)
+      hidePanel()
+    }
+  }, [activeFile, activeWorkspacePath, canSave, hidePanel, saveFile, setEmbedded])
+
   if (!isVisible || openFiles.length === 0) return null
 
   const title = activeFile ? activeFile.name : 'Editor'
@@ -121,6 +141,7 @@ export function FileEditor() {
       initialHeight={680}
       minWidth={720}
       minHeight={460}
+      embedded={isEmbedded}
       titlebarContent={
         <div className="flex min-w-0 items-end overflow-x-auto no-scrollbar">
           {openFiles.map((file) => (
@@ -136,18 +157,31 @@ export function FileEditor() {
       }
       titlebarActions={
         <div className="flex items-center gap-2">
+          {isEmbedded && (
+            <button
+              type="button"
+              aria-label={'\u8fd4\u56de\u72ec\u7acb\u6d6e\u7a97'}
+              title={'\u8fd4\u56de\u72ec\u7acb\u6d6e\u7a97'}
+              onClick={() => void detachEditor()}
+              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
+            >
+              <PanelRightClose size={14} strokeWidth={1.8} />
+            </button>
+          )}
           {canSave && (
             <button
               type="button"
+              aria-label={'\u4fdd\u5b58'}
+              title={'\u4fdd\u5b58'}
               onClick={() => activeFileId && void saveFile(activeFileId)}
-              className="h-6 rounded px-3 text-[11px] transition-colors"
+              className="flex h-7 w-7 items-center justify-center rounded transition-colors"
               style={{
                 background: activeFile?.isDirty ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
                 border: activeFile?.isDirty ? '1px solid rgba(255, 120, 48, 0.24)' : '1px solid rgba(255, 255, 255, 0.08)',
                 color: activeFile?.isDirty ? '#ffb084' : '#777',
               }}
             >
-              Save
+              <Save size={14} strokeWidth={1.8} />
             </button>
           )}
         </div>

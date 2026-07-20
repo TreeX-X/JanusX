@@ -2,7 +2,8 @@ export const SYSTEM_CHANNELS = {
   defaultShell: 'system:getDefaultShell', platform: 'system:getPlatform',
   openDirectory: 'dialog:openDirectory', saveFile: 'dialog:saveFile',
   minimize: 'window:minimize', maximize: 'window:maximize', close: 'window:close',
-  openEditor: 'editor-window:open', runtimeTelemetry: 'runtime-telemetry:get',
+  openEditor: 'editor-window:open', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
+  setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get',
   toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show',
 } as const
 
@@ -23,6 +24,9 @@ export interface DialogAPI {
 export interface WindowAPI {
   minimize(): Promise<void>; maximize(): Promise<void>; close(): Promise<void>
   openEditor(payload: { filePath?: string; workspacePath?: string }): Promise<{ success?: boolean }>
+  embedEditor(payload: { filePath: string; workspacePath: string; content?: string; isDirty?: boolean }): Promise<{ success?: boolean }>
+  setAlwaysOnTop(value: boolean): Promise<{ value: boolean }>
+  onEditorEmbedded(callback: (payload: { filePath: string; workspacePath: string; content?: string; isDirty?: boolean }) => void): () => void
 }
 export interface SystemAPI {
   getDefaultShell(): Promise<string>; getPlatform(): Promise<NodeJS.Platform>

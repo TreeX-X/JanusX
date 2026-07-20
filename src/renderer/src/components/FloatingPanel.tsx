@@ -11,6 +11,7 @@ interface FloatingPanelProps {
   initialHeight?: number
   minWidth?: number
   minHeight?: number
+  embedded?: boolean
 }
 
 export function FloatingPanel({
@@ -24,6 +25,7 @@ export function FloatingPanel({
   initialHeight = 500,
   minWidth = 400,
   minHeight = 300,
+  embedded = false,
 }: FloatingPanelProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
@@ -58,7 +60,7 @@ export function FloatingPanel({
   }, [visible, onClose])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
-    if (isMaximized) return
+    if (isMaximized || embedded) return
     dragging.current = true
     dragStart.current = {
       x: e.clientX,
@@ -69,11 +71,11 @@ export function FloatingPanel({
       height: 0,
     }
     document.body.style.userSelect = 'none'
-  }, [isMaximized, position])
+  }, [embedded, isMaximized, position])
 
   const handleResizeStart = useCallback((e: React.MouseEvent, edge: 'right' | 'bottom' | 'corner') => {
     e.stopPropagation()
-    if (isMaximized) return
+    if (isMaximized || embedded) return
     resizing.current = edge
     dragStart.current = {
       x: e.clientX,
@@ -84,7 +86,7 @@ export function FloatingPanel({
       height: size.height,
     }
     document.body.style.userSelect = 'none'
-  }, [isMaximized, position, size])
+  }, [embedded, isMaximized, position, size])
 
   const handleToggleMaximize = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -147,19 +149,21 @@ export function FloatingPanel({
   return (
     <div
       ref={panelRef}
-      className="fixed"
+      className={embedded ? 'absolute inset-0' : 'fixed'}
       style={{
         zIndex: 50,
-        left: position.x,
-        top: position.y,
-        width: size.width,
-        height: size.height,
+        left: embedded ? 0 : position.x,
+        top: embedded ? 0 : position.y,
+        right: embedded ? 0 : undefined,
+        bottom: embedded ? 0 : undefined,
+        width: embedded ? '100%' : size.width,
+        height: embedded ? '100%' : size.height,
         background: 'rgba(22, 22, 22, 0.97)',
         backdropFilter: 'blur(20px)',
         border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: 12,
+        borderRadius: embedded ? 0 : 12,
         boxShadow: '0 16px 40px rgba(0, 0, 0, 0.5)',
-        animation: 'file-panel-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        animation: embedded ? 'none' : 'file-panel-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -171,7 +175,7 @@ export function FloatingPanel({
           height: 38,
           background: 'rgba(16, 16, 16, 0.95)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-          cursor: isMaximized ? 'default' : 'move',
+          cursor: isMaximized || embedded ? 'default' : 'move',
         }}
         onMouseDown={handleDragStart}
       >
@@ -192,6 +196,7 @@ export function FloatingPanel({
             type="button"
             aria-label={isMaximized ? 'Restore panel' : 'Maximize panel'}
             onClick={handleToggleMaximize}
+            disabled={embedded}
             className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
           />
         </div>
@@ -221,7 +226,7 @@ export function FloatingPanel({
         style={{
           width: 2,
           height: '100%',
-          cursor: isMaximized ? 'default' : 'ew-resize',
+          cursor: isMaximized || embedded ? 'default' : 'ew-resize',
         }}
         onMouseDown={(e) => handleResizeStart(e, 'right')}
       />
@@ -230,7 +235,7 @@ export function FloatingPanel({
         style={{
           width: '100%',
           height: 4,
-          cursor: isMaximized ? 'default' : 'ns-resize',
+          cursor: isMaximized || embedded ? 'default' : 'ns-resize',
         }}
         onMouseDown={(e) => handleResizeStart(e, 'bottom')}
       />
@@ -239,7 +244,7 @@ export function FloatingPanel({
         style={{
           width: 8,
           height: 8,
-          cursor: isMaximized ? 'default' : 'nwse-resize',
+          cursor: isMaximized || embedded ? 'default' : 'nwse-resize',
         }}
         onMouseDown={(e) => handleResizeStart(e, 'corner')}
       />
