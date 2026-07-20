@@ -15,6 +15,7 @@ import {
   projectService,
   startProjectPolling,
 } from '@/services/project'
+import { useWorkspaceStore } from '@/stores/workspace'
 import styles from './ProjectRunningList.module.css'
 
 interface ProjectRunningListProps {
@@ -239,6 +240,18 @@ export function ProjectRunningList({
                         >
                           :{project.port}
                         </a>
+                        {/*-- 内嵌打开：在工作区浏览器 surface 中打开运行中的 dev server --*/}
+                        <button
+                          type="button"
+                          className={styles.embedOpenBtn}
+                          title="在内嵌浏览器中打开"
+                          onClick={e => {
+                            e.stopPropagation()
+                            void useWorkspaceStore.getState().openBrowserInWorkspace(`http://localhost:${project.port}`)
+                          }}
+                        >
+                          内嵌
+                        </button>
                       </span>
                     )}
                   </div>

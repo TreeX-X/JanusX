@@ -12,6 +12,10 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
+/*-- 终态子代理 run 保留上限：超出时按 updatedAt 淘汰最旧终态条目，活跃 run 不计入、不受影响 --*/
+const MAX_TERMINAL_RUNS = 200
+const TERMINAL_STATUSES: ReadonlySet<SubAgentRun['status']> = new Set(['done', 'failed', 'cancelled'])
+
 function sendToRenderer(mainWindow: BrowserWindow | null, channel: string, payload: unknown): void {
   if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
   mainWindow.webContents.send(channel, payload)
@@ -80,7 +84,18 @@ export class SubAgentRunRegistry {
   }
 
   finishRun(id: string, status: SubAgentRun['status'], lastEvent?: string): SubAgentRun | null {
-    return this.updateRun(id, { status, lastEvent })
+    const run = this.updateRun(id, { status, lastEvent })
+    if (run && TERMINAL_STATUSES.has(status)) this.enforceTerminalCap()
+    return run
+  }
+
+  private enforceTerminalCap(): void {
+    const terminal = Array.from(this.runs.values()).filter((run) => TERMINAL_STATUSES.has(run.status))
+    if (terminal.length <= MAX_TERMINAL_RUNS) return
+    terminal
+      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+      .slice(0, terminal.length - MAX_TERMINAL_RUNS)
+      .forEach((run) => this.removeRun(run.id))
   }
 
   getRun(id: string): SubAgentRun | undefined {

@@ -4,8 +4,11 @@ import {
   addTerminalToPaneTree,
   closePaneTab,
   collapsePaneTree,
+  createBrowserPaneContent,
   createJanusChatPaneContent,
   createTerminalPaneContent,
+  findFirstBrowserPaneContent,
+  findPaneContent,
   getLeafPanes,
   removeTerminalFromPaneTree,
   resizeSplitPane,
@@ -164,5 +167,60 @@ describe('workspace pane tree', () => {
         activeTabId: 'terminal:terminal-1',
       },
     ])
+  })
+
+  it('creates browser pane content with a stable surface-derived id', () => {
+    const content = createBrowserPaneContent('surface-1')
+    expect(content).toEqual({ type: 'browser', id: 'browser:surface-1', surfaceId: 'surface-1' })
+  })
+
+  it('adds and locates browser content in the pane tree like other content types', () => {
+    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const withBrowser = addPaneContentToTree(terminal.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+
+    expect(withBrowser.focus).toEqual({ paneId: 'pane-1', tabId: 'browser:surface-1', terminalId: null })
+    expect(findPaneContent(withBrowser.tree, 'browser:surface-1')).toEqual({
+      paneId: 'pane-1',
+      tabId: 'browser:surface-1',
+      terminalId: null,
+    })
+    expect(findFirstBrowserPaneContent(withBrowser.tree)).toEqual({
+      paneId: 'pane-1',
+      tabId: 'browser:surface-1',
+      surfaceId: 'surface-1',
+    })
+  })
+
+  it('re-adding the same browser surface activates its tab instead of duplicating', () => {
+    const first = addPaneContentToTree(null, null, createBrowserPaneContent('surface-1'), 'pane-1')
+    const withTerminal = addTerminalToPaneTree(first.tree, 'pane-1', createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-fallback')
+    const repeated = addPaneContentToTree(withTerminal.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+
+    const leaves = getLeafPanes(repeated.tree)
+    expect(leaves.flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'browser')).toHaveLength(1)
+    expect(repeated.focus).toEqual({ paneId: 'pane-1', tabId: 'browser:surface-1', terminalId: null })
+  })
+
+  it('finds the first browser tab across split panes', () => {
+    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const split = splitPaneTree(terminal.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const withBrowser = addPaneContentToTree(split.tree, 'pane-2', createBrowserPaneContent('surface-9'), 'pane-fallback')
+
+    expect(findFirstBrowserPaneContent(withBrowser.tree)).toEqual({
+      paneId: 'pane-2',
+      tabId: 'browser:surface-9',
+      surfaceId: 'surface-9',
+    })
+    expect(findFirstBrowserPaneContent(terminal.tree)).toBeNull()
+  })
+
+  it('closes a browser tab without touching sibling tabs', () => {
+    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const withBrowser = addPaneContentToTree(terminal.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+    const closed = closePaneTab(withBrowser.tree, 'pane-1', 'browser:surface-1')
+
+    const leaves = getLeafPanes(closed)
+    expect(leaves).toHaveLength(1)
+    expect(leaves[0].tabs.map((tab) => tab.id)).toEqual(['terminal:terminal-1'])
   })
 })

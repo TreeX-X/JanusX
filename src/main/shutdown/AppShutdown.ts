@@ -16,6 +16,7 @@ export interface AppShutdownDeps {
   disposeWatchers?: ShutdownStep
   destroyToast?: ShutdownStep
   closeEditors?: ShutdownStep
+  destroyBrowserSurfaces?: ShutdownStep
   disposeTerminalSession?: ShutdownStep
 }
 
@@ -88,6 +89,7 @@ export class AppShutdown {
     const ordered: Array<[keyof AppShutdownDeps, ShutdownStep | undefined]> = [
       ['destroyToast', this.deps.destroyToast],
       ['closeEditors', this.deps.closeEditors],
+      ['destroyBrowserSurfaces', this.deps.destroyBrowserSurfaces],
       ['abortChatStreams', this.deps.abortChatStreams],
       ['cancelAnalyzer', this.deps.cancelAnalyzer],
       ['stopHookBridge', this.deps.stopHookBridge],

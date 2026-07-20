@@ -1,6 +1,7 @@
 import type { FileAPI, FileTreeAPI, WorkspaceAPI } from '../../../shared/ipc/workspace'
 import type { TerminalAPI } from '../../../shared/ipc/terminal'
 import type { ProjectAPI } from '../../../shared/ipc/project'
+import type { BrowserAPI } from '../../../shared/ipc/browser'
 import type { KnowledgeAPI } from '../../../shared/ipc/knowledge'
 import type { JanusAPI } from '../../../shared/ipc/janus'
 import type { OfficeAPI } from '../../../shared/office'
@@ -20,6 +21,7 @@ interface ElectronAPI {
   file: FileAPI
   terminal: TerminalAPI
   project: ProjectAPI
+  browser: BrowserAPI
   knowledge: KnowledgeAPI
   janus: JanusAPI
   office: OfficeAPI

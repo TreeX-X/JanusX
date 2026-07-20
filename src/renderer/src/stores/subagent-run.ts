@@ -30,6 +30,22 @@ function sortRuns(runs: SubAgentRun[]): SubAgentRun[] {
   })
 }
 
+/*-- 终态 run 展示上限：与主进程 registry 对齐，超出时裁剪最旧终态条目，活跃 run 不受影响 --*/
+const MAX_TERMINAL_RUNS = 200
+const TERMINAL_STATUSES: ReadonlySet<SubAgentRun['status']> = new Set(['done', 'failed', 'cancelled'])
+
+function capTerminalRuns(runs: SubAgentRun[]): SubAgentRun[] {
+  const terminal = runs.filter((run) => TERMINAL_STATUSES.has(run.status))
+  if (terminal.length <= MAX_TERMINAL_RUNS) return runs
+  const removable = new Set(
+    [...terminal]
+      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+      .slice(0, terminal.length - MAX_TERMINAL_RUNS)
+      .map((run) => run.id),
+  )
+  return runs.filter((run) => !removable.has(run.id))
+}
+
 export const useSubAgentRunStore = create<SubAgentRunStore>((set, get) => ({
   runs: [],
   loading: false,
@@ -51,7 +67,7 @@ export const useSubAgentRunStore = create<SubAgentRunStore>((set, get) => ({
       const runs = existing
         ? state.runs.map((item) => (item.id === run.id ? run : item))
         : [...state.runs, run]
-      return { runs: sortRuns(runs) }
+      return { runs: capTerminalRuns(sortRuns(runs)) }
     })
   },
 

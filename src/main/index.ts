@@ -34,6 +34,7 @@ async function bootstrapApp(): Promise<void> {
     { createMainWindow },
     { registerWindowIpc },
     { feishuInboundRuntime },
+    { BrowserSurfaceManager },
   ] = await Promise.all([
     import('./ipc/handlers'),
     import('./ipc/project-handlers'),
@@ -50,10 +51,12 @@ async function bootstrapApp(): Promise<void> {
     import('./windows/main-window'),
     import('./windows/register-window-ipc'),
     import('./remote-notifications/feishu-inbound/runtime'),
+    import('./browser/surface-manager'),
   ])
 
   let mainWindow: BrowserWindow | null = null
   const editorWindows = new EditorWindowManager()
+  const browserSurfaces = new BrowserSurfaceManager({ getMainWindow: () => mainWindow })
   const getOfficeWindows = (): BrowserWindow[] => [
     ...(mainWindow && !mainWindow.isDestroyed() ? [mainWindow] : []),
     ...editorWindows.list(),
@@ -72,6 +75,7 @@ async function bootstrapApp(): Promise<void> {
     disposeWatchers: () => disposeWorkspaceWatchers(),
     destroyToast: () => desktopToastWindow.destroy(),
     closeEditors: () => editorWindows.closeAll(),
+    destroyBrowserSurfaces: () => browserSurfaces.destroyAll(),
     stopCompanion: () => feishuInboundRuntime.stop(),
   })
 
@@ -91,6 +95,7 @@ async function bootstrapApp(): Promise<void> {
       officeWatchPool,
       officeArtifactIndex,
       officecliInstaller,
+      browserSurfaces,
     })
     registerWindowIpc(editorWindows, () => mainWindow)
     feishuInboundRuntime.configure(mainWindow)

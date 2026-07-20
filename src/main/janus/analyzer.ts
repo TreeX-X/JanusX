@@ -46,6 +46,8 @@ const CHARS_PER_TOKEN = 3.5
 const COMMIT_BATCH_CAP = 50
 /** 首次分析默认只看最近 5 次提交，避免根任务首次触发时产生过多分段。 */
 const INITIAL_COMMIT_BATCH_DEFAULT = 5
+/** nodeWorkspace 回退映射上限：超出按插入顺序删最旧，避免长期运行的 Map 只增不减。 */
+const MAX_NODE_WORKSPACE = 500
 
 /** 状态严格度排序（越大越严，取最严为合并状态）。 */
 const STATUS_SEVERITY: Record<BlueprintNodeStatus, number> = {
@@ -454,6 +456,10 @@ class JanusAnalyzer {
   /** 记录 nodeId 所属 workspace（在蓝图加载/创建/绑定时调用）。 */
   registerNodeWorkspace(nodeId: string, workspace: string): void {
     this.nodeWorkspace.set(nodeId, workspace)
+    if (this.nodeWorkspace.size > MAX_NODE_WORKSPACE) {
+      const oldest = this.nodeWorkspace.keys().next().value
+      if (oldest !== undefined) this.nodeWorkspace.delete(oldest)
+    }
   }
 
   /** 投队列 + 去重，最终聚到 analyzeNode。所有触发入口都走这里。 */

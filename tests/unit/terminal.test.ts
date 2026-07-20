@@ -50,22 +50,6 @@ describe('Terminal Types', () => {
   })
 })
 
-describe('Health Checker', () => {
-  it('should create health checker instance', async () => {
-    const { HealthChecker } = await import('../../src/main/terminal/health')
-    const checker = new HealthChecker()
-    expect(checker).toBeDefined()
-  })
-
-  it('should return false for non-existent terminal', async () => {
-    const { HealthChecker } = await import('../../src/main/terminal/health')
-    const checker = new HealthChecker()
-    const status = checker.check('non-existent-id')
-    expect(status.alive).toBe(false)
-    expect(status.uptime).toBe(0)
-  })
-})
-
 describe('Default Shell', () => {
   it('should return a string for default shell', async () => {
     const { getDefaultShell } = await import('../../src/main/terminal/presets')

@@ -44,6 +44,13 @@ export interface UseJanusChatReturn {
 
 const SYSTEM_PROMPT = (window as Partial<Window>).electron?.janusPersona ?? ''
 
+/*-- 灵动岛对话消息上限：超出从头部裁剪，防止长对话消息数组无界增长 --*/
+const MAX_CHAT_MESSAGES = 200
+
+function capMessages(messages: Message[]): Message[] {
+  return messages.length > MAX_CHAT_MESSAGES ? messages.slice(-MAX_CHAT_MESSAGES) : messages
+}
+
 export function useJanusChat(): UseJanusChatReturn {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
@@ -172,7 +179,7 @@ export function useJanusChat(): UseJanusChatReturn {
 
   const commitAssistantMessage = useCallback((content: string) => {
     if (!content.trim()) return
-    setMessages((prev) => [
+    setMessages((prev) => capMessages([
       ...prev,
       {
         id: `assistant-${Date.now()}`,
@@ -180,7 +187,7 @@ export function useJanusChat(): UseJanusChatReturn {
         content,
         timestamp: Date.now()
       }
-    ])
+    ]))
   }, [])
 
   const stop = useCallback(() => {
@@ -205,7 +212,7 @@ export function useJanusChat(): UseJanusChatReturn {
         timestamp: Date.now()
       }
 
-      setMessages((prev) => [...prev, userMessage])
+      setMessages((prev) => capMessages([...prev, userMessage]))
       const streamId = streamIdRef.current + 1
       streamIdRef.current = streamId
       resetPrinter()

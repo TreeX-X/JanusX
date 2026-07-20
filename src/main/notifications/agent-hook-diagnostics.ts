@@ -1,7 +1,9 @@
 import { app } from 'electron'
-import { appendFile, mkdir, writeFile } from 'fs/promises'
+import { appendFile, mkdir, rename, rm, stat, truncate, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import type { AgentHookCoordinatorEvent, AgentHookPayload } from './agent-hook-types'
+
+const MAX_LOG_BYTES = 5 * 1024 * 1024
 
 type DiagnosticValue = string | number | boolean | null | undefined
 
@@ -75,8 +77,24 @@ export class AgentHookDiagnostics {
     void mkdir(dirname(this.lastPath), { recursive: true })
       .then(async () => {
         await writeFile(this.lastPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8')
+        await this.rotateLogIfNeeded()
         await appendFile(this.logPath, `${json}\n`, 'utf8')
       })
       .catch(() => {})
+  }
+
+  private async rotateLogIfNeeded(): Promise<void> {
+    try {
+      if ((await stat(this.logPath)).size < MAX_LOG_BYTES) return
+    } catch {
+      return
+    }
+    const oldPath = `${this.logPath}.old`
+    try {
+      await rm(oldPath, { force: true })
+      await rename(this.logPath, oldPath)
+    } catch {
+      await truncate(this.logPath, 0).catch(() => {})
+    }
   }
 }

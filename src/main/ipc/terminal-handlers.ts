@@ -453,7 +453,9 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     // after workspace switches, then forward live data to the renderer.
     instance.pty.onData((data: string) => {
       const seq = terminalManager.appendOutput(id, data)
-      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.data, { id, data, seq: seq ?? undefined })
+      // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
+      if (seq === null) return
+      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.data, { id, data, seq })
     })
 
     // Terminal exit: finalize any pending checkpoint.

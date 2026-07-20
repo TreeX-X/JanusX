@@ -6,8 +6,10 @@ import {
   addTerminalToPaneTree,
   closePaneTab,
   collapsePaneTree,
+  createBrowserPaneContent,
   createJanusChatPaneContent,
   createTerminalPaneContent,
+  findFirstBrowserPaneContent,
   findLeafPane,
   findPaneContent,
   findTerminalPane,
@@ -20,6 +22,7 @@ import {
   type PaneSplitDirection,
   type WorkspacePaneNode,
 } from '@/lib/workspace-pane'
+import { createBrowserSurface, openBrowserTab } from '@/services/browser'
 
 type TerminalSnapshot = {
   terminals: Terminal[]
@@ -56,6 +59,9 @@ interface WorkspaceStore {
   setFocusedPane: (paneId: string) => void
   setPaneTab: (paneId: string, tabId: string) => void
   openJanusChatInWorkspace: () => void
+  addBrowserSurfaceToTree: (surfaceId: string) => void
+  openBrowserInWorkspace: (url?: string) => Promise<void>
+  addBrowserToPane: (paneId: string, url?: string) => Promise<void>
   splitPane: (paneId: string | null, direction: PaneSplitDirection) => void
   unsplitPane: (paneId: string | null) => void
   collapsePaneLayout: () => void
@@ -73,6 +79,13 @@ function createPaneId(prefix = 'pane'): string {
     return `${prefix}-${crypto.randomUUID()}`
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function createBrowserSurfaceId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `browser-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 type TerminalLookupState = {
@@ -349,6 +362,83 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         activeTerminalId: null,
       }
     }),
+  /*-- 把已存在的 browser surface 纳入 pane 树（幂等：已有 tab 则激活）——janus-chat 同款入网逻辑 --*/
+  addBrowserSurfaceToTree: (surfaceId) =>
+    set((s) => {
+      const contentId = `browser:${surfaceId}`
+      const existing = findPaneContent(s.paneTree, contentId)
+      if (existing.paneId && existing.tabId) {
+        return {
+          paneTree: activatePaneTab(s.paneTree, existing.paneId, existing.tabId),
+          focusedPaneId: existing.paneId,
+          focusedTabId: existing.tabId,
+          activeTerminalId: null,
+        }
+      }
+
+      const focusedPane = findLeafPane(s.paneTree, s.focusedPaneId)
+      let paneTree = s.paneTree
+      let targetPaneId = focusedPane?.id ?? null
+      if (focusedPane && focusedPane.tabs.length > 0) {
+        const split = splitPaneTree(
+          paneTree,
+          focusedPane.id,
+          'horizontal',
+          createPaneId('split'),
+          createPaneId(),
+          'after',
+          0.62
+        )
+        paneTree = split.tree
+        targetPaneId = split.focus.paneId
+      }
+
+      const result = addPaneContentToTree(
+        paneTree,
+        targetPaneId,
+        createBrowserPaneContent(surfaceId),
+        createPaneId()
+      )
+      return {
+        paneTree: result.tree,
+        focusedPaneId: result.focus.paneId,
+        focusedTabId: result.focus.tabId,
+        activeTerminalId: null,
+      }
+    }),
+  /*-- 用户主动调用浏览器：已有 browser tab 则激活（带 url 则在其 surface 新开 tab），否则创建新 surface 入网 --*/
+  openBrowserInWorkspace: async (url) => {
+    const existing = findFirstBrowserPaneContent(get().paneTree)
+    if (existing) {
+      set((s) => ({
+        paneTree: activatePaneTab(s.paneTree, existing.paneId, existing.tabId),
+        focusedPaneId: existing.paneId,
+        focusedTabId: existing.tabId,
+        activeTerminalId: null,
+      }))
+      if (url) await openBrowserTab(existing.surfaceId, url)
+      return
+    }
+    const surfaceId = createBrowserSurfaceId()
+    const result = await createBrowserSurface(surfaceId, 'pane', url)
+    if (!result.success) return
+    get().addBrowserSurfaceToTree(surfaceId)
+  },
+  /*-- pane 内 "+" 入口：在指定 pane 直接新建 browser tab --*/
+  addBrowserToPane: async (paneId, url) => {
+    const surfaceId = createBrowserSurfaceId()
+    const result = await createBrowserSurface(surfaceId, 'pane', url)
+    if (!result.success) return
+    set((s) => {
+      const added = addPaneContentToTree(s.paneTree, paneId, createBrowserPaneContent(surfaceId), createPaneId())
+      return {
+        paneTree: added.tree,
+        focusedPaneId: added.focus.paneId,
+        focusedTabId: added.focus.tabId,
+        activeTerminalId: null,
+      }
+    })
+  },
   splitPane: (paneId, direction) =>
     set((s) => {
       const result = splitPaneTree(s.paneTree, paneId ?? s.focusedPaneId, direction, createPaneId('split'), createPaneId())

@@ -185,9 +185,29 @@
 }
 
 .port a {
-  color: var(--primary);
-  text-decoration: none;
-}
+    color: var(--primary);
+    text-decoration: none;
+  }
+  
+  .embedOpenBtn {
+    margin-left: 4px;
+    padding: 0 5px;
+    height: 14px;
+    line-height: 12px;
+    font-size: 9px;
+    background: rgba(255, 120, 48, 0.08);
+    border: 1px solid rgba(255, 120, 48, 0.24);
+    border-radius: 3px;
+    color: #ff9b64;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  
+  .embedOpenBtn:hover {
+    background: rgba(255, 120, 48, 0.18);
+    border-color: rgba(255, 120, 48, 0.45);
+    color: #ffb27d;
+  }
 
 .port a:hover {
   text-decoration: underline;

@@ -1,4 +1,5 @@
 import { spawn, type IPty } from 'node-pty'
+import { spawn as spawnProcess } from 'child_process'
 import { existsSync, readdirSync } from 'fs'
 import { createRequire } from 'module'
 import { delimiter, dirname, join } from 'path'
@@ -213,13 +214,41 @@ export class TerminalManager {
   kill(id: string): void {
     const instance = this.instances.get(id)
     if (instance) {
+      const pid = instance.pty.pid
       try {
         instance.pty.kill()
       } catch {
         // 进程可能已退出
       }
+      this.killProcessTree(pid)
       instance.status = 'exited'
       this.instances.delete(id)
+    }
+  }
+
+  /** Windows 进程树兜底：pty.kill() 不保证回收子进程，taskkill /T 强制清理。失败静默。 */
+  private killProcessTree(pid: number | undefined): void {
+    if (process.platform !== 'win32' || typeof pid !== 'number') return
+    try {
+      const killer = spawnProcess('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      })
+      killer.on('error', () => {
+        // 兜底失败不得中断 kill 流程
+      })
+    } catch {
+      // 兜底失败静默
+    }
+  }
+
+  killByWorkspace(workspaceId: string): void {
+    if (!workspaceId) return
+    const targets = Array.from(this.instances.values())
+      .filter(instance => instance.config.workspaceId === workspaceId)
+      .map(instance => instance.id)
+    for (const id of targets) {
+      this.kill(id)
     }
   }
 

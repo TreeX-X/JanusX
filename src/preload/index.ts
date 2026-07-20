@@ -17,6 +17,7 @@ import {
   type TerminalAPI,
 } from '../shared/ipc/terminal'
 import { PROJECT_CHANNELS, type ProjectAPI } from '../shared/ipc/project'
+import { BROWSER_EVENT_CHANNELS, BROWSER_INVOKE_CHANNELS, type BrowserAPI } from '../shared/ipc/browser'
 import { KNOWLEDGE_CHANNELS, type KnowledgeAPI } from '../shared/ipc/knowledge'
 import {
   JANUS_COMMAND_CHANNELS,
@@ -96,6 +97,24 @@ const projectAPI: ProjectAPI = {
   list: () => ipcRenderer.invoke(PROJECT_CHANNELS.list),
   get: (projectId) => ipcRenderer.invoke(PROJECT_CHANNELS.get, projectId),
   schemas: () => ipcRenderer.invoke(PROJECT_CHANNELS.schemas),
+}
+
+const browserAPI: BrowserAPI = {
+  createSurface: (request) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.createSurface, request),
+  destroySurface: (surfaceId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.destroySurface, surfaceId),
+  popOut: (surfaceId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.popOut, surfaceId),
+  embed: (surfaceId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.embed, surfaceId),
+  setBounds: (surfaceId, bounds) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.setBounds, surfaceId, bounds),
+  getState: (surfaceId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.getState, surfaceId),
+  openTab: (surfaceId, url) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.openTab, surfaceId, url),
+  closeTab: (surfaceId, tabId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.closeTab, surfaceId, tabId),
+  activateTab: (surfaceId, tabId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.activateTab, surfaceId, tabId),
+  navigate: (surfaceId, tabId, url) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.navigate, surfaceId, tabId, url),
+  goBack: (surfaceId, tabId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.goBack, surfaceId, tabId),
+  goForward: (surfaceId, tabId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.goForward, surfaceId, tabId),
+  reload: (surfaceId, tabId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.reload, surfaceId, tabId),
+  onStateChanged: (callback) => subscribeIpcEvent(BROWSER_EVENT_CHANNELS.state, callback),
+  onAgentControlChanged: (callback) => subscribeIpcEvent(BROWSER_EVENT_CHANNELS.agentControl, callback),
 }
 
 const knowledgeAPI: KnowledgeAPI = {
@@ -286,6 +305,7 @@ contextBridge.exposeInMainWorld('electron', {
   file: fileAPI,
   terminal: terminalAPI,
   project: projectAPI,
+  browser: browserAPI,
   knowledge: knowledgeAPI,
   janus: janusAPI,
   office: officeAPI,

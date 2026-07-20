@@ -1,7 +1,11 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { Globe } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
+import { useBrowserStore } from '@/stores/browser'
+import { BrowserSurface } from './browser/BrowserSurface'
+import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
 import { QuickNote } from './note/QuickNote'
 import { applyTerminalNoteLifecycle, DRAWER_VIEWS, DrawerViewTabs, getDrawerHeight, getDrawerPanelAttributes, type DrawerView } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
@@ -302,6 +306,20 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
   )
 }
 
+/*-- pane tab 条上的浏览器标签：标题跟随 surface 活动 tab --*/
+function BrowserPaneTabLabel({ surfaceId, isActive }: { surfaceId: string; isActive: boolean }) {
+  const surface = useBrowserStore((s) => s.surfaces[surfaceId])
+  const activeTab = surface?.tabs.find((tab) => tab.tabId === surface.activeTabId) ?? null
+  return (
+    <>
+      <Globe size={13} aria-hidden="true" style={{ opacity: isActive ? 0.95 : 0.55, flexShrink: 0 }} />
+      <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? '#ffb27d' : 'inherit' }}>
+        {activeTab?.title || activeTab?.url || 'Browser'}
+      </span>
+    </>
+  )
+}
+
 interface PaneTreeViewProps {
   node: WorkspacePaneNode | null
   terminalsById: Map<string, Terminal>
@@ -312,6 +330,9 @@ interface PaneTreeViewProps {
   onTabSelect: (paneId: string, tabId: string) => void
   onKillTerminalFromTab: (terminalId: string, e: React.MouseEvent) => void
   onClosePaneTab: (paneId: string, tabId: string) => void
+  onOpenBrowser: (paneId: string) => void
+  onCloseBrowserTab: (paneId: string, tabId: string, surfaceId: string) => void
+  onBrowserPopOut: (paneId: string, tabId: string, surfaceId: string) => void
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
   onTerminalDragStart: (terminalId: string) => void
@@ -509,6 +530,9 @@ function LeafPane({
   onTabSelect,
   onKillTerminalFromTab,
   onClosePaneTab,
+  onOpenBrowser,
+  onCloseBrowserTab,
+  onBrowserPopOut,
   onKillTerminal,
   onTerminalDrop,
   onTerminalDragStart,
@@ -653,7 +677,7 @@ function LeafPane({
                 background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
                 boxShadow: isActive && showFocus ? 'inset 0 -1px 0 rgba(255,120,48,0.72)' : 'none',
               }}
-              title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.terminalId}
+              title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
               {tab.type === 'janus-chat' && <span aria-hidden="true" style={{ color: '#ff7830' }}>J</span>}
               {terminal && (
@@ -665,17 +689,22 @@ function LeafPane({
                   style={{ opacity: isActive ? 0.95 : 0.55 }}
                 />
               )}
-              <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? '#ffb27d' : 'inherit' }}>
-                {tab.type === 'janus-chat' ? 'Janus Chat' : terminal?.name ?? tab.terminalId.slice(0, 8)}
-              </span>
+              {tab.type === 'browser' ? (
+                <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
+              ) : (
+                <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? '#ffb27d' : 'inherit' }}>
+                  {tab.type === 'janus-chat' ? 'Janus Chat' : terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
+                </span>
+              )}
               <span
                 tabIndex={-1}
-                title={tab.type === 'terminal' ? 'Kill Terminal' : 'Close Chat'}
+                title={tab.type === 'terminal' ? 'Kill Terminal' : tab.type === 'browser' ? 'Close Browser' : 'Close Chat'}
                 className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-35 transition-[opacity,color,background] group-hover/tab:opacity-75 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                 style={{ color: '#999' }}
                 onClick={(event) => {
                   event.stopPropagation()
                   if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId, event)
+                  else if (tab.type === 'browser') onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
                   else onClosePaneTab(leaf.id, tab.id)
                 }}
               >
@@ -693,6 +722,19 @@ function LeafPane({
             x
           </span>
           <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} />
+          <button
+            type="button"
+            title="New Browser"
+            aria-label="New Browser"
+            className="flex h-6 w-6 items-center justify-center rounded border text-[11px] leading-none transition-colors hover:bg-[rgba(255,120,48,0.1)]"
+            style={{ borderColor: 'rgba(255,255,255,0.08)', color: '#999' }}
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenBrowser(leaf.id)
+            }}
+          >
+            <Globe size={11} />
+          </button>
           <button
             type="button"
             aria-label="结束当前终端"
@@ -728,6 +770,29 @@ function LeafPane({
                 aria-hidden={!isActive}
               >
                 <JanusChatPane focused={isFocused && isActive} />
+              </div>
+            )
+          }
+
+          if (tab.type === 'browser') {
+            const isActive = tab.id === activeTabId
+            return (
+              <div
+                key={tab.id}
+                className="absolute inset-0"
+                style={{
+                  visibility: isActive ? 'visible' : 'hidden',
+                  pointerEvents: isActive ? 'auto' : 'none',
+                  zIndex: isActive ? 1 : 0,
+                }}
+                aria-hidden={!isActive}
+              >
+                <BrowserSurface
+                  surfaceId={tab.surfaceId}
+                  carrier="pane"
+                  visible={isActive}
+                  onRequestPopOut={() => onBrowserPopOut(leaf.id, tab.id, tab.surfaceId)}
+                />
               </div>
             )
           }
@@ -894,14 +959,48 @@ export function TerminalArea() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== 'n') return
-      event.preventDefault()
-      setDrawerView('note')
-      setDrawerOpen(true)
+      if (!event.shiftKey || (!event.ctrlKey && !event.metaKey)) return
+      const key = event.key.toLowerCase()
+      if (key === 'n') {
+        event.preventDefault()
+        setDrawerView('note')
+        setDrawerOpen(true)
+        return
+      }
+      /*-- Ctrl/Cmd+Shift+B：主动调用浏览器（已有则激活，否则新建） --*/
+      if (key === 'b') {
+        event.preventDefault()
+        void useWorkspaceStore.getState().openBrowserInWorkspace()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
+
+  /*-- pane "+" 菜单新增浏览器 tab --*/
+  const handleOpenBrowser = useCallback((paneId: string) => {
+    void useWorkspaceStore.getState().addBrowserToPane(paneId)
+  }, [])
+
+  /*-- 关闭浏览器 pane tab：先销毁主进程 surface 再移除 pane 内容 --*/
+  const handleCloseBrowserTab = useCallback(
+    async (paneId: string, tabId: string, surfaceId: string) => {
+      await destroyBrowserSurface(surfaceId)
+      closePaneTab(paneId, tabId)
+    },
+    [closePaneTab]
+  )
+
+  /*-- 弹出为独立窗口：乐观更新载体后再移除 pane 内容，避免卸载时误隐藏已移交的视图 --*/
+  const handleBrowserPopOut = useCallback(
+    async (paneId: string, tabId: string, surfaceId: string) => {
+      const result = await popOutBrowserSurface(surfaceId)
+      if (!result.success) return
+      useBrowserStore.getState().markCarrier(surfaceId, 'window')
+      closePaneTab(paneId, tabId)
+    },
+    [closePaneTab]
+  )
 
   const handleTerminalDrop = useCallback(
     (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
@@ -1006,6 +1105,9 @@ export function TerminalArea() {
           onTabSelect={setPaneTab}
           onKillTerminalFromTab={handleKillTerminal}
           onClosePaneTab={closePaneTab}
+          onOpenBrowser={handleOpenBrowser}
+          onCloseBrowserTab={handleCloseBrowserTab}
+          onBrowserPopOut={handleBrowserPopOut}
           onKillTerminal={handleKillTerminal}
           onTerminalDrop={handleTerminalDrop}
           onTerminalDragStart={(terminalId) => {

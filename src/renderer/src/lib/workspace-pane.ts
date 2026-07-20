@@ -16,7 +16,16 @@ export type JanusChatPaneContent = {
   workspaceId?: never
 }
 
-export type PaneContent = TerminalPaneContent | JanusChatPaneContent
+/*-- 浏览器 pane 内容：id 形如 browser:{surfaceId}，一个 surface 对应主进程一个浏览器实例 --*/
+export type BrowserPaneContent = {
+  type: 'browser'
+  id: `browser:${string}`
+  surfaceId: string
+  terminalId?: never
+  workspaceId?: never
+}
+
+export type PaneContent = TerminalPaneContent | JanusChatPaneContent | BrowserPaneContent
 
 export type WorkspacePaneLeaf = {
   type: 'leaf'
@@ -53,6 +62,23 @@ export function createTerminalPaneContent(terminalId: string, workspaceId: strin
 
 export function createJanusChatPaneContent(): JanusChatPaneContent {
   return { type: 'janus-chat', id: 'janus-chat' }
+}
+
+export function createBrowserPaneContent(surfaceId: string): BrowserPaneContent {
+  return { type: 'browser', id: `browser:${surfaceId}`, surfaceId }
+}
+
+/*-- 找到 pane 树中第一个浏览器 tab（Sidebar/快捷键入口的"已有则激活"语义） --*/
+export function findFirstBrowserPaneContent(
+  node: WorkspacePaneNode | null
+): { paneId: string; tabId: string; surfaceId: string } | null {
+  for (const leaf of getLeafPanes(node)) {
+    const tab = leaf.tabs.find((item) => item.type === 'browser')
+    if (tab && tab.type === 'browser') {
+      return { paneId: leaf.id, tabId: tab.id, surfaceId: tab.surfaceId }
+    }
+  }
+  return null
 }
 
 export function createEmptyPaneLeaf(id: string): WorkspacePaneLeaf {

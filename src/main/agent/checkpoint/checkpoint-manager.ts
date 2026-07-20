@@ -20,11 +20,18 @@ const SNAPSHOT_SKIP_DIRS = new Set([
   'coverage',
 ])
 
+interface HashCacheEntry {
+  mtimeMs: number
+  size: number
+  sha1: string
+}
+
 interface WorkspaceCheckpointState {
   workspacePath: string
   storagePath: string
   checkpoints: Map<string, ConversationCheckpoint>
   blobStore: BlobStore
+  hashCache: Map<string, HashCacheEntry>
 }
 
 export class CheckpointManager {
@@ -56,6 +63,7 @@ export class CheckpointManager {
       storagePath,
       checkpoints: new Map<string, ConversationCheckpoint>(),
       blobStore,
+      hashCache: new Map<string, HashCacheEntry>(),
     }
 
     await mkdir(join(state.storagePath, 'blobs'), { recursive: true })
@@ -443,12 +451,39 @@ export class CheckpointManager {
     try {
       const relPath = relative(cwd, absolutePath).replace(/\\/g, '/')
       if (this.shouldSkipSnapshotPath(relPath)) return
+
+      let stats: Awaited<ReturnType<typeof stat>> | null = null
+      try {
+        stats = await stat(absolutePath)
+      } catch {
+        stats = null
+      }
+
+      // Fast path: stat unchanged (mtimeMs AND size both match) and the blob
+      // for the cached hash still exists -> reuse hash without reading content.
+      if (stats) {
+        const cached = state.hashCache.get(relPath)
+        if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+          if (await state.blobStore.exists(cached.sha1)) {
+            files[relPath] = { path: relPath, hash: cached.sha1, size: cached.size }
+            return
+          }
+        }
+      }
+
+      // Slow path: cache miss, stat changed/unavailable, or blob evicted.
+      // Read content, (re)store the blob, and backfill the cache.
       const content = await readFile(absolutePath)
       const hash = await state.blobStore.store(content)
       files[relPath] = {
         path: relPath,
         hash,
         size: content.byteLength,
+      }
+      if (stats) {
+        state.hashCache.set(relPath, { mtimeMs: stats.mtimeMs, size: stats.size, sha1: hash })
+      } else {
+        state.hashCache.delete(relPath)
       }
     } catch {}
   }

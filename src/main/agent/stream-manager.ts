@@ -6,6 +6,8 @@ import { createParser } from './parsers'
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_MAX_CONCURRENCY = 3
+/*-- stderr 缓冲上限：仅保留尾部 256KB，超出丢弃头部，避免异常进程刷屏无界增长 --*/
+const MAX_STDERR_CHARS = 256 * 1024
 
 type EventCallback = (event: AgentEvent) => void
 
@@ -98,6 +100,9 @@ export class AgentStreamManager {
     let stderrBuffer = ''
     proc.stderr!.on('data', (chunk: Buffer) => {
       stderrBuffer += chunk.toString()
+      if (stderrBuffer.length > MAX_STDERR_CHARS) {
+        stderrBuffer = stderrBuffer.slice(-MAX_STDERR_CHARS)
+      }
     })
 
     // Process close

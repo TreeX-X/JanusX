@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'fs/promises'
+import { readdir, open, stat } from 'fs/promises'
 import { join } from 'path'
 import os from 'os'
 
@@ -32,6 +32,8 @@ interface JsonRecord {
 
 const MAX_CODEX_CANDIDATES = 80
 const STARTED_AT_TOLERANCE_MS = 1_000
+/*-- telemetry jsonl 尾读窗口：只读文件末尾 256KB，避免长会话全量读入内存；文件小于窗口时结果与全量读等价 --*/
+const TELEMETRY_TAIL_BYTES = 256 * 1024
 
 export async function getRuntimeTelemetrySnapshot(
   request: RuntimeTelemetryRequest,
@@ -253,11 +255,21 @@ async function listJsonlFilesRecursive(
 }
 
 async function readJsonlLines(filePath: string): Promise<string[]> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
-    const content = await readFile(filePath, 'utf-8')
-    return content.split(/\r?\n/).filter(Boolean)
+    handle = await open(filePath, 'r')
+    const { size } = await handle.stat()
+    const start = Math.max(0, size - TELEMETRY_TAIL_BYTES)
+    const buffer = Buffer.allocUnsafe(size - start)
+    await handle.read(buffer, 0, buffer.length, start)
+    const lines = buffer.toString('utf-8').split(/\r?\n/)
+    // 从文件中部起读时，首行可能被截断，丢弃它；从头读（start===0）时保留全部
+    if (start > 0) lines.shift()
+    return lines.filter(Boolean)
   } catch {
     return []
+  } finally {
+    await handle?.close()
   }
 }
 
