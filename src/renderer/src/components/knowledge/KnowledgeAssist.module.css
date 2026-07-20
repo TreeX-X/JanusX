@@ -1,11 +1,13 @@
 .root { min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; color: var(--text); font-size: 11px; }
-.searchForm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; padding: 8px; border-bottom: 1px solid var(--border); }
+.searchForm { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px; padding: 8px; border-bottom: 1px solid var(--border); }
 .searchInput { min-width: 0; height: 28px; padding: 0 8px; color: #d4d4d4; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 4px; outline: none; font: inherit; }
 .searchInput:focus { border-color: rgba(255,120,48,.4); background: rgba(255,255,255,.05); }
 .searchInput:disabled { opacity: .55; }
 .searchButton,.copyButton { border: 1px solid rgba(255,120,48,.28); border-radius: 4px; color: var(--primary); background: rgba(255,120,48,.09); font: inherit; }
 .searchButton { height: 28px; padding: 0 8px; }
 .searchButton:disabled,.copyButton:disabled { color: var(--text-dim); background: transparent; border-color: var(--border); cursor: default; }
+.workbenchLink { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; color: var(--text-dim); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 4px; cursor: pointer; }
+.workbenchLink:hover { color: var(--primary); border-color: rgba(255,120,48,.4); }
 .body { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #444 transparent; }
 .state { display: flex; min-height: 120px; padding: 18px 12px; flex-direction: column; justify-content: center; gap: 5px; color: var(--text-dim); text-align: center; }
 .state strong { color: var(--text-secondary); font-weight: 500; }
