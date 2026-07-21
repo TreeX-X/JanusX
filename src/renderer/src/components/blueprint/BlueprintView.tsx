@@ -57,9 +57,11 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
   const createBlueprint = useBlueprintStore((s) => s.createBlueprint)
   const deleteBlueprint = useBlueprintStore((s) => s.deleteBlueprint)
+  const renameBlueprint = useBlueprintStore((s) => s.renameBlueprint)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [analysisNotice, setAnalysisNotice] = useState<IslandAnalysisEvent | null>(null)
   const [discoveredNotice, setDiscoveredNotice] = useState<IslandDiscoveredEvent | null>(null)
@@ -202,6 +204,19 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
     setDeleteTarget({ id: selectedId, name: target?.name ?? selectedId })
   }
 
+  const handleRename = () => {
+    if (!selectedId) return
+    setRenameDialogOpen(true)
+  }
+
+  const handleRenameConfirm = async (name: string) => {
+    const id = selectedId
+    setRenameDialogOpen(false)
+    if (!id) return
+    const ok = await renameBlueprint(id, name)
+    if (ok) loadBlueprint(id)
+  }
+
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return
     const deleted = await deleteBlueprint(deleteTarget.id)
@@ -297,6 +312,9 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
             getPortalContainer={getSelectPortalContainer}
           />
           <button className="blueprint-btn blueprint-btn--primary" onClick={handleCreate}>+ 新建</button>
+          <button className="blueprint-btn" onClick={handleRename} disabled={!selectedId}>
+            重命名
+          </button>
           <button className="blueprint-btn blueprint-btn--danger" onClick={handleDelete} disabled={!selectedId}>
             删除
           </button>
@@ -471,6 +489,16 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         defaultValue={`蓝图-${new Date().toLocaleDateString()}`}
         onConfirm={handleCreateConfirm}
         onCancel={() => setCreateDialogOpen(false)}
+      />
+      <PromptDialog
+        open={renameDialogOpen}
+        title="重命名蓝图"
+        label="蓝图名称"
+        placeholder="输入蓝图名称"
+        defaultValue={blueprints.find((b) => b.id === selectedId)?.name ?? ''}
+        validate={(v) => (v.trim() ? null : '名称不能为空')}
+        onConfirm={(value) => void handleRenameConfirm(value)}
+        onCancel={() => setRenameDialogOpen(false)}
       />
       <PromptDialog
         open={deleteTarget !== null}

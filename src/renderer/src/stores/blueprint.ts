@@ -12,6 +12,7 @@ import {
   loadBlueprint,
   createBlueprint as createBlueprintIPC,
   deleteBlueprint as deleteBlueprintIPC,
+  updateBlueprint as updateBlueprintIPC,
   updateNode as updateNodeIPC,
   deleteNode as deleteNodeIPC,
   focusNode as focusNodeIPC,
@@ -50,6 +51,8 @@ interface BlueprintStore {
   createBlueprint: (input: BlueprintCreateInput) => Promise<Blueprint | null>
   /** 删除蓝图，成功后从列表和当前视图移除 */
   deleteBlueprint: (id: string) => Promise<boolean>
+  /** 重命名顶层蓝图，成功后同步 blueprints 列表与 currentBlueprint */
+  renameBlueprint: (id: string, name: string) => Promise<boolean>
   /** 激活节点协作会话，不创建终端，不注入上下文 */
   focusNode: (input: {
     blueprintId: string
@@ -147,6 +150,31 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
           loading: false
         }
       })
+      return true
+    } catch (err: unknown) {
+      set({
+        error: err instanceof Error ? err.message : String(err),
+        loading: false
+      })
+      return false
+    }
+  },
+
+  renameBlueprint: async (id, name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return false
+    set({ loading: true, error: null })
+    try {
+      const bp = await updateBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, id, { name: trimmed })
+      if (!bp) {
+        set({ loading: false })
+        return false
+      }
+      set((s) => ({
+        blueprints: s.blueprints.map((item) => (item.id === id ? bp : item)),
+        currentBlueprint: s.currentBlueprint?.id === id ? bp : s.currentBlueprint,
+        loading: false
+      }))
       return true
     } catch (err: unknown) {
       set({
