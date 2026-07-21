@@ -113,7 +113,7 @@ describe('AppShutdown', () => {
     expect(appExit).toHaveBeenCalledTimes(1)
   })
 
-  it('destroys toast/editor early and finalizes checkpoints before killing terminals', async () => {
+  it('destroys toast/editor early and kills terminals before finalizing checkpoints', async () => {
     const order: string[] = []
     const track = (name: string) => vi.fn(() => {
       order.push(name)
@@ -144,8 +144,10 @@ describe('AppShutdown', () => {
 
     expect(order.indexOf('destroyToast')).toBeLessThan(order.indexOf('abortChatStreams'))
     expect(order.indexOf('closeEditors')).toBeLessThan(order.indexOf('abortChatStreams'))
-    expect(order.indexOf('finalizePendingCheckpoints')).toBeLessThan(order.indexOf('killTerminals'))
-    expect(order.indexOf('stopOfficeWatches')).toBeLessThan(order.indexOf('killTerminals'))
+    // AC9: kill terminals before finalizing checkpoints so no native pty
+    // callback can fire sendToRenderer into a torn-down window during finalize.
+    expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('finalizePendingCheckpoints'))
+    expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('stopOfficeWatches'))
     expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('disposeOfficeArtifactIndexes'))
     expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('disposeTerminalSession'))
   })

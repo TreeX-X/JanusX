@@ -45,6 +45,9 @@ interface TerminalCpState {
   engine: CheckpointEngine
   initialized: boolean         // whether checkpointManager.initialize() succeeded
   creating: boolean
+  // AC6: per-id creation lock. True while a terminal:create for this id is
+  // in flight; concurrent create requests with the same id are rejected.
+  creationLocked: boolean
   pendingSubmitTexts: string[]
   // Output-flow heuristic for AI CLI display status (engine !== 'shell').
   // flowStatus mirrors the last status pushed to the renderer so we only
@@ -90,7 +93,14 @@ export async function finalizePendingTerminalCheckpoints(): Promise<void> {
 
 function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
-  mainWindow.webContents.send(channel, payload)
+  try {
+    mainWindow.webContents.send(channel, payload)
+  } catch (err) {
+    // AC2: webContents.send can throw synchronously when the window is torn down
+    // between the liveness check and the send (TOCTOU). Swallow so a native
+    // pty callback cannot crash the main process.
+    console.error(`[terminal] sendToRenderer(${channel}) failed:`, err)
+  }
 }
 
 function normalizeSubmittedPrompt(text: string): string {
@@ -258,8 +268,17 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   mainWindow.on('closed', () => {
     if (appShutdown.isQuitting) return
     // Non-darwin: index mainWindow.closed triggers app.quit -> AppShutdown.
-    // Keep terminal state until finalizePendingCheckpoints runs there.
-    if (process.platform !== 'darwin') return
+    // AC8: synchronously kill all ptys first so no native pty callback can
+    // reach a destroyed webContents during the finalize window. Final state
+    // cleanup still runs in AppShutdown.
+    if (process.platform !== 'darwin') {
+      try {
+        terminalManager.killAll()
+      } catch (err) {
+        console.error('[terminal] killAll on window close failed:', err)
+      }
+      return
+    }
 
     // Darwin keeps the app process alive after the last window closes.
     void finalizePendingTerminalCheckpoints()
@@ -303,6 +322,61 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
     const engine: CheckpointEngine =
       isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
+
+    // AC6: per-id creation lock. Concurrent terminal:create with the same id
+    // (e.g. double-click preset, retry during launch) is rejected so the
+    // second caller does not race checkpointManager.initialize on the same
+    // cwd or collide with the first pty spawn (Vector B/F).
+    const priorState = terminalStates.get(id)
+    if (priorState?.creationLocked) {
+      const existingInstance = terminalManager.getInstance(id)
+      if (existingInstance) return { pid: existingInstance.pty.pid }
+      throw new Error(`Terminal ${id} is already being created`)
+    }
+
+    // AC5: replacing an existing terminal with the same id. Tear down the
+    // old pty and clear stale flow timer / run registry so the old onExit
+    // callback cannot kill the new pty and the old flowTimer cannot push
+    // status events into the new terminal (Vector A/D/E).
+    if (priorState) {
+      if (priorState.flowTimer) {
+        clearTimeout(priorState.flowTimer)
+        priorState.flowTimer = null
+      }
+      if (priorState.engine && priorState.engine !== 'shell') {
+        try {
+          subAgentRunRegistry.finishRun(
+            `terminal:${id}`,
+            'cancelled',
+            'Replaced by new terminal with same id',
+          )
+        } catch (err) {
+          console.error(`[terminal] finishRun on replace failed for ${id}:`, err)
+        }
+      }
+    }
+    try {
+      terminalManager.kill(id)
+    } catch (err) {
+      console.error(`[terminal] kill-on-replace failed for ${id}:`, err)
+    }
+
+    // Pre-stub a locked state so concurrent callers see the lock immediately.
+    // This is replaced by the full state below once the pty is spawned.
+    terminalStates.set(id, {
+      checkpointId: null,
+      cwd,
+      workspaceId,
+      engine,
+      initialized: false,
+      creating: false,
+      creationLocked: true,
+      pendingSubmitTexts: [],
+      flowStatus: 'wait',
+      flowTimer: null,
+      lastDataAt: 0,
+    })
+
     const launchProgram = resolveTerminalLaunchProgram(
       isTerminalPreset(preset) ? preset : { command, args },
     )
@@ -357,7 +431,18 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       }
     })()
 
-    const officePromise = resolveOfficecliLaunchAssets()
+    // I-1 [P1] AC6: resolveOfficecliLaunchAssets() can reject when
+    // officecliManager.resolveBinary() -> detect() -> run() fails (no
+    // internal catch; see line 251's own .catch(() => undefined) proof).
+    // Without this guard, Promise.all below rejects between the pre-stub
+    // set (creationLocked: true) and the inner try that would release it,
+    // leaking the lock and permanently deadlocking same-id creates.
+    // Mirror the resolveProgramPromise/hookEnvPromise internal guard so
+    // all three legs of Promise.all are non-rejecting.
+    const officePromise = resolveOfficecliLaunchAssets().catch(() => ({
+      pathDir: undefined as string | undefined,
+      binaryPath: undefined as string | undefined,
+    }))
 
     const [resolvedProgram, hookEnvBase, office] = await Promise.all([
       resolveProgramPromise,
@@ -409,6 +494,8 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       })
+      // Release the creation lock stub so a later retry is not blocked.
+      terminalStates.delete(id)
       throw err
     }
 
@@ -457,78 +544,134 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       engine,
       initialized: false,
       creating: false,
+      creationLocked: false,
       pendingSubmitTexts: [],
       flowStatus: 'wait',
       flowTimer: null,
       lastDataAt: 0,
     })
 
+    // AC5/AC6: capture the pid of the pty we are about to register callbacks
+    // on. If this terminal is later replaced by a new pty with the same id
+    // (AC5 cleanup path), the old pty's native onData/onExit callbacks can
+    // still fire asynchronously and would otherwise mutate the new terminal's
+    // state (Vector A/E). The guard skips stale callbacks whose pty no longer
+    // matches the current instance for this id.
+    const registeredPid = instance.pty.pid
+
     // PTY output: keep a bounded replay buffer so remounted terminals can recover
     // after workspace switches, then forward live data to the renderer.
     instance.pty.onData((data: string) => {
-      const seq = terminalManager.appendOutput(id, data)
-      // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
-      if (seq === null) return
-      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.data, { id, data, seq })
+      // AC3: isolate native pty callback exceptions so a single terminal's
+      // failure cannot crash the main process or other terminals.
+      try {
+        // AC5: skip stale callbacks from a replaced pty.
+        const current = terminalManager.getInstance(id)
+        if (current && current.pty.pid !== registeredPid) return
 
-      // AI CLI output-flow heuristic: emit running on first chunk of a burst,
-      // debounce back to wait after IDLE_MS of silence. Shell terminals opt out
-      // entirely and never receive a status event from this path.
-      if (engine !== 'shell') {
-        const st = terminalStates.get(id)
-        if (st) {
-          const now = Date.now()
-          if (st.flowStatus !== 'running') {
-            st.flowStatus = 'running'
-            sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
+        const seq = terminalManager.appendOutput(id, data)
+        // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
+        if (seq === null) return
+        sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.data, { id, data, seq })
+
+        // AI CLI output-flow heuristic: emit running on first chunk of a burst,
+        // debounce back to wait after IDLE_MS of silence. Shell terminals opt out
+        // entirely and never receive a status event from this path.
+        if (engine !== 'shell') {
+          const st = terminalStates.get(id)
+          if (st) {
+            const now = Date.now()
+            if (st.flowStatus !== 'running') {
+              st.flowStatus = 'running'
+              sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
+            }
+            st.lastDataAt = now
+            if (st.flowTimer) clearTimeout(st.flowTimer)
+            st.flowTimer = setTimeout(() => {
+              try {
+                const current = terminalStates.get(id)
+                if (!current) return
+                current.flowStatus = 'wait'
+                current.flowTimer = null
+                sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
+              } catch (timerErr) {
+                console.error(`[terminal ${id}] flow timer error:`, timerErr)
+              }
+            }, TERMINAL_FLOW_IDLE_MS)
           }
-          st.lastDataAt = now
-          if (st.flowTimer) clearTimeout(st.flowTimer)
-          st.flowTimer = setTimeout(() => {
-            const current = terminalStates.get(id)
-            if (!current) return
-            current.flowStatus = 'wait'
-            current.flowTimer = null
-            sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
-          }, TERMINAL_FLOW_IDLE_MS)
         }
+      } catch (err) {
+        console.error(`[terminal ${id}] onData error:`, err)
       }
     })
 
     // Terminal exit: finalize any pending checkpoint.
     instance.pty.onExit(({ exitCode }: { exitCode: number }) => {
-      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.exit, { id, exitCode })
-      terminalManager.kill(id)
+      // AC3: isolate onExit callback exceptions; a throw here must not crash
+      // the main process or leave the terminal in a half-cleaned state.
+      try {
+        // AC5: if this onExit is from a replaced pty (a new pty with the same
+        // id now lives in the manager), skip all cleanup — the new terminal
+        // owns the state now. A missing instance means the pty was killed
+        // without replacement (user close / shutdown), so cleanup proceeds.
+        const current = terminalManager.getInstance(id)
+        if (current && current.pty.pid !== registeredPid) return
 
-      const state = terminalStates.get(id)
-      if (state?.flowTimer) {
-        clearTimeout(state.flowTimer)
-        state.flowTimer = null
+        // I-3 [P2] AC5: a replacement create is in flight (pre-stub locked).
+        // The old pty's onExit was scheduled asynchronously by the AC5
+        // kill-old step and can fire during the new create's `await
+        // Promise.all` window, after the pre-stub state has been set but
+        // before the new pty is spawned (getInstance is undefined in this
+        // gap, so the registeredPid guard above does not return). Skip
+        // cleanup so the new create's pre-stub state (incl. creationLocked)
+        // is not deleted out from under it — otherwise AC6's lock is
+        // dropped early and a concurrent same-id create can race
+        // checkpointManager.initialize (Vector B/F). This also subsumes
+        // the I-4 double-finishRun noise: the early return skips the
+        // stale finishRun call entirely.
+        const state0 = terminalStates.get(id)
+        if (state0?.creationLocked) return
+
+        sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.exit, { id, exitCode })
+        terminalManager.kill(id)
+
+        const state = terminalStates.get(id)
+        if (state?.flowTimer) {
+          clearTimeout(state.flowTimer)
+          state.flowTimer = null
+        }
+        if (state?.engine && state.engine !== 'shell') {
+          subAgentRunRegistry.finishRun(
+            `terminal:${id}`,
+            exitCode === 0 ? 'done' : 'failed',
+            exitCode === 0 ? 'Terminal completed' : `Terminal exited with code ${exitCode}`
+          )
+        }
+        if (state?.checkpointId) {
+          const cpId = state.checkpointId
+          checkpointManager.finalizeCheckpoint(cpId, state.cwd).then(() => {
+            sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
+              type: 'finalized',
+              checkpointId: cpId,
+            })
+          }).catch(err => console.error('Checkpoint finalize failed:', err))
+        }
+        // Janus Analyzer runs only for AI CLI terminals.
+        if (state && state.engine !== 'shell') {
+          analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
+        }
+        terminalStates.delete(id)
+        companionSessionState.unregisterTerminal(id)
+        hookCoordinator.unregisterTerminal(id)
+        agentTurnRecorder.unregisterTerminal(id)
+      } catch (err) {
+        console.error(`[terminal ${id}] onExit error:`, err)
+        // Best-effort cleanup so a partial failure does not leak state.
+        try { terminalStates.delete(id) } catch {}
+        try { companionSessionState.unregisterTerminal(id) } catch {}
+        try { hookCoordinator.unregisterTerminal(id) } catch {}
+        try { agentTurnRecorder.unregisterTerminal(id) } catch {}
       }
-      if (state?.engine && state.engine !== 'shell') {
-        subAgentRunRegistry.finishRun(
-          `terminal:${id}`,
-          exitCode === 0 ? 'done' : 'failed',
-          exitCode === 0 ? 'Terminal completed' : `Terminal exited with code ${exitCode}`
-        )
-      }
-      if (state?.checkpointId) {
-        const cpId = state.checkpointId
-        checkpointManager.finalizeCheckpoint(cpId, state.cwd).then(() => {
-          sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
-            type: 'finalized',
-            checkpointId: cpId,
-          })
-        }).catch(err => console.error('Checkpoint finalize failed:', err))
-      }
-      // Janus Analyzer runs only for AI CLI terminals.
-      if (state && state.engine !== 'shell') {
-        analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
-      }
-      terminalStates.delete(id)
-      companionSessionState.unregisterTerminal(id)
-      hookCoordinator.unregisterTerminal(id)
-      agentTurnRecorder.unregisterTerminal(id)
     })
 
     checkpointManager.initialize(cwd).then(() => {

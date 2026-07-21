@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, crashReporter } from 'electron'
 import { isAgentHookClientInvocation, runAgentHookClient } from './notifications/agent-hook-client'
 import { configureApplicationProfile, configureChromiumSessionPaths } from './bootstrap/session'
 
@@ -7,6 +7,67 @@ const isHookClient = isAgentHookClientInvocation()
 configureApplicationProfile(isHookClient)
 configureChromiumSessionPaths(isHookClient)
 
+// AC1 / AC4: process-level exception fences.
+// - Fatal exceptions during bootstrap (before app services are up) exit the
+//   process so initialization failures are not masked.
+// - Recoverable exceptions from pty/terminal/IPC callbacks (post-bootstrap) are
+//   logged and swallowed so a single terminal failure cannot crash the whole
+//   Electron process.
+// - A burst of recoverable exceptions in a short window is treated as a
+//   runaway main process and triggers app.relaunch() + app.exit() (AC4).
+let bootstrapComplete = false
+let recoverableBurst = 0
+let burstResetTimer: ReturnType<typeof setTimeout> | null = null
+const FATAL_BURST_THRESHOLD = 20
+const FATAL_BURST_WINDOW_MS = 5000
+
+function triggerFatalRelaunch(reason: string): void {
+  console.error(`[main] fatal relaunch triggered: ${reason}`)
+  try {
+    if (app.isReady()) app.relaunch()
+  } catch (err) {
+    console.error('[main] app.relaunch failed:', err)
+  }
+  try {
+    app.exit(1)
+  } catch {
+    process.exit(1)
+  }
+}
+
+function handleRecoverableBurst(): void {
+  recoverableBurst += 1
+  if (burstResetTimer) clearTimeout(burstResetTimer)
+  burstResetTimer = setTimeout(() => {
+    recoverableBurst = 0
+    burstResetTimer = null
+  }, FATAL_BURST_WINDOW_MS)
+  burstResetTimer.unref?.()
+  if (recoverableBurst > FATAL_BURST_THRESHOLD) {
+    triggerFatalRelaunch(`exception burst ${recoverableBurst} in ${FATAL_BURST_WINDOW_MS}ms`)
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaughtException:', err)
+  if (!bootstrapComplete) {
+    // Fatal: bootstrap stage. Allow exit so failure is visible.
+    process.exit(1)
+    return
+  }
+  // Recoverable: swallow, but track burst to detect runaway main process.
+  handleRecoverableBurst()
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] unhandledRejection:', reason)
+  if (!bootstrapComplete) {
+    process.exit(1)
+    return
+  }
+  handleRecoverableBurst()
+})
+
 if (isHookClient) {
   void runAgentHookClient()
     .catch(() => {})
@@ -14,7 +75,12 @@ if (isHookClient) {
       process.exit(0)
     })
 } else {
-  void bootstrapApp()
+  void bootstrapApp().then(() => {
+    bootstrapComplete = true
+  }).catch((err) => {
+    console.error('[main] bootstrapApp failed:', err)
+    if (!bootstrapComplete) process.exit(1)
+  })
 }
 
 async function bootstrapApp(): Promise<void> {
@@ -106,38 +172,52 @@ async function bootstrapApp(): Promise<void> {
 
   if (!hasSingleInstanceLock) {
     app.quit()
-  } else {
-    app.on('second-instance', () => {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        if (app.isReady()) createWindow()
-        return
-      }
-
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-    })
-
-    app.whenReady().then(async () => {
-      officecliManager.configureManagedBinaryPath(await officecliInstaller.getManagedBinary())
-      await initializeOfficecliProvider()
-      createWindow()
-
-      app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow()
-      })
-    })
-
-    app.on('window-all-closed', () => {
-      // Keep macOS app alive until explicit quit; other platforms exit.
-      if (process.platform === 'darwin') return
-      if (appShutdown.isQuitting) return
-      app.quit()
-    })
-
-    app.on('before-quit', (event) => {
-      if (appShutdown.isQuitting) return
-      event.preventDefault()
-      void appShutdown.beginQuit({ reason: 'before-quit' })
-    })
+    return
   }
+
+  app.on('second-instance', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      if (app.isReady()) createWindow()
+      return
+    }
+
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  })
+
+  app.on('window-all-closed', () => {
+    // Keep macOS app alive until explicit quit; other platforms exit.
+    if (process.platform === 'darwin') return
+    if (appShutdown.isQuitting) return
+    app.quit()
+  })
+
+  app.on('before-quit', (event) => {
+    if (appShutdown.isQuitting) return
+    event.preventDefault()
+    void appShutdown.beginQuit({ reason: 'before-quit' })
+  })
+
+  // I-2 [P2] AC1: await app.whenReady() inside bootstrapApp's async flow so
+  // createWindow() runs before bootstrapApp resolves. A throw from
+  // createMainWindow / registerApplicationIpc / registerWindowIpc inside
+  // createWindow rejects bootstrapApp, which the outer .catch turns into
+  // process.exit(1) — failure is visible, not masked by bootstrapComplete
+  // already being true. bootstrapComplete is set by the outer .then only
+  // after bootstrapApp resolves, i.e. only after createWindow succeeded.
+  await app.whenReady()
+  // AC4: local-only crash dump; never uploads. Relaunch path is handled
+  // by triggerFatalRelaunch on runaway exception bursts.
+  try {
+    crashReporter.start({ submitURL: '', uploadToServer: false })
+  } catch (err) {
+    console.error('[main] crashReporter.start failed:', err)
+  }
+  officecliManager.configureManagedBinaryPath(await officecliInstaller.getManagedBinary())
+  await initializeOfficecliProvider()
+  createWindow()
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
 }

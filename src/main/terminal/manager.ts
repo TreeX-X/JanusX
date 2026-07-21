@@ -150,6 +150,20 @@ export class TerminalManager {
     const cols = Math.max(2, Math.floor(config.cols ?? DEFAULT_COLS))
     const rows = Math.max(1, Math.floor(config.rows ?? DEFAULT_ROWS))
 
+    // AC5: if a previous instance with the same id still lives, kill it before
+    // spawning the replacement so the old onExit callback cannot target the
+    // new pty and the old pty does not leak (Vector A/E).
+    const existing = this.instances.get(config.id)
+    if (existing) {
+      try {
+        existing.pty.kill()
+      } catch {
+        // old pty may already be dead; ignore
+      }
+      this.killProcessTree(existing.pty.pid)
+      this.instances.delete(config.id)
+    }
+
     const pty = this.spawnPty(file, args, { ...config, shell, cols, rows }, officecliPathDir)
 
     const instance: TerminalInstance = {

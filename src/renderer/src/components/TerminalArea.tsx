@@ -914,6 +914,10 @@ export function TerminalArea() {
   const activeDragTerminalRef = useRef<string | null>(null)
   const [activeDragBrowserSurfaceId, setActiveDragBrowserSurfaceId] = useState<string | null>(null)
   const activeDragBrowserSurfaceRef = useRef<string | null>(null)
+  // AC7: launching guard for handlePresetSelect, mirroring TerminalSelector's
+  // launchingPreset pattern. Prevents double-click / rapid preset selection
+  // from firing two concurrent terminal:create requests for the same preset.
+  const [launchingPreset, setLaunchingPreset] = useState(false)
 
   const terminalsById = useMemo(() => {
     const map = new Map<string, Terminal>()
@@ -1061,18 +1065,25 @@ export function TerminalArea() {
     async (preset: typeof PRESETS[number]) => {
       closeTerminalMenu()
       if (!activeWorkspaceId) return
+      // AC7: reject concurrent preset launches (double-click, rapid reselect).
+      if (launchingPreset) return
 
       const workspace = useWorkspaceStore.getState().workspaces.find((w) => w.id === activeWorkspaceId)
       if (!workspace) return
 
-      await launchTerminalPreset({
-        preset: preset.type,
-        workspaceId: activeWorkspaceId,
-        workspacePath: workspace.path,
-        name: preset.name.toLowerCase(),
-      })
+      setLaunchingPreset(true)
+      try {
+        await launchTerminalPreset({
+          preset: preset.type,
+          workspaceId: activeWorkspaceId,
+          workspacePath: workspace.path,
+          name: preset.name.toLowerCase(),
+        })
+      } finally {
+        setLaunchingPreset(false)
+      }
     },
-    [activeWorkspaceId, closeTerminalMenu]
+    [activeWorkspaceId, closeTerminalMenu, launchingPreset]
   )
 
   useEffect(() => {

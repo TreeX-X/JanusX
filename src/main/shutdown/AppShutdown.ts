@@ -85,7 +85,10 @@ export class AppShutdown {
   private async runSteps(): Promise<void> {
     // Order matters:
     // 1) kill keep-alive windows first (toast/editor)
-    // 2) finalize pending checkpoints before killing terminals/session state
+    // 2) AC9: kill terminals BEFORE finalizing pending checkpoints so no native
+    //    pty callback can fire sendToRenderer into a torn-down window during
+    //    the finalize window. finalizeCheckpoint only touches workspace files
+    //    and does not require a live pty.
     const ordered: Array<[keyof AppShutdownDeps, ShutdownStep | undefined]> = [
       ['destroyToast', this.deps.destroyToast],
       ['closeEditors', this.deps.closeEditors],
@@ -94,9 +97,9 @@ export class AppShutdown {
       ['cancelAnalyzer', this.deps.cancelAnalyzer],
       ['stopHookBridge', this.deps.stopHookBridge],
       ['stopCompanion', this.deps.stopCompanion],
+      ['killTerminals', this.deps.killTerminals],
       ['finalizePendingCheckpoints', this.deps.finalizePendingCheckpoints],
       ['stopOfficeWatches', this.deps.stopOfficeWatches],
-      ['killTerminals', this.deps.killTerminals],
       ['killAgents', this.deps.killAgents],
       ['stopProjects', this.deps.stopProjects],
       ['disposeOfficeArtifactIndexes', this.deps.disposeOfficeArtifactIndexes],

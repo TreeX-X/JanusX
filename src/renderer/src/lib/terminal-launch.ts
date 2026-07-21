@@ -205,7 +205,21 @@ export async function launchTerminalPreset(
 }
 
 /** Retry creation for a failed/starting terminal without leaving the pane. */
+// AC7: per-id debounce set. Prevents concurrent retryTerminalCreate calls for
+// the same terminalId from racing terminal:create with an identical id.
+const retryingTerminalIds = new Set<string>()
+
 export async function retryTerminalCreate(terminalId: string): Promise<boolean> {
+  if (retryingTerminalIds.has(terminalId)) return false
+  retryingTerminalIds.add(terminalId)
+  try {
+    return await runRetryTerminalCreate(terminalId)
+  } finally {
+    retryingTerminalIds.delete(terminalId)
+  }
+}
+
+async function runRetryTerminalCreate(terminalId: string): Promise<boolean> {
   const terminal = useWorkspaceStore.getState().terminals.find((item) => item.id === terminalId)
   if (!terminal) return false
 

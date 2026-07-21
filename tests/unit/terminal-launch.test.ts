@@ -114,7 +114,7 @@ describe('terminal-launch', () => {
     expect(warmup).toHaveBeenCalledWith({ engines: ['claude'] })
   })
 
-  it('launches optimistically with starting status before create resolves', async () => {
+  it('launches optimistically with wait status before create resolves', async () => {
     const getDefaultShell = window.electron.system.getDefaultShell as ReturnType<typeof vi.fn>
     const create = window.electron.terminal.create as ReturnType<typeof vi.fn>
     let resolveCreate: ((value: { pid: number }) => void) | null = null
@@ -142,7 +142,7 @@ describe('terminal-launch', () => {
     })
 
     const terminal = addTerminal.mock.calls[0][0]
-    expect(terminal.status).toBe('starting')
+    expect(terminal.status).toBe('wait')
     expect(terminal.preset).toBe('claude')
     expect(terminal.shell).toBe('powershell.exe')
     expect(setBlueprintMode).toHaveBeenCalledWith(false)
@@ -175,7 +175,7 @@ describe('terminal-launch', () => {
 
     expect(updateTerminal).toHaveBeenCalledWith(
       terminal.id,
-      expect.objectContaining({ pid: 4242, status: 'running' }),
+      expect.objectContaining({ pid: 4242, status: 'wait' }),
     )
     expect(requestTerminalForceFit).toHaveBeenCalledWith(terminal.id)
   })
