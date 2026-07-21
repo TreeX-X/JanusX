@@ -43,6 +43,7 @@ import { BlueprintNodeCard, type BlueprintNodeData } from './BlueprintNodeCard'
 import { STATUS_VISUALS, STATUS_ORDER, NODE_TYPE_LABEL } from './blueprintStatus'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
+import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
 import { launchTerminalPreset } from '@/lib/terminal-launch'
 import { deriveBlueprintFlow } from '@/features/blueprint/canvas-layout'
@@ -269,6 +270,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
+
+  // 工作台开启时由 BlueprintWorkbench 通过 Context 注入专属承载层节点；
+  // embedded 模式下为 null，Select 回退到 document.body，行为不变。
+  const selectPortal = useBlueprintSelectPortal()
+  const getSelectPortalContainer = selectPortal ? () => selectPortal : undefined
 
   const [rfNodes, setRFNodes] = useState<Node<BlueprintNodeData, 'blueprint'>[]>([])
   const [rfEdges, setRFEdges] = useState<Edge[]>([])
@@ -839,6 +845,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                 onChange={(value) => setStatusFilter(value as StatusFilter)}
                 options={statusFilterOptions}
                 className="blueprint-select blueprint-select--status-filter"
+                getPortalContainer={getSelectPortalContainer}
               />
               {focusActive ? (
                 <span className="blueprint-toolbar__match-count">{focusedNodeCount} 个匹配</span>
@@ -1043,6 +1050,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                 options={NODE_TYPE_ORDER.map((type) => ({ value: type, label: NODE_TYPE_LABEL[type] ?? type }))}
                 className="blueprint-select bp-node-detail__select"
                 dropdownClassName="bp-node-detail__dropdown"
+                getPortalContainer={getSelectPortalContainer}
               />
             </div>
             <div className="bp-node-detail__section">
@@ -1058,6 +1066,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                 options={STATUS_ORDER.map((status) => ({ value: status, label: STATUS_VISUALS[status].label }))}
                 className="blueprint-select bp-node-detail__select"
                 dropdownClassName="bp-node-detail__dropdown"
+                getPortalContainer={getSelectPortalContainer}
               />
             </div>
           </div>
@@ -1185,12 +1194,14 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                       onChange={(value) => updateIssue(detailNode, issue.id, { severity: value as BlueprintIssueSeverity })}
                       options={ISSUE_SEVERITY_VALUES.map((severity) => ({ value: severity, label: ISSUE_SEVERITY_LABEL[severity] }))}
                       className="blueprint-select bp-node-detail__select"
+                      getPortalContainer={getSelectPortalContainer}
                     />
                     <Select
                       value={issue.status}
                       onChange={(value) => updateIssue(detailNode, issue.id, { status: value as BlueprintIssueStatus })}
                       options={ISSUE_STATUS_VALUES.map((status) => ({ value: status, label: ISSUE_STATUS_LABEL[status] }))}
                       className="blueprint-select bp-node-detail__select"
+                      getPortalContainer={getSelectPortalContainer}
                     />
                   </div>
                   <input
@@ -1217,6 +1228,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               ]}
               className="blueprint-select bp-node-detail__select"
               dropdownClassName="bp-node-detail__dropdown"
+              getPortalContainer={getSelectPortalContainer}
             />
           </div>
 
@@ -1229,6 +1241,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               disabled={currentBlueprint?.rootNodeId === detailNode.id}
               className="blueprint-select bp-node-detail__select"
               dropdownClassName="bp-node-detail__dropdown"
+              getPortalContainer={getSelectPortalContainer}
             />
           </div>
 
@@ -1240,6 +1253,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               options={TERMINAL_PRESETS.map((preset) => ({ value: preset.type, label: preset.label }))}
               className="blueprint-select bp-node-detail__select"
               dropdownClassName="bp-node-detail__dropdown"
+              getPortalContainer={getSelectPortalContainer}
             />
           </div>
 

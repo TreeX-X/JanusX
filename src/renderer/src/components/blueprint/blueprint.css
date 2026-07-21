@@ -1427,6 +1427,21 @@
   backdrop-filter: blur(20px);
 }
 
+/* 工作台专属下拉承载层：z-index 12001 恰好高于遮罩 12000，
+   让 Select 浮层进入比遮罩更高的层叠上下文。
+   零尺寸 + overflow visible：不拦截点击、不裁切下拉。
+   pointer-events: none 双重保险；子节点 .dropdown 默认 auto 仍可点击。 */
+.blueprint-select-portal-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  z-index: 12001;
+  pointer-events: none;
+}
+
 .blueprint-workbench-shell {
   width: min(1380px, calc(100vw - 80px));
   height: min(840px, calc(100vh - 80px));

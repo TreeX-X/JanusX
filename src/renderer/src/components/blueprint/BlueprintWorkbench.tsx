@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { BlueprintView } from './BlueprintView'
+import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
 import './blueprint.css'
 
 interface BlueprintWorkbenchProps {
@@ -13,6 +14,10 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const blueprints = useBlueprintStore((s) => s.blueprints)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const activeSession = useBlueprintStore((s) => s.activeSession)
+  // 工作台专属下拉承载层：z-index 12001，恰好高于遮罩 12000；
+  // 零尺寸 + overflow visible，不拦截点击、不裁切子节点。
+  // Select 通过 getPortalContainer 把浮层挂进这里，进入比遮罩更高的层叠上下文。
+  const [selectPortalNode, setSelectPortalNode] = useState<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -34,8 +39,9 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
       : activeSession?.nodeSnapshot.title ?? ''
 
   return createPortal(
-    <div className="blueprint-workbench-backdrop">
-      <section className="blueprint-workbench-shell" aria-label="Blueprint Workbench">
+    <BlueprintSelectPortalContext.Provider value={selectPortalNode}>
+      <div className="blueprint-workbench-backdrop">
+        <section className="blueprint-workbench-shell" aria-label="Blueprint Workbench">
         <header className="blueprint-workbench-header">
           <div className="blueprint-workbench-header-left">
             <div className="blueprint-workbench-icon-badge" aria-hidden="true">B</div>
@@ -78,7 +84,16 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
           <BlueprintView density="workbench" />
         </div>
       </section>
-    </div>,
+    </div>
+      {createPortal(
+        <div
+          ref={setSelectPortalNode}
+          className="blueprint-select-portal-layer"
+          aria-hidden="true"
+        />,
+        document.body
+      )}
+    </BlueprintSelectPortalContext.Provider>,
     document.body,
   )
 }

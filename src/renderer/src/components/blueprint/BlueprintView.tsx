@@ -25,6 +25,7 @@ import { BlueprintCanvas } from './BlueprintCanvas'
 import { PromptDialog } from './PromptDialog'
 import { RefreshIconButton } from '../ui/RefreshIconButton'
 import { Select } from '../ui/Select'
+import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 
@@ -68,6 +69,11 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
   const [candidateLoading, setCandidateLoading] = useState(false)
   const [noticeError, setNoticeError] = useState<string | null>(null)
   const [inboxExpanded, setInboxExpanded] = useState(false)
+
+  // 工作台模式下由 BlueprintWorkbench 注入承载层；embedded 模式下为 null，
+  // Select 回退到 document.body，行为与引入 Context 之前一致。
+  const selectPortal = useBlueprintSelectPortal()
+  const getSelectPortalContainer = selectPortal ? () => selectPortal : undefined
 
   const loadCandidates = useCallback(
     async (
@@ -288,6 +294,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
                 : blueprints.map((b) => ({ value: b.id, label: b.name }))
             }
             className="blueprint-select blueprint-select--toolbar"
+            getPortalContainer={getSelectPortalContainer}
           />
           <button className="blueprint-btn blueprint-btn--primary" onClick={handleCreate}>+ 新建</button>
           <button className="blueprint-btn blueprint-btn--danger" onClick={handleDelete} disabled={!selectedId}>
@@ -354,6 +361,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
                 onChange={(value) => setCandidateStatus(value as BlueprintRequirementCandidateStatus)}
                 options={candidateStatusOptions}
                 className="blueprint-select bp-candidate-inbox__select"
+                getPortalContainer={getSelectPortalContainer}
               />
               <RefreshIconButton
                 accent="orange"
@@ -416,6 +424,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
                             options={candidateParentOptions}
                             disabled={!editable}
                             className="blueprint-select bp-candidate-card__parent"
+                            getPortalContainer={getSelectPortalContainer}
                           />
                           {editable ? (
                             <div className="bp-candidate-card__actions">
