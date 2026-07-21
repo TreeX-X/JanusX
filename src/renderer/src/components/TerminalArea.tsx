@@ -829,6 +829,7 @@ function LeafPane({
             >
               <CLITerminal
                 terminalId={terminal.id}
+                visible={isActive}
                 focused={isFocused && isActive}
               />
               {terminal.status === 'error' && (

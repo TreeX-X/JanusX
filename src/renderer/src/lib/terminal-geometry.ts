@@ -123,18 +123,6 @@ export function requestTerminalForceFit(id: string): void {
   forceFitHandlers.get(id)?.()
 }
 
-/** Burst of force-fits so TUI reflows after PTY spawn / resize. */
-export function requestTerminalForceFitBurst(
-  id: string,
-  delaysMs: number[] = [0, 50, 160, 320],
-): void {
-  for (const delay of delaysMs) {
-    setTimeout(() => {
-      forceFitHandlers.get(id)?.()
-    }, delay)
-  }
-}
-
 /** Test helper — not used by production call sites. */
 export function __resetTerminalGeometryForTests(): void {
   geometryById.clear()

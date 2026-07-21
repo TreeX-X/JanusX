@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   captureTerminalViewport,
-  createLatestTimeoutScheduler,
+  createTerminalRecoveryScheduler,
+  finalizeTerminalReplay,
   fitTerminalViewportAndSync,
   hasTerminalGeometryChanged,
+  recoverTerminalViewportAndSync,
   restoreTerminalViewport,
   type TerminalGeometrySize,
   type TerminalViewportController,
@@ -26,9 +28,6 @@ function createTerminal(
 }
 
 describe('terminal viewport resize', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
-
   it('keeps a normal buffer following the bottom after fit', () => {
     const terminal = createTerminal('normal', 120, 120)
     const snapshot = captureTerminalViewport(terminal)
@@ -84,54 +83,42 @@ describe('terminal viewport resize', () => {
     ])
   })
 
-  it('replaces a pending transition catch-up instead of accumulating timers', () => {
-    const scheduler = createLatestTimeoutScheduler()
+  it('coalesces repeated signals into the latest callback after two frames', () => {
+    const frames = new Map<number, FrameRequestCallback>()
+    let nextFrame = 0
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      frames.set(++nextFrame, callback)
+      return nextFrame
+    })
+    const scheduler = createTerminalRecoveryScheduler(requestFrame, (id) => frames.delete(id))
     const stale = vi.fn()
     const latest = vi.fn()
-    const stable = vi.fn()
 
-    scheduler.schedule('transition-catch-up', 220, stale)
-    scheduler.schedule('transition-catch-up', 220, latest)
-    scheduler.schedule('transition-stable', 420, stable)
+    scheduler.schedule(stale)
+    scheduler.schedule(latest)
+    expect(requestFrame).toHaveBeenCalledOnce()
+    frames.get(1)?.(0)
+    frames.delete(1)
+    expect(latest).not.toHaveBeenCalled()
+    frames.get(2)?.(16)
 
-    vi.advanceTimersByTime(220)
     expect(stale).not.toHaveBeenCalled()
     expect(latest).toHaveBeenCalledOnce()
-    expect(stable).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(200)
-    expect(stable).toHaveBeenCalledOnce()
-    scheduler.clear()
   })
 
-  it('clears every pending callback before teardown', () => {
-    const scheduler = createLatestTimeoutScheduler()
-    const mount = vi.fn()
-    const replay = vi.fn()
+  it('cancels a pending recovery before teardown', () => {
+    const frames = new Map<number, FrameRequestCallback>()
+    const callback = vi.fn()
+    const scheduler = createTerminalRecoveryScheduler(
+      (frame) => { frames.set(1, frame); return 1 },
+      (id) => frames.delete(id),
+    )
 
-    scheduler.schedule('mount:50', 50, mount)
-    scheduler.schedule('replay:120', 120, replay)
-    scheduler.clear()
-    vi.runAllTimers()
+    scheduler.schedule(callback)
+    scheduler.cancel()
+    frames.get(1)?.(0)
 
-    expect(mount).not.toHaveBeenCalled()
-    expect(replay).not.toHaveBeenCalled()
-  })
-
-  it('keeps distinct mount, replay, and transition timers independent', () => {
-    const scheduler = createLatestTimeoutScheduler()
-    const mount = vi.fn()
-    const replay = vi.fn()
-    const transition = vi.fn()
-
-    scheduler.schedule('mount:50', 50, mount)
-    scheduler.schedule('replay:120', 120, replay)
-    scheduler.schedule('transition:stable', 420, transition)
-    vi.runAllTimers()
-
-    expect(mount).toHaveBeenCalledOnce()
-    expect(replay).toHaveBeenCalledOnce()
-    expect(transition).toHaveBeenCalledOnce()
+    expect(callback).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -214,5 +201,62 @@ describe('terminal viewport resize', () => {
     runFit()
     expect(resizePty).toHaveBeenCalledTimes(2)
     expect(resizePty).toHaveBeenLastCalledWith(120, 32)
+  })
+
+  it('refreshes a visible unchanged geometry without resizing the PTY', () => {
+    const terminal = createTerminal('normal', 120, 120)
+    const fit = vi.fn()
+    const refresh = vi.fn()
+    const resizePty = vi.fn()
+    const result = recoverTerminalViewportAndSync({
+      visible: true,
+      hostWidth: 800,
+      hostHeight: 500,
+      terminal,
+      fit,
+      refresh,
+      previousGeometry: { cols: 120, rows: 40 },
+      reportGeometry: vi.fn(),
+      resizePty,
+    })
+
+    expect(result.sizeChanged).toBe(false)
+    expect(fit).toHaveBeenCalledOnce()
+    expect(refresh).toHaveBeenCalledWith(0, 39)
+    expect(resizePty).not.toHaveBeenCalled()
+  })
+
+  it('does no work while hidden or when the host is degenerate', () => {
+    const terminal = createTerminal('normal', 0, 0)
+    const fit = vi.fn()
+    const refresh = vi.fn()
+    const options = {
+      visible: false,
+      hostWidth: 800,
+      hostHeight: 500,
+      terminal,
+      fit,
+      refresh,
+      previousGeometry: null,
+      reportGeometry: vi.fn(),
+      resizePty: vi.fn(),
+    }
+    recoverTerminalViewportAndSync(options)
+    recoverTerminalViewportAndSync({ ...options, visible: true, hostWidth: 1 })
+
+    expect(fit).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('uses one replay finalization path for input release, flushing, and recovery', () => {
+    const order: string[] = []
+    finalizeTerminalReplay({
+      releaseInput: () => order.push('release'),
+      markReady: () => order.push('ready'),
+      flushLiveOutput: () => order.push('flush'),
+      scheduleRecovery: () => order.push('recover'),
+    })
+
+    expect(order).toEqual(['release', 'ready', 'flush', 'recover'])
   })
 })

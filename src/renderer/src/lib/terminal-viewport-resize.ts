@@ -69,6 +69,82 @@ export interface FitTerminalViewportResult {
   sizeChanged: boolean
 }
 
+export interface RecoverTerminalViewportOptions extends FitTerminalViewportOptions {
+  visible: boolean
+  hostWidth: number
+  hostHeight: number
+  refresh: (start: number, end: number) => void
+}
+
+/** Recover a mounted terminal after it becomes visible or its host is resized. */
+export function recoverTerminalViewportAndSync({
+  visible,
+  hostWidth,
+  hostHeight,
+  refresh,
+  ...options
+}: RecoverTerminalViewportOptions): FitTerminalViewportResult {
+  if (!visible || hostWidth < 80 || hostHeight < 60) {
+    return { geometry: null, sizeChanged: false }
+  }
+
+  const result = fitTerminalViewportAndSync(options)
+  if (result.geometry) refresh(0, Math.max(0, result.geometry.rows - 1))
+  return result
+}
+
+export interface TerminalRecoveryScheduler {
+  schedule: (callback: () => void) => void
+  cancel: () => void
+}
+
+/** Coalesce bursts into one latest recovery after two committed animation frames. */
+export function createTerminalRecoveryScheduler(
+  requestFrame: (callback: FrameRequestCallback) => number = globalThis.requestAnimationFrame,
+  cancelFrame: (handle: number) => void = globalThis.cancelAnimationFrame,
+): TerminalRecoveryScheduler {
+  let firstFrame: number | null = null
+  let secondFrame: number | null = null
+  let pending: (() => void) | null = null
+
+  const cancel = () => {
+    if (firstFrame !== null) cancelFrame(firstFrame)
+    if (secondFrame !== null) cancelFrame(secondFrame)
+    firstFrame = null
+    secondFrame = null
+    pending = null
+  }
+
+  return {
+    schedule(callback) {
+      pending = callback
+      if (firstFrame !== null || secondFrame !== null) return
+      firstFrame = requestFrame(() => {
+        firstFrame = null
+        secondFrame = requestFrame(() => {
+          secondFrame = null
+          const latest = pending
+          pending = null
+          latest?.()
+        })
+      })
+    },
+    cancel,
+  }
+}
+
+export function finalizeTerminalReplay(options: {
+  releaseInput: () => void
+  markReady: () => void
+  flushLiveOutput: () => void
+  scheduleRecovery: () => void
+}): void {
+  options.releaseInput()
+  options.markReady()
+  options.flushLiveOutput()
+  options.scheduleRecovery()
+}
+
 export function fitTerminalViewportAndSync({
   terminal,
   fit,
@@ -90,30 +166,4 @@ export function fitTerminalViewportAndSync({
   if (sizeChanged) resizePty(geometry.cols, geometry.rows)
 
   return { geometry, sizeChanged }
-}
-
-export interface LatestTimeoutScheduler {
-  schedule: (key: string, delayMs: number, callback: () => void) => void
-  clear: () => void
-}
-
-export function createLatestTimeoutScheduler(): LatestTimeoutScheduler {
-  const timers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
-
-  return {
-    schedule(key, delayMs, callback) {
-      const pending = timers.get(key)
-      if (pending !== undefined) globalThis.clearTimeout(pending)
-
-      const timer = globalThis.setTimeout(() => {
-        timers.delete(key)
-        callback()
-      }, delayMs)
-      timers.set(key, timer)
-    },
-    clear() {
-      for (const timer of timers.values()) globalThis.clearTimeout(timer)
-      timers.clear()
-    },
-  }
 }

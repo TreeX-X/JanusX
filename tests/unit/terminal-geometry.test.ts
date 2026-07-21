@@ -6,7 +6,6 @@ import {
   registerTerminalForceFit,
   reportTerminalGeometry,
   requestTerminalForceFit,
-  requestTerminalForceFitBurst,
   unregisterTerminalForceFit,
   waitForTerminalGeometry,
 } from '../../src/renderer/src/lib/terminal-geometry'
@@ -81,20 +80,14 @@ describe('terminal-geometry', () => {
     expect(handler).not.toHaveBeenCalled()
   })
 
-  it('invokes registered force-fit and burst', () => {
+  it('invokes registered force-fit', () => {
     const handler = vi.fn()
     registerTerminalForceFit('t1', handler)
     requestTerminalForceFit('t1')
     expect(handler).toHaveBeenCalledTimes(1)
 
-    requestTerminalForceFitBurst('t1', [0, 10])
-    vi.advanceTimersByTime(0)
-    expect(handler).toHaveBeenCalledTimes(2)
-    vi.advanceTimersByTime(10)
-    expect(handler).toHaveBeenCalledTimes(3)
-
     unregisterTerminalForceFit('t1')
     requestTerminalForceFit('t1')
-    expect(handler).toHaveBeenCalledTimes(3)
+    expect(handler).toHaveBeenCalledTimes(1)
   })
 })

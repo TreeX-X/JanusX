@@ -36,15 +36,15 @@ vi.mock('@/lib/runtime-telemetry', () => ({
 
 const {
   waitForTerminalGeometry,
-  requestTerminalForceFitBurst,
+  requestTerminalForceFit,
 } = vi.hoisted(() => ({
   waitForTerminalGeometry: vi.fn(async () => ({ cols: 120, rows: 40 })),
-  requestTerminalForceFitBurst: vi.fn(),
+  requestTerminalForceFit: vi.fn(),
 }))
 
 vi.mock('@/lib/terminal-geometry', () => ({
   waitForTerminalGeometry,
-  requestTerminalForceFitBurst,
+  requestTerminalForceFit,
 }))
 
 describe('terminal-launch', () => {
@@ -56,7 +56,7 @@ describe('terminal-launch', () => {
     setLoadState.mockReset()
     waitForTerminalGeometry.mockReset()
     waitForTerminalGeometry.mockResolvedValue({ cols: 120, rows: 40 })
-    requestTerminalForceFitBurst.mockReset()
+    requestTerminalForceFit.mockReset()
     workspaceTerminals.length = 0
 
     Object.defineProperty(globalThis, 'window', {
@@ -177,7 +177,7 @@ describe('terminal-launch', () => {
       terminal.id,
       expect.objectContaining({ pid: 4242, status: 'running' }),
     )
-    expect(requestTerminalForceFitBurst).toHaveBeenCalledWith(terminal.id)
+    expect(requestTerminalForceFit).toHaveBeenCalledWith(terminal.id)
   })
 
   it('keeps terminal on create failure with recoverable error state', async () => {
@@ -241,9 +241,9 @@ describe('terminal-launch', () => {
       cols: 120,
       rows: 40,
     }))
-    expect(requestTerminalForceFitBurst).toHaveBeenCalledWith('retry-terminal')
+    expect(requestTerminalForceFit).toHaveBeenCalledWith('retry-terminal')
     expect(create.mock.invocationCallOrder[0]).toBeLessThan(
-      requestTerminalForceFitBurst.mock.invocationCallOrder[0],
+      requestTerminalForceFit.mock.invocationCallOrder[0],
     )
   })
 })

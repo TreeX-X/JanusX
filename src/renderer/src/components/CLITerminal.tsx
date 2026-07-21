@@ -25,8 +25,9 @@ import {
   unregisterTerminalForceFit,
 } from '@/lib/terminal-geometry'
 import {
-  createLatestTimeoutScheduler,
-  fitTerminalViewportAndSync,
+  createTerminalRecoveryScheduler,
+  finalizeTerminalReplay,
+  recoverTerminalViewportAndSync,
   type TerminalGeometrySize,
 } from '@/lib/terminal-viewport-resize'
 import { useAppStore } from '@/stores/app'
@@ -35,16 +36,18 @@ import type { TerminalDataEvent, TerminalReplayResult } from '../../../shared/ip
 
 interface CLITerminalProps {
   terminalId: string
+  visible?: boolean
   focused?: boolean
 }
 
 const HISTORY_TELEMETRY_POLL_MS = 5_000
 
-export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
+export function CLITerminal({ terminalId, visible = true, focused = false }: CLITerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<(() => void) | null>(null)
   const focusedRef = useRef(focused)
+  const visibleRef = useRef(visible)
   const [fileDragOver, setFileDragOver] = useState(false)
   const pendingOutputRef = useRef('')
   const telemetryFlushTimerRef = useRef<number | null>(null)
@@ -115,27 +118,15 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
 
   useEffect(() => {
     focusedRef.current = focused
-    if (focused) {
-      // Refit after tab show so xterm geometry matches the visible pane without remount.
-      const timers = [0, 50, 160, 320].map((delay) =>
-        window.setTimeout(() => {
-          fitRef.current?.()
-          termRef.current?.focus()
-        }, delay),
-      )
-      return () => timers.forEach((timer) => window.clearTimeout(timer))
-    }
-  }, [focused])
+    visibleRef.current = visible
+    if (visible) fitRef.current?.()
+    if (focused) termRef.current?.focus()
+  }, [focused, visible])
 
   // Side panel collapse/expand changes the center grid width; force a late refit
   // after the transition, matching the manual "toggle panel to recover" workaround.
   useEffect(() => {
-    const timers = [80, 220, 480, 900].map((delay) =>
-      window.setTimeout(() => {
-        fitRef.current?.()
-      }, delay),
-    )
-    return () => timers.forEach((timer) => window.clearTimeout(timer))
+    fitRef.current?.()
   }, [sidebarCollapsed, panelCollapsed])
 
   useEffect(() => {
@@ -373,48 +364,19 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
     })
 
     let lastSyncedGeometry: TerminalGeometrySize | null = null
-    let lastHostWidth = 0
-    let lastHostHeight = 0
-    let stableFitCount = 0
-    let fitRaf = 0
-    let layoutStable = false
-
-    const fitAndSync = (options?: { force?: boolean; source?: string }) => {
+    const fitAndSync = () => {
       try {
         const host = containerRef.current
         // Avoid reporting a degenerate size before layout settles.
         if (!host || host.clientWidth < 80 || host.clientHeight < 60) return false
 
-        const hostWidth = host.clientWidth
-        const hostHeight = host.clientHeight
-        const widthDelta = Math.abs(hostWidth - lastHostWidth)
-        const heightDelta = Math.abs(hostHeight - lastHostHeight)
-        const hostChanged = widthDelta > 1 || heightDelta > 1
-
-        // During grid/panel transitions the first measured width is often wrong.
-        // Prefer a stable size (or a forced late pass) before trusting the fit.
-        if (!options?.force && !layoutStable && hostChanged) {
-          lastHostWidth = hostWidth
-          lastHostHeight = hostHeight
-          stableFitCount = 0
-          return false
-        }
-
-        if (!hostChanged) {
-          stableFitCount += 1
-        } else {
-          lastHostWidth = hostWidth
-          lastHostHeight = hostHeight
-          stableFitCount = 1
-        }
-
-        if (!options?.force && !layoutStable && stableFitCount < 2) {
-          return false
-        }
-
-        const fitResult = fitTerminalViewportAndSync({
+        const fitResult = recoverTerminalViewportAndSync({
+          visible: visibleRef.current,
+          hostWidth: host.clientWidth,
+          hostHeight: host.clientHeight,
           terminal: term,
           fit: () => fitAddon.fit(),
+          refresh: (start, end) => term.refresh(start, end),
           previousGeometry: lastSyncedGeometry,
           reportGeometry: (cols, rows) => reportTerminalGeometry(terminalId, cols, rows),
           resizePty: (cols, rows) => window.electron.terminal.resize(terminalId, cols, rows),
@@ -424,12 +386,7 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
         }
 
         if (!fitResult.geometry) return false
-        const { cols, rows } = fitResult.geometry
         if (fitResult.sizeChanged) lastSyncedGeometry = fitResult.geometry
-
-        if (!layoutStable && (options?.force || stableFitCount >= 2) && cols >= 40 && rows >= 10) {
-          layoutStable = true
-        }
 
         return fitResult.sizeChanged
       } catch {
@@ -438,56 +395,28 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       }
     }
 
-    fitRef.current = () => {
-      fitAndSync({ force: true, source: 'external' })
-    }
-    registerTerminalForceFit(terminalId, () => {
-      fitAndSync({ force: true, source: 'launch' })
-    })
-
-    const scheduleFitFrame = () => {
-      if (fitRaf) cancelAnimationFrame(fitRaf)
-      fitRaf = requestAnimationFrame(() => {
-        fitRaf = requestAnimationFrame(() => {
-          fitRaf = 0
-          fitAndSync({ source: 'raf' })
-        })
-      })
-    }
-
-    // Delayed passes cover panel/grid transitions that ResizeObserver can miss mid-animation.
-    // Early force fits so first-open TUI can measure before terminal creation, not only on tab focus.
-    const fitScheduler = createLatestTimeoutScheduler()
-    const scheduleFit = (key: string, delayMs: number, force = false) => {
-      fitScheduler.schedule(key, delayMs, () => {
-        fitAndSync({ force, source: `timer:${delayMs}` })
-      })
-    }
+    const recoveryScheduler = createTerminalRecoveryScheduler()
+    const scheduleRecovery = () => recoveryScheduler.schedule(() => fitAndSync())
+    fitRef.current = scheduleRecovery
+    registerTerminalForceFit(terminalId, scheduleRecovery)
 
     // Immediate force fit on mount — do not wait for layoutStable when host already has size.
     // Early forced passes (0/16/50ms) so launch geometry wait can resolve before create.
-    fitAndSync({ force: true, source: 'mount' })
-    scheduleFitFrame()
-    scheduleFit('mount:0', 0, true)
-    scheduleFit('mount:16', 16, true)
-    scheduleFit('mount:50', 50, true)
-    scheduleFit('mount:120', 120, true)
-    scheduleFit('mount:240', 240)
-    scheduleFit('mount:480', 480)
-    scheduleFit('mount:900', 900, true)
-    scheduleFit('mount:1600', 1600, true)
+    scheduleRecovery()
 
     const observer = new ResizeObserver(() => {
-      scheduleFitFrame()
-      // One post-transition catch-up after side panel collapse/expand finishes.
-      scheduleFit('transition:catch-up', 220)
-      scheduleFit('transition:stable', 420, true)
+      scheduleRecovery()
     })
     observer.observe(hostElement)
     if (hostParent) {
       // Observe the pane host too: grid column changes sometimes resize the parent first.
       observer.observe(hostParent)
     }
+    const handleWindowRecovery = () => {
+      if (document.visibilityState === 'visible') scheduleRecovery()
+    }
+    window.addEventListener('focus', handleWindowRecovery)
+    document.addEventListener('visibilitychange', handleWindowRecovery)
 
     const win32InputModeEnableDisposable = term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, (params) => {
       if (params.some((param) => param === 9001 || (Array.isArray(param) && param.includes(9001)))) {
@@ -556,11 +485,13 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
         const data = typeof replay.data === 'string' ? replay.data : ''
         replaySeq = typeof replay.seq === 'number' ? replay.seq : 0
         const finishReplay = () => {
-          suppressReplayResponses = false
-          replayReady = true
-          flushQueuedLiveOutput()
-          scheduleFitFrame()
-          scheduleFit('replay:120', 120, true)
+          if (disposed) return
+          finalizeTerminalReplay({
+            releaseInput: () => { suppressReplayResponses = false },
+            markReady: () => { replayReady = true },
+            flushLiveOutput: flushQueuedLiveOutput,
+            scheduleRecovery,
+          })
         }
 
         if (!data) {
@@ -573,8 +504,12 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       })
       .catch(() => {
         if (disposed) return
-        replayReady = true
-        flushQueuedLiveOutput()
+        finalizeTerminalReplay({
+          releaseInput: () => { suppressReplayResponses = false },
+          markReady: () => { replayReady = true },
+          flushLiveOutput: flushQueuedLiveOutput,
+          scheduleRecovery,
+        })
       })
 
     termRef.current = term
@@ -590,8 +525,9 @@ export function CLITerminal({ terminalId, focused = false }: CLITerminalProps) {
       }
       stopScrollbarDrag()
       observer.disconnect()
-      if (fitRaf) cancelAnimationFrame(fitRaf)
-      fitScheduler.clear()
+      window.removeEventListener('focus', handleWindowRecovery)
+      document.removeEventListener('visibilitychange', handleWindowRecovery)
+      recoveryScheduler.cancel()
       unsubscribe()
       if (telemetryFlushTimerRef.current !== null) {
         window.clearTimeout(telemetryFlushTimerRef.current)

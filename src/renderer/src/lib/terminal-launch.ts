@@ -3,7 +3,7 @@ import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { getEstimatedContextWindow } from '@/lib/runtime-telemetry'
 import {
-  requestTerminalForceFitBurst,
+  requestTerminalForceFit,
   waitForTerminalGeometry,
 } from '@/lib/terminal-geometry'
 import {
@@ -189,7 +189,7 @@ export async function launchTerminalPreset(
     })
 
     // Correct any residual mismatch after PTY spawn (TUI reflow via resize).
-    requestTerminalForceFitBurst(terminalId)
+    requestTerminalForceFit(terminalId)
 
     return { ok: true, terminalId, pid: result.pid }
   } catch (err) {
@@ -241,7 +241,7 @@ export async function retryTerminalCreate(terminalId: string): Promise<boolean> 
       errorMessage: undefined,
       updatedAt: Date.now(),
     })
-    requestTerminalForceFitBurst(terminalId)
+    requestTerminalForceFit(terminalId)
     return true
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
