@@ -293,6 +293,46 @@ export function findPaneContent(
   return { paneId: null, tabId: null, terminalId: null }
 }
 
+/*-- 取回树中某个 browser 内容对象：拖拽移动/分屏时需要原 content 重新插入 --*/
+export function getBrowserPaneContent(
+  node: WorkspacePaneNode | null,
+  surfaceId: string
+): BrowserPaneContent | null {
+  for (const leaf of getLeafPanes(node)) {
+    const tab = leaf.tabs.find((item) => item.type === 'browser' && item.surfaceId === surfaceId)
+    if (tab && tab.type === 'browser') return tab
+  }
+  return null
+}
+
+/*-- 按 content id 从树中移除内容并修剪空 pane（拖拽 move/split 的前半段） --*/
+export function removePaneContentFromTree(
+  node: WorkspacePaneNode | null,
+  contentId: string
+): WorkspacePaneNode | null {
+  if (!node) return null
+
+  const remove = (current: WorkspacePaneNode): WorkspacePaneNode => {
+    if (current.type === 'leaf') {
+      const tabs = current.tabs.filter((item) => item.id !== contentId)
+      const activeTabStillExists = tabs.some((item) => item.id === current.activeTabId)
+      return {
+        ...current,
+        tabs,
+        activeTabId: activeTabStillExists ? current.activeTabId : tabs[0]?.id ?? null,
+      }
+    }
+
+    return {
+      ...current,
+      first: remove(current.first),
+      second: remove(current.second),
+    }
+  }
+
+  return pruneEmptyPanes(remove(node))
+}
+
 export function addPaneContentToTree(
   node: WorkspacePaneNode | null,
   targetPaneId: string | null,

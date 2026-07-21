@@ -189,6 +189,16 @@ body.terminal-scrollbar-dragging .xterm .xterm-scrollable-element > .scrollbar.v
   -webkit-app-region: no-drag;
 }
 
+/* 分屏落点预览淡入 */
+@keyframes pane-drop-hint-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* 模态框弹入 */
 @keyframes island-expand-modal {
   0% {

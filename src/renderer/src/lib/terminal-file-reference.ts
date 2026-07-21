@@ -1,7 +1,9 @@
 export const WORKSPACE_FILE_DRAG_TYPE = 'application/x-janusx-workspace-file'
 export const TERMINAL_DRAG_TYPE = 'application/x-janusx-terminal-id'
+export const BROWSER_TAB_DRAG_TYPE = 'application/x-janusx-browser-surface-id'
 
 let activeTerminalDragId: string | null = null
+let activeBrowserTabDragSurfaceId: string | null = null
 
 export interface WorkspaceFileDragPayload {
   type: 'file'
@@ -48,6 +50,31 @@ export function getActiveTerminalDragId(): string | null {
 export function clearTerminalDragData(terminalId?: string): void {
   if (!terminalId || activeTerminalDragId === terminalId) {
     activeTerminalDragId = null
+  }
+}
+
+/*-- 浏览器 pane tab 拖拽（分屏/移动），与 terminal 拖拽同一套 dataTransfer + 模块级兜底机制 --*/
+export function setBrowserTabDragData(dataTransfer: DataTransfer, surfaceId: string): void {
+  activeBrowserTabDragSurfaceId = surfaceId
+  dataTransfer.effectAllowed = 'move'
+  dataTransfer.setData(BROWSER_TAB_DRAG_TYPE, surfaceId)
+}
+
+export function hasBrowserTabDrag(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes(BROWSER_TAB_DRAG_TYPE)
+}
+
+export function readBrowserTabDragData(dataTransfer: DataTransfer): string | null {
+  return dataTransfer.getData(BROWSER_TAB_DRAG_TYPE) || null
+}
+
+export function getActiveBrowserTabDragId(): string | null {
+  return activeBrowserTabDragSurfaceId
+}
+
+export function clearBrowserTabDragData(surfaceId?: string): void {
+  if (!surfaceId || activeBrowserTabDragSurfaceId === surfaceId) {
+    activeBrowserTabDragSurfaceId = null
   }
 }
 

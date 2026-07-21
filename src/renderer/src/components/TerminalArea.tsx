@@ -13,11 +13,16 @@ import { JanusChatPane } from './janus/JanusChatPane'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
+  clearBrowserTabDragData,
   clearTerminalDragData,
+  getActiveBrowserTabDragId,
   getActiveTerminalDragId,
+  hasBrowserTabDrag,
   hasTerminalDrag,
   hasWorkspaceFileDrag,
+  readBrowserTabDragData,
   readTerminalDragData,
+  setBrowserTabDragData,
   setTerminalDragData,
 } from '@/lib/terminal-file-reference'
 import {
@@ -27,6 +32,7 @@ import {
   type WorkspacePaneNode,
   type WorkspacePaneSplit,
 } from '@/lib/workspace-pane'
+import { getPaneDropHint, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
 import { getEstimatedContextWindow, getRegistryContextWindow } from '@/lib/runtime-telemetry'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
 import {
@@ -62,44 +68,11 @@ const PRESETS: TerminalPresetOption[] = [
   createPreset('opencode'),
 ]
 
-const SPLIT_ZONE_MAX_PX = 240
-const SPLIT_ZONE_MIN_PX = 72
-const SPLIT_RATIO_EQUAL = 0.5
 // 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
 const TERMINAL_MENU_COLLAPSED_SIZE = 24
 // 展开宽度与内容精确匹配: pl-2(8) + 4×28 图标 + 3×4 gap + pr-1(4) + 28 加号 + 2 边框
 const TERMINAL_MENU_EXPANDED_WIDTH = 166
 const TERMINAL_MENU_EXPANDED_HEIGHT = 28
-
-type DragHintState = PaneDropEdge | 'center'
-
-function getPaneDropHint(element: HTMLElement, clientX: number, clientY: number): DragHintState {
-  const rect = element.getBoundingClientRect()
-  const maxZoneX = Math.max(0, rect.width * 0.45)
-  const maxZoneY = Math.max(0, rect.height * 0.45)
-  const thresholdX = Math.min(Math.max(rect.width * 0.34, SPLIT_ZONE_MIN_PX), SPLIT_ZONE_MAX_PX, maxZoneX)
-  const thresholdY = Math.min(Math.max(rect.height * 0.34, SPLIT_ZONE_MIN_PX), SPLIT_ZONE_MAX_PX, maxZoneY)
-  const left = clientX - rect.left
-  const top = clientY - rect.top
-  const right = rect.right - clientX
-  const bottom = rect.bottom - clientY
-  const nearest = Math.min(left, right, top, bottom)
-
-  if (nearest === left && left <= thresholdX) return 'left'
-  if (nearest === right && right <= thresholdX) return 'right'
-  if (nearest === top && top <= thresholdY) return 'top'
-  if (nearest === bottom && bottom <= thresholdY) return 'bottom'
-  return 'center'
-}
-
-function getSplitRatioForDrag(
-  _element: HTMLElement,
-  _edge: Exclude<DragHintState, 'center'>,
-  _clientX?: number,
-  _clientY?: number
-): number {
-  return SPLIT_RATIO_EQUAL
-}
 
 function providerLabel(preset: TerminalPreset): string {
   switch (preset) {
@@ -333,6 +306,10 @@ interface PaneTreeViewProps {
   onOpenBrowser: (paneId: string) => void
   onCloseBrowserTab: (paneId: string, tabId: string, surfaceId: string) => void
   onBrowserPopOut: (paneId: string, tabId: string, surfaceId: string) => void
+  onBrowserTabDragStart: (surfaceId: string) => void
+  onBrowserTabDrop: (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
+  activeDragBrowserSurfaceId: string | null
+  activeDragBrowserSurfaceRef: React.MutableRefObject<string | null>
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
   onTerminalDragStart: (terminalId: string) => void
@@ -533,6 +510,10 @@ function LeafPane({
   onOpenBrowser,
   onCloseBrowserTab,
   onBrowserPopOut,
+  onBrowserTabDragStart,
+  onBrowserTabDrop,
+  activeDragBrowserSurfaceId,
+  activeDragBrowserSurfaceRef,
   onKillTerminal,
   onTerminalDrop,
   onTerminalDragStart,
@@ -543,7 +524,7 @@ function LeafPane({
   onToggleTerminalMenu,
   onCreateTerminal,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
-  const [dragHint, setDragHint] = useState<PaneDropEdge | 'center' | null>(null)
+  const [dragHint, setDragHint] = useState<{ zone: PaneDropHint; ratio: number } | null>(null)
   const isFocused = leaf.id === focusedPaneId
   const showFocus = showFocusChrome && isFocused
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
@@ -568,14 +549,20 @@ function LeafPane({
       activeDragTerminalId ||
       activeDragTerminalRef.current ||
       getActiveTerminalDragId()
-    if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId) return
+    const dragBrowserSurfaceId =
+      readBrowserTabDragData(event.dataTransfer) ||
+      activeDragBrowserSurfaceId ||
+      activeDragBrowserSurfaceRef.current ||
+      getActiveBrowserTabDragId()
+    if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId && !hasBrowserTabDrag(event.dataTransfer) && !dragBrowserSurfaceId) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
-    const edge = getPaneDropHint(event.currentTarget, event.clientX, event.clientY)
-    const nextHint = edge ?? 'center'
-    setDragHint((current) => (current === nextHint ? current : nextHint))
-  }, [activeDragTerminalId])
+    const zone = getPaneDropHint(event.currentTarget, event.clientX, event.clientY)
+    /*-- 预览比例 = 松手后实际应用的比例（预览即结果）：落点分屏固定平分 --*/
+    const ratio = SPLIT_RATIO_EQUAL
+    setDragHint((current) => (current && current.zone === zone && current.ratio === ratio ? current : { zone, ratio }))
+  }, [activeDragTerminalId, activeDragBrowserSurfaceId])
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
@@ -593,21 +580,27 @@ function LeafPane({
       activeDragTerminalId ||
       activeDragTerminalRef.current ||
       getActiveTerminalDragId()
-    if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId) return
+    const dragBrowserSurfaceId =
+      readBrowserTabDragData(event.dataTransfer) ||
+      activeDragBrowserSurfaceId ||
+      activeDragBrowserSurfaceRef.current ||
+      getActiveBrowserTabDragId()
+    if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId && !hasBrowserTabDrag(event.dataTransfer) && !dragBrowserSurfaceId) return
     event.preventDefault()
     event.stopPropagation()
-    const terminalId = dragTerminalId
-    if (!terminalId) return
     const hint = getPaneDropHint(event.currentTarget, event.clientX, event.clientY)
-    if (hint === 'center') {
-      setDragHint(null)
+    /*-- center = 合并到本 pane（move 语义）；边缘 = 平分分屏（与预览一致） --*/
+    const edge: PaneDropEdge | null = hint === 'center' ? null : hint
+    const ratio = SPLIT_RATIO_EQUAL
+    setDragHint(null)
+    if (dragBrowserSurfaceId && !dragTerminalId) {
+      onBrowserTabDrop(dragBrowserSurfaceId, leaf.id, edge, ratio)
       return
     }
-    const edge: PaneDropEdge = hint
-    const ratio = getSplitRatioForDrag(event.currentTarget, edge, event.clientX, event.clientY)
-    setDragHint(null)
+    const terminalId = dragTerminalId
+    if (!terminalId) return
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
-  }, [activeDragTerminalId, leaf.id, onTerminalDrop])
+  }, [activeDragTerminalId, activeDragBrowserSurfaceId, leaf.id, onTerminalDrop, onBrowserTabDrop])
 
   return (
       <section
@@ -631,19 +624,34 @@ function LeafPane({
     >
       {dragHint && (
         <div
-          className="pointer-events-none absolute z-20"
+          className="pointer-events-none absolute z-20 flex items-center justify-center"
           style={{
-            top: dragHint === 'bottom' ? '50%' : 0,
-            right: dragHint === 'left' ? '50%' : 0,
-            bottom: dragHint === 'top' ? '50%' : 0,
-            left: dragHint === 'right' ? '50%' : 0,
-            background: dragHint === 'center' ? 'rgba(255,255,255,0.025)' : 'rgba(255,120,48,0.12)',
-            border: dragHint === 'center'
-              ? '1px solid rgba(255,255,255,0.08)'
+            /*-- 预览区域 = 松手后新 pane 的真实占比（first/second 语义与 splitPaneTree 一致） --*/
+            top: dragHint.zone === 'bottom' ? `${dragHint.ratio * 100}%` : 0,
+            right: dragHint.zone === 'left' ? `${(1 - dragHint.ratio) * 100}%` : 0,
+            bottom: dragHint.zone === 'top' ? `${(1 - dragHint.ratio) * 100}%` : 0,
+            left: dragHint.zone === 'right' ? `${dragHint.ratio * 100}%` : 0,
+            background: dragHint.zone === 'center' ? 'rgba(255,255,255,0.05)' : 'rgba(255,120,48,0.12)',
+            border: dragHint.zone === 'center'
+              ? '1px solid rgba(255,255,255,0.16)'
               : '1px solid rgba(255,120,48,0.58)',
-            boxShadow: dragHint === 'center' ? 'none' : 'inset 0 0 22px rgba(255,120,48,0.08)',
+            boxShadow: dragHint.zone === 'center' ? 'none' : 'inset 0 0 22px rgba(255,120,48,0.08)',
+            transition: 'top 70ms ease-out, right 70ms ease-out, bottom 70ms ease-out, left 70ms ease-out',
+            animation: 'pane-drop-hint-in 110ms ease-out',
           }}
-        />
+        >
+          {/*-- 预览语义标签：让落点结果（分屏方向/合并）在松手前自解释 --*/}
+          <span
+            className="rounded-full border px-2.5 py-1 font-mono text-[11px] leading-none"
+            style={{
+              color: dragHint.zone === 'center' ? 'rgba(255,255,255,0.82)' : '#ffc6a6',
+              borderColor: dragHint.zone === 'center' ? 'rgba(255,255,255,0.2)' : 'rgba(255,120,48,0.4)',
+              background: 'rgba(10,10,12,0.78)',
+            }}
+          >
+            {paneDropHintLabel(dragHint.zone)}
+          </span>
+        </div>
       )}
       <div
         className="flex h-9 shrink-0 items-end gap-1 overflow-x-auto px-2"
@@ -660,11 +668,17 @@ function LeafPane({
             <button
               key={tab.id}
               type="button"
-              draggable={tab.type === 'terminal'}
+              draggable={tab.type === 'terminal' || tab.type === 'browser'}
               onDragStart={(event) => {
-                if (tab.type !== 'terminal') return
-                setTerminalDragData(event.dataTransfer, tab.terminalId)
-                onTerminalDragStart(tab.terminalId)
+                if (tab.type === 'terminal') {
+                  setTerminalDragData(event.dataTransfer, tab.terminalId)
+                  onTerminalDragStart(tab.terminalId)
+                  return
+                }
+                if (tab.type === 'browser') {
+                  setBrowserTabDragData(event.dataTransfer, tab.surfaceId)
+                  onBrowserTabDragStart(tab.surfaceId)
+                }
               }}
               onDragEnd={() => {
                 setDragHint(null)
@@ -721,7 +735,6 @@ function LeafPane({
           >
             x
           </span>
-          <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} />
           <button
             type="button"
             title="New Browser"
@@ -735,6 +748,7 @@ function LeafPane({
           >
             <Globe size={11} />
           </button>
+          <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} />
           <button
             type="button"
             aria-label="结束当前终端"
@@ -887,7 +901,10 @@ export function TerminalArea() {
     resizePane,
     moveTerminalToPane,
     splitPaneWithTerminal,
+    moveBrowserToPane,
+    splitPaneWithBrowser,
     closePaneTab,
+    setTabDragInFlight,
   } = useWorkspaceStore()
   const setLoadState = useAppStore((s) => s.setLoadState)
   const terminalAreaRef = useRef<HTMLDivElement>(null)
@@ -896,6 +913,8 @@ export function TerminalArea() {
   const [terminalMenuPaneId, setTerminalMenuPaneId] = useState<string | null>(null)
   const [activeDragTerminalId, setActiveDragTerminalId] = useState<string | null>(null)
   const activeDragTerminalRef = useRef<string | null>(null)
+  const [activeDragBrowserSurfaceId, setActiveDragBrowserSurfaceId] = useState<string | null>(null)
+  const activeDragBrowserSurfaceRef = useRef<string | null>(null)
 
   const terminalsById = useMemo(() => {
     const map = new Map<string, Terminal>()
@@ -1013,15 +1032,31 @@ export function TerminalArea() {
     [moveTerminalToPane, splitPaneWithTerminal]
   )
 
+  /*-- browser tab 拖拽落点：边缘分屏，否则移入目标 pane（与 terminal 同语义） --*/
+  const handleBrowserTabDrop = useCallback(
+    (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
+      if (edge) {
+        splitPaneWithBrowser(surfaceId, paneId, edge, ratio)
+        return
+      }
+      moveBrowserToPane(surfaceId, paneId)
+    },
+    [moveBrowserToPane, splitPaneWithBrowser]
+  )
+
   useEffect(() => {
     const onDragEnd = () => {
       activeDragTerminalRef.current = null
       setActiveDragTerminalId(null)
       clearTerminalDragData()
+      activeDragBrowserSurfaceRef.current = null
+      setActiveDragBrowserSurfaceId(null)
+      clearBrowserTabDragData()
+      setTabDragInFlight(false)
     }
     window.addEventListener('dragend', onDragEnd)
     return () => window.removeEventListener('dragend', onDragEnd)
-  }, [])
+  }, [setTabDragInFlight])
 
   const handlePresetSelect = useCallback(
     async (preset: typeof PRESETS[number]) => {
@@ -1113,12 +1148,25 @@ export function TerminalArea() {
           onTerminalDragStart={(terminalId) => {
             activeDragTerminalRef.current = terminalId
             setActiveDragTerminalId(terminalId)
+            setTabDragInFlight(true)
           }}
           onTerminalDragEnd={() => {
             activeDragTerminalRef.current = null
             setActiveDragTerminalId(null)
             clearTerminalDragData()
+            activeDragBrowserSurfaceRef.current = null
+            setActiveDragBrowserSurfaceId(null)
+            clearBrowserTabDragData()
+            setTabDragInFlight(false)
           }}
+          onBrowserTabDragStart={(surfaceId) => {
+            activeDragBrowserSurfaceRef.current = surfaceId
+            setActiveDragBrowserSurfaceId(surfaceId)
+            setTabDragInFlight(true)
+          }}
+          onBrowserTabDrop={handleBrowserTabDrop}
+          activeDragBrowserSurfaceId={activeDragBrowserSurfaceId}
+          activeDragBrowserSurfaceRef={activeDragBrowserSurfaceRef}
           activeDragTerminalId={activeDragTerminalId}
           activeDragTerminalRef={activeDragTerminalRef}
           onResize={resizePane}

@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import { useBrowserStore } from '@/stores/browser'
+import { useWorkspaceStore } from '@/stores/workspace'
 import {
   activateBrowserTab,
   closeBrowserTab,
@@ -41,6 +42,9 @@ interface BrowserSurfaceProps {
  */
 export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, onRequestEmbed }: BrowserSurfaceProps) {
   const surface = useBrowserStore((s) => s.surfaces[surfaceId])
+  /*-- tab 拖拽期间隐藏原生视图：WebContentsView 盖在 DOM 之上会吞掉 dragover，落点区只有先让位才能命中 --*/
+  const tabDragInFlight = useWorkspaceStore((s) => s.tabDragInFlight)
+  const effectiveVisible = visible && !tabDragInFlight
   const [missing, setMissing] = useState(false)
   const [addressDraft, setAddressDraft] = useState('')
   const [addressFocused, setAddressFocused] = useState(false)
@@ -74,7 +78,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
       if (frameRef.current) cancelAnimationFrame(frameRef.current)
       frameRef.current = requestAnimationFrame(() => {
         frameRef.current = 0
-        if (!visible) {
+        if (!effectiveVisible) {
           void setBrowserSurfaceBounds(surfaceId, ZERO_BOUNDS)
           return
         }
@@ -103,7 +107,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         void setBrowserSurfaceBounds(surfaceId, ZERO_BOUNDS)
       }
     }
-  }, [surfaceId, visible, carrier])
+  }, [surfaceId, effectiveVisible, carrier])
 
   /*-- 地址栏草稿：未聚焦时跟随活动 tab 的 URL --*/
   useEffect(() => {

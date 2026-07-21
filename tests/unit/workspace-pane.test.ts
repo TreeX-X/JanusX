@@ -9,7 +9,9 @@ import {
   createTerminalPaneContent,
   findFirstBrowserPaneContent,
   findPaneContent,
+  getBrowserPaneContent,
   getLeafPanes,
+  removePaneContentFromTree,
   removeTerminalFromPaneTree,
   resizeSplitPane,
   splitPaneTree,
@@ -222,5 +224,41 @@ describe('workspace pane tree', () => {
     const leaves = getLeafPanes(closed)
     expect(leaves).toHaveLength(1)
     expect(leaves[0].tabs.map((tab) => tab.id)).toEqual(['terminal:terminal-1'])
+  })
+
+  it('gets the browser content object and removes it by id with pruning', () => {
+    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const split = splitPaneTree(terminal.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const withBrowser = addPaneContentToTree(split.tree, 'pane-2', createBrowserPaneContent('surface-1'), 'pane-fallback')
+
+    expect(getBrowserPaneContent(withBrowser.tree, 'surface-1')).toEqual(createBrowserPaneContent('surface-1'))
+    expect(getBrowserPaneContent(withBrowser.tree, 'missing')).toBeNull()
+
+    const removed = removePaneContentFromTree(withBrowser.tree, 'browser:surface-1')
+    const leaves = getLeafPanes(removed)
+    /*-- pane-2 空后被修剪，只剩 pane-1 与终端 --*/
+    expect(leaves).toHaveLength(1)
+    expect(leaves[0].id).toBe('pane-1')
+    expect(leaves[0].tabs.map((tab) => tab.id)).toEqual(['terminal:terminal-1'])
+  })
+
+  it('moves a browser tab across panes via remove + re-insert', () => {
+    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const withTerminal2 = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
+    const withBrowser = addPaneContentToTree(withTerminal2.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+
+    const content = getBrowserPaneContent(withBrowser.tree, 'surface-1')!
+    const removed = removePaneContentFromTree(withBrowser.tree, content.id)
+    const moved = addPaneContentToTree(removed, 'pane-2', content, 'pane-fallback')
+
+    const leaves = getLeafPanes(moved.tree)
+    expect(leaves).toHaveLength(2)
+    expect(leaves.find((leaf) => leaf.id === 'pane-1')?.tabs.map((tab) => tab.id)).toEqual(['terminal:terminal-1'])
+    expect(leaves.find((leaf) => leaf.id === 'pane-2')?.tabs.map((tab) => tab.id)).toEqual([
+      'terminal:terminal-2',
+      'browser:surface-1',
+    ])
+    expect(moved.focus).toEqual({ paneId: 'pane-2', tabId: 'browser:surface-1', terminalId: null })
   })
 })

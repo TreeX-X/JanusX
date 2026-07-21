@@ -1,6 +1,5 @@
 import { useCallback, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Globe } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
@@ -59,12 +58,6 @@ export function Sidebar() {
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressTargetRef = useRef<string | null>(null)
   const suppressClickRef = useRef<string | null>(null)
-
-  /*-- 浏览器入口：激活已有 browser tab 或新建（与 Ctrl/Cmd+Shift+B 同路径） --*/
-  const handleOpenBrowser = useCallback(() => {
-    if (!activeWorkspaceId) return
-    void useWorkspaceStore.getState().openBrowserInWorkspace()
-  }, [activeWorkspaceId])
 
   const handleAddWorkspace = useCallback(async () => {
     try {
@@ -241,20 +234,6 @@ export function Sidebar() {
           >
             <span>工作区</span>
             <div className="flex gap-1 items-center">
-              <button
-                onClick={handleOpenBrowser}
-                disabled={!activeWorkspaceId}
-                title="打开浏览器 (Ctrl+Shift+B)"
-                aria-label="打开浏览器"
-                className="w-[18px] h-[18px] rounded-[3px] flex items-center justify-center cursor-pointer transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#999',
-                }}
-              >
-                <Globe size={11} />
-              </button>
               <button
                 onClick={handleAddWorkspace}
                 className="w-[18px] h-[18px] rounded-[3px] flex items-center justify-center text-sm leading-none cursor-pointer transition-colors"

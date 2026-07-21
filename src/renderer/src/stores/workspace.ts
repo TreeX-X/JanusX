@@ -13,6 +13,8 @@ import {
   findLeafPane,
   findPaneContent,
   findTerminalPane,
+  getBrowserPaneContent,
+  removePaneContentFromTree,
   removeTerminalFromPaneTree,
   resizeSplitPane,
   resolvePaneFocus,
@@ -42,6 +44,8 @@ interface WorkspaceStore {
   focusedTabId: string | null
   fileTree: FileNode[]
   activeFilePath: string | null
+  /*-- tab 拖拽进行中：拖拽期间隐藏浏览器原生视图，让 pane 落点区恢复为 DOM 可命中 --*/
+  tabDragInFlight: boolean
 
   // 每个工作区的终端快照
   terminalSnapshots: Record<string, TerminalSnapshot>
@@ -58,6 +62,7 @@ interface WorkspaceStore {
   updateTerminal: (id: string, patch: Partial<Terminal>) => void
   setFocusedPane: (paneId: string) => void
   setPaneTab: (paneId: string, tabId: string) => void
+  setTabDragInFlight: (active: boolean) => void
   openJanusChatInWorkspace: () => void
   addBrowserSurfaceToTree: (surfaceId: string) => void
   openBrowserInWorkspace: (url?: string) => Promise<void>
@@ -69,6 +74,8 @@ interface WorkspaceStore {
   closePaneTab: (paneId: string, tabId: string) => void
   moveTerminalToPane: (terminalId: string, paneId: string) => void
   splitPaneWithTerminal: (terminalId: string, paneId: string, edge: PaneDropEdge, ratio?: number) => void
+  moveBrowserToPane: (surfaceId: string, paneId: string) => void
+  splitPaneWithBrowser: (surfaceId: string, paneId: string, edge: PaneDropEdge, ratio?: number) => void
 
   updateFileTree: (nodes: FileNode[]) => void
   setActiveFilePath: (path: string | null) => void
@@ -171,6 +178,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   focusedTabId: null,
   fileTree: [],
   activeFilePath: null,
+  tabDragInFlight: false,
   terminalSnapshots: {},
 
   setWorkspaces: (workspaces) => set({ workspaces }),
@@ -320,6 +328,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         activeTerminalId: focus.terminalId,
       }
     }),
+  setTabDragInFlight: (active) =>
+    set((s) => (s.tabDragInFlight === active ? {} : { tabDragInFlight: active })),
   openJanusChatInWorkspace: () =>
     set((s) => {
       const existing = findPaneContent(s.paneTree, 'janus-chat')
@@ -544,6 +554,58 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: result.focus.paneId,
         focusedTabId: result.focus.tabId,
         activeTerminalId: result.focus.terminalId,
+      }
+    }),
+
+  /*-- 拖拽移动 browser tab 到目标 pane（仅 pane 树换位置，surface 本体不动） --*/
+  moveBrowserToPane: (surfaceId, paneId) =>
+    set((s) => {
+      const content = getBrowserPaneContent(s.paneTree, surfaceId)
+      if (!content) return {}
+      const removed = removePaneContentFromTree(s.paneTree, content.id)
+      const result = addPaneContentToTree(removed, paneId, content, createPaneId())
+      return {
+        paneTree: result.tree,
+        focusedPaneId: result.focus.paneId,
+        focusedTabId: result.focus.tabId,
+        activeTerminalId: null,
+      }
+    }),
+  /*-- 拖拽 browser tab 触发分屏：先摘除原 tab，再在目标 pane 边缘 split 后插入 --*/
+  splitPaneWithBrowser: (surfaceId, paneId, edge, ratio = 0.5) =>
+    set((s) => {
+      const content = getBrowserPaneContent(s.paneTree, surfaceId)
+      if (!content) return {}
+
+      const removed = removePaneContentFromTree(s.paneTree, content.id)
+      const direction: PaneSplitDirection = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
+      const placement = edge === 'left' || edge === 'top' ? 'before' : 'after'
+      const clampedRatio = Math.min(0.85, Math.max(0.15, ratio))
+      const splitResult = splitPaneTree(
+        removed,
+        paneId,
+        direction,
+        createPaneId('split'),
+        createPaneId(),
+        placement,
+        clampedRatio
+      )
+      const targetPaneId = splitResult.focus.paneId
+      if (!targetPaneId) {
+        return {
+          paneTree: splitResult.tree,
+          focusedPaneId: splitResult.focus.paneId,
+          focusedTabId: splitResult.focus.tabId,
+          activeTerminalId: null,
+        }
+      }
+
+      const result = addPaneContentToTree(splitResult.tree, targetPaneId, content, createPaneId())
+      return {
+        paneTree: result.tree,
+        focusedPaneId: result.focus.paneId,
+        focusedTabId: result.focus.tabId,
+        activeTerminalId: null,
       }
     }),
 
