@@ -13,14 +13,12 @@ function terminalStatusLabel(status: Terminal['status']): string {
   switch (status) {
     case 'running':
       return 'running'
-    case 'exited':
-      return 'done'
-    case 'starting':
-      return 'starting'
     case 'error':
       return 'error'
+    case 'wait':
+      return 'wait'
     default:
-      return 'idle'
+      return 'wait'
   }
 }
 

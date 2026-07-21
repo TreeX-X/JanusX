@@ -9,8 +9,9 @@ export type {
 } from '../../../shared/ipc/workspace'
 
 import type { TerminalPreset } from '../../../shared/ipc/workspace'
+import type { TerminalStatus } from '../../../shared/ipc/terminal'
 
-export type TerminalStatus = 'idle' | 'starting' | 'running' | 'exited' | 'error'
+export type { TerminalStatus }
 
 export interface Terminal {
   id: string

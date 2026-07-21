@@ -16,9 +16,16 @@ export const TERMINAL_EVENT_CHANNELS = {
   exit: 'terminal:exit',
   focus: 'terminal:focus',
   created: 'terminal:created',
+  status: 'terminal:status',
 } as const
 
 export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode'
+
+// Sidebar display status of a terminal entry.
+// - wait: idle / no active output stream (AI CLI back at prompt, or shell always)
+// - running: AI CLI is emitting output (spinner / streaming tokens)
+// - error: pty exited non-zero; entry retained in the list
+export type TerminalStatus = 'wait' | 'running' | 'error'
 
 export interface TerminalWarmupRequest {
   engines?: TerminalAgentEngine[]
@@ -80,6 +87,11 @@ export interface TerminalCreatedEvent {
   pid: number
 }
 
+export interface TerminalStatusEvent {
+  id: string
+  status: TerminalStatus
+}
+
 export interface TerminalReplayResult {
   data: string
   seq: number
@@ -97,4 +109,5 @@ export interface TerminalAPI {
   onExit(callback: (event: TerminalExitEvent) => void): () => void
   onFocus(callback: (event: TerminalFocusEvent) => void): () => void
   onCreated(callback: (event: TerminalCreatedEvent) => void): () => void
+  onStatus(callback: (event: TerminalStatusEvent) => void): () => void
 }

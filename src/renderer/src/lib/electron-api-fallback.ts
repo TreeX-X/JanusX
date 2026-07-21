@@ -39,6 +39,7 @@ export function installElectronApiFallback(): void {
       onCreated: () => () => {},
       onExit: () => () => {},
       onFocus: () => () => {},
+      onStatus: () => () => {},
     },
     project: {
       detect: () => unavailableProjectResult(),

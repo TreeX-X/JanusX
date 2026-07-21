@@ -20,7 +20,7 @@ export function canPasteOfficePrompt(context: OfficePromptContext, terminal: Ter
     context.terminalId === terminal.id &&
     context.terminalPreset === terminal.preset &&
     terminal.preset !== 'shell' &&
-    terminal.status !== 'exited',
+    terminal.status !== 'error',
   )
 }
 

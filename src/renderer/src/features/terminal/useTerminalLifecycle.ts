@@ -4,11 +4,24 @@ import { useWorkspaceStore } from '@/stores/workspace'
 
 export function useTerminalLifecycle(): void {
   const updateTerminal = useWorkspaceStore((state) => state.updateTerminal)
+  const removeTerminal = useWorkspaceStore((state) => state.removeTerminal)
   const setLoadState = useAppStore((state) => state.setLoadState)
 
-  useEffect(() => window.electron.terminal.onExit(({ id, exitCode }) => {
-    updateTerminal(id, { status: 'exited', exitCode, updatedAt: Date.now() })
+  // AI CLI flow heuristic: main process emits running/wait transitions while
+  // the pty produces output. Shell terminals never emit status events.
+  useEffect(() => window.electron.terminal.onStatus(({ id, status }) => {
+    updateTerminal(id, { status, updatedAt: Date.now() })
   }), [updateTerminal])
+
+  // exit 0 -> remove from list (no misleading lingering state);
+  // non-zero -> mark error and retain so the user can see/retry.
+  useEffect(() => window.electron.terminal.onExit(({ id, exitCode }) => {
+    if (exitCode === 0) {
+      removeTerminal(id)
+      return
+    }
+    updateTerminal(id, { status: 'error', exitCode, updatedAt: Date.now() })
+  }), [updateTerminal, removeTerminal])
 
   useEffect(() => window.electron.terminal.onFocus(({ id }) => {
     const store = useWorkspaceStore.getState()
@@ -34,7 +47,7 @@ export function useTerminalLifecycle(): void {
     store.addTerminalForWorkspace({
       id: event.id, workspaceId: event.workspaceId, cwd: event.cwd, preset: event.preset,
       shell: event.shell, name: `${event.preset} terminal`, autoCommand: event.preset,
-      pid: event.pid, status: 'running', updatedAt: Date.now(),
+      pid: event.pid, status: 'wait', updatedAt: Date.now(),
     })
   }), [])
 }

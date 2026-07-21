@@ -144,7 +144,7 @@ export async function launchTerminalPreset(
     shell,
     autoCommand,
     pid: null,
-    status: 'starting',
+    status: 'wait',
     updatedAt: telemetryStartedAt,
     telemetryStartedAt,
     ...(includeContextWindow
@@ -184,7 +184,7 @@ export async function launchTerminalPreset(
 
     useWorkspaceStore.getState().updateTerminal(terminalId, {
       pid: result.pid,
-      status: 'running',
+      status: 'wait',
       updatedAt: Date.now(),
     })
 
@@ -210,7 +210,7 @@ export async function retryTerminalCreate(terminalId: string): Promise<boolean> 
   if (!terminal) return false
 
   useWorkspaceStore.getState().updateTerminal(terminalId, {
-    status: 'starting',
+    status: 'wait',
     errorMessage: undefined,
     updatedAt: Date.now(),
   })
@@ -236,7 +236,7 @@ export async function retryTerminalCreate(terminalId: string): Promise<boolean> 
 
     useWorkspaceStore.getState().updateTerminal(terminalId, {
       pid: result.pid,
-      status: 'running',
+      status: 'wait',
       shell,
       errorMessage: undefined,
       updatedAt: Date.now(),

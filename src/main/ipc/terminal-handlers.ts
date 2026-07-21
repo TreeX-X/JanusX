@@ -46,9 +46,20 @@ interface TerminalCpState {
   initialized: boolean         // whether checkpointManager.initialize() succeeded
   creating: boolean
   pendingSubmitTexts: string[]
+  // Output-flow heuristic for AI CLI display status (engine !== 'shell').
+  // flowStatus mirrors the last status pushed to the renderer so we only
+  // emit events on transitions, not on every data chunk.
+  flowStatus: 'wait' | 'running'
+  flowTimer: ReturnType<typeof setTimeout> | null
+  lastDataAt: number
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
+
+// Idle debounce for AI CLI output streams. When no pty data arrives for this
+// window, the terminal is considered back at an input prompt (wait). Spinner
+// / token output keeps the timer reset, holding the state at running.
+const TERMINAL_FLOW_IDLE_MS = 1200
 let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null
 
 export function createCompanionTerminal(config: TerminalCreateRequest): Promise<{ pid: number }> {
@@ -447,6 +458,9 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       initialized: false,
       creating: false,
       pendingSubmitTexts: [],
+      flowStatus: 'wait',
+      flowTimer: null,
+      lastDataAt: 0,
     })
 
     // PTY output: keep a bounded replay buffer so remounted terminals can recover
@@ -456,6 +470,29 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
       if (seq === null) return
       sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.data, { id, data, seq })
+
+      // AI CLI output-flow heuristic: emit running on first chunk of a burst,
+      // debounce back to wait after IDLE_MS of silence. Shell terminals opt out
+      // entirely and never receive a status event from this path.
+      if (engine !== 'shell') {
+        const st = terminalStates.get(id)
+        if (st) {
+          const now = Date.now()
+          if (st.flowStatus !== 'running') {
+            st.flowStatus = 'running'
+            sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
+          }
+          st.lastDataAt = now
+          if (st.flowTimer) clearTimeout(st.flowTimer)
+          st.flowTimer = setTimeout(() => {
+            const current = terminalStates.get(id)
+            if (!current) return
+            current.flowStatus = 'wait'
+            current.flowTimer = null
+            sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
+          }, TERMINAL_FLOW_IDLE_MS)
+        }
+      }
     })
 
     // Terminal exit: finalize any pending checkpoint.
@@ -464,6 +501,10 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       terminalManager.kill(id)
 
       const state = terminalStates.get(id)
+      if (state?.flowTimer) {
+        clearTimeout(state.flowTimer)
+        state.flowTimer = null
+      }
       if (state?.engine && state.engine !== 'shell') {
         subAgentRunRegistry.finishRun(
           `terminal:${id}`,
@@ -542,6 +583,11 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle(TERMINAL_INVOKE_CHANNELS.kill, async (_event, { id }: { id: string }) => {
+    const st = terminalStates.get(id)
+    if (st?.flowTimer) {
+      clearTimeout(st.flowTimer)
+      st.flowTimer = null
+    }
     terminalManager.kill(id)
     return { success: true }
   })

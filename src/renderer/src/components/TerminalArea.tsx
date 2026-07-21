@@ -88,10 +88,8 @@ function providerLabel(preset: TerminalPreset): string {
 }
 
 function accentColor(status: Terminal['status']): string {
-  if (status === 'exited') return '#4ec9b0'
   if (status === 'running') return '#ff7830'
   if (status === 'error') return '#ff5858'
-  if (status === 'starting') return '#e5c07b'
   return '#58a6ff'
 }
 
