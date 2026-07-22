@@ -141,6 +141,12 @@ export function installElectronApiFallback(): void {
       start: unavailable, cancel: unavailable, cancelAll: unavailable, listSessions: unavailable,
       onEvent: () => () => {}, onNotification: () => () => {}, onHookEvent: () => () => {},
     },
+    agentRuntime: {
+      createSession: unavailable, executeTool: unavailable, cancelSession: unavailable,
+      resolveApproval: () => Promise.resolve(false), getSession: () => Promise.resolve(null),
+      executeFunctionCall: unavailable, executePlannerStep: unavailable,
+      onEvent: () => () => {},
+    },
     checkpoint: {
       create: unavailable, finalize: unavailable, restore: unavailable, list: unavailable,
       diff: unavailable, diffAll: unavailable, delete: unavailable, clearAll: unavailable,

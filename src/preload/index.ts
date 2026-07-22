@@ -25,6 +25,7 @@ import {
   type JanusAPI
 } from '../shared/ipc/janus'
 import { AGENT_CHANNELS, SUBAGENT_RUN_CHANNELS, type AgentAPI, type SubAgentRunAPI } from '../shared/ipc/agent'
+import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agent-runtime'
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
@@ -232,6 +233,17 @@ const agentAPI: AgentAPI = {
   onHookEvent: (callback) => subscribeIpcEvent(AGENT_CHANNELS.hookEvent, callback),
 }
 
+const agentRuntimeAPI: AgentRuntimeAPI = {
+  createSession: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.createSession, input),
+  executeTool: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.executeTool, input),
+  cancelSession: (sessionId) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.cancelSession, sessionId),
+  resolveApproval: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.resolveApproval, input),
+  getSession: (sessionId) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.getSession, sessionId),
+  executeFunctionCall: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.executeFunctionCall, input),
+  executePlannerStep: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.executePlannerStep, input),
+  onEvent: (callback) => subscribeIpcEvent(AGENT_RUNTIME_CHANNELS.event, callback),
+}
+
 const checkpointAPI: CheckpointAPI = {
   create: (input) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.create, input),
   finalize: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.finalize, { checkpointId, cwd }),
@@ -312,6 +324,7 @@ contextBridge.exposeInMainWorld('electron', {
   office: officeAPI,
   llm: llmAPI,
   agent: agentAPI,
+  agentRuntime: agentRuntimeAPI,
   checkpoint: checkpointAPI,
   git: gitAPI,
   notificationSettings: notificationSettingsAPI,

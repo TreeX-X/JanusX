@@ -6,6 +6,7 @@ import type { KnowledgeAPI } from '../../../shared/ipc/knowledge'
 import type { JanusAPI } from '../../../shared/ipc/janus'
 import type { OfficeAPI } from '../../../shared/office'
 import type { AgentAPI, SubAgentRunAPI } from '../../../shared/ipc/agent'
+import type { AgentRuntimeAPI } from '../../../shared/ipc/agent-runtime'
 import type { CheckpointAPI } from '../../../shared/ipc/checkpoint'
 import type { GitAPI } from '../../../shared/ipc/git'
 import type { LlmAPI } from '../../../shared/ipc/llm'
@@ -27,6 +28,7 @@ interface ElectronAPI {
   office: OfficeAPI
   llm: LlmAPI
   agent: AgentAPI
+  agentRuntime: AgentRuntimeAPI
   checkpoint: CheckpointAPI
   git: GitAPI
   notificationSettings: NotificationSettingsAPI

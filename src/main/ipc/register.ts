@@ -21,6 +21,8 @@ import { registerSettingsHandlers } from './settings-handlers'
 import { registerSubAgentRunHandlers } from './subagent-run-handlers'
 import { registerTerminalHandlers } from './terminal-handlers'
 import { terminalManager } from '../terminal/manager'
+import { ipcMain } from 'electron'
+import { registerAgentRuntimeHandlers } from './agent-runtime-handlers'
 
 export interface RegisterApplicationIpcOptions {
   mainWindow: BrowserWindow
@@ -36,6 +38,7 @@ export interface RegisterApplicationIpcOptions {
 let applicationIpcRegistered = false
 
 export function registerApplicationIpc(options: RegisterApplicationIpcOptions): void {
+  registerAgentRuntimeHandlers(() => options.mainWindow, ipcMain, options.resolveWorkspaceRoot)
   if (applicationIpcRegistered) return
   applicationIpcRegistered = true
 
