@@ -14,10 +14,8 @@ import {
   Background,
   Controls,
   MiniMap,
-  applyNodeChanges,
   type Node,
   type Edge,
-  type NodeChange,
   type ReactFlowInstance,
   type NodeMouseHandler
 } from '@xyflow/react'
@@ -29,7 +27,6 @@ import { useAppStore } from '@/stores/app'
 import type { TerminalPreset } from '@/types'
 import {
   createNode as createNodeIPC,
-  updateBlueprint as updateBlueprintIPC,
   bindTerminal as bindTerminalIPC,
   type BlueprintFeatureItem,
   type BlueprintIssue,
@@ -40,14 +37,16 @@ import {
   type BlueprintNodeStatus
 } from '@/services/blueprint'
 import { BlueprintNodeCard, type BlueprintNodeData } from './BlueprintNodeCard'
+import { BlueprintAdaptiveEdge } from './BlueprintAdaptiveEdge'
 import { STATUS_VISUALS, STATUS_ORDER, NODE_TYPE_LABEL } from './blueprintStatus'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
 import { launchTerminalPreset } from '@/lib/terminal-launch'
-import { deriveBlueprintFlow } from '@/features/blueprint/canvas-layout'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
+import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
+import { collectLocalHierarchyIds, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
@@ -181,49 +180,6 @@ function makeRequirementItem(input: {
   }
 }
 
-function collectLegacyRequirements(node: BlueprintNode): BlueprintFeatureItem[] {
-  const existingTitles = new Set((node.features ?? []).map((feature) => feature.title.trim().toLowerCase()).filter(Boolean))
-  const out: BlueprintFeatureItem[] = []
-  const pushOnce = (item: BlueprintFeatureItem) => {
-    const key = item.title.trim().toLowerCase()
-    if (!key || existingTitles.has(key)) return
-    existingTitles.add(key)
-    out.push(item)
-  }
-
-  const description = node.description?.trim()
-  if (description) {
-    pushOnce(
-      makeRequirementItem({
-        title: description.split(/\r?\n/)[0].slice(0, 48),
-        description,
-        note: '由旧版节点描述迁移'
-      })
-    )
-  }
-
-  for (const item of node.completedItems ?? []) {
-    const title = item.trim()
-    if (!title) continue
-    pushOnce(makeRequirementItem({ title, progress: 100, status: 'done', note: '由旧版已完成事项迁移' }))
-  }
-
-  for (const todo of node.todos ?? []) {
-    const title = todo.text.trim()
-    if (!title) continue
-    pushOnce(
-      makeRequirementItem({
-        title,
-        progress: todo.done ? 100 : 0,
-        status: todo.done ? 'done' : 'planned',
-        note: '由旧版待办迁移'
-      })
-    )
-  }
-
-  return out
-}
-
 function getTerminalPreset(preset: TerminalPreset) {
   return TERMINAL_PRESETS.find((item) => item.type === preset) ?? TERMINAL_PRESETS[2]
 }
@@ -276,8 +232,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const selectPortal = useBlueprintSelectPortal()
   const getSelectPortalContainer = selectPortal ? () => selectPortal : undefined
 
-  const [rfNodes, setRFNodes] = useState<Node<BlueprintNodeData, 'blueprint'>[]>([])
-  const [rfEdges, setRFEdges] = useState<Edge[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
@@ -285,6 +239,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [localFocusActive, setLocalFocusActive] = useState(false)
+  const [descendantDepth, setDescendantDepth] = useState(2)
+  const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(() => new Set())
+  const [matchIndex, setMatchIndex] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
   const {
     analyzing,
@@ -310,8 +268,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const [deleteTarget, setDeleteTarget] = useState<{ nodeId: string; message: string } | null>(null)
 
   const rfInstanceRef = useRef<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>(null)
-  const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
-  const layoutSaveTimerRef = useRef<number | null>(null)
 
   const workspaceNameById = useMemo(
     () => Object.fromEntries(workspaces.map((w) => [w.id, w.name])),
@@ -320,17 +276,23 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const detailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
   const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
   const normalizedSearchQuery = useMemo(() => normalizeSearchText(searchQuery), [searchQuery])
-  const focusActive = normalizedSearchQuery.length > 0 || statusFilter !== 'all'
+  const searchFilterActive = normalizedSearchQuery.length > 0 || statusFilter !== 'all'
+  const allSearchMatchIds = useMemo(() => currentBlueprint?.nodeIds.filter((id) => {
+    const node = currentBlueprint.nodes[id]
+    return node ? nodeMatchesFocus(node, normalizedSearchQuery, statusFilter) : false
+  }) ?? [], [currentBlueprint, normalizedSearchQuery, statusFilter])
+  const searchMatchIds = useMemo(() => currentBlueprint
+    ? visibleNodeIds(currentBlueprint.nodes, allSearchMatchIds, collapsedNodeIds)
+    : [], [allSearchMatchIds, collapsedNodeIds, currentBlueprint])
+  const searchMatchKey = searchMatchIds.join('\u0000')
+  const focusActive = searchFilterActive || (localFocusActive && !!selectedId)
   const focusedNodeIds = useMemo(() => {
     if (!currentBlueprint || !focusActive) return new Set<string>()
-    return new Set(
-      currentBlueprint.nodeIds.filter((id) => {
-        const node = currentBlueprint.nodes[id]
-        return node ? nodeMatchesFocus(node, normalizedSearchQuery, statusFilter) : false
-      })
-    )
-  }, [currentBlueprint, focusActive, normalizedSearchQuery, statusFilter])
+    if (localFocusActive && selectedId) return collectLocalHierarchyIds(currentBlueprint.nodes, selectedId, descendantDepth)
+    return new Set(searchMatchIds)
+  }, [currentBlueprint, descendantDepth, focusActive, localFocusActive, searchMatchIds, selectedId])
   const focusedNodeCount = focusedNodeIds.size
+  useEffect(() => setMatchIndex(0), [searchMatchKey])
   const detailWorkspaceMissing = !!detailNode?.workspaceId && !workspaceNameById[detailNode.workspaceId]
   const latestAnalysis = detailNode?.analyses?.length
     ? detailNode.analyses[detailNode.analyses.length - 1]
@@ -361,97 +323,25 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     if (blueprintId) loadBlueprint(blueprintId)
   }, [blueprintId, loadBlueprint])
 
-  useEffect(() => {
-    return () => {
-      if (layoutSaveTimerRef.current !== null) {
-        window.clearTimeout(layoutSaveTimerRef.current)
-      }
-    }
-  }, [])
-
-  // 当 currentBlueprint 的节点集或关键字段变化时，重新派生 React Flow nodes/edges，保留已拖拽位置
-  const signature = useMemo(() => {
-    if (!currentBlueprint) return ''
-    return JSON.stringify({
-      id: currentBlueprint.id,
-      ids: currentBlueprint.nodeIds,
-      fields: currentBlueprint.nodeIds.map((id) => {
-        const n = currentBlueprint.nodes[id]
-        return n
-          ? [
-              n.title,
-              n.status,
-              n.progress,
-              n.workspaceId,
-              n.workspaceSnapshot?.name,
-              n.workspaceSnapshot?.path,
-              n.boundTerminalId,
-              n.parentId,
-              n.positioning,
-              n.techSolution,
-              n.description,
-              n.tags,
-              n.features?.map((feature) => [feature.title, feature.description, feature.status, feature.requirementNotes]),
-              n.issues?.map((issue) => [issue.title, issue.description, issue.severity, issue.status])
-            ]
-          : null
-      }),
-      search: normalizedSearchQuery,
-      statusFilter
-    })
-  }, [currentBlueprint, normalizedSearchQuery, statusFilter])
-
-  useEffect(() => {
-    if (!currentBlueprint) return
-    const { nodes, edges } = deriveBlueprintFlow(currentBlueprint, positionsRef.current, workspaceNameById, focusedNodeIds, focusActive)
-    // 记录最新位置（含自动布局）
-    positionsRef.current = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
-    setRFNodes(nodes)
-    setRFEdges(edges)
-  }, [signature, workspaceNameById, focusedNodeIds, focusActive]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const scheduleLayoutSave = useCallback(() => {
-    if (layoutSaveTimerRef.current !== null) {
-      window.clearTimeout(layoutSaveTimerRef.current)
-    }
-    layoutSaveTimerRef.current = window.setTimeout(async () => {
-      layoutSaveTimerRef.current = null
-      try {
-        await updateBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, {
-          canvasLayout: { ...positionsRef.current }
-        })
-        setActionError(null)
-      } catch (err) {
-        setActionError(`布局保存失败: ${(err as Error).message}`)
-      }
-    }, 500)
-  }, [blueprintId])
-
-  // 节点变更（拖拽 / 选中）
-  const onNodesChange = useCallback(
-    (changes: NodeChange<Node<BlueprintNodeData, 'blueprint'>>[]) => {
-      let hasPositionChange = false
-      for (const c of changes) {
-        if (c.type === 'position' && c.position) {
-          positionsRef.current[c.id] = c.position
-          hasPositionChange = true
-        }
-      }
-      setRFNodes((nds) => {
-        return applyNodeChanges(changes, nds)
-      })
-      // 选中态
-      for (const c of changes) {
-        if (c.type === 'select') {
-          setSelectedId(c.selected ? c.id : null)
-        }
-      }
-      if (hasPositionChange) {
-        scheduleLayoutSave()
-      }
-    },
-    [scheduleLayoutSave]
-  )
+  const {
+    nodes: rfNodes,
+    edges: rfEdges,
+    onNodesChange,
+    autoLayout,
+    layoutSubtree,
+    restoreDefaultLayout,
+    undoRestoreDefaultLayout,
+    canUndoRestoreDefaultLayout
+  } = useBlueprintGraphController({
+    blueprint: currentBlueprint,
+    blueprintId,
+    workspaceNameById,
+    focusedNodeIds,
+    focusActive,
+    collapsedNodeIds,
+    onSelectionChange: setSelectedId,
+    onError: setActionError
+  })
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
     (_e, node) => {
@@ -774,37 +664,27 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     [persistNodePatch]
   )
 
-  useEffect(() => {
-    if (!detailNode) return
-    const legacyRequirements = collectLegacyRequirements(detailNode)
-    if (!legacyRequirements.length) return
-    void persistNodePatch(detailNode.id, {
-      features: [...(detailNode.features ?? []), ...legacyRequirements],
-      description: '',
-      completedItems: [],
-      todos: []
-    })
-  }, [detailNode, persistNodePatch])
-
   const fitView = useCallback(() => {
     rfInstanceRef.current?.fitView({ padding: 0.2, duration: 200 })
   }, [])
 
-  const focusFirstMatch = useCallback(() => {
-    if (!currentBlueprint || focusedNodeCount === 0) return
-    const firstId = currentBlueprint.nodeIds.find((id) => focusedNodeIds.has(id))
-    if (!firstId) return
-    setSelectedId(firstId)
-    const rfNode = rfInstanceRef.current?.getNode(firstId)
+  const focusMatch = useCallback((step: number) => {
+    if (!searchMatchIds.length) return
+    const nextIndex = stepMatchIndex(matchIndex, step, searchMatchIds.length)
+    const nodeId = searchMatchIds[nextIndex]
+    setMatchIndex(nextIndex)
+    setSelectedId(nodeId)
+    const rfNode = rfInstanceRef.current?.getNode(nodeId)
     if (rfNode) {
       rfInstanceRef.current?.setCenter(rfNode.position.x + NODE_W / 2, rfNode.position.y + NODE_H / 2, {
         zoom: 1,
         duration: 220
       })
     }
-  }, [currentBlueprint, focusedNodeCount, focusedNodeIds])
+  }, [matchIndex, searchMatchIds])
 
   const nodeTypes = useMemo(() => ({ blueprint: BlueprintNodeCard }), [])
+  const edgeTypes = useMemo(() => ({ blueprintAdaptive: BlueprintAdaptiveEdge }), [])
   const statusFilterOptions = useMemo(
     () => [
       { value: 'all', label: '全部状态' },
@@ -832,7 +712,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           </div>
 
           <div className="blueprint-toolbar__actions">
-            <div className="blueprint-toolbar__group blueprint-toolbar__group--focus">
+            <div className="blueprint-toolbar__group blueprint-toolbar__group--focus" role="group" aria-label="查找和筛选">
               <input
                 className="blueprint-toolbar__search"
                 value={searchQuery}
@@ -850,6 +730,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               {focusActive ? (
                 <span className="blueprint-toolbar__match-count">{focusedNodeCount} 个匹配</span>
               ) : null}
+              {searchFilterActive ? <>
+                <button className="blueprint-btn" onClick={() => focusMatch(-1)} disabled={!searchMatchIds.length} aria-label="上一个搜索匹配">上一项</button>
+                <button className="blueprint-btn" onClick={() => focusMatch(1)} disabled={!searchMatchIds.length} aria-label="下一个搜索匹配">下一项</button>
+              </> : null}
               {focusActive ? (
                 <button
                   className="blueprint-btn"
@@ -863,7 +747,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               ) : null}
             </div>
 
-            <div className="blueprint-toolbar__group blueprint-toolbar__group--primary">
+            <div className="blueprint-toolbar__group blueprint-toolbar__group--primary" role="group" aria-label="常用工作">
               <button className="blueprint-btn blueprint-btn--primary" onClick={addRoot}>+ 新建根节点</button>
               <button className="blueprint-btn" onClick={() => selectedId && addChild(selectedId)} disabled={!selectedId}>
                 + 子节点
@@ -871,9 +755,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               <button className="blueprint-btn" onClick={() => selectedId && setDetailNodeId(selectedId)} disabled={!selectedId}>
                 节点详情
               </button>
+              <button className="blueprint-btn" onClick={() => selectedNode && void activateWorkSession(selectedNode)} disabled={!selectedNode} aria-label="进入选中节点工作会话">
+                进入工作
+              </button>
+              <button className={`blueprint-btn${localFocusActive ? ' blueprint-btn--active' : ''}`} onClick={() => setLocalFocusActive((value) => !value)} disabled={!selectedId} aria-pressed={localFocusActive}>
+                {localFocusActive ? '退出局部聚焦' : '聚焦层级'}
+              </button>
             </div>
 
-            <div className="blueprint-toolbar__group blueprint-toolbar__group--utility">
+            <div className="blueprint-toolbar__group blueprint-toolbar__group--utility" role="group" aria-label="实用工具">
               <button
                 className={`blueprint-btn blueprint-toolbar__toggle${toolbarExpanded ? ' blueprint-toolbar__toggle--active' : ''}`}
                 onClick={() => setToolbarExpanded((current) => !current)}
@@ -893,7 +783,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           aria-hidden={!toolbarExpanded}
         >
           <div className="blueprint-toolbar__panel">
-            <div className="blueprint-toolbar__panel-actions">
+            <div className="blueprint-toolbar__panel-actions" role="group" aria-label="分析、布局和删除">
               <label className="blueprint-toolbar__commit-limit">
                 <span>最近</span>
                 <input
@@ -909,10 +799,35 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               <button className="blueprint-btn" onClick={analyzeSelected} disabled={!selectedId || analyzing}>
                 {analyzing ? '分析中…' : '分析选中'}
               </button>
-              <button className="blueprint-btn" onClick={focusFirstMatch} disabled={!focusActive || focusedNodeCount === 0}>
-                定位匹配
-              </button>
+              <label className="blueprint-toolbar__commit-limit"><span>子孙层级</span><input type="number" min={0} max={8} value={descendantDepth} onChange={(event) => setDescendantDepth(Math.max(0, Math.min(8, Number(event.target.value) || 0)))} /></label>
+              <button className="blueprint-btn" onClick={() => focusMatch(0)} disabled={!searchMatchIds.length}>定位匹配</button>
               <button className="blueprint-btn" onClick={fitView}>适应画布</button>
+              <button className="blueprint-btn" onClick={() => void autoLayout()}>自动布局</button>
+              <button
+                className="blueprint-btn"
+                onClick={() => selectedId && void layoutSubtree(selectedId)}
+                disabled={!selectedId}
+              >
+                布局子树
+              </button>
+              <button className="blueprint-btn" onClick={() => selectedId && setCollapsedNodeIds((current) => { const next = new Set(current); if (next.has(selectedId)) next.delete(selectedId); else next.add(selectedId); return next })} disabled={!selectedId} aria-label="折叠或展开选中子树">
+                {selectedId && collapsedNodeIds.has(selectedId) ? '展开子树' : '折叠子树'}
+              </button>
+              <button
+                className="blueprint-btn"
+                onClick={() => {
+                  if (window.confirm('恢复默认布局将覆盖所有手动位置，是否继续？')) {
+                    void restoreDefaultLayout()
+                  }
+                }}
+              >
+                恢复默认布局
+              </button>
+              {canUndoRestoreDefaultLayout ? (
+                <button className="blueprint-btn" onClick={() => void undoRestoreDefaultLayout()}>
+                  撤销恢复
+                </button>
+              ) : null}
               <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
                 删除选中
               </button>
@@ -929,6 +844,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onNodeContextMenu}

@@ -222,9 +222,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr) 300px;
-  background-color: #070709;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
-  background-size: 14px 14px;
+  background-color: var(--workbench-canvas, #080809);
 }
 
 .leftPane,
@@ -237,7 +235,7 @@
 .leftPane,
 .rightPane {
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.018);
+  background: var(--workbench-canvas, #080809);
 }
 
 .leftPane {
@@ -253,6 +251,9 @@
 .stage {
   overflow: hidden;
   padding: 18px;
+  background-color: var(--workbench-canvas, #080809);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
+  background-size: 14px 14px;
 }
 
 .paneTitle {
@@ -370,7 +371,7 @@
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.065);
-  border-radius: 6px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -401,7 +402,7 @@
   gap: 10px;
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 7px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.028);
   color: #ddd;
   cursor: pointer;
@@ -481,7 +482,7 @@
 .searchPanel {
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.065);
-  border-radius: 7px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.026);
 }
 
@@ -528,7 +529,7 @@
   height: 100%;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.065);
-  border-radius: 7px;
+  border-radius: 8px;
   background:
     linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
@@ -769,8 +770,9 @@
   justify-content: center;
   flex-direction: column;
   gap: 8px;
-  border: 1px dashed rgba(255, 255, 255, 0.08);
-  border-radius: 7px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #77777e;
   text-align: center;
 }

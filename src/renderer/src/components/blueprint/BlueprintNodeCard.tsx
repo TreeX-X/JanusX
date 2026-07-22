@@ -16,6 +16,11 @@ export interface BlueprintNodeData extends Record<string, unknown> {
   progress: number
   workspaceName: string | null
   boundTerminalId: string | null
+  childSummary?: string
+  issueSummary?: string
+  blockedReason?: string
+  analysisSummary?: string
+  collapsedSummary?: string
   searchMatched?: boolean
   searchDimmed?: boolean
 }
@@ -61,6 +66,15 @@ function BlueprintNodeCardImpl({ data, selected }: NodeProps<BlueprintRFNodeType
           </span>
         ) : null}
       </div>
+      {(d.childSummary || d.issueSummary || d.blockedReason || d.analysisSummary || d.collapsedSummary) ? (
+        <div className="bp-node-card__signals" aria-label="执行摘要">
+          {d.childSummary ? <span>{d.childSummary}</span> : null}
+          {d.issueSummary ? <span className="bp-node-card__signal--risk">{d.issueSummary}</span> : null}
+          {d.blockedReason ? <span className="bp-node-card__signal--blocked">阻塞</span> : null}
+          {d.analysisSummary ? <span className="bp-node-card__signal--analysis">{d.analysisSummary}</span> : null}
+          {d.collapsedSummary ? <span className="bp-node-card__signal--collapsed">{d.collapsedSummary}</span> : null}
+        </div>
+      ) : null}
 
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>

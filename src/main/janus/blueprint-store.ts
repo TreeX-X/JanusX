@@ -26,6 +26,7 @@ import type {
   DiscoveredRequirement,
   WorkspaceSnapshot
 } from './types'
+import { BLUEPRINT_SCHEMA_VERSION, migrateBlueprint } from './blueprint-migration'
 
 const BLUEPRINTS_DIR = ['blueprints'] // 相对 .janusX
 const WORKSPACES_DIR = ['workspaces'] // 相对 userData/janusx
@@ -176,7 +177,7 @@ async function writeJson(file: string, data: unknown): Promise<void> {
   await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf-8')
 }
 
-class BlueprintStore {
+export class BlueprintStore {
   private cache = new Map<string, Blueprint>()
   private indexCache: WorkspaceIndex | null = null
   private migratedWorkspaces = new Set<string>()
@@ -272,6 +273,7 @@ class BlueprintStore {
         n.features = n.features.map((feature) => makeFeatureItem(feature))
         await this.hydrateWorkspaceSnapshot(n)
       }
+      migrateBlueprint(bp)
       idx.blueprints.push(id)
       this.cache.set(id, bp)
       await writeJson(blueprintFile(id), bp)
@@ -336,6 +338,7 @@ class BlueprintStore {
         n.features = n.features.map((feature) => makeFeatureItem(feature))
         changed = (await this.hydrateWorkspaceSnapshot(n)) || changed
       }
+      changed = migrateBlueprint(bp) || changed
       if (changed) await writeJson(blueprintFile(id), bp)
     }
     return bp
@@ -362,6 +365,7 @@ class BlueprintStore {
       type: input.rootType ?? 'epic'
     })
     const bp: Blueprint = {
+      schemaVersion: BLUEPRINT_SCHEMA_VERSION,
       id,
       name: input.name,
       description: input.description ?? '',

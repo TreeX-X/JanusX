@@ -168,6 +168,8 @@ export interface BlueprintNode {
 }
 
 export interface Blueprint {
+  /** Persisted schema version; absent means the legacy v0 shape. */
+  schemaVersion?: number
   id: string
   name: string
   description: string

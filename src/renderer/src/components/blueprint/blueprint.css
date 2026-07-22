@@ -1625,7 +1625,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background-color: #070709;
+  background-color: var(--workbench-grid, #070709);
   background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
   background-size: 14px 14px;
 }
@@ -1633,11 +1633,26 @@
 .blueprint-view--workbench {
   background:
     radial-gradient(circle at 55% 28%, rgba(255, 120, 48, 0.09), transparent 32%),
-    #080809;
+    var(--workbench-canvas, #080809);
 }
 
+.bp-node-card__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+  color: #8e8e8e;
+  font-size: 10px;
+}
+.bp-node-card__signals span { padding: 2px 4px; border-radius: 4px; background: rgba(255,255,255,.05); }
+.bp-node-card__signal--risk { color: #f0b35b; }
+.bp-node-card__signal--blocked { color: #ff756d; }
+.bp-node-card__signal--analysis { color: #8eb8ff; }
+.bp-node-card__signal--collapsed { color: #c3a5ff; }
+
 .blueprint-view--workbench.blueprint-view--empty {
-  background: var(--surface, rgba(18, 18, 20, 0.75));
+  /* Empty and populated canvases share the same base; only populated views add the glow. */
+  background: var(--workbench-canvas, #080809);
 }
 
 .blueprint-view--workbench .bp-candidate-inbox {
