@@ -249,6 +249,41 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await terminalInput.press('Enter')
     await expect(page.locator('.xterm-rows')).toContainText('JANUSX_DOCK_FIT', { timeout: 10_000 })
 
+    const terminalTabs = page.locator('main button[draggable="true"]')
+    await expect(terminalTabs).toHaveCount(1)
+    const firstTerminalView = terminalScreen.locator('xpath=ancestor::*[@aria-hidden][1]')
+    const firstTerminalElement = await terminalScreen.elementHandle()
+    if (!firstTerminalElement) throw new Error('First terminal did not expose an xterm screen')
+
+    await page.locator('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
+    await page.locator('main').getByRole('button', { name: 'New Shell terminal', exact: true }).click()
+    await expect(terminalTabs).toHaveCount(2, { timeout: 15_000 })
+    await expect(page.locator('.xterm-screen')).toHaveCount(2, { timeout: 15_000 })
+    await expect(firstTerminalView).toHaveAttribute('aria-hidden', 'true')
+    expect(await firstTerminalElement.evaluate((element) => element.isConnected)).toBe(true)
+
+    const secondTerminalInput = page.locator('.xterm-helper-textarea').nth(1)
+    const secondTerminalScreen = page.locator('.xterm-screen').nth(1)
+    await expect(secondTerminalScreen).toBeVisible()
+    await secondTerminalInput.focus()
+    await secondTerminalInput.pressSequentially('echo JANUSX_SECOND_TAB')
+    await secondTerminalInput.press('Enter')
+    await expect(page.locator('.xterm-rows').nth(1)).toContainText('JANUSX_SECOND_TAB', { timeout: 10_000 })
+
+    await terminalTabs.first().click()
+    await expect(firstTerminalView).toHaveAttribute('aria-hidden', 'false')
+    await expect(terminalScreen).toBeVisible()
+    await expect(secondTerminalScreen).toBeHidden()
+    expect(await firstTerminalElement.evaluate((element) => element.isConnected)).toBe(true)
+    const recoveredTerminalBox = await terminalScreen.boundingBox()
+    expect(recoveredTerminalBox?.width).toBeGreaterThan(0)
+    expect(recoveredTerminalBox?.height).toBeGreaterThan(0)
+    await expect(page.locator('.xterm-rows').first()).toContainText('JANUSX_DOCK_FIT')
+    await terminalInput.focus()
+    await terminalInput.pressSequentially('echo JANUSX_TAB_RECOVERED')
+    await terminalInput.press('Enter')
+    await expect(page.locator('.xterm-rows').first()).toContainText('JANUSX_TAB_RECOVERED', { timeout: 10_000 })
+
     const shell = process.platform === 'win32' ? process.env.ComSpec ?? 'cmd.exe' : process.env.SHELL ?? '/bin/sh'
     terminalId = `desktop-smoke-${process.pid}`
     await expect(

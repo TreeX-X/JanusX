@@ -17,9 +17,11 @@ export interface WorkspaceContext {
   workspaceRoot: string
 }
 
+export type ToolInputPropertyType = 'string' | 'number' | 'boolean' | 'array' | 'object'
+
 export interface ToolInputSchema {
   type: 'object'
-  properties?: Record<string, { type: string; enum?: unknown[] }>
+  properties?: Record<string, { type: ToolInputPropertyType; enum?: unknown[] }>
   required?: string[]
   additionalProperties?: boolean
 }

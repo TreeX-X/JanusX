@@ -12,6 +12,7 @@ import {
   createTerminalInputTransactionState,
   normalizeTerminalInputPreviewText,
 } from '@/lib/terminal-input-transaction'
+import { handleCodexMultilineInput } from '@/lib/codex-terminal-input'
 import {
   extractRuntimeTelemetry,
   mergeRuntimeTelemetrySnapshot,
@@ -285,7 +286,6 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
     }
 
     let pendingSoftEnterCount = 0
-    let win32InputMode = false
     let inputTransactionState = createTerminalInputTransactionState()
 
     const commitSubmittedInput = () => {
@@ -309,6 +309,18 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
     }
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      const terminal = useWorkspaceStore.getState().terminals.find((item) => item.id === terminalId)
+      const codexMultilineResult = handleCodexMultilineInput(
+        terminal?.preset,
+        e,
+        (data) => window.electron.terminal.input(terminalId, data),
+        (data) => {
+          pendingSoftEnterCount += 1
+          trackInputData(data)
+        },
+      )
+      if (codexMultilineResult !== null) return codexMultilineResult
+
       if (e.type === 'keydown' && e.key === 'Enter' && (e.shiftKey || e.altKey)) {
         pendingSoftEnterCount += 1
         return true
@@ -316,14 +328,6 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
 
       if (e.type === 'keydown' && e.ctrlKey && e.key.toLowerCase() === 'j') {
         pendingSoftEnterCount += 1
-        const terminal = useWorkspaceStore.getState().terminals.find((item) => item.id === terminalId)
-        if (terminal?.preset === 'codex' && win32InputMode) {
-          const data = '\x1b[74;36;10;1;8;1_'
-          window.electron.terminal.input(terminalId, data)
-          trackInputData(data)
-          e.preventDefault()
-          return false
-        }
         return true
       }
 
@@ -417,22 +421,6 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
     }
     window.addEventListener('focus', handleWindowRecovery)
     document.addEventListener('visibilitychange', handleWindowRecovery)
-
-    const win32InputModeEnableDisposable = term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, (params) => {
-      if (params.some((param) => param === 9001 || (Array.isArray(param) && param.includes(9001)))) {
-        win32InputMode = true
-        return true
-      }
-      return false
-    })
-
-    const win32InputModeDisableDisposable = term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, (params) => {
-      if (params.some((param) => param === 9001 || (Array.isArray(param) && param.includes(9001)))) {
-        win32InputMode = false
-        return true
-      }
-      return false
-    })
 
     let suppressReplayResponses = false
 
@@ -533,8 +521,6 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
         window.clearTimeout(telemetryFlushTimerRef.current)
         telemetryFlushTimerRef.current = null
       }
-      win32InputModeEnableDisposable.dispose()
-      win32InputModeDisableDisposable.dispose()
       term.dispose()
       termRef.current = null
       if (fitRef.current) fitRef.current = null

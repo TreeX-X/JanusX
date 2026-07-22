@@ -4,19 +4,31 @@ export interface RegisteredTool extends ToolDefinition {
   execute: (input: Record<string, unknown>, context: { workspaceId: string; workspaceRoot: string; signal: AbortSignal }) => Promise<unknown> | unknown
 }
 
+const SUPPORTED_PROPERTY_TYPES = new Set(['string', 'number', 'boolean', 'array', 'object'])
+const hasOwn = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key)
+
 function validSchema(schema: ToolInputSchema): boolean {
-  return schema?.type === 'object' && (!schema.properties || Object.values(schema.properties).every((p) => typeof p.type === 'string'))
+  if (!schema || schema.type !== 'object') return false
+  if (schema.properties && (typeof schema.properties !== 'object' || Array.isArray(schema.properties))) return false
+  if (schema.additionalProperties !== undefined && typeof schema.additionalProperties !== 'boolean') return false
+  if (schema.required && (!Array.isArray(schema.required) || new Set(schema.required).size !== schema.required.length || schema.required.some((key) => typeof key !== 'string' || !schema.properties || !hasOwn(schema.properties, key)))) return false
+  return Object.values(schema.properties ?? {}).every((property) =>
+    property !== null
+    && typeof property === 'object'
+    && SUPPORTED_PROPERTY_TYPES.has(property.type)
+    && (property.enum === undefined || Array.isArray(property.enum)),
+  )
 }
 
 export function validateToolInput(schema: ToolInputSchema, input: unknown): input is Record<string, unknown> {
   if (!validSchema(schema) || !input || typeof input !== 'object' || Array.isArray(input)) return false
   const value = input as Record<string, unknown>
-  for (const key of schema.required ?? []) if (!(key in value)) return false
+  for (const key of schema.required ?? []) if (!hasOwn(value, key)) return false
   if (schema.additionalProperties === false) {
-    for (const key of Object.keys(value)) if (!schema.properties?.[key]) return false
+    for (const key of Object.keys(value)) if (!schema.properties || !hasOwn(schema.properties, key)) return false
   }
   for (const [key, property] of Object.entries(schema.properties ?? {})) {
-    if (!(key in value)) continue
+    if (!hasOwn(value, key)) continue
     const actual = value[key]
     if (property.enum && !property.enum.some((item) => Object.is(item, actual))) return false
     if (property.type === 'string' && typeof actual !== 'string') return false

@@ -41,6 +41,7 @@ export function PromptDialog({
 }: PromptDialogProps) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
 
   // open 切到 true 时：重置为 defaultValue 并在下一帧 focus + 全选
   useEffect(() => {
@@ -55,6 +56,8 @@ export function PromptDialog({
       if (el) {
         el.focus()
         el.select()
+      } else {
+        confirmButtonRef.current?.focus()
       }
     })
     return () => cancelAnimationFrame(t)
@@ -71,11 +74,15 @@ export function PromptDialog({
     onConfirm(trimmed)
   }
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
       submit()
-    } else if (e.key === 'Escape') {
+    }
+  }
+
+  const onDialogKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
       e.preventDefault()
       onCancel()
     }
@@ -88,7 +95,13 @@ export function PromptDialog({
 
   return (
     <div className="prompt-dialog__overlay" onMouseDown={onOverlayClick}>
-      <div className="prompt-dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div
+        className="prompt-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onKeyDown={onDialogKeyDown}
+      >
         <div className="prompt-dialog__title">{title}</div>
 
         {description ? <div className="prompt-dialog__description">{description}</div> : null}
@@ -102,17 +115,19 @@ export function PromptDialog({
             value={value}
             placeholder={placeholder}
             onChange={(e) => setValue(e.target.value)}
-            onKeyDown={onKeyDown}
+            onKeyDown={onInputKeyDown}
           />
         ) : null}
 
         {validationMsg ? <div className="prompt-dialog__error">{validationMsg}</div> : null}
 
         <div className="prompt-dialog__actions">
-          <button className="blueprint-btn" onClick={onCancel}>
+          <button type="button" className="blueprint-btn" onClick={onCancel}>
             {cancelText}
           </button>
           <button
+            ref={confirmButtonRef}
+            type="button"
             className={`blueprint-btn ${tone === 'danger' ? 'blueprint-btn--danger' : 'blueprint-btn--primary'}`}
             onClick={submit}
             disabled={!canConfirm}

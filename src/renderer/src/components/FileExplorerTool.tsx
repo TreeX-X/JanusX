@@ -10,6 +10,7 @@ import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { classifyFile } from '@/lib/file-classification'
 import { resolveFilePresentation } from '@/lib/file-presentation'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { PromptDialog } from '@/components/blueprint/PromptDialog'
 
 interface FileTreeOperationResult {
   success?: boolean
@@ -28,6 +29,45 @@ interface FileTreeContextMenuState {
   x: number
   y: number
   target: FileTreeContextMenuTarget
+}
+
+export interface PendingFileTreeDelete {
+  workspacePath: string
+  targetPath: string
+  targetName: string
+  parentPath: string
+}
+
+interface FileTreeDeleteActions {
+  deleteTarget: (workspacePath: string, targetPath: string) => Promise<FileTreeOperationResult | null>
+  isWorkspaceActive: (workspacePath: string) => boolean
+  reloadDirectory: (parentPath: string, workspacePath: string) => Promise<void>
+  onDeleted: (targetPath: string) => void
+}
+
+export function createPendingFileTreeDelete(
+  workspacePath: string,
+  target: Pick<FileTreeContextMenuTarget, 'path' | 'name'>,
+): PendingFileTreeDelete {
+  return {
+    workspacePath,
+    targetPath: target.path,
+    targetName: target.name,
+    parentPath: getParentPath(target.path),
+  }
+}
+
+export async function executeFileTreeDelete(
+  request: PendingFileTreeDelete,
+  actions: FileTreeDeleteActions,
+): Promise<boolean> {
+  const result = await actions.deleteTarget(request.workspacePath, request.targetPath)
+  if (!result) return false
+  if (!actions.isWorkspaceActive(request.workspacePath)) return true
+
+  actions.onDeleted(request.targetPath)
+  await actions.reloadDirectory(request.parentPath, request.workspacePath)
+  return true
 }
 
 const CONTEXT_MENU_WIDTH = 196
@@ -77,6 +117,37 @@ function getAbsolutePath(workspacePath: string, relativePath: string): string {
 function isPathInScope(path: string, scope: string): boolean {
   if (!scope) return path.length > 0
   return path === scope || path.startsWith(`${scope}/`)
+}
+
+function getActiveWorkspacePath(): string | null {
+  const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
+  return workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null
+}
+
+function injectDirectoryChildren(nodes: FileNode[], path: string, children: FileNode[]): FileNode[] {
+  return nodes.map((node) => {
+    if (node.path === path && node.type === 'directory') {
+      return {
+        ...node,
+        children,
+        loaded: true,
+        hasChildren: children.length > 0,
+      }
+    }
+    if (!node.children?.length) return node
+    return { ...node, children: injectDirectoryChildren(node.children, path, children) }
+  })
+}
+
+export async function reloadWorkspaceDirectory(workspacePath: string, path: string): Promise<void> {
+  const children = await window.electron.fileTree.children(workspacePath, path)
+  if (getActiveWorkspacePath() !== workspacePath) return
+
+  useWorkspaceStore.setState((state) => {
+    const activePath = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.path
+    if (activePath !== workspacePath) return {}
+    return { fileTree: injectDirectoryChildren(state.fileTree, path, children) }
+  })
 }
 
 function isValidEntryName(name: string): boolean {
@@ -273,6 +344,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const fetchGitStatus = useGitStore((s) => s.fetchStatus)
   const openEditorFile = useEditorStore((s) => s.openFile)
   const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<PendingFileTreeDelete | null>(null)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
   const activeWorkspacePath = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
@@ -299,47 +371,27 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     return dirs
   }, [fileChangeMap])
 
-  const reloadRootFileTree = useCallback(async () => {
-    const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
-    const workspace = workspaces.find((item) => item.id === activeWorkspaceId)
-    if (!workspace) return
+  const reloadRootFileTree = useCallback(async (expectedWorkspacePath?: string) => {
+    const workspacePath = expectedWorkspacePath ?? getActiveWorkspacePath()
+    if (!workspacePath || getActiveWorkspacePath() !== workspacePath) return
 
-    await loadWorkspaceFileTree(workspace.path).catch(() => {})
+    await loadWorkspaceFileTree(
+      workspacePath,
+      () => getActiveWorkspacePath() === workspacePath,
+    ).catch(() => {})
   }, [])
 
-  const reloadDirectory = useCallback(async (path: string) => {
+  const reloadDirectory = useCallback(async (path: string, expectedWorkspacePath?: string) => {
+    const workspacePath = expectedWorkspacePath ?? getActiveWorkspacePath()
+    if (!workspacePath || getActiveWorkspacePath() !== workspacePath) return
+
     if (!path) {
-      await reloadRootFileTree()
+      await reloadRootFileTree(workspacePath)
       return
     }
 
-    const { workspaces, activeWorkspaceId, fileTree: currentTree } = useWorkspaceStore.getState()
-    const workspace = workspaces.find((item) => item.id === activeWorkspaceId)
-    if (!workspace) return
-
     try {
-      const children = await window.electron.fileTree.children(workspace.path, path)
-
-      const injectChildren = (nodes: FileNode[]): FileNode[] =>
-        nodes.map((node) => {
-          if (node.path === path && node.type === 'directory') {
-            return {
-              ...node,
-              children,
-              loaded: true,
-              hasChildren: children.length > 0,
-            }
-          }
-          if (node.children && node.children.length > 0) {
-            return {
-              ...node,
-              children: injectChildren(node.children),
-            }
-          }
-          return node
-        })
-
-      useWorkspaceStore.setState({ fileTree: injectChildren(currentTree) })
+      await reloadWorkspaceDirectory(workspacePath, path)
     } catch {
       // ignore
     }
@@ -579,27 +631,30 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     setContextMenu(null)
   }, [activeFilePath, contextMenu, getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
-  const handleDeleteContextTarget = useCallback(async () => {
+  const handleDeleteContextTarget = useCallback(() => {
     if (!contextMenu || !contextMenu.target.node) return
     const workspace = getActiveWorkspace()
     if (!workspace) return
 
-    const ok = window.confirm(`确认删除「${contextMenu.target.name}」？此操作不可恢复。`)
-    if (!ok) {
-      setContextMenu(null)
-      return
-    }
-
-    const targetPath = contextMenu.target.path
-    const parentPath = getParentPath(targetPath)
-    const result = await runFileTreeMutation(() => window.electron.fileTree.delete(workspace.path, targetPath))
-    if (!result) return
-
-    if (activeFilePath && isPathInScope(activeFilePath, targetPath)) setActiveFilePath(null)
-
-    await reloadDirectory(parentPath)
+    setPendingDelete(createPendingFileTreeDelete(workspace.path, contextMenu.target))
     setContextMenu(null)
-  }, [activeFilePath, contextMenu, getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+  }, [contextMenu, getActiveWorkspace])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDelete) return
+    const request = pendingDelete
+    setPendingDelete(null)
+
+    await executeFileTreeDelete(request, {
+      deleteTarget: (workspacePath, targetPath) =>
+        runFileTreeMutation(() => window.electron.fileTree.delete(workspacePath, targetPath)),
+      isWorkspaceActive: (workspacePath) => getActiveWorkspace()?.path === workspacePath,
+      reloadDirectory,
+      onDeleted: (targetPath) => {
+        if (activeFilePath && isPathInScope(activeFilePath, targetPath)) setActiveFilePath(null)
+      },
+    })
+  }, [activeFilePath, getActiveWorkspace, pendingDelete, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
   return (
     <>
@@ -730,7 +785,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                   <button
                     type="button"
                     className="w-full px-2.5 py-1.5 rounded text-left text-[#ff8a85] hover:bg-[rgba(255,95,87,0.18)]"
-                    onClick={() => void handleDeleteContextTarget()}
+                    onClick={handleDeleteContextTarget}
                   >
                     删除
                   </button>
@@ -740,6 +795,20 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
             document.body,
           )
         : null}
+      <PromptDialog
+        open={pendingDelete !== null}
+        title="确认删除"
+        description={
+          <>
+            确认删除「<strong className="prompt-dialog__emphasis">{pendingDelete?.targetName}</strong>」吗？此操作不可恢复。
+          </>
+        }
+        confirmOnly
+        confirmText="删除"
+        tone="danger"
+        onConfirm={() => void handleConfirmDelete()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </>
   )
 }

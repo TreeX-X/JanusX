@@ -49,33 +49,49 @@ export class WorkspaceAgentRuntime {
 
   private async executeActiveTool(session: ActiveSession, input: ExecuteToolInput, correlationId: string): Promise<ToolResult> {
     let tool: RegisteredTool
-    try { tool = this.registry.validateCall(input.call) } catch (error) { const result = this.result(session, input.call.toolName, correlationId, 'failed', undefined, error instanceof Error ? error.message : String(error)); this.emit({ type: 'tool-failed', result }); return result }
+    let executionInput: Record<string, unknown>
+    try {
+      executionInput = structuredClone(input.call.input)
+      tool = this.registry.validateCall({ ...input.call, input: executionInput })
+    } catch (error) { const result = this.result(session, input.call.toolName, correlationId, 'failed', undefined, error instanceof Error ? error.message : String(error)); this.emit({ type: 'tool-failed', result }); return result }
     if (tool.approval === 'required') {
       const approvalId = randomUUID()
-      const request = { id: approvalId, sessionId: session.id, workspaceId: session.workspace.workspaceId, toolName: tool.name, input: input.call.input, createdAt: new Date().toISOString() }
-      this.emit({ type: 'approval-requested', request })
-      const outcome = await new Promise<ApprovalOutcome>((resolve) => {
-        const timer = setTimeout(() => { const pending = session.pending.get(approvalId); if (!pending) return; session.pending.delete(approvalId); resolve('timed-out') }, session.timeoutMs)
-        session.pending.set(approvalId, { resolve, timer })
+      const request = { id: approvalId, sessionId: session.id, workspaceId: session.workspace.workspaceId, toolName: tool.name, input: structuredClone(executionInput), createdAt: new Date().toISOString() }
+      let resolveOutcome!: (outcome: ApprovalOutcome) => void
+      const outcomePromise = new Promise<ApprovalOutcome>((resolve) => { resolveOutcome = resolve })
+      const timer = setTimeout(() => {
+        const pending = session.pending.get(approvalId)
+        if (!pending) return
+        session.pending.delete(approvalId)
+        pending.resolve('timed-out')
+        this.timeoutSession(session)
       })
+      session.pending.set(approvalId, { resolve: resolveOutcome, timer })
+      this.emit({ type: 'approval-requested', request })
+      const outcome = await outcomePromise
       if (outcome !== 'approved') {
         const timedOut = outcome === 'timed-out'
         const result = this.result(session, tool.name, correlationId, timedOut ? 'timed-out' : 'cancelled', undefined, timedOut ? 'Tool approval timed out' : outcome === 'denied' ? 'Tool approval denied' : 'Session cancelled', approvalId)
         this.emit({ type: timedOut ? 'tool-timed-out' : 'tool-cancelled', result }); return result
       }
     }
+    if (session.status !== 'running' || session.controller.signal.aborted) {
+      const result = this.result(session, tool.name, correlationId, 'cancelled', undefined, 'Session cancelled')
+      this.emit({ type: 'tool-cancelled', result }); return result
+    }
     const startedAt = new Date().toISOString(); this.emit({ type: 'tool-started', sessionId: session.id, correlationId, toolName: tool.name, startedAt })
     const executionController = new AbortController()
     const abortExecution = () => executionController.abort()
     session.controller.signal.addEventListener('abort', abortExecution, { once: true })
     try {
-      const output = await this.withTimeout(Promise.resolve(tool.execute(input.call.input, { workspaceId: session.workspace.workspaceId, workspaceRoot: session.workspace.workspaceRoot, signal: executionController.signal })), session.timeoutMs, session.controller.signal, executionController)
+      if (session.status !== 'running' || session.controller.signal.aborted) throw new Error('Tool execution cancelled')
+      const output = await this.withTimeout(Promise.resolve(tool.execute(executionInput, { workspaceId: session.workspace.workspaceId, workspaceRoot: session.workspace.workspaceRoot, signal: executionController.signal })), session.timeoutMs, session.controller.signal, executionController)
       const result = this.result(session, tool.name, correlationId, 'completed', output, undefined, undefined, startedAt)
       this.emit({ type: 'tool-completed', result }); return result
     } catch (error) {
       const timedOut = error instanceof ToolTimeoutError
       const status = timedOut ? 'timed-out' : session.controller.signal.aborted ? 'cancelled' : 'failed'
-      if (timedOut) { session.status = 'timed-out'; session.updatedAt = new Date().toISOString(); session.controller.abort(); this.settleApprovals(session, 'cancelled') }
+      if (timedOut) this.timeoutSession(session)
       const result = this.result(session, tool.name, correlationId, status, undefined, error instanceof Error ? error.message : String(error), undefined, startedAt)
       this.emit({ type: timedOut ? 'tool-timed-out' : status === 'cancelled' ? 'tool-cancelled' : 'tool-failed', result }); return result
     } finally {
@@ -88,10 +104,11 @@ export class WorkspaceAgentRuntime {
   executeFunctionCall(input: ExecuteToolInput): Promise<ToolResult> { return this.executeTool({ ...input, call: { ...input.call, source: 'function-calling' } }) }
   executePlannerStep(input: ExecuteToolInput): Promise<ToolResult> { return this.executeTool({ ...input, call: { ...input.call, source: 'planner' } }) }
   getSession(id: string): AgentSession | null { const session = this.sessions.get(id); return session ? this.publicSession(session) : null }
-  private publicSession(session: ActiveSession): AgentSession { const { controller: _controller, pending: _pending, activeCalls: _activeCalls, ended: _ended, ...publicValue } = session; return publicValue }
+  private publicSession(session: ActiveSession): AgentSession { return { id: session.id, workspace: { ...session.workspace }, status: session.status, createdAt: session.createdAt, updatedAt: session.updatedAt, timeoutMs: session.timeoutMs } }
   private endSession(session: ActiveSession): void { if (session.ended) return; session.ended = true; this.emit({ type: 'session-ended', session: this.publicSession(session) }) }
   private endSessionWhenIdle(session: ActiveSession): void { if (session.status !== 'running' && session.activeCalls.size === 0) this.endSession(session) }
   private settleApprovals(session: ActiveSession, outcome: ApprovalOutcome): void { session.pending.forEach(({ resolve, timer }) => { clearTimeout(timer); resolve(outcome) }); session.pending.clear() }
+  private timeoutSession(session: ActiveSession): void { if (session.status !== 'running') return; session.status = 'timed-out'; session.updatedAt = new Date().toISOString(); session.controller.abort(); this.settleApprovals(session, 'cancelled') }
   private result(session: ActiveSession, toolName: string, correlationId: string, status: ToolResult['status'], output?: unknown, error?: string, approvalId?: string, startedAt = new Date().toISOString()): ToolResult { const completedAt = new Date().toISOString(); const summary = error ? `${toolName} ${status}: ${error}` : `${toolName} ${status}`; return { workspaceId: session.workspace.workspaceId, sessionId: session.id, correlationId, toolName, status, startedAt, completedAt, durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)), summary, output, error, approvalId } }
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, signal: AbortSignal, executionController: AbortController): Promise<T> { return await new Promise<T>((resolve, reject) => { const timer = setTimeout(() => { executionController.abort(); reject(new ToolTimeoutError('Tool execution timed out')) }, timeoutMs); const abort = () => { clearTimeout(timer); executionController.abort(); reject(new Error('Tool execution cancelled')) }; if (signal.aborted) return abort(); signal.addEventListener('abort', abort, { once: true }); promise.then((value) => { clearTimeout(timer); signal.removeEventListener('abort', abort); resolve(value) }, (error) => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(error) }) }) }
 }

@@ -20,10 +20,14 @@ function mergeFileTreeState(nextNodes: FileNode[], currentNodes: FileNode[]): Fi
   })
 }
 
-export async function loadWorkspaceFileTree(workspacePath: string): Promise<void> {
+export async function loadWorkspaceFileTree(
+  workspacePath: string,
+  shouldCommit: () => boolean = () => true,
+): Promise<void> {
   const tree = await window.electron.fileTree.load(workspacePath)
-  const currentTree = useWorkspaceStore.getState().fileTree
-  useWorkspaceStore.setState({ fileTree: mergeFileTreeState(tree, currentTree) })
+  useWorkspaceStore.setState((state) =>
+    shouldCommit() ? { fileTree: mergeFileTreeState(tree, state.fileTree) } : {},
+  )
 }
 
 export async function chooseAndCreateWorkspace(): Promise<Workspace | null> {

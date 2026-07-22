@@ -1,6 +1,7 @@
 import type { BrowserWindow, IpcMain } from 'electron'
 import { AGENT_RUNTIME_CHANNELS, type ApprovalResult, type CreateAgentSessionInput, type ExecuteToolInput } from '../../shared/ipc/agent-runtime'
 import { workspaceAgentRuntime } from '../agent/runtime/runtime'
+import { registerWorkspaceTools } from '../agent/runtime/tools/workspace-tools'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 
 let registered = false
@@ -10,6 +11,7 @@ export function registerAgentRuntimeHandlers(windowGetter: () => BrowserWindow |
   getMainWindow = windowGetter
   if (resolveWorkspaceRoot) workspaceAgentRuntime.setWorkspaceResolver(resolveWorkspaceRoot)
   if (registered) return
+  registerWorkspaceTools(workspaceAgentRuntime.registry)
   registered = true
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.createSession, (_event, input: CreateAgentSessionInput) => workspaceAgentRuntime.createSession(input))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.executeTool, (_event, input: ExecuteToolInput) => workspaceAgentRuntime.executeTool(input))
