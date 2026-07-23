@@ -103,6 +103,7 @@ interface EditorStore {
   markDirty: (id: string) => void
   updateContent: (id: string, content: string) => void
   saveFile: (id: string) => Promise<void>
+  closePanel: () => void
   hidePanel: () => void
   showPanel: () => void
   togglePanel: () => void
@@ -216,6 +217,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
+  closePanel: () => set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: false }),
   hidePanel: () => set({ isVisible: false, isEmbedded: false }),
   showPanel: () => set(s => ({ isVisible: s.openFiles.length > 0 })),
   togglePanel: () => set(s => ({ isVisible: s.openFiles.length > 0 ? !s.isVisible : false })),

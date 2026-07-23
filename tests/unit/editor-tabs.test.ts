@@ -46,4 +46,19 @@ describe('file editor tabs', () => {
     expect(useEditorStore.getState().openFiles).toHaveLength(2)
     expect(useEditorStore.getState().activeFileId).toBe('C:\\workspace\\src\\first.ts')
   })
+
+  it('clears all tabs when the preview window is closed', async () => {
+    const editor = useEditorStore.getState()
+    await editor.openFile('C:\\workspace\\src\\first.ts', 'C:\\workspace')
+    await editor.openFile('C:\\workspace\\src\\second.ts', 'C:\\workspace')
+
+    useEditorStore.getState().closePanel()
+
+    expect(useEditorStore.getState()).toMatchObject({
+      openFiles: [],
+      activeFileId: null,
+      isVisible: false,
+      isEmbedded: false,
+    })
+  })
 })

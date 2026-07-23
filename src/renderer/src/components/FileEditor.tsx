@@ -81,6 +81,7 @@ export function FileEditor() {
   const isVisible = useEditorStore((s) => s.isVisible)
   const setActiveFile = useEditorStore((s) => s.setActiveFile)
   const closeFile = useEditorStore((s) => s.closeFile)
+  const closePanel = useEditorStore((s) => s.closePanel)
   const hidePanel = useEditorStore((s) => s.hidePanel)
   const saveFile = useEditorStore((s) => s.saveFile)
   const isEmbedded = useEditorStore((s) => s.isEmbedded)
@@ -107,8 +108,8 @@ export function FileEditor() {
   }, [activeFileId, saveFile])
 
   const handleClose = useCallback(() => {
-    hidePanel()
-  }, [hidePanel])
+    closePanel()
+  }, [closePanel])
 
   const handleTabClose = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation()
