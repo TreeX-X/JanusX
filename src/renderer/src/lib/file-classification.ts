@@ -95,6 +95,9 @@ const EXTENSION_RULES: Record<string, FileRule> = {
   '.sql': ['code', 'code', 'sql'],
   '.graphql': ['code', 'code', 'graphql'],
   '.prisma': ['code', 'code', 'prisma'],
+  '.cmake': ['config', 'code', 'plaintext'],
+  '.s': ['code', 'code', 'plaintext'],
+  '.asm': ['code', 'code', 'plaintext'],
 }
 
 const BINARY_EXTENSIONS = new Set([
@@ -129,7 +132,7 @@ export function classifyFile(
     return { semanticKind: 'binary', viewerType: 'binary', monacoLanguage: null }
   }
 
-  return { semanticKind: 'binary', viewerType: 'binary', monacoLanguage: null }
+  return { semanticKind: 'document', viewerType: 'code', monacoLanguage: 'plaintext' }
 }
 
 export function getExtension(filePath: string): string {
@@ -152,6 +155,7 @@ function classifySpecialName(fileName: string): FileRule | null {
   if (fileName === 'makefile' || fileName === 'gnumakefile' || fileName === 'justfile') {
     return ['config', 'code', 'plaintext']
   }
+  if (fileName === 'cmakelists.txt') return ['config', 'code', 'plaintext']
   if (fileName === '.env' || fileName.startsWith('.env.')) {
     return ['config', 'code', 'plaintext']
   }

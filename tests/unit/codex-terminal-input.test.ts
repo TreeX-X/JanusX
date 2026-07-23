@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Terminal } from '@xterm/xterm'
 import {
   getCodexMultilineInput,
   handleCodexMultilineInput,
+  isCodexMultilineShortcut,
 } from '../../src/renderer/src/lib/codex-terminal-input'
 import {
   applyTerminalInputChunk,
@@ -20,10 +20,10 @@ function key(overrides: Partial<KeyboardEvent>): KeyboardEvent {
   } as unknown as KeyboardEvent
 }
 
-function exerciseHandler(event: KeyboardEvent, preset = 'codex') {
+function exerciseHandler(event: KeyboardEvent, preset = 'codex', win32InputMode = false) {
   const write = vi.fn()
   const track = vi.fn()
-  const result = handleCodexMultilineInput(preset, event, write, track)
+  const result = handleCodexMultilineInput(preset, event, write, track, win32InputMode)
 
   // xterm emits onData only when the custom handler allows normal processing.
   if (result !== false) {
@@ -34,35 +34,29 @@ function exerciseHandler(event: KeyboardEvent, preset = 'codex') {
   return { result, write, track }
 }
 
-function writeTerminal(term: Terminal, data: string): Promise<void> {
-  return new Promise((resolve) => term.write(data, resolve))
-}
-
 describe('Codex terminal multiline input', () => {
-  it('uses one CSI-u soft newline for Shift+Enter', () => {
-    expect(getCodexMultilineInput('codex', key({ key: 'Enter', shiftKey: true }))).toBe(
-      '\x1b[13;2u',
-    )
-  })
-
-  it('uses the same soft newline for Ctrl+J', () => {
-    expect(getCodexMultilineInput('codex', key({ key: 'j', ctrlKey: true }))).toBe(
-      '\x1b[13;2u',
-    )
+  it.each([
+    ['Shift+Enter', key({ key: 'Enter', shiftKey: true })],
+    ['Ctrl+J', key({ key: 'j', ctrlKey: true })],
+  ])('recognizes %s as a Codex multiline shortcut', (_name, event) => {
+    expect(isCodexMultilineShortcut('codex', event)).toBe(true)
   })
 
   it.each([
     ['Shift+Enter', key({ key: 'Enter', shiftKey: true })],
     ['Ctrl+J', key({ key: 'j', ctrlKey: true })],
-  ])('writes and tracks %s exactly once while consuming the event', (_name, event) => {
-    const { result, write, track } = exerciseHandler(event)
+  ])('lets xterm encode %s outside Win32 input mode', (_name, event) => {
+    expect(getCodexMultilineInput('codex', event)).toBeNull()
+  })
+
+  it('uses the Win32 input sequence for Ctrl+J when Codex enables mode 9001', () => {
+    const event = key({ key: 'j', ctrlKey: true })
+    const { result, write, track } = exerciseHandler(event, 'codex', true)
 
     expect(result).toBe(false)
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(write).toHaveBeenCalledOnce()
-    expect(write).toHaveBeenCalledWith('\x1b[13;2u')
-    expect(track).toHaveBeenCalledOnce()
-    expect(track).toHaveBeenCalledWith('\x1b[13;2u')
+    expect(write).toHaveBeenCalledExactlyOnceWith('\x1b[74;36;10;1;8;1_')
+    expect(track).toHaveBeenCalledExactlyOnceWith('\x1b[74;36;10;1;8;1_')
 
     const transaction = applyTerminalInputChunk(
       createTerminalInputTransactionState(),
@@ -77,29 +71,16 @@ describe('Codex terminal multiline input', () => {
     })
   })
 
-  it('keeps both shortcuts independent across parsed ?9001h and ?9001l transitions', async () => {
-    const term = new Terminal()
-    const assertShortcuts = () => {
-      for (const event of [
-        key({ key: 'Enter', shiftKey: true }),
-        key({ key: 'j', ctrlKey: true }),
-      ]) {
-        const { result, write, track } = exerciseHandler(event)
-        expect(result).toBe(false)
-        expect(write).toHaveBeenCalledExactlyOnceWith('\x1b[13;2u')
-        expect(track).toHaveBeenCalledExactlyOnceWith('\x1b[13;2u')
-      }
-    }
+  it('does not replace Shift+Enter with a literal CSI-u sequence in Win32 input mode', () => {
+    const event = key({ key: 'Enter', shiftKey: true })
+    const write = vi.fn()
+    const track = vi.fn()
+    const result = handleCodexMultilineInput('codex', event, write, track, true)
 
-    try {
-      assertShortcuts()
-      await writeTerminal(term, '\x1b[?9001h')
-      assertShortcuts()
-      await writeTerminal(term, '\x1b[?9001l')
-      assertShortcuts()
-    } finally {
-      term.dispose()
-    }
+    expect(result).toBeNull()
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(write).not.toHaveBeenCalled()
+    expect(track).not.toHaveBeenCalled()
   })
 
   it('passes ordinary Enter through the handler path', () => {

@@ -237,6 +237,7 @@ const agentRuntimeAPI: AgentRuntimeAPI = {
   createSession: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.createSession, input),
   executeTool: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.executeTool, input),
   cancelSession: (sessionId) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.cancelSession, sessionId),
+  queryPolicyAudit: (query) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.queryPolicyAudit, query),
   resolveApproval: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.resolveApproval, input),
   getSession: (sessionId) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.getSession, sessionId),
   executeFunctionCall: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.executeFunctionCall, input),

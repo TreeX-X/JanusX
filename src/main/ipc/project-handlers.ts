@@ -18,6 +18,7 @@ import {
   type LaunchConfig,
   type ProjectType,
 } from '../../shared/ipc/project'
+import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/renderer-authorization'
 
 // 全局 ProjectRunner 实例（单例）
 let projectRunner: ProjectRunner | null = null
@@ -48,7 +49,7 @@ function getProjectRunner(): ProjectRunner {
  * - project:stop - 停止项目
  * - project:list - 列表运行中的项目
  */
-export function registerProjectHandlers() {
+export function registerProjectHandlers(authorize: RendererActionAuthorizer = authorizeRendererAction) {
   // ═══════════════════════════════════════════════════════════
   // 项目检测
   // ═══════════════════════════════════════════════════════════
@@ -122,8 +123,9 @@ export function registerProjectHandlers() {
    * @param projectPath 项目根目录
    * @param config 配置对象
    */
-  ipcMain.handle(PROJECT_CHANNELS.writeConfig, async (_, projectPath: string, config: LaunchConfig) => {
+  ipcMain.handle(PROJECT_CHANNELS.writeConfig, async (event, projectPath: string, config: LaunchConfig) => {
     try {
+      if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.write-config', actionRisk: 'config-apply', preview: { summary: 'Apply project launch configuration', paths: [projectPath], detail: `${JSON.stringify(config).length} characters`, truncated: false } })) return { success: false, error: 'Configuration update denied by workspace policy' }
       await ProjectConfig.write(projectPath, config)
       return {
         success: true,
@@ -198,8 +200,9 @@ export function registerProjectHandlers() {
    */
   ipcMain.handle(
     PROJECT_CHANNELS.run,
-    async (_, projectPath: string, configName: string = 'dev') => {
+    async (event, projectPath: string, configName: string = 'dev') => {
       try {
+        if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.run', actionRisk: 'run', preview: { summary: 'Start project', paths: [projectPath], detail: `Configuration: ${configName}`, truncated: false } })) return { success: false, error: 'Project run denied by workspace policy' }
         const runner = getProjectRunner()
         const processHandle = await runner.run(projectPath, configName)
 
@@ -224,8 +227,9 @@ export function registerProjectHandlers() {
    * 停止项目
    * @param projectId 项目 ID（通常是项目路径）
    */
-  ipcMain.handle(PROJECT_CHANNELS.stop, async (_, projectId: string) => {
+  ipcMain.handle(PROJECT_CHANNELS.stop, async (event, projectId: string) => {
     try {
+      if (!await authorize(event, { workspaceRoot: projectId, toolName: 'legacy.project.stop', actionRisk: 'run', preview: { summary: 'Stop project', paths: [projectId], truncated: false } })) return { success: false, error: 'Project stop denied by workspace policy' }
       const runner = getProjectRunner()
       await runner.stop(projectId)
 

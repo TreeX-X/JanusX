@@ -12,7 +12,7 @@ import {
   createTerminalInputTransactionState,
   normalizeTerminalInputPreviewText,
 } from '@/lib/terminal-input-transaction'
-import { handleCodexMultilineInput } from '@/lib/codex-terminal-input'
+import { handleCodexMultilineInput, isCodexMultilineShortcut } from '@/lib/codex-terminal-input'
 import {
   extractRuntimeTelemetry,
   mergeRuntimeTelemetrySnapshot,
@@ -49,6 +49,7 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
   const fitRef = useRef<(() => void) | null>(null)
   const focusedRef = useRef(focused)
   const visibleRef = useRef(visible)
+  const visibilityRecoveryTimerRef = useRef<number | null>(null)
   const [fileDragOver, setFileDragOver] = useState(false)
   const pendingOutputRef = useRef('')
   const telemetryFlushTimerRef = useRef<number | null>(null)
@@ -120,7 +121,22 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
   useEffect(() => {
     focusedRef.current = focused
     visibleRef.current = visible
-    if (visible) fitRef.current?.()
+    if (visible) {
+      fitRef.current?.()
+      // Workspace activation can settle pane geometry after the first RAF pair
+      // (visibility changes do not reliably notify ResizeObserver). Re-run the
+      // coalesced recovery once the layout transition has had time to settle.
+      if (visibilityRecoveryTimerRef.current !== null) {
+        window.clearTimeout(visibilityRecoveryTimerRef.current)
+      }
+      visibilityRecoveryTimerRef.current = window.setTimeout(() => {
+        visibilityRecoveryTimerRef.current = null
+        if (visibleRef.current) fitRef.current?.()
+      }, 64)
+    } else if (visibilityRecoveryTimerRef.current !== null) {
+      window.clearTimeout(visibilityRecoveryTimerRef.current)
+      visibilityRecoveryTimerRef.current = null
+    }
     if (focused) termRef.current?.focus()
   }, [focused, visible])
 
@@ -286,6 +302,7 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
     }
 
     let pendingSoftEnterCount = 0
+    let win32InputMode = false
     let inputTransactionState = createTerminalInputTransactionState()
 
     const commitSubmittedInput = () => {
@@ -318,8 +335,14 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
           pendingSoftEnterCount += 1
           trackInputData(data)
         },
+        win32InputMode,
       )
       if (codexMultilineResult !== null) return codexMultilineResult
+
+      if (isCodexMultilineShortcut(terminal?.preset, e)) {
+        pendingSoftEnterCount += 1
+        return true
+      }
 
       if (e.type === 'keydown' && e.key === 'Enter' && (e.shiftKey || e.altKey)) {
         pendingSoftEnterCount += 1
@@ -366,6 +389,27 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
 
       return true
     })
+
+    const win32InputModeEnableDisposable = term.parser.registerCsiHandler(
+      { prefix: '?', final: 'h' },
+      (params) => {
+        if (!params.some((param) => param === 9001 || (Array.isArray(param) && param.includes(9001)))) {
+          return false
+        }
+        win32InputMode = true
+        return true
+      },
+    )
+    const win32InputModeDisableDisposable = term.parser.registerCsiHandler(
+      { prefix: '?', final: 'l' },
+      (params) => {
+        if (!params.some((param) => param === 9001 || (Array.isArray(param) && param.includes(9001)))) {
+          return false
+        }
+        win32InputMode = false
+        return true
+      },
+    )
 
     let lastSyncedGeometry: TerminalGeometrySize | null = null
     const fitAndSync = () => {
@@ -507,6 +551,8 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
       unregisterTerminalForceFit(terminalId)
       clearTerminalGeometry(terminalId)
       bufferChangeDisposable.dispose()
+      win32InputModeEnableDisposable.dispose()
+      win32InputModeDisableDisposable.dispose()
       delete hostElement.dataset.bufferType
       if (scrollbarElement instanceof HTMLElement) {
         scrollbarElement.removeEventListener('pointerdown', handleScrollbarPointerDown, true)
@@ -516,6 +562,10 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
       window.removeEventListener('focus', handleWindowRecovery)
       document.removeEventListener('visibilitychange', handleWindowRecovery)
       recoveryScheduler.cancel()
+      if (visibilityRecoveryTimerRef.current !== null) {
+        window.clearTimeout(visibilityRecoveryTimerRef.current)
+        visibilityRecoveryTimerRef.current = null
+      }
       unsubscribe()
       if (telemetryFlushTimerRef.current !== null) {
         window.clearTimeout(telemetryFlushTimerRef.current)

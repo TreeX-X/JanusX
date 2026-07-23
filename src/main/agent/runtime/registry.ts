@@ -5,6 +5,9 @@ export interface RegisteredTool extends ToolDefinition {
 }
 
 const SUPPORTED_PROPERTY_TYPES = new Set(['string', 'number', 'boolean', 'array', 'object'])
+const SUPPORTED_ACTION_RISKS = new Set([
+  'inspect', 'list', 'stat', 'read', 'write', 'create', 'config-apply', 'run', 'restore', 'delete', 'external-command', 'network',
+])
 const hasOwn = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key)
 
 function validSchema(schema: ToolInputSchema): boolean {
@@ -43,7 +46,7 @@ export function validateToolInput(schema: ToolInputSchema, input: unknown): inpu
 export class ToolRegistry {
   private readonly tools = new Map<string, RegisteredTool>()
   register(tool: RegisteredTool): void {
-    if (!tool.name || !validSchema(tool.inputSchema) || typeof tool.execute !== 'function') throw new Error('Invalid tool definition')
+    if (!tool.name || !SUPPORTED_ACTION_RISKS.has(tool.actionRisk) || !validSchema(tool.inputSchema) || typeof tool.execute !== 'function') throw new Error('Invalid tool definition')
     if (this.tools.has(tool.name)) throw new Error(`Tool already registered: ${tool.name}`)
     this.tools.set(tool.name, tool)
   }

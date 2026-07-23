@@ -1,20 +1,25 @@
-const CODEX_SOFT_ENTER_SEQUENCE = '\x1b[13;2u'
+const CODEX_WIN32_CTRL_J_SEQUENCE = '\x1b[74;36;10;1;8;1_'
+
+export function isCodexMultilineShortcut(
+  preset: string | undefined,
+  event: KeyboardEvent,
+): boolean {
+  if (preset !== 'codex' || event.type !== 'keydown') return false
+
+  return (event.key === 'Enter' && event.shiftKey)
+    || (event.ctrlKey && event.key.toLowerCase() === 'j')
+}
 
 export function getCodexMultilineInput(
   preset: string | undefined,
   event: KeyboardEvent,
+  win32InputMode = false,
 ): string | null {
-  if (preset !== 'codex' || event.type !== 'keydown') return null
+  if (!isCodexMultilineShortcut(preset, event)) return null
 
-  if (event.key === 'Enter' && event.shiftKey) {
-    return CODEX_SOFT_ENTER_SEQUENCE
-  }
-
-  if (event.ctrlKey && event.key.toLowerCase() === 'j') {
-    return CODEX_SOFT_ENTER_SEQUENCE
-  }
-
-  return null
+  return win32InputMode && event.ctrlKey && event.key.toLowerCase() === 'j'
+    ? CODEX_WIN32_CTRL_J_SEQUENCE
+    : null
 }
 
 export function handleCodexMultilineInput(
@@ -22,8 +27,9 @@ export function handleCodexMultilineInput(
   event: KeyboardEvent,
   write: (data: string) => void,
   track: (data: string) => void,
+  win32InputMode = false,
 ): false | null {
-  const data = getCodexMultilineInput(preset, event)
+  const data = getCodexMultilineInput(preset, event, win32InputMode)
   if (!data) return null
 
   write(data)

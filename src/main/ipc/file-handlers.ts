@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { readFile, writeFile, stat } from 'fs/promises'
 import { extname } from 'path'
 import { FILE_CHANNELS } from '../../shared/ipc/workspace'
+import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/renderer-authorization'
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -14,7 +15,7 @@ const MIME_MAP: Record<string, string> = {
   '.bmp': 'image/bmp',
 }
 
-export function registerFileHandlers(): void {
+export function registerFileHandlers(authorize: RendererActionAuthorizer = authorizeRendererAction): void {
   ipcMain.handle(FILE_CHANNELS.read, async (_event, filePath: string) => {
     try {
       const [content, info] = await Promise.all([
@@ -27,8 +28,9 @@ export function registerFileHandlers(): void {
     }
   })
 
-  ipcMain.handle(FILE_CHANNELS.save, async (_event, filePath: string, content: string) => {
+  ipcMain.handle(FILE_CHANNELS.save, async (event, filePath: string, content: string) => {
     try {
+      if (!await authorize(event, { workspaceRoot: filePath, toolName: 'legacy.file.save', actionRisk: 'write', preview: { summary: 'Save file changes', paths: [filePath], detail: `${content.length} characters`, truncated: false } })) return { error: 'File save denied by workspace policy' }
       await writeFile(filePath, content, 'utf-8')
       return { success: true }
     } catch (err: any) {

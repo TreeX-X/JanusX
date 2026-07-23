@@ -52,7 +52,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false }: 
   }, [])
 
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+    <div className="relative h-full w-full overflow-hidden" style={{ background: '#0a0a0a' }}>
       <Editor
         height="100%"
         language={language}

@@ -86,8 +86,8 @@ describe('file classification', () => {
     expectClassification('CHANGELOG', 'document', 'code', 'plaintext')
     expectClassification('manual.docx', 'document', 'binary', null)
     expectClassification('payload.wasm', 'binary', 'binary', null)
-    expectClassification('unknown.custom', 'binary', 'binary', null)
-    expectClassification('no-extension', 'binary', 'binary', null)
+    expectClassification('unknown.custom', 'document', 'code', 'plaintext')
+    expectClassification('no-extension', 'document', 'code', 'plaintext')
   })
 
   it('keeps database and archive presentation distinct while using Binary Viewer', () => {
@@ -110,6 +110,9 @@ describe('file utility compatibility', () => {
     expect(getFileViewType('cache.db')).toBe('binary')
     expect(getFileViewType('source.zip')).toBe('binary')
     expect(getFileViewType('unknown.bin')).toBe('binary')
+    expect(getFileViewType('CMakeLists.txt')).toBe('code')
+    expect(getFileViewType('toolchain.cmake')).toBe('code')
+    expect(getFileViewType('startup.s')).toBe('code')
 
     expect(getMonacoLanguage('component.tsx')).toBe('typescriptreact')
     expect(getMonacoLanguage('script.jsx')).toBe('javascriptreact')

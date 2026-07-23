@@ -144,6 +144,7 @@ export function installElectronApiFallback(): void {
     agentRuntime: {
       createSession: unavailable, executeTool: unavailable, cancelSession: unavailable,
       resolveApproval: () => Promise.resolve(false), getSession: () => Promise.resolve(null),
+      queryPolicyAudit: () => Promise.resolve([]),
       executeFunctionCall: unavailable, executePlannerStep: unavailable,
       onEvent: () => () => {},
     },

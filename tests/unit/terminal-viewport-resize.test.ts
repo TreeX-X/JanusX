@@ -203,28 +203,32 @@ describe('terminal viewport resize', () => {
     expect(resizePty).toHaveBeenLastCalledWith(120, 32)
   })
 
-  it('refreshes a visible unchanged geometry without resizing the PTY', () => {
-    const terminal = createTerminal('normal', 120, 120)
-    const fit = vi.fn()
-    const refresh = vi.fn()
-    const resizePty = vi.fn()
-    const result = recoverTerminalViewportAndSync({
-      visible: true,
-      hostWidth: 800,
-      hostHeight: 500,
-      terminal,
-      fit,
-      refresh,
-      previousGeometry: { cols: 120, rows: 40 },
-      reportGeometry: vi.fn(),
-      resizePty,
-    })
+  it.each(['normal', 'alternate'] as const)(
+    'refreshes a visible unchanged %s buffer without resizing the PTY',
+    (bufferType) => {
+      const atBottom = bufferType === 'normal' ? 120 : 0
+      const terminal = createTerminal(bufferType, atBottom, atBottom)
+      const fit = vi.fn()
+      const refresh = vi.fn()
+      const resizePty = vi.fn()
+      const result = recoverTerminalViewportAndSync({
+        visible: true,
+        hostWidth: 800,
+        hostHeight: 500,
+        terminal,
+        fit,
+        refresh,
+        previousGeometry: { cols: 120, rows: 40 },
+        reportGeometry: vi.fn(),
+        resizePty,
+      })
 
-    expect(result.sizeChanged).toBe(false)
-    expect(fit).toHaveBeenCalledOnce()
-    expect(refresh).toHaveBeenCalledWith(0, 39)
-    expect(resizePty).not.toHaveBeenCalled()
-  })
+      expect(result.sizeChanged).toBe(false)
+      expect(fit).toHaveBeenCalledOnce()
+      expect(refresh).toHaveBeenCalledWith(0, 39)
+      expect(resizePty).not.toHaveBeenCalled()
+    },
+  )
 
   it('does no work while hidden or when the host is degenerate', () => {
     const terminal = createTerminal('normal', 0, 0)

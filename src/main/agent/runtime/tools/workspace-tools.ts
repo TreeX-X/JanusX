@@ -16,6 +16,7 @@ function isText(content: Buffer): boolean {
 export const workspaceReadTool: RegisteredTool = {
   name: 'workspace.read',
   description: 'Read a UTF-8 text file inside the current workspace',
+  actionRisk: 'read',
   inputSchema: {
     type: 'object',
     properties: {

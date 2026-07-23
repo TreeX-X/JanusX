@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { spawn } from 'child_process'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { watch, type FSWatcher } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
@@ -11,6 +12,7 @@ import {
   type WorkspaceUpdates,
 } from '../../shared/ipc/workspace'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
+import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/renderer-authorization'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
@@ -27,6 +29,7 @@ export type WorkspaceWatcherSubscriber = (
 
 export interface WorkspaceHandlerOptions {
   beforeWorkspaceDelete?: (workspaceId: string) => Promise<void> | void
+  authorizeRendererAction?: RendererActionAuthorizer
 }
 
 type SaveFileExtension = 'md' | 'txt' | 'html'
@@ -75,12 +78,57 @@ function fileTreeResult(success: boolean, error?: string, path?: string): { succ
   return { success, error, path }
 }
 
+async function getGitIgnoredPaths(rootPath: string, paths: string[]): Promise<Set<string>> {
+  if (paths.length === 0) return new Set()
+
+  return new Promise((resolve) => {
+    let output = ''
+    let settled = false
+    const finish = (ignored: Set<string>) => {
+      if (settled) return
+      settled = true
+      resolve(ignored)
+    }
+
+    let command
+    try {
+      command = spawn('git', ['check-ignore', '--no-index', '--stdin', '-z'], {
+        cwd: rootPath,
+        windowsHide: true,
+      })
+    } catch {
+      finish(new Set())
+      return
+    }
+
+    command.stdout.setEncoding('utf8')
+    command.stdout.on('data', (chunk: string) => { output += chunk })
+    command.on('error', () => finish(new Set()))
+    command.on('close', () => {
+      finish(new Set(output.split('\0').filter(Boolean).map((path) => path.replace(/\\/g, '/').replace(/\/$/, ''))))
+    })
+    command.stdin.end(paths.join('\0') + '\0')
+  })
+}
+
+async function filterGitIgnoredEntries(rootPath: string, targetDir: string, entries: import('fs').Dirent[]): Promise<import('fs').Dirent[]> {
+  const candidates = entries.map((entry) => {
+    const relativePath = normalizeRelativePath(rootPath, join(targetDir, entry.name))
+    return entry.isDirectory() ? `${relativePath}/` : relativePath
+  })
+  const ignored = await getGitIgnoredPaths(rootPath, candidates)
+  return entries.filter((entry) => {
+    if (HIDDEN_FILETREE_ENTRIES.has(entry.name)) return false
+    const relativePath = normalizeRelativePath(rootPath, join(targetDir, entry.name)).replace(/\/$/, '')
+    return !ignored.has(relativePath)
+  })
+}
+
 async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<FileNode[]> {
   try {
-    const entries = await readdir(targetDir, { withFileTypes: true })
+    const entries = await filterGitIgnoredEntries(rootPath, targetDir, await readdir(targetDir, { withFileTypes: true }))
     const nodes = await Promise.all(
       entries
-        .filter((entry) => !HIDDEN_FILETREE_ENTRIES.has(entry.name))
         .map(async (entry) => {
           const fullPath = join(targetDir, entry.name)
           const nodePath = normalizeRelativePath(rootPath, fullPath)
@@ -88,8 +136,8 @@ async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<
           if (entry.isDirectory()) {
             let hasChildren = false
             try {
-              const children = await readdir(fullPath, { withFileTypes: true })
-              hasChildren = children.some((child) => !HIDDEN_FILETREE_ENTRIES.has(child.name))
+              const children = await filterGitIgnoredEntries(rootPath, fullPath, await readdir(fullPath, { withFileTypes: true }))
+              hasChildren = children.length > 0
             } catch {
               hasChildren = false
             }
@@ -231,6 +279,7 @@ export function registerWorkspaceHandlers(
   mainWindow: BrowserWindow,
   options: WorkspaceHandlerOptions = {},
 ): void {
+  const authorize = options.authorizeRendererAction ?? authorizeRendererAction
   // Also disposed from AppShutdown; function is idempotent.
   mainWindow.on('closed', disposeWorkspaceWatchers)
 
@@ -273,7 +322,8 @@ export function registerWorkspaceHandlers(
     return JSON.parse(data)
   })
 
-  ipcMain.handle(WORKSPACE_CHANNELS.create, async (_event, dto: WorkspaceCreateInput) => {
+  ipcMain.handle(WORKSPACE_CHANNELS.create, async (event, dto: WorkspaceCreateInput) => {
+    if (!await authorize(event, { workspaceRoot: dto.path, toolName: 'legacy.workspace.create', actionRisk: 'create', preview: { summary: 'Create workspace record', paths: [dto.path], truncated: false } })) throw new Error('Workspace creation denied by workspace policy')
     await ensureDir(WORKSPACES_DIR)
     const workspace = {
       id: randomUUID(),
@@ -288,18 +338,22 @@ export function registerWorkspaceHandlers(
     return workspace
   })
 
-  ipcMain.handle(WORKSPACE_CHANNELS.update, async (_event, id: string, updates: WorkspaceUpdates) => {
+  ipcMain.handle(WORKSPACE_CHANNELS.update, async (event, id: string, updates: WorkspaceUpdates) => {
     const filePath = join(WORKSPACES_DIR, `${id}.json`)
     const data = JSON.parse(await readFile(filePath, 'utf-8'))
+    const workspaceRoot = typeof data.path === 'string' ? data.path : id
+    if (!await authorize(event, { workspaceRoot, toolName: 'legacy.workspace.update', actionRisk: 'write', preview: { summary: 'Update workspace record', paths: [workspaceRoot], detail: Object.keys(updates).join(', '), truncated: false } })) throw new Error('Workspace update denied by workspace policy')
     const updated = { ...data, ...updates, updatedAt: new Date().toISOString() }
     await writeFile(filePath, JSON.stringify(updated, null, 2))
     return updated
   })
 
-  ipcMain.handle(WORKSPACE_CHANNELS.delete, async (_event, id: string) => {
+  ipcMain.handle(WORKSPACE_CHANNELS.delete, async (event, id: string) => {
     try {
       const recordPath = join(WORKSPACES_DIR, `${id}.json`)
       const record = JSON.parse(await readFile(recordPath, 'utf-8')) as { path?: unknown }
+      const workspaceRoot = typeof record.path === 'string' ? record.path : id
+      if (!await authorize(event, { workspaceRoot, toolName: 'legacy.workspace.delete', actionRisk: 'delete', preview: { summary: 'Delete workspace record', paths: [workspaceRoot], truncated: false } })) return { success: false }
       await options.beforeWorkspaceDelete?.(id)
       await unlink(recordPath)
       if (typeof record.path === 'string') disposeWorkspaceWatcher(record.path)
@@ -349,7 +403,7 @@ export function registerWorkspaceHandlers(
     return readDirectoryNodes(rootPath, targetDir)
   })
 
-  ipcMain.handle(FILE_TREE_CHANNELS.createFile, async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.createFile, async (event, rootPath: string, parentRelativePath: string, nameValue: string) => {
     const name = sanitizeEntryName(nameValue)
     const parentDir = resolveWorkspacePath(rootPath, parentRelativePath)
     if (!name || !parentDir) return fileTreeResult(false, 'Invalid file name')
@@ -358,6 +412,7 @@ export function registerWorkspaceHandlers(
     if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
 
     try {
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.create-file', actionRisk: 'create', preview: { summary: 'Create file', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'File creation denied by workspace policy')
       const parentInfo = await stat(parentDir)
       if (!parentInfo.isDirectory()) return fileTreeResult(false, 'Parent is not a directory')
       await writeFile(targetPath, '', { encoding: 'utf-8', flag: 'wx' })
@@ -367,7 +422,7 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle(FILE_TREE_CHANNELS.createDirectory, async (_event, rootPath: string, parentRelativePath: string, nameValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.createDirectory, async (event, rootPath: string, parentRelativePath: string, nameValue: string) => {
     const name = sanitizeEntryName(nameValue)
     const parentDir = resolveWorkspacePath(rootPath, parentRelativePath)
     if (!name || !parentDir) return fileTreeResult(false, 'Invalid folder name')
@@ -376,6 +431,7 @@ export function registerWorkspaceHandlers(
     if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
 
     try {
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.create-directory', actionRisk: 'create', preview: { summary: 'Create directory', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'Directory creation denied by workspace policy')
       const parentInfo = await stat(parentDir)
       if (!parentInfo.isDirectory()) return fileTreeResult(false, 'Parent is not a directory')
       await mkdir(targetPath)
@@ -385,7 +441,7 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle(FILE_TREE_CHANNELS.rename, async (_event, rootPath: string, relativePathValue: string, nameValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.rename, async (event, rootPath: string, relativePathValue: string, nameValue: string) => {
     const name = sanitizeEntryName(nameValue)
     const sourcePath = resolveWorkspacePath(rootPath, relativePathValue)
     if (!name || !sourcePath || resolve(sourcePath) === resolve(rootPath)) {
@@ -396,6 +452,7 @@ export function registerWorkspaceHandlers(
     if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
 
     try {
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.rename', actionRisk: 'write', preview: { summary: 'Rename workspace item', paths: [sourcePath, targetPath], truncated: false } })) return fileTreeResult(false, 'Rename denied by workspace policy')
       await rename(sourcePath, targetPath)
       return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, targetPath))
     } catch (err: any) {
@@ -403,13 +460,14 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle(FILE_TREE_CHANNELS.delete, async (_event, rootPath: string, relativePathValue: string) => {
+  ipcMain.handle(FILE_TREE_CHANNELS.delete, async (event, rootPath: string, relativePathValue: string) => {
     const targetPath = resolveWorkspacePath(rootPath, relativePathValue)
     if (!targetPath || resolve(targetPath) === resolve(rootPath)) {
       return fileTreeResult(false, 'Cannot delete workspace root')
     }
 
     try {
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.delete', actionRisk: 'delete', preview: { summary: 'Delete workspace item', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'Delete denied by workspace policy')
       await rm(targetPath, { recursive: true, force: false })
       return fileTreeResult(true)
     } catch (err: any) {
