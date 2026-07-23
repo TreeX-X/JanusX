@@ -82,16 +82,19 @@
 .tab {
   position: relative;
   display: flex;
-  min-width: 76px;
-  max-width: 132px;
+  min-width: 88px;
+  max-width: 160px;
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  padding: 0 5px 0 10px;
+  height: 30px;
+  margin-top: 4px;
+  padding: 0 8px 0 12px;
   color: rgba(255, 255, 255, 0.5);
   font-size: 11px;
   cursor: default;
   outline: none;
+  border-radius: 6px 6px 0 0;
   transition: color 140ms ease, background 140ms ease;
 }
 
@@ -105,17 +108,16 @@
 }
 
 .tab[data-active='true'] {
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 120, 48, 0.09);
+  color: #d4d4d4;
+  background: rgba(10, 10, 10, 0.98);
 }
 
 .tab[data-active='true']::after {
   position: absolute;
-  right: 8px;
+  right: 10px;
   bottom: 0;
-  left: 8px;
-  height: 2px;
-  border-radius: 1px 1px 0 0;
+  left: 10px;
+  height: 1px;
   background: #ff7830;
   content: '';
 }
@@ -144,7 +146,6 @@
 
 .tab:hover .tabClose,
 .tab:focus-visible .tabClose,
-.tab[data-active='true'] .tabClose,
 .tabClose:focus-visible {
   opacity: 1;
 }

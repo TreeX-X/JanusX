@@ -5,7 +5,6 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { chatStream, getDefaultProvider, getProviders, type ChatMessage } from '@/services/llm'
-import { useWorkspaceStore } from '@/stores/workspace'
 import { useStreamingPrinter } from './useStreamingPrinter'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 
@@ -52,9 +51,6 @@ function capMessages(messages: Message[]): Message[] {
 }
 
 export function useJanusChat(): UseJanusChatReturn {
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -256,14 +252,10 @@ export function useJanusChat(): UseJanusChatReturn {
               providerId: activeModelRef.current.providerId,
               modelId: activeModelRef.current.modelId,
               sourceTag: 'janus-chat',
-              workspaceId: activeWorkspace?.id,
-              workspacePath: activeWorkspace?.path,
               onRecallTrace: setLatestRecallTrace,
             }
           : {
               sourceTag: 'janus-chat',
-              workspaceId: activeWorkspace?.id,
-              workspacePath: activeWorkspace?.path,
               onRecallTrace: setLatestRecallTrace,
             }
       )
@@ -271,8 +263,6 @@ export function useJanusChat(): UseJanusChatReturn {
       abortRef.current = abort
     },
     [
-      activeWorkspace?.id,
-      activeWorkspace?.path,
       appendToPrinter,
       commitAssistantMessage,
       completePrinter,

@@ -111,32 +111,37 @@ async function getGitIgnoredPaths(rootPath: string, paths: string[]): Promise<Se
   })
 }
 
-async function filterGitIgnoredEntries(rootPath: string, targetDir: string, entries: import('fs').Dirent[]): Promise<import('fs').Dirent[]> {
+async function inspectGitEntries(
+  rootPath: string,
+  targetDir: string,
+  entries: import('fs').Dirent[],
+): Promise<Array<{ entry: import('fs').Dirent; isGitIgnored: boolean }>> {
   const candidates = entries.map((entry) => {
     const relativePath = normalizeRelativePath(rootPath, join(targetDir, entry.name))
     return entry.isDirectory() ? `${relativePath}/` : relativePath
   })
   const ignored = await getGitIgnoredPaths(rootPath, candidates)
-  return entries.filter((entry) => {
-    if (HIDDEN_FILETREE_ENTRIES.has(entry.name)) return false
-    const relativePath = normalizeRelativePath(rootPath, join(targetDir, entry.name)).replace(/\/$/, '')
-    return !ignored.has(relativePath)
-  })
+  return entries
+    .filter((entry) => !HIDDEN_FILETREE_ENTRIES.has(entry.name))
+    .map((entry) => {
+      const relativePath = normalizeRelativePath(rootPath, join(targetDir, entry.name)).replace(/\/$/, '')
+      return { entry, isGitIgnored: ignored.has(relativePath) }
+    })
 }
 
 async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<FileNode[]> {
   try {
-    const entries = await filterGitIgnoredEntries(rootPath, targetDir, await readdir(targetDir, { withFileTypes: true }))
+    const entries = await inspectGitEntries(rootPath, targetDir, await readdir(targetDir, { withFileTypes: true }))
     const nodes = await Promise.all(
       entries
-        .map(async (entry) => {
+        .map(async ({ entry, isGitIgnored }) => {
           const fullPath = join(targetDir, entry.name)
           const nodePath = normalizeRelativePath(rootPath, fullPath)
 
           if (entry.isDirectory()) {
             let hasChildren = false
             try {
-              const children = await filterGitIgnoredEntries(rootPath, fullPath, await readdir(fullPath, { withFileTypes: true }))
+              const children = await inspectGitEntries(rootPath, fullPath, await readdir(fullPath, { withFileTypes: true }))
               hasChildren = children.length > 0
             } catch {
               hasChildren = false
@@ -146,6 +151,7 @@ async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<
               name: entry.name,
               path: nodePath,
               type: 'directory' as const,
+              isGitIgnored,
               children: [],
               hasChildren,
               loaded: false,
@@ -156,6 +162,7 @@ async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<
             name: entry.name,
             path: nodePath,
             type: 'file' as const,
+            isGitIgnored,
           }
         }),
     )

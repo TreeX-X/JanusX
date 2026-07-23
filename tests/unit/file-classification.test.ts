@@ -179,6 +179,12 @@ describe('semantic file icon', () => {
       activeFilePath: null,
       fileChange: null,
     }))
+    const ignoredMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
+      ...commonProps,
+      node: { ...databaseNode, isGitIgnored: true },
+      activeFilePath: null,
+      fileChange: null,
+    }))
 
     expect(activeMarkup).toContain('data-file-kind="typescript"')
     expect(activeMarkup).toContain('data-selected="true"')
@@ -194,6 +200,9 @@ describe('semantic file icon', () => {
     expect(fileNameTag).toBeDefined()
     expect(fileNameTag).not.toContain('style=')
     expect(defaultMarkup).not.toContain('data-git-status=')
+    expect(ignoredMarkup).toContain('data-git-ignored="true"')
+    expect(ignoredMarkup).toContain('text-decoration:line-through')
+    expect(ignoredMarkup).toContain('opacity:0.68')
   })
 
   it('marks folders containing git changes with an aggregate dot', () => {

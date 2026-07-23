@@ -197,6 +197,7 @@ export function FileTreeItem({
 }: FileTreeItemProps) {
   const isFolder = node.type === 'directory'
   const isActive = activeFilePath === node.path
+  const isGitIgnored = node.isGitIgnored === true
   const changeVisual = !isFolder && fileChange ? FILE_CHANGE_VISUALS[fileChange.status] : null
   const presentation = resolveFilePresentation(classifyFile(node.path, node.type))
 
@@ -243,6 +244,7 @@ export function FileTreeItem({
       <div
         data-file-path={node.path}
         data-selected={isActive}
+        data-git-ignored={isGitIgnored ? 'true' : undefined}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
@@ -251,19 +253,20 @@ export function FileTreeItem({
         className="py-[5px] px-2 mb-px rounded cursor-pointer transition-colors flex items-center gap-1.5 text-xs select-none"
         style={{
           paddingLeft: `${8 + depth * 16}px`,
-          color: isActive ? '#ff7830' : '#999',
+          color: isActive ? '#ff7830' : isGitIgnored ? '#737373' : '#999',
           background: isActive ? 'rgba(255, 120, 48, 0.1)' : 'transparent',
+          opacity: isGitIgnored && !isActive ? 0.68 : 1,
         }}
         onMouseEnter={(e) => {
           if (!isActive) {
             e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'
-            e.currentTarget.style.color = '#ccc'
+            e.currentTarget.style.color = isGitIgnored ? '#969696' : '#ccc'
           }
         }}
         onMouseLeave={(e) => {
           if (!isActive) {
             e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = '#999'
+            e.currentTarget.style.color = isGitIgnored ? '#737373' : '#999'
           }
         }}
       >
@@ -282,6 +285,7 @@ export function FileTreeItem({
         <span
           className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
           data-file-name={node.name}
+          style={isGitIgnored ? { textDecoration: 'line-through', textDecorationThickness: '1px' } : undefined}
         >
           {node.name}
         </span>
@@ -452,26 +456,6 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
     const absolutePath = getAbsolutePath(workspace.path, relativePath)
     setActiveFilePath(relativePath)
-    void openEditorFile(absolutePath, workspace.path)
-  }, [getActiveWorkspace, openEditorFile, setActiveFilePath])
-
-  const openFileInDetachedEditor = useCallback(async (relativePath: string) => {
-    const workspace = getActiveWorkspace()
-    if (!workspace) return
-
-    const absolutePath = getAbsolutePath(workspace.path, relativePath)
-    setActiveFilePath(relativePath)
-
-    try {
-      const result = await window.electron.window.openEditor({
-        filePath: absolutePath,
-        workspacePath: workspace.path,
-      })
-      if (result?.success) return
-    } catch {
-      // Fall back to the in-app editor when the native window cannot be opened.
-    }
-
     void openEditorFile(absolutePath, workspace.path)
   }, [getActiveWorkspace, openEditorFile, setActiveFilePath])
 
@@ -699,7 +683,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                 changedDirs={changedDirs}
                 onSelect={setActiveFilePath}
                 onToggleDirectory={handleToggleDirectory}
-                onOpenFile={openFileInDetachedEditor}
+                onOpenFile={openFileInEditorPanel}
                 onOpenContextMenu={openContextMenu}
               />
             ))

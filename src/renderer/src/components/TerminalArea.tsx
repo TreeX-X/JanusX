@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Globe } from 'lucide-react'
+import { Globe, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useBrowserStore } from '@/stores/browser'
@@ -683,11 +683,10 @@ function LeafPane({
                 onTerminalDragEnd()
               }}
               onClick={() => onTabSelect(leaf.id, tab.id)}
-              className="group/tab flex h-8 min-w-[112px] max-w-[190px] cursor-pointer select-none items-center gap-1.5 rounded-t-md border-0 px-2 text-left font-mono text-[11px] leading-none transition-colors"
+              className="group/tab relative flex h-[30px] min-w-[112px] max-w-[190px] cursor-pointer select-none items-center gap-1.5 rounded-t-[6px] border-0 px-3 text-left font-mono text-[11px] leading-none transition-colors"
               style={{
-                color: isActive ? '#fff' : 'rgba(255,255,255,0.46)',
-                background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
-                boxShadow: isActive && showFocus ? 'inset 0 -1px 0 rgba(255,120,48,0.72)' : 'none',
+                color: isActive ? '#d4d4d4' : 'rgba(255,255,255,0.42)',
+                background: isActive ? 'rgba(10, 10, 10, 0.98)' : 'transparent',
               }}
               title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
@@ -711,7 +710,7 @@ function LeafPane({
               <span
                 tabIndex={-1}
                 title={tab.type === 'terminal' ? 'Kill Terminal' : tab.type === 'browser' ? 'Close Browser' : 'Close Chat'}
-                className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-35 transition-[opacity,color,background] group-hover/tab:opacity-75 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
+                className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                 style={{ color: '#999' }}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -720,8 +719,15 @@ function LeafPane({
                   else onClosePaneTab(leaf.id, tab.id)
                 }}
               >
-                x
+                <X size={12} strokeWidth={1.8} aria-hidden="true" />
               </span>
+              {isActive && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-0 left-2.5 right-2.5 h-px"
+                  style={{ background: '#ff7830' }}
+                />
+              )}
             </button>
           )
         })}

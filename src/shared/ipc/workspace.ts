@@ -65,6 +65,8 @@ export interface FileNode {
   name: string
   path: string
   type: 'file' | 'directory'
+  /** True when Git ignores this entry; ignored entries remain actionable in the tree. */
+  isGitIgnored?: boolean
   children?: FileNode[]
   hasChildren?: boolean
   loaded?: boolean

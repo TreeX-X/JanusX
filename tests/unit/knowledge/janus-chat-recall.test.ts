@@ -168,6 +168,35 @@ describe('Janus Chat knowledge recall', () => {
     expect(capture).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps an unbound Janus conversation global and skips workspace observations', async () => {
+    search.mockResolvedValue(emptyResult)
+    streamText.mockResolvedValue({
+      textStream: (async function* () {
+        yield 'global answer'
+      })(),
+    })
+    registerLlmHandlers()
+    const registration = on.mock.calls.find(([channel]) => channel === 'llm:chat-stream')
+    const reply = vi.fn()
+
+    await registration?.[1]({ reply }, {
+      requestId: 'stream-global',
+      messages,
+      providerId: 'provider-a',
+      sourceTag: 'janus-chat',
+    })
+
+    expect(search).toHaveBeenCalledWith({
+      query: 'latest workspace question',
+      workspaceId: undefined,
+      workspacePath: undefined,
+      maxItems: 5,
+      maxChars: 3_000,
+    })
+    expect(capture).not.toHaveBeenCalled()
+    expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-global' })
+  })
+
   it('keeps streaming when recall throws and reports degradation only through the trace', async () => {
     search.mockRejectedValue(new Error('knowledge offline'))
     streamText.mockResolvedValue({
