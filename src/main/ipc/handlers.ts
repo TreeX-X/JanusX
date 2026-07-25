@@ -422,7 +422,7 @@ export function registerWorkspaceHandlers(
     if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
 
     try {
-      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.create-file', actionRisk: 'create', preview: { summary: 'Create file', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'File creation denied by workspace policy')
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.create-file', actionRisk: 'create', source: 'renderer-user', preview: { summary: 'Create file', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'File creation denied by workspace policy')
       const parentInfo = await stat(parentDir)
       if (!parentInfo.isDirectory()) return fileTreeResult(false, 'Parent is not a directory')
       await writeFile(targetPath, '', { encoding: 'utf-8', flag: 'wx' })
@@ -441,7 +441,7 @@ export function registerWorkspaceHandlers(
     if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
 
     try {
-      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.create-directory', actionRisk: 'create', preview: { summary: 'Create directory', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'Directory creation denied by workspace policy')
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.create-directory', actionRisk: 'create', source: 'renderer-user', preview: { summary: 'Create directory', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'Directory creation denied by workspace policy')
       const parentInfo = await stat(parentDir)
       if (!parentInfo.isDirectory()) return fileTreeResult(false, 'Parent is not a directory')
       await mkdir(targetPath)
@@ -462,7 +462,7 @@ export function registerWorkspaceHandlers(
     if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
 
     try {
-      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.rename', actionRisk: 'write', preview: { summary: 'Rename workspace item', paths: [sourcePath, targetPath], truncated: false } })) return fileTreeResult(false, 'Rename denied by workspace policy')
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.rename', actionRisk: 'write', source: 'renderer-user', preview: { summary: 'Rename workspace item', paths: [sourcePath, targetPath], truncated: false } })) return fileTreeResult(false, 'Rename denied by workspace policy')
       await rename(sourcePath, targetPath)
       return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, targetPath))
     } catch (err: any) {
@@ -477,7 +477,7 @@ export function registerWorkspaceHandlers(
     }
 
     try {
-      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.delete', actionRisk: 'delete', preview: { summary: 'Delete workspace item', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'Delete denied by workspace policy')
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.delete', actionRisk: 'delete', source: 'renderer-user', preview: { summary: 'Delete workspace item', paths: [targetPath], truncated: false } })) return fileTreeResult(false, 'Delete denied by workspace policy')
       await rm(targetPath, { recursive: true, force: false })
       return fileTreeResult(true)
     } catch (err: any) {

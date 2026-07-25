@@ -30,7 +30,7 @@ export function registerFileHandlers(authorize: RendererActionAuthorizer = autho
 
   ipcMain.handle(FILE_CHANNELS.save, async (event, filePath: string, content: string) => {
     try {
-      if (!await authorize(event, { workspaceRoot: filePath, toolName: 'legacy.file.save', actionRisk: 'write', preview: { summary: 'Save file changes', paths: [filePath], detail: `${content.length} characters`, truncated: false } })) return { error: 'File save denied by workspace policy' }
+      if (!await authorize(event, { workspaceRoot: filePath, toolName: 'legacy.file.save', actionRisk: 'write', source: 'renderer-user', preview: { summary: 'Save file changes', paths: [filePath], detail: `${content.length} characters`, truncated: false } })) return { error: 'File save denied by workspace policy' }
       await writeFile(filePath, content, 'utf-8')
       return { success: true }
     } catch (err: any) {
