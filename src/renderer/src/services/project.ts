@@ -47,6 +47,53 @@ export interface CurrentTaskHandlers<T> {
   onFinally?: () => void
 }
 
+export interface ProjectConfigDiffEntry {
+  path: string
+  kind: 'added' | 'removed' | 'changed'
+  before?: string
+  after?: string
+}
+
+function flattenConfig(value: unknown, prefix = '', output = new Map<string, unknown>()): Map<string, unknown> {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => flattenConfig(item, `${prefix}[${index}]`, output))
+    if (value.length === 0) output.set(prefix, value)
+    return output
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value)
+    entries.forEach(([key, item]) => flattenConfig(item, prefix ? `${prefix}.${key}` : key, output))
+    if (entries.length === 0) output.set(prefix, value)
+    return output
+  }
+  output.set(prefix, value)
+  return output
+}
+
+function displayConfigValue(path: string, value: unknown): string {
+  if (/(password|secret|token|api.?key|private.?key)/i.test(path)) return '[REDACTED]'
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+  return (serialized ?? String(value)).slice(0, 160)
+}
+
+export function getProjectConfigDiff(current: LaunchConfig | null, candidate: LaunchConfig | null): ProjectConfigDiffEntry[] {
+  if (!candidate) return []
+  const before = flattenConfig(current ?? {})
+  const after = flattenConfig(candidate)
+  const paths = [...new Set([...before.keys(), ...after.keys()])].filter(Boolean).sort()
+  return paths.flatMap((path) => {
+    const hasBefore = before.has(path)
+    const hasAfter = after.has(path)
+    if (hasBefore && hasAfter && Object.is(before.get(path), after.get(path))) return []
+    return [{
+      path,
+      kind: !hasBefore ? 'added' as const : !hasAfter ? 'removed' as const : 'changed' as const,
+      before: hasBefore ? displayConfigValue(path, before.get(path)) : undefined,
+      after: hasAfter ? displayConfigValue(path, after.get(path)) : undefined,
+    }]
+  })
+}
+
 function unwrap<T>(result: ProjectResult<T>): T {
   if (!result.success) throw new Error(result.error)
   return result.data

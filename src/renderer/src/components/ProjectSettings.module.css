@@ -102,12 +102,71 @@
   border-bottom-color: var(--primary);
 }
 
+.diffCount {
+  display: inline-grid;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 5px;
+  place-items: center;
+  border-radius: 3px;
+  background: rgba(255, 120, 48, 0.14);
+  font-size: 10px;
+}
+
 .formContainer {
   flex: 1;
   overflow-y: auto;
   padding-right: 8px;
   margin-right: -8px;
 }
+
+.diffList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diffEmpty {
+  padding: 18px 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.diffRow {
+  padding: 8px 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.025);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.diffRow[data-kind='added'] { border-left-color: #58b87a; }
+.diffRow[data-kind='removed'] { border-left-color: #d86b6b; }
+.diffRow[data-kind='changed'] { border-left-color: #df9a55; }
+
+.diffPath {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+}
+
+.diffPath span {
+  width: 48px;
+  color: var(--text-secondary);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.diffBefore,
+.diffAfter {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.diffBefore { color: #d98787; }
+.diffAfter { color: #79c892; }
 
 .errorBanner {
   margin-top: 12px;

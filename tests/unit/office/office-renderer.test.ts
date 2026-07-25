@@ -340,7 +340,7 @@ describe('Office renderer lifecycle', () => {
     expect(canPasteOfficePrompt(context, terminal)).toBe(true)
     expect(isOfficePromptContextCurrent(context, 'workspace', 'other.docx', terminal)).toBe(false)
     expect(canPasteOfficePrompt(context, { ...terminal, id: 'other' })).toBe(false)
-    expect(canPasteOfficePrompt(context, { ...terminal, status: 'exited' })).toBe(false)
+    expect(canPasteOfficePrompt(context, { ...terminal, status: 'error' })).toBe(false)
     expect(canPasteOfficePrompt({ ...context, terminalId: null, terminalPreset: 'shell' }, null)).toBe(false)
   })
   it('uses validated loopback ports and the minimal iframe policy', () => {
@@ -392,7 +392,7 @@ describe('Office renderer lifecycle', () => {
     expect(app).toContain('onLostPointerCapture=')
     expect(app).toContain('setPointerCapture(event.pointerId)')
     expect(app).toContain('finishOfficeResize(false)')
-    expect(app).toContain("officeResizing\n            ? 'none'")
+    expect(app).toContain("officeResizing || rightDockResizing || editorResizing\n            ? 'none'")
     expect(app).not.toContain('addEventListener(\'pointermove\'')
   })
   it('uses an unclipped fixed hit target and source-safe close icon', () => {

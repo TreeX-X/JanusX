@@ -6,7 +6,7 @@ import { useJanusState } from './useJanusState'
 import { projectService, type ProjectConfig } from '@/services/project'
 import type { Terminal, Workspace } from '@/types'
 import { JanusChat } from './JanusChat'
-import type { ChatModelOption, Message } from './useJanusChat'
+import type { ChatModelOption, JanusResourceController, Message } from './useJanusChat'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useSubAgentRunStore } from '@/stores/subagent-run'
@@ -111,6 +111,7 @@ interface JanusIslandProps {
   onChatClear: () => void
   onOpenLlmConfig: () => void
   onAddChatToWorkspace: () => void
+  resourceController: JanusResourceController
   knowledgeTrace?: KnowledgeRecallTrace | null
   knowledgePeekActive?: boolean
   knowledgePeekEmpty?: boolean
@@ -251,6 +252,7 @@ export function JanusIsland({
   onChatClear,
   onOpenLlmConfig,
   onAddChatToWorkspace,
+  resourceController,
   knowledgeTrace = null,
   knowledgePeekActive = false,
   knowledgePeekEmpty = false,
@@ -763,6 +765,7 @@ export function JanusIsland({
               onRetry={onChatRetry}
               onClear={onChatClear}
               onOpenLlmConfig={onOpenLlmConfig}
+              resourceController={resourceController}
               onAddToWorkspace={onAddChatToWorkspace}
             />
           </div>

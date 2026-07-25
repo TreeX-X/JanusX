@@ -5,6 +5,7 @@ import {
   createLatestRequestGuard,
   createProjectErrorTracker,
   executeCurrentTask,
+  getProjectConfigDiff,
   getProjectLauncherMode,
   getRunningProjectFailureState,
   getProjectValidationError,
@@ -99,6 +100,24 @@ describe('projectService', () => {
       errors: [{ field: 'configurations', message: 'At least one configuration is required' }],
       warnings: [],
     })).toBe('Validation failed: At least one configuration is required')
+  })
+
+  it('produces a redacted, stable candidate configuration diff', () => {
+    const current = {
+      version: '0.1.0',
+      projectType: ProjectType.Vite,
+      projectName: 'demo',
+      configurations: [{ name: 'dev', type: ProjectType.Vite, request: 'launch', env: { TOKEN: 'old' } }],
+    }
+    const candidate = {
+      ...current,
+      configurations: [{ name: 'dev', type: ProjectType.Vite, request: 'launch', port: 5173, env: { TOKEN: 'new' } }],
+    }
+
+    expect(getProjectConfigDiff(current, candidate)).toEqual([
+      { path: 'configurations[0].env.TOKEN', kind: 'changed', before: '[REDACTED]', after: '[REDACTED]' },
+      { path: 'configurations[0].port', kind: 'added', before: undefined, after: '5173' },
+    ])
   })
 
   it('filters running projects by the exact workspace ID segment', async () => {

@@ -37,6 +37,7 @@ export function Titlebar() {
     activeModel,
     modelNotice,
     latestRecallTrace,
+    resourceController,
     send: handleChatSend,
     stop: handleChatStop,
     retry: handleChatRetry,
@@ -300,6 +301,7 @@ export function Titlebar() {
           onChatClear={handleChatClearAndInvalidatePeek}
           onOpenLlmConfig={handleOpenLlmConfig}
           onAddChatToWorkspace={handleAddChatToWorkspace}
+          resourceController={resourceController}
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
           knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}

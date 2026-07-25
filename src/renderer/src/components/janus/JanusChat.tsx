@@ -6,7 +6,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ChatModelOption, Message } from './useJanusChat'
+import { LoaderCircle, Plus, ScanSearch, X } from 'lucide-react'
+import type { ChatModelOption, JanusResourceController, Message } from './useJanusChat'
 
 /* ════════════════════════════════════════════════════════════
    类型定义
@@ -34,6 +35,7 @@ interface JanusChatProps {
   modelOptions?: ChatModelOption[]
   activeModel?: ChatModelOption | null
   modelNotice?: string | null
+  resourceController?: JanusResourceController
   onCycleModel?: () => void
   onSelectModel?: (providerId: string) => void
   /** 发送一条用户消�?*/
@@ -176,6 +178,7 @@ export function JanusChat({
   modelOptions = [],
   activeModel = null,
   modelNotice = null,
+  resourceController,
   onCycleModel = () => {},
   onSelectModel = () => {},
   onSend,
@@ -315,6 +318,9 @@ export function JanusChat({
   const canClear = messages.length > 0 || !!pendingContent || !!error
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
   const activeModelLabel = activeModel?.modelId ?? 'No model configured'
+  const attachedWorkspaceIds = new Set(resourceController?.resources.map((resource) => resource.workspaceId) ?? [])
+  const attachableWorkspaces = resourceController?.availableWorkspaces.filter((workspace) =>
+    !attachedWorkspaceIds.has(workspace.id)) ?? []
 
   return (
     <div
@@ -373,6 +379,75 @@ export function JanusChat({
           </button>
         </div>
       </div>
+
+      {resourceController && (
+        <div className="janus-resource-scope" aria-label="Workspace resources">
+          <span className="janus-resource-scope-label">Scope</span>
+          <div className="janus-resource-list">
+            {resourceController.resources.length === 0 ? (
+              <span className="janus-resource-global">Global</span>
+            ) : resourceController.resources.map((resource) => {
+              const active = resource.workspaceId === resourceController.activeResourceId
+              return (
+                <div
+                  key={resource.workspaceId}
+                  className="janus-resource-chip"
+                  data-active={active}
+                  data-source={resource.source}
+                >
+                  <button
+                    type="button"
+                    className="janus-resource-select"
+                    onClick={() => resourceController.selectResource(resource.workspaceId)}
+                    title={resource.workspacePath}
+                  >
+                    <span>{resource.workspaceName}</span>
+                    {resource.source === 'embedded' && <em>embedded</em>}
+                  </button>
+                  <button
+                    type="button"
+                    className="janus-resource-remove"
+                    aria-label={`Remove ${resource.workspaceName}`}
+                    title={`Remove ${resource.workspaceName}`}
+                    onClick={() => resourceController.detachWorkspace(resource.workspaceId)}
+                  >
+                    <X size={11} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          {attachableWorkspaces.length > 0 && (
+            <label className="janus-resource-attach" title="Attach workspace">
+              <Plus size={12} strokeWidth={1.8} aria-hidden="true" />
+              <select
+                aria-label="Attach workspace"
+                value=""
+                onChange={(event) => {
+                  if (event.target.value) resourceController.attachWorkspace(event.target.value)
+                }}
+              >
+                <option value="">Workspace</option>
+                {attachableWorkspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button
+            type="button"
+            className="janus-resource-analyze"
+            disabled={!resourceController.activeResourceId || resourceController.analysisStatus === 'running'}
+            aria-label="Analyze workspace"
+            title="Analyze workspace"
+            onClick={resourceController.analyzeActiveResource}
+          >
+            {resourceController.analysisStatus === 'running'
+              ? <LoaderCircle size={12} strokeWidth={1.8} aria-hidden="true" />
+              : <ScanSearch size={12} strokeWidth={1.8} aria-hidden="true" />}
+          </button>
+        </div>
+      )}
 
       {/* 消息区域 */}
       <div

@@ -14,7 +14,7 @@ export type WorkspaceReadPolicyDecision = Omit<PolicyDecision, 'outcome' | 'acti
   actionRisk: 'read'
 }
 
-const SENSITIVE_DIRECTORIES = new Set(['.aws', '.azure', '.gnupg', '.kube', '.secrets', '.ssh', 'secrets'])
+const SENSITIVE_DIRECTORIES = new Set(['.aws', '.azure', '.git', '.gnupg', '.kube', '.secrets', '.ssh', 'secrets'])
 const SENSITIVE_FILENAMES = new Set([
   '.env',
   '.envrc',

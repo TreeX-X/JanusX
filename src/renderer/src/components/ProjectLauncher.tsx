@@ -19,6 +19,10 @@ import styles from './ProjectLauncher.module.css'
 
 interface ProjectLauncherProps {
   projectPath: string
+  workspaceId?: string
+  workspaceRoot?: string
+  projectRelativePath?: string
+  candidateConfig?: LaunchConfig | null
 }
 
 /**
@@ -27,7 +31,7 @@ interface ProjectLauncherProps {
  * 1. 设置模式 - 配置项目启动参数
  * 2. 运行模式 - 显示运行中的项目
  */
-export function ProjectLauncher({ projectPath }: ProjectLauncherProps) {
+export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, projectRelativePath = '', candidateConfig = null }: ProjectLauncherProps) {
   const [mode, setMode] = useState<'settings' | 'running'>('settings')
   const [config, setConfig] = useState<LaunchConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -39,7 +43,7 @@ export function ProjectLauncher({ projectPath }: ProjectLauncherProps) {
     const isCurrent = loadGuardRef.current.begin()
     void loadConfig(isCurrent)
     return loadGuardRef.current.cancel
-  }, [projectPath])
+  }, [candidateConfig, projectPath])
 
   async function loadConfig(isCurrent = loadGuardRef.current.begin()) {
     setLoading(true)
@@ -47,7 +51,7 @@ export function ProjectLauncher({ projectPath }: ProjectLauncherProps) {
     await executeCurrentTask(isCurrent, () => projectService.readConfig(projectPath), {
       onSuccess: (loadedConfig) => {
         setConfig(loadedConfig)
-        setMode(getProjectLauncherMode(loadedConfig))
+        setMode(candidateConfig ? 'settings' : getProjectLauncherMode(loadedConfig))
       },
       onError: (err) => {
         setError(err instanceof Error ? err.message : 'Failed to load config')
@@ -92,7 +96,14 @@ export function ProjectLauncher({ projectPath }: ProjectLauncherProps) {
   return (
     <div className={styles.container}>
       {mode === 'settings' ? (
-        <ProjectSettings projectPath={projectPath} onSave={handleConfigSaved} />
+        <ProjectSettings
+          projectPath={projectPath}
+          workspaceId={workspaceId}
+          workspaceRoot={workspaceRoot}
+          projectRelativePath={projectRelativePath}
+          candidateConfig={candidateConfig}
+          onSave={handleConfigSaved}
+        />
       ) : (
         <ProjectRunningList
           projectPath={projectPath}

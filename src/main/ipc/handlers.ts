@@ -118,7 +118,10 @@ async function inspectGitEntries(
 ): Promise<Array<{ entry: import('fs').Dirent; isGitIgnored: boolean }>> {
   const candidates = entries.map((entry) => {
     const relativePath = normalizeRelativePath(rootPath, join(targetDir, entry.name))
-    return entry.isDirectory() ? `${relativePath}/` : relativePath
+    // Keep directory candidates slashless. Git treats a trailing slash as a
+    // recursive match, so a rule such as `docs/*` would incorrectly mark
+    // `docs` itself as ignored.
+    return relativePath
   })
   const ignored = await getGitIgnoredPaths(rootPath, candidates)
   return entries

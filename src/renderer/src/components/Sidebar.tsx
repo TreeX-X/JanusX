@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
@@ -8,6 +8,10 @@ import type { Workspace, Terminal } from '@/types'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
+import {
+  JANUS_PROJECT_CANDIDATE_EVENT,
+  type JanusProjectCandidate,
+} from './janus/janusProjectCandidate'
 
 function terminalStatusLabel(status: Terminal['status']): string {
   switch (status) {
@@ -50,12 +54,25 @@ export function Sidebar() {
   const [longPressProgressId, setLongPressProgressId] = useState<string | null>(null)
   const [longPressCompletedId, setLongPressCompletedId] = useState<string | null>(null)
   const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
+  const [projectCandidate, setProjectCandidate] = useState<JanusProjectCandidate | null>(null)
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([])
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressVisualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressTargetRef = useRef<string | null>(null)
   const suppressClickRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const openCandidate = (event: Event) => {
+      const detail = (event as CustomEvent<JanusProjectCandidate>).detail
+      const workspace = workspaces.find((item) => item.id === detail?.workspaceId)
+      if (!workspace || !detail) return
+      setProjectCandidate(detail)
+      setConfigTarget(workspace)
+    }
+    window.addEventListener(JANUS_PROJECT_CANDIDATE_EVENT, openCandidate)
+    return () => window.removeEventListener(JANUS_PROJECT_CANDIDATE_EVENT, openCandidate)
+  }, [workspaces])
 
   const handleAddWorkspace = useCallback(async () => {
     try {
@@ -206,6 +223,7 @@ export function Sidebar() {
         pressTargetRef.current = null
         completeTimerRef.current = setTimeout(() => {
           setLongPressCompletedId(null)
+          setProjectCandidate(null)
           setConfigTarget(ws)
           completeTimerRef.current = null
         }, 130)
@@ -646,11 +664,17 @@ export function Sidebar() {
                 </svg>
                 <span>工作区启动配置</span>
               </div>
-              <ModalCloseButton onClose={() => setConfigTarget(null)} />
+              <ModalCloseButton onClose={() => { setConfigTarget(null); setProjectCandidate(null) }} />
             </div>
             {/* Body */}
             <div style={{ padding: '0', overflow: 'hidden', flex: 1 }}>
-              <ProjectLauncher projectPath={configTarget.path} />
+              <ProjectLauncher
+                projectPath={projectCandidate?.projectPath ?? configTarget.path}
+                workspaceId={configTarget.id}
+                workspaceRoot={configTarget.path}
+                projectRelativePath={projectCandidate?.relativePath ?? ''}
+                candidateConfig={projectCandidate?.config ?? null}
+              />
             </div>
           </div>
         </div>,
