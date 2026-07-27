@@ -15,6 +15,9 @@ export function getActiveWorkspacePath(): string | null {
  * 不同目录的并发 reload 互不抢代际,可同时提交
  */
 let fileTreeLoadGeneration = 0
+// A directory response can arrive while a root refresh is in flight.  Track committed
+// directory updates separately so the older root snapshot cannot erase newly loaded children.
+let fileTreeDirectoryMutationGeneration = 0
 
 /**
  * 加载工作区文件树(唯一入口)。
@@ -26,6 +29,7 @@ export async function loadWorkspaceFileTree(
   shouldCommit: () => boolean = () => true,
 ): Promise<void> {
   const generation = ++fileTreeLoadGeneration
+  const directoryMutationGeneration = fileTreeDirectoryMutationGeneration
   const rootNodes = await window.electron.fileTree.load(workspacePath)
 
   // 当前 store 中的树属于活动工作区;仅当目标一致时才带着已展开分支去刷新
@@ -44,9 +48,14 @@ export async function loadWorkspaceFileTree(
     for (const [path, children] of results) childrenByPath.set(path, children)
   }
 
-  if (generation !== fileTreeLoadGeneration) return
+  if (
+    generation !== fileTreeLoadGeneration ||
+    directoryMutationGeneration !== fileTreeDirectoryMutationGeneration
+  ) return
   useWorkspaceStore.setState(() =>
-    shouldCommit() ? { fileTree: applyLoadedChildren(rootNodes, childrenByPath) } : {},
+    shouldCommit() && directoryMutationGeneration === fileTreeDirectoryMutationGeneration
+      ? { fileTree: applyLoadedChildren(rootNodes, childrenByPath) }
+      : {},
   )
 }
 
@@ -57,11 +66,14 @@ export async function reloadWorkspaceDirectory(workspacePath: string, path: stri
   if (generation !== fileTreeLoadGeneration) return
   if (getActiveWorkspacePath() !== workspacePath) return
 
+  let committed = false
   useWorkspaceStore.setState((state) => {
     if (generation !== fileTreeLoadGeneration) return {}
     if (getActiveWorkspacePath() !== workspacePath) return {}
+    committed = true
     return { fileTree: injectDirectoryChildren(state.fileTree, path, children) }
   })
+  if (committed) fileTreeDirectoryMutationGeneration += 1
 }
 
 export async function chooseAndCreateWorkspace(): Promise<Workspace | null> {

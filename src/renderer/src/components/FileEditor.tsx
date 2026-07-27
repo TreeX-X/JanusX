@@ -161,8 +161,8 @@ export function FileEditor() {
           {isEmbedded && (
             <button
               type="button"
-              aria-label={'\u8fd4\u56de\u72ec\u7acb\u6d6e\u7a97'}
-              title={'\u8fd4\u56de\u72ec\u7acb\u6d6e\u7a97'}
+              aria-label={'返回独立浮窗'}
+              title={'返回独立浮窗'}
               onClick={() => void detachEditor()}
               className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
             >

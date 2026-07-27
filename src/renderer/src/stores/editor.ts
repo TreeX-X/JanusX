@@ -152,7 +152,6 @@ interface EditorStore {
   activeFileId: string | null
   isVisible: boolean
   isEmbedded: boolean
-  embeddedWidth: number
 
   openFile: (absolutePath: string, workspacePath: string) => Promise<void>
   closeFile: (id: string) => void
@@ -165,7 +164,6 @@ interface EditorStore {
   showPanel: () => void
   togglePanel: () => void
   setEmbedded: (embedded: boolean) => void
-  setEmbeddedWidth: (width: number) => void
 }
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -173,13 +171,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   activeFileId: null,
   isVisible: false,
   isEmbedded: false,
-  embeddedWidth: 560,
 
   openFile: async (absolutePath, workspacePath) => {
     const id = absolutePath
     const existing = get().openFiles.find(f => f.id === id)
     if (existing) {
-      set({ activeFileId: id, isVisible: true, isEmbedded: false })
+      set({ activeFileId: id, isVisible: true })
       return
     }
 
@@ -199,7 +196,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       openFiles: [...s.openFiles, newFile],
       activeFileId: id,
       isVisible: true,
-      isEmbedded: false,
     }))
 
     if (cached) return
@@ -279,5 +275,4 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   showPanel: () => set(s => ({ isVisible: s.openFiles.length > 0 })),
   togglePanel: () => set(s => ({ isVisible: s.openFiles.length > 0 ? !s.isVisible : false })),
   setEmbedded: (isEmbedded) => set({ isEmbedded }),
-  setEmbeddedWidth: (embeddedWidth) => set({ embeddedWidth }),
 }))

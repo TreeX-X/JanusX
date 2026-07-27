@@ -20,7 +20,7 @@ import {
   type PendingFileTreeDelete,
 } from '@/features/workspace/file-tree'
 import { useGitStore } from '@/stores/git'
-import { closeEditorFilesUnderPath, remapEditorPaths, useEditorStore } from '@/stores/editor'
+import { closeEditorFilesUnderPath, remapEditorPaths } from '@/stores/editor'
 import type { FileNode, GitFileChange } from '@/types'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
@@ -69,7 +69,6 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const gitStatus = useGitStore((s) => s.status)
   const fetchGitStatus = useGitStore((s) => s.fetchStatus)
-  const openEditorFile = useEditorStore((s) => s.openFile)
   const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PendingFileTreeDelete | null>(null)
   const [namingDialog, setNamingDialog] = useState<NamingDialogState | null>(null)
@@ -210,14 +209,14 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     return workspaces.find((item) => item.id === activeWorkspaceId) ?? null
   }, [])
 
-  const openFileInEditorPanel = useCallback((relativePath: string) => {
+  const openFileInEditorPanel = useCallback(async (relativePath: string) => {
     const workspace = getActiveWorkspace()
     if (!workspace) return
 
     const absolutePath = getAbsolutePath(workspace.path, relativePath)
     setActiveFilePath(relativePath)
-    void openEditorFile(absolutePath, workspace.path)
-  }, [getActiveWorkspace, openEditorFile, setActiveFilePath])
+    await window.electron.window.openEditor({ filePath: absolutePath, workspacePath: workspace.path })
+  }, [getActiveWorkspace, setActiveFilePath])
 
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
     setContextMenu({
