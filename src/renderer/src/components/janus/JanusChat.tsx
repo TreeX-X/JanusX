@@ -4,10 +4,10 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { LoaderCircle, Plus, ScanSearch, X } from 'lucide-react'
+import { Check, CircleCheck, CircleX, LoaderCircle, PanelRightOpen, Plus, ShieldX, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message } from './useJanusChat'
+import { MarkdownContent, StreamingText } from '../chat/ChatContent'
+import { Select } from '../ui/Select'
 
 /* ════════════════════════════════════════════════════════════
    类型定义
@@ -54,49 +54,6 @@ interface JanusChatProps {
 /* ════════════════════════════════════════════════════════════
    Markdown 渲染组件（内联代�?+ 代码块复制）
    ════════════════════════════════════════════════════════════ */
-
-function MarkdownContent({ content }: { content: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code: ({ className, children }) => {
-          const isInline = !className
-          const codeText = String(children).replace(/\n$/, '')
-          if (isInline) {
-            return <code className="janus-chat-inline-code">{children}</code>
-          }
-          return (
-            <div className="janus-chat-code-block">
-              <button
-                className="janus-chat-copy-code"
-                onClick={() => {
-                  navigator.clipboard.writeText(codeText).catch(() => {})
-                }}
-                title="复制"
-              >
-                复制
-              </button>
-              <code>{children}</code>
-            </div>
-          )
-        },
-        pre: ({ children }) => <pre className="janus-chat-pre">{children}</pre>
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  )
-}
-
-function StreamingText({ content }: { content: string }) {
-  return (
-    <div className="janus-chat-streaming-text">
-      {content}
-      <span className="janus-chat-streaming-cursor" aria-hidden="true" />
-    </div>
-  )
-}
 
 function StopIcon() {
   return (
@@ -327,32 +284,6 @@ export function JanusChat({
       className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {onAddToWorkspace && (
-        <button
-          className="janus-chat-workspace-action"
-          onClick={onAddToWorkspace}
-          aria-label="Add Chat to workspace"
-          title="Add Chat to workspace"
-          type="button"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M9 4v16" />
-            <path d="M14 10h5M16.5 7.5 19 10l-2.5 2.5" />
-          </svg>
-        </button>
-      )}
       <div className="janus-chat-toolbar">
         <div>
           <span className="janus-chat-toolbar-kicker">Thread</span>
@@ -381,29 +312,17 @@ export function JanusChat({
       </div>
 
       {resourceController && (
+        <>
         <div className="janus-resource-scope" aria-label="Workspace resources">
-          <span className="janus-resource-scope-label">Scope</span>
           <div className="janus-resource-list">
-            {resourceController.resources.length === 0 ? (
-              <span className="janus-resource-global">Global</span>
-            ) : resourceController.resources.map((resource) => {
-              const active = resource.workspaceId === resourceController.activeResourceId
-              return (
+            {resourceController.resources.map((resource) => (
                 <div
                   key={resource.workspaceId}
                   className="janus-resource-chip"
-                  data-active={active}
-                  data-source={resource.source}
                 >
-                  <button
-                    type="button"
-                    className="janus-resource-select"
-                    onClick={() => resourceController.selectResource(resource.workspaceId)}
-                    title={resource.workspacePath}
-                  >
+                  <span className="janus-resource-label" title={resource.workspacePath}>
                     <span>{resource.workspaceName}</span>
-                    {resource.source === 'embedded' && <em>embedded</em>}
-                  </button>
+                  </span>
                   <button
                     type="button"
                     className="janus-resource-remove"
@@ -414,39 +333,92 @@ export function JanusChat({
                     <X size={11} strokeWidth={1.8} aria-hidden="true" />
                   </button>
                 </div>
-              )
-            })}
+            ))}
           </div>
           {attachableWorkspaces.length > 0 && (
-            <label className="janus-resource-attach" title="Attach workspace">
+            <div className="janus-resource-attach" title="Attach workspace">
               <Plus size={12} strokeWidth={1.8} aria-hidden="true" />
-              <select
-                aria-label="Attach workspace"
+              <Select
+                ariaLabel="Attach workspace"
                 value=""
-                onChange={(event) => {
-                  if (event.target.value) resourceController.attachWorkspace(event.target.value)
+                placeholder="Add workspace"
+                options={attachableWorkspaces.map((workspace) => ({
+                  value: workspace.id,
+                  label: workspace.name,
+                }))}
+                className="janus-resource-attach-select"
+                dropdownClassName="janus-resource-attach-dropdown"
+                onChange={(workspaceId) => {
+                  if (workspaceId) resourceController.attachWorkspace(workspaceId)
                 }}
-              >
-                <option value="">Workspace</option>
-                {attachableWorkspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
-                ))}
-              </select>
-            </label>
+              />
+            </div>
           )}
-          <button
-            type="button"
-            className="janus-resource-analyze"
-            disabled={!resourceController.activeResourceId || resourceController.analysisStatus === 'running'}
-            aria-label="Analyze workspace"
-            title="Analyze workspace"
-            onClick={resourceController.analyzeActiveResource}
-          >
-            {resourceController.analysisStatus === 'running'
-              ? <LoaderCircle size={12} strokeWidth={1.8} aria-hidden="true" />
-              : <ScanSearch size={12} strokeWidth={1.8} aria-hidden="true" />}
-          </button>
+          {onAddToWorkspace && (
+            <button
+              type="button"
+              className="janus-chat-workspace-action"
+              onClick={onAddToWorkspace}
+              aria-label="Embed Chat in current workspace"
+              title="Embed Chat in current workspace"
+            >
+              <PanelRightOpen size={13} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          )}
         </div>
+        {resourceController.pendingApprovals[0] ? (() => {
+          const approval = resourceController.pendingApprovals[0]
+          return (
+            <div className="janus-runtime-approval" aria-label="Workspace edit approval">
+              <div className="janus-runtime-approval-header">
+                <span className="janus-runtime-tool-name">{approval.toolName}</span>
+                <span className="janus-runtime-tool-state">Approval required</span>
+                <button
+                  type="button"
+                  onClick={() => resourceController.resolveApproval(approval.id, true)}
+                  title="Approve workspace action"
+                  aria-label="Approve workspace action"
+                >
+                  <Check size={12} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resourceController.resolveApproval(approval.id, false)}
+                  title="Reject workspace action"
+                  aria-label="Reject workspace action"
+                >
+                  <ShieldX size={12} aria-hidden="true" />
+                </button>
+              </div>
+              {approval.preview && (
+                <div className="janus-runtime-approval-preview">
+                  <div>{approval.preview.summary}</div>
+                  {approval.preview.paths.length > 0 && <span>{approval.preview.paths.join(', ')}</span>}
+                  {approval.preview.detail && <pre>{approval.preview.detail}</pre>}
+                </div>
+              )}
+            </div>
+          )
+        })() : resourceController.activities.length > 0 && (
+          <div className="janus-runtime-activity" aria-label="Workspace tool activity">
+            {(() => {
+              const activity = resourceController.activities.at(-1)!
+              const pending = activity.status === 'requested' || activity.status === 'running'
+              return (
+                <>
+                  {pending
+                    ? <LoaderCircle size={11} className="janus-runtime-tool-spinner" aria-hidden="true" />
+                    : activity.status === 'completed'
+                      ? <CircleCheck size={11} aria-hidden="true" />
+                      : <CircleX size={11} aria-hidden="true" />}
+                  <span className="janus-runtime-tool-name">{activity.toolName}</span>
+                  <span className="janus-runtime-tool-state">{activity.status}</span>
+                </>
+              )
+            })()}
+          </div>
+        )}
+        </>
       )}
 
       {/* 消息区域 */}

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/stores/app'
 import { invalidateEditorFileCache } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { loadWorkspaceFileTree } from './actions'
+import { getActiveWorkspacePath, loadWorkspaceFileTree } from './actions'
 
 export function useWorkspaceBootstrap(): void {
   useEffect(() => {
@@ -23,6 +23,6 @@ export function useWorkspaceBootstrap(): void {
     const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
     if (!activeWorkspace || activeWorkspace.path !== workspacePath) return
     invalidateEditorFileCache(workspacePath)
-    void loadWorkspaceFileTree(workspacePath).catch(() => {})
+    void loadWorkspaceFileTree(workspacePath, () => getActiveWorkspacePath() === workspacePath).catch(() => {})
   }), [])
 }

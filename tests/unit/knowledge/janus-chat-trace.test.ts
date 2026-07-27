@@ -22,6 +22,7 @@ describe('Janus Chat recall trace adapter', () => {
       onDone: (callback: (payload: never) => void) => subscribe('llm:chat:done', callback),
       onError: (callback: (payload: never) => void) => subscribe('llm:chat:error', callback),
       onRecallTrace: (callback: (payload: never) => void) => subscribe('llm:chat:recall-trace', callback),
+      onToolTrace: (callback: (payload: never) => void) => subscribe('llm:chat:tool-trace', callback),
       startChatStream: send,
       abortChat: vi.fn(),
     } } })

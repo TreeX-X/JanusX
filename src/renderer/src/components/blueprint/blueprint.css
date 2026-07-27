@@ -2101,6 +2101,11 @@
   animation: prompt-in 0.16s ease-out;
 }
 
+/* 容器承接初始焦点（tabIndex=-1），不显示焦点环 */
+.prompt-dialog:focus {
+  outline: none;
+}
+
 .prompt-dialog__title {
   font-size: 14px;
   font-weight: 600;

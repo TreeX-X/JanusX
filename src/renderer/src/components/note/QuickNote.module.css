@@ -14,10 +14,13 @@
 .toolbar input { min-width:0; flex:1; border:1px solid rgba(255,255,255,.1); border-radius:4px; background:#111315; padding:6px 8px; color:#eee; }
 .toolbar button,.paste { border:1px solid rgba(255,255,255,.1); border-radius:4px; background:#17191b; padding:6px 9px; color:#aaa; }
 .toolbar button[aria-pressed='true'] { color:#ffb27d; border-color:rgba(255,120,48,.35); }
-.editor textarea,.preview { min-height:0; flex:1; resize:none; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:4px; background:#0a0c0d; padding:10px; color:#d5d5d5; font:12px/1.55 ui-monospace,monospace; }
+.editor textarea,.preview { min-height:0; flex:1; resize:none; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:4px; background:#0a0c0d; padding:12px 14px; color:#d5d5d5; font:13px/1.65 'Cascadia Code','JetBrains Mono','Fira Code',ui-monospace,monospace; }
 .editor textarea:focus { outline:none; box-shadow:none; }
+.preview { padding:14px 18px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif; font-size:13px; line-height:1.7; color:#d4d4d4; }
 .preview :global(h1),.preview :global(h2),.preview :global(h3) { margin:0 0 8px; color:#f1f1f1; }
-.preview :global(pre) { overflow:auto; background:#050606; padding:8px; }
+.preview :global(pre) { overflow:auto; background:#050606; padding:8px; border:1px solid rgba(255,255,255,.04); border-radius:4px; }
+.preview :global(code) { font-family:'Cascadia Code','JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:12px; }
+.preview :global(a) { color:#ff7830; text-decoration:none; }
 .paste { align-self:flex-end; margin-top:7px; }
 .actions { display:flex; justify-content:flex-end; gap:5px; margin-top:7px; }
 .actions button { border:1px solid rgba(255,255,255,.1); border-radius:4px; background:#17191b; padding:6px 9px; color:#aaa; }

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { getCardsByTerminal, useNoteStore } from '@/stores/note'
 import styles from './QuickNote.module.css'
 import { exportNoteCard, type QuickNoteExportFormat } from './quick-note-export'
 import { formatNoteAge } from './quick-note-behavior'
+import { MARKDOWN_COMPONENTS } from '@/components/viewers/markdown-components'
 
 const EXPORT_OPTIONS: { format: QuickNoteExportFormat; label: string }[] = [
   { format: 'md', label: 'Markdown (.md)' },
@@ -19,19 +20,24 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
   const removeCard = useNoteStore((state) => state.removeCard)
   const updateCard = useNoteStore((state) => state.updateCard)
   const setActiveCard = useNoteStore((state) => state.setActiveCard)
-  const [preview, setPreview] = useState(false)
+  const [preview, setPreview] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportError, setExportError] = useState('')
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const exportButtonRef = useRef<HTMLButtonElement>(null)
   const active = cards.find((card) => card.id === activeId) ?? null
 
+  // 内容为空时回到编辑态，便于直接落笔；有内容时默认渲染 Markdown 预览。
+  const showPreview = preview && active !== null && active.content.trim().length > 0
+
   useEffect(() => {
-    if (!preview) editorRef.current?.focus()
-  }, [active?.id, preview])
+    if (!showPreview) editorRef.current?.focus()
+  }, [active?.id, showPreview])
+
+  const previewComponents = useMemo(() => MARKDOWN_COMPONENTS, [])
 
   const selectCard = (cardId: string) => {
-    setPreview(false)
+    setPreview(true)
     setExportOpen(false)
     setActiveCard(terminalId, cardId)
   }
@@ -71,16 +77,16 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
         ) : (
           <>
             <div className={styles.toolbar}>
-              <input value={active.title} aria-label="Note title" onChange={(event) => updateCard(terminalId, active.id, { title: event.target.value })} />
+              <input value={active.title} aria-label="Note title" spellCheck={false} onChange={(event) => updateCard(terminalId, active.id, { title: event.target.value })} />
               <div>
-                <button type="button" onClick={() => setPreview(false)} aria-pressed={!preview}>Edit</button>
-                <button type="button" onClick={() => setPreview(true)} aria-pressed={preview}>Preview</button>
+                <button type="button" onClick={() => setPreview(false)} aria-pressed={!showPreview}>Edit</button>
+                <button type="button" onClick={() => setPreview(true)} aria-pressed={showPreview}>Preview</button>
               </div>
             </div>
-            {preview ? (
-              <div className={styles.preview}><ReactMarkdown remarkPlugins={[remarkGfm]}>{active.content}</ReactMarkdown></div>
+            {showPreview ? (
+              <div className={styles.preview}><ReactMarkdown remarkPlugins={[remarkGfm]} components={previewComponents}>{active.content}</ReactMarkdown></div>
             ) : (
-              <textarea ref={editorRef} aria-label="Note content" value={active.content} onChange={(event) => updateCard(terminalId, active.id, { content: event.target.value })} />
+              <textarea ref={editorRef} aria-label="Note content" spellCheck={false} value={active.content} onChange={(event) => updateCard(terminalId, active.id, { content: event.target.value })} />
             )}
             <div className={styles.actions}>
               <div

@@ -172,7 +172,9 @@ export function Titlebar() {
   }, [handleOpenLlmConfig])
 
   const handleAddChatToWorkspace = useCallback(() => {
-    useWorkspaceStore.getState().openJanusChatInWorkspace()
+    const workspaceStore = useWorkspaceStore.getState()
+    if (!workspaceStore.activeWorkspaceId) return
+    workspaceStore.openJanusChatInWorkspace()
     dispatchIsland({ type: 'dismiss' })
   }, [])
 
@@ -300,7 +302,7 @@ export function Titlebar() {
           onChatRetry={handleChatRetry}
           onChatClear={handleChatClearAndInvalidatePeek}
           onOpenLlmConfig={handleOpenLlmConfig}
-          onAddChatToWorkspace={handleAddChatToWorkspace}
+          onAddChatToWorkspace={activeWorkspaceId ? handleAddChatToWorkspace : undefined}
           resourceController={resourceController}
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}

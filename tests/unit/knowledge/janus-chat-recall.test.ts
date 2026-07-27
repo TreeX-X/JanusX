@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnowledgeContextResult } from '../../../src/shared/knowledge'
 
-const { handle, on, search, capture, streamText } = vi.hoisted(() => ({
+const { handle, on, search, capture, streamText, getSession, executeFunctionCall } = vi.hoisted(() => ({
   handle: vi.fn(),
   on: vi.fn(),
   search: vi.fn(),
   capture: vi.fn(),
   streamText: vi.fn(),
+  getSession: vi.fn(),
+  executeFunctionCall: vi.fn(),
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle, on } }))
@@ -25,6 +27,9 @@ vi.mock('../../../src/main/llm/LlmService', () => ({
     getLanguageModel: vi.fn(async () => ({})),
     getAiModule: vi.fn(async () => ({ streamText, generateText: vi.fn() })),
   },
+}))
+vi.mock('../../../src/main/agent/runtime/runtime', () => ({
+  workspaceAgentRuntime: { getSession, executeFunctionCall },
 }))
 
 import { prepareJanusChatRecall, registerLlmHandlers } from '../../../src/main/ipc/llm-handlers'
@@ -53,6 +58,8 @@ describe('Janus Chat knowledge recall', () => {
     search.mockReset()
     capture.mockReset().mockResolvedValue(undefined)
     streamText.mockReset()
+    getSession.mockReset()
+    executeFunctionCall.mockReset()
   })
 
   it('uses the latest user message, bounded workspace scope, and injects after the persona', async () => {
@@ -195,6 +202,46 @@ describe('Janus Chat knowledge recall', () => {
     })
     expect(capture).not.toHaveBeenCalled()
     expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-global' })
+  })
+
+  it('adds trusted Runtime tools for every validated attached workspace session', async () => {
+    search.mockResolvedValue(emptyResult)
+    getSession.mockImplementation((sessionId: string) => ({
+      id: sessionId,
+      status: 'running',
+      workspace: sessionId === 'session-1'
+        ? { workspaceId: 'workspace-a', workspaceRoot: 'C:/workspace-a' }
+        : { workspaceId: 'workspace-b', workspaceRoot: 'C:/workspace-b' },
+    }))
+    streamText.mockResolvedValue({ textStream: (async function* () { yield 'workspace answer' })() })
+    registerLlmHandlers()
+    const registration = on.mock.calls.find(([channel]) => channel === 'llm:chat-stream')
+
+    await registration?.[1]({ reply: vi.fn(), sender: { id: 9 } }, {
+      requestId: 'stream-tools',
+      messages,
+      providerId: 'provider-a',
+      sourceTag: 'janus-chat',
+      workspaceResources: [
+        { workspaceId: 'workspace-a', workspacePath: 'C:/workspace-a', workspaceName: 'Workspace A', agentSessionId: 'session-1' },
+        { workspaceId: 'workspace-b', workspacePath: 'C:/workspace-b', workspaceName: 'Workspace B', agentSessionId: 'session-2' },
+      ],
+    })
+
+    expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
+      maxSteps: 12,
+      tools: expect.objectContaining({
+        workspace_list: expect.any(Object),
+        workspace_read: expect.any(Object),
+        project_detect: expect.any(Object),
+        project_generate_config: expect.any(Object),
+      }),
+      messages: expect.arrayContaining([
+        expect.objectContaining({ role: 'system', content: expect.stringContaining('workspaceId=workspace-a') }),
+        expect.objectContaining({ role: 'system', content: expect.stringContaining('workspaceId=workspace-b') }),
+      ]),
+    }))
+    expect(capture).toHaveBeenCalledTimes(4)
   })
 
   it('keeps streaming when recall throws and reports degradation only through the trace', async () => {

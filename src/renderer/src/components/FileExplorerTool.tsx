@@ -1,78 +1,43 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEvent } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { loadWorkspaceFileTree } from '@/features/workspace/actions'
+import {
+  getActiveWorkspacePath,
+  loadWorkspaceFileTree,
+  reloadWorkspaceDirectory,
+} from '@/features/workspace/actions'
+import {
+  collectDirectoryPathsToSearchLoad,
+  createPendingFileTreeDelete,
+  executeFileTreeDelete,
+  filterFileTree,
+  getAbsolutePath,
+  getParentPath,
+  isPathInScope,
+  isValidEntryName,
+  pruneExpandedPaths,
+  remapPath,
+  type FileTreeOperationResult,
+  type PendingFileTreeDelete,
+} from '@/features/workspace/file-tree'
 import { useGitStore } from '@/stores/git'
-import { useEditorStore } from '@/stores/editor'
+import { closeEditorFilesUnderPath, remapEditorPaths, useEditorStore } from '@/stores/editor'
 import type { FileNode, GitFileChange } from '@/types'
-import { setWorkspaceFileDragData } from '@/lib/terminal-file-reference'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
-import { classifyFile } from '@/lib/file-classification'
-import { resolveFilePresentation } from '@/lib/file-presentation'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
+import { FileTreeItem } from '@/components/file-tree/FileTreeItem'
+import {
+  FileTreeContextMenu,
+  type FileTreeContextMenuState,
+} from '@/components/file-tree/FileTreeContextMenu'
 
-interface FileTreeOperationResult {
-  success?: boolean
-  error?: string
-  path?: string
+// 兼容既有测试/调用方的再导出;实现已迁往 features/workspace/file-tree
+export {
+  createPendingFileTreeDelete,
+  executeFileTreeDelete,
+  reloadWorkspaceDirectory,
+  type PendingFileTreeDelete,
 }
-
-interface FileTreeContextMenuTarget {
-  node: FileNode | null
-  name: string
-  path: string
-  type: 'file' | 'directory'
-}
-
-interface FileTreeContextMenuState {
-  x: number
-  y: number
-  target: FileTreeContextMenuTarget
-}
-
-export interface PendingFileTreeDelete {
-  workspacePath: string
-  targetPath: string
-  targetName: string
-  parentPath: string
-}
-
-interface FileTreeDeleteActions {
-  deleteTarget: (workspacePath: string, targetPath: string) => Promise<FileTreeOperationResult | null>
-  isWorkspaceActive: (workspacePath: string) => boolean
-  reloadDirectory: (parentPath: string, workspacePath: string) => Promise<void>
-  onDeleted: (targetPath: string) => void
-}
-
-export function createPendingFileTreeDelete(
-  workspacePath: string,
-  target: Pick<FileTreeContextMenuTarget, 'path' | 'name'>,
-): PendingFileTreeDelete {
-  return {
-    workspacePath,
-    targetPath: target.path,
-    targetName: target.name,
-    parentPath: getParentPath(target.path),
-  }
-}
-
-export async function executeFileTreeDelete(
-  request: PendingFileTreeDelete,
-  actions: FileTreeDeleteActions,
-): Promise<boolean> {
-  const result = await actions.deleteTarget(request.workspacePath, request.targetPath)
-  if (!result) return false
-  if (!actions.isWorkspaceActive(request.workspacePath)) return true
-
-  actions.onDeleted(request.targetPath)
-  await actions.reloadDirectory(request.parentPath, request.workspacePath)
-  return true
-}
-
-const CONTEXT_MENU_WIDTH = 196
-const CONTEXT_MENU_HEIGHT = 320
-const CONTEXT_MENU_MARGIN = 8
+export { FileTreeItem, type FileTreeItemProps } from '@/components/file-tree/FileTreeItem'
 
 const FILE_CHANGE_PRIORITY: Record<GitFileChange['status'], number> = {
   UU: 0,
@@ -83,259 +48,17 @@ const FILE_CHANGE_PRIORITY: Record<GitFileChange['status'], number> = {
   '??': 5,
 }
 
-const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; color: string }> = {
-  M: { label: 'M', color: '#d99a4e' },
-  A: { label: 'A', color: '#7fae7f' },
-  D: { label: 'D', color: '#c96a5f' },
-  R: { label: 'R', color: '#7ba3bd' },
-  '??': { label: '?', color: '#9a9a9a' },
-  UU: { label: '!', color: '#e05f4a' },
+interface NamingDialogState {
+  mode: 'create-file' | 'create-directory' | 'rename'
+  /** 新建时为目标目录;重命名时为目标项路径 */
+  path: string
+  defaultValue: string
 }
 
-const GIT_MARKER_STYLE = `
-@keyframes git-marker-in {
-  from { opacity: 0; transform: scale(0.6); }
-}
-.git-marker {
-  animation: git-marker-in 140ms ease-out;
-  transition: color 140ms ease-out, background-color 140ms ease-out, opacity 140ms ease-out;
-}
-`
-
-function getParentPath(path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
-  const index = normalized.lastIndexOf('/')
-  return index === -1 ? '' : normalized.slice(0, index)
-}
-
-function getAbsolutePath(workspacePath: string, relativePath: string): string {
-  if (!relativePath) return workspacePath
-  const separator = workspacePath.includes('\\') ? '\\' : '/'
-  return `${workspacePath.replace(/[\\/]+$/, '')}${separator}${relativePath.split('/').join(separator)}`
-}
-
-function isPathInScope(path: string, scope: string): boolean {
-  if (!scope) return path.length > 0
-  return path === scope || path.startsWith(`${scope}/`)
-}
-
-function getActiveWorkspacePath(): string | null {
-  const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
-  return workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null
-}
-
-function injectDirectoryChildren(nodes: FileNode[], path: string, children: FileNode[]): FileNode[] {
-  return nodes.map((node) => {
-    if (node.path === path && node.type === 'directory') {
-      return {
-        ...node,
-        children,
-        loaded: true,
-        hasChildren: children.length > 0,
-      }
-    }
-    if (!node.children?.length) return node
-    return { ...node, children: injectDirectoryChildren(node.children, path, children) }
-  })
-}
-
-export async function reloadWorkspaceDirectory(workspacePath: string, path: string): Promise<void> {
-  const children = await window.electron.fileTree.children(workspacePath, path)
-  if (getActiveWorkspacePath() !== workspacePath) return
-
-  useWorkspaceStore.setState((state) => {
-    const activePath = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.path
-    if (activePath !== workspacePath) return {}
-    return { fileTree: injectDirectoryChildren(state.fileTree, path, children) }
-  })
-}
-
-function isValidEntryName(name: string): boolean {
-  return Boolean(name) && name !== '.' && name !== '..' && !/[/\\]/.test(name)
-}
-
-function promptEntryName(message: string, defaultValue = ''): string | null {
-  const value = window.prompt(message, defaultValue)
-  if (value === null) return null
-
-  const name = value.trim()
-  if (!isValidEntryName(name)) {
-    window.alert('名称不能为空，且不能包含 / 或 \\')
-    return null
-  }
-  return name
-}
-
-export interface FileTreeItemProps {
-  node: FileNode
-  depth: number
-  activeFilePath: string | null
-  expanded: boolean
-  expandedPaths: Set<string>
-  fileChange: GitFileChange | null
-  fileChangeMap: Map<string, GitFileChange>
-  changedDirs: Set<string>
-  onSelect: (path: string) => void
-  onToggleDirectory: (node: FileNode) => void
-  onOpenFile: (path: string) => void
-  onOpenContextMenu: (event: MouseEvent<HTMLDivElement>, node: FileNode) => void
-}
-
-export function FileTreeItem({
-  node,
-  depth,
-  activeFilePath,
-  expanded,
-  expandedPaths,
-  fileChange,
-  fileChangeMap,
-  changedDirs,
-  onSelect,
-  onToggleDirectory,
-  onOpenFile,
-  onOpenContextMenu,
-}: FileTreeItemProps) {
-  const isFolder = node.type === 'directory'
-  const isActive = activeFilePath === node.path
-  const isGitIgnored = node.isGitIgnored === true
-  const changeVisual = !isFolder && fileChange ? FILE_CHANGE_VISUALS[fileChange.status] : null
-  const presentation = resolveFilePresentation(classifyFile(node.path, node.type))
-
-  const handleClick = useCallback(() => {
-    if (isFolder) {
-      void onToggleDirectory(node)
-    } else {
-      onSelect(node.path)
-      void warmupEditorRuntime()
-    }
-  }, [isFolder, node, onSelect, onToggleDirectory])
-
-  const handleDoubleClick = useCallback(() => {
-    if (!isFolder) {
-      void warmupEditorRuntime()
-      onOpenFile(node.path)
-    }
-  }, [isFolder, node.path, onOpenFile])
-
-  const handleDragStart = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      if (isFolder) return
-      setWorkspaceFileDragData(event.dataTransfer, {
-        type: 'file',
-        name: node.name,
-        path: node.path,
-      })
-    },
-    [isFolder, node.name, node.path],
-  )
-
-  const handleContextMenu = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-      if (!isFolder) onSelect(node.path)
-      onOpenContextMenu(event, node)
-    },
-    [isFolder, node, onOpenContextMenu, onSelect],
-  )
-
-  return (
-    <div>
-      <div
-        data-file-path={node.path}
-        data-selected={isActive}
-        data-git-ignored={isGitIgnored ? 'true' : undefined}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onContextMenu={handleContextMenu}
-        draggable={!isFolder}
-        onDragStart={handleDragStart}
-        className="py-[5px] px-2 mb-px rounded cursor-pointer transition-colors flex items-center gap-1.5 text-xs select-none"
-        style={{
-          paddingLeft: `${8 + depth * 16}px`,
-          color: isActive ? '#ff7830' : isGitIgnored ? '#737373' : '#999',
-          background: isActive ? 'rgba(255, 120, 48, 0.1)' : 'transparent',
-          opacity: isGitIgnored && !isActive ? 0.68 : 1,
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive) {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'
-            e.currentTarget.style.color = isGitIgnored ? '#969696' : '#ccc'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) {
-            e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = isGitIgnored ? '#737373' : '#999'
-          }
-        }}
-      >
-        {isFolder && (
-          <div
-            className="w-1.5 h-1.5 border-r-[1.5px] border-b-[1.5px] transition-transform"
-            style={{
-              borderColor: isActive ? '#ff7830' : '#666',
-              transform: expanded ? 'rotate(45deg)' : 'rotate(-45deg)',
-            }}
-          />
-        )}
-        <span className="flex shrink-0" style={{ marginLeft: isFolder ? 0 : 6 }}>
-          <FileTypeIcon presentation={presentation} active={isActive} />
-        </span>
-        <span
-          className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
-          data-file-name={node.name}
-          style={isGitIgnored ? { textDecoration: 'line-through', textDecorationThickness: '1px' } : undefined}
-        >
-          {node.name}
-        </span>
-        {changeVisual && (
-          <span
-            data-git-status={fileChange?.status}
-            className="git-marker ml-1.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] font-mono text-[10px] font-semibold leading-none"
-            title={`${fileChange?.staged ? 'Staged' : 'Modified'} · ${fileChange?.status}`}
-            style={{
-              color: changeVisual.color,
-              opacity: fileChange?.staged ? 1 : 0.85,
-              background: fileChange?.staged ? `${changeVisual.color}24` : 'transparent',
-            }}
-          >
-            {changeVisual.label}
-          </span>
-        )}
-        {isFolder && changedDirs.has(node.path) && (
-          <span
-            data-git-dirty
-            className="git-marker ml-1.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center"
-            title="包含改动"
-          >
-            <span className="h-[5px] w-[5px] rounded-full" style={{ background: 'rgba(255,120,48,0.55)' }} />
-          </span>
-        )}
-      </div>
-      {isFolder && node.children && expanded && (
-        <div>
-          {node.children.map((child) => (
-            <FileTreeItem
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-              activeFilePath={activeFilePath}
-              expanded={expandedPaths.has(child.path)}
-              expandedPaths={expandedPaths}
-              fileChange={fileChangeMap.get(child.path) ?? null}
-              fileChangeMap={fileChangeMap}
-              changedDirs={changedDirs}
-              onSelect={onSelect}
-              onToggleDirectory={onToggleDirectory}
-              onOpenFile={onOpenFile}
-              onOpenContextMenu={onOpenContextMenu}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
+const NAMING_DIALOG_COPY: Record<NamingDialogState['mode'], { title: string; label: string }> = {
+  'create-file': { title: '新建文件', label: '文件名' },
+  'create-directory': { title: '新建文件夹', label: '文件夹名' },
+  rename: { title: '重命名', label: '新名称' },
 }
 
 export function FileExplorerTool({ active = true }: { active?: boolean }) {
@@ -349,6 +72,9 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const openEditorFile = useEditorStore((s) => s.openFile)
   const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PendingFileTreeDelete | null>(null)
+  const [namingDialog, setNamingDialog] = useState<NamingDialogState | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
   const activeWorkspacePath = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
@@ -375,37 +101,71 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     return dirs
   }, [fileChangeMap])
 
-  const reloadRootFileTree = useCallback(async (expectedWorkspacePath?: string) => {
-    const workspacePath = expectedWorkspacePath ?? getActiveWorkspacePath()
-    if (!workspacePath || getActiveWorkspacePath() !== workspacePath) return
-
-    await loadWorkspaceFileTree(
-      workspacePath,
-      () => getActiveWorkspacePath() === workspacePath,
-    ).catch(() => {})
-  }, [])
+  const trimmedQuery = searchQuery.trim()
+  const filtered = useMemo(
+    () => (trimmedQuery ? filterFileTree(fileTree, trimmedQuery) : null),
+    [fileTree, trimmedQuery],
+  )
+  const visibleTree = filtered ? filtered.nodes : fileTree
 
   const reloadDirectory = useCallback(async (path: string, expectedWorkspacePath?: string) => {
     const workspacePath = expectedWorkspacePath ?? getActiveWorkspacePath()
     if (!workspacePath || getActiveWorkspacePath() !== workspacePath) return
 
-    if (!path) {
-      await reloadRootFileTree(workspacePath)
-      return
-    }
-
     try {
-      await reloadWorkspaceDirectory(workspacePath, path)
-    } catch {
-      // ignore
+      if (path) {
+        await reloadWorkspaceDirectory(workspacePath, path)
+      } else {
+        await loadWorkspaceFileTree(workspacePath, () => getActiveWorkspacePath() === workspacePath)
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || '目录刷新失败')
     }
-  }, [reloadRootFileTree])
+  }, [])
 
   useEffect(() => {
     if (!activeWorkspacePath) return
     setExpandedPaths(new Set())
+    setSearchQuery('')
     void fetchGitStatus(activeWorkspacePath)
   }, [activeWorkspacePath, fetchGitStatus])
+
+  // 外部 FS 变更/重命名/删除后,丢弃树上已不存在的展开路径
+  useEffect(() => {
+    setExpandedPaths((current) => pruneExpandedPaths(current, fileTree))
+  }, [fileTree])
+
+  // 搜索时按需加载有限个未展开目录,让嵌套匹配逐步出现
+  useEffect(() => {
+    if (!trimmedQuery || !activeWorkspacePath) return
+
+    let cancelled = false
+    const timer = setTimeout(() => {
+      if (cancelled) return
+      const paths = collectDirectoryPathsToSearchLoad(fileTree, trimmedQuery, 40, expandedPaths)
+      if (paths.length === 0) return
+
+      setExpandedPaths((current) => {
+        const next = new Set(current)
+        for (const path of paths) next.add(path)
+        return next
+      })
+
+      void (async () => {
+        for (const path of paths) {
+          if (cancelled) return
+          if (getActiveWorkspacePath() !== activeWorkspacePath) return
+          await reloadDirectory(path, activeWorkspacePath)
+        }
+      })()
+    }, 180)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // expandedPaths 有意不入依赖:加载候选会主动 expand,避免与 setExpanded 形成环
+  }, [activeWorkspacePath, fileTree, reloadDirectory, trimmedQuery])
 
   useEffect(() => {
     if (!activeWorkspacePath) return
@@ -460,18 +220,9 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   }, [getActiveWorkspace, openEditorFile, setActiveFilePath])
 
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
-    const x = Math.max(
-      CONTEXT_MENU_MARGIN,
-      Math.min(event.clientX, window.innerWidth - CONTEXT_MENU_WIDTH - CONTEXT_MENU_MARGIN),
-    )
-    const y = Math.max(
-      CONTEXT_MENU_MARGIN,
-      Math.min(event.clientY, window.innerHeight - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_MARGIN),
-    )
-
     setContextMenu({
-      x,
-      y,
+      x: event.clientX,
+      y: event.clientY,
       target: node
         ? {
             node,
@@ -500,35 +251,41 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       if (event.key === 'Escape') close()
     }
 
-    window.addEventListener('click', close)
-    window.addEventListener('contextmenu', close)
-    window.addEventListener('keydown', closeOnEscape)
-    window.addEventListener('scroll', close, true)
+    // 延后挂关闭监听:避免与打开菜单的同一次 contextmenu/click 在同一事件轮次立刻关菜单
+    let disposed = false
+    let removeListeners: (() => void) | null = null
+    const attachTimer = window.setTimeout(() => {
+      if (disposed) return
+      window.addEventListener('click', close)
+      window.addEventListener('contextmenu', close)
+      window.addEventListener('keydown', closeOnEscape)
+      window.addEventListener('scroll', close, true)
+      removeListeners = () => {
+        window.removeEventListener('click', close)
+        window.removeEventListener('contextmenu', close)
+        window.removeEventListener('keydown', closeOnEscape)
+        window.removeEventListener('scroll', close, true)
+      }
+    }, 0)
+
     return () => {
-      window.removeEventListener('click', close)
-      window.removeEventListener('contextmenu', close)
-      window.removeEventListener('keydown', closeOnEscape)
-      window.removeEventListener('scroll', close, true)
+      disposed = true
+      window.clearTimeout(attachTimer)
+      removeListeners?.()
     }
   }, [active, contextMenu])
-
-  const contextBaseDirectory = contextMenu
-    ? contextMenu.target.type === 'directory'
-      ? contextMenu.target.path
-      : getParentPath(contextMenu.target.path)
-    : ''
 
   const runFileTreeMutation = useCallback(
     async (operation: () => Promise<FileTreeOperationResult>): Promise<FileTreeOperationResult | null> => {
       try {
         const result = await operation()
         if (!result.success) {
-          window.alert(result.error || '文件操作失败')
+          setErrorMessage(result.error || '文件操作失败')
           return null
         }
         return result
       } catch (err: any) {
-        window.alert(err.message || '文件操作失败')
+        setErrorMessage(err.message || '文件操作失败')
         return null
       }
     },
@@ -537,13 +294,10 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
   const handleOpenContextTarget = useCallback(() => {
     if (!contextMenu || contextMenu.target.type === 'directory') return
-    const workspace = getActiveWorkspace()
-    if (!workspace) return
-
     void warmupEditorRuntime()
     openFileInEditorPanel(contextMenu.target.path)
     setContextMenu(null)
-  }, [contextMenu, getActiveWorkspace, openFileInEditorPanel])
+  }, [contextMenu, openFileInEditorPanel])
 
   const handleCopyContextPath = useCallback(
     async (mode: 'relative' | 'absolute') => {
@@ -570,50 +324,81 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     setContextMenu(null)
   }, [contextMenu, getActiveWorkspace, runFileTreeMutation])
 
-  const handleCreateFileTreeItem = useCallback(
-    async (type: 'file' | 'directory') => {
+  const openNamingDialog = useCallback(
+    (mode: NamingDialogState['mode']) => {
       if (!contextMenu) return
+      if (mode === 'rename') {
+        if (!contextMenu.target.node) return
+        setNamingDialog({ mode, path: contextMenu.target.path, defaultValue: contextMenu.target.name })
+      } else {
+        const baseDirectory =
+          contextMenu.target.type === 'directory'
+            ? contextMenu.target.path
+            : getParentPath(contextMenu.target.path)
+        setNamingDialog({ mode, path: baseDirectory, defaultValue: '' })
+      }
+      setContextMenu(null)
+    },
+    [contextMenu],
+  )
+
+  const validateEntryName = useCallback((name: string): string | null => {
+    if (!isValidEntryName(name)) return '名称不能为空，且不能包含 / 或 \\'
+    return null
+  }, [])
+
+  const handleNamingConfirm = useCallback(
+    async (name: string) => {
+      if (!namingDialog) return
+      const dialog = namingDialog
+      setNamingDialog(null)
       const workspace = getActiveWorkspace()
       if (!workspace) return
 
-      const name = promptEntryName(type === 'file' ? '新建文件名' : '新建文件夹名')
-      if (!name) return
+      if (dialog.mode === 'rename') {
+        if (name === dialog.defaultValue) return
+        const oldPath = dialog.path
+        const parentPath = getParentPath(oldPath)
+        const result = await runFileTreeMutation(() =>
+          window.electron.fileTree.rename(workspace.path, oldPath, name),
+        )
+        if (!result?.path) return
+        const newPath = result.path
+
+        // 同步依赖旧路径的状态:编辑器 tab/缓存、展开集合、当前选中
+        remapEditorPaths(
+          getAbsolutePath(workspace.path, oldPath),
+          getAbsolutePath(workspace.path, newPath),
+          workspace.path,
+        )
+        setExpandedPaths((current) => {
+          const next = new Set<string>()
+          for (const path of current) next.add(remapPath(path, oldPath, newPath))
+          return next
+        })
+        const currentActive = useWorkspaceStore.getState().activeFilePath
+        if (currentActive && isPathInScope(currentActive, oldPath)) {
+          setActiveFilePath(remapPath(currentActive, oldPath, newPath))
+        }
+        await reloadDirectory(parentPath)
+        return
+      }
 
       const result = await runFileTreeMutation(() =>
-        type === 'file'
-          ? window.electron.fileTree.createFile(workspace.path, contextBaseDirectory, name)
-          : window.electron.fileTree.createDirectory(workspace.path, contextBaseDirectory, name),
+        dialog.mode === 'create-file'
+          ? window.electron.fileTree.createFile(workspace.path, dialog.path, name)
+          : window.electron.fileTree.createDirectory(workspace.path, dialog.path, name),
       )
       if (!result) return
 
-      await reloadDirectory(contextBaseDirectory)
-      if (type === 'file' && result.path) setActiveFilePath(result.path)
-      setContextMenu(null)
+      await reloadDirectory(dialog.path)
+      if (dialog.path) {
+        setExpandedPaths((current) => new Set(current).add(dialog.path))
+      }
+      if (dialog.mode === 'create-file' && result.path) setActiveFilePath(result.path)
     },
-    [contextBaseDirectory, contextMenu, getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath],
+    [getActiveWorkspace, namingDialog, reloadDirectory, runFileTreeMutation, setActiveFilePath],
   )
-
-  const handleRenameContextTarget = useCallback(async () => {
-    if (!contextMenu || !contextMenu.target.node) return
-    const workspace = getActiveWorkspace()
-    if (!workspace) return
-
-    const name = promptEntryName('重命名', contextMenu.target.name)
-    if (!name || name === contextMenu.target.name) {
-      setContextMenu(null)
-      return
-    }
-
-    const parentPath = getParentPath(contextMenu.target.path)
-    const result = await runFileTreeMutation(() =>
-      window.electron.fileTree.rename(workspace.path, contextMenu.target.path, name),
-    )
-    if (!result) return
-
-    await reloadDirectory(parentPath)
-    if (activeFilePath === contextMenu.target.path && result.path) setActiveFilePath(result.path)
-    setContextMenu(null)
-  }, [activeFilePath, contextMenu, getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
   const handleDeleteContextTarget = useCallback(() => {
     if (!contextMenu || !contextMenu.target.node) return
@@ -635,14 +420,24 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       isWorkspaceActive: (workspacePath) => getActiveWorkspace()?.path === workspacePath,
       reloadDirectory,
       onDeleted: (targetPath) => {
-        if (activeFilePath && isPathInScope(activeFilePath, targetPath)) setActiveFilePath(null)
+        closeEditorFilesUnderPath(getAbsolutePath(request.workspacePath, targetPath))
+        setExpandedPaths((current) => {
+          const next = new Set<string>()
+          for (const path of current) {
+            if (!isPathInScope(path, targetPath)) next.add(path)
+          }
+          return next
+        })
+        const currentActive = useWorkspaceStore.getState().activeFilePath
+        if (currentActive && isPathInScope(currentActive, targetPath)) setActiveFilePath(null)
       },
     })
-  }, [activeFilePath, getActiveWorkspace, pendingDelete, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+  }, [getActiveWorkspace, pendingDelete, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+
+  const namingCopy = namingDialog ? NAMING_DIALOG_COPY[namingDialog.mode] : null
 
   return (
     <>
-      <style>{GIT_MARKER_STYLE}</style>
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <div className="p-2">
           <input
@@ -654,131 +449,81 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
               color: '#d4d4d4',
             }}
             placeholder="搜索文件..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && searchQuery) {
+                event.stopPropagation()
+                setSearchQuery('')
+              }
+            }}
           />
         </div>
         <div
           data-testid="file-explorer-content"
           aria-label="文件浏览器内容"
-          className="no-scrollbar flex-1 overflow-y-auto p-1.5 text-xs"
+          className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-1.5 text-xs"
           onContextMenu={(event) => {
             event.preventDefault()
+            // 空白区菜单:item 已 stopPropagation;这里再 stop 防冒泡到外层容器
+            event.stopPropagation()
             openContextMenu(event, null)
           }}
         >
-          {fileTree.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3">
-              <div className="text-[#555]">未加载工作区</div>
-            </div>
-          ) : (
-            fileTree.map((node) => (
-              <FileTreeItem
-                key={node.path}
-                node={node}
-                depth={0}
-                activeFilePath={activeFilePath}
-                expanded={expandedPaths.has(node.path)}
-                expandedPaths={expandedPaths}
-                fileChange={fileChangeMap.get(node.path) ?? null}
-                fileChangeMap={fileChangeMap}
-                changedDirs={changedDirs}
-                onSelect={setActiveFilePath}
-                onToggleDirectory={handleToggleDirectory}
-                onOpenFile={openFileInEditorPanel}
-                onOpenContextMenu={openContextMenu}
-              />
-            ))
-          )}
+          <div className="min-h-full">
+            {visibleTree.length === 0 ? (
+              <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-3">
+                <div className="text-[#555]">
+                  {fileTree.length === 0 ? '未加载工作区' : '无匹配文件'}
+                </div>
+              </div>
+            ) : (
+              visibleTree.map((node) => (
+                <FileTreeItem
+                  key={node.path}
+                  node={node}
+                  depth={0}
+                  activeFilePath={activeFilePath}
+                  expanded={expandedPaths.has(node.path) || filtered?.expandedDirs.has(node.path) === true}
+                  expandedPaths={
+                    filtered ? new Set([...expandedPaths, ...filtered.expandedDirs]) : expandedPaths
+                  }
+                  fileChange={fileChangeMap.get(node.path) ?? null}
+                  fileChangeMap={fileChangeMap}
+                  changedDirs={changedDirs}
+                  onSelect={setActiveFilePath}
+                  onToggleDirectory={handleToggleDirectory}
+                  onOpenFile={openFileInEditorPanel}
+                  onOpenContextMenu={openContextMenu}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
 
-      {active && contextMenu
-        ? createPortal(
-            <div
-              className="fixed p-1 rounded-lg text-xs"
-              style={{
-                left: contextMenu.x,
-                top: contextMenu.y,
-                width: CONTEXT_MENU_WIDTH,
-                zIndex: 1000,
-                background: 'rgba(20, 20, 20, 0.98)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: '0 8px 28px rgba(0, 0, 0, 0.55)',
-                backdropFilter: 'blur(18px)',
-              }}
-              onClick={(event) => event.stopPropagation()}
-              onContextMenu={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-              }}
-            >
-              {contextMenu.target.type === 'file' && (
-                <button
-                  type="button"
-                  className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
-                  onClick={handleOpenContextTarget}
-                >
-                  打开
-                </button>
-              )}
-              <button
-                type="button"
-                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
-                onClick={() => void handleCreateFileTreeItem('file')}
-              >
-                新建文件
-              </button>
-              <button
-                type="button"
-                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
-                onClick={() => void handleCreateFileTreeItem('directory')}
-              >
-                新建文件夹
-              </button>
-              <div className="h-px my-1 mx-1.5 bg-[rgba(255,255,255,0.08)]" />
-              <button
-                type="button"
-                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
-                onClick={() => void handleCopyContextPath('relative')}
-              >
-                复制相对路径
-              </button>
-              <button
-                type="button"
-                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
-                onClick={() => void handleCopyContextPath('absolute')}
-              >
-                复制绝对路径
-              </button>
-              <button
-                type="button"
-                className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
-                onClick={() => void handleRevealContextTarget()}
-              >
-                在资源管理器中显示
-              </button>
-              {contextMenu.target.node && (
-                <>
-                  <div className="h-px my-1 mx-1.5 bg-[rgba(255,255,255,0.08)]" />
-                  <button
-                    type="button"
-                    className="w-full px-2.5 py-1.5 rounded text-left text-[#d4d4d4] hover:bg-[rgba(255,120,48,0.18)]"
-                    onClick={() => void handleRenameContextTarget()}
-                  >
-                    重命名
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full px-2.5 py-1.5 rounded text-left text-[#ff8a85] hover:bg-[rgba(255,95,87,0.18)]"
-                    onClick={handleDeleteContextTarget}
-                  >
-                    删除
-                  </button>
-                </>
-              )}
-            </div>,
-            document.body,
-          )
-        : null}
+      {active && contextMenu ? (
+        <FileTreeContextMenu
+          menu={contextMenu}
+          onOpen={handleOpenContextTarget}
+          onCreate={(type) => openNamingDialog(type === 'file' ? 'create-file' : 'create-directory')}
+          onCopyPath={(mode) => void handleCopyContextPath(mode)}
+          onReveal={() => void handleRevealContextTarget()}
+          onRename={() => openNamingDialog('rename')}
+          onDelete={handleDeleteContextTarget}
+        />
+      ) : null}
+
+      <PromptDialog
+        open={namingDialog !== null}
+        title={namingCopy?.title ?? ''}
+        label={namingCopy?.label}
+        defaultValue={namingDialog?.defaultValue}
+        validate={validateEntryName}
+        onConfirm={(value) => void handleNamingConfirm(value)}
+        onCancel={() => setNamingDialog(null)}
+      />
+
       <PromptDialog
         open={pendingDelete !== null}
         title="确认删除"
@@ -792,6 +537,17 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         tone="danger"
         onConfirm={() => void handleConfirmDelete()}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <PromptDialog
+        open={errorMessage !== null}
+        title="操作失败"
+        description={errorMessage}
+        confirmOnly
+        hideCancel
+        confirmText="知道了"
+        onConfirm={() => setErrorMessage(null)}
+        onCancel={() => setErrorMessage(null)}
       />
     </>
   )

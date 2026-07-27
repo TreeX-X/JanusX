@@ -188,6 +188,17 @@ export class VertexAIAdapter implements ProviderExtension {
   async listModels(_settings: ProviderSettings): Promise<ModelInfo[]> {
     return [
       {
+        id: 'gemini-3.6-flash',
+        name: 'Gemini 3.6 Flash',
+        providerId: this.id,
+        capabilities: { chat: true },
+        contextWindow: 1048576,
+        maxOutputTokens: 65536,
+        supportsFunctionCalling: true,
+        supportsVision: true,
+        description: 'Latest fast model'
+      },
+      {
         id: 'gemini-3.5-flash',
         name: 'Gemini 3.5 Flash',
         providerId: this.id,
@@ -292,7 +303,7 @@ export class VertexAIAdapter implements ProviderExtension {
   }
 
   getDefaultModel(settings: ProviderSettings): string {
-    return settings.modelId || 'gemini-2.5-flash'
+    return settings.modelId || 'gemini-3.6-flash'
   }
 
   async initialize(_settings: ProviderSettings): Promise<void> {

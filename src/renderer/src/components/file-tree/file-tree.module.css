@@ -1,0 +1,136 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  margin-bottom: 1px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #999;
+  user-select: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: #ccc;
+}
+
+.row[data-selected='true'] {
+  color: #ff7830;
+  background: rgba(255, 120, 48, 0.1);
+}
+
+.row[data-git-ignored='true'] {
+  color: #737373;
+  opacity: 0.68;
+}
+
+.row[data-git-ignored='true']:hover {
+  color: #969696;
+}
+
+.row[data-selected='true'][data-git-ignored='true'] {
+  color: #ff7830;
+  opacity: 1;
+}
+
+.chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid #666;
+  border-bottom: 1.5px solid #666;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.row[data-selected='true'] .chevron {
+  border-color: #ff7830;
+}
+
+.chevron[data-expanded='true'] {
+  transform: rotate(45deg);
+}
+
+.name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row[data-git-ignored='true'] .name {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+@keyframes git-marker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.gitMarker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  animation: git-marker-in 140ms ease-out;
+  transition: color 140ms ease-out, background-color 140ms ease-out, opacity 140ms ease-out;
+}
+
+.gitDirtyDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 120, 48, 0.55);
+}
+
+.menu {
+  position: fixed;
+  z-index: 1000;
+  padding: 4px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(18px);
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 4px;
+  text-align: left;
+  color: #d4d4d4;
+}
+
+.menuItem:hover {
+  background: rgba(255, 120, 48, 0.18);
+}
+
+.menuItemDanger {
+  color: #ff8a85;
+}
+
+.menuItemDanger:hover {
+  background: rgba(255, 95, 87, 0.18);
+}
+
+.menuSeparator {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.08);
+}

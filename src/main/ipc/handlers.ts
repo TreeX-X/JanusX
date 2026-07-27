@@ -17,6 +17,9 @@ import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
 const watcherRegistry = new Map<string, FSWatcher>()
+/** 根层非递归降级时,为已加载子目录额外挂的非递归 watcher */
+const nestedWatcherRegistry = new Map<string, Map<string, FSWatcher>>()
+const nonRecursiveWatchWorkspaces = new Set<string>()
 const watcherTimers = new Map<string, NodeJS.Timeout>()
 const watcherWindows = new Map<string, Set<BrowserWindow>>()
 const watcherSubscribers = new Map<string, Set<WorkspaceWatcherSubscriber>>()
@@ -182,9 +185,18 @@ async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<
   }
 }
 
+function closeNestedWatchers(workspacePath: string): void {
+  const nested = nestedWatcherRegistry.get(workspacePath)
+  if (!nested) return
+  for (const watcher of nested.values()) watcher.close()
+  nestedWatcherRegistry.delete(workspacePath)
+}
+
 function closeWorkspaceWatcher(workspacePath: string): void {
   watcherRegistry.get(workspacePath)?.close()
   watcherRegistry.delete(workspacePath)
+  closeNestedWatchers(workspacePath)
+  nonRecursiveWatchWorkspaces.delete(workspacePath)
   const timer = watcherTimers.get(workspacePath)
   if (timer) clearTimeout(timer)
   watcherTimers.delete(workspacePath)
@@ -193,34 +205,87 @@ function closeWorkspaceWatcher(workspacePath: string): void {
   watcherRecoveryTimers.delete(workspacePath)
 }
 
+function emitWorkspaceFsChange(
+  workspacePath: string,
+  eventType: 'change' | 'rename',
+  filename: string | Buffer | null,
+): void {
+  for (const subscriber of watcherSubscribers.get(workspacePath) ?? []) {
+    subscriber(eventType, filename)
+  }
+
+  const windows = watcherWindows.get(workspacePath)
+  if (!windows?.size) return
+  const existingTimer = watcherTimers.get(workspacePath)
+  if (existingTimer) clearTimeout(existingTimer)
+
+  watcherTimers.set(
+    workspacePath,
+    setTimeout(() => {
+      watcherTimers.delete(workspacePath)
+      for (const window of windows) {
+        sendToRenderer(window, FILE_TREE_CHANNELS.changed, workspacePath)
+      }
+    }, 150),
+  )
+}
+
+function createWorkspaceFsWatcher(
+  workspacePath: string,
+  listener: (eventType: 'change' | 'rename', filename: string | Buffer | null) => void,
+): { watcher: FSWatcher; recursive: boolean } {
+  // 递归监听:win32/darwin 原生支持;Linux 上较新 Node(>=20)同样支持,
+  // 旧内核/旧 Node 会同步抛 ERR_FEATURE_UNAVAILABLE_ON_PLATFORM,降级为仅监听根层
+  try {
+    return { watcher: watch(workspacePath, { recursive: true }, listener), recursive: true }
+  } catch (err: any) {
+    if (err?.code !== 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM') throw err
+    return { watcher: watch(workspacePath, { recursive: false }, listener), recursive: false }
+  }
+}
+
+/**
+ * 非递归降级时为已展开/已加载目录补挂 watcher。
+ * 事件统一汇入同一 workspace 的 debounce 通道,不单独广播。
+ */
+function ensureNestedDirectoryWatcher(workspacePath: string, absoluteDir: string): void {
+  if (!nonRecursiveWatchWorkspaces.has(workspacePath)) return
+  if (resolve(absoluteDir) === resolve(workspacePath)) return
+
+  const nested = nestedWatcherRegistry.get(workspacePath) ?? new Map<string, FSWatcher>()
+  if (nested.has(absoluteDir)) {
+    nestedWatcherRegistry.set(workspacePath, nested)
+    return
+  }
+
+  try {
+    const watcher = watch(absoluteDir, { recursive: false }, (eventType, filename) => {
+      emitWorkspaceFsChange(workspacePath, eventType, filename)
+    })
+    watcher.on('error', () => {
+      watcher.close()
+      nestedWatcherRegistry.get(workspacePath)?.delete(absoluteDir)
+    })
+    nested.set(absoluteDir, watcher)
+    nestedWatcherRegistry.set(workspacePath, nested)
+  } catch {
+    // ignore nested watcher registration failure
+  }
+}
+
 function ensureWorkspaceWatcher(workspacePath: string): void {
   if (watcherRegistry.has(workspacePath)) return
 
   try {
-    const watcher = watch(
+    const { watcher, recursive } = createWorkspaceFsWatcher(
       workspacePath,
-      { recursive: process.platform === 'win32' || process.platform === 'darwin' },
       (eventType, filename) => {
-        for (const subscriber of watcherSubscribers.get(workspacePath) ?? []) {
-          subscriber(eventType, filename)
-        }
-
-        const windows = watcherWindows.get(workspacePath)
-        if (!windows?.size) return
-        const existingTimer = watcherTimers.get(workspacePath)
-        if (existingTimer) clearTimeout(existingTimer)
-
-        watcherTimers.set(
-          workspacePath,
-          setTimeout(() => {
-            watcherTimers.delete(workspacePath)
-            for (const window of windows) {
-              sendToRenderer(window, FILE_TREE_CHANNELS.changed, workspacePath)
-            }
-          }, 150),
-        )
+        emitWorkspaceFsChange(workspacePath, eventType, filename)
       },
     )
+
+    if (!recursive) nonRecursiveWatchWorkspaces.add(workspacePath)
+    else nonRecursiveWatchWorkspaces.delete(workspacePath)
 
     watcher.on('error', () => {
       for (const subscriber of watcherSubscribers.get(workspacePath) ?? []) {
@@ -333,7 +398,7 @@ export function registerWorkspaceHandlers(
   })
 
   ipcMain.handle(WORKSPACE_CHANNELS.create, async (event, dto: WorkspaceCreateInput) => {
-    if (!await authorize(event, { workspaceRoot: dto.path, toolName: 'legacy.workspace.create', actionRisk: 'create', preview: { summary: 'Create workspace record', paths: [dto.path], truncated: false } })) throw new Error('Workspace creation denied by workspace policy')
+    if (!await authorize(event, { workspaceRoot: dto.path, toolName: 'legacy.workspace.create', actionRisk: 'create', source: 'renderer-user', preview: { summary: 'Create workspace record', paths: [dto.path], truncated: false } })) throw new Error('Workspace creation denied by workspace policy')
     await ensureDir(WORKSPACES_DIR)
     const workspace = {
       id: randomUUID(),
@@ -352,7 +417,7 @@ export function registerWorkspaceHandlers(
     const filePath = join(WORKSPACES_DIR, `${id}.json`)
     const data = JSON.parse(await readFile(filePath, 'utf-8'))
     const workspaceRoot = typeof data.path === 'string' ? data.path : id
-    if (!await authorize(event, { workspaceRoot, toolName: 'legacy.workspace.update', actionRisk: 'write', preview: { summary: 'Update workspace record', paths: [workspaceRoot], detail: Object.keys(updates).join(', '), truncated: false } })) throw new Error('Workspace update denied by workspace policy')
+    if (!await authorize(event, { workspaceRoot, toolName: 'legacy.workspace.update', actionRisk: 'write', source: 'renderer-user', preview: { summary: 'Update workspace record', paths: [workspaceRoot], detail: Object.keys(updates).join(', '), truncated: false } })) throw new Error('Workspace update denied by workspace policy')
     const updated = { ...data, ...updates, updatedAt: new Date().toISOString() }
     await writeFile(filePath, JSON.stringify(updated, null, 2))
     return updated
@@ -363,7 +428,7 @@ export function registerWorkspaceHandlers(
       const recordPath = join(WORKSPACES_DIR, `${id}.json`)
       const record = JSON.parse(await readFile(recordPath, 'utf-8')) as { path?: unknown }
       const workspaceRoot = typeof record.path === 'string' ? record.path : id
-      if (!await authorize(event, { workspaceRoot, toolName: 'legacy.workspace.delete', actionRisk: 'delete', preview: { summary: 'Delete workspace record', paths: [workspaceRoot], truncated: false } })) return { success: false }
+      if (!await authorize(event, { workspaceRoot, toolName: 'legacy.workspace.delete', actionRisk: 'delete', source: 'renderer-user', preview: { summary: 'Delete workspace record', paths: [workspaceRoot], truncated: false } })) return { success: false }
       await options.beforeWorkspaceDelete?.(id)
       await unlink(recordPath)
       if (typeof record.path === 'string') disposeWorkspaceWatcher(record.path)
@@ -395,6 +460,7 @@ export function registerWorkspaceHandlers(
 
   ipcMain.handle(FILE_TREE_CHANNELS.load, async (_event, rootPath: string) => {
     registerWorkspaceWatcher(mainWindow, rootPath)
+    // 根层在非递归模式下已由 ensureWorkspaceWatcher 监听
     return readDirectoryNodes(rootPath, rootPath)
   })
 
@@ -410,6 +476,8 @@ export function registerWorkspaceHandlers(
     }
 
     registerWorkspaceWatcher(mainWindow, rootPath)
+    // Linux 非递归降级:children 成功后为该绝对目录补 watcher,才能收到深层变更
+    ensureNestedDirectoryWatcher(rootPath, targetDir)
     return readDirectoryNodes(rootPath, targetDir)
   })
 

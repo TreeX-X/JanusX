@@ -57,6 +57,7 @@ describe('Project IPC contract', () => {
     await projectApi.writeConfig('C:\\demo', config)
     await projectApi.createDefaultConfig('C:\\demo', ProjectType.Vite, 'demo')
     await projectApi.validateConfig(config)
+    await projectApi.test('C:\\demo', 'test:unit')
     await projectApi.run('C:\\demo', 'dev')
     await projectApi.stop('C:\\demo')
     await projectApi.list()
@@ -70,6 +71,7 @@ describe('Project IPC contract', () => {
       [PROJECT_CHANNELS.writeConfig, 'C:\\demo', config],
       [PROJECT_CHANNELS.createDefaultConfig, 'C:\\demo', ProjectType.Vite, 'demo'],
       [PROJECT_CHANNELS.validateConfig, config],
+      [PROJECT_CHANNELS.test, 'C:\\demo', 'test:unit'],
       [PROJECT_CHANNELS.run, 'C:\\demo', 'dev'],
       [PROJECT_CHANNELS.stop, 'C:\\demo'],
       [PROJECT_CHANNELS.list],

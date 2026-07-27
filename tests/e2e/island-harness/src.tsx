@@ -14,7 +14,36 @@ import '../../../src/renderer/src/components/janus/janus-island.css'
 
 installElectronApiFallback()
 
+const workspaceOne = {
+  id: 'workspace-1',
+  name: 'Workspace One',
+  path: 'C:\\workspace-one',
+  clis: [],
+  layout: { mode: 'tabs' as const, positions: [] },
+  createdAt: '2026-07-26T00:00:00.000Z',
+  updatedAt: '2026-07-26T00:00:00.000Z',
+}
+const workspaceTwo = {
+  ...workspaceOne,
+  id: 'workspace-2',
+  name: 'Workspace Two',
+  path: 'C:\\workspace-two',
+}
+const workspaceThree = {
+  ...workspaceOne,
+  id: 'workspace-3',
+  name: 'Workspace Three',
+  path: 'C:\\workspace-three',
+}
+const workspaceTwoPane = {
+  type: 'leaf' as const,
+  id: 'pane-terminal-two',
+  tabs: [createTerminalPaneContent('terminal-2', 'workspace-2')],
+  activeTabId: 'terminal:terminal-2',
+}
+
 useWorkspaceStore.setState({
+  workspaces: [workspaceOne, workspaceTwo, workspaceThree],
   activeWorkspaceId: 'workspace-1',
   activeTerminalId: 'terminal-1',
   paneTree: {
@@ -25,6 +54,24 @@ useWorkspaceStore.setState({
   },
   focusedPaneId: 'pane-terminal',
   focusedTabId: 'terminal:terminal-1',
+  terminalSnapshots: {
+    'workspace-2': {
+      terminals: [{
+        id: 'terminal-2',
+        workspaceId: 'workspace-2',
+        name: 'Terminal 2',
+        preset: 'shell',
+        cwd: workspaceTwo.path,
+        shell: 'powershell',
+        pid: null,
+        status: 'wait',
+      }],
+      activeTerminalId: 'terminal-2',
+      paneTree: workspaceTwoPane,
+      focusedPaneId: workspaceTwoPane.id,
+      focusedTabId: workspaceTwoPane.activeTabId,
+    },
+  },
 })
 
 const controllerData = {
@@ -47,6 +94,7 @@ function Harness() {
   const [isStreaming, setIsStreaming] = useState(true)
   const paneTree = useWorkspaceStore((state) => state.paneTree)
   const focusedPaneId = useWorkspaceStore((state) => state.focusedPaneId)
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const chatPane = getLeafPanes(paneTree).find((leaf) => leaf.tabs.some((tab) => tab.type === 'janus-chat')) ?? null
   const terminalTabCount = getLeafPanes(paneTree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'terminal').length
 
@@ -66,6 +114,18 @@ function Harness() {
     onClear: () => setClearCount((count) => count + 1),
     onOpenLlmConfig: () => undefined,
   }
+  const resourceController = {
+    resources: [
+      { workspaceId: 'workspace-1', workspaceName: 'Workspace One', workspacePath: workspaceOne.path },
+      { workspaceId: 'workspace-2', workspaceName: 'Workspace Two', workspacePath: workspaceTwo.path },
+    ],
+    availableWorkspaces: [workspaceOne, workspaceTwo, workspaceThree],
+    attachWorkspace: () => undefined,
+    detachWorkspace: () => undefined,
+    activities: [],
+    pendingApprovals: [],
+    resolveApproval: () => undefined,
+  }
 
   return (
     <main
@@ -78,10 +138,16 @@ function Harness() {
       data-clear-count={clearCount}
       data-stop-count={stopCount}
       data-terminal-tab-count={terminalTabCount}
+      data-active-workspace={activeWorkspaceId}
+      data-pane-ratio={paneTree?.type === 'split' ? paneTree.ratio : 'single'}
+      data-pane-tabs={getLeafPanes(paneTree).flatMap((leaf) => leaf.tabs).map((tab) => tab.type).join(',')}
     >
       <button data-testid="replace-single" onClick={() => setCallbackVersion(2)}>Replace single callback</button>
       <button data-testid="reopen-island" onClick={() => dispatch({ type: 'double-activate' })}>Reopen Island</button>
       <button data-testid="toggle-streaming" onClick={() => setIsStreaming((value) => !value)}>Toggle streaming</button>
+      <button data-testid="switch-empty-workspace" onClick={() => useWorkspaceStore.getState().setActiveWorkspace('workspace-3')}>
+        Switch empty workspace
+      </button>
       <JanusIsland
         stage={island.stage}
         onSingleActivate={() => {
@@ -103,9 +169,11 @@ function Harness() {
         onChatClear={chatProps.onClear}
         onOpenLlmConfig={() => undefined}
         onAddChatToWorkspace={() => {
-          useWorkspaceStore.getState().openJanusChatInWorkspace()
+          const workspaceStore = useWorkspaceStore.getState()
+          workspaceStore.openJanusChatInWorkspace()
           dispatch({ type: 'dismiss' })
         }}
+        resourceController={resourceController}
         knowledgeTrace={null}
         knowledgePeekActive={island.knowledge.presentation !== 'hidden'}
         knowledgePeekEmpty={island.knowledge.presentation === 'empty'}

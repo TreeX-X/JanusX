@@ -5,6 +5,7 @@ export const PROJECT_CHANNELS = {
   writeConfig: 'project:config:write',
   createDefaultConfig: 'project:config:create-default',
   validateConfig: 'project:config:validate',
+  test: 'project:test',
   run: 'project:run',
   stop: 'project:stop',
   list: 'project:list',
@@ -54,6 +55,7 @@ export interface LaunchConfiguration {
   internalConsoleOptions?: 'neverOpen' | 'openOnSessionStart' | 'openOnFirstSessionStart'
   nodeVersion?: string
   packageManager?: 'npm' | 'yarn' | 'pnpm' | 'bun'
+  script?: string
   port?: number
   cmakePath?: string
   buildDir?: string
@@ -74,6 +76,16 @@ export interface DetectResult {
   packageManager?: string
   pythonVersion?: string
   compiler?: string
+  availableScripts?: string[]
+}
+
+export interface ProjectTaskResult {
+  command: string
+  script?: string
+  exitCode: number | null
+  output: string[]
+  durationMs: number
+  timedOut: boolean
 }
 
 export interface FieldValidator {
@@ -153,6 +165,7 @@ export interface ProjectAPI {
   writeConfig(projectPath: string, config: LaunchConfig): Promise<ProjectCommandResult>
   createDefaultConfig(projectPath: string, projectType: ProjectType, projectName: string): Promise<ProjectResult<LaunchConfig>>
   validateConfig(config: LaunchConfig): Promise<ProjectResult<ValidationResult>>
+  test(projectPath: string, script?: string): Promise<ProjectResult<ProjectTaskResult>>
   run(projectPath: string, configName?: string): Promise<ProjectResult<ProjectRunResult>>
   stop(projectId: string): Promise<ProjectCommandResult>
   list(): Promise<ProjectResult<RunningProjectSummary[]>>

@@ -16,6 +16,19 @@ function isPathInWorkspace(filePath: string, workspacePath: string): boolean {
   return normalizedFile === normalizedWorkspace || normalizedFile.startsWith(`${normalizedWorkspace}/`)
 }
 
+/** target 与 base 相同,或位于 base 目录之下(分隔符/大小写不敏感) */
+function isSameOrUnderPath(target: string, base: string): boolean {
+  const t = target.replace(/\\/g, '/').toLowerCase()
+  const b = base.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  return t === b || t.startsWith(`${b}/`)
+}
+
+/** 把 base 之下的绝对路径迁移到 newBase 下,保留后缀原始分隔符 */
+function remapAbsolutePath(target: string, base: string, newBase: string): string {
+  if (target.length === base.length) return newBase
+  return `${newBase}${target.slice(base.length)}`
+}
+
 export function invalidateEditorFileCache(workspacePath?: string): void {
   if (!workspacePath) {
     loadedFileCache.clear()
@@ -87,6 +100,50 @@ async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): P
     return snapshot
   } finally {
     pendingFileLoads.delete(absolutePath)
+  }
+}
+
+/** 文件树重命名后同步编辑器:迁移打开的 tab 路径与缓存键 */
+export function remapEditorPaths(oldAbsolutePath: string, newAbsolutePath: string, workspacePath: string): void {
+  for (const key of [...loadedFileCache.keys()]) {
+    if (!isSameOrUnderPath(key, oldAbsolutePath)) continue
+    const snapshot = loadedFileCache.get(key)!
+    loadedFileCache.delete(key)
+    loadedFileCache.set(remapAbsolutePath(key, oldAbsolutePath, newAbsolutePath), snapshot)
+  }
+
+  useEditorStore.setState((s) => {
+    let changed = false
+    const openFiles = s.openFiles.map((file) => {
+      if (!isSameOrUnderPath(file.absolutePath, oldAbsolutePath)) return file
+      changed = true
+      const absolutePath = remapAbsolutePath(file.absolutePath, oldAbsolutePath, newAbsolutePath)
+      return {
+        ...file,
+        id: absolutePath,
+        absolutePath,
+        name: getFileName(absolutePath),
+        path: absolutePath.replace(workspacePath, '').replace(/^[\\/]/, ''),
+      }
+    })
+    if (!changed) return {}
+    const activeFileId =
+      s.activeFileId && isSameOrUnderPath(s.activeFileId, oldAbsolutePath)
+        ? remapAbsolutePath(s.activeFileId, oldAbsolutePath, newAbsolutePath)
+        : s.activeFileId
+    return { openFiles, activeFileId }
+  })
+}
+
+/** 文件树删除后同步编辑器:关闭指向已删除路径的 tab、清理缓存 */
+export function closeEditorFilesUnderPath(absolutePath: string): void {
+  for (const key of [...loadedFileCache.keys()]) {
+    if (isSameOrUnderPath(key, absolutePath)) loadedFileCache.delete(key)
+  }
+
+  const store = useEditorStore.getState()
+  for (const file of store.openFiles) {
+    if (isSameOrUnderPath(file.absolutePath, absolutePath)) store.closeFile(file.id)
   }
 }
 

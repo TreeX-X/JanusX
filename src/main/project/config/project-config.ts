@@ -203,6 +203,10 @@ export class ProjectConfig {
       })
     }
 
+    if (config.script && !/^[\w:.-]+$/.test(config.script)) {
+      errors.push({ field: 'script', message: 'Package script name contains unsupported characters' })
+    }
+
     // 类型特化验证
     if (config.type === ProjectType.CppCMake) {
       if (!config.buildDir) {

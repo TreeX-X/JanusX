@@ -1,9 +1,18 @@
 import { isUtf8 } from 'buffer'
-import { readdir } from 'fs/promises'
+import { createHash } from 'node:crypto'
+import { readdir, readFile, stat } from 'fs/promises'
 import { join, resolve } from 'path'
 import { readWorkspaceFile, resolveWorkspaceTarget } from '../path-guard'
-import { evaluateWorkspaceReadPolicy, isSensitivePath } from '../policy-gate'
+import { evaluateWorkspaceReadPolicy, isSensitivePath, redactHighConfidenceSecrets } from '../policy-gate'
 import type { RegisteredTool, ToolRegistry } from '../registry'
+import { checkpointManager } from '../../checkpoint/checkpoint-manager'
+import {
+  atomicReplaceWorkspaceFile,
+  createWorkspaceFile,
+  prepareWorkspaceEdit,
+  MAX_WORKSPACE_EDIT_BYTES,
+  type WorkspaceExactReplacement,
+} from '../file-transaction'
 
 const DEFAULT_MAX_BYTES = 256 * 1024
 const MAX_MAX_BYTES = 1024 * 1024
@@ -55,12 +64,122 @@ export const workspaceReadTool: RegisteredTool = {
     if (context.signal.aborted) throw new Error('workspace.read cancelled')
     if (!isText(content)) throw new Error('workspace.read only supports UTF-8 text files')
 
+    // sha256 is always computed from disk content: edits to unmasked regions
+    // still match, and only the masked credential itself becomes uneditable.
+    const { text, redacted } = redactHighConfidenceSecrets(content.toString('utf-8'))
     return {
       workspaceId,
       path: requestedPath,
       encoding: 'utf-8',
       size: content.byteLength,
-      content: content.toString('utf-8'),
+      content: text,
+      sha256: createHash('sha256').update(content).digest('hex'),
+      contentRedacted: redacted,
+      ...(redacted ? {
+        redactionNotice: 'High-confidence credential material was masked as [REDACTED]. The sha256 covers the original file; masked regions cannot be used as oldText in workspace.edit.',
+      } : {}),
+    }
+  },
+}
+
+export const workspaceEditTool: RegisteredTool = {
+  name: 'workspace.edit',
+  description: 'Apply bounded exact text replacements to an existing workspace file after approval',
+  actionRisk: 'write',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      workspaceId: { type: 'string' },
+      path: { type: 'string' },
+      expectedHash: { type: 'string' },
+      replacements: { type: 'array' },
+    },
+    required: ['workspaceId', 'path', 'expectedHash', 'replacements'],
+    additionalProperties: false,
+  },
+  execute: async (input, context) => {
+    if (input.workspaceId !== context.workspaceId) {
+      throw new Error('workspace.edit workspaceId must match the active workspace resource')
+    }
+    if (typeof input.path !== 'string' || typeof input.expectedHash !== 'string' || !Array.isArray(input.replacements)) {
+      throw new Error('workspace.edit input is invalid')
+    }
+    if (context.signal.aborted) throw new Error('workspace.edit cancelled')
+    let prepared = await prepareWorkspaceEdit(
+      context.workspaceRoot,
+      input.path,
+      input.expectedHash,
+      input.replacements as WorkspaceExactReplacement[],
+    )
+    await checkpointManager.initialize(context.workspaceRoot)
+    const checkpoint = await checkpointManager.createCheckpoint({
+      terminalId: `workspace-chat:${context.workspaceId}`,
+      engine: 'manual',
+      prompt: `workspace.edit ${prepared.path}`,
+      cwd: context.workspaceRoot,
+    })
+    if (context.signal.aborted) throw new Error('workspace.edit cancelled')
+    prepared = await prepareWorkspaceEdit(
+      context.workspaceRoot,
+      input.path,
+      input.expectedHash,
+      input.replacements as WorkspaceExactReplacement[],
+    )
+    await atomicReplaceWorkspaceFile(context.workspaceRoot, prepared)
+    return {
+      workspaceId: context.workspaceId,
+      path: prepared.path,
+      changedPaths: [prepared.path],
+      previousHash: prepared.previousHash,
+      sha256: prepared.nextHash,
+      replacements: prepared.replacements,
+      bytes: Buffer.byteLength(prepared.nextContent),
+      checkpointId: checkpoint.id,
+    }
+  },
+}
+
+export const workspaceCreateTool: RegisteredTool = {
+  name: 'workspace.create',
+  description: 'Create a new UTF-8 text file inside the current workspace after approval',
+  actionRisk: 'create',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      workspaceId: { type: 'string' },
+      path: { type: 'string' },
+      content: { type: 'string' },
+    },
+    required: ['workspaceId', 'path', 'content'],
+    additionalProperties: false,
+  },
+  execute: async (input, context) => {
+    if (input.workspaceId !== context.workspaceId) {
+      throw new Error('workspace.create workspaceId must match the active workspace resource')
+    }
+    if (typeof input.path !== 'string' || typeof input.content !== 'string') {
+      throw new Error('workspace.create input is invalid')
+    }
+    if (Buffer.byteLength(input.content, 'utf-8') > MAX_WORKSPACE_EDIT_BYTES) {
+      throw new Error(`workspace.create content exceeds ${MAX_WORKSPACE_EDIT_BYTES} bytes`)
+    }
+    if (context.signal.aborted) throw new Error('workspace.create cancelled')
+    await checkpointManager.initialize(context.workspaceRoot)
+    const checkpoint = await checkpointManager.createCheckpoint({
+      terminalId: `workspace-chat:${context.workspaceId}`,
+      engine: 'manual',
+      prompt: `workspace.create ${input.path}`,
+      cwd: context.workspaceRoot,
+    })
+    if (context.signal.aborted) throw new Error('workspace.create cancelled')
+    const created = await createWorkspaceFile(context.workspaceRoot, input.path, input.content)
+    return {
+      workspaceId: context.workspaceId,
+      path: created.path,
+      changedPaths: [created.path],
+      sha256: created.sha256,
+      bytes: created.bytes,
+      checkpointId: checkpoint.id,
     }
   },
 }
@@ -154,9 +273,120 @@ export const workspaceListTool: RegisteredTool = {
   },
 }
 
+const SEARCH_MAX_QUERY_CHARS = 256
+const SEARCH_MAX_RESULTS = 50
+const SEARCH_MAX_FILES = 2_000
+const SEARCH_MAX_FILE_BYTES = 512 * 1024
+const SEARCH_MAX_LINE_CHARS = 300
+const SEARCH_MAX_DEPTH = 8
+const SEARCH_SKIPPED_DIRECTORIES = new Set([
+  'node_modules', 'dist', 'out', 'build', 'coverage', 'target', 'vendor', '__pycache__', '.venv', 'venv',
+])
+
+type WorkspaceSearchMatch = {
+  path: string
+  line: number
+  text: string
+}
+
+export const workspaceSearchTool: RegisteredTool = {
+  name: 'workspace.search',
+  description: 'Search UTF-8 text files in the workspace for a literal substring and return matching lines',
+  actionRisk: 'read',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      workspaceId: { type: 'string' },
+      query: { type: 'string' },
+      path: { type: 'string' },
+      maxResults: { type: 'number' },
+    },
+    required: ['workspaceId', 'query'],
+    additionalProperties: false,
+  },
+  execute: async (input, context) => {
+    const workspaceId = input.workspaceId
+    const query = input.query
+    const requestedPath = input.path ?? ''
+    const maxResults = input.maxResults ?? SEARCH_MAX_RESULTS
+    if (typeof workspaceId !== 'string' || workspaceId !== context.workspaceId) {
+      throw new Error('workspace.search workspaceId must match the active workspace resource')
+    }
+    if (typeof query !== 'string' || !query.trim() || query.length > SEARCH_MAX_QUERY_CHARS) {
+      throw new Error(`workspace.search query must be 1-${SEARCH_MAX_QUERY_CHARS} characters`)
+    }
+    if (typeof requestedPath !== 'string') throw new Error('workspace.search path must be a string')
+    if (typeof maxResults !== 'number' || !Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > SEARCH_MAX_RESULTS) {
+      throw new Error(`workspace.search maxResults must be an integer between 1 and ${SEARCH_MAX_RESULTS}`)
+    }
+    if (context.signal.aborted) throw new Error('workspace.search cancelled')
+
+    const target = await resolveWorkspaceTarget(context.workspaceRoot, requestedPath)
+    if (target.kind !== 'directory') throw new Error('workspace.search path must be a directory')
+    const rootPath = resolve(context.workspaceRoot, target.relativePath || '.')
+    const needle = query.toLowerCase()
+    const matches: WorkspaceSearchMatch[] = []
+    let scannedFiles = 0
+    let truncated = false
+
+    const walk = async (directoryPath: string, relativeDirectory: string, depth: number): Promise<void> => {
+      if (truncated || depth > SEARCH_MAX_DEPTH) return
+      if (context.signal.aborted) throw new Error('workspace.search cancelled')
+      const children = await readdir(directoryPath, { withFileTypes: true })
+      children.sort((left, right) => left.name.localeCompare(right.name))
+      for (const child of children) {
+        if (truncated) return
+        if (context.signal.aborted) throw new Error('workspace.search cancelled')
+        if (child.isSymbolicLink()) continue
+        const childRelative = relativeDirectory ? `${relativeDirectory}/${child.name}` : child.name
+        if (isSensitivePath(childRelative)) continue
+        if (child.isDirectory()) {
+          if (SEARCH_SKIPPED_DIRECTORIES.has(child.name)) continue
+          await walk(join(directoryPath, child.name), childRelative, depth + 1)
+          continue
+        }
+        if (!child.isFile()) continue
+        if (scannedFiles >= SEARCH_MAX_FILES) { truncated = true; return }
+        scannedFiles++
+        const filePath = join(directoryPath, child.name)
+        try {
+          if ((await stat(filePath)).size > SEARCH_MAX_FILE_BYTES) continue
+          const content = await readFile(filePath)
+          if (!isText(content)) continue
+          const lines = content.toString('utf-8').split('\n')
+          for (const [index, line] of lines.entries()) {
+            if (!line.toLowerCase().includes(needle)) continue
+            matches.push({
+              path: childRelative,
+              line: index + 1,
+              text: line.length > SEARCH_MAX_LINE_CHARS ? `${line.slice(0, SEARCH_MAX_LINE_CHARS)}…` : line,
+            })
+            if (matches.length >= maxResults) { truncated = true; break }
+          }
+        } catch {
+          // Unreadable files are skipped, not fatal to the search.
+        }
+      }
+    }
+
+    await walk(rootPath, target.relativePath, 1)
+    return {
+      workspaceId,
+      query,
+      path: target.relativePath,
+      matches,
+      scannedFiles,
+      truncated,
+    }
+  },
+}
+
 export function registerWorkspaceTools(registry: ToolRegistry): void {
   if (registeredRegistries.has(registry)) return
   registry.register(workspaceReadTool)
   registry.register(workspaceListTool)
+  registry.register(workspaceEditTool)
+  registry.register(workspaceCreateTool)
+  registry.register(workspaceSearchTool)
   registeredRegistries.add(registry)
 }

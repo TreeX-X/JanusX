@@ -4,6 +4,7 @@ import type {
   ProjectCommandResult,
   ProjectResult,
   ProjectRunResult,
+  ProjectTaskResult,
   ProjectType,
   ProjectTypeSchema,
   RunningProjectDetail,
@@ -235,6 +236,10 @@ export const projectService = {
 
   async validateConfig(config: LaunchConfig): Promise<ValidationResult> {
     return unwrap(await window.electron.project.validateConfig(config))
+  },
+
+  async test(projectPath: string, script?: string): Promise<ProjectTaskResult> {
+    return unwrap(await window.electron.project.test(projectPath, script))
   },
 
   async start(projectPath: string, configName?: string): Promise<true> {

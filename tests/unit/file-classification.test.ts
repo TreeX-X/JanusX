@@ -186,23 +186,21 @@ describe('semantic file icon', () => {
       fileChange: null,
     }))
 
+    // 选中/忽略状态通过 data-attribute 表达,视觉样式由 CSS module 按属性选择器渲染
     expect(activeMarkup).toContain('data-file-kind="typescript"')
     expect(activeMarkup).toContain('data-selected="true"')
-    expect(activeMarkup).toContain('color:#ff7830')
     expect(activeMarkup).toContain('data-git-status="M"')
     expect(activeMarkup.indexOf('data-file-kind="typescript"')).toBeLessThan(
       activeMarkup.indexOf('data-git-status="M"'),
     )
     expect(defaultMarkup).toContain('data-file-kind="database"')
     expect(defaultMarkup).toContain('data-selected="false"')
-    expect(defaultMarkup).toContain('color:#999')
     const fileNameTag = defaultMarkup.match(/<span[^>]*data-file-name="cache\.sqlite3"[^>]*>/)?.[0]
     expect(fileNameTag).toBeDefined()
     expect(fileNameTag).not.toContain('style=')
     expect(defaultMarkup).not.toContain('data-git-status=')
+    expect(defaultMarkup).not.toContain('data-git-ignored')
     expect(ignoredMarkup).toContain('data-git-ignored="true"')
-    expect(ignoredMarkup).toContain('text-decoration:line-through')
-    expect(ignoredMarkup).toContain('opacity:0.68')
   })
 
   it('marks folders containing git changes with an aggregate dot', () => {

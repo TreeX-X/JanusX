@@ -51,9 +51,9 @@
 
 .retryBtn {
   padding: 8px 16px;
-  background: var(--primary);
-  color: white;
-  border: none;
+  background: transparent;
+  color: #d49a78;
+  border: 1px solid rgba(255, 120, 48, 0.3);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -61,9 +61,9 @@
 }
 
 .retryBtn:hover {
-  background: #ff8844;
+  background: rgba(255, 120, 48, 0.05);
 }
 
 .retryBtn:active {
-  background: #ff6600;
+  background: rgba(255, 120, 48, 0.08);
 }

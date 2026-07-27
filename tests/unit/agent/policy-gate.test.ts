@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   evaluateWorkspaceActionPolicy,
   evaluateWorkspaceReadPolicy,
+  redactHighConfidenceSecrets,
   redactPolicyValue,
+  redactWorkingValue,
   settleApprovalDecision,
 } from '../../../src/main/agent/runtime/policy-gate'
 
@@ -90,6 +92,27 @@ describe('workspace read policy', () => {
     expect(redactPolicyValue({ path: 'config.json', apiKey: 'secret', nested: { access_token: 'token', value: 'ok' } })).toEqual({
       path: 'config.json', apiKey: '[REDACTED]', nested: { access_token: '[REDACTED]', value: 'ok' },
     })
+  })
+
+  it('keeps ordinary secret-shaped source code intact as working data', () => {
+    const source = 'const apiKey = process.env.MY_KEY\nconst token = getToken()\npassword: readPassword()'
+    expect(redactHighConfidenceSecrets(source)).toEqual({ text: source, redacted: false })
+    expect(redactWorkingValue({ content: source, apiKey: 'field-name-untouched' })).toEqual({
+      content: source,
+      apiKey: 'field-name-untouched',
+    })
+  })
+
+  it('masks only high-confidence credential material in working data', () => {
+    const pem = '-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----'
+    const key = 'sk-abcdefghijklmnop1234'
+    expect(redactHighConfidenceSecrets(`before\n${pem}\nafter ${key}`)).toEqual({
+      text: 'before\n[REDACTED]\nafter [REDACTED]',
+      redacted: true,
+    })
+    expect(redactWorkingValue({ nested: [pem] })).toEqual({ nested: ['[REDACTED]'] })
+    // Short sk- prefixes stay below the high-confidence threshold.
+    expect(redactHighConfidenceSecrets('sk-short123').redacted).toBe(false)
   })
 
   it('normalizes untrusted confidence metadata without changing authority', () => {

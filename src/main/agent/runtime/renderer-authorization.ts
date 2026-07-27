@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { BrowserWindow, dialog, type IpcMainInvokeEvent } from 'electron'
+import type { IpcMainInvokeEvent } from 'electron'
 import type { ActionRisk, ApprovalPreview } from '../../../shared/ipc/agent-runtime'
 import { createPolicyDecisionRecord, evaluateWorkspaceActionPolicy, settleApprovalDecision } from './policy-gate'
 import { FilePolicyAuditStore } from './policy-audit-store'
@@ -28,30 +28,17 @@ export const authorizeRendererAction: RendererActionAuthorizer = async (event, r
   const initial = evaluateWorkspaceActionPolicy({ actionRisk: request.actionRisk })
   const base = { workspaceId, sessionId, correlationId, toolName: request.toolName, toolInput: { preview: request.preview } }
 
-  // 显式用户操作：敏感路径仍由 evaluateWorkspaceActionPolicy 拒绝（outcome==='deny'），
-  // 只读放行照旧；其余 approval-required 直接放行，不再弹原生对话框，避免与前端确认重复。
-  if (request.source === 'renderer-user' && initial.outcome === 'approval-required') {
-    const approved = settleApprovalDecision(initial, 'approved')
-    await auditStore.record({ ...createPolicyDecisionRecord({ ...base, decision: approved }), provenance: 'manual-user' })
-    return true
+  if (initial.outcome !== 'approval-required') {
+    await auditStore.record({ ...createPolicyDecisionRecord({ ...base, decision: initial }), provenance: 'manual-user' })
+    return initial.outcome === 'allow'
   }
 
-  await auditStore.record({ ...createPolicyDecisionRecord({ ...base, decision: initial }), provenance: 'manual-user' })
-  if (initial.outcome !== 'approval-required') return initial.outcome === 'allow'
-
-  const owner = BrowserWindow.fromWebContents(event.sender)
-  const options = {
-    type: 'warning' as const,
-    title: 'Approve workspace action',
-    message: request.preview.summary,
-    detail: [...request.preview.paths, request.preview.detail].filter(Boolean).join('\n').slice(0, 4_000),
-    buttons: ['Cancel', 'Approve'],
-    cancelId: 0,
-    defaultId: 0,
-    noLink: true,
-  }
-  const result = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options)
-  const outcome = result.response === 1 ? 'approved' : 'denied'
-  await auditStore.record({ ...createPolicyDecisionRecord({ ...base, decision: settleApprovalDecision(initial, outcome) }), provenance: 'manual-user' })
+  // Renderer commands are approved only after an explicit JanusX UI action. Unmarked
+  // calls fail closed instead of falling back to an Electron-native confirmation.
+  const outcome = request.source === 'renderer-user' ? 'approved' : 'denied'
+  await auditStore.record({
+    ...createPolicyDecisionRecord({ ...base, decision: settleApprovalDecision(initial, outcome) }),
+    provenance: 'manual-user',
+  })
   return outcome === 'approved'
 }

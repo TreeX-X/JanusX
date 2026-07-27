@@ -11,6 +11,7 @@
 import { ipcMain } from 'electron'
 import ProjectDetector from '../project/detector/detector'
 import ProjectRunner from '../project/runner/runner'
+import { resolveProjectTestScript, runProjectTest } from '../project/runner/task-runner'
 import ProjectConfig from '../project/config/project-config'
 import { getProjectTypes } from '../project/config/project-schemas'
 import {
@@ -125,7 +126,7 @@ export function registerProjectHandlers(authorize: RendererActionAuthorizer = au
    */
   ipcMain.handle(PROJECT_CHANNELS.writeConfig, async (event, projectPath: string, config: LaunchConfig) => {
     try {
-      if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.write-config', actionRisk: 'config-apply', preview: { summary: 'Apply project launch configuration', paths: [projectPath], detail: `${JSON.stringify(config).length} characters`, truncated: false } })) return { success: false, error: 'Configuration update denied by workspace policy' }
+      if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.write-config', actionRisk: 'config-apply', source: 'renderer-user', preview: { summary: 'Apply project launch configuration', paths: [projectPath], detail: `${JSON.stringify(config).length} characters`, truncated: false } })) return { success: false, error: 'Configuration update denied by workspace policy' }
       await ProjectConfig.write(projectPath, config)
       return {
         success: true,
@@ -192,6 +193,27 @@ export function registerProjectHandlers(authorize: RendererActionAuthorizer = au
   // 项目执行
   // ═══════════════════════════════════════════════════════════
 
+  ipcMain.handle(PROJECT_CHANNELS.test, async (event, projectPath: string, script?: string) => {
+    try {
+      const selected = await resolveProjectTestScript(projectPath, script)
+      if (!await authorize(event, {
+        workspaceRoot: projectPath,
+        toolName: 'project.test',
+        actionRisk: 'run',
+        source: 'renderer-user',
+        preview: {
+          summary: 'Run project tests',
+          paths: [projectPath],
+          detail: `Package script: ${selected.name}\n${selected.command}`,
+          truncated: false,
+        },
+      })) return { success: false, error: 'Project test denied by workspace policy' }
+      return { success: true, data: await runProjectTest(projectPath, selected.name) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
   /**
    * 启动项目
    * @param projectPath 项目根目录
@@ -202,7 +224,7 @@ export function registerProjectHandlers(authorize: RendererActionAuthorizer = au
     PROJECT_CHANNELS.run,
     async (event, projectPath: string, configName: string = 'dev') => {
       try {
-        if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.run', actionRisk: 'run', preview: { summary: 'Start project', paths: [projectPath], detail: `Configuration: ${configName}`, truncated: false } })) return { success: false, error: 'Project run denied by workspace policy' }
+        if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.run', actionRisk: 'run', source: 'renderer-user', preview: { summary: 'Start project', paths: [projectPath], detail: `Configuration: ${configName}`, truncated: false } })) return { success: false, error: 'Project run denied by workspace policy' }
         const runner = getProjectRunner()
         const processHandle = await runner.run(projectPath, configName)
 
@@ -229,7 +251,7 @@ export function registerProjectHandlers(authorize: RendererActionAuthorizer = au
    */
   ipcMain.handle(PROJECT_CHANNELS.stop, async (event, projectId: string) => {
     try {
-      if (!await authorize(event, { workspaceRoot: projectId, toolName: 'legacy.project.stop', actionRisk: 'run', preview: { summary: 'Stop project', paths: [projectId], truncated: false } })) return { success: false, error: 'Project stop denied by workspace policy' }
+      if (!await authorize(event, { workspaceRoot: projectId, toolName: 'legacy.project.stop', actionRisk: 'run', source: 'renderer-user', preview: { summary: 'Stop project', paths: [projectId], truncated: false } })) return { success: false, error: 'Project stop denied by workspace policy' }
       const runner = getProjectRunner()
       await runner.stop(projectId)
 

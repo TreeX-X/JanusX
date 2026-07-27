@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
+import { MARKDOWN_COMPONENTS } from './markdown-components'
 
 interface MarkdownViewerProps {
   content: string
@@ -173,146 +174,7 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
           <div className="markdown-preview">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              components={{
-                h1: ({ children }) => (
-                  <h1 style={{ color: '#e8e8e8', fontSize: 22, fontWeight: 700, marginBottom: 12, marginTop: 20 }}>
-                    {children}
-                  </h1>
-                ),
-                h2: ({ children }) => (
-                  <h2 style={{ color: '#e8e8e8', fontSize: 18, fontWeight: 600, marginBottom: 10, marginTop: 18 }}>
-                    {children}
-                  </h2>
-                ),
-                h3: ({ children }) => (
-                  <h3 style={{ color: '#e8e8e8', fontSize: 15, fontWeight: 600, marginBottom: 8, marginTop: 16 }}>
-                    {children}
-                  </h3>
-                ),
-                p: ({ children }) => (
-                  <p style={{ color: '#d4d4d4', fontSize: 13, lineHeight: 1.7, marginBottom: 10 }}>
-                    {children}
-                  </p>
-                ),
-                a: ({ href, children }) => (
-                  <a href={href} style={{ color: '#ff7830', textDecoration: 'none' }}>
-                    {children}
-                  </a>
-                ),
-                code: ({ className, children }) => {
-                  const isInline = !className
-                  if (isInline) {
-                    return (
-                      <code
-                        style={{
-                          background: 'rgba(18, 18, 20, 0.85)',
-                          border: '1px solid rgba(255, 255, 255, 0.04)',
-                          borderRadius: 3,
-                          padding: '1px 5px',
-                          fontSize: 12,
-                          fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace",
-                        }}
-                      >
-                        {children}
-                      </code>
-                    )
-                  }
-                  return (
-                    <code
-                      style={{
-                        fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace",
-                        fontSize: 12,
-                      }}
-                    >
-                      {children}
-                    </code>
-                  )
-                },
-                pre: ({ children }) => (
-                  <pre
-                    style={{
-                      background: 'rgba(18, 18, 20, 0.85)',
-                      border: '1px solid rgba(255, 255, 255, 0.04)',
-                      borderRadius: 4,
-                      padding: 12,
-                      overflowX: 'auto',
-                      marginBottom: 12,
-                    }}
-                  >
-                    {children}
-                  </pre>
-                ),
-                blockquote: ({ children }) => (
-                  <blockquote
-                    style={{
-                      borderLeft: '3px solid #ff7830',
-                      paddingLeft: 12,
-                      color: '#999',
-                      marginBottom: 12,
-                    }}
-                  >
-                    {children}
-                  </blockquote>
-                ),
-                ul: ({ children }) => (
-                  <ul style={{ color: '#d4d4d4', fontSize: 13, lineHeight: 1.7, marginBottom: 10, paddingLeft: 20 }}>
-                    {children}
-                  </ul>
-                ),
-                ol: ({ children }) => (
-                  <ol style={{ color: '#d4d4d4', fontSize: 13, lineHeight: 1.7, marginBottom: 10, paddingLeft: 20 }}>
-                    {children}
-                  </ol>
-                ),
-                li: ({ children }) => (
-                  <li style={{ marginBottom: 4 }}>{children}</li>
-                ),
-                hr: () => (
-                  <hr
-                    style={{
-                      border: 'none',
-                      borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                      margin: '16px 0',
-                    }}
-                  />
-                ),
-                table: ({ children }) => (
-                  <table
-                    style={{
-                      borderCollapse: 'collapse',
-                      width: '100%',
-                      marginBottom: 12,
-                      fontSize: 12,
-                    }}
-                  >
-                    {children}
-                  </table>
-                ),
-                th: ({ children }) => (
-                  <th
-                    style={{
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      padding: '6px 10px',
-                      background: 'rgba(18, 18, 20, 0.85)',
-                      color: '#e8e8e8',
-                      fontWeight: 600,
-                      textAlign: 'left',
-                    }}
-                  >
-                    {children}
-                  </th>
-                ),
-                td: ({ children }) => (
-                  <td
-                    style={{
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      padding: '6px 10px',
-                    }}
-                  >
-                    {children}
-                  </td>
-                ),
-              }}
+              components={MARKDOWN_COMPONENTS}
             >
               {content}
             </ReactMarkdown>

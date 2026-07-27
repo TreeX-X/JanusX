@@ -11,6 +11,11 @@ import { knowledgeContextService } from '../knowledge/context-service'
 import { getModelCatalogService } from '../llm/ModelCatalogService'
 import type { KnowledgeContextResult, KnowledgeRecallTrace } from '../../shared/knowledge'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
+import type { ChatToolTraceEntry, ChatWorkspaceResource, LlmRuntimeStatus } from '../../shared/ipc/llm'
+import type { ToolResult } from '../../shared/ipc/agent-runtime'
+import { getDevelopmentLlmSyncStatus } from '../llm/development-config-sync'
+import { workspaceAgentRuntime } from '../agent/runtime/runtime'
+import { createWorkspaceChatSystemPrompt, createWorkspaceChatTools } from '../llm/workspace-chat-tools'
 
 /** 对话消息类型 */
 interface ChatMessage {
@@ -26,6 +31,7 @@ interface ChatRequest {
   sourceTag?: 'janus-chat'
   workspaceId?: string
   workspacePath?: string
+  workspaceResources?: ChatWorkspaceResource[]
 }
 
 /** 流式对话请求参数 */
@@ -37,10 +43,38 @@ interface ChatStreamRequest {
   sourceTag?: 'janus-chat'
   workspaceId?: string
   workspacePath?: string
+  workspaceResources?: ChatWorkspaceResource[]
+  toolTraces?: ChatToolTraceEntry[]
 }
 
 /** Active streaming chat abort controllers (module-scoped for shutdown). */
 const abortControllers = new Map<string, AbortController>()
+let connectionStatus: LlmRuntimeStatus['connection'] = { state: 'checking' }
+
+export async function refreshLlmRuntimeStatus(): Promise<LlmRuntimeStatus> {
+  try {
+    const configured = await llmService.getDefaultModel()
+    if (!configured) {
+      connectionStatus = { state: 'unconfigured', checkedAt: new Date().toISOString() }
+    } else {
+      const result = await llmService.testConnection(configured.provider, configured.modelId)
+      connectionStatus = {
+        state: result.success ? 'available' : 'unavailable',
+        providerId: configured.provider.id,
+        checkedAt: new Date().toISOString(),
+        ...(result.latency !== undefined ? { latency: result.latency } : {}),
+        ...(!result.success && result.error ? { error: result.error.slice(0, 500) } : {}),
+      }
+    }
+  } catch (error) {
+    connectionStatus = {
+      state: 'unavailable',
+      checkedAt: new Date().toISOString(),
+      error: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+    }
+  }
+  return { profileSync: getDevelopmentLlmSyncStatus(), connection: { ...connectionStatus } }
+}
 
 const JANUS_CHAT_MAX_ITEMS = 5
 const JANUS_CHAT_MAX_CHARS = 3_000
@@ -54,8 +88,83 @@ const KNOWLEDGE_CONTEXT_CLOSE = '</janus-knowledge-context>'
 
 type ContextSearch = typeof knowledgeContextService.search
 
+type TrustedWorkspaceChatResources = Map<string, {
+  sessionId: string
+  workspaceRoot: string
+  workspaceName: string
+}>
+
+function resolveWorkspaceChatResources(resources: ChatWorkspaceResource[] | undefined): TrustedWorkspaceChatResources {
+  const trusted: TrustedWorkspaceChatResources = new Map()
+  if (!resources) return trusted
+  if (!Array.isArray(resources) || resources.length > 12) throw new Error('Invalid attached workspace resources')
+
+  const sessionIds = new Set<string>()
+  for (const resource of resources) {
+    if (!resource?.workspaceId || !resource.agentSessionId || typeof resource.workspaceName !== 'string') {
+      throw new Error('Invalid attached workspace resource')
+    }
+    if (trusted.has(resource.workspaceId) || sessionIds.has(resource.agentSessionId)) {
+      throw new Error('Duplicate attached workspace resource')
+    }
+    const session = workspaceAgentRuntime.getSession(resource.agentSessionId)
+    if (!session || session.status !== 'running' || session.workspace.workspaceId !== resource.workspaceId) {
+      throw new Error(`Attached workspace session is unavailable: ${resource.workspaceId}`)
+    }
+    sessionIds.add(resource.agentSessionId)
+    trusted.set(resource.workspaceId, {
+      sessionId: session.id,
+      workspaceRoot: session.workspace.workspaceRoot,
+      workspaceName: resource.workspaceName.trim().slice(0, 120) || resource.workspaceId,
+    })
+  }
+  return trusted
+}
+
 function boundedText(value: string, maxChars: number): string {
   return value.length <= maxChars ? value : value.slice(0, maxChars)
+}
+
+const TOOL_TRACE_MAX_ENTRIES = 24
+const TOOL_TRACE_SUMMARY_MAX_CHARS = 300
+const CHAT_MAX_STEPS = 12
+
+/** Compress a runtime tool result into one trace line the next turn can replay. */
+export function toolTraceEntryFromResult(result: ToolResult): ChatToolTraceEntry {
+  const output = result.output as Record<string, unknown> | undefined
+  const parts: string[] = []
+  if (output && typeof output === 'object') {
+    if (typeof output.path === 'string') parts.push(output.path)
+    if (typeof output.sha256 === 'string') parts.push(`sha256=${output.sha256}`)
+    if (typeof output.query === 'string') parts.push(`query="${output.query}"`)
+    if (Array.isArray(output.matches)) parts.push(`${output.matches.length} matches`)
+    if (Array.isArray(output.entries)) parts.push(`${output.entries.length} entries`)
+    if (typeof output.checkpointId === 'string') parts.push(`checkpoint=${output.checkpointId}`)
+  }
+  if (result.status !== 'completed') {
+    parts.push(result.reasonCode === 'APPROVAL_DENIED' ? 'user denied' : result.error || result.status)
+  }
+  return {
+    toolName: result.toolName,
+    workspaceId: result.workspaceId,
+    status: result.status,
+    summary: boundedText(parts.join(', ') || result.summary, TOOL_TRACE_SUMMARY_MAX_CHARS),
+  }
+}
+
+/** Render prior tool traces as a system message so the model keeps hashes/paths across turns. */
+export function toolTraceHistoryMessage(entries: ChatToolTraceEntry[]): ChatMessage | null {
+  if (entries.length === 0) return null
+  const lines = entries.slice(-TOOL_TRACE_MAX_ENTRIES).map((entry) =>
+    `- ${entry.toolName}[${entry.workspaceId}] ${entry.status}: ${entry.summary}`)
+  return {
+    role: 'system',
+    content: [
+      'Workspace tool calls you executed earlier in this conversation (most recent last).',
+      'File hashes may be stale — re-read a file before editing it.',
+      ...lines,
+    ].join('\n'),
+  }
 }
 
 function latestUserQuery(messages: ChatMessage[]): string {
@@ -175,6 +284,7 @@ export function abortAllChatStreams(): void {
  * 注册 LLM 相关的 IPC handlers
  */
 export function registerLlmHandlers(): void {
+  ipcMain.handle(LLM_CHANNELS.runtimeStatus, () => refreshLlmRuntimeStatus())
   ipcMain.handle(LLM_CHANNELS.getCatalog, () => getModelCatalogService().getCatalog())
   ipcMain.handle(LLM_CHANNELS.refreshCatalog, () => getModelCatalogService().refresh())
 
@@ -263,14 +373,15 @@ export function registerLlmHandlers(): void {
   // 对话请求（非流式）
   ipcMain.handle(LLM_CHANNELS.chat, async (_, request: ChatRequest) => {
     try {
-      const { messages, providerId, modelId, sourceTag, workspaceId, workspacePath } = request
+      const { messages, providerId, modelId, sourceTag, workspaceId, workspacePath, workspaceResources } = request
+      const soleResource = workspaceResources?.length === 1 ? workspaceResources[0] : undefined
 
       const settings = await llmService.getProviderSettings(providerId)
       if (!settings) {
         throw new Error(`Provider "${providerId}" 未配置`)
       }
 
-      const actualModelId = modelId || settings.modelId || 'gemini-2.5-flash'
+      const actualModelId = modelId || settings.modelId || 'gemini-3.6-flash'
 
       // 过滤掉空内容的消息
       let formattedMessages = messages
@@ -284,8 +395,8 @@ export function registerLlmHandlers(): void {
         formattedMessages = (await prepareJanusChatRecall(
           'non-stream',
           formattedMessages,
-          workspaceId,
-          workspacePath,
+          soleResource?.workspaceId ?? workspaceId,
+          soleResource?.workspacePath ?? workspacePath,
         )).messages
       }
 
@@ -301,12 +412,12 @@ export function registerLlmHandlers(): void {
         })),
       })
 
-      if (sourceTag === 'janus-chat' && workspacePath) {
+      if (sourceTag === 'janus-chat' && soleResource) {
         const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')
         if (userMessage) {
           await knowledgeObservationService.capture({
-            workspaceId,
-            workspacePath,
+            workspaceId: soleResource.workspaceId,
+            workspacePath: soleResource.workspacePath,
             source: 'janus-chat',
             type: 'conversation-turn',
             content: userMessage.content,
@@ -316,8 +427,8 @@ export function registerLlmHandlers(): void {
           })
         }
         await knowledgeObservationService.capture({
-          workspaceId,
-          workspacePath,
+          workspaceId: soleResource.workspaceId,
+          workspacePath: soleResource.workspacePath,
           source: 'janus-chat',
           type: 'conversation-turn',
           content: result.text || '',
@@ -340,12 +451,13 @@ export function registerLlmHandlers(): void {
 
   // 流式对话请求（单向 send/on 模式，确保事件可靠送达渲染端）
   ipcMain.on(LLM_CHANNELS.chatStream, async (event, request: ChatStreamRequest) => {
-    const { requestId, messages, providerId, modelId, sourceTag, workspaceId, workspacePath } = request
+    const { requestId, messages, providerId, modelId, sourceTag, workspaceId, workspacePath, workspaceResources, toolTraces } = request
     const controller = new AbortController()
     let streamedText = ''
+    const executedToolTraces: ChatToolTraceEntry[] = []
     abortControllers.set(requestId, controller)
 
-    const sendEvent = (channel: typeof LLM_CHANNELS.delta | typeof LLM_CHANNELS.done | typeof LLM_CHANNELS.error | typeof LLM_CHANNELS.recallTrace, payload: any) => {
+    const sendEvent = (channel: typeof LLM_CHANNELS.delta | typeof LLM_CHANNELS.done | typeof LLM_CHANNELS.error | typeof LLM_CHANNELS.recallTrace | typeof LLM_CHANNELS.toolTrace, payload: any) => {
       event.reply(channel, payload)
     }
 
@@ -359,7 +471,7 @@ export function registerLlmHandlers(): void {
         throw new Error(`Provider "${providerId}" 未配置`)
       }
 
-      const actualModelId = modelId || settings.modelId || 'gemini-2.5-flash'
+      const actualModelId = modelId || settings.modelId || 'gemini-3.6-flash'
 
       // 过滤掉空内容的消息
       let formattedMessages = messages
@@ -369,15 +481,36 @@ export function registerLlmHandlers(): void {
           content: m.content
         }))
 
+      const trustedResources = sourceTag === 'janus-chat'
+        ? resolveWorkspaceChatResources(workspaceResources)
+        : new Map()
+      const soleResource = trustedResources.size === 1 ? [...trustedResources.entries()][0] : undefined
+
       if (sourceTag === 'janus-chat') {
         const recall = await prepareJanusChatRecall(
           requestId,
           formattedMessages,
-          workspaceId,
-          workspacePath,
+          soleResource?.[0] ?? workspaceId,
+          soleResource?.[1].workspaceRoot ?? workspacePath,
         )
         formattedMessages = recall.messages
         sendEvent(LLM_CHANNELS.recallTrace, recall.trace)
+      }
+
+      let workspaceTools: ReturnType<typeof createWorkspaceChatTools> | undefined
+      if (trustedResources.size > 0) {
+        const traceHistory = toolTraceHistoryMessage(Array.isArray(toolTraces) ? toolTraces.slice(-TOOL_TRACE_MAX_ENTRIES) : [])
+        formattedMessages = [
+          { role: 'system', content: createWorkspaceChatSystemPrompt(trustedResources) },
+          ...(traceHistory ? [traceHistory] : []),
+          ...formattedMessages,
+        ]
+        workspaceTools = createWorkspaceChatTools({
+          runtime: workspaceAgentRuntime,
+          resources: trustedResources,
+          callerId: `renderer:${event.sender.id}`,
+          onToolResult: (result) => { executedToolTraces.push(toolTraceEntryFromResult(result)) },
+        })
       }
 
       const model = await llmService.getLanguageModel(providerId, actualModelId)
@@ -390,6 +523,7 @@ export function registerLlmHandlers(): void {
           content: m.content
         })),
         abortSignal: controller.signal,
+        ...(workspaceTools ? { tools: workspaceTools, maxSteps: CHAT_MAX_STEPS } : {}),
       })
 
       for await (const delta of result.textStream) {
@@ -398,38 +532,43 @@ export function registerLlmHandlers(): void {
         streamedText += delta
       }
 
-      if (sourceTag === 'janus-chat' && workspacePath) {
+      const observationTargets: Array<[string, string]> = trustedResources.size > 0
+        ? [...trustedResources].map(([id, resource]) => [id, resource.workspaceRoot])
+        : workspaceId && workspacePath ? [[workspaceId, workspacePath]] : []
+      if (sourceTag === 'janus-chat' && observationTargets.length > 0) {
         const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')
-        if (userMessage) {
+        for (const [targetWorkspaceId, targetWorkspacePath] of observationTargets) {
+          if (userMessage) {
+            await knowledgeObservationService.capture({
+              workspaceId: targetWorkspaceId,
+              workspacePath: targetWorkspacePath,
+              source: 'janus-chat',
+              type: 'conversation-turn',
+              content: userMessage.content,
+              summary: 'Janus Chat user message',
+              tags: ['janus-chat', 'user'],
+              actor: 'user',
+              correlationId: requestId,
+            })
+          }
           await knowledgeObservationService.capture({
-            workspaceId,
-            workspacePath,
+            workspaceId: targetWorkspaceId,
+            workspacePath: targetWorkspacePath,
             source: 'janus-chat',
             type: 'conversation-turn',
-            content: userMessage.content,
-            summary: 'Janus Chat user message',
-            tags: ['janus-chat', 'user'],
-            actor: 'user',
+            content: streamedText,
+            summary: 'Janus Chat assistant response',
+            tags: ['janus-chat', 'assistant'],
+            actor: 'assistant',
             correlationId: requestId,
+            metadata: { providerId, modelId: actualModelId },
           })
         }
-        await knowledgeObservationService.capture({
-          workspaceId,
-          workspacePath,
-          source: 'janus-chat',
-          type: 'conversation-turn',
-          content: streamedText,
-          summary: 'Janus Chat assistant response',
-          tags: ['janus-chat', 'assistant'],
-          actor: 'assistant',
-          correlationId: requestId,
-          metadata: {
-            providerId,
-            modelId: actualModelId,
-          },
-        })
       }
 
+      if (executedToolTraces.length > 0) {
+        sendEvent(LLM_CHANNELS.toolTrace, { requestId, entries: executedToolTraces })
+      }
       sendEvent(LLM_CHANNELS.delta, { requestId, delta: '', done: true })
       sendEvent(LLM_CHANNELS.done, { requestId })
     } catch (error: any) {

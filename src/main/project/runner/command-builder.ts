@@ -93,7 +93,8 @@ export class CommandBuilder {
 
   private static buildNodejsCommand(config: LaunchConfiguration): CommandInfo {
     const pm = config.packageManager || 'npm'
-    const script = this.getNodejsScript(config.type)
+    const script = config.script || this.getNodejsScript(config.type)
+    if (!/^[\w:.-]+$/.test(script)) throw new Error('Invalid package script name')
     const args = [script]
 
     // 添加自定义参数

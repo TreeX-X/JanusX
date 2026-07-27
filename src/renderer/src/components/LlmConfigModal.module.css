@@ -105,6 +105,36 @@
   overflow: visible;
 }
 
+.runtimeStatus {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.runtimeIndicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #77777f;
+}
+
+.runtimeStatus[data-state='available'] .runtimeIndicator { background: #68b99c; }
+.runtimeStatus[data-state='unavailable'] .runtimeIndicator { background: #cf787f; }
+.runtimeStatus > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.runtimeStatus strong { color: #d8d8dc; font-size: 11px; font-weight: 600; }
+.runtimeStatus span, .runtimeStatus small { overflow-wrap: anywhere; color: #72727a; font-size: 9px; line-height: 1.45; }
+.runtimeStatus small { color: #a66f74; }
+.runtimeStatus button { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 5px; background: transparent; color: #77777f; }
+.runtimeStatus button:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.16); color: #d8d8dc; }
+.runtimeStatus button:disabled { opacity: 0.45; }
+.spinning { animation: runtime-spin 0.8s linear infinite; }
+
+@keyframes runtime-spin { to { transform: rotate(360deg); } }
+
 .configBody::-webkit-scrollbar {
   width: 6px;
 }

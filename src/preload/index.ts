@@ -94,6 +94,7 @@ const projectAPI: ProjectAPI = {
   createDefaultConfig: (projectPath, projectType, projectName) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.createDefaultConfig, projectPath, projectType, projectName),
   validateConfig: (config) => ipcRenderer.invoke(PROJECT_CHANNELS.validateConfig, config),
+  test: (projectPath, script) => ipcRenderer.invoke(PROJECT_CHANNELS.test, projectPath, script),
   run: (projectPath, configName) => ipcRenderer.invoke(PROJECT_CHANNELS.run, projectPath, configName),
   stop: (projectId) => ipcRenderer.invoke(PROJECT_CHANNELS.stop, projectId),
   list: () => ipcRenderer.invoke(PROJECT_CHANNELS.list),
@@ -205,6 +206,7 @@ const officeAPI: OfficeAPI = {
 
 const llmAPI: LlmAPI = {
   getProviders: () => ipcRenderer.invoke(LLM_CHANNELS.getProviders),
+  getRuntimeStatus: () => ipcRenderer.invoke(LLM_CHANNELS.runtimeStatus),
   saveProvider: (settings) => ipcRenderer.invoke(LLM_CHANNELS.saveProvider, settings),
   testConnection: (settings) => ipcRenderer.invoke(LLM_CHANNELS.testConnection, settings),
   removeProvider: (providerId) => ipcRenderer.invoke(LLM_CHANNELS.removeProvider, providerId),
@@ -221,6 +223,7 @@ const llmAPI: LlmAPI = {
   onDone: (callback) => subscribeIpcEvent(LLM_CHANNELS.done, callback),
   onError: (callback) => subscribeIpcEvent(LLM_CHANNELS.error, callback),
   onRecallTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.recallTrace, callback),
+  onToolTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.toolTrace, callback),
 }
 
 const agentAPI: AgentAPI = {

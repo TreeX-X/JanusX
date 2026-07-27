@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Globe, X } from 'lucide-react'
+import { Globe, SquareTerminal, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useBrowserStore } from '@/stores/browser'
@@ -690,8 +690,21 @@ function LeafPane({
               }}
               title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
-              {tab.type === 'janus-chat' && <span aria-hidden="true" style={{ color: '#ff7830' }}>J</span>}
-              {terminal && (
+              {tab.type === 'janus-chat' && (
+                <span className="janus-chat-tab-eyes" role="img" aria-label="JanusX">
+                  <span aria-hidden="true" />
+                  <span aria-hidden="true" />
+                </span>
+              )}
+              {terminal?.preset === 'shell' && (
+                <SquareTerminal
+                  size={14}
+                  strokeWidth={1.65}
+                  aria-hidden="true"
+                  style={{ opacity: isActive ? 0.95 : 0.55 }}
+                />
+              )}
+              {terminal && terminal.preset !== 'shell' && (
                 <img
                   src={PRESET_ICONS[terminal.preset]}
                   alt=""

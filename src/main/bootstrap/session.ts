@@ -3,6 +3,7 @@ import { mkdirSync, unlinkSync, writeFileSync } from 'fs'
 import { readdir, rm, stat } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { synchronizeInstalledLlmConfig } from '../llm/development-config-sync'
 
 const OFFICE_FRAME_CSP = "frame-src 'self' http://127.0.0.1:*; object-src 'none'; base-uri 'self'"
 const STALE_HOOK_DIR_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -29,7 +30,9 @@ export function configureApplicationProfile(isHookClient: boolean, argv: string[
     (argument) => argument === '--user-data-dir' || argument.startsWith('--user-data-dir=')
   )
   if (isHookClient || app.isPackaged || hasExplicitUserDataDir) return
-  app.setPath('userData', join(app.getPath('appData'), 'JanusX-Dev'))
+  const appDataRoot = app.getPath('appData')
+  synchronizeInstalledLlmConfig(appDataRoot)
+  app.setPath('userData', join(appDataRoot, 'JanusX-Dev'))
 }
 
 function canWriteDirectory(directory: string): boolean {

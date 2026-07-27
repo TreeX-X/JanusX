@@ -16,6 +16,8 @@ export interface PromptDialogProps {
   defaultValue?: string
   description?: ReactNode
   confirmOnly?: boolean
+  /** 仅展示确认按钮(用于错误告知类对话框) */
+  hideCancel?: boolean
   tone?: 'primary' | 'danger'
   confirmText?: string
   cancelText?: string
@@ -32,6 +34,7 @@ export function PromptDialog({
   defaultValue,
   description,
   confirmOnly = false,
+  hideCancel = false,
   tone = 'primary',
   confirmText = '确定',
   cancelText = '取消',
@@ -41,7 +44,7 @@ export function PromptDialog({
 }: PromptDialogProps) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   // open 切到 true 时：重置为 defaultValue 并在下一帧 focus + 全选
   useEffect(() => {
@@ -49,6 +52,8 @@ export function PromptDialog({
     setValue(defaultValue ?? '')
   }, [open, defaultValue])
 
+  // 无输入框时把焦点放到对话框容器上（而不是确认按钮）：
+  // 程序化 focus 按钮会触发 :focus-visible，让危险按钮意外出现高亮光圈
   useEffect(() => {
     if (!open) return
     const t = requestAnimationFrame(() => {
@@ -57,7 +62,7 @@ export function PromptDialog({
         el.focus()
         el.select()
       } else {
-        confirmButtonRef.current?.focus()
+        dialogRef.current?.focus()
       }
     })
     return () => cancelAnimationFrame(t)
@@ -85,6 +90,9 @@ export function PromptDialog({
     if (e.key === 'Escape') {
       e.preventDefault()
       onCancel()
+    } else if (e.key === 'Enter' && confirmOnly) {
+      e.preventDefault()
+      submit()
     }
   }
 
@@ -96,10 +104,12 @@ export function PromptDialog({
   return (
     <div className="prompt-dialog__overlay" onMouseDown={onOverlayClick}>
       <div
+        ref={dialogRef}
         className="prompt-dialog"
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         onKeyDown={onDialogKeyDown}
       >
         <div className="prompt-dialog__title">{title}</div>
@@ -122,11 +132,12 @@ export function PromptDialog({
         {validationMsg ? <div className="prompt-dialog__error">{validationMsg}</div> : null}
 
         <div className="prompt-dialog__actions">
-          <button type="button" className="blueprint-btn" onClick={onCancel}>
-            {cancelText}
-          </button>
+          {!hideCancel && (
+            <button type="button" className="blueprint-btn" onClick={onCancel}>
+              {cancelText}
+            </button>
+          )}
           <button
-            ref={confirmButtonRef}
             type="button"
             className={`blueprint-btn ${tone === 'danger' ? 'blueprint-btn--danger' : 'blueprint-btn--primary'}`}
             onClick={submit}

@@ -6,6 +6,7 @@
  */
 
 import type { ProjectType, ProjectTypeSchema } from '@/types/project'
+import { Check } from 'lucide-react'
 import styles from './ProjectTypeSelector.module.css'
 
 interface ProjectTypeSelectorProps {
@@ -49,7 +50,7 @@ export function ProjectTypeSelector({
               <div className={styles.typeDesc}>{schema.description}</div>
             </div>
 
-            {isSelected && <div className={styles.checkmark}>✓</div>}
+            {isSelected && <Check className={styles.checkmark} size={12} aria-hidden="true" />}
           </button>
         )
       })}

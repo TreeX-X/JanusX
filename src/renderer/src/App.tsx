@@ -37,6 +37,7 @@ import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-la
 import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
+import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
 
 type IdleWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
@@ -73,6 +74,8 @@ export default function App() {
   const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspacePaneTree = useWorkspaceStore((s) => s.paneTree)
+  const showWorkspacePane = shouldRenderWorkspacePane(loadState, workspacePaneTree !== null)
   const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
   const rightToolActiveId = useRightToolStore((s) => s.activeToolId)
@@ -419,10 +422,15 @@ export default function App() {
                 background: 'var(--bg-deep)',
               }}
             >
-              {loadState === 'no-workspace' && <EmptyWorkspace />}
-              {loadState === 'workspace-loaded' && <EmptyWorkspace />}
-              {loadState === 'no-terminal' && <TerminalSelector />}
-              {loadState === 'terminal-active' && <TerminalArea />}
+              {showWorkspacePane
+                ? <TerminalArea />
+                : (
+                  <>
+                    {loadState === 'no-workspace' && <EmptyWorkspace />}
+                    {loadState === 'workspace-loaded' && <EmptyWorkspace />}
+                    {loadState === 'no-terminal' && <TerminalSelector />}
+                  </>
+                )}
             </div>
 
             {/*-- 背面：蓝图视图（P2 画布） --*/}

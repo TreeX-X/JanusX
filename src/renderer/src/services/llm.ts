@@ -10,6 +10,9 @@ import type {
   ModelCatalogSnapshot,
 } from '@janusx/llm-core'
 import type { KnowledgeRecallTrace } from '../../../shared/knowledge'
+import type { ChatToolTraceEntry, ChatToolTraceEvent, ChatWorkspaceResource, LlmRuntimeStatus } from '../../../shared/ipc/llm'
+
+export type { ChatToolTraceEntry } from '../../../shared/ipc/llm'
 
 /* ════════════════════════════════════════════════════════════
    IPC 调用封装
@@ -18,6 +21,10 @@ import type { KnowledgeRecallTrace } from '../../../shared/knowledge'
 /** 获取所有 Provider 配置 */
 export async function getProviders(): Promise<ProviderSettings[]> {
   return window.electron.llm.getProviders()
+}
+
+export async function getLlmRuntimeStatus(): Promise<LlmRuntimeStatus> {
+  return window.electron.llm.getRuntimeStatus()
 }
 
 /** 保存 Provider 配置 */
@@ -77,7 +84,7 @@ export async function chat(
   messages: ChatMessage[],
   providerId?: string,
   modelId?: string,
-  options?: { sourceTag?: 'janus-chat'; workspaceId?: string; workspacePath?: string }
+  options?: { sourceTag?: 'janus-chat'; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[] }
 ): Promise<string> {
   const targetProvider = providerId || (await getDefaultProvider())?.provider.id
   if (!targetProvider) throw new Error('未配置 LLM Provider')
@@ -89,6 +96,7 @@ export async function chat(
     sourceTag: options?.sourceTag,
     workspaceId: options?.workspaceId,
     workspacePath: options?.workspacePath,
+    workspaceResources: options?.workspaceResources,
   })
 }
 
@@ -124,7 +132,10 @@ export function chatStream(
     sourceTag?: 'janus-chat'
     workspaceId?: string
     workspacePath?: string
+    workspaceResources?: ChatWorkspaceResource[]
+    toolTraces?: ChatToolTraceEntry[]
     onRecallTrace?: (trace: KnowledgeRecallTrace) => void
+    onToolTrace?: (entries: ChatToolTraceEntry[]) => void
   }
 ): { abort: () => void } {
   const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
@@ -138,6 +149,7 @@ export function chatStream(
     unsubDone()
     unsubError()
     unsubRecallTrace()
+    unsubToolTrace()
   }
 
   const filterByRequest = (payload: unknown): ChatStreamEvent | null => {
@@ -173,6 +185,12 @@ export function chatStream(
     options?.onRecallTrace?.(trace)
   })
 
+  const unsubToolTrace = window.electron.llm.onToolTrace((payload) => {
+    const trace = payload as ChatToolTraceEvent | undefined
+    if (trace?.requestId !== requestId || !Array.isArray(trace.entries)) return
+    options?.onToolTrace?.(trace.entries)
+  })
+
   const targetProvider = options?.providerId
     ? Promise.resolve({ providerId: options.providerId, modelId: options.modelId })
     : getDefaultProvider().then((def) =>
@@ -195,6 +213,8 @@ export function chatStream(
         sourceTag: options?.sourceTag,
         workspaceId: options?.workspaceId,
         workspacePath: options?.workspacePath,
+        workspaceResources: options?.workspaceResources,
+        toolTraces: options?.toolTraces,
       })
     })
     .catch((err: unknown) => {

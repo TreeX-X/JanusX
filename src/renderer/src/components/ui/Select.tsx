@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { createPortal } from 'react-dom'
 import styles from './Select.module.css'
 
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+
 export interface SelectOption {
   value: string
   label: string
@@ -20,6 +22,8 @@ export interface SelectProps {
   dropdownClassName?: string
   /** 透传到触发按钮的内联样式，便于控制尺寸 */
   style?: CSSProperties
+  /** 触发按钮的无障碍名称 */
+  ariaLabel?: string
   /** 指定浮层挂载容器，避免 Modal 内部下拉被外层遮罩覆盖 */
   getPortalContainer?: () => HTMLElement | null
 }
@@ -40,6 +44,7 @@ export function Select({
   className,
   dropdownClassName,
   style,
+  ariaLabel,
   getPortalContainer
 }: SelectProps) {
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -49,7 +54,7 @@ export function Select({
 
   const selected = options.find((o) => o.value === value)
   // 计算浮层位置：向下展开，空间不够则向上
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!open || !triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
     const viewportH = window.innerHeight
@@ -81,7 +86,9 @@ export function Select({
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setOpen(false)
     }
     const onPointer = (e: MouseEvent) => {
       const t = e.target as Node
@@ -89,10 +96,10 @@ export function Select({
       if (triggerRef.current?.contains(t)) return
       setOpen(false)
     }
-    document.addEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
     document.addEventListener('mousedown', onPointer)
     return () => {
-      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('keydown', onKey, true)
       document.removeEventListener('mousedown', onPointer)
     }
   }, [open])
@@ -103,7 +110,9 @@ export function Select({
     setOpen(false)
   }
 
-  const portalContainer = getPortalContainer?.() ?? document.body
+  const portalContainer = typeof document === 'undefined'
+    ? null
+    : getPortalContainer?.() ?? document.body
 
   return (
     <>
@@ -114,6 +123,9 @@ export function Select({
           open ? styles.triggerOpen : ''
         }`}
         style={style}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
       >
@@ -138,6 +150,7 @@ export function Select({
 
       {open &&
         pos &&
+        portalContainer &&
         createPortal(
           <div
             ref={listRef}
@@ -150,7 +163,9 @@ export function Select({
               minWidth: pos.width,
               animationDuration: '0.12s'
             }}
+            data-select-dropdown=""
             role="listbox"
+            onPointerDown={(event) => event.stopPropagation()}
           >
             {options.length === 0 && (
               <div className={styles.empty}>（无选项）</div>

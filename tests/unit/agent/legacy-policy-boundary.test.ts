@@ -41,6 +41,7 @@ describe('legacy renderer policy boundary', () => {
     await expect(handler(PROJECT_CHANNELS.run)(event, 'C:\\workspace', 'dev')).resolves.toMatchObject({ success: false })
     await expect(handler(PROJECT_CHANNELS.stop)(event, 'C:\\workspace')).resolves.toMatchObject({ success: false })
     expect(denied).toHaveBeenCalledTimes(3)
+    expect(denied.mock.calls.every(([, request]) => request.source === 'renderer-user')).toBe(true)
   })
 
   it('gates every workspace and file-tree mutation channel', async () => {
@@ -58,6 +59,7 @@ describe('legacy renderer policy boundary', () => {
       await expect(handler(channel)(event, ...args)).resolves.toMatchObject({ success: false })
     }
     expect(denied).toHaveBeenCalledTimes(7)
+    expect(denied.mock.calls.every(([, request]) => request.source === 'renderer-user')).toBe(true)
     expect(mocks.writeFile).not.toHaveBeenCalled()
   })
 })

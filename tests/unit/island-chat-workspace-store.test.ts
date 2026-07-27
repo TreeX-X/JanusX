@@ -37,12 +37,12 @@ function setTerminalPane(workspaceId = 'workspace-1', terminalId = 'terminal-1')
 afterEach(() => useWorkspaceStore.setState(initialState, true))
 
 describe('Island Chat workspace store orchestration', () => {
-  it('opens a right split at 0.62 and focuses one Chat tab on repeated open', () => {
+  it('opens a balanced right split and focuses one Chat tab on repeated open', () => {
     setTerminalPane()
 
     useWorkspaceStore.getState().openJanusChatInWorkspace()
     const opened = useWorkspaceStore.getState()
-    expect(opened.paneTree).toMatchObject({ type: 'split', direction: 'horizontal', ratio: 0.62 })
+    expect(opened.paneTree).toMatchObject({ type: 'split', direction: 'horizontal', ratio: 0.5 })
     expect(opened.focusedTabId).toBe('janus-chat')
     expect(opened.activeTerminalId).toBeNull()
 
@@ -50,6 +50,70 @@ describe('Island Chat workspace store orchestration', () => {
     const repeated = useWorkspaceStore.getState()
     expect(getLeafPanes(repeated.paneTree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'janus-chat')).toHaveLength(1)
     expect(repeated.focusedTabId).toBe('janus-chat')
+  })
+
+  it('opens Chat as the only pane when the workspace has no terminal', () => {
+    useWorkspaceStore.setState({
+      activeWorkspaceId: 'workspace-empty',
+      terminals: [],
+      activeTerminalId: null,
+      paneTree: null,
+      focusedPaneId: null,
+      focusedTabId: null,
+    })
+
+    useWorkspaceStore.getState().openJanusChatInWorkspace()
+
+    const opened = useWorkspaceStore.getState()
+    expect(opened.paneTree).toMatchObject({
+      type: 'leaf',
+      tabs: [{ id: 'janus-chat', type: 'janus-chat' }],
+      activeTabId: 'janus-chat',
+    })
+    expect(opened.focusedTabId).toBe('janus-chat')
+    expect(opened.activeTerminalId).toBeNull()
+  })
+
+  it('splits only the focused leaf in an existing multi-pane workspace', () => {
+    const workspaceId = 'workspace-multi'
+    useWorkspaceStore.setState({
+      activeWorkspaceId: workspaceId,
+      terminals: [terminal('terminal-left', workspaceId), terminal('terminal-focus', workspaceId)],
+      activeTerminalId: 'terminal-focus',
+      paneTree: {
+        type: 'split',
+        id: 'outer-split',
+        direction: 'horizontal',
+        ratio: 0.35,
+        first: {
+          type: 'leaf',
+          id: 'pane-left',
+          tabs: [createTerminalPaneContent('terminal-left', workspaceId)],
+          activeTabId: 'terminal:terminal-left',
+        },
+        second: {
+          type: 'leaf',
+          id: 'pane-focus',
+          tabs: [createTerminalPaneContent('terminal-focus', workspaceId)],
+          activeTabId: 'terminal:terminal-focus',
+        },
+      },
+      focusedPaneId: 'pane-focus',
+      focusedTabId: 'terminal:terminal-focus',
+    })
+
+    useWorkspaceStore.getState().openJanusChatInWorkspace()
+
+    const opened = useWorkspaceStore.getState()
+    expect(opened.paneTree).toMatchObject({
+      type: 'split',
+      id: 'outer-split',
+      ratio: 0.35,
+      first: { type: 'leaf', id: 'pane-left' },
+      second: { type: 'split', direction: 'horizontal', ratio: 0.5 },
+    })
+    expect(getLeafPanes(opened.paneTree)).toHaveLength(3)
+    expect(opened.focusedTabId).toBe('janus-chat')
   })
 
   it('isolates and restores the Chat pane with its active workspace snapshot', () => {

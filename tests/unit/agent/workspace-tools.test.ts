@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -70,8 +71,71 @@ describe('workspace.read tool', () => {
         encoding: 'utf-8',
         size: 15,
         content: 'hello workspace',
+        sha256: createHash('sha256').update('hello workspace').digest('hex'),
       },
     })
+  })
+
+  it('returns secret-shaped source code verbatim so hash-bound edits stay possible', async () => {
+    // Regression: display-level redaction used to rewrite `apiKey: ...` lines in
+    // tool output, so the model could never produce a matching oldText again.
+    const source = 'const apiKey = process.env.MY_KEY\nconst token = login()\n'
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'config.ts'), source, 'utf-8')
+
+    const runtime = new WorkspaceAgentRuntime(async () => root)
+    registerWorkspaceTools(runtime.registry)
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
+    const read = await runtime.executeTool({
+      sessionId: session.id,
+      call: { toolName: 'workspace.read', input: { workspaceId: 'workspace-1', path: 'config.ts' } },
+    })
+    expect(read.status).toBe('completed')
+    const output = read.output as { content: string; sha256: string; contentRedacted: boolean }
+    expect(output.content).toBe(source)
+    expect(output.contentRedacted).toBe(false)
+    expect(output.sha256).toBe(createHash('sha256').update(source).digest('hex'))
+
+    runtime.onEvent((event) => {
+      if (event.type !== 'approval-requested') return
+      runtime.resolveApproval({
+        approvalId: event.request.id, approved: true, workspaceId: event.request.workspaceId,
+        sessionId: event.request.sessionId, correlationId: event.request.correlationId,
+        toolName: event.request.toolName, actionRisk: event.request.actionRisk,
+      })
+    })
+    const edit = await runtime.executeTool({
+      sessionId: session.id,
+      call: {
+        toolName: 'workspace.edit',
+        input: {
+          workspaceId: 'workspace-1', path: 'config.ts', expectedHash: output.sha256,
+          replacements: [{ oldText: 'const apiKey = process.env.MY_KEY', newText: 'const apiKey = process.env.RENAMED_KEY' }],
+        },
+        preview: { summary: 'Edit config.ts', paths: ['config.ts'], truncated: false },
+      },
+    })
+    expect(edit.status).toBe('completed')
+    expect(await readFile(join(root, 'config.ts'), 'utf-8')).toBe(
+      'const apiKey = process.env.RENAMED_KEY\nconst token = login()\n',
+    )
+  })
+
+  it('masks embedded private keys, flags the redaction, and keeps other regions editable', async () => {
+    const pem = '-----BEGIN RSA PRIVATE KEY-----\nMIIB\n-----END RSA PRIVATE KEY-----'
+    const source = `const label = 'hello'\nconst pem = \`${pem}\`\n`
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'cert.ts'), source, 'utf-8')
+
+    const read = await executeRead(root, 'cert.ts')
+    expect(read.status).toBe('completed')
+    const output = read.output as { content: string; sha256: string; contentRedacted: boolean; redactionNotice?: string }
+    expect(output.contentRedacted).toBe(true)
+    expect(output.redactionNotice).toContain('masked')
+    expect(output.content).not.toContain('BEGIN RSA PRIVATE KEY')
+    expect(output.content).toContain("const label = 'hello'")
+    // Hash still covers the on-disk original, so unmasked regions remain editable.
+    expect(output.sha256).toBe(createHash('sha256').update(source).digest('hex'))
   })
 
   it.each([
@@ -125,6 +189,203 @@ describe('workspace.read tool', () => {
     expect(missing.error).toContain('Invalid input for tool')
     expect(mismatched).toMatchObject({ status: 'failed', output: undefined })
     expect(mismatched.error).toContain('must match the active workspace resource')
+  })
+})
+
+describe('workspace.edit tool', () => {
+  async function executeEdit(root: string, expectedHash: string, approved: boolean, oldText = 'hello') {
+    const runtime = new WorkspaceAgentRuntime(async () => root)
+    registerWorkspaceTools(runtime.registry)
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
+    runtime.onEvent((event) => {
+      if (event.type !== 'approval-requested') return
+      runtime.resolveApproval({
+        approvalId: event.request.id,
+        approved,
+        workspaceId: event.request.workspaceId,
+        sessionId: event.request.sessionId,
+        correlationId: event.request.correlationId,
+        toolName: event.request.toolName,
+        actionRisk: event.request.actionRisk,
+      })
+    })
+    return runtime.executeTool({
+      sessionId: session.id,
+      call: {
+        toolName: 'workspace.edit',
+        input: {
+          workspaceId: 'workspace-1',
+          path: 'notes.txt',
+          expectedHash,
+          replacements: [{ oldText, newText: 'updated' }],
+        },
+        preview: {
+          summary: 'Edit notes.txt',
+          paths: ['notes.txt'],
+          detail: `- ${oldText}\n+ updated`,
+          truncated: false,
+        },
+      },
+    })
+  }
+
+  it('applies an approved hash-bound replacement and returns a checkpoint', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'notes.txt'), 'hello workspace', 'utf-8')
+    const expectedHash = createHash('sha256').update('hello workspace').digest('hex')
+
+    const result = await executeEdit(root, expectedHash, true)
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      output: {
+        path: 'notes.txt',
+        changedPaths: ['notes.txt'],
+        previousHash: expectedHash,
+        replacements: 1,
+        checkpointId: expect.any(String),
+      },
+    })
+    expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('updated workspace')
+  })
+
+  it('does not write when approval is denied', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'notes.txt'), 'hello workspace', 'utf-8')
+    const expectedHash = createHash('sha256').update('hello workspace').digest('hex')
+
+    const result = await executeEdit(root, expectedHash, false)
+
+    expect(result).toMatchObject({ status: 'cancelled', output: undefined })
+    expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('hello workspace')
+  })
+
+  it('fails closed on a stale hash or ambiguous replacement', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'notes.txt'), 'hello hello', 'utf-8')
+    const currentHash = createHash('sha256').update('hello hello').digest('hex')
+
+    const stale = await executeEdit(root, '0'.repeat(64), true)
+    const ambiguous = await executeEdit(root, currentHash, true)
+
+    expect(stale).toMatchObject({ status: 'failed', reasonCode: 'TARGET_CHANGED' })
+    expect(ambiguous).toMatchObject({ status: 'failed', reasonCode: 'TARGET_CHANGED' })
+    expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('hello hello')
+  })
+})
+
+describe('workspace.create tool', () => {
+  async function executeCreate(root: string, path: string, content: string, approved = true) {
+    const runtime = new WorkspaceAgentRuntime(async () => root)
+    registerWorkspaceTools(runtime.registry)
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
+    runtime.onEvent((event) => {
+      if (event.type !== 'approval-requested') return
+      runtime.resolveApproval({
+        approvalId: event.request.id,
+        approved,
+        workspaceId: event.request.workspaceId,
+        sessionId: event.request.sessionId,
+        correlationId: event.request.correlationId,
+        toolName: event.request.toolName,
+        actionRisk: event.request.actionRisk,
+      })
+    })
+    return runtime.executeTool({
+      sessionId: session.id,
+      call: {
+        toolName: 'workspace.create',
+        input: { workspaceId: 'workspace-1', path, content },
+        preview: { summary: `Create ${path}`, paths: [path], truncated: false },
+      },
+    })
+  }
+
+  it('creates an approved new file with checkpoint and hash', async () => {
+    const root = await temporaryDirectory()
+    await mkdir(join(root, 'notes'))
+
+    const result = await executeCreate(root, 'notes/test.md', '# hello\n')
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      output: {
+        path: 'notes/test.md',
+        changedPaths: ['notes/test.md'],
+        sha256: createHash('sha256').update('# hello\n').digest('hex'),
+        bytes: 8,
+        checkpointId: expect.any(String),
+      },
+    })
+    expect(await readFile(join(root, 'notes/test.md'), 'utf-8')).toBe('# hello\n')
+  })
+
+  it('does not create when approval is denied', async () => {
+    const root = await temporaryDirectory()
+    const result = await executeCreate(root, 'test.md', 'content', false)
+    expect(result).toMatchObject({ status: 'cancelled', reasonCode: 'APPROVAL_DENIED' })
+    await expect(readFile(join(root, 'test.md'), 'utf-8')).rejects.toThrow()
+  })
+
+  it.each([
+    ['existing file', async (root: string) => { await writeFile(join(root, 'exists.txt'), 'x') }, 'exists.txt'],
+    ['missing parent', async () => {}, 'missing/child.txt'],
+    ['sensitive path', async () => {}, '.env.production'],
+    ['traversal', async () => {}, '../escape.txt'],
+  ])('fails closed for %s', async (_case, prepare, path) => {
+    const root = await temporaryDirectory()
+    await prepare(root)
+    const result = await executeCreate(root, path, 'content')
+    expect(result.status).toBe('failed')
+  })
+})
+
+describe('workspace.search tool', () => {
+  async function executeSearch(root: string, input: Record<string, unknown>) {
+    const runtime = new WorkspaceAgentRuntime(async () => root)
+    registerWorkspaceTools(runtime.registry)
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
+    return runtime.executeTool({
+      sessionId: session.id,
+      call: { toolName: 'workspace.search', input: { workspaceId: 'workspace-1', ...input } },
+    })
+  }
+
+  it('finds case-insensitive matches with paths and line numbers, skipping noise directories', async () => {
+    const root = await temporaryDirectory()
+    await mkdir(join(root, 'src'))
+    await mkdir(join(root, 'node_modules'))
+    await writeFile(join(root, 'src', 'main.ts'), 'const Needle = 1\nother\nlower needle here\n')
+    await writeFile(join(root, 'node_modules', 'dep.js'), 'needle in dependency')
+    await writeFile(join(root, '.env'), 'NEEDLE=secret')
+
+    const result = await executeSearch(root, { query: 'needle' })
+
+    expect(result.status).toBe('completed')
+    expect(result.output).toMatchObject({
+      truncated: false,
+      matches: [
+        { path: 'src/main.ts', line: 1, text: 'const Needle = 1' },
+        { path: 'src/main.ts', line: 3, text: 'lower needle here' },
+      ],
+    })
+  })
+
+  it('caps results and reports truncation', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'many.txt'), Array.from({ length: 10 }, () => 'match').join('\n'))
+
+    const result = await executeSearch(root, { query: 'match', maxResults: 3 })
+
+    expect(result.status).toBe('completed')
+    expect((result.output as { matches: unknown[] }).matches).toHaveLength(3)
+    expect(result.output).toMatchObject({ truncated: true })
+  })
+
+  it('rejects blank or oversized queries', async () => {
+    const root = await temporaryDirectory()
+    expect((await executeSearch(root, { query: '   ' })).status).toBe('failed')
+    expect((await executeSearch(root, { query: 'x'.repeat(300) })).status).toBe('failed')
   })
 })
 

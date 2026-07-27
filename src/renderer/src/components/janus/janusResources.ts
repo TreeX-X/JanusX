@@ -4,20 +4,24 @@ export interface WorkspaceResource {
   workspaceId: string
   workspacePath: string
   workspaceName: string
-  source: 'attached' | 'embedded'
 }
 
 export interface JanusResourceState {
   resources: WorkspaceResource[]
-  activeResourceId: string | null
 }
 
-function toResource(workspace: Workspace, source: WorkspaceResource['source']): WorkspaceResource {
+export interface JanusResourcePreferences {
+  version: 1
+  attachedWorkspaceIds: string[]
+}
+
+export const JANUS_RESOURCE_STORAGE_KEY = 'janusx.janus-chat.resources.v1'
+
+function toResource(workspace: Workspace): WorkspaceResource {
   return {
     workspaceId: workspace.id,
     workspacePath: workspace.path,
     workspaceName: workspace.name,
-    source,
   }
 }
 
@@ -25,50 +29,15 @@ export function attachWorkspaceResource(
   state: JanusResourceState,
   workspace: Workspace,
 ): JanusResourceState {
-  const exists = state.resources.some((resource) => resource.workspaceId === workspace.id)
-  return {
-    resources: exists ? state.resources : [...state.resources, toResource(workspace, 'attached')],
-    activeResourceId: workspace.id,
-  }
-}
-
-export function ensureEmbeddedWorkspaceResource(
-  state: JanusResourceState,
-  workspace: Workspace,
-): JanusResourceState {
-  const resources = state.resources
-    .filter((resource) => resource.source !== 'embedded' || resource.workspaceId === workspace.id)
-  const exists = resources.some((resource) => resource.workspaceId === workspace.id)
-  return {
-    resources: exists
-      ? resources.map((resource) => resource.workspaceId === workspace.id
-          ? { ...resource, workspaceName: workspace.name, workspacePath: workspace.path }
-          : resource)
-      : [...resources, toResource(workspace, 'embedded')],
-    activeResourceId: workspace.id,
-  }
+  if (state.resources.some((resource) => resource.workspaceId === workspace.id)) return state
+  return { resources: [...state.resources, toResource(workspace)] }
 }
 
 export function detachWorkspaceResource(
   state: JanusResourceState,
   workspaceId: string,
 ): JanusResourceState {
-  const resources = state.resources.filter((resource) => resource.workspaceId !== workspaceId)
-  return {
-    resources,
-    activeResourceId: state.activeResourceId === workspaceId
-      ? resources[0]?.workspaceId ?? null
-      : state.activeResourceId,
-  }
-}
-
-export function selectWorkspaceResource(
-  state: JanusResourceState,
-  workspaceId: string,
-): JanusResourceState {
-  return state.resources.some((resource) => resource.workspaceId === workspaceId)
-    ? { ...state, activeResourceId: workspaceId }
-    : state
+  return { resources: state.resources.filter((resource) => resource.workspaceId !== workspaceId) }
 }
 
 export function reconcileWorkspaceResources(
@@ -76,17 +45,45 @@ export function reconcileWorkspaceResources(
   workspaces: Workspace[],
 ): JanusResourceState {
   const workspacesById = new Map(workspaces.map((workspace) => [workspace.id, workspace]))
-  const resources = state.resources.flatMap((resource) => {
-    const workspace = workspacesById.get(resource.workspaceId)
-    return workspace
-      ? [{ ...resource, workspaceName: workspace.name, workspacePath: workspace.path }]
-      : []
-  })
   return {
-    resources,
-    activeResourceId: state.activeResourceId && resources.some((resource) =>
-      resource.workspaceId === state.activeResourceId)
-      ? state.activeResourceId
-      : resources[0]?.workspaceId ?? null,
+    resources: state.resources.flatMap((resource) => {
+      const workspace = workspacesById.get(resource.workspaceId)
+      return workspace ? [toResource(workspace)] : []
+    }),
+  }
+}
+
+export function toJanusResourcePreferences(state: JanusResourceState): JanusResourcePreferences {
+  return {
+    version: 1,
+    attachedWorkspaceIds: state.resources.map((resource) => resource.workspaceId),
+  }
+}
+
+export function parseJanusResourcePreferences(value: string | null): JanusResourcePreferences {
+  if (!value) return { version: 1, attachedWorkspaceIds: [] }
+  try {
+    const parsed = JSON.parse(value) as Partial<JanusResourcePreferences>
+    return {
+      version: 1,
+      attachedWorkspaceIds: Array.isArray(parsed.attachedWorkspaceIds)
+        ? [...new Set(parsed.attachedWorkspaceIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+        : [],
+    }
+  } catch {
+    return { version: 1, attachedWorkspaceIds: [] }
+  }
+}
+
+export function restoreJanusResourcePreferences(
+  preferences: JanusResourcePreferences,
+  workspaces: Workspace[],
+): JanusResourceState {
+  const workspacesById = new Map(workspaces.map((workspace) => [workspace.id, workspace]))
+  return {
+    resources: preferences.attachedWorkspaceIds.flatMap((id) => {
+      const workspace = workspacesById.get(id)
+      return workspace ? [toResource(workspace)] : []
+    }),
   }
 }

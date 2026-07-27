@@ -4,27 +4,30 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { chatStream, getDefaultProvider, getProviders, type ChatMessage } from '@/services/llm'
+import { chatStream, getDefaultProvider, getProviders, type ChatMessage, type ChatToolTraceEntry } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useStreamingPrinter } from './useStreamingPrinter'
+import { useStreamingPrinter } from '@/hooks/useStreamingPrinter'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
-import type { AgentSession, ToolResult } from '../../../../shared/ipc/agent-runtime'
-import type { LaunchConfig, ValidationResult } from '../../../../shared/ipc/project'
+import type { AgentSession, ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
+import type { ChatWorkspaceResource } from '../../../../shared/ipc/llm'
 import type { Workspace } from '@/types'
 import {
   attachWorkspaceResource,
   detachWorkspaceResource,
-  ensureEmbeddedWorkspaceResource,
+  JANUS_RESOURCE_STORAGE_KEY,
+  parseJanusResourcePreferences,
   reconcileWorkspaceResources,
-  selectWorkspaceResource,
+  restoreJanusResourcePreferences,
+  toJanusResourcePreferences,
   type JanusResourceState,
   type WorkspaceResource,
 } from './janusResources'
 import {
-  JANUS_PROJECT_CANDIDATE_EVENT,
-  joinWorkspacePath,
-  type JanusProjectCandidate,
-} from './janusProjectCandidate'
+  EMPTY_JANUS_RUNTIME_STATE,
+  reduceJanusRuntimeState,
+  runtimeEventSessionId,
+  type JanusToolActivity,
+} from './janusRuntimeState'
 
 export interface Message {
   id: string
@@ -46,13 +49,11 @@ export type { WorkspaceResource } from './janusResources'
 export interface JanusResourceController {
   resources: WorkspaceResource[]
   availableWorkspaces: Workspace[]
-  activeResourceId: string | null
   attachWorkspace: (workspaceId: string) => void
-  ensureEmbeddedWorkspace: (workspaceId: string) => void
   detachWorkspace: (workspaceId: string) => void
-  selectResource: (workspaceId: string) => void
-  analysisStatus: 'idle' | 'running' | 'done' | 'error'
-  analyzeActiveResource: () => void
+  activities: JanusToolActivity[]
+  pendingApprovals: ApprovalRequest[]
+  resolveApproval: (approvalId: string, approved: boolean) => void
 }
 
 export interface UseJanusChatReturn {
@@ -78,6 +79,9 @@ const SYSTEM_PROMPT = (window as Partial<Window>).electron?.janusPersona ?? ''
 
 /*-- 灵动岛对话消息上限：超出从头部裁剪，防止长对话消息数组无界增长 --*/
 const MAX_CHAT_MESSAGES = 200
+/*-- 发送给模型的历史条数与工具轨迹条数上限 --*/
+const HISTORY_MESSAGE_LIMIT = 24
+const MAX_TOOL_TRACES = 48
 
 function capMessages(messages: Message[]): Message[] {
   return messages.length > MAX_CHAT_MESSAGES ? messages.slice(-MAX_CHAT_MESSAGES) : messages
@@ -92,13 +96,9 @@ export function useJanusChat(): UseJanusChatReturn {
   const [activeModel, setActiveModel] = useState<ChatModelOption | null>(null)
   const [modelNotice, setModelNotice] = useState<string | null>(null)
   const [latestRecallTrace, setLatestRecallTrace] = useState<KnowledgeRecallTrace | null>(null)
-  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [resourceState, setResourceState] = useState<JanusResourceState>({
-    resources: [],
-    activeResourceId: null,
-  })
-  const { resources, activeResourceId } = resourceState
-  const activeResource = resources.find((resource) => resource.workspaceId === activeResourceId) ?? null
+  const [runtimeState, setRuntimeState] = useState(EMPTY_JANUS_RUNTIME_STATE)
+  const [resourceState, setResourceState] = useState<JanusResourceState>({ resources: [] })
+  const { resources } = resourceState
   const {
     output: printedContent,
     append: appendToPrinter,
@@ -114,9 +114,15 @@ export function useJanusChat(): UseJanusChatReturn {
 
   const abortRef = useRef<(() => void) | null>(null)
   const streamIdRef = useRef(0)
+  /*-- 跨轮次工具轨迹：主进程每轮流结束时回传,下一轮随请求带回,模型据此保留文件/hash 上下文 --*/
+  const toolTracesRef = useRef<ChatToolTraceEntry[]>([])
   const activeModelRef = useRef<ChatModelOption | null>(activeModel)
-  const agentSessionRef = useRef<AgentSession | null>(null)
-  const agentSessionGenerationRef = useRef(0)
+  const agentSessionsRef = useRef(new Map<string, AgentSession>())
+  const resourcesRef = useRef(resources)
+  const resourcePreferencesRef = useRef(parseJanusResourcePreferences(
+    typeof localStorage === 'undefined' ? null : localStorage.getItem(JANUS_RESOURCE_STORAGE_KEY),
+  ))
+  const resourcesHydratedRef = useRef(false)
 
   useEffect(() => {
     activeModelRef.current = activeModel
@@ -182,23 +188,48 @@ export function useJanusChat(): UseJanusChatReturn {
   }, [loadConfiguredModels])
 
   useEffect(() => {
-    setResourceState((current) => reconcileWorkspaceResources(current, availableWorkspaces))
+    if (!resourcesHydratedRef.current && availableWorkspaces.length === 0) return
+    setResourceState((current) => {
+      const restored = resourcesHydratedRef.current
+        ? current
+        : restoreJanusResourcePreferences(resourcePreferencesRef.current, availableWorkspaces)
+      resourcesHydratedRef.current = true
+      return reconcileWorkspaceResources(restored, availableWorkspaces)
+    })
   }, [availableWorkspaces])
 
   useEffect(() => {
-    const session = agentSessionRef.current
-    if (!session || session.workspace.workspaceId === activeResource?.workspaceId) return
-    agentSessionRef.current = null
-    agentSessionGenerationRef.current += 1
-    void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
-    setAnalysisStatus('idle')
-  }, [activeResource?.workspaceId])
+    if (!resourcesHydratedRef.current || typeof localStorage === 'undefined') return
+    try {
+      localStorage.setItem(JANUS_RESOURCE_STORAGE_KEY, JSON.stringify(toJanusResourcePreferences(resourceState)))
+    } catch {
+      // Persistence is optional; the active in-memory resource remains usable.
+    }
+  }, [resourceState])
+
+  useEffect(() => {
+    resourcesRef.current = resources
+    const resourceIds = new Set(resources.map((resource) => resource.workspaceId))
+    for (const [workspaceId, session] of agentSessionsRef.current) {
+      if (resourceIds.has(workspaceId)) continue
+      agentSessionsRef.current.delete(workspaceId)
+      void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
+    }
+    if (resourceIds.size === 0) setRuntimeState(EMPTY_JANUS_RUNTIME_STATE)
+  }, [resources])
+
+  useEffect(() => window.electron.agentRuntime.onEvent((event) => {
+    const sessionId = runtimeEventSessionId(event)
+    if (!sessionId || ![...agentSessionsRef.current.values()].some((session) => session.id === sessionId)) return
+    setRuntimeState((current) => reduceJanusRuntimeState(current, event))
+  }), [])
 
   useEffect(() => () => {
-    const session = agentSessionRef.current
-    agentSessionRef.current = null
-    agentSessionGenerationRef.current += 1
-    if (session) void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
+    const sessions = [...agentSessionsRef.current.values()]
+    agentSessionsRef.current.clear()
+    for (const session of sessions) {
+      void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
+    }
   }, [])
 
   const attachWorkspace = useCallback((workspaceId: string) => {
@@ -207,19 +238,27 @@ export function useJanusChat(): UseJanusChatReturn {
     setResourceState((current) => attachWorkspaceResource(current, workspace))
   }, [availableWorkspaces])
 
-  const ensureEmbeddedWorkspace = useCallback((workspaceId: string) => {
-    const workspace = availableWorkspaces.find((item) => item.id === workspaceId)
-    if (!workspace) return
-    setResourceState((current) => ensureEmbeddedWorkspaceResource(current, workspace))
-  }, [availableWorkspaces])
-
   const detachWorkspace = useCallback((workspaceId: string) => {
     setResourceState((current) => detachWorkspaceResource(current, workspaceId))
   }, [])
 
-  const selectResource = useCallback((workspaceId: string) => {
-    setResourceState((current) => selectWorkspaceResource(current, workspaceId))
-  }, [])
+  const resolveApproval = useCallback((approvalId: string, approved: boolean) => {
+    const request = runtimeState.pendingApprovals.find((item) => item.id === approvalId)
+    if (!request) return
+    void window.electron.agentRuntime.resolveApproval({
+      approvalId,
+      approved,
+      workspaceId: request.workspaceId,
+      sessionId: request.sessionId,
+      correlationId: request.correlationId,
+      toolName: request.toolName,
+      actionRisk: request.actionRisk,
+    }).then((resolved) => {
+      if (!resolved) setError('Workspace action approval is no longer active')
+    }).catch((reason: unknown) => {
+      setError(reason instanceof Error ? reason.message : 'Workspace action approval failed')
+    })
+  }, [runtimeState.pendingApprovals])
 
   const abortCurrentRequest = useCallback(() => {
     abortRef.current?.()
@@ -269,104 +308,35 @@ export function useJanusChat(): UseJanusChatReturn {
     ]))
   }, [])
 
-  const ensureAgentSession = useCallback(async (resource: WorkspaceResource): Promise<AgentSession> => {
-    const current = agentSessionRef.current
-    if (current?.workspace.workspaceId === resource.workspaceId && current.status === 'running') return current
-    if (current) await window.electron.agentRuntime.cancelSession(current.id).catch(() => undefined)
-    const generation = ++agentSessionGenerationRef.current
-    const session = await window.electron.agentRuntime.createSession({
-      workspaceId: resource.workspaceId,
-      workspaceRoot: resource.workspacePath,
-    })
-    if (generation !== agentSessionGenerationRef.current) {
-      await window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
-      throw new Error('Workspace resource changed during analysis')
-    }
-    agentSessionRef.current = session
-    return session
-  }, [])
-
-  const requireCompletedOutput = useCallback(<T,>(result: ToolResult): T => {
-    if (result.status !== 'completed') throw new Error(result.error || `${result.toolName} ${result.status}`)
-    return result.output as T
-  }, [])
-
-  const analyzeActiveResource = useCallback(() => {
-    if (!activeResource || analysisStatus === 'running') return
-    const resource = activeResource
-    setAnalysisStatus('running')
-    setError(null)
-    setMessages((prev) => capMessages([...prev, {
-      id: `user-analysis-${Date.now()}`,
-      role: 'user',
-      content: `Analyze workspace: ${resource.workspaceName}`,
-      timestamp: Date.now(),
-    }]))
-
-    void (async () => {
-      const session = await ensureAgentSession(resource)
-      const listed = requireCompletedOutput<{ entries: Array<{ path: string; type: 'file' | 'directory' }>; truncated: boolean }>(
-        await window.electron.agentRuntime.executePlannerStep({
-          sessionId: session.id,
-          call: { toolName: 'workspace.list', input: { workspaceId: resource.workspaceId, depth: 3, maxEntries: 500 } },
-        }),
-      )
-      const detection = requireCompletedOutput<JanusProjectCandidate['detection']>(
-        await window.electron.agentRuntime.executePlannerStep({
-          sessionId: session.id,
-          call: { toolName: 'project.detect', input: { workspaceId: resource.workspaceId, depth: 3, maxDirectories: 100 } },
-        }),
-      )
-      const primary = detection.candidates[0]
-      const relativePath = primary?.path ?? ''
-      const manifest = listed.entries.find((entry) => entry.type === 'file'
-        && entry.path.startsWith(relativePath)
-        && /(^|\/)(package\.json|pyproject\.toml|cargo\.toml|go\.mod|cmakelists\.txt)$/i.test(entry.path))
-      if (manifest) {
-        requireCompletedOutput(await window.electron.agentRuntime.executeFunctionCall({
-          sessionId: session.id,
-          call: { toolName: 'workspace.read', input: { workspaceId: resource.workspaceId, path: manifest.path, maxBytes: 64 * 1024 } },
-        }))
+  const ensureAgentSessions = useCallback(async (
+    requestedResources: WorkspaceResource[],
+  ): Promise<ChatWorkspaceResource[]> => {
+    const resolved = await Promise.all(requestedResources.map(async (resource) => {
+      let session = agentSessionsRef.current.get(resource.workspaceId)
+      if (!session || session.status !== 'running') {
+        session = await window.electron.agentRuntime.createSession({
+          workspaceId: resource.workspaceId,
+          workspaceRoot: resource.workspacePath,
+        })
+        agentSessionsRef.current.set(resource.workspaceId, session)
       }
-      const generated = requireCompletedOutput<{ config: LaunchConfig; validation: ValidationResult }>(
-        await window.electron.agentRuntime.executePlannerStep({
-          sessionId: session.id,
-          call: {
-            toolName: 'project.generate-config',
-            input: {
-              workspaceId: resource.workspaceId,
-              path: relativePath,
-              projectType: primary?.type ?? detection.type,
-            },
-          },
-        }),
-      )
-      const detail: JanusProjectCandidate = {
-        workspaceId: resource.workspaceId,
-        workspacePath: resource.workspacePath,
-        projectPath: joinWorkspacePath(resource.workspacePath, relativePath),
-        relativePath,
-        config: generated.config,
-        validation: generated.validation,
-        detection,
+
+      const current = resourcesRef.current.find((item) =>
+        item.workspaceId === resource.workspaceId && item.workspacePath === resource.workspacePath)
+      if (!current) {
+        agentSessionsRef.current.delete(resource.workspaceId)
+        await window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
+        return null
       }
-      window.dispatchEvent(new CustomEvent(JANUS_PROJECT_CANDIDATE_EVENT, { detail }))
-      const evidence = primary?.evidence ?? detection.evidence
-      commitAssistantMessage([
-        `Analyzed **${resource.workspaceName}** through the workspace Agent Runtime.`,
-        '',
-        `- Project: \`${primary?.type ?? detection.type}\` (${Math.round((primary?.confidence ?? detection.confidence) * 100)}% confidence)`,
-        `- Directory: \`${relativePath || '.'}\``,
-        `- Evidence: ${evidence.length > 0 ? evidence.map((item) => `\`${item}\``).join(', ') : 'none'}`,
-        `- Files inspected: ${listed.entries.length}${listed.truncated ? '+' : ''}`,
-        `- Candidate config: ${generated.validation.valid ? 'validated and opened for review' : 'requires correction'}`,
-      ].join('\n'))
-      setAnalysisStatus('done')
-    })().catch((reason: unknown) => {
-      setAnalysisStatus('error')
-      setError(reason instanceof Error ? reason.message : 'Workspace analysis failed')
-    })
-  }, [activeResource, analysisStatus, commitAssistantMessage, ensureAgentSession, requireCompletedOutput])
+      return {
+        workspaceId: current.workspaceId,
+        workspacePath: current.workspacePath,
+        workspaceName: current.workspaceName,
+        agentSessionId: session.id,
+      }
+    }))
+    return resolved.filter((resource): resource is ChatWorkspaceResource => resource !== null)
+  }, [])
 
   const stop = useCallback(() => {
     if (!isStreaming && !abortRef.current) return
@@ -399,63 +369,69 @@ export function useJanusChat(): UseJanusChatReturn {
 
       const chatMessages: ChatMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT },
-        ...messagesRef.current.slice(-10).map((m) => ({
+        ...messagesRef.current.slice(-HISTORY_MESSAGE_LIMIT).map((m) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content
         })),
         { role: 'user', content: trimmed }
       ]
 
-      const { abort } = chatStream(
-        chatMessages,
-        (delta) => {
-          appendToPrinter(delta)
-        },
-        () => {
-          abortRef.current = null
-          void completePrinter().then((final) => {
+      void (async () => {
+        const workspaceResources = await ensureAgentSessions(resources)
+        if (streamIdRef.current !== streamId) return
+        const model = activeModelRef.current
+        const { abort } = chatStream(
+          chatMessages,
+          (delta) => {
+            if (streamIdRef.current === streamId) appendToPrinter(delta)
+          },
+          () => {
             if (streamIdRef.current !== streamId) return
+            abortRef.current = null
+            void completePrinter().then((final) => {
+              if (streamIdRef.current !== streamId) return
+              setIsStreaming(false)
+              resetPrinter()
+              commitAssistantMessage(final)
+            })
+          },
+          (err) => {
+            if (streamIdRef.current !== streamId) return
+            abortRef.current = null
             setIsStreaming(false)
+            const final = flushPrinter()
             resetPrinter()
             commitAssistantMessage(final)
-          })
-        },
-        (err) => {
-          if (streamIdRef.current !== streamId) return
-          abortRef.current = null
-          setIsStreaming(false)
-          const final = flushPrinter()
-          resetPrinter()
-          commitAssistantMessage(final)
-          setError(err)
-        },
-        activeModelRef.current
-          ? {
-              providerId: activeModelRef.current.providerId,
-              modelId: activeModelRef.current.modelId,
-              sourceTag: 'janus-chat',
-              workspaceId: activeResource?.workspaceId,
-              workspacePath: activeResource?.workspacePath,
-              onRecallTrace: setLatestRecallTrace,
-            }
-          : {
-              sourceTag: 'janus-chat',
-              workspaceId: activeResource?.workspaceId,
-              workspacePath: activeResource?.workspacePath,
-              onRecallTrace: setLatestRecallTrace,
-            }
-      )
-
-      abortRef.current = abort
+            setError(err)
+          },
+          {
+            ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
+            sourceTag: 'janus-chat',
+            workspaceResources,
+            toolTraces: toolTracesRef.current,
+            onRecallTrace: setLatestRecallTrace,
+            onToolTrace: (entries) => {
+              toolTracesRef.current = [...toolTracesRef.current, ...entries].slice(-MAX_TOOL_TRACES)
+            },
+          },
+        )
+        abortRef.current = abort
+      })().catch((reason: unknown) => {
+        if (streamIdRef.current !== streamId) return
+        setIsStreaming(false)
+        resetPrinter()
+        setError(reason instanceof Error ? reason.message : 'Workspace session failed')
+      })
     },
     [
       appendToPrinter,
-      activeResource,
       commitAssistantMessage,
       completePrinter,
+      ensureAgentSessions,
       flushPrinter,
       isStreaming,
       resetPrinter,
+      resources,
     ]
   )
 
@@ -470,6 +446,7 @@ export function useJanusChat(): UseJanusChatReturn {
     streamIdRef.current += 1
     abortCurrentRequest()
     setMessages([])
+    toolTracesRef.current = []
     resetPrinter()
     setIsStreaming(false)
     setError(null)
@@ -488,13 +465,11 @@ export function useJanusChat(): UseJanusChatReturn {
     resourceController: {
       resources,
       availableWorkspaces,
-      activeResourceId,
       attachWorkspace,
-      ensureEmbeddedWorkspace,
       detachWorkspace,
-      selectResource,
-      analysisStatus,
-      analyzeActiveResource,
+      activities: runtimeState.activities,
+      pendingApprovals: runtimeState.pendingApprovals,
+      resolveApproval,
     },
     send,
     stop,

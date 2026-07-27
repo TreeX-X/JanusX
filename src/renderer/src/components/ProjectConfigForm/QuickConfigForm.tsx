@@ -87,7 +87,7 @@ export function QuickConfigForm({ config, schema, onChange }: QuickConfigFormPro
 
       {/* 提示文本 */}
       <div className={styles.hint}>
-        <p>⚙️ 关键配置已显示。点击"高级编辑"查看完整配置。</p>
+        <p>这里只显示常用字段，完整内容可在“高级编辑”中查看。</p>
       </div>
     </div>
   )

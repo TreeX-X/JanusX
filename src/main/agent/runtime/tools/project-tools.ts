@@ -145,6 +145,7 @@ export const projectDetectTool: RegisteredTool = {
       evidence: primary?.evidence ?? details.detectedFeatures,
       candidates: scan.candidates,
       recommendedConfiguration: details.recommendedConfig,
+      availableScripts: details.availableScripts ?? [],
     }
   },
 }

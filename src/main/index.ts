@@ -87,7 +87,7 @@ async function bootstrapApp(): Promise<void> {
   const [
     { disposeWorkspaceWatchers },
     { stopAllProjects },
-    { abortAllChatStreams },
+    { abortAllChatStreams, refreshLlmRuntimeStatus },
     { registerApplicationIpc },
     { initializeOfficecliProvider, officecliManager },
     { createApplicationServices },
@@ -216,6 +216,7 @@ async function bootstrapApp(): Promise<void> {
   officecliManager.configureManagedBinaryPath(await officecliInstaller.getManagedBinary())
   await initializeOfficecliProvider()
   createWindow()
+  void refreshLlmRuntimeStatus()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

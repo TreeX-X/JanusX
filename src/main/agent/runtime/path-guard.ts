@@ -10,6 +10,7 @@ export type WorkspacePathReasonCode =
   | 'OUTSIDE_WORKSPACE'
   | 'TARGET_NOT_REGULAR'
   | 'TARGET_CHANGED'
+  | 'TARGET_EXISTS'
   | 'FILE_TOO_LARGE'
   | 'INVALID_READ_LIMIT'
 
@@ -70,6 +71,54 @@ export async function resolveWorkspaceTarget(
 ): Promise<TrustedWorkspaceTarget> {
   const target = await resolveCanonicalWorkspaceTarget(workspaceRoot, requestedPath)
   return { relativePath: target.relativePath, kind: target.kind }
+}
+
+export interface TrustedWorkspaceCreationTarget {
+  relativePath: string
+  /** Canonical absolute path of the file to create (parent realpathed, leaf appended). */
+  targetPath: string
+}
+
+/**
+ * Resolve a path for a file that must NOT exist yet. The parent directory must
+ * exist inside the workspace; the leaf is validated syntactically and appended
+ * to the canonical parent, so symlinked parents cannot escape the root.
+ */
+export async function resolveWorkspaceCreationTarget(
+  workspaceRoot: string,
+  requestedPath: string,
+): Promise<TrustedWorkspaceCreationTarget> {
+  if (typeof requestedPath !== 'string' || requestedPath.includes('\0')) {
+    throw new WorkspacePathGuardError('TARGET_UNAVAILABLE', 'Workspace target is unavailable')
+  }
+  if (isAbsoluteOnAnyPlatform(requestedPath)) {
+    throw new WorkspacePathGuardError('ABSOLUTE_PATH', 'Absolute paths are not allowed')
+  }
+  const segments = requestedPath.split(/[\\/]+/).filter(Boolean)
+  if (segments.includes('..')) {
+    throw new WorkspacePathGuardError('PATH_TRAVERSAL', 'Parent path traversal is not allowed')
+  }
+  const leaf = segments.at(-1)
+  if (!leaf || leaf === '.' || /[<>:"|?*]/.test(leaf) || leaf.endsWith('.') || leaf.endsWith(' ')) {
+    throw new WorkspacePathGuardError('TARGET_UNAVAILABLE', 'Workspace file name is invalid')
+  }
+
+  const parent = segments.slice(0, -1).join('/')
+  const parentTarget = await resolveCanonicalWorkspaceTarget(workspaceRoot, parent)
+  if (parentTarget.kind !== 'directory') {
+    throw new WorkspacePathGuardError('TARGET_NOT_REGULAR', 'Workspace parent is not a directory')
+  }
+  const targetPath = resolve(parentTarget.targetPath, leaf)
+  try {
+    await stat(targetPath)
+    throw new WorkspacePathGuardError('TARGET_EXISTS', 'Workspace target already exists')
+  } catch (error) {
+    if (error instanceof WorkspacePathGuardError) throw error
+  }
+  return {
+    relativePath: parentTarget.relativePath ? `${parentTarget.relativePath}/${leaf}` : leaf,
+    targetPath,
+  }
 }
 
 async function resolveCanonicalWorkspaceTarget(

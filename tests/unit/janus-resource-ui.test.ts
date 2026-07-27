@@ -22,19 +22,17 @@ function controller(overrides: Partial<JanusResourceController> = {}): JanusReso
   return {
     resources: [],
     availableWorkspaces: [],
-    activeResourceId: null,
     attachWorkspace: vi.fn(),
-    ensureEmbeddedWorkspace: vi.fn(),
     detachWorkspace: vi.fn(),
-    selectResource: vi.fn(),
-    analysisStatus: 'idle',
-    analyzeActiveResource: vi.fn(),
+    activities: [],
+    pendingApprovals: [],
+    resolveApproval: vi.fn(),
     ...overrides,
   }
 }
 
 describe('Janus resource scope UI', () => {
-  it('shows global scope and an explicit workspace attachment menu', () => {
+  it('shows one compact workspace attachment menu without scope or analyze chrome', () => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,
       resourceController: controller({
@@ -51,28 +49,102 @@ describe('Janus resource scope UI', () => {
     }))
 
     expect(markup).toContain('aria-label="Workspace resources"')
-    expect(markup).toContain('Global')
     expect(markup).toContain('aria-label="Attach workspace"')
-    expect(markup).toContain('Workspace One')
-    expect(markup).toContain('aria-label="Analyze workspace"')
+    expect(markup).toContain('aria-haspopup="listbox"')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain('Add workspace')
+    expect(markup).not.toContain('<select')
+    expect(markup).not.toContain('>Scope<')
+    expect(markup).not.toContain('>Global<')
+    expect(markup).not.toContain('Analyze workspace')
   })
 
-  it('renders attached and embedded resources with an active target and remove controls', () => {
+  it('offers embedding independently of attached resources', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      onAddToWorkspace: vi.fn(),
+      resourceController: controller({
+        resources: [
+          { workspaceId: 'one', workspaceName: 'One', workspacePath: 'C:\\one' },
+          { workspaceId: 'two', workspaceName: 'Two', workspacePath: 'C:\\two' },
+        ],
+      }),
+    }))
+
+    expect(markup).toContain('aria-label="Embed Chat in current workspace"')
+    expect(markup).not.toContain('data-active=')
+  })
+
+  it('can embed into the external workspace without any attached Chat resource', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      onAddToWorkspace: vi.fn(),
+      resourceController: controller(),
+    }))
+
+    expect(markup).toContain('Embed Chat in current workspace')
+  })
+
+  it('renders all attached resources as passive removable labels', () => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,
       resourceController: controller({
         resources: [
-          { workspaceId: 'one', workspaceName: 'One', workspacePath: 'C:\\one', source: 'attached' },
-          { workspaceId: 'two', workspaceName: 'Two', workspacePath: 'C:\\two', source: 'embedded' },
+          { workspaceId: 'one', workspaceName: 'One', workspacePath: 'C:\\one' },
+          { workspaceId: 'two', workspaceName: 'Two', workspacePath: 'C:\\two' },
         ],
-        activeResourceId: 'two',
       }),
     }))
 
-    expect(markup).toContain('data-source="attached"')
-    expect(markup).toContain('data-source="embedded"')
-    expect(markup).toContain('data-active="true"')
+    expect(markup).toContain('class="janus-resource-label"')
+    expect(markup).not.toContain('janus-resource-select')
+    expect(markup).not.toContain('data-active=')
     expect(markup).toContain('aria-label="Remove Two"')
-    expect(markup).toContain('embedded')
+  })
+
+  it('renders compact Runtime tool activity below the workspace scope', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      resourceController: controller({
+        activities: [{ correlationId: 'call-1', toolName: 'workspace.read', status: 'running' }],
+      }),
+    }))
+
+    expect(markup).toContain('aria-label="Workspace tool activity"')
+    expect(markup).toContain('workspace.read')
+    expect(markup).toContain('running')
+  })
+
+  it('renders the custom workspace edit preview before approval', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      resourceController: controller({
+        pendingApprovals: [{
+          id: 'approval-1',
+          sessionId: 'session-1',
+          workspaceId: 'workspace-1',
+          correlationId: 'call-1',
+          toolName: 'workspace.edit',
+          input: {},
+          evidenceConfidence: 'medium',
+          actionRisk: 'write',
+          approvalPolicy: 'per-action',
+          reasonCode: 'ACTION_REQUIRES_APPROVAL',
+          preview: {
+            summary: 'Edit README.md with 1 exact replacement',
+            paths: ['README.md'],
+            detail: 'Replacement 1\n- before\n+ after',
+            truncated: false,
+          },
+          createdAt: '2026-07-26T00:00:00.000Z',
+        }],
+      }),
+    }))
+
+    expect(markup).toContain('aria-label="Workspace edit approval"')
+    expect(markup).toContain('Edit README.md with 1 exact replacement')
+    expect(markup).toContain('Replacement 1')
+    expect(markup).toContain('aria-label="Approve workspace action"')
+    expect(markup).toContain('aria-label="Reject workspace action"')
   })
 })

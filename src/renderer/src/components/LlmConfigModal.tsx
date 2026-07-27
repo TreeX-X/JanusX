@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { RefreshCw } from 'lucide-react'
 import styles from './LlmConfigModal.module.css'
 import { ModalCloseButton } from './ModalCloseButton'
 import { Select } from './ui/Select'
@@ -10,8 +11,10 @@ import {
   removeProvider,
   setDefaultProvider,
   getDefaultProvider,
+  getLlmRuntimeStatus,
 } from '@/services/llm'
 import type { ProviderSettings } from '@janusx/llm-core'
+import type { LlmRuntimeStatus } from '../../../shared/ipc/llm'
 
 interface LlmConfigModalProps {
   isOpen?: boolean
@@ -39,6 +42,8 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
   const [providers, setProviders] = useState<ProviderSettings[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [defaultProviderId, setDefaultProviderId] = useState<string | null>(null)
+  const [runtimeStatus, setRuntimeStatus] = useState<LlmRuntimeStatus | null>(null)
+  const [runtimeChecking, setRuntimeChecking] = useState(false)
 
   const [openaiName, setOpenaiName] = useState('')
   const [openaiBaseURL, setOpenaiBaseURL] = useState('https://api.openai.com/v1')
@@ -54,7 +59,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
   const [vertexClientEmail, setVertexClientEmail] = useState('')
   const [vertexPrivateKey, setVertexPrivateKey] = useState('')
   const [vertexSaJSON, setVertexSaJSON] = useState('')
-  const [vertexModel, setVertexModel] = useState('gemini-2.5-flash')
+  const [vertexModel, setVertexModel] = useState('gemini-3.6-flash')
   const [vertexProxy, setVertexProxy] = useState('')
 
   const [testStatus, setTestStatus] = useState<{
@@ -78,7 +83,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
     setVertexClientEmail('')
     setVertexPrivateKey('')
     setVertexSaJSON('')
-    setVertexModel('gemini-2.5-flash')
+    setVertexModel('gemini-3.6-flash')
     setVertexProxy('')
     setTestStatus({ state: 'idle', message: '' })
     setSaveStatus('idle')
@@ -94,17 +99,30 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
     }
   }, [])
 
+  const refreshRuntimeStatus = useCallback(async () => {
+    setRuntimeChecking(true)
+    try {
+      setRuntimeStatus(await getLlmRuntimeStatus())
+    } catch (error) {
+      console.error('Failed to detect LLM runtime status:', error)
+    } finally {
+      setRuntimeChecking(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (isOpen || embedded) {
       loadProviders()
+      void refreshRuntimeStatus()
       resetForm()
     }
-  }, [isOpen, embedded, loadProviders])
+  }, [isOpen, embedded, loadProviders, refreshRuntimeStatus])
 
   const handleSetDefault = async (providerId: string) => {
     try {
       await setDefaultProvider(providerId)
       setDefaultProviderId(providerId)
+      void refreshRuntimeStatus()
     } catch (error) {
       console.error('Failed to set default provider:', error)
     }
@@ -127,7 +145,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       setVertexClientEmail(provider.vertexAI?.clientEmail || '')
       setVertexPrivateKey(provider.vertexAI?.privateKey || '')
       setVertexSaJSON(provider.vertexAI?.serviceAccountJSON || '')
-      setVertexModel(provider.modelId || 'gemini-2.5-flash')
+      setVertexModel(provider.modelId || 'gemini-3.6-flash')
       setVertexProxy(provider.vertexAI?.proxy || '')
     } else {
       setProviderType('openai-compatible')
@@ -181,7 +199,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       const settings = buildSettings()
       const testModel =
         providerType === 'vertex-ai'
-          ? vertexModel || 'gemini-2.5-flash'
+          ? vertexModel || 'gemini-3.6-flash'
           : openaiModel || 'gpt-3.5-turbo'
 
       const result = await testConnection({ ...settings, testModel })
@@ -215,6 +233,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       if (result.success) {
         setSaveStatus('success')
         await loadProviders()
+        void refreshRuntimeStatus()
         setTimeout(() => {
           resetForm()
           setSaveStatus('idle')
@@ -246,6 +265,35 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       )}
 
       <div className={styles.configBody}>
+        {runtimeStatus && (
+          <div className={styles.runtimeStatus} data-state={runtimeStatus.connection.state}>
+            <span className={styles.runtimeIndicator} />
+            <div>
+              <strong>{runtimeStatus.connection.state === 'available'
+                ? '默认模型可用'
+                : runtimeStatus.connection.state === 'unavailable'
+                  ? '默认模型不可用'
+                  : runtimeStatus.connection.state === 'unconfigured'
+                    ? '尚未配置默认模型'
+                    : '正在检测默认模型'}</strong>
+              <span>{runtimeStatus.profileSync.state === 'synchronized'
+                ? `已从安装版同步 ${runtimeStatus.profileSync.importedProviderCount} 个 Provider`
+                : runtimeStatus.profileSync.state === 'unchanged'
+                  ? '安装版配置已同步'
+                  : runtimeStatus.profileSync.state === 'source-missing'
+                    ? '未发现可同步的安装版配置'
+                    : runtimeStatus.profileSync.state === 'failed'
+                      ? '安装版配置同步失败'
+                      : '当前使用正式配置目录'}
+                {runtimeStatus.connection.latency !== undefined ? ` · ${runtimeStatus.connection.latency}ms` : ''}
+              </span>
+              {runtimeStatus.connection.error && <small>{runtimeStatus.connection.error}</small>}
+            </div>
+            <button type="button" onClick={() => void refreshRuntimeStatus()} disabled={runtimeChecking} title="重新检测 LLM 连接">
+              <RefreshCw size={13} className={runtimeChecking ? styles.spinning : undefined} />
+            </button>
+          </div>
+        )}
         {providers.length > 0 && (
           <section className={styles.section}>
             <h3 className={styles.sectionTitle}>已配置服务 Providers</h3>
@@ -482,6 +530,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                 getPortalContainer={getModalPortalContainer}
                 onChange={setVertexModel}
                 options={[
+                  { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
                   { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
                   { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview' },
                   { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },

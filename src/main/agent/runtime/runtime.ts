@@ -4,12 +4,12 @@ import { statSync } from 'node:fs'
 import type { AgentRuntimeEvent, AgentSession, ApprovalPreview, ApprovalResult, CreateAgentSessionInput, ExecuteToolInput, PolicyAuditQuery, PolicyDecision, PolicyDecisionRecord, ToolResult } from '../../../shared/ipc/agent-runtime'
 import { ToolRegistry, type RegisteredTool } from './registry'
 import type { ResolveWorkspaceRoot } from '../../office/office-workspace-guard'
-import { createPolicyDecisionRecord, evaluateWorkspaceActionPolicy, redactPolicyValue, sanitizePolicyText, settleApprovalDecision } from './policy-gate'
+import { createPolicyDecisionRecord, evaluateWorkspaceActionPolicy, redactPolicyValue, redactWorkingValue, sanitizePolicyText, settleApprovalDecision } from './policy-gate'
 import { FilePolicyAuditStore, MemoryPolicyAuditStore, type PolicyAuditStore } from './policy-audit-store'
 
 type Listener = (event: AgentRuntimeEvent) => void
 type ApprovalOutcome = 'approved' | 'denied' | 'cancelled' | 'timed-out'
-interface PendingApproval { resolve: (outcome: ApprovalOutcome) => void; timer: ReturnType<typeof setTimeout>; callerId: string; expected: Omit<ApprovalResult, 'approved' | 'approvalId'> }
+interface PendingApproval { resolve: (outcome: ApprovalOutcome) => void; callerId: string; expected: Omit<ApprovalResult, 'approved' | 'approvalId'> }
 interface ActiveSession extends AgentSession { controller: AbortController; pending: Map<string, PendingApproval>; activeCalls: Set<Promise<void>>; ended: boolean }
 class ToolTimeoutError extends Error {}
 const PATH_DENIAL_CODES = new Set(['ABSOLUTE_PATH', 'PATH_TRAVERSAL', 'OUTSIDE_WORKSPACE', 'TARGET_CHANGED', 'WORKSPACE_UNAVAILABLE', 'TARGET_UNAVAILABLE', 'TARGET_NOT_REGULAR'])
@@ -114,16 +114,12 @@ export class WorkspaceAgentRuntime {
         preview: preview ?? undefined,
         createdAt: new Date().toISOString(),
       }
+      // Approvals wait on a human, not a machine: no timer here. The wait ends
+      // only when the user resolves it or the session is cancelled; only tool
+      // execution below runs under session.timeoutMs.
       let resolveOutcome!: (outcome: ApprovalOutcome) => void
       const outcomePromise = new Promise<ApprovalOutcome>((resolve) => { resolveOutcome = resolve })
-      const timer = setTimeout(() => {
-        const pending = session.pending.get(approvalId)
-        if (!pending) return
-        session.pending.delete(approvalId)
-        pending.resolve('timed-out')
-        this.timeoutSession(session)
-      }, session.timeoutMs)
-      session.pending.set(approvalId, { resolve: resolveOutcome, timer, callerId, expected: { workspaceId: session.workspace.workspaceId, sessionId: session.id, correlationId, toolName: tool.name, actionRisk: tool.actionRisk } })
+      session.pending.set(approvalId, { resolve: resolveOutcome, callerId, expected: { workspaceId: session.workspace.workspaceId, sessionId: session.id, correlationId, toolName: tool.name, actionRisk: tool.actionRisk } })
       this.emit({ type: 'approval-requested', request })
       const outcome = await outcomePromise
       policyDecision = settleApprovalDecision(policyDecision, outcome)
@@ -145,8 +141,10 @@ export class WorkspaceAgentRuntime {
     try {
       if (session.status !== 'running' || session.controller.signal.aborted) throw new Error('Tool execution cancelled')
       const output = await this.withTimeout(Promise.resolve(tool.execute(executionInput, { workspaceId: session.workspace.workspaceId, workspaceRoot: session.workspace.workspaceRoot, signal: executionController.signal })), session.timeoutMs, session.controller.signal, executionController)
-      const result = this.result(session, tool.name, correlationId, 'completed', redactPolicyValue(output), undefined, undefined, startedAt, policyDecision.reasonCode, policyRecord)
-      this.emit({ type: 'tool-completed', result }); return result
+      const result = this.result(session, tool.name, correlationId, 'completed', redactWorkingValue(output), undefined, undefined, startedAt, policyDecision.reasonCode, policyRecord)
+      // Broadcast a display-redacted copy; the caller (model tool loop) needs the
+      // working output intact or hash-bound edits can never match the file again.
+      this.emit({ type: 'tool-completed', result: { ...result, output: redactPolicyValue(result.output) } }); return result
     } catch (error) {
       const timedOut = error instanceof ToolTimeoutError
       const status = timedOut ? 'timed-out' : session.controller.signal.aborted ? 'cancelled' : 'failed'
@@ -171,7 +169,7 @@ export class WorkspaceAgentRuntime {
     const session = typeof value.sessionId === 'string' ? this.sessions.get(value.sessionId) : undefined
     const pending = session?.pending.get(value.approvalId)
     if (!pending || pending.callerId !== callerId || Object.entries(pending.expected).some(([key, expected]) => value[key as keyof ApprovalResult] !== expected)) return false
-    session!.pending.delete(value.approvalId); clearTimeout(pending.timer); pending.resolve(value.approved ? 'approved' : 'denied'); return true
+    session!.pending.delete(value.approvalId); pending.resolve(value.approved ? 'approved' : 'denied'); return true
   }
   executeFunctionCall(input: ExecuteToolInput, callerId = 'internal'): Promise<ToolResult> { return this.executeTool({ ...input, call: { ...input.call, source: 'function-calling' } }, callerId) }
   executePlannerStep(input: ExecuteToolInput, callerId = 'internal'): Promise<ToolResult> { return this.executeTool({ ...input, call: { ...input.call, source: 'planner' } }, callerId) }
@@ -191,9 +189,9 @@ export class WorkspaceAgentRuntime {
   private publicSession(session: ActiveSession): AgentSession { return { id: session.id, workspace: { ...session.workspace }, status: session.status, createdAt: session.createdAt, updatedAt: session.updatedAt, timeoutMs: session.timeoutMs } }
   private endSession(session: ActiveSession): void { if (session.ended) return; session.ended = true; this.emit({ type: 'session-ended', session: this.publicSession(session) }) }
   private endSessionWhenIdle(session: ActiveSession): void { if (session.status !== 'running' && session.activeCalls.size === 0) this.endSession(session) }
-  private settleApprovals(session: ActiveSession, outcome: ApprovalOutcome): void { session.pending.forEach(({ resolve, timer }) => { clearTimeout(timer); resolve(outcome) }); session.pending.clear() }
+  private settleApprovals(session: ActiveSession, outcome: ApprovalOutcome): void { session.pending.forEach(({ resolve }) => resolve(outcome)); session.pending.clear() }
   private timeoutSession(session: ActiveSession): void { if (session.status !== 'running') return; session.status = 'timed-out'; session.updatedAt = new Date().toISOString(); session.controller.abort(); this.settleApprovals(session, 'cancelled') }
-  private result(session: ActiveSession, toolName: string, correlationId: string, status: ToolResult['status'], output?: unknown, error?: string, approvalId?: string, startedAt = new Date().toISOString(), reasonCode?: string, policyDecision?: PolicyDecisionRecord): ToolResult { const completedAt = new Date().toISOString(); const safeError = error ? sanitizePolicyText(error) : undefined; const summary = safeError ? `${toolName} ${status}: ${safeError}` : `${toolName} ${status}`; return { workspaceId: session.workspace.workspaceId, sessionId: session.id, correlationId, toolName, status, startedAt, completedAt, durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)), summary, output: redactPolicyValue(output), error: safeError, approvalId, reasonCode, policyDecision } }
+  private result(session: ActiveSession, toolName: string, correlationId: string, status: ToolResult['status'], output?: unknown, error?: string, approvalId?: string, startedAt = new Date().toISOString(), reasonCode?: string, policyDecision?: PolicyDecisionRecord): ToolResult { const completedAt = new Date().toISOString(); const safeError = error ? sanitizePolicyText(error) : undefined; const summary = safeError ? `${toolName} ${status}: ${safeError}` : `${toolName} ${status}`; return { workspaceId: session.workspace.workspaceId, sessionId: session.id, correlationId, toolName, status, startedAt, completedAt, durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)), summary, output, error: safeError, approvalId, reasonCode, policyDecision } }
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, signal: AbortSignal, executionController: AbortController): Promise<T> { return await new Promise<T>((resolve, reject) => { const timer = setTimeout(() => { executionController.abort(); reject(new ToolTimeoutError('Tool execution timed out')) }, timeoutMs); const abort = () => { clearTimeout(timer); executionController.abort(); reject(new Error('Tool execution cancelled')) }; if (signal.aborted) return abort(); signal.addEventListener('abort', abort, { once: true }); promise.then((value) => { clearTimeout(timer); signal.removeEventListener('abort', abort); resolve(value) }, (error) => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(error) }) }) }
 }
 

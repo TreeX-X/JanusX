@@ -6,6 +6,7 @@ export {
   type LaunchConfig,
   type LaunchConfiguration,
   type ProjectRunResult,
+  type ProjectTaskResult,
   type ProjectTypeSchema,
   type RunningProjectDetail,
   type RunningProjectSummary,

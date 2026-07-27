@@ -2708,13 +2708,6 @@ body.is-running {
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
 }
 
-.janus-resource-scope-label {
-  flex: 0 0 auto;
-  color: rgba(255,255,255,0.34);
-  font-size: 9px;
-  text-transform: uppercase;
-}
-
 .janus-resource-list {
   display: flex;
   min-width: 0;
@@ -2726,11 +2719,6 @@ body.is-running {
 }
 
 .janus-resource-list::-webkit-scrollbar { display: none; }
-
-.janus-resource-global {
-  color: rgba(255,255,255,0.52);
-  font-size: 10px;
-}
 
 .janus-resource-chip {
   display: flex;
@@ -2745,32 +2733,19 @@ body.is-running {
   color: rgba(255,255,255,0.54);
 }
 
-.janus-resource-chip[data-active="true"] {
-  border-color: rgba(255,120,48,0.28);
-  background: rgba(255,120,48,0.075);
-  color: rgba(255,255,255,0.88);
-}
-
-.janus-resource-select {
+.janus-resource-label {
   display: flex;
   min-width: 0;
   height: 100%;
   align-items: center;
-  gap: 5px;
   padding: 0 6px;
   font-size: 10px;
 }
 
-.janus-resource-select span {
+.janus-resource-label span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.janus-resource-select em {
-  color: rgba(255,120,48,0.72);
-  font-size: 8px;
-  font-style: normal;
 }
 
 .janus-resource-remove {
@@ -2793,62 +2768,139 @@ body.is-running {
   height: 23px;
   flex: 0 0 auto;
   align-items: center;
-  gap: 3px;
-  padding: 0 5px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 4px;
   color: rgba(255,255,255,0.48);
 }
 
-.janus-resource-attach:hover {
-  border-color: rgba(255,120,48,0.24);
-  color: rgba(255,255,255,0.76);
+.janus-resource-attach > svg {
+  position: absolute;
+  left: 6px;
+  z-index: 1;
+  pointer-events: none;
 }
 
-.janus-resource-attach select {
-  width: 76px;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 9px;
-  cursor: pointer;
-}
-
-.janus-resource-attach option {
-  background: #171719;
-  color: #d4d4d4;
-}
-
-.janus-resource-analyze {
-  display: grid;
-  width: 23px;
+.janus-resource-attach-select {
+  width: 112px;
   height: 23px;
-  flex: 0 0 23px;
-  place-items: center;
-  border: 1px solid rgba(255,120,48,0.22);
+  padding: 0 6px 0 22px;
   border-radius: 4px;
-  color: rgba(255,150,92,0.86);
-  background: rgba(255,120,48,0.065);
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.58);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
 }
 
-.janus-resource-analyze:hover:not(:disabled) {
-  border-color: rgba(255,120,48,0.45);
-  background: rgba(255,120,48,0.13);
+.janus-resource-attach-select:hover:not(:disabled),
+.janus-resource-attach-select:focus-visible {
+  border-color: rgba(255,120,48,0.28);
+  color: rgba(255,255,255,0.82);
 }
 
-.janus-resource-analyze:disabled {
-  opacity: 0.35;
-  cursor: default;
+.janus-resource-attach-dropdown {
+  z-index: 10050 !important;
+  max-width: 240px;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
 }
 
-.janus-resource-analyze svg {
-  animation: none;
+.janus-runtime-activity {
+  display: flex;
+  min-height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.045);
+  color: rgba(255,255,255,0.46);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
 }
 
-.janus-resource-analyze:disabled svg.lucide-loader-circle {
+.janus-runtime-tool-name {
+  overflow: hidden;
+  color: rgba(255,255,255,0.7);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-runtime-tool-state {
+  margin-right: auto;
+  color: rgba(255,255,255,0.34);
+}
+
+.janus-runtime-activity button {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.66);
+  background: transparent;
+}
+
+.janus-runtime-activity button:hover {
+  border-color: rgba(255,120,48,0.35);
+  color: #ff985f;
+}
+
+.janus-runtime-approval {
+  flex: 0 0 auto;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  background: rgba(255,255,255,0.018);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+.janus-runtime-approval-header {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  color: rgba(255,255,255,0.46);
+  font-size: 9px;
+}
+
+.janus-runtime-approval-header button {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.66);
+  background: transparent;
+}
+
+.janus-runtime-approval-header button:hover {
+  border-color: rgba(255,120,48,0.35);
+  color: #ff985f;
+}
+
+.janus-runtime-approval-preview {
+  max-height: 150px;
+  overflow: auto;
+  padding: 0 12px 9px;
+  color: rgba(255,255,255,0.72);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.janus-runtime-approval-preview > span {
+  display: block;
+  margin-top: 2px;
+  color: rgba(255,255,255,0.38);
+  font-size: 9px;
+}
+
+.janus-runtime-approval-preview pre {
+  margin: 7px 0 0;
+  overflow: visible;
+  color: rgba(255,255,255,0.62);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.janus-runtime-tool-spinner {
   animation: janus-spin 0.85s linear infinite;
 }
 
@@ -5433,6 +5485,25 @@ body.is-running {
   box-shadow: 0 0 8px rgba(255,120,48,0.28);
 }
 
+.janus-chat-tab-eyes {
+  display: inline-flex;
+  width: 15px;
+  height: 14px;
+  flex: 0 0 15px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.janus-chat-tab-eyes > span {
+  display: block;
+  width: 4px;
+  height: 7px;
+  border-radius: 1px;
+  background: rgba(255,255,255,0.88);
+  box-shadow: 0 0 5px rgba(255,120,48,0.48);
+}
+
 .janus-runtime-meta {
   display: flex;
   flex-direction: column;
@@ -6071,23 +6142,20 @@ body.is-running {
   font-size: 11px;
 }
 
-/* Hidden-style dock trigger: icon-only ghost, hover/focus reveal */
+/* Embedding targets the external active workspace, independently of attached resources. */
 .janus-chat-workspace-action {
-  position: absolute;
-  top: 10px;
-  right: 28px;
-  z-index: 45;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   color: rgba(255, 255, 255, 0.42);
-  opacity: 0;
+  opacity: 0.68;
   cursor: pointer;
   transition:
     opacity 0.16s ease,
@@ -6096,8 +6164,6 @@ body.is-running {
     border-color 0.16s ease;
 }
 
-.janus-chat:hover .janus-chat-workspace-action,
-.janus-chat:focus-within .janus-chat-workspace-action,
 .janus-chat-workspace-action:hover,
 .janus-chat-workspace-action:focus-visible {
   opacity: 1;

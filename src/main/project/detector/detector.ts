@@ -8,7 +8,7 @@
  * 3. 返回检测结果和推荐配置
  */
 
-import { readdirSync, existsSync } from 'fs'
+import { readdirSync, existsSync, readFileSync } from 'fs'
 import { join, resolve } from 'path'
 import type { DetectResult, LaunchConfiguration } from '../types'
 import { ProjectType } from '../types'
@@ -67,6 +67,7 @@ export class ProjectDetector {
       confidence,
       detectedFeatures: this.getDetectedFeatures(detectedType, context),
       recommendedConfig: this.buildRecommendedConfig(detectedType, projectPath, context),
+      availableScripts: this.readPackageScripts(projectPath),
     }
   }
 
@@ -234,6 +235,18 @@ export class ProjectDetector {
     if (context.files.includes('yarn.lock')) return 'yarn'
     if (context.files.includes('bun.lockb')) return 'bun'
     return 'npm'
+  }
+
+  private static readPackageScripts(projectPath: string): string[] {
+    const packagePath = join(projectPath, 'package.json')
+    if (!existsSync(packagePath)) return []
+    try {
+      const parsed = JSON.parse(readFileSync(packagePath, 'utf-8')) as { scripts?: unknown }
+      if (!parsed.scripts || typeof parsed.scripts !== 'object' || Array.isArray(parsed.scripts)) return []
+      return Object.keys(parsed.scripts).filter((name) => /^[\w:.-]+$/.test(name)).sort()
+    } catch {
+      return []
+    }
   }
 
   /**

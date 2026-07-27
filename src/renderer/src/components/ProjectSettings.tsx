@@ -6,18 +6,23 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Play, Save, ScanSearch, Square, SquareTerminal, TestTube2 } from 'lucide-react'
 import { ProjectType } from '@/types/project'
 import type { LaunchConfig, DetectResult, ProjectTypeSchema } from '@/types/project'
 import type { ApprovalRequest } from '../../../shared/ipc/agent-runtime'
+import type { ProjectTaskResult, RunningProjectSummary } from '../../../shared/ipc/project'
 import {
   createLatestRequestGuard,
   getProjectConfigDiff,
   getProjectValidationError,
   projectService,
+  startProjectPolling,
 } from '@/services/project'
+import { analyzeWorkspaceLaunch, type WorkspaceLaunchAnalysis } from '@/services/workspace-launch-assistant'
 import ProjectTypeSelector from './ProjectTypeSelector'
 import QuickConfigForm from './ProjectConfigForm/QuickConfigForm'
 import JsonEditor from './ProjectConfigForm/JsonEditor'
+import ProjectLaunchAssistant from './ProjectLaunchAssistant'
 import styles from './ProjectSettings.module.css'
 
 interface ProjectSettingsProps {
@@ -55,11 +60,17 @@ export function ProjectSettings({
   const [error, setError] = useState<string | null>(null)
   const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [analysis, setAnalysis] = useState<WorkspaceLaunchAnalysis | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [taskResult, setTaskResult] = useState<ProjectTaskResult | null>(null)
+  const [runningProjects, setRunningProjects] = useState<RunningProjectSummary[]>([])
+  const [executing, setExecuting] = useState<'test' | 'run' | 'stop' | null>(null)
   const initializationGuardRef = useRef(createLatestRequestGuard())
   const saveGuardRef = useRef(createLatestRequestGuard())
   const applySessionRef = useRef<string | null>(null)
   const approvalUnsubscribeRef = useRef<(() => void) | null>(null)
-  const configDiff = useMemo(() => getProjectConfigDiff(baselineConfig, candidateConfig ? config : null), [baselineConfig, candidateConfig, config])
+  const configDiff = useMemo(() => getProjectConfigDiff(baselineConfig, config), [baselineConfig, config])
+  const suggestedTestScript = useMemo(() => ['test:unit', 'test', 'verify'].find((name) => detection?.availableScripts?.includes(name)), [detection])
 
   // 初始化：检测项目并创建默认配置
   useEffect(() => {
@@ -78,11 +89,14 @@ export function ProjectSettings({
     }
   }, [candidateConfig, projectPath])
 
-  async function initializeSettings() {
-    saveGuardRef.current.cancel()
-    setSaving(false)
-    await initializeSettingsForRequest(initializationGuardRef.current.begin())
-  }
+  useEffect(() => startProjectPolling(async (isCurrent) => {
+    try {
+      const projects = await projectService.listByWorkspace(projectPath)
+      if (isCurrent()) setRunningProjects(projects)
+    } catch {
+      // Runtime status is best-effort; command failures remain visible in the action handlers.
+    }
+  }, 2000), [projectPath])
 
   async function initializeSettingsForRequest(isCurrent: () => boolean) {
     setLoading(true)
@@ -196,19 +210,53 @@ export function ProjectSettings({
     }
   }, [])
 
+  const handleAssistantConfig = useCallback((nextConfig: LaunchConfig) => {
+    setConfig(structuredClone(nextConfig))
+    setUnsavedChanges(true)
+    setActiveView('diff')
+    setError(null)
+  }, [])
+
+  const handleAnalyze = useCallback(async (): Promise<WorkspaceLaunchAnalysis | null> => {
+    if (!workspaceId || !workspaceRoot) {
+      setError('当前工作区缺少可验证的 workspaceId，无法启动 Janus 分析。')
+      return null
+    }
+    setAnalyzing(true)
+    setError(null)
+    try {
+      const result = await analyzeWorkspaceLaunch({ workspaceId, workspaceRoot, projectRelativePath })
+      setAnalysis(result)
+      setDetection((current) => current ? {
+        ...current,
+        type: result.detection.candidates[0]?.type ?? result.detection.type,
+        confidence: result.detection.candidates[0]?.confidence ?? result.detection.confidence,
+        detectedFeatures: result.detection.candidates[0]?.evidence ?? result.detection.evidence,
+        availableScripts: result.detection.availableScripts ?? current.availableScripts,
+      } : current)
+      if (!baselineConfig && !unsavedChanges) handleAssistantConfig(result.candidateConfig)
+      return result
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '工作区分析失败')
+      return null
+    } finally {
+      setAnalyzing(false)
+    }
+  }, [baselineConfig, handleAssistantConfig, projectRelativePath, unsavedChanges, workspaceId, workspaceRoot])
+
   // 保存配置
-  const handleSave = useCallback(async () => {
-    if (!config) return
+  const handleSave = useCallback(async (overrideConfig?: LaunchConfig): Promise<boolean> => {
+    const configToSave = overrideConfig ?? config
+    if (!configToSave) return false
 
     const isCurrent = saveGuardRef.current.begin()
-    const configToSave = config
     setSaving(true)
     setError(null)
 
     try {
       // 验证配置
       const validation = await projectService.validateConfig(configToSave)
-      if (!isCurrent()) return
+      if (!isCurrent()) return false
 
       const validationError = getProjectValidationError(validation)
       if (validationError) throw new Error(validationError)
@@ -250,17 +298,65 @@ export function ProjectSettings({
       } else {
         await projectService.writeConfig(projectPath, configToSave)
       }
-      if (!isCurrent()) return
+      if (!isCurrent()) return false
       setUnsavedChanges(false)
       setBaselineConfig(configToSave)
+      setConfig(configToSave)
       onSave(configToSave)
+      return true
     } catch (err) {
-      if (!isCurrent()) return
+      if (!isCurrent()) return false
       setError(err instanceof Error ? err.message : 'Failed to save')
+      return false
     } finally {
       if (isCurrent()) setSaving(false)
     }
   }, [config, configDiff, onSave, projectPath, projectRelativePath, workspaceId, workspaceRoot])
+
+  const handleTest = useCallback(async (script?: string) => {
+    setExecuting('test')
+    setError(null)
+    try {
+      const result = await projectService.test(projectPath, script ?? suggestedTestScript)
+      setTaskResult(result)
+      if (result.exitCode !== 0 || result.timedOut) throw new Error(`${result.command} 未通过${result.timedOut ? '（超时）' : `（退出码 ${result.exitCode}）`}`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '测试执行失败')
+    } finally {
+      setExecuting(null)
+    }
+  }, [projectPath, suggestedTestScript])
+
+  const handleRun = useCallback(async (overrideConfig?: LaunchConfig) => {
+    const configToRun = overrideConfig ?? config
+    if (!configToRun) return
+    if (!overrideConfig && unsavedChanges && !await handleSave()) return
+    setExecuting('run')
+    setError(null)
+    try {
+      await projectService.start(projectPath, configToRun.configurations[0]?.name)
+      setRunningProjects(await projectService.listByWorkspace(projectPath))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '项目启动失败')
+    } finally {
+      setExecuting(null)
+    }
+  }, [config, handleSave, projectPath, unsavedChanges])
+
+  const handleStop = useCallback(async () => {
+    if (runningProjects.length === 0) return
+    setExecuting('stop')
+    setError(null)
+    try {
+      await Promise.all(runningProjects.map((project) => projectService.stop(project.id)))
+      setRunningProjects([])
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '项目停止失败')
+      setRunningProjects(await projectService.listByWorkspace(projectPath).catch(() => []))
+    } finally {
+      setExecuting(null)
+    }
+  }, [projectPath, runningProjects])
 
   const resolvePendingApproval = useCallback((approved: boolean) => {
     if (!pendingApproval) return
@@ -288,13 +384,12 @@ export function ProjectSettings({
 
   return (
     <div className={styles.container}>
-      {/* 左侧：项目类型选择器 */}
-      <div className={styles.sidebar}>
+      <nav className={styles.sidebar} aria-label="项目类型">
         <div className={styles.sidebarHeader}>
-          <h3>项目类型</h3>
+          <h3>运行类型</h3>
           {detection && (
             <span className={styles.confidence}>
-              {Math.round(detection.confidence * 100)}% 置信度
+              {Math.round(detection.confidence * 100)}%
             </span>
           )}
         </div>
@@ -308,15 +403,19 @@ export function ProjectSettings({
           />
         )}
 
-        <div className={styles.sidebarActions}>
-          <button onClick={initializeSettings} className={styles.actionBtn} title="重新检测项目">
-            重新检测
-          </button>
-        </div>
-      </div>
+      </nav>
 
-      {/* 中间：配置表单 */}
-      <div className={styles.main}>
+      <main className={styles.main}>
+        <div className={styles.contextBar}>
+          <div>
+            <strong>{config?.projectName || projectPath.split(/[/\\]/).pop()}</strong>
+            <span>{detection?.detectedFeatures.join(' · ') || '等待项目证据'}</span>
+          </div>
+          <div className={styles.contextMeta}>
+            {suggestedTestScript && <code>{suggestedTestScript}</code>}
+            {runningProjects.length > 0 && <span className={styles.runningState}>{runningProjects.length} 个进程运行中</span>}
+          </div>
+        </div>
         <div className={styles.tabs}>
           <button
             className={`${styles.tab} ${activeView === 'quick' ? styles.tabActive : ''}`}
@@ -330,7 +429,7 @@ export function ProjectSettings({
           >
             高级编辑
           </button>
-          {candidateConfig && (
+          {configDiff.length > 0 && (
             <button
               className={`${styles.tab} ${activeView === 'diff' ? styles.tabActive : ''}`}
               onClick={() => setActiveView('diff')}
@@ -365,30 +464,58 @@ export function ProjectSettings({
         </div>
 
         {error && <div className={styles.errorBanner}>{error}</div>}
-      </div>
-
-      {/* 右侧：操作按钮 */}
-      <div className={styles.actions}>
         {pendingApproval ? (
-          <>
-            <button onClick={() => resolvePendingApproval(true)} className={styles.btnSave}>批准</button>
-            <button onClick={() => resolvePendingApproval(false)} className={styles.btnCancel}>取消</button>
-          </>
-        ) : (
-          <button
-            onClick={handleSave}
-            disabled={!unsavedChanges || saving}
-            className={styles.btnSave}
-          >
-            {saving ? '等待审批...' : '保存'}
-          </button>
+          <div className={styles.approvalBar}>
+            <span>Janus 请求写入运行配置</span>
+            <button onClick={() => resolvePendingApproval(false)}>拒绝</button>
+            <button onClick={() => resolvePendingApproval(true)} className={styles.approveButton}>批准</button>
+          </div>
+        ) : null}
+
+        {taskResult && (
+          <details className={styles.taskOutput} open={taskResult.exitCode !== 0}>
+            <summary>
+              <SquareTerminal size={13} />
+              {taskResult.command}
+              <span data-success={taskResult.exitCode === 0}>{taskResult.exitCode === 0 ? '通过' : `退出 ${taskResult.exitCode}`}</span>
+            </summary>
+            <pre>{taskResult.output.slice(-120).join('\n')}</pre>
+          </details>
         )}
-        {onCancel && (
-          <button onClick={onCancel} className={styles.btnCancel}>
-            关闭
+
+        <div className={styles.commandBar}>
+          <button onClick={() => void handleAnalyze()} disabled={analyzing || executing !== null} title="读取工作区并更新分析">
+            <ScanSearch size={14} /> {analyzing ? '分析中' : '分析'}
           </button>
-        )}
-      </div>
+          <button onClick={() => void handleTest()} disabled={executing !== null || !suggestedTestScript} title={suggestedTestScript ? `运行 ${suggestedTestScript}` : '未发现测试脚本'}>
+            <TestTube2 size={14} /> {executing === 'test' ? '测试中' : '测试'}
+          </button>
+          <span className={styles.commandSpacer} />
+          {onCancel && <button onClick={onCancel}>关闭</button>}
+          {runningProjects.length > 0 && (
+            <button onClick={() => void handleStop()} disabled={executing !== null} title="停止当前工作区进程">
+              <Square size={13} /> {executing === 'stop' ? '停止中' : '停止'}
+            </button>
+          )}
+          <button onClick={() => void handleSave()} disabled={!unsavedChanges || saving || executing !== null} title="保存运行配置">
+            <Save size={14} /> {saving ? '等待审批' : '保存'}
+          </button>
+          <button className={styles.runButton} onClick={() => void handleRun()} disabled={saving || executing !== null || !config} title="启动当前配置">
+            <Play size={14} /> {executing === 'run' ? '启动中' : '启动'}
+          </button>
+        </div>
+      </main>
+
+      <ProjectLaunchAssistant
+        analysis={analysis}
+        config={config}
+        busy={analyzing || saving || executing !== null}
+        onAnalyze={handleAnalyze}
+        onConfig={handleAssistantConfig}
+        onSave={handleSave}
+        onTest={handleTest}
+        onRun={handleRun}
+      />
     </div>
   )
 }

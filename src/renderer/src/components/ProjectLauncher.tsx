@@ -5,16 +5,14 @@
  * 集成项目检测、配置管理、启动运行的完整流程
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import type { LaunchConfig } from '@/types/project'
 import {
   createLatestRequestGuard,
   executeCurrentTask,
-  getProjectLauncherMode,
   projectService,
 } from '@/services/project'
 import ProjectSettings from './ProjectSettings'
-import ProjectRunningList from './ProjectRunningList'
 import styles from './ProjectLauncher.module.css'
 
 interface ProjectLauncherProps {
@@ -32,8 +30,6 @@ interface ProjectLauncherProps {
  * 2. 运行模式 - 显示运行中的项目
  */
 export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, projectRelativePath = '', candidateConfig = null }: ProjectLauncherProps) {
-  const [mode, setMode] = useState<'settings' | 'running'>('settings')
-  const [config, setConfig] = useState<LaunchConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const loadGuardRef = useRef(createLatestRequestGuard())
@@ -49,25 +45,13 @@ export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, proje
     setLoading(true)
     setError(null)
     await executeCurrentTask(isCurrent, () => projectService.readConfig(projectPath), {
-      onSuccess: (loadedConfig) => {
-        setConfig(loadedConfig)
-        setMode(candidateConfig ? 'settings' : getProjectLauncherMode(loadedConfig))
-      },
+      onSuccess: () => undefined,
       onError: (err) => {
         setError(err instanceof Error ? err.message : 'Failed to load config')
       },
       onFinally: () => setLoading(false),
     })
   }
-
-  const handleConfigSaved = useCallback((newConfig: LaunchConfig) => {
-    setConfig(newConfig)
-    setMode('running')
-  }, [])
-
-  const handleBackToSettings = useCallback(() => {
-    setMode('settings')
-  }, [])
 
   if (loading) {
     return (
@@ -95,22 +79,14 @@ export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, proje
 
   return (
     <div className={styles.container}>
-      {mode === 'settings' ? (
-        <ProjectSettings
-          projectPath={projectPath}
-          workspaceId={workspaceId}
-          workspaceRoot={workspaceRoot}
-          projectRelativePath={projectRelativePath}
-          candidateConfig={candidateConfig}
-          onSave={handleConfigSaved}
-        />
-      ) : (
-        <ProjectRunningList
-          projectPath={projectPath}
-          config={config}
-          onEditSettings={handleBackToSettings}
-        />
-      )}
+      <ProjectSettings
+        projectPath={projectPath}
+        workspaceId={workspaceId}
+        workspaceRoot={workspaceRoot}
+        projectRelativePath={projectRelativePath}
+        candidateConfig={candidateConfig}
+        onSave={() => undefined}
+      />
     </div>
   )
 }

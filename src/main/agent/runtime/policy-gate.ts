@@ -56,6 +56,37 @@ const SECRET_TEXT_PATTERNS = [
   /\b(password|secret|token|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi,
   /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g,
 ]
+// Patterns that are near-certain credential material. Unlike SECRET_TEXT_PATTERNS
+// (display/audit redaction, tolerant of false positives), these are the only
+// patterns allowed to mask content handed back to the model as working data —
+// broad assignment patterns like `apiKey: x` would corrupt ordinary source files
+// and break hash-bound workspace edits.
+const HIGH_CONFIDENCE_SECRET_PATTERNS = [
+  /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g,
+  /\bsk-[A-Za-z0-9_-]{16,}\b/g,
+]
+
+export function redactHighConfidenceSecrets(text: string): { text: string; redacted: boolean } {
+  let redacted = false
+  const next = HIGH_CONFIDENCE_SECRET_PATTERNS.reduce(
+    (value, pattern) => value.replace(pattern, () => {
+      redacted = true
+      return '[REDACTED]'
+    }),
+    text,
+  )
+  return { text: next, redacted }
+}
+
+// Working-data redaction for tool outputs returned to the model: masks only
+// high-confidence secrets and never rewrites by field name, so file content
+// stays byte-identical to disk wherever no real credential is present.
+export function redactWorkingValue(value: unknown): unknown {
+  if (typeof value === 'string') return redactHighConfidenceSecrets(value).text
+  if (Array.isArray(value)) return value.map(redactWorkingValue)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactWorkingValue(item)]))
+}
 
 export function redactPolicyValue(value: unknown): unknown {
   if (typeof value === 'string') return SECRET_TEXT_PATTERNS.reduce((text, pattern) => text.replace(pattern, '[REDACTED]'), value)

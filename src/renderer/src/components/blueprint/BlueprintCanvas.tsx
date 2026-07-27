@@ -266,6 +266,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     | null
   >(null)
   const [deleteTarget, setDeleteTarget] = useState<{ nodeId: string; message: string } | null>(null)
+  const [restoreLayoutConfirmOpen, setRestoreLayoutConfirmOpen] = useState(false)
 
   const rfInstanceRef = useRef<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>(null)
 
@@ -815,11 +816,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               </button>
               <button
                 className="blueprint-btn"
-                onClick={() => {
-                  if (window.confirm('恢复默认布局将覆盖所有手动位置，是否继续？')) {
-                    void restoreDefaultLayout()
-                  }
-                }}
+                onClick={() => setRestoreLayoutConfirmOpen(true)}
               >
                 恢复默认布局
               </button>
@@ -1388,6 +1385,18 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         tone="danger"
         onConfirm={() => void handleDeleteConfirm()}
         onCancel={() => setDeleteTarget(null)}
+      />
+      <PromptDialog
+        open={restoreLayoutConfirmOpen}
+        title="恢复默认布局"
+        description="恢复默认布局将覆盖所有手动位置，是否继续？"
+        confirmOnly
+        confirmText="恢复"
+        onConfirm={() => {
+          setRestoreLayoutConfirmOpen(false)
+          void restoreDefaultLayout()
+        }}
+        onCancel={() => setRestoreLayoutConfirmOpen(false)}
       />
     </div>
   )

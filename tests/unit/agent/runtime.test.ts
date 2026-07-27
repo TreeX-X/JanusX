@@ -139,11 +139,13 @@ describe('WorkspaceAgentRuntime', () => {
         additionalProperties: false,
       },
     })
+    let completedEventOutput: unknown
     runtime.onEvent((event) => {
       if (event.type === 'approval-requested') {
         expect(event.request.input).toEqual({ text: '[string:5]', apiKey: '[string:14]' })
         resolve(runtime, event.request, true)
       }
+      if (event.type === 'tool-completed') completedEventOutput = event.result.output
     })
     const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd() })
     const result = await runtime.executeTool({
@@ -156,10 +158,13 @@ describe('WorkspaceAgentRuntime', () => {
       },
     })
 
+    // The caller (model tool loop) receives working data verbatim; only the
+    // broadcast event and audit records are display-redacted.
+    expect(completedEventOutput).toEqual({ text: 'start', apiKey: '[REDACTED]' })
     expect(result).toMatchObject({
       status: 'completed',
       reasonCode: 'APPROVAL_GRANTED',
-      output: { text: 'start', apiKey: '[REDACTED]' },
+      output: { text: 'start', apiKey: 'do-not-display' },
       policyDecision: {
         workspaceId: 'workspace-1',
         sessionId: session.id,
@@ -275,44 +280,47 @@ describe('WorkspaceAgentRuntime', () => {
     expect(records.at(-1)).toMatchObject({ outcome: 'deny', reasonCode: 'OUTSIDE_WORKSPACE' })
   })
 
-  it('times out an unanswered approval with a terminal timed-out event', async () => {
+  it('keeps an unanswered approval pending past the session timeout until the user resolves it', async () => {
     vi.useFakeTimers()
+    const execute = vi.fn(async (input) => input)
     const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
-    runtime.registry.register({ ...echoTool(), actionRisk: 'run' })
-    const events: string[] = []; runtime.onEvent((event) => events.push(event.type))
+    runtime.registry.register({ ...echoTool(execute), actionRisk: 'run' })
+    let request: ApprovalRequest | undefined
+    runtime.onEvent((event) => { if (event.type === 'approval-requested') request = event.request })
     const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd(), timeoutMs: 10 })
     const pending = runtime.executeTool({ sessionId: session.id, call: { toolName: 'workspace.echo', input: { text: 'wait' } } })
-    await vi.advanceTimersByTimeAsync(11)
-    const result = await pending
-    expect(result.status).toBe('timed-out'); expect(result.summary).toContain('workspace.echo timed-out')
-    expect(runtime.getSession(session.id)?.status).toBe('timed-out')
-    expect(events.filter((event) => event === 'tool-timed-out')).toHaveLength(1)
-    expect(events.filter((event) => event === 'session-ended')).toHaveLength(1)
-    expect(events.at(-1)).toBe('session-ended')
+    await vi.waitFor(() => expect(request).toBeDefined())
+    // The user is away far longer than the tool-execution timeout.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(runtime.getSession(session.id)?.status).toBe('running')
+    expect(resolve(runtime, request!, true)).toBe(true)
+    expect((await pending).status).toBe('completed')
+    expect(execute).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
 
-  it('settles concurrent approvals with one terminal event per call', async () => {
-    vi.useFakeTimers()
+  it('settles concurrent pending approvals when the session is cancelled', async () => {
     const execute = vi.fn(async () => 'unexpected')
     const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
     runtime.registry.register({ ...echoTool(execute), actionRisk: 'run' })
     const events: string[] = []
     const terminalCorrelationIds: string[] = []
+    let requested = 0
     runtime.onEvent((event) => {
       events.push(event.type)
-      if (event.type === 'tool-timed-out' || event.type === 'tool-cancelled') terminalCorrelationIds.push(event.result.correlationId)
+      if (event.type === 'approval-requested') requested++
+      if (event.type === 'tool-cancelled') terminalCorrelationIds.push(event.result.correlationId)
     })
     const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd(), timeoutMs: 10 })
     const first = runtime.executeTool({ sessionId: session.id, call: { toolName: 'workspace.echo', input: { text: 'first' }, correlationId: 'first' } })
     const second = runtime.executeTool({ sessionId: session.id, call: { toolName: 'workspace.echo', input: { text: 'second' }, correlationId: 'second' } })
-    await vi.advanceTimersByTimeAsync(11)
-    expect((await Promise.all([first, second])).map(({ status }) => status)).toEqual(['timed-out', 'cancelled'])
+    await vi.waitFor(() => expect(requested).toBe(2))
+    await runtime.cancelSession(session.id)
+    expect((await Promise.all([first, second])).map(({ status }) => status)).toEqual(['cancelled', 'cancelled'])
     expect(execute).not.toHaveBeenCalled()
     expect(terminalCorrelationIds.sort()).toEqual(['first', 'second'])
     expect(events.filter((event) => event === 'session-ended')).toHaveLength(1)
     expect(events.at(-1)).toBe('session-ended')
-    vi.useRealTimers()
   })
 
   it('does not invoke implementation when approval and cancellation race', async () => {

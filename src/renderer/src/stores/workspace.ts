@@ -207,10 +207,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedTabId: s.focusedTabId,
       }
     }
-    // 恢复目标工作区的终端快照
+    // 恢复目标工作区的终端快照;文件树属于旧工作区,立即清空避免串台
     const saved = snapshots[id]
     set({
       activeWorkspaceId: id,
+      fileTree: [],
+      activeFilePath: null,
       terminals: saved?.terminals ?? [],
       activeTerminalId: saved?.activeTerminalId ?? null,
       paneTree: saved?.paneTree ?? null,
@@ -353,7 +355,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
           createPaneId('split'),
           createPaneId(),
           'after',
-          0.62
+          0.5
         )
         paneTree = split.tree
         targetPaneId = split.focus.paneId

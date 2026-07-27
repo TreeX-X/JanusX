@@ -48,6 +48,7 @@ export function installElectronApiFallback(): void {
       writeConfig: () => unavailableProjectResult(),
       createDefaultConfig: () => unavailableProjectResult(),
       validateConfig: () => unavailableProjectResult(),
+      test: () => unavailableProjectResult(),
       run: () => unavailableProjectResult(),
       stop: () => unavailableProjectResult(),
       list: () => unavailableProjectResult(),
@@ -131,11 +132,12 @@ export function installElectronApiFallback(): void {
       onInstallerProgress: () => () => {}, onFilesChanged: () => () => {}, onWatchEvicted: () => () => {},
     },
     llm: {
-      getProviders: unavailable, saveProvider: unavailable, testConnection: unavailable,
+      getProviders: unavailable, getRuntimeStatus: unavailable, saveProvider: unavailable, testConnection: unavailable,
       removeProvider: unavailable, setDefaultProvider: unavailable, listModels: unavailable,
       getModelCatalog: unavailable, refreshModelCatalog: unavailable, getAdapters: unavailable,
       getDefaultProvider: unavailable, chat: unavailable, startChatStream: () => {}, abortChat: unavailable,
       onDelta: () => () => {}, onDone: () => () => {}, onError: () => () => {}, onRecallTrace: () => () => {},
+      onToolTrace: () => () => {},
     },
     agent: {
       start: unavailable, cancel: unavailable, cancelAll: unavailable, listSessions: unavailable,

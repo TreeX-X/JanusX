@@ -6,7 +6,7 @@ import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { Workspace, Terminal } from '@/types'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
-import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
+import { chooseAndCreateWorkspace, getActiveWorkspacePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
 import {
   JANUS_PROJECT_CANDIDATE_EVENT,
@@ -117,22 +117,6 @@ export function Sidebar() {
     setDeleteTarget(null)
   }, [deleteTarget, removeWorkspace, workspaces.length, setLoadState])
 
-  const loadWorkspaceFileTree = useCallback(
-    async (id: string) => {
-      try {
-        const ws = workspaces.find((w) => w.id === id)
-        if (ws) {
-          invalidateEditorFileCache(ws.path)
-          const tree = await window.electron.fileTree.load(ws.path)
-          useWorkspaceStore.setState({ fileTree: tree })
-        }
-      } catch (err) {
-        console.error('Failed to load file tree:', err)
-      }
-    },
-    [workspaces]
-  )
-
   const handleSelect = useCallback(
     async (id: string) => {
       if (suppressClickRef.current === id) {
@@ -143,10 +127,15 @@ export function Sidebar() {
       // 根据目标工作区是否有终端来设置状态
       const stateAfterSwitch = useWorkspaceStore.getState()
       setLoadState(stateAfterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
-      // 加载文件树
-      await loadWorkspaceFileTree(id)
+      // 加载文件树(统一入口,带工作区未再切换的竞态守卫)
+      const ws = workspaces.find((w) => w.id === id)
+      if (!ws) return
+      invalidateEditorFileCache(ws.path)
+      await loadWorkspaceFileTree(ws.path, () => getActiveWorkspacePath() === ws.path).catch((err) => {
+        console.error('Failed to load file tree:', err)
+      })
     },
-    [loadWorkspaceFileTree, setActiveWorkspace, setLoadState]
+    [setActiveWorkspace, setLoadState, workspaces]
   )
 
   const handleToggleWorkspaceExpand = useCallback((id: string, event: React.MouseEvent) => {

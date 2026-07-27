@@ -110,7 +110,7 @@ interface JanusIslandProps {
   onChatRetry: () => void
   onChatClear: () => void
   onOpenLlmConfig: () => void
-  onAddChatToWorkspace: () => void
+  onAddChatToWorkspace?: () => void
   resourceController: JanusResourceController
   knowledgeTrace?: KnowledgeRecallTrace | null
   knowledgePeekActive?: boolean
@@ -470,8 +470,9 @@ export function JanusIsland({
     if (stage === 'collapsed') return
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
+      const targetElement = target instanceof Element ? target : target?.parentElement
       const shell = shellRef.current
-      if (!shell || !target || shell.contains(target)) return
+      if (!shell || !target || shell.contains(target) || targetElement?.closest('[data-select-dropdown]')) return
       onDismiss()
     }
     const handleKeyDown = (event: KeyboardEvent) => {

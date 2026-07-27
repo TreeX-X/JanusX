@@ -1,15 +1,8 @@
 import { JanusChat } from './JanusChat'
 import { useJanusChatController } from './JanusChatProvider'
-import { useWorkspaceStore } from '@/stores/workspace'
-import { useEffect } from 'react'
 
 export function JanusChatPane({ focused }: { focused: boolean }) {
   const chat = useJanusChatController()
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
-
-  useEffect(() => {
-    if (activeWorkspaceId) chat.resourceController.ensureEmbeddedWorkspace(activeWorkspaceId)
-  }, [activeWorkspaceId, chat.resourceController.ensureEmbeddedWorkspace])
 
   return (
     <JanusChat
