@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import {
   getActiveWorkspacePath,
@@ -25,6 +25,7 @@ import type { FileNode, GitFileChange } from '@/types'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
 import { FileTreeItem } from '@/components/file-tree/FileTreeItem'
+import styles from '@/components/file-tree/file-tree.module.css'
 import {
   FileTreeContextMenu,
   type FileTreeContextMenuState,
@@ -63,6 +64,7 @@ const NAMING_DIALOG_COPY: Record<NamingDialogState['mode'], { title: string; lab
 
 export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const fileTree = useWorkspaceStore((s) => s.fileTree)
+  const fileTreeLoadState = useWorkspaceStore((s) => s.fileTreeLoadState)
   const activeFilePath = useWorkspaceStore((s) => s.activeFilePath)
   const setActiveFilePath = useWorkspaceStore((s) => s.setActiveFilePath)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -77,6 +79,10 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
   const activeWorkspacePath = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
+    [activeWorkspaceId, workspaces],
+  )
+  const activeWorkspaceName = useMemo(
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ?? '工作区',
     [activeWorkspaceId, workspaces],
   )
   const fileChangeMap = useMemo(() => {
@@ -121,6 +127,15 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       setErrorMessage(err?.message || '目录刷新失败')
     }
   }, [])
+
+  const retryFileTreeLoad = useCallback(() => {
+    if (!activeWorkspacePath) return
+    void loadWorkspaceFileTree(
+      activeWorkspacePath,
+      () => getActiveWorkspacePath() === activeWorkspacePath,
+      { visualTransition: true },
+    )
+  }, [activeWorkspacePath])
 
   useEffect(() => {
     if (!activeWorkspacePath) return
@@ -460,6 +475,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         </div>
         <div
           data-testid="file-explorer-content"
+          aria-busy={fileTreeLoadState === 'loading' || fileTreeLoadState === 'revealing'}
           aria-label="文件浏览器内容"
           className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-1.5 text-xs"
           onContextMenu={(event) => {
@@ -469,34 +485,45 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
             openContextMenu(event, null)
           }}
         >
-          <div className="min-h-full">
-            {visibleTree.length === 0 ? (
+          <div className={`min-h-full ${styles.tree}`} data-file-tree-phase={fileTreeLoadState}>
+            {fileTreeLoadState === 'loading' ? (
+              <FileTreeScanner workspaceName={activeWorkspaceName} />
+            ) : fileTreeLoadState === 'error' ? (
+              <div className={styles.loadError} role="alert">
+                <span>无法读取文件树</span>
+                <button type="button" onClick={retryFileTreeLoad}>重试</button>
+              </div>
+            ) : visibleTree.length === 0 ? (
               <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-3">
                 <div className="text-[#555]">
                   {fileTree.length === 0 ? '未加载工作区' : '无匹配文件'}
                 </div>
               </div>
             ) : (
-              visibleTree.map((node) => (
-                <FileTreeItem
-                  key={node.path}
-                  node={node}
-                  depth={0}
-                  activeFilePath={activeFilePath}
-                  expanded={expandedPaths.has(node.path) || filtered?.expandedDirs.has(node.path) === true}
-                  expandedPaths={
-                    filtered ? new Set([...expandedPaths, ...filtered.expandedDirs]) : expandedPaths
-                  }
-                  fileChange={fileChangeMap.get(node.path) ?? null}
-                  fileChangeMap={fileChangeMap}
-                  changedDirs={changedDirs}
-                  onSelect={setActiveFilePath}
-                  onToggleDirectory={handleToggleDirectory}
-                  onOpenFile={openFileInEditorPanel}
-                  onOpenContextMenu={openContextMenu}
-                />
-              ))
+              <div className={styles.treeContent}>
+                {visibleTree.map((node) => (
+                  <div key={node.path}>
+                    <FileTreeItem
+                      node={node}
+                      depth={0}
+                      activeFilePath={activeFilePath}
+                      expanded={expandedPaths.has(node.path) || filtered?.expandedDirs.has(node.path) === true}
+                      expandedPaths={
+                        filtered ? new Set([...expandedPaths, ...filtered.expandedDirs]) : expandedPaths
+                      }
+                      fileChange={fileChangeMap.get(node.path) ?? null}
+                      fileChangeMap={fileChangeMap}
+                      changedDirs={changedDirs}
+                      onSelect={setActiveFilePath}
+                      onToggleDirectory={handleToggleDirectory}
+                      onOpenFile={openFileInEditorPanel}
+                      onOpenContextMenu={openContextMenu}
+                    />
+                  </div>
+                ))}
+              </div>
             )}
+            {fileTreeLoadState === 'revealing' && <div className={styles.scanOverlay} aria-hidden="true" />}
           </div>
         </div>
       </div>
@@ -549,5 +576,22 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         onCancel={() => setErrorMessage(null)}
       />
     </>
+  )
+}
+
+function FileTreeScanner({ workspaceName }: { workspaceName: string }) {
+  return (
+    <div className={styles.scanner} aria-live="polite">
+      <div className={styles.scanLabel}>正在扫描 {workspaceName}</div>
+      <div className={styles.skeletonRows} aria-hidden="true">
+        {[76, 52, 68, 43, 80, 58, 47].map((width, index) => (
+          <div key={index} className={styles.skeletonRow} style={{ '--skeleton-width': `${width}%`, '--skeleton-depth': index % 3 } as CSSProperties}>
+            <span className={styles.skeletonIcon} />
+            <span className={styles.skeletonName} />
+          </div>
+        ))}
+      </div>
+      <div className={styles.scanLine} />
+    </div>
   )
 }

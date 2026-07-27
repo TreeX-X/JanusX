@@ -131,7 +131,7 @@ export function Sidebar() {
       const ws = workspaces.find((w) => w.id === id)
       if (!ws) return
       invalidateEditorFileCache(ws.path)
-      await loadWorkspaceFileTree(ws.path, () => getActiveWorkspacePath() === ws.path).catch((err) => {
+      await loadWorkspaceFileTree(ws.path, () => getActiveWorkspacePath() === ws.path, { visualTransition: true }).catch((err) => {
         console.error('Failed to load file tree:', err)
       })
     },

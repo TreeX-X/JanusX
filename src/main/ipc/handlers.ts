@@ -138,40 +138,28 @@ async function inspectGitEntries(
 async function readDirectoryNodes(rootPath: string, targetDir: string): Promise<FileNode[]> {
   try {
     const entries = await inspectGitEntries(rootPath, targetDir, await readdir(targetDir, { withFileTypes: true }))
-    const nodes = await Promise.all(
-      entries
-        .map(async ({ entry, isGitIgnored }) => {
-          const fullPath = join(targetDir, entry.name)
-          const nodePath = normalizeRelativePath(rootPath, fullPath)
+    const nodes = entries.map(({ entry, isGitIgnored }) => {
+      const fullPath = join(targetDir, entry.name)
+      const nodePath = normalizeRelativePath(rootPath, fullPath)
 
-          if (entry.isDirectory()) {
-            let hasChildren = false
-            try {
-              const children = await inspectGitEntries(rootPath, fullPath, await readdir(fullPath, { withFileTypes: true }))
-              hasChildren = children.length > 0
-            } catch {
-              hasChildren = false
-            }
+      if (entry.isDirectory()) {
+        return {
+          name: entry.name,
+          path: nodePath,
+          type: 'directory' as const,
+          isGitIgnored,
+          children: [],
+          loaded: false,
+        }
+      }
 
-            return {
-              name: entry.name,
-              path: nodePath,
-              type: 'directory' as const,
-              isGitIgnored,
-              children: [],
-              hasChildren,
-              loaded: false,
-            }
-          }
-
-          return {
-            name: entry.name,
-            path: nodePath,
-            type: 'file' as const,
-            isGitIgnored,
-          }
-        }),
-    )
+      return {
+        name: entry.name,
+        path: nodePath,
+        type: 'file' as const,
+        isGitIgnored,
+      }
+    })
 
     nodes.sort((a, b) => {
       if (a.type === 'directory' && b.type !== 'directory') return -1

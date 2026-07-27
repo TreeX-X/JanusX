@@ -19,6 +19,11 @@ let fileTreeLoadGeneration = 0
 // directory updates separately so the older root snapshot cannot erase newly loaded children.
 let fileTreeDirectoryMutationGeneration = 0
 
+export interface FileTreeLoadOptions {
+  /** Used when the visible workspace changes; background refreshes keep the current tree in place. */
+  visualTransition?: boolean
+}
+
 /**
  * 加载工作区文件树(唯一入口)。
  * 根层重新拉取之外,当前树中所有已展开加载过的目录也会同步重拉,
@@ -27,10 +32,24 @@ let fileTreeDirectoryMutationGeneration = 0
 export async function loadWorkspaceFileTree(
   workspacePath: string,
   shouldCommit: () => boolean = () => true,
+  options: FileTreeLoadOptions = {},
 ): Promise<void> {
   const generation = ++fileTreeLoadGeneration
   const directoryMutationGeneration = fileTreeDirectoryMutationGeneration
-  const rootNodes = await window.electron.fileTree.load(workspacePath)
+  const shouldAnimate = options.visualTransition === true
+  if (shouldAnimate && shouldCommit()) {
+    useWorkspaceStore.setState({ fileTreeLoadState: 'loading' })
+  }
+
+  let rootNodes: FileNode[]
+  try {
+    rootNodes = await window.electron.fileTree.load(workspacePath)
+  } catch (error) {
+    if (shouldAnimate && generation === fileTreeLoadGeneration && shouldCommit()) {
+      useWorkspaceStore.setState({ fileTreeLoadState: 'error' })
+    }
+    throw error
+  }
 
   // 当前 store 中的树属于活动工作区;仅当目标一致时才带着已展开分支去刷新
   const loadedPaths =
@@ -52,11 +71,21 @@ export async function loadWorkspaceFileTree(
     generation !== fileTreeLoadGeneration ||
     directoryMutationGeneration !== fileTreeDirectoryMutationGeneration
   ) return
-  useWorkspaceStore.setState(() =>
-    shouldCommit() && directoryMutationGeneration === fileTreeDirectoryMutationGeneration
-      ? { fileTree: applyLoadedChildren(rootNodes, childrenByPath) }
-      : {},
-  )
+  if (!shouldCommit() || directoryMutationGeneration !== fileTreeDirectoryMutationGeneration) return
+
+  useWorkspaceStore.setState({
+    fileTree: applyLoadedChildren(rootNodes, childrenByPath),
+    fileTreeLoadState: shouldAnimate ? 'revealing' : 'idle',
+  })
+
+  if (shouldAnimate) {
+    window.setTimeout(() => {
+      if (generation !== fileTreeLoadGeneration || getActiveWorkspacePath() !== workspacePath) return
+      useWorkspaceStore.setState((state) =>
+        state.fileTreeLoadState === 'revealing' ? { fileTreeLoadState: 'idle' } : {},
+      )
+    }, 760)
+  }
 }
 
 /** 重拉单个目录的 children 并挂回树上;工作区已切换或全量刷新已开始时丢弃结果 */
