@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { chatStream, getDefaultProvider, getProviders, type ChatMessage, type ChatToolTraceEntry } from '@/services/llm'
+import { chatStream, getDefaultProvider, getProviders, listModels, type ChatMessage, type ChatToolTraceEntry } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useStreamingPrinter } from '@/hooks/useStreamingPrinter'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
@@ -42,6 +42,7 @@ export interface ChatModelOption {
   modelId: string
   label: string
   isDefault: boolean
+  isProviderDefault: boolean
 }
 
 export type { WorkspaceResource } from './janusResources'
@@ -70,8 +71,7 @@ export interface UseJanusChatReturn {
   stop: () => void
   retry: () => void
   clear: () => void
-  cycleModel: () => void
-  selectModel: (providerId: string) => void
+  selectModel: (providerId: string, modelId: string) => void
   refreshModels: () => Promise<ChatModelOption[]>
 }
 
@@ -134,45 +134,44 @@ export function useJanusChat(): UseJanusChatReturn {
     return () => window.clearTimeout(timer)
   }, [modelNotice])
 
-  const loadConfiguredModels = useCallback(async (): Promise<ChatModelOption[]> => {
+  const loadConfiguredModels = useCallback(async (
+    preferDefault = false,
+    updatedProviderId?: string,
+  ): Promise<ChatModelOption[]> => {
     try {
       const [providers, defaultProvider] = await Promise.all([getProviders(), getDefaultProvider()])
-      const options = providers
-        .filter((provider) => provider.enabled !== false)
-        .map((provider) => {
-          const modelId =
-            provider.modelId ||
-            (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')
-          return modelId
-            ? {
-                providerId: provider.id,
-                providerName: provider.name,
-                modelId,
-                label: `${provider.name} / ${modelId}`,
-                isDefault: defaultProvider?.provider.id === provider.id,
-              }
-            : null
-        })
-        .filter((option): option is ChatModelOption => option !== null)
-
-      const fallback =
-        options.length === 0 && defaultProvider
-          ? [{
-              providerId: defaultProvider.provider.id,
-              providerName: defaultProvider.provider.name,
-              modelId: defaultProvider.modelId,
-              label: `${defaultProvider.provider.name} / ${defaultProvider.modelId}`,
-              isDefault: true,
-            }]
-          : []
-      const nextOptions = options.length > 0 ? options : fallback
+      const enabledProviders = providers.filter((provider) => provider.enabled !== false)
+      const nextOptions = (await Promise.all(enabledProviders.map(async (provider) => {
+        const configuredModelId = provider.modelId ||
+          (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')
+        const models = await listModels(provider.id).catch(() => [])
+        const modelIds = [...new Set([...models.map((model) => model.id), configuredModelId].filter(Boolean))]
+        return modelIds.map((modelId) => ({
+          providerId: provider.id,
+          providerName: provider.name,
+          modelId,
+          label: `${provider.name} / ${modelId}`,
+          isDefault: defaultProvider?.provider.id === provider.id && defaultProvider.modelId === modelId,
+          isProviderDefault: configuredModelId === modelId,
+        }))
+      }))).flat()
 
       setModelOptions(nextOptions)
       setActiveModel((current) => {
-        if (current && nextOptions.some((option) => option.providerId === current.providerId)) {
-          return nextOptions.find((option) => option.providerId === current.providerId) ?? current
+        const configuredDefault = nextOptions.find((option) => option.isDefault)
+        if (preferDefault) return configuredDefault ?? nextOptions[0] ?? null
+        if (current && updatedProviderId === current.providerId) {
+          return nextOptions.find((option) => option.providerId === current.providerId && option.isProviderDefault)
+            ?? nextOptions.find((option) => option.providerId === current.providerId)
+            ?? configuredDefault
+            ?? null
         }
-        return nextOptions.find((option) => option.isDefault) ?? nextOptions[0] ?? null
+        if (current) {
+          const unchanged = nextOptions.find((option) =>
+            option.providerId === current.providerId && option.modelId === current.modelId)
+          if (unchanged) return unchanged
+        }
+        return configuredDefault ?? nextOptions[0] ?? null
       })
       return nextOptions
     } catch (err) {
@@ -185,6 +184,15 @@ export function useJanusChat(): UseJanusChatReturn {
 
   useEffect(() => {
     void loadConfiguredModels()
+  }, [loadConfiguredModels])
+
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ preferDefault?: boolean; updatedProviderId?: string }>).detail
+      void loadConfiguredModels(detail?.preferDefault === true, detail?.updatedProviderId)
+    }
+    window.addEventListener('janus:llm-config-changed', refresh)
+    return () => window.removeEventListener('janus:llm-config-changed', refresh)
   }, [loadConfiguredModels])
 
   useEffect(() => {
@@ -265,35 +273,12 @@ export function useJanusChat(): UseJanusChatReturn {
     abortRef.current = null
   }, [])
 
-  const selectModel = useCallback((providerId: string) => {
-    const next = modelOptions.find((option) => option.providerId === providerId)
+  const selectModel = useCallback((providerId: string, modelId: string) => {
+    const next = modelOptions.find((option) => option.providerId === providerId && option.modelId === modelId)
     if (!next) return
     setActiveModel(next)
     setModelNotice(`Model switched: ${next.modelId}`)
   }, [modelOptions])
-
-  const cycleModel = useCallback(() => {
-    const switchFrom = (options: ChatModelOption[]) => {
-      if (options.length === 0) {
-        setModelNotice('No configured model')
-        return
-      }
-      const current = activeModelRef.current
-      const currentIndex = current
-        ? options.findIndex((option) => option.providerId === current.providerId)
-        : -1
-      const next = options[(currentIndex + 1) % options.length] ?? options[0]
-      setActiveModel(next)
-      setModelNotice(`Model switched: ${next.modelId}`)
-    }
-
-    if (modelOptions.length > 0) {
-      switchFrom(modelOptions)
-      return
-    }
-
-    void loadConfiguredModels().then(switchFrom)
-  }, [loadConfiguredModels, modelOptions])
 
   const commitAssistantMessage = useCallback((content: string) => {
     if (!content.trim()) return
@@ -475,7 +460,6 @@ export function useJanusChat(): UseJanusChatReturn {
     stop,
     retry,
     clear,
-    cycleModel,
     selectModel,
     refreshModels: loadConfiguredModels,
   }

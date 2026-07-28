@@ -4,11 +4,13 @@ export const BROWSER_TAB_DRAG_TYPE = 'application/x-janusx-browser-surface-id'
 
 let activeTerminalDragId: string | null = null
 let activeBrowserTabDragSurfaceId: string | null = null
+let activeWorkspaceFileDragPayload: WorkspaceFileDragPayload | null = null
 
 export interface WorkspaceFileDragPayload {
-  type: 'file'
+  type: 'file' | 'directory'
   name: string
   path: string
+  workspacePath: string
 }
 
 export function setWorkspaceFileDragData(
@@ -20,13 +22,22 @@ export function setWorkspaceFileDragData(
     path: normalizeWorkspaceFilePath(payload.path),
   }
 
-  dataTransfer.effectAllowed = 'copy'
+  activeWorkspaceFileDragPayload = normalizedPayload
+  dataTransfer.effectAllowed = payload.type === 'file' ? 'copyMove' : 'copy'
   dataTransfer.setData(WORKSPACE_FILE_DRAG_TYPE, JSON.stringify(normalizedPayload))
   dataTransfer.setData('text/plain', formatTerminalFileReference(normalizedPayload.path).trim())
 }
 
 export function hasWorkspaceFileDrag(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes(WORKSPACE_FILE_DRAG_TYPE)
+}
+
+export function getActiveWorkspaceFileDragData(): WorkspaceFileDragPayload | null {
+  return activeWorkspaceFileDragPayload
+}
+
+export function clearWorkspaceFileDragData(): void {
+  activeWorkspaceFileDragPayload = null
 }
 
 export function setTerminalDragData(dataTransfer: DataTransfer, terminalId: string): void {
@@ -84,14 +95,20 @@ export function readWorkspaceFileDragData(dataTransfer: DataTransfer): Workspace
 
   try {
     const parsed = JSON.parse(raw) as Partial<WorkspaceFileDragPayload>
-    if (parsed.type !== 'file' || typeof parsed.path !== 'string' || typeof parsed.name !== 'string') {
+    if (
+      (parsed.type !== 'file' && parsed.type !== 'directory') ||
+      typeof parsed.path !== 'string' ||
+      typeof parsed.name !== 'string' ||
+      typeof parsed.workspacePath !== 'string'
+    ) {
       return null
     }
 
     return {
-      type: 'file',
+      type: parsed.type,
       name: parsed.name,
       path: normalizeWorkspaceFilePath(parsed.path),
+      workspacePath: parsed.workspacePath,
     }
   } catch {
     return null

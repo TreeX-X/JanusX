@@ -65,11 +65,13 @@ describe('Workspace/File IPC contract', () => {
 
     await exposedApi.workspace.create(input)
     await exposedApi.fileTree.children(input.path, 'src')
+    await exposedApi.fileTree.move(input.path, 'src/demo.ts', 'archive')
     await exposedApi.file.save('C:\\workspace\\demo\\note.md', 'content')
 
     expect(invoke).toHaveBeenNthCalledWith(1, WORKSPACE_CHANNELS.create, input)
     expect(invoke).toHaveBeenNthCalledWith(2, FILE_TREE_CHANNELS.children, input.path, 'src')
-    expect(invoke).toHaveBeenNthCalledWith(3, FILE_CHANNELS.save, 'C:\\workspace\\demo\\note.md', 'content')
+    expect(invoke).toHaveBeenNthCalledWith(3, FILE_TREE_CHANNELS.move, input.path, 'src/demo.ts', 'archive')
+    expect(invoke).toHaveBeenNthCalledWith(4, FILE_CHANNELS.save, 'C:\\workspace\\demo\\note.md', 'content')
   })
 
   it('preserves file-tree event payload and unsubscribe semantics', () => {

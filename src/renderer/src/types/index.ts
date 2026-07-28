@@ -6,6 +6,7 @@ export type {
   LayoutPosition,
   TerminalPreset,
   Workspace,
+  WorkspaceSidebarGroup,
 } from '../../../shared/ipc/workspace'
 
 import type { TerminalPreset } from '../../../shared/ipc/workspace'

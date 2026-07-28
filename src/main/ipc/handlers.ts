@@ -3,14 +3,16 @@ import { spawn } from 'child_process'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { watch, type FSWatcher } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
-import { join, relative, resolve } from 'path'
+import { basename, join, relative, resolve } from 'path'
 import {
   FILE_TREE_CHANNELS,
   WORKSPACE_CHANNELS,
   type FileNode,
+  type Workspace,
   type WorkspaceCreateInput,
   type WorkspaceUpdates,
 } from '../../shared/ipc/workspace'
+import { sortWorkspaceSidebar } from '../../shared/workspace-sidebar'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/renderer-authorization'
 
@@ -350,17 +352,18 @@ export function registerWorkspaceHandlers(
     try {
       await ensureDir(WORKSPACES_DIR)
       const files = await readdir(WORKSPACES_DIR)
-      const workspaces = []
+      const workspaces: Workspace[] = []
       for (const file of files) {
         if (file.endsWith('.json')) {
           const data = await readFile(join(WORKSPACES_DIR, file), 'utf-8')
           workspaces.push(JSON.parse(data))
         }
       }
+      const orderedWorkspaces = sortWorkspaceSidebar(workspaces)
       return {
-        loadState: workspaces.length > 0 ? 'workspace-loaded' : 'no-workspace',
-        workspaces,
-        activeWorkspaceId: workspaces[0]?.id || null,
+        loadState: orderedWorkspaces.length > 0 ? 'workspace-loaded' : 'no-workspace',
+        workspaces: orderedWorkspaces,
+        activeWorkspaceId: orderedWorkspaces[0]?.id || null,
       }
     } catch {
       return { loadState: 'no-workspace', workspaces: [], activeWorkspaceId: null }
@@ -370,14 +373,14 @@ export function registerWorkspaceHandlers(
   ipcMain.handle(WORKSPACE_CHANNELS.list, async () => {
     await ensureDir(WORKSPACES_DIR)
     const files = await readdir(WORKSPACES_DIR)
-    const workspaces = []
+    const workspaces: Workspace[] = []
     for (const file of files) {
       if (file.endsWith('.json')) {
         const data = await readFile(join(WORKSPACES_DIR, file), 'utf-8')
         workspaces.push(JSON.parse(data))
       }
     }
-    return workspaces
+    return sortWorkspaceSidebar(workspaces)
   })
 
   ipcMain.handle(WORKSPACE_CHANNELS.load, async (_event, id: string) => {
@@ -523,6 +526,39 @@ export function registerWorkspaceHandlers(
       return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, targetPath))
     } catch (err: any) {
       return fileTreeResult(false, err.message || 'Failed to rename item')
+    }
+  })
+
+  ipcMain.handle(FILE_TREE_CHANNELS.move, async (event, rootPath: string, sourceRelativePath: string, targetDirectoryRelativePath: string) => {
+    const sourcePath = resolveWorkspacePath(rootPath, sourceRelativePath)
+    const targetDirectory = resolveWorkspacePath(rootPath, targetDirectoryRelativePath)
+    if (!sourcePath || !targetDirectory || resolve(sourcePath) === resolve(rootPath)) {
+      return fileTreeResult(false, 'Invalid move target')
+    }
+
+    const targetPath = resolve(targetDirectory, basename(sourcePath))
+    if (!isPathWithinRoot(rootPath, targetPath)) return fileTreeResult(false, 'Invalid target path')
+
+    try {
+      if (!await authorize(event, { workspaceRoot: rootPath, toolName: 'legacy.file-tree.move', actionRisk: 'write', source: 'renderer-user', preview: { summary: 'Move workspace file', paths: [sourcePath, targetPath], truncated: false } })) return fileTreeResult(false, 'Move denied by workspace policy')
+      const [sourceInfo, targetDirectoryInfo] = await Promise.all([stat(sourcePath), stat(targetDirectory)])
+      if (!sourceInfo.isFile()) return fileTreeResult(false, 'Only files can be moved')
+      if (!targetDirectoryInfo.isDirectory()) return fileTreeResult(false, 'Target is not a directory')
+      if (resolve(sourcePath) === resolve(targetPath)) {
+        return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, sourcePath))
+      }
+
+      try {
+        await stat(targetPath)
+        return fileTreeResult(false, 'A file with the same name already exists')
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') throw err
+      }
+
+      await rename(sourcePath, targetPath)
+      return fileTreeResult(true, undefined, normalizeRelativePath(rootPath, targetPath))
+    } catch (err: any) {
+      return fileTreeResult(false, err.message || 'Failed to move file')
     }
   })
 

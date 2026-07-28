@@ -4874,6 +4874,7 @@ body.is-running {
   border-radius: 4px;
   background: #111113;
   box-shadow: none;
+  overflow: visible;
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper::before {
@@ -5095,7 +5096,8 @@ body.is-running {
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button:hover,
-.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button[data-active="true"] {
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button[data-active="true"],
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button[data-highlighted="true"] {
   background: rgba(255,255,255,0.055);
   color: rgba(255,255,255,0.78);
 }
@@ -5932,7 +5934,7 @@ body.is-running {
   border-radius: 4px;
   background: #111113;
   box-shadow: none;
-  overflow: hidden;
+  overflow: visible;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -6113,7 +6115,8 @@ body.is-running {
 }
 
 .janus-chat--workspace .janus-chat-model-menu button:hover,
-.janus-chat--workspace .janus-chat-model-menu button[data-active="true"] {
+.janus-chat--workspace .janus-chat-model-menu button[data-active="true"],
+.janus-chat--workspace .janus-chat-model-menu button[data-highlighted="true"] {
   background: rgba(255, 255, 255, 0.055);
   color: rgba(255, 255, 255, 0.78);
 }
@@ -6124,6 +6127,33 @@ body.is-running {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.janus-chat-model-menu-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 9px 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.38);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.janus-chat-model-menu-heading strong {
+  color: rgba(255, 120, 48, 0.9);
+  font-size: 10px;
+}
+
+.janus-chat-model-menu-empty {
+  padding: 12px 9px;
+  color: rgba(255, 255, 255, 0.34);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  text-align: center;
 }
 
 .janus-chat--workspace .janus-chat-model-notice {

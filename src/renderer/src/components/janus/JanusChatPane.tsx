@@ -17,7 +17,6 @@ export function JanusChatPane({ focused }: { focused: boolean }) {
       modelOptions={chat.modelOptions}
       activeModel={chat.activeModel}
       modelNotice={chat.modelNotice}
-      onCycleModel={chat.cycleModel}
       onSelectModel={chat.selectModel}
       onSend={chat.send}
       onStop={chat.stop}

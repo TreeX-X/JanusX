@@ -36,6 +36,12 @@ const VERTEX_REGIONS = [
 
 type ProviderType = 'openai-compatible' | 'vertex-ai'
 
+function notifyJanusLlmConfigChanged(preferDefault: boolean, updatedProviderId?: string): void {
+  window.dispatchEvent(new CustomEvent('janus:llm-config-changed', {
+    detail: { preferDefault, updatedProviderId },
+  }))
+}
+
 export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: LlmConfigModalProps) {
   const modalRootRef = useRef<HTMLDivElement | null>(null)
   const [providerType, setProviderType] = useState<ProviderType>('openai-compatible')
@@ -122,6 +128,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
     try {
       await setDefaultProvider(providerId)
       setDefaultProviderId(providerId)
+      notifyJanusLlmConfigChanged(true, providerId)
       void refreshRuntimeStatus()
     } catch (error) {
       console.error('Failed to set default provider:', error)
@@ -158,6 +165,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
 
   const handleDelete = async (id: string) => {
     await removeProvider(id)
+    notifyJanusLlmConfigChanged(defaultProviderId === id, id)
     await loadProviders()
     if (editingId === id) resetForm()
   }
@@ -233,6 +241,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       if (result.success) {
         setSaveStatus('success')
         await loadProviders()
+        notifyJanusLlmConfigChanged(defaultProviderId === null || defaultProviderId === settings.id, settings.id)
         void refreshRuntimeStatus()
         setTimeout(() => {
           resetForm()

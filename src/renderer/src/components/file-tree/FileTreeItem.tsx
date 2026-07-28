@@ -1,6 +1,14 @@
-import { useCallback, type DragEvent, type MouseEvent } from 'react'
+import { useCallback, useState, type DragEvent, type MouseEvent } from 'react'
 import type { FileNode, GitFileChange } from '@/types'
-import { setWorkspaceFileDragData } from '@/lib/terminal-file-reference'
+import {
+  clearWorkspaceFileDragData,
+  getActiveWorkspaceFileDragData,
+  hasWorkspaceFileDrag,
+  readWorkspaceFileDragData,
+  setWorkspaceFileDragData,
+  type WorkspaceFileDragPayload,
+} from '@/lib/terminal-file-reference'
+import { getParentPath } from '@/features/workspace/file-tree'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { classifyFile } from '@/lib/file-classification'
 import { resolveFilePresentation } from '@/lib/file-presentation'
@@ -16,8 +24,19 @@ const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; colo
   UU: { label: '!', color: '#e05f4a' },
 }
 
+function canMoveFileToDirectory(
+  payload: WorkspaceFileDragPayload | null,
+  targetDirectoryPath: string,
+  workspacePath: string,
+): payload is WorkspaceFileDragPayload & { type: 'file' } {
+  return payload?.type === 'file'
+    && payload.workspacePath === workspacePath
+    && getParentPath(payload.path) !== targetDirectoryPath
+}
+
 export interface FileTreeItemProps {
   node: FileNode
+  workspacePath: string
   depth: number
   activeFilePath: string | null
   expanded: boolean
@@ -28,11 +47,13 @@ export interface FileTreeItemProps {
   onSelect: (path: string) => void
   onToggleDirectory: (node: FileNode) => void
   onOpenFile: (path: string) => void
+  onMoveFile: (sourcePath: string, targetDirectoryPath: string, workspacePath: string) => void | Promise<void>
   onOpenContextMenu: (event: MouseEvent<HTMLDivElement>, node: FileNode) => void
 }
 
 export function FileTreeItem({
   node,
+  workspacePath,
   depth,
   activeFilePath,
   expanded,
@@ -43,6 +64,7 @@ export function FileTreeItem({
   onSelect,
   onToggleDirectory,
   onOpenFile,
+  onMoveFile,
   onOpenContextMenu,
 }: FileTreeItemProps) {
   const isFolder = node.type === 'directory'
@@ -50,6 +72,7 @@ export function FileTreeItem({
   const isGitIgnored = node.isGitIgnored === true
   const changeVisual = !isFolder && fileChange ? FILE_CHANGE_VISUALS[fileChange.status] : null
   const presentation = resolveFilePresentation(classifyFile(node.path, node.type))
+  const [dropActive, setDropActive] = useState(false)
 
   const handleClick = useCallback(() => {
     if (isFolder) {
@@ -69,15 +92,39 @@ export function FileTreeItem({
 
   const handleDragStart = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      if (isFolder) return
       setWorkspaceFileDragData(event.dataTransfer, {
-        type: 'file',
+        type: node.type,
         name: node.name,
         path: node.path,
+        workspacePath,
       })
     },
-    [isFolder, node.name, node.path],
+    [node.name, node.path, node.type, workspacePath],
   )
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    const payload = getActiveWorkspaceFileDragData()
+    if (!isFolder || !hasWorkspaceFileDrag(event.dataTransfer) || !canMoveFileToDirectory(payload, node.path, workspacePath)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDropActive(true)
+  }, [isFolder, node.path, workspacePath])
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false)
+  }, [])
+
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    setDropActive(false)
+    if (!isFolder) return
+    const payload = readWorkspaceFileDragData(event.dataTransfer) ?? getActiveWorkspaceFileDragData()
+    if (!canMoveFileToDirectory(payload, node.path, workspacePath)) return
+    event.preventDefault()
+    event.stopPropagation()
+    clearWorkspaceFileDragData()
+    void onMoveFile(payload.path, node.path, payload.workspacePath)
+  }, [isFolder, node.path, onMoveFile, workspacePath])
 
   const handleContextMenu = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -95,11 +142,16 @@ export function FileTreeItem({
         data-file-path={node.path}
         data-selected={isActive}
         data-git-ignored={isGitIgnored ? 'true' : undefined}
+        data-drop-target={dropActive ? 'true' : undefined}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
-        draggable={!isFolder}
+        draggable
         onDragStart={handleDragStart}
+        onDragEnd={clearWorkspaceFileDragData}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         className={styles.row}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
@@ -136,6 +188,7 @@ export function FileTreeItem({
             <FileTreeItem
               key={child.path}
               node={child}
+              workspacePath={workspacePath}
               depth={depth + 1}
               activeFilePath={activeFilePath}
               expanded={expandedPaths.has(child.path)}
@@ -146,6 +199,7 @@ export function FileTreeItem({
               onSelect={onSelect}
               onToggleDirectory={onToggleDirectory}
               onOpenFile={onOpenFile}
+              onMoveFile={onMoveFile}
               onOpenContextMenu={onOpenContextMenu}
             />
           ))}

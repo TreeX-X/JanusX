@@ -94,10 +94,12 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-desktop-smoke-'))
     const userDataDir = join(fixtureRoot, 'user-data')
     const workspacePath = join(fixtureRoot, 'workspace')
+    const secondWorkspacePath = join(fixtureRoot, 'workspace-two')
     const projectPath = join(fixtureRoot, 'vite-project')
     await Promise.all([
       mkdir(userDataDir, { recursive: true }),
       mkdir(workspacePath, { recursive: true }),
+      mkdir(secondWorkspacePath, { recursive: true }),
       mkdir(join(projectPath, 'src'), { recursive: true }),
     ])
     await Promise.all([
@@ -142,8 +144,18 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       layout: { mode: 'grid', positions: [] },
     })
 
+    const secondWorkspace = await page.evaluate(
+      ({ workspacePath }) =>
+        (window as DesktopWindow).electron.workspace.create({
+          name: 'Desktop smoke workspace two',
+          path: workspacePath,
+        }),
+      { workspacePath: secondWorkspacePath },
+    )
+
     const listed = await page.evaluate(() => (window as DesktopWindow).electron.workspace.list())
     expect(listed).toContainEqual(workspace)
+    expect(listed).toContainEqual(secondWorkspace)
     const loaded = await page.evaluate(
       (id) => (window as DesktopWindow).electron.workspace.load(id),
       workspace.id,
@@ -156,13 +168,61 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     const workspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace' }).first()
     await expect(workspaceRow).toBeVisible()
+    const secondWorkspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace two' }).first()
+    await expect(secondWorkspaceRow).toBeVisible()
+    const secondWorkspaceRowBox = await secondWorkspaceRow.boundingBox()
     const workspaceRowBox = await workspaceRow.boundingBox()
-    if (!workspaceRowBox) throw new Error('Workspace row has no layout box')
+    if (!workspaceRowBox || !secondWorkspaceRowBox) throw new Error('Workspace rows have no layout box')
+    await page.mouse.move(secondWorkspaceRowBox.x + secondWorkspaceRowBox.width / 2, secondWorkspaceRowBox.y + secondWorkspaceRowBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(secondWorkspaceRowBox.x + secondWorkspaceRowBox.width / 2, secondWorkspaceRowBox.y + 4)
+    await page.mouse.move(workspaceRowBox.x + workspaceRowBox.width / 2, workspaceRowBox.y + workspaceRowBox.height / 2, { steps: 6 })
+    await page.waitForTimeout(360)
+    await page.mouse.up()
+    const groupNameInput = page.getByRole('textbox', { name: '分组名称' })
+    await expect(groupNameInput).toBeVisible()
+    await groupNameInput.fill('Desktop smoke group')
+    await groupNameInput.press('Enter')
+    await expect(page.getByText('Desktop smoke group', { exact: true })).toBeVisible()
+    await expect.poll(async () => page.evaluate(async ({ firstId, secondId }) => {
+      const workspaces = await (window as DesktopWindow).electron.workspace.list()
+      const first = workspaces.find((item) => item.id === firstId)
+      const second = workspaces.find((item) => item.id === secondId)
+      return {
+        sameGroup: Boolean(first?.sidebarGroup?.id && first.sidebarGroup.id === second?.sidebarGroup?.id),
+        groupName: first?.sidebarGroup?.name,
+      }
+    }, { firstId: workspace.id, secondId: secondWorkspace.id })).toEqual({
+      sameGroup: true,
+      groupName: 'Desktop smoke group',
+    })
+
+    await secondWorkspaceRow.click({ button: 'right' })
+    await page.getByRole('button', { name: '移出分组', exact: true }).click()
+    await expect(page.getByText('Desktop smoke group', { exact: true })).toHaveCount(0)
+    await expect.poll(async () => page.evaluate(async ({ firstId, secondId }) => {
+      const workspaces = await (window as DesktopWindow).electron.workspace.list()
+      return workspaces
+        .filter((item) => item.id === firstId || item.id === secondId)
+        .every((item) => !item.sidebarGroup)
+    }, { firstId: workspace.id, secondId: secondWorkspace.id })).toBe(true)
+    await secondWorkspaceRow.click()
+    await expect(secondWorkspaceRow).toHaveAttribute('aria-current', 'true')
+    await workspaceRow.click()
+    await expect(workspaceRow).toHaveAttribute('aria-current', 'true')
+    await expect(page.evaluate(
+      (id) => (window as DesktopWindow).electron.workspace.delete(id),
+      secondWorkspace.id,
+    )).resolves.toEqual({ success: true })
+
     await page.mouse.move(workspaceRowBox.x + workspaceRowBox.width / 2, workspaceRowBox.y + workspaceRowBox.height / 2)
     await page.mouse.down()
     await page.waitForTimeout(650)
     await page.mouse.up()
     const launchModal = page.locator('.ws-config-modal')
+    await expect(launchModal).toHaveCount(0)
+    await workspaceRow.click({ button: 'right' })
+    await page.getByRole('button', { name: '运行配置…', exact: true }).click()
     await expect(launchModal).toBeVisible()
     await expect(launchModal.getByRole('button', { name: /分析/ })).toHaveCount(1)
     await expect(launchModal.getByRole('button', { name: '分析', exact: true })).toBeVisible()

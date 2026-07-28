@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import {
   getActiveWorkspacePath,
@@ -81,10 +81,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
     [activeWorkspaceId, workspaces],
   )
-  const activeWorkspaceName = useMemo(
-    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ?? '工作区',
-    [activeWorkspaceId, workspaces],
-  )
+  const fileTreeViewportRef = useRef<HTMLDivElement>(null)
   const fileChangeMap = useMemo(() => {
     const map = new Map<string, GitFileChange>()
     for (const change of gitStatus?.changes ?? []) {
@@ -141,8 +138,15 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     if (!activeWorkspacePath) return
     setExpandedPaths(new Set())
     setSearchQuery('')
+    if (fileTreeViewportRef.current) fileTreeViewportRef.current.scrollTop = 0
     void fetchGitStatus(activeWorkspacePath)
   }, [activeWorkspacePath, fetchGitStatus])
+
+  const finishFileTreeReveal = useCallback(() => {
+    useWorkspaceStore.setState((state) =>
+      state.fileTreeLoadState === 'revealing' ? { fileTreeLoadState: 'idle' } : {},
+    )
+  }, [])
 
   // 外部 FS 变更/重命名/删除后,丢弃树上已不存在的展开路径
   useEffect(() => {
@@ -414,6 +418,38 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     [getActiveWorkspace, namingDialog, reloadDirectory, runFileTreeMutation, setActiveFilePath],
   )
 
+  const handleMoveFile = useCallback(async (
+    sourcePath: string,
+    targetDirectoryPath: string,
+    sourceWorkspacePath: string,
+  ) => {
+    const workspace = getActiveWorkspace()
+    if (!workspace || workspace.path !== sourceWorkspacePath) return
+
+    const sourceParentPath = getParentPath(sourcePath)
+    if (sourceParentPath === targetDirectoryPath) return
+
+    const result = await runFileTreeMutation(() =>
+      window.electron.fileTree.move(workspace.path, sourcePath, targetDirectoryPath),
+    )
+    if (!result?.path || getActiveWorkspace()?.path !== sourceWorkspacePath) return
+
+    const targetPath = result.path
+    remapEditorPaths(
+      getAbsolutePath(workspace.path, sourcePath),
+      getAbsolutePath(workspace.path, targetPath),
+      workspace.path,
+    )
+    const currentActive = useWorkspaceStore.getState().activeFilePath
+    if (currentActive === sourcePath) setActiveFilePath(targetPath)
+    setExpandedPaths((current) => new Set(current).add(targetDirectoryPath))
+
+    await reloadDirectory(sourceParentPath, sourceWorkspacePath)
+    if (targetDirectoryPath !== sourceParentPath) {
+      await reloadDirectory(targetDirectoryPath, sourceWorkspacePath)
+    }
+  }, [getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+
   const handleDeleteContextTarget = useCallback(() => {
     if (!contextMenu || !contextMenu.target.node) return
     const workspace = getActiveWorkspace()
@@ -474,10 +510,11 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
           />
         </div>
         <div
+          ref={fileTreeViewportRef}
           data-testid="file-explorer-content"
           aria-busy={fileTreeLoadState === 'loading' || fileTreeLoadState === 'revealing'}
           aria-label="文件浏览器内容"
-          className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-1.5 text-xs"
+          className={`no-scrollbar min-h-0 flex-1 overflow-y-auto p-1.5 text-xs ${styles.treeViewport}`}
           onContextMenu={(event) => {
             event.preventDefault()
             // 空白区菜单:item 已 stopPropagation;这里再 stop 防冒泡到外层容器
@@ -487,7 +524,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         >
           <div className={`min-h-full ${styles.tree}`} data-file-tree-phase={fileTreeLoadState}>
             {fileTreeLoadState === 'loading' ? (
-              <FileTreeScanner workspaceName={activeWorkspaceName} />
+              <div className={styles.loadingState} role="status">正在加载文件树…</div>
             ) : fileTreeLoadState === 'error' ? (
               <div className={styles.loadError} role="alert">
                 <span>无法读取文件树</span>
@@ -505,6 +542,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                   <div key={node.path}>
                     <FileTreeItem
                       node={node}
+                      workspacePath={activeWorkspacePath ?? ''}
                       depth={0}
                       activeFilePath={activeFilePath}
                       expanded={expandedPaths.has(node.path) || filtered?.expandedDirs.has(node.path) === true}
@@ -517,14 +555,26 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                       onSelect={setActiveFilePath}
                       onToggleDirectory={handleToggleDirectory}
                       onOpenFile={openFileInEditorPanel}
+                      onMoveFile={handleMoveFile}
                       onOpenContextMenu={openContextMenu}
                     />
                   </div>
                 ))}
               </div>
             )}
-            {fileTreeLoadState === 'revealing' && <div className={styles.scanOverlay} aria-hidden="true" />}
           </div>
+          {fileTreeLoadState === 'revealing' && (
+            <div
+              className={styles.scanOverlay}
+              aria-hidden="true"
+              onAnimationEnd={(event) => {
+                if (event.target === event.currentTarget) finishFileTreeReveal()
+              }}
+            >
+              <div className={styles.scanMask} />
+              <div className={styles.scanBeam} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -576,22 +626,5 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         onCancel={() => setErrorMessage(null)}
       />
     </>
-  )
-}
-
-function FileTreeScanner({ workspaceName }: { workspaceName: string }) {
-  return (
-    <div className={styles.scanner} aria-live="polite">
-      <div className={styles.scanLabel}>正在扫描 {workspaceName}</div>
-      <div className={styles.skeletonRows} aria-hidden="true">
-        {[76, 52, 68, 43, 80, 58, 47].map((width, index) => (
-          <div key={index} className={styles.skeletonRow} style={{ '--skeleton-width': `${width}%`, '--skeleton-depth': index % 3 } as CSSProperties}>
-            <span className={styles.skeletonIcon} />
-            <span className={styles.skeletonName} />
-          </div>
-        ))}
-      </div>
-      <div className={styles.scanLine} />
-    </div>
   )
 }

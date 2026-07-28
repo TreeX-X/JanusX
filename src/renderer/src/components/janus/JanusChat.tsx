@@ -9,6 +9,15 @@ import type { ChatModelOption, JanusResourceController, Message } from './useJan
 import { MarkdownContent, StreamingText } from '../chat/ChatContent'
 import { Select } from '../ui/Select'
 
+type SelectionMenu = 'provider' | 'model'
+
+function getProviderMenuOptions(options: ChatModelOption[]): ChatModelOption[] {
+  return [...new Set(options.map((option) => option.providerId))]
+    .map((providerId) => options.find((option) => option.providerId === providerId && option.isProviderDefault)
+      ?? options.find((option) => option.providerId === providerId))
+    .filter((option): option is ChatModelOption => option !== undefined)
+}
+
 /* ════════════════════════════════════════════════════════════
    类型定义
    ════════════════════════════════════════════════════════════ */
@@ -36,8 +45,7 @@ interface JanusChatProps {
   activeModel?: ChatModelOption | null
   modelNotice?: string | null
   resourceController?: JanusResourceController
-  onCycleModel?: () => void
-  onSelectModel?: (providerId: string) => void
+  onSelectModel?: (providerId: string, modelId: string) => void
   /** 发送一条用户消�?*/
   onSend: (text: string) => void
   /** 停止当前流式输出 */
@@ -136,7 +144,6 @@ export function JanusChat({
   activeModel = null,
   modelNotice = null,
   resourceController,
-  onCycleModel = () => {},
   onSelectModel = () => {},
   onSend,
   onStop,
@@ -148,11 +155,24 @@ export function JanusChat({
   const [input, setInput] = useState('')
   const [rows, setRows] = useState(1)
   const [showNewMessageBadge, setShowNewMessageBadge] = useState(false)
-  const [showModelMenu, setShowModelMenu] = useState(false)
+  const [selectionMenu, setSelectionMenu] = useState<SelectionMenu | null>(null)
+  const [menuIndex, setMenuIndex] = useState(0)
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const chatRootRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
+  const historyDraftRef = useRef('')
+
+  const inputHistory = messages
+    .filter((message) => message.role === 'user')
+    .map((message) => message.content)
+  const providerOptions = getProviderMenuOptions(modelOptions)
+  const activeProviderModels = activeModel
+    ? modelOptions.filter((option) => option.providerId === activeModel.providerId)
+    : modelOptions
+  const menuOptions = selectionMenu === 'provider' ? providerOptions : activeProviderModels
 
   // 聚焦定时器句柄，effect 清理时清除，避免视图可见性变化打断流
   const focusTimerRef = useRef<number | null>(null)
@@ -204,6 +224,8 @@ export function JanusChat({
 
       setInput('')
       setRows(1)
+      setHistoryIndex(null)
+      historyDraftRef.current = ''
       setShowNewMessageBadge(false)
       isAtBottomRef.current = true
       scrollToBottom('auto')
@@ -216,36 +238,146 @@ export function JanusChat({
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     setInput(value)
+    setHistoryIndex(null)
     const lineCount = (value.match(/\n/g) || []).length + 1
     setRows(Math.min(4, Math.max(1, lineCount)))
   }, [])
 
-  // 快捷键：Enter 发送，Shift+Enter 换行
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const openSelectionMenu = useCallback((menu: SelectionMenu) => {
+    const options = menu === 'provider'
+      ? getProviderMenuOptions(modelOptions)
+      : activeModel
+        ? modelOptions.filter((option) => option.providerId === activeModel.providerId)
+        : modelOptions
+    const activeIndex = options.findIndex((option) => menu === 'provider'
+      ? option.providerId === activeModel?.providerId
+      : option.providerId === activeModel?.providerId && option.modelId === activeModel?.modelId)
+    setSelectionMenu(menu)
+    setMenuIndex(activeIndex >= 0 ? activeIndex : 0)
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }, [activeModel, modelOptions])
+
+  const selectMenuOption = useCallback((option: ChatModelOption) => {
+    if (selectionMenu === 'provider') {
+      const providerModel = modelOptions.find((candidate) =>
+        candidate.providerId === option.providerId && candidate.isProviderDefault)
+        ?? modelOptions.find((candidate) => candidate.providerId === option.providerId)
+      if (providerModel) onSelectModel(providerModel.providerId, providerModel.modelId)
+    } else {
+      onSelectModel(option.providerId, option.modelId)
+    }
+    setSelectionMenu(null)
+  }, [modelOptions, onSelectModel, selectionMenu])
+
+  const handleMenuKey = useCallback((key: string): boolean => {
+    if (!selectionMenu) return false
+    if (key === 'Escape') {
+      setSelectionMenu(null)
+      return true
+    }
+    if (['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(key)) {
+      const direction = key === 'ArrowUp' || key === 'ArrowLeft' ? -1 : 1
+      setMenuIndex((current) => menuOptions.length
+        ? (current + direction + menuOptions.length) % menuOptions.length
+        : 0)
+      return true
+    }
+    if (key === 'Enter') {
+      const option = menuOptions[menuIndex]
+      if (option) selectMenuOption(option)
+      return true
+    }
+    return false
+  }, [menuIndex, menuOptions, selectMenuOption, selectionMenu])
+
+  const replaceInput = useCallback((value: string) => {
+    setInput(value)
+    setRows(Math.min(4, Math.max(1, (value.match(/\n/g) || []).length + 1)))
+    window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(value.length, value.length))
+  }, [])
+
+  const handleChatKeyDownCapture = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
       e.preventDefault()
       e.stopPropagation()
-      onCycleModel()
-      setShowModelMenu(false)
+      openSelectionMenu('model')
       return
+    }
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault()
+      openSelectionMenu('provider')
+      return
+    }
+    if (handleMenuKey(e.key)) {
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+  }, [handleMenuKey, openSelectionMenu])
+
+  const handleChatPointerDownCapture = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    if (target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return
+    chatRootRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  // 快捷键：Enter 发送，Shift+Enter 换行
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.nativeEvent.isComposing) {
+      const textarea = e.currentTarget
+      const caret = textarea.selectionStart
+      const selectionCollapsed = caret === textarea.selectionEnd
+      const firstLineEnd = input.indexOf('\n') < 0 ? input.length : input.indexOf('\n')
+      const lastLineStart = input.lastIndexOf('\n') + 1
+      if (e.key === 'ArrowUp' && selectionCollapsed && caret <= firstLineEnd && inputHistory.length) {
+        e.preventDefault()
+        if (historyIndex === null) historyDraftRef.current = input
+        const nextIndex = historyIndex === null
+          ? inputHistory.length - 1
+          : Math.max(0, historyIndex - 1)
+        setHistoryIndex(nextIndex)
+        replaceInput(inputHistory[nextIndex])
+        return
+      }
+      if (e.key === 'ArrowDown' && selectionCollapsed && caret >= lastLineStart && historyIndex !== null) {
+        e.preventDefault()
+        const nextIndex = historyIndex + 1
+        if (nextIndex >= inputHistory.length) {
+          setHistoryIndex(null)
+          replaceInput(historyDraftRef.current)
+        } else {
+          setHistoryIndex(nextIndex)
+          replaceInput(inputHistory[nextIndex])
+        }
+        return
+      }
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
-  }, [handleSend, onCycleModel])
+  }, [handleSend, historyIndex, input, inputHistory, replaceInput])
 
   useEffect(() => {
-    if (!visible || !focused) return
+    if (!visible) return
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'p') return
-      event.preventDefault()
-      onCycleModel()
-      setShowModelMenu(false)
+      const chatRoot = chatRootRef.current
+      if (!chatRoot?.contains(document.activeElement)) return
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
+        event.preventDefault()
+        event.stopPropagation()
+        openSelectionMenu('model')
+        return
+      }
+      if (!selectionMenu || event.target === inputRef.current) return
+      if (handleMenuKey(event.key)) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
     }
-    document.addEventListener('keydown', handleGlobalKeyDown)
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [focused, onCycleModel, visible])
+    window.addEventListener('keydown', handleGlobalKeyDown, true)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true)
+  }, [handleMenuKey, openSelectionMenu, selectionMenu, visible])
 
   // 停止生成
   const handleStop = useCallback(() => {
@@ -267,6 +399,8 @@ export function JanusChat({
     onClear()
     setInput('')
     setRows(1)
+    setHistoryIndex(null)
+    historyDraftRef.current = ''
   }, [onClear])
 
   if (!visible) return null
@@ -281,7 +415,11 @@ export function JanusChat({
 
   return (
     <div
+      ref={chatRootRef}
+      tabIndex={-1}
       className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
+      onKeyDownCapture={handleChatKeyDownCapture}
+      onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
     >
       <div className="janus-chat-toolbar">
@@ -492,7 +630,7 @@ export function JanusChat({
             scrollToBottom('smooth')
           }}
         >
-          �?新消�?
+          新消息
         </button>
       )}
 
@@ -527,39 +665,45 @@ export function JanusChat({
           <button
             type="button"
             className="janus-chat-model-tag"
-            onClick={() => {
-              if (modelOptions.length > 1) {
-                setShowModelMenu((current) => !current)
-                return
-              }
-              onCycleModel()
-            }}
-            title="Ctrl+P switch configured model"
+            onClick={() => openSelectionMenu('model')}
+            title="Ctrl+P open model menu"
           >
             <span>Model:</span>
             <strong>{activeModelLabel}</strong>
           </button>
           <div className="janus-chat-shortcuts">
             <span>JANUS.md</span>
-            <span><kbd>tab</kbd> agents</span>
+            <span><kbd>tab</kbd> providers</span>
             <span><kbd>ctrl+p</kbd> models</span>
           </div>
-          {showModelMenu && modelOptions.length > 1 && (
-            <div className="janus-chat-model-menu">
-              {modelOptions.map((option) => (
+          {selectionMenu && (
+            <div className="janus-chat-model-menu" role="listbox" aria-label={`${selectionMenu} selection`}>
+              <div className="janus-chat-model-menu-heading">
+                <strong>{selectionMenu === 'provider' ? 'Providers' : 'Models'}</strong>
+                <span>↑ ↓ ← → · Enter</span>
+              </div>
+              {menuOptions.map((option, index) => (
                 <button
-                  key={option.providerId}
+                  key={`${option.providerId}:${option.modelId}`}
                   type="button"
-                  data-active={activeModel?.providerId === option.providerId}
-                  onClick={() => {
-                    onSelectModel(option.providerId)
-                    setShowModelMenu(false)
-                  }}
+                  role="option"
+                  aria-selected={index === menuIndex}
+                  data-active={selectionMenu === 'provider'
+                    ? activeModel?.providerId === option.providerId
+                    : activeModel?.providerId === option.providerId && activeModel.modelId === option.modelId}
+                  data-highlighted={index === menuIndex}
+                  onMouseEnter={() => setMenuIndex(index)}
+                  onClick={() => selectMenuOption(option)}
                 >
                   <span>{option.providerName}</span>
                   <strong>{option.modelId}</strong>
                 </button>
               ))}
+              {menuOptions.length === 0 && (
+                <div className="janus-chat-model-menu-empty">
+                  No configured {selectionMenu}
+                </div>
+              )}
             </div>
           )}
         </div>

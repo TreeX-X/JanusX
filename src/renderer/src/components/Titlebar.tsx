@@ -42,7 +42,6 @@ export function Titlebar() {
     stop: handleChatStop,
     retry: handleChatRetry,
     clear: handleChatClear,
-    cycleModel: handleChatCycleModel,
     selectModel: handleChatSelectModel,
   } = useJanusChatController()
 
@@ -295,7 +294,6 @@ export function Titlebar() {
           modelOptions={modelOptions}
           activeModel={activeModel}
           modelNotice={modelNotice}
-          onChatCycleModel={handleChatCycleModel}
           onChatSelectModel={handleChatSelectModel}
           onChatSend={handleChatSend}
           onChatStop={handleChatStop}

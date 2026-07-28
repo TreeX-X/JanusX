@@ -220,6 +220,7 @@ describe('file explorer delete confirmation', () => {
     const onOpenContextMenu = vi.fn()
     const props: FileTreeItemProps = {
       node,
+      workspacePath: 'C:\\workspace',
       depth: 0,
       activeFilePath: null,
       expanded: false,
@@ -230,6 +231,7 @@ describe('file explorer delete confirmation', () => {
       onSelect,
       onToggleDirectory: vi.fn(),
       onOpenFile: vi.fn(),
+      onMoveFile: vi.fn(),
       onOpenContextMenu,
     }
     const tree = withSynchronousHooks(() => FileTreeItem(props) as TestElement)

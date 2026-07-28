@@ -141,6 +141,7 @@ describe('semantic file icon', () => {
 
   it('wires production file rows to semantic icons without merging selection, name and Git channels', () => {
     const commonProps = {
+      workspacePath: 'C:\\workspace',
       depth: 0,
       expanded: false,
       expandedPaths: new Set<string>(),
@@ -149,6 +150,7 @@ describe('semantic file icon', () => {
       onSelect: vi.fn(),
       onToggleDirectory: vi.fn(),
       onOpenFile: vi.fn(),
+      onMoveFile: vi.fn(),
       onOpenContextMenu: vi.fn(),
     }
     const typeScriptNode = {
@@ -206,6 +208,7 @@ describe('semantic file icon', () => {
   it('marks folders containing git changes with an aggregate dot', () => {
     const baseProps = {
       node: { name: 'src', path: 'src', type: 'directory' } as FileNode,
+      workspacePath: 'C:\\workspace',
       depth: 0,
       activeFilePath: null,
       expanded: false,
@@ -215,6 +218,7 @@ describe('semantic file icon', () => {
       onSelect: vi.fn(),
       onToggleDirectory: vi.fn(),
       onOpenFile: vi.fn(),
+      onMoveFile: vi.fn(),
       onOpenContextMenu: vi.fn(),
     }
 

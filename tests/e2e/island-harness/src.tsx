@@ -75,10 +75,17 @@ useWorkspaceStore.setState({
 })
 
 const controllerData = {
-  messages: [{ id: 'shared-message', role: 'assistant' as const, content: 'Shared controller message', timestamp: 1 }],
+  messages: [
+    { id: 'prompt-one', role: 'user' as const, content: 'First recalled prompt', timestamp: 1 },
+    { id: 'shared-message', role: 'assistant' as const, content: 'Shared controller message', timestamp: 2 },
+    { id: 'prompt-two', role: 'user' as const, content: 'Latest recalled prompt', timestamp: 3 },
+  ],
   error: null,
-  modelOptions: [],
-  activeModel: null,
+  modelOptions: [
+    { providerId: 'provider-a', providerName: 'Provider A', modelId: 'model-a1', label: 'Provider A / model-a1', isDefault: true, isProviderDefault: true },
+    { providerId: 'provider-a', providerName: 'Provider A', modelId: 'model-a2', label: 'Provider A / model-a2', isDefault: false, isProviderDefault: false },
+    { providerId: 'provider-b', providerName: 'Provider B', modelId: 'model-b1', label: 'Provider B / model-b1', isDefault: false, isProviderDefault: true },
+  ],
   modelNotice: null,
 }
 
@@ -88,7 +95,7 @@ function Harness() {
   const [doubleCount, setDoubleCount] = useState(0)
   const [callbackVersion, setCallbackVersion] = useState(1)
   const [calledVersion, setCalledVersion] = useState(0)
-  const [cycleCount, setCycleCount] = useState(0)
+  const [activeModel, setActiveModel] = useState(controllerData.modelOptions[0])
   const [clearCount, setClearCount] = useState(0)
   const [stopCount, setStopCount] = useState(0)
   const [isStreaming, setIsStreaming] = useState(true)
@@ -100,14 +107,18 @@ function Harness() {
 
   const controller = {
     ...controllerData,
+    activeModel,
     isStreaming,
     pendingContent: isStreaming ? 'Shared pending stream' : '',
   }
   const chatProps = {
     ...controller,
     modeColor: '#ff7830',
-    onCycleModel: () => setCycleCount((count) => count + 1),
-    onSelectModel: () => undefined,
+    onSelectModel: (providerId: string, modelId: string) => {
+      const next = controllerData.modelOptions.find((option) =>
+        option.providerId === providerId && option.modelId === modelId)
+      if (next) setActiveModel(next)
+    },
     onSend: () => undefined,
     onStop: () => setStopCount((count) => count + 1),
     onRetry: () => undefined,
@@ -134,7 +145,8 @@ function Harness() {
       data-single-count={singleCount}
       data-double-count={doubleCount}
       data-called-version={calledVersion}
-      data-cycle-count={cycleCount}
+      data-active-provider={activeModel.providerId}
+      data-active-model={activeModel.modelId}
       data-clear-count={clearCount}
       data-stop-count={stopCount}
       data-terminal-tab-count={terminalTabCount}
@@ -161,8 +173,7 @@ function Harness() {
         }}
         onDismiss={() => dispatch({ type: 'dismiss' })}
         {...controller}
-        onChatCycleModel={chatProps.onCycleModel}
-        onChatSelectModel={() => undefined}
+        onChatSelectModel={chatProps.onSelectModel}
         onChatSend={() => undefined}
         onChatStop={chatProps.onStop}
         onChatRetry={() => undefined}

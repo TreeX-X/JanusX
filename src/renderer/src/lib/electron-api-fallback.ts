@@ -17,6 +17,7 @@ export function installElectronApiFallback(): void {
       createFile: () => Promise.resolve({ success: false, error: 'Electron file tree API is unavailable' }),
       createDirectory: () => Promise.resolve({ success: false, error: 'Electron file tree API is unavailable' }),
       rename: () => Promise.resolve({ success: false, error: 'Electron file tree API is unavailable' }),
+      move: () => Promise.resolve({ success: false, error: 'Electron file tree API is unavailable' }),
       delete: () => Promise.resolve({ success: false, error: 'Electron file tree API is unavailable' }),
       reveal: () => Promise.resolve({ success: false, error: 'Electron file tree API is unavailable' }),
       onChanged: () => () => {},

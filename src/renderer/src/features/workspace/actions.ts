@@ -78,14 +78,6 @@ export async function loadWorkspaceFileTree(
     fileTreeLoadState: shouldAnimate ? 'revealing' : 'idle',
   })
 
-  if (shouldAnimate) {
-    window.setTimeout(() => {
-      if (generation !== fileTreeLoadGeneration || getActiveWorkspacePath() !== workspacePath) return
-      useWorkspaceStore.setState((state) =>
-        state.fileTreeLoadState === 'revealing' ? { fileTreeLoadState: 'idle' } : {},
-      )
-    }, 760)
-  }
 }
 
 /** 重拉单个目录的 children 并挂回树上;工作区已切换或全量刷新已开始时丢弃结果 */

@@ -54,11 +54,12 @@ describe('legacy renderer policy boundary', () => {
       [FILE_TREE_CHANNELS.createFile, ['C:\\workspace', '', 'a.txt']],
       [FILE_TREE_CHANNELS.createDirectory, ['C:\\workspace', '', 'dir']],
       [FILE_TREE_CHANNELS.rename, ['C:\\workspace', 'a.txt', 'b.txt']],
+      [FILE_TREE_CHANNELS.move, ['C:\\workspace', 'a.txt', 'dir']],
       [FILE_TREE_CHANNELS.delete, ['C:\\workspace', 'a.txt']],
     ] as const) {
       await expect(handler(channel)(event, ...args)).resolves.toMatchObject({ success: false })
     }
-    expect(denied).toHaveBeenCalledTimes(7)
+    expect(denied).toHaveBeenCalledTimes(8)
     expect(denied.mock.calls.every(([, request]) => request.source === 'renderer-user')).toBe(true)
     expect(mocks.writeFile).not.toHaveBeenCalled()
   })

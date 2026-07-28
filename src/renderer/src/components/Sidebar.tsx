@@ -1,17 +1,148 @@
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
-import type { Workspace, Terminal } from '@/types'
+import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 import { chooseAndCreateWorkspace, getActiveWorkspacePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
 import {
+  clearWorkspaceSidebarGroup,
+  groupWorkspaceInSidebar,
+  moveWorkspaceInSidebar,
+  moveWorkspaceToSidebarBoundary,
+  nextWorkspaceSidebarGroupName,
+  normalizeWorkspaceSidebarLayout,
+  removeWorkspaceFromSidebarGroup,
+  renameWorkspaceSidebarGroup,
+  sortWorkspaceSidebar,
+  workspaceSidebarLayoutsEqual,
+  type WorkspaceSidebarBoundary,
+  type WorkspaceSidebarDropPosition,
+} from '../../../shared/workspace-sidebar'
+import {
   JANUS_PROJECT_CANDIDATE_EVENT,
   type JanusProjectCandidate,
 } from './janus/janusProjectCandidate'
+
+const WORKSPACE_DRAG_TYPE = 'application/x-janus-workspace'
+const GROUP_HOVER_DELAY = 300
+const MENU_MARGIN = 8
+
+type WorkspaceDropIntent =
+  | { mode: WorkspaceSidebarDropPosition | 'group-pending' | 'group'; targetId: string }
+  | { mode: WorkspaceSidebarBoundary; targetId: null }
+
+type WorkspaceContextMenuState = {
+  x: number
+  y: number
+  target:
+    | { kind: 'workspace'; workspace: Workspace }
+    | { kind: 'group'; group: WorkspaceSidebarGroup }
+}
+
+interface WorkspaceContextMenuProps {
+  menu: WorkspaceContextMenuState
+  onRunConfiguration: (workspace: Workspace) => void
+  onRenameGroup: (group: WorkspaceSidebarGroup) => void
+  onRemoveFromGroup: (workspaceId: string) => void
+  onClearGroup: (groupId: string) => void
+  onDelete: (workspace: Workspace) => void
+}
+
+function WorkspaceContextMenu({
+  menu,
+  onRunConfiguration,
+  onRenameGroup,
+  onRemoveFromGroup,
+  onClearGroup,
+  onDelete,
+}: WorkspaceContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ x: menu.x, y: menu.y })
+
+  useLayoutEffect(() => {
+    const element = menuRef.current
+    if (!element) return
+    const rect = element.getBoundingClientRect()
+    setPosition({
+      x: Math.max(MENU_MARGIN, Math.min(menu.x, window.innerWidth - rect.width - MENU_MARGIN)),
+      y: Math.max(MENU_MARGIN, Math.min(menu.y, window.innerHeight - rect.height - MENU_MARGIN)),
+    })
+  }, [menu.x, menu.y])
+
+  const itemClassName = 'block w-full border-0 bg-transparent px-3 py-1.5 text-left text-[12px] text-[#c4c4c4] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-white'
+  const target = menu.target
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="fixed overflow-hidden rounded-md py-1"
+      style={{
+        left: position.x,
+        top: position.y,
+        width: 188,
+        zIndex: 1200,
+        background: 'rgba(25,25,25,0.98)',
+        border: '1px solid rgba(255,255,255,0.09)',
+        boxShadow: '0 14px 36px rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(16px)',
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+    >
+      {target.kind === 'workspace' ? (
+        <>
+          <button type="button" className={itemClassName} onClick={() => onRunConfiguration(target.workspace)}>
+            运行配置…
+          </button>
+          {target.workspace.sidebarGroup && (
+            <>
+              <div className="my-1 h-px bg-[rgba(255,255,255,0.07)]" />
+              <button type="button" className={itemClassName} onClick={() => onRenameGroup(target.workspace.sidebarGroup!)}>
+                重命名分组…
+              </button>
+              <button type="button" className={itemClassName} onClick={() => onRemoveFromGroup(target.workspace.id)}>
+                移出分组
+              </button>
+            </>
+          )}
+          <div className="my-1 h-px bg-[rgba(255,255,255,0.07)]" />
+          <button
+            type="button"
+            className={`${itemClassName} !text-[#ff7777] hover:!bg-[rgba(255,88,88,0.1)]`}
+            onClick={() => onDelete(target.workspace)}
+          >
+            删除工作区
+          </button>
+        </>
+      ) : (
+        <>
+          <button type="button" className={itemClassName} onClick={() => onRenameGroup(target.group)}>
+            重命名分组…
+          </button>
+          <button type="button" className={itemClassName} onClick={() => onClearGroup(target.group.id)}>
+            解除分组
+          </button>
+        </>
+      )}
+    </div>,
+    document.body,
+  )
+}
+
+function createWorkspaceSidebarGroupId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `workspace-group-${crypto.randomUUID()}`
+  }
+  return `workspace-group-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
 
 function terminalStatusLabel(status: Terminal['status']): string {
   switch (status) {
@@ -40,27 +171,42 @@ function terminalPresetLabel(preset: Terminal['preset']): string {
 }
 
 export function Sidebar() {
-  const longPressDuration = 450
-  const longPressVisualDelay = 120
-  const longPressProgressDuration = Math.max(120, longPressDuration - longPressVisualDelay)
-  const { workspaces, activeWorkspaceId, terminals, activeTerminalId, terminalSnapshots, setActiveWorkspace, addWorkspace, removeWorkspace } =
+  const { workspaces, activeWorkspaceId, terminals, activeTerminalId, terminalSnapshots, setWorkspaces, setActiveWorkspace, addWorkspace, removeWorkspace } =
     useWorkspaceStore()
+  const orderedWorkspaces = useMemo(() => sortWorkspaceSidebar(workspaces), [workspaces])
   const setLoadState = useAppStore((s) => s.setLoadState)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
 
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null)
-  const [longPressingId, setLongPressingId] = useState<string | null>(null)
-  const [longPressProgressId, setLongPressProgressId] = useState<string | null>(null)
-  const [longPressCompletedId, setLongPressCompletedId] = useState<string | null>(null)
   const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
   const [projectCandidate, setProjectCandidate] = useState<JanusProjectCandidate | null>(null)
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([])
-  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pressVisualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pressTargetRef = useRef<string | null>(null)
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<string[]>([])
+  const [contextMenu, setContextMenu] = useState<WorkspaceContextMenuState | null>(null)
+  const [draggedWorkspaceId, setDraggedWorkspaceId] = useState<string | null>(null)
+  const [dropIntent, setDropIntent] = useState<WorkspaceDropIntent | null>(null)
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null)
+  const [groupNameDraft, setGroupNameDraft] = useState('')
   const suppressClickRef = useRef<string | null>(null)
+  const draggedWorkspaceIdRef = useRef<string | null>(null)
+  const dropIntentRef = useRef<WorkspaceDropIntent | null>(null)
+  const groupHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const groupHoverTargetRef = useRef<string | null>(null)
+  const layoutSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const skipRenameBlurRef = useRef(false)
+
+  const groupMembersById = useMemo(() => {
+    const groups = new Map<string, Workspace[]>()
+    for (const workspace of orderedWorkspaces) {
+      const id = workspace.sidebarGroup?.id
+      if (!id) continue
+      const members = groups.get(id) ?? []
+      members.push(workspace)
+      groups.set(id, members)
+    }
+    return groups
+  }, [orderedWorkspaces])
 
   useEffect(() => {
     const openCandidate = (event: Event) => {
@@ -74,6 +220,28 @@ export function Sidebar() {
     return () => window.removeEventListener(JANUS_PROJECT_CANDIDATE_EVENT, openCandidate)
   }, [workspaces])
 
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('blur', close)
+    window.addEventListener('resize', close)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('blur', close)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [contextMenu])
+
+  useEffect(() => () => {
+    if (groupHoverTimerRef.current) clearTimeout(groupHoverTimerRef.current)
+  }, [])
+
   const handleAddWorkspace = useCallback(async () => {
     try {
       const workspace = await chooseAndCreateWorkspace()
@@ -85,6 +253,30 @@ export function Sidebar() {
       console.error('Failed to create workspace:', err)
     }
   }, [addWorkspace, setActiveWorkspace, setLoadState])
+
+  const persistWorkspaceLayout = useCallback((nextWorkspaces: Workspace[]) => {
+    setWorkspaces(nextWorkspaces)
+    layoutSaveQueueRef.current = layoutSaveQueueRef.current
+      .then(async () => {
+        await Promise.all(nextWorkspaces.map((workspace) => window.electron.workspace.update(workspace.id, {
+          sidebarOrder: workspace.sidebarOrder,
+          sidebarGroup: workspace.sidebarGroup,
+        })))
+      })
+      .catch((error) => {
+        console.error('Failed to persist workspace sidebar layout:', error)
+      })
+  }, [setWorkspaces])
+
+  const updateWorkspaceLayout = useCallback((
+    update: (current: Workspace[]) => Workspace[],
+  ): boolean => {
+    const current = sortWorkspaceSidebar(useWorkspaceStore.getState().workspaces)
+    const next = normalizeWorkspaceSidebarLayout(update(current))
+    if (workspaceSidebarLayoutsEqual(current, next)) return false
+    persistWorkspaceLayout(next)
+    return true
+  }, [persistWorkspaceLayout])
 
   const handleDeleteClick = useCallback(
     (ws: Workspace, e: React.MouseEvent) => {
@@ -99,6 +291,7 @@ export function Sidebar() {
     try {
       await window.electron.workspace.delete(deleteTarget.id)
       removeWorkspace(deleteTarget.id)
+      updateWorkspaceLayout((current) => current)
       setExpandedWorkspaceIds((current) => current.filter((id) => id !== deleteTarget.id))
       if (workspaces.length <= 1) {
         setLoadState('no-workspace')
@@ -115,7 +308,7 @@ export function Sidebar() {
       console.error('Failed to delete workspace:', err)
     }
     setDeleteTarget(null)
-  }, [deleteTarget, removeWorkspace, workspaces.length, setLoadState])
+  }, [deleteTarget, removeWorkspace, workspaces.length, setLoadState, updateWorkspaceLayout])
 
   const handleSelect = useCallback(
     async (id: string) => {
@@ -154,72 +347,246 @@ export function Sidebar() {
     []
   )
 
-  const cancelLongPress = useCallback(() => {
-    const hadActivePress = !!pressTargetRef.current
-    if (pressTimerRef.current) {
-      clearTimeout(pressTimerRef.current)
-      pressTimerRef.current = null
-    }
-    if (pressVisualTimerRef.current) {
-      clearTimeout(pressVisualTimerRef.current)
-      pressVisualTimerRef.current = null
-    }
-    if (hadActivePress && completeTimerRef.current) {
-      clearTimeout(completeTimerRef.current)
-      completeTimerRef.current = null
-    }
-    if (pressTargetRef.current) {
-      setLongPressingId(null)
-      setLongPressProgressId(null)
-      pressTargetRef.current = null
-    }
+  const setDropIntentValue = useCallback((intent: WorkspaceDropIntent | null) => {
+    dropIntentRef.current = intent
+    setDropIntent(intent)
   }, [])
 
-  const handlePointerDown = useCallback(
-    (ws: Workspace, e: React.PointerEvent) => {
-      if (e.button !== 0) return
-      if ((e.target as HTMLElement).closest('.ws-del')) return
-      if (pressTimerRef.current) {
-        clearTimeout(pressTimerRef.current)
-      }
-      if (pressVisualTimerRef.current) {
-        clearTimeout(pressVisualTimerRef.current)
-      }
-      if (completeTimerRef.current) {
-        clearTimeout(completeTimerRef.current)
-      }
-      pressTargetRef.current = ws.id
-      setLongPressingId(null)
-      setLongPressProgressId(null)
-      setLongPressCompletedId(null)
-      pressVisualTimerRef.current = setTimeout(() => {
-        if (pressTargetRef.current === ws.id) {
-          setLongPressingId(ws.id)
-          setLongPressProgressId(ws.id)
+  const clearGroupHover = useCallback(() => {
+    if (groupHoverTimerRef.current) {
+      clearTimeout(groupHoverTimerRef.current)
+      groupHoverTimerRef.current = null
+    }
+    groupHoverTargetRef.current = null
+  }, [])
+
+  const resetWorkspaceDrag = useCallback(() => {
+    clearGroupHover()
+    draggedWorkspaceIdRef.current = null
+    setDraggedWorkspaceId(null)
+    setDropIntentValue(null)
+  }, [clearGroupHover, setDropIntentValue])
+
+  const handleWorkspaceDragStart = useCallback((workspace: Workspace, event: React.DragEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button, input')) {
+      event.preventDefault()
+      return
+    }
+    clearGroupHover()
+    setContextMenu(null)
+    draggedWorkspaceIdRef.current = workspace.id
+    setDraggedWorkspaceId(workspace.id)
+    suppressClickRef.current = workspace.id
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(WORKSPACE_DRAG_TYPE, workspace.id)
+    event.dataTransfer.setData('text/plain', workspace.id)
+    event.dataTransfer.setDragImage(event.currentTarget, 18, 14)
+  }, [clearGroupHover])
+
+  const handleWorkspaceDragOver = useCallback((target: Workspace, event: React.DragEvent<HTMLDivElement>) => {
+    const sourceId = draggedWorkspaceIdRef.current || event.dataTransfer.getData(WORKSPACE_DRAG_TYPE)
+    if (!sourceId) return
+    if (sourceId === target.id) {
+      clearGroupHover()
+      setDropIntentValue(null)
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const ratio = (event.clientY - rect.top) / Math.max(rect.height, 1)
+    if (ratio < 0.25 || ratio > 0.75) {
+      clearGroupHover()
+      setDropIntentValue({ mode: ratio < 0.25 ? 'before' : 'after', targetId: target.id })
+      return
+    }
+
+    const currentIntent = dropIntentRef.current
+    if (currentIntent?.targetId === target.id && (currentIntent.mode === 'group-pending' || currentIntent.mode === 'group')) return
+    clearGroupHover()
+    groupHoverTargetRef.current = target.id
+    setDropIntentValue({ mode: 'group-pending', targetId: target.id })
+    groupHoverTimerRef.current = setTimeout(() => {
+      groupHoverTimerRef.current = null
+      if (!draggedWorkspaceIdRef.current || groupHoverTargetRef.current !== target.id) return
+      setDropIntentValue({ mode: 'group', targetId: target.id })
+    }, GROUP_HOVER_DELAY)
+  }, [clearGroupHover, setDropIntentValue])
+
+  const handleGroupDragOver = useCallback((targetId: string, event: React.DragEvent<HTMLDivElement>) => {
+    const sourceId = draggedWorkspaceIdRef.current || event.dataTransfer.getData(WORKSPACE_DRAG_TYPE)
+    if (!sourceId) return
+    if (sourceId === targetId) {
+      clearGroupHover()
+      setDropIntentValue(null)
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    clearGroupHover()
+    setDropIntentValue({ mode: 'group', targetId })
+  }, [clearGroupHover, setDropIntentValue])
+
+  const handleBoundaryDragOver = useCallback((boundary: WorkspaceSidebarBoundary, event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggedWorkspaceIdRef.current) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    clearGroupHover()
+    setDropIntentValue({ mode: boundary, targetId: null })
+  }, [clearGroupHover, setDropIntentValue])
+
+  const handleWorkspaceDrop = useCallback((target: Workspace, event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const sourceId = draggedWorkspaceIdRef.current || event.dataTransfer.getData(WORKSPACE_DRAG_TYPE)
+    const intent = dropIntentRef.current
+    if (!sourceId || sourceId === target.id || !intent || intent.targetId !== target.id) {
+      resetWorkspaceDrag()
+      return
+    }
+
+    if (intent.mode === 'group') {
+      const currentTarget = useWorkspaceStore.getState().workspaces.find((workspace) => workspace.id === target.id)
+      if (currentTarget) {
+        const group = currentTarget.sidebarGroup ?? {
+          id: createWorkspaceSidebarGroupId(),
+          name: nextWorkspaceSidebarGroupName(useWorkspaceStore.getState().workspaces),
         }
-        pressVisualTimerRef.current = null
-      }, longPressVisualDelay)
-      pressTimerRef.current = setTimeout(() => {
-        pressTimerRef.current = null
-        if (pressVisualTimerRef.current) {
-          clearTimeout(pressVisualTimerRef.current)
-          pressVisualTimerRef.current = null
+        updateWorkspaceLayout((current) => groupWorkspaceInSidebar(current, sourceId, target.id, group))
+        if (!currentTarget.sidebarGroup) {
+          setCollapsedGroupIds((current) => current.filter((id) => id !== group.id))
+          setGroupNameDraft(group.name)
+          setRenamingGroupId(group.id)
         }
-        setLongPressingId(null)
-        setLongPressProgressId(null)
-        setLongPressCompletedId(ws.id)
-        suppressClickRef.current = ws.id
-        pressTargetRef.current = null
-        completeTimerRef.current = setTimeout(() => {
-          setLongPressCompletedId(null)
-          setProjectCandidate(null)
-          setConfigTarget(ws)
-          completeTimerRef.current = null
-        }, 130)
-      }, longPressDuration)
-    },
-    [longPressDuration, longPressVisualDelay],
-  )
+      }
+      resetWorkspaceDrag()
+      return
+    }
+
+    const targetRect = event.currentTarget.getBoundingClientRect()
+    const position: WorkspaceSidebarDropPosition = intent.mode === 'group-pending'
+      ? event.clientY < targetRect.top + targetRect.height / 2
+        ? 'before'
+        : 'after'
+      : intent.mode
+    updateWorkspaceLayout((current) => moveWorkspaceInSidebar(current, sourceId, target.id, position))
+    resetWorkspaceDrag()
+  }, [resetWorkspaceDrag, updateWorkspaceLayout])
+
+  const handleBoundaryDrop = useCallback((boundary: WorkspaceSidebarBoundary, event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const sourceId = draggedWorkspaceIdRef.current || event.dataTransfer.getData(WORKSPACE_DRAG_TYPE)
+    if (sourceId) updateWorkspaceLayout((current) => moveWorkspaceToSidebarBoundary(current, sourceId, boundary))
+    resetWorkspaceDrag()
+  }, [resetWorkspaceDrag, updateWorkspaceLayout])
+
+  const handleWorkspaceDragEnd = useCallback((sourceId: string) => {
+    resetWorkspaceDrag()
+    window.setTimeout(() => {
+      if (suppressClickRef.current === sourceId) suppressClickRef.current = null
+    }, 0)
+  }, [resetWorkspaceDrag])
+
+  const handleWorkspaceListDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggedWorkspaceIdRef.current) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const edge = 28
+    if (event.clientY < rect.top + edge) event.currentTarget.scrollTop -= 12
+    else if (event.clientY > rect.bottom - edge) event.currentTarget.scrollTop += 12
+  }, [])
+
+  const openWorkspaceContextMenu = useCallback((workspace: Workspace, x: number, y: number) => {
+    resetWorkspaceDrag()
+    setContextMenu({ x, y, target: { kind: 'workspace', workspace } })
+  }, [resetWorkspaceDrag])
+
+  const handleWorkspaceContextMenu = useCallback((workspace: Workspace, event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    openWorkspaceContextMenu(workspace, event.clientX, event.clientY)
+  }, [openWorkspaceContextMenu])
+
+  const handleWorkspaceKeyDown = useCallback((workspace: Workspace, event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.shiftKey && event.key === 'F10') {
+      event.preventDefault()
+      const rect = event.currentTarget.getBoundingClientRect()
+      openWorkspaceContextMenu(workspace, rect.left + 18, rect.top + 18)
+      return
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    void handleSelect(workspace.id)
+  }, [handleSelect, openWorkspaceContextMenu])
+
+  const startRenamingGroup = useCallback((group: WorkspaceSidebarGroup) => {
+    setContextMenu(null)
+    setCollapsedGroupIds((current) => current.filter((id) => id !== group.id))
+    setGroupNameDraft(group.name)
+    setRenamingGroupId(group.id)
+  }, [])
+
+  const commitGroupRename = useCallback((groupId: string) => {
+    if (skipRenameBlurRef.current) {
+      skipRenameBlurRef.current = false
+      return
+    }
+    const name = groupNameDraft.trim()
+    setRenamingGroupId(null)
+    setGroupNameDraft('')
+    if (name) updateWorkspaceLayout((current) => renameWorkspaceSidebarGroup(current, groupId, name))
+  }, [groupNameDraft, updateWorkspaceLayout])
+
+  const handleGroupNameKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.currentTarget.blur()
+      return
+    }
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    skipRenameBlurRef.current = true
+    setRenamingGroupId(null)
+    setGroupNameDraft('')
+    event.currentTarget.blur()
+  }, [])
+
+  const handleGroupContextMenu = useCallback((group: WorkspaceSidebarGroup, event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    resetWorkspaceDrag()
+    setContextMenu({ x: event.clientX, y: event.clientY, target: { kind: 'group', group } })
+  }, [resetWorkspaceDrag])
+
+  const handleRunConfiguration = useCallback((workspace: Workspace) => {
+    setContextMenu(null)
+    setProjectCandidate(null)
+    setConfigTarget(workspace)
+  }, [])
+
+  const handleRemoveFromGroup = useCallback((workspaceId: string) => {
+    setContextMenu(null)
+    updateWorkspaceLayout((current) => removeWorkspaceFromSidebarGroup(current, workspaceId))
+  }, [updateWorkspaceLayout])
+
+  const handleClearGroup = useCallback((groupId: string) => {
+    setContextMenu(null)
+    setCollapsedGroupIds((current) => current.filter((id) => id !== groupId))
+    updateWorkspaceLayout((current) => clearWorkspaceSidebarGroup(current, groupId))
+  }, [updateWorkspaceLayout])
+
+  const handleContextDelete = useCallback((workspace: Workspace) => {
+    setContextMenu(null)
+    setDeleteTarget(workspace)
+  }, [])
+
+  const dropTargetGroupId = dropIntent?.targetId
+    ? orderedWorkspaces.find((workspace) => workspace.id === dropIntent.targetId)?.sidebarGroup?.id ?? null
+    : null
 
   return (
     <aside
@@ -266,80 +633,164 @@ export function Sidebar() {
               </button>
             </div>
           </div>
-          <div className="flex-1 p-1.5 overflow-y-auto">
-            {workspaces.length === 0 ? (
+          <div className="flex-1 p-1.5 overflow-y-auto" onDragOverCapture={handleWorkspaceListDragOver}>
+            {orderedWorkspaces.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4 opacity-30">
                 <div className="text-xs text-[#666]">暂无工作区</div>
               </div>
             ) : (
-              workspaces.map((ws) => {
-                const isActive = ws.id === activeWorkspaceId
-                const isLongPressing = longPressingId === ws.id
-                const isLongPressComplete = longPressCompletedId === ws.id
-                const showProgress = isLongPressing || isActive || isLongPressComplete
-                const workspaceTerminals = (isActive ? terminals : terminalSnapshots[ws.id]?.terminals ?? []).filter(
-                  (terminal) => terminal.workspaceId === ws.id
-                )
+              <>
+                <div
+                  className="relative h-1.5"
+                  onDragOver={(event) => handleBoundaryDragOver('start', event)}
+                  onDrop={(event) => handleBoundaryDrop('start', event)}
+                >
+                  {dropIntent?.mode === 'start' && (
+                    <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-[#ff7830] shadow-[0_0_7px_rgba(255,120,48,0.7)]" />
+                  )}
+                </div>
+                {orderedWorkspaces.map((ws, workspaceIndex) => {
+                  const isActive = ws.id === activeWorkspaceId
+                  const group = ws.sidebarGroup
+                  const isGroupStart = !!group && orderedWorkspaces[workspaceIndex - 1]?.sidebarGroup?.id !== group.id
+                  const isGroupCollapsed = !!group && collapsedGroupIds.includes(group.id)
+                  if (group && isGroupCollapsed && !isGroupStart) return null
+                  const groupMembers = group ? groupMembersById.get(group.id) ?? [ws] : []
+                  const workspaceTerminals = (isActive ? terminals : terminalSnapshots[ws.id]?.terminals ?? []).filter(
+                    (terminal) => terminal.workspaceId === ws.id
+                  )
                 const isExpanded = expandedWorkspaceIds.includes(ws.id)
                 const terminalCount = workspaceTerminals.length
-                const maxLights = 6
-                const visibleLights = Math.min(terminalCount, maxLights)
-                const overflowLights = terminalCount - visibleLights
+                  const maxLights = 6
+                  const visibleLights = Math.min(terminalCount, maxLights)
+                  const overflowLights = terminalCount - visibleLights
+                  const isDragged = draggedWorkspaceId === ws.id
+                  const isDropBefore = dropIntent?.targetId === ws.id && dropIntent.mode === 'before'
+                  const isDropAfter = dropIntent?.targetId === ws.id && dropIntent.mode === 'after'
+                  const isGroupPending = dropIntent?.targetId === ws.id && dropIntent.mode === 'group-pending'
+                  const isGroupTarget = dropIntent?.targetId === ws.id && dropIntent.mode === 'group'
+                  const isHeaderGroupTarget = !!group && dropIntent?.mode === 'group' && dropTargetGroupId === group.id
+                  const hasActiveGroupMember = groupMembers.some((member) => member.id === activeWorkspaceId)
 
-                return (
-                  <div key={ws.id} className="mb-px">
-                    <div
-                      onClick={() => handleSelect(ws.id)}
-                      onPointerDown={(e) => handlePointerDown(ws, e)}
-                      onPointerUp={cancelLongPress}
-                      onPointerLeave={cancelLongPress}
-                      onPointerCancel={cancelLongPress}
-                      className={`ws p-[9px] pl-2 pr-3 rounded-md cursor-pointer transition-all flex items-center gap-2 text-[13px] relative group${isLongPressing ? ' long-pressing' : ''}`}
-                      style={{
-                        color: isActive ? '#fff' : '#999',
-                        background: isLongPressing
-                          ? isActive
-                            ? 'rgba(255, 120, 48, 0.11)'
-                            : 'rgba(255, 255, 255, 0.045)'
-                          : isActive
-                            ? 'var(--accent-soft)'
-                            : 'transparent',
-                        transform: isLongPressing ? 'scale(0.988)' : 'scale(1)',
-                        boxShadow: isLongPressing
-                          ? 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 8px 16px rgba(0,0,0,0.18)'
-                          : isLongPressComplete
-                            ? '0 0 0 1px rgba(255, 120, 48, 0.12), 0 0 14px rgba(255, 120, 48, 0.14)'
-                            : 'none',
-                      }}
-                    >
-                      <div
-                        className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r-sm overflow-hidden pointer-events-none"
-                        style={{
-                          background: showProgress ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
-                        }}
-                      >
+                  return (
+                    <div key={ws.id}>
+                      {isGroupStart && (
                         <div
-                          className="absolute inset-0 origin-bottom"
+                          className="group/group-header mx-1 mb-0.5 mt-1 flex h-7 items-center gap-1 rounded px-1.5 text-[11px] transition-colors"
                           style={{
-                            background: isLongPressComplete ? '#ffd2b8' : '#ff7830',
-                            opacity: isLongPressComplete ? 0.9 : showProgress ? 1 : 0,
-                            transform:
-                              isLongPressing && longPressProgressId === ws.id
-                                ? 'scaleY(1)'
-                                : showProgress
-                                  ? 'scaleY(1)'
-                                  : 'scaleY(0)',
-                            transition: isLongPressing
-                              ? `transform ${longPressProgressDuration}ms linear, opacity 120ms ease`
-                              : 'opacity 120ms ease',
+                            color: hasActiveGroupMember ? '#c7c7c7' : '#777',
+                            background: isHeaderGroupTarget ? 'rgba(255,120,48,0.09)' : 'transparent',
+                            boxShadow: isHeaderGroupTarget ? 'inset 0 0 0 1px rgba(255,120,48,0.35)' : 'none',
                           }}
-                        />
-                      </div>
+                          onContextMenu={(event) => handleGroupContextMenu(group, event)}
+                          onDragOver={(event) => handleGroupDragOver(groupMembers[0]!.id, event)}
+                          onDrop={(event) => handleWorkspaceDrop(groupMembers[0]!, event)}
+                        >
+                          <button
+                            type="button"
+                            draggable={false}
+                            aria-label={isGroupCollapsed ? `展开分组 ${group.name}` : `折叠分组 ${group.name}`}
+                            onDragStart={(event) => event.preventDefault()}
+                            onClick={() => setCollapsedGroupIds((current) => current.includes(group.id)
+                              ? current.filter((id) => id !== group.id)
+                              : [...current, group.id])}
+                            className="flex h-5 w-4 shrink-0 items-center justify-center border-0 bg-transparent text-[#666] transition-colors hover:text-[#aaa]"
+                          >
+                            <span
+                              className="h-1.5 w-1.5 border-b border-r border-current transition-transform"
+                              style={{ transform: isGroupCollapsed ? 'rotate(-45deg)' : 'rotate(45deg)' }}
+                            />
+                          </button>
+                          {renamingGroupId === group.id ? (
+                            <input
+                              autoFocus
+                              value={groupNameDraft}
+                              onFocus={(event) => event.currentTarget.select()}
+                              onChange={(event) => setGroupNameDraft(event.target.value)}
+                              onKeyDown={handleGroupNameKeyDown}
+                              onBlur={() => commitGroupRename(group.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              className="min-w-0 flex-1 rounded-sm border border-[rgba(255,120,48,0.35)] bg-[rgba(0,0,0,0.28)] px-1.5 py-0.5 text-[11px] text-[#ddd] outline-none"
+                              aria-label="分组名称"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              draggable={false}
+                              onDragStart={(event) => event.preventDefault()}
+                              onClick={() => setCollapsedGroupIds((current) => current.includes(group.id)
+                                ? current.filter((id) => id !== group.id)
+                                : [...current, group.id])}
+                              className="min-w-0 flex-1 truncate border-0 bg-transparent text-left"
+                              title={`${group.name} · ${groupMembers.length} 个工作区`}
+                            >
+                              {group.name}
+                            </button>
+                          )}
+                          {isGroupCollapsed && hasActiveGroupMember && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#ff7830] shadow-[0_0_5px_rgba(255,120,48,0.65)]" />
+                          )}
+                          <span className="font-mono text-[9px] text-[#555]">{groupMembers.length}</span>
+                        </div>
+                      )}
+
+                      {!isGroupCollapsed && (
+                        <div className={`relative mb-px${group ? ' ml-2 pl-1.5' : ''}`}>
+                          {group && (
+                            <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-px bg-[rgba(255,255,255,0.075)]" />
+                          )}
+                          <div
+                            draggable
+                            tabIndex={0}
+                            role="button"
+                            aria-current={isActive ? 'true' : undefined}
+                            aria-label={`${ws.name}，拖动可排序或分组，右键打开运行配置`}
+                            title={`${group ? `${group.name} · ` : ''}${ws.name} · 拖动排序或分组 · 右键打开运行配置`}
+                            onClick={() => handleSelect(ws.id)}
+                            onKeyDown={(event) => handleWorkspaceKeyDown(ws, event)}
+                            onContextMenu={(event) => handleWorkspaceContextMenu(ws, event)}
+                            onDragStart={(event) => handleWorkspaceDragStart(ws, event)}
+                            onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
+                            onDrop={(event) => handleWorkspaceDrop(ws, event)}
+                            onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
+                            className="ws group relative flex cursor-grab items-center gap-2 rounded-md p-[9px] pl-2 pr-3 text-[13px] transition-all active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.28)]"
+                            style={{
+                              color: isActive ? '#fff' : '#999',
+                              background: isGroupTarget
+                                ? 'rgba(255,120,48,0.11)'
+                                : isGroupPending
+                                  ? 'rgba(255,255,255,0.035)'
+                                  : isActive
+                                    ? 'var(--accent-soft)'
+                                    : 'transparent',
+                              opacity: isDragged ? 0.42 : 1,
+                              boxShadow: isGroupTarget
+                                ? 'inset 0 0 0 1px rgba(255,120,48,0.48), 0 0 12px rgba(255,120,48,0.08)'
+                                : isGroupPending
+                                  ? 'inset 0 0 0 1px rgba(255,255,255,0.1)'
+                                  : 'none',
+                            }}
+                          >
+                            {isDropBefore && (
+                              <div className="pointer-events-none absolute -top-px inset-x-1 h-0.5 rounded bg-[#ff7830] shadow-[0_0_7px_rgba(255,120,48,0.7)]" />
+                            )}
+                            {isDropAfter && (
+                              <div className="pointer-events-none absolute -bottom-px inset-x-1 h-0.5 rounded bg-[#ff7830] shadow-[0_0_7px_rgba(255,120,48,0.7)]" />
+                            )}
+                            <div
+                              className="pointer-events-none absolute bottom-1 left-0 top-1 w-0.5 rounded-r-sm transition-colors"
+                              style={{ background: isActive ? '#ff7830' : 'transparent' }}
+                            />
                       <button
                         type="button"
+                        draggable={false}
                         aria-label={isExpanded ? `折叠 ${ws.name} 终端列表 (${terminalCount})` : `展开 ${ws.name} 终端列表 (${terminalCount})`}
                         title={isExpanded ? `折叠终端列表 (${terminalCount})` : `展开终端列表 (${terminalCount})`}
                         onPointerDown={(event) => event.stopPropagation()}
+                        onDragStart={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                        }}
                         onClick={(event) => {
                           event.stopPropagation()
                           handleToggleWorkspaceExpand(ws.id, event)
@@ -366,7 +817,14 @@ export function Sidebar() {
                         {ws.name}
                       </span>
                       <button
-                        onClick={(e) => handleDeleteClick(ws, e)}
+                        type="button"
+                        draggable={false}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onDragStart={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                        }}
+                        onClick={(event) => handleDeleteClick(ws, event)}
                         className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
                       >
                         ×
@@ -412,9 +870,21 @@ export function Sidebar() {
                         )}
                       </div>
                     )}
-                  </div>
-                )
-              })
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                <div
+                  className="relative h-2"
+                  onDragOver={(event) => handleBoundaryDragOver('end', event)}
+                  onDrop={(event) => handleBoundaryDrop('end', event)}
+                >
+                  {dropIntent?.mode === 'end' && (
+                    <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-[#ff7830] shadow-[0_0_7px_rgba(255,120,48,0.7)]" />
+                  )}
+                </div>
+              </>
             )}
           </div>
         </>
@@ -441,55 +911,56 @@ export function Sidebar() {
             className="w-5 h-px my-1"
             style={{ background: 'rgba(255, 255, 255, 0.06)' }}
           />
-          {workspaces.map((ws) => {
+          {orderedWorkspaces.map((ws, workspaceIndex) => {
             const isActive = ws.id === activeWorkspaceId
-            const isLongPressing = longPressingId === ws.id
-            const isLongPressComplete = longPressCompletedId === ws.id
-            const showProgress = isLongPressing || isActive || isLongPressComplete
+            const isGroupStart = !!ws.sidebarGroup && orderedWorkspaces[workspaceIndex - 1]?.sidebarGroup?.id !== ws.sidebarGroup.id
+            const isDragged = draggedWorkspaceId === ws.id
+            const isDropBefore = dropIntent?.targetId === ws.id && dropIntent.mode === 'before'
+            const isDropAfter = dropIntent?.targetId === ws.id && dropIntent.mode === 'after'
+            const isGroupPending = dropIntent?.targetId === ws.id && dropIntent.mode === 'group-pending'
+            const isGroupTarget = dropIntent?.targetId === ws.id && dropIntent.mode === 'group'
 
             return (
               <div
                 key={ws.id}
+                draggable
+                tabIndex={0}
+                role="button"
+                aria-current={isActive ? 'true' : undefined}
                 onClick={() => handleSelect(ws.id)}
-                onPointerDown={(e) => handlePointerDown(ws, e)}
-                onPointerUp={cancelLongPress}
-                onPointerLeave={cancelLongPress}
-                onPointerCancel={cancelLongPress}
-                title={ws.name}
-                className={`ws w-8 h-7 flex items-center justify-center cursor-pointer transition-all relative${isLongPressing ? ' long-pressing' : ''}`}
+                onKeyDown={(event) => handleWorkspaceKeyDown(ws, event)}
+                onContextMenu={(event) => handleWorkspaceContextMenu(ws, event)}
+                onDragStart={(event) => handleWorkspaceDragStart(ws, event)}
+                onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
+                onDrop={(event) => handleWorkspaceDrop(ws, event)}
+                onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
+                title={`${ws.sidebarGroup ? `${ws.sidebarGroup.name} · ` : ''}${ws.name} · 拖动排序或分组 · 右键打开运行配置`}
+                className="ws relative flex h-7 w-8 cursor-grab items-center justify-center transition-all active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.28)]"
                 style={{
-                  background: isLongPressing ? 'rgba(255, 255, 255, 0.04)' : 'transparent',
-                  transform: isLongPressing ? 'scale(0.96)' : 'scale(1)',
-                  boxShadow: isLongPressing
-                    ? 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 8px 14px rgba(0,0,0,0.2)'
-                    : isLongPressComplete
-                      ? '0 0 0 1px rgba(255, 120, 48, 0.12), 0 0 12px rgba(255, 120, 48, 0.14)'
+                  marginTop: isGroupStart && workspaceIndex > 0 ? 5 : 0,
+                  background: isGroupTarget
+                    ? 'rgba(255,120,48,0.11)'
+                    : isGroupPending
+                      ? 'rgba(255,255,255,0.04)'
+                      : 'transparent',
+                  opacity: isDragged ? 0.42 : 1,
+                  boxShadow: isGroupTarget
+                    ? 'inset 0 0 0 1px rgba(255,120,48,0.45)'
+                    : isGroupPending
+                      ? 'inset 0 0 0 1px rgba(255,255,255,0.1)'
                       : 'none',
                 }}
               >
+                {isDropBefore && (
+                  <div className="pointer-events-none absolute -top-px inset-x-0 h-0.5 rounded bg-[#ff7830]" />
+                )}
+                {isDropAfter && (
+                  <div className="pointer-events-none absolute -bottom-px inset-x-0 h-0.5 rounded bg-[#ff7830]" />
+                )}
                 <div
-                  className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-sm overflow-hidden pointer-events-none"
-                  style={{
-                    background: showProgress ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
-                  }}
-                >
-                  <div
-                    className="absolute inset-0 origin-bottom"
-                    style={{
-                      background: isLongPressComplete ? '#ffd2b8' : '#ff7830',
-                      opacity: isLongPressComplete ? 0.9 : showProgress ? 1 : 0,
-                      transform:
-                        isLongPressing && longPressProgressId === ws.id
-                          ? 'scaleY(1)'
-                          : showProgress
-                            ? 'scaleY(1)'
-                            : 'scaleY(0)',
-                      transition: isLongPressing
-                        ? `transform ${longPressProgressDuration}ms linear, opacity 120ms ease`
-                        : 'opacity 120ms ease',
-                    }}
-                  />
-                </div>
+                  className="pointer-events-none absolute bottom-1.5 left-0 top-1.5 w-0.5 rounded-r-sm"
+                  style={{ background: isActive ? '#ff7830' : 'transparent' }}
+                />
                 <div
                   className="rounded-full transition-all"
                   style={{
@@ -503,6 +974,16 @@ export function Sidebar() {
             )
           })}
         </div>
+      )}
+      {contextMenu && (
+        <WorkspaceContextMenu
+          menu={contextMenu}
+          onRunConfiguration={handleRunConfiguration}
+          onRenameGroup={startRenamingGroup}
+          onRemoveFromGroup={handleRemoveFromGroup}
+          onClearGroup={handleClearGroup}
+          onDelete={handleContextDelete}
+        />
       )}
       {/* 删除确认弹窗 — portal 到 body 级别，居窗口中央 */}
       {deleteTarget && createPortal(

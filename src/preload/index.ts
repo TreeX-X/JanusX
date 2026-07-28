@@ -49,6 +49,8 @@ const fileTreeAPI: FileTreeAPI = {
   createDirectory: (rootPath, parentRelativePath, name) =>
     ipcRenderer.invoke(FILE_TREE_CHANNELS.createDirectory, rootPath, parentRelativePath, name),
   rename: (rootPath, relativePath, name) => ipcRenderer.invoke(FILE_TREE_CHANNELS.rename, rootPath, relativePath, name),
+  move: (rootPath, sourceRelativePath, targetDirectoryRelativePath) =>
+    ipcRenderer.invoke(FILE_TREE_CHANNELS.move, rootPath, sourceRelativePath, targetDirectoryRelativePath),
   delete: (rootPath, relativePath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.delete, rootPath, relativePath),
   reveal: (rootPath, relativePath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.reveal, rootPath, relativePath),
   onChanged: (callback) => {

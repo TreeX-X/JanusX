@@ -13,6 +13,7 @@ export const FILE_TREE_CHANNELS = {
   createFile: 'filetree:create-file',
   createDirectory: 'filetree:create-directory',
   rename: 'filetree:rename',
+  move: 'filetree:move',
   delete: 'filetree:delete',
   reveal: 'filetree:reveal',
   changed: 'filetree:changed',
@@ -48,6 +49,11 @@ export interface LayoutConfig {
 
 export type TerminalPreset = 'shell' | 'claude' | 'codex' | 'opencode'
 
+export interface WorkspaceSidebarGroup {
+  id: string
+  name: string
+}
+
 export interface Workspace {
   id: string
   name: string
@@ -55,6 +61,8 @@ export interface Workspace {
   clis: CLIConfig[]
   layout: LayoutConfig
   lastTerminalType?: TerminalPreset
+  sidebarOrder?: number
+  sidebarGroup?: WorkspaceSidebarGroup
   createdAt: string
   updatedAt: string
 }
@@ -134,6 +142,7 @@ export interface FileTreeAPI {
   createFile(rootPath: string, parentRelativePath: string, name: string): Promise<OperationResult>
   createDirectory(rootPath: string, parentRelativePath: string, name: string): Promise<OperationResult>
   rename(rootPath: string, relativePath: string, name: string): Promise<OperationResult>
+  move(rootPath: string, sourceRelativePath: string, targetDirectoryRelativePath: string): Promise<OperationResult>
   delete(rootPath: string, relativePath: string): Promise<OperationResult>
   reveal(rootPath: string, relativePath: string): Promise<OperationResult>
   onChanged(callback: (workspacePath: string) => void): () => void
