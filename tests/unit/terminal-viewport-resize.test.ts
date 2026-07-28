@@ -212,7 +212,6 @@ describe('terminal viewport resize', () => {
       const refresh = vi.fn()
       const resizePty = vi.fn()
       const result = recoverTerminalViewportAndSync({
-        visible: true,
         hostWidth: 800,
         hostHeight: 500,
         terminal,
@@ -230,12 +229,12 @@ describe('terminal viewport resize', () => {
     },
   )
 
-  it('does no work while hidden or when the host is degenerate', () => {
-    const terminal = createTerminal('normal', 0, 0)
+  it('recovers a CSS-hidden tab when its host still has a valid layout box', () => {
+    const terminal = createTerminal('alternate', 0, 0)
     const fit = vi.fn()
     const refresh = vi.fn()
-    const options = {
-      visible: false,
+    const resizePty = vi.fn()
+    recoverTerminalViewportAndSync({
       hostWidth: 800,
       hostHeight: 500,
       terminal,
@@ -243,10 +242,28 @@ describe('terminal viewport resize', () => {
       refresh,
       previousGeometry: null,
       reportGeometry: vi.fn(),
+      resizePty,
+    })
+
+    expect(fit).toHaveBeenCalledOnce()
+    expect(refresh).toHaveBeenCalledWith(0, 39)
+    expect(resizePty).toHaveBeenCalledWith(120, 40)
+  })
+
+  it('does no work when the host is degenerate', () => {
+    const terminal = createTerminal('normal', 0, 0)
+    const fit = vi.fn()
+    const refresh = vi.fn()
+    recoverTerminalViewportAndSync({
+      hostWidth: 1,
+      hostHeight: 500,
+      terminal,
+      fit,
+      refresh,
+      previousGeometry: null,
+      reportGeometry: vi.fn(),
       resizePty: vi.fn(),
-    }
-    recoverTerminalViewportAndSync(options)
-    recoverTerminalViewportAndSync({ ...options, visible: true, hostWidth: 1 })
+    })
 
     expect(fit).not.toHaveBeenCalled()
     expect(refresh).not.toHaveBeenCalled()

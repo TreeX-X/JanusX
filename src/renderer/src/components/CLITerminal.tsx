@@ -419,7 +419,6 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
         if (!host || host.clientWidth < 80 || host.clientHeight < 60) return false
 
         const fitResult = recoverTerminalViewportAndSync({
-          visible: visibleRef.current,
           hostWidth: host.clientWidth,
           hostHeight: host.clientHeight,
           terminal: term,
@@ -448,8 +447,12 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
     fitRef.current = scheduleRecovery
     registerTerminalForceFit(terminalId, scheduleRecovery)
 
-    // Immediate force fit on mount — do not wait for layoutStable when host already has size.
-    // Early forced passes (0/16/50ms) so launch geometry wait can resolve before create.
+    // Establish xterm and PTY geometry before requesting replay. Inactive tabs
+    // are CSS-hidden but measurable, and alternate buffers need the right size
+    // before their output is reconstructed.
+    fitAndSync()
+
+    // Recheck after committed frames because surrounding layout may still settle.
     scheduleRecovery()
 
     const observer = new ResizeObserver(() => {

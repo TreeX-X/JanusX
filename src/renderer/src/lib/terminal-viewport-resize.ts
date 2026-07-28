@@ -70,21 +70,21 @@ export interface FitTerminalViewportResult {
 }
 
 export interface RecoverTerminalViewportOptions extends FitTerminalViewportOptions {
-  visible: boolean
   hostWidth: number
   hostHeight: number
   refresh: (start: number, end: number) => void
 }
 
-/** Recover a mounted terminal after it becomes visible or its host is resized. */
+/** Recover any mounted terminal whose host has a usable layout box. */
 export function recoverTerminalViewportAndSync({
-  visible,
   hostWidth,
   hostHeight,
   refresh,
   ...options
 }: RecoverTerminalViewportOptions): FitTerminalViewportResult {
-  if (!visible || hostWidth < 80 || hostHeight < 60) {
+  // CSS-hidden tabs still have a valid layout box and must be fit before replay.
+  // Alternate-screen TUIs cannot reliably reflow content replayed at 80x24.
+  if (hostWidth < 80 || hostHeight < 60) {
     return { geometry: null, sizeChanged: false }
   }
 
