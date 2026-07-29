@@ -11,6 +11,13 @@ const CONPTY_FILES = ['conpty.dll', 'OpenConsole.exe'] as const
 const TERMINAL_OUTPUT_BUFFER_LIMIT = 1_000_000
 const DEFAULT_COLS = 120
 const DEFAULT_ROWS = 40
+const MAX_COLS = 1_000
+const MAX_ROWS = 1_000
+
+function normalizePtyDimension(value: number | undefined, fallback: number, minimum: number, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(maximum, Math.max(minimum, Math.floor(value)))
+}
 
 function withPathPrepend(env: Record<string, string>, directory?: string): Record<string, string> {
   if (!directory) return env
@@ -72,8 +79,8 @@ export class TerminalManager {
     officecliPathDir?: string,
   ): IPty {
     const useBundledConptyDll = hasBundledConptyFiles()
-    const cols = Math.max(2, Math.floor(config.cols ?? DEFAULT_COLS))
-    const rows = Math.max(1, Math.floor(config.rows ?? DEFAULT_ROWS))
+    const cols = normalizePtyDimension(config.cols, DEFAULT_COLS, 2, MAX_COLS)
+    const rows = normalizePtyDimension(config.rows, DEFAULT_ROWS, 1, MAX_ROWS)
 
     const baseOptions = {
       name: 'xterm-256color',
@@ -147,8 +154,8 @@ export class TerminalManager {
     const shell = config.shell || (process.platform === 'win32' ? 'powershell.exe' : 'bash')
     const file = config.program || shell
     const args = config.program ? (config.programArgs ?? []) : []
-    const cols = Math.max(2, Math.floor(config.cols ?? DEFAULT_COLS))
-    const rows = Math.max(1, Math.floor(config.rows ?? DEFAULT_ROWS))
+    const cols = normalizePtyDimension(config.cols, DEFAULT_COLS, 2, MAX_COLS)
+    const rows = normalizePtyDimension(config.rows, DEFAULT_ROWS, 1, MAX_ROWS)
 
     // AC5: if a previous instance with the same id still lives, kill it before
     // spawning the replacement so the old onExit callback cannot target the
@@ -184,8 +191,15 @@ export class TerminalManager {
 
   write(id: string, data: string): void {
     const instance = this.instances.get(id)
-    if (instance) {
-      instance.pty.write(data)
+    if (instance && typeof data === 'string' && data.length > 0) {
+      try {
+        instance.pty.write(data)
+      } catch (error) {
+        logTerminalDiagnostic('pty write failed', {
+          id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 
@@ -193,15 +207,29 @@ export class TerminalManager {
     const instance = this.instances.get(id)
     if (!instance) return
 
-    const nextCols = Math.max(2, Math.floor(cols))
-    const nextRows = Math.max(1, Math.floor(rows))
+    if (!Number.isFinite(cols) || !Number.isFinite(rows)) {
+      logTerminalDiagnostic('pty resize rejected', { id, cols, rows })
+      return
+    }
+
+    const nextCols = normalizePtyDimension(cols, DEFAULT_COLS, 2, MAX_COLS)
+    const nextRows = normalizePtyDimension(rows, DEFAULT_ROWS, 1, MAX_ROWS)
     if (instance.lastCols === nextCols && instance.lastRows === nextRows) {
       return
     }
 
-    instance.lastCols = nextCols
-    instance.lastRows = nextRows
-    instance.pty.resize(nextCols, nextRows)
+    try {
+      instance.pty.resize(nextCols, nextRows)
+      instance.lastCols = nextCols
+      instance.lastRows = nextRows
+    } catch (error) {
+      logTerminalDiagnostic('pty resize failed', {
+        id,
+        cols: nextCols,
+        rows: nextRows,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   appendOutput(id: string, data: string): number | null {

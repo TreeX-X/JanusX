@@ -13,6 +13,7 @@ import {
   getLeafPanes,
   removePaneContentFromTree,
   removeTerminalFromPaneTree,
+  retainWorkspacePaneContent,
   resizeSplitPane,
   splitPaneTree,
   unsplitPaneTree,
@@ -143,6 +144,23 @@ describe('workspace pane tree', () => {
     expect(getLeafPanes(collapsed.tree)).toHaveLength(1)
     expect(getLeafPanes(collapsed.tree)[0].tabs.map((tab) => tab.terminalId)).toEqual(['terminal-1', 'terminal-2'])
     expect(collapsed.focus).toEqual({ paneId: 'pane-1', tabId: 'terminal:terminal-2', terminalId: 'terminal-2' })
+  })
+
+  it('removes foreign-workspace terminal views before restoring a workspace layout', () => {
+    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const mixed = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-2'), 'pane-fallback')
+
+    const restored = retainWorkspacePaneContent(mixed.tree, 'workspace-1', new Set(['terminal-1']))
+
+    expect(getLeafPanes(restored)).toEqual([
+      {
+        type: 'leaf',
+        id: 'pane-1',
+        tabs: [createTerminalPaneContent('terminal-1', 'workspace-1')],
+        activeTabId: 'terminal:terminal-1',
+      },
+    ])
   })
 
   it('adds one Janus Chat view to a split and focuses the existing view on repeat', () => {

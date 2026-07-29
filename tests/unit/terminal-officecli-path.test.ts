@@ -66,4 +66,34 @@ describe('TerminalManager OfficeCLI PATH integration', () => {
     const instance = manager.getInstance('codex-1')
     expect(instance?.pty.write).not.toHaveBeenCalled()
   })
+
+  it('rejects invalid geometry, clamps extreme resize, and isolates native resize failures', async () => {
+    const { TerminalManager } = await import('../../src/main/terminal/manager')
+    const manager = new TerminalManager()
+    manager.create({
+      id: 'safe-resize', workspaceId: 'workspace', cwd: process.cwd(), shell: 'powershell.exe',
+    })
+    const resize = manager.getInstance('safe-resize')!.pty.resize as ReturnType<typeof vi.fn>
+
+    manager.resize('safe-resize', Number.NaN, 40)
+    expect(resize).not.toHaveBeenCalled()
+
+    manager.resize('safe-resize', 100_000, 100_000)
+    expect(resize).toHaveBeenLastCalledWith(1_000, 1_000)
+
+    resize.mockImplementationOnce(() => { throw new Error('native resize failed') })
+    expect(() => manager.resize('safe-resize', 120, 40)).not.toThrow()
+  })
+
+  it('isolates native PTY write failures', async () => {
+    const { TerminalManager } = await import('../../src/main/terminal/manager')
+    const manager = new TerminalManager()
+    manager.create({
+      id: 'safe-write', workspaceId: 'workspace', cwd: process.cwd(), shell: 'powershell.exe',
+    })
+    const write = manager.getInstance('safe-write')!.pty.write as ReturnType<typeof vi.fn>
+    write.mockImplementationOnce(() => { throw new Error('native write failed') })
+
+    expect(() => manager.write('safe-write', 'input')).not.toThrow()
+  })
 })

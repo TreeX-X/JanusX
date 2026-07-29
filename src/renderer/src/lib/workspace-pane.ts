@@ -368,6 +368,38 @@ export function removeTerminalFromPaneTree(
   return pruneEmptyPanes(removeTerminalView(node, terminalId))
 }
 
+export function retainWorkspacePaneContent(
+  node: WorkspacePaneNode | null,
+  workspaceId: string,
+  terminalIds?: ReadonlySet<string>
+): WorkspacePaneNode | null {
+  if (!node) return null
+
+  const retain = (current: WorkspacePaneNode): WorkspacePaneNode => {
+    if (current.type === 'leaf') {
+      const tabs = current.tabs.filter((item) =>
+        item.type !== 'terminal'
+        || (item.workspaceId === workspaceId && (!terminalIds || terminalIds.has(item.terminalId)))
+      )
+      return {
+        ...current,
+        tabs,
+        activeTabId: tabs.some((item) => item.id === current.activeTabId)
+          ? current.activeTabId
+          : tabs[0]?.id ?? null,
+      }
+    }
+
+    return {
+      ...current,
+      first: retain(current.first),
+      second: retain(current.second),
+    }
+  }
+
+  return pruneEmptyPanes(retain(node))
+}
+
 export function closePaneTab(
   node: WorkspacePaneNode | null,
   paneId: string,

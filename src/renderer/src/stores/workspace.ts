@@ -14,8 +14,10 @@ import {
   findPaneContent,
   findTerminalPane,
   getBrowserPaneContent,
+  getLeafPanes,
   removePaneContentFromTree,
   removeTerminalFromPaneTree,
+  retainWorkspacePaneContent,
   resizeSplitPane,
   resolvePaneFocus,
   splitPaneTree,
@@ -117,6 +119,36 @@ function ensureTerminalInCurrentView(terminals: Terminal[], terminal: Terminal):
   return terminals.some((item) => item.id === terminal.id) ? terminals : [...terminals, terminal]
 }
 
+function sanitizeWorkspaceSnapshot(snapshot: TerminalSnapshot, workspaceId: string): TerminalSnapshot {
+  const terminals = snapshot.terminals.filter((terminal) => terminal.workspaceId === workspaceId)
+  const paneTree = retainWorkspacePaneContent(
+    snapshot.paneTree,
+    workspaceId,
+    new Set(terminals.map((terminal) => terminal.id))
+  )
+  const focus = resolvePaneFocus(paneTree, snapshot.focusedPaneId, snapshot.focusedTabId)
+  return {
+    terminals,
+    activeTerminalId: focus.terminalId,
+    paneTree,
+    focusedPaneId: focus.paneId,
+    focusedTabId: focus.tabId,
+  }
+}
+
+function allowsTerminalPresentation(
+  paneTree: WorkspacePaneNode | null,
+  activeWorkspaceId: string | null,
+  paneId: string,
+  tabId: string | null
+): boolean {
+  const pane = findLeafPane(paneTree, paneId)
+  const tab = pane?.tabs.find((item) => item.id === tabId)
+  if (!pane || !tab || tab.type !== 'terminal' || tab.workspaceId === activeWorkspaceId) return true
+  return getLeafPanes(paneTree).length > 1
+    && pane.tabs.every((item) => item.type !== 'terminal' || item.workspaceId === tab.workspaceId)
+}
+
 function updateTerminalSnapshots(
   snapshots: Record<string, TerminalSnapshot>,
   terminalId: string,
@@ -201,16 +233,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     // 保存当前工作区的终端快照
     const snapshots = { ...s.terminalSnapshots }
     if (s.activeWorkspaceId) {
-      snapshots[s.activeWorkspaceId] = {
+      snapshots[s.activeWorkspaceId] = sanitizeWorkspaceSnapshot({
         terminals: s.terminals,
         activeTerminalId: s.activeTerminalId,
         paneTree: s.paneTree,
         focusedPaneId: s.focusedPaneId,
         focusedTabId: s.focusedTabId,
-      }
+      }, s.activeWorkspaceId)
     }
     // 恢复目标工作区的终端快照;文件树属于旧工作区,立即清空避免串台
-    const saved = snapshots[id]
+    const saved = snapshots[id] ? sanitizeWorkspaceSnapshot(snapshots[id], id) : null
+    if (saved) snapshots[id] = saved
     set({
       activeWorkspaceId: id,
       fileTree: [],
@@ -224,7 +257,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     })
   },
 
-  addTerminal: (terminal) =>
+  addTerminal: (terminal) => {
+    if (get().activeWorkspaceId !== terminal.workspaceId) {
+      get().addTerminalForWorkspace(terminal)
+      return
+    }
     set((s) => {
       const now = Date.now()
       const nextTerminal = {
@@ -245,7 +282,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: result.focus.paneId,
         focusedTabId: result.focus.tabId,
       }
-    }),
+    })
+  },
   addTerminalForWorkspace: (terminal) => {
     if (get().activeWorkspaceId === terminal.workspaceId) {
       get().addTerminal(terminal)
@@ -315,6 +353,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   setFocusedPane: (paneId) =>
     set((s) => {
       const focus = resolvePaneFocus(s.paneTree, paneId, null)
+      if (!allowsTerminalPresentation(s.paneTree, s.activeWorkspaceId, paneId, focus.tabId)) return {}
       return {
         focusedPaneId: focus.paneId,
         focusedTabId: focus.tabId,
@@ -323,6 +362,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   setPaneTab: (paneId, tabId) =>
     set((s) => {
+      if (!allowsTerminalPresentation(s.paneTree, s.activeWorkspaceId, paneId, tabId)) return {}
       const paneTree = activatePaneTab(s.paneTree, paneId, tabId)
       const focus = resolvePaneFocus(paneTree, paneId, tabId)
       return {
@@ -475,8 +515,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   collapsePaneLayout: () =>
     set((s) => {
-      const result = collapsePaneTree(s.paneTree, s.activeTerminalId)
+      if (!s.activeWorkspaceId) return {}
+      const safeSnapshot = sanitizeWorkspaceSnapshot({
+        terminals: s.terminals,
+        activeTerminalId: s.activeTerminalId,
+        paneTree: s.paneTree,
+        focusedPaneId: s.focusedPaneId,
+        focusedTabId: s.focusedTabId,
+      }, s.activeWorkspaceId)
+      const result = collapsePaneTree(safeSnapshot.paneTree, safeSnapshot.activeTerminalId)
       return {
+        terminals: safeSnapshot.terminals,
         paneTree: result.tree,
         focusedPaneId: result.focus.paneId,
         focusedTabId: result.focus.tabId,
@@ -501,7 +550,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   moveTerminalToPane: (terminalId, paneId) =>
     set((s) => {
       const terminal = findTerminalInState(s, terminalId)
-      if (!terminal) return {}
+      if (!terminal || terminal.workspaceId !== s.activeWorkspaceId) return {}
       const terminals = ensureTerminalInCurrentView(s.terminals, terminal)
       const result = addTerminalToPaneTree(
         s.paneTree,
@@ -521,7 +570,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set((s) => {
       const terminal = findTerminalInState(s, terminalId)
       if (!terminal) return {}
-      const terminals = ensureTerminalInCurrentView(s.terminals, terminal)
+      const terminals = terminal.workspaceId === s.activeWorkspaceId
+        ? ensureTerminalInCurrentView(s.terminals, terminal)
+        : s.terminals
 
       const direction: PaneSplitDirection = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
       const placement = edge === 'left' || edge === 'top' ? 'before' : 'after'
