@@ -1894,6 +1894,10 @@ body.is-running {
   pointer-events: auto;
 }
 
+.janus-chat:focus {
+  outline: none;
+}
+
 /* 停靠态：作为右栏 flex 子元素，覆盖绝对定位浮层。
    用 relative 而非 static，保留内部绝对定位元素（如新消息徽标 z:40）的锚点。
    靠源序生效（docked 位于基线 .janus-chat 之后，同等特异性 0,1,0 后定义覆盖先定义），无需 !important。

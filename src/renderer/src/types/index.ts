@@ -11,6 +11,10 @@ export type {
 
 import type { TerminalPreset } from '../../../shared/ipc/workspace'
 import type { TerminalStatus } from '../../../shared/ipc/terminal'
+import type {
+  RuntimeTelemetryConfidence,
+  RuntimeTelemetrySource,
+} from '../../../shared/ipc/system'
 
 export type { TerminalStatus }
 
@@ -31,8 +35,15 @@ export interface Terminal {
   detectedModel?: string
   inputTokens?: number
   outputTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  totalTokens?: number
   contextTokens?: number
   contextWindowTokens?: number
+  telemetrySessionId?: string
+  telemetrySource?: RuntimeTelemetrySource
+  telemetryConfidence?: RuntimeTelemetryConfidence
+  telemetryUpdatedAt?: number
 }
 
 // ── Git types ──

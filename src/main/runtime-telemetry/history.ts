@@ -1,25 +1,7 @@
 import { readdir, open, stat } from 'fs/promises'
 import { join } from 'path'
 import os from 'os'
-
-type RuntimeTelemetryPreset = 'shell' | 'claude' | 'codex' | 'opencode'
-
-export interface RuntimeTelemetryRequest {
-  preset?: RuntimeTelemetryPreset
-  cwd?: string
-  startedAt?: number
-}
-
-export interface RuntimeTelemetrySnapshot {
-  detectedModel?: string
-  contextTokens?: number
-  contextWindowTokens?: number
-  inputTokens?: number
-  outputTokens?: number
-  filePath?: string
-  sessionId?: string
-  updatedAt?: number
-}
+import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 
 interface SessionFileRef {
   path: string
@@ -32,6 +14,7 @@ interface JsonRecord {
 
 const MAX_CODEX_CANDIDATES = 80
 const STARTED_AT_TOLERANCE_MS = 1_000
+const TELEMETRY_HEAD_BYTES = 16 * 1024
 /*-- telemetry jsonl 尾读窗口：只读文件末尾 256KB，避免长会话全量读入内存；文件小于窗口时结果与全量读等价 --*/
 const TELEMETRY_TAIL_BYTES = 256 * 1024
 
@@ -41,16 +24,18 @@ export async function getRuntimeTelemetrySnapshot(
   const preset = request.preset
   const cwd = normalizePath(request.cwd)
   const startedAt = readStartedAt(request.startedAt)
+  const sessionId = readString(request.sessionId)
 
   if (!preset || preset === 'shell' || !cwd) return null
-  if (preset === 'claude') return scanClaudeHistory(cwd, startedAt)
-  if (preset === 'codex') return scanCodexHistory(cwd, startedAt)
+  if (preset === 'claude') return scanClaudeHistory(cwd, startedAt, sessionId)
+  if (preset === 'codex') return scanCodexHistory(cwd, startedAt, sessionId)
   return null
 }
 
-async function scanClaudeHistory(cwd: string, startedAt?: number): Promise<RuntimeTelemetrySnapshot | null> {
+async function scanClaudeHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
   const projectDir = join(os.homedir(), '.claude', 'projects', toClaudeProjectKey(cwd))
   const files = (await listJsonlFiles(projectDir, (name) => name.endsWith('.jsonl')))
+    .filter((file) => !sessionId || file.path.toLowerCase().includes(sessionId.toLowerCase()))
     .sort((a, b) => b.updatedAt - a.updatedAt)
   const latestCurrent = files.find((file) => isFileAfterStartedAt(file, startedAt))
   const latestKnownModel = startedAt === undefined ? null : await readClaudeLatestModel(files)
@@ -76,10 +61,11 @@ async function scanClaudeHistory(cwd: string, startedAt?: number): Promise<Runti
   return current
 }
 
-async function scanCodexHistory(cwd: string, startedAt?: number): Promise<RuntimeTelemetrySnapshot | null> {
+async function scanCodexHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
   const root = join(os.homedir(), '.codex', 'sessions')
   const files = (await listJsonlFilesRecursive(root, (name) => name.startsWith('rollout-') && name.endsWith('.jsonl')))
     .filter((file) => isFileAfterStartedAt(file, startedAt))
+    .filter((file) => !sessionId || file.path.toLowerCase().includes(sessionId.toLowerCase()))
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_CODEX_CANDIDATES)
 
@@ -96,8 +82,15 @@ async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Pro
   const lines = await readJsonlLines(file.path)
   const snapshot: RuntimeTelemetrySnapshot = {
     filePath: file.path,
-    updatedAt: file.updatedAt,
+    observedAt: file.updatedAt,
+    source: 'history',
+    confidence: 'derived',
   }
+  let totalInput = 0
+  let totalOutput = 0
+  let totalCacheRead = 0
+  let totalCacheWrite = 0
+  let hasUsage = false
 
   for (const line of lines) {
     const value = parseJsonObject(line)
@@ -121,9 +114,20 @@ async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Pro
       readPositiveNumber(usage.cache_creation_input_tokens ?? usage.cache_creation_tokens ?? usage.cacheCreationTokens) ?? 0
     const contextTokens = (inputTokens ?? 0) + cacheReadTokens + cacheCreationTokens
 
-    if (inputTokens !== undefined) snapshot.inputTokens = inputTokens
-    if (outputTokens !== undefined) snapshot.outputTokens = outputTokens
+    totalInput += inputTokens ?? 0
+    totalOutput += outputTokens ?? 0
+    totalCacheRead += cacheReadTokens
+    totalCacheWrite += cacheCreationTokens
+    hasUsage = true
     if (contextTokens > 0) snapshot.contextTokens = contextTokens
+  }
+
+  if (hasUsage) {
+    snapshot.inputTokens = totalInput
+    snapshot.outputTokens = totalOutput
+    snapshot.cacheReadTokens = totalCacheRead
+    snapshot.cacheWriteTokens = totalCacheWrite
+    snapshot.totalTokens = totalInput + totalOutput + totalCacheRead + totalCacheWrite
   }
 
   return hasTelemetry(snapshot) ? snapshot : null
@@ -145,7 +149,9 @@ async function readClaudeLatestModel(files: SessionFileRef[]): Promise<RuntimeTe
         detectedModel: model,
         sessionId: readString(value.sessionId) ?? readString(value.session_id),
         filePath: file.path,
-        updatedAt: file.updatedAt,
+        observedAt: file.updatedAt,
+        source: 'history',
+        confidence: 'derived',
       }
     }
   }
@@ -159,7 +165,9 @@ function createEmptyCurrentSnapshot(modelSnapshot?: RuntimeTelemetrySnapshot | n
     contextTokens: 0,
     inputTokens: 0,
     outputTokens: 0,
-    updatedAt: Date.now(),
+    observedAt: Date.now(),
+    source: 'history',
+    confidence: 'derived',
   }
 }
 
@@ -167,17 +175,15 @@ async function parseCodexSession(file: SessionFileRef, cwd: string, startedAt?: 
   const lines = await readJsonlLines(file.path)
   const snapshot: RuntimeTelemetrySnapshot & { cwd?: string } = {
     filePath: file.path,
-    updatedAt: file.updatedAt,
+    observedAt: file.updatedAt,
+    source: 'history',
+    confidence: 'authoritative',
   }
 
   for (const line of lines) {
     const value = parseJsonObject(line)
     if (!value) continue
-    if (!isLineAfterStartedAt(value, startedAt)) continue
-
     const payload = asRecord(value.payload)
-    const info = asRecord(payload?.info)
-    const payloadType = readString(payload?.type)
     const rootType = readString(value.type)
 
     if (rootType === 'session_meta') {
@@ -186,6 +192,11 @@ async function parseCodexSession(file: SessionFileRef, cwd: string, startedAt?: 
       if (sessionId) snapshot.sessionId = sessionId
       if (sessionCwd) snapshot.cwd = normalizePath(sessionCwd)
     }
+
+    if (!isLineAfterStartedAt(value, startedAt)) continue
+
+    const info = asRecord(payload?.info)
+    const payloadType = readString(payload?.type)
 
     if (rootType === 'turn_context') {
       const model = readString(payload?.model)
@@ -207,7 +218,9 @@ async function parseCodexSession(file: SessionFileRef, cwd: string, startedAt?: 
     if (contextTokens !== undefined) snapshot.contextTokens = contextTokens
     if (contextWindowTokens !== undefined) snapshot.contextWindowTokens = contextWindowTokens
     if (inputTokens !== undefined) snapshot.inputTokens = Math.max(0, inputTokens - cachedInputTokens)
+    if (cachedInputTokens > 0) snapshot.cacheReadTokens = cachedInputTokens
     if (outputTokens !== undefined) snapshot.outputTokens = outputTokens
+    snapshot.totalTokens = readPositiveNumber(totalUsage?.total_tokens ?? totalUsage?.totalTokens)
   }
 
   if (snapshot.cwd && !pathsEqual(snapshot.cwd, cwd)) {
@@ -259,13 +272,25 @@ async function readJsonlLines(filePath: string): Promise<string[]> {
   try {
     handle = await open(filePath, 'r')
     const { size } = await handle.stat()
+    if (size <= TELEMETRY_TAIL_BYTES + TELEMETRY_HEAD_BYTES) {
+      const fullBuffer = Buffer.allocUnsafe(size)
+      await handle.read(fullBuffer, 0, fullBuffer.length, 0)
+      return fullBuffer.toString('utf-8').split(/\r?\n/).filter(Boolean)
+    }
+
+    const headLength = Math.min(size, TELEMETRY_HEAD_BYTES)
+    const headBuffer = Buffer.allocUnsafe(headLength)
+    await handle.read(headBuffer, 0, headLength, 0)
+    const headLines = headBuffer.toString('utf-8').split(/\r?\n/)
+    headLines.pop()
+
     const start = Math.max(0, size - TELEMETRY_TAIL_BYTES)
     const buffer = Buffer.allocUnsafe(size - start)
     await handle.read(buffer, 0, buffer.length, start)
     const lines = buffer.toString('utf-8').split(/\r?\n/)
     // 从文件中部起读时，首行可能被截断，丢弃它；从头读（start===0）时保留全部
-    if (start > 0) lines.shift()
-    return lines.filter(Boolean)
+    lines.shift()
+    return [...headLines, ...lines].filter(Boolean)
   } catch {
     return []
   } finally {

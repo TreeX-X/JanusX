@@ -1,5 +1,12 @@
 import type { TerminalPreset } from '@/types'
 import { matchAiModel } from '@janusx/llm-core/model-registry'
+import type {
+  RuntimeTelemetryConfidence,
+  RuntimeTelemetrySnapshot,
+  RuntimeTelemetrySource,
+} from '../../../shared/ipc/system'
+
+export type { RuntimeTelemetryConfidence, RuntimeTelemetrySnapshot, RuntimeTelemetrySource }
 
 export interface RuntimeTelemetryPatch {
   detectedModel?: string
@@ -7,23 +14,43 @@ export interface RuntimeTelemetryPatch {
   contextWindowTokens?: number
   inputTokens?: number
   outputTokens?: number
-}
-
-export type RuntimeTelemetrySource = 'live' | 'history'
-
-export type RuntimeTelemetrySnapshot = RuntimeTelemetryPatch & {
-  updatedAt?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  totalTokens?: number
+  sessionId?: string
+  observedAt?: number
+  source?: RuntimeTelemetrySource
+  confidence?: RuntimeTelemetryConfidence
 }
 
 export type RuntimeTelemetryState = RuntimeTelemetryPatch & {
   preset: TerminalPreset
-  updatedAt?: number
+  telemetrySessionId?: string
+  telemetrySource?: RuntimeTelemetrySource
+  telemetryConfidence?: RuntimeTelemetryConfidence
+  telemetryUpdatedAt?: number
+}
+
+export interface RuntimeTelemetryUpdate {
+  detectedModel?: string
+  contextTokens?: number
+  contextWindowTokens?: number
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  totalTokens?: number
+  telemetrySessionId?: string
+  telemetrySource?: RuntimeTelemetrySource
+  telemetryConfidence?: RuntimeTelemetryConfidence
+  telemetryUpdatedAt?: number
 }
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
 const MODEL_FIELD_PATTERN =
   /(?:^|[\s{,])(?:model|model_id|modelId|model_name|modelName|selected model|using model)\s*[:=]\s*["'`]?([a-z0-9][a-z0-9_.:/+-]{1,80})/i
 const MODEL_FLAG_PATTERN = /(?:^|\s)(?:--model|-m|\/model)\s+["'`]?([a-z0-9][a-z0-9_.:/+-]{1,80})/i
+const STREAM_BUFFER_LIMIT = 64 * 1024
 
 const MODEL_PATTERNS: RegExp[] = [
   /\bclaude-(?:opus|sonnet|haiku|3(?:\.\d)?)[a-z0-9_.-]*\b/i,
@@ -90,82 +117,113 @@ export function getRegistryContextWindow(model?: string): number | undefined {
   return undefined
 }
 
-export function stabilizeContextTokens(
-  current: number | undefined,
-  next: number | undefined
-): number | undefined {
-  if (next === undefined) return undefined
-  if (current === undefined || current <= 0) return next
-  if (next >= current) return next
-
-  return current
-}
-
 export function mergeRuntimeTelemetrySnapshot(
   current: RuntimeTelemetryState,
-  telemetry: RuntimeTelemetrySnapshot,
-  source: RuntimeTelemetrySource = 'live'
-): RuntimeTelemetrySnapshot {
-  const isHistory = source === 'history'
-  const isNewer = telemetry.updatedAt !== undefined && (!current.updatedAt || telemetry.updatedAt >= current.updatedAt)
-  const detectedModel = telemetry.detectedModel ?? current.detectedModel
-  const registryWindow = getRegistryContextWindow(detectedModel)
-  const patch: RuntimeTelemetrySnapshot = {}
+  telemetry: RuntimeTelemetrySnapshot
+): RuntimeTelemetryUpdate {
+  const observedAt = telemetry.observedAt ?? Date.now()
+  const source = telemetry.source ?? 'terminal-text'
+  const confidence = telemetry.confidence ?? defaultConfidence(source)
+  const sessionChanged = Boolean(
+    telemetry.sessionId &&
+    current.telemetrySessionId &&
+    telemetry.sessionId !== current.telemetrySessionId
+  )
+  const isOlder = !sessionChanged && current.telemetryUpdatedAt !== undefined && observedAt < current.telemetryUpdatedAt
+  const lowerConfidence = !sessionChanged && confidenceRank(confidence) < confidenceRank(current.telemetryConfidence)
 
-  if (detectedModel && detectedModel !== current.detectedModel && (!isHistory || !current.detectedModel)) {
-    patch.detectedModel = detectedModel
-    const estimatedWindow = registryWindow ?? getEstimatedContextWindow(current.preset, detectedModel)
-    if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
+  if (isOlder) return {}
+
+  const patch: RuntimeTelemetryUpdate = {}
+  const assign = <K extends keyof RuntimeTelemetryUpdate>(key: K, value: RuntimeTelemetryUpdate[K]) => {
+    if (value !== undefined && value !== current[key as keyof RuntimeTelemetryState]) patch[key] = value
   }
 
-  if (!current.contextWindowTokens && detectedModel && patch.contextWindowTokens === undefined) {
-    const estimatedWindow = registryWindow ?? getEstimatedContextWindow(current.preset, detectedModel)
-    if (estimatedWindow) patch.contextWindowTokens = estimatedWindow
-  }
+  if (!lowerConfidence || current.detectedModel === undefined) assign('detectedModel', telemetry.detectedModel)
+  if (!lowerConfidence || current.contextTokens === undefined) assign('contextTokens', telemetry.contextTokens)
+  if (!lowerConfidence || current.contextWindowTokens === undefined) assign('contextWindowTokens', telemetry.contextWindowTokens)
 
-  if (registryWindow !== undefined) {
-    if (registryWindow !== current.contextWindowTokens && (!isHistory || !current.contextWindowTokens)) {
-      patch.contextWindowTokens = registryWindow
-    }
-  } else if (telemetry.contextWindowTokens !== undefined) {
+  const cumulativeFields = [
+    'inputTokens',
+    'outputTokens',
+    'cacheReadTokens',
+    'cacheWriteTokens',
+    'totalTokens',
+  ] as const
+  for (const field of cumulativeFields) {
+    const next = telemetry[field]
+    const previous = current[field]
     if (
-      telemetry.contextWindowTokens !== current.contextWindowTokens &&
-      (!isHistory || !current.contextWindowTokens)
+      next !== undefined &&
+      (!lowerConfidence || previous === undefined) &&
+      (sessionChanged || previous === undefined || next >= previous)
     ) {
-      patch.contextWindowTokens = telemetry.contextWindowTokens
+      assign(field, next)
     }
   }
 
-  const stableContextTokens = stabilizeContextTokens(current.contextTokens, telemetry.contextTokens)
-  if (stableContextTokens !== undefined && stableContextTokens !== current.contextTokens) {
-    patch.contextTokens = stableContextTokens
+  if (sessionChanged) {
+    for (const field of ['contextTokens', 'contextWindowTokens', ...cumulativeFields] as const) {
+      if (telemetry[field] === undefined && current[field] !== undefined) patch[field] = undefined
+    }
   }
 
-  const inputTokens = mergeUsageTokens(current.inputTokens, telemetry.inputTokens, isHistory, isNewer)
-  if (inputTokens !== undefined) patch.inputTokens = inputTokens
-
-  const outputTokens = mergeUsageTokens(current.outputTokens, telemetry.outputTokens, isHistory, isNewer)
-  if (outputTokens !== undefined) patch.outputTokens = outputTokens
-
-  if (Object.keys(patch).length > 0) {
-    patch.updatedAt = telemetry.updatedAt ?? Date.now()
+  if (telemetry.sessionId && telemetry.sessionId !== current.telemetrySessionId) {
+    patch.telemetrySessionId = telemetry.sessionId
   }
 
+  if (Object.keys(patch).length === 0) return patch
+  patch.telemetrySource = source
+  patch.telemetryConfidence = confidence
+  patch.telemetryUpdatedAt = observedAt
   return patch
 }
 
-export function extractRuntimeTelemetry(text: string): RuntimeTelemetryPatch {
+export function extractRuntimeTelemetry(text: string, observedAt = Date.now()): RuntimeTelemetrySnapshot {
   const normalized = stripAnsi(text)
   const fromJson = extractStructuredTelemetry(normalized)
   const detectedModel = fromJson.detectedModel ?? detectModelFromText(normalized)
   const explicitContext = extractExplicitContext(normalized)
+  const hasStructuredUsage = hasUsage(fromJson)
+  const hasExplicitContext = explicitContext.contextTokens !== undefined || explicitContext.contextWindowTokens !== undefined
+  const isAuthoritativeTokenCount = /["']type["']\s*:\s*["']token_count["']/i.test(normalized)
 
   return {
     detectedModel,
     inputTokens: fromJson.inputTokens,
     outputTokens: fromJson.outputTokens,
+    cacheReadTokens: fromJson.cacheReadTokens,
+    cacheWriteTokens: fromJson.cacheWriteTokens,
+    totalTokens: fromJson.totalTokens,
     contextTokens: fromJson.contextTokens ?? explicitContext.contextTokens,
     contextWindowTokens: fromJson.contextWindowTokens ?? explicitContext.contextWindowTokens,
+    observedAt,
+    source: hasStructuredUsage ? 'provider-event' : 'terminal-text',
+    confidence: isAuthoritativeTokenCount ? 'authoritative' : hasStructuredUsage ? 'derived' : hasExplicitContext ? 'estimated' : 'estimated',
+  }
+}
+
+export function createRuntimeTelemetryStreamParser(now: () => number = Date.now): {
+  push(data: string): RuntimeTelemetrySnapshot[]
+  reset(): void
+} {
+  let pending = ''
+
+  return {
+    push(data) {
+      if (!data) return []
+      pending += data
+      if (pending.length > STREAM_BUFFER_LIMIT) pending = pending.slice(-STREAM_BUFFER_LIMIT)
+
+      const lines = pending.split(/\r?\n/)
+      pending = lines.pop() ?? ''
+      return lines
+        .map((line) => extractRuntimeTelemetry(line, now()))
+        .filter(hasTelemetry)
+    },
+    reset() {
+      pending = ''
+    },
   }
 }
 
@@ -208,7 +266,9 @@ function extractTelemetryFromJson(value: Record<string, unknown>): RuntimeTeleme
     const inputTokens = readPositiveNumber(totalUsage?.input_tokens ?? totalUsage?.inputTokens)
     const cachedInputTokens = readPositiveNumber(totalUsage?.cached_input_tokens ?? totalUsage?.cachedInputTokens) ?? 0
     if (inputTokens !== undefined) patch.inputTokens = Math.max(0, inputTokens - cachedInputTokens)
+    if (cachedInputTokens > 0) patch.cacheReadTokens = cachedInputTokens
     patch.outputTokens = readPositiveNumber(totalUsage?.output_tokens ?? totalUsage?.outputTokens)
+    patch.totalTokens = readPositiveNumber(totalUsage?.total_tokens ?? totalUsage?.totalTokens)
   }
 
   if (usage) {
@@ -223,7 +283,11 @@ function extractTelemetryFromJson(value: Record<string, unknown>): RuntimeTeleme
 
     if (inputTokens !== undefined) patch.inputTokens = inputTokens
     if (outputTokens !== undefined) patch.outputTokens = outputTokens
+    if (cacheReadTokens > 0) patch.cacheReadTokens = cacheReadTokens
+    if (cacheCreationTokens > 0) patch.cacheWriteTokens = cacheCreationTokens
     if (contextTokens > 0) patch.contextTokens = contextTokens
+    const totalTokens = contextTokens + (outputTokens ?? 0)
+    if (totalTokens > 0) patch.totalTokens = totalTokens
   }
 
   return patch
@@ -254,17 +318,36 @@ function mergeTelemetryPatch(target: RuntimeTelemetryPatch, source: RuntimeTelem
   if (source.contextWindowTokens !== undefined) target.contextWindowTokens = source.contextWindowTokens
   if (source.inputTokens !== undefined) target.inputTokens = source.inputTokens
   if (source.outputTokens !== undefined) target.outputTokens = source.outputTokens
+  if (source.cacheReadTokens !== undefined) target.cacheReadTokens = source.cacheReadTokens
+  if (source.cacheWriteTokens !== undefined) target.cacheWriteTokens = source.cacheWriteTokens
+  if (source.totalTokens !== undefined) target.totalTokens = source.totalTokens
 }
 
-function mergeUsageTokens(
-  current: number | undefined,
-  next: number | undefined,
-  isHistory: boolean,
-  isNewer: boolean
-): number | undefined {
-  if (next === undefined || next === current) return undefined
-  if (!isHistory || current === undefined || next > current || isNewer) return next
-  return undefined
+function defaultConfidence(source: RuntimeTelemetrySource): RuntimeTelemetryConfidence {
+  if (source === 'provider-event') return 'authoritative'
+  if (source === 'history') return 'derived'
+  return 'estimated'
+}
+
+function confidenceRank(confidence?: RuntimeTelemetryConfidence): number {
+  if (confidence === 'authoritative') return 3
+  if (confidence === 'derived') return 2
+  if (confidence === 'estimated') return 1
+  return 0
+}
+
+function hasUsage(telemetry: RuntimeTelemetryPatch): boolean {
+  return telemetry.contextTokens !== undefined ||
+    telemetry.contextWindowTokens !== undefined ||
+    telemetry.inputTokens !== undefined ||
+    telemetry.outputTokens !== undefined ||
+    telemetry.cacheReadTokens !== undefined ||
+    telemetry.cacheWriteTokens !== undefined ||
+    telemetry.totalTokens !== undefined
+}
+
+function hasTelemetry(telemetry: RuntimeTelemetrySnapshot): boolean {
+  return Boolean(telemetry.detectedModel || hasUsage(telemetry))
 }
 
 function parseTokenAmount(raw: string): number | undefined {

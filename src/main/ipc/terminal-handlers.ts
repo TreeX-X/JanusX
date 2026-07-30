@@ -36,6 +36,7 @@ import { AGENT_CHANNELS } from '../../shared/ipc/agent'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
 import { companionSessionState } from '../companion/session-state'
 import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
+import { getRuntimeTelemetrySnapshot } from '../runtime-telemetry/history'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -215,14 +216,43 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       detail: event.observationId ?? event.workspacePath,
     })
   })
+  const refreshRuntimeTelemetry = async (
+    terminalId: string,
+    engine: Exclude<CheckpointEngine, 'shell' | 'manual'>,
+    cwd: string,
+    sessionId?: string,
+  ) => {
+    const instance = terminalManager.getInstance(terminalId)
+    if (!instance) return
+    const telemetry = await getRuntimeTelemetrySnapshot({
+      preset: engine,
+      cwd,
+      startedAt: instance.createdAt,
+      sessionId,
+    })
+    if (telemetry) {
+      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.telemetry, { id: terminalId, telemetry })
+    }
+  }
+
   const hookCoordinator = new AgentHookCoordinator(mainWindow, {
     onEvent: (event) => {
       hookDiagnostics.record(summarizeCoordinatorEvent(event))
       sendToRenderer(mainWindow, AGENT_CHANNELS.hookEvent, event)
     },
-    onResolvedPayload: (payload) => {
+    onResolvedPayload: (payload, terminal) => {
       companionSessionState.handleHookPayload(payload)
       agentTurnRecorder.handleHookPayload(payload)
+      if (/stop|complete|idle/i.test(payload.event)) {
+        const refresh = () => refreshRuntimeTelemetry(
+          terminal.terminalId,
+          terminal.engine as Exclude<CheckpointEngine, 'shell' | 'manual'>,
+          terminal.cwd ?? payload.cwd ?? '',
+          payload.sessionId,
+        ).catch(() => undefined)
+        void refresh()
+        setTimeout(() => { void refresh() }, 750)
+      }
     },
   })
   const hookBridge = new AgentHookBridge({

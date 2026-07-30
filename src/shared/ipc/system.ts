@@ -7,10 +7,19 @@ export const SYSTEM_CHANNELS = {
   toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show',
 } as const
 
-export interface RuntimeTelemetryRequest { preset?: 'shell' | 'claude' | 'codex' | 'opencode'; cwd?: string; startedAt?: number }
+export interface RuntimeTelemetryRequest {
+  preset?: 'shell' | 'claude' | 'codex' | 'opencode'
+  cwd?: string
+  startedAt?: number
+  sessionId?: string
+}
+export type RuntimeTelemetrySource = 'provider-event' | 'history' | 'terminal-text' | 'model-registry'
+export type RuntimeTelemetryConfidence = 'authoritative' | 'derived' | 'estimated'
 export interface RuntimeTelemetrySnapshot {
   detectedModel?: string; contextTokens?: number; contextWindowTokens?: number; inputTokens?: number; outputTokens?: number
-  filePath?: string; sessionId?: string; updatedAt?: number
+  cacheReadTokens?: number; cacheWriteTokens?: number; totalTokens?: number
+  filePath?: string; sessionId?: string; observedAt?: number
+  source?: RuntimeTelemetrySource; confidence?: RuntimeTelemetryConfidence
 }
 export interface DesktopToastPayload {
   id?: string; type?: 'completed' | 'failed' | 'attention'; engine?: string; title?: string; body?: string

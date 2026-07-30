@@ -41,6 +41,7 @@ export function installElectronApiFallback(): void {
       onExit: () => () => {},
       onFocus: () => () => {},
       onStatus: () => () => {},
+      onTelemetry: () => () => {},
     },
     project: {
       detect: () => unavailableProjectResult(),

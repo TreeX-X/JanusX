@@ -255,6 +255,25 @@ test('Tab and Ctrl+P menus respond to every arrow key', async ({ page }) => {
   await expect(harness(page)).toHaveAttribute('data-active-provider', 'provider-b')
 })
 
+test('typing while the Chat root is focused does not outline the whole Chat', async ({ page }) => {
+  await page.getByTestId('toggle-streaming').click()
+  const island = page.locator('.janus-island')
+  await tap(island)
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await islandExpandedChatButton(page).click()
+
+  const chat = page.locator('.janus-island .janus-chat')
+  const input = chat.locator('textarea')
+  await chat.getByText('Shared controller message').click()
+  await expect(chat).toBeFocused()
+  await page.keyboard.type('outside input')
+
+  await expect(input).toHaveValue('')
+  await expect(chat).toHaveCSS('outline-style', 'none')
+})
+
 test('Island Chat embeds as the only pane in a workspace with no terminal', async ({ page }) => {
   await page.getByTestId('switch-empty-workspace').click()
   await expect(harness(page)).toHaveAttribute('data-active-workspace', 'workspace-3')

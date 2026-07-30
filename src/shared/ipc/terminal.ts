@@ -1,3 +1,5 @@
+import type { RuntimeTelemetrySnapshot } from './system'
+
 export const TERMINAL_INVOKE_CHANNELS = {
   warmup: 'terminal:warmup',
   create: 'terminal:create',
@@ -17,6 +19,7 @@ export const TERMINAL_EVENT_CHANNELS = {
   focus: 'terminal:focus',
   created: 'terminal:created',
   status: 'terminal:status',
+  telemetry: 'terminal:telemetry',
 } as const
 
 export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode'
@@ -92,6 +95,11 @@ export interface TerminalStatusEvent {
   status: TerminalStatus
 }
 
+export interface TerminalTelemetryEvent {
+  id: string
+  telemetry: RuntimeTelemetrySnapshot
+}
+
 export interface TerminalReplayResult {
   data: string
   seq: number
@@ -110,4 +118,5 @@ export interface TerminalAPI {
   onFocus(callback: (event: TerminalFocusEvent) => void): () => void
   onCreated(callback: (event: TerminalCreatedEvent) => void): () => void
   onStatus(callback: (event: TerminalStatusEvent) => void): () => void
+  onTelemetry(callback: (event: TerminalTelemetryEvent) => void): () => void
 }

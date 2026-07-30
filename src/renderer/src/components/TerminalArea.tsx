@@ -126,10 +126,17 @@ function modelLabel(terminal: Terminal): string {
 
 function contextWindow(terminal: Terminal): number | undefined {
   return (
-    getRegistryContextWindow(terminal.detectedModel) ??
     terminal.contextWindowTokens ??
+    getRegistryContextWindow(terminal.detectedModel) ??
     getEstimatedContextWindow(terminal.preset, terminal.detectedModel)
   )
+}
+
+function telemetryQualityLabel(terminal: Terminal): string {
+  if (terminal.telemetryConfidence === 'authoritative') return 'Exact'
+  if (terminal.telemetryConfidence === 'derived') return 'Derived'
+  if (terminal.telemetryConfidence === 'estimated') return 'Estimated'
+  return 'Unknown'
 }
 
 function contextRatio(terminal: Terminal): number | undefined {
@@ -185,9 +192,13 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
   const [popoverSize, setPopoverSize] = useState<PopoverSize>({ width: 270, height: 160 })
   const windowTokens = contextWindow(terminal)
   const rows = [
-    ['Input', formatExactTokenCount(terminal.inputTokens)],
-    ['Output', formatExactTokenCount(terminal.outputTokens)],
-    ['Updated', formatAge(terminal.updatedAt)],
+    ['Session input', formatExactTokenCount(terminal.inputTokens)],
+    ['Session output', formatExactTokenCount(terminal.outputTokens)],
+    ['Cache read', formatExactTokenCount(terminal.cacheReadTokens)],
+    ['Cache write', formatExactTokenCount(terminal.cacheWriteTokens)],
+    ['Session total', formatExactTokenCount(terminal.totalTokens)],
+    ['Source', `${telemetryQualityLabel(terminal)} · ${terminal.telemetrySource ?? 'unknown'}`],
+    ['Updated', formatAge(terminal.telemetryUpdatedAt)],
   ]
 
   useEffect(() => {
@@ -244,7 +255,7 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
     >
       <span className="mb-2 flex items-end justify-between gap-3">
         <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">Context</span>
+          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">Current context</span>
           <span className="mt-0.5 block truncate text-[13px] text-[#f2f2f2]">
             {formatExactTokenCount(terminal.contextTokens)} / {formatExactTokenCount(windowTokens)}
           </span>
@@ -1455,7 +1466,7 @@ export function TerminalArea() {
                         <ContextUsagePopover terminal={terminal} />
                       </span>
                       <span className="text-right text-[#555]" title={`input ${formatTokenCount(terminal.inputTokens)} · output ${formatTokenCount(terminal.outputTokens)}`}>
-                        {formatAge(terminal.updatedAt)}
+                        {formatAge(terminal.telemetryUpdatedAt)}
                       </span>
                     </button>
                   ))

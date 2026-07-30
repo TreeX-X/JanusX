@@ -148,7 +148,12 @@ export async function launchTerminalPreset(
     updatedAt: telemetryStartedAt,
     telemetryStartedAt,
     ...(includeContextWindow
-      ? { contextWindowTokens: getEstimatedContextWindow(preset) }
+      ? {
+          contextWindowTokens: getEstimatedContextWindow(preset),
+          telemetrySource: 'model-registry' as const,
+          telemetryConfidence: 'estimated' as const,
+          telemetryUpdatedAt: telemetryStartedAt,
+        }
       : {}),
   }
 

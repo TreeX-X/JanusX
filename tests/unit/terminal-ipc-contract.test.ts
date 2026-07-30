@@ -107,6 +107,21 @@ describe('Terminal IPC contract', () => {
     expect(mocks.removeListener).toHaveBeenCalledWith(TERMINAL_EVENT_CHANNELS.data, handler)
   })
 
+  it('forwards structured telemetry events', () => {
+    const callback = vi.fn()
+    const unsubscribe = terminalApi.onTelemetry(callback)
+    const handler = mocks.onRenderer.mock.calls.at(-1)?.[1]
+    const payload = {
+      id: 'terminal-1',
+      telemetry: { contextTokens: 8_000, source: 'history', observedAt: 1_000 },
+    }
+
+    handler({}, payload)
+    expect(callback).toHaveBeenCalledWith(payload)
+    unsubscribe()
+    expect(mocks.removeListener).toHaveBeenCalledWith(TERMINAL_EVENT_CHANNELS.telemetry, handler)
+  })
+
   it('does not expose a generic bridge', () => {
     expect(mocks.expose.mock.calls[0]?.[0]).not.toHaveProperty('invoke')
   })
