@@ -59,6 +59,8 @@ export interface GitFileChange {
   path: string
   status: 'M' | 'A' | 'D' | 'R' | '??' | 'UU'
   staged: boolean
+  additions: number | null
+  deletions: number | null
 }
 
 export interface GitCommit {

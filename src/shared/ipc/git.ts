@@ -4,7 +4,13 @@ export const GIT_CHANNELS = {
 } as const
 
 export interface GitBranch { name: string; upstream: string | null; ahead: number; behind: number }
-export interface GitFileChange { path: string; status: 'M' | 'A' | 'D' | 'R' | '??' | 'UU'; staged: boolean }
+export interface GitFileChange {
+  path: string
+  status: 'M' | 'A' | 'D' | 'R' | '??' | 'UU'
+  staged: boolean
+  additions: number | null
+  deletions: number | null
+}
 export interface GitCommit { hash: string; shortHash: string; message: string; author: string; date: string }
 export interface GitStatus { branch: GitBranch; changes: GitFileChange[]; clean: boolean }
 

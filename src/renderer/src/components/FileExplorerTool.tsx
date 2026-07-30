@@ -78,6 +78,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
+  const [loadingDirectoryKeys, setLoadingDirectoryKeys] = useState<Set<string>>(() => new Set())
   const activeWorkspacePath = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
     [activeWorkspaceId, workspaces],
@@ -96,10 +97,29 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   }, [gitStatus])
 
   const changedDirs = useMemo(() => {
-    const dirs = new Set<string>()
-    for (const path of fileChangeMap.keys()) {
-      // Walk from the change path itself so directory entries (e.g. untracked 'dir/') mark their own row.
-      for (let dir = path.replace(/\/+$/, ''); dir; dir = getParentPath(dir)) dirs.add(dir)
+    const dirs = new Map<string, { additions: boolean; deletions: boolean }>()
+    for (const [path, change] of fileChangeMap) {
+      const hasKnownCounts = change.additions !== null || change.deletions !== null
+      const hasLineChanges = (change.additions ?? 0) > 0 || (change.deletions ?? 0) > 0
+      const additions = (change.additions ?? 0) > 0
+        || change.status === 'A'
+        || change.status === '??'
+        || change.status === 'R'
+        || (!hasLineChanges && change.status === 'M')
+        || (!hasKnownCounts && change.status !== 'D')
+      const deletions = (change.deletions ?? 0) > 0
+        || change.status === 'D'
+        || change.status === 'R'
+        || (!hasLineChanges && change.status === 'M')
+        || (!hasKnownCounts && change.status !== 'A' && change.status !== '??')
+
+      for (let dir = getParentPath(path.replace(/\/+$/, '')); dir; dir = getParentPath(dir)) {
+        const current = dirs.get(dir)
+        dirs.set(dir, {
+          additions: current?.additions === true || additions,
+          deletions: current?.deletions === true || deletions,
+        })
+      }
     }
     return dirs
   }, [fileChangeMap])
@@ -111,9 +131,28 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   )
   const visibleTree = filtered ? filtered.nodes : fileTree
 
+  const loadingDirectoryPaths = useMemo(() => {
+    const paths = new Set<string>()
+    if (!activeWorkspacePath) return paths
+    const prefix = `${activeWorkspacePath}\0`
+    for (const key of loadingDirectoryKeys) {
+      if (key.startsWith(prefix)) paths.add(key.slice(prefix.length))
+    }
+    return paths
+  }, [activeWorkspacePath, loadingDirectoryKeys])
+
   const reloadDirectory = useCallback(async (path: string, expectedWorkspacePath?: string) => {
     const workspacePath = expectedWorkspacePath ?? getActiveWorkspacePath()
     if (!workspacePath || getActiveWorkspacePath() !== workspacePath) return
+    const loadKey = `${workspacePath}\0${path}`
+    if (path) {
+      setLoadingDirectoryKeys((current) => {
+        if (current.has(loadKey)) return current
+        const next = new Set(current)
+        next.add(loadKey)
+        return next
+      })
+    }
 
     try {
       if (path) {
@@ -123,6 +162,15 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       }
     } catch (err: any) {
       setErrorMessage(err?.message || '目录刷新失败')
+    } finally {
+      if (path) {
+        setLoadingDirectoryKeys((current) => {
+          if (!current.has(loadKey)) return current
+          const next = new Set(current)
+          next.delete(loadKey)
+          return next
+        })
+      }
     }
   }, [])
 
@@ -138,6 +186,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   useEffect(() => {
     if (!activeWorkspacePath) return
     setExpandedPaths(new Set())
+    setLoadingDirectoryKeys(new Set())
     setSearchQuery('')
     if (fileTreeViewportRef.current) fileTreeViewportRef.current.scrollTop = 0
     void fetchGitStatus(activeWorkspacePath)
@@ -209,6 +258,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
   const handleToggleDirectory = useCallback(
     (node: FileNode) => {
+      if (loadingDirectoryPaths.has(node.path)) return
       const shouldExpand = !expandedPaths.has(node.path)
       setExpandedPaths((current) => {
         const next = new Set(current)
@@ -221,7 +271,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         void reloadDirectory(node.path)
       }
     },
-    [expandedPaths, reloadDirectory],
+    [expandedPaths, loadingDirectoryPaths, reloadDirectory],
   )
 
   const getActiveWorkspace = useCallback(() => {
@@ -550,6 +600,8 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                       expandedPaths={
                         filtered ? new Set([...expandedPaths, ...filtered.expandedDirs]) : expandedPaths
                       }
+                      loading={loadingDirectoryPaths.has(node.path)}
+                      loadingDirectoryPaths={loadingDirectoryPaths}
                       fileChange={fileChangeMap.get(node.path) ?? null}
                       fileChangeMap={fileChangeMap}
                       changedDirs={changedDirs}

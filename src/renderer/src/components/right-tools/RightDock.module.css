@@ -168,7 +168,6 @@
   width: 30px;
   flex: 0 0 30px;
   color: var(--shell-dim);
-  border-left: 1px solid var(--shell-border);
   transition: color 140ms ease, background 140ms ease;
 }
 

@@ -53,6 +53,24 @@
   transform: rotate(45deg);
 }
 
+@keyframes directory-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.directorySpinner {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: #777;
+  animation: directory-spinner 700ms linear infinite;
+}
+
+.row[data-directory-loading='true'] {
+  cursor: progress;
+}
+
 .name {
   flex: 1;
   overflow: hidden;
@@ -65,35 +83,81 @@
   text-decoration-thickness: 1px;
 }
 
-@keyframes git-marker-in {
+@keyframes git-change-in {
   from {
     opacity: 0;
-    transform: scale(0.6);
+    transform: translateY(1px);
   }
 }
 
-.gitMarker {
+.gitChange {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  gap: 5px;
   flex-shrink: 0;
-  width: 14px;
   height: 14px;
   margin-left: 6px;
-  border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  animation: git-marker-in 140ms ease-out;
-  transition: color 140ms ease-out, background-color 140ms ease-out, opacity 140ms ease-out;
+  font-variant-numeric: tabular-nums;
+  animation: git-change-in 140ms ease-out;
 }
 
-.gitDirtyDot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(255, 120, 48, 0.55);
+.gitStatus {
+  display: flex;
+  min-width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+.gitAddition {
+  color: #78b982;
+}
+
+.gitDeletion {
+  color: #d27168;
+}
+
+.gitAddition,
+.gitDeletion {
+  width: 30px;
+  text-align: right;
+}
+
+.gitAggregate {
+  display: flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-left: 6px;
+  animation: git-change-in 140ms ease-out;
+}
+
+.gitAggregateAddition,
+.gitAggregateDeletion {
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+}
+
+.gitAggregateAddition {
+  background: #78b982;
+}
+
+.gitAggregateDeletion {
+  background: #d27168;
 }
 
 .row[data-drop-target='true'] {

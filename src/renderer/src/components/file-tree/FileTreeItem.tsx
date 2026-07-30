@@ -1,4 +1,5 @@
 import { useCallback, useState, type DragEvent, type MouseEvent } from 'react'
+import { LoaderCircle } from 'lucide-react'
 import type { FileNode, GitFileChange } from '@/types'
 import {
   clearWorkspaceFileDragData,
@@ -15,13 +16,18 @@ import { resolveFilePresentation } from '@/lib/file-presentation'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import styles from './file-tree.module.css'
 
-const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; color: string }> = {
-  M: { label: 'M', color: '#d99a4e' },
-  A: { label: 'A', color: '#7fae7f' },
-  D: { label: 'D', color: '#c96a5f' },
-  R: { label: 'R', color: '#7ba3bd' },
-  '??': { label: '?', color: '#9a9a9a' },
-  UU: { label: '!', color: '#e05f4a' },
+const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; color: string; title: string }> = {
+  M: { label: 'M', color: '#d99a4e', title: '已修改' },
+  A: { label: 'A', color: '#78b982', title: '已新增' },
+  D: { label: 'D', color: '#d27168', title: '已删除' },
+  R: { label: 'R', color: '#7ba3bd', title: '已重命名' },
+  '??': { label: 'A', color: '#78b982', title: '未跟踪' },
+  UU: { label: '!', color: '#e05f4a', title: '存在冲突' },
+}
+
+interface DirectoryChangeSummary {
+  additions: boolean
+  deletions: boolean
 }
 
 function canMoveFileToDirectory(
@@ -41,9 +47,11 @@ export interface FileTreeItemProps {
   activeFilePath: string | null
   expanded: boolean
   expandedPaths: Set<string>
+  loading: boolean
+  loadingDirectoryPaths: ReadonlySet<string>
   fileChange: GitFileChange | null
   fileChangeMap: Map<string, GitFileChange>
-  changedDirs: Set<string>
+  changedDirs: Map<string, DirectoryChangeSummary>
   onSelect: (path: string) => void
   onToggleDirectory: (node: FileNode) => void
   onOpenFile: (path: string) => void
@@ -58,6 +66,8 @@ export function FileTreeItem({
   activeFilePath,
   expanded,
   expandedPaths,
+  loading,
+  loadingDirectoryPaths,
   fileChange,
   fileChangeMap,
   changedDirs,
@@ -71,6 +81,7 @@ export function FileTreeItem({
   const isActive = activeFilePath === node.path
   const isGitIgnored = node.isGitIgnored === true
   const changeVisual = !isFolder && fileChange ? FILE_CHANGE_VISUALS[fileChange.status] : null
+  const directoryChange = isFolder ? changedDirs.get(node.path) : null
   const presentation = resolveFilePresentation(classifyFile(node.path, node.type))
   const [dropActive, setDropActive] = useState(false)
 
@@ -143,6 +154,8 @@ export function FileTreeItem({
         data-selected={isActive}
         data-git-ignored={isGitIgnored ? 'true' : undefined}
         data-drop-target={dropActive ? 'true' : undefined}
+        data-directory-loading={loading ? 'true' : undefined}
+        aria-busy={loading || undefined}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
@@ -162,23 +175,22 @@ export function FileTreeItem({
         <span className={styles.name} data-file-name={node.name}>
           {node.name}
         </span>
-        {changeVisual && (
-          <span
-            data-git-status={fileChange?.status}
-            className={styles.gitMarker}
-            title={`${fileChange?.staged ? 'Staged' : 'Modified'} · ${fileChange?.status}`}
-            style={{
-              color: changeVisual.color,
-              opacity: fileChange?.staged ? 1 : 0.85,
-              background: fileChange?.staged ? `${changeVisual.color}24` : 'transparent',
-            }}
-          >
-            {changeVisual.label}
-          </span>
+        {isFolder && loading && (
+          <LoaderCircle className={styles.directorySpinner} size={12} strokeWidth={1.6} aria-hidden="true" />
         )}
-        {isFolder && changedDirs.has(node.path) && (
-          <span data-git-dirty className={styles.gitMarker} title="包含改动">
-            <span className={styles.gitDirtyDot} />
+        {changeVisual && fileChange && (
+          <FileChangeIndicator change={fileChange} visual={changeVisual} />
+        )}
+        {directoryChange && (
+          <span
+            data-git-dirty
+            data-has-additions={directoryChange.additions || undefined}
+            data-has-deletions={directoryChange.deletions || undefined}
+            className={styles.gitAggregate}
+            title={`包含${directoryChange.additions ? '新增' : ''}${directoryChange.additions && directoryChange.deletions ? '和' : ''}${directoryChange.deletions ? '删除' : ''}`}
+          >
+            {directoryChange.additions && <span className={styles.gitAggregateAddition} />}
+            {directoryChange.deletions && <span className={styles.gitAggregateDeletion} />}
           </span>
         )}
       </div>
@@ -193,6 +205,8 @@ export function FileTreeItem({
               activeFilePath={activeFilePath}
               expanded={expandedPaths.has(child.path)}
               expandedPaths={expandedPaths}
+              loading={loadingDirectoryPaths.has(child.path)}
+              loadingDirectoryPaths={loadingDirectoryPaths}
               fileChange={fileChangeMap.get(child.path) ?? null}
               fileChangeMap={fileChangeMap}
               changedDirs={changedDirs}
@@ -207,4 +221,54 @@ export function FileTreeItem({
       )}
     </div>
   )
+}
+
+function FileChangeIndicator({
+  change,
+  visual,
+}: {
+  change: GitFileChange
+  visual: { label: string; color: string; title: string }
+}) {
+  const hasAdditions = (change.additions ?? 0) > 0
+  const hasDeletions = (change.deletions ?? 0) > 0
+  const isBinary = change.additions === null && change.deletions === null
+  const showStatus = change.status === 'UU'
+    || change.status === 'R'
+    || isBinary
+    || (!hasAdditions && !hasDeletions)
+  const statusLabel = isBinary && change.status !== 'UU' && change.status !== 'R' ? 'BIN' : visual.label
+  const countTitle = [
+    hasAdditions ? `+${change.additions}` : '',
+    hasDeletions ? `−${change.deletions}` : '',
+  ].filter(Boolean).join(' ')
+
+  return (
+    <span
+      data-git-status={change.status}
+      className={styles.gitChange}
+      title={`${visual.title}${countTitle ? ` · ${countTitle}` : ''}`}
+    >
+      {showStatus && (
+        <span
+          className={styles.gitStatus}
+          style={{ color: visual.color, borderColor: `${visual.color}52` }}
+        >
+          {statusLabel}
+        </span>
+      )}
+      {hasAdditions && (
+        <span data-git-additions className={styles.gitAddition}>+{formatChangeCount(change.additions!)}</span>
+      )}
+      {hasDeletions && (
+        <span data-git-deletions className={styles.gitDeletion}>−{formatChangeCount(change.deletions!)}</span>
+      )}
+    </span>
+  )
+}
+
+function formatChangeCount(value: number): string {
+  if (value < 1000) return String(value)
+  const compact = value < 10000 ? (value / 1000).toFixed(1) : Math.round(value / 1000).toString()
+  return `${compact.replace(/\.0$/, '')}k`
 }

@@ -11,13 +11,14 @@ export function getActiveWorkspacePath(): string | null {
 /**
  * 全量树加载代际。
  * - loadWorkspaceFileTree 每次自增,只提交最新一次
- * - reloadWorkspaceDirectory 捕获启动时代际;若期间发生全量加载则丢弃,避免旧子树写回
- * 不同目录的并发 reload 互不抢代际,可同时提交
+ * - reloadWorkspaceDirectory 提交后推进目录变更代际,阻止旧根快照覆盖 children
+ * - 同一目录的并发 reload 复用请求,不同目录仍可同时加载
  */
 let fileTreeLoadGeneration = 0
 // A directory response can arrive while a root refresh is in flight.  Track committed
 // directory updates separately so the older root snapshot cannot erase newly loaded children.
 let fileTreeDirectoryMutationGeneration = 0
+const pendingDirectoryLoads = new Map<string, Promise<void>>()
 
 export interface FileTreeLoadOptions {
   /** Used when the visible workspace changes; background refreshes keep the current tree in place. */
@@ -80,21 +81,41 @@ export async function loadWorkspaceFileTree(
 
 }
 
-/** 重拉单个目录的 children 并挂回树上;工作区已切换或全量刷新已开始时丢弃结果 */
-export async function reloadWorkspaceDirectory(workspacePath: string, path: string): Promise<void> {
-  const generation = fileTreeLoadGeneration
-  const children = await window.electron.fileTree.children(workspacePath, path)
-  if (generation !== fileTreeLoadGeneration) return
-  if (getActiveWorkspacePath() !== workspacePath) return
+/** 重拉单个目录的 children 并挂回树上。 */
+function containsDirectory(nodes: FileNode[], path: string): boolean {
+  for (const node of nodes) {
+    if (node.type !== 'directory') continue
+    if (node.path === path) return true
+    if (node.children?.length && containsDirectory(node.children, path)) return true
+  }
+  return false
+}
 
-  let committed = false
-  useWorkspaceStore.setState((state) => {
-    if (generation !== fileTreeLoadGeneration) return {}
-    if (getActiveWorkspacePath() !== workspacePath) return {}
-    committed = true
-    return { fileTree: injectDirectoryChildren(state.fileTree, path, children) }
-  })
-  if (committed) fileTreeDirectoryMutationGeneration += 1
+export async function reloadWorkspaceDirectory(workspacePath: string, path: string): Promise<void> {
+  const loadKey = `${workspacePath}\0${path}`
+  const pending = pendingDirectoryLoads.get(loadKey)
+  if (pending) return pending
+
+  const operation = (async () => {
+    const children = await window.electron.fileTree.children(workspacePath, path)
+    if (getActiveWorkspacePath() !== workspacePath) return
+
+    let committed = false
+    useWorkspaceStore.setState((state) => {
+      if (getActiveWorkspacePath() !== workspacePath) return {}
+      if (!containsDirectory(state.fileTree, path)) return {}
+      committed = true
+      return { fileTree: injectDirectoryChildren(state.fileTree, path, children) }
+    })
+    if (committed) fileTreeDirectoryMutationGeneration += 1
+  })()
+
+  pendingDirectoryLoads.set(loadKey, operation)
+  try {
+    await operation
+  } finally {
+    if (pendingDirectoryLoads.get(loadKey) === operation) pendingDirectoryLoads.delete(loadKey)
+  }
 }
 
 export async function chooseAndCreateWorkspace(): Promise<Workspace | null> {

@@ -146,7 +146,7 @@ describe('semantic file icon', () => {
       expanded: false,
       expandedPaths: new Set<string>(),
       fileChangeMap: new Map<string, GitFileChange>(),
-      changedDirs: new Set<string>(),
+      changedDirs: new Map<string, { additions: boolean; deletions: boolean }>(),
       onSelect: vi.fn(),
       onToggleDirectory: vi.fn(),
       onOpenFile: vi.fn(),
@@ -167,6 +167,8 @@ describe('semantic file icon', () => {
       path: 'src/App.tsx',
       status: 'M',
       staged: false,
+      additions: 18,
+      deletions: 4,
     } as GitFileChange
 
     const activeMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
@@ -192,6 +194,10 @@ describe('semantic file icon', () => {
     expect(activeMarkup).toContain('data-file-kind="typescript"')
     expect(activeMarkup).toContain('data-selected="true"')
     expect(activeMarkup).toContain('data-git-status="M"')
+    expect(activeMarkup).toContain('data-git-additions')
+    expect(activeMarkup).toContain('>+18</span>')
+    expect(activeMarkup).toContain('data-git-deletions')
+    expect(activeMarkup).toContain('>−4</span>')
     expect(activeMarkup.indexOf('data-file-kind="typescript"')).toBeLessThan(
       activeMarkup.indexOf('data-git-status="M"'),
     )
@@ -205,7 +211,69 @@ describe('semantic file icon', () => {
     expect(ignoredMarkup).toContain('data-git-ignored="true"')
   })
 
-  it('marks folders containing git changes with an aggregate dot', () => {
+  it('renders a new file with additions only and suppresses zero deletions', () => {
+    const node = { name: 'NewPanel.tsx', path: 'src/NewPanel.tsx', type: 'file' } as FileNode
+    const change = {
+      path: node.path,
+      status: '??',
+      staged: false,
+      additions: 126,
+      deletions: 0,
+    } as GitFileChange
+    const markup = renderToStaticMarkup(createElement(FileTreeItem, {
+      node,
+      workspacePath: 'C:\\workspace',
+      depth: 0,
+      activeFilePath: null,
+      expanded: false,
+      expandedPaths: new Set<string>(),
+      fileChange: change,
+      fileChangeMap: new Map([[node.path, change]]),
+      changedDirs: new Map(),
+      onSelect: vi.fn(),
+      onToggleDirectory: vi.fn(),
+      onOpenFile: vi.fn(),
+      onMoveFile: vi.fn(),
+      onOpenContextMenu: vi.fn(),
+    }))
+
+    expect(markup).toContain('>+126</span>')
+    expect(markup).not.toContain('data-git-deletions')
+    expect(markup).not.toContain('>−0</span>')
+  })
+
+  it('keeps exceptional file status symbols distinct from line counts', () => {
+    const node = { name: 'renamed.bin', path: 'src/renamed.bin', type: 'file' } as FileNode
+    const change = {
+      path: node.path,
+      status: 'R',
+      staged: true,
+      additions: null,
+      deletions: null,
+    } as GitFileChange
+    const markup = renderToStaticMarkup(createElement(FileTreeItem, {
+      node,
+      workspacePath: 'C:\\workspace',
+      depth: 0,
+      activeFilePath: null,
+      expanded: false,
+      expandedPaths: new Set<string>(),
+      fileChange: change,
+      fileChangeMap: new Map([[node.path, change]]),
+      changedDirs: new Map(),
+      onSelect: vi.fn(),
+      onToggleDirectory: vi.fn(),
+      onOpenFile: vi.fn(),
+      onMoveFile: vi.fn(),
+      onOpenContextMenu: vi.fn(),
+    }))
+
+    expect(markup).toContain('data-git-status="R"')
+    expect(markup).toContain('>R</span>')
+    expect(markup).not.toContain('>BIN</span>')
+  })
+
+  it('marks folders with character-free addition and deletion bars', () => {
     const baseProps = {
       node: { name: 'src', path: 'src', type: 'directory' } as FileNode,
       workspacePath: 'C:\\workspace',
@@ -224,14 +292,16 @@ describe('semantic file icon', () => {
 
     const dirtyMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
       ...baseProps,
-      changedDirs: new Set(['src']),
+      changedDirs: new Map([['src', { additions: true, deletions: true }]]),
     }))
     const cleanMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
       ...baseProps,
-      changedDirs: new Set<string>(),
+      changedDirs: new Map<string, { additions: boolean; deletions: boolean }>(),
     }))
 
     expect(dirtyMarkup).toContain('data-git-dirty')
+    expect(dirtyMarkup).toContain('data-has-additions="true"')
+    expect(dirtyMarkup).toContain('data-has-deletions="true"')
     expect(dirtyMarkup).not.toContain('data-git-status=')
     expect(cleanMarkup).not.toContain('data-git-dirty')
   })

@@ -8,6 +8,7 @@ import {
   type FileTreeItemProps,
   type PendingFileTreeDelete,
 } from '../../src/renderer/src/components/FileExplorerTool'
+import { loadWorkspaceFileTree } from '../../src/renderer/src/features/workspace/actions'
 import { PromptDialog, type PromptDialogProps } from '../../src/renderer/src/components/blueprint/PromptDialog'
 import { useWorkspaceStore } from '../../src/renderer/src/stores/workspace'
 import type { FileNode, Workspace } from '../../src/renderer/src/types'
@@ -214,6 +215,77 @@ describe('file explorer delete confirmation', () => {
     }
   })
 
+  it('keeps an expanded directory visible through consecutive root refreshes', async () => {
+    const originalWindow = globalThis.window
+    const originalState = useWorkspaceStore.getState()
+    const firstChildrenLoad = deferred<FileNode[]>()
+    const firstRootLoad = deferred<FileNode[]>()
+    const secondRootLoad = deferred<FileNode[]>()
+    const child = { name: 'App.tsx', path: 'src/App.tsx', type: 'file' } as FileNode
+    const loadChildren = vi.fn(() => firstChildrenLoad.promise)
+    const workspace = { id: 'active', path: 'C:\\workspace' } as Workspace
+    const rootTree = [{
+      name: 'src',
+      path: 'src',
+      type: 'directory',
+      loaded: false,
+      hasChildren: true,
+      children: [],
+    }] as FileNode[]
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: {
+        electron: {
+          fileTree: {
+            children: loadChildren,
+            load: vi.fn()
+              .mockReturnValueOnce(firstRootLoad.promise)
+              .mockReturnValueOnce(secondRootLoad.promise),
+          },
+        },
+      },
+    })
+    useWorkspaceStore.setState({
+      workspaces: [workspace],
+      activeWorkspaceId: workspace.id,
+      fileTree: rootTree,
+    })
+
+    try {
+      const directoryReload = reloadWorkspaceDirectory(workspace.path, 'src')
+      const duplicateReload = reloadWorkspaceDirectory(workspace.path, 'src')
+      await vi.waitFor(() => expect(loadChildren).toHaveBeenCalledTimes(1))
+      const firstRootRefresh = loadWorkspaceFileTree(workspace.path)
+      const secondRootRefresh = loadWorkspaceFileTree(workspace.path)
+
+      firstChildrenLoad.resolve([child])
+      await Promise.all([directoryReload, duplicateReload])
+      expect(loadChildren).toHaveBeenCalledTimes(1)
+
+      firstRootLoad.resolve(rootTree)
+      secondRootLoad.resolve(rootTree)
+      await Promise.all([firstRootRefresh, secondRootRefresh])
+
+      expect(useWorkspaceStore.getState().fileTree[0]).toMatchObject({
+        path: 'src',
+        loaded: true,
+        children: [child],
+      })
+    } finally {
+      useWorkspaceStore.setState({
+        workspaces: originalState.workspaces,
+        activeWorkspaceId: originalState.activeWorkspaceId,
+        fileTree: originalState.fileTree,
+      })
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        writable: true,
+        value: originalWindow,
+      })
+    }
+  })
+
   it('preserves the neighboring file-row context-menu operation', () => {
     const node = { name: 'original.ts', path: 'src/original.ts', type: 'file' } as FileNode
     const onSelect = vi.fn()
@@ -225,9 +297,11 @@ describe('file explorer delete confirmation', () => {
       activeFilePath: null,
       expanded: false,
       expandedPaths: new Set(),
+      loading: false,
+      loadingDirectoryPaths: new Set(),
       fileChange: null,
       fileChangeMap: new Map(),
-      changedDirs: new Set(),
+      changedDirs: new Map(),
       onSelect,
       onToggleDirectory: vi.fn(),
       onOpenFile: vi.fn(),

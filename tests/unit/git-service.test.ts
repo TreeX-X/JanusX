@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { push } from '../../src/main/git/service'
+import { getStatus, push } from '../../src/main/git/service'
 
 const execFileAsync = promisify(execFile)
 
@@ -48,5 +48,48 @@ describe('Git service push', () => {
     await git(repository, 'remote', 'remove', 'origin')
 
     await expect(push(repository)).rejects.toThrow('No Git remote is configured')
+  })
+
+  it('reports working-tree line totals across staged, unstaged and untracked changes', async () => {
+    await writeFile(join(repository, 'README.md'), '# staged\n')
+    await git(repository, 'add', 'README.md')
+    await writeFile(join(repository, 'README.md'), '# working\nextra\n')
+    await writeFile(join(repository, 'new-file.txt'), 'one\ntwo\n')
+
+    const status = await getStatus(repository)
+    const readmeChanges = status.changes.filter((change) => change.path === 'README.md')
+    const newFile = status.changes.find((change) => change.path === 'new-file.txt')
+
+    expect(readmeChanges).toHaveLength(2)
+    expect(readmeChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ staged: true, additions: 2, deletions: 1 }),
+      expect.objectContaining({ staged: false, additions: 2, deletions: 1 }),
+    ]))
+    expect(newFile).toMatchObject({ status: '??', additions: 2, deletions: 0 })
+  })
+
+  it('uses a binary fallback when an untracked file has no line statistics', async () => {
+    await writeFile(join(repository, 'image.bin'), Buffer.from([0, 1, 2, 3]))
+
+    const status = await getStatus(repository)
+
+    expect(status.changes.find((change) => change.path === 'image.bin')).toMatchObject({
+      status: '??',
+      additions: null,
+      deletions: null,
+    })
+  })
+
+  it('keeps the destination path and zero-line statistic for a pure rename', async () => {
+    await git(repository, 'mv', 'README.md', 'GUIDE.md')
+
+    const status = await getStatus(repository)
+
+    expect(status.changes).toContainEqual(expect.objectContaining({
+      path: 'GUIDE.md',
+      status: 'R',
+      additions: 0,
+      deletions: 0,
+    }))
   })
 })
