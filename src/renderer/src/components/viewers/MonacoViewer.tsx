@@ -1,11 +1,14 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import Editor from '@monaco-editor/react'
+import type { FindableEditor } from '@/lib/editor-find'
+import { defineJanusxDarkTheme, JANUSX_DARK_THEME_NAME } from '@/lib/monaco-theme'
 
 interface MonacoViewerProps {
   content: string
   language: string
   onChange: (value: string) => void
   readOnly?: boolean
+  onEditorMount?: (editor: FindableEditor | null) => void
 }
 
 function LoadingIndicator() {
@@ -25,7 +28,8 @@ function LoadingIndicator() {
   )
 }
 
-export function MonacoViewer({ content, language, onChange, readOnly = false }: MonacoViewerProps) {
+export function MonacoViewer({ content, language, onChange, readOnly = false, onEditorMount }: MonacoViewerProps) {
+  const editorRef = useRef<FindableEditor | null>(null)
   const handleChange = useCallback(
     (value: string | undefined) => {
       onChange(value || '')
@@ -34,22 +38,17 @@ export function MonacoViewer({ content, language, onChange, readOnly = false }: 
   )
 
   const handleBeforeMount = useCallback((monaco: any) => {
-    monaco.editor.defineTheme('janusx-dark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: {
-        'editor.background': '#0a0a0a',
-        'editor.foreground': '#d4d4d4',
-        'editor.lineHighlightBackground': '#1a1a1a',
-        'editorCursor.foreground': '#ff7830',
-        'editor.selectionBackground': '#264f78',
-        'editorLineNumber.foreground': '#444444',
-        'editorLineNumber.activeForeground': '#888888',
-        'editor.inactiveSelectionBackground': '#1e3a56',
-      },
-    })
+    defineJanusxDarkTheme(monaco)
   }, [])
+
+  const handleMount = useCallback((editor: FindableEditor) => {
+    editorRef.current = editor
+    onEditorMount?.(editor)
+  }, [onEditorMount])
+
+  useEffect(() => () => {
+    if (editorRef.current) onEditorMount?.(null)
+  }, [onEditorMount])
 
   return (
     <div className="relative h-full w-full overflow-hidden" style={{ background: '#0a0a0a' }}>
@@ -58,7 +57,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false }: 
         language={language}
         value={content}
         onChange={handleChange}
-        theme="janusx-dark"
+        theme={JANUSX_DARK_THEME_NAME}
         loading={<LoadingIndicator />}
         options={{
           fontSize: 13,
@@ -73,6 +72,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false }: 
           domReadOnly: readOnly,
         }}
         beforeMount={handleBeforeMount}
+        onMount={handleMount}
       />
     </div>
   )

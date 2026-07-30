@@ -11,9 +11,9 @@ interface GitStore {
   fetchLog: (cwd: string, maxCount?: number) => Promise<void>
   stageFiles: (cwd: string, paths: string[]) => Promise<void>
   unstageFiles: (cwd: string, paths: string[]) => Promise<void>
-  commitChanges: (cwd: string, message: string) => Promise<void>
-  pushChanges: (cwd: string) => Promise<void>
-  pullChanges: (cwd: string) => Promise<void>
+  commitChanges: (cwd: string, message: string) => Promise<boolean>
+  pushChanges: (cwd: string) => Promise<boolean>
+  pullChanges: (cwd: string) => Promise<boolean>
 }
 
 export const useGitStore = create<GitStore>((set) => ({
@@ -66,8 +66,10 @@ export const useGitStore = create<GitStore>((set) => ({
     try {
       const status = await window.electron.git.commit(cwd, message)
       set({ status, loading: false })
+      return true
     } catch (err: any) {
       set({ error: err.message, loading: false })
+      return false
     }
   },
 
@@ -77,8 +79,10 @@ export const useGitStore = create<GitStore>((set) => ({
       await window.electron.git.push(cwd)
       const status = await window.electron.git.status(cwd)
       set({ status, loading: false })
+      return true
     } catch (err: any) {
       set({ error: err.message, loading: false })
+      return false
     }
   },
 
@@ -88,8 +92,10 @@ export const useGitStore = create<GitStore>((set) => ({
       await window.electron.git.pull(cwd)
       const status = await window.electron.git.status(cwd)
       set({ status, loading: false })
+      return true
     } catch (err: any) {
       set({ error: err.message, loading: false })
+      return false
     }
   },
 }))

@@ -1,13 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
+import type { FindableEditor } from '@/lib/editor-find'
+import { defineJanusxDarkTheme, JANUSX_DARK_THEME_NAME } from '@/lib/monaco-theme'
 
 interface HtmlViewerProps {
   content: string
   onChange: (value: string) => void
+  onEditorMount?: (editor: FindableEditor | null) => void
 }
 
-export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
+export function HtmlViewer({ content, onChange, onEditorMount }: HtmlViewerProps) {
   const [splitRatio, setSplitRatio] = useState(50)
   const [scriptsEnabled, setScriptsEnabled] = useState(false)
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
@@ -15,6 +18,7 @@ export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editorRef = useRef<FindableEditor | null>(null)
 
   const handleChange = useCallback(
     (value: string | undefined) => {
@@ -24,22 +28,13 @@ export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
   )
 
   const handleBeforeMount = useCallback((monaco: any) => {
-    monaco.editor.defineTheme('janusx-dark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: {
-        'editor.background': '#0a0a0a',
-        'editor.foreground': '#d4d4d4',
-        'editor.lineHighlightBackground': '#1a1a1a',
-        'editorCursor.foreground': '#ff7830',
-        'editor.selectionBackground': 'rgba(100, 140, 200, 0.25)',
-        'editorLineNumber.foreground': '#444444',
-        'editorLineNumber.activeForeground': '#888888',
-        'editor.inactiveSelectionBackground': 'rgba(100, 140, 200, 0.12)',
-      },
-    })
+    defineJanusxDarkTheme(monaco)
   }, [])
+
+  const handleMount = useCallback((editor: FindableEditor) => {
+    editorRef.current = editor
+    onEditorMount?.(editor)
+  }, [onEditorMount])
 
   useEffect(() => {
     if (debounceTimer.current) {
@@ -89,6 +84,17 @@ export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
   const showEditor = previewMode !== 'preview'
   const showPreview = previewMode !== 'editor'
   const isSplit = previewMode === 'split'
+
+  useEffect(() => {
+    if (!showEditor && editorRef.current) {
+      editorRef.current = null
+      onEditorMount?.(null)
+    }
+  }, [onEditorMount, showEditor])
+
+  useEffect(() => () => {
+    if (editorRef.current) onEditorMount?.(null)
+  }, [onEditorMount])
 
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden" style={{ background: '#0a0a0a', height: '100%' }}>
@@ -148,7 +154,7 @@ export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
                 language="html"
                 value={content}
                 onChange={handleChange}
-                theme="janusx-dark"
+                theme={JANUSX_DARK_THEME_NAME}
                 loading={null}
                 options={{
                   fontSize: 13,
@@ -161,6 +167,7 @@ export function HtmlViewer({ content, onChange }: HtmlViewerProps) {
                   padding: { top: 12, bottom: 12 },
                 }}
                 beforeMount={handleBeforeMount}
+                onMount={handleMount}
               />
             </div>
           </div>

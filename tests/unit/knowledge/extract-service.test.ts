@@ -12,15 +12,17 @@ import type {
 const mocks = vi.hoisted(() => ({
   getDefaultModel: vi.fn(),
   getLanguageModel: vi.fn(),
-  getAiModule: vi.fn(),
+  generateObject: vi.fn(),
 }))
 
 vi.mock('../../../src/main/llm/LlmService', () => ({
   llmService: {
     getDefaultModel: mocks.getDefaultModel,
     getLanguageModel: mocks.getLanguageModel,
-    getAiModule: mocks.getAiModule,
   },
+}))
+vi.mock('../../../src/main/llm/ai-runtime', () => ({
+  generateObject: mocks.generateObject,
 }))
 
 async function loadService() {
@@ -53,9 +55,7 @@ function setupLlm(object: unknown): void {
     modelId: 'gpt-test',
   })
   mocks.getLanguageModel.mockResolvedValue({ id: 'test-model' })
-  mocks.getAiModule.mockResolvedValue({
-    generateObject: vi.fn(async () => ({ object })),
-  })
+  mocks.generateObject.mockResolvedValue({ object })
 }
 
 describe('KnowledgeExtractService', () => {
@@ -67,7 +67,7 @@ describe('KnowledgeExtractService', () => {
     process.env.JANUSX_KNOWLEDGE_ROOT = knowledgeRoot
     mocks.getDefaultModel.mockReset()
     mocks.getLanguageModel.mockReset()
-    mocks.getAiModule.mockReset()
+    mocks.generateObject.mockReset()
   })
 
   afterEach(async () => {
@@ -228,10 +228,8 @@ describe('KnowledgeExtractService', () => {
       modelId: 'gpt-test',
     })
     mocks.getLanguageModel.mockResolvedValue({ id: 'test-model' })
-    mocks.getAiModule.mockResolvedValue({
-      generateObject: vi.fn(async () => {
-        throw new Error('provider-down')
-      }),
+    mocks.generateObject.mockImplementation(async () => {
+      throw new Error('provider-down')
     })
     const { knowledgeExtractService } = await loadService()
 

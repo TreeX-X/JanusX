@@ -13,6 +13,8 @@ import {
   normalizeTerminalInputPreviewText,
 } from '@/lib/terminal-input-transaction'
 import { handleCodexMultilineInput, isCodexMultilineShortcut } from '@/lib/codex-terminal-input'
+import { createTerminalScrollIntentController } from '@/lib/terminal-scroll-intent'
+import { attachTerminalTuiWheelHandler } from '@/lib/terminal-tui-wheel'
 import {
   extractRuntimeTelemetry,
   mergeRuntimeTelemetrySnapshot,
@@ -31,6 +33,7 @@ import {
   recoverTerminalViewportAndSync,
   type TerminalGeometrySize,
 } from '@/lib/terminal-viewport-resize'
+import { createTerminalOutputScheduler } from '@/lib/terminal-output-scheduler'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { TerminalDataEvent, TerminalReplayResult } from '../../../shared/ipc/terminal'
@@ -39,18 +42,26 @@ interface CLITerminalProps {
   terminalId: string
   visible?: boolean
   focused?: boolean
+  workspaceVisible?: boolean
 }
 
 const HISTORY_TELEMETRY_POLL_MS = 5_000
 
-export function CLITerminal({ terminalId, visible = true, focused = false }: CLITerminalProps) {
+export function CLITerminal({
+  terminalId,
+  visible = true,
+  focused = false,
+  workspaceVisible = true,
+}: CLITerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<(() => void) | null>(null)
   const focusedRef = useRef(focused)
   const visibleRef = useRef(visible)
+  const workspaceVisibleRef = useRef(workspaceVisible)
   const visibilityRecoveryTimerRef = useRef<number | null>(null)
   const [fileDragOver, setFileDragOver] = useState(false)
+  const [rendererGeneration, setRendererGeneration] = useState(0)
   const pendingOutputRef = useRef('')
   const telemetryFlushTimerRef = useRef<number | null>(null)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
@@ -121,6 +132,7 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
   useEffect(() => {
     focusedRef.current = focused
     visibleRef.current = visible
+    workspaceVisibleRef.current = workspaceVisible
     if (visible) {
       fitRef.current?.()
       // Workspace activation can settle pane geometry after the first RAF pair
@@ -138,7 +150,7 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
       visibilityRecoveryTimerRef.current = null
     }
     if (focused) termRef.current?.focus()
-  }, [focused, visible])
+  }, [focused, visible, workspaceVisible])
 
   // Side panel collapse/expand changes the center grid width; force a late refit
   // after the transition, matching the manual "toggle panel to recover" workaround.
@@ -162,10 +174,11 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
 
     const term = new Terminal({
       theme: {
-        background: '#050505',
+        /*-- 与 --shell-canvas 对齐：终端画布与中部工作台同色，避免 pane 内出现色阶断层 --*/
+        background: '#0a0a0a',
         foreground: '#d4d4d4',
         cursor: '#ff7830',
-        cursorAccent: '#050505',
+        cursorAccent: '#0a0a0a',
         selectionBackground: 'rgba(255, 120, 48, 0.18)',
         black: '#1f1f23',
         red: '#e06c75',
@@ -194,6 +207,8 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
       cursorStyle: 'bar',
       cursorWidth: 2,
       scrollback: 5000,
+      scrollSensitivity: 1.15,
+      fastScrollSensitivity: 5,
       allowTransparency: true,
       windowsPty,
       reflowCursorLine,
@@ -205,101 +220,28 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
 
     const hostElement = containerRef.current
     const hostParent = hostElement.parentElement
-    let activeBufferType: 'normal' | 'alternate' = term.buffer.active.type
-
-    const syncBufferType = (type: 'normal' | 'alternate') => {
-      activeBufferType = type
-      hostElement.dataset.bufferType = type
-      if (type === 'normal') {
-        const slider = hostElement.querySelector<HTMLElement>(
-          '.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider'
-        )
-        slider?.style.removeProperty('top')
-      }
-    }
-    syncBufferType(term.buffer.active.type)
+    const scrollIntent = createTerminalScrollIntentController(term)
+    attachTerminalTuiWheelHandler(term)
+    hostElement.dataset.bufferType = term.buffer.active.type
     const bufferChangeDisposable = term.buffer.onBufferChange((buffer) => {
-      syncBufferType(buffer.type)
+      hostElement.dataset.bufferType = buffer.type
+      scrollIntent.handleBufferChange(buffer.type)
     })
-
-    // Scrollbar is optional for terminal operation; never skip fit/resize when missing.
-    const scrollbarElement = hostElement.querySelector(
+    const scrollbarElement = hostElement.querySelector<HTMLElement>(
       '.xterm .xterm-scrollable-element > .scrollbar.vertical'
     )
-    const xtermElement = hostElement.querySelector<HTMLElement>('.xterm')
-    const scrollbarSlider = scrollbarElement?.querySelector<HTMLElement>('.slider')
-
-    let draggingScrollbar = false
-    let lastScrollbarPointerY = 0
-    let pendingAlternateDragDelta = 0
-
-    const dispatchAlternateBufferWheel = (direction: -1 | 1) => {
-      if (!xtermElement) return
-      const rect = xtermElement.getBoundingClientRect()
-      xtermElement.dispatchEvent(new WheelEvent('wheel', {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2,
-        deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-        deltaY: direction * 100,
-      }))
+    const finishScrollbarInteraction = () => {
+      window.removeEventListener('pointerup', finishScrollbarInteraction)
+      window.removeEventListener('blur', finishScrollbarInteraction)
+      scrollIntent.commitUserScroll()
     }
-
-    const handleAlternateScrollbarDrag = (event: PointerEvent) => {
-      const delta = event.clientY - lastScrollbarPointerY
-      lastScrollbarPointerY = event.clientY
-      pendingAlternateDragDelta += delta
-
-      if (scrollbarElement instanceof HTMLElement && scrollbarSlider) {
-        const trackRect = scrollbarElement.getBoundingClientRect()
-        const thumbHeight = scrollbarSlider.getBoundingClientRect().height
-        const nextTop = Math.max(
-          0,
-          Math.min(trackRect.height - thumbHeight, event.clientY - trackRect.top - thumbHeight / 2)
-        )
-        scrollbarSlider.style.setProperty('top', `${nextTop}px`, 'important')
-      }
-
-      const steps = Math.min(8, Math.floor(Math.abs(pendingAlternateDragDelta) / 8))
-      if (steps === 0) return
-      const direction = pendingAlternateDragDelta < 0 ? -1 : 1
-      for (let step = 0; step < steps; step += 1) {
-        dispatchAlternateBufferWheel(direction)
-      }
-      pendingAlternateDragDelta -= direction * steps * 8
+    const handleScrollbarPointerDown = () => {
+      if (term.buffer.active.type !== 'normal') return
+      scrollIntent.beginUserScroll()
+      window.addEventListener('pointerup', finishScrollbarInteraction)
+      window.addEventListener('blur', finishScrollbarInteraction)
     }
-
-    const stopScrollbarDrag = () => {
-      if (!draggingScrollbar) return
-      draggingScrollbar = false
-      pendingAlternateDragDelta = 0
-      document.body.classList.remove('terminal-scrollbar-dragging')
-      window.removeEventListener('pointermove', handleAlternateScrollbarDrag)
-      window.removeEventListener('pointerup', stopScrollbarDrag)
-      window.removeEventListener('blur', stopScrollbarDrag)
-      window.removeEventListener('dragend', stopScrollbarDrag)
-    }
-
-    const handleScrollbarPointerDown = (event: PointerEvent) => {
-      draggingScrollbar = true
-      document.body.classList.add('terminal-scrollbar-dragging')
-      if (activeBufferType === 'alternate') {
-        event.preventDefault()
-        event.stopImmediatePropagation()
-        term.focus()
-        lastScrollbarPointerY = event.clientY
-        pendingAlternateDragDelta = 0
-        window.addEventListener('pointermove', handleAlternateScrollbarDrag)
-      }
-      window.addEventListener('pointerup', stopScrollbarDrag)
-      window.addEventListener('blur', stopScrollbarDrag)
-      window.addEventListener('dragend', stopScrollbarDrag)
-    }
-
-    if (scrollbarElement instanceof HTMLElement) {
-      scrollbarElement.addEventListener('pointerdown', handleScrollbarPointerDown, true)
-    }
+    scrollbarElement?.addEventListener('pointerdown', handleScrollbarPointerDown, true)
 
     let pendingSoftEnterCount = 0
     let win32InputMode = false
@@ -414,6 +356,7 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
     let lastSyncedGeometry: TerminalGeometrySize | null = null
     const fitAndSync = () => {
       try {
+        if (!workspaceVisibleRef.current) return false
         const host = containerRef.current
         // Avoid reporting a degenerate size before layout settles.
         if (!host || host.clientWidth < 80 || host.clientHeight < 60) return false
@@ -423,6 +366,8 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
           hostHeight: host.clientHeight,
           terminal: term,
           fit: () => fitAddon.fit(),
+          captureViewport: scrollIntent.capture,
+          restoreViewport: (snapshot) => scrollIntent.enforce(snapshot as ReturnType<typeof scrollIntent.capture>),
           refresh: (start, end) => term.refresh(start, end),
           previousGeometry: lastSyncedGeometry,
           reportGeometry: (cols, rows) => reportTerminalGeometry(terminalId, cols, rows),
@@ -483,8 +428,28 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
     let disposed = false
     const queuedLiveOutput: TerminalDataEvent[] = []
 
+    const markViewportInteraction = () => scrollIntent.recordUserScroll()
+    const handleViewportKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'PageUp' || event.key === 'PageDown' || event.key === 'Home' || event.key === 'End') {
+        markViewportInteraction()
+      }
+    }
+    hostElement.addEventListener('wheel', markViewportInteraction, { capture: true })
+    hostElement.addEventListener('keydown', handleViewportKeyDown, { capture: true })
+
+    const outputScheduler = createTerminalOutputScheduler({
+      write: (data, onParsed) => term.write(data, onParsed),
+      beforeWrite: scrollIntent.capture,
+      afterWrite: (snapshot) => scrollIntent.enforce(snapshot as ReturnType<typeof scrollIntent.capture>),
+      onRecoveryRequired: (reason) => {
+        if (disposed) return
+        console.warn(`Terminal ${terminalId} renderer recovery requested: ${reason}`)
+        setRendererGeneration((generation) => generation + 1)
+      },
+    })
+
     const writeLiveOutput = (data: string) => {
-      term.write(data)
+      outputScheduler.enqueue(data)
       scheduleOutputTelemetry(data)
     }
 
@@ -535,7 +500,7 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
         }
 
         suppressReplayResponses = true
-        term.write(data, finishReplay)
+        outputScheduler.enqueue(data, finishReplay)
       })
       .catch(() => {
         if (disposed) return
@@ -551,19 +516,21 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
 
     return () => {
       disposed = true
+      outputScheduler.dispose()
       unregisterTerminalForceFit(terminalId)
       clearTerminalGeometry(terminalId)
       bufferChangeDisposable.dispose()
       win32InputModeEnableDisposable.dispose()
       win32InputModeDisableDisposable.dispose()
       delete hostElement.dataset.bufferType
-      if (scrollbarElement instanceof HTMLElement) {
-        scrollbarElement.removeEventListener('pointerdown', handleScrollbarPointerDown, true)
-      }
-      stopScrollbarDrag()
+      scrollbarElement?.removeEventListener('pointerdown', handleScrollbarPointerDown, true)
+      window.removeEventListener('pointerup', finishScrollbarInteraction)
+      window.removeEventListener('blur', finishScrollbarInteraction)
       observer.disconnect()
       window.removeEventListener('focus', handleWindowRecovery)
       document.removeEventListener('visibilitychange', handleWindowRecovery)
+      hostElement.removeEventListener('wheel', markViewportInteraction, { capture: true })
+      hostElement.removeEventListener('keydown', handleViewportKeyDown, { capture: true })
       recoveryScheduler.cancel()
       if (visibilityRecoveryTimerRef.current !== null) {
         window.clearTimeout(visibilityRecoveryTimerRef.current)
@@ -578,7 +545,7 @@ export function CLITerminal({ terminalId, visible = true, focused = false }: CLI
       termRef.current = null
       if (fitRef.current) fitRef.current = null
     }
-  }, [terminalId, updateTelemetry, scheduleOutputTelemetry])
+  }, [terminalId, updateTelemetry, scheduleOutputTelemetry, rendererGeneration])
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!hasWorkspaceFileDrag(event.dataTransfer)) return

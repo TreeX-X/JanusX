@@ -92,11 +92,13 @@ describe('Quick Note view behavior', () => {
     const terminalAreaStart = source.indexOf('export function TerminalArea()')
     const leafSource = source.slice(leafStart, terminalAreaStart)
     const terminalAreaSource = source.slice(terminalAreaStart)
-    const liveTreeNodeIndex = terminalAreaSource.indexOf('node={paneTree}')
+    const liveTreeNodeIndex = terminalAreaSource.indexOf('node={surface.paneTree}')
     const liveTreeIndex = terminalAreaSource.lastIndexOf('<PaneTreeView', liveTreeNodeIndex)
+    const workspaceSurfaceIndex = terminalAreaSource.indexOf('workspaceSurfaces.map((surface) => {')
     const drawerIndex = terminalAreaSource.indexOf('className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"')
 
     expect(leafStart).toBeGreaterThanOrEqual(0)
+    expect(workspaceSurfaceIndex).toBeGreaterThanOrEqual(0)
     expect(liveTreeIndex).toBeGreaterThanOrEqual(0)
     expect(drawerIndex).toBeGreaterThan(liveTreeIndex)
     expect(leafSource).toContain('{leaf.tabs.map((tab) => {')
@@ -104,6 +106,8 @@ describe('Quick Note view behavior', () => {
     expect(leafSource).toContain('<CLITerminal')
     expect(leafSource).not.toContain('drawerOpen')
     expect(leafSource).not.toContain('drawerView')
+    expect(terminalAreaSource).toContain("display: workspaceVisible ? 'block' : 'none'")
+    expect(terminalAreaSource).toContain("...(!workspaceVisible ? { inert: '' } : {})")
     expect(terminalAreaSource).toContain('height: getDrawerHeight(drawerOpen, drawerView)')
   })
 

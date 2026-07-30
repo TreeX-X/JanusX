@@ -243,14 +243,6 @@ class LlmService {
     }))
   }
 
-  /**
-   * 获取 AI SDK 模块
-   */
-  async getAiModule() {
-    // 动态导入 ai 包
-    const aiPath = require.resolve('ai', { paths: [require.resolve('@janusx/llm-core')] })
-    return require(aiPath)
-  }
 }
 
 export const llmService = new LlmService()

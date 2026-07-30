@@ -34,8 +34,8 @@ function TerminalOption({ preset, name, busy, onClick, onHover }: TerminalOption
       onClick={busy ? undefined : onClick}
       className="w-full rounded-lg transition-all flex flex-col items-center justify-center gap-3 px-4 py-5 min-h-[132px]"
       style={{
-        background: 'rgba(18, 18, 20, 0.85)',
-        border: busy ? '1px solid rgba(255, 120, 48, 0.35)' : '1px solid var(--border)',
+        background: 'var(--shell-pane-chrome)',
+        border: busy ? '1px solid rgba(255, 120, 48, 0.35)' : '1px solid var(--shell-border)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
         cursor: busy ? 'wait' : 'pointer',
         opacity: busy ? 0.72 : 1,
@@ -43,15 +43,15 @@ function TerminalOption({ preset, name, busy, onClick, onHover }: TerminalOption
       onMouseEnter={(e) => {
         if (busy) return
         onHover?.()
-        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
+        e.currentTarget.style.background = 'var(--shell-active)'
         e.currentTarget.style.borderColor = 'rgba(255, 120, 48, 0.3)'
         e.currentTarget.style.transform = 'translateY(-2px)'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'rgba(18, 18, 20, 0.85)'
+        e.currentTarget.style.background = 'var(--shell-pane-chrome)'
         e.currentTarget.style.borderColor = busy
           ? 'rgba(255, 120, 48, 0.35)'
-          : 'rgba(255, 255, 255, 0.04)'
+          : 'var(--shell-border)'
         e.currentTarget.style.transform = 'translateY(0)'
       }}
     >

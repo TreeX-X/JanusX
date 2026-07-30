@@ -134,12 +134,12 @@ export class ProxyManager {
       this.proxyAgent = new HttpsProxyAgent(normalizedUrl)
       this.currentProxy = normalizedUrl
 
-      // 设置环境变量
       process.env.HTTP_PROXY = normalizedUrl
       process.env.HTTPS_PROXY = normalizedUrl
       process.env.http_proxy = normalizedUrl
       process.env.https_proxy = normalizedUrl
 
+      // 设置环境变量
       // 劫持 HTTP/HTTPS 模块
       this.hookHttpMethods()
 

@@ -4,7 +4,9 @@ import { resolve } from 'path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({
+      exclude: ['@janusx/llm-core', '@janusx/llm-core/model-registry']
+    })],
     build: {
       rollupOptions: {
         input: {

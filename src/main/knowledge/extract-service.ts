@@ -28,6 +28,7 @@ import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { llmService } from '../llm/LlmService'
+import { generateObject } from '../llm/ai-runtime'
 
 const FACT_CANDIDATES_FILE = join('facts', 'candidates.jsonl')
 const GRAPH_CANDIDATES_FILE = join('graph', 'candidates.jsonl')
@@ -285,14 +286,13 @@ export class KnowledgeExtractService {
 
     // 4. 调用 generateObject（对齐 analyzer.ts:409-433）
     const model = await llmService.getLanguageModel(def.provider.id, def.modelId)
-    const ai = await llmService.getAiModule()
-    const generateObject = ai.generateObject as (
-      opts: unknown,
+    const generateStructuredObject = generateObject as unknown as (
+      options: unknown,
     ) => Promise<{ object: ExtractResult }>
 
     let result: ExtractResult
     try {
-      const response = await generateObject({
+      const response = await generateStructuredObject({
         model,
         name: 'knowledgeExtract',
         mode: 'json',

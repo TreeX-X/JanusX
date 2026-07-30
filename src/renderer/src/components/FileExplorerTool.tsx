@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useEditorStore } from '@/stores/editor'
 import {
   getActiveWorkspacePath,
   loadWorkspaceFileTree,
@@ -234,7 +235,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
     const absolutePath = getAbsolutePath(workspace.path, relativePath)
     setActiveFilePath(relativePath)
-    await window.electron.window.openEditor({ filePath: absolutePath, workspacePath: workspace.path })
+    await useEditorStore.getState().openFile(absolutePath, workspace.path)
   }, [getActiveWorkspace, setActiveFilePath])
 
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {

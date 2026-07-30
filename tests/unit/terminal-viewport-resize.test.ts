@@ -203,6 +203,27 @@ describe('terminal viewport resize', () => {
     expect(resizePty).toHaveBeenLastCalledWith(120, 32)
   })
 
+  it('lets the shared scroll-intent owner restore around fit', () => {
+    const terminal = createTerminal('normal', 42, 120)
+    const snapshot = { kind: 'pinnedViewport' }
+    const captureViewport = vi.fn(() => snapshot)
+    const restoreViewport = vi.fn()
+
+    fitTerminalViewportAndSync({
+      terminal,
+      fit: vi.fn(),
+      captureViewport,
+      restoreViewport,
+      previousGeometry: { cols: 120, rows: 40 },
+      reportGeometry: vi.fn(),
+      resizePty: vi.fn(),
+    })
+
+    expect(captureViewport).toHaveBeenCalledOnce()
+    expect(restoreViewport).toHaveBeenCalledWith(snapshot)
+    expect(terminal.scrollToLine).not.toHaveBeenCalled()
+  })
+
   it.each(['normal', 'alternate'] as const)(
     'refreshes a visible unchanged %s buffer without resizing the PTY',
     (bufferType) => {

@@ -16,6 +16,7 @@ import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { llmService } from '../llm/LlmService'
+import { generateObject } from '../llm/ai-runtime'
 import {
   getCommitRange,
   getCommitDiff,
@@ -423,11 +424,11 @@ async function callLLM(
     throw new Error('no-default-llm')
   }
   const model = await llmService.getLanguageModel(def.provider.id, def.modelId)
-  const ai = await llmService.getAiModule()
-  const generateObject: (opts: unknown) => Promise<{ object: SegmentResult }> =
-    ai.generateObject
+  const generateStructuredObject = generateObject as unknown as (
+    options: unknown,
+  ) => Promise<{ object: SegmentResult }>
 
-  const res = await generateObject({
+  const res = await generateStructuredObject({
     model,
     name: 'blueprintAnalysis',
     mode: 'json',

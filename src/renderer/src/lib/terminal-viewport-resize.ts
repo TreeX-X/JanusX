@@ -59,6 +59,8 @@ export function hasTerminalGeometryChanged(
 export interface FitTerminalViewportOptions {
   terminal: TerminalViewportController
   fit: () => void
+  captureViewport?: () => unknown
+  restoreViewport?: (snapshot: unknown) => void
   previousGeometry: TerminalGeometrySize | null
   reportGeometry: (cols: number, rows: number) => void
   resizePty: (cols: number, rows: number) => void
@@ -148,13 +150,19 @@ export function finalizeTerminalReplay(options: {
 export function fitTerminalViewportAndSync({
   terminal,
   fit,
+  captureViewport,
+  restoreViewport: restoreCapturedViewport,
   previousGeometry,
   reportGeometry,
   resizePty,
 }: FitTerminalViewportOptions): FitTerminalViewportResult {
-  const viewport = captureTerminalViewport(terminal)
+  const viewport = captureViewport?.() ?? captureTerminalViewport(terminal)
   fit()
-  restoreTerminalViewport(terminal, viewport)
+  if (restoreCapturedViewport) {
+    restoreCapturedViewport(viewport)
+  } else {
+    restoreTerminalViewport(terminal, viewport as TerminalViewportSnapshot)
+  }
 
   const geometry = { cols: terminal.cols, rows: terminal.rows }
   if (geometry.cols < 2 || geometry.rows < 1) {

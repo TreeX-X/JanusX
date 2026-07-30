@@ -1,13 +1,15 @@
 import { MonacoViewer, MarkdownViewer, HtmlViewer, ImageViewer, BinaryInfo } from '@/components/viewers'
 import { getMonacoLanguage } from '@/lib/file-utils'
+import type { FindableEditor } from '@/lib/editor-find'
 import type { OpenFile } from '@/types'
 
 interface FileViewerContentProps {
   file: OpenFile
   onContentChange: (content: string) => void
+  onEditorMount?: (editor: FindableEditor | null) => void
 }
 
-export function FileViewerContent({ file, onContentChange }: FileViewerContentProps) {
+export function FileViewerContent({ file, onContentChange, onEditorMount }: FileViewerContentProps) {
   if (file.isLoading) {
     return (
       <div
@@ -48,6 +50,7 @@ export function FileViewerContent({ file, onContentChange }: FileViewerContentPr
           content={file.content}
           language={getMonacoLanguage(file.path)}
           onChange={onContentChange}
+          onEditorMount={onEditorMount}
         />
       )
     case 'markdown':
@@ -55,6 +58,7 @@ export function FileViewerContent({ file, onContentChange }: FileViewerContentPr
         <MarkdownViewer
           content={file.content}
           onChange={onContentChange}
+          onEditorMount={onEditorMount}
         />
       )
     case 'html':
@@ -62,6 +66,7 @@ export function FileViewerContent({ file, onContentChange }: FileViewerContentPr
         <HtmlViewer
           content={file.content}
           onChange={onContentChange}
+          onEditorMount={onEditorMount}
         />
       )
     case 'image':

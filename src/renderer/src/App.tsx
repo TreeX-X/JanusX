@@ -16,6 +16,7 @@ import { useEditorStore } from '@/stores/editor'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalArea } from '@/components/TerminalArea'
+import { WorkbenchErrorBoundary } from '@/components/WorkbenchErrorBoundary'
 import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel, RightDockLayoutProvider } from '@/components/Panel'
 import { getRightDockLayout, CENTER_WORKSPACE_MIN_WIDTH } from '@/components/right-tools/layout'
@@ -44,8 +45,8 @@ type IdleWindow = Window & {
   cancelIdleCallback?: (id: number) => void
 }
 
-const SIDE_PANEL_WIDTH = 'clamp(240px, 14vw, 280px)'
-const SIDE_PANEL_COLLAPSED_WIDTH = '48px'
+const SIDE_PANEL_WIDTH = 'clamp(252px, 15vw, 288px)'
+const SIDE_PANEL_COLLAPSED_WIDTH = '52px'
 const OFFICE_PREVIEW_WIDTH = 'clamp(300px, 30vw, 480px)'
 const OFFICE_CLOSE_DURATION_MS = 200
 const OFFICE_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
@@ -58,11 +59,15 @@ interface OfficeResizeSession {
 
 export default function App() {
   useWorkspaceBootstrap()
-  const { loadState, sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
+  const { sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspacePaneTree = useWorkspaceStore((s) => s.paneTree)
-  const showWorkspacePane = shouldRenderWorkspacePane(loadState, workspacePaneTree !== null)
+  const hasRetainedWorkspacePane = useWorkspaceStore((s) =>
+    Object.values(s.terminalSnapshots).some((snapshot) => snapshot.paneTree !== null)
+  )
+  const showWorkspacePane = shouldRenderWorkspacePane(workspacePaneTree !== null)
+  const mountWorkspacePane = showWorkspacePane || hasRetainedWorkspacePane
   const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
   const rightToolActiveId = useRightToolStore((s) => s.activeToolId)
@@ -83,8 +88,8 @@ export default function App() {
   const officeRendered = officeVisible || officeClosing
   const [appGridWidth, setAppGridWidth] = useState(() => window.innerWidth)
   const sidebarWidth = sidebarCollapsed
-    ? 48
-    : Math.min(280, Math.max(240, appGridWidth * 0.14))
+    ? 52
+    : Math.min(288, Math.max(252, appGridWidth * 0.15))
   const officeColumnWidth = officeRendered && !officeClosing
     ? officeWidth ?? officeMeasuredWidth
     : 0
@@ -334,15 +339,26 @@ export default function App() {
                 background: 'var(--bg-deep)',
               }}
             >
-              {showWorkspacePane
-                ? <TerminalArea />
-                : (
-                  <>
-                    {loadState === 'no-workspace' && <EmptyWorkspace />}
-                    {loadState === 'workspace-loaded' && <EmptyWorkspace />}
-                    {loadState === 'no-terminal' && <TerminalSelector />}
-                  </>
-                )}
+              {mountWorkspacePane && (
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    display: showWorkspacePane ? 'block' : 'none',
+                  }}
+                  {...(!showWorkspacePane ? { inert: '' } : {})}
+                  aria-hidden={!showWorkspacePane}
+                >
+                  <WorkbenchErrorBoundary>
+                    <TerminalArea />
+                  </WorkbenchErrorBoundary>
+                </div>
+              )}
+              {!showWorkspacePane && (
+                <>
+                  {activeWorkspaceId === null && <EmptyWorkspace />}
+                  {activeWorkspaceId !== null && <TerminalSelector />}
+                </>
+              )}
             </div>
 
             {/*-- 背面：蓝图视图（P2 画布） --*/}

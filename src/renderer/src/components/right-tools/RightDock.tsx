@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
+import { PanelRightClose } from 'lucide-react'
 import type { RightToolId } from '@/right-tools/types'
 import { useAppStore } from '@/stores/app'
 import { useRightToolStore } from '@/stores/right-tools'
@@ -46,7 +47,6 @@ export function RightDock({
   const closeTool = useRightToolStore((state) => state.closeTool)
   const toggleFromRail = useRightToolStore((state) => state.toggleFromRail)
   const setPanelWidth = useRightToolStore((state) => state.setPanelWidth)
-  const panelCollapsed = useAppStore((state) => state.panelCollapsed)
   const togglePanel = useAppStore((state) => state.togglePanel)
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const workspaces = useWorkspaceStore((state) => state.workspaces)
@@ -178,7 +178,7 @@ export function RightDock({
               title="折叠面板"
               onClick={togglePanel}
             >
-              <span className={styles.collapseGlyph} aria-hidden="true" />
+              <PanelRightClose size={15} strokeWidth={1.6} aria-hidden="true" />
             </button>
           </div>
           <RightToolHost
@@ -193,10 +193,7 @@ export function RightDock({
       <RightToolRail
         openToolIds={openToolIds}
         activeToolId={activeToolId}
-        collapsed={effectiveCollapsed || panelCollapsed}
-        panelToggleDisabled={forcedCollapsed}
         onToggleTool={handleRailTool}
-        onTogglePanel={togglePanel}
       />
     </aside>
   )

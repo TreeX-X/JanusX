@@ -4,17 +4,21 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
 import { MARKDOWN_COMPONENTS } from './markdown-components'
+import type { FindableEditor } from '@/lib/editor-find'
+import { defineJanusxDarkTheme, JANUSX_DARK_THEME_NAME } from '@/lib/monaco-theme'
 
 interface MarkdownViewerProps {
   content: string
   onChange: (value: string) => void
+  onEditorMount?: (editor: FindableEditor | null) => void
 }
 
-export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
+export function MarkdownViewer({ content, onChange, onEditorMount }: MarkdownViewerProps) {
   const [splitRatio, setSplitRatio] = useState(50)
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<FindableEditor | null>(null)
 
   const handleChange = useCallback(
     (value: string | undefined) => {
@@ -24,22 +28,13 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
   )
 
   const handleBeforeMount = useCallback((monaco: any) => {
-    monaco.editor.defineTheme('janusx-dark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: {
-        'editor.background': '#0a0a0a',
-        'editor.foreground': '#d4d4d4',
-        'editor.lineHighlightBackground': '#1a1a1a',
-        'editorCursor.foreground': '#ff7830',
-        'editor.selectionBackground': 'rgba(100, 140, 200, 0.25)',
-        'editorLineNumber.foreground': '#444444',
-        'editorLineNumber.activeForeground': '#888888',
-        'editor.inactiveSelectionBackground': 'rgba(100, 140, 200, 0.12)',
-      },
-    })
+    defineJanusxDarkTheme(monaco)
   }, [])
+
+  const handleMount = useCallback((editor: FindableEditor) => {
+    editorRef.current = editor
+    onEditorMount?.(editor)
+  }, [onEditorMount])
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -70,6 +65,17 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
   const showEditor = previewMode !== 'preview'
   const showPreview = previewMode !== 'editor'
   const isSplit = previewMode === 'split'
+
+  useEffect(() => {
+    if (!showEditor && editorRef.current) {
+      editorRef.current = null
+      onEditorMount?.(null)
+    }
+  }, [onEditorMount, showEditor])
+
+  useEffect(() => () => {
+    if (editorRef.current) onEditorMount?.(null)
+  }, [onEditorMount])
 
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden" style={{ background: '#0a0a0a', height: '100%' }}>
@@ -108,7 +114,7 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
             language="markdown"
             value={content}
             onChange={handleChange}
-            theme="janusx-dark"
+            theme={JANUSX_DARK_THEME_NAME}
             loading={null}
             options={{
               fontSize: 13,
@@ -121,6 +127,7 @@ export function MarkdownViewer({ content, onChange }: MarkdownViewerProps) {
               padding: { top: 12, bottom: 12 },
             }}
             beforeMount={handleBeforeMount}
+            onMount={handleMount}
           />
         </div>
       </div>

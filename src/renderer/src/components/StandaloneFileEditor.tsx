@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { getFileName, getFileViewType } from '@/lib/file-utils'
 import type { OpenFile } from '@/types'
-import { Maximize2, PanelRightOpen, Pin, PinOff, Save } from 'lucide-react'
+import { Maximize2, PanelRightOpen, Pin, PinOff, Save, Search } from 'lucide-react'
+import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 
 interface EditorWindowParams {
   filePath: string
@@ -34,7 +35,7 @@ function WindowTrafficLights() {
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
   return (
-    <div className="flex gap-2" style={noDrag}>
+    <div className="relative z-10 flex shrink-0 gap-2" style={noDrag}>
       <button
         type="button"
         aria-label="Close"
@@ -61,11 +62,20 @@ function WindowTrafficLights() {
 }
 
 export function StandaloneFileEditor() {
+  const findEditorRef = useRef<FindableEditor | null>(null)
   const editorParams = useMemo(() => getEditorWindowParams(), [])
   const [file, setFile] = useState<OpenFile | null>(() =>
     editorParams ? createLoadingFile(editorParams.filePath, editorParams.workspacePath) : null,
   )
   const [isPinned, setIsPinned] = useState(false)
+  const unwatchFindControlsRef = useRef<(() => void) | null>(null)
+  const handleEditorMount = useCallback((editor: FindableEditor | null) => {
+    findEditorRef.current = editor
+    unwatchFindControlsRef.current?.()
+    unwatchFindControlsRef.current = editor ? watchFindWidgetControls(editor.getDomNode?.()) : null
+  }, [])
+
+  useEffect(() => () => unwatchFindControlsRef.current?.(), [])
 
   useEffect(() => {
     if (!editorParams) return
@@ -155,6 +165,11 @@ export function StandaloneFileEditor() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      if (isEditorFindShortcut(event) && findEditorRef.current && !isMonacoKeyboardEvent(event)) {
+        event.preventDefault()
+        void openEditorFind(findEditorRef.current)
+        return
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
         void saveFile()
@@ -191,6 +206,7 @@ export function StandaloneFileEditor() {
   const titlebarDrag = { WebkitAppRegion: 'drag' } as CSSProperties
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
   const canSave = Boolean(file && file.viewType !== 'image' && file.viewType !== 'binary')
+  const canFind = file?.viewType === 'code' || file?.viewType === 'markdown' || file?.viewType === 'html'
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0a0a', color: '#d4d4d4' }}>
@@ -207,7 +223,19 @@ export function StandaloneFileEditor() {
         <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs">
           {file ? `${file.isDirty ? '* ' : ''}${file.path || file.name}` : 'File preview'}
         </span>
-        <div className="flex shrink-0 items-center gap-1.5" style={noDrag}>
+        <div className="relative z-10 flex shrink-0 items-center gap-1.5" style={noDrag}>
+          {canFind && (
+            <button
+              type="button"
+              aria-label="查找"
+              title="查找 (Ctrl+F)"
+              onClick={() => void openEditorFind(findEditorRef.current)}
+              onMouseDown={(event) => event.stopPropagation()}
+              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#888] transition-colors hover:border-white/[0.14] hover:text-white"
+            >
+              <Search size={14} strokeWidth={1.8} />
+            </button>
+          )}
           <button
             type="button"
             aria-pressed={isPinned}
@@ -215,7 +243,7 @@ export function StandaloneFileEditor() {
             title={isPinned ? '\u53d6\u6d88\u7a97\u53e3\u7f6e\u9876' : '\u9501\u5b9a\u7a97\u53e3\u7f6e\u9876'}
             onClick={() => void togglePinned()}
             onMouseDown={(event) => event.stopPropagation()}
-            className="flex h-7 w-7 items-center justify-center rounded transition-colors"
+            className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors"
             style={{
               background: isPinned ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
               border: isPinned ? '1px solid rgba(255, 120, 48, 0.28)' : '1px solid rgba(255, 255, 255, 0.08)',
@@ -267,7 +295,7 @@ export function StandaloneFileEditor() {
       </div>
       <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
         {file ? (
-          <FileViewerContent file={file} onContentChange={handleContentChange} />
+          <FileViewerContent file={file} onContentChange={handleContentChange} onEditorMount={handleEditorMount} />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-[#666]">
             Missing file information

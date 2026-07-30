@@ -28,6 +28,11 @@ The Phase 1-5 modular-monolith optimization is complete at commit `c6bc283`:
 
 The plan has no blocking residual work. Four product/distribution decisions remain tracked under `Pending Confirmation` in `06-architecture-optimization-plan.md`.
 
+## Research Notes
+
+- [`research/pi架构与JanusX-Chat扩展设计借鉴分析.md`](research/pi架构与JanusX-Chat扩展设计借鉴分析.md) - JanusX Chat 设置与扩展能力盘点、Pi 对比、目标架构和分阶段演进建议。
+- [`research/BridgeMind产品调研与JanusX Agent Runtime借鉴方案.md`](research/BridgeMind产品调研与JanusX Agent Runtime借鉴方案.md) - BridgeMind 产品调研与 Agent Runtime 借鉴方案。
+
 ## Current Project Shape
 
 JanusX is an Electron desktop application for managing AI coding workspaces, terminals, project launch configs, checkpoints, LLM providers, and Janus Blueprint planning/analysis.

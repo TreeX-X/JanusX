@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const REQUIRED_PATTERNS = [
@@ -15,6 +15,13 @@ const REQUIRED_OUTPUTS = [
   'out/main/office-launcher.js',
   'out/preload/index.mjs',
   'out/renderer/index.html',
+]
+
+const FORBIDDEN_RUNTIME_REFERENCES = [
+  /\brequire\w*\.resolve\(\s*["']@janusx\/llm-core(?:\/[^"']*)?["']/,
+  /\brequire\w*\(\s*["']@janusx\/llm-core(?:\/[^"']*)?["']/,
+  /\bimport\(\s*["']@janusx\/llm-core(?:\/[^"']*)?["']\s*\)/,
+  /\bfrom\s*["']@janusx\/llm-core(?:\/[^"']*)?["']/,
 ]
 
 export function parseFilesList(yaml) {
@@ -69,6 +76,48 @@ export function validateFilePatterns(patterns) {
   }
 }
 
+export function validateDependencyContract(root) {
+  const appPackage = JSON.parse(readFileSync(`${root}/package.json`, 'utf8'))
+  const corePackage = JSON.parse(readFileSync(`${root}/packages/llm-core/package.json`, 'utf8'))
+  const appAiVersion = appPackage.dependencies?.ai
+  const corePeerVersion = corePackage.peerDependencies?.ai
+  const coreDevVersion = corePackage.devDependencies?.ai
+
+  if (!appPackage.dependencies?.['@janusx/llm-core']) {
+    throw new Error('Root package must declare @janusx/llm-core as a workspace dependency')
+  }
+  if (!appAiVersion || appAiVersion !== corePeerVersion || appAiVersion !== coreDevVersion) {
+    throw new Error(
+      `AI SDK contract mismatch: app=${appAiVersion || 'missing'}, peer=${corePeerVersion || 'missing'}, dev=${coreDevVersion || 'missing'}`,
+    )
+  }
+
+  const tsconfig = JSON.parse(readFileSync(`${root}/tsconfig.json`, 'utf8'))
+  const paths = tsconfig.compilerOptions?.paths ?? {}
+  if (paths.ai || paths['@ai-sdk/*']) {
+    throw new Error('AI SDK must use standard Node resolution; remove ai/@ai-sdk path aliases')
+  }
+}
+
+function listJavaScriptFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${directory}/${entry.name}`
+    if (entry.isDirectory()) return listJavaScriptFiles(path)
+    return entry.isFile() && entry.name.endsWith('.js') ? [path] : []
+  })
+}
+
+export function validateRuntimeBundle(root) {
+  const mainOutput = `${root}/out/main`
+  const violations = listJavaScriptFiles(mainOutput).filter((path) => {
+    const source = readFileSync(path, 'utf8')
+    return FORBIDDEN_RUNTIME_REFERENCES.some((pattern) => pattern.test(source))
+  })
+  if (violations.length) {
+    throw new Error(`Bundled main process still resolves @janusx/llm-core at runtime: ${violations.join(', ')}`)
+  }
+}
+
 export function checkPackageBoundary(root = process.cwd()) {
   const config = readFileSync(`${root}/electron-builder.yml`, 'utf8')
   validateFilePatterns(parseFilesList(config))
@@ -77,6 +126,8 @@ export function checkPackageBoundary(root = process.cwd()) {
   if (missingOutputs.length) {
     throw new Error(`Run the production build first; missing package outputs: ${missingOutputs.join(', ')}`)
   }
+  validateDependencyContract(root)
+  validateRuntimeBundle(root)
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

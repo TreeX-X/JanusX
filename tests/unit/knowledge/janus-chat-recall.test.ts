@@ -25,8 +25,11 @@ vi.mock('../../../src/main/llm/LlmService', () => ({
   llmService: {
     getProviderSettings: vi.fn(async () => ({ modelId: 'test-model' })),
     getLanguageModel: vi.fn(async () => ({})),
-    getAiModule: vi.fn(async () => ({ streamText, generateText: vi.fn() })),
   },
+}))
+vi.mock('../../../src/main/llm/ai-runtime', () => ({
+  generateText: vi.fn(),
+  streamText,
 }))
 vi.mock('../../../src/main/agent/runtime/runtime', () => ({
   workspaceAgentRuntime: { getSession, executeFunctionCall },

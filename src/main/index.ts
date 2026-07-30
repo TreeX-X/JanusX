@@ -3,9 +3,10 @@ import { isAgentHookClientInvocation, runAgentHookClient } from './notifications
 import { configureApplicationProfile, configureChromiumSessionPaths } from './bootstrap/session'
 
 const isHookClient = isAgentHookClientInvocation()
+const isLlmRuntimeSmoke = process.argv.includes('--smoke-test=llm-runtime')
 
-configureApplicationProfile(isHookClient)
-configureChromiumSessionPaths(isHookClient)
+configureApplicationProfile(isHookClient || isLlmRuntimeSmoke)
+configureChromiumSessionPaths(isHookClient || isLlmRuntimeSmoke)
 
 // AC1 / AC4: process-level exception fences.
 // - Fatal exceptions during bootstrap (before app services are up) exit the
@@ -74,6 +75,8 @@ if (isHookClient) {
     .finally(() => {
       process.exit(0)
     })
+} else if (isLlmRuntimeSmoke) {
+  void runLlmRuntimeSmoke()
 } else {
   void bootstrapApp().then(() => {
     bootstrapComplete = true
@@ -81,6 +84,35 @@ if (isHookClient) {
     console.error('[main] bootstrapApp failed:', err)
     if (!bootstrapComplete) process.exit(1)
   })
+}
+
+async function runLlmRuntimeSmoke(): Promise<void> {
+  try {
+    await app.whenReady()
+    const [aiRuntime, { llmService }] = await Promise.all([
+      import('./llm/ai-runtime'),
+      import('./llm/LlmService'),
+    ])
+    const missingExports = ['generateObject', 'generateText', 'streamText']
+      .filter((name) => typeof aiRuntime[name as keyof typeof aiRuntime] !== 'function')
+    if (missingExports.length > 0) {
+      throw new Error(`AI Runtime exports unavailable: ${missingExports.join(', ')}`)
+    }
+
+    await llmService.initialize()
+    const adapterIds = llmService.getAvailableAdapters().map((adapter) => adapter.id)
+    for (const requiredAdapter of ['openai-compatible', 'vertex-ai']) {
+      if (!adapterIds.includes(requiredAdapter)) {
+        throw new Error(`LLM adapter unavailable: ${requiredAdapter}`)
+      }
+    }
+
+    console.log(`[llm-runtime-smoke] ok adapters=${adapterIds.join(',')}`)
+    app.exit(0)
+  } catch (error) {
+    console.error('[llm-runtime-smoke] failed:', error)
+    app.exit(1)
+  }
 }
 
 async function bootstrapApp(): Promise<void> {

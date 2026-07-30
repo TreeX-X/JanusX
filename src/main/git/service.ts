@@ -2,14 +2,24 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 
 const execFileAsync = promisify(execFile)
+const LOCAL_GIT_TIMEOUT_MS = 10000
+const REMOTE_GIT_TIMEOUT_MS = 120000
 
-async function git(cwd: string, ...args: string[]): Promise<string> {
+async function runGit(cwd: string, args: string[], timeout: number): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', args, { cwd, timeout: 10000 })
+    const { stdout } = await execFileAsync('git', args, { cwd, timeout })
     return stdout.trim()
   } catch (err: any) {
     throw new Error(err.stderr?.trim() || err.message)
   }
+}
+
+async function git(cwd: string, ...args: string[]): Promise<string> {
+  return runGit(cwd, args, LOCAL_GIT_TIMEOUT_MS)
+}
+
+async function remoteGit(cwd: string, ...args: string[]): Promise<string> {
+  return runGit(cwd, args, REMOTE_GIT_TIMEOUT_MS)
 }
 
 export async function getStatus(cwd: string) {
@@ -89,11 +99,20 @@ export async function commit(cwd: string, message: string) {
 }
 
 export async function push(cwd: string) {
-  await git(cwd, 'push')
+  const upstream = await git(cwd, 'rev-parse', '--abbrev-ref', '@{upstream}').catch(() => '')
+  if (upstream) {
+    await remoteGit(cwd, 'push')
+    return
+  }
+
+  const remotes = (await git(cwd, 'remote')).split(/\r?\n/).filter(Boolean)
+  const remote = remotes.includes('origin') ? 'origin' : remotes[0]
+  if (!remote) throw new Error('No Git remote is configured for this repository')
+  await remoteGit(cwd, 'push', '--set-upstream', remote, 'HEAD')
 }
 
 export async function pull(cwd: string) {
-  await git(cwd, 'pull')
+  await remoteGit(cwd, 'pull')
 }
 
 export async function getCurrentBranch(cwd: string) {

@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   commitExists: vi.fn(),
   findNode: vi.fn(),
   generateObject: vi.fn(),
-  getAiModule: vi.fn(),
   getCommitDiff: vi.fn(),
   getCommitRange: vi.fn(),
   getDefaultModel: vi.fn(),
@@ -29,10 +28,12 @@ vi.mock('../../src/main/git/service', () => ({
 }))
 vi.mock('../../src/main/llm/LlmService', () => ({
   llmService: {
-    getAiModule: mocks.getAiModule,
     getDefaultModel: mocks.getDefaultModel,
     getLanguageModel: mocks.getLanguageModel,
   },
+}))
+vi.mock('../../src/main/llm/ai-runtime', () => ({
+  generateObject: mocks.generateObject,
 }))
 vi.mock('../../src/main/janus/blueprint-store', () => ({
   blueprintStore: {
@@ -112,7 +113,6 @@ beforeEach(() => {
   mocks.getCommitDiff.mockResolvedValue('diff --git a/old.ts b/new.ts\n+typed boundary')
   mocks.getDefaultModel.mockResolvedValue({ provider: { id: 'provider-1' }, modelId: 'model-1' })
   mocks.getLanguageModel.mockResolvedValue({})
-  mocks.getAiModule.mockResolvedValue({ generateObject: mocks.generateObject })
   mocks.appendAnalysis.mockResolvedValue(undefined)
   mocks.applyAnalysisPatch.mockResolvedValue(node)
   mocks.setCursor.mockResolvedValue(undefined)

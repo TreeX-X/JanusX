@@ -4,16 +4,16 @@
 
 :root {
   --primary: #ff7830;
-  --bg-app: #0a0a0c;
-  --bg-deep: #050505;
-  --bg-dark: #0a0a0a;
-  --bg-darker: #050505;
+  --bg-app: #101011;
+  --bg-deep: #0a0a0a;
+  --bg-dark: #121214;
+  --bg-darker: #0a0a0a;
   /* Shared workbench canvas baseline. Module accents remain local. */
-  --workbench-canvas: #080809;
-  --workbench-grid: #070709;
-  --surface: rgba(18, 18, 20, 0.75);
-  --surface-elevated: rgba(18, 18, 20, 0.88);
-  --chrome-bg: rgba(12, 12, 12, 0.85);
+  --workbench-canvas: #0d0d0e;
+  --workbench-grid: #0b0b0c;
+  --surface: rgba(26, 26, 29, 0.75);
+  --surface-elevated: rgba(26, 26, 29, 0.88);
+  --chrome-bg: rgba(23, 23, 23, 0.88);
   --text: #e0e0e0;
   --text-secondary: #888;
   --text-dim: #555;
@@ -22,6 +22,28 @@
   --accent-soft: rgba(255, 120, 48, 0.1);
   --accent-mid: rgba(255, 120, 48, 0.18);
   --accent-glow: rgba(255, 120, 48, 0.3);
+
+  /* ── Orca-inspired shell: neutral gray chrome, deeper canvas, amber accent ──
+     Chrome tokens dress the app frame (left rail, right dock, titlebar,
+     statusbar). Canvas tokens dress the center workbench, which stays recessed
+     below the chrome so panes read as sunk into the shell. Amber is the only
+     accent hue — Orca's neutral palette replaces JanusX near-black, not the
+     JanusX orange. */
+  --shell-chrome: #171717;
+  --shell-chrome-raised: #1d1d1d;
+  --shell-hover: #222222;
+  --shell-active: #262626;
+  --shell-border: rgb(255 255 255 / 0.07);
+  --shell-text: #fafafa;
+  --shell-muted: #a1a1a1;
+  --shell-dim: #737373;
+  --shell-canvas: #0a0a0a;
+  --shell-pane: #121214;
+  --shell-pane-chrome: #1a1a1d;
+  --shell-accent: #f47d43;
+  --shell-accent-strong: #ff9159;
+  --shell-accent-soft: rgb(244 125 67 / 0.11);
+  --shell-accent-border: rgb(244 125 67 / 0.42);
 }
 
 * {
@@ -47,6 +69,82 @@ body {
 .monaco-editor .selected-text,
 .monaco-editor .focused .selected-text {
   background-color: rgba(38, 79, 120, 0.35) !important;
+}
+
+/* Keep Monaco's find controls in a stable hit-test layer inside draggable/translucent editor windows. */
+.monaco-editor .find-widget {
+  z-index: 100 !important;
+  pointer-events: auto !important;
+  -webkit-app-region: no-drag;
+  transition: none !important;
+}
+
+.monaco-editor .find-widget:not(.visible),
+.monaco-editor .find-widget[aria-hidden='true'] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.monaco-editor .find-widget .button,
+.monaco-editor .find-widget .monaco-inputbox,
+.monaco-editor .find-widget .monaco-findInput > .controls,
+.monaco-editor .find-widget .monaco-custom-toggle {
+  z-index: 1;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.monaco-editor .find-widget > .find-part .find-actions > .button,
+.monaco-editor .find-widget > .button.codicon-widget-close {
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+/* Monaco pins the close button to the widget corner, while every other action sits inside the
+   25px .find-actions row that starts 3px down (.find-part margin-top). Centering the 22px close
+   box in that same band is what makes it read level with the prev/next controls. */
+.monaco-editor .find-widget > .button.codicon-widget-close {
+  top: calc(3px + (25px - 22px) / 2);
+  right: 4px;
+  z-index: 2;
+}
+
+/* Monaco shows each find control's label ("Escape", "Alt+L", …) through the hover service, which
+   renders into a ContextView. The full overlay chain is:
+
+     .context-view.monaco-component[.fixed]        <- absolutely positioned wrapper
+       +- .workbench-hover-container[.locked]
+            +- .workbench-hover-pointer            <- Monaco already sets pointer-events: none
+            +- .monaco-hover.workbench-hover
+
+   Near a window edge that wrapper gets repositioned over the very control it describes. Because it
+   is hit-testable, the pointer lands on the overlay instead of the button: the control loses
+   :hover, the overlay hides, :hover returns - the label bar flickers and the click never arrives.
+   The right-hand controls (case/word/regex toggles, corner close) sit closest to that edge, which
+   is why prev/next kept working and they did not.
+
+   The fix has to sit at the TOP of that chain, not on the hover itself - that was the earlier
+   miss. pointer-events inherits, so one rule on the wrapper takes the whole subtree out of
+   hit-testing (nothing inside Monaco sets it back to auto). `.context-view.fixed` declares
+   `all: initial`, which resets pointer-events to auto, hence !important.
+
+   The label is hidden as well: even click-through, it still covered the very control you were
+   aiming at. `visibility` rather than `display` keeps the box measurable, so Monaco's hover layout
+   pass has something to measure and does not thrash. Explanatory text is not lost - the controls
+   carry native `title` attributes instead (see labelFindWidgetControls in lib/editor-find.ts).
+   The OS draws those outside the document, so they can neither cover a control nor take a click.
+   Hovers the user pinned (.locked) are left alone.
+
+   Content/symbol hovers in the code area are a different widget (.monaco-resizable-hover, never
+   wrapped in .workbench-hover-container) and are unaffected by this rule.
+
+   tests/unit/monaco-theme.test.ts pins the Monaco class names this rule depends on, so an upgrade
+   that renames them fails loudly instead of silently bringing the flicker back. */
+.context-view:has(> .workbench-hover-container:not(.locked)) {
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* 滚动条 */
@@ -89,90 +187,48 @@ body {
   background: transparent !important;
 }
 
-.xterm .xterm-viewport::-webkit-scrollbar {
-  width: 8px;
-}
-
-.xterm .xterm-viewport::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.xterm .xterm-viewport::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background-clip: content-box;
-}
-
-.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.32);
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
 .xterm .xterm-scrollable-element > .scrollbar.vertical {
+  /* xterm 6.0 reserves 14px internally; keep CSS and FitAddon geometry aligned. */
   width: 14px !important;
-  right: 4px !important;
+  right: 0 !important;
   cursor: default !important;
   background: transparent !important;
-  border-radius: 999px !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  transition: width 120ms ease, background 120ms ease !important;
+  opacity: 1;
+  transition: background 120ms ease !important;
 }
 
 .xterm .xterm-scrollable-element > .scrollbar.vertical.invisible {
-  opacity: 1 !important;
-  pointer-events: auto !important;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .xterm .xterm-scrollable-element > .scrollbar.vertical:hover,
-.xterm .xterm-scrollable-element > .scrollbar.vertical:active,
-body.terminal-scrollbar-dragging .xterm .xterm-scrollable-element > .scrollbar.vertical {
-  width: 18px !important;
+.xterm .xterm-scrollable-element > .scrollbar.vertical:active {
   background: rgba(255, 255, 255, 0.03) !important;
 }
 
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
-  left: auto !important;
+  left: 5px !important;
   right: 5px !important;
-  width: 3px !important;
+  width: auto !important;
   cursor: default !important;
   pointer-events: auto !important;
-  border-radius: 999px !important;
+  border-radius: 4px !important;
   background: rgba(255, 255, 255, 0.26) !important;
   border: 0 !important;
-  transition: width 120ms ease, right 120ms ease, background 120ms ease !important;
+  transition: background 120ms ease !important;
 }
 
-/*
- * Full-screen TUIs (Claude/OpenCode) use xterm's alternate buffer. That buffer
- * deliberately has no scrollback, so xterm sizes its thumb to the full track
- * and it reads as a border instead of a scrollbar. Keep the native TUI intact
- * while presenting the track as a relative scroll control. Dragging the thumb
- * is translated to wheel input that the child TUI handles itself; the thumb
- * position is therefore interaction feedback, not an absolute history offset.
- */
+/* Alternate-screen TUIs own their internal list position. Do not present
+   xterm's full-height thumb as an absolute history scrollbar. */
 .cli-terminal[data-buffer-type='alternate']
   .xterm .xterm-scrollable-element > .scrollbar.vertical {
-  cursor: ns-resize !important;
-}
-
-.cli-terminal[data-buffer-type='alternate']
-  .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
-  top: 36% !important;
-  height: 28% !important;
-  min-height: 44px !important;
-  max-height: 140px !important;
-  cursor: ns-resize !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .xterm .xterm-scrollable-element > .scrollbar.vertical:hover > .slider,
-.xterm .xterm-scrollable-element > .scrollbar.vertical:active > .slider,
-body.terminal-scrollbar-dragging .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
-  right: 3px !important;
-  width: 12px !important;
-  cursor: default !important;
+.xterm .xterm-scrollable-element > .scrollbar.vertical:active > .slider {
   background: rgba(255, 255, 255, 0.34) !important;
 }
 

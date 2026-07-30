@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, type CSSProperties } from 'react'
 
 interface FloatingPanelProps {
   visible: boolean
@@ -61,6 +61,7 @@ export function FloatingPanel({
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     if (isMaximized || embedded) return
+    if ((e.target as HTMLElement).closest('[data-floating-panel-interactive]')) return
     dragging.current = true
     dragStart.current = {
       x: e.clientX,
@@ -145,6 +146,7 @@ export function FloatingPanel({
   }, [minWidth, minHeight])
 
   if (!visible) return null
+  const interactiveTitlebar = { WebkitAppRegion: 'no-drag', position: 'relative', zIndex: 1 } as CSSProperties
 
   return (
     <div
@@ -179,7 +181,12 @@ export function FloatingPanel({
         }}
         onMouseDown={handleDragStart}
       >
-        <div className="flex shrink-0 gap-2" onMouseDown={(e) => e.stopPropagation()}>
+        <div
+          className="flex shrink-0 gap-2"
+          data-floating-panel-interactive
+          style={interactiveTitlebar}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
             aria-label="Close panel"
@@ -211,7 +218,12 @@ export function FloatingPanel({
           )}
         </div>
         {titlebarActions && (
-          <div className="shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+          <div
+            className="shrink-0"
+            data-floating-panel-interactive
+            style={interactiveTitlebar}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             {titlebarActions}
           </div>
         )}

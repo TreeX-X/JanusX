@@ -6,6 +6,7 @@ import type { GitFileChange } from '@/types'
 import { ModalCloseButton } from './ModalCloseButton'
 
 type GitRemoteAction = 'push' | 'pull'
+const GIT_HISTORY_LIMIT = 100
 
 const REMOTE_ACTION_META: Record<
   GitRemoteAction,
@@ -39,7 +40,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   const refreshGitData = useCallback(async (includeLog = true) => {
     if (!cwd) return
     if (includeLog) {
-      await Promise.all([fetchStatus(cwd), fetchLog(cwd, 20)])
+      await Promise.all([fetchStatus(cwd), fetchLog(cwd, GIT_HISTORY_LIMIT)])
     } else {
       await fetchStatus(cwd)
     }
@@ -87,8 +88,9 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 
   const handleCommit = useCallback(async () => {
     if (!cwd || !commitMsg.trim()) return
-    await commitChanges(cwd, commitMsg.trim())
-    await fetchLog(cwd, 20)
+    const committed = await commitChanges(cwd, commitMsg.trim())
+    if (!committed) return
+    await fetchLog(cwd, GIT_HISTORY_LIMIT)
     setCommitMsg('')
   }, [cwd, commitMsg, commitChanges, fetchLog])
 
@@ -105,12 +107,11 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   const handleConfirmRemoteAction = useCallback(async () => {
     if (!cwd || !confirmAction) return
 
-    if (confirmAction === 'push') {
-      await pushChanges(cwd)
-    } else {
-      await pullChanges(cwd)
-    }
-    await fetchLog(cwd, 20)
+    const succeeded = confirmAction === 'push'
+      ? await pushChanges(cwd)
+      : await pullChanges(cwd)
+    if (!succeeded) return
+    await fetchLog(cwd, GIT_HISTORY_LIMIT)
     setConfirmAction(null)
   }, [confirmAction, cwd, fetchLog, pullChanges, pushChanges])
 
@@ -146,7 +147,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 
   return (
     <>
-    <div className="flex-1 flex flex-col overflow-hidden text-xs">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden text-xs" aria-busy={loading}>
       {/* Branch bar */}
       <div
         className="flex items-center gap-2 px-3 py-2"
@@ -195,7 +196,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
       </div>
 
       {/* Changed files */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="git-scroll-region">
         {error && (
           <div className="px-3 py-2 text-[10px]" style={{ color: '#e06c75' }}>
             {error}
@@ -287,7 +288,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 
       {/* Commit input */}
       <div
-        className="p-2"
+        className="shrink-0 p-2"
         style={{ borderTop: '1px solid var(--border)' }}
       >
         <div className="flex gap-1.5">

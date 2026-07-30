@@ -32,20 +32,23 @@
     "typecheck:llm-core": "npm run typecheck --workspace=@janusx/llm-core",
     "lint": "eslint src --ext .ts,.tsx",
     "check:package-boundary": "node scripts/check-package-boundary.mjs",
+    "check:packaged-runtime": "node scripts/check-packaged-runtime.mjs",
+    "check:portable-runtime": "node scripts/check-packaged-runtime.mjs --portable",
     "verify": "npm run typecheck && npm run typecheck:llm-core && npm run build:llm-core && npm run test:unit -- --run && npm run test:llm-core && npm run typecheck:strict-unused && npm run build && npm run check:package-boundary && npm run test:e2e:desktop",
-    "package:win": "npm run build && npm run check:package-boundary && electron-builder --win",
+    "package:win": "npm run build && npm run check:package-boundary && electron-builder --win && npm run check:portable-runtime",
     "package:mac": "npm run build && npm run check:package-boundary && electron-builder --mac",
     "package:linux": "npm run build && npm run check:package-boundary && electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
+    "@janusx/llm-core": "file:packages/llm-core",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@monaco-editor/react": "^4.7.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "@xyflow/react": "^12.11.1",
-    "ai": "^3.4.33",
+    "ai": "3.4.33",
     "execa": "^9.0.0",
     "lucide-react": "^0.468.0",
     "node-pty": "^1.0.0",
@@ -57,6 +60,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@electron/asar": "^3.4.1",
     "@playwright/test": "^1.48.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",

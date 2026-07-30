@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useEditorStore } from '@/stores/editor'
 import { FloatingPanel } from '@/components/FloatingPanel'
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { OpenFile } from '@/types'
-import { PanelRightClose, Save } from 'lucide-react'
+import { PanelRightClose, Save, Search } from 'lucide-react'
+import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 
-function ViewerContent({ file }: { file: OpenFile }) {
+function ViewerContent({ file, onEditorMount }: { file: OpenFile; onEditorMount: (editor: FindableEditor | null) => void }) {
   const updateContent = useEditorStore((s) => s.updateContent)
-  return <FileViewerContent file={file} onContentChange={(content) => updateContent(file.id, content)} />
+  return <FileViewerContent file={file} onContentChange={(content) => updateContent(file.id, content)} onEditorMount={onEditorMount} />
 }
 
 function TabItem({
@@ -76,6 +77,8 @@ function TabItem({
 }
 
 export function FileEditor() {
+  const findEditorRef = useRef<FindableEditor | null>(null)
+  const unwatchFindControlsRef = useRef<(() => void) | null>(null)
   const openFiles = useEditorStore((s) => s.openFiles)
   const activeFileId = useEditorStore((s) => s.activeFileId)
   const isVisible = useEditorStore((s) => s.isVisible)
@@ -92,10 +95,23 @@ export function FileEditor() {
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
   const canSave = activeFile && activeFile.viewType !== 'image' && activeFile.viewType !== 'binary'
+  const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
+  const handleEditorMount = useCallback((editor: FindableEditor | null) => {
+    findEditorRef.current = editor
+    unwatchFindControlsRef.current?.()
+    unwatchFindControlsRef.current = editor ? watchFindWidgetControls(editor.getDomNode?.()) : null
+  }, [])
+
+  useEffect(() => () => unwatchFindControlsRef.current?.(), [])
 
   // Ctrl+S / Cmd+S save shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (isEditorFindShortcut(e) && findEditorRef.current && !isMonacoKeyboardEvent(e)) {
+        e.preventDefault()
+        void openEditorFind(findEditorRef.current)
+        return
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
         if (activeFileId) {
@@ -106,6 +122,10 @@ export function FileEditor() {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [activeFileId, saveFile])
+
+  useEffect(() => {
+    findEditorRef.current = null
+  }, [activeFileId])
 
   const handleClose = useCallback(() => {
     closePanel()
@@ -158,6 +178,17 @@ export function FileEditor() {
       }
       titlebarActions={
         <div className="flex items-center gap-2">
+          {canFind && (
+            <button
+              type="button"
+              aria-label="查找"
+              title="查找 (Ctrl+F)"
+              onClick={() => void openEditorFind(findEditorRef.current)}
+              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#888] transition-colors hover:border-white/[0.14] hover:text-white"
+            >
+              <Search size={14} strokeWidth={1.8} />
+            </button>
+          )}
           {isEmbedded && (
             <button
               type="button"
@@ -190,7 +221,7 @@ export function FileEditor() {
     >
       {/* Viewer area */}
       <div className="flex-1 overflow-hidden" style={{ background: '#0a0a0a', height: '100%', position: 'relative' }}>
-        {activeFile && <ViewerContent file={activeFile} />}
+        {activeFile && <ViewerContent key={activeFile.id} file={activeFile} onEditorMount={handleEditorMount} />}
       </div>
     </FloatingPanel>
   )

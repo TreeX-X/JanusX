@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Activity, ChevronRight, CirclePause, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { ProjectLauncher } from './ProjectLauncher'
@@ -8,6 +9,11 @@ import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 import { chooseAndCreateWorkspace, getActiveWorkspacePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
+import { getTerminalStatusVisual, summarizeTerminalActivity } from '@/lib/terminal-sidebar-visual'
+import terminalIcon from '@/assets/icons/terminal.svg'
+import claudeIcon from '@/assets/icons/claude.svg'
+import codexIcon from '@/assets/icons/codex.svg'
+import opencodeIcon from '@/assets/icons/opencode.svg'
 import {
   clearWorkspaceSidebarGroup,
   groupWorkspaceInSidebar,
@@ -144,19 +150,6 @@ function createWorkspaceSidebarGroupId(): string {
   return `workspace-group-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function terminalStatusLabel(status: Terminal['status']): string {
-  switch (status) {
-    case 'running':
-      return 'running'
-    case 'error':
-      return 'error'
-    case 'wait':
-      return 'wait'
-    default:
-      return 'wait'
-  }
-}
-
 function terminalPresetLabel(preset: Terminal['preset']): string {
   switch (preset) {
     case 'claude':
@@ -168,6 +161,41 @@ function terminalPresetLabel(preset: Terminal['preset']): string {
     default:
       return 'Shell'
   }
+}
+
+const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
+  shell: terminalIcon,
+  claude: claudeIcon,
+  codex: codexIcon,
+  opencode: opencodeIcon,
+}
+
+function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
+  const visual = getTerminalStatusVisual(status)
+  const Icon = status === 'running' ? Activity : status === 'error' ? TriangleAlert : CirclePause
+
+  return (
+    <span
+      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] font-medium"
+      style={{ color: visual.color, background: visual.background }}
+      title={`终端状态：${visual.label}`}
+    >
+      <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+        {status === 'running' && (
+          <span
+            className="absolute h-2 w-2 rounded-full opacity-30 motion-safe:animate-ping motion-reduce:animate-none"
+            style={{ background: visual.color }}
+          />
+        )}
+        <Icon size={10} strokeWidth={2} className="relative" aria-hidden="true" />
+      </span>
+      {visual.label}
+    </span>
+  )
+}
+
+function workspaceInitial(name: string): string {
+  return Array.from(name.trim())[0]?.toUpperCase() ?? '?'
 }
 
 export function Sidebar() {
@@ -592,48 +620,44 @@ export function Sidebar() {
     <aside
       className="flex flex-col overflow-hidden"
       style={{
-        background: 'var(--surface)',
-        backdropFilter: 'blur(20px)',
-        borderRight: '1px solid var(--border)',
+        background: 'var(--shell-chrome)',
+        borderRight: '1px solid var(--shell-border)',
       }}
+      data-collapsed={sidebarCollapsed}
+      aria-label="工作区侧栏"
     >
       {/* 展开态 */}
       {!sidebarCollapsed && (
         <>
           <div
-            className="p-2.5 px-3 text-[10px] font-semibold tracking-wider uppercase text-[#555] flex justify-between items-center"
-            style={{ borderBottom: '1px solid var(--border)' }}
+            className="flex h-9 items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
+            style={{ color: 'var(--shell-muted)', borderBottom: '1px solid var(--shell-border)' }}
           >
             <span>工作区</span>
-            <div className="flex gap-1 items-center">
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={handleAddWorkspace}
-                className="w-[18px] h-[18px] rounded-[3px] flex items-center justify-center text-sm leading-none cursor-pointer transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{
-                  background: 'rgba(255, 120, 48, 0.08)',
-                  border: '1px solid rgba(255, 120, 48, 0.2)',
-                  color: '#ff7830',
+                  color: 'var(--shell-accent-strong)',
                 }}
+                title="添加工作区"
+                aria-label="添加工作区"
               >
-                +
+                <Plus size={15} strokeWidth={1.7} aria-hidden="true" />
               </button>
               <button
                 onClick={toggleSidebar}
                 title="收起侧栏"
-                className="w-5 h-5 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+                style={{ color: 'var(--shell-dim)' }}
+                aria-label="收起工作区侧栏"
               >
-                <div
-                  className="w-[7px] h-[7px] transition-colors"
-                  style={{
-                    borderRight: '1.5px solid rgba(255, 255, 255, 0.2)',
-                    borderBottom: '1.5px solid rgba(255, 255, 255, 0.2)',
-                    transform: 'rotate(135deg)',
-                  }}
-                />
+                <PanelLeftClose size={15} strokeWidth={1.6} aria-hidden="true" />
               </button>
             </div>
           </div>
-          <div className="flex-1 p-1.5 overflow-y-auto" onDragOverCapture={handleWorkspaceListDragOver}>
+          <div className="flex-1 overflow-y-auto px-1.5 py-1" onDragOverCapture={handleWorkspaceListDragOver}>
             {orderedWorkspaces.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4 opacity-30">
                 <div className="text-xs text-[#666]">暂无工作区</div>
@@ -661,9 +685,7 @@ export function Sidebar() {
                   )
                 const isExpanded = expandedWorkspaceIds.includes(ws.id)
                 const terminalCount = workspaceTerminals.length
-                  const maxLights = 6
-                  const visibleLights = Math.min(terminalCount, maxLights)
-                  const overflowLights = terminalCount - visibleLights
+                  const terminalActivity = summarizeTerminalActivity(workspaceTerminals)
                   const isDragged = draggedWorkspaceId === ws.id
                   const isDropBefore = dropIntent?.targetId === ws.id && dropIntent.mode === 'before'
                   const isDropAfter = dropIntent?.targetId === ws.id && dropIntent.mode === 'after'
@@ -678,9 +700,9 @@ export function Sidebar() {
                         <div
                           className="group/group-header mx-1 mb-0.5 mt-1 flex h-7 items-center gap-1 rounded px-1.5 text-[11px] transition-colors"
                           style={{
-                            color: hasActiveGroupMember ? '#c7c7c7' : '#777',
-                            background: isHeaderGroupTarget ? 'rgba(255,120,48,0.09)' : 'transparent',
-                            boxShadow: isHeaderGroupTarget ? 'inset 0 0 0 1px rgba(255,120,48,0.35)' : 'none',
+                            color: hasActiveGroupMember ? 'var(--shell-text)' : 'var(--shell-dim)',
+                            background: isHeaderGroupTarget ? 'var(--shell-accent-soft)' : 'transparent',
+                            boxShadow: isHeaderGroupTarget ? 'inset 0 0 0 1px var(--shell-accent-border)' : 'none',
                           }}
                           onContextMenu={(event) => handleGroupContextMenu(group, event)}
                           onDragOver={(event) => handleGroupDragOver(groupMembers[0]!.id, event)}
@@ -753,15 +775,15 @@ export function Sidebar() {
                             onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
                             onDrop={(event) => handleWorkspaceDrop(ws, event)}
                             onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
-                            className="ws group relative flex cursor-grab items-center gap-2 rounded-md p-[9px] pl-2 pr-3 text-[13px] transition-all active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.28)]"
+                            className="ws group relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
                             style={{
-                              color: isActive ? '#fff' : '#999',
+                              color: isActive ? 'var(--shell-text)' : 'var(--shell-muted)',
                               background: isGroupTarget
                                 ? 'rgba(255,120,48,0.11)'
                                 : isGroupPending
-                                  ? 'rgba(255,255,255,0.035)'
+                                  ? 'var(--shell-hover)'
                                   : isActive
-                                    ? 'var(--accent-soft)'
+                                    ? 'var(--shell-active)'
                                     : 'transparent',
                               opacity: isDragged ? 0.42 : 1,
                               boxShadow: isGroupTarget
@@ -779,7 +801,7 @@ export function Sidebar() {
                             )}
                             <div
                               className="pointer-events-none absolute bottom-1 left-0 top-1 w-0.5 rounded-r-sm transition-colors"
-                              style={{ background: isActive ? '#ff7830' : 'transparent' }}
+                              style={{ background: isActive ? 'var(--shell-accent)' : 'transparent' }}
                             />
                       <button
                         type="button"
@@ -795,27 +817,46 @@ export function Sidebar() {
                           event.stopPropagation()
                           handleToggleWorkspaceExpand(ws.id, event)
                         }}
-                        className="relative h-4 shrink-0 cursor-pointer border-0 bg-transparent flex items-center justify-center gap-0.5 transition-opacity duration-150 hover:opacity-90 focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)]"
+                        className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border-0 bg-transparent text-[#626268] transition-colors duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)]"
                       >
-                        <span className="relative z-10 flex items-center gap-0.5">
-                          {terminalCount > 0
-                            ? Array.from({ length: visibleLights }).map((_, index) => (
-                              <span
-                                key={`${ws.id}-light-${index}`}
-                                className="h-1.5 w-1.5 rounded-full"
-                                style={{
-                                  background: 'rgba(255,120,48,0.96)',
-                                  boxShadow: '0 0 4px rgba(255,120,48,0.75)',
-                                }}
-                              />
-                            ))
-                            : <span className="h-1.5 w-1.5 rounded-full bg-[#5a5a5a]" />}
-                          {overflowLights > 0 ? <span className="text-[7px] leading-none font-mono text-[#ffc6a6]">+{overflowLights}</span> : null}
-                        </span>
+                        <ChevronRight
+                          size={12}
+                          strokeWidth={1.8}
+                          className="transition-transform duration-200 ease-out motion-reduce:transition-none"
+                          style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                          aria-hidden="true"
+                        />
                       </button>
-                      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
                         {ws.name}
                       </span>
+                      {terminalCount > 0 && (
+                        <span
+                          className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] tabular-nums"
+                          style={{
+                            color: terminalActivity.errors > 0 ? '#ff8585' : terminalActivity.running > 0 ? '#87d9aa' : '#77777d',
+                            background: terminalActivity.errors > 0
+                              ? 'rgba(255,88,88,0.08)'
+                              : terminalActivity.running > 0
+                                ? 'rgba(70,190,125,0.08)'
+                                : 'rgba(255,255,255,0.035)',
+                          }}
+                          title={`${terminalActivity.total} 个终端 · ${terminalActivity.running} 个运行中${terminalActivity.errors ? ` · ${terminalActivity.errors} 个异常` : ''}`}
+                        >
+                          <img src={terminalIcon} alt="" className="h-3 w-3 opacity-70" />
+                          <span>{terminalActivity.total}</span>
+                          <span
+                            className={`h-1 w-1 rounded-full ${terminalActivity.running > 0 ? 'motion-safe:animate-pulse motion-reduce:animate-none' : ''}`}
+                            style={{
+                              background: terminalActivity.errors > 0
+                                ? '#ff6666'
+                                : terminalActivity.running > 0
+                                  ? '#58c98d'
+                                  : '#55555b',
+                            }}
+                          />
+                        </span>
+                      )}
                       <button
                         type="button"
                         draggable={false}
@@ -830,11 +871,17 @@ export function Sidebar() {
                         ×
                       </button>
                     </div>
-                    {isExpanded && (
-                      <div
-                        className="ml-5 mr-1 overflow-hidden py-1"
-                        style={{ borderLeft: '1px solid rgba(255,255,255,0.045)' }}
-                      >
+                    <div
+                      className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${
+                        isExpanded ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'
+                      }`}
+                      aria-hidden={!isExpanded}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <div
+                          className="ml-5 mr-1 py-1"
+                          style={{ borderLeft: '1px solid rgba(255,255,255,0.055)' }}
+                        >
                         {workspaceTerminals.length === 0 ? (
                           <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">暂无终端</div>
                         ) : (
@@ -851,25 +898,39 @@ export function Sidebar() {
                                 }}
                                 onDragStart={(event) => handleTerminalPreviewDragStart(terminal, event)}
                                 onDragEnd={() => clearTerminalDragData(terminal.id)}
-                                className="group/terminal mb-0.5 grid w-full cursor-grab grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2.5 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] active:cursor-grabbing"
+                                className="group/terminal mb-0.5 grid w-full cursor-grab grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)] active:cursor-grabbing"
                                 style={{
                                   background: isFocusedTerminal ? 'rgba(255,120,48,0.055)' : 'transparent',
                                   color: isFocusedTerminal ? '#d8d8d8' : '#8a8a8a',
                                 }}
                                 title={`${terminalPresetLabel(terminal.preset)} · ${terminal.cwd}`}
                               >
-                                <span className="min-w-0 truncate font-mono text-[11px]">
-                                  {terminal.name || terminalPresetLabel(terminal.preset)}
+                                <span
+                                  className="flex h-[18px] w-[18px] items-center justify-center"
+                                  title={terminalPresetLabel(terminal.preset)}
+                                >
+                                  <img
+                                    src={TERMINAL_PRESET_ICONS[terminal.preset]}
+                                    alt={`${terminalPresetLabel(terminal.preset)} 图标`}
+                                    className="h-3.5 w-3.5 object-contain"
+                                  />
                                 </span>
-                                <span className="font-mono text-[10px] text-[#5f5f5f]">
-                                  {terminalStatusLabel(terminal.status)}
+                                <span className="min-w-0">
+                                  <span className="block truncate font-mono text-[11px]">
+                                    {terminal.name || terminalPresetLabel(terminal.preset)}
+                                  </span>
+                                  <span className="block truncate text-[9px] text-[#55555b]">
+                                    {terminalPresetLabel(terminal.preset)}
+                                  </span>
                                 </span>
+                                <TerminalStatusIndicator status={terminal.status} />
                               </div>
                             )
                           })
                         )}
+                        </div>
                       </div>
-                    )}
+                    </div>
                         </div>
                       )}
                     </div>
@@ -892,20 +953,15 @@ export function Sidebar() {
 
       {/* 收起态 */}
       {sidebarCollapsed && (
-        <div className="flex-1 flex flex-col items-center py-3 gap-0.5 overflow-hidden">
+        <div className="flex flex-1 flex-col items-center gap-1 overflow-hidden py-1.5">
           <button
             onClick={toggleSidebar}
             title="展开侧栏"
-            className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.04)] mb-1"
+            className="mb-1 flex h-9 w-9 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+            style={{ color: 'var(--shell-dim)' }}
+            aria-label="展开工作区侧栏"
           >
-            <div
-              className="w-[7px] h-[7px] transition-colors"
-              style={{
-                borderRight: '1.5px solid rgba(255, 255, 255, 0.2)',
-                borderBottom: '1.5px solid rgba(255, 255, 255, 0.2)',
-                transform: 'rotate(-45deg)',
-              }}
-            />
+            <PanelLeftOpen size={15} strokeWidth={1.6} aria-hidden="true" />
           </button>
           <div
             className="w-5 h-px my-1"
@@ -935,14 +991,16 @@ export function Sidebar() {
                 onDrop={(event) => handleWorkspaceDrop(ws, event)}
                 onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
                 title={`${ws.sidebarGroup ? `${ws.sidebarGroup.name} · ` : ''}${ws.name} · 拖动排序或分组 · 右键打开运行配置`}
-                className="ws relative flex h-7 w-8 cursor-grab items-center justify-center transition-all active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.28)]"
+                className="ws relative flex h-9 w-9 cursor-grab items-center justify-center rounded-[4px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
                 style={{
                   marginTop: isGroupStart && workspaceIndex > 0 ? 5 : 0,
                   background: isGroupTarget
                     ? 'rgba(255,120,48,0.11)'
                     : isGroupPending
-                      ? 'rgba(255,255,255,0.04)'
-                      : 'transparent',
+                      ? 'var(--shell-hover)'
+                      : isActive
+                        ? 'var(--shell-active)'
+                        : 'transparent',
                   opacity: isDragged ? 0.42 : 1,
                   boxShadow: isGroupTarget
                     ? 'inset 0 0 0 1px rgba(255,120,48,0.45)'
@@ -959,17 +1017,14 @@ export function Sidebar() {
                 )}
                 <div
                   className="pointer-events-none absolute bottom-1.5 left-0 top-1.5 w-0.5 rounded-r-sm"
-                  style={{ background: isActive ? '#ff7830' : 'transparent' }}
+                  style={{ background: isActive ? 'var(--shell-accent)' : 'transparent' }}
                 />
-                <div
-                  className="rounded-full transition-all"
-                  style={{
-                    width: isActive ? '8px' : '6px',
-                    height: isActive ? '8px' : '6px',
-                    background: isActive ? '#ff7830' : 'rgba(255, 255, 255, 0.12)',
-                    boxShadow: isActive ? '0 0 6px rgba(255, 120, 48, 0.5)' : 'none',
-                  }}
-                />
+                <span
+                  className="font-mono text-[10px] font-semibold"
+                  style={{ color: isActive ? 'var(--shell-accent-strong)' : 'var(--shell-dim)' }}
+                >
+                  {workspaceInitial(ws.name)}
+                </span>
               </div>
             )
           })}

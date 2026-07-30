@@ -42,6 +42,12 @@ import {
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
 import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
+import {
+  buildWorkspaceTerminalSurfaces,
+  HOT_WORKSPACE_EVICTION_GRACE_MS,
+  MAX_HOT_WORKSPACE_SURFACES,
+  touchWorkspaceSurfaceRecency,
+} from '@/lib/workspace-front-surface'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -232,7 +238,7 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
         top: position.top,
         left: position.left,
         borderColor: 'rgba(255,255,255,0.12)',
-        background: 'rgb(15, 15, 17)',
+        background: 'var(--shell-chrome-raised)',
         color: '#e8e8e8',
       }}
     >
@@ -293,6 +299,7 @@ function BrowserPaneTabLabel({ surfaceId, isActive }: { surfaceId: string; isAct
 
 interface PaneTreeViewProps {
   node: WorkspacePaneNode | null
+  workspaceVisible: boolean
   terminalsById: Map<string, Terminal>
   focusedPaneId: string | null
   activeTerminalId: string | null
@@ -412,10 +419,8 @@ function TerminalPresetCapsule({
         width: open ? TERMINAL_MENU_EXPANDED_WIDTH : TERMINAL_MENU_COLLAPSED_SIZE,
         height: open ? TERMINAL_MENU_EXPANDED_HEIGHT : TERMINAL_MENU_COLLAPSED_SIZE,
         borderRadius: open ? 999 : 4,
-        borderColor: open ? 'rgba(255,120,48,0.28)' : 'rgba(255,255,255,0.08)',
-        background: open
-          ? 'linear-gradient(180deg, rgb(29, 28, 28) 0%, rgb(14, 14, 16) 100%)'
-          : 'rgb(18, 18, 20)',
+        borderColor: open ? 'rgba(255,120,48,0.28)' : 'var(--shell-border)',
+        background: open ? 'var(--shell-active)' : 'var(--shell-chrome-raised)',
         boxShadow: open
           ? '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)'
           : 'inset 0 1px 0 rgba(255,255,255,0.04)',
@@ -448,7 +453,7 @@ function TerminalPresetCapsule({
             className="flex h-6 w-7 shrink-0 items-center justify-center rounded-full border transition-[background,border-color,transform] hover:scale-[1.04] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.35)]"
             style={{
               borderColor: 'rgba(255,255,255,0.1)',
-              background: 'rgb(21, 21, 23)',
+              background: 'var(--shell-hover)',
             }}
             onClick={(event) => {
               event.stopPropagation()
@@ -460,7 +465,7 @@ function TerminalPresetCapsule({
             }}
             onMouseLeave={(event) => {
               event.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
-              event.currentTarget.style.background = 'rgb(21, 21, 23)'
+              event.currentTarget.style.background = 'var(--shell-hover)'
             }}
           >
             <img src={preset.icon} alt="" aria-hidden="true" className="h-3.5 w-3.5" />
@@ -498,6 +503,7 @@ function TerminalPresetCapsule({
 
 function LeafPane({
   leaf,
+  workspaceVisible,
   terminalsById,
   focusedPaneId,
   showFocusChrome,
@@ -611,8 +617,8 @@ function LeafPane({
         // Multi-pane: rounded card chrome with gap-friendly silhouette.
         // Single-pane: lighter radius so it stays intentional without double-framing.
         borderRadius: showFocusChrome ? 11 : 8,
-        background: showFocus ? 'rgba(24, 24, 26, 0.96)' : 'rgba(14, 14, 16, 0.92)',
-        border: showFocus ? '1px solid rgba(255,120,48,0.28)' : '1px solid rgba(255,255,255,0.06)',
+        background: showFocus ? 'var(--shell-pane-chrome)' : 'var(--shell-pane)',
+        border: showFocus ? '1px solid rgba(255,120,48,0.28)' : '1px solid var(--shell-border)',
         boxShadow: showFocus
           ? '0 0 0 1px rgba(255,120,48,0.08), inset 0 0 0 1px rgba(255,120,48,0.05), 0 6px 18px rgba(0,0,0,0.28)'
           : showFocusChrome
@@ -654,8 +660,8 @@ function LeafPane({
       <div
         className="flex h-9 shrink-0 items-end gap-1 overflow-x-auto px-2"
         style={{
-          background: showFocus ? 'rgba(255,120,48,0.028)' : 'rgba(255,255,255,0.018)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          background: showFocus ? 'rgba(244, 125, 67, 0.06)' : 'rgba(255, 255, 255, 0.022)',
+          borderBottom: '1px solid var(--shell-border)',
           scrollbarWidth: 'none',
         }}
       >
@@ -685,8 +691,8 @@ function LeafPane({
               onClick={() => onTabSelect(leaf.id, tab.id)}
               className="group/tab relative flex h-[30px] min-w-[112px] max-w-[190px] cursor-pointer select-none items-center gap-1.5 rounded-t-[6px] border-0 px-3 text-left font-mono text-[11px] leading-none transition-colors"
               style={{
-                color: isActive ? '#d4d4d4' : 'rgba(255,255,255,0.42)',
-                background: isActive ? 'rgba(10, 10, 10, 0.98)' : 'transparent',
+                color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
+                background: isActive ? 'var(--shell-canvas)' : 'transparent',
               }}
               title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
@@ -783,7 +789,7 @@ function LeafPane({
       <div
         className="relative min-h-0 flex-1 overflow-hidden"
         style={{
-          background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.66) 0%, rgba(2, 2, 2, 0.88) 100%)',
+          background: 'var(--shell-canvas)',
         }}
       >
         {leaf.tabs.map((tab) => {
@@ -800,7 +806,7 @@ function LeafPane({
                 }}
                 aria-hidden={!isActive}
               >
-                <JanusChatPane focused={isFocused && isActive} />
+                <JanusChatPane focused={workspaceVisible && isFocused && isActive} />
               </div>
             )
           }
@@ -821,7 +827,7 @@ function LeafPane({
                 <BrowserSurface
                   surfaceId={tab.surfaceId}
                   carrier="pane"
-                  visible={isActive}
+                  visible={workspaceVisible && isActive}
                   onRequestPopOut={() => onBrowserPopOut(leaf.id, tab.id, tab.surfaceId)}
                 />
               </div>
@@ -846,19 +852,20 @@ function LeafPane({
             >
               <CLITerminal
                 terminalId={terminal.id}
-                visible={isActive}
-                focused={isFocused && isActive}
+                visible={workspaceVisible && isActive}
+                focused={workspaceVisible && isFocused && isActive}
+                workspaceVisible={workspaceVisible}
               />
               {terminal.status === 'error' && (
                 <div
                   className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-                  style={{ background: 'rgba(8, 8, 10, 0.72)' }}
+                  style={{ background: 'rgba(10, 10, 10, 0.72)' }}
                 >
                   <div
                     className="pointer-events-auto flex max-w-[320px] flex-col items-center gap-3 rounded-lg border px-5 py-4 text-center font-mono"
                     style={{
                       borderColor: 'rgba(255, 88, 88, 0.28)',
-                      background: 'rgba(14, 14, 16, 0.92)',
+                      background: 'var(--shell-chrome-raised)',
                       boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
                     }}
                   >
@@ -924,6 +931,10 @@ export function TerminalArea() {
     closePaneTab,
     setTabDragInFlight,
   } = useWorkspaceStore()
+  const [hotWorkspaceIds, setHotWorkspaceIds] = useState<string[]>(() =>
+    touchWorkspaceSurfaceRecency([], activeWorkspaceId)
+  )
+  const hotWorkspaceEvictionTimerRef = useRef<number | null>(null)
   const setLoadState = useAppStore((s) => s.setLoadState)
   const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -950,6 +961,41 @@ export function TerminalArea() {
     }
     return map
   }, [terminalSnapshots, terminals])
+
+  const workspaceSurfaces = useMemo(() => {
+    return buildWorkspaceTerminalSurfaces(terminalSnapshots, activeWorkspaceId, {
+      paneTree,
+      activeTerminalId,
+      focusedPaneId,
+    }, hotWorkspaceIds)
+  }, [activeTerminalId, activeWorkspaceId, focusedPaneId, hotWorkspaceIds, paneTree, terminalSnapshots])
+
+  useEffect(() => {
+    setHotWorkspaceIds((recentWorkspaceIds) =>
+      touchWorkspaceSurfaceRecency(
+        recentWorkspaceIds,
+        activeWorkspaceId,
+        MAX_HOT_WORKSPACE_SURFACES + 1,
+      )
+    )
+
+    if (hotWorkspaceEvictionTimerRef.current !== null) {
+      window.clearTimeout(hotWorkspaceEvictionTimerRef.current)
+    }
+    hotWorkspaceEvictionTimerRef.current = window.setTimeout(() => {
+      hotWorkspaceEvictionTimerRef.current = null
+      setHotWorkspaceIds((recentWorkspaceIds) =>
+        recentWorkspaceIds.slice(0, MAX_HOT_WORKSPACE_SURFACES)
+      )
+    }, HOT_WORKSPACE_EVICTION_GRACE_MS)
+
+    return () => {
+      if (hotWorkspaceEvictionTimerRef.current !== null) {
+        window.clearTimeout(hotWorkspaceEvictionTimerRef.current)
+        hotWorkspaceEvictionTimerRef.current = null
+      }
+    }
+  }, [activeWorkspaceId])
 
   const closeTerminalMenu = useCallback(() => {
     setTerminalMenuPaneId(null)
@@ -1119,14 +1165,14 @@ export function TerminalArea() {
         ref={terminalAreaRef}
         className="flex h-full w-full min-w-0 flex-col relative overflow-hidden"
         style={{
-          background: 'linear-gradient(180deg, rgba(16, 16, 18, 0.98) 0%, rgba(5, 5, 5, 1) 100%)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -24px 40px rgba(0,0,0,0.4)',
+          background: 'var(--shell-canvas)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
       }}
     >
       {paneCount > 1 && (
         <div
           className="flex h-5 shrink-0 items-center justify-end px-3 pt-1"
-          style={{ background: 'rgba(10, 10, 10, 0.38)' }}
+          style={{ background: 'transparent' }}
         >
           <button
             type="button"
@@ -1152,64 +1198,80 @@ export function TerminalArea() {
                 boxShadow: 'none',
               }
             : {
-                background: 'linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(2, 2, 2, 0.8) 100%)',
-                border: '1px solid rgba(255, 255, 255, 0.03)',
+                background: 'var(--shell-pane)',
+                border: '1px solid var(--shell-border)',
                 borderRadius: 10,
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
               }
         }
       >
-        <PaneTreeView
-          node={paneTree}
-          terminalsById={terminalsById}
-          focusedPaneId={focusedPaneId}
-          activeTerminalId={activeTerminalId}
-          showFocusChrome={paneCount > 1}
-          onPaneFocus={setFocusedPane}
-          onTabSelect={setPaneTab}
-          onKillTerminalFromTab={handleKillTerminal}
-          onClosePaneTab={closePaneTab}
-          onOpenBrowser={handleOpenBrowser}
-          onCloseBrowserTab={handleCloseBrowserTab}
-          onBrowserPopOut={handleBrowserPopOut}
-          onKillTerminal={handleKillTerminal}
-          onTerminalDrop={handleTerminalDrop}
-          onTerminalDragStart={(terminalId) => {
-            activeDragTerminalRef.current = terminalId
-            setActiveDragTerminalId(terminalId)
-            setTabDragInFlight(true)
-          }}
-          onTerminalDragEnd={() => {
-            activeDragTerminalRef.current = null
-            setActiveDragTerminalId(null)
-            clearTerminalDragData()
-            activeDragBrowserSurfaceRef.current = null
-            setActiveDragBrowserSurfaceId(null)
-            clearBrowserTabDragData()
-            setTabDragInFlight(false)
-          }}
-          onBrowserTabDragStart={(surfaceId) => {
-            activeDragBrowserSurfaceRef.current = surfaceId
-            setActiveDragBrowserSurfaceId(surfaceId)
-            setTabDragInFlight(true)
-          }}
-          onBrowserTabDrop={handleBrowserTabDrop}
-          activeDragBrowserSurfaceId={activeDragBrowserSurfaceId}
-          activeDragBrowserSurfaceRef={activeDragBrowserSurfaceRef}
-          activeDragTerminalId={activeDragTerminalId}
-          activeDragTerminalRef={activeDragTerminalRef}
-          onResize={resizePane}
-          terminalMenuPaneId={terminalMenuPaneId}
-          onToggleTerminalMenu={toggleTerminalMenu}
-          onCreateTerminal={handlePresetSelect}
-        />
+        {workspaceSurfaces.map((surface) => {
+          const workspaceVisible = surface.workspaceId === activeWorkspaceId
+          return (
+            <div
+              key={surface.workspaceId}
+              className="absolute inset-0"
+              style={{
+                display: workspaceVisible ? 'block' : 'none',
+              }}
+              {...(!workspaceVisible ? { inert: '' } : {})}
+              aria-hidden={!workspaceVisible}
+            >
+              <PaneTreeView
+                node={surface.paneTree}
+                workspaceVisible={workspaceVisible}
+                terminalsById={terminalsById}
+                focusedPaneId={surface.focusedPaneId}
+                activeTerminalId={surface.activeTerminalId}
+                showFocusChrome={workspaceVisible && paneCount > 1}
+                onPaneFocus={setFocusedPane}
+                onTabSelect={setPaneTab}
+                onKillTerminalFromTab={handleKillTerminal}
+                onClosePaneTab={closePaneTab}
+                onOpenBrowser={handleOpenBrowser}
+                onCloseBrowserTab={handleCloseBrowserTab}
+                onBrowserPopOut={handleBrowserPopOut}
+                onKillTerminal={handleKillTerminal}
+                onTerminalDrop={handleTerminalDrop}
+                onTerminalDragStart={(terminalId) => {
+                  activeDragTerminalRef.current = terminalId
+                  setActiveDragTerminalId(terminalId)
+                  setTabDragInFlight(true)
+                }}
+                onTerminalDragEnd={() => {
+                  activeDragTerminalRef.current = null
+                  setActiveDragTerminalId(null)
+                  clearTerminalDragData()
+                  activeDragBrowserSurfaceRef.current = null
+                  setActiveDragBrowserSurfaceId(null)
+                  clearBrowserTabDragData()
+                  setTabDragInFlight(false)
+                }}
+                onBrowserTabDragStart={(surfaceId) => {
+                  activeDragBrowserSurfaceRef.current = surfaceId
+                  setActiveDragBrowserSurfaceId(surfaceId)
+                  setTabDragInFlight(true)
+                }}
+                onBrowserTabDrop={handleBrowserTabDrop}
+                activeDragBrowserSurfaceId={activeDragBrowserSurfaceId}
+                activeDragBrowserSurfaceRef={activeDragBrowserSurfaceRef}
+                activeDragTerminalId={activeDragTerminalId}
+                activeDragTerminalRef={activeDragTerminalRef}
+                onResize={resizePane}
+                terminalMenuPaneId={terminalMenuPaneId}
+                onToggleTerminalMenu={toggleTerminalMenu}
+                onCreateTerminal={handlePresetSelect}
+              />
+            </div>
+          )
+        })}
       </div>
 
       <div
         className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
         style={{
-          background: drawerOpen ? 'rgba(11, 12, 13, 0.98)' : 'rgba(9, 10, 11, 0.96)',
-          borderTop: '1px solid var(--border)',
+          background: drawerOpen ? 'var(--shell-chrome)' : 'var(--shell-canvas)',
+          borderTop: '1px solid var(--shell-border)',
           height: getDrawerHeight(drawerOpen, drawerView),
         }}
       >

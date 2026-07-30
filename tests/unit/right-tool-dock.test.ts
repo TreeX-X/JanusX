@@ -122,10 +122,7 @@ describe('right tool rail', () => {
       createElement(RightToolRail, {
         openToolIds: ['files', 'git'],
         activeToolId: 'git',
-        collapsed: false,
-        panelToggleDisabled: false,
         onToggleTool: vi.fn(),
-        onTogglePanel: vi.fn(),
       }),
     )
 
@@ -133,6 +130,8 @@ describe('right tool rail', () => {
     expect(markup).toContain('data-state="closed"')
     expect(markup).toContain('data-state="open"')
     expect(markup).toContain('data-state="active"')
+    expect(markup).not.toContain('折叠右侧工具面板')
+    expect(markup).not.toContain('展开右侧工具面板')
     expect(markup).toContain('已打开')
     expect(markup).toContain('已关闭')
     expect(markup).not.toContain('office')

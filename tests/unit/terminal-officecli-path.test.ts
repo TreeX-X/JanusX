@@ -77,10 +77,8 @@ describe('TerminalManager OfficeCLI PATH integration', () => {
 
     manager.resize('safe-resize', Number.NaN, 40)
     expect(resize).not.toHaveBeenCalled()
-
     manager.resize('safe-resize', 100_000, 100_000)
     expect(resize).toHaveBeenLastCalledWith(1_000, 1_000)
-
     resize.mockImplementationOnce(() => { throw new Error('native resize failed') })
     expect(() => manager.resize('safe-resize', 120, 40)).not.toThrow()
   })
@@ -93,7 +91,6 @@ describe('TerminalManager OfficeCLI PATH integration', () => {
     })
     const write = manager.getInstance('safe-write')!.pty.write as ReturnType<typeof vi.fn>
     write.mockImplementationOnce(() => { throw new Error('native write failed') })
-
     expect(() => manager.write('safe-write', 'input')).not.toThrow()
   })
 })

@@ -183,7 +183,7 @@ export function Titlebar() {
       style={{
         background: 'var(--chrome-bg)',
         backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid var(--border)',
+        borderBottom: '1px solid var(--shell-border)',
         zIndex: 9999,
       }}
     >
@@ -214,7 +214,7 @@ export function Titlebar() {
           <div
             className="llm-trigger-line-1 absolute w-3.5 h-[1.5px] top-1/2 left-1/2 rounded-[1px] transition-all duration-[400ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
             style={{
-              background: '#888',
+              background: 'var(--shell-muted)',
               transform: 'translate(-50%, -50%) rotate(45deg)',
             }}
           />
@@ -228,7 +228,7 @@ export function Titlebar() {
         </div>
 
         {/* 文字 */}
-        <span className="text-[13px] font-medium text-[#888] tracking-[0.5px] transition-all duration-[400ms] group-hover:text-white group-hover:drop-shadow-[0_0_10px_rgba(255,120,48,0.4)]">
+        <span className="text-[13px] font-medium tracking-[0.5px] transition-all duration-[400ms] group-hover:text-white group-hover:drop-shadow-[0_0_10px_rgba(255,120,48,0.4)]" style={{ color: 'var(--shell-muted)' }}>
           JanusX
         </span>
 

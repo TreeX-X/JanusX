@@ -16,6 +16,7 @@ import type { ToolResult } from '../../shared/ipc/agent-runtime'
 import { getDevelopmentLlmSyncStatus } from '../llm/development-config-sync'
 import { workspaceAgentRuntime } from '../agent/runtime/runtime'
 import { createWorkspaceChatSystemPrompt, createWorkspaceChatTools } from '../llm/workspace-chat-tools'
+import { generateText, streamText } from '../llm/ai-runtime'
 
 /** 对话消息类型 */
 interface ChatMessage {
@@ -402,7 +403,6 @@ export function registerLlmHandlers(): void {
 
       // 使用 AI SDK
       const model = await llmService.getLanguageModel(providerId, actualModelId)
-      const { generateText } = await llmService.getAiModule()
 
       const result = await generateText({
         model: model as any,
@@ -514,7 +514,6 @@ export function registerLlmHandlers(): void {
       }
 
       const model = await llmService.getLanguageModel(providerId, actualModelId)
-      const { streamText } = await llmService.getAiModule()
 
       const result = await streamText({
         model: model as any,
