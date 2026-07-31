@@ -7,12 +7,17 @@
  *
  *              焦点（归属机制 B）：每个 workspace 同时最多一个焦点节点，
  *              cursor 为 `focusedNodeId`，commit 归焦点节点。
+ *
+ *              并发安全：所有公开方法经 ReentrantAsyncLock 串行化（store 级单锁，
+ *              因 index.json 跨蓝图共享，避免 per-blueprint 双锁死锁），
+ *              writeJson 为 temp+rename 原子写，防止退出期截断丢蓝图。
  */
 
 import { promises as fs } from 'fs'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { app } from 'electron'
+import { ReentrantAsyncLock, writeFileAtomic } from '../lib/atomic-file'
 import type {
   Blueprint,
   BlueprintFeatureItem,
@@ -159,10 +164,6 @@ function makeNode(input: Partial<BlueprintNode> & { title: string; type: Bluepri
   }
 }
 
-async function ensureDir(dir: string): Promise<void> {
-  await fs.mkdir(dir, { recursive: true })
-}
-
 async function readJson<T>(file: string): Promise<T | null> {
   try {
     const raw = await fs.readFile(file, 'utf-8')
@@ -173,25 +174,33 @@ async function readJson<T>(file: string): Promise<T | null> {
 }
 
 async function writeJson(file: string, data: unknown): Promise<void> {
-  await ensureDir(join(file, '..'))
-  await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf-8')
+  // temp+rename 原子写：退出期中断不会产生截断 JSON
+  await writeFileAtomic(file, JSON.stringify(data, null, 2))
 }
 
 export class BlueprintStore {
   private cache = new Map<string, Blueprint>()
   private indexCache: WorkspaceIndex | null = null
   private migratedWorkspaces = new Set<string>()
+  private mutex = new ReentrantAsyncLock()
+
+  /** 全部公开方法经此锁串行化；可重入，内部互调不会死锁 */
+  private locked<T>(operation: () => Promise<T>): Promise<T> {
+    return this.mutex.run(operation)
+  }
 
   async loadIndex(_workspace?: string): Promise<WorkspaceIndex> {
-    if (this.indexCache) return this.indexCache
-    const idx = (await readJson<WorkspaceIndex>(indexFile())) ?? {
-      blueprints: [],
-      focusedNodeId: null,
-      focusedNodeByWorkspace: {}
-    }
-    if (!idx.focusedNodeByWorkspace) idx.focusedNodeByWorkspace = {}
-    this.indexCache = idx
-    return idx
+    return this.locked(async () => {
+      if (this.indexCache) return this.indexCache
+      const idx = (await readJson<WorkspaceIndex>(indexFile())) ?? {
+        blueprints: [],
+        focusedNodeId: null,
+        focusedNodeByWorkspace: {}
+      }
+      if (!idx.focusedNodeByWorkspace) idx.focusedNodeByWorkspace = {}
+      this.indexCache = idx
+      return idx
+    })
   }
 
   private async saveIndex(_workspace?: string): Promise<void> {
@@ -283,17 +292,19 @@ export class BlueprintStore {
   }
 
   async listBlueprints(workspace: string): Promise<Blueprint[]> {
-    await this.migrateLegacyWorkspace(workspace)
-    const idx = await this.loadIndex(workspace)
-    const out: Blueprint[] = []
-    for (const id of idx.blueprints) {
-      const bp = this.cache.get(id) ?? (await this.readBlueprintFile(id))
-      if (bp) {
-        this.cache.set(id, bp)
-        out.push(bp)
+    return this.locked(async () => {
+      await this.migrateLegacyWorkspace(workspace)
+      const idx = await this.loadIndex(workspace)
+      const out: Blueprint[] = []
+      for (const id of idx.blueprints) {
+        const bp = this.cache.get(id) ?? (await this.readBlueprintFile(id))
+        if (bp) {
+          this.cache.set(id, bp)
+          out.push(bp)
+        }
       }
-    }
-    return out
+      return out
+    })
   }
 
   private async readBlueprintFile(id: string): Promise<Blueprint | null> {
@@ -345,45 +356,49 @@ export class BlueprintStore {
   }
 
   async loadBlueprint(...args: [workspace: string, id: string]): Promise<Blueprint | null> {
-    // Keep the workspace-first public contract; persisted blueprint files are keyed globally by id.
-    const id = args[1]
-    const cached = this.cache.get(id)
-    if (cached) return cached
-    const bp = await this.readBlueprintFile(id)
-    if (bp) this.cache.set(id, bp)
-    return bp
+    return this.locked(async () => {
+      // Keep the workspace-first public contract; persisted blueprint files are keyed globally by id.
+      const id = args[1]
+      const cached = this.cache.get(id)
+      if (cached) return cached
+      const bp = await this.readBlueprintFile(id)
+      if (bp) this.cache.set(id, bp)
+      return bp
+    })
   }
 
   async createBlueprint(
     workspace: string,
     input: { name: string; description?: string; rootTitle?: string; rootType?: BlueprintNodeType }
   ): Promise<Blueprint> {
-    const id = randomUUID()
-    const ts = nowIso()
-    const root = makeNode({
-      title: input.rootTitle ?? input.name,
-      type: input.rootType ?? 'epic'
+    return this.locked(async () => {
+      const id = randomUUID()
+      const ts = nowIso()
+      const root = makeNode({
+        title: input.rootTitle ?? input.name,
+        type: input.rootType ?? 'epic'
+      })
+      const bp: Blueprint = {
+        schemaVersion: BLUEPRINT_SCHEMA_VERSION,
+        id,
+        name: input.name,
+        description: input.description ?? '',
+        rootNodeId: root.id,
+        nodeIds: [root.id],
+        nodes: { [root.id]: root },
+        requirementCandidates: [],
+        mountedTo: null,
+        canvasLayout: {},
+        createdAt: ts,
+        updatedAt: ts
+      }
+      this.cache.set(id, bp)
+      const idx = await this.loadIndex(workspace)
+      idx.blueprints.push(id)
+      await this.saveIndex(workspace)
+      await writeJson(blueprintFile(id), bp)
+      return bp
     })
-    const bp: Blueprint = {
-      schemaVersion: BLUEPRINT_SCHEMA_VERSION,
-      id,
-      name: input.name,
-      description: input.description ?? '',
-      rootNodeId: root.id,
-      nodeIds: [root.id],
-      nodes: { [root.id]: root },
-      requirementCandidates: [],
-      mountedTo: null,
-      canvasLayout: {},
-      createdAt: ts,
-      updatedAt: ts
-    }
-    this.cache.set(id, bp)
-    const idx = await this.loadIndex(workspace)
-    idx.blueprints.push(id)
-    await this.saveIndex(workspace)
-    await writeJson(blueprintFile(id), bp)
-    return bp
   }
 
   async updateBlueprint(
@@ -391,37 +406,41 @@ export class BlueprintStore {
     id: string,
     patch: Partial<Pick<Blueprint, 'name' | 'description' | 'canvasLayout'>>
   ): Promise<Blueprint | null> {
-    const bp = await this.loadBlueprint(workspace, id)
-    if (!bp) return null
-    if (patch.name !== undefined) bp.name = patch.name
-    if (patch.description !== undefined) bp.description = patch.description
-    if (patch.canvasLayout !== undefined) bp.canvasLayout = patch.canvasLayout
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(id), bp)
-    return bp
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, id)
+      if (!bp) return null
+      if (patch.name !== undefined) bp.name = patch.name
+      if (patch.description !== undefined) bp.description = patch.description
+      if (patch.canvasLayout !== undefined) bp.canvasLayout = patch.canvasLayout
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(id), bp)
+      return bp
+    })
   }
 
   async deleteBlueprint(workspace: string, id: string): Promise<boolean> {
-    const existed = this.cache.has(id) || (await readJson<Blueprint>(blueprintFile(id))) !== null
-    this.cache.delete(id)
-    const idx = await this.loadIndex(workspace)
-    idx.blueprints = idx.blueprints.filter((b) => b !== id)
-    if (idx.focusedNodeId) {
-      const stillExists = await this.nodeExistsInIndex(workspace, idx.focusedNodeId)
-      if (!stillExists) idx.focusedNodeId = null
-    }
-    for (const [ws, nodeId] of Object.entries(idx.focusedNodeByWorkspace ?? {})) {
-      if (!nodeId) continue
-      const stillExists = await this.nodeExistsInIndex(workspace, nodeId)
-      if (!stillExists) idx.focusedNodeByWorkspace![ws] = null
-    }
-    await this.saveIndex(workspace)
-    try {
-      await fs.unlink(blueprintFile(id))
-    } catch {
-      /* 文件可能不存在 */
-    }
-    return existed
+    return this.locked(async () => {
+      const existed = this.cache.has(id) || (await readJson<Blueprint>(blueprintFile(id))) !== null
+      this.cache.delete(id)
+      const idx = await this.loadIndex(workspace)
+      idx.blueprints = idx.blueprints.filter((b) => b !== id)
+      if (idx.focusedNodeId) {
+        const stillExists = await this.nodeExistsInIndex(workspace, idx.focusedNodeId)
+        if (!stillExists) idx.focusedNodeId = null
+      }
+      for (const [ws, nodeId] of Object.entries(idx.focusedNodeByWorkspace ?? {})) {
+        if (!nodeId) continue
+        const stillExists = await this.nodeExistsInIndex(workspace, nodeId)
+        if (!stillExists) idx.focusedNodeByWorkspace![ws] = null
+      }
+      await this.saveIndex(workspace)
+      try {
+        await fs.unlink(blueprintFile(id))
+      } catch {
+        /* 文件可能不存在 */
+      }
+      return existed
+    })
   }
 
   private async nodeExistsInIndex(workspace: string, nodeId: string): Promise<boolean> {
@@ -439,19 +458,21 @@ export class BlueprintStore {
     input: Partial<BlueprintNode> & { title: string; type: BlueprintNodeType },
     parentId: string | null = null
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp) return null
-    const node = makeNode({ ...input, parentId })
-    await this.hydrateWorkspaceSnapshot(node)
-    bp.nodes[node.id] = node
-    bp.nodeIds.push(node.id)
-    if (parentId && bp.nodes[parentId]) {
-      bp.nodes[parentId].children.push(node.id)
-      bp.nodes[parentId].updatedAt = nowIso()
-    }
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp) return null
+      const node = makeNode({ ...input, parentId })
+      await this.hydrateWorkspaceSnapshot(node)
+      bp.nodes[node.id] = node
+      bp.nodeIds.push(node.id)
+      if (parentId && bp.nodes[parentId]) {
+        bp.nodes[parentId].children.push(node.id)
+        bp.nodes[parentId].updatedAt = nowIso()
+      }
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async updateNode(
@@ -460,50 +481,52 @@ export class BlueprintStore {
     nodeId: string,
     patch: Partial<BlueprintNode>
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    // 不允许通过通用 patch 覆盖只读字段
-    const { id: _id, createdAt: _c, ...safe } = patch
-    if (safe.workspaceId !== undefined) {
-      if (!safe.workspaceId) {
-        safe.workspaceId = null
-        safe.workspaceSnapshot = null
-      } else if (safe.workspaceSnapshot === undefined) {
-        const record = await this.findWorkspaceRecord(safe.workspaceId)
-        safe.workspaceSnapshot = record ? toWorkspaceSnapshot(record) : node.workspaceSnapshot ?? null
-      }
-    }
-    if (safe.parentId !== undefined && safe.parentId !== node.parentId) {
-      const nextParentId = safe.parentId
-      if (nodeId === bp.rootNodeId && nextParentId) return null
-      if (nextParentId === nodeId) return null
-      if (nextParentId && !bp.nodes[nextParentId]) return null
-      const isDescendant = (candidateId: string, ancestorId: string): boolean => {
-        let cursor = bp.nodes[candidateId]?.parentId ?? null
-        while (cursor) {
-          if (cursor === ancestorId) return true
-          cursor = bp.nodes[cursor]?.parentId ?? null
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      // 不允许通过通用 patch 覆盖只读字段
+      const { id: _id, createdAt: _c, ...safe } = patch
+      if (safe.workspaceId !== undefined) {
+        if (!safe.workspaceId) {
+          safe.workspaceId = null
+          safe.workspaceSnapshot = null
+        } else if (safe.workspaceSnapshot === undefined) {
+          const record = await this.findWorkspaceRecord(safe.workspaceId)
+          safe.workspaceSnapshot = record ? toWorkspaceSnapshot(record) : node.workspaceSnapshot ?? null
         }
-        return false
       }
-      if (nextParentId && isDescendant(nextParentId, nodeId)) return null
-      const oldParent = node.parentId ? bp.nodes[node.parentId] : null
-      if (oldParent) {
-        oldParent.children = oldParent.children.filter((id) => id !== nodeId)
-        oldParent.updatedAt = nowIso()
+      if (safe.parentId !== undefined && safe.parentId !== node.parentId) {
+        const nextParentId = safe.parentId
+        if (nodeId === bp.rootNodeId && nextParentId) return null
+        if (nextParentId === nodeId) return null
+        if (nextParentId && !bp.nodes[nextParentId]) return null
+        const isDescendant = (candidateId: string, ancestorId: string): boolean => {
+          let cursor = bp.nodes[candidateId]?.parentId ?? null
+          while (cursor) {
+            if (cursor === ancestorId) return true
+            cursor = bp.nodes[cursor]?.parentId ?? null
+          }
+          return false
+        }
+        if (nextParentId && isDescendant(nextParentId, nodeId)) return null
+        const oldParent = node.parentId ? bp.nodes[node.parentId] : null
+        if (oldParent) {
+          oldParent.children = oldParent.children.filter((id) => id !== nodeId)
+          oldParent.updatedAt = nowIso()
+        }
+        const nextParent = nextParentId ? bp.nodes[nextParentId] : null
+        if (nextParent && !nextParent.children.includes(nodeId)) {
+          nextParent.children.push(nodeId)
+          nextParent.updatedAt = nowIso()
+        }
       }
-      const nextParent = nextParentId ? bp.nodes[nextParentId] : null
-      if (nextParent && !nextParent.children.includes(nodeId)) {
-        nextParent.children.push(nodeId)
-        nextParent.updatedAt = nowIso()
-      }
-    }
-    Object.assign(node, safe)
-    node.updatedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+      Object.assign(node, safe)
+      node.updatedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async patchNodeFeatures(
@@ -512,14 +535,16 @@ export class BlueprintStore {
     nodeId: string,
     features: Array<Partial<BlueprintFeatureItem> & { title: string }>
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    node.features = features.map((feature) => makeFeatureItem(feature))
-    node.updatedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      node.features = features.map((feature) => makeFeatureItem(feature))
+      node.updatedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async appendNodeFeature(
@@ -528,14 +553,16 @@ export class BlueprintStore {
     nodeId: string,
     feature: Partial<BlueprintFeatureItem> & { title: string }
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    node.features = [...(node.features ?? []), makeFeatureItem(feature)]
-    node.updatedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      node.features = [...(node.features ?? []), makeFeatureItem(feature)]
+      node.updatedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async updateNodeFeature(
@@ -545,21 +572,23 @@ export class BlueprintStore {
     featureId: string,
     patch: Partial<BlueprintFeatureItem>
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    const feature = (node.features ?? []).find((item) => item.id === featureId)
-    if (!feature) return null
-    if (patch.title !== undefined) feature.title = patch.title
-    if (patch.description !== undefined) feature.description = patch.description
-    if (patch.progress !== undefined) feature.progress = Math.max(0, Math.min(100, patch.progress))
-    if (patch.status !== undefined) feature.status = normalizeFeatureStatus(patch.status)
-    if (patch.requirementNotes !== undefined) feature.requirementNotes = [...patch.requirementNotes]
-    feature.updatedAt = nowIso()
-    node.updatedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      const feature = (node.features ?? []).find((item) => item.id === featureId)
+      if (!feature) return null
+      if (patch.title !== undefined) feature.title = patch.title
+      if (patch.description !== undefined) feature.description = patch.description
+      if (patch.progress !== undefined) feature.progress = Math.max(0, Math.min(100, patch.progress))
+      if (patch.status !== undefined) feature.status = normalizeFeatureStatus(patch.status)
+      if (patch.requirementNotes !== undefined) feature.requirementNotes = [...patch.requirementNotes]
+      feature.updatedAt = nowIso()
+      node.updatedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async deleteNodeFeature(
@@ -568,56 +597,60 @@ export class BlueprintStore {
     nodeId: string,
     featureId: string
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    node.features = (node.features ?? []).filter((item) => item.id !== featureId)
-    node.updatedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      node.features = (node.features ?? []).filter((item) => item.id !== featureId)
+      node.updatedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async deleteNode(workspace: string, blueprintId: string, nodeId: string): Promise<boolean> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return false
-    if (bp.nodeIds.length <= 1) return false
-    const node = bp.nodes[nodeId]
-    // 重新挂载子节点到父节点
-    const parent = node.parentId ? bp.nodes[node.parentId] : null
-    for (const childId of node.children) {
-      const child = bp.nodes[childId]
-      if (child) {
-        child.parentId = node.parentId
-        if (parent && !parent.children.includes(childId)) parent.children.push(childId)
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return false
+      if (bp.nodeIds.length <= 1) return false
+      const node = bp.nodes[nodeId]
+      // 重新挂载子节点到父节点
+      const parent = node.parentId ? bp.nodes[node.parentId] : null
+      for (const childId of node.children) {
+        const child = bp.nodes[childId]
+        if (child) {
+          child.parentId = node.parentId
+          if (parent && !parent.children.includes(childId)) parent.children.push(childId)
+        }
       }
-    }
-    if (parent) {
-      parent.children = parent.children.filter((c) => c !== nodeId)
-    }
-    delete bp.nodes[nodeId]
-    bp.nodeIds = bp.nodeIds.filter((n) => n !== nodeId)
-    delete bp.canvasLayout[nodeId]
-    if (bp.rootNodeId === nodeId) {
-      const promoted =
-        node.children.find((childId) => bp.nodes[childId]) ??
-        bp.nodeIds.find((id) => bp.nodes[id]?.parentId === null) ??
-        bp.nodeIds[0]
-      if (!promoted) return false
-      bp.rootNodeId = promoted
-      bp.nodes[promoted].parentId = null
-    }
-    bp.updatedAt = nowIso()
-    const idx = await this.loadIndex(workspace)
-    if (idx.focusedNodeId === nodeId) {
-      idx.focusedNodeId = null
-    }
-    for (const [ws, focused] of Object.entries(idx.focusedNodeByWorkspace ?? {})) {
-      if (focused === nodeId) idx.focusedNodeByWorkspace![ws] = null
-    }
-    await this.saveIndex(workspace)
-    await writeJson(blueprintFile(blueprintId), bp)
-    return true
+      if (parent) {
+        parent.children = parent.children.filter((c) => c !== nodeId)
+      }
+      delete bp.nodes[nodeId]
+      bp.nodeIds = bp.nodeIds.filter((n) => n !== nodeId)
+      delete bp.canvasLayout[nodeId]
+      if (bp.rootNodeId === nodeId) {
+        const promoted =
+          node.children.find((childId) => bp.nodes[childId]) ??
+          bp.nodeIds.find((id) => bp.nodes[id]?.parentId === null) ??
+          bp.nodeIds[0]
+        if (!promoted) return false
+        bp.rootNodeId = promoted
+        bp.nodes[promoted].parentId = null
+      }
+      bp.updatedAt = nowIso()
+      const idx = await this.loadIndex(workspace)
+      if (idx.focusedNodeId === nodeId) {
+        idx.focusedNodeId = null
+      }
+      for (const [ws, focused] of Object.entries(idx.focusedNodeByWorkspace ?? {})) {
+        if (focused === nodeId) idx.focusedNodeByWorkspace![ws] = null
+      }
+      await this.saveIndex(workspace)
+      await writeJson(blueprintFile(blueprintId), bp)
+      return true
+    })
   }
 
   /** 追加分析记录并按成功与否回写状态字段 */
@@ -627,36 +660,38 @@ export class BlueprintStore {
     nodeId: string,
     analysis: BlueprintAnalysis
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    node.analyses.push(analysis)
-    node.activities.push({
-      id: randomUUID(),
-      type: 'analysis',
-      content: analysis.result?.summary ?? analysis.error ?? '分析完成',
-      metadata: { analysisId: analysis.id, applied: analysis.applied },
-      createdAt: analysis.createdAt
-    })
-    if (analysis.applied && analysis.result) {
-      const r: AnalysisResult = analysis.result
-      node.progress = r.progress
-      node.status = r.status
-      node.statusSource = 'janus'
-      for (const update of r.featureUpdates ?? []) {
-        const feature = (node.features ?? []).find((item) => item.id === update.featureId)
-        if (!feature) continue
-        if (update.progress !== undefined) feature.progress = Math.max(0, Math.min(100, update.progress))
-        if (update.status !== undefined) feature.status = normalizeFeatureStatus(update.status)
-        if (update.description !== undefined) feature.description = update.description
-        if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
-        feature.updatedAt = nowIso()
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      node.analyses.push(analysis)
+      node.activities.push({
+        id: randomUUID(),
+        type: 'analysis',
+        content: analysis.result?.summary ?? analysis.error ?? '分析完成',
+        metadata: { analysisId: analysis.id, applied: analysis.applied },
+        createdAt: analysis.createdAt
+      })
+      if (analysis.applied && analysis.result) {
+        const r: AnalysisResult = analysis.result
+        node.progress = r.progress
+        node.status = r.status
+        node.statusSource = 'janus'
+        for (const update of r.featureUpdates ?? []) {
+          const feature = (node.features ?? []).find((item) => item.id === update.featureId)
+          if (!feature) continue
+          if (update.progress !== undefined) feature.progress = Math.max(0, Math.min(100, update.progress))
+          if (update.status !== undefined) feature.status = normalizeFeatureStatus(update.status)
+          if (update.description !== undefined) feature.description = update.description
+          if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
+          feature.updatedAt = nowIso()
+        }
       }
-    }
-    node.updatedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+      node.updatedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async applyAnalysisPatch(
@@ -675,30 +710,32 @@ export class BlueprintStore {
       }>
     }
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    if (patch.progress !== undefined) {
-      node.progress = Math.max(0, Math.min(100, patch.progress))
-      node.statusSource = 'janus'
-    }
-    if (patch.status !== undefined) {
-      node.status = patch.status
-      node.statusSource = 'janus'
-    }
-    for (const update of patch.featureUpdates ?? []) {
-      const feature = (node.features ?? []).find((item) => item.id === update.featureId)
-      if (!feature) continue
-      if (update.progress !== undefined) feature.progress = Math.max(0, Math.min(100, update.progress))
-      if (update.status !== undefined) feature.status = normalizeFeatureStatus(update.status)
-      if (update.description !== undefined) feature.description = update.description
-      if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
-      feature.updatedAt = nowIso()
-    }
-    node.updatedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      if (patch.progress !== undefined) {
+        node.progress = Math.max(0, Math.min(100, patch.progress))
+        node.statusSource = 'janus'
+      }
+      if (patch.status !== undefined) {
+        node.status = patch.status
+        node.statusSource = 'janus'
+      }
+      for (const update of patch.featureUpdates ?? []) {
+        const feature = (node.features ?? []).find((item) => item.id === update.featureId)
+        if (!feature) continue
+        if (update.progress !== undefined) feature.progress = Math.max(0, Math.min(100, update.progress))
+        if (update.status !== undefined) feature.status = normalizeFeatureStatus(update.status)
+        if (update.description !== undefined) feature.description = update.description
+        if (update.requirementNotes !== undefined) feature.requirementNotes = [...update.requirementNotes]
+        feature.updatedAt = nowIso()
+      }
+      node.updatedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
+    })
   }
 
   async upsertRequirementCandidates(
@@ -709,62 +746,64 @@ export class BlueprintStore {
     requirements: DiscoveredRequirement[],
     evidence: string[] = []
   ): Promise<BlueprintRequirementCandidate[]> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[sourceNodeId]) return []
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[sourceNodeId]) return []
 
-    bp.requirementCandidates ??= []
-    const touched: BlueprintRequirementCandidate[] = []
-    let changed = false
-    const now = nowIso()
+      bp.requirementCandidates ??= []
+      const touched: BlueprintRequirementCandidate[] = []
+      let changed = false
+      const now = nowIso()
 
-    for (const requirement of requirements) {
-      const title = requirement.title.trim()
-      if (!title) continue
+      for (const requirement of requirements) {
+        const title = requirement.title.trim()
+        if (!title) continue
 
-      const description = requirement.description?.trim() ?? ''
-      const suggestedParentTitle = requirement.suggestedParent?.trim() || undefined
-      const key = candidateKey(sourceNodeId, title, description, suggestedParentTitle)
-      const existing = bp.requirementCandidates.find((candidate) =>
-        candidateKey(candidate.sourceNodeId, candidate.title, candidate.description, candidate.suggestedParentTitle) === key
-      )
+        const description = requirement.description?.trim() ?? ''
+        const suggestedParentTitle = requirement.suggestedParent?.trim() || undefined
+        const key = candidateKey(sourceNodeId, title, description, suggestedParentTitle)
+        const existing = bp.requirementCandidates.find((candidate) =>
+          candidateKey(candidate.sourceNodeId, candidate.title, candidate.description, candidate.suggestedParentTitle) === key
+        )
 
-      if (existing) {
-        if (existing.status !== 'pending') continue
-        existing.sourceAnalysisId = sourceAnalysisId
-        existing.confidence = Math.max(existing.confidence, requirement.confidence)
-        existing.suggestedParentId = existing.suggestedParentId ?? resolveSuggestedParentId(bp, suggestedParentTitle)
-        existing.suggestedParentTitle = existing.suggestedParentTitle ?? suggestedParentTitle
-        existing.evidence = Array.from(new Set([...(existing.evidence ?? []), ...evidence]))
-        touched.push(existing)
+        if (existing) {
+          if (existing.status !== 'pending') continue
+          existing.sourceAnalysisId = sourceAnalysisId
+          existing.confidence = Math.max(existing.confidence, requirement.confidence)
+          existing.suggestedParentId = existing.suggestedParentId ?? resolveSuggestedParentId(bp, suggestedParentTitle)
+          existing.suggestedParentTitle = existing.suggestedParentTitle ?? suggestedParentTitle
+          existing.evidence = Array.from(new Set([...(existing.evidence ?? []), ...evidence]))
+          touched.push(existing)
+          changed = true
+          continue
+        }
+
+        const candidate: BlueprintRequirementCandidate = {
+          id: randomUUID(),
+          blueprintId,
+          sourceNodeId,
+          sourceAnalysisId,
+          title,
+          description,
+          suggestedParentId: resolveSuggestedParentId(bp, suggestedParentTitle),
+          suggestedParentTitle,
+          confidence: requirement.confidence,
+          status: 'pending',
+          evidence: [...evidence],
+          createdAt: now
+        }
+        bp.requirementCandidates.push(candidate)
+        touched.push(candidate)
         changed = true
-        continue
       }
 
-      const candidate: BlueprintRequirementCandidate = {
-        id: randomUUID(),
-        blueprintId,
-        sourceNodeId,
-        sourceAnalysisId,
-        title,
-        description,
-        suggestedParentId: resolveSuggestedParentId(bp, suggestedParentTitle),
-        suggestedParentTitle,
-        confidence: requirement.confidence,
-        status: 'pending',
-        evidence: [...evidence],
-        createdAt: now
+      if (changed) {
+        bp.updatedAt = nowIso()
+        await writeJson(blueprintFile(blueprintId), bp)
       }
-      bp.requirementCandidates.push(candidate)
-      touched.push(candidate)
-      changed = true
-    }
 
-    if (changed) {
-      bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
-    }
-
-    return touched
+      return touched
+    })
   }
 
   async listRequirementCandidates(
@@ -772,12 +811,14 @@ export class BlueprintStore {
     blueprintId: string,
     status?: BlueprintRequirementCandidateStatus
   ): Promise<BlueprintRequirementCandidate[]> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp) return []
-    const candidates = bp.requirementCandidates ?? []
-    return candidates
-      .filter((candidate) => !status || candidate.status === status)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp) return []
+      const candidates = bp.requirementCandidates ?? []
+      return candidates
+        .filter((candidate) => !status || candidate.status === status)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    })
   }
 
   async acceptRequirementCandidate(
@@ -791,53 +832,55 @@ export class BlueprintStore {
       decisionNote?: string
     } = {}
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp) return null
-    bp.requirementCandidates ??= []
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp) return null
+      bp.requirementCandidates ??= []
 
-    const candidate = bp.requirementCandidates.find((item) => item.id === candidateId)
-    if (!candidate) return null
-    if (candidate.status === 'accepted' && candidate.acceptedNodeId) {
-      return bp.nodes[candidate.acceptedNodeId] ?? null
-    }
+      const candidate = bp.requirementCandidates.find((item) => item.id === candidateId)
+      if (!candidate) return null
+      if (candidate.status === 'accepted' && candidate.acceptedNodeId) {
+        return bp.nodes[candidate.acceptedNodeId] ?? null
+      }
 
-    const title = patch.title?.trim() || candidate.title
-    const description = patch.description !== undefined ? patch.description : candidate.description
-    let parentId = patch.parentId ?? candidate.suggestedParentId ?? null
-    if (!parentId || !bp.nodes[parentId]) parentId = candidate.sourceNodeId
-    if (!bp.nodes[parentId]) parentId = bp.rootNodeId
+      const title = patch.title?.trim() || candidate.title
+      const description = patch.description !== undefined ? patch.description : candidate.description
+      let parentId = patch.parentId ?? candidate.suggestedParentId ?? null
+      if (!parentId || !bp.nodes[parentId]) parentId = candidate.sourceNodeId
+      if (!bp.nodes[parentId]) parentId = bp.rootNodeId
 
-    const sourceNode = bp.nodes[candidate.sourceNodeId]
-    const node = makeNode({
-      title,
-      type: 'task',
-      description,
-      status: 'not-started',
-      progress: 0,
-      tags: ['discovered-by-janus'],
-      parentId,
-      workspaceId: sourceNode?.workspaceId ?? null,
-      workspaceSnapshot: sourceNode?.workspaceSnapshot ?? null
+      const sourceNode = bp.nodes[candidate.sourceNodeId]
+      const node = makeNode({
+        title,
+        type: 'task',
+        description,
+        status: 'not-started',
+        progress: 0,
+        tags: ['discovered-by-janus'],
+        parentId,
+        workspaceId: sourceNode?.workspaceId ?? null,
+        workspaceSnapshot: sourceNode?.workspaceSnapshot ?? null
+      })
+      await this.hydrateWorkspaceSnapshot(node)
+
+      bp.nodes[node.id] = node
+      bp.nodeIds.push(node.id)
+      bp.nodes[parentId].children.push(node.id)
+      bp.nodes[parentId].updatedAt = nowIso()
+
+      candidate.title = title
+      candidate.description = description
+      candidate.suggestedParentId = parentId
+      candidate.suggestedParentTitle = bp.nodes[parentId].title
+      candidate.status = 'accepted'
+      candidate.acceptedNodeId = node.id
+      candidate.decisionNote = patch.decisionNote
+      candidate.decidedAt = nowIso()
+
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return node
     })
-    await this.hydrateWorkspaceSnapshot(node)
-
-    bp.nodes[node.id] = node
-    bp.nodeIds.push(node.id)
-    bp.nodes[parentId].children.push(node.id)
-    bp.nodes[parentId].updatedAt = nowIso()
-
-    candidate.title = title
-    candidate.description = description
-    candidate.suggestedParentId = parentId
-    candidate.suggestedParentTitle = bp.nodes[parentId].title
-    candidate.status = 'accepted'
-    candidate.acceptedNodeId = node.id
-    candidate.decisionNote = patch.decisionNote
-    candidate.decidedAt = nowIso()
-
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return node
   }
 
   async rejectRequirementCandidate(
@@ -846,19 +889,21 @@ export class BlueprintStore {
     candidateId: string,
     decisionNote?: string
   ): Promise<BlueprintRequirementCandidate | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp) return null
-    bp.requirementCandidates ??= []
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp) return null
+      bp.requirementCandidates ??= []
 
-    const candidate = bp.requirementCandidates.find((item) => item.id === candidateId)
-    if (!candidate) return null
+      const candidate = bp.requirementCandidates.find((item) => item.id === candidateId)
+      if (!candidate) return null
 
-    candidate.status = 'rejected'
-    candidate.decisionNote = decisionNote
-    candidate.decidedAt = nowIso()
-    bp.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
-    return candidate
+      candidate.status = 'rejected'
+      candidate.decisionNote = decisionNote
+      candidate.decidedAt = nowIso()
+      bp.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+      return candidate
+    })
   }
 
   async listAnalyses(
@@ -866,9 +911,11 @@ export class BlueprintStore {
     blueprintId: string,
     nodeId: string
   ): Promise<BlueprintAnalysis[]> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return []
-    return [...(bp.nodes[nodeId].analyses ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return []
+      return [...(bp.nodes[nodeId].analyses ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    })
   }
 
   async applyAnalysis(
@@ -877,33 +924,35 @@ export class BlueprintStore {
     nodeId: string,
     analysisId: string
   ): Promise<BlueprintNode | null> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return null
-    const node = bp.nodes[nodeId]
-    const analysis = (node.analyses ?? []).find((item) => item.id === analysisId)
-    if (!analysis?.applied || !analysis.result) return null
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return null
+      const node = bp.nodes[nodeId]
+      const analysis = (node.analyses ?? []).find((item) => item.id === analysisId)
+      if (!analysis?.applied || !analysis.result) return null
 
-    const updated = await this.applyAnalysisPatch(workspace, blueprintId, nodeId, {
-      progress: analysis.result.progress,
-      status: analysis.result.status,
-      featureUpdates: analysis.result.featureUpdates
-    })
-    if (!updated) return null
+      const updated = await this.applyAnalysisPatch(workspace, blueprintId, nodeId, {
+        progress: analysis.result.progress,
+        status: analysis.result.status,
+        featureUpdates: analysis.result.featureUpdates
+      })
+      if (!updated) return null
 
-    const latest = await this.loadBlueprint(workspace, blueprintId)
-    const latestNode = latest?.nodes[nodeId]
-    if (!latest || !latestNode) return updated
-    latestNode.activities.push({
-      id: randomUUID(),
-      type: 'analysis',
-      content: `重新应用分析：${analysis.result.summary || analysis.id}`,
-      metadata: { analysisId: analysis.id, reapplied: true },
-      createdAt: nowIso()
+      const latest = await this.loadBlueprint(workspace, blueprintId)
+      const latestNode = latest?.nodes[nodeId]
+      if (!latest || !latestNode) return updated
+      latestNode.activities.push({
+        id: randomUUID(),
+        type: 'analysis',
+        content: `重新应用分析：${analysis.result.summary || analysis.id}`,
+        metadata: { analysisId: analysis.id, reapplied: true },
+        createdAt: nowIso()
+      })
+      latestNode.updatedAt = nowIso()
+      latest.updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), latest)
+      return latestNode
     })
-    latestNode.updatedAt = nowIso()
-    latest.updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), latest)
-    return latestNode
   }
 
   /** 更新分析游标 */
@@ -913,40 +962,48 @@ export class BlueprintStore {
     nodeId: string,
     sha: string | null
   ): Promise<void> {
-    const bp = await this.loadBlueprint(workspace, blueprintId)
-    if (!bp || !bp.nodes[nodeId]) return
-    bp.nodes[nodeId].lastAnalyzedCommitSha = sha
-    bp.nodes[nodeId].updatedAt = nowIso()
-    await writeJson(blueprintFile(blueprintId), bp)
+    return this.locked(async () => {
+      const bp = await this.loadBlueprint(workspace, blueprintId)
+      if (!bp || !bp.nodes[nodeId]) return
+      bp.nodes[nodeId].lastAnalyzedCommitSha = sha
+      bp.nodes[nodeId].updatedAt = nowIso()
+      await writeJson(blueprintFile(blueprintId), bp)
+    })
   }
 
   /** 焦点节点（归属机制 B） */
   async getFocusedNodeId(workspace: string): Promise<string | null> {
-    const idx = await this.loadIndex(workspace)
-    const key = await this.resolveWorkspaceKey(workspace)
-    const focused = idx.focusedNodeByWorkspace?.[key] ?? idx.focusedNodeByWorkspace?.[workspace] ?? idx.focusedNodeId
-    if (focused && key !== workspace && idx.focusedNodeByWorkspace?.[workspace] === focused && idx.focusedNodeByWorkspace[key] !== focused) {
-      idx.focusedNodeByWorkspace[key] = focused
-      delete idx.focusedNodeByWorkspace[workspace]
-      await this.saveIndex(workspace)
-    }
-    return focused ?? null
+    return this.locked(async () => {
+      const idx = await this.loadIndex(workspace)
+      const key = await this.resolveWorkspaceKey(workspace)
+      const focused = idx.focusedNodeByWorkspace?.[key] ?? idx.focusedNodeByWorkspace?.[workspace] ?? idx.focusedNodeId
+      if (focused && key !== workspace && idx.focusedNodeByWorkspace?.[workspace] === focused && idx.focusedNodeByWorkspace[key] !== focused) {
+        idx.focusedNodeByWorkspace[key] = focused
+        delete idx.focusedNodeByWorkspace[workspace]
+        await this.saveIndex(workspace)
+      }
+      return focused ?? null
+    })
   }
 
   async setFocusedNodeId(workspace: string, nodeId: string | null): Promise<void> {
-    const idx = await this.loadIndex(workspace)
-    idx.focusedNodeByWorkspace ??= {}
-    const key = await this.resolveWorkspaceKey(workspace)
-    idx.focusedNodeByWorkspace[key] = nodeId
-    if (key !== workspace) delete idx.focusedNodeByWorkspace[workspace]
-    await this.saveIndex(workspace)
+    return this.locked(async () => {
+      const idx = await this.loadIndex(workspace)
+      idx.focusedNodeByWorkspace ??= {}
+      const key = await this.resolveWorkspaceKey(workspace)
+      idx.focusedNodeByWorkspace[key] = nodeId
+      if (key !== workspace) delete idx.focusedNodeByWorkspace[workspace]
+      await this.saveIndex(workspace)
+    })
   }
 
   async focusNode(workspace: string, nodeId: string): Promise<BlueprintNode | null> {
-    const found = await this.findNode(workspace, nodeId)
-    if (!found) return null
-    await this.setFocusedNodeId(found.node.workspaceId ?? workspace, nodeId)
-    return found.node
+    return this.locked(async () => {
+      const found = await this.findNode(workspace, nodeId)
+      if (!found) return null
+      await this.setFocusedNodeId(found.node.workspaceId ?? workspace, nodeId)
+      return found.node
+    })
   }
 
   async bindTerminal(
@@ -954,18 +1011,20 @@ export class BlueprintStore {
     nodeId: string,
     terminalId: string
   ): Promise<BlueprintNode | null> {
-    const found = await this.findNode(workspace, nodeId)
-    if (!found) return null
-    const { blueprintId } = found
-    const node = await this.updateNode(workspace, blueprintId, nodeId, {
-      boundTerminalId: terminalId
+    return this.locked(async () => {
+      const found = await this.findNode(workspace, nodeId)
+      if (!found) return null
+      const { blueprintId } = found
+      const node = await this.updateNode(workspace, blueprintId, nodeId, {
+        boundTerminalId: terminalId
+      })
+      if (node) {
+        node.terminalHistory = [...node.terminalHistory, terminalId]
+        await this.updateNode(workspace, blueprintId, nodeId, { terminalHistory: node.terminalHistory })
+      }
+      await this.setFocusedNodeId(node?.workspaceId ?? workspace, nodeId)
+      return node
     })
-    if (node) {
-      node.terminalHistory = [...node.terminalHistory, terminalId]
-      await this.updateNode(workspace, blueprintId, nodeId, { terminalHistory: node.terminalHistory })
-    }
-    await this.setFocusedNodeId(node?.workspaceId ?? workspace, nodeId)
-    return node
   }
 
   /** 在某 workspace 的所有蓝图里查找节点 */
@@ -973,23 +1032,27 @@ export class BlueprintStore {
     workspace: string,
     nodeId: string
   ): Promise<{ blueprintId: string; node: BlueprintNode } | null> {
-    const idx = await this.loadIndex(workspace)
-    for (const bid of idx.blueprints) {
-      const bp = await this.loadBlueprint(workspace, bid)
-      if (bp && bp.nodes[nodeId]) {
-        return { blueprintId: bid, node: bp.nodes[nodeId] }
+    return this.locked(async () => {
+      const idx = await this.loadIndex(workspace)
+      for (const bid of idx.blueprints) {
+        const bp = await this.loadBlueprint(workspace, bid)
+        if (bp && bp.nodes[nodeId]) {
+          return { blueprintId: bid, node: bp.nodes[nodeId] }
+        }
       }
-    }
-    return null
+      return null
+    })
   }
 
   /** 取某 workspace 当前焦点节点（含所属 blueprint） */
   async findFocusedNode(
     workspace: string
   ): Promise<{ blueprintId: string; node: BlueprintNode } | null> {
-    const fid = await this.getFocusedNodeId(workspace)
-    if (!fid) return null
-    return this.findNode(workspace, fid)
+    return this.locked(async () => {
+      const fid = await this.getFocusedNodeId(workspace)
+      if (!fid) return null
+      return this.findNode(workspace, fid)
+    })
   }
 
   /** 依据 terminalId 反查绑定节点（终端关闭最终分析用） */
@@ -997,17 +1060,19 @@ export class BlueprintStore {
     workspace: string,
     terminalId: string
   ): Promise<{ blueprintId: string; node: BlueprintNode } | null> {
-    const idx = await this.loadIndex(workspace)
-    for (const bid of idx.blueprints) {
-      const bp = await this.loadBlueprint(workspace, bid)
-      if (!bp) continue
-      for (const n of Object.values(bp.nodes)) {
-        if (n.boundTerminalId === terminalId) {
-          return { blueprintId: bid, node: n }
+    return this.locked(async () => {
+      const idx = await this.loadIndex(workspace)
+      for (const bid of idx.blueprints) {
+        const bp = await this.loadBlueprint(workspace, bid)
+        if (!bp) continue
+        for (const n of Object.values(bp.nodes)) {
+          if (n.boundTerminalId === terminalId) {
+            return { blueprintId: bid, node: n }
+          }
         }
       }
-    }
-    return null
+      return null
+    })
   }
 }
 

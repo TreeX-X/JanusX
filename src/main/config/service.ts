@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { join } from 'path'
-import { readFile, writeFile, mkdir } from 'fs/promises'
+import { readFile, rename } from 'fs/promises'
+import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type { GlobalConfig } from '../workspace/types'
 import {
   DEFAULT_AGENT_NOTIFICATION_SETTINGS,
@@ -45,13 +46,10 @@ const DEFAULT_CONFIG: GlobalConfig = {
 export class ConfigService {
   private configPath: string
   private config: GlobalConfig | null = null
+  private writeQueue = new SerialQueue()
 
   constructor() {
     this.configPath = join(app.getPath('userData'), 'janusx', 'config.json')
-  }
-
-  private async ensureDir(): Promise<void> {
-    await mkdir(join(app.getPath('userData'), 'janusx'), { recursive: true })
   }
 
   async load(): Promise<GlobalConfig> {
@@ -64,17 +62,32 @@ export class ConfigService {
         notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
         knowledgeSettings: normalizeKnowledgeSettings(parsed.knowledgeSettings),
       }
-    } catch {
+    } catch (error) {
+      // 解析失败（文件存在但损坏）时先备份，避免默认配置覆盖后用户数据无法恢复
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        await this.backupCorruptFile()
+      }
       this.config = { ...DEFAULT_CONFIG }
-      await this.save()
+      await this.persist()
     }
     return this.config!
   }
 
+  private async backupCorruptFile(): Promise<void> {
+    try {
+      await rename(this.configPath, `${this.configPath}.corrupt-${Date.now()}`)
+    } catch {
+      /* 备份失败不阻塞启动 */
+    }
+  }
+
   async save(): Promise<void> {
+    await this.writeQueue.run(() => this.persist())
+  }
+
+  private async persist(): Promise<void> {
     if (!this.config) return
-    await this.ensureDir()
-    await writeFile(this.configPath, JSON.stringify(this.config, null, 2))
+    await writeFileAtomic(this.configPath, JSON.stringify(this.config, null, 2))
   }
 
   async get(): Promise<GlobalConfig> {
@@ -85,22 +98,25 @@ export class ConfigService {
   }
 
   async update(partial: Partial<GlobalConfig>): Promise<GlobalConfig> {
-    const current = await this.get()
-    this.config = { ...current, ...partial }
-    if (partial.notificationSettings) {
-      this.config.notificationSettings = normalizeAgentNotificationSettings({
-        ...current.notificationSettings,
-        ...partial.notificationSettings,
-      })
-    }
-    if (partial.knowledgeSettings) {
-      this.config.knowledgeSettings = normalizeKnowledgeSettings({
-        ...current.knowledgeSettings,
-        ...partial.knowledgeSettings,
-      })
-    }
-    await this.save()
-    return this.config
+    // merge 与写盘同队列执行，防止并发 update 交错丢字段
+    return this.writeQueue.run(async () => {
+      const current = await this.get()
+      this.config = { ...current, ...partial }
+      if (partial.notificationSettings) {
+        this.config.notificationSettings = normalizeAgentNotificationSettings({
+          ...current.notificationSettings,
+          ...partial.notificationSettings,
+        })
+      }
+      if (partial.knowledgeSettings) {
+        this.config.knowledgeSettings = normalizeKnowledgeSettings({
+          ...current.knowledgeSettings,
+          ...partial.knowledgeSettings,
+        })
+      }
+      await this.persist()
+      return this.config
+    })
   }
 
   async getNotificationSettings(): Promise<AgentNotificationSettings> {

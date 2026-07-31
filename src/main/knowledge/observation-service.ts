@@ -3,6 +3,7 @@ import { gzip, gunzip } from 'zlib'
 import { promisify } from 'util'
 import { appendFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'fs/promises'
 import { basename, join, resolve } from 'path'
+import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type {
   AuditAction,
   CaptureObservationInput,
@@ -242,9 +243,9 @@ function parseShardLines(shard: ShardFile): Array<{ line: string; observation: O
 
 async function writeShardIfChanged(relativePath: string, lines: string[]): Promise<void> {
   const absolutePath = join(knowledgeRootPath(), relativePath)
-  await mkdir(join(absolutePath, '..'), { recursive: true })
   const newContent = lines.length ? `${lines.join('\n')}\n` : ''
-  await writeFile(absolutePath, newContent, 'utf8')
+  // temp+rename 原子写：退出期中断不会截断 NDJSON
+  await writeFileAtomic(absolutePath, newContent)
 }
 
 async function blobExists(relativePath: string): Promise<boolean> {
@@ -257,6 +258,9 @@ async function blobExists(relativePath: string): Promise<boolean> {
 }
 
 export class KnowledgeObservationService {
+  /** 串行化 shard 追加与重写：防止 prune/archive 整文件重写吞掉并发 capture 的追加 */
+  private readonly writeQueue = new SerialQueue()
+
   async capture(input: CaptureObservationInput): Promise<Observation> {
     const workspacePath = input.workspacePath.trim()
     if (!workspacePath) {
@@ -303,8 +307,10 @@ export class KnowledgeObservationService {
 
     const shardPath = shardRelativePath(createdAt)
     const filePath = join(knowledgeRootPath(), shardPath)
-    await mkdir(join(filePath, '..'), { recursive: true })
-    await appendFile(filePath, `${JSON.stringify(observation)}\n`, 'utf8')
+    await this.writeQueue.run(async () => {
+      await mkdir(join(filePath, '..'), { recursive: true })
+      await appendFile(filePath, `${JSON.stringify(observation)}\n`, 'utf8')
+    })
 
     return observation
   }
@@ -380,92 +386,97 @@ export class KnowledgeObservationService {
 
     await knowledgeContractService.bootstrapWorkspace(filters.workspacePath)
 
-    const shards = await listObservationShardFiles()
-    let matched = 0
-    let keptTotal = 0
-    const rewrites: Array<{ relativePath: string; lines: string[] }> = []
-    const removed: Observation[] = []
+    // 读取与重写同队列执行，避免基于陈旧快照重写吞掉并发追加
+    return this.writeQueue.run(async () => {
+      const shards = await listObservationShardFiles()
+      let matched = 0
+      let keptTotal = 0
+      const rewrites: Array<{ relativePath: string; lines: string[] }> = []
+      const removed: Observation[] = []
 
-    for (const shard of shards) {
-      const entries = parseShardLines(shard)
-      let shardMatched = 0
-      const keptLines: string[] = []
-      for (const entry of entries) {
-        if (entry.observation && matchesFilters(entry.observation, filters)) {
-          shardMatched++
-          removed.push(entry.observation)
-        } else {
-          keptLines.push(entry.line)
+      for (const shard of shards) {
+        const entries = parseShardLines(shard)
+        let shardMatched = 0
+        const keptLines: string[] = []
+        for (const entry of entries) {
+          if (entry.observation && matchesFilters(entry.observation, filters)) {
+            shardMatched++
+            removed.push(entry.observation)
+          } else {
+            keptLines.push(entry.line)
+          }
+        }
+        matched += shardMatched
+        keptTotal += keptLines.length
+
+        if (query.confirm === true && shardMatched > 0) {
+          rewrites.push({ relativePath: shard.relativePath, lines: keptLines })
         }
       }
-      matched += shardMatched
-      keptTotal += keptLines.length
 
-      if (query.confirm === true && shardMatched > 0) {
-        rewrites.push({ relativePath: shard.relativePath, lines: keptLines })
+      if (query.confirm === true) {
+        for (const rewrite of rewrites) {
+          await writeShardIfChanged(rewrite.relativePath, rewrite.lines)
+        }
+        if (removed.length > 0) {
+          await this.auditRemovals(removed, 'observation_pruned', 'knowledge-service')
+        }
       }
-    }
 
-    if (query.confirm === true) {
-      for (const rewrite of rewrites) {
-        await writeShardIfChanged(rewrite.relativePath, rewrite.lines)
+      return {
+        dryRun: query.confirm !== true,
+        matched,
+        removed: query.confirm === true ? matched : 0,
+        kept: keptTotal,
       }
-      if (removed.length > 0) {
-        await this.auditRemovals(removed, 'observation_pruned', 'knowledge-service')
-      }
-    }
-
-    return {
-      dryRun: query.confirm !== true,
-      matched,
-      removed: query.confirm === true ? matched : 0,
-      kept: keptTotal,
-    }
+    })
   }
 
   async autoPrune(nowMs: number = Date.now()): Promise<ObservationPruneResult> {
     await knowledgeContractService.bootstrapWorkspace(undefined)
 
-    const shards = await listObservationShardFiles()
-    let matched = 0
-    let keptTotal = 0
-    const rewrites: Array<{ relativePath: string; lines: string[] }> = []
-    const removed: Observation[] = []
+    return this.writeQueue.run(async () => {
+      const shards = await listObservationShardFiles()
+      let matched = 0
+      let keptTotal = 0
+      const rewrites: Array<{ relativePath: string; lines: string[] }> = []
+      const removed: Observation[] = []
 
-    for (const shard of shards) {
-      const entries = parseShardLines(shard)
-      let shardMatched = 0
-      const keptLines: string[] = []
-      for (const entry of entries) {
-        if (entry.observation && isAutoPrunable(entry.observation, nowMs)) {
-          shardMatched++
-          removed.push(entry.observation)
-        } else {
-          keptLines.push(entry.line)
+      for (const shard of shards) {
+        const entries = parseShardLines(shard)
+        let shardMatched = 0
+        const keptLines: string[] = []
+        for (const entry of entries) {
+          if (entry.observation && isAutoPrunable(entry.observation, nowMs)) {
+            shardMatched++
+            removed.push(entry.observation)
+          } else {
+            keptLines.push(entry.line)
+          }
+        }
+        matched += shardMatched
+        keptTotal += keptLines.length
+
+        if (shardMatched > 0) {
+          rewrites.push({ relativePath: shard.relativePath, lines: keptLines })
         }
       }
-      matched += shardMatched
-      keptTotal += keptLines.length
 
-      if (shardMatched > 0) {
-        rewrites.push({ relativePath: shard.relativePath, lines: keptLines })
+      for (const rewrite of rewrites) {
+        await writeShardIfChanged(rewrite.relativePath, rewrite.lines)
       }
-    }
 
-    for (const rewrite of rewrites) {
-      await writeShardIfChanged(rewrite.relativePath, rewrite.lines)
-    }
+      if (removed.length > 0) {
+        await this.auditRemovals(removed, 'observation_auto_pruned', 'knowledge-auto-prune')
+      }
 
-    if (removed.length > 0) {
-      await this.auditRemovals(removed, 'observation_auto_pruned', 'knowledge-auto-prune')
-    }
-
-    return {
-      dryRun: false,
-      matched,
-      removed: matched,
-      kept: keptTotal,
-    }
+      return {
+        dryRun: false,
+        matched,
+        removed: matched,
+        kept: keptTotal,
+      }
+    })
   }
 
   async stats(): Promise<RetentionStats> {
@@ -502,102 +513,105 @@ export class KnowledgeObservationService {
 
     await knowledgeContractService.bootstrapWorkspace(undefined)
 
-    const root = knowledgeRootPath()
-    const activeDir = join(root, ACTIVE_OBSERVATIONS_DIR)
-    let activeEntries: string[] = []
-    try {
-      activeEntries = await readdir(activeDir)
-    } catch {
-      activeEntries = []
-    }
+    // 归档读-压缩-删除全程持队列：防止 capture 在读取与 unlink 之间追加导致记录丢失
+    return this.writeQueue.run(async () => {
+      const root = knowledgeRootPath()
+      const activeDir = join(root, ACTIVE_OBSERVATIONS_DIR)
+      let activeEntries: string[] = []
+      try {
+        activeEntries = await readdir(activeDir)
+      } catch {
+        activeEntries = []
+      }
 
-    const candidates: Array<{ shardName: string; relativePath: string; recordCount: number }> = []
-    for (const name of activeEntries) {
-      if (!name.endsWith('.jsonl')) continue
-      const shardMonthMs = shardMonthToMs(name)
-      if (shardMonthMs === null) continue
-      if (nowMs - shardMonthMs < olderThanMonths * MS_PER_MONTH) continue
+      const candidates: Array<{ shardName: string; relativePath: string; recordCount: number }> = []
+      for (const name of activeEntries) {
+        if (!name.endsWith('.jsonl')) continue
+        const shardMonthMs = shardMonthToMs(name)
+        if (shardMonthMs === null) continue
+        if (nowMs - shardMonthMs < olderThanMonths * MS_PER_MONTH) continue
 
-      const shard = await readShardFile(`${ACTIVE_OBSERVATIONS_DIR}/${name}`)
-      const recordCount = shard ? shard.lines.length : 0
-      candidates.push({
-        shardName: name,
-        relativePath: `${ACTIVE_OBSERVATIONS_DIR}/${name}`,
-        recordCount,
-      })
-    }
+        const shard = await readShardFile(`${ACTIVE_OBSERVATIONS_DIR}/${name}`)
+        const recordCount = shard ? shard.lines.length : 0
+        candidates.push({
+          shardName: name,
+          relativePath: `${ACTIVE_OBSERVATIONS_DIR}/${name}`,
+          recordCount,
+        })
+      }
 
-    const archivedShards: ObservationArchiveResult['archivedShards'] = []
-    let totalRecords = 0
+      const archivedShards: ObservationArchiveResult['archivedShards'] = []
+      let totalRecords = 0
 
-    if (!confirm) {
+      if (!confirm) {
+        for (const candidate of candidates) {
+          const archivedTo = `${ARCHIVE_OBSERVATIONS_DIR}/${candidate.shardName}.gz`
+          archivedShards.push({
+            shard: candidate.shardName,
+            recordCount: candidate.recordCount,
+            archivedTo,
+          })
+          totalRecords += candidate.recordCount
+        }
+        return { archivedShards, totalRecords }
+      }
+
       for (const candidate of candidates) {
-        const archivedTo = `${ARCHIVE_OBSERVATIONS_DIR}/${candidate.shardName}.gz`
+        const activeAbsolutePath = join(root, candidate.relativePath)
+        const archiveRelativePath = `${ARCHIVE_OBSERVATIONS_DIR}/${candidate.shardName}.gz`
+        const archiveAbsolutePath = join(root, archiveRelativePath)
+
+        const rawContent = await readFile(activeAbsolutePath, 'utf8')
+        const originalLineCount = rawContent.split('\n').filter((line) => line.trim()).length
+
+        const compressed = await gzipAsync(Buffer.from(rawContent, 'utf8'))
+        await mkdir(join(archiveAbsolutePath, '..'), { recursive: true })
+        await writeFile(archiveAbsolutePath, compressed)
+
+        // Verification: re-read the .gz, gunzip, confirm line count matches.
+        const reread = await readFile(archiveAbsolutePath)
+        const redecompressed = (await gunzipAsync(reread)).toString('utf8')
+        const verifiedLineCount = redecompressed.split('\n').filter((line) => line.trim()).length
+        if (verifiedLineCount !== originalLineCount) {
+          throw new Error(
+            `Archive verification failed for ${candidate.shardName}: expected ${originalLineCount} lines, got ${verifiedLineCount}`,
+          )
+        }
+
+        await unlink(activeAbsolutePath)
+
         archivedShards.push({
           shard: candidate.shardName,
-          recordCount: candidate.recordCount,
-          archivedTo,
-        })
-        totalRecords += candidate.recordCount
-      }
-      return { archivedShards, totalRecords }
-    }
-
-    for (const candidate of candidates) {
-      const activeAbsolutePath = join(root, candidate.relativePath)
-      const archiveRelativePath = `${ARCHIVE_OBSERVATIONS_DIR}/${candidate.shardName}.gz`
-      const archiveAbsolutePath = join(root, archiveRelativePath)
-
-      const rawContent = await readFile(activeAbsolutePath, 'utf8')
-      const originalLineCount = rawContent.split('\n').filter((line) => line.trim()).length
-
-      const compressed = await gzipAsync(Buffer.from(rawContent, 'utf8'))
-      await mkdir(join(archiveAbsolutePath, '..'), { recursive: true })
-      await writeFile(archiveAbsolutePath, compressed)
-
-      // Verification: re-read the .gz, gunzip, confirm line count matches.
-      const reread = await readFile(archiveAbsolutePath)
-      const redecompressed = (await gunzipAsync(reread)).toString('utf8')
-      const verifiedLineCount = redecompressed.split('\n').filter((line) => line.trim()).length
-      if (verifiedLineCount !== originalLineCount) {
-        throw new Error(
-          `Archive verification failed for ${candidate.shardName}: expected ${originalLineCount} lines, got ${verifiedLineCount}`,
-        )
-      }
-
-      await unlink(activeAbsolutePath)
-
-      archivedShards.push({
-        shard: candidate.shardName,
-        recordCount: originalLineCount,
-        archivedTo: archiveRelativePath,
-      })
-      totalRecords += originalLineCount
-
-      await knowledgeAuditService.record({
-        action: 'observation_archived',
-        targetType: 'observation',
-        targetId: candidate.shardName,
-        before: {
-          shard: candidate.shardName,
           recordCount: originalLineCount,
-          activePath: candidate.relativePath,
-        },
-        after: { archivedTo: archiveRelativePath },
-        provenance: {
-          workspaceId: 'global',
-          workspaceName: 'global',
-          workspacePath: '',
-          source: 'system',
-          sourceObservationIds: [],
-          fileRefs: [],
-          actor: 'knowledge-archive',
-          createdAt: new Date(nowMs).toISOString(),
-        },
-      })
-    }
+          archivedTo: archiveRelativePath,
+        })
+        totalRecords += originalLineCount
 
-    return { archivedShards, totalRecords }
+        await knowledgeAuditService.record({
+          action: 'observation_archived',
+          targetType: 'observation',
+          targetId: candidate.shardName,
+          before: {
+            shard: candidate.shardName,
+            recordCount: originalLineCount,
+            activePath: candidate.relativePath,
+          },
+          after: { archivedTo: archiveRelativePath },
+          provenance: {
+            workspaceId: 'global',
+            workspaceName: 'global',
+            workspacePath: '',
+            source: 'system',
+            sourceObservationIds: [],
+            fileRefs: [],
+            actor: 'knowledge-archive',
+            createdAt: new Date(nowMs).toISOString(),
+          },
+        })
+      }
+
+      return { archivedShards, totalRecords }
+    })
   }
 
   /**
@@ -618,108 +632,110 @@ export class KnowledgeObservationService {
 
     await knowledgeContractService.bootstrapWorkspace(undefined)
 
-    const root = knowledgeRootPath()
-    const activeDir = join(root, ACTIVE_OBSERVATIONS_DIR)
-    let activeEntries: string[] = []
-    try {
-      activeEntries = await readdir(activeDir)
-    } catch {
-      activeEntries = []
-    }
+    return this.writeQueue.run(async () => {
+      const root = knowledgeRootPath()
+      const activeDir = join(root, ACTIVE_OBSERVATIONS_DIR)
+      let activeEntries: string[] = []
+      try {
+        activeEntries = await readdir(activeDir)
+      } catch {
+        activeEntries = []
+      }
 
-    const targetShardNames = activeEntries.filter((name) => {
-      if (!name.endsWith('.jsonl')) return false
-      const shardMonthMs = shardMonthToMs(name)
-      if (shardMonthMs === null) return false
-      return nowMs - shardMonthMs >= olderThanMonths * MS_PER_MONTH
-    })
+      const targetShardNames = activeEntries.filter((name) => {
+        if (!name.endsWith('.jsonl')) return false
+        const shardMonthMs = shardMonthToMs(name)
+        if (shardMonthMs === null) return false
+        return nowMs - shardMonthMs >= olderThanMonths * MS_PER_MONTH
+      })
 
-    let compactedCount = 0
-    let keptCount = 0
+      let compactedCount = 0
+      let keptCount = 0
 
-    for (const shardName of targetShardNames) {
-      const relativePath = `${ACTIVE_OBSERVATIONS_DIR}/${shardName}`
-      const shard = await readShardFile(relativePath)
-      if (!shard) continue
+      for (const shardName of targetShardNames) {
+        const relativePath = `${ACTIVE_OBSERVATIONS_DIR}/${shardName}`
+        const shard = await readShardFile(relativePath)
+        if (!shard) continue
 
-      const entries = parseShardLines(shard)
-      let shardTargets = 0
-      const rewrittenLines: string[] = []
-      const compacted: Observation[] = []
+        const entries = parseShardLines(shard)
+        let shardTargets = 0
+        const rewrittenLines: string[] = []
+        const compacted: Observation[] = []
 
-      for (const entry of entries) {
-        if (!entry.observation) {
-          rewrittenLines.push(entry.line)
-          continue
+        for (const entry of entries) {
+          if (!entry.observation) {
+            rewrittenLines.push(entry.line)
+            continue
+          }
+          const obs = entry.observation
+          const isTarget =
+            obs.retentionClass === 'evidence' &&
+            obs.compactionStatus === 'active' &&
+            (Boolean(obs.blobRef) || (obs.contentLength ?? 0) > CONTENT_PREVIEW_CHARS)
+
+          if (!isTarget) {
+            rewrittenLines.push(entry.line)
+            keptCount++
+            continue
+          }
+
+          shardTargets++
+          if (!confirm) {
+            // Dry-run: count the target but keep the original line.
+            rewrittenLines.push(entry.line)
+            continue
+          }
+
+          const nowIso = new Date(nowMs).toISOString()
+          const summary =
+            obs.summary ??
+            obs.contentPreview ??
+            obs.content.slice(0, CONTENT_PREVIEW_CHARS)
+          const updated: Observation = {
+            ...obs,
+            compactionStatus: 'compacted',
+            compactedAt: nowIso,
+            summary,
+          }
+          rewrittenLines.push(JSON.stringify(updated))
+          compacted.push(updated)
         }
-        const obs = entry.observation
-        const isTarget =
-          obs.retentionClass === 'evidence' &&
-          obs.compactionStatus === 'active' &&
-          (Boolean(obs.blobRef) || (obs.contentLength ?? 0) > CONTENT_PREVIEW_CHARS)
 
-        if (!isTarget) {
-          rewrittenLines.push(entry.line)
-          keptCount++
-          continue
-        }
-
-        shardTargets++
         if (!confirm) {
-          // Dry-run: count the target but keep the original line.
-          rewrittenLines.push(entry.line)
+          compactedCount += shardTargets
           continue
         }
 
-        const nowIso = new Date(nowMs).toISOString()
-        const summary =
-          obs.summary ??
-          obs.contentPreview ??
-          obs.content.slice(0, CONTENT_PREVIEW_CHARS)
-        const updated: Observation = {
-          ...obs,
-          compactionStatus: 'compacted',
-          compactedAt: nowIso,
-          summary,
+        await writeShardIfChanged(relativePath, rewrittenLines)
+        compactedCount += compacted.length
+
+        for (const obs of compacted) {
+          await knowledgeAuditService.record({
+            action: 'observation_compacted',
+            targetType: 'observation',
+            targetId: obs.id,
+            before: { compactionStatus: 'active' },
+            after: { compactionStatus: 'compacted', compactedAt: obs.compactedAt },
+            provenance: {
+              workspaceId: obs.workspaceId,
+              workspaceName: obs.workspaceName,
+              workspacePath: obs.workspacePath,
+              source: 'system',
+              sourceObservationIds: [obs.id],
+              fileRefs: obs.fileRefs,
+              actor: 'knowledge-compact',
+              createdAt: new Date(nowMs).toISOString(),
+            },
+          })
         }
-        rewrittenLines.push(JSON.stringify(updated))
-        compacted.push(updated)
       }
 
-      if (!confirm) {
-        compactedCount += shardTargets
-        continue
+      return {
+        compacted: compactedCount,
+        kept: keptCount,
+        dryRun: !confirm,
       }
-
-      await writeShardIfChanged(relativePath, rewrittenLines)
-      compactedCount += compacted.length
-
-      for (const obs of compacted) {
-        await knowledgeAuditService.record({
-          action: 'observation_compacted',
-          targetType: 'observation',
-          targetId: obs.id,
-          before: { compactionStatus: 'active' },
-          after: { compactionStatus: 'compacted', compactedAt: obs.compactedAt },
-          provenance: {
-            workspaceId: obs.workspaceId,
-            workspaceName: obs.workspaceName,
-            workspacePath: obs.workspacePath,
-            source: 'system',
-            sourceObservationIds: [obs.id],
-            fileRefs: obs.fileRefs,
-            actor: 'knowledge-compact',
-            createdAt: new Date(nowMs).toISOString(),
-          },
-        })
-      }
-    }
-
-    return {
-      compacted: compactedCount,
-      kept: keptCount,
-      dryRun: !confirm,
-    }
+    })
   }
 
   private async auditRemovals(
