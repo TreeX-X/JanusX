@@ -158,10 +158,10 @@ export function CLITerminal({
     const term = new Terminal({
       theme: {
         /*-- 与 --shell-canvas 对齐：终端画布与中部工作台同色，避免 pane 内出现色阶断层 --*/
-        background: '#0a0a0a',
+        background: '#151517',
         foreground: '#d4d4d4',
         cursor: '#ff7830',
-        cursorAccent: '#0a0a0a',
+        cursorAccent: '#151517',
         selectionBackground: 'rgba(255, 120, 48, 0.18)',
         black: '#1f1f23',
         red: '#e06c75',

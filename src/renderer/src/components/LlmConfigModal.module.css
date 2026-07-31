@@ -1,8 +1,18 @@
+/**
+ * src/renderer/src/components/LlmConfigModal.module.css
+ *
+ * LLM 引擎配置。两种上下文共用一套类名：
+ *   - 独立弹窗（.llmConfigPanel）
+ *   - 设置中心内嵌（.embeddedPanel，由 AppSettingsModal 提供 --so-* 变量）
+ * 独立弹窗自己声明一份 --so-* 兜底，两边视觉才不会分叉。
+ * 视觉规则见 AppSettingsModal.module.css 顶部注释。
+ */
+
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(8px);
+  background: rgba(8, 8, 10, 0.62);
+  backdrop-filter: blur(10px);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -10,12 +20,19 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.24s ease;
-  /* Light-orange settings palette (covers standalone modal + portaled Select dropdown) */
-  --so-accent: #ff9a52;
-  --so-accent-ink: #ffaf7a;
+
+  /* 与 AppSettingsModal .panel 保持同源（同时覆盖 portal 出去的 Select 下拉）。 */
+  --so-accent: #f2934f;
+  --so-accent-ink: #f0a878;
   --so-accent-hover: #ffbf94;
-  --so-accent-rgb: 255, 120, 48;
+  --so-accent-rgb: 244, 125, 67;
   --janus-order: var(--so-accent);
+  --so-rule: var(--shell-border);
+  --so-rule-soft: var(--shell-border-soft);
+  --so-field: rgba(255, 255, 255, 0.035);
+  --so-field-border: rgba(255, 255, 255, 0.09);
+  --so-control-h: 34px;
+  --so-radius: 6px;
 }
 
 .modalBackdrop.show {
@@ -26,16 +43,16 @@
 .llmConfigPanel {
   width: 520px;
   max-height: min(760px, calc(100vh - 48px));
-  background: #111113;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  background: var(--shell-canvas);
+  border-radius: 10px;
+  border: 1px solid var(--shell-border);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   transform: translateY(14px) scale(0.98);
   transition: transform 0.24s ease;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: #f4f4f5;
+  color: var(--shell-text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
@@ -61,8 +78,8 @@
 }
 
 .configHeader {
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--so-rule);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -71,24 +88,24 @@
 .configTitle {
   font-size: 13px;
   font-weight: 650;
-  color: #f4f4f5;
+  color: var(--shell-text);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .titleMeta {
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 11px;
   font-weight: 500;
 }
 
 .statusDot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   background: var(--so-accent);
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(var(--so-accent-rgb), 0.36);
+  box-shadow: 0 0 8px rgba(var(--so-accent-rgb), 0.34);
 }
 
 .configBody {
@@ -110,9 +127,9 @@
   grid-template-columns: 8px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 9px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   padding-bottom: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--so-rule-soft);
 }
 
 .runtimeIndicator {
@@ -125,11 +142,11 @@
 .runtimeStatus[data-state='available'] .runtimeIndicator { background: #68b99c; }
 .runtimeStatus[data-state='unavailable'] .runtimeIndicator { background: #cf787f; }
 .runtimeStatus > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-.runtimeStatus strong { color: #d8d8dc; font-size: 11px; font-weight: 600; }
-.runtimeStatus span, .runtimeStatus small { overflow-wrap: anywhere; color: #72727a; font-size: 9px; line-height: 1.45; }
+.runtimeStatus strong { color: #d9d9dd; font-size: 11px; font-weight: 600; }
+.runtimeStatus span, .runtimeStatus small { overflow-wrap: anywhere; color: var(--shell-dim); font-size: 9px; line-height: 1.45; }
 .runtimeStatus small { color: #a66f74; }
-.runtimeStatus button { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 5px; background: transparent; color: #77777f; }
-.runtimeStatus button:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.16); color: #d8d8dc; }
+.runtimeStatus button { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 1px solid var(--so-field-border); border-radius: 5px; background: transparent; color: #77777f; cursor: pointer; }
+.runtimeStatus button:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.16); color: #d9d9dd; }
 .runtimeStatus button:disabled { opacity: 0.45; }
 .spinning { animation: runtime-spin 0.8s linear infinite; }
 
@@ -140,21 +157,21 @@
 }
 
 .configBody::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
 }
 
 .configBody::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
 }
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 0 0 18px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 12px;
+  padding: 0 0 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--so-rule-soft);
 }
 
 .section:last-child {
@@ -165,10 +182,12 @@
 
 .sectionTitle {
   margin: 0;
-  color: #f4f4f5;
-  font-size: 12px;
+  color: var(--shell-muted);
+  font-size: 10px;
   font-weight: 650;
+  letter-spacing: 0.08em;
   line-height: 1.35;
+  text-transform: uppercase;
 }
 
 .formGroup {
@@ -178,7 +197,7 @@
 }
 
 .formGroup label {
-  color: #d4d4d8;
+  color: #d9d9dd;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
@@ -186,22 +205,21 @@
 
 .configInput {
   width: 100%;
-  min-height: 36px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: var(--so-control-h);
+  background: var(--so-field);
+  border: 1px solid var(--so-field-border);
   padding: 8px 10px;
-  border-radius: 6px;
-  color: #f4f4f5;
-  font-size: 13px;
+  border-radius: var(--so-radius);
+  color: var(--shell-text);
+  font-size: 12px;
   font-family: inherit;
   outline: none;
-  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease;
 }
 
 .configInput:focus {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(var(--so-accent-rgb), 0.58);
-  box-shadow: 0 0 0 1px rgba(var(--so-accent-rgb), 0.22);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(var(--so-accent-rgb), 0.55);
 }
 
 .configInput::placeholder {
@@ -209,8 +227,8 @@
 }
 
 .configInput.selectInput {
-  height: 36px;
-  min-height: 36px;
+  height: var(--so-control-h);
+  min-height: var(--so-control-h);
   padding: 0 10px;
   line-height: 1;
 }
@@ -223,27 +241,49 @@
   line-height: 1.5;
 }
 
+/* Provider 列表：旧版每一项都是"填充底 + 边框"的卡片，选中项再整块染橙——
+   五六个 provider 排下来就是一面色块墙。改成发丝线分隔的行，选中态只保留
+   左侧 2px 强调条，和左侧工作区列表、设置导航是同一个选中语言。 */
 .providerList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  border-top: 1px solid var(--so-rule-soft);
 }
 
 .providerItem {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  min-height: 52px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 6px;
+  min-height: 48px;
+  padding: 8px 10px 8px 12px;
+  border-bottom: 1px solid var(--so-rule-soft);
+  transition: background 0.16s ease;
+}
+
+.providerItem::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: transparent;
+  transition: background 0.16s ease;
+}
+
+.providerItem:hover {
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .providerItemActive {
-  background: rgba(var(--so-accent-rgb), 0.11);
-  border-color: rgba(var(--so-accent-rgb), 0.3);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.providerItemActive::before {
+  background: var(--so-accent);
 }
 
 .providerMeta {
@@ -253,27 +293,30 @@
 .providerName {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: #d4d4d8;
+  gap: 8px;
+  color: #d9d9dd;
   font-size: 12px;
   font-weight: 600;
 }
 
+.providerItemActive .providerName {
+  color: var(--shell-text);
+}
+
+/* 徽标降级为文字标记：无底色、无边框，只靠字重和颜色区分。 */
 .providerBadge {
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 4px;
-  background: rgba(var(--so-accent-rgb), 0.16);
   color: var(--so-accent-ink);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .providerModel {
   margin-top: 3px;
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 11px;
 }
 
@@ -292,19 +335,18 @@
 }
 
 .inlineHint {
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 11px;
   line-height: 1.5;
 }
 
+/* 提示条：去掉填充底，只留一条强调色细线做锚点。 */
 .notice {
-  padding: 9px 10px;
-  border-left: 2px solid var(--so-accent);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.035);
-  color: #a1a1aa;
+  padding: 2px 0 2px 11px;
+  border-left: 2px solid rgba(var(--so-accent-rgb), 0.55);
+  color: var(--shell-muted);
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .notice code {
@@ -317,23 +359,24 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.18);
+  padding: 15px 20px;
+  border-top: 1px solid var(--so-rule);
+  background: transparent;
 }
 
 .embeddedPanel .configFooter {
   position: sticky;
-  bottom: -24px;
-  margin: 18px -24px -24px;
-  padding: 14px 24px;
+  bottom: calc(var(--so-body-pad-y, 22px) * -1);
+  margin: 16px calc(var(--so-body-pad-x, 22px) * -1) calc(var(--so-body-pad-y, 22px) * -1);
+  padding: 13px var(--so-body-pad-x, 22px);
   backdrop-filter: blur(16px);
-  background: rgba(17, 17, 19, 0.9);
+  /* Matches --shell-canvas (#151517) with alpha so scrolled content shows through. */
+  background: rgba(21, 21, 23, 0.9);
 }
 
 .testStatus {
   min-height: 18px;
-  color: #a1a1aa;
+  color: var(--shell-muted);
   font-size: 11px;
   opacity: 0;
   transition: opacity 0.18s ease;
@@ -346,17 +389,18 @@
 }
 
 .testStatus.success {
-  color: #22c55e;
+  color: #6fb88a;
 }
 
 .testStatus.error {
-  color: #ff5f57;
+  color: #d78b92;
 }
 
 .btn {
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  height: var(--so-control-h);
+  border-radius: var(--so-radius);
+  border: 1px solid var(--so-field-border);
+  background: transparent;
   padding: 0 14px;
   font-size: 12px;
   font-weight: 600;
@@ -367,43 +411,53 @@
 }
 
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .btnCompact {
   height: 26px;
-  padding: 0 8px;
+  padding: 0 9px;
   font-size: 10px;
 }
 
 .btnGhost {
-  background: transparent;
-  color: #a1a1aa;
+  color: var(--shell-muted);
 }
 
 .btnGhost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
-  color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
 }
 
 .btnAccent {
   color: var(--so-accent-ink);
 }
 
+.btnAccent:hover:not(:disabled) {
+  border-color: rgba(var(--so-accent-rgb), 0.5);
+  color: var(--so-accent-hover);
+}
+
 .btnDanger {
-  color: #ff5f57;
+  color: #d78b92;
+}
+
+.btnDanger:hover:not(:disabled) {
+  border-color: rgba(215, 139, 146, 0.42);
+  color: #e8a2a8;
 }
 
 .btnPrimary {
-  background: rgba(var(--so-accent-rgb), 0.14);
-  border-color: rgba(var(--so-accent-rgb), 0.42);
+  border-color: rgba(var(--so-accent-rgb), 0.4);
   color: var(--so-accent-ink);
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: rgba(var(--so-accent-rgb), 0.22);
-  border-color: rgba(var(--so-accent-rgb), 0.6);
+  background: rgba(var(--so-accent-rgb), 0.1);
+  border-color: rgba(var(--so-accent-rgb), 0.62);
+  color: var(--so-accent-hover);
 }
 
 @media (max-width: 720px) {

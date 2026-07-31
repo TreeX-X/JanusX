@@ -8,7 +8,7 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at center, #111 0%, var(--bg-deep, #050505) 100%);
+  background: radial-gradient(circle at center, #1d1d21 0%, var(--bg-deep, #151517) 100%);
   color: var(--text, #e0e0e0);
   overflow: hidden;
 }

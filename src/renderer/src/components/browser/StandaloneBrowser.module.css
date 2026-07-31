@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: #0a0a0a;
+  background: #151517;
   color: #d4d4d4;
 }
 
@@ -98,7 +98,7 @@
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: #0a0a0a;
+  background: #151517;
   color: #666;
   font-family: var(--font-mono, monospace);
   font-size: 12px;

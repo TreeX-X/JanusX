@@ -1,3 +1,11 @@
+/**
+ * src/renderer/src/components/ModelCatalogPanel.module.css
+ *
+ * 模型目录。旧版是三层嵌套的填充容器（vendorGroup 卡片 → modelItem 卡片 → details 卡片），
+ * 每层都有自己的底色和边框，展开后整页都是矩形块。这里改成"发丝线 + 缩进"的列表：
+ * 层级靠左缩进和分隔线表达，不靠嵌套边框。视觉规则见 AppSettingsModal.module.css。
+ */
+
 .root {
   display: flex;
   min-height: 100%;
@@ -20,7 +28,7 @@
   position: absolute;
   left: 11px;
   top: 50%;
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 17px;
   transform: translateY(-52%);
   pointer-events: none;
@@ -28,20 +36,21 @@
 
 .searchInput {
   width: 100%;
-  height: 38px;
+  height: 36px;
   padding: 0 12px 0 34px;
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
+  color: var(--shell-text);
+  background: var(--so-field);
+  border: 1px solid var(--so-field-border);
+  border-radius: var(--so-radius);
   outline: none;
   font: inherit;
   font-size: 12px;
+  transition: background 0.18s ease, border-color 0.18s ease;
 }
 
 .searchInput:focus {
-  border-color: rgba(var(--so-accent-rgb), 0.58);
-  box-shadow: 0 0 0 1px rgba(var(--so-accent-rgb), 0.2);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(var(--so-accent-rgb), 0.55);
 }
 
 .searchInput::placeholder { color: #5f6368; }
@@ -52,38 +61,45 @@
   justify-content: center;
   gap: 7px;
   min-width: 104px;
-  height: 38px;
+  height: 36px;
   padding: 0 13px;
   color: var(--so-accent-ink);
-  background: rgba(var(--so-accent-rgb), 0.14);
-  border: 1px solid rgba(var(--so-accent-rgb), 0.42);
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(var(--so-accent-rgb), 0.4);
+  border-radius: var(--so-radius);
   font: inherit;
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .refreshButton:hover:not(:disabled) {
-  background: rgba(var(--so-accent-rgb), 0.22);
-  border-color: rgba(var(--so-accent-rgb), 0.6);
+  background: rgba(var(--so-accent-rgb), 0.1);
+  border-color: rgba(var(--so-accent-rgb), 0.62);
+  color: var(--so-accent-hover);
 }
-.refreshButton:disabled { opacity: 0.6; cursor: wait; }
+.refreshButton:disabled { opacity: 0.5; cursor: wait; }
 
 .inlineButton {
-  height: 32px;
+  height: 30px;
   padding: 0 12px;
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
+  color: var(--shell-muted);
+  background: transparent;
+  border: 1px solid var(--so-field-border);
+  border-radius: var(--so-radius);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
-.inlineButton:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
-.inlineButton:disabled { opacity: 0.6; cursor: wait; }
+.inlineButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
+}
+.inlineButton:disabled { opacity: 0.5; cursor: wait; }
 
 .spinning { animation: spin 0.8s linear infinite; }
 
@@ -93,31 +109,31 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 11px;
   line-height: 1.4;
 }
 
+/* 状态消息：一条强调色细线 + 文字，没有填充块。 */
 .message {
-  padding: 9px 10px;
+  padding: 2px 0 2px 11px;
   border-left: 2px solid;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.035);
   font-size: 11px;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
-.messageError { border-color: #ff5f57; color: #fca5a5; }
-.messageSuccess { border-color: #22c55e; color: #86efac; }
+.messageError { border-color: rgba(215, 139, 146, 0.7); color: #d78b92; }
+.messageSuccess { border-color: rgba(111, 184, 138, 0.7); color: #6fb88a; }
 
-.groups { display: flex; flex-direction: column; gap: 8px; }
+.groups {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--so-rule-soft);
+}
 
-.vendorGroup,
-.modelItem {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.025);
-  overflow: hidden;
+.vendorGroup {
+  border-bottom: 1px solid var(--so-rule-soft);
 }
 
 .vendorHeader,
@@ -126,78 +142,87 @@
   align-items: center;
   cursor: pointer;
   list-style: none;
+  transition: background 0.16s ease;
 }
 
 .vendorHeader::-webkit-details-marker,
 .modelSummary::-webkit-details-marker { display: none; }
 
 .vendorHeader {
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 42px;
-  padding: 0 12px;
-  color: #d4d4d8;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  min-height: 40px;
+  padding: 0 8px;
+  color: #d9d9dd;
   font-size: 12px;
   font-weight: 650;
 }
 
+.vendorHeader:hover { background: rgba(255, 255, 255, 0.025); }
+
 .vendorHeader::before {
   content: '›';
   width: 14px;
-  color: #71717a;
+  color: var(--shell-dim);
   transition: transform 0.15s ease;
 }
 
-.vendorHeader { grid-template-columns: 14px minmax(0, 1fr) auto; }
 .vendorGroup[open] > .vendorHeader::before { transform: rotate(90deg); }
+.vendorGroup[open] > .vendorHeader { color: var(--shell-text); }
 
+/* 计数不再是圆角标签，只是行尾的一个等宽数字。 */
 .count {
-  min-width: 28px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #a1a1aa;
-  background: rgba(255, 255, 255, 0.055);
+  min-width: 24px;
+  color: var(--shell-dim);
+  font-family: 'SF Mono', Consolas, monospace;
   font-size: 10px;
-  text-align: center;
+  text-align: right;
 }
 
+/* 型号列表靠缩进 + 左侧竖线表达从属，而不是再套一层卡片。 */
 .modelList {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 0 8px 8px;
+  margin: 0 0 6px 21px;
+  padding-left: 1px;
+  border-left: 1px solid var(--so-rule-soft);
 }
 
-.modelItem { background: #111113; }
+.modelItem {
+  border-top: 1px solid var(--so-rule-soft);
+}
+
+.modelItem:first-child { border-top: 0; }
 
 .modelSummary {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  min-height: 52px;
-  padding: 8px 10px;
+  min-height: 46px;
+  padding: 7px 10px;
 }
 
-.modelIdentity { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.modelIdentity strong { color: #e4e4e7; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
-.modelIdentity code { color: #71717a; font: 10px/1.35 'SF Mono', Consolas, monospace; overflow-wrap: anywhere; }
-.modelQuickMeta { color: #a1a1aa; font-size: 10px; white-space: nowrap; }
+.modelSummary:hover { background: rgba(255, 255, 255, 0.025); }
+
+.modelIdentity { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.modelIdentity strong { color: #e2e2e5; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.modelIdentity code { color: var(--shell-dim); font: 10px/1.35 'SF Mono', Consolas, monospace; overflow-wrap: anywhere; }
+.modelQuickMeta { color: var(--shell-muted); font-size: 10px; white-space: nowrap; }
 
 .details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 16px;
-  padding: 12px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 10px 14px;
 }
 
 .metadata { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.metadata span { color: #71717a; font-size: 10px; }
-.metadata strong { color: #d4d4d8; font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+.metadata span { color: var(--shell-dim); font-size: 10px; }
+.metadata strong { color: #d9d9dd; font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
 
 .description {
   grid-column: 1 / -1;
   min-width: 0;
   margin: 2px 0 0;
-  color: #a1a1aa;
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -211,11 +236,11 @@
   justify-content: center;
   flex-direction: column;
   gap: 5px;
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 11px;
   text-align: center;
 }
-.empty strong { color: #d4d4d8; font-size: 12px; }
+.empty strong { color: #d9d9dd; font-size: 12px; }
 .empty span { max-width: 100%; overflow-wrap: anywhere; }
 
 .srOnly {

@@ -1045,7 +1045,7 @@ export function Sidebar() {
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(8,8,10,0.62)',
             backdropFilter: 'blur(10px)',
             zIndex: 1000,
           }}
@@ -1166,7 +1166,7 @@ export function Sidebar() {
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(8,8,10,0.62)',
             backdropFilter: 'blur(10px)',
             zIndex: 1000,
           }}

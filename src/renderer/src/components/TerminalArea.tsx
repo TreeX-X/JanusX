@@ -700,10 +700,14 @@ function LeafPane({
                 onTerminalDragEnd()
               }}
               onClick={() => onTabSelect(leaf.id, tab.id)}
-              className="group/tab relative flex h-[30px] min-w-[112px] max-w-[190px] cursor-pointer select-none items-center gap-1.5 rounded-t-[6px] border-0 px-3 text-left font-mono text-[11px] leading-none transition-colors"
+              className="group/tab relative flex h-[30px] min-w-[112px] max-w-[190px] cursor-pointer select-none items-center gap-1.5 rounded-t-[6px] border-0 px-3 text-left font-mono text-[11px] leading-none transition-colors hover:bg-white/[0.035]"
               style={{
                 color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
-                background: isActive ? 'var(--shell-canvas)' : 'transparent',
+                /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
+                     未选中态刻意不写 inline background —— 内联样式会盖过 hover 类，
+                     写死 transparent 等于让 hover 失效（Tailwind preflight 已把 button 置为透明）。 --*/
+                background: isActive ? 'var(--shell-canvas)' : undefined,
+                boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.045)' : 'none',
               }}
               title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
@@ -754,8 +758,9 @@ function LeafPane({
               {isActive && (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute bottom-0 left-2.5 right-2.5 h-px"
-                  style={{ background: '#ff7830' }}
+                  /*-- 强调条移到顶边：底边要留给 tab 与画布的无缝衔接，画一条线就等于把它们切开。 --*/
+                  className="pointer-events-none absolute left-2.5 right-2.5 top-0 h-0.5 rounded-b-sm"
+                  style={{ background: 'var(--shell-accent)' }}
                 />
               )}
             </button>

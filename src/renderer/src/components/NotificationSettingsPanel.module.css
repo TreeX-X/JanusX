@@ -1,18 +1,26 @@
+/**
+ * src/renderer/src/components/NotificationSettingsPanel.module.css
+ *
+ * 通知/知识库设置面板（KnowledgeSettingsPanel 复用同一套类名）。
+ * 视觉规则见 AppSettingsModal.module.css 顶部注释：表面走 --shell-* 阶梯，
+ * 橙色只做 1px 边框与文字，分组靠发丝线。
+ */
+
 .panel {
   display: flex;
   flex-direction: column;
   gap: 0;
   min-height: 100%;
-  color: #f4f4f5;
+  color: var(--shell-text);
 }
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 0 0 18px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 12px;
+  padding: 0 0 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--so-rule-soft);
 }
 
 .section:last-of-type {
@@ -22,10 +30,12 @@
 
 .sectionTitle {
   margin: 0;
-  color: #f4f4f5;
-  font-size: 12px;
+  color: var(--shell-muted);
+  font-size: 10px;
   font-weight: 650;
+  letter-spacing: 0.08em;
   line-height: 1.35;
+  text-transform: uppercase;
 }
 
 .row {
@@ -33,7 +43,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 20px;
   align-items: center;
-  min-height: 38px;
+  min-height: 36px;
 }
 
 .label {
@@ -44,14 +54,14 @@
 }
 
 .labelText {
-  color: #d4d4d8;
+  color: #d9d9dd;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .hint {
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 11px;
   line-height: 1.5;
   max-width: 560px;
@@ -59,7 +69,7 @@
 
 .switch {
   position: relative;
-  width: 42px;
+  width: 40px;
   height: 22px;
 }
 
@@ -73,8 +83,8 @@
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--so-field-border);
   cursor: pointer;
   transition: background 0.18s ease, border-color 0.18s ease;
 }
@@ -87,17 +97,19 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #a1a1aa;
+  background: #8b8b91;
   transition: transform 0.18s ease, background 0.18s ease;
 }
 
+/* 开关"开"态：轨道保持中性，只让滑块变成强调色。整条轨道染橙会在长列表里
+   变成一排橙色条，正是要避免的色块堆积。 */
 .switch input:checked + .switchTrack {
-  background: rgba(var(--so-accent-rgb), 0.22);
-  border-color: rgba(var(--so-accent-rgb), 0.42);
+  background: rgba(var(--so-accent-rgb), 0.14);
+  border-color: rgba(var(--so-accent-rgb), 0.4);
 }
 
 .switch input:checked + .switchTrack::after {
-  transform: translateX(20px);
+  transform: translateX(18px);
   background: var(--so-accent);
 }
 
@@ -110,19 +122,20 @@
 
 .input {
   width: 88px;
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.035);
-  color: #f4f4f5;
-  font-size: 13px;
+  height: var(--so-control-h);
+  border-radius: var(--so-radius);
+  border: 1px solid var(--so-field-border);
+  background: var(--so-field);
+  color: var(--shell-text);
+  font-size: 12px;
   padding: 0 10px;
   outline: none;
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .input:focus {
-  border-color: rgba(var(--so-accent-rgb), 0.58);
-  box-shadow: 0 0 0 1px rgba(var(--so-accent-rgb), 0.22);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(var(--so-accent-rgb), 0.55);
 }
 
 .textInput {
@@ -139,98 +152,105 @@
   line-height: 1.4;
 }
 
+/* 说明行：旧版是"浅色填充 + 2px 橙色左边框"的卡片。改成一条发丝线上下界定的
+   留白区，信息层级不变，视觉噪声降一级。 */
 .controlStatus {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
-  min-height: 44px;
-  padding: 10px 12px;
-  border-left: 2px solid rgba(var(--so-accent-rgb), 0.5);
-  background: rgba(255, 255, 255, 0.025);
+  min-height: 42px;
+  padding: 10px 0;
+  border-top: 1px solid var(--so-rule-soft);
+  border-bottom: 1px solid var(--so-rule-soft);
 }
 
 .controlNotice {
   margin: 0;
-  color: #a1a1aa;
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.55;
 }
 
 .select {
   width: 160px;
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.035);
-  color: #f4f4f5;
-  font-size: 13px;
+  height: var(--so-control-h);
+  border-radius: var(--so-radius);
+  border: 1px solid var(--so-field-border);
+  background: var(--so-field);
+  color: var(--shell-text);
+  font-size: 12px;
   padding: 0 10px;
   outline: none;
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .select:focus {
-  border-color: rgba(var(--so-accent-rgb), 0.58);
-  box-shadow: 0 0 0 1px rgba(var(--so-accent-rgb), 0.22);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(var(--so-accent-rgb), 0.55);
 }
 
 .select option {
-  background: #18181b;
-  color: #f4f4f5;
+  background: var(--shell-chrome-raised);
+  color: var(--shell-text);
 }
 
 .testRow {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 38px;
+  min-height: 36px;
 }
 
 .unit {
-  color: #71717a;
+  color: var(--shell-dim);
   font-size: 12px;
 }
 
 .footer {
   position: sticky;
-  bottom: -24px;
+  bottom: calc(var(--so-body-pad-y, 22px) * -1);
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   margin-top: auto;
-  margin-right: -24px;
-  margin-bottom: -24px;
-  margin-left: -24px;
-  padding: 14px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(17, 17, 19, 0.92);
+  margin-right: calc(var(--so-body-pad-x, 22px) * -1);
+  margin-bottom: calc(var(--so-body-pad-y, 22px) * -1);
+  margin-left: calc(var(--so-body-pad-x, 22px) * -1);
+  padding: 13px var(--so-body-pad-x, 22px);
+  border-top: 1px solid var(--so-rule);
+  /* Matches --shell-canvas (#151517) with alpha so scrolled content shows through. */
+  background: rgba(21, 21, 23, 0.9);
   backdrop-filter: blur(16px);
 }
 
 .status {
   min-height: 18px;
-  color: #a1a1aa;
+  color: var(--shell-muted);
   font-size: 11px;
 }
 
 .statusError {
-  color: #ff5f57;
+  color: #d78b92;
 }
 
 .statusSuccess {
-  color: #22c55e;
+  color: #6fb88a;
 }
 
 .actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
+/* 按钮统一为"透明底 + 发丝边框"，与工作区启动配置里的按钮同一套语言。
+   主按钮只把边框和文字换成强调色，不做填充。 */
 .button {
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  height: var(--so-control-h);
+  border-radius: var(--so-radius);
+  border: 1px solid var(--so-field-border);
+  background: transparent;
   padding: 0 14px;
   font-size: 12px;
   font-weight: 600;
@@ -239,29 +259,29 @@
 }
 
 .button:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .ghostButton {
-  background: transparent;
-  color: #a1a1aa;
+  color: var(--shell-muted);
 }
 
 .ghostButton:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
-  color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
 }
 
 .primaryButton {
-  background: rgba(var(--so-accent-rgb), 0.14);
-  border-color: rgba(var(--so-accent-rgb), 0.42);
+  border-color: rgba(var(--so-accent-rgb), 0.4);
   color: var(--so-accent-ink);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: rgba(var(--so-accent-rgb), 0.22);
-  border-color: rgba(var(--so-accent-rgb), 0.6);
+  background: rgba(var(--so-accent-rgb), 0.1);
+  border-color: rgba(var(--so-accent-rgb), 0.62);
+  color: var(--so-accent-hover);
 }
 
 @media (max-width: 720px) {
@@ -272,13 +292,8 @@
   }
 
   .footer {
-    bottom: -16px;
     flex-direction: column;
     align-items: stretch;
-    margin-right: -16px;
-    margin-bottom: -16px;
-    margin-left: -16px;
-    padding: 12px 16px;
   }
 
   .actions {

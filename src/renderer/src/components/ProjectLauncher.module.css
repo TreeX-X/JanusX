@@ -1,15 +1,16 @@
 /**
  * src/renderer/src/components/ProjectLauncher.module.css
  * 项目启动器主容器样式
+ *
+ * 容器本身不再画边框和圆角：它永远渲染在 .ws-config-modal 内部，
+ * 自带边框会在弹窗边框内侧再套一圈，读起来是双层画框。
  */
 
 .container {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-dark);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--shell-canvas);
 }
 
 .loadingState,
@@ -52,16 +53,17 @@
 .retryBtn {
   padding: 8px 16px;
   background: transparent;
-  color: #d49a78;
+  color: #e6a077;
   border: 1px solid rgba(255, 120, 48, 0.3);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
+  font-size: 13px;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .retryBtn:hover {
-  background: rgba(255, 120, 48, 0.05);
+  background: rgba(255, 120, 48, 0.08);
+  border-color: rgba(255, 120, 48, 0.5);
 }
 
 .retryBtn:active {

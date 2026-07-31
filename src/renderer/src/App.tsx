@@ -367,7 +367,7 @@ export default function App() {
               style={{
                 backfaceVisibility: 'hidden',
                 transform: 'rotateX(180deg)',
-                background: 'radial-gradient(circle at center, #111 0%, var(--bg-deep) 100%)',
+                background: 'radial-gradient(circle at center, #1d1d21 0%, var(--bg-deep) 100%)',
               }}
             >
               <BlueprintFocusView />

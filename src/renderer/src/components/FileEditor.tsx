@@ -220,7 +220,7 @@ export function FileEditor() {
       }
     >
       {/* Viewer area */}
-      <div className="flex-1 overflow-hidden" style={{ background: '#0a0a0a', height: '100%', position: 'relative' }}>
+      <div className="flex-1 overflow-hidden" style={{ background: '#151517', height: '100%', position: 'relative' }}>
         {activeFile && <ViewerContent key={activeFile.id} file={activeFile} onEditorMount={handleEditorMount} />}
       </div>
     </FloatingPanel>

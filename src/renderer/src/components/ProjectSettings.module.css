@@ -1,17 +1,25 @@
+/**
+ * src/renderer/src/components/ProjectSettings.module.css
+ *
+ * 工作区启动配置（左侧侧栏右键进入）。三栏结构刻意复刻主窗口：
+ * 左侧配置栏与右侧助手栏吃 --shell-chrome（对应侧栏/右坞），中间主区吃 --shell-canvas
+ * （对应中部工作台）。设置中心用的是同一套阶梯与同一套控件语言。
+ */
+
 .container {
   display: grid;
   grid-template-columns: 176px minmax(420px, 1fr) 320px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: #0b0b0c;
+  background: var(--shell-canvas);
   color: var(--text);
 }
 
 .sidebar,
 .assistant {
   min-width: 0;
-  background: rgba(255, 255, 255, 0.012);
+  background: var(--shell-chrome);
 }
 
 .sidebar {
@@ -20,7 +28,7 @@
   min-height: 0;
   padding: 14px 10px 10px;
   overflow-y: auto;
-  border-right: 1px solid rgba(255, 255, 255, 0.055);
+  border-right: 1px solid var(--shell-border);
 }
 
 .sidebarHeader,
@@ -59,7 +67,7 @@
   justify-content: center;
   gap: 6px;
   min-height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--shell-border);
   border-radius: 5px;
   background: transparent;
   color: #929299;
@@ -82,7 +90,7 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid rgba(255, 255, 255, 0.055);
+  border-right: 1px solid var(--shell-border);
 }
 
 .contextBar {
@@ -90,7 +98,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 10px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--shell-border);
 }
 
 .contextBar > div:first-child {
@@ -126,7 +134,7 @@
   min-height: 38px;
   gap: 2px;
   padding: 0 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  border-bottom: 1px solid var(--shell-border-soft);
 }
 
 .tab {
@@ -140,7 +148,7 @@
 }
 
 .tab:hover { color: #c6c6ca; }
-.tabActive { border-bottom-color: #ff7830; color: #ececef; }
+.tabActive { border-bottom-color: var(--shell-accent); color: #ececef; }
 .diffCount { margin-left: 5px; color: #d98a5d; font-family: monospace; font-size: 9px; }
 
 .formContainer {
@@ -152,19 +160,18 @@
 
 .diffList { display: flex; flex-direction: column; }
 .diffEmpty { padding: 18px 0; color: #73737a; font-size: 11px; }
-.diffRow { padding: 8px 2px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 10px; line-height: 1.55; }
+.diffRow { padding: 8px 2px; border-bottom: 1px solid var(--shell-border-soft); font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 10px; line-height: 1.55; }
 .diffPath { display: flex; align-items: center; gap: 8px; color: #d6d6da; }
 .diffPath span { width: 44px; color: #77777e; font-size: 8px; text-transform: uppercase; }
 .diffBefore, .diffAfter { overflow-wrap: anywhere; white-space: pre-wrap; }
 .diffBefore { color: #b97878; }
 .diffAfter { color: #6fb88a; }
 
+/* 错误提示与设置中心的 .message 同构：一条细线做锚点，不做填充块。 */
 .errorBanner {
-  margin: 0 14px 8px;
-  padding: 8px 10px;
-  border: 1px solid rgba(224, 108, 117, 0.22);
-  border-radius: 5px;
-  background: rgba(224, 108, 117, 0.045);
+  margin: 0 16px 8px;
+  padding: 2px 0 2px 11px;
+  border-left: 2px solid rgba(215, 139, 146, 0.7);
   color: #d78b92;
   font-size: 10px;
   line-height: 1.5;
@@ -183,17 +190,17 @@
 .approvalBar button { min-height: 26px; padding: 0 9px; }
 .approvalBar .approveButton { border-color: rgba(255, 120, 48, 0.35); color: #e6a077; }
 
-.taskOutput { border-top: 1px solid rgba(255, 255, 255, 0.045); }
+.taskOutput { border-top: 1px solid var(--shell-border-soft); }
 .taskOutput summary { min-height: 32px; gap: 7px; padding: 0 14px; color: #8b8b92; cursor: pointer; font-size: 10px; list-style: none; }
 .taskOutput summary span { margin-left: auto; color: #cf787f; }
 .taskOutput summary span[data-success='true'] { color: #68b99c; }
-.taskOutput pre { max-height: 140px; margin: 0; overflow: auto; padding: 9px 14px; border-top: 1px solid rgba(255, 255, 255, 0.04); background: #080809; color: #aaaab0; font: 9px/1.55 'Cascadia Mono', 'SF Mono', Consolas, monospace; white-space: pre-wrap; }
+.taskOutput pre { max-height: 140px; margin: 0; overflow: auto; padding: 9px 14px; border-top: 1px solid var(--shell-border-soft); background: var(--shell-void); color: #aaaab0; font: 9px/1.55 'Cascadia Mono', 'SF Mono', Consolas, monospace; white-space: pre-wrap; }
 
 .commandBar {
   min-height: 46px;
   gap: 7px;
   padding: 7px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-top: 1px solid var(--shell-border);
 }
 
 .commandBar button { min-width: 70px; padding: 0 10px; }
@@ -211,7 +218,7 @@
   min-height: 54px;
   justify-content: space-between;
   padding: 10px 12px 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--shell-border);
 }
 
 .assistantHeader > div { display: flex; flex-direction: column; gap: 2px; }

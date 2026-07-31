@@ -14,7 +14,7 @@ export function FileViewerContent({ file, onContentChange, onEditorMount }: File
     return (
       <div
         className="flex items-center justify-center flex-1"
-        style={{ background: '#0a0a0a', minHeight: 0 }}
+        style={{ background: '#151517', minHeight: 0 }}
       >
         <div className="flex items-center gap-2">
           <span style={{ color: '#555', fontSize: 12 }}>Loading</span>
@@ -34,7 +34,7 @@ export function FileViewerContent({ file, onContentChange, onEditorMount }: File
     return (
       <div
         className="flex flex-col items-center justify-center flex-1 gap-2"
-        style={{ background: '#0a0a0a', minHeight: 0 }}
+        style={{ background: '#151517', minHeight: 0 }}
       >
         <span style={{ color: '#ff5858', fontSize: 13 }}>Error</span>
         <span style={{ color: '#666', fontSize: 11 }}>{file.error}</span>

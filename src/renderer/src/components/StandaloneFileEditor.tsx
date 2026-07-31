@@ -209,7 +209,7 @@ export function StandaloneFileEditor() {
   const canFind = file?.viewType === 'code' || file?.viewType === 'markdown' || file?.viewType === 'html'
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0a0a', color: '#d4d4d4' }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#151517', color: '#d4d4d4' }}>
       <div
         className="h-[38px] shrink-0 flex items-center gap-3 px-3 select-none"
         style={{

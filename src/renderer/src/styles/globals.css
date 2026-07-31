@@ -3,47 +3,62 @@
 @tailwind utilities;
 
 :root {
-  --primary: #ff7830;
-  --bg-app: #101011;
-  --bg-deep: #0a0a0a;
-  --bg-dark: #121214;
-  --bg-darker: #0a0a0a;
-  /* Shared workbench canvas baseline. Module accents remain local. */
-  --workbench-canvas: #0d0d0e;
-  --workbench-grid: #0b0b0c;
-  --surface: rgba(26, 26, 29, 0.75);
-  --surface-elevated: rgba(26, 26, 29, 0.88);
-  --chrome-bg: rgba(23, 23, 23, 0.88);
-  --text: #e0e0e0;
-  --text-secondary: #888;
-  --text-dim: #555;
-  --border: rgba(255, 255, 255, 0.04);
-  --border-soft: rgba(255, 255, 255, 0.035);
-  --accent-soft: rgba(255, 120, 48, 0.1);
-  --accent-mid: rgba(255, 120, 48, 0.18);
-  --accent-glow: rgba(255, 120, 48, 0.3);
+  /* ── Surface ramp ───────────────────────────────────────────────────────
+     One neutral family, eight steps, no pure black anywhere the user can see.
+     Earlier revisions parked the canvas at #0a0a0a while the chrome sat at
+     #171717; that 13-point jump is what made the center workbench read as a
+     hole punched between the rails rather than a recessed surface. The ramp
+     below keeps the same *ordering* (canvas below chrome, so panes still look
+     sunk into the shell) but compresses the gap to ~9 points, which reads as
+     depth instead of separation.
 
-  /* ── Orca-inspired shell: neutral gray chrome, deeper canvas, amber accent ──
-     Chrome tokens dress the app frame (left rail, right dock, titlebar,
-     statusbar). Canvas tokens dress the center workbench, which stays recessed
-     below the chrome so panes read as sunk into the shell. Amber is the only
-     accent hue — Orca's neutral palette replaces JanusX near-black, not the
-     JanusX orange. */
-  --shell-chrome: #171717;
-  --shell-chrome-raised: #1d1d1d;
-  --shell-hover: #222222;
-  --shell-active: #262626;
+       void   #101012  app root, behind the grid
+       canvas #151517  center workbench bed + terminal canvas
+       pane   #191919  pane body
+       chrome #1e1e20  left rail, right dock, titlebar, settings rail
+
+     Anything that used to be `#000` / `rgba(0,0,0,…)` as a *surface* should
+     pull from this ramp. Pure black stays reserved for shadows and scrims. */
+  --shell-void: #101012;
+  --shell-canvas: #151517;
+  --shell-pane: #191919;
+  --shell-pane-chrome: #1e1e1f;
+  --shell-chrome: #1e1e20;
+  --shell-chrome-raised: #252527;
+  --shell-hover: #2b2b2e;
+  --shell-active: #333336;
   --shell-border: rgb(255 255 255 / 0.07);
+  --shell-border-soft: rgb(255 255 255 / 0.045);
   --shell-text: #fafafa;
   --shell-muted: #a1a1a1;
   --shell-dim: #737373;
-  --shell-canvas: #0a0a0a;
-  --shell-pane: #121214;
-  --shell-pane-chrome: #1a1a1d;
+
+  /* Amber is the only accent hue in the shell. It earns 1px borders, 2px
+     selection bars and text — not filled blocks. See the settings modal. */
   --shell-accent: #f47d43;
   --shell-accent-strong: #ff9159;
   --shell-accent-soft: rgb(244 125 67 / 0.11);
   --shell-accent-border: rgb(244 125 67 / 0.42);
+
+  --primary: #ff7830;
+  --bg-app: var(--shell-void);
+  --bg-deep: var(--shell-canvas);
+  --bg-dark: var(--shell-pane);
+  --bg-darker: var(--shell-void);
+  /* Shared workbench canvas baseline. Module accents remain local. */
+  --workbench-canvas: #131315;
+  --workbench-grid: #101012;
+  --surface: rgba(30, 30, 32, 0.75);
+  --surface-elevated: rgba(30, 30, 32, 0.9);
+  --chrome-bg: rgba(30, 30, 32, 0.9);
+  --text: #e0e0e0;
+  --text-secondary: #888;
+  --text-dim: #555;
+  --border: rgba(255, 255, 255, 0.055);
+  --border-soft: rgba(255, 255, 255, 0.04);
+  --accent-soft: rgba(255, 120, 48, 0.1);
+  --accent-mid: rgba(255, 120, 48, 0.18);
+  --accent-glow: rgba(255, 120, 48, 0.3);
 }
 
 * {
@@ -54,7 +69,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg-deep);
+  background: var(--bg-app);
   color: var(--text);
   overflow: hidden;
   height: 100vh;
@@ -289,10 +304,10 @@ body {
   width: min(1180px, calc(100vw - 56px));
   height: min(760px, calc(100vh - 56px));
   max-height: none;
-  background: rgba(18, 18, 18, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  background: var(--shell-chrome);
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
   overflow: hidden;

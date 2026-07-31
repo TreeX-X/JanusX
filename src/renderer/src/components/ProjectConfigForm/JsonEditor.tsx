@@ -22,7 +22,7 @@ const handleBeforeMount = (monaco: any) => {
     inherit: true,
     rules: [],
     colors: {
-      'editor.background': '#0a0a0a',
+      'editor.background': '#151517',
       'editor.foreground': '#d4d4d4',
       'editor.lineHighlightBackground': '#1a1a1a',
       'editorCursor.foreground': '#ff7830',
@@ -36,7 +36,7 @@ const handleBeforeMount = (monaco: any) => {
 
 function LoadingIndicator() {
   return (
-    <div className={styles.loading} style={{ background: '#0a0a0a' }}>
+    <div className={styles.loading} style={{ background: '#151517' }}>
       <div className={styles.loadingInner}>
         <span style={{ color: '#555', fontSize: 12 }}>Loading</span>
         <span className={styles.loadingDot} />
