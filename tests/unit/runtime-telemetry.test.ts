@@ -4,12 +4,30 @@ import {
   getEstimatedContextWindow,
   getRegistryContextWindow,
   mergeRuntimeTelemetrySnapshot,
+  resolveContextWindows,
 } from '../../src/renderer/src/lib/runtime-telemetry'
 
 describe('runtime telemetry model context lookup', () => {
   it('uses the model registry before heuristic estimates', () => {
     expect(getRegistryContextWindow('gpt-5.5')).toBe(1_050_000)
     expect(getEstimatedContextWindow('codex', 'GPT-5.5')).toBe(1_050_000)
+  })
+
+  it('separates the active runtime window from the model capacity', () => {
+    expect(resolveContextWindows('codex', 'gpt-5.6-sol', 258_400)).toEqual({
+      runtimeWindow: 258_400,
+      modelCapacity: 1_050_000,
+      effectiveWindow: 258_400,
+      effectiveSource: 'runtime',
+    })
+  })
+
+  it('uses model capacity when the runtime does not report a window', () => {
+    expect(resolveContextWindows('codex', 'gpt-5.6-sol')).toEqual({
+      modelCapacity: 1_050_000,
+      effectiveWindow: 1_050_000,
+      effectiveSource: 'model-registry',
+    })
   })
 
   it('accepts a newer lower context value after compaction', () => {

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useEditorStore } from '@/stores/editor'
 import {
   getActiveWorkspacePath,
   loadWorkspaceFileTree,
@@ -279,13 +278,16 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     return workspaces.find((item) => item.id === activeWorkspaceId) ?? null
   }, [])
 
-  const openFileInEditorPanel = useCallback(async (relativePath: string) => {
+  const openFileInEditorWindow = useCallback(async (relativePath: string) => {
     const workspace = getActiveWorkspace()
     if (!workspace) return
 
     const absolutePath = getAbsolutePath(workspace.path, relativePath)
     setActiveFilePath(relativePath)
-    await useEditorStore.getState().openFile(absolutePath, workspace.path)
+    await window.electron.window.openEditor({
+      filePath: absolutePath,
+      workspacePath: workspace.path,
+    })
   }, [getActiveWorkspace, setActiveFilePath])
 
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
@@ -364,9 +366,9 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const handleOpenContextTarget = useCallback(() => {
     if (!contextMenu || contextMenu.target.type === 'directory') return
     void warmupEditorRuntime()
-    openFileInEditorPanel(contextMenu.target.path)
+    openFileInEditorWindow(contextMenu.target.path)
     setContextMenu(null)
-  }, [contextMenu, openFileInEditorPanel])
+  }, [contextMenu, openFileInEditorWindow])
 
   const handleCopyContextPath = useCallback(
     async (mode: 'relative' | 'absolute') => {
@@ -607,7 +609,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                       changedDirs={changedDirs}
                       onSelect={setActiveFilePath}
                       onToggleDirectory={handleToggleDirectory}
-                      onOpenFile={openFileInEditorPanel}
+                      onOpenFile={openFileInEditorWindow}
                       onMoveFile={handleMoveFile}
                       onOpenContextMenu={openContextMenu}
                     />

@@ -256,53 +256,6 @@ async function uninstallJsonHooks(filePath: string, engine: HookableEngine): Pro
   return { engine, installed: false, path: filePath }
 }
 
-async function enableCodexHooksFeature(configPath: string): Promise<void> {
-  let raw = ''
-  try {
-    raw = await readFile(configPath, 'utf8')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  }
-
-  if (!raw.trim()) {
-    await mkdir(dirname(configPath), { recursive: true })
-    await writeFile(configPath, '[features]\nhooks = true\n', 'utf8')
-    return
-  }
-
-  const lines = raw.split(/\r?\n/)
-  let featuresStart = -1
-  let nextSection = lines.length
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index].trim()
-    if (trimmed === '[features]') {
-      featuresStart = index
-      continue
-    }
-    if (featuresStart >= 0 && index > featuresStart && /^\[[^\]]+\]$/.test(trimmed)) {
-      nextSection = index
-      break
-    }
-  }
-
-  if (featuresStart < 0) {
-    const next = raw.endsWith('\n') ? `${raw}\n[features]\nhooks = true\n` : `${raw}\n\n[features]\nhooks = true\n`
-    await writeFile(configPath, next, 'utf8')
-    return
-  }
-
-  for (let index = featuresStart + 1; index < nextSection; index += 1) {
-    if (/^\s*hooks\s*=/.test(lines[index])) {
-      lines[index] = 'hooks = true'
-      await writeFile(configPath, `${lines.join('\n').replace(/\n*$/g, '')}\n`, 'utf8')
-      return
-    }
-  }
-
-  lines.splice(featuresStart + 1, 0, 'hooks = true')
-  await writeFile(configPath, `${lines.join('\n').replace(/\n*$/g, '')}\n`, 'utf8')
-}
-
 function mergeWslenv(existing: string | undefined, keys: string[]): string {
   const current = existing?.split(':').filter(Boolean) ?? []
   const merged = [...current]
@@ -499,7 +452,6 @@ export class AgentHookConfigManager {
         engine,
         windowsHookScriptPath,
       )
-      await enableCodexHooksFeature(this.getCodexConfigPath())
       return result
     }
 
@@ -552,10 +504,6 @@ export class AgentHookConfigManager {
 
   getCodexHooksPath(): string {
     return join(this.homeDir, '.codex', 'hooks.json')
-  }
-
-  getCodexConfigPath(): string {
-    return join(this.homeDir, '.codex', 'config.toml')
   }
 
   getOpencodeConfigDir(): string {

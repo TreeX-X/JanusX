@@ -142,9 +142,13 @@ describe('Janus resource scope UI', () => {
     }))
 
     expect(markup).toContain('aria-label="Workspace edit approval"')
+    expect(markup).toContain('role="region"')
+    expect(markup).toContain('Approval required')
     expect(markup).toContain('Edit README.md with 1 exact replacement')
     expect(markup).toContain('Replacement 1')
     expect(markup).toContain('aria-label="Approve workspace action"')
     expect(markup).toContain('aria-label="Reject workspace action"')
+    expect(markup).toContain('>Approve</span>')
+    expect(markup).toContain('>Reject</span>')
   })
 })

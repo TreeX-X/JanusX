@@ -2856,61 +2856,169 @@ body.is-running {
 }
 
 .janus-runtime-approval {
+  position: relative;
+  display: flex;
+  min-height: 128px;
   flex: 0 0 auto;
-  border-bottom: 1px solid rgba(255,255,255,0.055);
-  background: rgba(255,255,255,0.018);
+  flex-direction: column;
+  margin: 8px 0 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 6px;
+  background: rgba(20,21,23,0.96);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.2);
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
 }
 
 .janus-runtime-approval-header {
   display: flex;
-  min-height: 30px;
+  min-height: 48px;
   align-items: center;
-  gap: 6px;
-  padding: 3px 12px;
-  color: rgba(255,255,255,0.46);
-  font-size: 9px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.025);
 }
 
-.janus-runtime-approval-header button {
-  display: grid;
-  width: 21px;
-  height: 21px;
-  place-items: center;
+.janus-runtime-approval-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.janus-runtime-approval-heading > span {
+  color: rgba(255,255,255,0.4);
+  font-size: 8px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.janus-runtime-approval-heading > strong {
+  color: rgba(255,255,255,0.92);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.janus-runtime-approval-tool {
+  max-width: 52%;
+  overflow: hidden;
+  padding: 4px 6px;
   border: 1px solid rgba(255,255,255,0.09);
   border-radius: 4px;
-  color: rgba(255,255,255,0.66);
-  background: transparent;
-}
-
-.janus-runtime-approval-header button:hover {
-  border-color: rgba(255,120,48,0.35);
-  color: #ff985f;
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.52);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .janus-runtime-approval-preview {
-  max-height: 150px;
+  max-height: 210px;
+  flex: 1 1 auto;
   overflow: auto;
-  padding: 0 12px 9px;
-  color: rgba(255,255,255,0.72);
+  padding: 11px 12px 12px;
+  color: rgba(255,255,255,0.76);
   font-size: 10px;
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+.janus-runtime-approval-preview > strong {
+  display: block;
+  color: rgba(255,255,255,0.86);
+  font-size: 11px;
+  font-weight: 550;
+  text-wrap: pretty;
 }
 
 .janus-runtime-approval-preview > span {
   display: block;
-  margin-top: 2px;
-  color: rgba(255,255,255,0.38);
+  margin-top: 4px;
+  color: rgba(255,255,255,0.42);
   font-size: 9px;
+  overflow-wrap: anywhere;
 }
 
 .janus-runtime-approval-preview pre {
-  margin: 7px 0 0;
-  overflow: visible;
-  color: rgba(255,255,255,0.62);
+  max-height: 120px;
+  margin: 10px -12px -12px;
+  overflow: auto;
+  padding: 9px 12px 10px;
+  border-top: 1px solid rgba(255,255,255,0.065);
+  background: rgba(0,0,0,0.16);
+  color: rgba(255,255,255,0.64);
   font: inherit;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.janus-runtime-approval-actions {
+  display: flex;
+  min-height: 45px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 7px 9px;
+  border-top: 1px solid rgba(255,255,255,0.075);
+}
+
+.janus-runtime-approval-actions button {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.035);
+  color: rgba(255,255,255,0.68);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.janus-runtime-approval-actions button:hover,
+.janus-runtime-approval-actions button:focus-visible {
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.065);
+  color: rgba(255,255,255,0.92);
+  outline: none;
+}
+
+.janus-runtime-approval-actions .janus-runtime-approval-approve {
+  border-color: rgba(255,120,48,0.28);
+  background: rgba(255,120,48,0.105);
+  color: #efad84;
+}
+
+.janus-runtime-approval-actions .janus-runtime-approval-approve:hover,
+.janus-runtime-approval-actions .janus-runtime-approval-approve:focus-visible {
+  border-color: rgba(255,120,48,0.42);
+  background: rgba(255,120,48,0.15);
+  color: #ffd1b5;
+}
+
+@media (max-width: 520px) {
+  .janus-runtime-approval {
+    min-height: 118px;
+  }
+
+  .janus-runtime-approval-header {
+    gap: 8px;
+  }
+
+  .janus-runtime-approval-tool {
+    max-width: 46%;
+  }
+
+  .janus-runtime-approval-preview pre {
+    max-height: 72px;
+  }
 }
 
 .janus-runtime-tool-spinner {

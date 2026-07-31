@@ -175,8 +175,13 @@ describe('AgentHookConfigManager', () => {
     expect(JSON.stringify(parsed)).not.toContain(JANUSX_HOOK_COMMAND_MARKER)
   })
 
-  it('enables the Codex hooks feature in config.toml', async () => {
+  it('does not modify the external Codex config.toml', async () => {
     const homeDir = await createTempDir()
+    const codexDir = join(homeDir, '.codex')
+    const configPath = join(codexDir, 'config.toml')
+    const externalConfig = 'base_url = \"https://provider.example/v1\"\nwire_api = \"responses\"\n'
+    await mkdir(codexDir, { recursive: true })
+    await writeFile(configPath, externalConfig, 'utf8')
     const manager = new AgentHookConfigManager({
       homeDir,
       userDataDir: join(homeDir, 'userData'),
@@ -186,7 +191,7 @@ describe('AgentHookConfigManager', () => {
 
     await manager.ensureInstalled('codex')
 
-    expect(await readFile(manager.getCodexConfigPath(), 'utf8')).toContain('[features]\nhooks = true')
+    expect(await readFile(configPath, 'utf8')).toBe(externalConfig)
   })
 
   it('uses a managed PowerShell hook sender on Windows', async () => {

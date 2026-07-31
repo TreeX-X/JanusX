@@ -117,6 +117,34 @@ export function getRegistryContextWindow(model?: string): number | undefined {
   return undefined
 }
 
+export type ContextWindowSource = 'runtime' | 'model-registry' | 'estimated' | 'unknown'
+
+export interface ContextWindowResolution {
+  runtimeWindow?: number
+  modelCapacity?: number
+  effectiveWindow?: number
+  effectiveSource: ContextWindowSource
+}
+
+export function resolveContextWindows(
+  preset: TerminalPreset,
+  model?: string,
+  runtimeWindow?: number,
+): ContextWindowResolution {
+  const modelCapacity = getRegistryContextWindow(model)
+  if (runtimeWindow !== undefined) {
+    return { runtimeWindow, modelCapacity, effectiveWindow: runtimeWindow, effectiveSource: 'runtime' }
+  }
+  if (modelCapacity !== undefined) {
+    return { modelCapacity, effectiveWindow: modelCapacity, effectiveSource: 'model-registry' }
+  }
+  const estimatedWindow = getEstimatedContextWindow(preset, model)
+  return {
+    effectiveWindow: estimatedWindow,
+    effectiveSource: estimatedWindow === undefined ? 'unknown' : 'estimated',
+  }
+}
+
 export function mergeRuntimeTelemetrySnapshot(
   current: RuntimeTelemetryState,
   telemetry: RuntimeTelemetrySnapshot

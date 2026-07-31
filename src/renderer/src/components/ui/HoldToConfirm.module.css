@@ -1,0 +1,61 @@
+.control {
+  --hold-duration: 1000ms;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  touch-action: none;
+  user-select: none;
+}
+
+.control::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  content: '';
+  background: rgba(210, 72, 72, 0.28);
+  transform: scaleX(0);
+  transform-origin: left;
+  pointer-events: none;
+}
+
+.control::after {
+  position: absolute;
+  z-index: 2;
+  inset: 3px;
+  content: '';
+  border: 1px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.holding::before {
+  animation: hold-confirm-fill var(--hold-duration) linear forwards;
+}
+
+.holding::after {
+  opacity: 0.72;
+  animation: hold-confirm-spin 650ms linear infinite;
+}
+
+.holding > * {
+  opacity: 0.3;
+}
+
+.control > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes hold-confirm-fill {
+  to { transform: scaleX(1); }
+}
+
+@keyframes hold-confirm-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holding::after { animation: none; }
+}

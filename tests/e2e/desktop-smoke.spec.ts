@@ -315,6 +315,40 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await expect(panelShell).toBeVisible()
     expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
 
+    const fileRow = filesPanel.locator('[data-file-path="dock-file.txt"]')
+    await expect(fileRow).toBeVisible()
+    const initialEditorWindowPromise = application.waitForEvent('window')
+    await fileRow.dblclick()
+    const initialEditorWindow = await initialEditorWindowPromise
+    await initialEditorWindow.waitForLoadState('domcontentloaded')
+    const initialPinButton = initialEditorWindow.getByRole('button', { name: '锁定窗口置顶' })
+    await expect(initialPinButton).toBeVisible()
+    await initialPinButton.click()
+    await expect(initialEditorWindow.getByRole('button', { name: '取消窗口置顶' })).toHaveAttribute('aria-pressed', 'true')
+    await initialEditorWindow.getByRole('button', { name: '嵌入主窗口工作区' }).click()
+
+    const embeddedEditor = page.getByRole('region', { name: 'Embedded file editor' })
+    await expect(embeddedEditor).toBeVisible()
+    await expect(panelShell).toBeHidden()
+    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    const editorSeparator = page.getByRole('separator', { name: 'Resize embedded editor' })
+    await editorSeparator.focus()
+    await editorSeparator.press('Home')
+    await expect(editorSeparator).toHaveAttribute('aria-valuenow', '360')
+    await page.screenshot({ path: test.info().outputPath('embedded-file-editor.png') })
+
+    const restoredEditorWindowPromise = application.waitForEvent('window')
+    await embeddedEditor.getByRole('button', { name: '返回独立浮窗' }).click()
+    const restoredEditorWindow = await restoredEditorWindowPromise
+    await restoredEditorWindow.waitForLoadState('domcontentloaded')
+    await expect(restoredEditorWindow.getByRole('button', { name: '锁定窗口置顶' })).toBeVisible()
+    await restoredEditorWindow.getByRole('button', { name: '嵌入主窗口工作区' }).click()
+
+    await expect(embeddedEditor).toBeVisible()
+    await embeddedEditor.getByRole('button', { name: 'Close panel' }).click()
+    await expect(embeddedEditor).toHaveCount(0)
+    await expect(panelShell).toBeVisible()
+
     await page.getByTitle('收起侧栏').click()
     await expect(rail).toBeVisible()
     expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
@@ -332,7 +366,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await terminalInput.press('Enter')
     await expect(page.locator('.xterm-rows')).toContainText('JANUSX_DOCK_FIT', { timeout: 10_000 })
 
-    const terminalTabs = page.locator('main button[draggable="true"]')
+    const terminalTabs = page.locator('main [role="button"][draggable="true"]')
     await expect(terminalTabs).toHaveCount(1)
     const firstTerminalView = terminalScreen.locator('xpath=ancestor::*[@aria-hidden][1]')
     const firstTerminalElement = await terminalScreen.elementHandle()

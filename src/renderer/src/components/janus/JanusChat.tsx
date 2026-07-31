@@ -507,34 +507,50 @@ export function JanusChat({
         {resourceController.pendingApprovals[0] ? (() => {
           const approval = resourceController.pendingApprovals[0]
           return (
-            <div className="janus-runtime-approval" aria-label="Workspace edit approval">
+            <div
+              className="janus-runtime-approval"
+              aria-label="Workspace edit approval"
+              aria-live="polite"
+              role="region"
+            >
               <div className="janus-runtime-approval-header">
-                <span className="janus-runtime-tool-name">{approval.toolName}</span>
-                <span className="janus-runtime-tool-state">Approval required</span>
-                <button
-                  type="button"
-                  onClick={() => resourceController.resolveApproval(approval.id, true)}
-                  title="Approve workspace action"
-                  aria-label="Approve workspace action"
-                >
-                  <Check size={12} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => resourceController.resolveApproval(approval.id, false)}
-                  title="Reject workspace action"
-                  aria-label="Reject workspace action"
-                >
-                  <ShieldX size={12} aria-hidden="true" />
-                </button>
+                <div className="janus-runtime-approval-heading">
+                  <span>Workspace action</span>
+                  <strong>Approval required</strong>
+                </div>
+                <span className="janus-runtime-approval-tool" title={approval.toolName}>
+                  {approval.toolName} / {approval.actionRisk}
+                </span>
               </div>
               {approval.preview && (
                 <div className="janus-runtime-approval-preview">
-                  <div>{approval.preview.summary}</div>
+                  <strong>{approval.preview.summary}</strong>
                   {approval.preview.paths.length > 0 && <span>{approval.preview.paths.join(', ')}</span>}
                   {approval.preview.detail && <pre>{approval.preview.detail}</pre>}
                 </div>
               )}
+              <div className="janus-runtime-approval-actions">
+                <button
+                  type="button"
+                  className="janus-runtime-approval-reject"
+                  onClick={() => resourceController.resolveApproval(approval.id, false)}
+                  title="Reject workspace action"
+                  aria-label="Reject workspace action"
+                >
+                  <ShieldX size={13} aria-hidden="true" />
+                  <span>Reject</span>
+                </button>
+                <button
+                  type="button"
+                  className="janus-runtime-approval-approve"
+                  onClick={() => resourceController.resolveApproval(approval.id, true)}
+                  title="Approve workspace action"
+                  aria-label="Approve workspace action"
+                >
+                  <Check size={13} aria-hidden="true" />
+                  <span>Approve</span>
+                </button>
+              </div>
             </div>
           )
         })() : resourceController.activities.length > 0 && (

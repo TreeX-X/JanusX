@@ -4,7 +4,7 @@ import { FloatingPanel } from '@/components/FloatingPanel'
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { OpenFile } from '@/types'
-import { PanelRightClose, Save, Search } from 'lucide-react'
+import { PanelRightClose, PanelRightOpen, Save, Search } from 'lucide-react'
 import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 
 function ViewerContent({ file, onEditorMount }: { file: OpenFile; onEditorMount: (editor: FindableEditor | null) => void }) {
@@ -187,6 +187,17 @@ export function FileEditor() {
               className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#888] transition-colors hover:border-white/[0.14] hover:text-white"
             >
               <Search size={14} strokeWidth={1.8} />
+            </button>
+          )}
+          {!isEmbedded && (
+            <button
+              type="button"
+              aria-label={'\u5d4c\u5165\u4e2d\u90e8\u5de5\u4f5c\u533a'}
+              title={'\u5d4c\u5165\u4e2d\u90e8\u5de5\u4f5c\u533a'}
+              onClick={() => setEmbedded(true)}
+              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
+            >
+              <PanelRightOpen size={14} strokeWidth={1.8} />
             </button>
           )}
           {isEmbedded && (

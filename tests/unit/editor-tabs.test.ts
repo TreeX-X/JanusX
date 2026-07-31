@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   invalidateEditorFileCache,
   useEditorStore,
@@ -12,6 +13,7 @@ describe('file editor tabs', () => {
       activeFileId: null,
       isVisible: false,
       isEmbedded: false,
+      embeddedWidth: 560,
     })
     vi.stubGlobal('window', {
       electron: {
@@ -60,5 +62,45 @@ describe('file editor tabs', () => {
       isVisible: false,
       isEmbedded: false,
     })
+  })
+
+  it('preserves the embedded editor width while toggling its workspace placement', () => {
+    const editor = useEditorStore.getState()
+
+    editor.setEmbeddedWidth(640)
+    editor.setEmbedded(true)
+
+    expect(useEditorStore.getState()).toMatchObject({
+      isEmbedded: true,
+      embeddedWidth: 640,
+    })
+  })
+
+  it('keeps the preview embed action and the resizable workspace column wired', () => {
+    const editorSource = readFileSync(
+      new URL('../../src/renderer/src/components/FileEditor.tsx', import.meta.url),
+      'utf8',
+    )
+    const appSource = readFileSync(
+      new URL('../../src/renderer/src/App.tsx', import.meta.url),
+      'utf8',
+    )
+    const explorerSource = readFileSync(
+      new URL('../../src/renderer/src/components/FileExplorerTool.tsx', import.meta.url),
+      'utf8',
+    )
+    const standaloneEditorSource = readFileSync(
+      new URL('../../src/renderer/src/components/StandaloneFileEditor.tsx', import.meta.url),
+      'utf8',
+    )
+
+    expect(editorSource).toContain('<PanelRightOpen')
+    expect(editorSource).toContain('onClick={() => setEmbedded(true)}')
+    expect(appSource).toContain('aria-label="Embedded file editor"')
+    expect(appSource).toContain('aria-label="Resize embedded editor"')
+    expect(appSource).toContain("- (isEditorEmbedded ? EMBEDDED_EDITOR_MIN_WIDTH : 0)")
+    expect(explorerSource).toContain('window.electron.window.openEditor({')
+    expect(explorerSource).not.toContain('useEditorStore.getState().openFile')
+    expect(standaloneEditorSource).toContain("'\\u9501\\u5b9a\\u7a97\\u53e3\\u7f6e\\u9876'")
   })
 })

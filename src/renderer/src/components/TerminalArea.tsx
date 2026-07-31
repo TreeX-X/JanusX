@@ -9,6 +9,7 @@ import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
 import { QuickNote } from './note/QuickNote'
 import { applyTerminalNoteLifecycle, DRAWER_VIEWS, DrawerViewTabs, getDrawerHeight, getDrawerPanelAttributes, type DrawerView } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
+import { HoldToConfirm } from './ui/HoldToConfirm'
 import { JanusChatPane } from './janus/JanusChatPane'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
@@ -33,7 +34,7 @@ import {
   type WorkspacePaneSplit,
 } from '@/lib/workspace-pane'
 import { getPaneDropHint, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
-import { getEstimatedContextWindow, getRegistryContextWindow } from '@/lib/runtime-telemetry'
+import { resolveContextWindows } from '@/lib/runtime-telemetry'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
 import {
   launchTerminalPreset,
@@ -125,11 +126,11 @@ function modelLabel(terminal: Terminal): string {
 }
 
 function contextWindow(terminal: Terminal): number | undefined {
-  return (
-    terminal.contextWindowTokens ??
-    getRegistryContextWindow(terminal.detectedModel) ??
-    getEstimatedContextWindow(terminal.preset, terminal.detectedModel)
-  )
+  return resolveContextWindows(
+    terminal.preset,
+    terminal.detectedModel,
+    terminal.contextWindowTokens,
+  ).effectiveWindow
 }
 
 function telemetryQualityLabel(terminal: Terminal): string {
@@ -177,7 +178,7 @@ function contextLabel(terminal: Terminal): string {
   const used = terminal.contextTokens
   const windowTokens = contextWindow(terminal)
   if (!windowTokens) return `${formatTokenCount(used)} ctx`
-  return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} ctx`
+  return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} session`
 }
 
 function contextPercentLabel(terminal: Terminal): string {
@@ -190,14 +191,22 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
   const popoverRef = useRef<HTMLSpanElement | null>(null)
   const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
   const [popoverSize, setPopoverSize] = useState<PopoverSize>({ width: 270, height: 160 })
-  const windowTokens = contextWindow(terminal)
+  const windows = resolveContextWindows(
+    terminal.preset,
+    terminal.detectedModel,
+    terminal.contextWindowTokens,
+  )
+  const windowTokens = windows.effectiveWindow
   const rows = [
+    ['Runtime window', formatExactTokenCount(windows.runtimeWindow)],
+    ['Model capacity', formatExactTokenCount(windows.modelCapacity)],
     ['Session input', formatExactTokenCount(terminal.inputTokens)],
     ['Session output', formatExactTokenCount(terminal.outputTokens)],
     ['Cache read', formatExactTokenCount(terminal.cacheReadTokens)],
     ['Cache write', formatExactTokenCount(terminal.cacheWriteTokens)],
     ['Session total', formatExactTokenCount(terminal.totalTokens)],
-    ['Source', `${telemetryQualityLabel(terminal)} · ${terminal.telemetrySource ?? 'unknown'}`],
+    ['Usage source', `${telemetryQualityLabel(terminal)} · ${terminal.telemetrySource ?? 'unknown'}`],
+    ['Window source', windows.effectiveSource === 'runtime' ? 'Runtime telemetry' : windows.effectiveSource],
     ['Updated', formatAge(terminal.telemetryUpdatedAt)],
   ]
 
@@ -255,7 +264,7 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
     >
       <span className="mb-2 flex items-end justify-between gap-3">
         <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">Current context</span>
+          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">Runtime context</span>
           <span className="mt-0.5 block truncate text-[13px] text-[#f2f2f2]">
             {formatExactTokenCount(terminal.contextTokens)} / {formatExactTokenCount(windowTokens)}
           </span>
@@ -317,7 +326,7 @@ interface PaneTreeViewProps {
   showFocusChrome: boolean
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
-  onKillTerminalFromTab: (terminalId: string, e: React.MouseEvent) => void
+  onKillTerminalFromTab: (terminalId: string, e?: React.MouseEvent) => void
   onClosePaneTab: (paneId: string, tabId: string) => void
   onOpenBrowser: (paneId: string) => void
   onCloseBrowserTab: (paneId: string, tabId: string, surfaceId: string) => void
@@ -680,9 +689,10 @@ function LeafPane({
           const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
           const isActive = tab.id === activeTabId
           return (
-            <button
+            <div
               key={tab.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               draggable={tab.type === 'terminal' || tab.type === 'browser'}
               onDragStart={(event) => {
                 if (tab.type === 'terminal') {
@@ -700,6 +710,11 @@ function LeafPane({
                 onTerminalDragEnd()
               }}
               onClick={() => onTabSelect(leaf.id, tab.id)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                onTabSelect(leaf.id, tab.id)
+              }}
               className="group/tab relative flex h-[30px] min-w-[112px] max-w-[190px] cursor-pointer select-none items-center gap-1.5 rounded-t-[6px] border-0 px-3 text-left font-mono text-[11px] leading-none transition-colors hover:bg-white/[0.035]"
               style={{
                 color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
@@ -741,20 +756,31 @@ function LeafPane({
                   {tab.type === 'janus-chat' ? 'Janus Chat' : terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
                 </span>
               )}
-              <span
-                tabIndex={-1}
-                title={tab.type === 'terminal' ? 'Kill Terminal' : tab.type === 'browser' ? 'Close Browser' : 'Close Chat'}
-                className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
-                style={{ color: '#999' }}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId, event)
-                  else if (tab.type === 'browser') onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
-                  else onClosePaneTab(leaf.id, tab.id)
-                }}
-              >
-                <X size={12} strokeWidth={1.8} aria-hidden="true" />
-              </span>
+              {tab.type === 'terminal' ? (
+                <HoldToConfirm
+                  as="span"
+                  label="关闭终端"
+                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
+                  style={{ color: '#b86b6b' }}
+                  onConfirm={() => onKillTerminalFromTab(tab.terminalId)}
+                >
+                  <X size={12} strokeWidth={1.8} />
+                </HoldToConfirm>
+              ) : (
+                <span
+                  tabIndex={-1}
+                  title={tab.type === 'browser' ? 'Close Browser' : 'Close Chat'}
+                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
+                  style={{ color: '#999' }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (tab.type === 'browser') onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
+                    else onClosePaneTab(leaf.id, tab.id)
+                  }}
+                >
+                  <X size={12} strokeWidth={1.8} aria-hidden="true" />
+                </span>
+              )}
               {isActive && (
                 <span
                   aria-hidden="true"
@@ -763,7 +789,7 @@ function LeafPane({
                   style={{ background: 'var(--shell-accent)' }}
                 />
               )}
-            </button>
+            </div>
           )
         })}
         <div className="ml-auto flex h-8 shrink-0 items-center gap-1 pb-1">
@@ -788,17 +814,15 @@ function LeafPane({
             <Globe size={11} />
           </button>
           <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} />
-          <button
-            type="button"
-            aria-label="结束当前终端"
-            title="结束当前终端"
+          <HoldToConfirm
+            label="结束当前终端"
             disabled={!activeTerminal}
             className="flex h-6 w-6 items-center justify-center rounded border text-[14px] leading-none transition-colors enabled:hover:bg-[rgba(255,88,88,0.1)] disabled:cursor-not-allowed disabled:opacity-35"
             style={{ borderColor: 'rgba(255,255,255,0.08)', color: activeTerminal ? '#b86b6b' : '#666' }}
-            onClick={(event) => activeTerminal && onKillTerminal(activeTerminal.id, event)}
+            onConfirm={() => activeTerminal && onKillTerminal(activeTerminal.id)}
           >
             -
-          </button>
+          </HoldToConfirm>
         </div>
       </div>
 
@@ -928,6 +952,7 @@ function LeafPane({
 export function TerminalArea() {
   useTerminalLifecycle()
   const {
+    workspaces,
     terminals,
     activeTerminalId,
     activeWorkspaceId,
@@ -1174,6 +1199,9 @@ export function TerminalArea() {
 
   const paneCount = useMemo(() => getLeafPanes(paneTree).length, [paneTree])
   const activeTerminal = activeTerminalId ? terminalsById.get(activeTerminalId) ?? null : null
+  const focusedTerminalWorkspace = activeTerminal
+    ? workspaces.find((workspace) => workspace.id === activeTerminal.workspaceId) ?? null
+    : null
   const otherTerminals = terminals.filter((terminal) => terminal.id !== activeTerminal?.id)
 
   return (
@@ -1190,16 +1218,14 @@ export function TerminalArea() {
           className="flex h-5 shrink-0 items-center justify-end px-3 pt-1"
           style={{ background: 'transparent' }}
         >
-          <button
-            type="button"
-            aria-label="取消分屏布局"
-            title="取消分屏布局"
-            onClick={collapsePaneLayout}
+          <HoldToConfirm
+            label="结束布局"
+            onConfirm={collapsePaneLayout}
             className="flex h-4 w-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent font-mono text-[14px] leading-none opacity-28 transition-[opacity,background,color] hover:bg-[rgba(255,255,255,0.045)] hover:opacity-75 focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.28)]"
             style={{ color: 'rgba(255,255,255,0.74)' }}
           >
             -
-          </button>
+          </HoldToConfirm>
         </div>
       )}
 
@@ -1311,6 +1337,23 @@ export function TerminalArea() {
             </span>
             {activeTerminal ? (
               <span className="flex min-w-0 items-center gap-1.5">
+                {focusedTerminalWorkspace && (
+                  <span
+                    className="hidden min-w-0 max-w-[150px] items-center gap-1.5 border-r pr-2 font-mono text-[10px] sm:inline-flex"
+                    style={{
+                      borderColor: 'rgba(255,255,255,0.055)',
+                      color: 'var(--shell-dim)',
+                    }}
+                    title={`焦点终端工作区：${focusedTerminalWorkspace.name} · ${focusedTerminalWorkspace.path}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-1 w-1 shrink-0 rounded-full"
+                      style={{ background: 'rgba(255,255,255,0.24)' }}
+                    />
+                    <span className="truncate">{focusedTerminalWorkspace.name}</span>
+                  </span>
+                )}
                 <span
                   className="inline-flex h-5 min-w-0 max-w-[180px] items-center rounded border px-2 font-mono"
                   style={{

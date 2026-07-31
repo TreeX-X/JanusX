@@ -30,6 +30,7 @@ class LlmService {
   private registry = ExtensionRegistry.getInstance()
   private initialized = false
   private initializePromise: Promise<void> | null = null
+  private proxyRefreshPromise: Promise<void> | null = null
 
   private getAdapterForProvider(settings: ProviderSettings) {
     const adapterId = AUTH_TYPE_TO_ADAPTER[settings.authType] || settings.id
@@ -70,22 +71,37 @@ class LlmService {
     }
   }
 
+  private async refreshProxyConfiguration(): Promise<void> {
+    if (this.proxyRefreshPromise) return this.proxyRefreshPromise
+
+    this.proxyRefreshPromise = (async () => {
+      const proxyManager = getProxyManager()
+      const previousProxyUrl = proxyManager.getProxyUrl()
+      proxyManager.autoDetect()
+      const proxyUrl = proxyManager.getProxyUrl()
+
+      if (proxyUrl === previousProxyUrl) return
+
+      await this.setElectronProxy(proxyUrl)
+      this.factory.clearCache()
+    })()
+
+    try {
+      await this.proxyRefreshPromise
+    } finally {
+      this.proxyRefreshPromise = null
+    }
+  }
+
   /**
    * 初始化服务（注册适配器，初始化代理）
    */
   async initialize(): Promise<void> {
+    await this.refreshProxyConfiguration()
     if (this.initialized) return
     if (this.initializePromise) return this.initializePromise
 
     this.initializePromise = (async () => {
-      const proxyManager = getProxyManager()
-      proxyManager.autoDetect()
-
-      const proxyUrl = proxyManager.getProxyUrl()
-      if (proxyUrl) {
-        await this.setElectronProxy(proxyUrl)
-      }
-
       this.registerBuiltInAdapters()
       this.initialized = true
     })()

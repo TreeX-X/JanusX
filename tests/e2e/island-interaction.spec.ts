@@ -30,6 +30,41 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.janus-island')).toBeVisible()
 })
 
+test('approval panel is distinct, compact, and exposes explicit decisions', async ({ page }) => {
+  await page.goto('/?approval=1')
+  await page.getByTestId('reopen-island').click()
+  await islandExpandedChatButton(page).click()
+
+  const approval = page.getByRole('region', { name: 'Workspace edit approval' })
+  const reject = approval.getByRole('button', { name: 'Reject workspace action' })
+  const approve = approval.getByRole('button', { name: 'Approve workspace action' })
+  await expect(approval).toBeVisible()
+  await expect(approval.getByText('Approval required')).toBeVisible()
+  await expect(approval.getByText('workspace.edit / write')).toBeVisible()
+  await expect(reject).toBeVisible()
+  await expect(approve).toBeVisible()
+
+  const approvalBox = await approval.boundingBox()
+  const rejectBox = await reject.boundingBox()
+  const approveBox = await approve.boundingBox()
+  expect(approvalBox).not.toBeNull()
+  expect(rejectBox).not.toBeNull()
+  expect(approveBox).not.toBeNull()
+  expect(rejectBox!.x + rejectBox!.width).toBeLessThanOrEqual(approveBox!.x)
+  expect(approveBox!.x + approveBox!.width).toBeLessThanOrEqual(approvalBox!.x + approvalBox!.width)
+  await page.screenshot({ path: test.info().outputPath('approval-panel-desktop.png') })
+
+  await page.setViewportSize({ width: 720, height: 720 })
+  await expect(approval).toBeVisible()
+  await expect(reject).toBeVisible()
+  await expect(approve).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('approval-panel-compact.png') })
+
+  await reject.click()
+  await expect(approval).toHaveCount(0)
+  await expect(harness(page)).toHaveAttribute('data-approval-decision', 'rejected')
+})
+
 test('single activation shows only the empty Knowledge peek after confirmation', async ({ page }) => {
   const island = page.locator('.janus-island')
   await tap(island)

@@ -1,5 +1,6 @@
 import React, { useReducer, useState } from 'react'
 import ReactDOM from 'react-dom/client'
+import type { ApprovalRequest } from '../../../src/shared/ipc/agent-runtime'
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import {
@@ -89,6 +90,26 @@ const controllerData = {
   modelNotice: null,
 }
 
+const approvalFixture: ApprovalRequest = {
+  id: 'approval-fixture',
+  sessionId: 'session-fixture',
+  workspaceId: 'workspace-1',
+  correlationId: 'call-fixture',
+  toolName: 'workspace.edit',
+  input: {},
+  evidenceConfidence: 'medium',
+  actionRisk: 'write',
+  approvalPolicy: 'per-action',
+  reasonCode: 'ACTION_REQUIRES_APPROVAL',
+  preview: {
+    summary: 'Edit README.md with 1 exact replacement',
+    paths: ['README.md'],
+    detail: 'Replacement 1\n- Previous project summary\n+ Updated project summary',
+    truncated: false,
+  },
+  createdAt: '2026-07-31T00:00:00.000Z',
+}
+
 function Harness() {
   const [island, dispatch] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const [singleCount, setSingleCount] = useState(0)
@@ -99,6 +120,10 @@ function Harness() {
   const [clearCount, setClearCount] = useState(0)
   const [stopCount, setStopCount] = useState(0)
   const [isStreaming, setIsStreaming] = useState(true)
+  const [approvalPending, setApprovalPending] = useState(
+    () => new URLSearchParams(window.location.search).get('approval') === '1',
+  )
+  const [approvalDecision, setApprovalDecision] = useState('pending')
   const paneTree = useWorkspaceStore((state) => state.paneTree)
   const focusedPaneId = useWorkspaceStore((state) => state.focusedPaneId)
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
@@ -134,8 +159,11 @@ function Harness() {
     attachWorkspace: () => undefined,
     detachWorkspace: () => undefined,
     activities: [],
-    pendingApprovals: [],
-    resolveApproval: () => undefined,
+    pendingApprovals: approvalPending ? [approvalFixture] : [],
+    resolveApproval: (_approvalId: string, approved: boolean) => {
+      setApprovalDecision(approved ? 'approved' : 'rejected')
+      setApprovalPending(false)
+    },
   }
 
   return (
@@ -153,6 +181,7 @@ function Harness() {
       data-active-workspace={activeWorkspaceId}
       data-pane-ratio={paneTree?.type === 'split' ? paneTree.ratio : 'single'}
       data-pane-tabs={getLeafPanes(paneTree).flatMap((leaf) => leaf.tabs).map((tab) => tab.type).join(',')}
+      data-approval-decision={approvalDecision}
     >
       <button data-testid="replace-single" onClick={() => setCallbackVersion(2)}>Replace single callback</button>
       <button data-testid="reopen-island" onClick={() => dispatch({ type: 'double-activate' })}>Reopen Island</button>

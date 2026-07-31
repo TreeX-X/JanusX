@@ -160,10 +160,10 @@ export class ProxyManager {
     const proxy = getSystemProxy()
     if (proxy) {
       this.logger.info?.(`[ProxyManager] 检测到系统代理: ${proxy}`)
-      this.configure(proxy)
     } else {
       this.logger.info?.('[ProxyManager] 未检测到系统代理')
     }
+    this.configure(proxy)
   }
 
   /**
