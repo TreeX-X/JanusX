@@ -4915,12 +4915,81 @@ body.is-running {
   text-transform: uppercase;
 }
 
+.janus-chat-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.janus-chat-message.user .janus-chat-message-meta {
+  justify-content: flex-end;
+}
+
+.janus-chat-message-edit,
+.janus-chat-clear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.janus-chat-message-edit {
+  opacity: 0.48;
+}
+
+.janus-chat-message.user:hover .janus-chat-message-edit,
+.janus-chat-message.user:focus-within .janus-chat-message-edit {
+  opacity: 1;
+}
+
+.janus-chat-message-edit:hover:not(:disabled),
+.janus-chat-clear-button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.janus-chat-clear-button:hover:not(:disabled) {
+  color: rgba(255, 151, 151, 0.9);
+}
+
+.janus-chat-message-edit:focus-visible,
+.janus-chat-clear-button:focus-visible {
+  opacity: 1;
+  outline: 1px solid rgba(255, 255, 255, 0.42);
+  outline-offset: 1px;
+}
+
+.janus-chat-message-edit:disabled,
+.janus-chat-clear-button:disabled {
+  opacity: 0.24;
+  cursor: not-allowed;
+}
+
 .janus-chat-message.user .janus-chat-message-author {
   text-align: right;
 }
 
 .janus-chat-message.assistant .janus-chat-message-author {
   color: rgba(255,120,48,0.84);
+}
+
+.janus-chat-status-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-content {

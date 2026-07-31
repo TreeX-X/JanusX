@@ -32,6 +32,16 @@ function controller(overrides: Partial<JanusResourceController> = {}): JanusReso
 }
 
 describe('Janus resource scope UI', () => {
+  it('exposes clear and edit-again actions for the current conversation', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      messages: [{ id: 'prompt-1', role: 'user', content: 'Revise this prompt', timestamp: 1 }],
+    }))
+
+    expect(markup).toContain('aria-label="清空当前对话"')
+    expect(markup).toContain('aria-label="编辑并重新提问"')
+  })
+
   it('shows one compact workspace attachment menu without scope or analyze chrome', () => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,

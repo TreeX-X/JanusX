@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, CircleCheck, CircleX, LoaderCircle, PanelRightOpen, Plus, ShieldX, X } from 'lucide-react'
+import { Check, CircleCheck, CircleX, LoaderCircle, PanelRightOpen, Pencil, Plus, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message } from './useJanusChat'
 import { MarkdownContent, StreamingText } from '../chat/ChatContent'
 import { Select } from '../ui/Select'
@@ -296,6 +296,13 @@ export function JanusChat({
     window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(value.length, value.length))
   }, [])
 
+  const handleEditMessage = useCallback((content: string) => {
+    setHistoryIndex(null)
+    historyDraftRef.current = ''
+    replaceInput(content)
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }, [replaceInput])
+
   const handleChatKeyDownCapture = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
       e.preventDefault()
@@ -436,15 +443,6 @@ export function JanusChat({
             type="button"
           >
             模型
-          </button>
-          <button
-            className="janus-chat-tool-button danger"
-            onClick={handleClear}
-            disabled={!canClear}
-            title="清空对话"
-            type="button"
-          >
-            清空
           </button>
         </div>
       </div>
@@ -592,8 +590,22 @@ export function JanusChat({
             key={msg.id}
             className={`janus-chat-message ${msg.role}`}
           >
-            <div className="janus-chat-message-author">
-              {msg.role === 'user' ? 'You' : 'JANUSX'}
+            <div className="janus-chat-message-meta">
+              <div className="janus-chat-message-author">
+                {msg.role === 'user' ? 'You' : 'JANUSX'}
+              </div>
+              {msg.role === 'user' && (
+                <button
+                  className="janus-chat-message-edit"
+                  type="button"
+                  title="编辑并重新提问"
+                  aria-label="编辑并重新提问"
+                  onClick={() => handleEditMessage(msg.content)}
+                  disabled={isStreaming}
+                >
+                  <Pencil size={13} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              )}
             </div>
             <div className="janus-chat-message-content">
               <MarkdownContent content={msg.content} />
@@ -687,10 +699,22 @@ export function JanusChat({
             <span>Model:</span>
             <strong>{activeModelLabel}</strong>
           </button>
-          <div className="janus-chat-shortcuts">
-            <span>JANUS.md</span>
-            <span><kbd>tab</kbd> providers</span>
-            <span><kbd>ctrl+p</kbd> models</span>
+          <div className="janus-chat-status-actions">
+            <div className="janus-chat-shortcuts">
+              <span>JANUS.md</span>
+              <span><kbd>tab</kbd> providers</span>
+              <span><kbd>ctrl+p</kbd> models</span>
+            </div>
+            <button
+              className="janus-chat-clear-button"
+              onClick={handleClear}
+              disabled={!canClear}
+              title="清空当前对话"
+              aria-label="清空当前对话"
+              type="button"
+            >
+              <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />
+            </button>
           </div>
           {selectionMenu && (
             <div className="janus-chat-model-menu" role="listbox" aria-label={`${selectionMenu} selection`}>

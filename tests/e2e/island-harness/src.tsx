@@ -118,6 +118,7 @@ function Harness() {
   const [calledVersion, setCalledVersion] = useState(0)
   const [activeModel, setActiveModel] = useState(controllerData.modelOptions[0])
   const [clearCount, setClearCount] = useState(0)
+  const [lastSentPrompt, setLastSentPrompt] = useState('')
   const [stopCount, setStopCount] = useState(0)
   const [isStreaming, setIsStreaming] = useState(true)
   const [approvalPending, setApprovalPending] = useState(
@@ -144,7 +145,7 @@ function Harness() {
         option.providerId === providerId && option.modelId === modelId)
       if (next) setActiveModel(next)
     },
-    onSend: () => undefined,
+    onSend: (text: string) => setLastSentPrompt(text),
     onStop: () => setStopCount((count) => count + 1),
     onRetry: () => undefined,
     onClear: () => setClearCount((count) => count + 1),
@@ -176,6 +177,7 @@ function Harness() {
       data-active-provider={activeModel.providerId}
       data-active-model={activeModel.modelId}
       data-clear-count={clearCount}
+      data-last-sent-prompt={lastSentPrompt}
       data-stop-count={stopCount}
       data-terminal-tab-count={terminalTabCount}
       data-active-workspace={activeWorkspaceId}
@@ -203,7 +205,7 @@ function Harness() {
         onDismiss={() => dispatch({ type: 'dismiss' })}
         {...controller}
         onChatSelectModel={chatProps.onSelectModel}
-        onChatSend={() => undefined}
+        onChatSend={chatProps.onSend}
         onChatStop={chatProps.onStop}
         onChatRetry={() => undefined}
         onChatClear={chatProps.onClear}

@@ -234,6 +234,28 @@ test('Chat input recalls sent prompts and restores the current draft', async ({ 
   await expect(input).toHaveValue('Unsent draft')
 })
 
+test('Chat can edit a previous prompt, resend it, and clear the visible conversation', async ({ page }) => {
+  await page.getByTestId('toggle-streaming').click()
+  await page.getByTestId('reopen-island').click()
+  await islandExpandedChatButton(page).click()
+
+  const chat = page.locator('.janus-island .janus-chat')
+  const input = chat.locator('textarea')
+  await chat.getByRole('button', { name: '编辑并重新提问' }).last().click()
+  await expect(input).toBeFocused()
+  await expect(input).toHaveValue('Latest recalled prompt')
+
+  await input.fill('Latest recalled prompt, with more detail')
+  await input.press('Enter')
+  await expect(harness(page)).toHaveAttribute('data-last-sent-prompt', 'Latest recalled prompt, with more detail')
+
+  const clear = chat.getByRole('button', { name: '清空当前对话' })
+  await expect(clear).toBeVisible()
+  await clear.click()
+  await expect(harness(page)).toHaveAttribute('data-clear-count', '1')
+  await expect(input).toHaveValue('')
+})
+
 test('model menu stays visible and keyboard-operable while Chat is streaming', async ({ page }) => {
   const island = page.locator('.janus-island')
   await tap(island)
