@@ -12,6 +12,7 @@ const commonProps = {
   isStreaming: false,
   error: null,
   onSend: vi.fn(),
+  onRewrite: vi.fn(),
   onStop: vi.fn(),
   onRetry: vi.fn(),
   onClear: vi.fn(),

@@ -4926,6 +4926,36 @@ body.is-running {
   justify-content: flex-end;
 }
 
+.janus-chat-message-edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.janus-chat-inline-editor {
+  width: min(520px, 70vw);
+  max-width: 100%;
+  min-width: min(240px, 70vw);
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.065);
+  color: rgba(255, 255, 255, 0.95);
+  caret-color: #ff8a45;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.janus-chat-inline-editor:focus {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .janus-chat-message-edit,
 .janus-chat-clear-button {
   display: inline-flex;

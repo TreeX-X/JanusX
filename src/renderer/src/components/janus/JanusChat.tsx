@@ -48,6 +48,8 @@ interface JanusChatProps {
   onSelectModel?: (providerId: string, modelId: string) => void
   /** 发送一条用户消�?*/
   onSend: (text: string) => void
+  /** 重写历史用户消息并从该轮重新生成 */
+  onRewrite: (messageId: string, text: string) => void
   /** 停止当前流式输出 */
   onStop: () => void
   /** 重试最后一条用户消�?*/
@@ -146,6 +148,7 @@ export function JanusChat({
   resourceController,
   onSelectModel = () => {},
   onSend,
+  onRewrite,
   onStop,
   onRetry,
   onClear,
@@ -158,9 +161,12 @@ export function JanusChat({
   const [selectionMenu, setSelectionMenu] = useState<SelectionMenu | null>(null)
   const [menuIndex, setMenuIndex] = useState(0)
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [editingContent, setEditingContent] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const editInputRef = useRef<HTMLTextAreaElement>(null)
   const chatRootRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
   const historyDraftRef = useRef('')
@@ -296,12 +302,35 @@ export function JanusChat({
     window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(value.length, value.length))
   }, [])
 
-  const handleEditMessage = useCallback((content: string) => {
-    setHistoryIndex(null)
-    historyDraftRef.current = ''
-    replaceInput(content)
-    window.requestAnimationFrame(() => inputRef.current?.focus())
-  }, [replaceInput])
+  const handleEditMessage = useCallback((message: Message) => {
+    setEditingMessageId(message.id)
+    setEditingContent(message.content)
+  }, [])
+
+  const cancelMessageEdit = useCallback(() => {
+    setEditingMessageId(null)
+    setEditingContent('')
+  }, [])
+
+  const confirmMessageEdit = useCallback((messageId: string) => {
+    const text = editingContent.trim()
+    if (!text || isStreaming) return
+    onRewrite(messageId, text)
+    cancelMessageEdit()
+  }, [cancelMessageEdit, editingContent, isStreaming, onRewrite])
+
+  useEffect(() => {
+    if (!editingMessageId) return
+    if (!messages.some((message) => message.id === editingMessageId)) {
+      cancelMessageEdit()
+      return
+    }
+    window.requestAnimationFrame(() => {
+      const editor = editInputRef.current
+      editor?.focus()
+      editor?.setSelectionRange(editor.value.length, editor.value.length)
+    })
+  }, [cancelMessageEdit, editingMessageId, messages])
 
   const handleChatKeyDownCapture = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
@@ -594,22 +623,64 @@ export function JanusChat({
               <div className="janus-chat-message-author">
                 {msg.role === 'user' ? 'You' : 'JANUSX'}
               </div>
-              {msg.role === 'user' && (
+              {msg.role === 'user' && editingMessageId === msg.id ? (
+                <div className="janus-chat-message-edit-actions">
+                  <button
+                    className="janus-chat-message-edit"
+                    type="button"
+                    title="取消修改"
+                    aria-label="取消修改"
+                    onClick={cancelMessageEdit}
+                  >
+                    <X size={13} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                  <button
+                    className="janus-chat-message-edit"
+                    type="button"
+                    title="确认修改并重新生成"
+                    aria-label="确认修改并重新生成"
+                    onClick={() => confirmMessageEdit(msg.id)}
+                    disabled={!editingContent.trim() || isStreaming}
+                  >
+                    <Check size={13} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : msg.role === 'user' ? (
                 <button
                   className="janus-chat-message-edit"
                   type="button"
                   title="编辑并重新提问"
                   aria-label="编辑并重新提问"
-                  onClick={() => handleEditMessage(msg.content)}
+                  onClick={() => handleEditMessage(msg)}
                   disabled={isStreaming}
                 >
                   <Pencil size={13} strokeWidth={1.8} aria-hidden="true" />
                 </button>
-              )}
+              ) : null}
             </div>
-            <div className="janus-chat-message-content">
-              <MarkdownContent content={msg.content} />
-            </div>
+            {editingMessageId === msg.id ? (
+              <textarea
+                ref={editInputRef}
+                className="janus-chat-inline-editor"
+                value={editingContent}
+                onChange={(event) => setEditingContent(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelMessageEdit()
+                  } else if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    confirmMessageEdit(msg.id)
+                  }
+                }}
+                aria-label="编辑历史问题"
+                rows={Math.min(6, Math.max(2, (editingContent.match(/\n/g) || []).length + 1))}
+              />
+            ) : (
+              <div className="janus-chat-message-content">
+                <MarkdownContent content={msg.content} />
+              </div>
+            )}
           </div>
         ))}
 

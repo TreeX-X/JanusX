@@ -20,6 +20,7 @@ interface JanusExpandedProps {
   isStreaming: boolean
   error: string | null
   onChatSend: (text: string) => void
+  onChatRewrite: (messageId: string, text: string) => void
   onChatStop: () => void
   onChatRetry: () => void
   onChatClear: () => void
@@ -46,6 +47,7 @@ export function JanusExpanded({
   isStreaming,
   error,
   onChatSend,
+  onChatRewrite,
   onChatStop,
   onChatRetry,
   onChatClear,
@@ -283,6 +285,7 @@ export function JanusExpanded({
               isStreaming={isStreaming}
               error={error}
               onSend={onChatSend}
+              onRewrite={onChatRewrite}
               onStop={onChatStop}
               onRetry={onChatRetry}
               onClear={onChatClear}

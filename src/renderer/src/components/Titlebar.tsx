@@ -39,6 +39,7 @@ export function Titlebar() {
     latestRecallTrace,
     resourceController,
     send: handleChatSend,
+    rewrite: handleChatRewrite,
     stop: handleChatStop,
     retry: handleChatRetry,
     clear: handleChatClear,
@@ -296,6 +297,7 @@ export function Titlebar() {
           modelNotice={modelNotice}
           onChatSelectModel={handleChatSelectModel}
           onChatSend={handleChatSend}
+          onChatRewrite={handleChatRewrite}
           onChatStop={handleChatStop}
           onChatRetry={handleChatRetry}
           onChatClear={handleChatClearAndInvalidatePeek}

@@ -80,6 +80,7 @@ const controllerData = {
     { id: 'prompt-one', role: 'user' as const, content: 'First recalled prompt', timestamp: 1 },
     { id: 'shared-message', role: 'assistant' as const, content: 'Shared controller message', timestamp: 2 },
     { id: 'prompt-two', role: 'user' as const, content: 'Latest recalled prompt', timestamp: 3 },
+    { id: 'latest-response', role: 'assistant' as const, content: 'Latest controller response', timestamp: 4 },
   ],
   error: null,
   modelOptions: [
@@ -119,6 +120,8 @@ function Harness() {
   const [activeModel, setActiveModel] = useState(controllerData.modelOptions[0])
   const [clearCount, setClearCount] = useState(0)
   const [lastSentPrompt, setLastSentPrompt] = useState('')
+  const [lastRewrite, setLastRewrite] = useState({ messageId: '', content: '' })
+  const [displayMessages, setDisplayMessages] = useState(controllerData.messages)
   const [stopCount, setStopCount] = useState(0)
   const [isStreaming, setIsStreaming] = useState(true)
   const [approvalPending, setApprovalPending] = useState(
@@ -133,6 +136,7 @@ function Harness() {
 
   const controller = {
     ...controllerData,
+    messages: displayMessages,
     activeModel,
     isStreaming,
     pendingContent: isStreaming ? 'Shared pending stream' : '',
@@ -146,6 +150,14 @@ function Harness() {
       if (next) setActiveModel(next)
     },
     onSend: (text: string) => setLastSentPrompt(text),
+    onRewrite: (messageId: string, text: string) => {
+      setLastRewrite({ messageId, content: text })
+      setDisplayMessages((current) => {
+        const messageIndex = current.findIndex((message) => message.id === messageId)
+        if (messageIndex < 0) return current
+        return [...current.slice(0, messageIndex), { ...current[messageIndex], content: text }]
+      })
+    },
     onStop: () => setStopCount((count) => count + 1),
     onRetry: () => undefined,
     onClear: () => setClearCount((count) => count + 1),
@@ -178,6 +190,8 @@ function Harness() {
       data-active-model={activeModel.modelId}
       data-clear-count={clearCount}
       data-last-sent-prompt={lastSentPrompt}
+      data-last-rewrite-id={lastRewrite.messageId}
+      data-last-rewrite-content={lastRewrite.content}
       data-stop-count={stopCount}
       data-terminal-tab-count={terminalTabCount}
       data-active-workspace={activeWorkspaceId}
@@ -206,6 +220,7 @@ function Harness() {
         {...controller}
         onChatSelectModel={chatProps.onSelectModel}
         onChatSend={chatProps.onSend}
+        onChatRewrite={chatProps.onRewrite}
         onChatStop={chatProps.onStop}
         onChatRetry={() => undefined}
         onChatClear={chatProps.onClear}

@@ -68,6 +68,7 @@ export interface UseJanusChatReturn {
   latestRecallTrace: KnowledgeRecallTrace | null
   resourceController: JanusResourceController
   send: (text: string) => void
+  rewrite: (messageId: string, text: string) => void
   stop: () => void
   retry: () => void
   clear: () => void
@@ -333,19 +334,12 @@ export function useJanusChat(): UseJanusChatReturn {
     commitAssistantMessage(final)
   }, [abortCurrentRequest, commitAssistantMessage, flushPrinter, isStreaming, resetPrinter])
 
-  const send = useCallback(
-    (text: string) => {
-      const trimmed = text.trim()
-      if (!trimmed || isStreaming) return
-
-      const userMessage: Message = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: trimmed,
-        timestamp: Date.now()
-      }
-
-      setMessages((prev) => capMessages([...prev, userMessage]))
+  const startRequest = useCallback(
+    (history: Message[], userMessage: Message) => {
+      if (isStreaming) return
+      const nextMessages = capMessages([...history, userMessage])
+      messagesRef.current = nextMessages
+      setMessages(nextMessages)
       const streamId = streamIdRef.current + 1
       streamIdRef.current = streamId
       resetPrinter()
@@ -354,11 +348,11 @@ export function useJanusChat(): UseJanusChatReturn {
 
       const chatMessages: ChatMessage[] = [
         { role: 'system', content: SYSTEM_PROMPT },
-        ...messagesRef.current.slice(-HISTORY_MESSAGE_LIMIT).map((m) => ({
+        ...history.slice(-HISTORY_MESSAGE_LIMIT).map((m) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content
         })),
-        { role: 'user', content: trimmed }
+        { role: 'user', content: userMessage.content }
       ]
 
       void (async () => {
@@ -420,6 +414,30 @@ export function useJanusChat(): UseJanusChatReturn {
     ]
   )
 
+  const send = useCallback((text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || isStreaming) return
+    startRequest(messagesRef.current, {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: trimmed,
+      timestamp: Date.now(),
+    })
+  }, [isStreaming, startRequest])
+
+  const rewrite = useCallback((messageId: string, text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || isStreaming) return
+    const current = messagesRef.current
+    const messageIndex = current.findIndex((message) => message.id === messageId && message.role === 'user')
+    if (messageIndex < 0) return
+
+    const target = current[messageIndex]
+    toolTracesRef.current = []
+    setLatestRecallTrace(null)
+    startRequest(current.slice(0, messageIndex), { ...target, content: trimmed })
+  }, [isStreaming, startRequest])
+
   const retry = useCallback(() => {
     const lastUser = [...messagesRef.current].reverse().find((m) => m.role === 'user')
     if (lastUser) {
@@ -457,6 +475,7 @@ export function useJanusChat(): UseJanusChatReturn {
       resolveApproval,
     },
     send,
+    rewrite,
     stop,
     retry,
     clear,

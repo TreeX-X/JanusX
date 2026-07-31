@@ -105,6 +105,7 @@ interface JanusIslandProps {
   modelNotice: string | null
   onChatSelectModel: (providerId: string, modelId: string) => void
   onChatSend: (text: string) => void
+  onChatRewrite: (messageId: string, text: string) => void
   onChatStop: () => void
   onChatRetry: () => void
   onChatClear: () => void
@@ -245,6 +246,7 @@ export function JanusIsland({
   modelNotice,
   onChatSelectModel,
   onChatSend,
+  onChatRewrite,
   onChatStop,
   onChatRetry,
   onChatClear,
@@ -759,6 +761,7 @@ export function JanusIsland({
               modelNotice={modelNotice}
               onSelectModel={onChatSelectModel}
               onSend={onChatSend}
+              onRewrite={onChatRewrite}
               onStop={onChatStop}
               onRetry={onChatRetry}
               onClear={onChatClear}

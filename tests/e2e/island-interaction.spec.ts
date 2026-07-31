@@ -234,26 +234,34 @@ test('Chat input recalls sent prompts and restores the current draft', async ({ 
   await expect(input).toHaveValue('Unsent draft')
 })
 
-test('Chat can edit a previous prompt, resend it, and clear the visible conversation', async ({ page }) => {
+test('Chat rewrites a previous turn in place, removes its reply, and clears the visible conversation', async ({ page }) => {
   await page.getByTestId('toggle-streaming').click()
   await page.getByTestId('reopen-island').click()
   await islandExpandedChatButton(page).click()
 
   const chat = page.locator('.janus-island .janus-chat')
-  const input = chat.locator('textarea')
+  const composer = chat.locator('.janus-chat-input')
   await chat.getByRole('button', { name: '编辑并重新提问' }).last().click()
-  await expect(input).toBeFocused()
-  await expect(input).toHaveValue('Latest recalled prompt')
+  const editor = chat.getByRole('textbox', { name: '编辑历史问题' })
+  await expect(editor).toBeFocused()
+  await expect(editor).toHaveValue('Latest recalled prompt')
+  await expect(composer).toHaveValue('')
 
-  await input.fill('Latest recalled prompt, with more detail')
-  await input.press('Enter')
-  await expect(harness(page)).toHaveAttribute('data-last-sent-prompt', 'Latest recalled prompt, with more detail')
+  await editor.fill('Latest recalled prompt, with more detail')
+  await editor.press('Enter')
+  await expect(harness(page)).toHaveAttribute('data-last-rewrite-id', 'prompt-two')
+  await expect(harness(page)).toHaveAttribute('data-last-rewrite-content', 'Latest recalled prompt, with more detail')
+  await expect(harness(page)).toHaveAttribute('data-last-sent-prompt', '')
+  await expect(editor).toHaveCount(0)
+  await expect(chat.getByText('Latest recalled prompt, with more detail')).toBeVisible()
+  await expect(chat.getByText('Latest controller response')).toHaveCount(0)
+  await expect(chat.getByText('Shared controller message')).toBeVisible()
 
   const clear = chat.getByRole('button', { name: '清空当前对话' })
   await expect(clear).toBeVisible()
   await clear.click()
   await expect(harness(page)).toHaveAttribute('data-clear-count', '1')
-  await expect(input).toHaveValue('')
+  await expect(composer).toHaveValue('')
 })
 
 test('model menu stays visible and keyboard-operable while Chat is streaming', async ({ page }) => {
