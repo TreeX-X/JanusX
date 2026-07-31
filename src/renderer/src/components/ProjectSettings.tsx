@@ -510,11 +510,13 @@ export function ProjectSettings({
         analysis={analysis}
         config={config}
         busy={analyzing || saving || executing !== null}
+        runningProjects={runningProjects}
         onAnalyze={handleAnalyze}
         onConfig={handleAssistantConfig}
         onSave={handleSave}
         onTest={handleTest}
         onRun={handleRun}
+        onStop={handleStop}
       />
     </div>
   )

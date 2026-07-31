@@ -1,7 +1,8 @@
 import { readdir } from 'fs/promises'
-import { basename, join, resolve } from 'path'
+import { basename, isAbsolute, join, relative, resolve } from 'path'
 import { ProjectConfig, ProjectDetector, ProjectType, detectByFeatures, getProjectSchema } from '../../../project'
 import type { LaunchConfig } from '../../../../shared/ipc/project'
+import { getProjectRunner } from '../../../project/runner/service'
 import { resolveWorkspaceTarget } from '../path-guard'
 import { isSensitivePath } from '../policy-gate'
 import type { RegisteredTool, ToolRegistry } from '../registry'
@@ -102,15 +103,47 @@ function projectConfigFromDetection(
   projectPath: string,
   details: Awaited<ReturnType<typeof ProjectDetector.detectWithDetails>>,
   requestedType?: ProjectType,
+  launchOverride?: Record<string, unknown>,
 ): LaunchConfig {
   const projectName = basename(projectPath) || 'app'
-  const projectType = requestedType ?? details.type
+  const projectType = launchOverride ? ProjectType.Custom : requestedType ?? details.type
   const config = ProjectConfig.createDefault(projectPath, projectType, projectName)
-  if (!requestedType || requestedType === details.type) {
+  if (launchOverride) {
+    config.configurations = [{
+      name: typeof launchOverride.name === 'string' ? launchOverride.name : 'dev',
+      type: ProjectType.Custom,
+      request: 'launch',
+      program: String(launchOverride.program),
+      ...(Array.isArray(launchOverride.args) ? { args: launchOverride.args as string[] } : {}),
+      ...(typeof launchOverride.cwd === 'string' ? { cwd: launchOverride.cwd } : {}),
+      ...(launchOverride.env && typeof launchOverride.env === 'object' && !Array.isArray(launchOverride.env)
+        ? { env: launchOverride.env as Record<string, string> }
+        : {}),
+    }]
+  } else if (!requestedType || requestedType === details.type) {
     config.configurations = [{ ...details.recommendedConfig, type: projectType }]
   }
-  config.metadata = { autoDetected: true, lastModified: new Date().toISOString() }
+  config.metadata = { autoDetected: !launchOverride && !requestedType, lastModified: new Date().toISOString() }
   return config
+}
+
+function isProjectIdInWorkspace(projectId: string, workspaceRoot: string): boolean {
+  const projectPath = projectId.split('::', 1)[0]
+  const relation = relative(resolve(workspaceRoot), resolve(projectPath))
+  return relation === '' || (!relation.startsWith('..') && !isAbsolute(relation))
+}
+
+function runningProjectSummary(id: string, handle: ReturnType<ReturnType<typeof getProjectRunner>['getRunning']>) {
+  if (!handle) return null
+  return {
+    id,
+    pid: handle.pid,
+    type: handle.config.type,
+    name: handle.config.name,
+    port: handle.port,
+    startTime: handle.startTime.toISOString(),
+    uptime: Date.now() - handle.startTime.getTime(),
+  }
 }
 
 export const projectDetectTool: RegisteredTool = {
@@ -160,6 +193,7 @@ export const projectGenerateConfigTool: RegisteredTool = {
       workspaceId: { type: 'string' },
       path: { type: 'string' },
       projectType: { type: 'string' },
+      launch: { type: 'object' },
     },
     required: ['workspaceId'],
     additionalProperties: false,
@@ -177,9 +211,26 @@ export const projectGenerateConfigTool: RegisteredTool = {
     if (requestedType !== undefined && (typeof requestedType !== 'string' || !Object.values(ProjectType).includes(requestedType as ProjectType))) {
       throw new Error('project.generate-config projectType is invalid')
     }
-    const config = projectConfigFromDetection(projectPath, details, requestedType as ProjectType | undefined)
+    const launch = input.launch
+    if (launch !== undefined) {
+      if (!launch || typeof launch !== 'object' || Array.isArray(launch)) throw new Error('project.generate-config launch must be an object')
+      const value = launch as Record<string, unknown>
+      if (typeof value.program !== 'string' || value.program.trim().length === 0) throw new Error('project.generate-config launch.program is required')
+      if (value.name !== undefined && (typeof value.name !== 'string' || value.name.trim().length === 0)) throw new Error('project.generate-config launch.name is invalid')
+      if (value.args !== undefined && (!Array.isArray(value.args) || value.args.some((arg) => typeof arg !== 'string'))) throw new Error('project.generate-config launch.args must contain strings')
+      if (value.cwd !== undefined && typeof value.cwd !== 'string') throw new Error('project.generate-config launch.cwd must be a string')
+      if (value.env !== undefined && (!value.env || typeof value.env !== 'object' || Array.isArray(value.env) || Object.values(value.env).some((item) => typeof item !== 'string'))) throw new Error('project.generate-config launch.env must contain string values')
+    }
+    const config = projectConfigFromDetection(projectPath, details, requestedType as ProjectType | undefined, launch as Record<string, unknown> | undefined)
     const validation = ProjectConfig.validate(config)
-    return { workspaceId, path: target.relativePath, config, validation }
+    return {
+      workspaceId,
+      path: target.relativePath,
+      detectedType: details.type,
+      intentOverrideApplied: launch !== undefined || requestedType !== undefined,
+      config,
+      validation,
+    }
   },
 }
 
@@ -213,10 +264,83 @@ export const projectApplyConfigTool: RegisteredTool = {
   },
 }
 
+export const projectListProcessesTool: RegisteredTool = {
+  name: 'project.list-processes',
+  description: 'List JanusX-managed project processes inside the active workspace',
+  actionRisk: 'inspect',
+  inputSchema: {
+    type: 'object',
+    properties: { workspaceId: { type: 'string' } },
+    required: ['workspaceId'],
+    additionalProperties: false,
+  },
+  execute: (input, context) => {
+    const workspaceId = assertWorkspaceId(input, context, 'project.list-processes')
+    const processes = [...getProjectRunner().getAllRunning().entries()]
+      .filter(([id]) => isProjectIdInWorkspace(id, context.workspaceRoot))
+      .map(([id, handle]) => runningProjectSummary(id, handle))
+      .filter((value) => value !== null)
+    return { workspaceId, processes }
+  },
+}
+
+export const projectStartProcessTool: RegisteredTool = {
+  name: 'project.start-process',
+  description: 'Start one saved JanusX launch configuration in the active workspace',
+  actionRisk: 'run',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      workspaceId: { type: 'string' },
+      path: { type: 'string' },
+      configName: { type: 'string' },
+    },
+    required: ['workspaceId'],
+    additionalProperties: false,
+  },
+  execute: async (input, context) => {
+    const workspaceId = assertWorkspaceId(input, context, 'project.start-process')
+    const requestedPath = input.path ?? ''
+    const configName = input.configName ?? 'dev'
+    if (typeof requestedPath !== 'string' || typeof configName !== 'string' || !configName.trim()) throw new Error('project.start-process input is invalid')
+    const target = await resolveWorkspaceTarget(context.workspaceRoot, requestedPath)
+    if (target.kind !== 'directory') throw new Error('project.start-process path must be a directory')
+    const handle = await getProjectRunner().run(resolve(context.workspaceRoot, target.relativePath || '.'), configName)
+    const entries = [...getProjectRunner().getAllRunning().entries()]
+    const entry = entries.find(([, candidate]) => candidate === handle || candidate.pid === handle.pid)
+    return { workspaceId, process: entry ? runningProjectSummary(entry[0], entry[1]) : { pid: handle.pid, name: handle.config.name } }
+  },
+}
+
+export const projectStopProcessTool: RegisteredTool = {
+  name: 'project.stop-process',
+  description: 'Stop one JanusX-managed project process in the active workspace',
+  actionRisk: 'run',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      workspaceId: { type: 'string' },
+      projectId: { type: 'string' },
+    },
+    required: ['workspaceId', 'projectId'],
+    additionalProperties: false,
+  },
+  execute: async (input, context) => {
+    const workspaceId = assertWorkspaceId(input, context, 'project.stop-process')
+    const projectId = input.projectId
+    if (typeof projectId !== 'string' || !isProjectIdInWorkspace(projectId, context.workspaceRoot)) throw new Error('project.stop-process projectId is outside the active workspace')
+    await getProjectRunner().stop(projectId)
+    return { workspaceId, projectId, stopped: true }
+  },
+}
+
 export function registerProjectTools(registry: ToolRegistry): void {
   if (registeredRegistries.has(registry)) return
   registry.register(projectDetectTool)
   registry.register(projectGenerateConfigTool)
   registry.register(projectApplyConfigTool)
+  registry.register(projectListProcessesTool)
+  registry.register(projectStartProcessTool)
+  registry.register(projectStopProcessTool)
   registeredRegistries.add(registry)
 }

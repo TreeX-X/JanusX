@@ -216,6 +216,12 @@ export class ProjectConfig {
         })
       }
     }
+    if (config.type === ProjectType.Custom && !config.program) {
+      errors.push({
+        field: 'program',
+        message: 'Program is required for custom configurations',
+      })
+    }
 
     return errors
   }

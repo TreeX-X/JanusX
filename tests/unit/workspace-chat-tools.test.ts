@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ToolResult } from '../../src/shared/ipc/agent-runtime'
-import { createWorkspaceChatTools } from '../../src/main/llm/workspace-chat-tools'
+import { createWorkspaceChatSystemPrompt, createWorkspaceChatTools } from '../../src/main/llm/workspace-chat-tools'
 
 function result(overrides: Partial<ToolResult> = {}): ToolResult {
   return {
@@ -165,5 +165,50 @@ describe('workspace chat tools', () => {
         },
       }),
     }, 'renderer:7')
+  })
+
+  it('exposes shared launch configuration and process tools with approval previews', async () => {
+    const executeFunctionCall = vi.fn().mockResolvedValue(result({ output: { ok: true } }))
+    const tools = createWorkspaceChatTools({
+      runtime: { executeFunctionCall },
+      resources,
+      callerId: 'renderer:7',
+    })
+    const config = {
+      version: '0.1.0',
+      projectType: 'custom',
+      projectName: 'demo',
+      configurations: [],
+    }
+
+    await tools.project_apply_config.execute({ workspaceId: 'workspace-1', path: 'app', config })
+    await tools.project_list_processes.execute({ workspaceId: 'workspace-1' })
+    await tools.project_start_process.execute({ workspaceId: 'workspace-1', path: 'app', configName: 'external-script' })
+    await tools.project_stop_process.execute({ workspaceId: 'workspace-1', projectId: 'C:/one/app::external-script::1' })
+
+    expect(executeFunctionCall.mock.calls.map(([input]) => input.call.toolName)).toEqual([
+      'project.apply-config',
+      'project.list-processes',
+      'project.start-process',
+      'project.stop-process',
+    ])
+    expect(executeFunctionCall.mock.calls[0][0].call.preview).toMatchObject({
+      summary: expect.stringContaining('launch configuration'),
+      paths: ['app/.janusX/janusX.launch.json'],
+    })
+    expect(executeFunctionCall.mock.calls[2][0].call.preview).toMatchObject({
+      summary: expect.stringContaining('Start'),
+      detail: 'Configuration: external-script',
+    })
+  })
+
+  it('treats detection as evidence and explicit launch intent as authoritative', () => {
+    const prompt = createWorkspaceChatSystemPrompt(resources)
+
+    expect(prompt).toContain('Project detection is evidence, not a command')
+    expect(prompt).toContain('Explicit user statements')
+    expect(prompt).toContain('project_generate_config.launch')
+    expect(prompt).toContain('project_list_processes')
+    expect(prompt).toContain('manage unrelated operating-system processes')
   })
 })

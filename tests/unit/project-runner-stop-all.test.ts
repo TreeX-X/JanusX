@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
-import ProjectRunner from '../../src/main/project/runner/runner'
+import ProjectRunner, { requiresCommandShell } from '../../src/main/project/runner/runner'
 
 function makeFakeProcess(): EventEmitter & {
   kill: ReturnType<typeof vi.fn>
@@ -23,6 +23,13 @@ function makeFakeProcess(): EventEmitter & {
 }
 
 describe('ProjectRunner.stopAll', () => {
+  it('uses a shell only for Windows command scripts and package-manager shims', () => {
+    expect(requiresCommandShell('scripts/start.cmd', 'win32')).toBe(true)
+    expect(requiresCommandShell('npm', 'win32')).toBe(true)
+    expect(requiresCommandShell('node.exe', 'win32')).toBe(false)
+    expect(requiresCommandShell('/usr/bin/node', 'linux')).toBe(false)
+  })
+
   it('stops all running projects best-effort', async () => {
     const runner = new ProjectRunner(5)
     const internal = runner as unknown as {

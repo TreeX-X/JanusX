@@ -10,7 +10,7 @@
 
 import { ipcMain } from 'electron'
 import ProjectDetector from '../project/detector/detector'
-import ProjectRunner from '../project/runner/runner'
+import { getProjectRunner, stopAllProjects } from '../project/runner/service'
 import { resolveProjectTestScript, runProjectTest } from '../project/runner/task-runner'
 import ProjectConfig from '../project/config/project-config'
 import { getProjectTypes } from '../project/config/project-schemas'
@@ -20,21 +20,6 @@ import {
   type ProjectType,
 } from '../../shared/ipc/project'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/renderer-authorization'
-
-// 全局 ProjectRunner 实例（单例）
-let projectRunner: ProjectRunner | null = null
-
-/**
- * 获取或创建 ProjectRunner 实例
- */
-function getProjectRunner(): ProjectRunner {
-  if (!projectRunner) {
-    projectRunner = new ProjectRunner(5) // 最多 5 个并行项目
-
-  }
-
-  return projectRunner
-}
 
 /**
  * 注册项目管理相关的 IPC 处理器
@@ -355,10 +340,4 @@ export function registerProjectHandlers(authorize: RendererActionAuthorizer = au
 
 }
 
-export { getProjectRunner }
-
-/** Best-effort stop for app shutdown; no-op if runner never started. */
-export async function stopAllProjects(timeout: number = 1500): Promise<void> {
-  if (!projectRunner) return
-  await projectRunner.stopAll(timeout)
-}
+export { getProjectRunner, stopAllProjects }

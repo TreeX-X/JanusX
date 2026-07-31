@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react'
 import type { LaunchConfig } from '@/types/project'
+import type { RunningProjectSummary } from '../../../shared/ipc/project'
 import {
   streamWorkspaceLaunchAssistant,
   type LaunchAssistantResponse,
@@ -16,22 +17,24 @@ interface ProjectLaunchAssistantProps {
   analysis: WorkspaceLaunchAnalysis | null
   config: LaunchConfig | null
   busy: boolean
+  runningProjects: RunningProjectSummary[]
   onAnalyze: () => Promise<WorkspaceLaunchAnalysis | null>
   onConfig: (config: LaunchConfig) => void
   onSave: (config?: LaunchConfig) => Promise<boolean>
   onTest: (script?: string) => Promise<void>
   onRun: (config?: LaunchConfig) => Promise<void>
+  onStop: () => Promise<void>
 }
 
 export function ProjectLaunchAssistant({
-  analysis, config, busy, onAnalyze, onConfig, onSave, onTest, onRun,
+  analysis, config, busy, runningProjects, onAnalyze, onConfig, onSave, onTest, onRun, onStop,
 }: ProjectLaunchAssistantProps) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: '告诉我你希望怎样启动这个工作区。我可以分析代码、生成配置、运行测试或直接启动。',
+    content: '告诉我这个工作区实际怎样启动。我可以按你的说明覆盖自动识别结果、生成配置，并管理 JanusX 启动的进程。',
   }])
   const abortRef = useRef<(() => void) | null>(null)
   const streamIdRef = useRef(0)
@@ -55,6 +58,7 @@ export function ProjectLaunchAssistant({
       if (response.config && !await onSave(response.config)) return
       await onRun(response.config ?? undefined)
     }
+    if (response.action === 'stop') await onStop()
   }
 
   const stop = () => {
@@ -86,6 +90,7 @@ export function ProjectLaunchAssistant({
         request,
         analysis: workspaceAnalysis,
         config,
+        runningProjects,
         history: messages,
         onDelta: (delta) => {
           if (streamIdRef.current === streamId) append(delta)

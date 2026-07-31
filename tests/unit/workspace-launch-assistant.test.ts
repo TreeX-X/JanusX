@@ -40,12 +40,37 @@ describe('workspace launch assistant', () => {
     expect(JSON.stringify(messages)).toContain('[REDACTED]')
   })
 
+  it('treats user launch intent as authoritative and shares managed process context', () => {
+    const messages = buildLaunchAssistantMessages({
+      request: '虽然是 CMake，但请用 scripts/start.cmd 启动',
+      analysis,
+      config,
+      runningProjects: [{
+        id: 'C:\\workspace::dev::1',
+        pid: 42,
+        type: ProjectType.Custom,
+        name: 'external-script',
+        startTime: '2026-07-31T00:00:00.000Z',
+        uptime: 100,
+      }],
+    })
+    const prompt = JSON.stringify(messages)
+
+    expect(prompt).toContain('Detected project type is advisory evidence')
+    expect(prompt).toContain('type \\\"custom\\\"')
+    expect(prompt).toContain('external-script')
+    expect(prompt).toContain('save, test, run, stop')
+  })
+
   it('parses a fenced structured response and validates actions', () => {
     expect(parseLaunchAssistantResponse('```json\n{"message":"ok","config":null,"action":"test","testScript":"test:unit"}\n```')).toEqual({
       message: 'ok', config: null, action: 'test', testScript: 'test:unit',
     })
     expect(parseLaunchAssistantResponse('{"message":"no","action":"shell","testScript":"test;rm"}')).toEqual({
       message: 'no', config: null, action: 'none', testScript: undefined,
+    })
+    expect(parseLaunchAssistantResponse('{"message":"stopping","action":"stop"}')).toMatchObject({
+      message: 'stopping', action: 'stop',
     })
   })
 

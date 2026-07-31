@@ -1,5 +1,5 @@
 import type { ToolResult } from '../../../shared/ipc/agent-runtime'
-import { ProjectType, type LaunchConfig, type ValidationResult } from '../../../shared/ipc/project'
+import { ProjectType, type LaunchConfig, type RunningProjectSummary, type ValidationResult } from '../../../shared/ipc/project'
 import { chatStream, type ChatMessage } from './llm'
 
 const MANIFEST_PATTERN = /(^|\/)(package\.json|pyproject\.toml|cargo\.toml|go\.mod|cmakelists\.txt|readme(?:\.md)?)$/i
@@ -45,7 +45,7 @@ export function redactWorkspaceExcerpt(content: string): string {
     .replace(/(https?:\/\/)[^\s/@:]+:[^\s/@]+@/g, '$1[REDACTED]@')
 }
 
-export type LaunchAssistantAction = 'none' | 'save' | 'test' | 'run'
+export type LaunchAssistantAction = 'none' | 'save' | 'test' | 'run' | 'stop'
 
 export interface WorkspaceLaunchAnalysis {
   workspaceId: string
@@ -161,6 +161,7 @@ export function buildLaunchAssistantMessages(input: {
   request: string
   analysis: WorkspaceLaunchAnalysis
   config: LaunchConfig
+  runningProjects?: RunningProjectSummary[]
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
 }): ChatMessage[] {
   const context = {
@@ -168,17 +169,22 @@ export function buildLaunchAssistantMessages(input: {
     files: input.analysis.files.slice(0, 160),
     excerpts: input.analysis.excerpts,
     currentConfig: redactConfig(input.config),
+    runningProjects: input.runningProjects ?? [],
   }
   return [
     {
       role: 'system',
       content: [
         'You are the JanusX workspace launch assistant.',
-        'Analyze only the supplied workspace evidence. Do not invent files, scripts, ports, or commands.',
+        'Analyze the supplied workspace evidence and the user request. Do not invent files, scripts, ports, or commands.',
+        'Detected project type is advisory evidence, not a restriction. The user description of how the project is actually launched is authoritative.',
+        'If the user names an external workspace script or executable, create a complete custom LaunchConfig using type "custom", program, args, cwd and env as needed. Do not force CMake or another detected default.',
+        'Distinguish the detected project type from the requested launch method in your explanation.',
         'Write a concise user-facing answer first, then append one machine action block.',
         `The action block format is ${ACTION_OPEN}{"config":null,"action":"none","testScript":null}${ACTION_CLOSE}.`,
         'Never place user-facing prose inside the action block and never use Markdown fences around it.',
-        'action must be one of none, save, test, run. Use an action only when the user explicitly asks for it.',
+        'action must be one of none, save, test, run, stop. Use an action only when the user explicitly asks for it.',
+        'runningProjects contains the shared JanusX-managed processes for this workspace. Use stop only when the user asks to stop them.',
         'config in the action block must be the complete JanusX LaunchConfig or null. Preserve existing fields unless the user asks to change them.',
         'testScript must be a package script name visible in package.json, otherwise omit it.',
         'Always close the action block. Keep it compact.',
@@ -211,7 +217,7 @@ export function parseLaunchAssistantResponse(raw: string): LaunchAssistantRespon
       }
     }
   }
-  const action: LaunchAssistantAction = ['none', 'save', 'test', 'run'].includes(candidate.action ?? '')
+  const action: LaunchAssistantAction = ['none', 'save', 'test', 'run', 'stop'].includes(candidate.action ?? '')
     ? candidate.action as LaunchAssistantAction
     : 'none'
   const config = candidate.config && typeof candidate.config === 'object' && Array.isArray(candidate.config.configurations)
@@ -244,6 +250,7 @@ export function streamWorkspaceLaunchAssistant(input: {
   request: string
   analysis: WorkspaceLaunchAnalysis
   config: LaunchConfig
+  runningProjects?: RunningProjectSummary[]
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
   onDelta: (delta: string) => void
   onDone: (response: LaunchAssistantResponse) => void
@@ -280,6 +287,7 @@ export async function askWorkspaceLaunchAssistant(input: {
   request: string
   analysis: WorkspaceLaunchAnalysis
   config: LaunchConfig
+  runningProjects?: RunningProjectSummary[]
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
 }): Promise<LaunchAssistantResponse> {
   return new Promise((resolve, reject) => {

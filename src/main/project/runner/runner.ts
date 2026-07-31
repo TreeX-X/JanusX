@@ -11,6 +11,7 @@
 
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
+import { extname, isAbsolute, resolve } from 'path'
 import type { ProcessHandle } from '../types'
 import ProjectConfig from '../config/project-config'
 import CommandBuilder from './command-builder'
@@ -26,6 +27,14 @@ interface RunningProject extends ProcessHandle {
   outputBuffer: string // 用于缓存未完整的输出行
   eventEmitter: EventEmitter
   terminated: boolean
+}
+
+const WINDOWS_SHELL_COMMANDS = new Set(['npm', 'yarn', 'pnpm', 'bun'])
+
+export function requiresCommandShell(command: string, platform: NodeJS.Platform = process.platform): boolean {
+  if (platform !== 'win32') return false
+  return WINDOWS_SHELL_COMMANDS.has(command.toLowerCase())
+    || ['.bat', '.cmd'].includes(extname(command).toLowerCase())
 }
 
 /**
@@ -96,8 +105,11 @@ export class ProjectRunner extends EventEmitter {
 
     // 5. 启动进程
     const processId = this.generateProcessId(projectPath, configName)
+    const configuredCwd = launchConfig.cwd?.replace('${workspaceFolder}', projectPath)
     const childProc = this.spawnProcess(commandInfo.command, commandInfo.args, {
-      cwd: launchConfig.program || projectPath,
+      cwd: configuredCwd
+        ? (isAbsolute(configuredCwd) ? configuredCwd : resolve(projectPath, configuredCwd))
+        : projectPath,
       env: { ...process.env, ...launchConfig.env },
     })
 
@@ -249,7 +261,7 @@ export class ProjectRunner extends EventEmitter {
     return spawn(command, args, {
       ...options,
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true, // 在 Windows 上需要
+      shell: requiresCommandShell(command),
     })
   }
 
