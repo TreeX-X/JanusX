@@ -1,7 +1,12 @@
+import { memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-export function MarkdownContent({ content }: { content: string }) {
+/**
+ * memo：流式期间父组件每次 delta 都会重渲染整个消息列表，
+ * 历史消息 content 不变时跳过 react-markdown 的整段重解析（audit P1）。
+ */
+export const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -29,7 +34,7 @@ export function MarkdownContent({ content }: { content: string }) {
       {content}
     </ReactMarkdown>
   )
-}
+})
 
 export function StreamingText({ content }: { content: string }) {
   return (

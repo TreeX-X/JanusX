@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises'
+import { readdir, readFile, stat } from 'fs/promises'
 import { join } from 'path'
 import type {
   CandidateFact,
@@ -380,7 +380,51 @@ const defaultSources: RecallSources = {
 }
 
 export class KnowledgeRecallService {
+  /**
+   * documents 构建缓存（audit P2）：recall 挂在 chat 首 token 前置路径，
+   * 每次全量读盘 + 解析 + 解压 blob 是延迟大头。指纹取知识库文件的
+   * mtime+size（blobs 内容按 hash 寻址不可变、audit 日志不进语料，均不参与指纹），
+   * 任何写入改变指纹即失效重建。
+   */
+  private documentsCache = new Map<KnowledgeRecallLayer, { fingerprint: string; documents: KnowledgeRecallDocument[] }>()
+
   constructor(private readonly sources: RecallSources = defaultSources) {}
+
+  private async computeFingerprint(): Promise<string> {
+    const root = knowledgeRootPath()
+    let names: string[]
+    try {
+      names = (await readdir(root, { recursive: true })) as string[]
+    } catch {
+      return 'absent'
+    }
+    const parts = await Promise.all(
+      names
+        .filter((name) => {
+          const top = String(name).split(/[\\/]/)[0]
+          return top !== 'blobs' && top !== 'audit'
+        })
+        .sort()
+        .map(async (name) => {
+          try {
+            const info = await stat(join(root, String(name)))
+            return info.isFile() ? `${name}:${info.mtimeMs}:${info.size}` : ''
+          } catch {
+            return ''
+          }
+        }),
+    )
+    return parts.filter(Boolean).join('|')
+  }
+
+  private async cachedDocuments(layer: KnowledgeRecallLayer): Promise<KnowledgeRecallDocument[]> {
+    const fingerprint = await this.computeFingerprint()
+    const cached = this.documentsCache.get(layer)
+    if (cached && cached.fingerprint === fingerprint) return cached.documents
+    const documents = await this.buildDocuments(layer)
+    this.documentsCache.set(layer, { fingerprint, documents })
+    return documents
+  }
 
   async recall(request: KnowledgeRecallRequest): Promise<KnowledgeRecallResult> {
     const query = request.query.trim()
@@ -389,7 +433,7 @@ export class KnowledgeRecallService {
       return this.emptyResult('missing-workspace')
     }
 
-    const documents = (await this.buildDocuments(request.layer))
+    const documents = (await this.cachedDocuments(request.layer))
       .filter((document) => matchesFilters(document, request))
     const index = new Bm25Index(documents.map((document) => ({
       id: document.key,

@@ -2,8 +2,10 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 
 export function StatusBar() {
-  const { terminals, activeTerminalId } = useWorkspaceStore()
-  const { loadState, blueprintMode } = useAppStore()
+  const terminals = useWorkspaceStore((s) => s.terminals)
+  const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
+  const loadState = useAppStore((s) => s.loadState)
+  const blueprintMode = useAppStore((s) => s.blueprintMode)
 
   const focusedTerminal = activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null
 

@@ -1,15 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useEditorStore } from '@/stores/editor'
 import { FloatingPanel } from '@/components/FloatingPanel'
-import { FileViewerContent } from '@/components/FileViewerContent'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { OpenFile } from '@/types'
 import { PanelRightClose, PanelRightOpen, Save, Search } from 'lucide-react'
 import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 
+/*-- P4: 查看器栈（Monaco/HTML/Markdown viewer）按需分包，编辑器未打开文件时不加载 --*/
+const FileViewerContent = lazy(() =>
+  import('@/components/FileViewerContent').then((m) => ({ default: m.FileViewerContent }))
+)
+
 function ViewerContent({ file, onEditorMount }: { file: OpenFile; onEditorMount: (editor: FindableEditor | null) => void }) {
   const updateContent = useEditorStore((s) => s.updateContent)
-  return <FileViewerContent file={file} onContentChange={(content) => updateContent(file.id, content)} onEditorMount={onEditorMount} />
+  return (
+    <Suspense fallback={null}>
+      <FileViewerContent file={file} onContentChange={(content) => updateContent(file.id, content)} onEditorMount={onEditorMount} />
+    </Suspense>
+  )
 }
 
 function TabItem({

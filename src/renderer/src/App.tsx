@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -20,7 +22,6 @@ import { WorkbenchErrorBoundary } from '@/components/WorkbenchErrorBoundary'
 import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel, RightDockLayoutProvider } from '@/components/Panel'
 import { getRightDockLayout, CENTER_WORKSPACE_MIN_WIDTH } from '@/components/right-tools/layout'
-import { OfficePreviewPanel } from '@/components/office/OfficePreviewPanel'
 import {
   clampOfficePreviewWidth,
   getOfficePreviewMaxWidth,
@@ -32,13 +33,21 @@ import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
 import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
-import { BlueprintFocusView } from '@/components/blueprint/BlueprintFocusView'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
 import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
+
+/*-- P4: 重量级面板按需分包。蓝图画布（@xyflow）与 Office 预览不进首屏 bundle，
+     Suspense fallback 为 null（蓝图在翻转卡背面、Office 有显隐门控，无感加载）。 --*/
+const BlueprintFocusView = lazy(() =>
+  import('@/components/blueprint/BlueprintFocusView').then((m) => ({ default: m.BlueprintFocusView }))
+)
+const OfficePreviewPanel = lazy(() =>
+  import('@/components/office/OfficePreviewPanel').then((m) => ({ default: m.OfficePreviewPanel }))
+)
 
 type IdleWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
@@ -72,7 +81,13 @@ interface EditorResizeSession {
 
 export default function App() {
   useWorkspaceBootstrap()
-  const { sidebarCollapsed, panelCollapsed, blueprintMode, isIslandDragging, flipDuration, dragFlipProgress } = useAppStore()
+  // P5: 细粒度 selector——App 是整树根组件，任意 store 字段变化都不应带动整树
+  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
+  const panelCollapsed = useAppStore((s) => s.panelCollapsed)
+  const blueprintMode = useAppStore((s) => s.blueprintMode)
+  const isIslandDragging = useAppStore((s) => s.isIslandDragging)
+  const flipDuration = useAppStore((s) => s.flipDuration)
+  const dragFlipProgress = useAppStore((s) => s.dragFlipProgress)
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspacePaneTree = useWorkspaceStore((s) => s.paneTree)
@@ -464,7 +479,9 @@ export default function App() {
                 background: 'radial-gradient(circle at center, #1d1d21 0%, var(--bg-deep) 100%)',
               }}
             >
-              <BlueprintFocusView />
+              <Suspense fallback={null}>
+                <BlueprintFocusView />
+              </Suspense>
             </div>
           </div>
         </main>
@@ -500,10 +517,12 @@ export default function App() {
                 onKeyDown={handleOfficeResizeKeyDown}
               />
             )}
-            <OfficePreviewPanel
-              workspaceId={visibleOfficeWorkspaceId}
-              onClose={handleCloseOffice}
-            />
+            <Suspense fallback={null}>
+              <OfficePreviewPanel
+                workspaceId={visibleOfficeWorkspaceId}
+                onClose={handleCloseOffice}
+              />
+            </Suspense>
           </section>
         )}
         {isEditorEmbedded && (
@@ -553,7 +572,8 @@ export default function App() {
 }
 
 function EmptyWorkspace() {
-  const { addWorkspace, setActiveWorkspace } = useWorkspaceStore()
+  const addWorkspace = useWorkspaceStore((s) => s.addWorkspace)
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
   const setLoadState = useAppStore((s) => s.setLoadState)
 
   const handleAdd = async () => {

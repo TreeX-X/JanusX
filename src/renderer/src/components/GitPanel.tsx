@@ -28,7 +28,8 @@ const REMOTE_ACTION_META: Record<
 
 export function GitPanel({ active = true }: { active?: boolean }) {
   const { status, commits, loading, error, fetchStatus, fetchLog, stageFiles, unstageFiles, commitChanges, pushChanges, pullChanges } = useGitStore()
-  const { activeWorkspaceId, workspaces } = useWorkspaceStore()
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
   const [commitMsg, setCommitMsg] = useState('')
   const [confirmAction, setConfirmAction] = useState<GitRemoteAction | null>(null)
 

@@ -1,13 +1,22 @@
-import React from 'react'
+import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
-import { DesktopToastApp } from './components/DesktopToastApp'
-import { StandaloneFileEditor } from './components/StandaloneFileEditor'
-import { StandaloneBrowser } from './components/browser/StandaloneBrowser'
 import { installElectronApiFallback } from './lib/electron-api-fallback'
 import { initBrowserEventSubscriptions } from './stores/browser'
 import './styles/globals.css'
 import './components/janus/janus-island.css'
+
+/*-- P4: 按窗口类型分包。四种窗口共用一个 HTML 入口，
+     静态导入会让主窗口首屏背上编辑器/浏览器/Toast 三个用不到的根组件。 --*/
+const App = lazy(() => import('./App'))
+const DesktopToastApp = lazy(() =>
+  import('./components/DesktopToastApp').then((m) => ({ default: m.DesktopToastApp }))
+)
+const StandaloneFileEditor = lazy(() =>
+  import('./components/StandaloneFileEditor').then((m) => ({ default: m.StandaloneFileEditor }))
+)
+const StandaloneBrowser = lazy(() =>
+  import('./components/browser/StandaloneBrowser').then((m) => ({ default: m.StandaloneBrowser }))
+)
 
 installElectronApiFallback()
 
@@ -21,6 +30,8 @@ const isBrowserWindow = searchParams.get('browserWindow') === '1'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {isDesktopToast ? <DesktopToastApp /> : isEditorWindow ? <StandaloneFileEditor /> : isBrowserWindow ? <StandaloneBrowser /> : <App />}
+    <Suspense fallback={null}>
+      {isDesktopToast ? <DesktopToastApp /> : isEditorWindow ? <StandaloneFileEditor /> : isBrowserWindow ? <StandaloneBrowser /> : <App />}
+    </Suspense>
   </React.StrictMode>
 )

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { Globe, SquareTerminal, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
@@ -951,6 +952,7 @@ function LeafPane({
 
 export function TerminalArea() {
   useTerminalLifecycle()
+  // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树
   const {
     workspaces,
     terminals,
@@ -971,7 +973,29 @@ export function TerminalArea() {
     splitPaneWithBrowser,
     closePaneTab,
     setTabDragInFlight,
-  } = useWorkspaceStore()
+  } = useWorkspaceStore(
+    useShallow((s) => ({
+      workspaces: s.workspaces,
+      terminals: s.terminals,
+      activeTerminalId: s.activeTerminalId,
+      activeWorkspaceId: s.activeWorkspaceId,
+      terminalSnapshots: s.terminalSnapshots,
+      paneTree: s.paneTree,
+      focusedPaneId: s.focusedPaneId,
+      setActiveTerminal: s.setActiveTerminal,
+      removeTerminal: s.removeTerminal,
+      setFocusedPane: s.setFocusedPane,
+      setPaneTab: s.setPaneTab,
+      collapsePaneLayout: s.collapsePaneLayout,
+      resizePane: s.resizePane,
+      moveTerminalToPane: s.moveTerminalToPane,
+      splitPaneWithTerminal: s.splitPaneWithTerminal,
+      moveBrowserToPane: s.moveBrowserToPane,
+      splitPaneWithBrowser: s.splitPaneWithBrowser,
+      closePaneTab: s.closePaneTab,
+      setTabDragInFlight: s.setTabDragInFlight,
+    }))
+  )
   const [hotWorkspaceIds, setHotWorkspaceIds] = useState<string[]>(() =>
     touchWorkspaceSurfaceRecency([], activeWorkspaceId)
   )

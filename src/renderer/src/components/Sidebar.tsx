@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import { Activity, ChevronRight, CirclePause, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -199,8 +200,21 @@ function workspaceInitial(name: string): string {
 }
 
 export function Sidebar() {
+  // P5: useShallow 细粒度订阅，避免整 store 任意变化带动整个侧栏重渲染
   const { workspaces, activeWorkspaceId, terminals, activeTerminalId, terminalSnapshots, setWorkspaces, setActiveWorkspace, addWorkspace, removeWorkspace } =
-    useWorkspaceStore()
+    useWorkspaceStore(
+      useShallow((s) => ({
+        workspaces: s.workspaces,
+        activeWorkspaceId: s.activeWorkspaceId,
+        terminals: s.terminals,
+        activeTerminalId: s.activeTerminalId,
+        terminalSnapshots: s.terminalSnapshots,
+        setWorkspaces: s.setWorkspaces,
+        setActiveWorkspace: s.setActiveWorkspace,
+        addWorkspace: s.addWorkspace,
+        removeWorkspace: s.removeWorkspace,
+      }))
+    )
   const orderedWorkspaces = useMemo(() => sortWorkspaceSidebar(workspaces), [workspaces])
   const setLoadState = useAppStore((s) => s.setLoadState)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)

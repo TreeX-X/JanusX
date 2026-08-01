@@ -29,9 +29,14 @@ import { formatKnowledgeMatch } from './islandKnowledgePeek'
 
 /** useProjectRunning �?管理项目运行状�?*/
 function useProjectRunning(activeWorkspace: Workspace | undefined) {
-  const { janusRunning, setJanusRunning, setRunningProjects } = useAppStore()
+  const janusRunning = useAppStore((s) => s.janusRunning)
+  const setJanusRunning = useAppStore((s) => s.setJanusRunning)
+  const setRunningProjects = useAppStore((s) => s.setRunningProjects)
   const [workspaceConfig, setWorkspaceConfig] = useState<ProjectConfig | null>(null)
   const configRef = useRef<ProjectConfig | null>(null)
+  // P6: 轮询结果无变化时跳过 setState，避免每 3s 的新引用触发无意义重渲染
+  const configKeyRef = useRef<string>('')
+  const runningKeyRef = useRef<string>('')
 
   useEffect(() => {
     if (!activeWorkspace) {
@@ -39,17 +44,27 @@ function useProjectRunning(activeWorkspace: Workspace | undefined) {
       setRunningProjects([])
       setJanusRunning(false)
       configRef.current = null
+      configKeyRef.current = ''
+      runningKeyRef.current = ''
       return
     }
 
     const loadData = async () => {
       try {
         const config = await projectService.readConfig(activeWorkspace.path)
-        setWorkspaceConfig(config)
         configRef.current = config
+        const configKey = JSON.stringify(config)
+        if (configKeyRef.current !== configKey) {
+          configKeyRef.current = configKey
+          setWorkspaceConfig(config)
+        }
         const running = await projectService.listByWorkspace(activeWorkspace.path)
-        setRunningProjects(running)
-        setJanusRunning(running.length > 0)
+        const runningKey = JSON.stringify(running)
+        if (runningKeyRef.current !== runningKey) {
+          runningKeyRef.current = runningKey
+          setRunningProjects(running)
+          setJanusRunning(running.length > 0)
+        }
       } catch (err) {
         console.error('Failed to load workspace data:', err)
       }

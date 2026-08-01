@@ -67,7 +67,8 @@ export function CheckpointPanel() {
     clearConflicts,
     clearWorkspaceScope,
   } = useCheckpointStore()
-  const { activeWorkspaceId, workspaces } = useWorkspaceStore()
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
   const [filter, setFilter] = useState('all')
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null)

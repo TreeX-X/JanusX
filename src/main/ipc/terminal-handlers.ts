@@ -79,6 +79,47 @@ export function handleTerminalHostWindowClosed(): void {
   hostWindowClosedHandler?.()
 }
 
+/*-- P3: pty 输出 IPC 合批。每 chunk 一次 send 在编译输出等场景可达每秒数千次，
+     按终端 id 累积 ~16ms 再 flush；replay/exit/kill 前强制 flush 保证顺序一致。 --*/
+const TERMINAL_DATA_FLUSH_MS = 16
+
+interface PendingTerminalData {
+  data: string
+  seq: number
+  timer: ReturnType<typeof setTimeout> | null
+}
+
+const pendingTerminalData = new Map<string, PendingTerminalData>()
+
+function flushTerminalData(id: string): void {
+  const pending = pendingTerminalData.get(id)
+  if (!pending) return
+  if (pending.timer) clearTimeout(pending.timer)
+  pendingTerminalData.delete(id)
+  if (pending.data) {
+    sendToRenderer(getHostWindow(), TERMINAL_EVENT_CHANNELS.data, { id, data: pending.data, seq: pending.seq })
+  }
+}
+
+function queueTerminalData(id: string, data: string, seq: number): void {
+  const pending = pendingTerminalData.get(id)
+  if (pending) {
+    pending.data += data
+    pending.seq = seq
+    return
+  }
+  const entry: PendingTerminalData = { data, seq, timer: null }
+  pendingTerminalData.set(id, entry)
+  entry.timer = setTimeout(() => flushTerminalData(id), TERMINAL_DATA_FLUSH_MS)
+}
+
+function dropPendingTerminalData(id: string): void {
+  const pending = pendingTerminalData.get(id)
+  if (!pending) return
+  if (pending.timer) clearTimeout(pending.timer)
+  pendingTerminalData.delete(id)
+}
+
 export function createCompanionTerminal(config: TerminalCreateRequest): Promise<{ pid: number }> {
   if (!companionTerminalCreator) throw new Error('Terminal lifecycle is not available')
   return companionTerminalCreator(config)
@@ -300,6 +341,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     finalizePendingCheckpoints: () => finalizePendingTerminalCheckpoints(),
     stopHookBridge: () => hookBridge.stop(),
     disposeTerminalSession: () => {
+      for (const id of [...pendingTerminalData.keys()]) dropPendingTerminalData(id)
       terminalStates.clear()
       hooksInstalledThisSession.clear()
       hookCoordinator.dispose()
@@ -389,6 +431,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         clearTimeout(priorState.flowTimer)
         priorState.flowTimer = null
       }
+      // 旧 pty 未 flush 的合批数据不再属于新终端，丢弃
+      dropPendingTerminalData(id)
       if (priorState.engine && priorState.engine !== 'shell') {
         try {
           subAgentRunRegistry.finishRun(
@@ -618,32 +662,40 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         const seq = terminalManager.appendOutput(id, data)
         // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
         if (seq === null) return
-        sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.data, { id, data, seq })
+        queueTerminalData(id, data, seq)
 
         // AI CLI output-flow heuristic: emit running on first chunk of a burst,
         // debounce back to wait after IDLE_MS of silence. Shell terminals opt out
         // entirely and never receive a status event from this path.
+        // P3: 不再每 chunk clearTimeout+setTimeout，改记录 lastDataAt +
+        // 单个按空闲差值自续期的检查定时器。
         if (engine !== 'shell') {
           const st = terminalStates.get(id)
           if (st) {
-            const now = Date.now()
             if (st.flowStatus !== 'running') {
               st.flowStatus = 'running'
               sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
             }
-            st.lastDataAt = now
-            if (st.flowTimer) clearTimeout(st.flowTimer)
-            st.flowTimer = setTimeout(() => {
-              try {
-                const current = terminalStates.get(id)
-                if (!current) return
-                current.flowStatus = 'wait'
-                current.flowTimer = null
-                sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
-              } catch (timerErr) {
-                console.error(`[terminal ${id}] flow timer error:`, timerErr)
+            st.lastDataAt = Date.now()
+            if (!st.flowTimer) {
+              const checkIdle = () => {
+                try {
+                  const current = terminalStates.get(id)
+                  if (!current) return
+                  const idleFor = Date.now() - current.lastDataAt
+                  if (idleFor < TERMINAL_FLOW_IDLE_MS) {
+                    current.flowTimer = setTimeout(checkIdle, TERMINAL_FLOW_IDLE_MS - idleFor)
+                    return
+                  }
+                  current.flowStatus = 'wait'
+                  current.flowTimer = null
+                  sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
+                } catch (timerErr) {
+                  console.error(`[terminal ${id}] flow timer error:`, timerErr)
+                }
               }
-            }, TERMINAL_FLOW_IDLE_MS)
+              st.flowTimer = setTimeout(checkIdle, TERMINAL_FLOW_IDLE_MS)
+            }
           }
         }
       } catch (err) {
@@ -678,6 +730,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         const state0 = terminalStates.get(id)
         if (state0?.creationLocked) return
 
+        flushTerminalData(id)
         sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.exit, { id, exitCode })
         terminalManager.kill(id)
 
@@ -768,6 +821,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   })
 
   ipcMain.handle(TERMINAL_INVOKE_CHANNELS.replay, async (_event, { id }: { id: string }) => {
+    // 先把未 flush 的合批数据发出去再取快照，保证快照 seq 之后到达的事件不含快照内数据
+    flushTerminalData(id)
     return terminalManager.getOutputReplay(id) ?? { data: '', seq: 0 }
   })
 
@@ -777,6 +832,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       clearTimeout(st.flowTimer)
       st.flowTimer = null
     }
+    dropPendingTerminalData(id)
     terminalManager.kill(id)
     return { success: true }
   })

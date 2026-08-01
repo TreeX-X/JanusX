@@ -1,11 +1,10 @@
-import { useState, useCallback, useEffect, useReducer, useRef } from 'react'
+import { useState, useCallback, useEffect, useReducer, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
 import { AppSettingsModal } from '@/components/AppSettingsModal'
 import { KnowledgeWorkbench } from '@/components/knowledge'
-import { BlueprintWorkbench } from '@/components/blueprint/BlueprintWorkbench'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
 import { useJanusChatController } from '@/components/janus/JanusChatProvider'
@@ -14,6 +13,11 @@ import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentO
 import { officeService } from '@/services/office'
 import { startOfficeDiscovery } from '@/components/office/officeDiscovery'
 import { useOfficeStore } from '@/stores/office'
+
+/*-- P4: 蓝图工作台（@xyflow 画布链）按需分包，未打开蓝图工作台时不加载 --*/
+const BlueprintWorkbench = lazy(() =>
+  import('@/components/blueprint/BlueprintWorkbench').then((m) => ({ default: m.BlueprintWorkbench }))
+)
 
 /* ════════════════════════════════════════════════════════════
    Titlebar �?标题栏（简化版�?
@@ -269,10 +273,12 @@ export function Titlebar() {
         <WorkbenchSwitcher />
       </div>
 
-      <BlueprintWorkbench
-        isOpen={activeWorkbench === 'blueprint'}
-        onClose={() => setActiveWorkbench(null)}
-      />
+      <Suspense fallback={null}>
+        <BlueprintWorkbench
+          isOpen={activeWorkbench === 'blueprint'}
+          onClose={() => setActiveWorkbench(null)}
+        />
+      </Suspense>
       <KnowledgeWorkbench
         isOpen={activeWorkbench === 'knowledge'}
         onClose={() => setActiveWorkbench(null)}
