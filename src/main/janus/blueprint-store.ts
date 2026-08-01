@@ -10,14 +10,28 @@
  *
  *              并发安全：所有公开方法经 ReentrantAsyncLock 串行化（store 级单锁，
  *              因 index.json 跨蓝图共享，避免 per-blueprint 双锁死锁），
- *              writeJson 为 temp+rename 原子写，防止退出期截断丢蓝图。
+ *              writeJson 为 temp+rename 原子写，防止退出期截断丢蓝图（audit C2）。
+ *
+ *              模块划分（audit A1）：路径 → blueprint-paths，工厂 → blueprint-factory，
+ *              JSON 持久化 → blueprint-persistence，候选去重 → requirement-candidates，
+ *              本文件只保留编排、缓存与图操作。
  */
 
 import { promises as fs } from 'fs'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
-import { app } from 'electron'
-import { ReentrantAsyncLock, writeFileAtomic } from '../lib/atomic-file'
+import { ReentrantAsyncLock } from '../lib/atomic-file'
+import {
+  GLOBAL_BLUEPRINT_SCOPE,
+  blueprintFile,
+  indexFile,
+  legacyBlueprintFile,
+  legacyIndexFile,
+  workspacesDir
+} from './blueprint-paths'
+import { makeFeatureItem, makeNode, normalizeFeatureStatus, nowIso } from './blueprint-factory'
+import { readJson, writeJson } from './blueprint-persistence'
+import { candidateKey, resolveSuggestedParentId } from './requirement-candidates'
 import type {
   Blueprint,
   BlueprintFeatureItem,
@@ -33,11 +47,6 @@ import type {
 } from './types'
 import { BLUEPRINT_SCHEMA_VERSION, migrateBlueprint } from './blueprint-migration'
 
-const BLUEPRINTS_DIR = ['blueprints'] // 相对 .janusX
-const WORKSPACES_DIR = ['workspaces'] // 相对 userData/janusx
-const INDEX_FILE = 'index.json'
-const GLOBAL_BLUEPRINT_SCOPE = '__global__'
-
 interface WorkspaceIndex {
   blueprints: string[]
   focusedNodeId: string | null
@@ -48,34 +57,6 @@ interface WorkspaceRecord {
   id: string
   name: string
   path: string
-}
-
-function blueprintsDir(): string {
-  return join(app.getPath('userData'), 'janusx', ...BLUEPRINTS_DIR)
-}
-
-function indexFile(): string {
-  return join(blueprintsDir(), INDEX_FILE)
-}
-
-function blueprintFile(id: string): string {
-  return join(blueprintsDir(), `${id}.json`)
-}
-
-function workspacesDir(): string {
-  return join(app.getPath('userData'), 'janusx', ...WORKSPACES_DIR)
-}
-
-function legacyIndexFile(workspace: string): string {
-  return join(workspace, '.janusX', ...BLUEPRINTS_DIR, INDEX_FILE)
-}
-
-function legacyBlueprintFile(workspace: string, id: string): string {
-  return join(workspace, '.janusX', ...BLUEPRINTS_DIR, `${id}.json`)
-}
-
-function nowIso(): string {
-  return new Date().toISOString()
 }
 
 function normalizePathKey(path: string): string {
@@ -92,90 +73,6 @@ function toWorkspaceSnapshot(workspace: WorkspaceRecord): WorkspaceSnapshot {
     name: workspace.name,
     path: workspace.path
   }
-}
-
-function makeFeatureItem(input: Partial<BlueprintFeatureItem> & { title: string }): BlueprintFeatureItem {
-  const ts = nowIso()
-  return {
-    id: input.id ?? randomUUID(),
-    title: input.title,
-    description: input.description ?? '',
-    progress: input.progress ?? 0,
-    status: input.status ?? 'planned',
-    requirementNotes: input.requirementNotes ?? [],
-    createdAt: input.createdAt ?? ts,
-    updatedAt: input.updatedAt ?? ts
-  }
-}
-
-function normalizeFeatureStatus(status?: BlueprintFeatureStatus): BlueprintFeatureStatus {
-  return status ?? 'planned'
-}
-
-function normalizeCandidatePart(value?: string): string {
-  return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
-}
-
-function candidateKey(sourceNodeId: string, title: string, description: string, suggestedParentTitle?: string): string {
-  return [
-    sourceNodeId,
-    normalizeCandidatePart(title),
-    normalizeCandidatePart(description),
-    normalizeCandidatePart(suggestedParentTitle)
-  ].join('|')
-}
-
-function resolveSuggestedParentId(bp: Blueprint, suggestedParentTitle?: string): string | undefined {
-  const normalized = normalizeCandidatePart(suggestedParentTitle)
-  if (!normalized) return undefined
-  const parent = Object.values(bp.nodes).find((node) => normalizeCandidatePart(node.title) === normalized)
-  return parent?.id
-}
-
-function makeNode(input: Partial<BlueprintNode> & { title: string; type: BlueprintNodeType }): BlueprintNode {
-  const ts = nowIso()
-  return {
-    id: input.id ?? randomUUID(),
-    title: input.title,
-    type: input.type,
-    status: input.status ?? 'not-started',
-    progress: input.progress ?? 0,
-    statusSource: input.statusSource ?? 'manual',
-    positioning: input.positioning ?? '',
-    description: input.description ?? '',
-    features: Array.isArray(input.features) ? input.features.map((feature) => makeFeatureItem(feature)) : [],
-    completedItems: input.completedItems ?? [],
-    techSolution: input.techSolution ?? '',
-    notes: input.notes ?? '',
-    todos: input.todos ?? [],
-    issues: input.issues ?? [],
-    activities: input.activities ?? [],
-    analyses: input.analyses ?? [],
-    workspaceId: input.workspaceId ?? null,
-    workspaceSnapshot: input.workspaceSnapshot ?? null,
-    boundTerminalId: input.boundTerminalId ?? null,
-    terminalHistory: input.terminalHistory ?? [],
-    lastAnalyzedCommitSha: input.lastAnalyzedCommitSha ?? null,
-    children: input.children ?? [],
-    parentId: input.parentId ?? null,
-    tags: input.tags ?? [],
-    createdAt: input.createdAt ?? ts,
-    updatedAt: ts
-  }
-}
-
-async function readJson<T>(file: string): Promise<T | null> {
-  try {
-    const raw = await fs.readFile(file, 'utf-8')
-    return JSON.parse(raw) as T
-  } catch {
-    return null
-  }
-}
-
-async function writeJson(file: string, data: unknown): Promise<void> {
-  // temp+rename 原子写：退出期中断不会产生截断 JSON
-  await writeFileAtomic(file, JSON.stringify(data, null, 2))
 }
 
 export class BlueprintStore {

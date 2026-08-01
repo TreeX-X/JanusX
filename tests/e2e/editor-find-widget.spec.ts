@@ -129,7 +129,8 @@ test('editor find widget controls remain clickable in a compact preview window',
     // only sets aria-label, so these come from labelFindWidgetControls().
     for (const [locator, expected] of [
       [close, 'Escape'],
-      [selection, 'Alt+L'],
+      // '+' 需转义：new RegExp('Alt+L') 里 t+ 是量词，永远匹配不到字面 "Alt+L"
+      [selection, 'Alt\\+L'],
       [previous, '上一个匹配'],
       [next, '下一个匹配'],
     ] as const) {
