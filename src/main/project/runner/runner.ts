@@ -31,6 +31,9 @@ interface RunningProject extends ProcessHandle {
 
 const WINDOWS_SHELL_COMMANDS = new Set(['npm', 'yarn', 'pnpm', 'bun'])
 
+/*-- 不完整行缓冲上限：长期无换行的输出（单行 JSON 流等）保尾截断，防止无界增长（audit M3） --*/
+const MAX_OUTPUT_LINE_BUFFER_CHARS = 256 * 1024
+
 export function requiresCommandShell(command: string, platform: NodeJS.Platform = process.platform): boolean {
   if (platform !== 'win32') return false
   return WINDOWS_SHELL_COMMANDS.has(command.toLowerCase())
@@ -289,12 +292,16 @@ export class ProjectRunner extends EventEmitter {
       this.handleExit(projectId, running, code, signal)
     })
 
-    // 进程错误
+    // 进程错误：spawn 失败（如 ENOENT）只发 error 不发 exit，
+    // 必须在这里回收条目，否则 activeCount 泄漏累积到上限后无法再启动项目（audit M3）
     child.on('error', (error: Error) => {
       this.emit('project:error', {
         projectId,
         error: error.message,
       })
+      if (this.runningProjects.has(projectId)) {
+        this.handleExit(projectId, running, null, null)
+      }
     })
   }
 
@@ -310,12 +317,15 @@ export class ProjectRunner extends EventEmitter {
     data: string,
     stream: 'stdout' | 'stderr'
   ): void {
-    // 缓冲输出，逐行处理
+    // 缓冲输出，逐行处理；`\r` 也视为分隔，进度条类输出不会滞留缓冲
     running.outputBuffer += data
-    const lines = running.outputBuffer.split('\n')
+    const lines = running.outputBuffer.split(/\r\n|\n|\r/)
 
-    // 保留最后一个不完整的行
+    // 保留最后一个不完整的行；超长单行（无换行的 JSON 流等）保尾截断，防止无界增长
     running.outputBuffer = lines.pop() || ''
+    if (running.outputBuffer.length > MAX_OUTPUT_LINE_BUFFER_CHARS) {
+      running.outputBuffer = running.outputBuffer.slice(-MAX_OUTPUT_LINE_BUFFER_CHARS)
+    }
 
     for (const line of lines) {
       if (line.trim()) {
@@ -352,6 +362,7 @@ export class ProjectRunner extends EventEmitter {
 
   /**
    * 处理进程退出
+   * exit 与 error 都可能触发（各一次或先后触发），按条目在场与否去重
    */
   private handleExit(
     projectId: string,
@@ -359,6 +370,7 @@ export class ProjectRunner extends EventEmitter {
     code: number | null,
     signal: string | null
   ): void {
+    if (!this.runningProjects.has(projectId)) return
     this.activeCount--
     this.runningProjects.delete(projectId)
 

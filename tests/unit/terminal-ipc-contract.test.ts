@@ -55,7 +55,7 @@ vi.mock('../../src/main/office/office-agent-policy', () => ({ buildOfficeAgentSe
 beforeAll(async () => {
   await import('../../src/preload/index')
   const { registerTerminalHandlers } = await import('../../src/main/ipc/terminal-handlers')
-  registerTerminalHandlers({ on: vi.fn() } as never)
+  registerTerminalHandlers(() => null)
 })
 
 describe('Terminal IPC contract', () => {

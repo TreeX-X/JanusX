@@ -66,6 +66,19 @@ const terminalStates = new Map<string, TerminalCpState>()
 const TERMINAL_FLOW_IDLE_MS = 1200
 let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null
 
+/**
+ * 当前主窗口 getter：由 registerTerminalHandlers 注入。
+ * 事件发送方每次调用取最新窗口，窗口重建后不再持有旧引用（audit M1）。
+ */
+let getHostWindow: () => BrowserWindow | null = () => null
+
+/** 窗口 closed 时的终端侧清理；由 register.ts 在每个新窗口上挂载。 */
+let hostWindowClosedHandler: (() => void) | null = null
+
+export function handleTerminalHostWindowClosed(): void {
+  hostWindowClosedHandler?.()
+}
+
 export function createCompanionTerminal(config: TerminalCreateRequest): Promise<{ pid: number }> {
   if (!companionTerminalCreator) throw new Error('Terminal lifecycle is not available')
   return companionTerminalCreator(config)
@@ -92,8 +105,8 @@ export async function finalizePendingTerminalCheckpoints(): Promise<void> {
   )
 }
 
-function sendToRenderer(mainWindow: BrowserWindow, channel: string, payload: unknown): void {
-  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
+function sendToRenderer(mainWindow: BrowserWindow | null, channel: string, payload: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
   try {
     mainWindow.webContents.send(channel, payload)
   } catch (err) {
@@ -112,13 +125,13 @@ function normalizeSubmittedPrompt(text: string): string {
     .trimEnd()
 }
 
-function enqueueCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text: string): void {
+function enqueueCheckpointFromSubmit(id: string, text: string): void {
   const prompt = normalizeSubmittedPrompt(text)
   if (!prompt.trim()) return
 
   const state = terminalStates.get(id)
   if (!state) {
-    sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
+    sendToRenderer(getHostWindow(), CHECKPOINT_CHANNELS.event, {
       type: 'error',
       terminalId: id,
       error: 'Terminal checkpoint state not found',
@@ -127,16 +140,16 @@ function enqueueCheckpointFromSubmit(mainWindow: BrowserWindow, id: string, text
   }
 
   state.pendingSubmitTexts.push(prompt)
-  processCheckpointQueue(mainWindow, id)
+  processCheckpointQueue(id)
 }
 
 /** Remote control uses the same checkpoint transaction as renderer submit-line. */
-export function submitCompanionTerminalLine(mainWindow: BrowserWindow, id: string, text: string): void {
+export function submitCompanionTerminalLine(id: string, text: string): void {
   terminalManager.write(id, `${text}\r`)
-  enqueueCheckpointFromSubmit(mainWindow, id, text)
+  enqueueCheckpointFromSubmit(id, text)
 }
 
-function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
+function processCheckpointQueue(id: string): void {
   const state = terminalStates.get(id)
   if (!state || !state.initialized || state.creating) return
 
@@ -155,14 +168,14 @@ function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
     cwd: state.cwd,
   }).then(({ finalized, checkpoint }) => {
     if (finalized && previousCpId) {
-      sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
+      sendToRenderer(getHostWindow(), CHECKPOINT_CHANNELS.event, {
         type: 'finalized',
         terminalId: id,
         checkpointId: previousCpId,
       })
     }
     state.checkpointId = checkpoint.id
-    sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
+    sendToRenderer(getHostWindow(), CHECKPOINT_CHANNELS.event, {
       type: 'created',
       terminalId: id,
       checkpointId: checkpoint.id,
@@ -171,14 +184,14 @@ function processCheckpointQueue(mainWindow: BrowserWindow, id: string): void {
     state.checkpointId = previousCpId
     const message = err instanceof Error ? err.message : String(err)
     console.error('Checkpoint lifecycle failed:', err)
-    sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
+    sendToRenderer(getHostWindow(), CHECKPOINT_CHANNELS.event, {
       type: 'error',
       terminalId: id,
       error: message,
     })
   }).finally(() => {
     state.creating = false
-    processCheckpointQueue(mainWindow, id)
+    processCheckpointQueue(id)
   })
 }
 
@@ -202,7 +215,8 @@ async function resolveOfficecliLaunchAssets(): Promise<{
   }
 }
 
-export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
+export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | null): void {
+  getHostWindow = getMainWindow
   const hookDiagnostics = new AgentHookDiagnostics()
   agentTurnRecorder.setEventSink((event) => {
     hookDiagnostics.record({
@@ -231,14 +245,14 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       sessionId,
     })
     if (telemetry) {
-      sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.telemetry, { id: terminalId, telemetry })
+      sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.telemetry, { id: terminalId, telemetry })
     }
   }
 
-  const hookCoordinator = new AgentHookCoordinator(mainWindow, {
+  const hookCoordinator = new AgentHookCoordinator(getMainWindow, {
     onEvent: (event) => {
       hookDiagnostics.record(summarizeCoordinatorEvent(event))
-      sendToRenderer(mainWindow, AGENT_CHANNELS.hookEvent, event)
+      sendToRenderer(getMainWindow(), AGENT_CHANNELS.hookEvent, event)
     },
     onResolvedPayload: (payload, terminal) => {
       companionSessionState.handleHookPayload(payload)
@@ -295,7 +309,9 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     },
   })
 
-  mainWindow.on('closed', () => {
+  // 窗口 closed 清理逻辑；由 register.ts 在每个新窗口的 closed 事件上触发，
+  // 窗口重建后仍然生效（旧实现只挂在首个窗口上，audit M1）。
+  hostWindowClosedHandler = () => {
     if (appShutdown.isQuitting) return
     // Non-darwin: index mainWindow.closed triggers app.quit -> AppShutdown.
     // AC8: synchronously kill all ptys first so no native pty callback can
@@ -303,7 +319,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     // cleanup still runs in AppShutdown.
     if (process.platform !== 'darwin') {
       try {
-        terminalManager.killAll()
+        void terminalManager.killAll()
       } catch (err) {
         console.error('[terminal] killAll on window close failed:', err)
       }
@@ -314,7 +330,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     void finalizePendingTerminalCheckpoints()
       .catch((err) => console.error('Checkpoint finalize on window close failed:', err))
       .finally(() => {
-        terminalManager.killAll()
+        void terminalManager.killAll()
         terminalStates.clear()
         hooksInstalledThisSession.clear()
         hookCoordinator.dispose()
@@ -323,7 +339,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         agentTurnRecorder.setEventSink(undefined)
         void hookBridge.stop()
       })
-  })
+  }
 
   ipcMain.handle(TERMINAL_INVOKE_CHANNELS.warmup, async (_event, payload?: TerminalWarmupRequest) => {
     const requested = Array.isArray(payload?.engines)
@@ -456,7 +472,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
           delivered: false,
         } as const
         hookDiagnostics.record(summarizeCoordinatorEvent(event))
-        sendToRenderer(mainWindow, AGENT_CHANNELS.hookEvent, event)
+        sendToRenderer(getMainWindow(), AGENT_CHANNELS.hookEvent, event)
         return undefined
       }
     })()
@@ -602,7 +618,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         const seq = terminalManager.appendOutput(id, data)
         // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
         if (seq === null) return
-        sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.data, { id, data, seq })
+        sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.data, { id, data, seq })
 
         // AI CLI output-flow heuristic: emit running on first chunk of a burst,
         // debounce back to wait after IDLE_MS of silence. Shell terminals opt out
@@ -613,7 +629,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
             const now = Date.now()
             if (st.flowStatus !== 'running') {
               st.flowStatus = 'running'
-              sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
+              sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
             }
             st.lastDataAt = now
             if (st.flowTimer) clearTimeout(st.flowTimer)
@@ -623,7 +639,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
                 if (!current) return
                 current.flowStatus = 'wait'
                 current.flowTimer = null
-                sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
+                sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
               } catch (timerErr) {
                 console.error(`[terminal ${id}] flow timer error:`, timerErr)
               }
@@ -662,7 +678,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         const state0 = terminalStates.get(id)
         if (state0?.creationLocked) return
 
-        sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.exit, { id, exitCode })
+        sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.exit, { id, exitCode })
         terminalManager.kill(id)
 
         const state = terminalStates.get(id)
@@ -680,7 +696,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
         if (state?.checkpointId) {
           const cpId = state.checkpointId
           checkpointManager.finalizeCheckpoint(cpId, state.cwd).then(() => {
-            sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.event, {
+            sendToRenderer(getMainWindow(), CHECKPOINT_CHANNELS.event, {
               type: 'finalized',
               checkpointId: cpId,
             })
@@ -708,15 +724,15 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
       const state = terminalStates.get(id)
       if (state) {
         state.initialized = true
-        processCheckpointQueue(mainWindow, id)
+        processCheckpointQueue(id)
       }
-      sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.ready, { terminalId: id, success: true })
+      sendToRenderer(getMainWindow(), CHECKPOINT_CHANNELS.ready, { terminalId: id, success: true })
     }).catch((err) => {
       console.error('Checkpoint init failed:', err)
-      sendToRenderer(mainWindow, CHECKPOINT_CHANNELS.ready, { terminalId: id, success: false, error: String(err) })
+      sendToRenderer(getMainWindow(), CHECKPOINT_CHANNELS.ready, { terminalId: id, success: false, error: String(err) })
     })
 
-    sendToRenderer(mainWindow, TERMINAL_EVENT_CHANNELS.created, {
+    sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.created, {
       id, workspaceId, cwd, preset: engine, shell, pid: instance.pty.pid,
     })
     return { pid: instance.pty.pid }
@@ -744,7 +760,7 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
 
   // Submit-line handler: renderer sends one complete user input transaction.
   ipcMain.on(TERMINAL_SEND_CHANNELS.submitLine, (_event, { id, text }: TerminalSubmitLinePayload) => {
-    enqueueCheckpointFromSubmit(mainWindow, id, text)
+    enqueueCheckpointFromSubmit(id, text)
   })
 
   ipcMain.on(TERMINAL_SEND_CHANNELS.resize, (_event, { id, cols, rows }: TerminalResizePayload) => {

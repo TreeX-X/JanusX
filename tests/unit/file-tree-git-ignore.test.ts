@@ -50,7 +50,7 @@ describe('file-tree gitignore state', () => {
       writeFile(join(workspaceRoot, 'scratch.tmp'), 'ignored file'),
     ])
     await execFileAsync('git', ['init', '--quiet'], { cwd: workspaceRoot })
-    registerWorkspaceHandlers({ on: vi.fn() } as never)
+    registerWorkspaceHandlers(() => null)
   })
 
   afterEach(async () => {

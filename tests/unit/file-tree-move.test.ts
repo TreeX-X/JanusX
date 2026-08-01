@@ -34,7 +34,7 @@ describe('file-tree move', () => {
       mkdir(join(workspaceRoot, 'source')),
       mkdir(join(workspaceRoot, 'target')),
     ])
-    registerWorkspaceHandlers({ on: vi.fn() } as never, {
+    registerWorkspaceHandlers(() => null, {
       authorizeRendererAction: async () => true,
     })
   })

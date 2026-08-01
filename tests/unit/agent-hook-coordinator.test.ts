@@ -27,7 +27,7 @@ function createCoordinator(now: () => number) {
   const events: AgentHookCoordinatorEvent[] = []
   const resolvedPayloads: AgentHookPayload[] = []
 
-  const coordinator = new AgentHookCoordinator({} as never, {
+  const coordinator = new AgentHookCoordinator(() => null, {
     now,
     deliverCompletion: (completion) => {
       completions.push(completion)
@@ -190,7 +190,7 @@ describe('AgentHookCoordinator', () => {
       completions.push(completion)
       return true
     })
-    const isolated = new AgentHookCoordinator({} as never, {
+    const isolated = new AgentHookCoordinator(() => null, {
       deliverCompletion: deliverSpy,
       onEvent: (event) => events.push(event),
     })

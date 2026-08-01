@@ -36,7 +36,7 @@ beforeAll(async () => {
   await import('../../src/preload/index')
   const { registerWorkspaceHandlers } = await import('../../src/main/ipc/handlers')
   const { registerFileHandlers } = await import('../../src/main/ipc/file-handlers')
-  registerWorkspaceHandlers({ on: vi.fn() } as never)
+  registerWorkspaceHandlers(() => null)
   registerFileHandlers()
 })
 

@@ -113,6 +113,10 @@ interface ChatStreamEvent {
 
 let requestSeq = 0
 
+/*-- 空闲超时兜底：主进程异常断流（done/error 均未送达）时清理 listener，
+     防止闭包持有完整聊天历史泄漏。工具调用可能长时间无 delta，取宽松值。 --*/
+const STREAM_IDLE_TIMEOUT_MS = 300_000
+
 /**
  * 流式对话
  * @param messages 完整消息列表（含 system / user / assistant）
@@ -141,15 +145,26 @@ export function chatStream(
   const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
   let cleaned = false
   let doneCalled = false
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
 
   const cleanup = () => {
     if (cleaned) return
     cleaned = true
+    if (idleTimer) clearTimeout(idleTimer)
     unsubDelta()
     unsubDone()
     unsubError()
     unsubRecallTrace()
     unsubToolTrace()
+  }
+
+  const armIdleTimer = () => {
+    if (cleaned) return
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      cleanup()
+      onError('流式响应空闲超时，已断开')
+    }, STREAM_IDLE_TIMEOUT_MS)
   }
 
   const filterByRequest = (payload: unknown): ChatStreamEvent | null => {
@@ -160,6 +175,7 @@ export function chatStream(
   const unsubDelta = window.electron.llm.onDelta((payload) => {
     const p = filterByRequest(payload)
     if (!p || p.done) return
+    armIdleTimer()
     onDelta(p.delta ?? '')
   })
 
@@ -182,14 +198,18 @@ export function chatStream(
   const unsubRecallTrace = window.electron.llm.onRecallTrace((payload) => {
     const trace = payload as KnowledgeRecallTrace | undefined
     if (trace?.requestId !== requestId) return
+    armIdleTimer()
     options?.onRecallTrace?.(trace)
   })
 
   const unsubToolTrace = window.electron.llm.onToolTrace((payload) => {
     const trace = payload as ChatToolTraceEvent | undefined
     if (trace?.requestId !== requestId || !Array.isArray(trace.entries)) return
+    armIdleTimer()
     options?.onToolTrace?.(trace.entries)
   })
+
+  armIdleTimer()
 
   const targetProvider = options?.providerId
     ? Promise.resolve({ providerId: options.providerId, modelId: options.modelId })

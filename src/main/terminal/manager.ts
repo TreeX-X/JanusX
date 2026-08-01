@@ -268,20 +268,35 @@ export class TerminalManager {
     }
   }
 
-  /** Windows 进程树兜底：pty.kill() 不保证回收子进程，taskkill /T 强制清理。失败静默。 */
-  private killProcessTree(pid: number | undefined): void {
-    if (process.platform !== 'win32' || typeof pid !== 'number') return
-    try {
-      const killer = spawnProcess('taskkill', ['/PID', String(pid), '/T', '/F'], {
-        windowsHide: true,
-        stdio: 'ignore',
-      })
-      killer.on('error', () => {
-        // 兜底失败不得中断 kill 流程
-      })
-    } catch {
-      // 兜底失败静默
-    }
+  /** 在途的 taskkill 兜底进程；killAll 等待它们全部退出（audit C7）。 */
+  private pendingKillers = new Set<Promise<void>>()
+
+  /**
+   * Windows 进程树兜底：pty.kill() 不保证回收子进程，taskkill /T 强制清理。
+   * 返回 Promise 以便 shutdown 路径等待 killer 完成，保证「先杀终端再 finalize
+   * checkpoint」的顺序真正成立（audit C7）。失败静默。
+   */
+  private killProcessTree(pid: number | undefined): Promise<void> {
+    if (process.platform !== 'win32' || typeof pid !== 'number') return Promise.resolve()
+    const done = new Promise<void>((resolve) => {
+      try {
+        const killer = spawnProcess('taskkill', ['/PID', String(pid), '/T', '/F'], {
+          windowsHide: true,
+          stdio: 'ignore',
+        })
+        killer.on('error', () => {
+          // 兜底失败不得中断 kill 流程
+          resolve()
+        })
+        killer.on('exit', () => resolve())
+      } catch {
+        // 兜底失败静默
+        resolve()
+      }
+    })
+    this.pendingKillers.add(done)
+    void done.finally(() => this.pendingKillers.delete(done))
+    return done
   }
 
   killByWorkspace(workspaceId: string): void {
@@ -294,10 +309,12 @@ export class TerminalManager {
     }
   }
 
-  killAll(): void {
+  /** 同步发起全部 kill；返回的 Promise 在所有 taskkill 兜底进程退出后 resolve。 */
+  killAll(): Promise<void> {
     for (const [id] of this.instances) {
       this.kill(id)
     }
+    return Promise.all([...this.pendingKillers]).then(() => undefined)
   }
 
   getInstance(id: string): TerminalInstance | undefined {

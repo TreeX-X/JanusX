@@ -298,9 +298,9 @@ function ensureWorkspaceWatcher(workspacePath: string): void {
   }
 }
 
-function registerWorkspaceWatcher(mainWindow: BrowserWindow, workspacePath: string): void {
+function registerWorkspaceWatcher(mainWindow: BrowserWindow | null, workspacePath: string): void {
   const windows = watcherWindows.get(workspacePath) ?? new Set<BrowserWindow>()
-  windows.add(mainWindow)
+  if (mainWindow) windows.add(mainWindow)
   watcherWindows.set(workspacePath, windows)
   ensureWorkspaceWatcher(workspacePath)
 }
@@ -341,12 +341,11 @@ export function disposeWorkspaceWatchers(): void {
 }
 
 export function registerWorkspaceHandlers(
-  mainWindow: BrowserWindow,
+  getMainWindow: () => BrowserWindow | null,
   options: WorkspaceHandlerOptions = {},
 ): void {
   const authorize = options.authorizeRendererAction ?? authorizeRendererAction
-  // Also disposed from AppShutdown; function is idempotent.
-  mainWindow.on('closed', disposeWorkspaceWatchers)
+  // 窗口 closed 时的 disposeWorkspaceWatchers 由 register.ts 统一挂载（audit M1）
 
   ipcMain.handle(WORKSPACE_CHANNELS.initialize, async () => {
     try {
@@ -430,13 +429,17 @@ export function registerWorkspaceHandlers(
   })
 
   ipcMain.handle(SYSTEM_CHANNELS.openDirectory, async () => {
-    return dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory'],
-    })
+    const mainWindow = getMainWindow()
+    const dialogOptions = { properties: ['openDirectory'] as Array<'openDirectory'> }
+    return mainWindow ? dialog.showOpenDialog(mainWindow, dialogOptions) : dialog.showOpenDialog(dialogOptions)
   })
 
   ipcMain.handle(SYSTEM_CHANNELS.saveFile, async (_event, options: unknown) => {
-    const result = await dialog.showSaveDialog(mainWindow, resolveSaveFileDialogOptions(options))
+    const mainWindow = getMainWindow()
+    const saveOptions = resolveSaveFileDialogOptions(options)
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, saveOptions)
+      : await dialog.showSaveDialog(saveOptions)
     return { canceled: result.canceled, ...(result.filePath ? { filePath: result.filePath } : {}) }
   })
 
@@ -450,7 +453,7 @@ export function registerWorkspaceHandlers(
   })
 
   ipcMain.handle(FILE_TREE_CHANNELS.load, async (_event, rootPath: string) => {
-    registerWorkspaceWatcher(mainWindow, rootPath)
+    registerWorkspaceWatcher(getMainWindow(), rootPath)
     // 根层在非递归模式下已由 ensureWorkspaceWatcher 监听
     return readDirectoryNodes(rootPath, rootPath)
   })
@@ -466,7 +469,7 @@ export function registerWorkspaceHandlers(
       return []
     }
 
-    registerWorkspaceWatcher(mainWindow, rootPath)
+    registerWorkspaceWatcher(getMainWindow(), rootPath)
     // Linux 非递归降级:children 成功后为该绝对目录补 watcher,才能收到深层变更
     ensureNestedDirectoryWatcher(rootPath, targetDir)
     return readDirectoryNodes(rootPath, targetDir)

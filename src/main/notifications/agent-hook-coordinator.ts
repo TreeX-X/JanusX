@@ -139,7 +139,7 @@ export class AgentHookCoordinator {
   private readonly onResolvedPayload?: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => void
 
   constructor(
-    private readonly mainWindow: BrowserWindow,
+    private readonly getMainWindow: () => BrowserWindow | null,
     options: AgentHookCoordinatorOptions = {},
   ) {
     this.now = options.now ?? Date.now
@@ -363,9 +363,11 @@ export class AgentHookCoordinator {
   }
 
   private async defaultDeliverCompletion(completion: AgentHookCompletion): Promise<boolean> {
+    const mainWindow = this.getMainWindow()
+    if (!mainWindow) return false
     const settings = await configService.getNotificationSettings()
     const delivered = notifyAgentEvent(
-      this.mainWindow,
+      mainWindow,
       {
         sessionId: `terminal:${completion.terminalId}`,
         engine: completion.engine,
@@ -430,9 +432,11 @@ export class AgentHookCoordinator {
     payload: AgentHookPayload,
     terminal: RegisteredHookTerminal,
   ): Promise<boolean> {
+    const mainWindow = this.getMainWindow()
+    if (!mainWindow) return false
     const settings = await configService.getNotificationSettings()
     const delivered = notifyAgentAttention(
-      this.mainWindow,
+      mainWindow,
       {
         sessionId: `terminal:${terminal.terminalId}`,
         engine: terminal.engine,
@@ -488,8 +492,9 @@ export class AgentHookCoordinator {
   }
 
   private focusTerminal(terminalId: string): void {
-    if (this.mainWindow.isDestroyed() || this.mainWindow.webContents.isDestroyed()) return
-    this.mainWindow.webContents.send(TERMINAL_EVENT_CHANNELS.focus, { id: terminalId })
+    const mainWindow = this.getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
+    mainWindow.webContents.send(TERMINAL_EVENT_CHANNELS.focus, { id: terminalId })
   }
 
   private emit(event: AgentHookCoordinatorEvent): void {

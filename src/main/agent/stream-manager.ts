@@ -11,10 +11,16 @@ const MAX_STDERR_CHARS = 256 * 1024
 
 type EventCallback = (event: AgentEvent) => void
 
+interface QueuedTask {
+  id: string
+  run: () => Promise<void>
+  reject: (err: Error) => void
+}
+
 export class AgentStreamManager {
   private sessions = new Map<string, StreamSession>()
   private listeners = new Map<string, Set<EventCallback>>()
-  private queue: Array<() => Promise<void>> = []
+  private queue: QueuedTask[] = []
   private running = 0
   private maxConcurrency: number
 
@@ -27,6 +33,10 @@ export class AgentStreamManager {
   }
 
   async startWithId(id: string, options: AgentSpawnOptions): Promise<string> {
+    // 重复 id 会覆盖旧 session 使其失去 cancel 句柄，直接拒绝
+    if (this.sessions.has(id) || this.queue.some((task) => task.id === id)) {
+      throw new Error(`Agent stream already exists: ${id}`)
+    }
     return new Promise<string>((resolve, reject) => {
       const run = async () => {
         try {
@@ -34,13 +44,15 @@ export class AgentStreamManager {
           resolve(id)
         } catch (err) {
           this.running--
+          this.sessions.delete(id)
+          this.listeners.delete(id)
           this.drainQueue()
           reject(err)
         }
       }
 
       if (this.running >= this.maxConcurrency) {
-        this.queue.push(run)
+        this.queue.push({ id, run, reject })
         return
       }
       this.running++
@@ -69,7 +81,7 @@ export class AgentStreamManager {
     const timeout = setTimeout(() => {
       this.emit(id, { type: 'error', message: `Timeout: exceeded ${timeoutMs}ms` })
       abortController.abort('timeout')
-      proc.kill('SIGTERM')
+      this.killProcessTree(proc)
     }, timeoutMs)
 
     const session: StreamSession = {
@@ -172,19 +184,54 @@ export class AgentStreamManager {
   }
 
   cancel(id: string): void {
+    // 命中排队任务：移出队列并 reject，否则调用方 await start() 永挂
+    const queuedIndex = this.queue.findIndex((task) => task.id === id)
+    if (queuedIndex >= 0) {
+      const [task] = this.queue.splice(queuedIndex, 1)
+      this.listeners.delete(id)
+      task.reject(new Error(`Agent stream cancelled before start: ${id}`))
+      return
+    }
     const session = this.sessions.get(id)
     if (!session || session.status !== 'running') return
     session.abortController.abort('user-cancel')
     if (session.timeout) clearTimeout(session.timeout)
-    session.process.kill('SIGTERM')
+    this.killProcessTree(session.process)
     session.status = 'cancelled'
   }
 
   cancelAll(): void {
+    const queued = this.queue
+    this.queue = []
+    for (const task of queued) {
+      this.listeners.delete(task.id)
+      task.reject(new Error(`Agent stream cancelled before start: ${task.id}`))
+    }
     for (const [id, session] of this.sessions) {
       if (session.status === 'running') this.cancel(id)
     }
-    this.queue = []
+  }
+
+  /** SIGTERM + Windows taskkill /T 双发：shell:true 时 SIGTERM 只杀 shell 壳，taskkill 连带 CLI 子进程 */
+  private killProcessTree(proc: StreamSession['process']): void {
+    try {
+      proc.kill('SIGTERM')
+    } catch {
+      /* 进程可能已退出 */
+    }
+    if (process.platform === 'win32' && typeof proc.pid === 'number') {
+      try {
+        const killer = spawn('taskkill', ['/PID', String(proc.pid), '/T', '/F'], {
+          windowsHide: true,
+          stdio: 'ignore',
+        })
+        killer.on('error', () => {
+          /* 兜底失败不中断，SIGTERM 已发 */
+        })
+      } catch {
+        /* 兜底失败静默 */
+      }
+    }
   }
 
   killAll(): void {
@@ -203,7 +250,7 @@ export class AgentStreamManager {
     while (this.queue.length > 0 && this.running < this.maxConcurrency) {
       const next = this.queue.shift()!
       this.running++
-      next().finally(() => this.drainQueue())
+      next.run().finally(() => this.drainQueue())
     }
   }
 }

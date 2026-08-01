@@ -404,8 +404,9 @@ describe('AgentStreamManager', () => {
       const p1 = manager.start({ engine: 'claude', prompt: '1', cwd: '/tmp' })
       const p2 = manager.start({ engine: 'claude', prompt: '2', cwd: '/tmp' })
       const p3 = manager.start({ engine: 'claude', prompt: '3', cwd: '/tmp' })
-      // p4 is queued and will never resolve once the queue is cleared
-      manager.start({ engine: 'claude', prompt: '4', cwd: '/tmp' })
+      // p4 is queued; cancelAll must reject it instead of leaving it hanging forever
+      const p4 = manager.start({ engine: 'claude', prompt: '4', cwd: '/tmp' })
+      const p4Rejection = expect(p4).rejects.toThrow('cancelled before start')
 
       // Flush microtasks so p1-p3 resolve (runTask completes synchronously after spawn)
       await vi.advanceTimersByTimeAsync(0)
@@ -423,10 +424,13 @@ describe('AgentStreamManager', () => {
       await vi.runAllTimersAsync()
       // Await only the 3 that were actually running
       await Promise.all([p1, p2, p3])
+      await p4Rejection
 
       // All sessions cleaned up, 4th task was never spawned
+      // (win32 上 cancel 会额外 spawn taskkill 兜底，只统计 CLI spawn)
       expect(manager.listSessions()).toHaveLength(0)
-      expect(spawnMock).toHaveBeenCalledTimes(3)
+      const cliSpawns = spawnMock.mock.calls.filter(([command]) => command !== 'taskkill')
+      expect(cliSpawns).toHaveLength(3)
     })
   })
 

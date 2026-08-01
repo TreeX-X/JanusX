@@ -414,10 +414,11 @@ function resolveCommitLimit(value: number | undefined, isFirstAnalysis: boolean)
   return Math.max(1, Math.min(COMMIT_BATCH_CAP, candidate))
 }
 
-/** 单段 LLM 调用。 */
+/** 单段 LLM 调用。abortSignal 用于 app 退出时中断 in-flight 请求（audit C4）。 */
 async function callLLM(
   node: BlueprintNode,
-  segment: Segment
+  segment: Segment,
+  abortSignal?: AbortSignal
 ): Promise<SegmentResult> {
   const def = await llmService.getDefaultModel()
   if (!def) {
@@ -435,9 +436,33 @@ async function callLLM(
     schema: segmentSchema,
     system: getAnalysisSystemPrompt(),
     messages: [{ role: 'user', content: buildUserMessage(node, segment) }],
-    temperature: 0.2
+    temperature: 0.2,
+    abortSignal
   })
   return res.object
+}
+
+/** trigger 合并优先级：手动触发不被后续自动对账覆盖（audit C8-3）。 */
+const TRIGGER_PRIORITY: Record<AnalysisTrigger, number> = {
+  reconcile: 0,
+  'commit-threshold': 1,
+  'terminal-close': 2,
+  manual: 3
+}
+
+function mergeAnalyzeOptions(previous: AnalyzeOptions | undefined, next: AnalyzeOptions): AnalyzeOptions {
+  if (!previous) return next
+  const trigger = TRIGGER_PRIORITY[next.trigger] >= TRIGGER_PRIORITY[previous.trigger]
+    ? next.trigger
+    : previous.trigger
+  const commitLimit = previous.commitLimit === undefined && next.commitLimit === undefined
+    ? undefined
+    : Math.max(previous.commitLimit ?? 0, next.commitLimit ?? 0)
+  return {
+    workspacePath: next.workspacePath ?? previous.workspacePath,
+    trigger,
+    ...(commitLimit !== undefined ? { commitLimit } : {})
+  }
 }
 
 class JanusAnalyzer {
@@ -449,6 +474,8 @@ class JanusAnalyzer {
   private pending = new Set<string>()
   private pendingOpts = new Map<string, AnalyzeOptions>()
   private cancelled = false
+  /** app 退出时中断 in-flight LLM 调用（audit C4）。 */
+  private abortController = new AbortController()
 
   setMainWindow(win: BrowserWindow | null): void {
     this.mainWindow = win
@@ -468,7 +495,8 @@ class JanusAnalyzer {
     if (this.cancelled) return
     if (this.inflight.has(nodeId)) {
       this.pending.add(nodeId)
-      this.pendingOpts.set(nodeId, opts) // 合并进下一次
+      // 合并进下一次：保留更高优先级 trigger，commitLimit 取较大值（audit C8-3）
+      this.pendingOpts.set(nodeId, mergeAnalyzeOptions(this.pendingOpts.get(nodeId), opts))
       return
     }
     const p = this.analyzeNode(nodeId, opts)
@@ -500,12 +528,18 @@ class JanusAnalyzer {
 
   /**
    * Cancel pending work and ignore late inflight completions on app quit.
-   * In-flight promises may still settle; their finally handlers will not re-schedule.
+   * Aborts in-flight LLM calls; write paths check `cancelled` before touching
+   * blueprint files so a mid-shutdown analysis cannot race the store (audit C4).
    */
   cancelAll(): void {
     this.cancelled = true
     this.pending.clear()
     this.pendingOpts.clear()
+    try {
+      this.abortController.abort('analyzer-cancelled')
+    } catch {
+      /* ignore */
+    }
   }
 
   /** 对账补漏：取焦点节点游标，有未分析 commit 则入队。 */
@@ -602,13 +636,18 @@ class JanusAnalyzer {
     const segResults: Array<{ segment: Segment; result: SegmentResult }> = []
     const errors: AnalysisErrorInfo[] = []
     for (const seg of segments) {
+      if (this.cancelled) return null
       try {
-        const r = await callLLM(node, seg)
+        const r = await callLLM(node, seg, this.abortController.signal)
         segResults.push({ segment: seg, result: r })
       } catch (err) {
+        if (this.cancelled) return null
         errors.push(normalizeAnalysisError(err))
       }
     }
+
+    // 退出期不再落盘：避免与 AppShutdown 的强退窗口竞态写蓝图文件（audit C4）
+    if (this.cancelled) return null
 
     const lastSha = commits[0].hash
 

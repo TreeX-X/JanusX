@@ -9,7 +9,7 @@
  *  - 分析完成后主进程发 janus:island:analysis / janus:island:discovered（渲染侧接线为 follow-up）。
  */
 
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { blueprintStore } from '../janus/blueprint-store'
 import { analyzer } from '../janus/analyzer'
 import { knowledgeObservationService } from '../knowledge/observation-service'
@@ -33,8 +33,8 @@ import {
   type RejectCandidatePayload,
 } from '../../shared/ipc/janus'
 
-export function registerJanusHandlers(mainWindow: BrowserWindow): void {
-  analyzer.setMainWindow(mainWindow)
+export function registerJanusHandlers(): void {
+  // analyzer.setMainWindow 由 register.ts 在每次窗口重建时重绑（audit M1）
 
   // ───────────── 蓝图 CRUD（§6.1） ─────────────
   ipcMain.handle(JANUS_COMMAND_CHANNELS.listBlueprints, async (_e, cwd: string) => {

@@ -46,7 +46,7 @@ describe('legacy renderer policy boundary', () => {
 
   it('gates every workspace and file-tree mutation channel', async () => {
     const { registerWorkspaceHandlers } = await import('../../../src/main/ipc/handlers')
-    registerWorkspaceHandlers({ on: vi.fn() } as never, { authorizeRendererAction: denied })
+    registerWorkspaceHandlers(() => null, { authorizeRendererAction: denied })
     await expect(handler(WORKSPACE_CHANNELS.create)(event, { name: 'demo', path: 'C:\\workspace' })).rejects.toThrow('denied')
     await expect(handler(WORKSPACE_CHANNELS.update)(event, 'id', { name: 'next' })).rejects.toThrow('denied')
     await expect(handler(WORKSPACE_CHANNELS.delete)(event, 'id')).resolves.toEqual({ success: false })

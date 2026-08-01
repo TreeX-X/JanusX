@@ -73,7 +73,7 @@ describe('workspace watcher coordinator', () => {
       isDestroyed: () => false,
       webContents: { isDestroyed: () => false, send },
     } as any
-    registerWorkspaceHandlers(mainWindow)
+    registerWorkspaceHandlers(() => mainWindow)
     await mocks.handlers.get('filetree:load')!({}, temporaryRoot)
 
     expect(mocks.watch).toHaveBeenCalledTimes(1)

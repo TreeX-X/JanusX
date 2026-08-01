@@ -70,7 +70,7 @@ export class FeishuInboundRuntime {
       let channel: FeishuInboundChannel | null = null
       let client: FeishuInboundClient | null = null
       try {
-        this.gateway = this.createGateway(config, this.mainWindow)
+        this.gateway = this.createGateway(config)
         channel = this.channelFactory({ appId: config.appId.trim(), appSecret: config.appSecret.trim() })
         client = new FeishuInboundClient(
           channel,
@@ -136,7 +136,7 @@ export class FeishuInboundRuntime {
     if (client) await client.stop()
   }
 
-  private createGateway(config: FeishuRemoteProviderConfig, mainWindow: BrowserWindow): CompanionGateway {
+  private createGateway(config: FeishuRemoteProviderConfig): CompanionGateway {
     const root = join(app.getPath('userData'), 'janusx', 'companion')
     return new CompanionGateway({
       policy: () => ({
@@ -154,7 +154,7 @@ export class FeishuInboundRuntime {
         join(root, 'audit.jsonl'),
         config.auditRetentionDays * 24 * 60 * 60 * 1000,
       ),
-      terminals: new MainProcessTerminalControl((id, text) => submitCompanionTerminalLine(mainWindow, id, text)),
+      terminals: new MainProcessTerminalControl((id, text) => submitCompanionTerminalLine(id, text)),
       createTerminal: async (workspaceId, engine) => {
         const rootDir = join(app.getPath('userData'), 'janusx', 'workspaces')
         const record = await resolveRegisteredWorkspace(rootDir, workspaceId)

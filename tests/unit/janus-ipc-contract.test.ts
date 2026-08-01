@@ -73,7 +73,7 @@ vi.mock('../../src/main/knowledge/observation-service', () => ({
 beforeAll(async () => {
   await import('../../src/preload/index')
   const { registerJanusHandlers } = await import('../../src/main/ipc/janus-handlers')
-  registerJanusHandlers({} as Electron.BrowserWindow)
+  registerJanusHandlers()
   for (const [channel, handler] of mocks.handle.mock.calls) {
     handlers.set(channel, handler)
   }

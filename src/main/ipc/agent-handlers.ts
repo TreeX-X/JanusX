@@ -121,7 +121,7 @@ function toObservationPayload(
   }
 }
 
-export function registerAgentHandlers(mainWindow: BrowserWindow): void {
+export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle(AGENT_CHANNELS.start, async (_event, options: AgentSpawnOptions) => {
     const sessionId = randomUUID()
     const startedAt = new Date().toISOString()
@@ -167,32 +167,37 @@ export function registerAgentHandlers(mainWindow: BrowserWindow): void {
 
     // Wire event forwarding to renderer
     agentStreamManager.onEvent(sessionId, (event) => {
-      mainWindow.webContents.send(AGENT_CHANNELS.event, { sessionId, event })
+      const mainWindow = getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send(AGENT_CHANNELS.event, { sessionId, event })
+      }
       subAgentRunRegistry.updateRun(sessionId, {
         status: statusFromAgentEvent(event),
         lastEvent: summarizeAgentEvent(event),
       })
-      void configService
-        .getNotificationSettings()
-        .then((settings) => {
-          notifyAgentEvent(
-            mainWindow,
-            {
+      if (mainWindow) {
+        void configService
+          .getNotificationSettings()
+          .then((settings) => {
+            notifyAgentEvent(
+              mainWindow,
+              {
+                sessionId,
+                engine: options.engine,
+                startedAt: agentStreamManager.getSession(sessionId)?.startedAt ?? startedAt,
+              },
+              event,
+              settings,
+            )
+          })
+          .catch(() => {
+            notifyAgentEvent(mainWindow, {
               sessionId,
               engine: options.engine,
               startedAt: agentStreamManager.getSession(sessionId)?.startedAt ?? startedAt,
-            },
-            event,
-            settings,
-          )
-        })
-        .catch(() => {
-          notifyAgentEvent(mainWindow, {
-            sessionId,
-            engine: options.engine,
-            startedAt: agentStreamManager.getSession(sessionId)?.startedAt ?? startedAt,
-          }, event)
-        })
+            }, event)
+          })
+      }
 
       const observation = toObservationPayload(event, options, sessionId)
       if (observation) {
