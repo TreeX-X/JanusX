@@ -145,6 +145,7 @@ describe('terminal-launch', () => {
     expect(terminal.status).toBe('wait')
     expect(terminal.preset).toBe('claude')
     expect(terminal.shell).toBe('powershell.exe')
+    expect(terminal.contextWindowTokens).toBeUndefined()
     expect(setBlueprintMode).toHaveBeenCalledWith(false)
     expect(setLoadState).toHaveBeenCalledWith('terminal-active')
     expect(terminalBootLabel('claude')).toBe('Starting Claude Code…')

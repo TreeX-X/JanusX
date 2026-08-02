@@ -248,8 +248,11 @@ describe('AgentHookConfigManager', () => {
     )
 
     expect(env.OPENCODE_CONFIG_DIR).toBe(manager.getOpencodeConfigDir())
-    expect(await readFile(join(manager.getOpencodeConfigDir(), 'plugins', 'janusx-notify.js'), 'utf8')).toContain(
-      'session.idle',
-    )
+    const plugin = await readFile(join(manager.getOpencodeConfigDir(), 'plugins', 'janusx-notify.js'), 'utf8')
+    expect(plugin).toContain('session.idle')
+    expect(plugin).toContain('session.created')
+    expect(plugin).toContain('session.updated')
+    expect(plugin).toContain('extractSessionId')
+    expect(plugin).toContain('sessionID')
   })
 })

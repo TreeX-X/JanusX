@@ -44,6 +44,7 @@ export interface HookInstallResult {
 }
 
 const CLAUDE_HOOKS: HookCommandSpec[] = [
+  { event: 'SessionStart' },
   { event: 'UserPromptSubmit' },
   { event: 'Notification', matcher: 'permission_prompt|idle_prompt' },
   { event: 'Stop' },
@@ -266,7 +267,7 @@ function mergeWslenv(existing: string | undefined, keys: string[]): string {
 }
 
 function buildOpencodePlugin(): string {
-  return `const TARGET_EVENTS = new Set(["session.status", "session.idle", "session.error", "permission.asked"]);
+  return `const TARGET_EVENTS = new Set(["session.created", "session.updated", "session.status", "session.idle", "session.error", "permission.asked"]);
 
 function env(name) {
   const value = process.env[name];
@@ -277,6 +278,14 @@ function extractMessage(event) {
   if (!event || typeof event !== "object") return undefined;
   const properties = event.properties && typeof event.properties === "object" ? event.properties : {};
   const candidates = [event.message, event.error, event.reason, properties.message, properties.error, properties.reason];
+  return candidates.find((value) => typeof value === "string" && value.trim());
+}
+
+function extractSessionId(event) {
+  if (!event || typeof event !== "object") return undefined;
+  const properties = event.properties && typeof event.properties === "object" ? event.properties : {};
+  const session = properties.session && typeof properties.session === "object" ? properties.session : {};
+  const candidates = [event.sessionID, event.sessionId, event.session_id, properties.sessionID, properties.sessionId, properties.session_id, session.id, session.sessionID, session.sessionId];
   return candidates.find((value) => typeof value === "string" && value.trim());
 }
 
@@ -296,6 +305,7 @@ async function postToJanusX(event, directory) {
       event: event.type,
       terminalId: env("JANUSX_HOOK_TERMINAL_ID"),
       workspaceId: env("JANUSX_HOOK_WORKSPACE_ID"),
+      sessionId: extractSessionId(event),
       cwd: directory,
       message: extractMessage(event),
       timestamp: new Date().toISOString(),

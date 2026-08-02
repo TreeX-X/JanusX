@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { DatabaseSync } from 'node:sqlite'
 
 const testContext = vi.hoisted(() => ({ homeDir: '' }))
 
@@ -116,6 +117,137 @@ describe('runtime telemetry history', () => {
       outputTokens: 2_000,
       cacheReadTokens: 2_000,
       totalTokens: 12_000,
+      source: 'history',
+      confidence: 'authoritative',
+    })
+  })
+
+  it('reads Codex startup capacity and exact compactions only for a bound session', async () => {
+    const sessionId = '12345678-1234-1234-1234-123456789abc'
+    const sessionDir = join(testContext.homeDir, '.codex', 'sessions', '2026', '07', '30')
+    await mkdir(sessionDir, { recursive: true })
+    await writeFile(join(sessionDir, `rollout-2026-07-30T10-00-00-${sessionId}.jsonl`), [
+      JSON.stringify({ timestamp: '2026-07-30T10:00:00Z', type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
+      JSON.stringify({ timestamp: '2026-07-30T10:00:01Z', type: 'event_msg', payload: { type: 'task_started', model_context_window: 258_400 } }),
+      JSON.stringify({ timestamp: '2026-07-30T10:00:02Z', type: 'event_msg', payload: { type: 'context_compacted' } }),
+      JSON.stringify({ timestamp: '2026-07-30T10:00:03Z', type: 'event_msg', payload: { type: 'context_compacted' } }),
+    ].join('\n'))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId })
+
+    expect(snapshot).toMatchObject({
+      sessionId,
+      contextWindowTokens: 258_400,
+      compactionCount: 2,
+      compactionCountConfidence: 'exact',
+    })
+  })
+
+  it('does not accept a filename match whose Codex session metadata belongs to another terminal', async () => {
+    const requestedSessionId = '12345678-1234-1234-1234-123456789abc'
+    const actualSessionId = '12345678-1234-1234-1234-123456789abd'
+    const sessionDir = join(testContext.homeDir, '.codex', 'sessions', '2026', '07', '30')
+    await mkdir(sessionDir, { recursive: true })
+    await writeFile(join(sessionDir, `rollout-2026-07-30T10-00-00-${requestedSessionId}.jsonl`), [
+      JSON.stringify({ timestamp: '2026-07-30T10:00:00Z', type: 'session_meta', payload: { id: actualSessionId, cwd: 'C:/repo' } }),
+      JSON.stringify({ timestamp: '2026-07-30T10:00:01Z', type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { total_tokens: 50 } } } }),
+    ].join('\n'))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId: requestedSessionId })
+
+    expect(snapshot).toBeNull()
+  })
+
+  it('reads declared Codex capacity without claiming an unrelated active session', async () => {
+    const codexDir = join(testContext.homeDir, '.codex')
+    await mkdir(codexDir, { recursive: true })
+    await writeFile(join(codexDir, 'config.toml'), 'model = "gpt-5.6-sol"\nmodel_context_window = 258400\n')
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo' })
+
+    expect(snapshot).toMatchObject({
+      detectedModel: 'gpt-5.6-sol',
+      contextTokens: 0,
+      contextWindowTokens: 258_400,
+      source: 'configuration',
+      confidence: 'declared',
+    })
+    expect(snapshot?.sessionId).toBeUndefined()
+  })
+
+  it('reads the declared Claude model before the first conversation', async () => {
+    const claudeDir = join(testContext.homeDir, '.claude')
+    await mkdir(claudeDir, { recursive: true })
+    await writeFile(join(claudeDir, 'settings.json'), JSON.stringify({
+      model: 'opus[1m]',
+      env: { ANTHROPIC_AUTH_TOKEN: 'must-not-be-returned' },
+    }))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'claude', cwd: 'C:/repo' })
+
+    expect(snapshot).toEqual(expect.objectContaining({
+      detectedModel: 'opus[1m]',
+      contextTokens: 0,
+      contextWindowTokens: 1_000_000,
+      source: 'configuration',
+      confidence: 'declared',
+    }))
+    expect(JSON.stringify(snapshot)).not.toContain('must-not-be-returned')
+  })
+
+  it('reads a uniquely configured OpenCode model before the first conversation', async () => {
+    const configDir = join(testContext.homeDir, '.config', 'opencode')
+    await mkdir(configDir, { recursive: true })
+    await writeFile(join(configDir, 'opencode.json'), JSON.stringify({
+      provider: { custom: { models: { 'glm-5.2': { name: 'GLM 5.2' } } } },
+    }))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'opencode', cwd: 'C:/repo' })
+
+    expect(snapshot).toEqual(expect.objectContaining({
+      detectedModel: 'custom/glm-5.2',
+      contextTokens: 0,
+      source: 'configuration',
+      confidence: 'declared',
+    }))
+  })
+
+  it('reads current context and cumulative usage for an exact OpenCode session', async () => {
+    const dataDir = join(testContext.homeDir, '.local', 'share', 'opencode')
+    await mkdir(dataDir, { recursive: true })
+    const database = new DatabaseSync(join(dataDir, 'opencode.db'))
+    database.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY, directory TEXT, model TEXT, tokens_input INTEGER, tokens_output INTEGER,
+        tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_updated INTEGER
+      );
+      CREATE TABLE message (session_id TEXT, time_updated INTEGER, data TEXT);
+    `)
+    database.prepare('INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+      'session-1', 'C:/repo', JSON.stringify({ id: 'glm-5.2', providerID: 'custom' }),
+      1_200, 300, 400, 50, 2_000,
+    )
+    database.prepare('INSERT INTO message VALUES (?, ?, ?)').run(
+      'session-1', 2_000, JSON.stringify({
+        role: 'assistant', modelID: 'glm-5.2',
+        tokens: { input: 700, output: 100, cache: { read: 200, write: 25 } },
+      }),
+    )
+    database.close()
+
+    const snapshot = await getRuntimeTelemetrySnapshot({
+      preset: 'opencode', cwd: 'C:/repo', sessionId: 'session-1',
+    })
+
+    expect(snapshot).toMatchObject({
+      sessionId: 'session-1',
+      detectedModel: 'glm-5.2',
+      contextTokens: 925,
+      inputTokens: 1_200,
+      outputTokens: 300,
+      cacheReadTokens: 400,
+      cacheWriteTokens: 50,
+      totalTokens: 1_950,
       source: 'history',
       confidence: 'authoritative',
     })

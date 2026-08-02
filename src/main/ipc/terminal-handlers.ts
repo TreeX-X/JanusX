@@ -36,7 +36,7 @@ import { AGENT_CHANNELS } from '../../shared/ipc/agent'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
 import { companionSessionState } from '../companion/session-state'
 import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
-import { getRuntimeTelemetrySnapshot } from '../runtime-telemetry/history'
+import { terminalContextCoordinator } from '../runtime-telemetry/coordinator'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -279,14 +279,19 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   ) => {
     const instance = terminalManager.getInstance(terminalId)
     if (!instance) return
-    const telemetry = await getRuntimeTelemetrySnapshot({
+    if (sessionId) terminalContextCoordinator.bindSession(terminalId, engine, sessionId)
+    const telemetry = await terminalContextCoordinator.getSnapshot({
+      terminalId,
       preset: engine,
       cwd,
       startedAt: instance.createdAt,
       sessionId,
     })
     if (telemetry) {
-      sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.telemetry, { id: terminalId, telemetry })
+      sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.telemetry, {
+        id: terminalId,
+        telemetry,
+      })
     }
   }
 
@@ -298,6 +303,15 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     onResolvedPayload: (payload, terminal) => {
       companionSessionState.handleHookPayload(payload)
       agentTurnRecorder.handleHookPayload(payload)
+      if (payload.sessionId) {
+        const refresh = () => refreshRuntimeTelemetry(
+          terminal.terminalId,
+          terminal.engine as Exclude<CheckpointEngine, 'shell' | 'manual'>,
+          terminal.cwd ?? payload.cwd ?? '',
+          payload.sessionId,
+        ).catch(() => undefined)
+        void refresh()
+      }
       if (/stop|complete|idle/i.test(payload.event)) {
         const refresh = () => refreshRuntimeTelemetry(
           terminal.terminalId,
@@ -763,6 +777,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         companionSessionState.unregisterTerminal(id)
         hookCoordinator.unregisterTerminal(id)
         agentTurnRecorder.unregisterTerminal(id)
+        terminalContextCoordinator.unbindTerminal(id)
       } catch (err) {
         console.error(`[terminal ${id}] onExit error:`, err)
         // Best-effort cleanup so a partial failure does not leak state.
@@ -770,6 +785,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         try { companionSessionState.unregisterTerminal(id) } catch {}
         try { hookCoordinator.unregisterTerminal(id) } catch {}
         try { agentTurnRecorder.unregisterTerminal(id) } catch {}
+        try { terminalContextCoordinator.unbindTerminal(id) } catch {}
       }
     })
 
@@ -795,6 +811,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         unregisterCompanion: () => companionSessionState.unregisterTerminal(id),
         unregisterHook: () => hookCoordinator.unregisterTerminal(id),
         unregisterRecorder: () => agentTurnRecorder.unregisterTerminal(id),
+        unregisterTelemetry: () => terminalContextCoordinator.unbindTerminal(id),
         removeRun: () => subAgentRunRegistry.removeRun(`terminal:${id}`),
         killPty: () => terminalManager.kill(id),
       })

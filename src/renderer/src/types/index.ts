@@ -41,9 +41,13 @@ export interface Terminal {
   contextTokens?: number
   contextWindowTokens?: number
   telemetrySessionId?: string
+  telemetrySessionBinding?: 'exact'
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number
+  compactionCount?: number
+  compactionCountConfidence?: 'exact'
+  modelChangedAt?: number
 }
 
 // ── Git types ──

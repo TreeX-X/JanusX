@@ -21,6 +21,10 @@ export interface RuntimeTelemetryPatch {
   observedAt?: number
   source?: RuntimeTelemetrySource
   confidence?: RuntimeTelemetryConfidence
+  sessionBinding?: 'exact'
+  compactionCount?: number
+  compactionCountConfidence?: 'exact'
+  modelChangedAt?: number
 }
 
 export type RuntimeTelemetryState = RuntimeTelemetryPatch & {
@@ -29,6 +33,10 @@ export type RuntimeTelemetryState = RuntimeTelemetryPatch & {
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number
+  telemetrySessionBinding?: 'exact'
+  compactionCount?: number
+  compactionCountConfidence?: 'exact'
+  modelChangedAt?: number
 }
 
 export interface RuntimeTelemetryUpdate {
@@ -44,6 +52,10 @@ export interface RuntimeTelemetryUpdate {
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number
+  telemetrySessionBinding?: 'exact'
+  compactionCount?: number
+  compactionCountConfidence?: 'exact'
+  modelChangedAt?: number
 }
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
@@ -149,14 +161,37 @@ export function mergeRuntimeTelemetrySnapshot(
   current: RuntimeTelemetryState,
   telemetry: RuntimeTelemetrySnapshot
 ): RuntimeTelemetryUpdate {
+  if (
+    telemetry.source === 'history' &&
+    telemetry.sessionId &&
+    current.telemetrySessionBinding !== 'exact' &&
+    telemetry.sessionBinding !== 'exact'
+  ) {
+    return {}
+  }
   const observedAt = telemetry.observedAt ?? Date.now()
   const source = telemetry.source ?? 'terminal-text'
   const confidence = telemetry.confidence ?? defaultConfidence(source)
   const sessionChanged = Boolean(
+    telemetry.sessionBinding === 'exact' &&
     telemetry.sessionId &&
     current.telemetrySessionId &&
     telemetry.sessionId !== current.telemetrySessionId
   )
+  // A new model invalidates a previous model's runtime capacity. Some CLIs
+  // emit turn_context before task_started, so use the registry in that gap.
+  const modelChanged = Boolean(
+    telemetry.modelChangedAt !== undefined &&
+    telemetry.detectedModel &&
+    telemetry.detectedModel !== current.detectedModel,
+  )
+  if (
+    current.telemetrySessionBinding === 'exact' &&
+    telemetry.source === 'history' &&
+    telemetry.sessionId !== current.telemetrySessionId
+  ) {
+    return {}
+  }
   const isOlder = !sessionChanged && current.telemetryUpdatedAt !== undefined && observedAt < current.telemetryUpdatedAt
   const lowerConfidence = !sessionChanged && confidenceRank(confidence) < confidenceRank(current.telemetryConfidence)
 
@@ -195,10 +230,23 @@ export function mergeRuntimeTelemetrySnapshot(
       if (telemetry[field] === undefined && current[field] !== undefined) patch[field] = undefined
     }
   }
-
-  if (telemetry.sessionId && telemetry.sessionId !== current.telemetrySessionId) {
-    patch.telemetrySessionId = telemetry.sessionId
+  if (modelChanged && telemetry.contextWindowTokens === undefined && current.contextWindowTokens !== undefined) {
+    patch.contextWindowTokens = undefined
   }
+
+  // A history scan may find a session in the same cwd as another terminal. Only
+  // a hook/adapter assertion may bind that session to this terminal instance.
+  if (telemetry.sessionBinding === 'exact' && telemetry.sessionId && telemetry.sessionId !== current.telemetrySessionId) {
+    patch.telemetrySessionId = telemetry.sessionId
+    patch.telemetrySessionBinding = 'exact'
+  }
+
+  if (telemetry.compactionCountConfidence === 'exact' && telemetry.compactionCount !== undefined) {
+    assign('compactionCount', telemetry.compactionCount)
+    assign('compactionCountConfidence', 'exact')
+  }
+
+  if (telemetry.modelChangedAt !== undefined) assign('modelChangedAt', telemetry.modelChangedAt)
 
   if (Object.keys(patch).length === 0) return patch
   patch.telemetrySource = source
@@ -212,7 +260,7 @@ export function extractRuntimeTelemetry(text: string, observedAt = Date.now()): 
   const fromJson = extractStructuredTelemetry(normalized)
   const detectedModel = fromJson.detectedModel ?? detectModelFromText(normalized)
   const explicitContext = extractExplicitContext(normalized)
-  const hasStructuredUsage = hasUsage(fromJson)
+  const hasStructuredRuntimeEvent = hasUsage(fromJson) || fromJson.modelChangedAt !== undefined
   const hasExplicitContext = explicitContext.contextTokens !== undefined || explicitContext.contextWindowTokens !== undefined
   const isAuthoritativeTokenCount = /["']type["']\s*:\s*["']token_count["']/i.test(normalized)
 
@@ -225,9 +273,10 @@ export function extractRuntimeTelemetry(text: string, observedAt = Date.now()): 
     totalTokens: fromJson.totalTokens,
     contextTokens: fromJson.contextTokens ?? explicitContext.contextTokens,
     contextWindowTokens: fromJson.contextWindowTokens ?? explicitContext.contextWindowTokens,
+    modelChangedAt: fromJson.modelChangedAt,
     observedAt,
-    source: hasStructuredUsage ? 'provider-event' : 'terminal-text',
-    confidence: isAuthoritativeTokenCount ? 'authoritative' : hasStructuredUsage ? 'derived' : hasExplicitContext ? 'estimated' : 'estimated',
+    source: hasStructuredRuntimeEvent ? 'provider-event' : 'terminal-text',
+    confidence: isAuthoritativeTokenCount || hasStructuredRuntimeEvent ? 'authoritative' : hasExplicitContext ? 'estimated' : 'estimated',
   }
 }
 
@@ -275,6 +324,7 @@ function extractStructuredTelemetry(text: string): RuntimeTelemetryPatch {
 function extractTelemetryFromJson(value: Record<string, unknown>): RuntimeTelemetryPatch {
   const patch: RuntimeTelemetryPatch = {}
   const payload = asRecord(value.payload)
+  const payloadType = readString(payload?.type)
   const info = asRecord(payload?.info)
   const message = asRecord(value.message)
   const usage = asRecord(value.usage) ?? asRecord(message?.usage) ?? asRecord(payload?.usage)
@@ -286,7 +336,15 @@ function extractTelemetryFromJson(value: Record<string, unknown>): RuntimeTeleme
     readString(info?.model)
   if (model) patch.detectedModel = normalizeModelName(model)
 
-  if (payload?.type === 'token_count' && info) {
+  if (value.type === 'turn_context' || payloadType === 'task_started') {
+    patch.modelChangedAt = readTimestamp(value.timestamp) ?? Date.now()
+  }
+
+  if (payloadType === 'task_started') {
+    patch.contextWindowTokens = readPositiveNumber(payload?.model_context_window ?? payload?.modelContextWindow)
+  }
+
+  if (payloadType === 'token_count' && info) {
     const lastUsage = asRecord(info.last_token_usage) ?? asRecord(info.lastTokenUsage)
     const totalUsage = asRecord(info.total_token_usage) ?? asRecord(info.totalTokenUsage)
     patch.contextTokens = readPositiveNumber(lastUsage?.total_tokens ?? lastUsage?.totalTokens)
@@ -349,6 +407,7 @@ function mergeTelemetryPatch(target: RuntimeTelemetryPatch, source: RuntimeTelem
   if (source.cacheReadTokens !== undefined) target.cacheReadTokens = source.cacheReadTokens
   if (source.cacheWriteTokens !== undefined) target.cacheWriteTokens = source.cacheWriteTokens
   if (source.totalTokens !== undefined) target.totalTokens = source.totalTokens
+  if (source.modelChangedAt !== undefined) target.modelChangedAt = source.modelChangedAt
 }
 
 function defaultConfidence(source: RuntimeTelemetrySource): RuntimeTelemetryConfidence {
@@ -360,6 +419,7 @@ function defaultConfidence(source: RuntimeTelemetrySource): RuntimeTelemetryConf
 function confidenceRank(confidence?: RuntimeTelemetryConfidence): number {
   if (confidence === 'authoritative') return 3
   if (confidence === 'derived') return 2
+  if (confidence === 'declared') return 1.5
   if (confidence === 'estimated') return 1
   return 0
 }
@@ -393,6 +453,15 @@ function readPositiveNumber(value: unknown): number | undefined {
   const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
   if (!Number.isFinite(numeric) || numeric <= 0) return undefined
   return Math.round(numeric)
+}
+
+function readTimestamp(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value < 1_000_000_000_000 ? Math.round(value * 1000) : Math.round(value)
+  }
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function readString(value: unknown): string | undefined {

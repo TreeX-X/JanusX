@@ -1,6 +1,7 @@
-import { readdir, open, stat } from 'fs/promises'
+import { readdir, open, readFile, stat } from 'fs/promises'
 import { join } from 'path'
 import os from 'os'
+import { DatabaseSync } from 'node:sqlite'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 
 interface SessionFileRef {
@@ -27,8 +28,24 @@ export async function getRuntimeTelemetrySnapshot(
   const sessionId = readString(request.sessionId)
 
   if (!preset || preset === 'shell' || !cwd) return null
-  if (preset === 'claude') return scanClaudeHistory(cwd, startedAt, sessionId)
-  if (preset === 'codex') return scanCodexHistory(cwd, startedAt, sessionId)
+  // Never infer a session from a shared cwd. Two JanusX terminals can launch
+  // the same CLI in the same workspace at once; only an adapter/hook-provided
+  // session id is safe to read as terminal-specific telemetry.
+  if (preset === 'claude') {
+    return sessionId
+      ? scanClaudeHistory(cwd, startedAt, sessionId)
+      : readClaudeBootstrapTelemetry()
+  }
+  if (preset === 'codex') {
+    return sessionId
+      ? scanCodexHistory(cwd, startedAt, sessionId)
+      : readCodexBootstrapTelemetry()
+  }
+  if (preset === 'opencode') {
+    return sessionId
+      ? readOpenCodeSessionTelemetry(cwd, sessionId)
+      : readOpenCodeBootstrapTelemetry(cwd)
+  }
   return null
 }
 
@@ -47,6 +64,7 @@ async function scanClaudeHistory(cwd: string, startedAt?: number, sessionId?: st
   const current = await parseClaudeSession(latestCurrent, startedAt)
   if (!current && latestKnownModel) return createEmptyCurrentSnapshot(latestKnownModel)
   if (!current) return startedAt === undefined ? null : createEmptyCurrentSnapshot()
+  if (sessionId && current.sessionId !== sessionId) return null
 
   if (!current.detectedModel && latestKnownModel?.detectedModel) {
     current.detectedModel = latestKnownModel.detectedModel
@@ -70,8 +88,9 @@ async function scanCodexHistory(cwd: string, startedAt?: number, sessionId?: str
     .slice(0, MAX_CODEX_CANDIDATES)
 
   for (const file of files) {
-    const snapshot = await parseCodexSession(file, cwd, startedAt)
+    const snapshot = await parseCodexSession(file, cwd, startedAt, true)
     if (!snapshot) continue
+    if (sessionId && snapshot.sessionId !== sessionId) continue
     if (snapshotMatchesCwd(snapshot, cwd)) return snapshot
   }
 
@@ -171,8 +190,16 @@ function createEmptyCurrentSnapshot(modelSnapshot?: RuntimeTelemetrySnapshot | n
   }
 }
 
-async function parseCodexSession(file: SessionFileRef, cwd: string, startedAt?: number): Promise<RuntimeTelemetrySnapshot | null> {
-  const lines = await readJsonlLines(file.path)
+async function parseCodexSession(
+  file: SessionFileRef,
+  cwd: string,
+  startedAt?: number,
+  includeCompactions = false,
+): Promise<RuntimeTelemetrySnapshot | null> {
+  // Compression is an auditable count, not a best-effort tail sample. A bound
+  // session is read completely so older compactions cannot disappear from a
+  // long rollout file.
+  const lines = await readJsonlLines(file.path, includeCompactions)
   const snapshot: RuntimeTelemetrySnapshot & { cwd?: string } = {
     filePath: file.path,
     observedAt: file.updatedAt,
@@ -198,11 +225,22 @@ async function parseCodexSession(file: SessionFileRef, cwd: string, startedAt?: 
     const info = asRecord(payload?.info)
     const payloadType = readString(payload?.type)
 
+    if (payloadType === 'context_compacted' && includeCompactions) {
+      snapshot.compactionCount = (snapshot.compactionCount ?? 0) + 1
+      snapshot.compactionCountConfidence = 'exact'
+    }
+
+    if (payloadType === 'task_started') {
+      const runtimeWindow = readPositiveNumber(payload?.model_context_window ?? payload?.modelContextWindow)
+      if (runtimeWindow !== undefined) snapshot.contextWindowTokens = runtimeWindow
+    }
+
     if (rootType === 'turn_context') {
       const model = readString(payload?.model)
       const turnCwd = readString(payload?.cwd)
       if (model) snapshot.detectedModel = model
       if (turnCwd) snapshot.cwd = normalizePath(turnCwd)
+      snapshot.modelChangedAt = readRecordTimestampMs(value)
     }
 
     if (payloadType !== 'token_count' || !info) continue
@@ -267,12 +305,12 @@ async function listJsonlFilesRecursive(
   }
 }
 
-async function readJsonlLines(filePath: string): Promise<string[]> {
+async function readJsonlLines(filePath: string, full = false): Promise<string[]> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(filePath, 'r')
     const { size } = await handle.stat()
-    if (size <= TELEMETRY_TAIL_BYTES + TELEMETRY_HEAD_BYTES) {
+    if (full || size <= TELEMETRY_TAIL_BYTES + TELEMETRY_HEAD_BYTES) {
       const fullBuffer = Buffer.allocUnsafe(size)
       await handle.read(fullBuffer, 0, fullBuffer.length, 0)
       return fullBuffer.toString('utf-8').split(/\r?\n/).filter(Boolean)
@@ -371,9 +409,165 @@ function hasTelemetry(snapshot: RuntimeTelemetrySnapshot): boolean {
     snapshot.detectedModel ||
     snapshot.contextTokens !== undefined ||
     snapshot.contextWindowTokens !== undefined ||
+    snapshot.compactionCount !== undefined ||
     snapshot.inputTokens !== undefined ||
     snapshot.outputTokens !== undefined
   )
+}
+
+/**
+ * Before Codex creates a session, config.toml is the only terminal-specific
+ * source available. It is deliberately marked declared rather than runtime
+ * confirmed; a later task_started/token_count event supersedes it.
+ */
+async function readCodexBootstrapTelemetry(): Promise<RuntimeTelemetrySnapshot | null> {
+  try {
+    const config = await readFile(join(os.homedir(), '.codex', 'config.toml'), 'utf8')
+    const model = config.match(/^\s*model\s*=\s*["']?([^"'\r\n#]+)["']?/m)?.[1]?.trim()
+    const window = readPositiveNumber(config.match(/^\s*model_context_window\s*=\s*(\d+)/m)?.[1])
+    if (!model && window === undefined) return null
+    return {
+      detectedModel: model,
+      contextTokens: 0,
+      contextWindowTokens: window,
+      observedAt: Date.now(),
+      source: 'configuration',
+      confidence: 'declared',
+    }
+  } catch {
+    return null
+  }
+}
+
+async function readClaudeBootstrapTelemetry(): Promise<RuntimeTelemetrySnapshot | null> {
+  const settings = await readJsonConfig(join(os.homedir(), '.claude', 'settings.json'))
+  if (!settings) return null
+  const env = asRecord(settings.env)
+  const model = readString(settings.model) ?? readString(env?.ANTHROPIC_MODEL)
+  if (!model) return null
+  return createBootstrapSnapshot(model, inferDeclaredContextWindow(model, 'claude'))
+}
+
+async function readOpenCodeBootstrapTelemetry(cwd: string): Promise<RuntimeTelemetrySnapshot | null> {
+  const configPaths = [
+    join(cwd, 'opencode.json'),
+    join(cwd, 'opencode.jsonc'),
+    join(os.homedir(), '.config', 'opencode', 'opencode.json'),
+    join(os.homedir(), '.config', 'opencode', 'opencode.jsonc'),
+  ]
+
+  for (const configPath of configPaths) {
+    const config = await readJsonConfig(configPath)
+    if (!config) continue
+    const declared = readString(config.model)
+    const model = declared ?? readOnlyConfiguredOpenCodeModel(config)
+    if (model) return createBootstrapSnapshot(model, inferDeclaredContextWindow(model, 'opencode'))
+  }
+  return null
+}
+
+function readOpenCodeSessionTelemetry(cwd: string, sessionId: string): RuntimeTelemetrySnapshot | null {
+  const databasePath = join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db')
+  let database: DatabaseSync | undefined
+  try {
+    database = new DatabaseSync(databasePath, { readOnly: true })
+    const session = database.prepare(`
+      SELECT directory, model, tokens_input, tokens_output, tokens_cache_read, tokens_cache_write, time_updated
+      FROM session WHERE id = ?
+    `).get(sessionId) as Record<string, unknown> | undefined
+    if (!session || !pathsEqual(readString(session.directory) ?? '', cwd)) return null
+
+    const latestMessage = database.prepare(`
+      SELECT data FROM message
+      WHERE session_id = ? AND json_extract(data, '$.role') = 'assistant'
+      ORDER BY time_updated DESC LIMIT 1
+    `).get(sessionId) as { data?: unknown } | undefined
+    const message = parseJsonObject(readString(latestMessage?.data) ?? '')
+    const sessionModel = parseJsonObject(readString(session.model) ?? '')
+    const tokens = asRecord(message?.tokens)
+    const cache = asRecord(tokens?.cache)
+    const model = readString(message?.modelID) ?? readString(sessionModel?.id)
+    const inputTokens = readNonNegativeNumber(session.tokens_input)
+    const outputTokens = readNonNegativeNumber(session.tokens_output)
+    const cacheReadTokens = readNonNegativeNumber(session.tokens_cache_read)
+    const cacheWriteTokens = readNonNegativeNumber(session.tokens_cache_write)
+    const currentInput = readNonNegativeNumber(tokens?.input)
+    const currentCacheRead = readNonNegativeNumber(cache?.read) ?? 0
+    const currentCacheWrite = readNonNegativeNumber(cache?.write) ?? 0
+
+    return {
+      detectedModel: model,
+      contextTokens: currentInput === undefined ? 0 : currentInput + currentCacheRead + currentCacheWrite,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      totalTokens: sumDefined(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens),
+      sessionId,
+      observedAt: readTimestampMs(session.time_updated) ?? Date.now(),
+      source: 'history',
+      confidence: 'authoritative',
+    }
+  } catch {
+    return null
+  } finally {
+    database?.close()
+  }
+}
+
+function createBootstrapSnapshot(model: string, contextWindowTokens?: number): RuntimeTelemetrySnapshot {
+  return {
+    detectedModel: model,
+    contextTokens: 0,
+    contextWindowTokens,
+    observedAt: Date.now(),
+    source: 'configuration',
+    confidence: 'declared',
+  }
+}
+
+async function readJsonConfig(filePath: string): Promise<JsonRecord | undefined> {
+  try {
+    const raw = await readFile(filePath, 'utf8')
+    return parseJsonObject(stripJsonComments(raw)) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+function stripJsonComments(value: string): string {
+  return value.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+
+function readOnlyConfiguredOpenCodeModel(config: JsonRecord): string | undefined {
+  const provider = asRecord(config.provider)
+  if (!provider) return undefined
+  const models: string[] = []
+  for (const [providerId, rawProvider] of Object.entries(provider)) {
+    const configuredModels = asRecord(asRecord(rawProvider)?.models)
+    if (!configuredModels) continue
+    for (const modelId of Object.keys(configuredModels)) models.push(`${providerId}/${modelId}`)
+  }
+  return models.length === 1 ? models[0] : undefined
+}
+
+function inferDeclaredContextWindow(model: string, preset: 'claude' | 'opencode'): number | undefined {
+  const normalized = model.toLowerCase()
+  if (/\[1m\]|\b1m\b/.test(normalized)) return 1_000_000
+  if (preset === 'claude') return 200_000
+  return undefined
+}
+
+function readNonNegativeNumber(value: unknown): number | undefined {
+  const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  if (!Number.isFinite(numeric) || numeric < 0) return undefined
+  return Math.round(numeric)
+}
+
+function sumDefined(...values: Array<number | undefined>): number | undefined {
+  return values.some((value) => value !== undefined)
+    ? values.reduce<number>((total, value) => total + (value ?? 0), 0)
+    : undefined
 }
 
 function readPositiveNumber(value: unknown): number | undefined {

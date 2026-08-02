@@ -1,7 +1,6 @@
 import type { Terminal, TerminalPreset } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { getEstimatedContextWindow } from '@/lib/runtime-telemetry'
 import {
   requestTerminalForceFit,
   waitForTerminalGeometry,
@@ -95,8 +94,6 @@ export interface LaunchTerminalPresetOptions {
   workspacePath: string
   /** Defaults to preset meta name. */
   name?: string
-  /** Defaults true — TerminalArea previously set estimated context window. */
-  includeContextWindow?: boolean
   /** Defaults true — enter terminal UI immediately after addTerminal. */
   enterTerminalUi?: boolean
 }
@@ -119,7 +116,6 @@ export async function launchTerminalPreset(
     workspaceId,
     workspacePath,
     name,
-    includeContextWindow = true,
     enterTerminalUi = true,
   } = options
 
@@ -147,14 +143,6 @@ export async function launchTerminalPreset(
     status: 'wait',
     updatedAt: telemetryStartedAt,
     telemetryStartedAt,
-    ...(includeContextWindow
-      ? {
-          contextWindowTokens: getEstimatedContextWindow(preset),
-          telemetrySource: 'model-registry' as const,
-          telemetryConfidence: 'estimated' as const,
-          telemetryUpdatedAt: telemetryStartedAt,
-        }
-      : {}),
   }
 
   useWorkspaceStore.getState().addTerminal(terminal)

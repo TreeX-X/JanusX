@@ -137,6 +137,7 @@ function contextWindow(terminal: Terminal): number | undefined {
 function telemetryQualityLabel(terminal: Terminal): string {
   if (terminal.telemetryConfidence === 'authoritative') return 'Exact'
   if (terminal.telemetryConfidence === 'derived') return 'Derived'
+  if (terminal.telemetryConfidence === 'declared') return 'Configured'
   if (terminal.telemetryConfidence === 'estimated') return 'Estimated'
   return 'Unknown'
 }
@@ -206,6 +207,9 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
     ['Cache read', formatExactTokenCount(terminal.cacheReadTokens)],
     ['Cache write', formatExactTokenCount(terminal.cacheWriteTokens)],
     ['Session total', formatExactTokenCount(terminal.totalTokens)],
+    ['Session binding', terminal.telemetrySessionBinding === 'exact' ? 'Exact' : 'Pending'],
+    ['Context compactions', terminal.compactionCountConfidence === 'exact' ? String(terminal.compactionCount ?? 0) : 'Not reported'],
+    ['Model changed', formatAge(terminal.modelChangedAt)],
     ['Usage source', `${telemetryQualityLabel(terminal)} · ${terminal.telemetrySource ?? 'unknown'}`],
     ['Window source', windows.effectiveSource === 'runtime' ? 'Runtime telemetry' : windows.effectiveSource],
     ['Updated', formatAge(terminal.telemetryUpdatedAt)],

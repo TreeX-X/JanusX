@@ -8,18 +8,27 @@ export const SYSTEM_CHANNELS = {
 } as const
 
 export interface RuntimeTelemetryRequest {
+  /** JanusX terminal identity. Main process resolves its exact external-session binding. */
+  terminalId?: string
   preset?: 'shell' | 'claude' | 'codex' | 'opencode'
   cwd?: string
   startedAt?: number
   sessionId?: string
 }
-export type RuntimeTelemetrySource = 'provider-event' | 'history' | 'terminal-text' | 'model-registry'
-export type RuntimeTelemetryConfidence = 'authoritative' | 'derived' | 'estimated'
+export type RuntimeTelemetrySource = 'provider-event' | 'history' | 'terminal-text' | 'model-registry' | 'configuration'
+export type RuntimeTelemetryConfidence = 'authoritative' | 'derived' | 'declared' | 'estimated'
 export interface RuntimeTelemetrySnapshot {
   detectedModel?: string; contextTokens?: number; contextWindowTokens?: number; inputTokens?: number; outputTokens?: number
   cacheReadTokens?: number; cacheWriteTokens?: number; totalTokens?: number
   filePath?: string; sessionId?: string; observedAt?: number
   source?: RuntimeTelemetrySource; confidence?: RuntimeTelemetryConfidence
+  /** A hook or adapter explicitly associated this external session with one JanusX terminal. */
+  sessionBinding?: 'exact'
+  /** Only present when the adapter has counted compactions for an exactly bound session. */
+  compactionCount?: number
+  compactionCountConfidence?: 'exact'
+  /** The latest runtime model selection event for this session. */
+  modelChangedAt?: number
 }
 export interface DesktopToastPayload {
   id?: string; type?: 'completed' | 'failed' | 'attention'; engine?: string; title?: string; body?: string

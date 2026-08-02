@@ -509,7 +509,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         workspaceId: workspace.id,
         workspacePath: workspace.path,
         name: preset.name,
-        includeContextWindow: false,
       })
 
       if (!launched) {

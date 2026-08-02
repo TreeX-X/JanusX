@@ -85,13 +85,17 @@ export function CLITerminal({
 
       try {
         const result = await window.electron.system.getRuntimeTelemetry({
+          terminalId,
           preset: terminal.preset,
           cwd: terminal.cwd,
           startedAt: terminal.telemetryStartedAt,
           sessionId: terminal.telemetrySessionId,
         })
         if (cancelled || !result || typeof result !== 'object') return
-        applyTelemetryPatch(result as RuntimeTelemetrySnapshot)
+        applyTelemetryPatch({
+          ...(result as RuntimeTelemetrySnapshot),
+          ...(terminal.telemetrySessionBinding === 'exact' ? { sessionBinding: 'exact' as const } : {}),
+        })
       } catch {
         // History telemetry is opportunistic; terminal rendering must not depend on it.
       }
