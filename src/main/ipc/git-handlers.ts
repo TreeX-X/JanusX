@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { getStatus, getLog, stage, unstage, commit, push, pull } from '../git/service'
+import { getStatus, getLog, stage, unstage, commit, push, pull, getFileBaseline } from '../git/service'
 import { analyzer } from '../janus/analyzer'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { GIT_CHANNELS } from '../../shared/ipc/git'
@@ -92,4 +92,8 @@ export function registerGitHandlers(): void {
       actor: 'user',
     }).catch(() => {})
   })
+
+  ipcMain.handle(GIT_CHANNELS.fileBaseline, (_event, cwd: string, relativePath: string) =>
+    getFileBaseline(cwd, relativePath)
+  )
 }

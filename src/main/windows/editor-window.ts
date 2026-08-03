@@ -1,6 +1,7 @@
 import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { loadRendererWindow } from './renderer-loader'
+import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 
 export interface EditorWindowPayload { filePath?: string; workspacePath?: string }
 
@@ -25,6 +26,7 @@ export class EditorWindowManager {
     const existing = this.windows.get(payload.filePath)
     if (existing && !existing.isDestroyed()) {
       existing.focus()
+      existing.webContents.send(SYSTEM_CHANNELS.refreshEditor)
       return { success: true }
     }
 

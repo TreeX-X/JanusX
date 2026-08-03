@@ -3,6 +3,7 @@ import type { GitStatus, GitCommit } from '@/types'
 
 interface GitStore {
   status: GitStatus | null
+  statusCwd: string | null
   commits: GitCommit[]
   loading: boolean
   error: string | null
@@ -16,20 +17,66 @@ interface GitStore {
   pullChanges: (cwd: string) => Promise<boolean>
 }
 
+interface PendingStatusRefresh {
+  promise: Promise<void>
+  rerun: boolean
+}
+
+const pendingStatusRefreshes = new Map<string, PendingStatusRefresh>()
+
+function normalizeCwd(cwd: string): string {
+  const normalized = cwd.replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[A-Za-z]:/.test(normalized) ? normalized.toLowerCase() : normalized
+}
+
+function supersedePendingRefresh(cwd: string): string {
+  const statusCwd = normalizeCwd(cwd)
+  const pending = pendingStatusRefreshes.get(statusCwd)
+  if (pending) pending.rerun = true
+  return statusCwd
+}
+
 export const useGitStore = create<GitStore>((set) => ({
   status: null,
+  statusCwd: null,
   commits: [],
   loading: false,
   error: null,
 
   fetchStatus: async (cwd) => {
-    set({ error: null })
-    try {
-      const status = await window.electron.git.status(cwd)
-      set({ status })
-    } catch (err: any) {
-      set({ status: null, error: err.message })
+    const statusCwd = normalizeCwd(cwd)
+    set((state) => ({
+      status: state.statusCwd === statusCwd ? state.status : null,
+      statusCwd,
+      error: null,
+    }))
+
+    const pending = pendingStatusRefreshes.get(statusCwd)
+    if (pending) {
+      pending.rerun = true
+      return pending.promise
     }
+
+    const refresh: PendingStatusRefresh = { promise: Promise.resolve(), rerun: false }
+    refresh.promise = (async () => {
+      do {
+        refresh.rerun = false
+        try {
+          const status = await window.electron.git.status(cwd)
+          if (refresh.rerun) continue
+          set((state) => state.statusCwd === statusCwd ? { status, error: null } : {})
+        } catch (err: any) {
+          if (refresh.rerun) continue
+          set((state) => state.statusCwd === statusCwd ? { error: err.message } : {})
+        }
+      } while (refresh.rerun)
+    })().finally(() => {
+      if (pendingStatusRefreshes.get(statusCwd) === refresh) {
+        pendingStatusRefreshes.delete(statusCwd)
+      }
+    })
+    pendingStatusRefreshes.set(statusCwd, refresh)
+    return refresh.promise
   },
 
   fetchLog: async (cwd, maxCount) => {
@@ -42,30 +89,33 @@ export const useGitStore = create<GitStore>((set) => ({
   },
 
   stageFiles: async (cwd, paths) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, statusCwd: normalizeCwd(cwd) })
     try {
       const status = await window.electron.git.stage(cwd, paths)
-      set({ status, loading: false })
+      const statusCwd = supersedePendingRefresh(cwd)
+      set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
     } catch (err: any) {
       set({ error: err.message, loading: false })
     }
   },
 
   unstageFiles: async (cwd, paths) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, statusCwd: normalizeCwd(cwd) })
     try {
       const status = await window.electron.git.unstage(cwd, paths)
-      set({ status, loading: false })
+      const statusCwd = supersedePendingRefresh(cwd)
+      set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
     } catch (err: any) {
       set({ error: err.message, loading: false })
     }
   },
 
   commitChanges: async (cwd, message) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, statusCwd: normalizeCwd(cwd) })
     try {
       const status = await window.electron.git.commit(cwd, message)
-      set({ status, loading: false })
+      const statusCwd = supersedePendingRefresh(cwd)
+      set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
       return true
     } catch (err: any) {
       set({ error: err.message, loading: false })
@@ -74,11 +124,12 @@ export const useGitStore = create<GitStore>((set) => ({
   },
 
   pushChanges: async (cwd) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, statusCwd: normalizeCwd(cwd) })
     try {
       await window.electron.git.push(cwd)
       const status = await window.electron.git.status(cwd)
-      set({ status, loading: false })
+      const statusCwd = supersedePendingRefresh(cwd)
+      set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
       return true
     } catch (err: any) {
       set({ error: err.message, loading: false })
@@ -87,11 +138,12 @@ export const useGitStore = create<GitStore>((set) => ({
   },
 
   pullChanges: async (cwd) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, statusCwd: normalizeCwd(cwd) })
     try {
       await window.electron.git.pull(cwd)
       const status = await window.electron.git.status(cwd)
-      set({ status, loading: false })
+      const statusCwd = supersedePendingRefresh(cwd)
+      set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
       return true
     } catch (err: any) {
       set({ error: err.message, loading: false })

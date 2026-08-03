@@ -67,6 +67,9 @@ export function StandaloneFileEditor() {
   const [file, setFile] = useState<OpenFile | null>(() =>
     editorParams ? createLoadingFile(editorParams.filePath, editorParams.workspacePath) : null,
   )
+  const [baselineContent, setBaselineContent] = useState<string | undefined>(undefined)
+  const fileRef = useRef<OpenFile | null>(null)
+  const loadRequestRef = useRef(0)
   const [isPinned, setIsPinned] = useState(false)
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
   const handleEditorMount = useCallback((editor: FindableEditor | null) => {
@@ -78,84 +81,88 @@ export function StandaloneFileEditor() {
   useEffect(() => () => unwatchFindControlsRef.current?.(), [])
 
   useEffect(() => {
+    fileRef.current = file
+  }, [file])
+
+  const loadFile = useCallback(async (allowDirty = false) => {
     if (!editorParams) return
-
-    let disposed = false
-    const loadFile = async () => {
-      const viewType = getFileViewType(editorParams.filePath)
-      try {
-        if (viewType === 'image') {
-          const result = await window.electron.file.readBinary(editorParams.filePath)
-          if (disposed) return
-          if (result.error) throw new Error(result.error)
-          setFile((current) =>
-            current
-              ? {
-                  ...current,
-                  viewType,
-                  base64: result.base64 ?? '',
-                  mimeType: result.mimeType ?? 'application/octet-stream',
-                  size: result.size,
-                  mtime: result.mtime,
-                  isLoading: false,
-                }
-              : current,
-          )
-          return
-        }
-
-        if (viewType === 'binary') {
-          const result = await window.electron.file.stat(editorParams.filePath)
-          if (disposed) return
-          if (result.error) throw new Error(result.error)
-          setFile((current) =>
-            current
-              ? {
-                  ...current,
-                  viewType,
-                  size: result.size,
-                  mtime: result.mtime,
-                  isLoading: false,
-                }
-              : current,
-          )
-          return
-        }
-
-        const result = await window.electron.file.read(editorParams.filePath)
-        if (disposed) return
+    if (!allowDirty && fileRef.current?.isDirty) return
+    const requestId = ++loadRequestRef.current
+    const viewType = getFileViewType(editorParams.filePath)
+    try {
+      if (viewType === 'image') {
+        const result = await window.electron.file.readBinary(editorParams.filePath)
+        if (requestId !== loadRequestRef.current) return
         if (result.error) throw new Error(result.error)
         setFile((current) =>
           current
             ? {
                 ...current,
                 viewType,
-                content: result.content ?? '',
+                base64: result.base64 ?? '',
+                mimeType: result.mimeType ?? 'application/octet-stream',
                 size: result.size,
                 mtime: result.mtime,
+                error: undefined,
                 isLoading: false,
               }
             : current,
         )
-      } catch (err: any) {
-        if (disposed) return
-        setFile((current) =>
-          current
-            ? {
-                ...current,
-                error: err.message || 'Failed to load file',
-                isLoading: false,
-              }
-            : current,
-        )
+        return
       }
-    }
 
-    void loadFile()
-    return () => {
-      disposed = true
+      if (viewType === 'binary') {
+        const result = await window.electron.file.stat(editorParams.filePath)
+        if (requestId !== loadRequestRef.current) return
+        if (result.error) throw new Error(result.error)
+        setFile((current) => current ? {
+          ...current,
+          viewType,
+          size: result.size,
+          mtime: result.mtime,
+          error: undefined,
+          isLoading: false,
+        } : current)
+        return
+      }
+
+      const relativePath = editorParams.filePath
+        .replace(editorParams.workspacePath, '')
+        .replace(/^[\\/]/, '')
+      const [result, baseline] = await Promise.all([
+        window.electron.file.read(editorParams.filePath),
+        window.electron.git.fileBaseline(editorParams.workspacePath, relativePath).catch(() => null),
+      ])
+      if (requestId !== loadRequestRef.current) return
+      if (result.error) throw new Error(result.error)
+      setBaselineContent(baseline?.available ? baseline.content : undefined)
+      setFile((current) => current ? {
+        ...current,
+        viewType,
+        content: result.content ?? '',
+        size: result.size,
+        mtime: result.mtime,
+        error: undefined,
+        isLoading: false,
+        isDirty: false,
+      } : current)
+    } catch (err: any) {
+      if (requestId !== loadRequestRef.current) return
+      setFile((current) =>
+        current
+          ? {
+              ...current,
+              error: err.message || 'Failed to load file',
+              isLoading: false,
+            }
+          : current,
+      )
     }
   }, [editorParams])
+
+  useEffect(() => { void loadFile(true) }, [loadFile])
+
+  useEffect(() => window.electron.window.onEditorRefresh(() => { void loadFile(false) }), [loadFile])
 
   const saveFile = useCallback(async () => {
     if (!file || file.isLoading || file.viewType === 'image' || file.viewType === 'binary') return
@@ -295,7 +302,7 @@ export function StandaloneFileEditor() {
       </div>
       <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
         {file ? (
-          <FileViewerContent file={file} onContentChange={handleContentChange} onEditorMount={handleEditorMount} />
+          <FileViewerContent file={file} diffOriginalContent={baselineContent} onContentChange={handleContentChange} onEditorMount={handleEditorMount} />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-[#666]">
             Missing file information

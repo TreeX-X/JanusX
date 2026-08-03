@@ -159,7 +159,7 @@ export function installElectronApiFallback(): void {
     },
     git: {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,
-      commit: unavailable, push: unavailable, pull: unavailable,
+      commit: unavailable, push: unavailable, pull: unavailable, fileBaseline: unavailable,
     },
     notificationSettings: {
       get: unavailable,
@@ -177,6 +177,7 @@ export function installElectronApiFallback(): void {
       embedEditor: unavailable,
       setAlwaysOnTop: unavailable,
       onEditorEmbedded: () => () => {},
+      onEditorRefresh: () => () => {},
     },
     system: { getDefaultShell: unavailable, getPlatform: unavailable, getRuntimeTelemetry: unavailable },
     desktopToast: { ready: () => {}, action: () => {}, onShow: () => () => {} },

@@ -83,13 +83,6 @@
   text-decoration-thickness: 1px;
 }
 
-@keyframes git-change-in {
-  from {
-    opacity: 0;
-    transform: translateY(1px);
-  }
-}
-
 .gitChange {
   display: flex;
   align-items: center;
@@ -103,7 +96,7 @@
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  animation: git-change-in 140ms ease-out;
+  transition: color 120ms ease;
 }
 
 .gitStatus {
@@ -142,7 +135,7 @@
   justify-content: center;
   gap: 3px;
   margin-left: 6px;
-  animation: git-change-in 140ms ease-out;
+  transition: opacity 120ms ease;
 }
 
 .gitAggregateAddition,

@@ -272,6 +272,7 @@ const gitAPI: GitAPI = {
   commit: (cwd, message) => ipcRenderer.invoke(GIT_CHANNELS.commit, cwd, message),
   push: (cwd) => ipcRenderer.invoke(GIT_CHANNELS.push, cwd),
   pull: (cwd) => ipcRenderer.invoke(GIT_CHANNELS.pull, cwd),
+  fileBaseline: (cwd, relativePath) => ipcRenderer.invoke(GIT_CHANNELS.fileBaseline, cwd, relativePath),
 }
 
 const notificationSettingsAPI: NotificationSettingsAPI = {
@@ -299,6 +300,7 @@ const windowAPI: WindowAPI = {
   embedEditor: (payload) => ipcRenderer.invoke(SYSTEM_CHANNELS.embedEditor, payload),
   setAlwaysOnTop: (value) => ipcRenderer.invoke(SYSTEM_CHANNELS.setAlwaysOnTop, value),
   onEditorEmbedded: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.editorEmbedded, callback),
+  onEditorRefresh: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.refreshEditor, callback),
 }
 const systemAPI: SystemAPI = {
   getDefaultShell: () => ipcRenderer.invoke(SYSTEM_CHANNELS.defaultShell),

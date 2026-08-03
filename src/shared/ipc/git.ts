@@ -1,6 +1,6 @@
 export const GIT_CHANNELS = {
   status: 'git:status', log: 'git:log', stage: 'git:stage', unstage: 'git:unstage',
-  commit: 'git:commit', push: 'git:push', pull: 'git:pull',
+  commit: 'git:commit', push: 'git:push', pull: 'git:pull', fileBaseline: 'git:file-baseline',
 } as const
 
 export interface GitBranch { name: string; upstream: string | null; ahead: number; behind: number }
@@ -13,6 +13,7 @@ export interface GitFileChange {
 }
 export interface GitCommit { hash: string; shortHash: string; message: string; author: string; date: string }
 export interface GitStatus { branch: GitBranch; changes: GitFileChange[]; clean: boolean }
+export interface GitFileBaseline { content: string; tracked: boolean; available: boolean }
 
 export interface GitAPI {
   status(cwd: string): Promise<GitStatus>
@@ -22,4 +23,5 @@ export interface GitAPI {
   commit(cwd: string, message: string): Promise<GitStatus>
   push(cwd: string): Promise<void>
   pull(cwd: string): Promise<void>
+  fileBaseline(cwd: string, relativePath: string): Promise<GitFileBaseline>
 }

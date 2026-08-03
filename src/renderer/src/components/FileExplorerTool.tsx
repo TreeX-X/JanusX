@@ -70,7 +70,6 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const gitStatus = useGitStore((s) => s.status)
-  const fetchGitStatus = useGitStore((s) => s.fetchStatus)
   const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PendingFileTreeDelete | null>(null)
   const [namingDialog, setNamingDialog] = useState<NamingDialogState | null>(null)
@@ -188,8 +187,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     setLoadingDirectoryKeys(new Set())
     setSearchQuery('')
     if (fileTreeViewportRef.current) fileTreeViewportRef.current.scrollTop = 0
-    void fetchGitStatus(activeWorkspacePath)
-  }, [activeWorkspacePath, fetchGitStatus])
+  }, [activeWorkspacePath])
 
   const finishFileTreeReveal = useCallback(() => {
     useWorkspaceStore.setState((state) =>
@@ -233,27 +231,6 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     }
     // expandedPaths 有意不入依赖:加载候选会主动 expand,避免与 setExpanded 形成环
   }, [activeWorkspacePath, fileTree, reloadDirectory, trimmedQuery])
-
-  useEffect(() => {
-    if (!activeWorkspacePath) return
-
-    let disposed = false
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null
-
-    const unsubscribe = window.electron.fileTree.onChanged((workspacePath) => {
-      if (workspacePath !== activeWorkspacePath) return
-      if (refreshTimer) clearTimeout(refreshTimer)
-      refreshTimer = setTimeout(() => {
-        if (!disposed) void fetchGitStatus(activeWorkspacePath)
-      }, 180)
-    })
-
-    return () => {
-      disposed = true
-      if (refreshTimer) clearTimeout(refreshTimer)
-      unsubscribe()
-    }
-  }, [activeWorkspacePath, fetchGitStatus])
 
   const handleToggleDirectory = useCallback(
     (node: FileNode) => {

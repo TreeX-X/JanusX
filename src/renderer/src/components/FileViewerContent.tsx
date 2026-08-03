@@ -7,9 +7,10 @@ interface FileViewerContentProps {
   file: OpenFile
   onContentChange: (content: string) => void
   onEditorMount?: (editor: FindableEditor | null) => void
+  diffOriginalContent?: string
 }
 
-export function FileViewerContent({ file, onContentChange, onEditorMount }: FileViewerContentProps) {
+export function FileViewerContent({ file, onContentChange, onEditorMount, diffOriginalContent }: FileViewerContentProps) {
   if (file.isLoading) {
     return (
       <div
@@ -40,6 +41,18 @@ export function FileViewerContent({ file, onContentChange, onEditorMount }: File
         <span style={{ color: '#666', fontSize: 11 }}>{file.error}</span>
         <span style={{ color: '#444', fontSize: 10 }}>Try closing and reopening the file</span>
       </div>
+    )
+  }
+
+  if (diffOriginalContent !== undefined && ['code', 'markdown', 'html'].includes(file.viewType)) {
+    return (
+      <MonacoViewer
+        content={file.content}
+        language={getMonacoLanguage(file.path)}
+        originalContent={diffOriginalContent}
+        onChange={onContentChange}
+        onEditorMount={onEditorMount}
+      />
     )
   }
 

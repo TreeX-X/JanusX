@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { lstat, readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'util'
 import type { GitFileChange } from '../../shared/ipc/git'
 
@@ -219,6 +219,27 @@ export async function push(cwd: string) {
 
 export async function pull(cwd: string) {
   await remoteGit(cwd, 'pull')
+}
+
+export async function getFileBaseline(cwd: string, relativePath: string): Promise<{ content: string; tracked: boolean; available: boolean }> {
+  if (!relativePath || relativePath.includes('\0') || isAbsolute(relativePath)) {
+    throw new Error('Invalid Git file path')
+  }
+  const absolutePath = resolve(cwd, relativePath)
+  const safePath = relative(resolve(cwd), absolutePath)
+  if (!safePath || safePath === '..' || safePath.startsWith(`..${sep}`)) {
+    throw new Error('Git file path is outside the workspace')
+  }
+  const available = await git(cwd, 'rev-parse', '--is-inside-work-tree').then(
+    (value) => value === 'true',
+    () => false,
+  )
+  if (!available) return { content: '', tracked: false, available: false }
+  try {
+    return { content: await rawGit(cwd, 'show', `HEAD:${safePath.replace(/\\/g, '/')}`), tracked: true, available: true }
+  } catch {
+    return { content: '', tracked: false, available: true }
+  }
 }
 
 export async function getCurrentBranch(cwd: string) {

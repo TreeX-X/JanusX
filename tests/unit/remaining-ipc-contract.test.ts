@@ -50,6 +50,7 @@ describe('remaining typed IPC contracts', () => {
     await api.agent.listSessions()
     await api.checkpoint.list({ cwd: 'C:\\repo' })
     await api.git.status('C:\\repo')
+    await api.git.fileBaseline('C:\\repo', 'README.md')
     await api.llm.getProviders()
     await api.notificationSettings.get()
     await api.notificationSettings.getFeishuControlStatus()
@@ -62,6 +63,7 @@ describe('remaining typed IPC contracts', () => {
       [AGENT_CHANNELS.listSessions],
       [CHECKPOINT_CHANNELS.list, { cwd: 'C:\\repo' }],
       [GIT_CHANNELS.status, 'C:\\repo'],
+      [GIT_CHANNELS.fileBaseline, 'C:\\repo', 'README.md'],
       [LLM_CHANNELS.getProviders],
       [NOTIFICATION_SETTINGS_CHANNELS.get],
       [NOTIFICATION_SETTINGS_CHANNELS.feishuControlStatus],

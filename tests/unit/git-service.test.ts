@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getStatus, push } from '../../src/main/git/service'
+import { getFileBaseline, getStatus, push } from '../../src/main/git/service'
 
 const execFileAsync = promisify(execFile)
 
@@ -91,5 +91,33 @@ describe('Git service push', () => {
       additions: 0,
       deletions: 0,
     }))
+  })
+
+  it('returns the HEAD baseline and an empty baseline for untracked files', async () => {
+    await writeFile(join(repository, 'README.md'), '# working\n')
+    await writeFile(join(repository, 'new-file.txt'), 'new\n')
+
+    await expect(getFileBaseline(repository, 'README.md')).resolves.toEqual({
+      content: '# test\n',
+      tracked: true,
+      available: true,
+    })
+    await expect(getFileBaseline(repository, 'new-file.txt')).resolves.toEqual({
+      content: '',
+      tracked: false,
+      available: true,
+    })
+  })
+
+  it('rejects baseline paths outside the workspace', async () => {
+    await expect(getFileBaseline(repository, '..\\outside.txt')).rejects.toThrow('outside the workspace')
+  })
+
+  it('reports that diff baselines are unavailable outside a Git repository', async () => {
+    await expect(getFileBaseline(root, 'plain.txt')).resolves.toEqual({
+      content: '',
+      tracked: false,
+      available: false,
+    })
   })
 })

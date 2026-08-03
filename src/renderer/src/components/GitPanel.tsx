@@ -27,7 +27,7 @@ const REMOTE_ACTION_META: Record<
 }
 
 export function GitPanel({ active = true }: { active?: boolean }) {
-  const { status, commits, loading, error, fetchStatus, fetchLog, stageFiles, unstageFiles, commitChanges, pushChanges, pullChanges } = useGitStore()
+  const { status, commits, loading, error, fetchLog, stageFiles, unstageFiles, commitChanges, pushChanges, pullChanges } = useGitStore()
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const [commitMsg, setCommitMsg] = useState('')
@@ -38,41 +38,14 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   }, [active])
 
   const cwd = workspaces.find((w) => w.id === activeWorkspaceId)?.path
-  const refreshGitData = useCallback(async (includeLog = true) => {
+  const refreshGitData = useCallback(async () => {
     if (!cwd) return
-    if (includeLog) {
-      await Promise.all([fetchStatus(cwd), fetchLog(cwd, GIT_HISTORY_LIMIT)])
-    } else {
-      await fetchStatus(cwd)
-    }
-  }, [cwd, fetchLog, fetchStatus])
+    await fetchLog(cwd, GIT_HISTORY_LIMIT)
+  }, [cwd, fetchLog])
 
   useEffect(() => {
     if (!cwd) return
     void refreshGitData()
-  }, [cwd, refreshGitData])
-
-  useEffect(() => {
-    if (!cwd) return
-
-    let disposed = false
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null
-
-    const unsubscribe = window.electron.fileTree.onChanged((workspacePath) => {
-      if (workspacePath !== cwd) return
-      if (refreshTimer) clearTimeout(refreshTimer)
-      refreshTimer = setTimeout(() => {
-        if (!disposed) {
-          void refreshGitData(false)
-        }
-      }, 180)
-    })
-
-    return () => {
-      disposed = true
-      if (refreshTimer) clearTimeout(refreshTimer)
-      unsubscribe()
-    }
   }, [cwd, refreshGitData])
 
   const handleStageAll = useCallback(async () => {
