@@ -10,6 +10,13 @@ type LoadedFileSnapshot = Pick<
 const loadedFileCache = new Map<string, LoadedFileSnapshot>()
 const pendingFileLoads = new Map<string, Promise<LoadedFileSnapshot>>()
 
+export function getEditorFileId(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[a-z]:\//i.test(normalized) || normalized.startsWith('//')
+    ? normalized.toLowerCase()
+    : normalized
+}
+
 function isPathInWorkspace(filePath: string, workspacePath: string): boolean {
   const normalizedFile = filePath.replace(/\\/g, '/').toLowerCase()
   const normalizedWorkspace = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
@@ -52,7 +59,8 @@ function readResultError(result: unknown): string | null {
 }
 
 async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): Promise<LoadedFileSnapshot> {
-  const pending = pendingFileLoads.get(absolutePath)
+  const id = getEditorFileId(absolutePath)
+  const pending = pendingFileLoads.get(id)
   if (pending) return pending
 
   const request = (async () => {
@@ -93,13 +101,13 @@ async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): P
     }
   })()
 
-  pendingFileLoads.set(absolutePath, request)
+  pendingFileLoads.set(id, request)
   try {
     const snapshot = await request
-    loadedFileCache.set(absolutePath, snapshot)
+    loadedFileCache.set(id, snapshot)
     return snapshot
   } finally {
-    pendingFileLoads.delete(absolutePath)
+    pendingFileLoads.delete(id)
   }
 }
 
@@ -109,18 +117,19 @@ export function remapEditorPaths(oldAbsolutePath: string, newAbsolutePath: strin
     if (!isSameOrUnderPath(key, oldAbsolutePath)) continue
     const snapshot = loadedFileCache.get(key)!
     loadedFileCache.delete(key)
-    loadedFileCache.set(remapAbsolutePath(key, oldAbsolutePath, newAbsolutePath), snapshot)
+    loadedFileCache.set(getEditorFileId(remapAbsolutePath(key, oldAbsolutePath, newAbsolutePath)), snapshot)
   }
 
   useEditorStore.setState((s) => {
     let changed = false
+    const activeFile = s.openFiles.find((file) => file.id === s.activeFileId)
     const openFiles = s.openFiles.map((file) => {
       if (!isSameOrUnderPath(file.absolutePath, oldAbsolutePath)) return file
       changed = true
       const absolutePath = remapAbsolutePath(file.absolutePath, oldAbsolutePath, newAbsolutePath)
       return {
         ...file,
-        id: absolutePath,
+        id: getEditorFileId(absolutePath),
         absolutePath,
         name: getFileName(absolutePath),
         path: absolutePath.replace(workspacePath, '').replace(/^[\\/]/, ''),
@@ -128,8 +137,8 @@ export function remapEditorPaths(oldAbsolutePath: string, newAbsolutePath: strin
     })
     if (!changed) return {}
     const activeFileId =
-      s.activeFileId && isSameOrUnderPath(s.activeFileId, oldAbsolutePath)
-        ? remapAbsolutePath(s.activeFileId, oldAbsolutePath, newAbsolutePath)
+      activeFile && isSameOrUnderPath(activeFile.absolutePath, oldAbsolutePath)
+        ? getEditorFileId(remapAbsolutePath(activeFile.absolutePath, oldAbsolutePath, newAbsolutePath))
         : s.activeFileId
     return { openFiles, activeFileId }
   })
@@ -176,7 +185,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   embeddedWidth: 560,
 
   openFile: async (absolutePath, workspacePath) => {
-    const id = absolutePath
+    const id = getEditorFileId(absolutePath)
     const existing = get().openFiles.find(f => f.id === id)
     if (existing) {
       set({ activeFileId: id, isVisible: true })
@@ -257,7 +266,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!file) return
     try {
       await window.electron.file.save(file.absolutePath, file.content)
-      loadedFileCache.set(file.absolutePath, {
+      loadedFileCache.set(file.id, {
         viewType: file.viewType,
         content: file.content,
         base64: file.base64,

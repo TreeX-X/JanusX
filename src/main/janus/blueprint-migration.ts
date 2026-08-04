@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { Blueprint, BlueprintFeatureItem, BlueprintNode } from './types'
 
-export const BLUEPRINT_SCHEMA_VERSION = 1
+export const BLUEPRINT_SCHEMA_VERSION = 2
 
 type VersionedBlueprint = Blueprint & { schemaVersion?: number }
 
@@ -134,6 +134,13 @@ export function migrateBlueprint(blueprint: Blueprint): boolean {
     for (const node of Object.values(blueprint.nodes)) {
       changed = migrateLegacyNodeFields(node) || changed
     }
+    versioned.schemaVersion = 1
+    changed = true
+  }
+  if (version < 2) {
+    blueprint.contentRevision = Number.isInteger(blueprint.contentRevision)
+      ? Math.max(0, blueprint.contentRevision)
+      : 0
     versioned.schemaVersion = BLUEPRINT_SCHEMA_VERSION
     changed = true
   }

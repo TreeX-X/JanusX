@@ -10,6 +10,15 @@ import type {
   BlueprintRequirementCandidateStatus,
   DiscoveredRequirement,
 } from '../janus/types'
+import type {
+  BlueprintMaintenanceApplyInput,
+  BlueprintMaintenanceApplyResult,
+  BlueprintMaintenanceEvent,
+  BlueprintMaintenanceMessageInput,
+  BlueprintMaintenanceProposalInput,
+  BlueprintMaintenanceStartInput,
+  BlueprintMaintenanceTask,
+} from '../janus/maintenance-types'
 
 export const JANUS_COMMAND_CHANNELS = {
   listBlueprints: 'blueprint:list',
@@ -34,11 +43,19 @@ export const JANUS_COMMAND_CHANNELS = {
   acceptRequirementCandidate: 'janus:requirements:accept-candidate',
   rejectRequirementCandidate: 'janus:requirements:reject-candidate',
   acceptDiscovered: 'janus:analyzer:accept-discovered',
+  maintenanceList: 'blueprint:maintenance:list',
+  maintenanceStart: 'blueprint:maintenance:start',
+  maintenanceMessage: 'blueprint:maintenance:message',
+  maintenancePropose: 'blueprint:maintenance:propose',
+  maintenanceApply: 'blueprint:maintenance:apply',
+  maintenanceCancel: 'blueprint:maintenance:cancel',
+  maintenanceComplete: 'blueprint:maintenance:complete',
 } as const
 
 export const JANUS_EVENT_CHANNELS = {
   analysis: 'janus:island:analysis',
   discovered: 'janus:island:discovered',
+  maintenance: 'blueprint:maintenance:event',
 } as const
 
 export interface BlueprintCreateInput {
@@ -178,4 +195,12 @@ export interface JanusAPI {
   acceptDiscovered(payload: AcceptDiscoveredPayload): Promise<BlueprintNode | null>
   onAnalysisResult(callback: (event: IslandAnalysisEvent) => void): () => void
   onDiscovered(callback: (event: IslandDiscoveredEvent) => void): () => void
+  listMaintenanceTasks(): Promise<BlueprintMaintenanceTask[]>
+  startMaintenanceTask(input: BlueprintMaintenanceStartInput): Promise<BlueprintMaintenanceTask>
+  sendMaintenanceMessage(input: BlueprintMaintenanceMessageInput): Promise<BlueprintMaintenanceTask>
+  generateMaintenanceProposal(input: BlueprintMaintenanceProposalInput): Promise<BlueprintMaintenanceTask>
+  applyMaintenanceChangeSet(input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult>
+  cancelMaintenanceTask(taskId: string): Promise<BlueprintMaintenanceTask>
+  completeMaintenanceTask(taskId: string): Promise<BlueprintMaintenanceTask>
+  onMaintenanceTask(callback: (event: BlueprintMaintenanceEvent) => void): () => void
 }

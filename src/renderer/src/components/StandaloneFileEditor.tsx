@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { FileViewerContent } from '@/components/FileViewerContent'
-import { getFileName, getFileViewType } from '@/lib/file-utils'
-import type { OpenFile } from '@/types'
+import { useEditorStore } from '@/stores/editor'
 import { Maximize2, PanelRightOpen, Pin, PinOff, Save, Search } from 'lucide-react'
 import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 
@@ -16,19 +15,6 @@ function getEditorWindowParams(): EditorWindowParams | null {
   const workspacePath = params.get('workspacePath')
   if (!filePath || !workspacePath) return null
   return { filePath, workspacePath }
-}
-
-function createLoadingFile(filePath: string, workspacePath: string): OpenFile {
-  return {
-    id: filePath,
-    name: getFileName(filePath),
-    path: filePath.replace(workspacePath, '').replace(/^[\\/]/, ''),
-    absolutePath: filePath,
-    viewType: getFileViewType(filePath),
-    content: '',
-    isDirty: false,
-    isLoading: true,
-  }
 }
 
 function WindowTrafficLights() {
@@ -64,12 +50,15 @@ function WindowTrafficLights() {
 export function StandaloneFileEditor() {
   const findEditorRef = useRef<FindableEditor | null>(null)
   const editorParams = useMemo(() => getEditorWindowParams(), [])
-  const [file, setFile] = useState<OpenFile | null>(() =>
-    editorParams ? createLoadingFile(editorParams.filePath, editorParams.workspacePath) : null,
-  )
+  const openFiles = useEditorStore((state) => state.openFiles)
+  const activeFileId = useEditorStore((state) => state.activeFileId)
+  const openFile = useEditorStore((state) => state.openFile)
+  const setActiveFile = useEditorStore((state) => state.setActiveFile)
+  const closeFile = useEditorStore((state) => state.closeFile)
+  const updateContent = useEditorStore((state) => state.updateContent)
+  const saveFile = useEditorStore((state) => state.saveFile)
+  const activeFile = openFiles.find((file) => file.id === activeFileId) ?? null
   const [baselineContent, setBaselineContent] = useState<string | undefined>(undefined)
-  const fileRef = useRef<OpenFile | null>(null)
-  const loadRequestRef = useRef(0)
   const [isPinned, setIsPinned] = useState(false)
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
   const handleEditorMount = useCallback((editor: FindableEditor | null) => {
@@ -81,94 +70,26 @@ export function StandaloneFileEditor() {
   useEffect(() => () => unwatchFindControlsRef.current?.(), [])
 
   useEffect(() => {
-    fileRef.current = file
-  }, [file])
-
-  const loadFile = useCallback(async (allowDirty = false) => {
     if (!editorParams) return
-    if (!allowDirty && fileRef.current?.isDirty) return
-    const requestId = ++loadRequestRef.current
-    const viewType = getFileViewType(editorParams.filePath)
-    try {
-      if (viewType === 'image') {
-        const result = await window.electron.file.readBinary(editorParams.filePath)
-        if (requestId !== loadRequestRef.current) return
-        if (result.error) throw new Error(result.error)
-        setFile((current) =>
-          current
-            ? {
-                ...current,
-                viewType,
-                base64: result.base64 ?? '',
-                mimeType: result.mimeType ?? 'application/octet-stream',
-                size: result.size,
-                mtime: result.mtime,
-                error: undefined,
-                isLoading: false,
-              }
-            : current,
-        )
-        return
-      }
+    void openFile(editorParams.filePath, editorParams.workspacePath)
+    const unsubscribe = window.electron.window.onEditorRefresh((payload) => {
+      void openFile(payload.filePath, payload.workspacePath)
+    })
+    window.electron.window.editorReady()
+    return unsubscribe
+  }, [editorParams, openFile])
 
-      if (viewType === 'binary') {
-        const result = await window.electron.file.stat(editorParams.filePath)
-        if (requestId !== loadRequestRef.current) return
-        if (result.error) throw new Error(result.error)
-        setFile((current) => current ? {
-          ...current,
-          viewType,
-          size: result.size,
-          mtime: result.mtime,
-          error: undefined,
-          isLoading: false,
-        } : current)
-        return
-      }
-
-      const relativePath = editorParams.filePath
-        .replace(editorParams.workspacePath, '')
-        .replace(/^[\\/]/, '')
-      const [result, baseline] = await Promise.all([
-        window.electron.file.read(editorParams.filePath),
-        window.electron.git.fileBaseline(editorParams.workspacePath, relativePath).catch(() => null),
-      ])
-      if (requestId !== loadRequestRef.current) return
-      if (result.error) throw new Error(result.error)
-      setBaselineContent(baseline?.available ? baseline.content : undefined)
-      setFile((current) => current ? {
-        ...current,
-        viewType,
-        content: result.content ?? '',
-        size: result.size,
-        mtime: result.mtime,
-        error: undefined,
-        isLoading: false,
-        isDirty: false,
-      } : current)
-    } catch (err: any) {
-      if (requestId !== loadRequestRef.current) return
-      setFile((current) =>
-        current
-          ? {
-              ...current,
-              error: err.message || 'Failed to load file',
-              isLoading: false,
-            }
-          : current,
-      )
-    }
-  }, [editorParams])
-
-  useEffect(() => { void loadFile(true) }, [loadFile])
-
-  useEffect(() => window.electron.window.onEditorRefresh(() => { void loadFile(false) }), [loadFile])
-
-  const saveFile = useCallback(async () => {
-    if (!file || file.isLoading || file.viewType === 'image' || file.viewType === 'binary') return
-    await window.electron.file.save(file.absolutePath, file.content)
-    setFile((current) => (current ? { ...current, isDirty: false, mtime: Date.now() } : current))
-  }, [file])
+  useEffect(() => {
+    let cancelled = false
+    setBaselineContent(undefined)
+    if (!activeFile || !editorParams || activeFile.viewType === 'image' || activeFile.viewType === 'binary') return
+    void window.electron.git.fileBaseline(editorParams.workspacePath, activeFile.path)
+      .then((baseline) => {
+        if (!cancelled) setBaselineContent(baseline?.available ? baseline.content : undefined)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activeFile?.id, activeFile?.mtime, activeFile?.path, activeFile?.viewType, editorParams])
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -179,21 +100,22 @@ export function StandaloneFileEditor() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
-        void saveFile()
+        if (activeFileId) void saveFile(activeFileId)
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [saveFile])
+  }, [activeFileId, saveFile])
+
+  useEffect(() => { findEditorRef.current = null }, [activeFileId])
 
   useEffect(() => {
-    if (!file) return
-    document.title = `${file.isDirty ? '* ' : ''}${file.name} - JanusX`
-  }, [file])
+    document.title = activeFile ? `${activeFile.isDirty ? '* ' : ''}${activeFile.name} - JanusX` : 'JanusX Editor'
+  }, [activeFile])
 
   const handleContentChange = useCallback((content: string) => {
-    setFile((current) => (current ? { ...current, content, isDirty: true } : current))
-  }, [])
+    if (activeFileId) updateContent(activeFileId, content)
+  }, [activeFileId, updateContent])
 
   const togglePinned = useCallback(async () => {
     const result = await window.electron.window.setAlwaysOnTop(!isPinned)
@@ -201,19 +123,19 @@ export function StandaloneFileEditor() {
   }, [isPinned])
 
   const embedInWorkspace = useCallback(async () => {
-    if (!file || !editorParams) return
+    if (!activeFile || !editorParams) return
     await window.electron.window.embedEditor({
-      filePath: file.absolutePath,
+      filePath: activeFile.absolutePath,
       workspacePath: editorParams.workspacePath,
-      content: file.content,
-      isDirty: file.isDirty,
+      content: activeFile.content,
+      isDirty: activeFile.isDirty,
     })
-  }, [editorParams, file])
+  }, [activeFile, editorParams])
 
   const titlebarDrag = { WebkitAppRegion: 'drag' } as CSSProperties
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
-  const canSave = Boolean(file && file.viewType !== 'image' && file.viewType !== 'binary')
-  const canFind = file?.viewType === 'code' || file?.viewType === 'markdown' || file?.viewType === 'html'
+  const canSave = Boolean(activeFile && activeFile.viewType !== 'image' && activeFile.viewType !== 'binary')
+  const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#151517', color: '#d4d4d4' }}>
@@ -227,9 +149,37 @@ export function StandaloneFileEditor() {
         }}
       >
         <WindowTrafficLights />
-        <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs">
-          {file ? `${file.isDirty ? '* ' : ''}${file.path || file.name}` : 'File preview'}
-        </span>
+        <div className="flex min-w-0 flex-1 self-stretch items-end overflow-x-auto" style={noDrag}>
+          {openFiles.map((file) => {
+            const isActive = file.id === activeFileId
+            return (
+              <div
+                key={file.id}
+                data-editor-tab={file.absolutePath}
+                data-active={isActive ? 'true' : 'false'}
+                className="relative flex h-[31px] max-w-[180px] shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md px-3 font-mono text-[11px]"
+                style={{ color: isActive ? '#ddd' : '#777', background: isActive ? '#151517' : 'transparent' }}
+                onClick={() => setActiveFile(file.id)}
+              >
+                {file.isDirty ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff7830]" /> : null}
+                <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{file.name}</span>
+                <button
+                  type="button"
+                  aria-label={`关闭 ${file.name}`}
+                  className="ml-1 shrink-0 border-0 bg-transparent p-0 text-[#666] hover:text-[#ff7474]"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    closeFile(file.id)
+                    if (openFiles.length === 1) void window.electron.window.close()
+                  }}
+                >
+                  ×
+                </button>
+                {isActive ? <span className="absolute inset-x-2 bottom-0 h-px bg-[#ff7830]" /> : null}
+              </div>
+            )
+          })}
+        </div>
         <div className="relative z-10 flex shrink-0 items-center gap-1.5" style={noDrag}>
           {canFind && (
             <button
@@ -273,7 +223,7 @@ export function StandaloneFileEditor() {
             type="button"
             aria-label={'\u5d4c\u5165\u4e3b\u7a97\u53e3\u5de5\u4f5c\u533a'}
             title={'\u5d4c\u5165\u4e3b\u7a97\u53e3\u5de5\u4f5c\u533a'}
-            disabled={!file || !editorParams}
+            disabled={!activeFile || !editorParams}
             onClick={() => void embedInWorkspace()}
             onMouseDown={(event) => event.stopPropagation()}
             className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors enabled:hover:border-white/[0.14] enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
@@ -284,16 +234,16 @@ export function StandaloneFileEditor() {
         {canSave && (
           <button
             type="button"
-            onClick={() => void saveFile()}
+            onClick={() => activeFileId && void saveFile(activeFileId)}
             aria-label={'\u4fdd\u5b58'}
             title={'\u4fdd\u5b58'}
             onMouseDown={(event) => event.stopPropagation()}
             className="flex h-7 w-7 items-center justify-center rounded transition-colors"
             style={{
               ...noDrag,
-              background: file?.isDirty ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
-              border: file?.isDirty ? '1px solid rgba(255, 120, 48, 0.24)' : '1px solid rgba(255, 255, 255, 0.08)',
-              color: file?.isDirty ? '#ffb084' : '#777',
+              background: activeFile?.isDirty ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
+              border: activeFile?.isDirty ? '1px solid rgba(255, 120, 48, 0.24)' : '1px solid rgba(255, 255, 255, 0.08)',
+              color: activeFile?.isDirty ? '#ffb084' : '#777',
             }}
           >
             <Save size={14} strokeWidth={1.8} />
@@ -301,8 +251,8 @@ export function StandaloneFileEditor() {
         )}
       </div>
       <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-        {file ? (
-          <FileViewerContent file={file} diffOriginalContent={baselineContent} onContentChange={handleContentChange} onEditorMount={handleEditorMount} />
+        {activeFile ? (
+          <FileViewerContent key={activeFile.id} file={activeFile} diffOriginalContent={baselineContent} onContentChange={handleContentChange} onEditorMount={handleEditorMount} />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-[#666]">
             Missing file information

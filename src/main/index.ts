@@ -126,6 +126,7 @@ async function bootstrapApp(): Promise<void> {
     { terminalManager },
     { agentStreamManager },
     { analyzer },
+    { blueprintMaintenanceService },
     { desktopToastWindow },
     { appShutdown },
     { EditorWindowManager },
@@ -143,6 +144,7 @@ async function bootstrapApp(): Promise<void> {
     import('./terminal/manager'),
     import('./agent/stream-manager'),
     import('./janus/analyzer'),
+    import('./janus/maintenance/service'),
     import('./notifications/desktop-toast-window'),
     import('./shutdown/AppShutdown'),
     import('./windows/editor-window'),
@@ -165,6 +167,7 @@ async function bootstrapApp(): Promise<void> {
   appShutdown.configure({
     abortChatStreams: () => abortAllChatStreams(),
     cancelAnalyzer: () => analyzer.cancelAll(),
+    cancelBlueprintMaintenance: () => blueprintMaintenanceService.cancelAll(),
     killTerminals: () => terminalManager.killAll(),
     killAgents: () => agentStreamManager.killAll(),
     stopProjects: () => stopAllProjects(),

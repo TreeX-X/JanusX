@@ -21,6 +21,7 @@ import type { SubAgentRun, SubAgentRunRole, SubAgentRunStatus } from '../../../.
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import type { OfficeFileEntry } from '../../../../shared/office'
 import { formatKnowledgeMatch } from './islandKnowledgePeek'
+import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 
 /* ════════════════════════════════════════════════════════════
    JanusIsland �?52×26px 折叠态胶�?
@@ -289,6 +290,10 @@ export function JanusIsland({
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const focusedTabId = useWorkspaceStore((s) => s.focusedTabId)
   const terminals = useWorkspaceStore((s) => s.terminals)
+  const maintenanceTasks = useBlueprintMaintenanceStore((state) => state.tasks)
+  const requestMaintenanceOpen = useBlueprintMaintenanceStore((state) => state.requestOpen)
+  const cancelMaintenance = useBlueprintMaintenanceStore((state) => state.cancel)
+  const loadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
@@ -351,26 +356,55 @@ export function JanusIsland({
       ? currentBlueprint.nodes[activeSession.nodeId] ?? activeSession.nodeSnapshot
       : activeSession?.nodeSnapshot ?? null
   const activeVisual = activeNode ? STATUS_VISUALS[activeNode.status] ?? STATUS_VISUALS['not-started'] : null
+  const maintenanceTask = useMemo(() => {
+    const live = maintenanceTasks.filter((task) => !['completed', 'cancelled'].includes(task.status))
+    return live.find((task) => task.status === 'failed' || task.status === 'stale')
+      ?? live.find((task) => task.status === 'proposal-ready')
+      ?? live.find((task) => task.status === 'analyzing' || task.status === 'applying')
+      ?? live[0]
+      ?? null
+  }, [maintenanceTasks])
 
-  const peekTitle = useMemo(() => officeNotice ? 'Office file ready' : knowledgePeekEmpty ? 'Knowledge' : knowledgePeekActive && knowledgeTrace ? 'Knowledge recalled' : '', [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, officeNotice])
+  const handleOpenMaintenance = useCallback(() => {
+    if (!maintenanceTask) return
+    void loadBlueprint(maintenanceTask.blueprintId)
+    requestMaintenanceOpen({ blueprintId: maintenanceTask.blueprintId, nodeId: maintenanceTask.nodeScope.type === 'blueprint' ? undefined : maintenanceTask.nodeScope.nodeId })
+    setActiveWorkbench('blueprint')
+  }, [loadBlueprint, maintenanceTask, requestMaintenanceOpen, setActiveWorkbench])
+
+  const maintenanceNeedsAttention = maintenanceTask?.status === 'failed' || maintenanceTask?.status === 'stale' || maintenanceTask?.status === 'proposal-ready'
+  const peekTitle = useMemo(() => {
+    if (maintenanceNeedsAttention) return maintenanceTask?.status === 'proposal-ready' ? 'Blueprint proposal ready' : 'Blueprint needs attention'
+    if (officeNotice) return 'Office file ready'
+    if (knowledgePeekEmpty) return 'Knowledge'
+    if (knowledgePeekActive && knowledgeTrace) return 'Knowledge recalled'
+    if (maintenanceTask) return 'Blueprint maintenance'
+    return ''
+  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, officeNotice])
 
   const peekSubtitle = useMemo(() => {
+    if (maintenanceNeedsAttention && maintenanceTask) return `${maintenanceTask.blueprintName} | ${maintenanceTask.phase}`
     if (officeNotice) return `${officeNotice.relPath} | ${officeNotice.ext.slice(1)}`
     if (knowledgePeekEmpty) return 'No knowledge match'
     if (knowledgePeekActive && knowledgeTrace?.topHit) {
       const count = String(knowledgeTrace.recalledCount) + ' item' + (knowledgeTrace.recalledCount === 1 ? '' : 's')
       return count + ' | ' + formatKnowledgeMatch(knowledgeTrace.topHit.score) + ' | ' + knowledgeTrace.topHit.kind + ': ' + knowledgeTrace.topHit.title
     }
+    if (maintenanceTask) return `${maintenanceTask.blueprintName} | ${maintenanceTask.progress}% | ${maintenanceTask.phase}`
     return ''
-  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, officeNotice])
+  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, officeNotice])
 
   const modeLabel = activeNode ? 'BLUEPRINT' : mode === 'analytics' ? 'ANALYTICS' : mode === 'running' ? 'RUNNING' : 'ORDER'
-  const statusText = officeNotice
+  const statusText = maintenanceNeedsAttention && maintenanceTask
+    ? maintenanceTask.status === 'proposal-ready' ? 'BLUEPRINT // APPROVAL REQUIRED' : 'BLUEPRINT // ATTENTION'
+    : officeNotice
     ? 'OFFICE // OPEN PREVIEW'
     : knowledgePeekEmpty
     ? 'KNOWLEDGE // NO MATCH'
     : knowledgePeekActive && knowledgeTrace
     ? 'KNOWLEDGE // ' + (knowledgeTrace.truncated ? 'TRUNCATED' : 'READY')
+    : maintenanceTask
+    ? `BLUEPRINT // ${maintenanceTask.status.toUpperCase()}`
     : activeNode
     ? 'BLUEPRINT // FOCUSED'
     : janusRunning
@@ -793,6 +827,18 @@ export function JanusIsland({
               <span>{statusText}</span>
             </div>
             <div className="janus-expanded-actions">
+              {maintenanceTask ? (
+                <>
+                  <button type="button" className="janus-expanded-action-button" onClick={handleOpenMaintenance}>
+                    Open Maintenance
+                  </button>
+                  {(maintenanceTask.status === 'analyzing' || maintenanceTask.status === 'draft') ? (
+                    <button type="button" className="janus-expanded-action-button" onClick={() => void cancelMaintenance(maintenanceTask.id)}>
+                      Cancel Analysis
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
               <button type="button" className="janus-expanded-action-button" onClick={handleOpenBlueprintWorkbench}>
                 Open Blueprint
               </button>

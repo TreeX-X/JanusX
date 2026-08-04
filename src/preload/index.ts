@@ -188,8 +188,16 @@ const janusAPI: JanusAPI = {
   rejectRequirementCandidate: (payload) =>
     ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.rejectRequirementCandidate, payload),
   acceptDiscovered: (payload) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.acceptDiscovered, payload),
+  listMaintenanceTasks: () => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceList),
+  startMaintenanceTask: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceStart, input),
+  sendMaintenanceMessage: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceMessage, input),
+  generateMaintenanceProposal: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenancePropose, input),
+  applyMaintenanceChangeSet: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceApply, input),
+  cancelMaintenanceTask: (taskId) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceCancel, taskId),
+  completeMaintenanceTask: (taskId) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceComplete, taskId),
   onAnalysisResult: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.analysis, callback),
   onDiscovered: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.discovered, callback),
+  onMaintenanceTask: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.maintenance, callback),
 }
 
 const officeAPI: OfficeAPI = {
@@ -303,6 +311,7 @@ const windowAPI: WindowAPI = {
   maximize: () => ipcRenderer.invoke(SYSTEM_CHANNELS.maximize),
   close: () => ipcRenderer.invoke(SYSTEM_CHANNELS.close),
   openEditor: (payload) => ipcRenderer.invoke(SYSTEM_CHANNELS.openEditor, payload),
+  editorReady: () => ipcRenderer.send(SYSTEM_CHANNELS.editorReady),
   embedEditor: (payload) => ipcRenderer.invoke(SYSTEM_CHANNELS.embedEditor, payload),
   setAlwaysOnTop: (value) => ipcRenderer.invoke(SYSTEM_CHANNELS.setAlwaysOnTop, value),
   onEditorEmbedded: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.editorEmbedded, callback),

@@ -35,7 +35,7 @@ describe('file editor tabs', () => {
     await editor.openFile('C:\\workspace\\src\\second.ts', 'C:\\workspace')
 
     expect(useEditorStore.getState()).toMatchObject({
-      activeFileId: 'C:\\workspace\\src\\second.ts',
+      activeFileId: 'c:/workspace/src/second.ts',
       isVisible: true,
     })
     expect(useEditorStore.getState().openFiles.map((file) => file.name)).toEqual([
@@ -46,7 +46,18 @@ describe('file editor tabs', () => {
     await editor.openFile('C:\\workspace\\src\\first.ts', 'C:\\workspace')
 
     expect(useEditorStore.getState().openFiles).toHaveLength(2)
-    expect(useEditorStore.getState().activeFileId).toBe('C:\\workspace\\src\\first.ts')
+    expect(useEditorStore.getState().activeFileId).toBe('c:/workspace/src/first.ts')
+  })
+
+  it('treats Windows path casing and separators as the same tab', async () => {
+    const editor = useEditorStore.getState()
+
+    await editor.openFile('C:\\Workspace\\src\\first.ts', 'C:\\Workspace')
+    await editor.openFile('c:/workspace/src/first.ts', 'c:/workspace')
+
+    expect(useEditorStore.getState().openFiles).toHaveLength(1)
+    expect(useEditorStore.getState().activeFileId).toBe('c:/workspace/src/first.ts')
+    expect(window.electron.file.read).toHaveBeenCalledTimes(1)
   })
 
   it('clears all tabs when the preview window is closed', async () => {
@@ -102,5 +113,8 @@ describe('file editor tabs', () => {
     expect(explorerSource).toContain('window.electron.window.openEditor({')
     expect(explorerSource).not.toContain('useEditorStore.getState().openFile')
     expect(standaloneEditorSource).toContain("'\\u9501\\u5b9a\\u7a97\\u53e3\\u7f6e\\u9876'")
+    expect(standaloneEditorSource).toContain('window.electron.window.editorReady()')
+    expect(standaloneEditorSource).toContain('window.electron.window.onEditorRefresh((payload) =>')
+    expect(standaloneEditorSource).toContain('void openFile(payload.filePath, payload.workspacePath)')
   })
 })

@@ -46,6 +46,7 @@ import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
 import { launchTerminalPreset } from '@/lib/terminal-launch'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
+import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { collectLocalHierarchyIds, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
@@ -226,6 +227,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
   const setLoadState = useAppStore((s) => s.setLoadState)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
+  const requestMaintenanceOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
 
   // 工作台开启时由 BlueprintWorkbench 通过 Context 注入专属承载层节点；
   // embedded 模式下为 null，Select 回退到 document.body，行为不变。
@@ -1338,6 +1340,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           <div className="bp-node-detail__actions">
             <button
               className="blueprint-btn blueprint-btn--primary"
+              onClick={() => requestMaintenanceOpen({ blueprintId, nodeId: detailNode.id })}
+            >
+              维护此节点
+            </button>
+            <button
+              className="blueprint-btn"
               onClick={() => activateWorkSession(detailNode)}
               disabled={!detailNode.workspaceId || detailWorkspaceMissing}
             >

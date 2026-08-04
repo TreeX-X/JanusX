@@ -170,6 +170,8 @@ export interface BlueprintNode {
 export interface Blueprint {
   /** Persisted schema version; absent means the legacy v0 shape. */
   schemaVersion?: number
+  /** Monotonic version for semantic changes. Canvas-only changes do not increment it. */
+  contentRevision: number
   id: string
   name: string
   description: string

@@ -22,6 +22,15 @@ import type {
   NodeCreateInput,
   RejectCandidatePayload,
 } from '../../../shared/ipc/janus'
+import type {
+  BlueprintMaintenanceApplyInput,
+  BlueprintMaintenanceApplyResult,
+  BlueprintMaintenanceEvent,
+  BlueprintMaintenanceMessageInput,
+  BlueprintMaintenanceProposalInput,
+  BlueprintMaintenanceStartInput,
+  BlueprintMaintenanceTask,
+} from '../../../shared/janus/maintenance-types'
 
 export type {
   AnalysisInputSummary,
@@ -62,6 +71,19 @@ export type {
   NodeCreateInput,
   RejectCandidatePayload,
 } from '../../../shared/ipc/janus'
+export type {
+  BlueprintChangeSet,
+  BlueprintMaintenanceApplyInput,
+  BlueprintMaintenanceApplyResult,
+  BlueprintMaintenanceEvent,
+  BlueprintMaintenanceMessageInput,
+  BlueprintMaintenanceProposalInput,
+  BlueprintMaintenanceScope,
+  BlueprintMaintenanceStartInput,
+  BlueprintMaintenanceTask,
+  BlueprintMaintenanceTaskStatus,
+  BlueprintOperation,
+} from '../../../shared/janus/maintenance-types'
 
 export function listBlueprints(cwd: string): Promise<Blueprint[] | null> {
   return window.electron.janus.listBlueprints(cwd)
@@ -203,3 +225,20 @@ export function onAnalysisResult(callback: (event: IslandAnalysisEvent) => void)
 export function onDiscovered(callback: (event: IslandDiscoveredEvent) => void): () => void {
   return window.electron.janus.onDiscovered(callback)
 }
+
+export const listMaintenanceTasks = (): Promise<BlueprintMaintenanceTask[]> =>
+  window.electron.janus.listMaintenanceTasks()
+export const startMaintenanceTask = (input: BlueprintMaintenanceStartInput): Promise<BlueprintMaintenanceTask> =>
+  window.electron.janus.startMaintenanceTask(input)
+export const sendMaintenanceMessage = (input: BlueprintMaintenanceMessageInput): Promise<BlueprintMaintenanceTask> =>
+  window.electron.janus.sendMaintenanceMessage(input)
+export const generateMaintenanceProposal = (input: BlueprintMaintenanceProposalInput): Promise<BlueprintMaintenanceTask> =>
+  window.electron.janus.generateMaintenanceProposal(input)
+export const applyMaintenanceChangeSet = (input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult> =>
+  window.electron.janus.applyMaintenanceChangeSet(input)
+export const cancelMaintenanceTask = (taskId: string): Promise<BlueprintMaintenanceTask> =>
+  window.electron.janus.cancelMaintenanceTask(taskId)
+export const completeMaintenanceTask = (taskId: string): Promise<BlueprintMaintenanceTask> =>
+  window.electron.janus.completeMaintenanceTask(taskId)
+export const onMaintenanceTask = (callback: (event: BlueprintMaintenanceEvent) => void): (() => void) =>
+  window.electron.janus.onMaintenanceTask(callback)

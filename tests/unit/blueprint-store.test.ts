@@ -23,6 +23,18 @@ afterAll(async () => {
 })
 
 describe('BlueprintStore graph invariants', () => {
+  it('increments contentRevision for semantic edits but not canvas layout', async () => {
+    const store = new BlueprintStore()
+    const blueprint = await store.createBlueprint('__global__', { name: 'Revision' })
+    expect(blueprint.contentRevision).toBe(0)
+
+    await store.updateBlueprint('__global__', blueprint.id, { canvasLayout: { [blueprint.rootNodeId]: { x: 1, y: 2 } } })
+    expect((await store.loadBlueprint('__global__', blueprint.id))?.contentRevision).toBe(0)
+
+    await store.updateNode('__global__', blueprint.id, blueprint.rootNodeId, { title: 'Changed' })
+    expect((await store.loadBlueprint('__global__', blueprint.id))?.contentRevision).toBe(1)
+  })
+
   it('preserves parent-child consistency through create, move, delete, and root promotion', async () => {
     const store = new BlueprintStore()
     const blueprint = await store.createBlueprint('__global__', { name: 'Graph' })

@@ -46,6 +46,8 @@ import type {
   WorkspaceSnapshot
 } from './types'
 import { BLUEPRINT_SCHEMA_VERSION, migrateBlueprint } from './blueprint-migration'
+import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
+import { applyOperations } from './maintenance/changeset'
 
 interface WorkspaceIndex {
   blueprints: string[]
@@ -84,6 +86,11 @@ export class BlueprintStore {
   /** 全部公开方法经此锁串行化；可重入，内部互调不会死锁 */
   private locked<T>(operation: () => Promise<T>): Promise<T> {
     return this.mutex.run(operation)
+  }
+
+  private async persistBlueprint(id: string, blueprint: Blueprint, semantic = true): Promise<void> {
+    if (semantic) blueprint.contentRevision += 1
+    await writeJson(blueprintFile(id), blueprint)
   }
 
   async loadIndex(_workspace?: string): Promise<WorkspaceIndex> {
@@ -182,7 +189,7 @@ export class BlueprintStore {
       migrateBlueprint(bp)
       idx.blueprints.push(id)
       this.cache.set(id, bp)
-      await writeJson(blueprintFile(id), bp)
+      await this.persistBlueprint(id, bp, false)
       changed = true
     }
     if (changed) await this.saveIndex()
@@ -264,6 +271,26 @@ export class BlueprintStore {
     })
   }
 
+  async applyMaintenanceOperations(
+    blueprintId: string,
+    expectedRevision: number,
+    operations: BlueprintOperation[],
+    allowedNodeIds: Set<string>
+  ): Promise<{ before: Blueprint; after: Blueprint }> {
+    return this.locked(async () => {
+      const current = await this.loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, blueprintId)
+      if (!current) throw new Error('目标蓝图不存在')
+      if (current.contentRevision !== expectedRevision) {
+        throw new Error(`蓝图版本已变化：期望 ${expectedRevision}，当前 ${current.contentRevision}`)
+      }
+      const before = structuredClone(current)
+      const after = applyOperations(current, operations, new Set(allowedNodeIds))
+      await writeJson(blueprintFile(blueprintId), after)
+      this.cache.set(blueprintId, after)
+      return { before, after }
+    })
+  }
+
   async createBlueprint(
     workspace: string,
     input: { name: string; description?: string; rootTitle?: string; rootType?: BlueprintNodeType }
@@ -277,6 +304,7 @@ export class BlueprintStore {
       })
       const bp: Blueprint = {
         schemaVersion: BLUEPRINT_SCHEMA_VERSION,
+        contentRevision: 0,
         id,
         name: input.name,
         description: input.description ?? '',
@@ -293,7 +321,7 @@ export class BlueprintStore {
       const idx = await this.loadIndex(workspace)
       idx.blueprints.push(id)
       await this.saveIndex(workspace)
-      await writeJson(blueprintFile(id), bp)
+      await this.persistBlueprint(id, bp, false)
       return bp
     })
   }
@@ -310,7 +338,7 @@ export class BlueprintStore {
       if (patch.description !== undefined) bp.description = patch.description
       if (patch.canvasLayout !== undefined) bp.canvasLayout = patch.canvasLayout
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(id), bp)
+      await this.persistBlueprint(id, bp, patch.name !== undefined || patch.description !== undefined)
       return bp
     })
   }
@@ -367,7 +395,7 @@ export class BlueprintStore {
         bp.nodes[parentId].updatedAt = nowIso()
       }
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -421,7 +449,7 @@ export class BlueprintStore {
       Object.assign(node, safe)
       node.updatedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -439,7 +467,7 @@ export class BlueprintStore {
       node.features = features.map((feature) => makeFeatureItem(feature))
       node.updatedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -457,7 +485,7 @@ export class BlueprintStore {
       node.features = [...(node.features ?? []), makeFeatureItem(feature)]
       node.updatedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -483,7 +511,7 @@ export class BlueprintStore {
       feature.updatedAt = nowIso()
       node.updatedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -501,7 +529,7 @@ export class BlueprintStore {
       node.features = (node.features ?? []).filter((item) => item.id !== featureId)
       node.updatedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -545,7 +573,7 @@ export class BlueprintStore {
         if (focused === nodeId) idx.focusedNodeByWorkspace![ws] = null
       }
       await this.saveIndex(workspace)
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return true
     })
   }
@@ -586,7 +614,7 @@ export class BlueprintStore {
       }
       node.updatedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -630,7 +658,7 @@ export class BlueprintStore {
       }
       node.updatedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -696,7 +724,7 @@ export class BlueprintStore {
 
       if (changed) {
         bp.updatedAt = nowIso()
-        await writeJson(blueprintFile(blueprintId), bp)
+        await this.persistBlueprint(blueprintId, bp)
       }
 
       return touched
@@ -775,7 +803,7 @@ export class BlueprintStore {
       candidate.decidedAt = nowIso()
 
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return node
     })
   }
@@ -798,7 +826,7 @@ export class BlueprintStore {
       candidate.decisionNote = decisionNote
       candidate.decidedAt = nowIso()
       bp.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
       return candidate
     })
   }
@@ -847,7 +875,7 @@ export class BlueprintStore {
       })
       latestNode.updatedAt = nowIso()
       latest.updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), latest)
+      await this.persistBlueprint(blueprintId, latest)
       return latestNode
     })
   }
@@ -864,7 +892,7 @@ export class BlueprintStore {
       if (!bp || !bp.nodes[nodeId]) return
       bp.nodes[nodeId].lastAnalyzedCommitSha = sha
       bp.nodes[nodeId].updatedAt = nowIso()
-      await writeJson(blueprintFile(blueprintId), bp)
+      await this.persistBlueprint(blueprintId, bp)
     })
   }
 

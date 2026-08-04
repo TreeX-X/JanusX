@@ -23,6 +23,13 @@ const mocks = vi.hoisted(() => ({
   removeListener: vi.fn(),
   scheduleAnalyze: vi.fn(),
   setMainWindow: vi.fn(),
+  maintenanceList: vi.fn(),
+  maintenanceStart: vi.fn(),
+  maintenanceMessage: vi.fn(),
+  maintenancePropose: vi.fn(),
+  maintenanceApply: vi.fn(),
+  maintenanceCancel: vi.fn(),
+  maintenanceComplete: vi.fn(),
 }))
 
 let janusApi: JanusAPI
@@ -64,6 +71,17 @@ vi.mock('../../src/main/janus/analyzer', () => ({
     registerNodeWorkspace: mocks.registerNodeWorkspace,
     scheduleAnalyze: mocks.scheduleAnalyze,
     setMainWindow: mocks.setMainWindow,
+  },
+}))
+vi.mock('../../src/main/janus/maintenance/service', () => ({
+  blueprintMaintenanceService: {
+    list: mocks.maintenanceList,
+    start: mocks.maintenanceStart,
+    message: mocks.maintenanceMessage,
+    propose: mocks.maintenancePropose,
+    apply: mocks.maintenanceApply,
+    cancel: mocks.maintenanceCancel,
+    complete: mocks.maintenanceComplete,
   },
 }))
 vi.mock('../../src/main/knowledge/observation-service', () => ({
@@ -111,13 +129,13 @@ describe('Janus IPC contract', () => {
     expect(mocks.registerNodeWorkspace).not.toHaveBeenCalled()
   }
 
-  it('defines unique channels and registers all 22 main commands', () => {
+  it('defines unique channels and registers all main commands', () => {
     const commands = Object.values(JANUS_COMMAND_CHANNELS)
     const events = Object.values(JANUS_EVENT_CHANNELS)
 
-    expect(commands).toHaveLength(22)
-    expect(events).toHaveLength(2)
-    expect(new Set([...commands, ...events]).size).toBe(24)
+    expect(commands).toHaveLength(29)
+    expect(events).toHaveLength(3)
+    expect(new Set([...commands, ...events]).size).toBe(32)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining(commands)
     )
@@ -151,6 +169,10 @@ describe('Janus IPC contract', () => {
       ...listPayload,
       discovered: { title: 'New', description: 'New task', suggestedParent: '', confidence: 0.8 },
     }
+    const maintenanceStart = { blueprintId: 'bp-1' } as Parameters<JanusAPI['startMaintenanceTask']>[0]
+    const maintenanceMessage = { taskId: 'task-1', content: '继续讨论' }
+    const maintenanceProposal = { taskId: 'task-1' }
+    const maintenanceApply = { taskId: 'task-1', changeSetId: 'set-1', operationIds: ['op-1'] }
 
     await janusApi.listBlueprints('C:\\repo')
     await janusApi.loadBlueprint('C:\\repo', 'bp-1')
@@ -174,6 +196,13 @@ describe('Janus IPC contract', () => {
     await janusApi.acceptRequirementCandidate(acceptPayload)
     await janusApi.rejectRequirementCandidate(rejectPayload)
     await janusApi.acceptDiscovered(discoveredPayload)
+    await janusApi.listMaintenanceTasks()
+    await janusApi.startMaintenanceTask(maintenanceStart)
+    await janusApi.sendMaintenanceMessage(maintenanceMessage)
+    await janusApi.generateMaintenanceProposal(maintenanceProposal)
+    await janusApi.applyMaintenanceChangeSet(maintenanceApply)
+    await janusApi.cancelMaintenanceTask('task-1')
+    await janusApi.completeMaintenanceTask('task-1')
 
     expect(mocks.invoke.mock.calls).toEqual([
       [JANUS_COMMAND_CHANNELS.listBlueprints, 'C:\\repo'],
@@ -198,6 +227,13 @@ describe('Janus IPC contract', () => {
       [JANUS_COMMAND_CHANNELS.acceptRequirementCandidate, acceptPayload],
       [JANUS_COMMAND_CHANNELS.rejectRequirementCandidate, rejectPayload],
       [JANUS_COMMAND_CHANNELS.acceptDiscovered, discoveredPayload],
+      [JANUS_COMMAND_CHANNELS.maintenanceList],
+      [JANUS_COMMAND_CHANNELS.maintenanceStart, maintenanceStart],
+      [JANUS_COMMAND_CHANNELS.maintenanceMessage, maintenanceMessage],
+      [JANUS_COMMAND_CHANNELS.maintenancePropose, maintenanceProposal],
+      [JANUS_COMMAND_CHANNELS.maintenanceApply, maintenanceApply],
+      [JANUS_COMMAND_CHANNELS.maintenanceCancel, 'task-1'],
+      [JANUS_COMMAND_CHANNELS.maintenanceComplete, 'task-1'],
     ])
   })
 

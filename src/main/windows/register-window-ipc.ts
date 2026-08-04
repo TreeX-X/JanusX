@@ -10,6 +10,7 @@ export function registerWindowIpc(editorWindows: EditorWindowManager, getMainWin
   })
   ipcMain.handle(SYSTEM_CHANNELS.close, () => BrowserWindow.getFocusedWindow()?.close())
   ipcMain.handle(SYSTEM_CHANNELS.openEditor, (_event, payload: EditorWindowPayload) => editorWindows.open(payload))
+  ipcMain.on(SYSTEM_CHANNELS.editorReady, (event) => editorWindows.ready(event.sender))
   ipcMain.handle(SYSTEM_CHANNELS.setAlwaysOnTop, (event, value: boolean) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window || window.isDestroyed()) return { value: false }

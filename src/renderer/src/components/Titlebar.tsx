@@ -13,6 +13,7 @@ import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentO
 import { officeService } from '@/services/office'
 import { startOfficeDiscovery } from '@/components/office/officeDiscovery'
 import { useOfficeStore } from '@/stores/office'
+import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 
 /*-- P4: 蓝图工作台（@xyflow 画布链）按需分包，未打开蓝图工作台时不加载 --*/
 const BlueprintWorkbench = lazy(() =>
@@ -60,6 +61,9 @@ export function Titlebar() {
   const artifactNotice = useOfficeStore((state) => state.artifactNotice)
   const artifactsByWorkspace = useOfficeStore((state) => state.artifactsByWorkspace)
   const officeArtifacts = activeWorkspaceId ? artifactsByWorkspace[activeWorkspaceId] ?? [] : []
+  const initializeBlueprintMaintenance = useBlueprintMaintenanceStore((state) => state.initialize)
+
+  useEffect(() => { void initializeBlueprintMaintenance() }, [initializeBlueprintMaintenance])
 
   useEffect(() => {
     dispatchIsland({ type: 'trace', trace: latestRecallTrace })

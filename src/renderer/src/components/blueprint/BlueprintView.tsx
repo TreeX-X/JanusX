@@ -26,6 +26,7 @@ import { PromptDialog } from './PromptDialog'
 import { RefreshIconButton } from '../ui/RefreshIconButton'
 import { Select } from '../ui/Select'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
+import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 
@@ -58,6 +59,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
   const createBlueprint = useBlueprintStore((s) => s.createBlueprint)
   const deleteBlueprint = useBlueprintStore((s) => s.deleteBlueprint)
   const renameBlueprint = useBlueprintStore((s) => s.renameBlueprint)
+  const maintenanceOpenRequest = useBlueprintMaintenanceStore((s) => s.openRequest)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -177,6 +179,13 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
       if (next) loadBlueprint(next.id)
     }
   }, [blueprints, selectedId, loadBlueprint])
+
+  useEffect(() => {
+    if (!maintenanceOpenRequest || maintenanceOpenRequest.blueprintId === selectedId) return
+    if (!blueprints.some((blueprint) => blueprint.id === maintenanceOpenRequest.blueprintId)) return
+    setSelectedId(maintenanceOpenRequest.blueprintId)
+    void loadBlueprint(maintenanceOpenRequest.blueprintId)
+  }, [blueprints, loadBlueprint, maintenanceOpenRequest, selectedId])
 
   useEffect(() => {
     void loadCandidates()

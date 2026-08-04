@@ -23,6 +23,7 @@ import { registerSubAgentRunHandlers } from './subagent-run-handlers'
 import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './terminal-handlers'
 import { terminalManager } from '../terminal/manager'
 import { analyzer } from '../janus/analyzer'
+import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { subAgentRunRegistry } from '../agent/subagent-run-registry'
 import { ipcMain } from 'electron'
 import { registerAgentRuntimeHandlers } from './agent-runtime-handlers'
@@ -57,10 +58,12 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   // 每次窗口重建都重绑窗口级引用与生命周期监听；幂等守卫只拦 handler 注册。
   currentMainWindow = mainWindow
   analyzer.setMainWindow(mainWindow)
+  blueprintMaintenanceService.setMainWindow(mainWindow)
   subAgentRunRegistry.setMainWindow(mainWindow)
   mainWindow.on('closed', () => {
     if (currentMainWindow === mainWindow) currentMainWindow = null
     analyzer.setMainWindow(null)
+    blueprintMaintenanceService.setMainWindow(null)
     subAgentRunRegistry.setMainWindow(null)
     // Also disposed from AppShutdown; function is idempotent.
     disposeWorkspaceWatchers()

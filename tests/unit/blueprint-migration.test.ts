@@ -11,7 +11,7 @@ function blueprintFixture(): Blueprint {
     children, parentId, tags: [], createdAt: '', updatedAt: ''
   })
   return {
-    id: 'bp', name: 'Blueprint', description: '', rootNodeId: 'root', nodeIds: ['root', 'a', 'b'],
+    contentRevision: 0, id: 'bp', name: 'Blueprint', description: '', rootNodeId: 'root', nodeIds: ['root', 'a', 'b'],
     nodes: { root: node('root', null, ['missing']), a: node('a', 'b'), b: node('b', 'a') },
     requirementCandidates: [], mountedTo: null, canvasLayout: {}, createdAt: '', updatedAt: ''
   }
@@ -35,6 +35,7 @@ describe('blueprint migration boundary', () => {
 
     expect(migrateBlueprint(blueprint)).toBe(true)
     expect(blueprint.schemaVersion).toBe(BLUEPRINT_SCHEMA_VERSION)
+    expect(blueprint.contentRevision).toBe(0)
     expect(blueprint.nodes.root.features.map((feature) => feature.title)).toEqual([
       'Legacy description', 'Completed', 'Pending'
     ])

@@ -5,6 +5,7 @@ export type ShutdownStep = () => void | Promise<void>
 export interface AppShutdownDeps {
   abortChatStreams?: ShutdownStep
   cancelAnalyzer?: ShutdownStep
+  cancelBlueprintMaintenance?: ShutdownStep
   finalizePendingCheckpoints?: ShutdownStep
   stopHookBridge?: ShutdownStep
   stopCompanion?: ShutdownStep
@@ -95,6 +96,7 @@ export class AppShutdown {
       ['destroyBrowserSurfaces', this.deps.destroyBrowserSurfaces],
       ['abortChatStreams', this.deps.abortChatStreams],
       ['cancelAnalyzer', this.deps.cancelAnalyzer],
+      ['cancelBlueprintMaintenance', this.deps.cancelBlueprintMaintenance],
       ['stopHookBridge', this.deps.stopHookBridge],
       ['stopCompanion', this.deps.stopCompanion],
       ['killTerminals', this.deps.killTerminals],

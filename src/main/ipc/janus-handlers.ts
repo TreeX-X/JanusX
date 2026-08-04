@@ -12,6 +12,7 @@
 import { ipcMain } from 'electron'
 import { blueprintStore } from '../janus/blueprint-store'
 import { analyzer } from '../janus/analyzer'
+import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import type {
   BlueprintFeatureItem,
@@ -32,6 +33,12 @@ import {
   type NodeCreateInput,
   type RejectCandidatePayload,
 } from '../../shared/ipc/janus'
+import type {
+  BlueprintMaintenanceApplyInput,
+  BlueprintMaintenanceMessageInput,
+  BlueprintMaintenanceProposalInput,
+  BlueprintMaintenanceStartInput,
+} from '../../shared/janus/maintenance-types'
 
 export function registerJanusHandlers(): void {
   // analyzer.setMainWindow 由 register.ts 在每次窗口重建时重绑（audit M1）
@@ -64,6 +71,32 @@ export function registerJanusHandlers(): void {
   ipcMain.handle(JANUS_COMMAND_CHANNELS.deleteBlueprint, async (_e, cwd: string, id: string) => {
     return blueprintStore.deleteBlueprint(cwd, id)
   })
+
+  ipcMain.handle(JANUS_COMMAND_CHANNELS.maintenanceList, async () => blueprintMaintenanceService.list())
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceStart,
+    async (_event, input: BlueprintMaintenanceStartInput) => blueprintMaintenanceService.start(input)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceMessage,
+    async (_event, input: BlueprintMaintenanceMessageInput) => blueprintMaintenanceService.message(input)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenancePropose,
+    async (_event, input: BlueprintMaintenanceProposalInput) => blueprintMaintenanceService.propose(input)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceApply,
+    async (_event, input: BlueprintMaintenanceApplyInput) => blueprintMaintenanceService.apply(input)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceCancel,
+    async (_event, taskId: string) => blueprintMaintenanceService.cancel(taskId)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceComplete,
+    async (_event, taskId: string) => blueprintMaintenanceService.complete(taskId)
+  )
 
   // ───────────── 节点操作（§6.2） ─────────────
   ipcMain.handle(

@@ -714,7 +714,7 @@
 .bp-node-detail {
   position: absolute;
   top: 50px;
-  right: 10px;
+  left: 10px;
   z-index: 900;
   width: 438px;
   max-width: calc(100% - 24px);
@@ -1430,7 +1430,7 @@
 /* 工作台专属下拉承载层：z-index 12001 恰好高于遮罩 12000，
    让 Select 浮层进入比遮罩更高的层叠上下文。
    零尺寸 + overflow visible：不拦截点击、不裁切下拉。
-   pointer-events: none 双重保险；子节点 .dropdown 默认 auto 仍可点击。 */
+   容器不接收指针事件，下拉浮层需显式恢复 pointer-events。 */
 .blueprint-select-portal-layer {
   position: fixed;
   top: 0;
@@ -1440,6 +1440,10 @@
   overflow: visible;
   z-index: 12001;
   pointer-events: none;
+}
+
+.blueprint-select-portal-layer > [data-select-dropdown] {
+  pointer-events: auto;
 }
 
 .blueprint-workbench-shell {
@@ -1600,6 +1604,71 @@
   transition: filter 0.2s ease, transform 0.2s ease;
 }
 
+.blueprint-workbench-actions { justify-self: end; display: flex; align-items: center; gap: 14px; }
+
+.blueprint-janus-capsule {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 9px 3px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #d8d8dc;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.blueprint-janus-capsule:hover {
+  border-color: rgba(255, 120, 48, 0.34);
+  background: rgba(255, 120, 48, 0.07);
+}
+
+.blueprint-janus-capsule:active { transform: translateY(1px); }
+.blueprint-janus-capsule:focus-visible { outline: 2px solid rgba(255, 120, 48, 0.55); outline-offset: 2px; }
+.blueprint-janus-capsule:disabled { opacity: 0.42; cursor: default; }
+
+.blueprint-janus-capsule .blueprint-janus-capsule__identity {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.blueprint-janus-capsule .blueprint-janus-capsule__identity .janus-identity-face {
+  gap: 3px;
+}
+
+.blueprint-janus-capsule .blueprint-janus-capsule__identity .janus-identity-eye {
+  width: 4px;
+  height: 7px;
+  box-shadow: 0 0 4px #fff, 0 0 8px var(--c), 0 0 12px var(--cg);
+}
+
+.blueprint-janus-capsule[data-state='working'] .blueprint-janus-capsule__identity {
+  animation: blueprint-janus-pulse 1.4s ease-in-out infinite;
+}
+
+.blueprint-janus-capsule__name { font-size: 11px; font-weight: 650; }
+.blueprint-janus-capsule__status {
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  color: #7f7f87;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.blueprint-janus-capsule[data-state='working'] .blueprint-janus-capsule__status,
+.blueprint-janus-capsule[data-state='attention'] .blueprint-janus-capsule__status { color: #e6a16f; }
+.blueprint-janus-capsule[data-state='error'] .blueprint-janus-capsule__status { color: #e88b87; }
+.blueprint-janus-capsule__chevron { color: #5d5d65; transition: transform 160ms ease; }
+.blueprint-janus-capsule[aria-expanded='true'] .blueprint-janus-capsule__chevron { transform: rotate(180deg); }
+
+@keyframes blueprint-janus-pulse {
+  50% { box-shadow: 0 0 0 4px rgba(255, 138, 72, 0.12); }
+}
+
 .blueprint-workbench-close::before {
   content: "×";
   font-size: 10px;
@@ -1622,6 +1691,9 @@
 }
 
 .blueprint-workbench-body {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1629,6 +1701,123 @@
   background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
   background-size: 14px 14px;
 }
+
+.bp-maintenance-panel {
+  position: absolute;
+  z-index: 30;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: min(390px, calc(48% - 18px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(13, 13, 15, 0.98);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.42), 0 12px 32px rgba(0, 0, 0, 0.34);
+  overflow: hidden;
+  animation: bp-maintenance-panel-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.blueprint-workbench-body:has(> .bp-maintenance-panel) .bp-node-detail {
+  width: min(438px, calc(52% - 18px));
+}
+
+@keyframes bp-maintenance-panel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bp-maintenance-panel__header {
+  height: 58px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.bp-maintenance-panel__identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bp-maintenance-panel__identity > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bp-maintenance-panel__identity span { color: #666; font-size: 9px; }
+.bp-maintenance-panel__identity strong { color: #eee; font-size: 14px; }
+.bp-maintenance-panel__mark {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 120, 48, 0.1);
+  color: #ff9a62;
+}
+.bp-maintenance-panel__header button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+}
+.bp-maintenance-panel__header button:hover { background: rgba(255, 255, 255, 0.05); color: #ddd; }
+
+.bp-maintenance-start,
+.bp-maintenance-task { min-height: 0; display: flex; flex: 1; flex-direction: column; gap: 12px; padding: 14px; overflow-y: auto; }
+.bp-maintenance-start label { display: flex; flex-direction: column; gap: 6px; color: #888; font-size: 11px; }
+.bp-maintenance-start label > button { height: 34px; }
+.bp-maintenance-start textarea,
+.bp-maintenance-compose textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 82px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: #09090b;
+  color: #ddd;
+  padding: 9px;
+  font: inherit;
+  outline: none;
+}
+.bp-maintenance-start p { margin: 0; color: #6f6f75; font-size: 10px; line-height: 1.55; }
+
+.bp-maintenance-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bp-maintenance-status div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.bp-maintenance-status strong { color: #e6e6e8; font-size: 13px; }
+.bp-maintenance-status span { overflow: hidden; color: #717177; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.bp-maintenance-status em { color: #ff8f50; font-size: 12px; font-style: normal; }
+.bp-maintenance-progress { height: 2px; overflow: hidden; background: rgba(255, 255, 255, 0.06); }
+.bp-maintenance-progress span { display: block; height: 100%; background: #ff7830; transition: width 180ms ease; }
+
+.bp-maintenance-messages { display: flex; flex-direction: column; gap: 8px; }
+.bp-maintenance-messages > div { padding: 8px 10px; border-left: 2px solid #555; background: rgba(255, 255, 255, 0.025); }
+.bp-maintenance-messages > div[data-role='assistant'] { border-left-color: #ff7830; }
+.bp-maintenance-messages span { color: #777; font-size: 9px; }
+.bp-maintenance-messages p { margin: 3px 0 0; color: #bbb; font-size: 11px; line-height: 1.5; white-space: pre-wrap; }
+
+.bp-maintenance-proposal { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 12px; }
+.bp-maintenance-proposal > header { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
+.bp-maintenance-proposal > header span { color: #777; }
+.bp-maintenance-operation { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 9px; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 6px; background: rgba(255, 255, 255, 0.02); cursor: pointer; }
+.bp-maintenance-operation input { margin: 2px 0 0; accent-color: #ff7830; }
+.bp-maintenance-operation div { min-width: 0; }
+.bp-maintenance-operation strong { display: block; overflow: hidden; color: #ddd; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.bp-maintenance-operation p { margin: 4px 0; color: #888; font-size: 10px; line-height: 1.4; }
+.bp-maintenance-operation span { color: #666; font-size: 9px; }
+
+.bp-maintenance-compose { display: flex; flex-direction: column; gap: 8px; }
+.bp-maintenance-compose textarea { min-height: 64px; }
+.bp-maintenance-compose__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.bp-maintenance-compose button { min-height: 32px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 0 11px; background: rgba(255, 255, 255, 0.04); color: #aaa; cursor: pointer; }
+.bp-maintenance-compose button:disabled { cursor: default; opacity: 0.4; }
+.bp-maintenance-compose .bp-maintenance-compose__proposal { border-color: rgba(255, 120, 48, 0.25); background: rgba(255, 120, 48, 0.08); color: #ffad7c; }
+.bp-maintenance-task footer { display: flex; gap: 8px; margin-top: auto; }
+.bp-maintenance-error { padding: 8px 12px; color: #ff8f88; font-size: 10px; line-height: 1.45; }
 
 .blueprint-view--workbench {
   background:
