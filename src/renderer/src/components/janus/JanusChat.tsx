@@ -474,7 +474,7 @@ export function JanusChat({
             aria-label="Select conversation"
             aria-expanded={threadMenuOpen}
             onClick={() => setThreadMenuOpen((open) => !open)}
-            disabled={workspace || !conversations || isStreaming}
+            disabled={workspace || !conversations}
           >
             <span>
               <span className="janus-chat-toolbar-kicker">Thread</span>
@@ -614,11 +614,11 @@ export function JanusChat({
           </div>
           {attachableWorkspaces.length > 0 && (
             <div className="janus-resource-attach" title="Attach workspace">
-              <Plus size={12} strokeWidth={1.8} aria-hidden="true" />
               <Select
                 ariaLabel="Attach workspace"
                 value=""
                 placeholder="Add workspace"
+                prefix={<Plus size={12} strokeWidth={1.8} aria-hidden="true" />}
                 options={attachableWorkspaces.map((workspace) => ({
                   value: workspace.id,
                   label: workspace.name,

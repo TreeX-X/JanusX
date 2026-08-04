@@ -25,6 +25,22 @@ function islandExpandedChatButton(page: Page) {
   return page.locator('.janus-island .janus-expanded-view-button', { hasText: /^Chat$/ })
 }
 
+async function expectContainedAttachLayout(trigger: Locator) {
+  const triggerBox = await trigger.boundingBox()
+  const prefixBox = await trigger.locator(':scope > span').nth(0).boundingBox()
+  const labelBox = await trigger.locator(':scope > span').nth(1).boundingBox()
+  expect(triggerBox).not.toBeNull()
+  expect(prefixBox).not.toBeNull()
+  expect(labelBox).not.toBeNull()
+  for (const box of [prefixBox!, labelBox!]) {
+    expect(box.x).toBeGreaterThanOrEqual(triggerBox!.x)
+    expect(box.x + box.width).toBeLessThanOrEqual(triggerBox!.x + triggerBox!.width)
+    expect(box.y).toBeGreaterThanOrEqual(triggerBox!.y)
+    expect(box.y + box.height).toBeLessThanOrEqual(triggerBox!.y + triggerBox!.height)
+  }
+  expect(prefixBox!.x + prefixBox!.width).toBeLessThanOrEqual(labelBox!.x)
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('.janus-island')).toBeVisible()
@@ -157,7 +173,15 @@ test('Island Chat action docks the shared presentation and closes only its works
   const islandChat = page.locator('.janus-island .janus-chat')
   await expect(islandChat.getByText('Shared controller message')).toBeVisible()
   await expect(islandChat.getByText('Shared pending stream')).toBeVisible()
-  await islandChat.getByRole('button', { name: 'Attach workspace' }).click()
+  const attachWorkspace = islandChat.getByRole('button', { name: 'Attach workspace' })
+  await expectContainedAttachLayout(attachWorkspace)
+  const defaultViewport = page.viewportSize()!
+  await page.setViewportSize({ width: 720, height: 720 })
+  await page.waitForTimeout(350)
+  await expectContainedAttachLayout(attachWorkspace)
+  await page.setViewportSize(defaultViewport)
+  await page.waitForTimeout(350)
+  await attachWorkspace.click()
   await expect(page.getByRole('listbox')).toBeVisible()
   await expect(page.getByRole('option', { name: 'Workspace Three' })).toBeVisible()
   await page.screenshot({ path: test.info().outputPath('island-chat-workspaces.png') })
@@ -175,6 +199,7 @@ test('Island Chat action docks the shared presentation and closes only its works
   await expect(harness(page)).toHaveAttribute('data-pane-ratio', '0.5')
   const workspaceChat = page.getByTestId('workspace-chat')
   await expect(workspaceChat).toBeVisible()
+  await expectContainedAttachLayout(workspaceChat.getByRole('button', { name: 'Attach workspace' }))
   await expect(workspaceChat.getByText('Shared controller message')).toBeVisible()
   await expect(workspaceChat.getByText('Shared pending stream')).toBeVisible()
   await page.getByTestId('toggle-streaming').click()
@@ -281,6 +306,39 @@ test('model menu stays visible and keyboard-operable while Chat is streaming', a
   await page.keyboard.press('Enter')
   await expect(harness(page)).toHaveAttribute('data-active-model', 'model-a2')
   await expect(menu).toHaveCount(0)
+})
+
+test('Island Chat switches conversations while the current thread is streaming', async ({ page }) => {
+  await page.goto('/?providerStream=1')
+  await page.getByTestId('fail-provider-thread').click()
+  await expect(harness(page)).toHaveAttribute('data-provider-error', 'Fixture stream error')
+  await page.getByTestId('start-provider-stream').click()
+  await expect(harness(page)).toHaveAttribute('data-provider-streaming', 'true')
+  await expect(harness(page)).toHaveAttribute('data-provider-stream-count', '2')
+  const island = page.locator('.janus-island')
+  await tap(island)
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await islandExpandedChatButton(page).click()
+
+  const chat = page.locator('.janus-island .janus-chat')
+  const threadTrigger = chat.getByRole('button', { name: 'Select conversation' })
+  await expect(threadTrigger).toBeEnabled()
+  await threadTrigger.click()
+  const threadMenu = chat.getByRole('menu', { name: 'Conversations' })
+  await expect(threadMenu).toBeVisible()
+  await expect(threadMenu.getByText('Streaming thread', { exact: true })).toBeVisible()
+  await expect(threadMenu.getByText('Other thread', { exact: true })).toBeVisible()
+  await expect(threadMenu.getByLabel('Generating')).toBeVisible()
+  await expect(threadMenu.getByLabel('Conversation error')).toBeVisible()
+  await threadMenu.locator('.janus-chat-thread-row', { hasText: 'Other thread' }).locator('.janus-chat-thread-main').click()
+
+  await expect(threadTrigger).toContainText('Other thread')
+  await threadTrigger.click()
+  await expect(chat.getByRole('menu', { name: 'Conversations' }).getByLabel('Generating')).toBeVisible()
+  await expect(harness(page)).toHaveAttribute('data-provider-streaming', 'true')
+  await expect(harness(page)).toHaveAttribute('data-provider-abort-count', '0')
 })
 
 test('Tab and Ctrl+P menus respond to every arrow key', async ({ page }) => {

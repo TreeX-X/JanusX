@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './Select.module.css'
 
@@ -15,6 +15,7 @@ export interface SelectProps {
   onChange: (value: string) => void
   options: SelectOption[]
   placeholder?: string
+  prefix?: ReactNode
   disabled?: boolean
   /** 透传到触发按钮的 className，便于覆盖尺寸/布局 */
   className?: string
@@ -40,6 +41,7 @@ export function Select({
   onChange,
   options,
   placeholder,
+  prefix,
   disabled,
   className,
   dropdownClassName,
@@ -129,6 +131,7 @@ export function Select({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
       >
+        {prefix && <span className={styles.triggerPrefix}>{prefix}</span>}
         <span className={styles.triggerLabel}>
           {selected ? selected.label : <span className={styles.placeholder}>{placeholder ?? ''}</span>}
         </span>

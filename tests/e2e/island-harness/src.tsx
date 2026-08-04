@@ -1,8 +1,12 @@
 import React, { useReducer, useState } from 'react'
 import ReactDOM from 'react-dom/client'
+import { AuthType } from '../../../packages/llm-core/src/core/types'
 import type { ApprovalRequest } from '../../../src/shared/ipc/agent-runtime'
+import type { ChatStreamEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
+import { JanusChatProvider, useJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
+import { CONVERSATION_STORAGE_KEY } from '../../../src/renderer/src/components/janus/janusChatConversations'
 import {
   INITIAL_ISLAND_CONTROLLER_STATE,
   reduceIslandController,
@@ -14,6 +18,72 @@ import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
 
 installElectronApiFallback()
+
+const streamListeners = {
+  delta: new Set<(payload: ChatStreamEvent) => void>(),
+  done: new Set<(payload: ChatStreamEvent) => void>(),
+  error: new Set<(payload: ChatStreamEvent) => void>(),
+}
+let providerAbortCount = 0
+let providerStreamCount = 0
+
+Object.assign(window.electron.llm, {
+  getDefaultProvider: async () => ({
+    provider: { id: 'fixture-provider', name: 'Fixture Provider', authType: AuthType.NONE },
+    modelId: 'fixture-model',
+  }),
+  startChatStream: (request: ChatStreamRequest) => {
+    providerStreamCount += 1
+    const prompt = request.messages.at(-1)?.content
+    queueMicrotask(() => {
+      if (prompt === 'Create error status') {
+        streamListeners.error.forEach((listener) => listener({ requestId: request.requestId, error: 'Fixture stream error' }))
+      } else {
+        streamListeners.delta.forEach((listener) => listener({ requestId: request.requestId, delta: 'Provider pending stream' }))
+      }
+    })
+  },
+  abortChat: async () => {
+    providerAbortCount += 1
+  },
+  onDelta: (listener: (payload: ChatStreamEvent) => void) => {
+    streamListeners.delta.add(listener)
+    return () => streamListeners.delta.delete(listener)
+  },
+  onDone: (listener: (payload: ChatStreamEvent) => void) => {
+    streamListeners.done.add(listener)
+    return () => streamListeners.done.delete(listener)
+  },
+  onError: (listener: (payload: ChatStreamEvent) => void) => {
+    streamListeners.error.add(listener)
+    return () => streamListeners.error.delete(listener)
+  },
+})
+
+localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify({
+  version: 1,
+  activeConversationId: 'thread-streaming',
+  conversations: [
+    {
+      id: 'thread-streaming',
+      title: 'Streaming thread',
+      createdAt: 1,
+      updatedAt: 2,
+      messages: [],
+      attachedWorkspaceIds: [],
+      toolTraces: [],
+    },
+    {
+      id: 'thread-other',
+      title: 'Other thread',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+      attachedWorkspaceIds: [],
+      toolTraces: [],
+    },
+  ],
+}))
 
 const workspaceOne = {
   id: 'workspace-1',
@@ -112,6 +182,10 @@ const approvalFixture: ApprovalRequest = {
 }
 
 function Harness() {
+  const providerStreamMode = new URLSearchParams(window.location.search).get('providerStream') === '1'
+  const activeConversation = useJanusChatController()
+  const streamingConversation = useJanusChatController('thread-streaming')
+  const errorConversation = useJanusChatController('thread-other')
   const [island, dispatch] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const [singleCount, setSingleCount] = useState(0)
   const [doubleCount, setDoubleCount] = useState(0)
@@ -134,7 +208,7 @@ function Harness() {
   const chatPane = getLeafPanes(paneTree).find((leaf) => leaf.tabs.some((tab) => tab.type === 'janus-chat')) ?? null
   const terminalTabCount = getLeafPanes(paneTree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'terminal').length
 
-  const controller = {
+  const manualController = {
     ...controllerData,
     messages: displayMessages,
     activeModel,
@@ -142,7 +216,7 @@ function Harness() {
     pendingContent: isStreaming ? 'Shared pending stream' : '',
   }
   const chatProps = {
-    ...controller,
+    ...manualController,
     modeColor: '#ff7830',
     onSelectModel: (providerId: string, modelId: string) => {
       const next = controllerData.modelOptions.find((option) =>
@@ -178,6 +252,23 @@ function Harness() {
       setApprovalPending(false)
     },
   }
+  const controller = providerStreamMode ? {
+    messages: activeConversation.messages,
+    pendingContent: activeConversation.pendingContent,
+    isStreaming: activeConversation.isStreaming,
+    error: activeConversation.error,
+    modelOptions: activeConversation.modelOptions,
+    activeModel: activeConversation.activeModel,
+    modelNotice: activeConversation.modelNotice,
+  } : manualController
+  const providerChatProps = {
+    onChatSelectModel: activeConversation.selectModel,
+    onChatSend: activeConversation.send,
+    onChatRewrite: activeConversation.rewrite,
+    onChatStop: activeConversation.stop,
+    onChatRetry: activeConversation.retry,
+    onChatClear: activeConversation.clear,
+  }
 
   return (
     <main
@@ -198,10 +289,16 @@ function Harness() {
       data-pane-ratio={paneTree?.type === 'split' ? paneTree.ratio : 'single'}
       data-pane-tabs={getLeafPanes(paneTree).flatMap((leaf) => leaf.tabs).map((tab) => tab.type).join(',')}
       data-approval-decision={approvalDecision}
+      data-provider-abort-count={providerAbortCount}
+      data-provider-stream-count={providerStreamCount}
+      data-provider-streaming={streamingConversation.isStreaming}
+      data-provider-error={errorConversation.error ?? ''}
     >
       <button data-testid="replace-single" onClick={() => setCallbackVersion(2)}>Replace single callback</button>
       <button data-testid="reopen-island" onClick={() => dispatch({ type: 'double-activate' })}>Reopen Island</button>
       <button data-testid="toggle-streaming" onClick={() => setIsStreaming((value) => !value)}>Toggle streaming</button>
+      <button data-testid="start-provider-stream" onClick={() => streamingConversation.send('Keep provider stream pending')}>Start provider stream</button>
+      <button data-testid="fail-provider-thread" onClick={() => errorConversation.send('Create error status')}>Fail provider thread</button>
       <button data-testid="switch-empty-workspace" onClick={() => useWorkspaceStore.getState().setActiveWorkspace('workspace-3')}>
         Switch empty workspace
       </button>
@@ -218,12 +315,12 @@ function Harness() {
         }}
         onDismiss={() => dispatch({ type: 'dismiss' })}
         {...controller}
-        onChatSelectModel={chatProps.onSelectModel}
-        onChatSend={chatProps.onSend}
-        onChatRewrite={chatProps.onRewrite}
-        onChatStop={chatProps.onStop}
-        onChatRetry={() => undefined}
-        onChatClear={chatProps.onClear}
+        onChatSelectModel={providerStreamMode ? providerChatProps.onChatSelectModel : chatProps.onSelectModel}
+        onChatSend={providerStreamMode ? providerChatProps.onChatSend : chatProps.onSend}
+        onChatRewrite={providerStreamMode ? providerChatProps.onChatRewrite : chatProps.onRewrite}
+        onChatStop={providerStreamMode ? providerChatProps.onChatStop : chatProps.onStop}
+        onChatRetry={providerStreamMode ? providerChatProps.onChatRetry : chatProps.onRetry}
+        onChatClear={providerStreamMode ? providerChatProps.onChatClear : chatProps.onClear}
         onOpenLlmConfig={() => undefined}
         onAddChatToWorkspace={() => {
           const workspaceStore = useWorkspaceStore.getState()
@@ -243,11 +340,15 @@ function Harness() {
           >
             Close workspace Chat
           </button>
-          <JanusChat visible workspace focused={focusedPaneId === chatPane.id} {...chatProps} />
+          <JanusChat visible workspace focused={focusedPaneId === chatPane.id} {...chatProps} resourceController={resourceController} />
         </section>
       )}
     </main>
   )
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<Harness />)
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <JanusChatProvider>
+    <Harness />
+  </JanusChatProvider>,
+)

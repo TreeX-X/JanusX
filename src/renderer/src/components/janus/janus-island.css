@@ -2929,7 +2929,6 @@ body.is-running {
 }
 
 .janus-resource-attach {
-  position: relative;
   display: flex;
   height: 23px;
   flex: 0 0 auto;
@@ -2937,17 +2936,11 @@ body.is-running {
   color: rgba(255,255,255,0.48);
 }
 
-.janus-resource-attach > svg {
-  position: absolute;
-  left: 6px;
-  z-index: 1;
-  pointer-events: none;
-}
-
 .janus-resource-attach-select {
   width: 112px;
   height: 23px;
-  padding: 0 6px 0 22px;
+  gap: 5px;
+  padding: 0 6px;
   border-radius: 4px;
   background: rgba(255,255,255,0.025);
   color: rgba(255,255,255,0.58);
@@ -4845,7 +4838,7 @@ body.is-running {
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar {
-  display: none;
+  display: flex;
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-messages {

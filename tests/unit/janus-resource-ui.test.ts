@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { JanusChat } from '../../src/renderer/src/components/janus/JanusChat'
 import type { JanusResourceController } from '../../src/renderer/src/components/janus/useJanusChat'
+import type { UseJanusChatReturn } from '../../src/renderer/src/components/janus/useJanusChat'
 
 const commonProps = {
   visible: true,
@@ -28,6 +29,38 @@ function controller(overrides: Partial<JanusResourceController> = {}): JanusReso
     activities: [],
     pendingApprovals: [],
     resolveApproval: vi.fn(),
+    ...overrides,
+  }
+}
+
+function conversationController(overrides: Partial<UseJanusChatReturn> = {}): UseJanusChatReturn {
+  return {
+    conversationId: 'streaming',
+    conversationTitle: 'Streaming thread',
+    conversations: [
+      { id: 'streaming', title: 'Streaming thread', updatedAt: 2, messageCount: 2, isStreaming: true, hasError: false },
+      { id: 'failed', title: 'Failed thread', updatedAt: 1, messageCount: 1, isStreaming: false, hasError: true },
+    ],
+    messages: [],
+    pendingContent: '',
+    isStreaming: true,
+    error: null,
+    modelOptions: [],
+    activeModel: null,
+    modelNotice: null,
+    latestRecallTrace: null,
+    resourceController: controller(),
+    send: vi.fn(),
+    rewrite: vi.fn(),
+    stop: vi.fn(),
+    retry: vi.fn(),
+    clear: vi.fn(),
+    selectModel: vi.fn(),
+    refreshModels: vi.fn().mockResolvedValue([]),
+    createConversation: vi.fn(),
+    selectConversation: vi.fn(),
+    renameConversation: vi.fn(),
+    deleteConversation: vi.fn(),
     ...overrides,
   }
 }
@@ -64,10 +97,21 @@ describe('Janus resource scope UI', () => {
     expect(markup).toContain('aria-haspopup="listbox"')
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).toContain('Add workspace')
+    expect(markup).toMatch(/aria-label="Attach workspace"[^>]*>\s*<span[^>]*><svg/)
     expect(markup).not.toContain('<select')
     expect(markup).not.toContain('>Scope<')
     expect(markup).not.toContain('>Global<')
     expect(markup).not.toContain('Analyze workspace')
+  })
+
+  it('keeps the Island conversation selector enabled while streaming', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      isStreaming: true,
+      conversationController: conversationController(),
+    }))
+
+    expect(markup).toMatch(/aria-label="Select conversation"[^>]*aria-expanded="false"(?![^>]*disabled)/)
   })
 
   it.each([

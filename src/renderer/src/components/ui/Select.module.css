@@ -36,9 +36,16 @@
 
 .triggerLabel {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.triggerPrefix {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
 }
 
 .placeholder {
