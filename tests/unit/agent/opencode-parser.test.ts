@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 
 describe('OpenCodeParser', () => {
   let OpenCodeParser: new () => { parseLine(json: Record<string, unknown>): import('../../../src/main/agent/types').AgentEvent[]; reset(): void }
@@ -49,29 +49,19 @@ describe('OpenCodeParser', () => {
   // --- tool events ---
 
   describe('tool events', () => {
-    it('should emit tool-start for tool_use with state=running', () => {
+    it.each([
+      ['running', 'read', 'Read'],
+      ['started', 'bash', 'Bash'],
+    ] as const)('should emit tool-start for tool_use with state=%s', (state, tool, expectedName) => {
       const parser = new OpenCodeParser()
       const events = parser.parseLine({
         type: 'tool_use',
         tool_id: 't1',
-        tool: 'read',
-        state: 'running',
+        tool,
+        state,
       })
       expect(events).toEqual([
-        { type: 'tool-start', id: 't1', name: 'Read', arg: '', filePath: undefined },
-      ])
-    })
-
-    it('should emit tool-start for tool_use with state=started', () => {
-      const parser = new OpenCodeParser()
-      const events = parser.parseLine({
-        type: 'tool_use',
-        tool_id: 't1',
-        tool: 'bash',
-        state: 'started',
-      })
-      expect(events).toEqual([
-        { type: 'tool-start', id: 't1', name: 'Bash', arg: '', filePath: undefined },
+        { type: 'tool-start', id: 't1', name: expectedName, arg: '', filePath: undefined },
       ])
     })
 
@@ -129,19 +119,6 @@ describe('OpenCodeParser', () => {
         state: 'running',
       })
       expect(events[0]).toMatchObject({ name: 'Read' })
-    })
-
-    it('should set arg and filePath to empty/undefined when state is a string', () => {
-      const parser = new OpenCodeParser()
-      const events = parser.parseLine({
-        type: 'tool_use',
-        tool_id: 't1',
-        tool: 'read',
-        state: 'running',
-      })
-      // When state is a string like 'running', the parser's internal cast
-      // (part.state as Record)?.input resolves to undefined, so arg is '' and filePath is undefined
-      expect(events[0]).toMatchObject({ arg: '', filePath: undefined })
     })
 
     it('should emit tool-end for tool_use with state=completed', () => {

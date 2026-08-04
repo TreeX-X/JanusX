@@ -1,4 +1,4 @@
-import React, { Children, isValidElement, type ReactElement, type ReactNode } from 'react'
+import React, { Children } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createPendingFileTreeDelete,
@@ -12,9 +12,7 @@ import { loadWorkspaceFileTree } from '../../src/renderer/src/features/workspace
 import { PromptDialog, type PromptDialogProps } from '../../src/renderer/src/components/blueprint/PromptDialog'
 import { useWorkspaceStore } from '../../src/renderer/src/stores/workspace'
 import type { FileNode, Workspace } from '../../src/renderer/src/types'
-
-type ElementProps = Record<string, unknown> & { children?: ReactNode }
-type TestElement = ReactElement<ElementProps>
+import { withSynchronousHooks, findElement, type TestElement } from './helpers/tree-render'
 
 const request: PendingFileTreeDelete = {
   workspacePath: 'C:\\workspace',
@@ -31,45 +29,6 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function withSynchronousHooks<T>(render: () => T): T {
-  const internals = (React as unknown as {
-    __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: {
-      ReactCurrentDispatcher: { current: unknown }
-    }
-  }).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
-  const previous = internals.ReactCurrentDispatcher.current
-
-  internals.ReactCurrentDispatcher.current = {
-    useCallback: <V>(callback: V) => callback,
-    useEffect: () => undefined,
-    useRef: <V>(value: V) => ({ current: value }),
-    useState: <V>(initial: V | (() => V)) => [
-      typeof initial === 'function' ? (initial as () => V)() : initial,
-      vi.fn(),
-    ],
-  }
-
-  try {
-    return render()
-  } finally {
-    internals.ReactCurrentDispatcher.current = previous
-  }
-}
-
-function findElement(root: ReactNode, predicate: (element: TestElement) => boolean): TestElement {
-  if (isValidElement<ElementProps>(root)) {
-    if (predicate(root)) return root
-    for (const child of Children.toArray(root.props.children)) {
-      try {
-        return findElement(child, predicate)
-      } catch {
-        // Continue through sibling branches.
-      }
-    }
-  }
-  throw new Error('Element not found')
-}
-
 function renderConfirmDialog(overrides: Partial<PromptDialogProps> = {}): TestElement {
   return withSynchronousHooks(() => PromptDialog({
     open: true,
@@ -82,6 +41,55 @@ function renderConfirmDialog(overrides: Partial<PromptDialogProps> = {}): TestEl
     onCancel: vi.fn(),
     ...overrides,
   }) as TestElement)
+}
+
+function renderRow(node: FileNode, overrides: Partial<FileTreeItemProps> = {}): TestElement {
+  const props: FileTreeItemProps = {
+    node,
+    workspacePath: 'C:\\workspace',
+    depth: 0,
+    activeFilePath: null,
+    expanded: false,
+    expandedPaths: new Set(),
+    loading: false,
+    loadingDirectoryPaths: new Set(),
+    fileChange: null,
+    fileChangeMap: new Map(),
+    changedDirs: new Map(),
+    onSelect: vi.fn(),
+    onToggleDirectory: vi.fn(),
+    onOpenFile: vi.fn(),
+    onMoveFile: vi.fn(),
+    onOpenContextMenu: vi.fn(),
+    ...overrides,
+  }
+  const tree = withSynchronousHooks(() => FileTreeItem(props) as TestElement)
+  return findElement(tree, (element) => element.props['data-file-path'] === node.path)
+}
+
+async function withMockWindowEnv<T>(
+  windowValue: unknown,
+  storeState: Partial<ReturnType<typeof useWorkspaceStore.getState>>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const originalWindow = globalThis.window
+  const originalState = useWorkspaceStore.getState()
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    writable: true,
+    value: windowValue,
+  })
+  useWorkspaceStore.setState({ ...originalState, ...storeState } as ReturnType<typeof useWorkspaceStore.getState>)
+  try {
+    return await fn()
+  } finally {
+    useWorkspaceStore.setState(originalState)
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: originalWindow,
+    })
+  }
 }
 
 describe('file explorer delete confirmation', () => {
@@ -157,8 +165,6 @@ describe('file explorer delete confirmation', () => {
   })
 
   it('discards a directory reload that resolves after the active workspace changes', async () => {
-    const originalWindow = globalThis.window
-    const originalState = useWorkspaceStore.getState()
     const childrenLoad = deferred<FileNode[]>()
     const loadChildren = vi.fn(() => childrenLoad.promise)
     const oldWorkspace = { id: 'old', path: 'C:\\workspace' } as Workspace
@@ -166,58 +172,41 @@ describe('file explorer delete confirmation', () => {
     const oldTree = [{ name: 'src', path: 'src', type: 'directory' }] as FileNode[]
     const newTree = [{ name: 'new.ts', path: 'new.ts', type: 'file' }] as FileNode[]
 
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      writable: true,
-      value: { electron: { fileTree: { children: loadChildren } } },
-    })
-    useWorkspaceStore.setState({
-      workspaces: [oldWorkspace, newWorkspace],
-      activeWorkspaceId: oldWorkspace.id,
-      activeFilePath: request.targetPath,
-      fileTree: oldTree,
-    })
+    await withMockWindowEnv(
+      { electron: { fileTree: { children: loadChildren } } },
+      {
+        workspaces: [oldWorkspace, newWorkspace],
+        activeWorkspaceId: oldWorkspace.id,
+        activeFilePath: request.targetPath,
+        fileTree: oldTree,
+      },
+      async () => {
+        const operation = executeFileTreeDelete(request, {
+          deleteTarget: vi.fn().mockResolvedValue({ success: true }),
+          isWorkspaceActive: (workspacePath) =>
+            useWorkspaceStore.getState().workspaces.find(
+              (workspace) => workspace.id === useWorkspaceStore.getState().activeWorkspaceId,
+            )?.path === workspacePath,
+          reloadDirectory: (path, workspacePath) => reloadWorkspaceDirectory(workspacePath, path),
+          onDeleted: () => useWorkspaceStore.setState({ activeFilePath: null }),
+        })
+        await vi.waitFor(() => expect(loadChildren).toHaveBeenCalledWith('C:\\workspace', 'src'))
 
-    try {
-      const operation = executeFileTreeDelete(request, {
-        deleteTarget: vi.fn().mockResolvedValue({ success: true }),
-        isWorkspaceActive: (workspacePath) =>
-          useWorkspaceStore.getState().workspaces.find(
-            (workspace) => workspace.id === useWorkspaceStore.getState().activeWorkspaceId,
-          )?.path === workspacePath,
-        reloadDirectory: (path, workspacePath) => reloadWorkspaceDirectory(workspacePath, path),
-        onDeleted: () => useWorkspaceStore.setState({ activeFilePath: null }),
-      })
-      await vi.waitFor(() => expect(loadChildren).toHaveBeenCalledWith('C:\\workspace', 'src'))
+        useWorkspaceStore.setState({
+          activeWorkspaceId: newWorkspace.id,
+          activeFilePath: 'new.ts',
+          fileTree: newTree,
+        })
+        childrenLoad.resolve([{ name: 'old.ts', path: 'src/old.ts', type: 'file' }])
+        await operation
 
-      useWorkspaceStore.setState({
-        activeWorkspaceId: newWorkspace.id,
-        activeFilePath: 'new.ts',
-        fileTree: newTree,
-      })
-      childrenLoad.resolve([{ name: 'old.ts', path: 'src/old.ts', type: 'file' }])
-      await operation
-
-      expect(useWorkspaceStore.getState().activeFilePath).toBe('new.ts')
-      expect(useWorkspaceStore.getState().fileTree).toBe(newTree)
-    } finally {
-      useWorkspaceStore.setState({
-        workspaces: originalState.workspaces,
-        activeWorkspaceId: originalState.activeWorkspaceId,
-        activeFilePath: originalState.activeFilePath,
-        fileTree: originalState.fileTree,
-      })
-      Object.defineProperty(globalThis, 'window', {
-        configurable: true,
-        writable: true,
-        value: originalWindow,
-      })
-    }
+        expect(useWorkspaceStore.getState().activeFilePath).toBe('new.ts')
+        expect(useWorkspaceStore.getState().fileTree).toBe(newTree)
+      },
+    )
   })
 
   it('keeps an expanded directory visible through consecutive root refreshes', async () => {
-    const originalWindow = globalThis.window
-    const originalState = useWorkspaceStore.getState()
     const firstChildrenLoad = deferred<FileNode[]>()
     const firstRootLoad = deferred<FileNode[]>()
     const secondRootLoad = deferred<FileNode[]>()
@@ -232,10 +221,9 @@ describe('file explorer delete confirmation', () => {
       hasChildren: true,
       children: [],
     }] as FileNode[]
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      writable: true,
-      value: {
+
+    await withMockWindowEnv(
+      {
         electron: {
           fileTree: {
             children: loadChildren,
@@ -245,71 +233,40 @@ describe('file explorer delete confirmation', () => {
           },
         },
       },
-    })
-    useWorkspaceStore.setState({
-      workspaces: [workspace],
-      activeWorkspaceId: workspace.id,
-      fileTree: rootTree,
-    })
+      {
+        workspaces: [workspace],
+        activeWorkspaceId: workspace.id,
+        fileTree: rootTree,
+      },
+      async () => {
+        const directoryReload = reloadWorkspaceDirectory(workspace.path, 'src')
+        const duplicateReload = reloadWorkspaceDirectory(workspace.path, 'src')
+        await vi.waitFor(() => expect(loadChildren).toHaveBeenCalledTimes(1))
+        const firstRootRefresh = loadWorkspaceFileTree(workspace.path)
+        const secondRootRefresh = loadWorkspaceFileTree(workspace.path)
 
-    try {
-      const directoryReload = reloadWorkspaceDirectory(workspace.path, 'src')
-      const duplicateReload = reloadWorkspaceDirectory(workspace.path, 'src')
-      await vi.waitFor(() => expect(loadChildren).toHaveBeenCalledTimes(1))
-      const firstRootRefresh = loadWorkspaceFileTree(workspace.path)
-      const secondRootRefresh = loadWorkspaceFileTree(workspace.path)
+        firstChildrenLoad.resolve([child])
+        await Promise.all([directoryReload, duplicateReload])
+        expect(loadChildren).toHaveBeenCalledTimes(1)
 
-      firstChildrenLoad.resolve([child])
-      await Promise.all([directoryReload, duplicateReload])
-      expect(loadChildren).toHaveBeenCalledTimes(1)
+        firstRootLoad.resolve(rootTree)
+        secondRootLoad.resolve(rootTree)
+        await Promise.all([firstRootRefresh, secondRootRefresh])
 
-      firstRootLoad.resolve(rootTree)
-      secondRootLoad.resolve(rootTree)
-      await Promise.all([firstRootRefresh, secondRootRefresh])
-
-      expect(useWorkspaceStore.getState().fileTree[0]).toMatchObject({
-        path: 'src',
-        loaded: true,
-        children: [child],
-      })
-    } finally {
-      useWorkspaceStore.setState({
-        workspaces: originalState.workspaces,
-        activeWorkspaceId: originalState.activeWorkspaceId,
-        fileTree: originalState.fileTree,
-      })
-      Object.defineProperty(globalThis, 'window', {
-        configurable: true,
-        writable: true,
-        value: originalWindow,
-      })
-    }
+        expect(useWorkspaceStore.getState().fileTree[0]).toMatchObject({
+          path: 'src',
+          loaded: true,
+          children: [child],
+        })
+      },
+    )
   })
 
   it('preserves the neighboring file-row context-menu operation', () => {
     const node = { name: 'original.ts', path: 'src/original.ts', type: 'file' } as FileNode
     const onSelect = vi.fn()
     const onOpenContextMenu = vi.fn()
-    const props: FileTreeItemProps = {
-      node,
-      workspacePath: 'C:\\workspace',
-      depth: 0,
-      activeFilePath: null,
-      expanded: false,
-      expandedPaths: new Set(),
-      loading: false,
-      loadingDirectoryPaths: new Set(),
-      fileChange: null,
-      fileChangeMap: new Map(),
-      changedDirs: new Map(),
-      onSelect,
-      onToggleDirectory: vi.fn(),
-      onOpenFile: vi.fn(),
-      onMoveFile: vi.fn(),
-      onOpenContextMenu,
-    }
-    const tree = withSynchronousHooks(() => FileTreeItem(props) as TestElement)
-    const row = findElement(tree, (element) => element.props['data-file-path'] === node.path)
+    const row = renderRow(node, { onSelect, onOpenContextMenu })
     const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() }
 
     ;(row.props.onContextMenu as (event: unknown) => void)(event)

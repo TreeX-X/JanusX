@@ -11,10 +11,55 @@ function currentShardName(date: Date): string {
   return `${year}-${month}.jsonl`
 }
 
+type ObsRecord = {
+  id: string
+  workspaceId: string
+  workspaceName: string
+  workspacePath: string
+  source: string
+  type: string
+  content: string
+  fileRefs: string[]
+  tags: string[]
+  visibility: string
+  actor: string
+  createdAt: string
+  retentionClass: string
+  contentLength?: number
+  contentPreview?: string
+  compactionStatus?: string
+}
+
 describe('KnowledgeObservationService', () => {
   let workspacePath: string
   let knowledgeRoot: string
   const previousKnowledgeRoot = process.env.JANUSX_KNOWLEDGE_ROOT
+
+  function makeObs(overrides: Partial<ObsRecord> = {}): ObsRecord {
+    return {
+      id: 'obs-1',
+      workspaceId: 'ws',
+      workspaceName: 'ws',
+      workspacePath,
+      source: 'manual',
+      type: 'user-note',
+      content: 'x',
+      fileRefs: [],
+      tags: [],
+      visibility: 'global',
+      actor: 'tester',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      retentionClass: 'evidence',
+      ...overrides,
+    }
+  }
+
+  async function writeShard(records: ObsRecord[], shardName = '2024-01.jsonl') {
+    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
+    const shard = join(knowledgeRoot, 'observations/active', shardName)
+    await writeFile(shard, records.map((o) => JSON.stringify(o)).join('\n') + '\n', 'utf8')
+    return shard
+  }
 
   beforeEach(async () => {
     workspacePath = await mkdtemp(join(tmpdir(), 'janusx-observations-'))
@@ -54,6 +99,9 @@ describe('KnowledgeObservationService', () => {
     expect(observation.contentLength).toBe(Buffer.byteLength('remember this design decision', 'utf8'))
     expect(observation.truncated).toBe(false)
     expect(observation.blobRef).toBeUndefined()
+
+    // Short content is never blobbed and resolves verbatim.
+    expect(await knowledgeObservationService.resolveContent(observation)).toBe('remember this design decision')
 
     const shardName = currentShardName(new Date(observation.createdAt))
     const fileContent = await readFile(
@@ -202,57 +250,10 @@ describe('KnowledgeObservationService', () => {
     expect(resolved).toBe(longContent)
   })
 
-  it('does not blob short content', async () => {
-    const observation = await knowledgeObservationService.capture({
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'short note',
-      actor: 'tester',
-    })
-    expect(observation.blobRef).toBeUndefined()
-    expect(observation.truncated).toBe(false)
-    expect(observation.content).toBe('short note')
-    expect(await knowledgeObservationService.resolveContent(observation)).toBe('short note')
-  })
-
   it('aggregates across multiple monthly shards', async () => {
     // Write two records directly into two different shard files to simulate history.
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
-    const oldShard = join(knowledgeRoot, 'observations/active/2024-01.jsonl')
-    const recentShard = join(knowledgeRoot, 'observations/active/2025-06.jsonl')
-    const oldObs = {
-      id: 'old-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'old record',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-15T00:00:00.000Z',
-      retentionClass: 'evidence',
-    }
-    const recentObs = {
-      id: 'recent-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'recent record',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2025-06-15T00:00:00.000Z',
-      retentionClass: 'evidence',
-    }
-    await writeFile(oldShard, `${JSON.stringify(oldObs)}\n`, 'utf8')
-    await writeFile(recentShard, `${JSON.stringify(recentObs)}\n`, 'utf8')
+    await writeShard([makeObs({ id: 'old-1', content: 'old record', createdAt: '2024-01-15T00:00:00.000Z' })], '2024-01.jsonl')
+    await writeShard([makeObs({ id: 'recent-1', content: 'recent record', createdAt: '2025-06-15T00:00:00.000Z' })], '2025-06.jsonl')
 
     const all = await knowledgeObservationService.list({ limit: 200 })
     expect(all).toHaveLength(2)
@@ -264,54 +265,11 @@ describe('KnowledgeObservationService', () => {
   })
 
   it('autoPrune removes noise/operational past TTL but keeps evidence', async () => {
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
-    const shard = join(knowledgeRoot, 'observations/active/2024-01.jsonl')
-    const noise = {
-      id: 'noise-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'agent-stream',
-      type: 'system-event',
-      content: '   ',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'engine',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      retentionClass: 'noise',
-    }
-    const operational = {
-      id: 'op-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'agent-stream',
-      type: 'system-event',
-      content: 'turn completed',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'engine',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      retentionClass: 'operational',
-    }
-    const evidence = {
-      id: 'ev-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'keep forever',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      retentionClass: 'evidence',
-    }
-    await writeFile(shard, [noise, operational, evidence].map((o) => JSON.stringify(o)).join('\n') + '\n', 'utf8')
+    await writeShard([
+      makeObs({ id: 'noise-1', source: 'agent-stream', type: 'system-event', content: '   ', actor: 'engine', retentionClass: 'noise' }),
+      makeObs({ id: 'op-1', source: 'agent-stream', type: 'system-event', content: 'turn completed', actor: 'engine', retentionClass: 'operational' }),
+      makeObs({ id: 'ev-1', content: 'keep forever', retentionClass: 'evidence' }),
+    ])
 
     const now = Date.parse('2024-08-01T00:00:00.000Z')
     const result = await knowledgeObservationService.autoPrune(now)
@@ -326,30 +284,13 @@ describe('KnowledgeObservationService', () => {
   })
 
   it('stats counts observations by retention class across shards', async () => {
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
-    const shard = join(knowledgeRoot, 'observations/active/2024-01.jsonl')
-    const make = (id: string, cls: 'noise' | 'operational' | 'evidence' | 'derived') => ({
-      id,
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'x',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      retentionClass: cls,
-    })
-    await writeFile(
-      shard,
-      [make('a', 'noise'), make('b', 'noise'), make('c', 'operational'), make('d', 'evidence'), make('e', 'derived')]
-        .map((o) => JSON.stringify(o))
-        .join('\n') + '\n',
-      'utf8',
-    )
+    await writeShard([
+      makeObs({ id: 'a', retentionClass: 'noise' }),
+      makeObs({ id: 'b', retentionClass: 'noise' }),
+      makeObs({ id: 'c', retentionClass: 'operational' }),
+      makeObs({ id: 'd', retentionClass: 'evidence' }),
+      makeObs({ id: 'e', retentionClass: 'derived' }),
+    ])
 
     const stats = await knowledgeObservationService.stats()
     expect(stats).toEqual({ noise: 2, operational: 1, evidence: 1, derived: 1, total: 5 })
@@ -381,24 +322,9 @@ describe('KnowledgeObservationService', () => {
   })
 
   it('autoPrune writes observation_auto_pruned audit events', async () => {
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
-    const shard = join(knowledgeRoot, 'observations/active/2024-01.jsonl')
-    const noise = {
-      id: 'noise-audit-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'agent-stream',
-      type: 'system-event',
-      content: '   ',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'engine',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      retentionClass: 'noise',
-    }
-    await writeFile(shard, `${JSON.stringify(noise)}\n`, 'utf8')
+    await writeShard([
+      makeObs({ id: 'noise-audit-1', source: 'agent-stream', type: 'system-event', content: '   ', actor: 'engine', retentionClass: 'noise' }),
+    ])
 
     await knowledgeObservationService.autoPrune(Date.parse('2024-08-01T00:00:00.000Z'))
 
@@ -409,27 +335,7 @@ describe('KnowledgeObservationService', () => {
   })
 
   it('archiveOldShards dry-run reports candidates without touching the filesystem', async () => {
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
-    const oldObs = {
-      id: 'archive-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'old record',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-15T00:00:00.000Z',
-      retentionClass: 'evidence',
-    }
-    await writeFile(
-      join(knowledgeRoot, 'observations/active/2024-01.jsonl'),
-      `${JSON.stringify(oldObs)}\n`,
-      'utf8',
-    )
+    await writeShard([makeObs({ id: 'archive-1', content: 'old record', createdAt: '2024-01-15T00:00:00.000Z' })])
 
     const result = await knowledgeObservationService.archiveOldShards({
       olderThanMonths: 3,
@@ -451,27 +357,7 @@ describe('KnowledgeObservationService', () => {
   })
 
   it('archiveOldShards(confirm:true) moves active shard to gzipped archive and keeps records queryable', async () => {
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
-    const oldObs = {
-      id: 'archive-confirm-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'old record that will be archived',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-15T00:00:00.000Z',
-      retentionClass: 'evidence',
-    }
-    await writeFile(
-      join(knowledgeRoot, 'observations/active/2024-01.jsonl'),
-      `${JSON.stringify(oldObs)}\n`,
-      'utf8',
-    )
+    await writeShard([makeObs({ id: 'archive-confirm-1', content: 'old record that will be archived', createdAt: '2024-01-15T00:00:00.000Z' })])
 
     const result = await knowledgeObservationService.archiveOldShards({
       olderThanMonths: 3,
@@ -502,54 +388,29 @@ describe('KnowledgeObservationService', () => {
     expect(audit[0]?.after).toMatchObject({ archivedTo: 'observations/archive/2024-01.jsonl.gz' })
   })
 
-  it('compactEvidence dry-run counts targets; confirmed marks compactionStatus and writes audit', async () => {
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
+  it.each([
+    ['active', 'compact-1'],
+    [undefined, 'legacy-compact-1'],
+  ] as const)('compactEvidence treats compactionStatus=%s as active target (backward compat)', async (compactionStatus, longId) => {
     const longContent = 'A'.repeat(300) // > CONTENT_PREVIEW_CHARS (200)
-    const oldEvidence = {
-      id: 'compact-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: longContent,
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-15T00:00:00.000Z',
-      retentionClass: 'evidence',
-      contentLength: longContent.length,
-      contentPreview: longContent.slice(0, 200),
-    }
-    const shortEvidence = {
-      id: 'compact-keep-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: 'short',
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-15T00:00:00.000Z',
-      retentionClass: 'evidence',
-      contentLength: 5,
-    }
-    await writeFile(
-      join(knowledgeRoot, 'observations/active/2024-01.jsonl'),
-      [oldEvidence, shortEvidence].map((o) => JSON.stringify(o)).join('\n') + '\n',
-      'utf8',
-    )
+    await writeShard([
+      makeObs({
+        id: longId,
+        content: longContent,
+        createdAt: '2024-01-15T00:00:00.000Z',
+        contentLength: longContent.length,
+        contentPreview: longContent.slice(0, 200),
+        ...(compactionStatus !== undefined ? { compactionStatus } : {}),
+      }),
+      makeObs({ id: 'compact-keep-1', content: 'short', createdAt: '2024-01-15T00:00:00.000Z', contentLength: 5 }),
+    ])
 
     const dryRun = await knowledgeObservationService.compactEvidence({
       olderThanMonths: 3,
       nowMs: Date.parse('2024-08-01T00:00:00.000Z'),
     })
     expect(dryRun.dryRun).toBe(true)
-    expect(dryRun.compacted).toBe(1) // only oldEvidence qualifies (long content)
+    expect(dryRun.compacted).toBe(1) // only the long record qualifies
     expect(dryRun.kept).toBe(1)
 
     // No audit in dry-run.
@@ -565,7 +426,7 @@ describe('KnowledgeObservationService', () => {
     expect(confirmed.compacted).toBe(1)
 
     const all = await knowledgeObservationService.list({ limit: 200 })
-    const compactedObs = all.find((o) => o.id === 'compact-1')
+    const compactedObs = all.find((o) => o.id === longId)
     const keptObs = all.find((o) => o.id === 'compact-keep-1')
     expect(compactedObs?.compactionStatus).toBe('compacted')
     expect(compactedObs?.compactedAt).toBeTruthy()
@@ -576,45 +437,8 @@ describe('KnowledgeObservationService', () => {
 
     const audit = await knowledgeAuditService.list({ action: 'observation_compacted' })
     expect(audit).toHaveLength(1)
-    expect(audit[0]?.targetId).toBe('compact-1')
+    expect(audit[0]?.targetId).toBe(longId)
     expect(audit[0]?.after).toMatchObject({ compactionStatus: 'compacted' })
     expect(audit[0]?.provenance.actor).toBe('knowledge-compact')
-  })
-
-  it('treats records without compactionStatus as active compact targets (backward compat)', async () => {
-    await mkdir(join(knowledgeRoot, 'observations/active'), { recursive: true })
-    const longContent = 'B'.repeat(300)
-    // No compactionStatus field at all — must be treated as 'active'.
-    const oldEvidence = {
-      id: 'legacy-compact-1',
-      workspaceId: 'ws',
-      workspaceName: 'ws',
-      workspacePath,
-      source: 'manual',
-      type: 'user-note',
-      content: longContent,
-      fileRefs: [],
-      tags: [],
-      visibility: 'global',
-      actor: 'tester',
-      createdAt: '2024-01-15T00:00:00.000Z',
-      retentionClass: 'evidence',
-      contentLength: longContent.length,
-    }
-    await writeFile(
-      join(knowledgeRoot, 'observations/active/2024-01.jsonl'),
-      `${JSON.stringify(oldEvidence)}\n`,
-      'utf8',
-    )
-
-    const result = await knowledgeObservationService.compactEvidence({
-      olderThanMonths: 3,
-      confirm: true,
-      nowMs: Date.parse('2024-08-01T00:00:00.000Z'),
-    })
-    expect(result.compacted).toBe(1)
-
-    const all = await knowledgeObservationService.list({ limit: 200 })
-    expect(all[0]?.compactionStatus).toBe('compacted')
   })
 })

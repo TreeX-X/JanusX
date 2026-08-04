@@ -19,13 +19,15 @@ function childWithOutput(output: string, alive = true): OfficeWatchReadyChild {
 }
 
 describe('Office watch readiness', () => {
-  it('accepts only the exact expected loopback Watch URL', () => {
-    expect(matchesExpectedWatchLine('Watch: http://127.0.0.1:4312/', 4312)).toBe(true)
-    expect(matchesExpectedWatchLine('  Watch: http://localhost:4312', 4312)).toBe(true)
-    expect(matchesExpectedWatchLine('Watch: http://127.0.0.1:4313/', 4312)).toBe(false)
-    expect(matchesExpectedWatchLine('Server: http://127.0.0.1:4312/', 4312)).toBe(false)
-    expect(matchesExpectedWatchLine('Watch: http://0.0.0.0:4312/', 4312)).toBe(false)
-    expect(matchesExpectedWatchLine('Watch: http://127.0.0.1:4312/ extra', 4312)).toBe(false)
+  it.each([
+    ['Watch: http://127.0.0.1:4312/', 4312, true],
+    ['  Watch: http://localhost:4312', 4312, true],
+    ['Watch: http://127.0.0.1:4313/', 4312, false],
+    ['Server: http://127.0.0.1:4312/', 4312, false],
+    ['Watch: http://0.0.0.0:4312/', 4312, false],
+    ['Watch: http://127.0.0.1:4312/ extra', 4312, false],
+  ] as const)('matchesExpectedWatchLine(%j, %i) -> %s', (line, port, expected) => {
+    expect(matchesExpectedWatchLine(line, port)).toBe(expected)
   })
 
   it('requires matching output, a live child, and reachability', async () => {
@@ -38,27 +40,30 @@ describe('Office watch readiness', () => {
     })).resolves.toBeUndefined()
   })
 
-  it('fails closed on wrong-port output, dead child, and unreachable timeout', async () => {
+  it.each([
+    {
+      name: 'wrong-port output',
+      setup: () => ({ child: childWithOutput('Watch: http://127.0.0.1:4313/\n'), deadline: Date.now() + 100, reach: async () => true }),
+      expectedCode: 'START_FAILED',
+    },
+    {
+      name: 'dead child',
+      setup: () => ({ child: childWithOutput('Watch: http://127.0.0.1:4312/\n', false), deadline: Date.now() + 100, reach: async () => true }),
+      expectedCode: 'START_FAILED',
+    },
+    {
+      name: 'unreachable timeout',
+      setup: () => ({ child: childWithOutput('Watch: http://127.0.0.1:4312/\n'), deadline: Date.now() + 20, reach: async () => false }),
+      expectedCode: 'PORT_TIMEOUT',
+    },
+  ])('fails closed on $name', async ({ setup, expectedCode }) => {
+    const { child, deadline, reach } = setup()
     await expect(waitForOfficeWatchReady({
-      child: childWithOutput('Watch: http://127.0.0.1:4313/\n'),
+      child,
       port: 4312,
-      deadline: Date.now() + 100,
-      reach: async () => true,
-    })).rejects.toSatisfy((error) => readinessFailureCode(error) === 'START_FAILED')
-
-    await expect(waitForOfficeWatchReady({
-      child: childWithOutput('Watch: http://127.0.0.1:4312/\n', false),
-      port: 4312,
-      deadline: Date.now() + 100,
-      reach: async () => true,
-    })).rejects.toSatisfy((error) => readinessFailureCode(error) === 'START_FAILED')
-
-    await expect(waitForOfficeWatchReady({
-      child: childWithOutput('Watch: http://127.0.0.1:4312/\n'),
-      port: 4312,
-      deadline: Date.now() + 20,
-      reach: async () => false,
-    })).rejects.toSatisfy((error) => readinessFailureCode(error) === 'PORT_TIMEOUT')
+      deadline,
+      reach,
+    })).rejects.toSatisfy((error) => readinessFailureCode(error) === expectedCode)
   })
 
   it('rejects termination-initiated null-exit children before and after HTTP reachability', async () => {

@@ -7,6 +7,21 @@ const cleanStatus = {
   clean: true,
 }
 
+function createGitApiMock() {
+  return {
+    commit: vi.fn().mockResolvedValue(cleanStatus),
+    push: vi.fn().mockResolvedValue(undefined),
+    pull: vi.fn().mockResolvedValue(undefined),
+    status: vi.fn().mockResolvedValue(cleanStatus),
+  }
+}
+
+function invokeStoreAction(storeAction: 'commitChanges' | 'pushChanges' | 'pullChanges', cwd: string) {
+  return storeAction === 'commitChanges'
+    ? useGitStore.getState()[storeAction](cwd, 'message')
+    : useGitStore.getState()[storeAction](cwd)
+}
+
 describe('Git store actions', () => {
   beforeEach(() => {
     useGitStore.setState({
@@ -70,17 +85,10 @@ describe('Git store actions', () => {
     ['pushChanges', 'push'],
     ['pullChanges', 'pull'],
   ] as const)('returns true and refreshes status after %s succeeds', async (storeAction, apiAction) => {
-    const api = {
-      commit: vi.fn().mockResolvedValue(cleanStatus),
-      push: vi.fn().mockResolvedValue(undefined),
-      pull: vi.fn().mockResolvedValue(undefined),
-      status: vi.fn().mockResolvedValue(cleanStatus),
-    }
+    const api = createGitApiMock()
     vi.stubGlobal('window', { electron: { git: api } })
 
-    const succeeded = storeAction === 'commitChanges'
-      ? await useGitStore.getState()[storeAction]('C:\\workspace', 'message')
-      : await useGitStore.getState()[storeAction]('C:\\workspace')
+    const succeeded = await invokeStoreAction(storeAction, 'C:\\workspace')
 
     expect(succeeded).toBe(true)
     expect(api[apiAction]).toHaveBeenCalled()
@@ -97,18 +105,11 @@ describe('Git store actions', () => {
     ['pushChanges', 'push'],
     ['pullChanges', 'pull'],
   ] as const)('returns false and preserves the error after %s fails', async (storeAction, apiAction) => {
-    const api = {
-      commit: vi.fn().mockResolvedValue(cleanStatus),
-      push: vi.fn().mockResolvedValue(undefined),
-      pull: vi.fn().mockResolvedValue(undefined),
-      status: vi.fn().mockResolvedValue(cleanStatus),
-    }
+    const api = createGitApiMock()
     api[apiAction].mockRejectedValue(new Error(`${apiAction} failed`))
     vi.stubGlobal('window', { electron: { git: api } })
 
-    const succeeded = storeAction === 'commitChanges'
-      ? await useGitStore.getState()[storeAction]('C:\\workspace', 'message')
-      : await useGitStore.getState()[storeAction]('C:\\workspace')
+    const succeeded = await invokeStoreAction(storeAction, 'C:\\workspace')
 
     expect(succeeded).toBe(false)
     expect(useGitStore.getState()).toMatchObject({

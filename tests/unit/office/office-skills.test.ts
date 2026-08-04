@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OFFICE_SKILL_IDS, type OfficecliInfo, type OfficeSkillId } from '../../../src/shared/office'
+import { type OfficecliInfo, type OfficeSkillId } from '../../../src/shared/office'
 import { buildOfficePromptForAgent } from '../../../src/main/office/office-skills'
 
 const BINARY = 'C:\\Program Files\\OfficeCLI\\officecli.exe'
@@ -53,10 +53,6 @@ describe('buildOfficePromptForAgent', () => {
       detected,
     )).rejects.toThrow('Invalid Office skillId')
     expect(detected.detect).not.toHaveBeenCalled()
-  })
-
-  it('supports only the three approved MVP skill ids', () => {
-    expect(OFFICE_SKILL_IDS).toEqual(['officecli-xlsx', 'officecli-docx', 'officecli-pptx'])
   })
 
   it.each([

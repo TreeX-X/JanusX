@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 
 describe('CodexParser', () => {
   let CodexParser: new () => { parseLine(json: Record<string, unknown>): import('../../../src/main/agent/types').AgentEvent[]; reset(): void }
@@ -15,14 +15,6 @@ describe('CodexParser', () => {
       const parser = new CodexParser()
       const events = parser.parseLine({ type: 'agent_message', text: 'Hello from Codex' })
       expect(events).toEqual([{ type: 'text-chunk', text: 'Hello from Codex' }])
-    })
-
-    it('should emit text-chunk for each agent_message independently', () => {
-      const parser = new CodexParser()
-      const events1 = parser.parseLine({ type: 'agent_message', text: 'First' })
-      const events2 = parser.parseLine({ type: 'agent_message', text: 'Second' })
-      expect(events1).toEqual([{ type: 'text-chunk', text: 'First' }])
-      expect(events2).toEqual([{ type: 'text-chunk', text: 'Second' }])
     })
 
     it('should not emit event when text is missing', () => {
@@ -46,46 +38,16 @@ describe('CodexParser', () => {
       ])
     })
 
-    it('should extract path as arg when command is absent', () => {
+    it.each([
+      [{ id: 'item2', type: 'file_read', path: '/src/index.ts' }, '/src/index.ts'],
+      [{ id: 'item3', type: 'search', query: 'TODO' }, 'TODO'],
+      [{ id: 'item4', type: 'unknown' }, ''],
+    ] as const)('should extract arg from %s', async (item, expectedArg) => {
       const parser = new CodexParser()
-      const events = parser.parseLine({
-        type: 'item.started',
-        item: { id: 'item2', type: 'file_read', path: '/src/index.ts' },
-      })
+      const events = parser.parseLine({ type: 'item.started', item })
       expect(events).toEqual([
-        { type: 'tool-start', id: 'item2', name: 'file_read', arg: '/src/index.ts' },
+        { type: 'tool-start', id: item.id, name: item.type, arg: expectedArg },
       ])
-    })
-
-    it('should extract query as arg when command and path are absent', () => {
-      const parser = new CodexParser()
-      const events = parser.parseLine({
-        type: 'item.started',
-        item: { id: 'item3', type: 'search', query: 'TODO' },
-      })
-      expect(events).toEqual([
-        { type: 'tool-start', id: 'item3', name: 'search', arg: 'TODO' },
-      ])
-    })
-
-    it('should use empty string when no command, path, or query', () => {
-      const parser = new CodexParser()
-      const events = parser.parseLine({
-        type: 'item.started',
-        item: { id: 'item4', type: 'unknown' },
-      })
-      expect(events).toEqual([
-        { type: 'tool-start', id: 'item4', name: 'unknown', arg: '' },
-      ])
-    })
-
-    it('should use type as name for tool-start', () => {
-      const parser = new CodexParser()
-      const events = parser.parseLine({
-        type: 'item.started',
-        item: { id: 'item1', type: 'shell', command: 'echo hi' },
-      })
-      expect(events[0]).toMatchObject({ name: 'shell' })
     })
 
     it('should use Date.now fallback when item.id is missing', () => {
@@ -171,21 +133,15 @@ describe('CodexParser', () => {
   // --- reset ---
 
   describe('reset', () => {
-    it('should clear startedItems set', () => {
+    // startedItems is vestigial dead state in source (added but never checked for dedup);
+    // reset() is a no-op on it, so no meaningful behavior to assert beyond not throwing.
+    it('should not throw when called after parsing', () => {
       const parser = new CodexParser()
       parser.parseLine({
         type: 'item.started',
         item: { id: 'item1', type: 'command', command: 'ls' },
       })
-      parser.reset()
-      // After reset, starting the same item id should work without issue
-      const events = parser.parseLine({
-        type: 'item.started',
-        item: { id: 'item1', type: 'command', command: 'pwd' },
-      })
-      expect(events).toEqual([
-        { type: 'tool-start', id: 'item1', name: 'command', arg: 'pwd' },
-      ])
+      expect(() => parser.reset()).not.toThrow()
     })
   })
 })

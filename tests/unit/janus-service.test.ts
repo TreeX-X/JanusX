@@ -18,33 +18,15 @@ beforeAll(async () => {
 describe('Blueprint renderer service', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('preserves raw command results through the sole typed client', async () => {
-    const result = [{ id: 'bp-1' }] as Blueprint[]
-    vi.mocked(janus.listBlueprints).mockResolvedValue(result)
+  it.each([
+    ['listBlueprints', 'listBlueprints', ['C:\\repo'], [{ id: 'bp-1' }] as Blueprint[]],
+    ['applyAnalysisPatch', 'applyAnalysisPatch', [{ workspacePath: 'C:\\repo', blueprintId: 'bp-1', nodeId: 'node-1', patch: { progress: 50 } }], null],
+    ['onAnalysisResult', 'onAnalysisResult', [vi.fn()], vi.fn()],
+  ] as const)('%s is a thin passthrough to the Janus API', async (method, apiMethod, args, mockReturn) => {
+    vi.mocked(janus[apiMethod]).mockReturnValue(mockReturn as never)
 
-    await expect(service.listBlueprints('C:\\repo')).resolves.toBe(result)
-    expect(janus.listBlueprints).toHaveBeenCalledWith('C:\\repo')
-  })
-
-  it('exposes the existing analyzer apply-patch capability without transforming its payload', async () => {
-    const payload = {
-      workspacePath: 'C:\\repo',
-      blueprintId: 'bp-1',
-      nodeId: 'node-1',
-      patch: { progress: 50 },
-    }
-    vi.mocked(janus.applyAnalysisPatch).mockResolvedValue(null)
-
-    await expect(service.applyAnalysisPatch(payload)).resolves.toBeNull()
-    expect(janus.applyAnalysisPatch).toHaveBeenCalledWith(payload)
-  })
-
-  it('returns the fixed API unsubscribe function unchanged', () => {
-    const unsubscribe = vi.fn()
-    const callback = vi.fn()
-    vi.mocked(janus.onAnalysisResult).mockReturnValue(unsubscribe)
-
-    expect(service.onAnalysisResult(callback)).toBe(unsubscribe)
-    expect(janus.onAnalysisResult).toHaveBeenCalledWith(callback)
+    const result = await (service[method] as (...a: unknown[]) => unknown)(...args)
+    expect(result).toBe(mockReturn)
+    expect(janus[apiMethod]).toHaveBeenCalledWith(...args)
   })
 })

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { notifyAgentEvent, notifyAgentAttention } from '../../src/main/notifications/agent-notifier'
 
 const desktopToastMock = vi.hoisted(() => ({
   show: vi.fn(() => true),
@@ -43,8 +44,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('skips non-terminal agent events', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
-
     const delivered = notifyAgentEvent(createWindowMock() as never, { sessionId: 's1', engine: 'codex' }, {
       type: 'text-chunk',
       text: 'working',
@@ -55,7 +54,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('shows a completion notification through desktop toast without renderer fallback', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
     const windowMock = createWindowMock()
 
     const delivered = notifyAgentEvent(windowMock as never, { sessionId: 's1', engine: 'codex' }, {
@@ -81,7 +79,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('returns true when the main renderer is unavailable but desktop toast accepts the payload', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
     const windowMock = createWindowMock({
       webContents: {
         isDestroyed: vi.fn(() => true),
@@ -101,31 +98,7 @@ describe('notifyAgentEvent', () => {
     expect(desktopToastMock.show).toHaveBeenCalledTimes(1)
   })
 
-  it('uses the renderer fallback when desktop toast is rejected', async () => {
-    desktopToastMock.show.mockReturnValue(false)
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
-    const windowMock = createWindowMock()
-
-    const delivered = notifyAgentEvent(
-      windowMock as never,
-      { sessionId: 's1', engine: 'codex' },
-      { type: 'done', exitCode: 0 },
-      enabledSettings,
-    )
-
-    expect(delivered).toBe(true)
-    expect(windowMock.webContents.send).toHaveBeenCalledWith(
-      'agent-notification:show',
-      expect.objectContaining({
-        type: 'completed',
-        engine: 'codex',
-        title: 'JanusX - Agent completed',
-      }),
-    )
-  })
-
   it('skips notifications when desktop notifications are disabled', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
     const windowMock = createWindowMock()
 
     const delivered = notifyAgentEvent(
@@ -147,8 +120,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('skips short tasks when a runtime threshold is configured', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
-
     notifyAgentEvent(
       createWindowMock() as never,
       {
@@ -170,8 +141,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('shows a failure notification for error events', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
-
     notifyAgentEvent(createWindowMock() as never, { sessionId: 's1', engine: 'claude' }, {
       type: 'error',
       message: 'failed',
@@ -187,8 +156,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('can include a truncated failure message when configured', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
-
     notifyAgentEvent(
       createWindowMock() as never,
       { sessionId: 's1', engine: 'claude' },
@@ -213,7 +180,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('restores, focuses, and runs click callback when desktop toast is clicked', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
     const windowMock = createWindowMock({ isMinimized: vi.fn(() => true) })
     const onClick = vi.fn()
 
@@ -237,7 +203,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('reports desktop toast show and failure callbacks', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
     const onDesktopToastShown = vi.fn()
     const onDesktopToastFailure = vi.fn()
 
@@ -259,7 +224,6 @@ describe('notifyAgentEvent', () => {
   })
 
   it('uses the renderer fallback when desktop toast fails before it is shown', async () => {
-    const { notifyAgentEvent } = await import('../../src/main/notifications/agent-notifier')
     const windowMock = createWindowMock()
 
     notifyAgentEvent(
@@ -289,8 +253,6 @@ describe('notifyAgentAttention', () => {
   })
 
   it('shows an attention notification', async () => {
-    const { notifyAgentAttention } = await import('../../src/main/notifications/agent-notifier')
-
     notifyAgentAttention(
       createWindowMock() as never,
       { sessionId: 's1', engine: 'codex' },

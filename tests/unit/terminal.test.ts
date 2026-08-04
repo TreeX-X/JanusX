@@ -1,19 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-// Mock node-pty
-vi.mock('node-pty', () => {
-  const mockPty = {
-    pid: 12345,
-    write: vi.fn(),
-    resize: vi.fn(),
-    kill: vi.fn(),
-    onData: vi.fn(),
-    onExit: vi.fn(),
-  }
-  return {
-    spawn: vi.fn(() => mockPty),
-  }
-})
+import { describe, it, expect, beforeEach } from 'vitest'
 
 describe('Terminal Presets', () => {
   it('should return correct auto command for claude preset', async () => {
@@ -39,14 +24,7 @@ describe('Terminal Presets', () => {
     expect(PRESETS).toHaveProperty('shell')
     expect(PRESETS).toHaveProperty('claude')
     expect(PRESETS).toHaveProperty('codex')
-  })
-})
-
-describe('Terminal Types', () => {
-  it('should export type definitions', async () => {
-    const types = await import('../../src/main/terminal/types')
-    // Just verify the module loads without error
-    expect(types).toBeDefined()
+    expect(PRESETS).toHaveProperty('opencode')
   })
 })
 

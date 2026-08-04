@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { join, resolve } from 'path'
+import { join } from 'path'
 
 // --- Mock infrastructure ---
 
@@ -7,20 +7,6 @@ const mockFiles: Record<string, string> = {}
 const storedBlobs = new Map<string, Buffer>()
 let storeCounter = 0
 let uuidCounter = 0
-const WORKSPACE_ROOTS = ['/workspace', '/workspace-a', '/workspace-b']
-
-function normalizeMockPath(path: string): string {
-  return path.replace(/\\/g, '/')
-}
-
-function isMockWorkspacePath(path: string): boolean {
-  const normalized = normalizeMockPath(path)
-  return WORKSPACE_ROOTS.some((root) => {
-    const direct = normalizeMockPath(root)
-    const resolved = normalizeMockPath(resolve(root))
-    return normalized === direct || normalized === resolved
-  })
-}
 
 vi.mock('crypto', () => {
   return {
@@ -88,18 +74,11 @@ vi.mock('fs/promises', () => {
     readdir: vi.fn().mockResolvedValue([]),
     unlink: vi.fn().mockResolvedValue(undefined),
     access: vi.fn().mockImplementation(async (path: string) => {
-      if (isMockWorkspacePath(String(path)) || mockFiles[String(path)]) return
+      const p = String(path).replace(/\\/g, '/')
+      if (p.startsWith('/workspace') || mockFiles[String(path)]) return
       throw new Error('ENOENT')
     }),
-    stat: vi.fn().mockImplementation(async (path: string) => {
-      if (!isMockWorkspacePath(String(path))) {
-        throw new Error('ENOENT')
-      }
-
-      return {
-        isDirectory: () => true,
-      }
-    }),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
     rm: vi.fn().mockResolvedValue(undefined),
   }
 })
@@ -117,7 +96,7 @@ describe('CheckpointManager', () => {
     uuidCounter = 0
 
     // Populate mockFiles with tracked file content (paths as the source code would resolve them)
-    for (const root of WORKSPACE_ROOTS) {
+    for (const root of ['/workspace', '/workspace-a', '/workspace-b']) {
       mockFiles[join(root, 'src/index.ts')] = `export const workspace = "${root}"`
       mockFiles[join(root, 'README.md')] = `# ${root}`
     }
@@ -276,45 +255,29 @@ describe('CheckpointManager', () => {
     expect(list[0].createdAt >= list[1].createdAt).toBe(true)
   })
 
-  it('listCheckpoints() filters by terminalId', async () => {
+  it.each([
+    [{ terminalId: 'term-1' }, 'terminalId', 'term-1'],
+    [{ engine: 'codex' }, 'engine', 'codex'],
+  ] as const)('listCheckpoints() filters by %s', async (filter, field, expected) => {
     await manager.createCheckpoint({
       terminalId: 'term-1',
       engine: 'claude',
-      prompt: 'terminal 1',
+      prompt: 'first',
       cwd: '/workspace',
     })
     await manager.createCheckpoint({
       terminalId: 'term-2',
-      engine: 'claude',
-      prompt: 'terminal 2',
-      cwd: '/workspace',
-    })
-
-    const filtered = await manager.listCheckpoints({ terminalId: 'term-1' })
-    expect(filtered.length).toBe(1)
-    expect(filtered[0].terminalId).toBe('term-1')
-  })
-
-  it('listCheckpoints() filters by engine', async () => {
-    await manager.createCheckpoint({
-      terminalId: 'term-1',
-      engine: 'claude',
-      prompt: 'claude engine',
-      cwd: '/workspace',
-    })
-    await manager.createCheckpoint({
-      terminalId: 'term-1',
       engine: 'codex',
-      prompt: 'codex engine',
+      prompt: 'second',
       cwd: '/workspace',
     })
 
-    const filtered = await manager.listCheckpoints({ engine: 'codex' })
+    const filtered = await manager.listCheckpoints(filter)
     expect(filtered.length).toBe(1)
-    expect(filtered[0].engine).toBe('codex')
+    expect((filtered[0] as Record<string, unknown>)[field as string]).toBe(expected)
   })
 
-  it('deleteCheckpoint() removes from internal map', async () => {
+  it('deleteCheckpoint() removes from internal map and unreferenced blobs', async () => {
     const checkpoint = await manager.createCheckpoint({
       terminalId: 'term-1',
       engine: 'claude',
@@ -323,23 +286,12 @@ describe('CheckpointManager', () => {
     })
     const before = await manager.listCheckpoints()
     expect(before.length).toBe(1)
-
-    await manager.deleteCheckpoint(checkpoint.id)
-    const after = await manager.listCheckpoints()
-    expect(after.length).toBe(0)
-  })
-
-  it('deleteCheckpoint() removes unreferenced blobs', async () => {
-    const checkpoint = await manager.createCheckpoint({
-      terminalId: 'term-1',
-      engine: 'claude',
-      prompt: 'delete blobs',
-      cwd: '/workspace',
-    })
     expect(storedBlobs.size).toBeGreaterThan(0)
 
     await manager.deleteCheckpoint(checkpoint.id)
 
+    const after = await manager.listCheckpoints()
+    expect(after.length).toBe(0)
     expect(storedBlobs.size).toBe(0)
   })
 
@@ -379,19 +331,11 @@ describe('CheckpointManager', () => {
     expect(diff).toContain('janus')
   })
 
-  it('getDiff() returns empty string for unknown file', async () => {
-    const checkpoint = await manager.createCheckpoint({
-      terminalId: 'term-1',
-      engine: 'claude',
-      prompt: 'diff test',
-      cwd: '/workspace',
-    })
-    const diff = await manager.getDiff(checkpoint.id, 'nonexistent.ts')
-    expect(diff).toBe('')
-  })
-
-  it('getDiff() returns empty string for unknown checkpoint', async () => {
-    const diff = await manager.getDiff('nonexistent-id', 'src/index.ts')
+  it.each([
+    ['unknown file', () => manager.createCheckpoint({ terminalId: 'term-1', engine: 'claude', prompt: 'diff test', cwd: '/workspace' }).then(cp => manager.getDiff(cp.id, 'nonexistent.ts'))],
+    ['unknown checkpoint', () => Promise.resolve(manager.getDiff('nonexistent-id', 'src/index.ts'))],
+  ] as const)('getDiff() returns empty string for %s', async (_label, run) => {
+    const diff = await run()
     expect(diff).toBe('')
   })
 })

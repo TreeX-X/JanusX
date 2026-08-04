@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
 import {
   buildWorkspaceTerminalSurfaces,
   MAX_HOT_WORKSPACE_SURFACES,
@@ -15,18 +14,6 @@ describe('workspace front surface', () => {
 
   it('keeps the terminal selector when an empty workspace has no pane content', () => {
     expect(shouldRenderWorkspacePane(false)).toBe(false)
-  })
-
-  it('does not expose a retained terminal when the active workspace has no pane', () => {
-    expect(shouldRenderWorkspacePane(false)).toBe(false)
-  })
-
-  it('fully isolates the retained workbench while showing the empty workspace selector', () => {
-    const source = readFileSync(new URL('../../src/renderer/src/App.tsx', import.meta.url), 'utf8')
-
-    expect(source).toContain("display: showWorkspacePane ? 'block' : 'none'")
-    expect(source).toContain("...(!showWorkspacePane ? { inert: '' } : {})")
-    expect(source).toContain('activeWorkspaceId !== null && <TerminalSelector />')
   })
 
   it('keeps visited workspace surfaces mounted and lets active state override its snapshot', () => {

@@ -17,6 +17,30 @@ import {
 } from '../../src/renderer/src/lib/file-utils'
 import type { FileNode, GitFileChange } from '../../src/renderer/src/types'
 
+const commonProps = {
+  workspacePath: 'C:\\workspace',
+  depth: 0,
+  expanded: false,
+  expandedPaths: new Set<string>(),
+  fileChangeMap: new Map<string, GitFileChange>(),
+  changedDirs: new Map<string, { additions: boolean; deletions: boolean }>(),
+  onSelect: vi.fn(),
+  onToggleDirectory: vi.fn(),
+  onOpenFile: vi.fn(),
+  onMoveFile: vi.fn(),
+  onOpenContextMenu: vi.fn(),
+}
+
+function renderTreeItemMarkup(node: FileNode, overrides: Record<string, unknown> = {}) {
+  return renderToStaticMarkup(createElement(FileTreeItem, {
+    ...commonProps,
+    node,
+    activeFilePath: null,
+    fileChange: null,
+    ...overrides,
+  }))
+}
+
 function expectClassification(
   path: string,
   semanticKind: FileSemanticKind,
@@ -102,22 +126,14 @@ describe('file classification', () => {
 })
 
 describe('file utility compatibility', () => {
-  it('preserves the existing public viewer and Monaco categories', () => {
-    expect(getFileViewType('photo.webp')).toBe('image')
-    expect(getFileViewType('README.md')).toBe('markdown')
-    expect(getFileViewType('index.html')).toBe('html')
-    expect(getFileViewType('main.cpp')).toBe('code')
-    expect(getFileViewType('cache.db')).toBe('binary')
-    expect(getFileViewType('source.zip')).toBe('binary')
-    expect(getFileViewType('unknown.bin')).toBe('binary')
+  it('preserves the existing public viewer and Monaco categories for extensions not covered by classifyFile', () => {
+    // Extensions already exercised through classifyFile are omitted here; this
+    // test guards the special full-name / unknown-fallback paths only.
     expect(getFileViewType('CMakeLists.txt')).toBe('code')
     expect(getFileViewType('toolchain.cmake')).toBe('code')
     expect(getFileViewType('startup.s')).toBe('code')
+    expect(getFileViewType('unknown.bin')).toBe('binary')
 
-    expect(getMonacoLanguage('component.tsx')).toBe('typescriptreact')
-    expect(getMonacoLanguage('script.jsx')).toBe('javascriptreact')
-    expect(getMonacoLanguage('config.yml')).toBe('yaml')
-    expect(getMonacoLanguage('styles.scss')).toBe('scss')
     expect(getMonacoLanguage('unknown.bin')).toBe('plaintext')
   })
 
@@ -140,19 +156,6 @@ describe('semantic file icon', () => {
   })
 
   it('wires production file rows to semantic icons without merging selection, name and Git channels', () => {
-    const commonProps = {
-      workspacePath: 'C:\\workspace',
-      depth: 0,
-      expanded: false,
-      expandedPaths: new Set<string>(),
-      fileChangeMap: new Map<string, GitFileChange>(),
-      changedDirs: new Map<string, { additions: boolean; deletions: boolean }>(),
-      onSelect: vi.fn(),
-      onToggleDirectory: vi.fn(),
-      onOpenFile: vi.fn(),
-      onMoveFile: vi.fn(),
-      onOpenContextMenu: vi.fn(),
-    }
     const typeScriptNode = {
       name: 'App.tsx',
       path: 'src/App.tsx',
@@ -171,24 +174,12 @@ describe('semantic file icon', () => {
       deletions: 4,
     } as GitFileChange
 
-    const activeMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
-      ...commonProps,
-      node: typeScriptNode,
+    const activeMarkup = renderTreeItemMarkup(typeScriptNode, {
       activeFilePath: typeScriptNode.path,
       fileChange: gitChange,
-    }))
-    const defaultMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
-      ...commonProps,
-      node: databaseNode,
-      activeFilePath: null,
-      fileChange: null,
-    }))
-    const ignoredMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
-      ...commonProps,
-      node: { ...databaseNode, isGitIgnored: true },
-      activeFilePath: null,
-      fileChange: null,
-    }))
+    })
+    const defaultMarkup = renderTreeItemMarkup(databaseNode)
+    const ignoredMarkup = renderTreeItemMarkup({ ...databaseNode, isGitIgnored: true })
 
     // 选中/忽略状态通过 data-attribute 表达,视觉样式由 CSS module 按属性选择器渲染
     expect(activeMarkup).toContain('data-file-kind="typescript"')
@@ -220,22 +211,10 @@ describe('semantic file icon', () => {
       additions: 126,
       deletions: 0,
     } as GitFileChange
-    const markup = renderToStaticMarkup(createElement(FileTreeItem, {
-      node,
-      workspacePath: 'C:\\workspace',
-      depth: 0,
-      activeFilePath: null,
-      expanded: false,
-      expandedPaths: new Set<string>(),
+    const markup = renderTreeItemMarkup(node, {
       fileChange: change,
       fileChangeMap: new Map([[node.path, change]]),
-      changedDirs: new Map(),
-      onSelect: vi.fn(),
-      onToggleDirectory: vi.fn(),
-      onOpenFile: vi.fn(),
-      onMoveFile: vi.fn(),
-      onOpenContextMenu: vi.fn(),
-    }))
+    })
 
     expect(markup).toContain('>+126</span>')
     expect(markup).not.toContain('data-git-deletions')
@@ -251,22 +230,10 @@ describe('semantic file icon', () => {
       additions: null,
       deletions: null,
     } as GitFileChange
-    const markup = renderToStaticMarkup(createElement(FileTreeItem, {
-      node,
-      workspacePath: 'C:\\workspace',
-      depth: 0,
-      activeFilePath: null,
-      expanded: false,
-      expandedPaths: new Set<string>(),
+    const markup = renderTreeItemMarkup(node, {
       fileChange: change,
       fileChangeMap: new Map([[node.path, change]]),
-      changedDirs: new Map(),
-      onSelect: vi.fn(),
-      onToggleDirectory: vi.fn(),
-      onOpenFile: vi.fn(),
-      onMoveFile: vi.fn(),
-      onOpenContextMenu: vi.fn(),
-    }))
+    })
 
     expect(markup).toContain('data-git-status="R"')
     expect(markup).toContain('>R</span>')
@@ -274,30 +241,12 @@ describe('semantic file icon', () => {
   })
 
   it('marks folders with character-free addition and deletion bars', () => {
-    const baseProps = {
-      node: { name: 'src', path: 'src', type: 'directory' } as FileNode,
-      workspacePath: 'C:\\workspace',
-      depth: 0,
-      activeFilePath: null,
-      expanded: false,
-      expandedPaths: new Set<string>(),
-      fileChange: null,
-      fileChangeMap: new Map<string, GitFileChange>(),
-      onSelect: vi.fn(),
-      onToggleDirectory: vi.fn(),
-      onOpenFile: vi.fn(),
-      onMoveFile: vi.fn(),
-      onOpenContextMenu: vi.fn(),
-    }
+    const folderNode = { name: 'src', path: 'src', type: 'directory' } as FileNode
 
-    const dirtyMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
-      ...baseProps,
+    const dirtyMarkup = renderTreeItemMarkup(folderNode, {
       changedDirs: new Map([['src', { additions: true, deletions: true }]]),
-    }))
-    const cleanMarkup = renderToStaticMarkup(createElement(FileTreeItem, {
-      ...baseProps,
-      changedDirs: new Map<string, { additions: boolean; deletions: boolean }>(),
-    }))
+    })
+    const cleanMarkup = renderTreeItemMarkup(folderNode)
 
     expect(dirtyMarkup).toContain('data-git-dirty')
     expect(dirtyMarkup).toContain('data-has-additions="true"')

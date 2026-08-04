@@ -37,16 +37,15 @@ describe('loadKnowledgeWorkbenchSnapshot', () => {
   })
 
   it('does not substitute demo records for an empty runtime store', async () => {
-    const knowledge = {
-      listObservations: vi.fn().mockResolvedValue([]),
-      listCandidates: vi.fn().mockResolvedValue([]),
-      listWikiPatchCandidates: vi.fn().mockResolvedValue([]),
-      listGraphCandidates: vi.fn().mockResolvedValue([]),
-      listAudit: vi.fn().mockResolvedValue([]),
-      retentionStats: vi.fn().mockResolvedValue(null),
-      listTruth: vi.fn().mockResolvedValue({ facts: [], wikiPages: [], graphEdges: [] }),
-      listConflicts: vi.fn().mockResolvedValue([]),
-    }
+    const knowledge = makeKnowledgeApi()
+    knowledge.listObservations.mockResolvedValue([])
+    knowledge.listCandidates.mockResolvedValue([])
+    knowledge.listWikiPatchCandidates.mockResolvedValue([])
+    knowledge.listGraphCandidates.mockResolvedValue([])
+    knowledge.listAudit.mockResolvedValue([])
+    knowledge.retentionStats.mockResolvedValue(null)
+    knowledge.listTruth.mockResolvedValue({ facts: [], wikiPages: [], graphEdges: [] })
+    knowledge.listConflicts.mockResolvedValue([])
     vi.stubGlobal('window', { electron: { knowledge } })
 
     const snapshot = await loadKnowledgeWorkbenchSnapshot()
@@ -58,23 +57,16 @@ describe('loadKnowledgeWorkbenchSnapshot', () => {
   })
 
   it('maps accepted truth records into Library cards', async () => {
-    const knowledge = {
-      listObservations: vi.fn().mockResolvedValue([]),
-      listCandidates: vi.fn().mockResolvedValue([]),
-      listWikiPatchCandidates: vi.fn().mockResolvedValue([]),
-      listGraphCandidates: vi.fn().mockResolvedValue([]),
-      listAudit: vi.fn().mockResolvedValue([]),
-      retentionStats: vi.fn().mockResolvedValue({ noise: 0, operational: 0, evidence: 0, derived: 0, total: 0 }),
-      listTruth: vi.fn().mockResolvedValue({
-          facts: [{
-            id: 'fact-1', content: 'Accepted truth', concepts: ['truth'], files: [], tags: ['accepted'], confidence: 0.9, version: 1, status: 'active',
-            provenance: { workspaceId: 'ws-1', workspaceName: 'Workspace', workspacePath: 'C:/work', source: 'manual', sourceObservationIds: ['obs-1'], fileRefs: ['src/a.ts'], actor: 'tester', createdAt: '2026-07-12T00:00:00.000Z' },
-          }],
-          wikiPages: [],
-          graphEdges: [],
-      }),
-      listConflicts: vi.fn().mockResolvedValue([]),
-    }
+    const knowledge = makeKnowledgeApi()
+    knowledge.listObservations.mockResolvedValue([])
+    knowledge.listTruth.mockResolvedValue({
+      facts: [{
+        id: 'fact-1', content: 'Accepted truth', concepts: ['truth'], files: [], tags: ['accepted'], confidence: 0.9, version: 1, status: 'active',
+        provenance: { workspaceId: 'ws-1', workspaceName: 'Workspace', workspacePath: 'C:/work', source: 'manual', sourceObservationIds: ['obs-1'], fileRefs: ['src/a.ts'], actor: 'tester', createdAt: '2026-07-12T00:00:00.000Z' },
+      }],
+      wikiPages: [],
+      graphEdges: [],
+    })
     vi.stubGlobal('window', { electron: { knowledge } })
 
     const snapshot = await loadKnowledgeWorkbenchSnapshot()

@@ -28,38 +28,28 @@ function createTerminal(
 }
 
 describe('terminal viewport resize', () => {
-  it('keeps a normal buffer following the bottom after fit', () => {
-    const terminal = createTerminal('normal', 120, 120)
+  it.each([
+    ['normal bottom', 'normal' as const, 120, 120, 'bottom' as const],
+    ['normal scrollback', 'normal' as const, 42, 120, 'line' as const],
+    ['alternate buffer', 'alternate' as const, 0, 0, 'none' as const],
+  ])('restoreTerminalViewport handles %s', (_label, type, viewportY, baseY, expected) => {
+    const terminal = createTerminal(type, viewportY, baseY)
     const snapshot = captureTerminalViewport(terminal)
 
     terminal.buffer.active.viewportY = 0
     terminal.buffer.active.baseY = 140
     restoreTerminalViewport(terminal, snapshot)
 
-    expect(terminal.scrollToBottom).toHaveBeenCalledOnce()
-    expect(terminal.scrollToLine).not.toHaveBeenCalled()
-  })
-
-  it('restores the visible top-line anchor while reading normal-buffer scrollback', () => {
-    const terminal = createTerminal('normal', 42, 120)
-    const snapshot = captureTerminalViewport(terminal)
-
-    terminal.buffer.active.viewportY = 0
-    terminal.buffer.active.baseY = 140
-    restoreTerminalViewport(terminal, snapshot)
-
-    expect(terminal.scrollToLine).toHaveBeenCalledWith(42)
-    expect(terminal.scrollToBottom).not.toHaveBeenCalled()
-  })
-
-  it('does not manipulate the alternate-buffer viewport', () => {
-    const terminal = createTerminal('alternate', 0, 0)
-    const snapshot = captureTerminalViewport(terminal)
-
-    restoreTerminalViewport(terminal, snapshot)
-
-    expect(terminal.scrollToBottom).not.toHaveBeenCalled()
-    expect(terminal.scrollToLine).not.toHaveBeenCalled()
+    if (expected === 'bottom') {
+      expect(terminal.scrollToBottom).toHaveBeenCalledOnce()
+      expect(terminal.scrollToLine).not.toHaveBeenCalled()
+    } else if (expected === 'line') {
+      expect(terminal.scrollToLine).toHaveBeenCalledWith(viewportY)
+      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+    } else {
+      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+      expect(terminal.scrollToLine).not.toHaveBeenCalled()
+    }
   })
 
   it('emits geometry only when rows or columns actually change', () => {

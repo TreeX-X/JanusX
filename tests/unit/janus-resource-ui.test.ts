@@ -70,30 +70,18 @@ describe('Janus resource scope UI', () => {
     expect(markup).not.toContain('Analyze workspace')
   })
 
-  it('offers embedding independently of attached resources', () => {
+  it.each([
+    [{ workspaceId: 'one', workspaceName: 'One', workspacePath: 'C:\\one' }, { workspaceId: 'two', workspaceName: 'Two', workspacePath: 'C:\\two' }],
+    [],
+  ])('offers embedding independently of attached resources %#', (...resources) => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,
       onAddToWorkspace: vi.fn(),
-      resourceController: controller({
-        resources: [
-          { workspaceId: 'one', workspaceName: 'One', workspacePath: 'C:\\one' },
-          { workspaceId: 'two', workspaceName: 'Two', workspacePath: 'C:\\two' },
-        ],
-      }),
+      resourceController: controller({ resources }),
     }))
 
     expect(markup).toContain('aria-label="Embed Chat in current workspace"')
     expect(markup).not.toContain('data-active=')
-  })
-
-  it('can embed into the external workspace without any attached Chat resource', () => {
-    const markup = renderToStaticMarkup(createElement(JanusChat, {
-      ...commonProps,
-      onAddToWorkspace: vi.fn(),
-      resourceController: controller(),
-    }))
-
-    expect(markup).toContain('Embed Chat in current workspace')
   })
 
   it('renders all attached resources as passive removable labels', () => {

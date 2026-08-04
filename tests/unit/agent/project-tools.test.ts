@@ -22,6 +22,21 @@ async function createRuntime(root: string) {
   return { runtime, session }
 }
 
+function resolveApproval(runtime: WorkspaceAgentRuntime) {
+  runtime.onEvent((event) => {
+    if (event.type !== 'approval-requested') return
+    runtime.resolveApproval({
+      approvalId: event.request.id,
+      approved: true,
+      workspaceId: event.request.workspaceId,
+      sessionId: event.request.sessionId,
+      correlationId: event.request.correlationId,
+      toolName: event.request.toolName,
+      actionRisk: event.request.actionRisk,
+    })
+  })
+}
+
 afterEach(async () => {
   await getProjectRunner().stopAll(100)
   await Promise.all(temporaryDirectories.splice(0).map((directory) =>
@@ -164,18 +179,7 @@ describe('project Agent Runtime tools', () => {
     }
     const { runtime, session } = await createRuntime(root)
     await import('../../../src/main/project/config/project-config').then(({ default: ProjectConfig }) => ProjectConfig.write(root, config))
-    runtime.onEvent((event) => {
-      if (event.type !== 'approval-requested') return
-      runtime.resolveApproval({
-        approvalId: event.request.id,
-        approved: true,
-        workspaceId: event.request.workspaceId,
-        sessionId: event.request.sessionId,
-        correlationId: event.request.correlationId,
-        toolName: event.request.toolName,
-        actionRisk: event.request.actionRisk,
-      })
-    })
+    resolveApproval(runtime)
 
     const started = await runtime.executeTool({
       sessionId: session.id,
@@ -213,18 +217,7 @@ describe('project Agent Runtime tools', () => {
       projectName: 'demo',
       configurations: [{ name: 'dev', type: ProjectType.Vite, request: 'launch' }],
     }
-    runtime.onEvent((event) => {
-      if (event.type !== 'approval-requested') return
-      runtime.resolveApproval({
-        approvalId: event.request.id,
-        approved: true,
-        workspaceId: event.request.workspaceId,
-        sessionId: event.request.sessionId,
-        correlationId: event.request.correlationId,
-        toolName: event.request.toolName,
-        actionRisk: event.request.actionRisk,
-      })
-    })
+    resolveApproval(runtime)
 
     const result = await runtime.executeTool({
       sessionId: session.id,

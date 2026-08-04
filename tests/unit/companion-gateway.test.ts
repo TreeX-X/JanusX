@@ -77,6 +77,23 @@ describe('CompanionGateway', () => {
     return gateway.execute({ context: context({ eventId }), command: { type: 'bind', terminalId: 'term-1' } })
   }
 
+  async function readAuditRecords(dir: string) {
+    return (await readFile(join(dir, 'audit.jsonl'), 'utf8')).trim().split('\n').map((line) => JSON.parse(line))
+  }
+
+  function rebuildGateway(overrides: Record<string, unknown> = {}) {
+    gateway = new CompanionGateway({
+      policy: () => policy,
+      bindings: new CompanionBindingStore(join(directory, 'bindings.json'), () => NOW),
+      tokens,
+      dedupe: new CompanionDedupe(dedupePath, 60_000, () => NOW),
+      audit: new CompanionAuditStore(join(directory, 'audit.jsonl'), 60_000, () => NOW),
+      terminals,
+      now: () => NOW,
+      ...overrides,
+    })
+  }
+
   it('denies disabled, webhook, malformed, stale, and unauthorized requests before terminal lookup', async () => {
     policy.enabled = false
     expect((await execute({ type: 'status' })).code).toBe('disabled')
@@ -198,15 +215,7 @@ describe('CompanionGateway', () => {
     const request = { context: context({ eventId: 'restart-event' }), command: { type: 'stop' } as const }
     expect((await gateway.execute(request)).ok).toBe(true)
 
-    gateway = new CompanionGateway({
-      policy: () => policy,
-      bindings: new CompanionBindingStore(join(directory, 'bindings.json'), () => NOW),
-      tokens,
-      dedupe: new CompanionDedupe(dedupePath, 60_000, () => NOW),
-      audit: new CompanionAuditStore(join(directory, 'audit.jsonl'), 60_000, () => NOW),
-      terminals,
-      now: () => NOW,
-    })
+    rebuildGateway()
 
     expect(await gateway.execute(request)).toMatchObject({ ok: true, replayed: true })
     expect(interrupt).toHaveBeenCalledOnce()
@@ -279,15 +288,7 @@ describe('CompanionGateway', () => {
       actionToken: token,
     })).ok).toBe(true)
 
-    gateway = new CompanionGateway({
-      policy: () => policy,
-      bindings: new CompanionBindingStore(join(directory, 'bindings.json'), () => NOW),
-      tokens,
-      dedupe: new CompanionDedupe(dedupePath, 60_000, () => NOW),
-      audit: new CompanionAuditStore(join(directory, 'audit.jsonl'), 60_000, () => NOW),
-      terminals,
-      now: () => NOW,
-    })
+    rebuildGateway()
 
     expect((await gateway.execute({
       context: context({ eventId: 'token-after-restart' }),
@@ -306,7 +307,7 @@ describe('CompanionGateway', () => {
     expect((await gateway.execute(collision)).code).toBe('invalid-request')
     expect(interrupt).not.toHaveBeenCalled()
 
-    const records = (await readFile(join(directory, 'audit.jsonl'), 'utf8')).trim().split('\n').map((line) => JSON.parse(line))
+    const records = await readAuditRecords(directory)
     expect(records).toContainEqual(expect.objectContaining({
       phase: 'outcome', command: 'stop', decision: 'deny', outcome: 'invalid-request',
     }))
@@ -326,7 +327,7 @@ describe('CompanionGateway', () => {
     expect((await gateway.execute(collision)).code).toBe('invalid-request')
     expect(submitLine).toHaveBeenCalledOnce()
 
-    const records = (await readFile(join(directory, 'audit.jsonl'), 'utf8')).trim().split('\n').map((line) => JSON.parse(line))
+    const records = await readAuditRecords(directory)
     expect(records).toContainEqual(expect.objectContaining({
       phase: 'outcome', command: 'follow-up', decision: 'deny', outcome: 'invalid-request',
       prompt: expect.objectContaining({ preview: 'second' }),
@@ -349,7 +350,7 @@ describe('CompanionGateway', () => {
     await bind()
     const prompt = 'sensitive prompt value'
     await execute({ type: 'follow-up', text: prompt }, { context: context({ eventId: 'audit-follow' }) })
-    const records = (await readFile(join(directory, 'audit.jsonl'), 'utf8')).trim().split('\n').map((line) => JSON.parse(line))
+    const records = await readAuditRecords(directory)
     expect(records.some((record) => record.timestamp === NOW - 60_001)).toBe(false)
     const follow = records.find((record) => record.command === 'follow-up')
     expect(follow.prompt).toMatchObject({ preview: prompt, length: prompt.length })

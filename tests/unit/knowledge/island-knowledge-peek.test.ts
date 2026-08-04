@@ -113,44 +113,33 @@ describe('Island knowledge peek state', () => {
     expect(formatKnowledgeMatch(0.1)).toBe('RELATED')
   })
 
-  it('routes single activation only through Knowledge replay or collapse', () => {
-    expect(getSingleActivationAction('collapsed')).toBe('replay-knowledge')
-    expect(getSingleActivationAction('peek')).toBe('collapse')
-    expect(getSingleActivationAction('expanded')).toBe('none')
+  it.each([
+    ['single', getSingleActivationAction, 'collapsed', 'replay-knowledge'],
+    ['single', getSingleActivationAction, 'peek', 'collapse'],
+    ['single', getSingleActivationAction, 'expanded', 'none'],
+    ['double', getDoubleActivationAction, 'collapsed', 'expand'],
+    ['double', getDoubleActivationAction, 'peek', 'expand'],
+    ['double', getDoubleActivationAction, 'expanded', 'collapse'],
+  ] as const)('routes %s activation for state %s', (_label, fn, state, expected) => {
+    expect(fn(state)).toBe(expected)
   })
 
-  it('routes double activation directly between default and expanded states', () => {
-    expect(getDoubleActivationAction('collapsed')).toBe('expand')
-    expect(getDoubleActivationAction('peek')).toBe('expand')
-    expect(getDoubleActivationAction('expanded')).toBe('collapse')
+  it.each([
+    [0, 1000, 260, false],
+    [1000, 1200, 260, true],
+    [1000, 1260, 260, false],
+  ] as const)('isDoubleTap(%i, %i, %i) -> %s', (firstTap, secondTap, window, expected) => {
+    expect(isDoubleTap(firstTap, secondTap, window)).toBe(expected)
   })
 
-  it('accepts only taps strictly inside the double activation window', () => {
-    const firstTap = 1000
-    expect(isDoubleTap(0, firstTap, 260)).toBe(false)
-
-    const secondTap = 1200
-    expect(isDoubleTap(firstTap, secondTap, 260)).toBe(true)
-    expect(isDoubleTap(firstTap, 1260, 260)).toBe(false)
-  })
-
-  it('accepts a forgiving double activation with small pointer jitter', () => {
-    const firstPoint = { x: 100, y: 40 }
-    expect(isDoubleTapWithinTolerance(1000, 1380, 420, firstPoint, { x: 112, y: 48 }, 18)).toBe(true)
-    expect(isDoubleTapWithinTolerance(1000, 1420, 420, firstPoint, { x: 112, y: 48 }, 18)).toBe(false)
-    expect(isDoubleTapWithinTolerance(1000, 1380, 420, firstPoint, { x: 120, y: 40 }, 18)).toBe(false)
-    expect(isDoubleTapWithinTolerance(0, 1100, 420, null, firstPoint, 18)).toBe(false)
-  })
-
-  it('recognizes the second pointer-down as soon as it matches the completed first tap', () => {
-    expect(isDoubleTapWithinTolerance(
-      1000,
-      1280,
-      420,
-      { x: 100, y: 40 },
-      { x: 108, y: 45 },
-      18,
-    )).toBe(true)
+  it.each([
+    [1000, 1380, 420, { x: 100, y: 40 }, { x: 112, y: 48 }, 18, true],
+    [1000, 1420, 420, { x: 100, y: 40 }, { x: 112, y: 48 }, 18, false],
+    [1000, 1380, 420, { x: 100, y: 40 }, { x: 120, y: 40 }, 18, false],
+    [0, 1100, 420, null, { x: 100, y: 40 }, 18, false],
+    [1000, 1280, 420, { x: 100, y: 40 }, { x: 108, y: 45 }, 18, true],
+  ] as const)('isDoubleTapWithinTolerance accepts forgiving and jitter cases', (firstTap, secondTap, window, firstPoint, secondPoint, tolerance, expected) => {
+    expect(isDoubleTapWithinTolerance(firstTap, secondTap, window, firstPoint, secondPoint, tolerance)).toBe(expected)
   })
 
   it('atomically routes trace, single, double, dismiss, and timeout transitions', () => {

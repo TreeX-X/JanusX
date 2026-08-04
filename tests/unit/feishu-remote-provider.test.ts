@@ -20,6 +20,22 @@ const event: RemoteNotificationEvent = {
   severity: 'warning',
 }
 
+function feishuSettings(overrides: Record<string, unknown> = {}) {
+  return {
+    enabled: true,
+    mode: 'webhook',
+    inboundControlEnabled: false,
+    allowedOpenIds: [],
+    ...FEISHU_CONTROL_DEFAULTS,
+    webhookUrl: '',
+    appId: '',
+    appSecret: '',
+    receiveIdType: 'chat_id',
+    receiveId: '',
+    ...overrides,
+  }
+}
+
 describe('FeishuRemoteNotificationProvider', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -38,18 +54,7 @@ describe('FeishuRemoteNotificationProvider', () => {
     const provider = new FeishuRemoteNotificationProvider()
     await provider.send(
       event,
-      {
-        enabled: true,
-        mode: 'webhook',
-        inboundControlEnabled: false,
-        allowedOpenIds: [],
-        ...FEISHU_CONTROL_DEFAULTS,
-        webhookUrl: 'https://example.test/hook',
-        appId: '',
-        appSecret: '',
-        receiveIdType: 'chat_id',
-        receiveId: '',
-      },
+      feishuSettings({ webhookUrl: 'https://example.test/hook' }),
       { timeoutMs: 1000 },
     )
 
@@ -79,18 +84,7 @@ describe('FeishuRemoteNotificationProvider', () => {
     const provider = new FeishuRemoteNotificationProvider()
     await provider.send(
       event,
-      {
-        enabled: true,
-        mode: 'app',
-        inboundControlEnabled: false,
-        allowedOpenIds: [],
-        ...FEISHU_CONTROL_DEFAULTS,
-        webhookUrl: '',
-        appId: 'app-id',
-        appSecret: 'app-secret',
-        receiveIdType: 'open_id',
-        receiveId: 'ou_x',
-      },
+      feishuSettings({ mode: 'app', appId: 'app-id', appSecret: 'app-secret', receiveIdType: 'open_id', receiveId: 'ou_x' }),
       { timeoutMs: 1000 },
     )
 
@@ -119,18 +113,7 @@ describe('FeishuRemoteNotificationProvider', () => {
     await expect(
       provider.send(
         event,
-        {
-          enabled: true,
-          mode: 'app',
-          inboundControlEnabled: false,
-          allowedOpenIds: [],
-          ...FEISHU_CONTROL_DEFAULTS,
-          webhookUrl: '',
-          appId: '',
-          appSecret: 'secret',
-          receiveIdType: 'chat_id',
-          receiveId: 'chat',
-        },
+        feishuSettings({ mode: 'app', appSecret: 'secret', receiveId: 'chat' }),
         { timeoutMs: 1000 },
       ),
     ).rejects.toThrow('Feishu app_id is required')
@@ -144,18 +127,16 @@ describe('FeishuRemoteNotificationProvider', () => {
       expirations.push(expiresAt)
       return `token:${terminalId}:${action}`
     })
-    const base = {
-      enabled: true,
+    const base = feishuSettings({
+      mode: 'app',
       inboundControlEnabled: true,
       allowedOpenIds: ['ou-1'],
-      ...FEISHU_CONTROL_DEFAULTS,
       actionTokenTtlMinutes: 2,
       webhookUrl: 'https://example.test/hook',
       appId: 'app-id',
       appSecret: 'secret',
-      receiveIdType: 'chat_id' as const,
       receiveId: 'oc-1',
-    }
+    })
     const appCard = buildFeishuCard(event, { ...base, mode: 'app' })
     const webhookCard = buildFeishuCard(event, { ...base, mode: 'webhook' })
     const appJson = JSON.stringify(appCard)

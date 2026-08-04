@@ -142,18 +142,24 @@ describe('OfficeWatchPool', () => {
     finishExit()
     await expect(stop).resolves.toBeUndefined()
 
-    for (const stopped of [killed, signaled, exitedProcess]) {
-      let finishStopped!: () => void
-      const stoppedExit = new Promise<void>((resolveExit) => { finishStopped = resolveExit })
-      let stoppedSettled = false
-      const stoppedStop = stopOfficeWatchProcess(stopped, stoppedExit).finally(() => { stoppedSettled = true })
-      expect(stopped.kill).not.toHaveBeenCalled()
-      await Promise.resolve()
-      expect(stoppedSettled).toBe(false)
-      finishStopped()
-      await expect(stoppedStop).resolves.toBeUndefined()
-    }
     expect(exitedProcess.kill).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['killed', { exitCode: null, signalCode: null, killed: true }],
+    ['signaled', { exitCode: null, signalCode: 'SIGTERM', killed: true }],
+    ['exited', { exitCode: 0, signalCode: null, killed: false }],
+  ] as const)('does not call kill and awaits exit for a %s child', async (_label, state) => {
+    const stopped = { ...state, kill: vi.fn() }
+    let finishStopped!: () => void
+    const stoppedExit = new Promise<void>((resolveExit) => { finishStopped = resolveExit })
+    let stoppedSettled = false
+    const stoppedStop = stopOfficeWatchProcess(stopped, stoppedExit).finally(() => { stoppedSettled = true })
+    expect(stopped.kill).not.toHaveBeenCalled()
+    await Promise.resolve()
+    expect(stoppedSettled).toBe(false)
+    finishStopped()
+    await expect(stoppedStop).resolves.toBeUndefined()
   })
 
   it('uses the documented production cap', () => {

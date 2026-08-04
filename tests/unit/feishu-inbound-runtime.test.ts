@@ -9,6 +9,23 @@ vi.mock('../../src/main/ipc/terminal-handlers', () => ({ submitCompanionTerminal
 
 import { FeishuInboundRuntime } from '../../src/main/remote-notifications/feishu-inbound/runtime'
 
+type ChannelOverrides = Partial<FeishuInboundChannel> & { connectReject?: Error }
+
+function makeChannel(overrides: ChannelOverrides = {}): FeishuInboundChannel {
+  const { connectReject, ...rest } = overrides
+  return {
+    onMessage: () => vi.fn(),
+    onCardAction: () => vi.fn(),
+    onError: () => vi.fn(),
+    onReconnecting: () => vi.fn(),
+    onReconnected: () => vi.fn(),
+    connect: connectReject ? vi.fn().mockRejectedValue(connectReject) : vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn().mockResolvedValue(undefined),
+    receipts: { send: vi.fn().mockResolvedValue(undefined) },
+    ...rest,
+  }
+}
+
 function settings(appId = 'app-1', enabled = true): RemoteNotificationSettings {
   return {
     enabled,
@@ -31,12 +48,7 @@ describe('FeishuInboundRuntime', () => {
     getUserDataPath.mockReturnValue('.')
     channels = []
     factory = vi.fn(() => {
-      const channel: FeishuInboundChannel = {
-        onMessage: () => vi.fn(), onCardAction: () => vi.fn(), onError: () => vi.fn(),
-        onReconnecting: () => vi.fn(), onReconnected: () => vi.fn(),
-        connect: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn().mockResolvedValue(undefined),
-        receipts: { send: vi.fn().mockResolvedValue(undefined) },
-      }
+      const channel = makeChannel()
       channels.push(channel)
       return channel
     })
@@ -73,16 +85,7 @@ describe('FeishuInboundRuntime', () => {
   })
 
   it('reports startup failure without rejecting application reconfiguration', async () => {
-    factory.mockImplementationOnce(() => {
-      const channel: FeishuInboundChannel = {
-        onMessage: () => vi.fn(), onCardAction: () => vi.fn(), onError: () => vi.fn(),
-        onReconnecting: () => vi.fn(), onReconnected: () => vi.fn(),
-        connect: vi.fn().mockRejectedValue(new Error('network unavailable')),
-        disconnect: vi.fn().mockResolvedValue(undefined),
-        receipts: { send: vi.fn().mockResolvedValue(undefined) },
-      }
-      return channel
-    })
+    factory.mockImplementationOnce(() => makeChannel({ connectReject: new Error('network unavailable') }))
     const runtime = new FeishuInboundRuntime(factory)
     runtime.configure({} as never)
     await expect(runtime.reconfigure(settings())).resolves.toBeUndefined()
@@ -112,13 +115,12 @@ describe('FeishuInboundRuntime', () => {
 
     const disposeMessage = vi.fn()
     const disconnect = vi.fn().mockResolvedValue(undefined)
-    const partialChannel: FeishuInboundChannel = {
+    const partialChannel = makeChannel({
       onMessage: () => disposeMessage,
       onCardAction: () => { throw new Error('listener failed') },
-      onError: () => vi.fn(), onReconnecting: () => vi.fn(), onReconnected: () => vi.fn(),
-      connect: vi.fn(), disconnect,
-      receipts: { send: vi.fn().mockResolvedValue(undefined) },
-    }
+      connect: vi.fn(),
+      disconnect,
+    })
     const listenerFailure = new FeishuInboundRuntime(() => partialChannel)
     listenerFailure.configure({} as never)
     await expect(listenerFailure.reconfigure(settings())).resolves.toBeUndefined()

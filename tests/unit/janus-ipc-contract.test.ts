@@ -85,22 +85,30 @@ describe('Janus IPC contract', () => {
     mocks.invoke.mockResolvedValue(null)
     mocks.on.mockClear()
     mocks.removeListener.mockClear()
-    mocks.acceptRequirementCandidate.mockReset()
-    mocks.analyzeNode.mockReset()
-    mocks.bindTerminal.mockReset()
-    mocks.capture.mockReset()
+    ;[
+      mocks.acceptRequirementCandidate,
+      mocks.analyzeNode,
+      mocks.bindTerminal,
+      mocks.capture,
+      mocks.createNode,
+      mocks.focusNode,
+      mocks.loadBlueprint,
+      mocks.registerNodeWorkspace,
+      mocks.scheduleAnalyze,
+    ].forEach((m) => m.mockReset())
     mocks.capture.mockResolvedValue(undefined)
-    mocks.createNode.mockReset()
-    mocks.focusNode.mockReset()
-    mocks.loadBlueprint.mockReset()
-    mocks.registerNodeWorkspace.mockReset()
-    mocks.scheduleAnalyze.mockReset()
   })
 
   function handler(channel: string): (...args: unknown[]) => Promise<unknown> {
     const registered = handlers.get(channel)
     if (!registered) throw new Error(`Missing handler for ${channel}`)
     return registered
+  }
+
+  async function expectNoRegister(fn: () => Promise<unknown>) {
+    mocks.registerNodeWorkspace.mockClear()
+    await expect(fn()).resolves.toBeNull()
+    expect(mocks.registerNodeWorkspace).not.toHaveBeenCalled()
   }
 
   it('defines unique channels and registers all 22 main commands', () => {
@@ -113,6 +121,11 @@ describe('Janus IPC contract', () => {
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining(commands)
     )
+    // Does not expose generic bridges.
+    const exposed = mocks.expose.mock.calls[0]?.[0]
+    expect(exposed).not.toHaveProperty('invoke')
+    expect(exposed).not.toHaveProperty('send')
+    expect(exposed).not.toHaveProperty('on')
   })
 
   it('routes every command through the fixed API with exact argument order', async () => {
@@ -229,15 +242,14 @@ describe('Janus IPC contract', () => {
     expect(mocks.registerNodeWorkspace).toHaveBeenCalledWith('bound-node', 'C:\\repo')
 
     mocks.registerNodeWorkspace.mockClear()
-    await expect(
+    await expectNoRegister(() =>
       handler(JANUS_COMMAND_CHANNELS.bindTerminal)(
         undefined,
         'C:\\repo',
         'missing',
         'terminal-1'
       )
-    ).resolves.toBeNull()
-    expect(mocks.registerNodeWorkspace).not.toHaveBeenCalled()
+    )
   })
 
   it('registers nodes created directly, from candidates, and from discoveries', async () => {
@@ -327,7 +339,7 @@ describe('Janus IPC contract', () => {
     mocks.registerNodeWorkspace.mockClear()
     mocks.createNode.mockResolvedValue(null)
     mocks.acceptRequirementCandidate.mockResolvedValue(null)
-    await expect(
+    await expectNoRegister(() =>
       handler(JANUS_COMMAND_CHANNELS.createNode)(
         undefined,
         'C:\\repo',
@@ -335,17 +347,16 @@ describe('Janus IPC contract', () => {
         nodeInput,
         'root-node'
       )
-    ).resolves.toBeNull()
-    await expect(
+    )
+    await expectNoRegister(() =>
       handler(JANUS_COMMAND_CHANNELS.acceptRequirementCandidate)(
         undefined,
         candidatePayload
       )
-    ).resolves.toBeNull()
-    await expect(
+    )
+    await expectNoRegister(() =>
       handler(JANUS_COMMAND_CHANNELS.acceptDiscovered)(undefined, discoveredPayload)
-    ).resolves.toBeNull()
-    expect(mocks.registerNodeWorkspace).not.toHaveBeenCalled()
+    )
   })
 
   it('captures successful manual analysis and suppresses capture for null results', async () => {
@@ -446,12 +457,5 @@ describe('Janus IPC contract', () => {
       [JANUS_EVENT_CHANNELS.analysis, analysisListener],
       [JANUS_EVENT_CHANNELS.discovered, discoveredListener],
     ])
-  })
-
-  it('does not expose generic bridges', () => {
-    const exposed = mocks.expose.mock.calls[0]?.[0]
-    expect(exposed).not.toHaveProperty('invoke')
-    expect(exposed).not.toHaveProperty('send')
-    expect(exposed).not.toHaveProperty('on')
   })
 })

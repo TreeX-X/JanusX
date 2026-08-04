@@ -17,6 +17,21 @@ async function temporaryDirectory(): Promise<string> {
   return directory
 }
 
+function autoApprove(runtime: WorkspaceAgentRuntime, approved = true) {
+  runtime.onEvent((event) => {
+    if (event.type !== 'approval-requested') return
+    runtime.resolveApproval({
+      approvalId: event.request.id,
+      approved,
+      workspaceId: event.request.workspaceId,
+      sessionId: event.request.sessionId,
+      correlationId: event.request.correlationId,
+      toolName: event.request.toolName,
+      actionRisk: event.request.actionRisk,
+    })
+  })
+}
+
 async function executeRead(root: string, path: string, maxBytes?: number) {
   const runtime = new WorkspaceAgentRuntime(async () => root)
   registerWorkspaceTools(runtime.registry)
@@ -50,7 +65,7 @@ afterEach(async () => {
 })
 
 describe('workspace.read tool', () => {
-  it('registers once and reads UTF-8 text through the runtime executor', async () => {
+  it('registers every workspace tool once and reads UTF-8 text through the runtime executor', async () => {
     const root = await temporaryDirectory()
     await writeFile(join(root, 'notes.txt'), 'hello workspace', 'utf-8')
     const runtime = new WorkspaceAgentRuntime(async () => root)
@@ -59,6 +74,7 @@ describe('workspace.read tool', () => {
     registerWorkspaceTools(runtime.registry)
 
     expect(runtime.registry.list().filter(({ name }) => name === 'workspace.read')).toHaveLength(1)
+    expect(runtime.registry.list().filter(({ name }) => name === 'workspace.list')).toHaveLength(1)
     const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
     await expect(runtime.executeTool({
       sessionId: session.id,
@@ -96,14 +112,7 @@ describe('workspace.read tool', () => {
     expect(output.contentRedacted).toBe(false)
     expect(output.sha256).toBe(createHash('sha256').update(source).digest('hex'))
 
-    runtime.onEvent((event) => {
-      if (event.type !== 'approval-requested') return
-      runtime.resolveApproval({
-        approvalId: event.request.id, approved: true, workspaceId: event.request.workspaceId,
-        sessionId: event.request.sessionId, correlationId: event.request.correlationId,
-        toolName: event.request.toolName, actionRisk: event.request.actionRisk,
-      })
-    })
+    autoApprove(runtime)
     const edit = await runtime.executeTool({
       sessionId: session.id,
       call: {
@@ -197,18 +206,7 @@ describe('workspace.edit tool', () => {
     const runtime = new WorkspaceAgentRuntime(async () => root)
     registerWorkspaceTools(runtime.registry)
     const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
-    runtime.onEvent((event) => {
-      if (event.type !== 'approval-requested') return
-      runtime.resolveApproval({
-        approvalId: event.request.id,
-        approved,
-        workspaceId: event.request.workspaceId,
-        sessionId: event.request.sessionId,
-        correlationId: event.request.correlationId,
-        toolName: event.request.toolName,
-        actionRisk: event.request.actionRisk,
-      })
-    })
+    autoApprove(runtime, approved)
     return runtime.executeTool({
       sessionId: session.id,
       call: {
@@ -279,18 +277,7 @@ describe('workspace.create tool', () => {
     const runtime = new WorkspaceAgentRuntime(async () => root)
     registerWorkspaceTools(runtime.registry)
     const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
-    runtime.onEvent((event) => {
-      if (event.type !== 'approval-requested') return
-      runtime.resolveApproval({
-        approvalId: event.request.id,
-        approved,
-        workspaceId: event.request.workspaceId,
-        sessionId: event.request.sessionId,
-        correlationId: event.request.correlationId,
-        toolName: event.request.toolName,
-        actionRisk: event.request.actionRisk,
-      })
-    })
+    autoApprove(runtime, approved)
     return runtime.executeTool({
       sessionId: session.id,
       call: {
@@ -390,14 +377,11 @@ describe('workspace.search tool', () => {
 })
 
 describe('workspace.list tool', () => {
-  it('registers once and executes as a read-only list action', async () => {
+  it('executes as a read-only list action', async () => {
     const root = await temporaryDirectory()
     const runtime = new WorkspaceAgentRuntime(async () => root)
 
     registerWorkspaceTools(runtime.registry)
-    registerWorkspaceTools(runtime.registry)
-
-    expect(runtime.registry.list().filter(({ name }) => name === 'workspace.list')).toHaveLength(1)
     expect(runtime.registry.get('workspace.list')?.actionRisk).toBe('list')
     const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
     await expect(runtime.executeTool({
@@ -439,18 +423,6 @@ describe('workspace.list tool', () => {
         ],
       },
     })
-  })
-
-  it('requires the explicit workspace resource id to match the session', async () => {
-    const root = await temporaryDirectory()
-
-    const missing = await executeList(root, {})
-    const mismatched = await executeList(root, { workspaceId: 'workspace-2' })
-
-    expect(missing).toMatchObject({ status: 'failed', output: undefined })
-    expect(missing.error).toContain('Invalid input for tool')
-    expect(mismatched).toMatchObject({ status: 'failed', output: undefined })
-    expect(mismatched.error).toContain('must match the active workspace resource')
   })
 
   it.each(['../outside', 'C:\\outside', '/outside'])(

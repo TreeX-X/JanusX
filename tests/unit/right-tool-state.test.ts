@@ -72,24 +72,18 @@ describe('right tool transitions', () => {
     expect(result.preferences.activeToolId).toBe('git')
   })
 
-  it('selects the right neighbor when closing the active tool', () => {
-    const result = closeRightTool(preferences(['files', 'git', 'assist'], 'git'), 'git')
+  it.each([
+    ['right neighbor', ['files', 'git', 'assist'] as const, 'git', 'git', ['files', 'assist'], 'assist', undefined],
+    ['left neighbor', ['files', 'git'] as const, 'git', 'git', ['files'], 'files', undefined],
+    ['only tool', ['files'] as const, 'files', 'files', [], null, 'collapse'],
+  ] as const)('closing the active tool selects the %s', (_label, openIds, activeId, closingId, expectedOpen, expectedActive, expectedCommand) => {
+    const result = closeRightTool(preferences(openIds, activeId), closingId)
 
-    expect(result.preferences.activeToolId).toBe('assist')
-  })
-
-  it('selects the left neighbor when the active tool has no right neighbor', () => {
-    const result = closeRightTool(preferences(['files', 'git'], 'git'), 'git')
-
-    expect(result.preferences.activeToolId).toBe('files')
-  })
-
-  it('clears active and collapses content after closing the only tool', () => {
-    const result = closeRightTool(preferences(['files'], 'files'), 'files')
-
-    expect(result.preferences.openToolIds).toEqual([])
-    expect(result.preferences.activeToolId).toBeNull()
-    expect(result.panelCollapseCommand).toBe('collapse')
+    expect(result.preferences.openToolIds).toEqual(expectedOpen)
+    expect(result.preferences.activeToolId).toBe(expectedActive)
+    if (expectedCommand) {
+      expect(result.panelCollapseCommand).toBe(expectedCommand)
+    }
   })
 })
 
@@ -239,26 +233,19 @@ describe('right tool persistence contract', () => {
     expect(JSON.parse(storage.getItem(RIGHT_TOOL_STORAGE_KEY)!)).toMatchObject({ version: 1 })
   })
 
-  it('normalizes invalid persisted widths without trusting JSON data', async () => {
-    const invalid = await loadStores(
+  it.each([
+    [null, 280],
+    [-1, 240],
+  ] as const)('normalizes invalid persisted width %s to %i', async (panelWidth, expected) => {
+    const result = await loadStores(
       envelope({
         schemaVersion: 1,
         openToolIds: ['git'],
         activeToolId: 'git',
-        panelWidth: null,
+        panelWidth,
       }),
     )
-    expect(invalid.storeModule.useRightToolStore.getState().panelWidth).toBe(280)
-
-    const belowMinimum = await loadStores(
-      envelope({
-        schemaVersion: 1,
-        openToolIds: ['git'],
-        activeToolId: 'git',
-        panelWidth: -1,
-      }),
-    )
-    expect(belowMinimum.storeModule.useRightToolStore.getState().panelWidth).toBe(240)
+    expect(result.storeModule.useRightToolStore.getState().panelWidth).toBe(expected)
   })
 
   it('treats malformed JSON as no saved value and completes hydration', async () => {

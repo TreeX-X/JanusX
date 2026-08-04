@@ -52,48 +52,32 @@ describe('ModelCatalogService', () => {
     expect(fetchModels).not.toHaveBeenCalled()
   })
 
-  it('ignores malformed renderer-used optional cache fields', async () => {
+  it.each([
+    {
+      name: 'malformed renderer-used optional cache fields',
+      updatedAt: '2026-07-10T07:30:00.000Z',
+      mutate: (doc: AiModelRegistryDocument) => {
+        doc.models[0].supportedParameters = ['tools', 42] as unknown as string[]
+      },
+    },
+    {
+      name: 'blank price strings',
+      updatedAt: '2026-07-10T07:30:00.000Z',
+      mutate: (doc: AiModelRegistryDocument) => {
+        doc.models[0].promptPricePerToken = ' '
+        doc.models[0].completionPricePerToken = ''
+      },
+    },
+    {
+      name: 'future-dated cache snapshots',
+      updatedAt: '2026-07-10T08:00:01.000Z',
+      mutate: () => undefined,
+    },
+  ])('ignores $name and falls back to the bundled catalog', async ({ updatedAt, mutate }) => {
     const cachePath = await createCachePath()
-    const malformed = documentAt('2026-07-10T07:30:00.000Z', 'cached/model')
-    malformed.models[0].supportedParameters = ['tools', 42] as unknown as string[]
+    const malformed = documentAt(updatedAt, 'cached/model')
+    mutate(malformed)
     await writeFile(cachePath, JSON.stringify(malformed))
-    const fetchModels = vi.fn()
-    const service = new ModelCatalogService({
-      cachePath,
-      bundledDocument: documentAt('2026-07-10T07:30:00.000Z', 'bundled/model'),
-      fetchModels,
-      now: () => NOW,
-    })
-
-    const catalog = await service.getCatalog()
-    expect(catalog.source).toBe('bundled')
-    expect(catalog.models[0].id).toBe('bundled/model')
-    expect(fetchModels).not.toHaveBeenCalled()
-  })
-
-  it('ignores cache documents with blank price strings', async () => {
-    const cachePath = await createCachePath()
-    const malformed = documentAt('2026-07-10T07:30:00.000Z', 'cached/model')
-    malformed.models[0].promptPricePerToken = ' '
-    malformed.models[0].completionPricePerToken = ''
-    await writeFile(cachePath, JSON.stringify(malformed))
-    const fetchModels = vi.fn()
-    const service = new ModelCatalogService({
-      cachePath,
-      bundledDocument: documentAt('2026-07-10T07:30:00.000Z', 'bundled/model'),
-      fetchModels,
-      now: () => NOW,
-    })
-
-    const catalog = await service.getCatalog()
-    expect(catalog.source).toBe('bundled')
-    expect(catalog.models[0].id).toBe('bundled/model')
-    expect(fetchModels).not.toHaveBeenCalled()
-  })
-
-  it('ignores future-dated cache snapshots', async () => {
-    const cachePath = await createCachePath()
-    await writeFile(cachePath, JSON.stringify(documentAt('2026-07-10T08:00:01.000Z', 'cached/model')))
     const fetchModels = vi.fn()
     const service = new ModelCatalogService({
       cachePath,

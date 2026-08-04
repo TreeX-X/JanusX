@@ -23,6 +23,21 @@ async function createTempDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'janusx-hook-test-'))
 }
 
+type ManagerOverrides = {
+  userDataDir?: string
+  executablePath?: string
+  platform?: 'win32' | 'linux' | 'darwin'
+}
+
+function makeManager(homeDir: string, overrides: ManagerOverrides = {}) {
+  return new AgentHookConfigManager({
+    homeDir,
+    userDataDir: overrides.userDataDir ?? join(homeDir, 'userData'),
+    executablePath: overrides.executablePath ?? '/usr/local/bin/janusx',
+    platform: overrides.platform ?? 'linux',
+  })
+}
+
 describe('AgentHookConfigManager', () => {
   it('installs marker-owned Claude hooks without removing user hooks', async () => {
     const homeDir = await createTempDir()
@@ -42,12 +57,7 @@ describe('AgentHookConfigManager', () => {
       'utf8',
     )
 
-    const manager = new AgentHookConfigManager({
-      homeDir,
-      userDataDir: join(homeDir, 'userData'),
-      executablePath: 'C:/Program Files/JanusX/JanusX.exe',
-      platform: 'win32',
-    })
+    const manager = makeManager(homeDir, { executablePath: 'C:/Program Files/JanusX/JanusX.exe', platform: 'win32' })
 
     await manager.ensureInstalled('claude')
     const parsed = JSON.parse(await readFile(settingsPath, 'utf8')) as {
@@ -90,12 +100,7 @@ describe('AgentHookConfigManager', () => {
       'utf8',
     )
 
-    const manager = new AgentHookConfigManager({
-      homeDir,
-      userDataDir: join(homeDir, 'userData'),
-      executablePath: 'C:/Program Files/JanusX/JanusX.exe',
-      platform: 'win32',
-    })
+    const manager = makeManager(homeDir, { executablePath: 'C:/Program Files/JanusX/JanusX.exe', platform: 'win32' })
 
     await manager.ensureInstalled('claude')
     const settings = await readFile(settingsPath, 'utf8')
@@ -125,12 +130,7 @@ describe('AgentHookConfigManager', () => {
       ]),
     )
 
-    const manager = new AgentHookConfigManager({
-      homeDir,
-      userDataDir: join(homeDir, 'userData'),
-      executablePath: '/usr/local/bin/janusx',
-      platform: 'linux',
-    })
+    const manager = makeManager(homeDir)
 
     await manager.ensureInstalled('codex')
     const repaired = await readFile(hooksPath)
@@ -145,12 +145,7 @@ describe('AgentHookConfigManager', () => {
 
   it('uninstalls only marker-owned Codex hooks and keeps user hooks', async () => {
     const homeDir = await createTempDir()
-    const manager = new AgentHookConfigManager({
-      homeDir,
-      userDataDir: join(homeDir, 'userData'),
-      executablePath: '/Applications/JanusX.app/Contents/MacOS/JanusX',
-      platform: 'darwin',
-    })
+    const manager = makeManager(homeDir, { executablePath: '/Applications/JanusX.app/Contents/MacOS/JanusX', platform: 'darwin' })
 
     await manager.ensureInstalled('codex')
     const hooksPath = manager.getCodexHooksPath()
@@ -182,12 +177,7 @@ describe('AgentHookConfigManager', () => {
     const externalConfig = 'base_url = \"https://provider.example/v1\"\nwire_api = \"responses\"\n'
     await mkdir(codexDir, { recursive: true })
     await writeFile(configPath, externalConfig, 'utf8')
-    const manager = new AgentHookConfigManager({
-      homeDir,
-      userDataDir: join(homeDir, 'userData'),
-      executablePath: '/usr/local/bin/janusx',
-      platform: 'linux',
-    })
+    const manager = makeManager(homeDir)
 
     await manager.ensureInstalled('codex')
 
@@ -200,12 +190,7 @@ describe('AgentHookConfigManager', () => {
     electronApp.getAppPath.mockReturnValue(join(homeDir, 'janusx-app'))
 
     try {
-      const manager = new AgentHookConfigManager({
-        homeDir,
-        userDataDir: join(homeDir, 'userData'),
-        executablePath: 'C:/repo/node_modules/electron/dist/electron.exe',
-        platform: 'win32',
-      })
+      const manager = makeManager(homeDir, { executablePath: 'C:/repo/node_modules/electron/dist/electron.exe', platform: 'win32' })
 
       await manager.ensureInstalled('codex')
       const hooksJson = await readFile(manager.getCodexHooksPath(), 'utf8')
@@ -227,12 +212,7 @@ describe('AgentHookConfigManager', () => {
   it('creates an opencode plugin directory and injects OPENCODE_CONFIG_DIR', async () => {
     const homeDir = await createTempDir()
     const userDataDir = join(homeDir, 'userData')
-    const manager = new AgentHookConfigManager({
-      homeDir,
-      userDataDir,
-      executablePath: '/usr/local/bin/janusx',
-      platform: 'linux',
-    })
+    const manager = makeManager(homeDir, { userDataDir })
 
     await manager.ensureInstalled('opencode')
     const env = manager.buildTerminalEnv(

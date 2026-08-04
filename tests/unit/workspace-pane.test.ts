@@ -20,10 +20,16 @@ import {
   type WorkspacePaneNode,
 } from '../../src/renderer/src/lib/workspace-pane'
 
+// Shared bootstrap: seed a single pane-1 leaf holding terminal-1 in workspace-1.
+function seedPane() {
+  const result = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
+  return { tree: result.tree, paneId: 'pane-1' as const }
+}
+
 describe('workspace pane tree', () => {
   it('adds terminals into the focused pane and avoids duplicate views', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const second = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const second = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const moved = addTerminalToPaneTree(
       second.tree,
       'pane-2',
@@ -38,8 +44,8 @@ describe('workspace pane tree', () => {
   })
 
   it('creates an empty focused pane when splitting', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'vertical', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'vertical', 'split-1', 'pane-2')
 
     expect(split.focus).toEqual({ paneId: 'pane-2', tabId: null, terminalId: null })
     expect(getLeafPanes(split.tree)).toEqual([
@@ -49,22 +55,22 @@ describe('workspace pane tree', () => {
   })
 
   it('can insert the new split pane before the target pane', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2', 'before')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2', 'before')
 
     expect(split.focus).toEqual({ paneId: 'pane-2', tabId: null, terminalId: null })
     expect(getLeafPanes(split.tree).map((leaf) => leaf.id)).toEqual(['pane-2', 'pane-1'])
   })
 
   it('creates split with custom ratio', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2', 'after', 0.3)
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2', 'after', 0.3)
     expect((split.tree as any).ratio).toBe(0.3)
   })
 
   it('merges tabs into the sibling when unsplitting', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const second = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
     const unsplit = unsplitPaneTree(second.tree, 'pane-2')
 
@@ -75,8 +81,8 @@ describe('workspace pane tree', () => {
   })
 
   it('prunes an empty pane after closing its last visible tab', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const second = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
     const closed = closePaneTab(second.tree, 'pane-2', 'terminal:terminal-2')
 
@@ -107,8 +113,8 @@ describe('workspace pane tree', () => {
   })
 
   it('prunes an empty pane after removing a terminal session', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const second = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
     const removed = removeTerminalFromPaneTree(second.tree, 'terminal-2')
 
@@ -136,8 +142,8 @@ describe('workspace pane tree', () => {
   })
 
   it('collapses split panes into one leaf and keeps the preferred terminal focused', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const second = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
     const collapsed = collapsePaneTree(second.tree, 'terminal-2')
 
@@ -147,8 +153,8 @@ describe('workspace pane tree', () => {
   })
 
   it('removes foreign-workspace terminal views before restoring a workspace layout', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const mixed = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-2'), 'pane-fallback')
 
     const restored = retainWorkspacePaneContent(mixed.tree, 'workspace-1', new Set(['terminal-1']))
@@ -164,8 +170,8 @@ describe('workspace pane tree', () => {
   })
 
   it('adds one Janus Chat view to a split and focuses the existing view on repeat', () => {
-    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(terminal.tree, 'pane-1', 'horizontal', 'split-1', 'pane-chat', 'after', 0.62)
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-chat', 'after', 0.62)
     const first = addPaneContentToTree(split.tree, 'pane-chat', createJanusChatPaneContent(), 'pane-fallback')
     const repeated = addPaneContentToTree(first.tree, 'pane-1', createJanusChatPaneContent(), 'pane-fallback')
 
@@ -175,8 +181,8 @@ describe('workspace pane tree', () => {
   })
 
   it('closes only the Janus Chat presentation and keeps the terminal tab', () => {
-    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const withChat = addPaneContentToTree(terminal.tree, 'pane-1', createJanusChatPaneContent(), 'pane-fallback')
+    const { tree } = seedPane()
+    const withChat = addPaneContentToTree(tree, 'pane-1', createJanusChatPaneContent(), 'pane-fallback')
     const closed = closePaneTab(withChat.tree, 'pane-1', 'janus-chat')
 
     expect(getLeafPanes(closed)).toEqual([
@@ -195,8 +201,8 @@ describe('workspace pane tree', () => {
   })
 
   it('adds and locates browser content in the pane tree like other content types', () => {
-    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const withBrowser = addPaneContentToTree(terminal.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+    const { tree } = seedPane()
+    const withBrowser = addPaneContentToTree(tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
 
     expect(withBrowser.focus).toEqual({ paneId: 'pane-1', tabId: 'browser:surface-1', terminalId: null })
     expect(findPaneContent(withBrowser.tree, 'browser:surface-1')).toEqual({
@@ -222,8 +228,8 @@ describe('workspace pane tree', () => {
   })
 
   it('finds the first browser tab across split panes', () => {
-    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(terminal.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const withBrowser = addPaneContentToTree(split.tree, 'pane-2', createBrowserPaneContent('surface-9'), 'pane-fallback')
 
     expect(findFirstBrowserPaneContent(withBrowser.tree)).toEqual({
@@ -231,12 +237,12 @@ describe('workspace pane tree', () => {
       tabId: 'browser:surface-9',
       surfaceId: 'surface-9',
     })
-    expect(findFirstBrowserPaneContent(terminal.tree)).toBeNull()
+    expect(findFirstBrowserPaneContent(tree)).toBeNull()
   })
 
   it('closes a browser tab without touching sibling tabs', () => {
-    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const withBrowser = addPaneContentToTree(terminal.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+    const { tree } = seedPane()
+    const withBrowser = addPaneContentToTree(tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
     const closed = closePaneTab(withBrowser.tree, 'pane-1', 'browser:surface-1')
 
     const leaves = getLeafPanes(closed)
@@ -245,8 +251,8 @@ describe('workspace pane tree', () => {
   })
 
   it('gets the browser content object and removes it by id with pruning', () => {
-    const terminal = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(terminal.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const withBrowser = addPaneContentToTree(split.tree, 'pane-2', createBrowserPaneContent('surface-1'), 'pane-fallback')
 
     expect(getBrowserPaneContent(withBrowser.tree, 'surface-1')).toEqual(createBrowserPaneContent('surface-1'))
@@ -261,8 +267,8 @@ describe('workspace pane tree', () => {
   })
 
   it('moves a browser tab across panes via remove + re-insert', () => {
-    const first = addTerminalToPaneTree(null, null, createTerminalPaneContent('terminal-1', 'workspace-1'), 'pane-1')
-    const split = splitPaneTree(first.tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
     const withTerminal2 = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
     const withBrowser = addPaneContentToTree(withTerminal2.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
 

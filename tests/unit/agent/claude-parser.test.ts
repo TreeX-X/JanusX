@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 
 describe('ClaudeParser', () => {
   let ClaudeParser: new () => { parseLine(json: Record<string, unknown>): import('../../../src/main/agent/types').AgentEvent[]; reset(): void }
@@ -31,19 +31,6 @@ describe('ClaudeParser', () => {
         message: { id: 'msg1', content: [{ type: 'text', text: 'Hello world' }] },
       })
       expect(events).toEqual([{ type: 'text-delta', delta: ' world', fullText: 'Hello world' }])
-    })
-
-    it('should emit text-chunk when message id changes', () => {
-      const parser = new ClaudeParser()
-      parser.parseLine({
-        type: 'assistant',
-        message: { id: 'msg1', content: [{ type: 'text', text: 'Hello' }] },
-      })
-      const events = parser.parseLine({
-        type: 'assistant',
-        message: { id: 'msg2', content: [{ type: 'text', text: 'New msg' }] },
-      })
-      expect(events).toEqual([{ type: 'text-chunk', text: 'New msg' }])
     })
 
     it('should concatenate multiple text blocks in content', () => {
@@ -87,45 +74,21 @@ describe('ClaudeParser', () => {
   // --- tool events ---
 
   describe('tool events', () => {
-    it('should emit tool-start for tool_use content block', () => {
+    it.each([
+      ['Read', { file_path: '/foo.ts' }, '/foo.ts'],
+      ['Bash', { command: 'ls -la' }, 'ls -la'],
+      ['Grep', { pattern: 'foo.*bar' }, 'foo.*bar'],
+    ] as const)('should emit tool-start for %s with extracted arg', (name, input, arg) => {
       const parser = new ClaudeParser()
       const events = parser.parseLine({
         type: 'assistant',
         message: {
           id: 'msg1',
-          content: [{ type: 'tool_use', id: 'tool1', name: 'Read', input: { file_path: '/foo.ts' } }],
+          content: [{ type: 'tool_use', id: 'tool1', name, input }],
         },
       })
       expect(events).toEqual([
-        { type: 'tool-start', id: 'tool1', name: 'Read', arg: '/foo.ts' },
-      ])
-    })
-
-    it('should extract command arg for Bash tool', () => {
-      const parser = new ClaudeParser()
-      const events = parser.parseLine({
-        type: 'assistant',
-        message: {
-          id: 'msg1',
-          content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls -la' } }],
-        },
-      })
-      expect(events).toEqual([
-        { type: 'tool-start', id: 't1', name: 'Bash', arg: 'ls -la' },
-      ])
-    })
-
-    it('should extract pattern arg for Grep tool', () => {
-      const parser = new ClaudeParser()
-      const events = parser.parseLine({
-        type: 'assistant',
-        message: {
-          id: 'msg1',
-          content: [{ type: 'tool_use', id: 't1', name: 'Grep', input: { pattern: 'foo.*bar' } }],
-        },
-      })
-      expect(events).toEqual([
-        { type: 'tool-start', id: 't1', name: 'Grep', arg: 'foo.*bar' },
+        { type: 'tool-start', id: 'tool1', name, arg },
       ])
     })
 
@@ -258,13 +221,16 @@ describe('ClaudeParser', () => {
         type: 'assistant',
         message: {
           id: 'msg2',
-          content: [{ type: 'tool_use', id: 'tool1', name: 'Read', input: { file_path: '/bar.ts' } }],
+          content: [
+            { type: 'text', text: 'again' },
+            { type: 'tool_use', id: 'tool1', name: 'Read', input: { file_path: '/bar.ts' } },
+          ],
         },
       })
       expect(events).toEqual([
-        { type: 'text-chunk', text: '' },  // won't appear since fullText is empty
+        { type: 'text-chunk', text: 'again' },
         { type: 'tool-start', id: 'tool1', name: 'Read', arg: '/bar.ts' },
-      ].filter((e) => !(e.type === 'text-chunk' && e.text === '')))
+      ])
     })
   })
 })

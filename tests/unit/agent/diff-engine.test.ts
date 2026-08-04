@@ -1,94 +1,54 @@
 import { describe, it, expect } from 'vitest'
+import { generateUnifiedDiff, threeWayMerge, parseConflictMarkers } from '../../../src/main/agent/checkpoint/diff-engine'
 
 describe('generateUnifiedDiff', () => {
-  it('returns empty string for identical content', async () => {
-    const { generateUnifiedDiff } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('returns empty string for identical content', () => {
     const content = 'line1\nline2\nline3'
     const result = generateUnifiedDiff('test.ts', content, content)
     expect(result).toBe('')
   })
 
-  it('shows + lines for added lines', async () => {
-    const { generateUnifiedDiff } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    const old = 'line1'
-    const newContent = 'line1\nline2'
-    const result = generateUnifiedDiff('test.ts', old, newContent)
-    expect(result).toContain('+line2')
-    // Verify no diff removal lines (single '-' prefix, not '---' header)
+  it.each([
+    ['shows + lines for added lines', 'line1', 'line1\nline2', ['+line2'], []],
+    ['shows - lines for removed lines', 'line1\nline2', 'line1', ['-line2'], []],
+    ['shows both - and + for changed lines', 'old line', 'new line', ['-old line', '+new line'], []],
+  ] as const)('%s', (_label, oldContent, newContent, expectedContains, expectedAbsent) => {
+    const result = generateUnifiedDiff('test.ts', oldContent, newContent)
+    for (const expected of expectedContains) {
+      expect(result).toContain(expected)
+    }
     const removalLines = result.split('\n').filter(l => l.startsWith('-') && !l.startsWith('---'))
-    expect(removalLines).toEqual([])
+    for (const absent of expectedAbsent) {
+      expect(removalLines).not.toContain(absent)
+    }
   })
 
-  it('shows - lines for removed lines', async () => {
-    const { generateUnifiedDiff } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    const old = 'line1\nline2'
-    const newContent = 'line1'
-    const result = generateUnifiedDiff('test.ts', old, newContent)
-    expect(result).toContain('-line2')
-  })
-
-  it('shows both - and + for changed lines', async () => {
-    const { generateUnifiedDiff } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    const old = 'old line'
-    const newContent = 'new line'
-    const result = generateUnifiedDiff('test.ts', old, newContent)
-    expect(result).toContain('-old line')
-    expect(result).toContain('+new line')
-  })
-
-  it('includes file path in header', async () => {
-    const { generateUnifiedDiff } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('includes file path in header', () => {
     const result = generateUnifiedDiff('src/foo.ts', 'a', 'b')
     expect(result).toContain('--- a/src/foo.ts')
     expect(result).toContain('+++ b/src/foo.ts')
   })
 
-  it('includes hunk header', async () => {
-    const { generateUnifiedDiff } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('includes hunk header', () => {
     const result = generateUnifiedDiff('test.ts', 'a', 'b')
     expect(result).toMatch(/^--- a\/test\.ts\n\+\+\+ b\/test\.ts\n@@ .+ @@/)
   })
 })
 
 describe('threeWayMerge', () => {
-  it('returns ours when all three are the same', async () => {
-    const { threeWayMerge } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    const text = 'same content'
-    const result = threeWayMerge(text, text, text)
-    expect(result.merged).toBe(text)
+  it.each([
+    ['returns ours when all three are the same', 'same content', 'same content', 'same content', 'same content'],
+    ['returns ours when theirs matches base (ours changed)', 'original', 'modified by us', 'original', 'modified by us'],
+    ['returns theirs when ours matches base (theirs changed)', 'original', 'original', 'modified by them', 'modified by them'],
+    ['returns ours when both changed the same way', 'original', 'both changed to this', 'both changed to this', 'both changed to this'],
+  ] as const)('%s', (_label, base, ours, theirs, expected) => {
+    const result = threeWayMerge(base, ours, theirs)
+    expect(result.merged).toBe(expected)
     expect(result.conflicts).toBe(false)
     expect(result.conflictRegions).toEqual([])
   })
 
-  it('returns ours when theirs matches base (ours changed)', async () => {
-    const { threeWayMerge } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    const base = 'original'
-    const ours = 'modified by us'
-    const result = threeWayMerge(base, ours, base)
-    expect(result.merged).toBe(ours)
-    expect(result.conflicts).toBe(false)
-  })
-
-  it('returns theirs when ours matches base (theirs changed)', async () => {
-    const { threeWayMerge } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    const base = 'original'
-    const theirs = 'modified by them'
-    const result = threeWayMerge(base, base, theirs)
-    expect(result.merged).toBe(theirs)
-    expect(result.conflicts).toBe(false)
-  })
-
-  it('returns ours when both changed the same way', async () => {
-    const { threeWayMerge } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    const base = 'original'
-    const same = 'both changed to this'
-    const result = threeWayMerge(base, same, same)
-    expect(result.merged).toBe(same)
-    expect(result.conflicts).toBe(false)
-  })
-
-  it('produces conflict markers when both changed differently', async () => {
-    const { threeWayMerge } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('produces conflict markers when both changed differently', () => {
     const base = 'original'
     const ours = 'our version'
     const theirs = 'their version'
@@ -104,15 +64,13 @@ describe('threeWayMerge', () => {
 })
 
 describe('parseConflictMarkers', () => {
-  it('returns no conflicts for content without markers', async () => {
-    const { parseConflictMarkers } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('returns no conflicts for content without markers', () => {
     const result = parseConflictMarkers('just plain text\nno conflicts here')
     expect(result.hasConflicts).toBe(false)
     expect(result.regions).toEqual([])
   })
 
-  it('extracts a single conflict region', async () => {
-    const { parseConflictMarkers } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('extracts a single conflict region', () => {
     const content = [
       'before',
       '<<<<<<< ours',
@@ -129,8 +87,7 @@ describe('parseConflictMarkers', () => {
     expect(result.regions[0].theirs).toBe('their version')
   })
 
-  it('extracts multiple conflict regions', async () => {
-    const { parseConflictMarkers } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('extracts multiple conflict regions', () => {
     const content = [
       '<<<<<<< ours',
       'first ours',
@@ -153,8 +110,7 @@ describe('parseConflictMarkers', () => {
     expect(result.regions[1].theirs).toBe('second theirs')
   })
 
-  it('handles multi-line conflict content', async () => {
-    const { parseConflictMarkers } = await import('../../../src/main/agent/checkpoint/diff-engine')
+  it('handles multi-line conflict content', () => {
     const content = [
       '<<<<<<< ours',
       'our line 1',
@@ -171,9 +127,7 @@ describe('parseConflictMarkers', () => {
     expect(result.regions[0].theirs).toBe('their line 1\ntheir line 2\ntheir line 3')
   })
 
-  it('returns empty regions for partial/malformed markers', async () => {
-    const { parseConflictMarkers } = await import('../../../src/main/agent/checkpoint/diff-engine')
-    // Only has start marker, no end marker
+  it('returns empty regions for partial/malformed markers', () => {
     const content = '<<<<<<< ours\norphan conflict'
     const result = parseConflictMarkers(content)
     expect(result.hasConflicts).toBe(false)

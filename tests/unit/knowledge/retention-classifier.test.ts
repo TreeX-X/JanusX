@@ -28,89 +28,36 @@ function makeObservation(overrides: Partial<Observation>): Observation {
 }
 
 describe('classifyRetention', () => {
-  it('classifies empty system-event as noise', () => {
-    const result = classifyRetention({
-      source: 'agent-stream',
-      type: 'system-event',
-      content: '   ',
-    })
-    expect(result.retentionClass).toBe('noise')
-    expect(result.retentionReason).toBe('empty-system-event')
+  it.each([
+    [{ source: 'agent-stream', type: 'system-event', content: '   ' }, 'noise', 'empty-system-event'],
+  ] as const)('classifies %s as %s', (input, retentionClass, retentionReason) => {
+    const result = classifyRetention(input)
+    expect(result.retentionClass).toBe(retentionClass)
+    expect(result.retentionReason).toBe(retentionReason)
   })
 
-  it('classifies conversation-turn as evidence', () => {
-    const result = classifyRetention({ source: 'janus-chat', type: 'conversation-turn', content: 'hi' })
+  it.each([
+    [{ source: 'janus-chat', type: 'conversation-turn', content: 'hi' }, 'conversation-turn'],
+    [{ source: 'agent-stream', type: 'analysis-result', content: 'ok' }, 'analysis-result'],
+    [{ source: 'tool', type: 'tool-call', content: 'edit', fileRefs: ['src/a.ts'] }, 'tool-with-file-refs'],
+    [{ source: 'tool', type: 'tool-result', content: 'done', fileRefs: ['src/a.ts'] }, 'tool-with-file-refs'],
+    [{ source: 'manual', type: 'user-note', content: 'remember' }, 'user-note'],
+    [{ source: 'tool', type: 'tool-call', content: 'noop' }, 'tool-event'],
+    [{ source: 'tool', type: 'tool-result', content: 'ok' }, 'tool-event'],
+  ] as const)('classifies %s as evidence', (input, retentionReason) => {
+    const result = classifyRetention(input)
     expect(result.retentionClass).toBe('evidence')
-    expect(result.retentionReason).toBe('conversation-turn')
+    expect(result.retentionReason).toBe(retentionReason)
   })
 
-  it('classifies analysis-result as evidence', () => {
-    const result = classifyRetention({ source: 'agent-stream', type: 'analysis-result', content: 'ok' })
-    expect(result.retentionClass).toBe('evidence')
-    expect(result.retentionReason).toBe('analysis-result')
-  })
-
-  it('classifies tool-call with file refs as evidence', () => {
-    const result = classifyRetention({
-      source: 'tool',
-      type: 'tool-call',
-      content: 'edit',
-      fileRefs: ['src/a.ts'],
-    })
-    expect(result.retentionClass).toBe('evidence')
-    expect(result.retentionReason).toBe('tool-with-file-refs')
-  })
-
-  it('classifies tool-result with file refs as evidence', () => {
-    const result = classifyRetention({
-      source: 'tool',
-      type: 'tool-result',
-      content: 'done',
-      fileRefs: ['src/a.ts'],
-    })
-    expect(result.retentionClass).toBe('evidence')
-    expect(result.retentionReason).toBe('tool-with-file-refs')
-  })
-
-  it('classifies user-note as evidence', () => {
-    const result = classifyRetention({ source: 'manual', type: 'user-note', content: 'remember' })
-    expect(result.retentionClass).toBe('evidence')
-    expect(result.retentionReason).toBe('user-note')
-  })
-
-  it('classifies lifecycle system-event (with content, no file refs) as operational', () => {
-    const result = classifyRetention({
-      source: 'agent-stream',
-      type: 'system-event',
-      content: 'task started',
-    })
+  it.each([
+    [{ source: 'agent-stream', type: 'system-event', content: 'task started' }, 'lifecycle-event'],
+    [{ source: 'checkpoint', type: 'checkpoint-event', content: 'snap' }, 'checkpoint-event'],
+    [{ source: 'git-analyzer', type: 'git-event', content: 'commit' }, 'git-event'],
+  ] as const)('classifies %s as operational', (input, retentionReason) => {
+    const result = classifyRetention(input)
     expect(result.retentionClass).toBe('operational')
-    expect(result.retentionReason).toBe('lifecycle-event')
-  })
-
-  it('classifies checkpoint-event as operational', () => {
-    const result = classifyRetention({ source: 'checkpoint', type: 'checkpoint-event', content: 'snap' })
-    expect(result.retentionClass).toBe('operational')
-    expect(result.retentionReason).toBe('checkpoint-event')
-  })
-
-  it('classifies git-event as operational', () => {
-    const result = classifyRetention({ source: 'git-analyzer', type: 'git-event', content: 'commit' })
-    expect(result.retentionClass).toBe('operational')
-    expect(result.retentionReason).toBe('git-event')
-  })
-
-  it('classifies tool-call without file refs as evidence (fallback)', () => {
-    const result = classifyRetention({ source: 'tool', type: 'tool-call', content: 'noop' })
-    expect(result.retentionClass).toBe('evidence')
-    expect(result.retentionReason).toBe('tool-event')
-  })
-
-  it('defaults unmatched to evidence', () => {
-    // tool-result with no file refs falls to rule 9
-    const result = classifyRetention({ source: 'tool', type: 'tool-result', content: 'ok' })
-    expect(result.retentionClass).toBe('evidence')
-    expect(result.retentionReason).toBe('tool-event')
+    expect(result.retentionReason).toBe(retentionReason)
   })
 
   it('computes sha256 contentHash and UTF-8 contentLength', () => {
@@ -123,9 +70,12 @@ describe('classifyRetention', () => {
 })
 
 describe('isAutoPrunable', () => {
-  it('prunes noise past TTL', () => {
-    const obs = makeObservation({ retentionClass: 'noise' })
-    const cutoff = Date.parse(LONG_AGO) + (RETENTION_TTL_MS.noise as number) + 1
+  it.each([
+    ['noise', 'noise'],
+    ['operational', 'operational'],
+  ] as const)('prunes %s past TTL', (retentionClass, ttlKey) => {
+    const obs = makeObservation({ retentionClass })
+    const cutoff = Date.parse(LONG_AGO) + (RETENTION_TTL_MS[ttlKey] as number) + 1
     expect(isAutoPrunable(obs, cutoff)).toBe(true)
   })
 
@@ -135,24 +85,12 @@ describe('isAutoPrunable', () => {
     expect(isAutoPrunable(obs, NOW)).toBe(false)
   })
 
-  it('prunes operational past TTL', () => {
-    const obs = makeObservation({ retentionClass: 'operational' })
-    const cutoff = Date.parse(LONG_AGO) + (RETENTION_TTL_MS.operational as number) + 1
-    expect(isAutoPrunable(obs, cutoff)).toBe(true)
-  })
-
-  it('never prunes evidence', () => {
-    const obs = makeObservation({ retentionClass: 'evidence' })
-    expect(isAutoPrunable(obs, Date.parse(LONG_AGO) + 365 * 24 * 60 * 60 * 1000)).toBe(false)
-  })
-
-  it('never prunes derived', () => {
-    const obs = makeObservation({ retentionClass: 'derived' })
-    expect(isAutoPrunable(obs, Date.parse(LONG_AGO) + 365 * 24 * 60 * 60 * 1000)).toBe(false)
-  })
-
-  it('never prunes unknown retention class (safe default)', () => {
-    const obs = makeObservation({ retentionClass: undefined })
+  it.each([
+    ['evidence'],
+    ['derived'],
+    [undefined],
+  ])('never prunes %s', (retentionClass) => {
+    const obs = makeObservation({ retentionClass })
     expect(isAutoPrunable(obs, Date.parse(LONG_AGO) + 365 * 24 * 60 * 60 * 1000)).toBe(false)
   })
 

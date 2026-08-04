@@ -54,6 +54,19 @@ const messages = [
   { role: 'user' as const, content: 'latest workspace question' },
 ]
 
+function registerAndFindHandler(channel: string) {
+  registerLlmHandlers()
+  return on.mock.calls.find(([c]) => c === channel)
+}
+
+function fakeStream(text: string) {
+  streamText.mockResolvedValue({
+    textStream: (async function* () {
+      yield text
+    })(),
+  })
+}
+
 describe('Janus Chat knowledge recall', () => {
   beforeEach(() => {
     handle.mockReset()
@@ -150,13 +163,8 @@ describe('Janus Chat knowledge recall', () => {
 
   it('emits exactly one correlated trace before stream completion and preserves observations', async () => {
     search.mockResolvedValue(emptyResult)
-    streamText.mockResolvedValue({
-      textStream: (async function* () {
-        yield 'answer'
-      })(),
-    })
-    registerLlmHandlers()
-    const registration = on.mock.calls.find(([channel]) => channel === 'llm:chat-stream')
+    fakeStream('answer')
+    const registration = registerAndFindHandler('llm:chat-stream')
     const reply = vi.fn()
 
     await registration?.[1]({ reply }, {
@@ -180,13 +188,8 @@ describe('Janus Chat knowledge recall', () => {
 
   it('keeps an unbound Janus conversation global and skips workspace observations', async () => {
     search.mockResolvedValue(emptyResult)
-    streamText.mockResolvedValue({
-      textStream: (async function* () {
-        yield 'global answer'
-      })(),
-    })
-    registerLlmHandlers()
-    const registration = on.mock.calls.find(([channel]) => channel === 'llm:chat-stream')
+    fakeStream('global answer')
+    const registration = registerAndFindHandler('llm:chat-stream')
     const reply = vi.fn()
 
     await registration?.[1]({ reply }, {
@@ -216,9 +219,8 @@ describe('Janus Chat knowledge recall', () => {
         ? { workspaceId: 'workspace-a', workspaceRoot: 'C:/workspace-a' }
         : { workspaceId: 'workspace-b', workspaceRoot: 'C:/workspace-b' },
     }))
-    streamText.mockResolvedValue({ textStream: (async function* () { yield 'workspace answer' })() })
-    registerLlmHandlers()
-    const registration = on.mock.calls.find(([channel]) => channel === 'llm:chat-stream')
+    fakeStream('workspace answer')
+    const registration = registerAndFindHandler('llm:chat-stream')
 
     await registration?.[1]({ reply: vi.fn(), sender: { id: 9 } }, {
       requestId: 'stream-tools',
@@ -249,13 +251,8 @@ describe('Janus Chat knowledge recall', () => {
 
   it('keeps streaming when recall throws and reports degradation only through the trace', async () => {
     search.mockRejectedValue(new Error('knowledge offline'))
-    streamText.mockResolvedValue({
-      textStream: (async function* () {
-        yield 'ordinary answer'
-      })(),
-    })
-    registerLlmHandlers()
-    const registration = on.mock.calls.find(([channel]) => channel === 'llm:chat-stream')
+    fakeStream('ordinary answer')
+    const registration = registerAndFindHandler('llm:chat-stream')
     const reply = vi.fn()
 
     await registration?.[1]({ reply }, {

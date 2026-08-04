@@ -16,6 +16,12 @@ vi.mock('os', async (importOriginal) => {
 
 const { getRuntimeTelemetrySnapshot } = await import('../../src/main/runtime-telemetry/history')
 
+async function writeCodexRollout(sessionId: string, lines: string[]) {
+  const sessionDir = join(testContext.homeDir, '.codex', 'sessions', '2026', '07', '30')
+  await mkdir(sessionDir, { recursive: true })
+  await writeFile(join(sessionDir, `rollout-2026-07-30T10-00-00-${sessionId}.jsonl`), lines.join('\n'))
+}
+
 describe('runtime telemetry history', () => {
   beforeEach(async () => {
     testContext.homeDir = await mkdtemp(join(tmpdir(), 'janusx-telemetry-'))
@@ -67,11 +73,8 @@ describe('runtime telemetry history', () => {
 
   it('combines Codex head metadata with tail usage in a long session', async () => {
     const sessionId = '12345678-1234-1234-1234-123456789abc'
-    const sessionDir = join(testContext.homeDir, '.codex', 'sessions', '2026', '07', '30')
-    await mkdir(sessionDir, { recursive: true })
-    const filePath = join(sessionDir, `rollout-2026-07-30T10-00-00-${sessionId}.jsonl`)
     const filler = `${JSON.stringify({ timestamp: '2026-07-30T10:00:01Z', type: 'event_msg', payload: { type: 'agent_message', message: 'x'.repeat(512) } })}\n`.repeat(600)
-    await writeFile(filePath, [
+    await writeCodexRollout(sessionId, [
       JSON.stringify({
         timestamp: '2026-07-30T10:00:00Z',
         type: 'session_meta',
@@ -100,7 +103,7 @@ describe('runtime telemetry history', () => {
           },
         },
       }),
-    ].join('\n'))
+    ])
 
     const snapshot = await getRuntimeTelemetrySnapshot({
       preset: 'codex',
@@ -124,14 +127,12 @@ describe('runtime telemetry history', () => {
 
   it('reads Codex startup capacity and exact compactions only for a bound session', async () => {
     const sessionId = '12345678-1234-1234-1234-123456789abc'
-    const sessionDir = join(testContext.homeDir, '.codex', 'sessions', '2026', '07', '30')
-    await mkdir(sessionDir, { recursive: true })
-    await writeFile(join(sessionDir, `rollout-2026-07-30T10-00-00-${sessionId}.jsonl`), [
+    await writeCodexRollout(sessionId, [
       JSON.stringify({ timestamp: '2026-07-30T10:00:00Z', type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
       JSON.stringify({ timestamp: '2026-07-30T10:00:01Z', type: 'event_msg', payload: { type: 'task_started', model_context_window: 258_400 } }),
       JSON.stringify({ timestamp: '2026-07-30T10:00:02Z', type: 'event_msg', payload: { type: 'context_compacted' } }),
       JSON.stringify({ timestamp: '2026-07-30T10:00:03Z', type: 'event_msg', payload: { type: 'context_compacted' } }),
-    ].join('\n'))
+    ])
 
     const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId })
 
@@ -146,12 +147,10 @@ describe('runtime telemetry history', () => {
   it('does not accept a filename match whose Codex session metadata belongs to another terminal', async () => {
     const requestedSessionId = '12345678-1234-1234-1234-123456789abc'
     const actualSessionId = '12345678-1234-1234-1234-123456789abd'
-    const sessionDir = join(testContext.homeDir, '.codex', 'sessions', '2026', '07', '30')
-    await mkdir(sessionDir, { recursive: true })
-    await writeFile(join(sessionDir, `rollout-2026-07-30T10-00-00-${requestedSessionId}.jsonl`), [
+    await writeCodexRollout(requestedSessionId, [
       JSON.stringify({ timestamp: '2026-07-30T10:00:00Z', type: 'session_meta', payload: { id: actualSessionId, cwd: 'C:/repo' } }),
       JSON.stringify({ timestamp: '2026-07-30T10:00:01Z', type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { total_tokens: 50 } } } }),
-    ].join('\n'))
+    ])
 
     const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId: requestedSessionId })
 
