@@ -4,8 +4,9 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, CircleCheck, CircleX, LoaderCircle, PanelRightOpen, Pencil, Plus, ShieldX, Trash2, X } from 'lucide-react'
-import type { ChatModelOption, JanusResourceController, Message } from './useJanusChat'
+import { Check, ChevronDown, CircleCheck, CircleX, LoaderCircle, PanelRightOpen, Pencil, Plus, ShieldX, Trash2, X } from 'lucide-react'
+import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
+import { useOptionalJanusChatController } from './JanusChatProvider'
 import { MarkdownContent, StreamingText } from '../chat/ChatContent'
 import { Select } from '../ui/Select'
 
@@ -45,6 +46,7 @@ interface JanusChatProps {
   activeModel?: ChatModelOption | null
   modelNotice?: string | null
   resourceController?: JanusResourceController
+  conversationController?: UseJanusChatReturn | null
   onSelectModel?: (providerId: string, modelId: string) => void
   /** 发送一条用户消�?*/
   onSend: (text: string) => void
@@ -146,6 +148,7 @@ export function JanusChat({
   activeModel = null,
   modelNotice = null,
   resourceController,
+  conversationController,
   onSelectModel = () => {},
   onSend,
   onRewrite,
@@ -163,6 +166,9 @@ export function JanusChat({
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
+  const [threadMenuOpen, setThreadMenuOpen] = useState(false)
+  const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
+  const [renamingTitle, setRenamingTitle] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -170,6 +176,8 @@ export function JanusChat({
   const chatRootRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
   const historyDraftRef = useRef('')
+  const contextConversations = useOptionalJanusChatController()
+  const conversations = conversationController ?? contextConversations
 
   const inputHistory = messages
     .filter((message) => message.role === 'user')
@@ -459,9 +467,113 @@ export function JanusChat({
       onDoubleClick={(e) => e.stopPropagation()}
     >
       <div className="janus-chat-toolbar">
-        <div>
-          <span className="janus-chat-toolbar-kicker">Thread</span>
-          <strong>Janus</strong>
+        <div className="janus-chat-thread-selector">
+          <button
+            type="button"
+            className="janus-chat-thread-trigger"
+            aria-label="Select conversation"
+            aria-expanded={threadMenuOpen}
+            onClick={() => setThreadMenuOpen((open) => !open)}
+            disabled={workspace || !conversations || isStreaming}
+          >
+            <span>
+              <span className="janus-chat-toolbar-kicker">Thread</span>
+              <strong>{conversations?.conversationTitle ?? 'Janus'}</strong>
+            </span>
+            {!workspace && conversations && <ChevronDown size={13} aria-hidden="true" />}
+          </button>
+          {threadMenuOpen && !workspace && conversations && (
+            <div className="janus-chat-thread-menu" role="menu" aria-label="Conversations">
+              <div className="janus-chat-thread-menu-header">
+                <span>Conversations</span>
+                <button
+                  type="button"
+                  aria-label="New conversation"
+                  title="New conversation"
+                  onClick={() => {
+                    conversations.createConversation()
+                    setRenamingConversationId(null)
+                  }}
+                >
+                  <Plus size={13} aria-hidden="true" />
+                </button>
+              </div>
+              <div className="janus-chat-thread-list">
+                {conversations.conversations.map((conversation) => (
+                  <div
+                    key={conversation.id}
+                    className="janus-chat-thread-row"
+                    data-active={conversation.id === conversations.conversationId}
+                  >
+                    {renamingConversationId === conversation.id ? (
+                      <input
+                        autoFocus
+                        value={renamingTitle}
+                        aria-label="Conversation title"
+                        onChange={(event) => setRenamingTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') setRenamingConversationId(null)
+                          if (event.key === 'Enter') {
+                            conversations.renameConversation(conversation.id, renamingTitle)
+                            setRenamingConversationId(null)
+                          }
+                        }}
+                        onBlur={() => {
+                          conversations.renameConversation(conversation.id, renamingTitle)
+                          setRenamingConversationId(null)
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="janus-chat-thread-main"
+                        onClick={() => {
+                          conversations.selectConversation(conversation.id)
+                          setThreadMenuOpen(false)
+                        }}
+                      >
+                        <strong>
+                          {conversation.isStreaming && (
+                            <LoaderCircle size={11} className="janus-runtime-tool-spinner" aria-label="Generating" />
+                          )}
+                          {!conversation.isStreaming && conversation.hasError && (
+                            <CircleX size={11} aria-label="Conversation error" />
+                          )}
+                          {conversation.title}
+                        </strong>
+                        <span>{conversation.messageCount} messages</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="janus-chat-thread-action"
+                      aria-label={`Rename ${conversation.title}`}
+                      title="Rename conversation"
+                      onClick={() => {
+                        setRenamingConversationId(conversation.id)
+                        setRenamingTitle(conversation.title)
+                      }}
+                    >
+                      <Pencil size={12} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className="janus-chat-thread-action danger"
+                      aria-label={`Delete ${conversation.title}`}
+                      title="Delete conversation"
+                      onClick={() => {
+                        if (window.confirm(`Delete conversation "${conversation.title}"?`)) {
+                          conversations.deleteConversation(conversation.id)
+                        }
+                      }}
+                    >
+                      <Trash2 size={12} aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="janus-chat-toolbar-actions">
 

@@ -12,6 +12,7 @@ import { registerFileHandlers } from './file-handlers'
 import { registerGitHandlers } from './git-handlers'
 import { disposeWorkspaceWatchers, registerWorkspaceHandlers } from './handlers'
 import { registerJanusHandlers } from './janus-handlers'
+import { registerJanusChatHandlers } from './janus-chat-handlers'
 import { registerKnowledgeHandlers } from './knowledge-handlers'
 import { registerLlmHandlers } from './llm-handlers'
 import { registerOfficeHandlers } from './office-handlers'
@@ -87,6 +88,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerProjectHandlers()
   registerLlmHandlers()
   registerJanusHandlers()
+  registerJanusChatHandlers()
   registerRuntimeTelemetryHandlers()
   registerSettingsHandlers()
   registerSubAgentRunHandlers()

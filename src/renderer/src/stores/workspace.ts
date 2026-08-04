@@ -66,7 +66,8 @@ interface WorkspaceStore {
   setFocusedPane: (paneId: string) => void
   setPaneTab: (paneId: string, tabId: string) => void
   setTabDragInFlight: (active: boolean) => void
-  openJanusChatInWorkspace: () => void
+  openJanusChatInWorkspace: (conversationId?: string) => void
+  removeJanusConversationViews: (conversationId: string) => void
   addBrowserSurfaceToTree: (surfaceId: string) => void
   openBrowserInWorkspace: (url?: string) => Promise<void>
   addBrowserToPane: (paneId: string, url?: string) => Promise<void>
@@ -374,9 +375,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   setTabDragInFlight: (active) =>
     set((s) => (s.tabDragInFlight === active ? {} : { tabDragInFlight: active })),
-  openJanusChatInWorkspace: () =>
+  openJanusChatInWorkspace: (conversationId = 'default') =>
     set((s) => {
-      const existing = findPaneContent(s.paneTree, 'janus-chat')
+      const content = createJanusChatPaneContent(conversationId)
+      const existing = findPaneContent(s.paneTree, content.id)
       if (existing.paneId && existing.tabId) {
         return {
           paneTree: activatePaneTab(s.paneTree, existing.paneId, existing.tabId),
@@ -389,7 +391,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       const focusedPane = findLeafPane(s.paneTree, s.focusedPaneId)
       let paneTree = s.paneTree
       let targetPaneId = focusedPane?.id ?? null
-      if (focusedPane && focusedPane.tabs.length > 0) {
+      const focusedPaneHasChat = focusedPane?.tabs.some((tab) => tab.type === 'janus-chat') ?? false
+      if (focusedPane && focusedPane.tabs.length > 0 && !focusedPaneHasChat) {
         const split = splitPaneTree(
           paneTree,
           focusedPane.id,
@@ -406,7 +409,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       const result = addPaneContentToTree(
         paneTree,
         targetPaneId,
-        createJanusChatPaneContent(),
+        content,
         createPaneId()
       )
       return {
@@ -415,6 +418,44 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedTabId: result.focus.tabId,
         activeTerminalId: null,
       }
+    }),
+  removeJanusConversationViews: (conversationId) =>
+    set((s) => {
+      const contentIds = new Set([
+        `janus-chat:${conversationId}`,
+        ...(conversationId === 'default' ? ['janus-chat'] : []),
+      ])
+      const removeFromSnapshot = (snapshot: TerminalSnapshot): TerminalSnapshot => {
+        const paneTree = [...contentIds].reduce(
+          (tree, contentId) => removePaneContentFromTree(tree, contentId),
+          snapshot.paneTree,
+        )
+        const focus = resolvePaneFocus(paneTree, snapshot.focusedPaneId, snapshot.focusedTabId)
+        return {
+          ...snapshot,
+          paneTree,
+          focusedPaneId: focus.paneId,
+          focusedTabId: focus.tabId,
+          activeTerminalId: focus.terminalId,
+        }
+      }
+      const terminalSnapshots = Object.fromEntries(
+        Object.entries(s.terminalSnapshots).map(([id, snapshot]) => [id, removeFromSnapshot(snapshot)]),
+      )
+      if (s.activeWorkspaceId !== null) {
+        const activeSnapshot = removeFromSnapshot({
+          terminals: s.terminals,
+          activeTerminalId: s.activeTerminalId,
+          paneTree: s.paneTree,
+          focusedPaneId: s.focusedPaneId,
+          focusedTabId: s.focusedTabId,
+        })
+        return {
+          ...activeSnapshot,
+          terminalSnapshots,
+        }
+      }
+      return { terminalSnapshots }
     }),
   /*-- 把已存在的 browser surface 纳入 pane 树（幂等：已有 tab 则激活）——janus-chat 同款入网逻辑 --*/
   addBrowserSurfaceToTree: (surfaceId) =>

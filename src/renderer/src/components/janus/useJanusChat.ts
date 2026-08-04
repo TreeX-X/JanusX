@@ -1,39 +1,53 @@
-/**
- * @file useJanusChat — 持久化灵动岛对话状态
- * @description 将 JanusChat 状态提升到稳定父级（Titlebar），避免 Expanded 关闭时丢失消息。
- */
-
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { chatStream, getDefaultProvider, getProviders, listModels, type ChatMessage, type ChatToolTraceEntry } from '@/services/llm'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  chatStream,
+  getDefaultProvider,
+  getProviders,
+  listModels,
+  type ChatMessage,
+} from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useStreamingPrinter } from '@/hooks/useStreamingPrinter'
+import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import type { AgentSession, ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
 import type { ChatWorkspaceResource } from '../../../../shared/ipc/llm'
-import type { Workspace } from '@/types'
+import type {
+  JanusChatMessage,
+  JanusChatStorageSnapshot,
+  PersistedJanusConversation,
+} from '../../../../shared/ipc/janus-chat'
 import {
-  attachWorkspaceResource,
-  detachWorkspaceResource,
+  CONVERSATION_STORAGE_KEY,
+  MAX_TOOL_TRACES,
+  NEW_CONVERSATION_TITLE,
+  capChatMessages,
+  createJanusConversation,
+  getRetryTurn,
+  loadLocalConversationSnapshot,
+  titleFromMessages,
+} from './janusChatConversations'
+import {
   JANUS_RESOURCE_STORAGE_KEY,
   parseJanusResourcePreferences,
-  reconcileWorkspaceResources,
-  restoreJanusResourcePreferences,
-  toJanusResourcePreferences,
-  type JanusResourceState,
   type WorkspaceResource,
 } from './janusResources'
 import {
   EMPTY_JANUS_RUNTIME_STATE,
   reduceJanusRuntimeState,
   runtimeEventSessionId,
+  type JanusRuntimeState,
   type JanusToolActivity,
 } from './janusRuntimeState'
 
-export interface Message {
+export type Message = JanusChatMessage
+
+export interface ConversationSummary {
   id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: number
+  title: string
+  updatedAt: number
+  messageCount: number
+  isStreaming: boolean
+  hasError: boolean
 }
 
 export interface ChatModelOption {
@@ -58,6 +72,9 @@ export interface JanusResourceController {
 }
 
 export interface UseJanusChatReturn {
+  conversationId: string
+  conversationTitle: string
+  conversations: ConversationSummary[]
   messages: Message[]
   pendingContent: string
   isStreaming: boolean
@@ -74,77 +91,230 @@ export interface UseJanusChatReturn {
   clear: () => void
   selectModel: (providerId: string, modelId: string) => void
   refreshModels: () => Promise<ChatModelOption[]>
+  createConversation: () => string
+  selectConversation: (conversationId: string) => void
+  renameConversation: (conversationId: string, title: string) => void
+  deleteConversation: (conversationId: string) => void
 }
 
-const SYSTEM_PROMPT = (window as Partial<Window>).electron?.janusPersona ?? ''
+export interface UseJanusChatRegistryReturn {
+  islandConversationId: string
+  getController: (conversationId?: string) => UseJanusChatReturn
+}
 
-/*-- 灵动岛对话消息上限：超出从头部裁剪，防止长对话消息数组无界增长 --*/
-const MAX_CHAT_MESSAGES = 200
-/*-- 发送给模型的历史条数与工具轨迹条数上限 --*/
+interface ConversationRuntime {
+  pendingContent: string
+  isStreaming: boolean
+  error: string | null
+  modelNotice: string | null
+  latestRecallTrace: KnowledgeRecallTrace | null
+  agent: JanusRuntimeState
+}
+
+interface RuntimeHandles {
+  generation: number
+  active: boolean
+  abort: (() => void) | null
+  pendingBuffer: string
+  flushTimer: number | null
+  noticeTimer: number | null
+  sessions: Map<string, AgentSession>
+}
+
+const SYSTEM_PROMPT = typeof window === 'undefined'
+  ? ''
+  : (window as Partial<Window>).electron?.janusPersona ?? ''
 const HISTORY_MESSAGE_LIMIT = 24
-const MAX_TOOL_TRACES = 48
 
-function capMessages(messages: Message[]): Message[] {
-  return messages.length > MAX_CHAT_MESSAGES ? messages.slice(-MAX_CHAT_MESSAGES) : messages
+function emptyRuntime(): ConversationRuntime {
+  return {
+    pendingContent: '',
+    isStreaming: false,
+    error: null,
+    modelNotice: null,
+    latestRecallTrace: null,
+    agent: EMPTY_JANUS_RUNTIME_STATE,
+  }
 }
 
-export function useJanusChat(): UseJanusChatReturn {
+function createRuntimeHandles(): RuntimeHandles {
+  return {
+    generation: 0,
+    active: false,
+    abort: null,
+    pendingBuffer: '',
+    flushTimer: null,
+    noticeTimer: null,
+    sessions: new Map(),
+  }
+}
+
+function workspaceResources(
+  conversation: PersistedJanusConversation,
+  workspaces: Workspace[],
+): WorkspaceResource[] {
+  const byId = new Map(workspaces.map((workspace) => [workspace.id, workspace]))
+  return conversation.attachedWorkspaceIds.flatMap((id) => {
+    const workspace = byId.get(id)
+    return workspace
+      ? [{ workspaceId: workspace.id, workspacePath: workspace.path, workspaceName: workspace.name }]
+      : []
+  })
+}
+
+export function useJanusChat(): UseJanusChatRegistryReturn {
   const availableWorkspaces = useWorkspaceStore((state) => state.workspaces)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const initialRef = useRef<JanusChatStorageSnapshot>()
+  initialRef.current ??= loadLocalConversationSnapshot()
+
+  const [conversations, setConversations] = useState(initialRef.current.conversations)
+  const [islandConversationId, setIslandConversationId] = useState(initialRef.current.activeConversationId)
+  const [runtimeStates, setRuntimeStates] = useState<Record<string, ConversationRuntime>>({})
   const [modelOptions, setModelOptions] = useState<ChatModelOption[]>([])
-  const [activeModel, setActiveModel] = useState<ChatModelOption | null>(null)
-  const [modelNotice, setModelNotice] = useState<string | null>(null)
-  const [latestRecallTrace, setLatestRecallTrace] = useState<KnowledgeRecallTrace | null>(null)
-  const [runtimeState, setRuntimeState] = useState(EMPTY_JANUS_RUNTIME_STATE)
-  const [resourceState, setResourceState] = useState<JanusResourceState>({ resources: [] })
-  const { resources } = resourceState
-  const {
-    output: printedContent,
-    append: appendToPrinter,
-    complete: completePrinter,
-    flush: flushPrinter,
-    reset: resetPrinter
-  } = useStreamingPrinter()
+  const [persistenceReady, setPersistenceReady] = useState(false)
 
-  const messagesRef = useRef(messages)
-  useEffect(() => {
-    messagesRef.current = messages
-  }, [messages])
-
-  const abortRef = useRef<(() => void) | null>(null)
-  const streamIdRef = useRef(0)
-  /*-- 跨轮次工具轨迹：主进程每轮流结束时回传,下一轮随请求带回,模型据此保留文件/hash 上下文 --*/
-  const toolTracesRef = useRef<ChatToolTraceEntry[]>([])
-  const activeModelRef = useRef<ChatModelOption | null>(activeModel)
-  const agentSessionsRef = useRef(new Map<string, AgentSession>())
-  const resourcesRef = useRef(resources)
-  const resourcePreferencesRef = useRef(parseJanusResourcePreferences(
+  const conversationsRef = useRef(conversations)
+  const runtimesRef = useRef(runtimeStates)
+  const workspacesRef = useRef(availableWorkspaces)
+  const modelOptionsRef = useRef(modelOptions)
+  const handlesRef = useRef(new Map<string, RuntimeHandles>())
+  const legacyResourcesRef = useRef(parseJanusResourcePreferences(
     typeof localStorage === 'undefined' ? null : localStorage.getItem(JANUS_RESOURCE_STORAGE_KEY),
   ))
-  const resourcesHydratedRef = useRef(false)
+
+  conversationsRef.current = conversations
+  runtimesRef.current = runtimeStates
+  workspacesRef.current = availableWorkspaces
+  modelOptionsRef.current = modelOptions
+
+  const setRuntime = useCallback((id: string, update: (current: ConversationRuntime) => ConversationRuntime) => {
+    setRuntimeStates((current) => {
+      const nextRuntime = update(current[id] ?? emptyRuntime())
+      const next = { ...current, [id]: nextRuntime }
+      runtimesRef.current = next
+      return next
+    })
+  }, [])
+
+  const updateConversations = useCallback((
+    update: (current: PersistedJanusConversation[]) => PersistedJanusConversation[],
+  ) => {
+    setConversations((current) => {
+      const next = update(current)
+      conversationsRef.current = next
+      return next
+    })
+  }, [])
+
+  const updateConversation = useCallback((
+    id: string,
+    update: (current: PersistedJanusConversation) => PersistedJanusConversation,
+  ) => {
+    updateConversations((current) => current.map((conversation) =>
+      conversation.id === id ? update(conversation) : conversation))
+  }, [updateConversations])
+
+  const getHandles = useCallback((id: string) => {
+    let handles = handlesRef.current.get(id)
+    if (!handles) {
+      handles = createRuntimeHandles()
+      handlesRef.current.set(id, handles)
+    }
+    return handles
+  }, [])
+
+  const clearFlushTimer = useCallback((handles: RuntimeHandles) => {
+    if (handles.flushTimer === null) return
+    window.clearTimeout(handles.flushTimer)
+    handles.flushTimer = null
+  }, [])
+
+  const flushPending = useCallback((id: string): string => {
+    const handles = getHandles(id)
+    clearFlushTimer(handles)
+    const content = handles.pendingBuffer
+    setRuntime(id, (current) => current.pendingContent === content
+      ? current
+      : { ...current, pendingContent: content })
+    return content
+  }, [clearFlushTimer, getHandles, setRuntime])
+
+  const appendPending = useCallback((id: string, delta: string) => {
+    if (!delta) return
+    const handles = getHandles(id)
+    handles.pendingBuffer += delta
+    if (handles.flushTimer !== null) return
+    handles.flushTimer = window.setTimeout(() => {
+      handles.flushTimer = null
+      setRuntime(id, (current) => ({ ...current, pendingContent: handles.pendingBuffer }))
+    }, 16)
+  }, [getHandles, setRuntime])
+
+  const cancelSessions = useCallback((handles: RuntimeHandles) => {
+    const sessions = [...handles.sessions.values()]
+    handles.sessions.clear()
+    for (const session of sessions) {
+      void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
+    }
+  }, [])
+
+  const invalidateRuntime = useCallback((id: string, cancelAgentSessions = false) => {
+    const handles = getHandles(id)
+    handles.generation += 1
+    handles.active = false
+    handles.abort?.()
+    handles.abort = null
+    clearFlushTimer(handles)
+    if (handles.noticeTimer !== null) window.clearTimeout(handles.noticeTimer)
+    handles.noticeTimer = null
+    handles.pendingBuffer = ''
+    if (cancelAgentSessions) cancelSessions(handles)
+  }, [cancelSessions, clearFlushTimer, getHandles])
 
   useEffect(() => {
-    activeModelRef.current = activeModel
-  }, [activeModel])
+    let cancelled = false
+    const persistence = window.electron.janusChat
+    if (!persistence) {
+      setPersistenceReady(true)
+      return
+    }
+    void persistence.load().then((snapshot) => {
+      if (cancelled || !snapshot?.conversations.length) return
+      const activeId = snapshot.conversations.some((item) => item.id === snapshot.activeConversationId)
+        ? snapshot.activeConversationId
+        : snapshot.conversations[0].id
+      conversationsRef.current = snapshot.conversations
+      setConversations(snapshot.conversations)
+      setIslandConversationId(activeId)
+    }).catch(() => undefined).finally(() => {
+      if (!cancelled) setPersistenceReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
-    if (!modelNotice) return
-    const timer = window.setTimeout(() => setModelNotice(null), 1800)
-    return () => window.clearTimeout(timer)
-  }, [modelNotice])
+    try {
+      const snapshot: JanusChatStorageSnapshot = {
+        version: 1,
+        activeConversationId: islandConversationId,
+        conversations,
+      }
+      localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(snapshot))
+      if (persistenceReady) void window.electron.janusChat?.save(snapshot).catch(() => undefined)
+    } catch {
+      // Chat remains usable if renderer persistence is unavailable.
+    }
+  }, [conversations, islandConversationId, persistenceReady])
 
-  const loadConfiguredModels = useCallback(async (
-    preferDefault = false,
-    updatedProviderId?: string,
-  ): Promise<ChatModelOption[]> => {
+  const loadConfiguredModels = useCallback(async (): Promise<ChatModelOption[]> => {
     try {
       const [providers, defaultProvider] = await Promise.all([getProviders(), getDefaultProvider()])
       const enabledProviders = providers.filter((provider) => provider.enabled !== false)
-      const nextOptions = (await Promise.all(enabledProviders.map(async (provider) => {
-        const configuredModelId = provider.modelId ||
-          (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')
+      const options = (await Promise.all(enabledProviders.map(async (provider) => {
+        const configuredModelId = provider.modelId
+          || (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')
         const models = await listModels(provider.id).catch(() => [])
         const modelIds = [...new Set([...models.map((model) => model.id), configuredModelId].filter(Boolean))]
         return modelIds.map((modelId) => ({
@@ -156,103 +326,317 @@ export function useJanusChat(): UseJanusChatReturn {
           isProviderDefault: configuredModelId === modelId,
         }))
       }))).flat()
-
-      setModelOptions(nextOptions)
-      setActiveModel((current) => {
-        const configuredDefault = nextOptions.find((option) => option.isDefault)
-        if (preferDefault) return configuredDefault ?? nextOptions[0] ?? null
-        if (current && updatedProviderId === current.providerId) {
-          return nextOptions.find((option) => option.providerId === current.providerId && option.isProviderDefault)
-            ?? nextOptions.find((option) => option.providerId === current.providerId)
-            ?? configuredDefault
-            ?? null
-        }
-        if (current) {
-          const unchanged = nextOptions.find((option) =>
-            option.providerId === current.providerId && option.modelId === current.modelId)
-          if (unchanged) return unchanged
-        }
-        return configuredDefault ?? nextOptions[0] ?? null
-      })
-      return nextOptions
-    } catch (err) {
-      console.error('Failed to load chat model options:', err)
+      modelOptionsRef.current = options
+      setModelOptions(options)
+      return options
+    } catch (error) {
+      console.error('Failed to load chat model options:', error)
+      modelOptionsRef.current = []
       setModelOptions([])
-      setActiveModel(null)
       return []
     }
   }, [])
 
   useEffect(() => {
     void loadConfiguredModels()
-  }, [loadConfiguredModels])
-
-  useEffect(() => {
-    const refresh = (event: Event) => {
-      const detail = (event as CustomEvent<{ preferDefault?: boolean; updatedProviderId?: string }>).detail
-      void loadConfiguredModels(detail?.preferDefault === true, detail?.updatedProviderId)
-    }
+    const refresh = () => void loadConfiguredModels()
     window.addEventListener('janus:llm-config-changed', refresh)
     return () => window.removeEventListener('janus:llm-config-changed', refresh)
   }, [loadConfiguredModels])
 
   useEffect(() => {
-    if (!resourcesHydratedRef.current && availableWorkspaces.length === 0) return
-    setResourceState((current) => {
-      const restored = resourcesHydratedRef.current
-        ? current
-        : restoreJanusResourcePreferences(resourcePreferencesRef.current, availableWorkspaces)
-      resourcesHydratedRef.current = true
-      return reconcileWorkspaceResources(restored, availableWorkspaces)
+    const legacy = legacyResourcesRef.current
+    if (availableWorkspaces.length === 0 || legacy.attachedWorkspaceIds.length === 0) return
+    legacyResourcesRef.current = { version: 1, attachedWorkspaceIds: [] }
+    updateConversation(islandConversationId, (conversation) => conversation.attachedWorkspaceIds.length > 0
+      ? conversation
+      : { ...conversation, attachedWorkspaceIds: legacy.attachedWorkspaceIds, updatedAt: Date.now() })
+    localStorage.removeItem(JANUS_RESOURCE_STORAGE_KEY)
+  }, [availableWorkspaces, islandConversationId, updateConversation])
+
+  useEffect(() => {
+    if (availableWorkspaces.length === 0) return
+    const validIds = new Set(availableWorkspaces.map((workspace) => workspace.id))
+    updateConversations((current) => {
+      let changed = false
+      const next = current.map((conversation) => {
+        const attachedWorkspaceIds = conversation.attachedWorkspaceIds.filter((id) => validIds.has(id))
+        if (attachedWorkspaceIds.length === conversation.attachedWorkspaceIds.length) return conversation
+        changed = true
+        const handles = handlesRef.current.get(conversation.id)
+        if (handles) {
+          for (const [workspaceId, session] of handles.sessions) {
+            if (validIds.has(workspaceId)) continue
+            handles.sessions.delete(workspaceId)
+            void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
+          }
+        }
+        return { ...conversation, attachedWorkspaceIds, updatedAt: Date.now() }
+      })
+      return changed ? next : current
     })
-  }, [availableWorkspaces])
-
-  useEffect(() => {
-    if (!resourcesHydratedRef.current || typeof localStorage === 'undefined') return
-    try {
-      localStorage.setItem(JANUS_RESOURCE_STORAGE_KEY, JSON.stringify(toJanusResourcePreferences(resourceState)))
-    } catch {
-      // Persistence is optional; the active in-memory resource remains usable.
-    }
-  }, [resourceState])
-
-  useEffect(() => {
-    resourcesRef.current = resources
-    const resourceIds = new Set(resources.map((resource) => resource.workspaceId))
-    for (const [workspaceId, session] of agentSessionsRef.current) {
-      if (resourceIds.has(workspaceId)) continue
-      agentSessionsRef.current.delete(workspaceId)
-      void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
-    }
-    if (resourceIds.size === 0) setRuntimeState(EMPTY_JANUS_RUNTIME_STATE)
-  }, [resources])
+  }, [availableWorkspaces, updateConversations])
 
   useEffect(() => window.electron.agentRuntime.onEvent((event) => {
     const sessionId = runtimeEventSessionId(event)
-    if (!sessionId || ![...agentSessionsRef.current.values()].some((session) => session.id === sessionId)) return
-    setRuntimeState((current) => reduceJanusRuntimeState(current, event))
-  }), [])
+    if (!sessionId) return
+    for (const [conversationId, handles] of handlesRef.current) {
+      if (![...handles.sessions.values()].some((session) => session.id === sessionId)) continue
+      setRuntime(conversationId, (current) => ({
+        ...current,
+        agent: reduceJanusRuntimeState(current.agent, event),
+      }))
+      break
+    }
+  }), [setRuntime])
 
   useEffect(() => () => {
-    const sessions = [...agentSessionsRef.current.values()]
-    agentSessionsRef.current.clear()
-    for (const session of sessions) {
+    for (const handles of handlesRef.current.values()) {
+      handles.abort?.()
+      clearFlushTimer(handles)
+      if (handles.noticeTimer !== null) window.clearTimeout(handles.noticeTimer)
+      cancelSessions(handles)
+    }
+    handlesRef.current.clear()
+  }, [cancelSessions, clearFlushTimer])
+
+  const ensureAgentSessions = useCallback(async (
+    id: string,
+    requestedResources: WorkspaceResource[],
+  ): Promise<ChatWorkspaceResource[]> => {
+    const handles = getHandles(id)
+    const resolved = await Promise.all(requestedResources.map(async (resource) => {
+      let session = handles.sessions.get(resource.workspaceId)
+      if (!session || session.status !== 'running') {
+        session = await window.electron.agentRuntime.createSession({
+          workspaceId: resource.workspaceId,
+          workspaceRoot: resource.workspacePath,
+        })
+        handles.sessions.set(resource.workspaceId, session)
+      }
+      const conversation = conversationsRef.current.find((item) => item.id === id)
+      const current = conversation
+        ? workspaceResources(conversation, workspacesRef.current).find((item) =>
+            item.workspaceId === resource.workspaceId && item.workspacePath === resource.workspacePath)
+        : undefined
+      if (!current) {
+        handles.sessions.delete(resource.workspaceId)
+        await window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
+        return null
+      }
+      return { ...current, agentSessionId: session.id }
+    }))
+    return resolved.filter((resource): resource is ChatWorkspaceResource => resource !== null)
+  }, [getHandles])
+
+  const commitAssistant = useCallback((id: string, content: string) => {
+    if (!content.trim()) return
+    updateConversation(id, (conversation) => {
+      const messages = capChatMessages([...conversation.messages, {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content,
+        timestamp: Date.now(),
+      }])
+      return { ...conversation, messages, updatedAt: Date.now() }
+    })
+  }, [updateConversation])
+
+  const startRequest = useCallback((id: string, history: Message[], userMessage: Message) => {
+    const runtime = runtimesRef.current[id]
+    const conversation = conversationsRef.current.find((item) => item.id === id)
+    const handles = getHandles(id)
+    if (!conversation || runtime?.isStreaming || handles.active) return
+    const generation = handles.generation + 1
+    handles.generation = generation
+    handles.active = true
+    handles.abort?.()
+    handles.abort = null
+    clearFlushTimer(handles)
+    handles.pendingBuffer = ''
+
+    const nextMessages = capChatMessages([...history, userMessage])
+    updateConversation(id, (current) => ({
+      ...current,
+      title: current.title === NEW_CONVERSATION_TITLE ? titleFromMessages(nextMessages) : current.title,
+      messages: nextMessages,
+      updatedAt: Date.now(),
+    }))
+    setRuntime(id, (current) => ({
+      ...current,
+      pendingContent: '',
+      isStreaming: true,
+      error: null,
+      latestRecallTrace: null,
+    }))
+
+    const chatMessages: ChatMessage[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...history.slice(-HISTORY_MESSAGE_LIMIT).map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+      { role: 'user', content: userMessage.content },
+    ]
+
+    void (async () => {
+      const latest = conversationsRef.current.find((item) => item.id === id)
+      if (!latest) return
+      const resources = workspaceResources(latest, workspacesRef.current)
+      const agentResources = await ensureAgentSessions(id, resources)
+      if (handles.generation !== generation) return
+      const options = modelOptionsRef.current
+      const model = options.find((option) =>
+        option.providerId === latest.providerId && option.modelId === latest.modelId)
+        ?? options.find((option) => option.isDefault)
+        ?? options[0]
+
+      const stream = chatStream(
+        chatMessages,
+        (delta) => {
+          if (handles.generation === generation) appendPending(id, delta)
+        },
+        () => {
+          if (handles.generation !== generation) return
+          handles.active = false
+          handles.abort = null
+          const final = flushPending(id)
+          handles.pendingBuffer = ''
+          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
+          commitAssistant(id, final)
+        },
+        (error) => {
+          if (handles.generation !== generation) return
+          handles.active = false
+          handles.abort = null
+          const final = flushPending(id)
+          handles.pendingBuffer = ''
+          setRuntime(id, (current) => ({
+            ...current,
+            pendingContent: '',
+            isStreaming: false,
+            error,
+          }))
+          commitAssistant(id, final)
+        },
+        {
+          ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
+          sourceTag: 'janus-chat',
+          workspaceResources: agentResources,
+          toolTraces: latest.toolTraces,
+          onRecallTrace: (trace) => {
+            if (handles.generation === generation) {
+              setRuntime(id, (current) => ({ ...current, latestRecallTrace: trace }))
+            }
+          },
+          onToolTrace: (entries) => {
+            if (handles.generation !== generation) return
+            updateConversation(id, (current) => ({
+              ...current,
+              toolTraces: [...current.toolTraces, ...entries].slice(-MAX_TOOL_TRACES),
+              updatedAt: Date.now(),
+            }))
+          },
+        },
+      )
+      handles.abort = stream.abort
+    })().catch((reason: unknown) => {
+      if (handles.generation !== generation) return
+      handles.active = false
+      setRuntime(id, (current) => ({
+        ...current,
+        isStreaming: false,
+        error: reason instanceof Error ? reason.message : 'Workspace session failed',
+      }))
+    })
+  }, [appendPending, clearFlushTimer, commitAssistant, ensureAgentSessions, flushPending, getHandles, setRuntime, updateConversation])
+
+  const stop = useCallback((id: string) => {
+    const runtime = runtimesRef.current[id]
+    const handles = handlesRef.current.get(id)
+    if (!runtime?.isStreaming && !handles?.abort && !handles?.active) return
+    if (!handles) return
+    handles.generation += 1
+    handles.active = false
+    handles.abort?.()
+    handles.abort = null
+    const final = flushPending(id)
+    handles.pendingBuffer = ''
+    setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
+    commitAssistant(id, final)
+  }, [commitAssistant, flushPending, setRuntime])
+
+  const send = useCallback((id: string, text: string) => {
+    const trimmed = text.trim()
+    const conversation = conversationsRef.current.find((item) => item.id === id)
+    if (!trimmed || !conversation || runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) return
+    startRequest(id, conversation.messages, {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: trimmed,
+      timestamp: Date.now(),
+    })
+  }, [startRequest])
+
+  const rewrite = useCallback((id: string, messageId: string, text: string) => {
+    const trimmed = text.trim()
+    const conversation = conversationsRef.current.find((item) => item.id === id)
+    if (!trimmed || !conversation || runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) return
+    const index = conversation.messages.findIndex((message) =>
+      message.id === messageId && message.role === 'user')
+    if (index < 0) return
+    const target = conversation.messages[index]
+    updateConversation(id, (current) => ({ ...current, toolTraces: [] }))
+    startRequest(id, conversation.messages.slice(0, index), { ...target, content: trimmed })
+  }, [startRequest, updateConversation])
+
+  const retry = useCallback((id: string) => {
+    const conversation = conversationsRef.current.find((item) => item.id === id)
+    if (!conversation || runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) return
+    const turn = getRetryTurn(conversation.messages)
+    if (!turn) return
+    updateConversation(id, (current) => ({ ...current, toolTraces: [] }))
+    startRequest(id, turn.history, turn.userMessage)
+  }, [startRequest, updateConversation])
+
+  const clear = useCallback((id: string) => {
+    invalidateRuntime(id)
+    updateConversation(id, (conversation) => ({
+      ...conversation,
+      messages: [],
+      toolTraces: [],
+      updatedAt: Date.now(),
+    }))
+    setRuntime(id, () => emptyRuntime())
+  }, [invalidateRuntime, setRuntime, updateConversation])
+
+  const attachWorkspace = useCallback((id: string, workspaceId: string) => {
+    if (!workspacesRef.current.some((workspace) => workspace.id === workspaceId)) return
+    updateConversation(id, (conversation) => conversation.attachedWorkspaceIds.includes(workspaceId)
+      ? conversation
+      : {
+          ...conversation,
+          attachedWorkspaceIds: [...conversation.attachedWorkspaceIds, workspaceId],
+          updatedAt: Date.now(),
+        })
+  }, [updateConversation])
+
+  const detachWorkspace = useCallback((id: string, workspaceId: string) => {
+    const handles = handlesRef.current.get(id)
+    const session = handles?.sessions.get(workspaceId)
+    if (session) {
+      handles!.sessions.delete(workspaceId)
       void window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
     }
-  }, [])
+    updateConversation(id, (conversation) => ({
+      ...conversation,
+      attachedWorkspaceIds: conversation.attachedWorkspaceIds.filter((item) => item !== workspaceId),
+      updatedAt: Date.now(),
+    }))
+  }, [updateConversation])
 
-  const attachWorkspace = useCallback((workspaceId: string) => {
-    const workspace = availableWorkspaces.find((item) => item.id === workspaceId)
-    if (!workspace) return
-    setResourceState((current) => attachWorkspaceResource(current, workspace))
-  }, [availableWorkspaces])
-
-  const detachWorkspace = useCallback((workspaceId: string) => {
-    setResourceState((current) => detachWorkspaceResource(current, workspaceId))
-  }, [])
-
-  const resolveApproval = useCallback((approvalId: string, approved: boolean) => {
-    const request = runtimeState.pendingApprovals.find((item) => item.id === approvalId)
+  const resolveApproval = useCallback((id: string, approvalId: string, approved: boolean) => {
+    const request = runtimesRef.current[id]?.agent.pendingApprovals.find((item) => item.id === approvalId)
     if (!request) return
     void window.electron.agentRuntime.resolveApproval({
       approvalId,
@@ -263,223 +647,156 @@ export function useJanusChat(): UseJanusChatReturn {
       toolName: request.toolName,
       actionRisk: request.actionRisk,
     }).then((resolved) => {
-      if (!resolved) setError('Workspace action approval is no longer active')
+      if (!resolved) setRuntime(id, (current) => ({
+        ...current,
+        error: 'Workspace action approval is no longer active',
+      }))
     }).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : 'Workspace action approval failed')
+      setRuntime(id, (current) => ({
+        ...current,
+        error: reason instanceof Error ? reason.message : 'Workspace action approval failed',
+      }))
     })
-  }, [runtimeState.pendingApprovals])
+  }, [setRuntime])
 
-  const abortCurrentRequest = useCallback(() => {
-    abortRef.current?.()
-    abortRef.current = null
-  }, [])
-
-  const selectModel = useCallback((providerId: string, modelId: string) => {
-    const next = modelOptions.find((option) => option.providerId === providerId && option.modelId === modelId)
-    if (!next) return
-    setActiveModel(next)
-    setModelNotice(`Model switched: ${next.modelId}`)
-  }, [modelOptions])
-
-  const commitAssistantMessage = useCallback((content: string) => {
-    if (!content.trim()) return
-    setMessages((prev) => capMessages([
-      ...prev,
-      {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content,
-        timestamp: Date.now()
-      }
-    ]))
-  }, [])
-
-  const ensureAgentSessions = useCallback(async (
-    requestedResources: WorkspaceResource[],
-  ): Promise<ChatWorkspaceResource[]> => {
-    const resolved = await Promise.all(requestedResources.map(async (resource) => {
-      let session = agentSessionsRef.current.get(resource.workspaceId)
-      if (!session || session.status !== 'running') {
-        session = await window.electron.agentRuntime.createSession({
-          workspaceId: resource.workspaceId,
-          workspaceRoot: resource.workspacePath,
-        })
-        agentSessionsRef.current.set(resource.workspaceId, session)
-      }
-
-      const current = resourcesRef.current.find((item) =>
-        item.workspaceId === resource.workspaceId && item.workspacePath === resource.workspacePath)
-      if (!current) {
-        agentSessionsRef.current.delete(resource.workspaceId)
-        await window.electron.agentRuntime.cancelSession(session.id).catch(() => undefined)
-        return null
-      }
-      return {
-        workspaceId: current.workspaceId,
-        workspacePath: current.workspacePath,
-        workspaceName: current.workspaceName,
-        agentSessionId: session.id,
-      }
+  const selectModel = useCallback((id: string, providerId: string, modelId: string) => {
+    const model = modelOptionsRef.current.find((option) =>
+      option.providerId === providerId && option.modelId === modelId)
+    if (!model) return
+    updateConversation(id, (conversation) => ({
+      ...conversation,
+      providerId,
+      modelId,
+      updatedAt: Date.now(),
     }))
-    return resolved.filter((resource): resource is ChatWorkspaceResource => resource !== null)
+    const handles = getHandles(id)
+    if (handles.noticeTimer !== null) window.clearTimeout(handles.noticeTimer)
+    setRuntime(id, (current) => ({ ...current, modelNotice: `Model switched: ${model.modelId}` }))
+    handles.noticeTimer = window.setTimeout(() => {
+      handles.noticeTimer = null
+      setRuntime(id, (current) => ({ ...current, modelNotice: null }))
+    }, 1800)
+  }, [getHandles, setRuntime, updateConversation])
+
+  const createConversation = useCallback(() => {
+    const conversation = createJanusConversation()
+    updateConversations((current) => [conversation, ...current])
+    setIslandConversationId(conversation.id)
+    return conversation.id
+  }, [updateConversations])
+
+  const selectConversation = useCallback((id: string) => {
+    if (conversationsRef.current.some((conversation) => conversation.id === id)) {
+      setIslandConversationId(id)
+    }
   }, [])
 
-  const stop = useCallback(() => {
-    if (!isStreaming && !abortRef.current) return
-    streamIdRef.current += 1
-    abortCurrentRequest()
-    const final = flushPrinter()
-    resetPrinter()
-    setIsStreaming(false)
-    commitAssistantMessage(final)
-  }, [abortCurrentRequest, commitAssistantMessage, flushPrinter, isStreaming, resetPrinter])
+  const renameConversation = useCallback((id: string, title: string) => {
+    const normalized = title.trim().replace(/\s+/g, ' ')
+    if (!normalized) return
+    updateConversation(id, (conversation) => ({
+      ...conversation,
+      title: normalized.slice(0, 80),
+      updatedAt: Date.now(),
+    }))
+  }, [updateConversation])
 
-  const startRequest = useCallback(
-    (history: Message[], userMessage: Message) => {
-      if (isStreaming) return
-      const nextMessages = capMessages([...history, userMessage])
-      messagesRef.current = nextMessages
-      setMessages(nextMessages)
-      const streamId = streamIdRef.current + 1
-      streamIdRef.current = streamId
-      resetPrinter()
-      setIsStreaming(true)
-      setError(null)
-
-      const chatMessages: ChatMessage[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...history.slice(-HISTORY_MESSAGE_LIMIT).map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content
-        })),
-        { role: 'user', content: userMessage.content }
-      ]
-
-      void (async () => {
-        const workspaceResources = await ensureAgentSessions(resources)
-        if (streamIdRef.current !== streamId) return
-        const model = activeModelRef.current
-        const { abort } = chatStream(
-          chatMessages,
-          (delta) => {
-            if (streamIdRef.current === streamId) appendToPrinter(delta)
-          },
-          () => {
-            if (streamIdRef.current !== streamId) return
-            abortRef.current = null
-            void completePrinter().then((final) => {
-              if (streamIdRef.current !== streamId) return
-              setIsStreaming(false)
-              resetPrinter()
-              commitAssistantMessage(final)
-            })
-          },
-          (err) => {
-            if (streamIdRef.current !== streamId) return
-            abortRef.current = null
-            setIsStreaming(false)
-            const final = flushPrinter()
-            resetPrinter()
-            commitAssistantMessage(final)
-            setError(err)
-          },
-          {
-            ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
-            sourceTag: 'janus-chat',
-            workspaceResources,
-            toolTraces: toolTracesRef.current,
-            onRecallTrace: setLatestRecallTrace,
-            onToolTrace: (entries) => {
-              toolTracesRef.current = [...toolTracesRef.current, ...entries].slice(-MAX_TOOL_TRACES)
-            },
-          },
-        )
-        abortRef.current = abort
-      })().catch((reason: unknown) => {
-        if (streamIdRef.current !== streamId) return
-        setIsStreaming(false)
-        resetPrinter()
-        setError(reason instanceof Error ? reason.message : 'Workspace session failed')
-      })
-    },
-    [
-      appendToPrinter,
-      commitAssistantMessage,
-      completePrinter,
-      ensureAgentSessions,
-      flushPrinter,
-      isStreaming,
-      resetPrinter,
-      resources,
-    ]
-  )
-
-  const send = useCallback((text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed || isStreaming) return
-    startRequest(messagesRef.current, {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: trimmed,
-      timestamp: Date.now(),
+  const deleteConversation = useCallback((id: string) => {
+    const exists = conversationsRef.current.some((conversation) => conversation.id === id)
+    if (!exists) return
+    invalidateRuntime(id, true)
+    handlesRef.current.delete(id)
+    setRuntimeStates((current) => {
+      const { [id]: _removed, ...next } = current
+      runtimesRef.current = next
+      return next
     })
-  }, [isStreaming, startRequest])
+    useWorkspaceStore.getState().removeJanusConversationViews(id)
+    const remaining = conversationsRef.current.filter((conversation) => conversation.id !== id)
+    const fallback = remaining[0] ?? createJanusConversation()
+    const next = remaining.length > 0 ? remaining : [fallback]
+    conversationsRef.current = next
+    setConversations(next)
+    setIslandConversationId((current) => current === id ? fallback.id : current)
+  }, [invalidateRuntime])
 
-  const rewrite = useCallback((messageId: string, text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed || isStreaming) return
-    const current = messagesRef.current
-    const messageIndex = current.findIndex((message) => message.id === messageId && message.role === 'user')
-    if (messageIndex < 0) return
+  const summaries = useMemo<ConversationSummary[]>(() => conversations.map((conversation) => ({
+    id: conversation.id,
+    title: conversation.title,
+    updatedAt: conversation.updatedAt,
+    messageCount: conversation.messages.length,
+    isStreaming: runtimeStates[conversation.id]?.isStreaming ?? false,
+    hasError: !!runtimeStates[conversation.id]?.error,
+  })).sort((a, b) => b.updatedAt - a.updatedAt), [conversations, runtimeStates])
 
-    const target = current[messageIndex]
-    toolTracesRef.current = []
-    setLatestRecallTrace(null)
-    startRequest(current.slice(0, messageIndex), { ...target, content: trimmed })
-  }, [isStreaming, startRequest])
+  const getController = useCallback((requestedId?: string): UseJanusChatReturn => {
+    const id = requestedId && conversations.some((conversation) => conversation.id === requestedId)
+      ? requestedId
+      : islandConversationId
+    const conversation = conversations.find((item) => item.id === id) ?? conversations[0]
+    const runtime = runtimeStates[id] ?? emptyRuntime()
+    const resources = conversation ? workspaceResources(conversation, availableWorkspaces) : []
+    const activeModel = modelOptions.find((option) =>
+      option.providerId === conversation?.providerId && option.modelId === conversation?.modelId)
+      ?? modelOptions.find((option) => option.isDefault)
+      ?? modelOptions[0]
+      ?? null
 
-  const retry = useCallback(() => {
-    const lastUser = [...messagesRef.current].reverse().find((m) => m.role === 'user')
-    if (lastUser) {
-      send(lastUser.content)
+    return {
+      conversationId: conversation?.id ?? id,
+      conversationTitle: conversation?.title ?? NEW_CONVERSATION_TITLE,
+      conversations: summaries,
+      messages: conversation?.messages ?? [],
+      pendingContent: runtime.pendingContent,
+      isStreaming: runtime.isStreaming,
+      error: runtime.error,
+      modelOptions,
+      activeModel,
+      modelNotice: runtime.modelNotice,
+      latestRecallTrace: runtime.latestRecallTrace,
+      resourceController: {
+        resources,
+        availableWorkspaces,
+        attachWorkspace: (workspaceId) => attachWorkspace(id, workspaceId),
+        detachWorkspace: (workspaceId) => detachWorkspace(id, workspaceId),
+        activities: runtime.agent.activities,
+        pendingApprovals: runtime.agent.pendingApprovals,
+        resolveApproval: (approvalId, approved) => resolveApproval(id, approvalId, approved),
+      },
+      send: (text) => send(id, text),
+      rewrite: (messageId, text) => rewrite(id, messageId, text),
+      stop: () => stop(id),
+      retry: () => retry(id),
+      clear: () => clear(id),
+      selectModel: (providerId, modelId) => selectModel(id, providerId, modelId),
+      refreshModels: loadConfiguredModels,
+      createConversation,
+      selectConversation,
+      renameConversation,
+      deleteConversation,
     }
-  }, [send])
-
-  const clear = useCallback(() => {
-    streamIdRef.current += 1
-    abortCurrentRequest()
-    setMessages([])
-    toolTracesRef.current = []
-    resetPrinter()
-    setIsStreaming(false)
-    setError(null)
-    setLatestRecallTrace(null)
-  }, [abortCurrentRequest, resetPrinter])
-
-  return {
-    messages,
-    pendingContent: printedContent,
-    isStreaming,
-    error,
-    modelOptions,
-    activeModel,
-    modelNotice,
-    latestRecallTrace,
-    resourceController: {
-      resources,
-      availableWorkspaces,
-      attachWorkspace,
-      detachWorkspace,
-      activities: runtimeState.activities,
-      pendingApprovals: runtimeState.pendingApprovals,
-      resolveApproval,
-    },
-    send,
-    rewrite,
-    stop,
-    retry,
+  }, [
+    attachWorkspace,
+    availableWorkspaces,
     clear,
+    conversations,
+    createConversation,
+    deleteConversation,
+    detachWorkspace,
+    islandConversationId,
+    loadConfiguredModels,
+    modelOptions,
+    renameConversation,
+    resolveApproval,
+    retry,
+    rewrite,
+    runtimeStates,
+    selectConversation,
     selectModel,
-    refreshModels: loadConfiguredModels,
-  }
+    send,
+    stop,
+    summaries,
+  ])
+
+  return { islandConversationId, getController }
 }

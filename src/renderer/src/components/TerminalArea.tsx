@@ -12,6 +12,7 @@ import { applyTerminalNoteLifecycle, DRAWER_VIEWS, DrawerViewTabs, getDrawerHeig
 import { CLITerminal } from './CLITerminal'
 import { HoldToConfirm } from './ui/HoldToConfirm'
 import { JanusChatPane } from './janus/JanusChatPane'
+import { useOptionalJanusChatController } from './janus/JanusChatProvider'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
@@ -55,6 +56,11 @@ import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
 import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
+
+function JanusChatTabTitle({ conversationId }: { conversationId: string }) {
+  const chat = useOptionalJanusChatController()
+  return chat?.conversations.find((conversation) => conversation.id === conversationId)?.title ?? 'Janus Chat'
+}
 
 const PRESET_ICONS: Record<TerminalPreset, string> = {
   shell: terminalIcon,
@@ -758,7 +764,9 @@ function LeafPane({
                 <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
               ) : (
                 <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? '#ffb27d' : 'inherit' }}>
-                  {tab.type === 'janus-chat' ? 'Janus Chat' : terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
+                  {tab.type === 'janus-chat'
+                    ? <JanusChatTabTitle conversationId={tab.conversationId} />
+                    : terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
                 </span>
               )}
               {tab.type === 'terminal' ? (
@@ -851,7 +859,10 @@ function LeafPane({
                 }}
                 aria-hidden={!isActive}
               >
-                <JanusChatPane focused={workspaceVisible && isFocused && isActive} />
+                <JanusChatPane
+                  focused={workspaceVisible && isFocused && isActive}
+                  conversationId={tab.conversationId}
+                />
               </div>
             )
           }

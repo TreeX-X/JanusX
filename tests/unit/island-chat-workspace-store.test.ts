@@ -37,6 +37,36 @@ function setTerminalPane(workspaceId = 'workspace-1', terminalId = 'terminal-1')
 afterEach(() => useWorkspaceStore.setState(initialState, true))
 
 describe('Island Chat workspace store orchestration', () => {
+  it('binds different conversations as tabs in the same Chat pane', () => {
+    setTerminalPane()
+
+    useWorkspaceStore.getState().openJanusChatInWorkspace('conversation-a')
+    useWorkspaceStore.getState().openJanusChatInWorkspace('conversation-b')
+
+    const state = useWorkspaceStore.getState()
+    const chatTabs = getLeafPanes(state.paneTree)
+      .flatMap((leaf) => leaf.tabs)
+      .filter((tab) => tab.type === 'janus-chat')
+    expect(chatTabs).toEqual([
+      { type: 'janus-chat', id: 'janus-chat:conversation-a', conversationId: 'conversation-a' },
+      { type: 'janus-chat', id: 'janus-chat:conversation-b', conversationId: 'conversation-b' },
+    ])
+    expect(getLeafPanes(state.paneTree)).toHaveLength(2)
+    expect(state.focusedTabId).toBe('janus-chat:conversation-b')
+  })
+
+  it('removes every pane binding when a conversation is deleted', () => {
+    setTerminalPane()
+    useWorkspaceStore.getState().openJanusChatInWorkspace('conversation-a')
+    useWorkspaceStore.getState().openJanusChatInWorkspace('conversation-b')
+
+    useWorkspaceStore.getState().removeJanusConversationViews('conversation-a')
+
+    const tabs = getLeafPanes(useWorkspaceStore.getState().paneTree).flatMap((leaf) => leaf.tabs)
+    expect(tabs.some((tab) => tab.id === 'janus-chat:conversation-a')).toBe(false)
+    expect(tabs.some((tab) => tab.id === 'janus-chat:conversation-b')).toBe(true)
+  })
+
   it('opens a balanced right split and focuses one Chat tab on repeated open', () => {
     setTerminalPane()
 

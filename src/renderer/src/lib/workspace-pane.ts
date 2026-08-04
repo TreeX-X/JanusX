@@ -11,7 +11,8 @@ export type TerminalPaneContent = {
 
 export type JanusChatPaneContent = {
   type: 'janus-chat'
-  id: 'janus-chat'
+  id: 'janus-chat' | `janus-chat:${string}`
+  conversationId: string
   terminalId?: never
   workspaceId?: never
 }
@@ -60,8 +61,12 @@ export function createTerminalPaneContent(terminalId: string, workspaceId: strin
   }
 }
 
-export function createJanusChatPaneContent(): JanusChatPaneContent {
-  return { type: 'janus-chat', id: 'janus-chat' }
+export function createJanusChatPaneContent(conversationId = 'default'): JanusChatPaneContent {
+  return {
+    type: 'janus-chat',
+    id: conversationId === 'default' ? 'janus-chat' : `janus-chat:${conversationId}`,
+    conversationId,
+  }
 }
 
 export function createBrowserPaneContent(surfaceId: string): BrowserPaneContent {

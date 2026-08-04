@@ -1,15 +1,24 @@
 import { createContext, useContext, type ReactNode } from 'react'
-import { useJanusChat, type UseJanusChatReturn } from './useJanusChat'
+import {
+  useJanusChat,
+  type UseJanusChatRegistryReturn,
+  type UseJanusChatReturn,
+} from './useJanusChat'
 
-const JanusChatContext = createContext<UseJanusChatReturn | null>(null)
+const JanusChatContext = createContext<UseJanusChatRegistryReturn | null>(null)
 
 export function JanusChatProvider({ children }: { children: ReactNode }) {
-  const controller = useJanusChat()
-  return <JanusChatContext.Provider value={controller}>{children}</JanusChatContext.Provider>
+  const registry = useJanusChat()
+  return <JanusChatContext.Provider value={registry}>{children}</JanusChatContext.Provider>
 }
 
-export function useJanusChatController(): UseJanusChatReturn {
-  const controller = useContext(JanusChatContext)
-  if (!controller) throw new Error('useJanusChatController must be used within JanusChatProvider')
-  return controller
+export function useJanusChatController(conversationId?: string): UseJanusChatReturn {
+  const registry = useContext(JanusChatContext)
+  if (!registry) throw new Error('useJanusChatController must be used within JanusChatProvider')
+  return registry.getController(conversationId)
+}
+
+export function useOptionalJanusChatController(): UseJanusChatReturn | null {
+  const registry = useContext(JanusChatContext)
+  return registry?.getController() ?? null
 }

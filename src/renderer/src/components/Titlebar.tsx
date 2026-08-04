@@ -33,6 +33,7 @@ export function Titlebar() {
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
 
   const {
+    conversationId,
     messages,
     pendingContent,
     isStreaming,
@@ -178,9 +179,9 @@ export function Titlebar() {
   const handleAddChatToWorkspace = useCallback(() => {
     const workspaceStore = useWorkspaceStore.getState()
     if (!workspaceStore.activeWorkspaceId) return
-    workspaceStore.openJanusChatInWorkspace()
+    workspaceStore.openJanusChatInWorkspace(conversationId)
     dispatchIsland({ type: 'dismiss' })
-  }, [])
+  }, [conversationId])
 
   return (
     <div

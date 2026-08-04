@@ -29,6 +29,7 @@ import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agen
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
+import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
 import { NOTIFICATION_SETTINGS_CHANNELS, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 
@@ -275,6 +276,11 @@ const gitAPI: GitAPI = {
   fileBaseline: (cwd, relativePath) => ipcRenderer.invoke(GIT_CHANNELS.fileBaseline, cwd, relativePath),
 }
 
+const janusChatAPI: JanusChatAPI = {
+  load: () => ipcRenderer.invoke(JANUS_CHAT_CHANNELS.load),
+  save: (snapshot) => ipcRenderer.invoke(JANUS_CHAT_CHANNELS.save, snapshot).then(() => undefined),
+}
+
 const notificationSettingsAPI: NotificationSettingsAPI = {
   get: () => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.get),
   update: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.update, settings),
@@ -332,6 +338,7 @@ contextBridge.exposeInMainWorld('electron', {
   janus: janusAPI,
   office: officeAPI,
   llm: llmAPI,
+  janusChat: janusChatAPI,
   agent: agentAPI,
   agentRuntime: agentRuntimeAPI,
   checkpoint: checkpointAPI,

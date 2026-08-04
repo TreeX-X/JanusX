@@ -1,8 +1,8 @@
 import { JanusChat } from './JanusChat'
 import { useJanusChatController } from './JanusChatProvider'
 
-export function JanusChatPane({ focused }: { focused: boolean }) {
-  const chat = useJanusChatController()
+export function JanusChatPane({ focused, conversationId }: { focused: boolean; conversationId: string }) {
+  const chat = useJanusChatController(conversationId)
 
   return (
     <JanusChat
@@ -25,6 +25,7 @@ export function JanusChatPane({ focused }: { focused: boolean }) {
       onClear={chat.clear}
       onOpenLlmConfig={() => window.dispatchEvent(new Event('janus:open-llm-settings'))}
       resourceController={chat.resourceController}
+      conversationController={chat}
     />
   )
 }
