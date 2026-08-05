@@ -33,6 +33,7 @@ const WINDOWS_SHELL_COMMANDS = new Set(['npm', 'yarn', 'pnpm', 'bun'])
 
 /*-- 不完整行缓冲上限：长期无换行的输出（单行 JSON 流等）保尾截断，防止无界增长（audit M3） --*/
 const MAX_OUTPUT_LINE_BUFFER_CHARS = 256 * 1024
+const MAX_STORED_OUTPUT_LINE_CHARS = 16 * 1024
 
 export function requiresCommandShell(command: string, platform: NodeJS.Platform = process.platform): boolean {
   if (platform !== 'win32') return false
@@ -329,11 +330,14 @@ export class ProjectRunner extends EventEmitter {
 
     for (const line of lines) {
       if (line.trim()) {
-        running.output.push(line)
+        const boundedLine = line.length > MAX_STORED_OUTPUT_LINE_CHARS
+          ? line.slice(-MAX_STORED_OUTPUT_LINE_CHARS)
+          : line
+        running.output.push(boundedLine)
 
         // 尝试提取端口号
         if (!running.port) {
-          const extractedPort = PortExtractor.extract(line)
+          const extractedPort = PortExtractor.extract(boundedLine)
           if (extractedPort) {
             running.port = extractedPort
             this.emit('project:ready', {
@@ -348,7 +352,7 @@ export class ProjectRunner extends EventEmitter {
         this.emit('project:output', {
           projectId,
           stream,
-          line,
+          line: boundedLine,
           timestamp: new Date(),
         })
       }

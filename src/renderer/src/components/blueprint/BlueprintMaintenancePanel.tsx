@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageCircle, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -92,13 +92,12 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   }
 
   return (
-    <aside className="bp-maintenance-panel" aria-label="Janus 蓝图维护">
+    <aside className="bp-maintenance-panel" aria-label="Janus Copilot 控制台">
       <header className="bp-maintenance-panel__header">
         <div className="bp-maintenance-panel__identity">
-          <span className="bp-maintenance-panel__mark" aria-hidden="true"><MessageCircle size={15} strokeWidth={1.8} /></span>
-          <div><span>JANUSX · BLUEPRINT</span><strong>蓝图维护对话</strong></div>
+          <div><span>JANUS // BLUEPRINT ENGINE</span><strong>COPILOT CONTROL</strong></div>
         </div>
-        <button type="button" onClick={onClose} aria-label="关闭维护对话" title="关闭">
+        <button type="button" onClick={onClose} aria-label="关闭控制台" title="关闭">
           <X size={16} aria-hidden="true" />
         </button>
       </header>

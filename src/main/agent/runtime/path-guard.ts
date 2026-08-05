@@ -178,15 +178,16 @@ async function resolveCanonicalWorkspaceTarget(
 }
 
 function hasStableIdentity(value: { dev: bigint; ino: bigint }): boolean {
-  return value.dev !== 0n && value.ino !== 0n
+  return value.ino !== 0n
 }
 
-function sameFile(
+export function sameWorkspaceFileIdentity(
   left: { dev: bigint; ino: bigint },
   right: { dev: bigint; ino: bigint },
 ): boolean {
   return hasStableIdentity(left) && hasStableIdentity(right)
-    && left.dev === right.dev && left.ino === right.ino
+    && left.ino === right.ino
+    && (left.dev === 0n || right.dev === 0n || left.dev === right.dev)
 }
 
 async function readBounded(handle: Awaited<ReturnType<typeof open>>, maxBytes: number): Promise<Buffer> {
@@ -202,16 +203,12 @@ async function readBounded(handle: Awaited<ReturnType<typeof open>>, maxBytes: n
   throw new WorkspacePathGuardError('FILE_TOO_LARGE', 'Workspace file exceeds the read limit')
 }
 
-export async function readWorkspaceFile(
+async function readStableWorkspaceFile(
   workspaceRoot: string,
   requestedPath: string,
   maxBytes: number,
   authorize: WorkspaceReadAuthorizer,
-): Promise<Buffer> {
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes >= Number.MAX_SAFE_INTEGER) {
-    throw new WorkspacePathGuardError('INVALID_READ_LIMIT', 'Workspace file read limit is invalid')
-  }
-
+): Promise<Buffer | null> {
   const target = await resolveCanonicalWorkspaceTarget(workspaceRoot, requestedPath)
   if (target.kind !== 'file') {
     throw new WorkspacePathGuardError('TARGET_NOT_REGULAR', 'Workspace target is not a regular file')
@@ -222,21 +219,16 @@ export async function readWorkspaceFile(
     const noFollow = constants.O_NOFOLLOW ?? 0
     handle = await open(target.targetPath, constants.O_RDONLY | noFollow)
     const openedStat = await handle.stat({ bigint: true })
-    if (!openedStat.isFile() || !hasStableIdentity(openedStat) || openedStat.size > BigInt(maxBytes)) {
-      if (openedStat.size > BigInt(maxBytes)) {
-        throw new WorkspacePathGuardError('FILE_TOO_LARGE', 'Workspace file exceeds the read limit')
-      }
-      throw new WorkspacePathGuardError('TARGET_CHANGED', 'Workspace target changed during authorization')
+    if (openedStat.size > BigInt(maxBytes)) {
+      throw new WorkspacePathGuardError('FILE_TOO_LARGE', 'Workspace file exceeds the read limit')
     }
+    if (!openedStat.isFile() || !hasStableIdentity(openedStat)) return null
 
     const freshTarget = await resolveCanonicalWorkspaceTarget(workspaceRoot, requestedPath)
-    if (freshTarget.kind !== 'file') {
-      throw new WorkspacePathGuardError('TARGET_CHANGED', 'Workspace target changed during authorization')
-    }
+    if (freshTarget.kind !== 'file') return null
     const freshStat = await stat(freshTarget.targetPath, { bigint: true })
-    if (!sameFile(openedStat, freshStat)) {
-      throw new WorkspacePathGuardError('TARGET_CHANGED', 'Workspace target changed during authorization')
-    }
+    if (!sameWorkspaceFileIdentity(openedStat, freshStat)) return null
+
     const authorization = await authorize({
       relativePath: freshTarget.relativePath,
       kind: freshTarget.kind,
@@ -245,10 +237,30 @@ export async function readWorkspaceFile(
       throw new WorkspaceReadDeniedError(authorization?.reasonCode || 'READ_NOT_AUTHORIZED')
     }
     return await readBounded(handle, maxBytes)
+  } finally {
+    await handle?.close().catch(() => undefined)
+  }
+}
+
+export async function readWorkspaceFile(
+  workspaceRoot: string,
+  requestedPath: string,
+  maxBytes: number,
+  authorize: WorkspaceReadAuthorizer,
+): Promise<Buffer> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes >= Number.MAX_SAFE_INTEGER) {
+    throw new WorkspacePathGuardError('INVALID_READ_LIMIT', 'Workspace file read limit is invalid')
+  }
+
+  try {
+    // Atomic saves replace the target identity briefly. Retry once from canonical resolution.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const content = await readStableWorkspaceFile(workspaceRoot, requestedPath, maxBytes, authorize)
+      if (content !== null) return content
+    }
+    throw new WorkspacePathGuardError('TARGET_CHANGED', 'Workspace target changed during authorization')
   } catch (error) {
     if (error instanceof WorkspacePathGuardError || error instanceof WorkspaceReadDeniedError) throw error
     throw new WorkspacePathGuardError('TARGET_UNAVAILABLE', 'Workspace file is unavailable')
-  } finally {
-    await handle?.close().catch(() => undefined)
   }
 }

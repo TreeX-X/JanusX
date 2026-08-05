@@ -44,24 +44,13 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
     )
   }
 
-  if (diffOriginalContent !== undefined && ['code', 'markdown', 'html'].includes(file.viewType)) {
-    return (
-      <MonacoViewer
-        content={file.content}
-        language={getMonacoLanguage(file.path)}
-        originalContent={diffOriginalContent}
-        onChange={onContentChange}
-        onEditorMount={onEditorMount}
-      />
-    )
-  }
-
   switch (file.viewType) {
     case 'code':
       return (
         <MonacoViewer
           content={file.content}
           language={getMonacoLanguage(file.path)}
+          originalContent={diffOriginalContent}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />
@@ -70,6 +59,7 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
       return (
         <MarkdownViewer
           content={file.content}
+          originalContent={diffOriginalContent}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />
@@ -78,6 +68,7 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
       return (
         <HtmlViewer
           content={file.content}
+          originalContent={diffOriginalContent}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />

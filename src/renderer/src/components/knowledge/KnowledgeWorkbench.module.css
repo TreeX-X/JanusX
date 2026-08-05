@@ -52,19 +52,13 @@
 }
 
 .iconBadge {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 5px;
-  background: rgba(59, 130, 246, 0.04);
   color: #6ba6ff;
-  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
 }
 
 .breadcrumb {

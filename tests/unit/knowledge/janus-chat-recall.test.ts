@@ -35,7 +35,8 @@ vi.mock('../../../src/main/agent/runtime/runtime', () => ({
   workspaceAgentRuntime: { getSession, executeFunctionCall },
 }))
 
-import { prepareJanusChatRecall, registerLlmHandlers } from '../../../src/main/ipc/llm-handlers'
+import { registerLlmHandlers } from '../../../src/main/ipc/llm-handlers'
+import { hasExplicitWorkspaceMutationIntent, prepareJanusChatRecall } from '../../../src/main/llm/chat-orchestrator'
 
 const emptyResult: KnowledgeContextResult = {
   items: [],
@@ -234,12 +235,15 @@ describe('Janus Chat knowledge recall', () => {
     })
 
     expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
-      maxSteps: 12,
+      maxSteps: 20,
       tools: expect.objectContaining({
         workspace_list: expect.any(Object),
         workspace_read: expect.any(Object),
         project_detect: expect.any(Object),
         project_generate_config: expect.any(Object),
+        project_process_output: expect.any(Object),
+        git_status: expect.any(Object),
+        command_run: expect.any(Object),
       }),
       messages: expect.arrayContaining([
         expect.objectContaining({ role: 'system', content: expect.stringContaining('workspaceId=workspace-a') }),
@@ -275,5 +279,117 @@ describe('Janus Chat knowledge recall', () => {
     }))
     expect(reply.mock.calls.some(([channel]) => channel === 'llm:chat:error')).toBe(false)
     expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-fail-open' })
+  })
+
+  it('distinguishes direct workspace changes from read-only analysis', () => {
+    expect(hasExplicitWorkspaceMutationIntent('请你直接修改工作区即可')).toBe(true)
+    expect(hasExplicitWorkspaceMutationIntent('修复一下这个文件的问题')).toBe(true)
+    expect(hasExplicitWorkspaceMutationIntent('只分析如何修改，不要修改代码')).toBe(false)
+  })
+
+  it('turns an empty model completion into visible feedback', async () => {
+    search.mockResolvedValue(emptyResult)
+    streamText.mockResolvedValue({
+      textStream: (async function* () {})(),
+      responseMessages: Promise.resolve([]),
+    })
+    const registration = registerAndFindHandler('llm:chat-stream')
+    const reply = vi.fn()
+
+    await registration?.[1]({ reply }, {
+      requestId: 'stream-empty',
+      messages,
+      providerId: 'provider-a',
+      sourceTag: 'janus-chat',
+    })
+
+    expect(reply).toHaveBeenCalledWith('llm:chat:delta', expect.objectContaining({
+      requestId: 'stream-empty',
+      delta: expect.stringContaining('模型没有返回可显示内容'),
+    }))
+    expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-empty' })
+  })
+
+  it('retries a changed workspace read and continues an explicitly requested edit', async () => {
+    search.mockResolvedValue(emptyResult)
+    getSession.mockReturnValue({
+      id: 'session-1',
+      status: 'running',
+      workspace: { workspaceId: 'workspace-a', workspaceRoot: 'C:/workspace-a' },
+    })
+    executeFunctionCall.mockImplementation(async (input: any) => {
+      const firstRead = input.call.toolName === 'workspace.read' && executeFunctionCall.mock.calls.length === 1
+      return {
+        workspaceId: 'workspace-a',
+        sessionId: 'session-1',
+        correlationId: `call-${executeFunctionCall.mock.calls.length}`,
+        toolName: input.call.toolName,
+        status: firstRead ? 'failed' : 'completed',
+        startedAt: '2026-08-05T00:00:00.000Z',
+        completedAt: '2026-08-05T00:00:00.001Z',
+        durationMs: 1,
+        summary: firstRead ? 'workspace.read failed' : `${input.call.toolName} completed`,
+        ...(firstRead
+          ? { reasonCode: 'TARGET_CHANGED', error: 'Workspace target changed during authorization' }
+          : {
+              output: input.call.toolName === 'workspace.read'
+                ? { path: 'src/main.ts', content: 'before', sha256: 'a'.repeat(64) }
+                : { path: 'src/main.ts', sha256: 'b'.repeat(64), checkpointId: 'checkpoint-1' },
+            }),
+      }
+    })
+    streamText
+      .mockImplementationOnce(async (options: any) => {
+        const read = await options.tools.workspace_read.execute({
+          workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096,
+        })
+        expect(read).toMatchObject({ retryable: true, reasonCode: 'TARGET_CHANGED' })
+        return {
+          textStream: (async function* () {})(),
+          responseMessages: Promise.resolve([
+            { role: 'assistant', content: 'The read changed and should be retried.' },
+          ]),
+        }
+      })
+      .mockImplementationOnce(async (options: any) => {
+        expect(options.messages[0].content).toContain('previous tool sequence ended')
+        await options.tools.workspace_read.execute({ workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 })
+        await options.tools.workspace_edit.execute({
+          workspaceId: 'workspace-a',
+          path: 'src/main.ts',
+          expectedHash: 'a'.repeat(64),
+          replacements: [{ oldText: 'before', newText: 'after' }],
+        })
+        return {
+          textStream: (async function* () { yield '修改完成。' })(),
+          responseMessages: Promise.resolve([]),
+        }
+      })
+    const registration = registerAndFindHandler('llm:chat-stream')
+    const reply = vi.fn()
+
+    await registration?.[1]({ reply, sender: { id: 9 } }, {
+      requestId: 'stream-edit-recovery',
+      messages: [{ role: 'user', content: '请你直接修改工作区即可' }],
+      providerId: 'provider-a',
+      sourceTag: 'janus-chat',
+      workspaceResources: [{
+        workspaceId: 'workspace-a',
+        workspacePath: 'C:/workspace-a',
+        workspaceName: 'Workspace A',
+        agentSessionId: 'session-1',
+      }],
+    })
+
+    expect(streamText).toHaveBeenCalledTimes(2)
+    expect(executeFunctionCall.mock.calls.map(([input]) => input.call.toolName)).toEqual([
+      'workspace.read',
+      'workspace.read',
+      'workspace.edit',
+    ])
+    expect(reply).toHaveBeenCalledWith('llm:chat:delta', expect.objectContaining({
+      requestId: 'stream-edit-recovery',
+      delta: '修改完成。',
+    }))
   })
 })

@@ -53,7 +53,20 @@ const KNOWLEDGE_CONTEXT_CLOSE = '</janus-knowledge-context>'
 
 const TOOL_TRACE_MAX_ENTRIES = 24
 const TOOL_TRACE_SUMMARY_MAX_CHARS = 300
-const CHAT_MAX_STEPS = 12
+const CHAT_MAX_STEPS = 20
+const WORKSPACE_MUTATION_TOOLS = new Set([
+  'workspace.edit',
+  'workspace.create',
+  'project.apply-config',
+  'project.start-process',
+  'project.stop-process',
+  'git.stage',
+  'git.unstage',
+  'git.commit',
+  'git.pull',
+  'git.push',
+  'command.run',
+])
 /*-- delta 合批窗口：高速流下把每 token 一次 IPC 压到每 40ms 一次 --*/
 const DELTA_FLUSH_MS = 40
 
@@ -137,6 +150,53 @@ export function toolTraceHistoryMessage(entries: ChatToolTraceEntry[]): ChatMess
 function latestUserQuery(messages: ChatMessage[]): string {
   return [...messages].reverse().find((message) => message.role === 'user' && message.content.trim())
     ?.content.trim() ?? ''
+}
+
+export function hasExplicitWorkspaceMutationIntent(message: string): boolean {
+  const normalized = message.trim().toLowerCase()
+  if (!normalized) return false
+  if (/(?:只|仅)(?:需|要)?(?:分析|查看|阅读|检查)|先不要(?:修改|编辑|写入)|不要(?:修改|编辑|写入|改动)|只读/.test(normalized)) return false
+  if (/(?:do not|don't|without)\s+(?:edit|change|modify|write)|read[- ]only|analysis only/.test(normalized)) return false
+  return /(?:直接|请|帮我|开始|继续|现在).{0,16}(?:修改|编辑|改动|修复|实现|新增|创建|写入|保存|应用|重构|优化)/.test(normalized)
+    || /^(?:修改|编辑|改动|修复|实现|新增|创建|写入|保存|应用|重构|优化)(?:一下|这个|该|工作区|文件|代码|功能)/.test(normalized)
+    || /(?:modify|edit|change|fix|implement|create|write|update|apply|refactor)\b/.test(normalized)
+}
+
+function workspaceRecoveryPrompt(userRequestedMutation: boolean): string {
+  return userRequestedMutation
+    ? [
+        'The user explicitly requested a workspace change, but the previous tool sequence ended before any mutation tool was attempted.',
+        'Continue from the existing tool calls and results. Read the exact target files as needed, then call workspace_edit or workspace_create with the smallest valid change.',
+        'Writing must still wait for the JanusX approval dialog. If the change cannot be made, explain the concrete blocker. Do not stop at another analysis-only answer.',
+      ].join('\n')
+    : 'The previous workspace tool sequence ended without a user-facing answer. Continue from its tool calls and results, then provide a concise answer or explain the concrete blocker.'
+}
+
+function emptyResponseFeedback(toolTraces: ChatToolTraceEntry[], userRequestedMutation: boolean): string {
+  const mutation = toolTraces.find((entry) => WORKSPACE_MUTATION_TOOLS.has(entry.toolName))
+  if (mutation?.status === 'completed') {
+    return `工作区操作已经完成（${mutation.toolName}），但模型没有返回结果说明。请检查对应文件的最新内容。`
+  }
+  if (mutation) {
+    return `工作区操作未完成（${mutation.toolName}: ${mutation.status}），模型没有返回进一步说明。请重试或检查审批与工具状态。`
+  }
+  if (toolTraces.length > 0 && userRequestedMutation) {
+    return '已完成工作区探索，但模型未能继续生成编辑操作；本次没有修改任何文件。请重试该请求。'
+  }
+  if (toolTraces.length > 0) {
+    return '工作区工具调用已经结束，但模型没有返回可显示的结论。请重试该请求。'
+  }
+  return '本次响应已经结束，但模型没有返回可显示内容，也没有执行工作区操作。请重试。'
+}
+
+async function resolvedStreamValue<T>(value: unknown, fallback: T): Promise<T> {
+  try {
+    return value && typeof (value as PromiseLike<T>).then === 'function'
+      ? await (value as PromiseLike<T>)
+      : fallback
+  } catch {
+    return fallback
+  }
 }
 
 function injectKnowledgeContext(messages: ChatMessage[], compactContext: string): ChatMessage[] {
@@ -361,20 +421,52 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
     const model = await llmService.getLanguageModel(providerId, actualModelId)
 
-    const result = await streamText({
+    const modelMessages = formattedMessages.map(m => ({
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: m.content,
+    }))
+    const runStream = (runMessages: unknown[]) => streamText({
       model: model as any,
-      messages: formattedMessages.map(m => ({
-        role: m.role as 'user' | 'assistant' | 'system',
-        content: m.content
-      })),
+      messages: runMessages as any,
       abortSignal: controller.signal,
       ...(workspaceTools ? { tools: workspaceTools, maxSteps: CHAT_MAX_STEPS } : {}),
     })
+    const consumeStream = async (result: { textStream: AsyncIterable<string> }) => {
+      let runText = ''
+      for await (const delta of result.textStream) {
+        if (controller.signal.aborted) break
+        if (!runText && streamedText.trim()) {
+          queueDelta('\n\n')
+          streamedText += '\n\n'
+        }
+        queueDelta(delta)
+        runText += delta
+        streamedText += delta
+      }
+    }
 
-    for await (const delta of result.textStream) {
-      if (controller.signal.aborted) break
-      queueDelta(delta)
-      streamedText += delta
+    const firstResult = await runStream(modelMessages)
+    await consumeStream(firstResult)
+
+    const userRequestedMutation = hasExplicitWorkspaceMutationIntent(latestUserQuery(formattedMessages))
+    const mutationAttempted = executedToolTraces.some((entry) => WORKSPACE_MUTATION_TOOLS.has(entry.toolName))
+    if (!controller.signal.aborted && workspaceTools
+      && (!streamedText.trim() || (userRequestedMutation && !mutationAttempted))) {
+      const responseMessages = await resolvedStreamValue<unknown[]>((firstResult as any).responseMessages, [])
+      const traceContext = responseMessages.length === 0 ? toolTraceHistoryMessage(executedToolTraces) : null
+      const recoveryResult = await runStream([
+        { role: 'system', content: workspaceRecoveryPrompt(userRequestedMutation && !mutationAttempted) },
+        ...modelMessages,
+        ...(traceContext ? [traceContext] : []),
+        ...responseMessages,
+      ])
+      await consumeStream(recoveryResult)
+    }
+
+    if (!controller.signal.aborted && !streamedText.trim()) {
+      const feedback = emptyResponseFeedback(executedToolTraces, userRequestedMutation)
+      queueDelta(feedback)
+      streamedText = feedback
     }
     flushDelta()
 

@@ -17,6 +17,8 @@ import type {
   KnowledgeCard,
 } from '../../../../shared/knowledge'
 import { RefreshIconButton } from '../ui/RefreshIconButton'
+import { QuantumTopologyPreview } from '../ui/QuantumTopologyPreview'
+import { WorkbenchIcon } from '../ui/WorkbenchIcon'
 import styles from './KnowledgeWorkbench.module.css'
 
 export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit'
@@ -184,7 +186,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
       <section className={styles.shell} aria-label="Knowledge Engine">
         <header className={styles.header}>
           <div className={styles.headerLeft}>
-            <div className={styles.iconBadge} aria-hidden="true">K</div>
+            <span className={styles.iconBadge} aria-hidden="true">
+              <WorkbenchIcon id="knowledge" />
+            </span>
             <nav className={styles.breadcrumb} aria-label="Breadcrumb"><span className={styles.bcCurrent}>Knowledge Engine</span></nav>
             {snapshot?.usingDemoData && <span className={styles.badge}>DEMO DATA</span>}
           </div>
@@ -293,7 +297,21 @@ function SearchLab({ query, onQueryChange, cards, state, selectedId, onSelect }:
 }
 
 function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; active?: boolean; onSelect: () => void }) {
-  return <button type="button" className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}><div className={styles.cardTopline}><span>{card.kind.toUpperCase()}</span><span>{formatConfidence(card.score)}</span></div><strong>{card.title}</strong>{card.summary && <p>{card.summary}</p>}<TagRow tags={card.tags} /><div className={styles.cardFoot}>{card.status ?? 'active'} - {card.sourceRefs.observationIds.length} source refs</div></button>
+  return (
+    <button type="button" className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}>
+      <div className={styles.cardTopline}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <QuantumTopologyPreview seed={card.id} name={card.title} size="icon" />
+          <span>{card.kind.toUpperCase()}</span>
+        </div>
+        <span>{formatConfidence(card.score)}</span>
+      </div>
+      <strong>{card.title}</strong>
+      {card.summary && <p>{card.summary}</p>}
+      <TagRow tags={card.tags} />
+      <div className={styles.cardFoot}>{card.status ?? 'active'} - {card.sourceRefs.observationIds.length} source refs</div>
+    </button>
+  )
 }
 
 function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevoke }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: () => void; onReject: () => void; onRevoke: () => void }) {

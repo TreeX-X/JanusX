@@ -57,6 +57,7 @@ describe('project Agent Runtime tools', () => {
       'project.generate-config',
       'project.apply-config',
       'project.list-processes',
+      'project.process-output',
       'project.start-process',
       'project.stop-process',
     ])
@@ -200,6 +201,11 @@ describe('project Agent Runtime tools', () => {
 
     await expect(runtime.executeTool({
       sessionId: session.id,
+      call: { toolName: 'project.process-output', input: { workspaceId: 'workspace-1', projectId: processes[0].id, maxLines: 10 } },
+    })).resolves.toMatchObject({ status: 'completed', output: { projectId: processes[0].id, output: expect.any(String) } })
+
+    await expect(runtime.executeTool({
+      sessionId: session.id,
       call: {
         toolName: 'project.stop-process',
         input: { workspaceId: 'workspace-1', projectId: processes[0].id },
@@ -246,5 +252,20 @@ describe('project Agent Runtime tools', () => {
       status: 'failed',
       reasonCode: 'PATH_TRAVERSAL',
     })
+  })
+
+  it('rejects launch working directories outside the active workspace', async () => {
+    const root = await temporaryDirectory()
+    const { runtime, session } = await createRuntime(root)
+    await expect(runtime.executeTool({
+      sessionId: session.id,
+      call: {
+        toolName: 'project.generate-config',
+        input: {
+          workspaceId: 'workspace-1',
+          launch: { name: 'outside', program: 'node', cwd: '../outside' },
+        },
+      },
+    })).resolves.toMatchObject({ status: 'failed', error: expect.stringContaining('outside the active workspace') })
   })
 })

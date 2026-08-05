@@ -2,12 +2,30 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceAgentRuntime } from '../../../src/main/agent/runtime/runtime'
 import {
   registerWorkspaceTools,
   workspaceListTool,
 } from '../../../src/main/agent/runtime/tools/workspace-tools'
+
+const fileStatHooks = vi.hoisted(() => ({
+  pathStatDevice: undefined as bigint | undefined,
+}))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    stat: async (...args: Parameters<typeof actual.stat>) => {
+      const result = await actual.stat(...args)
+      if (fileStatHooks.pathStatDevice !== undefined && typeof result.dev === 'bigint') {
+        result.dev = fileStatHooks.pathStatDevice
+      }
+      return result
+    },
+  }
+})
 
 const temporaryDirectories: string[] = []
 
@@ -59,6 +77,7 @@ async function executeList(
 }
 
 afterEach(async () => {
+  fileStatHooks.pathStatDevice = undefined
   await Promise.all(temporaryDirectories.splice(0).map((directory) =>
     rm(directory, { recursive: true, force: true }),
   ))
@@ -243,6 +262,28 @@ describe('workspace.edit tool', () => {
         replacements: 1,
         checkpointId: expect.any(String),
       },
+    })
+    expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('updated workspace')
+
+    const nextTurnRead = await executeRead(root, 'notes.txt')
+    expect(nextTurnRead).toMatchObject({
+      status: 'completed',
+      output: {
+        content: 'updated workspace',
+        sha256: createHash('sha256').update('updated workspace').digest('hex'),
+      },
+    })
+  })
+
+  it('applies an edit when Electron omits the path stat device on Windows', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'notes.txt'), 'hello workspace', 'utf-8')
+    const expectedHash = createHash('sha256').update('hello workspace').digest('hex')
+    fileStatHooks.pathStatDevice = 0n
+
+    await expect(executeEdit(root, expectedHash, true)).resolves.toMatchObject({
+      status: 'completed',
+      output: { path: 'notes.txt', previousHash: expectedHash },
     })
     expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('updated workspace')
   })

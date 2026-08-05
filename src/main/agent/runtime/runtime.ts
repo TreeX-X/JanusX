@@ -177,7 +177,7 @@ export class WorkspaceAgentRuntime {
   queryPolicyAudit(query: PolicyAuditQuery = {}): Promise<PolicyDecisionRecord[]> { return this.auditStore.query(query) }
   getPolicyAuditRecords(sessionId?: string): Promise<PolicyDecisionRecord[]> { return this.queryPolicyAudit({ sessionId }) }
   private validatePreview(actionRisk: RegisteredTool['actionRisk'], preview?: ApprovalPreview): ApprovalPreview | undefined | null {
-    const requiresPreview = ['write', 'create', 'config-apply'].includes(actionRisk)
+    const requiresPreview = ['write', 'create', 'config-apply', 'external-command', 'network'].includes(actionRisk)
     if (!requiresPreview && actionRisk !== 'run') return undefined
     if (!preview) return requiresPreview ? null : undefined
     if (typeof preview.summary !== 'string' || preview.summary.length < 1 || preview.summary.length > 500 || !Array.isArray(preview.paths) || preview.paths.length > 20 || preview.paths.some((path) => typeof path !== 'string' || path.length > 500) || typeof preview.truncated !== 'boolean' || (preview.detail !== undefined && (typeof preview.detail !== 'string' || preview.detail.length > 4_000))) return null

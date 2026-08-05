@@ -7,6 +7,9 @@
 
 import { useCallback } from 'react'
 import Editor from '@monaco-editor/react'
+import { configureMonacoRuntime } from '@/lib/monaco-runtime'
+
+configureMonacoRuntime()
 import styles from './JsonEditor.module.css'
 
 interface JsonEditorProps {

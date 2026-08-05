@@ -37,18 +37,18 @@ test('JanusX capsule opens blueprint conversation without resizing the canvas', 
     await createDialog.locator('input').fill('JanusX Capsule Fixture')
     await createDialog.locator('input').press('Enter')
 
-    const capsule = page.getByRole('button', { name: /打开 JanusX 蓝图对话/ })
+    const capsule = page.getByRole('button', { name: /打开 Janus Copilot 控制台/ })
     await expect(capsule).toBeEnabled()
-    await expect(capsule).toContainText('JanusX')
-    await expect(capsule).toContainText('待命')
+    await expect(capsule).toContainText('JANUS // COPILOT')
+    await expect(capsule).toContainText('IDLE')
     await expect(capsule.locator('.janus-identity-eye')).toHaveCount(2)
     const canvasWidthBefore = (await page.locator('.blueprint-view--workbench').boundingBox())?.width
 
     await capsule.click()
     await expect(capsule).toHaveAttribute('aria-expanded', 'true')
-    const conversation = page.getByRole('complementary', { name: 'Janus 蓝图维护' })
+    const conversation = page.getByRole('complementary', { name: 'Janus Copilot 控制台' })
     await expect(conversation).toBeVisible()
-    await expect(page.getByText('蓝图维护对话', { exact: true })).toBeVisible()
+    await expect(page.getByText('COPILOT CONTROL', { exact: true })).toBeVisible()
     const conversationBoxBeforeDetail = await conversation.boundingBox()
 
     await page.locator('.react-flow__node').first().dblclick()
@@ -68,7 +68,7 @@ test('JanusX capsule opens blueprint conversation without resizing the canvas', 
     await page.screenshot({ path: test.info().outputPath('blueprint-janus-capsule.png') })
     await capsule.click()
     await expect(capsule).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.getByRole('complementary', { name: 'Janus 蓝图维护' })).toHaveCount(0)
+    await expect(page.getByRole('complementary', { name: 'Janus Copilot 控制台' })).toHaveCount(0)
   } finally {
     if (application) await application.close().catch(() => undefined)
     if (root) await rm(root, { recursive: true, force: true })

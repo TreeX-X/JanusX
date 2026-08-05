@@ -14,10 +14,11 @@ function mapTool(tool: Record<string, any>): Record<string, any> {
 }
 
 function mapProviderOptions(value: Record<string, any>): Record<string, any> {
-  const { providerMetadata, ...rest } = value
+  const { providerMetadata, experimental_providerMetadata, ...rest } = value
+  const metadata = providerMetadata ?? experimental_providerMetadata
   return {
     ...rest,
-    ...(providerMetadata !== undefined ? { providerOptions: providerMetadata } : {}),
+    ...(metadata !== undefined ? { providerOptions: metadata } : {}),
   }
 }
 
@@ -40,11 +41,19 @@ function mapToolResultOutput(part: Record<string, any>): Record<string, any> {
     : { type: 'json', value: part.result ?? null }
 }
 
-function mapPromptPart(part: Record<string, any>): Record<string, any> {
+function mapPromptPart(
+  part: Record<string, any>,
+  toolProviderMetadata?: Map<string, Record<string, any>>,
+): Record<string, any> {
   const mapped = mapProviderOptions(part)
   if (part.type === 'tool-call') {
-    const { args: _args, ...rest } = mapped
-    return { ...rest, input: part.input ?? part.args }
+    const { args: _args, providerOptions, ...rest } = mapped
+    const metadata = providerOptions ?? toolProviderMetadata?.get(part.toolCallId)
+    return {
+      ...rest,
+      input: part.input ?? part.args,
+      ...(metadata !== undefined ? { providerOptions: metadata } : {}),
+    }
   }
   if (part.type === 'tool-result') {
     const { result: _result, isError: _isError, content: _content, ...rest } = mapped
@@ -66,22 +75,25 @@ function mapPromptPart(part: Record<string, any>): Record<string, any> {
   return mapped
 }
 
-function mapPrompt(prompt: unknown): unknown {
+function mapPrompt(prompt: unknown, toolProviderMetadata?: Map<string, Record<string, any>>): unknown {
   if (!Array.isArray(prompt)) return prompt
   return prompt.map((message) => {
     if (!message || typeof message !== 'object') return message
     const mapped = mapProviderOptions(message as Record<string, any>)
     return Array.isArray(mapped.content)
-      ? { ...mapped, content: mapped.content.map(mapPromptPart) }
+      ? { ...mapped, content: mapped.content.map((part: Record<string, any>) => mapPromptPart(part, toolProviderMetadata)) }
       : mapped
   })
 }
 
-function toV3CallOptions(options: Record<string, any>): Record<string, any> {
+function toV3CallOptions(
+  options: Record<string, any>,
+  toolProviderMetadata?: Map<string, Record<string, any>>,
+): Record<string, any> {
   const { inputFormat: _inputFormat, mode, maxTokens, providerMetadata, prompt, ...rest } = options
   const mapped: Record<string, any> = {
     ...rest,
-    prompt: mapPrompt(prompt),
+    prompt: mapPrompt(prompt, toolProviderMetadata),
     ...(maxTokens !== undefined ? { maxOutputTokens: maxTokens } : {}),
     ...(providerMetadata !== undefined ? { providerOptions: providerMetadata } : {}),
   }
@@ -147,7 +159,10 @@ function normalizeUsage(usage: any): { promptTokens: number; completionTokens: n
   }
 }
 
-function normalizeStreamChunk(chunk: StreamChunk): StreamChunk | null {
+function normalizeStreamChunk(
+  chunk: StreamChunk,
+  toolProviderMetadata?: Map<string, Record<string, any>>,
+): StreamChunk | null {
   switch (chunk.type) {
     case 'text-delta': {
       return {
@@ -156,12 +171,21 @@ function normalizeStreamChunk(chunk: StreamChunk): StreamChunk | null {
       }
     }
     case 'tool-call': {
+      if (chunk.providerMetadata !== undefined && typeof chunk.toolCallId === 'string') {
+        toolProviderMetadata?.set(chunk.toolCallId, chunk.providerMetadata)
+        if (toolProviderMetadata && toolProviderMetadata.size > 256) {
+          toolProviderMetadata.delete(toolProviderMetadata.keys().next().value!)
+        }
+      }
       return {
         type: 'tool-call',
         toolCallType: 'function',
         toolCallId: chunk.toolCallId,
         toolName: normalizeToolName(chunk.toolName),
-        args: chunk.args ?? chunk.input ?? '{}'
+        args: chunk.args ?? chunk.input ?? '{}',
+        ...(chunk.providerMetadata !== undefined
+          ? { experimental_providerMetadata: chunk.providerMetadata }
+          : {}),
       }
     }
     case 'tool-call-delta':
@@ -201,8 +225,9 @@ function normalizeStreamChunk(chunk: StreamChunk): StreamChunk | null {
 export function withAiSdkV1StreamCompatibility(model: LanguageModelV1): LanguageModelV1 {
   const source = model as any
   if (source.__janusxAiSdkV1StreamCompat) return model
+  const toolProviderMetadata = new Map<string, Record<string, any>>()
   const callOptions = (options: Record<string, any>) =>
-    source.specificationVersion === 'v3' ? toV3CallOptions(options) : options
+    source.specificationVersion === 'v3' ? toV3CallOptions(options, toolProviderMetadata) : options
 
   const wrapped = {
     specificationVersion: 'v1',
@@ -223,7 +248,7 @@ export function withAiSdkV1StreamCompatibility(model: LanguageModelV1): Language
         stream: result.stream.pipeThrough(
           new TransformStream<StreamChunk, StreamChunk>({
             transform(chunk, controller) {
-              const normalized = normalizeStreamChunk(chunk)
+              const normalized = normalizeStreamChunk(chunk, toolProviderMetadata)
               if (normalized) {
                 controller.enqueue(normalized)
               }

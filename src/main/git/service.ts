@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import { lstat, readFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'util'
@@ -7,11 +7,18 @@ import type { GitFileChange } from '../../shared/ipc/git'
 const execFileAsync = promisify(execFile)
 const LOCAL_GIT_TIMEOUT_MS = 10000
 const REMOTE_GIT_TIMEOUT_MS = 120000
+const DEFAULT_GIT_OUTPUT_BYTES = 1024 * 1024
 const CONFLICT_STATUS_PAIRS = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'])
 
-async function runGit(cwd: string, args: string[], timeout: number): Promise<string> {
+async function runGit(
+  cwd: string,
+  args: string[],
+  timeout: number,
+  maxBuffer = DEFAULT_GIT_OUTPUT_BYTES,
+  signal?: AbortSignal,
+): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', args, { cwd, timeout })
+    const { stdout } = await execFileAsync('git', args, { cwd, timeout, maxBuffer, signal })
     return stdout
   } catch (err: any) {
     throw new Error(err.stderr?.trim() || err.message)
@@ -26,13 +33,13 @@ async function rawGit(cwd: string, ...args: string[]): Promise<string> {
   return runGit(cwd, args, LOCAL_GIT_TIMEOUT_MS)
 }
 
-async function remoteGit(cwd: string, ...args: string[]): Promise<string> {
-  return (await runGit(cwd, args, REMOTE_GIT_TIMEOUT_MS)).trim()
+async function remoteGit(cwd: string, args: string[], signal?: AbortSignal): Promise<string> {
+  return (await runGit(cwd, args, REMOTE_GIT_TIMEOUT_MS, DEFAULT_GIT_OUTPUT_BYTES, signal)).trim()
 }
 
 export async function getStatus(cwd: string) {
   const [branchLine, upstreamLine, aheadBehind, rawStatus, hasHead] = await Promise.all([
-    git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD'),
+    git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD').catch(() => git(cwd, 'symbolic-ref', '--short', 'HEAD')),
     git(cwd, 'rev-parse', '--abbrev-ref', '@{upstream}').catch(() => ''),
     git(cwd, 'rev-list', '--left-right', '--count', 'HEAD...@{upstream}').catch(() => '0\t0'),
     rawGit(cwd, 'status', '--porcelain=v1', '-z', '--untracked-files=all'),
@@ -181,6 +188,8 @@ async function getUntrackedLineStats(cwd: string, path: string): Promise<LineSta
 }
 
 export async function getLog(cwd: string, maxCount = 50) {
+  const hasHead = await git(cwd, 'rev-parse', '--verify', 'HEAD').then(() => true, () => false)
+  if (!hasHead) return []
   const raw = await git(
     cwd, 'log', `--max-count=${maxCount}`,
     '--pretty=format:%H|%h|%s|%an|%ai'
@@ -193,32 +202,96 @@ export async function getLog(cwd: string, maxCount = 50) {
 }
 
 export async function stage(cwd: string, paths: string[]) {
-  await git(cwd, 'add', ...paths)
+  await git(cwd, 'add', '--', ...paths)
 }
 
 export async function unstage(cwd: string, paths: string[]) {
-  await git(cwd, 'reset', 'HEAD', ...paths)
+  const hasHead = await git(cwd, 'rev-parse', '--verify', 'HEAD').then(() => true, () => false)
+  await (hasHead
+    ? git(cwd, 'reset', 'HEAD', '--', ...paths)
+    : git(cwd, 'rm', '--cached', '--', ...paths))
 }
 
 export async function commit(cwd: string, message: string) {
   await git(cwd, 'commit', '-m', message)
 }
 
-export async function push(cwd: string) {
+export async function push(cwd: string, signal?: AbortSignal) {
   const upstream = await git(cwd, 'rev-parse', '--abbrev-ref', '@{upstream}').catch(() => '')
   if (upstream) {
-    await remoteGit(cwd, 'push')
+    await remoteGit(cwd, ['push'], signal)
     return
   }
 
   const remotes = (await git(cwd, 'remote')).split(/\r?\n/).filter(Boolean)
   const remote = remotes.includes('origin') ? 'origin' : remotes[0]
   if (!remote) throw new Error('No Git remote is configured for this repository')
-  await remoteGit(cwd, 'push', '--set-upstream', remote, 'HEAD')
+  await remoteGit(cwd, ['push', '--set-upstream', remote, 'HEAD'], signal)
 }
 
-export async function pull(cwd: string) {
-  await remoteGit(cwd, 'pull')
+export async function pull(cwd: string, signal?: AbortSignal) {
+  await remoteGit(cwd, ['pull'], signal)
+}
+
+export async function getWorkingDiff(
+  cwd: string,
+  options: { staged?: boolean; path?: string; maxBytes: number; signal?: AbortSignal },
+): Promise<{ content: string; truncated: boolean }> {
+  const args = ['diff', '--no-color']
+  if (options.staged) args.push('--cached')
+  args.push('--')
+  if (options.path) args.push(options.path)
+
+  return runBoundedGit(cwd, args, options.maxBytes, options.signal)
+}
+
+function runBoundedGit(cwd: string, args: string[], maxBytes: number, signal?: AbortSignal): Promise<{ content: string; truncated: boolean }> {
+  return new Promise((resolveResult, reject) => {
+    const child = spawn('git', args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const chunks: Buffer[] = []
+    const errors: Buffer[] = []
+    let bytes = 0
+    let errorBytes = 0
+    let truncated = false
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; child.kill() }, LOCAL_GIT_TIMEOUT_MS)
+    const abort = () => child.kill()
+    signal?.addEventListener('abort', abort, { once: true })
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      const remaining = maxBytes - bytes
+      if (remaining > 0) chunks.push(chunk.subarray(0, remaining))
+      bytes += Math.min(chunk.length, Math.max(remaining, 0))
+      if (chunk.length > remaining) truncated = true
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      const remaining = 64 * 1024 - errorBytes
+      if (remaining > 0) errors.push(chunk.subarray(0, remaining))
+      errorBytes += Math.min(chunk.length, Math.max(remaining, 0))
+    })
+    child.once('error', (error) => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+      reject(error)
+    })
+    child.once('close', (code) => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+      if (signal?.aborted) {
+        reject(new Error('Git command cancelled'))
+        return
+      }
+      if (timedOut) {
+        reject(new Error('Git command timed out'))
+        return
+      }
+      if (code !== 0) {
+        reject(new Error(Buffer.concat(errors).toString('utf-8').trim() || `Git exited with code ${code}`))
+        return
+      }
+      resolveResult({ content: Buffer.concat(chunks).toString('utf-8'), truncated })
+    })
+  })
 }
 
 export async function getFileBaseline(cwd: string, relativePath: string): Promise<{ content: string; tracked: boolean; available: boolean }> {

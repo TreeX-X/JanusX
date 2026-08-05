@@ -1,16 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import Editor from '@monaco-editor/react'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
+import { MonacoViewer } from './MonacoViewer'
 import type { FindableEditor } from '@/lib/editor-find'
-import { defineJanusxDarkTheme, JANUSX_DARK_THEME_NAME } from '@/lib/monaco-theme'
 
 interface HtmlViewerProps {
   content: string
+  originalContent?: string
   onChange: (value: string) => void
   onEditorMount?: (editor: FindableEditor | null) => void
 }
 
-export function HtmlViewer({ content, onChange, onEditorMount }: HtmlViewerProps) {
+export function HtmlViewer({ content, originalContent, onChange, onEditorMount }: HtmlViewerProps) {
   const [splitRatio, setSplitRatio] = useState(50)
   const [scriptsEnabled, setScriptsEnabled] = useState(false)
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
@@ -18,24 +18,6 @@ export function HtmlViewer({ content, onChange, onEditorMount }: HtmlViewerProps
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const editorRef = useRef<FindableEditor | null>(null)
-
-  const handleChange = useCallback(
-    (value: string | undefined) => {
-      onChange(value || '')
-    },
-    [onChange],
-  )
-
-  const handleBeforeMount = useCallback((monaco: any) => {
-    defineJanusxDarkTheme(monaco)
-  }, [])
-
-  const handleMount = useCallback((editor: FindableEditor) => {
-    editorRef.current = editor
-    onEditorMount?.(editor)
-  }, [onEditorMount])
-
   useEffect(() => {
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current)
@@ -84,17 +66,6 @@ export function HtmlViewer({ content, onChange, onEditorMount }: HtmlViewerProps
   const showEditor = previewMode !== 'preview'
   const showPreview = previewMode !== 'editor'
   const isSplit = previewMode === 'split'
-
-  useEffect(() => {
-    if (!showEditor && editorRef.current) {
-      editorRef.current = null
-      onEditorMount?.(null)
-    }
-  }, [onEditorMount, showEditor])
-
-  useEffect(() => () => {
-    if (editorRef.current) onEditorMount?.(null)
-  }, [onEditorMount])
 
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden" style={{ background: '#0a0a0a', height: '100%' }}>
@@ -149,25 +120,12 @@ export function HtmlViewer({ content, onChange, onEditorMount }: HtmlViewerProps
               EDITOR
             </div>
             <div className="flex-1 overflow-hidden" style={{ height: '100%', position: 'relative' }}>
-              <Editor
-                height="100%"
+              <MonacoViewer
+                content={content}
                 language="html"
-                value={content}
-                onChange={handleChange}
-                theme={JANUSX_DARK_THEME_NAME}
-                loading={null}
-                options={{
-                  fontSize: 13,
-                  fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace",
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on',
-                  lineNumbers: 'on',
-                  renderLineHighlight: 'line',
-                  padding: { top: 12, bottom: 12 },
-                }}
-                beforeMount={handleBeforeMount}
-                onMount={handleMount}
+                originalContent={originalContent}
+                onChange={onChange}
+                onEditorMount={onEditorMount}
               />
             </div>
           </div>

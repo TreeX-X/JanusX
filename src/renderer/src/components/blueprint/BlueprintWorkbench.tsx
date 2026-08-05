@@ -7,6 +7,7 @@ import { BlueprintView } from './BlueprintView'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
 import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { WorkbenchIcon } from '../ui/WorkbenchIcon'
 import './blueprint.css'
 
 interface BlueprintWorkbenchProps {
@@ -87,7 +88,9 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         <section className="blueprint-workbench-shell" aria-label="Blueprint Workbench">
         <header className="blueprint-workbench-header">
           <div className="blueprint-workbench-header-left">
-            <div className="blueprint-workbench-icon-badge" aria-hidden="true">B</div>
+            <span className="blueprint-workbench-icon-badge" aria-hidden="true">
+              <WorkbenchIcon id="blueprint" />
+            </span>
             <nav className="blueprint-workbench-breadcrumb" aria-label="Breadcrumb">
               <span className="blueprint-workbench-bc-current">Blueprint Workbench</span>
             </nav>
@@ -118,7 +121,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
               className="blueprint-janus-capsule"
               data-state={maintenanceState.tone}
               disabled={!currentBlueprint}
-              aria-label={`打开 JanusX 蓝图对话，当前状态：${maintenanceState.label}`}
+              aria-label={`打开 Janus Copilot 控制台，当前状态：${maintenanceState.label}`}
               aria-expanded={maintenanceOpen}
               onClick={() => {
                 if (!currentBlueprint) return
@@ -137,10 +140,20 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
                 showHalo={false}
                 showScanline={false}
                 className="blueprint-janus-capsule__identity"
-                aria-label={`JanusX ${maintenanceState.label}`}
+                aria-label={`Janus ${maintenanceState.label}`}
               />
-              <span className="blueprint-janus-capsule__name">JanusX</span>
-              <span className="blueprint-janus-capsule__status">{maintenanceState.label}</span>
+              <span className="blueprint-janus-capsule__name">JANUS // COPILOT</span>
+              <span className="blueprint-janus-capsule__status">
+                {maintenanceState.tone === 'working'
+                  ? 'RUNNING'
+                  : maintenanceState.tone === 'attention'
+                    ? 'ACTION_REQUIRED'
+                    : maintenanceState.tone === 'error'
+                      ? 'ERROR'
+                      : maintenanceState.tone === 'disabled'
+                        ? 'OFFLINE'
+                        : 'IDLE'}
+              </span>
               <ChevronRight className="blueprint-janus-capsule__chevron" size={13} aria-hidden="true" />
             </button>
             <button

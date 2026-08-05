@@ -138,9 +138,9 @@ export function StandaloneFileEditor() {
   const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#151517', color: '#d4d4d4' }}>
+    <div data-editor-window-state="ready" className="h-screen flex flex-col overflow-hidden" style={{ background: '#151517', color: '#d4d4d4' }}>
       <div
-        className="h-[38px] shrink-0 flex items-center gap-3 px-3 select-none"
+        className="relative h-[38px] shrink-0 flex items-center gap-3 px-3 select-none"
         style={{
           ...titlebarDrag,
           background: 'rgba(6, 6, 6, 0.96)',
@@ -148,8 +148,18 @@ export function StandaloneFileEditor() {
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
+        <div
+          data-editor-window-drag-strip
+          className="absolute inset-x-0 top-0 z-20 h-2"
+          style={titlebarDrag}
+          aria-hidden="true"
+        />
         <WindowTrafficLights />
-        <div className="flex min-w-0 flex-1 self-stretch items-end overflow-x-auto" style={noDrag}>
+        <div
+          data-editor-drag-region
+          className="flex min-w-0 flex-1 self-stretch items-end overflow-x-auto"
+          style={titlebarDrag}
+        >
           {openFiles.map((file) => {
             const isActive = file.id === activeFileId
             return (
@@ -158,7 +168,7 @@ export function StandaloneFileEditor() {
                 data-editor-tab={file.absolutePath}
                 data-active={isActive ? 'true' : 'false'}
                 className="relative flex h-[31px] max-w-[180px] shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md px-3 font-mono text-[11px]"
-                style={{ color: isActive ? '#ddd' : '#777', background: isActive ? '#151517' : 'transparent' }}
+                style={{ ...noDrag, color: isActive ? '#ddd' : '#777', background: isActive ? '#151517' : 'transparent' }}
                 onClick={() => setActiveFile(file.id)}
               >
                 {file.isDirty ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff7830]" /> : null}

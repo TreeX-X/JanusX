@@ -51,9 +51,27 @@ test('file opens share one workspace editor window and switch existing tabs', as
 
     await expect.poll(() => editorWindows(application!).length).toBe(1)
     const editorPage = editorWindows(application)[0]
+    await expect(editorPage.locator('#root')).not.toBeEmpty()
+    await expect(editorPage.locator('[data-editor-window-state="ready"]')).toBeVisible()
+    await expect(editorPage.locator('[data-editor-window-state="error"]')).toHaveCount(0)
+    await expect(editorPage.locator('.monaco-editor')).toBeVisible({ timeout: 30_000 })
+    await editorPage.screenshot({ path: test.info().outputPath('standalone-editor-ready.png') })
     const tabs = editorPage.locator('[data-editor-tab]')
     await expect(tabs).toHaveCount(2)
     await expect(tabs.filter({ hasText: 'second.ts' })).toHaveAttribute('data-active', 'true')
+
+    const dragRegion = editorPage.locator('[data-editor-drag-region]')
+    const dragStrip = editorPage.locator('[data-editor-window-drag-strip]')
+    await expect(dragRegion).toHaveCSS('-webkit-app-region', 'drag')
+    await expect(dragStrip).toHaveCSS('-webkit-app-region', 'drag')
+    await expect(tabs.first()).toHaveCSS('-webkit-app-region', 'no-drag')
+    const dragStripBox = await dragStrip.boundingBox()
+    expect(dragStripBox?.height).toBe(8)
+    expect(dragStripBox?.width).toBeGreaterThan(1000)
+    expect(await dragStrip.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2) === element
+    })).toBe(true)
 
     await mainPage.evaluate(
       ({ first, workspace }) => (window as EditorWindowAPI).electron.window.openEditor({ filePath: first, workspacePath: workspace }),

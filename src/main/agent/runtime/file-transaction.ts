@@ -4,7 +4,13 @@ import { open, realpath, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { isUtf8 } from 'node:buffer'
 import { evaluateWorkspaceReadPolicy, isSensitivePath } from './policy-gate'
-import { readWorkspaceFile, resolveWorkspaceCreationTarget, resolveWorkspaceTarget, WorkspacePathGuardError } from './path-guard'
+import {
+  readWorkspaceFile,
+  resolveWorkspaceCreationTarget,
+  resolveWorkspaceTarget,
+  sameWorkspaceFileIdentity,
+  WorkspacePathGuardError,
+} from './path-guard'
 
 export const MAX_WORKSPACE_EDIT_BYTES = 1024 * 1024
 export const MAX_WORKSPACE_REPLACEMENTS = 40
@@ -172,7 +178,7 @@ export async function atomicReplaceWorkspaceFile(
     }
 
     const freshStat = await stat(targetPath, { bigint: true })
-    if (freshStat.dev !== openedStat.dev || freshStat.ino !== openedStat.ino) {
+    if (!sameWorkspaceFileIdentity(openedStat, freshStat)) {
       throw new WorkspaceEditConflictError('workspace.edit target changed before replacement')
     }
     // Windows does not allow replacing a file while this process still holds it open.

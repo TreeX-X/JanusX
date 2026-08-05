@@ -10,12 +10,6 @@ import {
 const readSource = (relativePath: string) =>
   readFileSync(resolve(__dirname, '../../src/renderer/src', relativePath), 'utf8')
 
-const VIEWERS = [
-  'components/viewers/MonacoViewer.tsx',
-  'components/viewers/MarkdownViewer.tsx',
-  'components/viewers/HtmlViewer.tsx',
-]
-
 describe('monaco theme', () => {
   it('registers under the shared name', () => {
     const defineTheme = vi.fn()
@@ -39,13 +33,36 @@ describe('monaco theme', () => {
     expect(colors['editor.findMatchBackground']).toBeDefined()
   })
 
-  it('is defined in exactly one place — every viewer delegates to it', () => {
-    for (const viewer of VIEWERS) {
+  it('uses restrained full-line diff colors and stronger local change markers', () => {
+    const colors = JANUSX_DARK_THEME.colors as Record<string, string>
+
+    expect(colors['diffEditor.insertedLineBackground']).toMatch(/0d$/)
+    expect(colors['diffEditor.removedLineBackground']).toMatch(/0d$/)
+    expect(colors['diffEditor.insertedTextBackground']).toMatch(/2e$/)
+    expect(colors['diffEditor.removedTextBackground']).toMatch(/2e$/)
+  })
+
+  it('is defined in exactly one viewer and reused by markdown and html', () => {
+    const monacoViewer = readSource('components/viewers/MonacoViewer.tsx')
+    expect(monacoViewer).toContain('defineJanusxDarkTheme(monaco)')
+    expect(monacoViewer).not.toContain('monaco.editor.defineTheme(')
+    expect(monacoViewer).toContain('theme={JANUSX_DARK_THEME_NAME}')
+
+    for (const viewer of ['components/viewers/MarkdownViewer.tsx', 'components/viewers/HtmlViewer.tsx']) {
       const source = readSource(viewer)
-      expect(source, viewer).toContain('defineJanusxDarkTheme(monaco)')
+      expect(source, viewer).toContain("import { MonacoViewer } from './MonacoViewer'")
       expect(source, viewer).not.toContain('monaco.editor.defineTheme(')
-      expect(source, viewer).toContain('theme={JANUSX_DARK_THEME_NAME}')
     }
+  })
+})
+
+describe('file viewer diff routing', () => {
+  it('keeps markdown and html viewers while passing the baseline into their editor pane', () => {
+    const source = readSource('components/FileViewerContent.tsx')
+
+    expect(source).not.toContain("['code', 'markdown', 'html'].includes(file.viewType)")
+    expect(source).toMatch(/<MarkdownViewer[\s\S]*?originalContent=\{diffOriginalContent\}/)
+    expect(source).toMatch(/<HtmlViewer[\s\S]*?originalContent=\{diffOriginalContent\}/)
   })
 })
 

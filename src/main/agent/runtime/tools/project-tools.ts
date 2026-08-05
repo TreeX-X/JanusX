@@ -1,5 +1,5 @@
 import { readdir } from 'fs/promises'
-import { basename, isAbsolute, join, relative, resolve } from 'path'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'path'
 import { ProjectConfig, ProjectDetector, ProjectType, detectByFeatures, getProjectSchema } from '../../../project'
 import type { LaunchConfig } from '../../../../shared/ipc/project'
 import { getProjectRunner } from '../../../project/runner/service'
@@ -133,6 +133,51 @@ function isProjectIdInWorkspace(projectId: string, workspaceRoot: string): boole
   return relation === '' || (!relation.startsWith('..') && !isAbsolute(relation))
 }
 
+function configuredWorkingDirectory(projectPath: string, cwd?: string): string {
+  const configured = cwd?.replace('${workspaceFolder}', projectPath)
+  return configured ? (isAbsolute(configured) ? resolve(configured) : resolve(projectPath, configured)) : projectPath
+}
+
+function assertInsideWorkspace(workspaceRoot: string, targetPath: string, label: string): string {
+  const relation = relative(resolve(workspaceRoot), resolve(targetPath))
+  if (relation === '..' || relation.startsWith(`..${sep}`) || isAbsolute(relation)) {
+    throw new Error(`${label} is outside the active workspace`)
+  }
+  return relation
+}
+
+function validateLaunchConfigBoundary(workspaceRoot: string, projectPath: string, config: LaunchConfig): void {
+  for (const launch of config.configurations) {
+    const cwd = configuredWorkingDirectory(projectPath, launch.cwd)
+    assertInsideWorkspace(workspaceRoot, cwd, `Launch configuration "${launch.name}" cwd`)
+    if (launch.type === ProjectType.Custom && launch.program && !isAbsolute(launch.program) && /[\\/]/.test(launch.program)) {
+      assertInsideWorkspace(workspaceRoot, resolve(cwd, launch.program), `Launch configuration "${launch.name}" program`)
+    }
+  }
+}
+
+async function validateRunnableConfigBoundary(
+  workspaceRoot: string,
+  projectPath: string,
+  configName: string,
+): Promise<void> {
+  const config = await ProjectConfig.read(projectPath)
+  if (!config) throw new Error(`No configuration found for project at ${projectPath}`)
+  validateLaunchConfigBoundary(workspaceRoot, projectPath, config)
+  const launch = ProjectConfig.getConfiguration(config, configName)
+  if (!launch) throw new Error(`Configuration '${configName}' not found`)
+  const cwd = configuredWorkingDirectory(projectPath, launch.cwd)
+  const cwdTarget = await resolveWorkspaceTarget(workspaceRoot, assertInsideWorkspace(workspaceRoot, cwd, 'Launch cwd'))
+  if (cwdTarget.kind !== 'directory') throw new Error('Launch cwd must be a workspace directory')
+  if (launch.type === ProjectType.Custom && launch.program && !isAbsolute(launch.program) && /[\\/]/.test(launch.program)) {
+    const programTarget = await resolveWorkspaceTarget(
+      workspaceRoot,
+      assertInsideWorkspace(workspaceRoot, resolve(cwd, launch.program), 'Launch program'),
+    )
+    if (programTarget.kind !== 'file') throw new Error('Launch program must be a regular workspace file')
+  }
+}
+
 function runningProjectSummary(id: string, handle: ReturnType<ReturnType<typeof getProjectRunner>['getRunning']>) {
   if (!handle) return null
   return {
@@ -223,6 +268,7 @@ export const projectGenerateConfigTool: RegisteredTool = {
     }
     const config = projectConfigFromDetection(projectPath, details, requestedType as ProjectType | undefined, launch as Record<string, unknown> | undefined)
     const validation = ProjectConfig.validate(config)
+    if (validation.valid) validateLaunchConfigBoundary(context.workspaceRoot, projectPath, config)
     return {
       workspaceId,
       path: target.relativePath,
@@ -258,6 +304,7 @@ export const projectApplyConfigTool: RegisteredTool = {
     const config = structuredClone(input.config) as LaunchConfig
     const validation = ProjectConfig.validate(config)
     if (!validation.valid) throw new Error(`Project configuration is invalid: ${validation.errors.map((error) => error.message).join('; ')}`)
+    validateLaunchConfigBoundary(context.workspaceRoot, resolve(context.workspaceRoot, target.relativePath || '.'), config)
     if (context.signal.aborted) throw new Error('project config application cancelled')
     await ProjectConfig.write(resolve(context.workspaceRoot, target.relativePath || '.'), config)
     return { workspaceId, path: target.relativePath, validation, applied: true }
@@ -305,10 +352,51 @@ export const projectStartProcessTool: RegisteredTool = {
     if (typeof requestedPath !== 'string' || typeof configName !== 'string' || !configName.trim()) throw new Error('project.start-process input is invalid')
     const target = await resolveWorkspaceTarget(context.workspaceRoot, requestedPath)
     if (target.kind !== 'directory') throw new Error('project.start-process path must be a directory')
-    const handle = await getProjectRunner().run(resolve(context.workspaceRoot, target.relativePath || '.'), configName)
+    const projectPath = resolve(context.workspaceRoot, target.relativePath || '.')
+    await validateRunnableConfigBoundary(context.workspaceRoot, projectPath, configName)
+    const handle = await getProjectRunner().run(projectPath, configName)
     const entries = [...getProjectRunner().getAllRunning().entries()]
     const entry = entries.find(([, candidate]) => candidate === handle || candidate.pid === handle.pid)
     return { workspaceId, process: entry ? runningProjectSummary(entry[0], entry[1]) : { pid: handle.pid, name: handle.config.name } }
+  },
+}
+
+export const projectProcessOutputTool: RegisteredTool = {
+  name: 'project.process-output',
+  description: 'Read recent bounded output from one JanusX-managed project process in the active workspace',
+  actionRisk: 'inspect',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      workspaceId: { type: 'string' },
+      projectId: { type: 'string' },
+      maxLines: { type: 'number' },
+    },
+    required: ['workspaceId', 'projectId'],
+    additionalProperties: false,
+  },
+  execute: (input, context) => {
+    const workspaceId = assertWorkspaceId(input, context, 'project.process-output')
+    const projectId = input.projectId
+    const maxLines = input.maxLines ?? 100
+    if (typeof projectId !== 'string' || !isProjectIdInWorkspace(projectId, context.workspaceRoot)) {
+      throw new Error('project.process-output projectId is outside the active workspace')
+    }
+    if (!Number.isSafeInteger(maxLines) || Number(maxLines) < 1 || Number(maxLines) > 500) {
+      throw new Error('project.process-output maxLines must be an integer between 1 and 500')
+    }
+    const process = getProjectRunner().getRunning(projectId)
+    if (!process) throw new Error(`Project ${projectId} is not running`)
+    const lines = process.output.slice(-Number(maxLines))
+    const fullOutput = lines.join('\n')
+    const maxChars = 128 * 1024
+    const output = fullOutput.length > maxChars ? fullOutput.slice(-maxChars) : fullOutput
+    return {
+      workspaceId,
+      projectId,
+      output,
+      truncated: process.output.length > lines.length || output.length < fullOutput.length,
+    }
   },
 }
 
@@ -340,6 +428,7 @@ export function registerProjectTools(registry: ToolRegistry): void {
   registry.register(projectGenerateConfigTool)
   registry.register(projectApplyConfigTool)
   registry.register(projectListProcessesTool)
+  registry.register(projectProcessOutputTool)
   registry.register(projectStartProcessTool)
   registry.register(projectStopProcessTool)
   registeredRegistries.add(registry)

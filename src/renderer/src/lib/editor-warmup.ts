@@ -7,8 +7,8 @@ let editorWarmupPromise: Promise<unknown> | null = null
 export function warmupEditorRuntime(): Promise<unknown> {
   if (editorWarmupPromise) return editorWarmupPromise
 
-  editorWarmupPromise = import('@monaco-editor/react')
-    .then(({ loader }) => loader.init())
+  editorWarmupPromise = import('@/lib/monaco-runtime')
+    .then(({ initializeMonacoRuntime }) => initializeMonacoRuntime())
     .catch((error) => {
       editorWarmupPromise = null
       console.debug('Editor warmup failed:', error)

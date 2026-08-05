@@ -34,7 +34,14 @@ describe('stream compatibility', () => {
 
     await withAiSdkV1StreamCompatibility(model).doStream({
       inputFormat: 'messages',
-      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Read the workspace' }] }],
+      prompt: [{
+        role: 'user',
+        content: [{
+          type: 'text',
+          text: 'Read the workspace',
+          experimental_providerMetadata: { vertex: { thoughtSignature: 'signature-1' } },
+        }],
+      }],
       maxTokens: 128,
       mode: {
         type: 'regular',
@@ -60,6 +67,10 @@ describe('stream compatibility', () => {
       }],
     })
     expect(receivedOptions.tools[0]).not.toHaveProperty('parameters')
+    expect(receivedOptions.prompt[0].content[0].providerOptions).toEqual({
+      vertex: { thoughtSignature: 'signature-1' },
+    })
+    expect(receivedOptions.prompt[0].content[0]).not.toHaveProperty('experimental_providerMetadata')
   })
 
   it('normalizes newer AI SDK stream chunks to v1 chunks', async () => {
@@ -125,7 +136,8 @@ describe('stream compatibility', () => {
               type: 'tool-call',
               toolCallId: 'call-1',
               toolName: 'janusx_workspace_tools:list_dir',
-              input: '{"path":"src"}'
+              input: '{"path":"src"}',
+              providerMetadata: { vertex: { thoughtSignature: 'signature-2' } },
             })
             controller.close()
           }
@@ -138,7 +150,11 @@ describe('stream compatibility', () => {
 
     expect(chunks).toEqual([
       expect.objectContaining({ type: 'tool-call-delta', toolName: 'workspace_list' }),
-      expect.objectContaining({ type: 'tool-call', toolName: 'workspace_list' })
+      expect.objectContaining({
+        type: 'tool-call',
+        toolName: 'workspace_list',
+        experimental_providerMetadata: { vertex: { thoughtSignature: 'signature-2' } },
+      })
     ])
   })
 
@@ -162,6 +178,7 @@ describe('stream compatibility', () => {
                   toolCallId: 'call-1',
                   toolName: 'workspace_list',
                   input: '{"workspaceId":"one"}',
+                  providerMetadata: { vertex: { thoughtSignature: 'roundtrip-signature' } },
                 })
                 controller.enqueue({
                   type: 'finish',
@@ -213,6 +230,7 @@ describe('stream compatibility', () => {
             type: 'tool-call',
             toolName: 'workspace_list',
             input: { workspaceId: 'one' },
+            providerOptions: { vertex: { thoughtSignature: 'roundtrip-signature' } },
           }),
         ]),
       }),

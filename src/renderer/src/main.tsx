@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react'
+import React, { lazy, Suspense, type ErrorInfo, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { installElectronApiFallback } from './lib/electron-api-fallback'
 import { initBrowserEventSubscriptions } from './stores/browser'
@@ -28,10 +28,93 @@ const isEditorWindow = searchParams.get('editorWindow') === '1'
 const isDesktopToast = searchParams.get('desktopToast') === '1'
 const isBrowserWindow = searchParams.get('browserWindow') === '1'
 
+function EditorWindowLoading() {
+  return (
+    <div
+      data-editor-window-state="loading"
+      className="flex h-screen flex-col overflow-hidden bg-[#151517] text-[#d4d4d4]"
+      role="status"
+      aria-label="Loading editor"
+    >
+      <div className="h-[38px] shrink-0 border-b border-white/[0.06] bg-[#060606] px-3">
+        <div className="flex h-full items-center gap-2" aria-hidden="true">
+          <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+          <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
+          <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+        </div>
+      </div>
+      <div className="flex flex-1 items-center justify-center gap-2 text-xs text-[#666]">
+        <span>Loading editor</span>
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#ff7830]" aria-hidden="true" />
+      </div>
+    </div>
+  )
+}
+
+class EditorWindowErrorBoundary extends React.Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('Standalone editor failed to render:', error, info.componentStack)
+  }
+
+  render(): ReactNode {
+    if (!this.state.error) return this.props.children
+
+    return (
+      <div
+        data-editor-window-state="error"
+        className="flex h-screen items-center justify-center bg-[#151517] px-8 text-[#d4d4d4]"
+        role="alert"
+      >
+        <div className="w-full max-w-md border border-white/[0.08] bg-[#191919] p-5">
+          <div className="text-sm text-[#eee]">Editor failed to open</div>
+          <div className="mt-2 break-words font-mono text-[11px] leading-5 text-[#777]">
+            {this.state.error.message || 'The editor renderer could not be loaded.'}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              className="h-8 border border-[#ff7830]/40 bg-[#ff7830]/10 px-3 text-xs text-[#ff9b64] hover:bg-[#ff7830]/15"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              className="h-8 border border-white/[0.08] bg-white/[0.04] px-3 text-xs text-[#999] hover:text-white"
+              onClick={() => window.electron.window.close()}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+}
+
+const rootContent = isEditorWindow ? (
+  <EditorWindowErrorBoundary>
+    <Suspense fallback={<EditorWindowLoading />}>
+      <StandaloneFileEditor />
+    </Suspense>
+  </EditorWindowErrorBoundary>
+) : (
+  <Suspense fallback={null}>
+    {isDesktopToast ? <DesktopToastApp /> : isBrowserWindow ? <StandaloneBrowser /> : <App />}
+  </Suspense>
+)
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Suspense fallback={null}>
-      {isDesktopToast ? <DesktopToastApp /> : isEditorWindow ? <StandaloneFileEditor /> : isBrowserWindow ? <StandaloneBrowser /> : <App />}
-    </Suspense>
+    {rootContent}
   </React.StrictMode>
 )

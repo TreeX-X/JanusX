@@ -3,6 +3,8 @@ import { AGENT_RUNTIME_CHANNELS, type ApprovalResult, type CreateAgentSessionInp
 import { workspaceAgentRuntime } from '../agent/runtime/runtime'
 import { registerWorkspaceTools } from '../agent/runtime/tools/workspace-tools'
 import { registerProjectTools } from '../agent/runtime/tools/project-tools'
+import { registerGitTools } from '../agent/runtime/tools/git-tools'
+import { registerCommandTools } from '../agent/runtime/tools/command-tools'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 
 let registered = false
@@ -14,6 +16,8 @@ export function registerAgentRuntimeHandlers(windowGetter: () => BrowserWindow |
   if (registered) return
   registerWorkspaceTools(workspaceAgentRuntime.registry)
   registerProjectTools(workspaceAgentRuntime.registry)
+  registerGitTools(workspaceAgentRuntime.registry)
+  registerCommandTools(workspaceAgentRuntime.registry)
   registered = true
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.createSession, (_event, input: CreateAgentSessionInput) => workspaceAgentRuntime.createSession(input))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.executeTool, (event, input: ExecuteToolInput) => workspaceAgentRuntime.executeTool(input, `renderer:${event.sender.id}`))

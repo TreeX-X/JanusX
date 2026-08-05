@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import type { FindableEditor } from '@/lib/editor-find'
 import { defineJanusxDarkTheme, JANUSX_DARK_THEME_NAME } from '@/lib/monaco-theme'
+import { configureMonacoRuntime } from '@/lib/monaco-runtime'
+
+configureMonacoRuntime()
 
 interface MonacoViewerProps {
   content: string

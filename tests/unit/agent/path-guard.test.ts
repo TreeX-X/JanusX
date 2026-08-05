@@ -13,12 +13,20 @@ import { evaluateWorkspaceReadPolicy } from '../../../src/main/agent/runtime/pol
 const fileOpenHooks = vi.hoisted(() => ({
   beforeOpen: undefined as undefined | (() => Promise<void>),
   afterOpen: undefined as undefined | (() => Promise<void>),
+  pathStatDevice: undefined as bigint | undefined,
 }))
 
 vi.mock('fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs/promises')>()
   return {
     ...actual,
+    stat: async (...args: Parameters<typeof actual.stat>) => {
+      const result = await actual.stat(...args)
+      if (fileOpenHooks.pathStatDevice !== undefined && typeof result.dev === 'bigint') {
+        result.dev = fileOpenHooks.pathStatDevice
+      }
+      return result
+    },
     open: async (...args: Parameters<typeof actual.open>) => {
       await fileOpenHooks.beforeOpen?.()
       const handle = await actual.open(...args)
@@ -39,6 +47,7 @@ async function temporaryDirectory(): Promise<string> {
 afterEach(async () => {
   fileOpenHooks.beforeOpen = undefined
   fileOpenHooks.afterOpen = undefined
+  fileOpenHooks.pathStatDevice = undefined
   await Promise.all(temporaryDirectories.splice(0).map((directory) =>
     rm(directory, { recursive: true, force: true }),
   ))
@@ -71,6 +80,40 @@ describe('workspace path guard', () => {
     })
     await expect(readWorkspaceFile(root, '', 64, evaluateWorkspaceReadPolicy)).rejects.toMatchObject({
       code: 'TARGET_NOT_REGULAR',
+    })
+  })
+
+  it('retries once when an atomic save replaces the file during validation', async () => {
+    const root = await temporaryDirectory()
+    const target = join(root, 'notes.txt')
+    await writeFile(target, 'before')
+
+    fileOpenHooks.afterOpen = async () => {
+      fileOpenHooks.afterOpen = undefined
+      await rename(target, join(root, 'notes-before.txt'))
+      await writeFile(target, 'after')
+    }
+
+    await expect(readWorkspaceFile(root, 'notes.txt', 64, evaluateWorkspaceReadPolicy))
+      .resolves.toEqual(Buffer.from('after'))
+  })
+
+  it('accepts a matching inode when Electron omits the path stat device on Windows', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'notes.txt'), 'inside content')
+    fileOpenHooks.pathStatDevice = 0n
+
+    await expect(readWorkspaceFile(root, 'notes.txt', 64, evaluateWorkspaceReadPolicy))
+      .resolves.toEqual(Buffer.from('inside content'))
+  })
+
+  it('rejects different devices when both file identities provide them', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'notes.txt'), 'inside content')
+    fileOpenHooks.pathStatDevice = 1n
+
+    await expect(readWorkspaceFile(root, 'notes.txt', 64, evaluateWorkspaceReadPolicy)).rejects.toMatchObject({
+      code: 'TARGET_CHANGED',
     })
   })
 

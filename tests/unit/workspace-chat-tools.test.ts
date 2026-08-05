@@ -55,6 +55,28 @@ describe('workspace chat tools', () => {
       .resolves.toMatchObject({ ok: false, status: 'failed', error: 'Sensitive path denied' })
   })
 
+  it('identifies a changed target as retryable instead of a locked workspace', async () => {
+    const tools = createWorkspaceChatTools({
+      runtime: {
+        executeFunctionCall: vi.fn().mockResolvedValue(result({
+          status: 'failed',
+          reasonCode: 'TARGET_CHANGED',
+          error: 'Workspace target changed during authorization',
+        })),
+      },
+      resources,
+      callerId: 'renderer:7',
+    })
+
+    await expect(tools.workspace_read.execute({ workspaceId: 'workspace-1', path: 'README.md', maxBytes: 4096 }))
+      .resolves.toMatchObject({
+        ok: false,
+        retryable: true,
+        reasonCode: 'TARGET_CHANGED',
+        guidance: expect.stringContaining('workspace is not locked'),
+      })
+  })
+
   it('turns a user denial into guidance the model can continue from', async () => {
     const tools = createWorkspaceChatTools({
       runtime: {
@@ -202,6 +224,37 @@ describe('workspace chat tools', () => {
     })
   })
 
+  it('routes Git and command tools with explicit approval previews', async () => {
+    const executeFunctionCall = vi.fn().mockResolvedValue(result({ output: { ok: true } }))
+    const tools = createWorkspaceChatTools({
+      runtime: { executeFunctionCall },
+      resources,
+      callerId: 'renderer:7',
+    })
+
+    await tools.git_status.execute({ workspaceId: 'workspace-1', path: '' })
+    await tools.git_diff.execute({ workspaceId: 'workspace-1', path: '', staged: false, maxBytes: 4096 })
+    await tools.git_stage.execute({ workspaceId: 'workspace-1', path: '', paths: ['src/app.ts'] })
+    await tools.git_commit.execute({ workspaceId: 'workspace-1', path: '', message: 'fix: update app' })
+    await tools.git_push.execute({ workspaceId: 'workspace-1', path: '' })
+    await tools.command_run.execute({
+      workspaceId: 'workspace-1', cwd: '', program: 'npm', args: ['test'], timeoutMs: 30_000,
+    })
+
+    expect(executeFunctionCall.mock.calls.map(([input]) => input.call.toolName)).toEqual([
+      'git.status', 'git.diff', 'git.stage', 'git.commit', 'git.push', 'command.run',
+    ])
+    expect(executeFunctionCall.mock.calls[2][0].call.preview).toMatchObject({
+      summary: expect.stringContaining('Stage'),
+      detail: '["src/app.ts"]',
+    })
+    expect(executeFunctionCall.mock.calls[3][0].call.preview).toMatchObject({ detail: 'fix: update app' })
+    expect(executeFunctionCall.mock.calls[5][0].call.preview).toMatchObject({
+      summary: 'Run npm',
+      detail: expect.stringContaining('"test"'),
+    })
+  })
+
   it('treats detection as evidence and explicit launch intent as authoritative', () => {
     const prompt = createWorkspaceChatSystemPrompt(resources)
 
@@ -209,6 +262,8 @@ describe('workspace chat tools', () => {
     expect(prompt).toContain('Explicit user statements')
     expect(prompt).toContain('project_generate_config.launch')
     expect(prompt).toContain('project_list_processes')
+    expect(prompt).toContain('git_status')
+    expect(prompt).toContain('command_run')
     expect(prompt).toContain('manage unrelated operating-system processes')
   })
 })
