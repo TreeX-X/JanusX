@@ -1,4 +1,5 @@
 import type {
+  BlueprintFeatureStatus,
   BlueprintNode,
   BlueprintNodeStatus,
   BlueprintNodeType,
@@ -6,6 +7,15 @@ import type {
   BlueprintRelation,
   BlueprintRelationType,
 } from './types'
+
+export interface BlueprintProposedFeature {
+  id?: string
+  title: string
+  description: string
+  progress: number
+  status: BlueprintFeatureStatus
+  requirementNotes: string[]
+}
 
 export type BlueprintMaintenanceScope =
   | { type: 'node'; nodeId: string }
@@ -74,7 +84,7 @@ export interface BlueprintUpdateNodeOperation extends BlueprintOperationBase {
   before: Partial<BlueprintNode>
   after: Partial<Pick<BlueprintNode,
     'title' | 'type' | 'status' | 'progress' | 'positioning' | 'description' |
-    'techSolution' | 'notes' | 'tags'>>
+    'techSolution' | 'notes' | 'tags'>> & { features?: BlueprintProposedFeature[] }
 }
 
 export interface BlueprintMoveNodeOperation extends BlueprintOperationBase {
@@ -194,6 +204,7 @@ export interface BlueprintMaintenanceTask {
   workspaceId: string
   workspaceName: string
   workspacePath: string
+  authorizedWorkspaces?: BlueprintMaintenanceWorkspace[]
   nodeScope: BlueprintMaintenanceScope
   goal: string
   status: BlueprintMaintenanceTaskStatus
@@ -207,11 +218,18 @@ export interface BlueprintMaintenanceTask {
   updatedAt: string
 }
 
+export interface BlueprintMaintenanceWorkspace {
+  workspaceId: string
+  workspaceName: string
+  workspacePath: string
+}
+
 export interface BlueprintMaintenanceStartInput {
   blueprintId: string
   workspaceId: string
   workspaceName: string
   workspacePath: string
+  authorizedWorkspaces?: BlueprintMaintenanceWorkspace[]
   nodeScope: BlueprintMaintenanceScope
   goal: string
   providerId?: string

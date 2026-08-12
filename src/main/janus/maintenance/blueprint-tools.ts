@@ -13,6 +13,14 @@ const operationBase = {
 }
 
 const relationType = z.enum(['depends-on', 'blocks', 'related-to', 'implements'])
+const proposedFeature = z.object({
+  id: z.string().min(1).optional(),
+  title: z.string().min(1),
+  description: z.string().default(''),
+  progress: z.number().min(0).max(100).default(0),
+  status: z.enum(['planned', 'in-progress', 'done', 'blocked']).default('planned'),
+  requirementNotes: z.array(z.string()).default([]),
+})
 
 export const blueprintProposalSchema = z.object({
   summary: z.string().min(1),
@@ -25,6 +33,7 @@ export const blueprintProposalSchema = z.object({
       title: z.string().min(1).optional(), type: z.enum(['epic', 'feature', 'task', 'issue']).optional(),
       status: z.enum(['not-started', 'in-progress', 'testing', 'done', 'blocked']).optional(), progress: z.number().min(0).max(100).optional(),
       positioning: z.string().optional(), description: z.string().optional(), techSolution: z.string().optional(), notes: z.string().optional(), tags: z.array(z.string()).optional(),
+      features: z.array(proposedFeature).max(40).optional(),
     }) }),
     z.object({ ...operationBase, type: z.literal('move-node'), nodeId: z.string().min(1), afterParentId: z.string().min(1) }),
     z.object({ ...operationBase, type: z.literal('add-relation'), tempRelationId: z.string().min(1), after: z.object({

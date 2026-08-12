@@ -263,6 +263,11 @@ export function useBlueprintGraphController({
     await applyLayout(computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, {}), {})
   }, [applyLayout, blueprint, collapsedNodeIds])
 
+  const reflowVisibleLayout = useCallback(async (nextCollapsedNodeIds: Set<string>) => {
+    if (!blueprint) return
+    await applyLayout(computeVisibleBlueprintLayout(blueprint, nextCollapsedNodeIds, {}), {})
+  }, [applyLayout, blueprint])
+
   const layoutSubtree = useCallback(async (nodeId: string) => {
     if (!blueprint?.nodes[nodeId]) return
     const next = computeBlueprintSubtreeLayout(blueprint, nodeId, positionsRef.current)
@@ -291,6 +296,7 @@ export function useBlueprintGraphController({
     edges,
     onNodesChange,
     autoLayout,
+    reflowVisibleLayout,
     layoutSubtree,
     restoreDefaultLayout,
     undoRestoreDefaultLayout,

@@ -341,21 +341,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     }
   }, [currentBlueprint, blueprintId])
 
-  const toggleCollapse = useCallback((nodeId: string) => {
-    setCollapsedNodeIds((current) => {
-      const next = new Set(current)
-      if (next.has(nodeId)) next.delete(nodeId)
-      else next.add(nodeId)
-      return next
-    })
-  }, [])
-  const cardActions = useMemo(() => ({ toggleCollapse }), [toggleCollapse])
-
   const {
     nodes: rfNodes,
     edges: rfEdges,
     onNodesChange,
     autoLayout,
+    reflowVisibleLayout,
     layoutSubtree,
     restoreDefaultLayout,
     undoRestoreDefaultLayout,
@@ -370,6 +361,19 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     onSelectionChange: setSelectedId,
     onError: setActionError
   })
+
+  const toggleCollapse = useCallback((nodeId: string) => {
+    const next = new Set(collapsedNodeIds)
+    const expanding = next.delete(nodeId)
+    if (!expanding) next.add(nodeId)
+    setCollapsedNodeIds(next)
+    if (expanding) {
+      void reflowVisibleLayout(next).then(() => {
+        window.setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.2, duration: 240 }), 40)
+      })
+    }
+  }, [collapsedNodeIds, reflowVisibleLayout])
+  const cardActions = useMemo(() => ({ toggleCollapse }), [toggleCollapse])
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
     (_e, node) => {
@@ -1011,6 +1015,17 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                 getPortalContainer={getSelectPortalContainer}
               />
             </div>
+          </div>
+
+          <div className="bp-node-detail__section bp-node-detail__section--content">
+            <label className="bp-node-detail__label">{t('blueprint:detailPanel.description')}</label>
+            <textarea
+              key={`${detailNode.id}-${detailNode.updatedAt}-description`}
+              className="bp-node-detail__textarea"
+              defaultValue={detailNode.description}
+              placeholder={t('blueprint:detailPanel.descriptionPlaceholder')}
+              onBlur={(event) => persistNodePatch(detailNode.id, { description: event.currentTarget.value.trim() })}
+            />
           </div>
 
           <div className="bp-node-detail__section bp-node-detail__section--content">

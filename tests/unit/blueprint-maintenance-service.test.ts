@@ -76,20 +76,24 @@ function fixture(): Blueprint {
 describe('Blueprint maintenance free conversation', () => {
   let root = ''
   let workspace = ''
+  let workspace2 = ''
   let registry = ''
 
   beforeAll(async () => {
     root = await fs.mkdtemp(join(tmpdir(), 'janusx-maintenance-'))
     workspace = join(root, 'workspace')
+    workspace2 = join(root, 'workspace-2')
     registry = join(root, 'registry')
     await fs.mkdir(workspace)
+    await fs.mkdir(workspace2)
     await fs.mkdir(registry)
     await fs.writeFile(join(registry, 'workspace.json'), JSON.stringify({ id: 'ws-1', path: workspace }), 'utf8')
+    await fs.writeFile(join(registry, 'workspace-2.json'), JSON.stringify({ id: 'ws-2', path: workspace2 }), 'utf8')
     mocks.workspacesDir.mockReturnValue(registry)
     mocks.getDefaultModel.mockResolvedValue({ provider: { id: 'provider' }, modelId: 'model' })
     mocks.getLanguageModel.mockResolvedValue({})
     mocks.loadBlueprint.mockImplementation(async () => fixture())
-    mocks.createSession.mockResolvedValue({ id: 'agent-session' })
+    mocks.createSession.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({ id: `agent-session-${workspaceId}` }))
     mocks.getSession.mockReturnValue({ status: 'running' })
     mocks.cancelSession.mockResolvedValue({ status: 'cancelled' })
   })
@@ -164,6 +168,25 @@ describe('Blueprint maintenance free conversation', () => {
     await expect(blueprintMaintenanceService.start(input)).rejects.toThrow('已有活动维护任务')
     releaseLoad()
     const started = await first
+    blueprintMaintenanceService.cancel(started.id)
+  })
+
+  it('authorizes multiple workspaces while keeping a single node scope', async () => {
+    const { blueprintMaintenanceService } = await import('../../src/main/janus/maintenance/service')
+    const started = await blueprintMaintenanceService.start({
+      blueprintId: 'bp-1', workspaceId: 'ws-1', workspaceName: 'Workspace', workspacePath: workspace,
+      authorizedWorkspaces: [
+        { workspaceId: 'ws-1', workspaceName: 'Workspace', workspacePath: workspace },
+        { workspaceId: 'ws-2', workspaceName: 'Workspace 2', workspacePath: workspace2 },
+      ],
+      nodeScope: { type: 'node', nodeId: 'root' }, goal: 'cross-workspace evidence',
+    })
+    await waitFor(() => expect(blueprintMaintenanceService.list()[0]?.status).toBe('active'))
+
+    expect(started.authorizedWorkspaces).toHaveLength(2)
+    expect(started.nodeScope).toEqual({ type: 'node', nodeId: 'root' })
+    expect(mocks.createSession).toHaveBeenCalledWith({ workspaceId: 'ws-1', workspaceRoot: workspace })
+    expect(mocks.createSession).toHaveBeenCalledWith({ workspaceId: 'ws-2', workspaceRoot: workspace2 })
     blueprintMaintenanceService.cancel(started.id)
   })
 

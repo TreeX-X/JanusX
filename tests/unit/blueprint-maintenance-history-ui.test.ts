@@ -15,5 +15,8 @@ describe('Blueprint maintenance audit history UI', () => {
     expect(panel).toContain('selectedAuditOperations(record)')
     expect(panel).toContain('auditOperationChanges(operation)')
     expect(panel).toContain('auditOperationEvidence(record, operation)')
+    expect(panel).toContain("panelView === 'history'")
+    expect(panel).toContain("setPanelView('conversation')")
+    expect(panel).toContain("setPanelView('history')")
   })
 })

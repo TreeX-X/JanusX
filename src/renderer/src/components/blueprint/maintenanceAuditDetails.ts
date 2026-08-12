@@ -87,6 +87,11 @@ export function auditOperationEvidence(
 
 export function formatAuditValue(value: unknown, emptyValue: string): string {
   if (value === null || value === undefined || value === '') return emptyValue
-  if (Array.isArray(value)) return value.length ? value.join(', ') : emptyValue
+  if (Array.isArray(value)) {
+    if (!value.length) return emptyValue
+    return value.some((item) => typeof item === 'object' && item !== null)
+      ? JSON.stringify(value)
+      : value.join(', ')
+  }
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }

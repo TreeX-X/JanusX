@@ -1,15 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDownToLine, Check, ChevronDown, X } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { Select } from '../ui/Select'
 import { useI18n } from '@/i18n/useI18n'
 import type { TFunction } from 'i18next'
 import type {
   BlueprintChangeSet,
   BlueprintMaintenanceAuditRecord,
-  BlueprintMaintenanceScope,
   BlueprintOperation,
 } from '@/services/blueprint'
 import {
@@ -22,6 +20,26 @@ import {
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
 const EMPTY_AUDITS: BlueprintMaintenanceAuditRecord[] = []
+const MESSAGE_SUMMARY_LIMIT = 220
+
+export function splitMaintenanceReply(content: string): { summary: string; details: string | null } {
+  const normalized = content.trim()
+  const sections = normalized.split(/\n\s*\n/).map((section) => section.trim()).filter(Boolean)
+  if (sections.length > 1) return { summary: sections[0], details: sections.slice(1).join('\n\n') }
+  if (normalized.length <= MESSAGE_SUMMARY_LIMIT) return { summary: normalized, details: null }
+  const sentenceEnd = normalized.slice(60, MESSAGE_SUMMARY_LIMIT).search(/[。！？.!?](?:\s|$)/)
+  const summaryWindow = normalized.slice(0, MESSAGE_SUMMARY_LIMIT)
+  const lastWhitespace = Math.max(summaryWindow.lastIndexOf(' '), summaryWindow.lastIndexOf('\n'))
+  const splitAt = sentenceEnd >= 0
+    ? 60 + sentenceEnd + 1
+    : lastWhitespace > 80
+      ? lastWhitespace
+      : MESSAGE_SUMMARY_LIMIT
+  return {
+    summary: normalized.slice(0, splitAt).trim(),
+    details: normalized.slice(splitAt).trim() || null,
+  }
+}
 
 function relationTypeLabel(type: string, t: TFunction): string {
   const labels: Record<string, string> = {
@@ -66,6 +84,7 @@ function fieldLabel(field: string, t: TFunction): string {
     progress: t('blueprint:maintenance.auditField.progress'),
     positioning: t('blueprint:maintenance.auditField.positioning'),
     description: t('blueprint:maintenance.auditField.description'),
+    features: t('blueprint:maintenance.auditField.features'),
     techSolution: t('blueprint:maintenance.auditField.techSolution'),
     notes: t('blueprint:maintenance.auditField.notes'),
     tags: t('blueprint:maintenance.auditField.tags'),
@@ -241,6 +260,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const reloadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
   const workspaces = useWorkspaceStore((state) => state.workspaces)
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const setWorkspaces = useWorkspaceStore((state) => state.setWorkspaces)
   const tasks = useBlueprintMaintenanceStore((state) => state.tasks)
   const openRequest = useBlueprintMaintenanceStore((state) => state.openRequest)
   const error = useBlueprintMaintenanceStore((state) => state.error)
@@ -261,35 +281,86 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const clearPendingUndo = useBlueprintMaintenanceStore((state) => state.clearPendingUndo)
   const applyUndo = useBlueprintMaintenanceStore((state) => state.applyUndo)
   const task = tasks.find((item) => item.blueprintId === blueprint?.id && !['completed', 'cancelled'].includes(item.status)) ?? null
-  const [workspaceId, setWorkspaceId] = useState(activeWorkspaceId ?? workspaces[0]?.id ?? '')
-  const [scopeType, setScopeType] = useState<'node' | 'subtree' | 'blueprint'>(openRequest?.nodeId ? 'node' : 'blueprint')
+  const [workspaceIds, setWorkspaceIds] = useState<string[]>(() => activeWorkspaceId ? [activeWorkspaceId] : workspaces[0]?.id ? [workspaces[0].id] : [])
   const [scopeNodeId, setScopeNodeId] = useState(openRequest?.nodeId ?? blueprint?.rootNodeId ?? '')
   const [goal, setGoal] = useState(() => t('blueprint:maintenance.goalDefault'))
   const [draft, setDraft] = useState('')
+  const [panelView, setPanelView] = useState<'conversation' | 'history'>('conversation')
+  const taskScrollRef = useRef<HTMLDivElement>(null)
+  const conversationBottomRef = useRef<HTMLDivElement>(null)
+  const followsConversationRef = useRef(true)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
 
   const proposalSelection = useOperationSelection(task?.changeSet ?? null)
   const undoSelection = useOperationSelection(pendingUndo?.changeSet ?? null)
 
   useEffect(() => { void initialize() }, [initialize])
+  useEffect(() => {
+    void window.electron.workspace.list().then((items) => {
+      setWorkspaces(items)
+      setWorkspaceIds((current) => {
+        const valid = current.filter((id) => items.some((item) => item.id === id))
+        if (valid.length) return valid
+        const fallback = items.find((item) => item.id === activeWorkspaceId) ?? items[0]
+        return fallback ? [fallback.id] : []
+      })
+    }).catch(() => undefined)
+  }, [activeWorkspaceId, setWorkspaces])
   useEffect(() => { if (blueprint?.id) void loadAudits(blueprint.id) }, [blueprint?.id, loadAudits])
   useEffect(() => {
     if (!openRequest || openRequest.blueprintId !== blueprint?.id) return
-    if (openRequest.nodeId) { setScopeType('node'); setScopeNodeId(openRequest.nodeId) }
+    if (openRequest.nodeId) setScopeNodeId(openRequest.nodeId)
     clearOpenRequest()
   }, [blueprint?.id, clearOpenRequest, openRequest])
 
-  const workspace = workspaces.find((item) => item.id === workspaceId)
+  const scrollConversationToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const container = taskScrollRef.current
+    const target = conversationBottomRef.current
+    if (!container || !target) return
+    container.scrollTo({ top: Math.max(0, target.offsetTop - container.clientHeight + 24), behavior })
+    followsConversationRef.current = true
+    setShowScrollToBottom(false)
+  }, [])
+
+  const handleTaskScroll = useCallback(() => {
+    const container = taskScrollRef.current
+    const target = conversationBottomRef.current
+    if (!container || !target) return
+    const awayFromBottom = target.offsetTop - container.scrollTop - container.clientHeight > 96
+    followsConversationRef.current = !awayFromBottom
+    setShowScrollToBottom(awayFromBottom)
+  }, [])
+
+  useEffect(() => {
+    if (!task || !followsConversationRef.current) return
+    const frame = window.requestAnimationFrame(() => scrollConversationToBottom('auto'))
+    return () => window.cancelAnimationFrame(frame)
+  }, [scrollConversationToBottom, task?.changeSet?.id, task?.messages.length])
+
+  const selectedWorkspaces = workspaces.filter((item) => workspaceIds.includes(item.id))
   const nodeOptions = blueprint?.nodeIds.map((id) => ({ value: id, label: blueprint.nodes[id]?.title ?? id })) ?? []
   const proposalGroups = useMemo(() => groupOperations(task?.changeSet?.operations ?? []), [task?.changeSet])
   const undoGroups = useMemo(() => groupOperations(pendingUndo?.changeSet.operations ?? []), [pendingUndo?.changeSet])
   const appliedAudits = audits.filter((record) => record.status === 'applied')
+  const taskWorking = task?.status === 'analyzing' || task?.status === 'applying'
+  const taskNeedsNotice = taskWorking || task?.status === 'failed' || task?.status === 'stale'
 
   const handleStart = async () => {
-    if (!blueprint || !workspace) return
-    const nodeScope: BlueprintMaintenanceScope = scopeType === 'blueprint'
-      ? { type: 'blueprint' }
-      : { type: scopeType, nodeId: scopeNodeId }
-    await start({ blueprintId: blueprint.id, workspaceId: workspace.id, workspaceName: workspace.name, workspacePath: workspace.path, nodeScope, goal })
+    const primaryWorkspace = selectedWorkspaces[0]
+    if (!blueprint || !primaryWorkspace || !scopeNodeId) return
+    await start({
+      blueprintId: blueprint.id,
+      workspaceId: primaryWorkspace.id,
+      workspaceName: primaryWorkspace.name,
+      workspacePath: primaryWorkspace.path,
+      authorizedWorkspaces: selectedWorkspaces.map((workspace) => ({
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        workspacePath: workspace.path,
+      })),
+      nodeScope: { type: 'node', nodeId: scopeNodeId },
+      goal,
+    })
   }
   const handleApply = async () => {
     if (!task?.changeSet || !blueprint) return
@@ -425,28 +496,75 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
           <X size={16} aria-hidden="true" />
         </button>
       </header>
-      {!task ? (
-        <div className="bp-maintenance-start">
-          <label>{t('blueprint:maintenance.authorizeWorkspace')}<Select value={workspaceId} onChange={setWorkspaceId} options={workspaces.map((item) => ({ value: item.id, label: item.name }))} /></label>
-          <label>{t('blueprint:maintenance.nodeScope')}<Select value={scopeType} onChange={(value) => setScopeType(value as typeof scopeType)} options={[{ value: 'node', label: t('blueprint:maintenance.scopeCurrentNode') }, { value: 'subtree', label: t('blueprint:maintenance.scopeSubtree') }, { value: 'blueprint', label: t('blueprint:maintenance.scopeBlueprint') }]} /></label>
-          {scopeType !== 'blueprint' ? <label>{t('blueprint:maintenance.targetNode')}<Select value={scopeNodeId} onChange={setScopeNodeId} options={nodeOptions} /></label> : null}
-          <label>{t('blueprint:maintenance.maintenanceGoal')}<textarea value={goal} onChange={(event) => setGoal(event.target.value)} /></label>
-          <p>{t('blueprint:maintenance.policyHint')}</p>
-          <button className="blueprint-btn blueprint-btn--primary" type="button" onClick={() => void handleStart()} disabled={!blueprint || !workspace || !goal.trim()}>{t('blueprint:maintenance.startConversation')}</button>
+      <nav className="bp-maintenance-panel__tabs" aria-label={t('blueprint:maintenance.viewAria')}>
+        <button type="button" className={panelView === 'conversation' ? 'is-active' : ''} onClick={() => setPanelView('conversation')} aria-pressed={panelView === 'conversation'}>
+          {t('blueprint:maintenance.viewConversation')}
+        </button>
+        <button type="button" className={panelView === 'history' ? 'is-active' : ''} onClick={() => setPanelView('history')} aria-pressed={panelView === 'history'}>
+          {t('blueprint:maintenance.viewHistory')}
+          {appliedAudits.length ? <span>{appliedAudits.length}</span> : null}
+        </button>
+      </nav>
+      {panelView === 'history' ? (
+        <div className="bp-maintenance-history-view">
           {undoPanel}
           {auditHistory}
         </div>
+      ) : !task ? (
+        <div className="bp-maintenance-start">
+          <label>{t('blueprint:maintenance.authorizeWorkspace')}
+            <details className="bp-maintenance-workspace-picker">
+              <summary>
+                <span>{selectedWorkspaces.length ? t('blueprint:maintenance.workspaceSelected', { count: selectedWorkspaces.length }) : t('blueprint:maintenance.workspaceSelectPlaceholder')}</span>
+                <ChevronDown size={13} aria-hidden="true" />
+              </summary>
+              <div role="group" aria-label={t('blueprint:maintenance.authorizeWorkspace')}>
+                {workspaces.length ? workspaces.map((workspace) => {
+                  const selected = workspaceIds.includes(workspace.id)
+                  return <button key={workspace.id} type="button" className={selected ? 'is-selected' : ''} aria-pressed={selected} onClick={() => setWorkspaceIds((current) => selected ? current.filter((id) => id !== workspace.id) : [...current, workspace.id])}>
+                    <span><strong>{workspace.name}</strong><small>{workspace.path}</small></span>
+                    {selected ? <Check size={14} aria-hidden="true" /> : null}
+                  </button>
+                }) : <p>{t('blueprint:maintenance.workspaceEmpty')}</p>}
+              </div>
+            </details>
+          </label>
+          <label>{t('blueprint:maintenance.targetNode')}<select value={scopeNodeId} onChange={(event) => setScopeNodeId(event.target.value)}>{nodeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label>{t('blueprint:maintenance.maintenanceGoal')}<textarea value={goal} onChange={(event) => setGoal(event.target.value)} /></label>
+          <p>{t('blueprint:maintenance.policyHint')}</p>
+          <button className="blueprint-btn blueprint-btn--primary" type="button" onClick={() => void handleStart()} disabled={!blueprint || !selectedWorkspaces.length || !scopeNodeId || !goal.trim()}>{t('blueprint:maintenance.startConversation')}</button>
+        </div>
       ) : (
-        <div className="bp-maintenance-task">
-          <div className="bp-maintenance-task-overview" role="status" aria-live="polite">
+        <div className="bp-maintenance-task" ref={taskScrollRef} onScroll={handleTaskScroll}>
+          {taskNeedsNotice ? <div className="bp-maintenance-task-overview" role="status" aria-live="polite">
             <div className="bp-maintenance-status" data-status={task.status}>
               <div><strong>{task.phase}</strong><span>{t('blueprint:maintenance.taskRevision', { workspace: task.workspaceName, revision: task.baseRevision })}</span></div>
               <em>{task.progress}%</em>
             </div>
             <div className="bp-maintenance-progress"><span style={{ width: `${task.progress}%` }} /></div>
-          </div>
+          </div> : null}
           <div className="bp-maintenance-messages">
-            {task.messages.map((item) => <div key={item.id} data-role={item.role}><span>{item.role === 'user' ? t('blueprint:maintenance.roleUser') : t('blueprint:maintenance.roleJanus')}</span><p>{item.content}</p></div>)}
+            {task.messages.map((item) => {
+              const reply = item.role === 'assistant' ? splitMaintenanceReply(item.content) : null
+              return (
+                <div key={item.id} data-role={item.role}>
+                  <span>{item.role === 'user' ? t('blueprint:maintenance.roleUser') : t('blueprint:maintenance.roleJanus')}</span>
+                  <p>{reply?.summary ?? item.content}</p>
+                  {reply?.details ? (
+                    <details className="bp-maintenance-message-details">
+                      <summary>{t('blueprint:maintenance.expandReply')}</summary>
+                      <div>{reply.details}</div>
+                    </details>
+                  ) : null}
+                </div>
+              )
+            })}
+            {taskWorking ? (
+              <div className="bp-maintenance-thinking" role="status" aria-live="polite">
+                <span>{t('blueprint:maintenance.roleJanus')}</span>
+                <div><i /><i /><i /><em>{task.phase}</em></div>
+              </div>
+            ) : null}
             {task.error ? <div className="bp-maintenance-error">{task.error}</div> : null}
           </div>
           {task.changeSet ? (
@@ -465,7 +583,18 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
               </div>
             </div>
           ) : null}
-          {auditHistory}
+          <div ref={conversationBottomRef} className="bp-maintenance-conversation-bottom" aria-hidden="true" />
+          {showScrollToBottom ? (
+            <button
+              type="button"
+              className="bp-maintenance-scroll-bottom"
+              onClick={() => scrollConversationToBottom()}
+              aria-label={t('blueprint:maintenance.scrollToBottom')}
+              title={t('blueprint:maintenance.scrollToBottom')}
+            >
+              <ArrowDownToLine size={15} aria-hidden="true" />
+            </button>
+          ) : null}
           <footer>
             {!['cancelled', 'completed'].includes(task.status) ? <button className="blueprint-btn" type="button" onClick={() => void cancel(task.id)}>{t('blueprint:maintenance.cancelTask')}</button> : null}
             {task.status === 'active' ? <button className="blueprint-btn" type="button" onClick={() => void complete(task.id)}>{t('blueprint:maintenance.completeMaintenance')}</button> : null}

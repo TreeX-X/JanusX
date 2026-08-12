@@ -44,4 +44,23 @@ describe('Janus Blueprint tools', () => {
       arguments: { ...base, operations: [{ ...base.operations[0], nodeId: 'root' }] },
     }, new AbortController().signal)).rejects.toThrow('超出维护范围')
   })
+
+  it('accepts structured requirements in update-node proposals', async () => {
+    const tools = createJanusBlueprintTools({ blueprint: fixture(), allowedNodeIds: new Set(['child']) })
+    const tool = tools.find((item) => item.name === 'janus.blueprint.propose')!
+    const result = await tool.execute({
+      id: 'requirements', name: tool.name, arguments: {
+        summary: 'Add requirement details',
+        operations: [{
+          operationId: 'requirements-1', type: 'update-node', nodeId: 'child',
+          after: { features: [{ title: 'Requirement A', description: 'Acceptance A' }] },
+          reason: 'Requested', evidenceRefs: [], dependsOn: [], risk: 'low',
+        }],
+      },
+    }, new AbortController().signal)
+    expect(result.details).toMatchObject({ operations: [{
+      before: { features: [] },
+      after: { features: [{ title: 'Requirement A', description: 'Acceptance A', progress: 0, status: 'planned' }] },
+    }] })
+  })
 })

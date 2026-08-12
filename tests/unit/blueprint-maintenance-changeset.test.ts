@@ -153,6 +153,33 @@ describe('Blueprint maintenance ChangeSet', () => {
     }
   })
 
+  it('normalizes and applies structured requirement descriptions', () => {
+    const source = fixture()
+    source.nodes.child.features = [{
+      id: 'existing', title: 'Old title', description: '', progress: 10, status: 'planned',
+      requirementNotes: [], createdAt: 'created', updatedAt: 'old',
+    }]
+    const [normalized] = normalizeProposedOperations(source, new Set(['child']), [{
+      ...baseOp('requirements'), type: 'update-node', nodeId: 'child', before: {}, after: { features: [{
+        id: 'existing', title: 'Revised requirement', description: 'Acceptance details', progress: 25,
+        status: 'in-progress', requirementNotes: ['Reviewed by Janus'],
+      }, {
+        title: 'New requirement', description: 'New acceptance details', progress: 0,
+        status: 'planned', requirementNotes: [],
+      }] },
+    }])
+    expect(normalized.type).toBe('update-node')
+    if (normalized.type !== 'update-node') return
+    expect(normalized.before.features).toEqual(source.nodes.child.features)
+    expect(normalized.after.features?.[0]).toMatchObject({ id: 'existing', title: 'Revised requirement' })
+    expect(normalized.after.features?.[0].createdAt).toBe('created')
+    expect(normalized.after.features?.[1].id).toBeTruthy()
+
+    const result = applyOperations(source, [normalized], new Set(['child']))
+    expect(result.blueprint.nodes.child.features).toHaveLength(2)
+    expect(result.blueprint.nodes.child.features[1].title).toBe('New requirement')
+  })
+
   it('rejects restore-node in model proposals and relations fully out of scope', () => {
     const source = fixture()
     expect(() => normalizeProposedOperations(source, new Set(['root', 'child']), [{

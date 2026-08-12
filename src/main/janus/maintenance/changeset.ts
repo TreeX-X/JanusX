@@ -11,12 +11,12 @@ import {
   normalizeRelationEndpoints,
   relationPairKey,
 } from '../../../shared/janus/relations'
-import { makeNode, nowIso } from '../blueprint-factory'
+import { makeFeatureItem, makeNode, nowIso } from '../blueprint-factory'
 import { reconcileBlueprintTree, reconcileNodeWorkspaceBinding } from '../blueprint-migration'
 
 const UPDATE_FIELDS = new Set([
   'title', 'type', 'status', 'progress', 'positioning', 'description',
-  'techSolution', 'notes', 'tags'
+  'techSolution', 'notes', 'tags', 'features'
 ])
 
 export class BlueprintChangeSetError extends Error {}
@@ -191,7 +191,7 @@ export function normalizeProposedOperations(
         throw new BlueprintChangeSetError('restore-node 只能由撤销流程生成，不接受模型提案')
       }
       default: {
-        const nodeOperation = operation as Extract<BlueprintOperation, { type: 'update-node' | 'move-node' }>
+        let nodeOperation = operation as Extract<BlueprintOperation, { type: 'update-node' | 'move-node' }>
         if (!allowed.has(nodeOperation.nodeId) || !blueprint.nodes[nodeOperation.nodeId]) {
           throw new BlueprintChangeSetError(`操作超出维护范围：${nodeOperation.nodeId}`)
         }
@@ -201,6 +201,24 @@ export function normalizeProposedOperations(
           }
           requireTempDependency(nodeOperation.afterParentId, nodeOperation)
           return { ...nodeOperation, beforeParentId: blueprint.nodes[nodeOperation.nodeId].parentId }
+        }
+        if (nodeOperation.after.features) {
+          const currentFeatures = new Map(blueprint.nodes[nodeOperation.nodeId].features.map((feature) => [feature.id, feature]))
+          nodeOperation = {
+            ...nodeOperation,
+            after: {
+              ...nodeOperation.after,
+              features: nodeOperation.after.features.map((feature) => {
+                const current = feature.id ? currentFeatures.get(feature.id) : undefined
+                return makeFeatureItem({
+                  ...feature,
+                  id: current?.id,
+                  createdAt: current?.createdAt,
+                  updatedAt: nowIso(),
+                })
+              }),
+            },
+          }
         }
         const before = Object.fromEntries(Object.keys(nodeOperation.after).map((key) => [
           key,

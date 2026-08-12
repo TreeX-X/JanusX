@@ -48,6 +48,7 @@ describe('Blueprint maintenance audit details', () => {
     expect(formatAuditValue(null, 'None')).toBe('None')
     expect(formatAuditValue([], 'None')).toBe('None')
     expect(formatAuditValue(['a', 'b'], 'None')).toBe('a, b')
+    expect(formatAuditValue([{ title: 'Requirement A' }], 'None')).toBe('[{"title":"Requirement A"}]')
     expect(formatAuditValue(42, 'None')).toBe('42')
   })
 })
