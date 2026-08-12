@@ -1,10 +1,10 @@
-import { isUtf8 } from 'buffer'
 import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'fs/promises'
 import { join, resolve } from 'path'
-import { readWorkspaceFile, resolveWorkspaceTarget } from '../path-guard'
+import { resolveWorkspaceTarget } from '../path-guard'
 import { evaluateWorkspaceReadPolicy, isSensitivePath, redactHighConfidenceSecrets } from '../policy-gate'
 import type { RegisteredTool, ToolRegistry } from '../registry'
+import { isTextBuffer, janusWorkspaceFs } from '../../environment/janus-workspace-fs'
 import { checkpointManager } from '../../checkpoint/checkpoint-manager'
 import {
   atomicReplaceWorkspaceFile,
@@ -21,12 +21,6 @@ const MAX_DEPTH = 4
 const DEFAULT_MAX_ENTRIES = 200
 const MAX_MAX_ENTRIES = 1000
 const registeredRegistries = new WeakSet<ToolRegistry>()
-
-function isText(content: Buffer): boolean {
-  return isUtf8(content) && !content.some((byte) =>
-    byte === 0x7f || (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d),
-  )
-}
 
 export const workspaceReadTool: RegisteredTool = {
   name: 'workspace.read',
@@ -55,14 +49,15 @@ export const workspaceReadTool: RegisteredTool = {
     }
     if (context.signal.aborted) throw new Error('workspace.read cancelled')
 
-    const content = await readWorkspaceFile(
+    const read = await janusWorkspaceFs.readWorkspaceText(
       context.workspaceRoot,
       requestedPath,
       Number(maxBytes),
       evaluateWorkspaceReadPolicy,
     )
+    if (!read.ok) throw read.error
+    const content = read.value
     if (context.signal.aborted) throw new Error('workspace.read cancelled')
-    if (!isText(content)) throw new Error('workspace.read only supports UTF-8 text files')
 
     // sha256 is always computed from disk content: edits to unmasked regions
     // still match, and only the masked credential itself becomes uneditable.
@@ -352,7 +347,7 @@ export const workspaceSearchTool: RegisteredTool = {
         try {
           if ((await stat(filePath)).size > SEARCH_MAX_FILE_BYTES) continue
           const content = await readFile(filePath)
-          if (!isText(content)) continue
+          if (!isTextBuffer(content)) continue
           const lines = content.toString('utf-8').split('\n')
           for (const [index, line] of lines.entries()) {
             if (!line.toLowerCase().includes(needle)) continue

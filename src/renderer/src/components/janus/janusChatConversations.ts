@@ -2,8 +2,7 @@ import type {
   JanusChatStorageSnapshot,
   PersistedJanusConversation,
 } from '../../../../shared/ipc/janus-chat'
-import { normalizeJanusChatSnapshot } from '../../../../shared/ipc/janus-chat'
-
+// Retained for isolated renderer harnesses; production conversations are persisted by main IPC.
 export const CONVERSATION_STORAGE_KEY = 'janusx.janus-chat.conversations.v1'
 export const NEW_CONVERSATION_TITLE = 'New conversation'
 export const MAX_CHAT_MESSAGES = 200
@@ -47,15 +46,4 @@ export function getRetryTurn(messages: PersistedJanusConversation['messages']): 
 export function createInitialSnapshot(): JanusChatStorageSnapshot {
   const conversation = createJanusConversation()
   return { version: 1, activeConversationId: conversation.id, conversations: [conversation] }
-}
-
-export function loadLocalConversationSnapshot(): JanusChatStorageSnapshot {
-  try {
-    const value = localStorage.getItem(CONVERSATION_STORAGE_KEY)
-    const snapshot = value ? normalizeJanusChatSnapshot(JSON.parse(value)) : null
-    if (snapshot) return snapshot
-  } catch {
-    // A malformed renderer snapshot must not prevent Chat from opening.
-  }
-  return createInitialSnapshot()
 }

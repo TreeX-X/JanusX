@@ -14,15 +14,16 @@ import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { classifyFile } from '@/lib/file-classification'
 import { resolveFilePresentation } from '@/lib/file-presentation'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './file-tree.module.css'
 
-const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; color: string; title: string }> = {
-  M: { label: 'M', color: '#d99a4e', title: '已修改' },
-  A: { label: 'A', color: '#78b982', title: '已新增' },
-  D: { label: 'D', color: '#d27168', title: '已删除' },
-  R: { label: 'R', color: '#7ba3bd', title: '已重命名' },
-  '??': { label: 'A', color: '#78b982', title: '未跟踪' },
-  UU: { label: '!', color: '#e05f4a', title: '存在冲突' },
+const FILE_CHANGE_VISUALS: Record<GitFileChange['status'], { label: string; color: string; titleKey: string }> = {
+  M: { label: 'M', color: '#d99a4e', titleKey: 'editor:fileTree.gitStatus.modified' },
+  A: { label: 'A', color: '#78b982', titleKey: 'editor:fileTree.gitStatus.added' },
+  D: { label: 'D', color: '#d27168', titleKey: 'editor:fileTree.gitStatus.deleted' },
+  R: { label: 'R', color: '#7ba3bd', titleKey: 'editor:fileTree.gitStatus.renamed' },
+  '??': { label: 'A', color: '#78b982', titleKey: 'editor:fileTree.gitStatus.untracked' },
+  UU: { label: '!', color: '#e05f4a', titleKey: 'editor:fileTree.gitStatus.conflict' },
 }
 
 interface DirectoryChangeSummary {
@@ -77,6 +78,7 @@ export function FileTreeItem({
   onMoveFile,
   onOpenContextMenu,
 }: FileTreeItemProps) {
+  const { t } = useI18n('editor')
   const isFolder = node.type === 'directory'
   const isActive = activeFilePath === node.path
   const isGitIgnored = node.isGitIgnored === true
@@ -181,13 +183,17 @@ export function FileTreeItem({
         {changeVisual && fileChange && (
           <FileChangeIndicator change={fileChange} visual={changeVisual} />
         )}
-        {directoryChange && (
+{directoryChange && (
           <span
             data-git-dirty
             data-has-additions={directoryChange.additions || undefined}
             data-has-deletions={directoryChange.deletions || undefined}
             className={styles.gitAggregate}
-            title={`包含${directoryChange.additions ? '新增' : ''}${directoryChange.additions && directoryChange.deletions ? '和' : ''}${directoryChange.deletions ? '删除' : ''}`}
+            title={t('editor:fileTree.directoryChange.contains', {
+              additions: directoryChange.additions ? t('editor:fileTree.directoryChange.additions') : '',
+              connector: directoryChange.additions && directoryChange.deletions ? t('editor:fileTree.directoryChange.connector') : '',
+              deletions: directoryChange.deletions ? t('editor:fileTree.directoryChange.deletions') : '',
+            })}
           >
             {directoryChange.additions && <span className={styles.gitAggregateAddition} />}
             {directoryChange.deletions && <span className={styles.gitAggregateDeletion} />}
@@ -228,8 +234,9 @@ function FileChangeIndicator({
   visual,
 }: {
   change: GitFileChange
-  visual: { label: string; color: string; title: string }
+  visual: { label: string; color: string; titleKey: string }
 }) {
+  const { t } = useI18n('editor')
   const hasAdditions = (change.additions ?? 0) > 0
   const hasDeletions = (change.deletions ?? 0) > 0
   const isBinary = change.additions === null && change.deletions === null
@@ -237,7 +244,7 @@ function FileChangeIndicator({
     || change.status === 'R'
     || isBinary
     || (!hasAdditions && !hasDeletions)
-  const statusLabel = isBinary && change.status !== 'UU' && change.status !== 'R' ? 'BIN' : visual.label
+  const statusLabel = isBinary && change.status !== 'UU' && change.status !== 'R' ? t('editor:fileTree.gitStatus.binary') : visual.label
   const countTitle = [
     hasAdditions ? `+${change.additions}` : '',
     hasDeletions ? `−${change.deletions}` : '',
@@ -247,7 +254,7 @@ function FileChangeIndicator({
     <span
       data-git-status={change.status}
       className={styles.gitChange}
-      title={`${visual.title}${countTitle ? ` · ${countTitle}` : ''}`}
+      title={`${t(visual.titleKey)}${countTitle ? ` · ${countTitle}` : ''}`}
     >
       {showStatus && (
         <span

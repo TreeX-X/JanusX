@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { homedir } from 'os'
 import { dirname, isAbsolute, join } from 'path'
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { access, mkdir, readFile, writeFile } from 'fs/promises'
 import type { AgentEngine } from '../agent/types'
 import type { AgentHookBridgeEnv } from './agent-hook-bridge'
 
@@ -179,13 +179,22 @@ function buildHookCommand(
       quotePowerShell(JANUSX_HOOK_COMMAND_MARKER),
     ].join(' ')
 
+    // The hook script sets its own UTF-8 encoding internally, so the guard only
+    // needs the Test-Path check. Avoid inline PowerShell variables ($utf8 etc.)
+    // here: Claude Code/Codex run hook commands through bash, which expands $var
+    // before powershell sees it, corrupting the command.
+    const guardedCommand = [
+      `if (-not (Test-Path -LiteralPath ${quotePowerShell(windowsHookScriptPath)})) { exit 0 }`,
+      command,
+    ].join('; ')
+
     return [
       'powershell',
       '-NoProfile',
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      `"${command.replace(/"/g, '`"')}"`,
+      `"${guardedCommand.replace(/"/g, '`"')}"`,
     ].join(' ')
   }
 
@@ -481,6 +490,44 @@ export class AgentHookConfigManager {
     return { engine, installed: false, path: this.getOpencodeConfigDir() }
   }
 
+  async isInstalled(engine: HookableEngine): Promise<boolean> {
+    if (engine === 'opencode') {
+      return Promise.all([
+        access(join(this.getOpencodeConfigDir(), 'opencode.json')),
+        access(join(this.getOpencodeConfigDir(), 'janusx-agent-hook-marker.json')),
+      ]).then(() => true, () => false)
+    }
+
+    if (this.platform === 'win32') {
+      try {
+        await access(this.getWindowsHookScriptPath())
+      } catch {
+        return false
+      }
+    }
+
+    try {
+      const specs = engine === 'claude' ? CLAUDE_HOOKS : CODEX_HOOKS
+      const settings = await readJsonObject(engine === 'claude' ? this.getClaudeSettingsPath() : this.getCodexHooksPath())
+      return specs.every((spec) => {
+        const commands = toArray(getObject(settings.hooks)?.[spec.event])
+          .flatMap((entry) => toArray(getObject(entry)?.hooks))
+          .map((hook) => getObject(hook)?.command)
+          .filter((command): command is string => typeof command === 'string')
+        return commands.includes(buildHookCommand(
+          this.platform,
+          this.executablePath,
+          this.appEntryArg,
+          engine,
+          spec.event,
+          this.platform === 'win32' ? this.getWindowsHookScriptPath() : undefined,
+        ))
+      })
+    } catch {
+      return false
+    }
+  }
+
   buildTerminalEnv(input: TerminalHookEnvInput, bridgeEnv: AgentHookBridgeEnv): Record<string, string> {
     const env: Record<string, string> = {
       ...bridgeEnv,
@@ -521,7 +568,7 @@ export class AgentHookConfigManager {
   }
 
   getWindowsHookScriptPath(): string {
-    return this.configuredWindowsHookScriptPath ?? join(this.userDataDir, 'hooks', 'janusx-agent-hook.ps1')
+    return this.configuredWindowsHookScriptPath ?? join(this.homeDir, '.janusx', 'hooks', 'janusx-agent-hook.ps1')
   }
 
   private async ensureHookClientScript(): Promise<string | undefined> {

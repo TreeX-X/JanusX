@@ -5068,6 +5068,13 @@ body.is-running {
   min-height: 24px;
 }
 
+.janus-chat-message-time {
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+}
+
 .janus-chat-message.user .janus-chat-message-meta {
   justify-content: flex-end;
 }
@@ -5124,7 +5131,9 @@ body.is-running {
 }
 
 .janus-chat-message.user:hover .janus-chat-message-edit,
-.janus-chat-message.user:focus-within .janus-chat-message-edit {
+.janus-chat-message.user:focus-within .janus-chat-message-edit,
+.janus-chat-message.assistant:hover .janus-chat-message-edit,
+.janus-chat-message.assistant:focus-within .janus-chat-message-edit {
   opacity: 1;
 }
 
@@ -6576,6 +6585,76 @@ body.is-running {
 .janus-chat-workspace-action:focus-visible {
   box-shadow: 0 0 0 2px rgba(255, 120, 48, 0.28);
 }
+
+.janus-tool-call-group {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.janus-tool-card {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: rgba(10, 12, 16, 0.72);
+  color: rgba(255, 255, 255, 0.72);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+}
+
+.janus-tool-card--running,
+.janus-tool-card--requested {
+  border-color: rgba(255, 178, 125, 0.35);
+}
+
+.janus-tool-card--failed,
+.janus-tool-card--cancelled {
+  border-color: rgba(255, 96, 96, 0.38);
+}
+
+.janus-tool-card-head {
+  display: flex;
+  align-items: center;
+  min-height: 27px;
+  gap: 6px;
+  padding: 4px 7px;
+}
+
+.janus-tool-card-toggle,
+.janus-tool-card-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.janus-tool-card-toggle:disabled { cursor: default; }
+.janus-tool-card-toggle:hover:not(:disabled),
+.janus-tool-card-copy:hover { background: rgba(255, 255, 255, 0.08); }
+.janus-tool-card-toggle-spacer { width: 11px; }
+.janus-tool-card-name { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, 0.9); }
+.janus-tool-card-workspace,
+.janus-tool-card-status,
+.janus-tool-card-duration { color: rgba(255, 255, 255, 0.42); white-space: nowrap; }
+.janus-tool-card-status--failed,
+.janus-tool-card-status--cancelled { color: #ff8c8c; }
+.janus-tool-card-status--completed { color: #8fd5ae; }
+.janus-tool-card-duration { display: inline-flex; align-items: center; gap: 3px; }
+.janus-tool-card-copy { color: rgba(255, 178, 125, 0.88); font-size: 9px; }
+.janus-tool-card-body { display: grid; gap: 7px; padding: 7px 9px 9px 31px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.janus-tool-card-section { display: grid; gap: 3px; min-width: 0; }
+.janus-tool-card-section-label { color: rgba(255, 255, 255, 0.42); font-size: 9px; font-weight: 500; text-transform: uppercase; }
+.janus-tool-card-code,
+.janus-tool-card-error { overflow: auto; margin: 0; color: rgba(255, 255, 255, 0.7); font-family: inherit; font-size: 10px; white-space: pre-wrap; word-break: break-word; }
+.janus-tool-card-section--error .janus-tool-card-error { color: #ffadad; }
 
 @media (max-width: 720px) {
   .janus-chat--workspace {

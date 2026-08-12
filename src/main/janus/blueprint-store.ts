@@ -276,7 +276,7 @@ export class BlueprintStore {
     expectedRevision: number,
     operations: BlueprintOperation[],
     allowedNodeIds: Set<string>
-  ): Promise<{ before: Blueprint; after: Blueprint }> {
+  ): Promise<{ before: Blueprint; after: Blueprint; createdNodeIds: Record<string, string>; createdRelationIds: Record<string, string> }> {
     return this.locked(async () => {
       const current = await this.loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, blueprintId)
       if (!current) throw new Error('目标蓝图不存在')
@@ -284,10 +284,11 @@ export class BlueprintStore {
         throw new Error(`蓝图版本已变化：期望 ${expectedRevision}，当前 ${current.contentRevision}`)
       }
       const before = structuredClone(current)
-      const after = applyOperations(current, operations, new Set(allowedNodeIds))
+      const { blueprint: after, createdNodeIds, createdRelationIds } =
+        applyOperations(current, operations, new Set(allowedNodeIds))
       await writeJson(blueprintFile(blueprintId), after)
       this.cache.set(blueprintId, after)
-      return { before, after }
+      return { before, after, createdNodeIds, createdRelationIds }
     })
   }
 
@@ -311,6 +312,7 @@ export class BlueprintStore {
         rootNodeId: root.id,
         nodeIds: [root.id],
         nodes: { [root.id]: root },
+        relations: [],
         requirementCandidates: [],
         mountedTo: null,
         canvasLayout: {},
@@ -412,6 +414,21 @@ export class BlueprintStore {
       const node = bp.nodes[nodeId]
       // 不允许通过通用 patch 覆盖只读字段
       const { id: _id, createdAt: _c, ...safe } = patch
+      if (safe.workspaceId !== undefined && safe.primaryWorkspaceId === undefined) {
+        safe.primaryWorkspaceId = safe.workspaceId || null
+      }
+      if (safe.primaryWorkspaceId !== undefined) {
+        safe.workspaceId = safe.primaryWorkspaceId
+        if (safe.linkedWorkspaceIds === undefined) {
+          safe.linkedWorkspaceIds = (node.linkedWorkspaceIds ?? [])
+            .filter((id) => id !== safe.primaryWorkspaceId)
+        }
+      }
+      if (safe.linkedWorkspaceIds !== undefined) {
+        const primary = safe.primaryWorkspaceId !== undefined ? safe.primaryWorkspaceId : node.primaryWorkspaceId
+        safe.linkedWorkspaceIds = safe.linkedWorkspaceIds
+          .filter((id, index, ids) => id !== primary && ids.indexOf(id) === index)
+      }
       if (safe.workspaceId !== undefined) {
         if (!safe.workspaceId) {
           safe.workspaceId = null
@@ -554,6 +571,9 @@ export class BlueprintStore {
       }
       delete bp.nodes[nodeId]
       bp.nodeIds = bp.nodeIds.filter((n) => n !== nodeId)
+      bp.relations = (bp.relations ?? []).filter(
+        (relation) => relation.sourceNodeId !== nodeId && relation.targetNodeId !== nodeId
+      )
       delete bp.canvasLayout[nodeId]
       if (bp.rootNodeId === nodeId) {
         const promoted =

@@ -1,0 +1,51 @@
+{
+  "vendor": {
+    "unknown": "未知"
+  },
+  "search": {
+    "label": "搜索模型名称或 ID",
+    "placeholder": "搜索模型名称或 ID"
+  },
+  "refresh": {
+    "updating": "更新中",
+    "retry": "重试",
+    "updateCatalog": "更新目录",
+    "retryUpdate": "重试更新"
+  },
+  "summary": {
+    "loading": "正在加载模型目录...",
+    "count": "{{modelCount}} 个模型 / {{vendorCount}} 个厂商",
+    "sourceOnline": "在线目录",
+    "sourceBundled": "内置目录",
+    "stale": " / 已过期"
+  },
+  "message": {
+    "updated": "已更新 {{count}} 个模型",
+    "updateFailed": "更新失败；保留当前目录"
+  },
+  "error": {
+    "loadFailed": "模型目录加载失败",
+    "loadFailedTitle": "无法加载模型目录"
+  },
+  "empty": {
+    "noResultsTitle": "没有匹配的模型",
+    "noResultsHint": "尝试输入模型名称或完整 ID",
+    "emptyTitle": "暂无可用模型",
+    "emptyHint": "使用「更新目录」重新获取最新快照"
+  },
+  "model": {
+    "contextUnknown": "上下文未知",
+    "updatedTimeUnknown": "更新时间未知",
+    "tokensSuffix": "{{value}} tokens",
+    "priceFormat": "${{price}} / 1M tokens"
+  },
+  "meta": {
+    "context": "上下文",
+    "maxOutput": "最大输出",
+    "input": "输入",
+    "output": "输出",
+    "capabilities": "能力",
+    "inputPrice": "输入价格",
+    "outputPrice": "输出价格"
+  }
+}

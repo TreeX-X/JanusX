@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Activity, ChevronRight, CirclePause, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
+import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
@@ -67,6 +68,7 @@ function WorkspaceContextMenu({
   onClearGroup,
   onDelete,
 }: WorkspaceContextMenuProps) {
+  const { t } = useI18n('common')
   const menuRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ x: menu.x, y: menu.y })
 
@@ -107,16 +109,16 @@ function WorkspaceContextMenu({
       {target.kind === 'workspace' ? (
         <>
           <button type="button" className={itemClassName} onClick={() => onRunConfiguration(target.workspace)}>
-            运行配置…
+            {t('common:workspace.runConfiguration')}
           </button>
           {target.workspace.sidebarGroup && (
             <>
               <div className="my-1 h-px bg-[rgba(255,255,255,0.07)]" />
               <button type="button" className={itemClassName} onClick={() => onRenameGroup(target.workspace.sidebarGroup!)}>
-                重命名分组…
+                {t('common:workspace.renameGroup')}
               </button>
               <button type="button" className={itemClassName} onClick={() => onRemoveFromGroup(target.workspace.id)}>
-                移出分组
+                {t('common:workspace.removeFromGroup')}
               </button>
             </>
           )}
@@ -126,16 +128,16 @@ function WorkspaceContextMenu({
             className={`${itemClassName} !text-[#ff7777] hover:!bg-[rgba(255,88,88,0.1)]`}
             onClick={() => onDelete(target.workspace)}
           >
-            删除工作区
+            {t('common:workspace.deleteWorkspace')}
           </button>
         </>
       ) : (
         <>
           <button type="button" className={itemClassName} onClick={() => onRenameGroup(target.group)}>
-            重命名分组…
+            {t('common:workspace.renameGroup')}
           </button>
           <button type="button" className={itemClassName} onClick={() => onClearGroup(target.group.id)}>
-            解除分组
+            {t('common:workspace.ungroup')}
           </button>
         </>
       )}
@@ -151,16 +153,16 @@ function createWorkspaceSidebarGroupId(): string {
   return `workspace-group-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function terminalPresetLabel(preset: Terminal['preset']): string {
+function terminalPresetLabel(preset: Terminal['preset'], t: (key: string) => string): string {
   switch (preset) {
     case 'claude':
-      return 'Claude'
+      return t('terminal:provider.claude')
     case 'codex':
-      return 'Codex'
+      return t('terminal:provider.codex')
     case 'opencode':
-      return 'OpenCode'
+      return t('terminal:provider.opencode')
     default:
-      return 'Shell'
+      return t('terminal:provider.shell')
   }
 }
 
@@ -172,14 +174,16 @@ const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
 }
 
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
+  const { t } = useI18n('terminal')
   const visual = getTerminalStatusVisual(status)
   const Icon = status === 'running' ? Activity : status === 'error' ? TriangleAlert : CirclePause
+  const label = t(visual.labelKey)
 
   return (
     <span
       className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] font-medium"
       style={{ color: visual.color, background: visual.background }}
-      title={`终端状态：${visual.label}`}
+      title={t('common:workspace.terminalStatusTitle', { label })}
     >
       <span className="relative flex h-2.5 w-2.5 items-center justify-center">
         {status === 'running' && (
@@ -190,7 +194,7 @@ function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
         )}
         <Icon size={10} strokeWidth={2} className="relative" aria-hidden="true" />
       </span>
-      {visual.label}
+      {label}
     </span>
   )
 }
@@ -200,6 +204,7 @@ function workspaceInitial(name: string): string {
 }
 
 export function Sidebar() {
+  const { t } = useI18n()
   // P5: useShallow 细粒度订阅，避免整 store 任意变化带动整个侧栏重渲染
   const { workspaces, activeWorkspaceId, terminals, activeTerminalId, terminalSnapshots, setWorkspaces, setActiveWorkspace, addWorkspace, removeWorkspace } =
     useWorkspaceStore(
@@ -638,7 +643,7 @@ export function Sidebar() {
         borderRight: '1px solid var(--shell-border)',
       }}
       data-collapsed={sidebarCollapsed}
-      aria-label="工作区侧栏"
+      aria-label={t('common:workspace.ariaLabel')}
     >
       {/* 展开态 */}
       {!sidebarCollapsed && (
@@ -647,7 +652,7 @@ export function Sidebar() {
             className="flex h-9 items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
             style={{ color: 'var(--shell-muted)', borderBottom: '1px solid var(--shell-border)' }}
           >
-            <span>工作区</span>
+            <span>{t('common:workspace.label')}</span>
             <div className="flex items-center gap-0.5">
               <button
                 onClick={handleAddWorkspace}
@@ -655,17 +660,17 @@ export function Sidebar() {
                 style={{
                   color: 'var(--shell-accent-strong)',
                 }}
-                title="添加工作区"
-                aria-label="添加工作区"
+                title={t('common:workspace.add')}
+                aria-label={t('common:workspace.add')}
               >
                 <Plus size={15} strokeWidth={1.7} aria-hidden="true" />
               </button>
               <button
                 onClick={toggleSidebar}
-                title="收起侧栏"
+                title={t('common:workspace.collapse')}
                 className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{ color: 'var(--shell-dim)' }}
-                aria-label="收起工作区侧栏"
+                aria-label={t('common:workspace.collapseAria')}
               >
                 <PanelLeftClose size={15} strokeWidth={1.6} aria-hidden="true" />
               </button>
@@ -674,7 +679,7 @@ export function Sidebar() {
           <div className="flex-1 overflow-y-auto px-1.5 py-1" onDragOverCapture={handleWorkspaceListDragOver}>
             {orderedWorkspaces.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4 opacity-30">
-                <div className="text-xs text-[#666]">暂无工作区</div>
+                <div className="text-xs text-[#666]">{t('common:workspace.empty')}</div>
               </div>
             ) : (
               <>
@@ -725,7 +730,7 @@ export function Sidebar() {
                           <button
                             type="button"
                             draggable={false}
-                            aria-label={isGroupCollapsed ? `展开分组 ${group.name}` : `折叠分组 ${group.name}`}
+                            aria-label={isGroupCollapsed ? t('common:workspace.groupExpand', { name: group.name }) : t('common:workspace.groupCollapse', { name: group.name })}
                             onDragStart={(event) => event.preventDefault()}
                             onClick={() => setCollapsedGroupIds((current) => current.includes(group.id)
                               ? current.filter((id) => id !== group.id)
@@ -747,7 +752,7 @@ export function Sidebar() {
                               onBlur={() => commitGroupRename(group.id)}
                               onClick={(event) => event.stopPropagation()}
                               className="min-w-0 flex-1 rounded-sm border border-[rgba(255,120,48,0.35)] bg-[rgba(0,0,0,0.28)] px-1.5 py-0.5 text-[11px] text-[#ddd] outline-none"
-                              aria-label="分组名称"
+                              aria-label={t('common:workspace.groupNameAria')}
                             />
                           ) : (
                             <button
@@ -758,7 +763,7 @@ export function Sidebar() {
                                 ? current.filter((id) => id !== group.id)
                                 : [...current, group.id])}
                               className="min-w-0 flex-1 truncate border-0 bg-transparent text-left"
-                              title={`${group.name} · ${groupMembers.length} 个工作区`}
+                              title={t('common:workspace.groupCountTitle', { name: group.name, count: groupMembers.length })}
                             >
                               {group.name}
                             </button>
@@ -780,8 +785,8 @@ export function Sidebar() {
                             tabIndex={0}
                             role="button"
                             aria-current={isActive ? 'true' : undefined}
-                            aria-label={`${ws.name}，拖动可排序或分组，右键打开运行配置`}
-                            title={`${group ? `${group.name} · ` : ''}${ws.name} · 拖动排序或分组 · 右键打开运行配置`}
+                            aria-label={t('common:workspace.wsAriaLabel', { name: ws.name })}
+                            title={t('common:workspace.wsTitle', { prefix: group ? `${group.name} · ` : '', name: ws.name })}
                             onClick={() => handleSelect(ws.id)}
                             onKeyDown={(event) => handleWorkspaceKeyDown(ws, event)}
                             onContextMenu={(event) => handleWorkspaceContextMenu(ws, event)}
@@ -820,8 +825,8 @@ export function Sidebar() {
                       <button
                         type="button"
                         draggable={false}
-                        aria-label={isExpanded ? `折叠 ${ws.name} 终端列表 (${terminalCount})` : `展开 ${ws.name} 终端列表 (${terminalCount})`}
-                        title={isExpanded ? `折叠终端列表 (${terminalCount})` : `展开终端列表 (${terminalCount})`}
+                        aria-label={isExpanded ? t('common:workspace.terminalListCollapse', { name: ws.name, count: terminalCount }) : t('common:workspace.terminalListExpand', { name: ws.name, count: terminalCount })}
+                        title={isExpanded ? t('common:workspace.terminalListCollapseShort', { count: terminalCount }) : t('common:workspace.terminalListExpandShort', { count: terminalCount })}
                         onPointerDown={(event) => event.stopPropagation()}
                         onDragStart={(event) => {
                           event.preventDefault()
@@ -855,7 +860,7 @@ export function Sidebar() {
                                 ? 'rgba(70,190,125,0.08)'
                                 : 'rgba(255,255,255,0.035)',
                           }}
-                          title={`${terminalActivity.total} 个终端 · ${terminalActivity.running} 个运行中${terminalActivity.errors ? ` · ${terminalActivity.errors} 个异常` : ''}`}
+                          title={t('common:workspace.terminalCountTitle', { total: terminalActivity.total, running: terminalActivity.running, errors: terminalActivity.errors ? t('common:workspace.terminalCountErrorsSuffix', { count: terminalActivity.errors }) : '' })}
                         >
                           <img src={terminalIcon} alt="" className="h-3 w-3 opacity-70" />
                           <span>{terminalActivity.total}</span>
@@ -897,7 +902,7 @@ export function Sidebar() {
                           style={{ borderLeft: '1px solid rgba(255,255,255,0.055)' }}
                         >
                         {workspaceTerminals.length === 0 ? (
-                          <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">暂无终端</div>
+                          <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
                         ) : (
                           workspaceTerminals.map((terminal) => {
                             const isFocusedTerminal = isActive && terminal.id === activeTerminalId
@@ -917,24 +922,24 @@ export function Sidebar() {
                                   background: isFocusedTerminal ? 'rgba(255,120,48,0.055)' : 'transparent',
                                   color: isFocusedTerminal ? '#d8d8d8' : '#8a8a8a',
                                 }}
-                                title={`${terminalPresetLabel(terminal.preset)} · ${terminal.cwd}`}
+                                title={`${terminalPresetLabel(terminal.preset, t)} · ${terminal.cwd}`}
                               >
                                 <span
                                   className="flex h-[18px] w-[18px] items-center justify-center"
-                                  title={terminalPresetLabel(terminal.preset)}
+                                  title={terminalPresetLabel(terminal.preset, t)}
                                 >
                                   <img
                                     src={TERMINAL_PRESET_ICONS[terminal.preset]}
-                                    alt={`${terminalPresetLabel(terminal.preset)} 图标`}
+                                    alt={t('common:workspace.presetIconAlt', { preset: terminalPresetLabel(terminal.preset, t) })}
                                     className="h-3.5 w-3.5 object-contain"
                                   />
                                 </span>
                                 <span className="min-w-0">
                                   <span className="block truncate font-mono text-[11px]">
-                                    {terminal.name || terminalPresetLabel(terminal.preset)}
+                                    {terminal.name || terminalPresetLabel(terminal.preset, t)}
                                   </span>
                                   <span className="block truncate text-[9px] text-[#55555b]">
-                                    {terminalPresetLabel(terminal.preset)}
+                                    {terminalPresetLabel(terminal.preset, t)}
                                   </span>
                                 </span>
                                 <TerminalStatusIndicator status={terminal.status} />
@@ -970,10 +975,10 @@ export function Sidebar() {
         <div className="flex flex-1 flex-col items-center gap-1 overflow-hidden py-1.5">
           <button
             onClick={toggleSidebar}
-            title="展开侧栏"
+            title={t('common:workspace.expand')}
             className="mb-1 flex h-9 w-9 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
             style={{ color: 'var(--shell-dim)' }}
-            aria-label="展开工作区侧栏"
+            aria-label={t('common:workspace.expandAria')}
           >
             <PanelLeftOpen size={15} strokeWidth={1.6} aria-hidden="true" />
           </button>
@@ -1004,7 +1009,7 @@ export function Sidebar() {
                 onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
                 onDrop={(event) => handleWorkspaceDrop(ws, event)}
                 onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
-                title={`${ws.sidebarGroup ? `${ws.sidebarGroup.name} · ` : ''}${ws.name} · 拖动排序或分组 · 右键打开运行配置`}
+                title={t('common:workspace.wsTitle', { prefix: ws.sidebarGroup ? `${ws.sidebarGroup.name} · ` : '', name: ws.name })}
                 className="ws relative flex h-9 w-9 cursor-grab items-center justify-center rounded-[4px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
                 style={{
                   marginTop: isGroupStart && workspaceIndex > 0 ? 5 : 0,
@@ -1034,7 +1039,7 @@ export function Sidebar() {
                   style={{ background: isActive ? 'var(--shell-accent)' : 'transparent' }}
                 />
                 <span
-                  className="font-mono text-[10px] font-semibold"
+                  className="font-mono text-[13px] font-semibold"
                   style={{ color: isActive ? 'var(--shell-accent-strong)' : 'var(--shell-dim)' }}
                 >
                   {workspaceInitial(ws.name)}
@@ -1088,7 +1093,7 @@ export function Sidebar() {
                 style={{ fontSize: 13, color: '#fff', gap: 6 }}
               >
                 <span style={{ color: '#ff5858' }}>&#9888;</span>
-                删除工作区
+                {t('common:workspace.delete.title')}
               </div>
               <ModalCloseButton onClose={() => setDeleteTarget(null)} />
             </div>
@@ -1096,9 +1101,7 @@ export function Sidebar() {
             {/* Body */}
             <div style={{ padding: '16px 16px 20px' }}>
               <div style={{ fontSize: 12, color: '#999', marginBottom: 14, lineHeight: 1.6 }}>
-                确认删除工作区{' '}
-                <strong style={{ color: '#fff' }}>{deleteTarget.name}</strong>
-                {' '}吗？此操作不会删除磁盘上的文件，但会移除该工作区下的所有终端会话和还原点记录。
+                {t('common:workspace.delete.confirm', { name: deleteTarget.name })}
               </div>
 
               <div
@@ -1113,7 +1116,7 @@ export function Sidebar() {
                 }}
               >
                 <span style={{ color: '#ff5858', marginRight: 4 }}>&#8226;</span>
-                终端快照和 Checkpoint 数据将被清除
+                {t('common:workspace.delete.checkpointWarning')}
               </div>
             </div>
 
@@ -1146,7 +1149,7 @@ export function Sidebar() {
                   e.currentTarget.style.color = '#999'
                 }}
               >
-                取消
+                {t('common:action.cancel')}
               </button>
               <button
                 onClick={confirmDelete}
@@ -1168,7 +1171,7 @@ export function Sidebar() {
                   e.currentTarget.style.borderColor = 'rgba(255,88,88,0.3)'
                 }}
               >
-                删除
+                {t('common:action.delete')}
               </button>
             </div>
           </div>
@@ -1201,7 +1204,7 @@ export function Sidebar() {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d4d4d4" strokeWidth="2">
                   <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                 </svg>
-                <span>工作区启动配置</span>
+                <span>{t('common:workspace.launcherTitle')}</span>
               </div>
               <ModalCloseButton onClose={() => { setConfigTarget(null); setProjectCandidate(null) }} />
             </div>

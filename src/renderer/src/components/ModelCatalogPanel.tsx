@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AiModelRegistryEntry, ModelCatalogSnapshot } from '@janusx/llm-core'
 import { getModelCatalog, refreshModelCatalog } from '../services/llm'
-import { buildCapabilityList, catalogEmptyState, formatList, groupModels } from './modelCatalogPanelLogic'
+import { buildCapabilityList, catalogEmptyState, formatList, groupModels, UNKNOWN_VENDOR } from './modelCatalogPanelLogic'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './ModelCatalogPanel.module.css'
 
 export function ModelCatalogPanel() {
+  const { t } = useI18n('model')
   const [catalog, setCatalog] = useState<ModelCatalogSnapshot | null>(null)
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -22,7 +24,7 @@ export function ModelCatalogPanel() {
       })
       .catch((error: unknown) => {
         if (!active) return
-        setLoadError(error instanceof Error ? error.message : 'Model catalog failed to load')
+        setLoadError(error instanceof Error ? error.message : t('model:error.loadFailed'))
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -43,12 +45,12 @@ export function ModelCatalogPanel() {
       setCatalog(result.catalog)
       setLoadError(null)
       setMessage(result.success
-        ? { kind: 'success', text: `Updated ${result.catalog.models.length} models` }
-        : { kind: 'error', text: result.error ?? 'Update failed; keeping the current catalog' })
+        ? { kind: 'success', text: t('model:message.updated', { count: result.catalog.models.length }) }
+        : { kind: 'error', text: result.error ?? t('model:message.updateFailed') })
     } catch (error) {
       setMessage({
         kind: 'error',
-        text: error instanceof Error ? error.message : 'Update failed; keeping the current catalog',
+        text: error instanceof Error ? error.message : t('model:message.updateFailed'),
       })
     } finally {
       setRefreshing(false)
@@ -59,13 +61,13 @@ export function ModelCatalogPanel() {
     <section className={styles.root} aria-busy={loading || refreshing}>
       <div className={styles.toolbar}>
         <label className={styles.searchField}>
-          <span className={styles.srOnly}>Search model name or ID</span>
+          <span className={styles.srOnly}>{t('model:search.label')}</span>
           <span className={styles.searchIcon} aria-hidden="true">⌕</span>
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search model name or ID"
+            placeholder={t('model:search.placeholder')}
             className={styles.searchInput}
           />
         </label>
@@ -76,16 +78,16 @@ export function ModelCatalogPanel() {
           disabled={refreshing}
         >
           <span className={refreshing ? styles.spinning : ''} aria-hidden="true">↻</span>
-          {refreshing ? 'Updating' : loadError ? 'Retry' : 'Update catalog'}
+          {refreshing ? t('model:refresh.updating') : loadError ? t('model:refresh.retry') : t('model:refresh.updateCatalog')}
         </button>
       </div>
 
       <div className={styles.summary} aria-live="polite">
-        <span>{loading ? 'Loading model catalog...' : `${resultCount} models / ${groups.length} vendors`}</span>
+        <span>{loading ? t('model:summary.loading') : t('model:summary.count', { modelCount: resultCount, vendorCount: groups.length })}</span>
         {catalog && (
           <span>
-            {catalog.source === 'cache' ? 'Online catalog' : 'Bundled catalog'} / {formatDate(catalog.updatedAt)}
-            {catalog.isStale ? ' / stale' : ''}
+            {catalog.source === 'cache' ? t('model:summary.sourceOnline') : t('model:summary.sourceBundled')} / {formatDate(catalog.updatedAt, t)}
+            {catalog.isStale ? t('model:summary.stale') : ''}
           </span>
         )}
       </div>
@@ -98,18 +100,18 @@ export function ModelCatalogPanel() {
 
       {emptyState === 'load-error' && (
         <div className={styles.empty} role="alert">
-          <strong>Model catalog could not be loaded</strong>
+          <strong>{t('model:error.loadFailedTitle')}</strong>
           <span>{loadError}</span>
           <button type="button" className={styles.inlineButton} onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? 'Updating' : 'Retry update'}
+            {refreshing ? t('model:refresh.updating') : t('model:refresh.retryUpdate')}
           </button>
         </div>
       )}
 
       {(emptyState === 'empty-catalog' || emptyState === 'no-results') && (
         <div className={styles.empty}>
-          <strong>{emptyState === 'no-results' ? 'No matching models' : 'No models available'}</strong>
-          <span>{emptyState === 'no-results' ? 'Try a model name or complete ID' : 'Use Update catalog to retry the latest snapshot'}</span>
+          <strong>{emptyState === 'no-results' ? t('model:empty.noResultsTitle') : t('model:empty.emptyTitle')}</strong>
+          <span>{emptyState === 'no-results' ? t('model:empty.noResultsHint') : t('model:empty.emptyHint')}</span>
         </div>
       )}
 
@@ -117,7 +119,7 @@ export function ModelCatalogPanel() {
         {groups.map((group, index) => (
           <details className={styles.vendorGroup} key={group.vendor} open={hasSearch || index === 0}>
             <summary className={styles.vendorHeader}>
-              <span>{group.vendor}</span>
+              <span>{group.vendor === UNKNOWN_VENDOR ? t('model:vendor.unknown') : group.vendor}</span>
               <span className={styles.count}>{group.models.length}</span>
             </summary>
             <div className={styles.modelList}>
@@ -131,6 +133,7 @@ export function ModelCatalogPanel() {
 }
 
 function ModelItem({ model }: { model: AiModelRegistryEntry }) {
+  const { t } = useI18n('model')
   const capabilities = buildCapabilityList(model)
 
   return (
@@ -141,17 +144,17 @@ function ModelItem({ model }: { model: AiModelRegistryEntry }) {
           <code>{model.id}</code>
         </span>
         <span className={styles.modelQuickMeta}>
-          {model.effectiveContextWindow ? formatTokens(model.effectiveContextWindow) : 'Context unknown'}
+          {model.effectiveContextWindow ? formatTokens(model.effectiveContextWindow) : t('model:model.contextUnknown')}
         </span>
       </summary>
       <div className={styles.details}>
-        <Metadata label="Context" value={formatOptionalTokens(model.effectiveContextWindow)} />
-        <Metadata label="Max output" value={formatOptionalTokens(model.maxOutputTokens)} />
-        <Metadata label="Input" value={formatList(model.inputModalities)} />
-        <Metadata label="Output" value={formatList(model.outputModalities)} />
-        <Metadata label="Capabilities" value={formatList(capabilities)} />
-        <Metadata label="Input price" value={formatPrice(model.promptPricePerToken)} />
-        <Metadata label="Output price" value={formatPrice(model.completionPricePerToken)} />
+        <Metadata label={t('model:meta.context')} value={formatOptionalTokens(model.effectiveContextWindow, t)} />
+        <Metadata label={t('model:meta.maxOutput')} value={formatOptionalTokens(model.maxOutputTokens, t)} />
+        <Metadata label={t('model:meta.input')} value={formatList(model.inputModalities)} />
+        <Metadata label={t('model:meta.output')} value={formatList(model.outputModalities)} />
+        <Metadata label={t('model:meta.capabilities')} value={formatList(capabilities)} />
+        <Metadata label={t('model:meta.inputPrice')} value={formatPrice(model.promptPricePerToken, t)} />
+        <Metadata label={t('model:meta.outputPrice')} value={formatPrice(model.completionPricePerToken, t)} />
         {model.description && <p className={styles.description}>{model.description}</p>}
       </div>
     </details>
@@ -163,23 +166,26 @@ function Metadata({ label, value }: { label: string; value?: string }) {
   return <div className={styles.metadata}><span>{label}</span><strong>{value}</strong></div>
 }
 
+type TFunc = (key: string, opts?: Record<string, unknown>) => string
+
 function formatTokens(value: number): string {
   return value >= 1_000_000 ? `${trimDecimal(value / 1_000_000)}M` : `${trimDecimal(value / 1_000)}K`
 }
 
-function formatOptionalTokens(value?: number): string | undefined {
-  return value ? `${formatTokens(value)} tokens` : undefined
+function formatOptionalTokens(value: number | undefined, t: TFunc): string | undefined {
+  return value ? t('model:model.tokensSuffix', { value: formatTokens(value) }) : undefined
 }
 
-function formatPrice(value?: string): string | undefined {
+function formatPrice(value: string | undefined, t: TFunc): string | undefined {
   if (value === undefined) return undefined
   const price = Number(value) * 1_000_000
-  return Number.isFinite(price) ? `$${price.toLocaleString(undefined, { maximumFractionDigits: 4 })} / 1M tokens` : undefined
+  if (!Number.isFinite(price)) return undefined
+  return t('model:model.priceFormat', { price: price.toLocaleString(undefined, { maximumFractionDigits: 4 }) })
 }
 
-function formatDate(value: string): string {
+function formatDate(value: string, t: TFunc): string {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? 'Updated time unknown' : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? t('model:model.updatedTimeUnknown') : date.toLocaleString()
 }
 
 function trimDecimal(value: number): string {

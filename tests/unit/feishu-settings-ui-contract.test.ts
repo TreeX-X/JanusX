@@ -10,9 +10,9 @@ describe('Feishu control settings UI contract', () => {
     ]) expect(source).toContain(field)
     expect(source).toContain('getFeishuControlStatus')
     expect(source).toContain('RefreshIconButton')
-    expect(source).toContain('Webhook 仅支持通知')
-    expect(source).toContain('不会暴露任意 shell')
-    expect(source).toContain('留空表示保留已保存的 secret')
+    expect(source).toContain("t('settings:notification.controlNotice')")
+    expect(source).toContain('settings:notification.controlNotice')
+    expect(source).toContain('settings:notification.row.appSecret.hint')
   })
 
   it('documents platform setup, commands, audit, revocation, and exclusions', async () => {

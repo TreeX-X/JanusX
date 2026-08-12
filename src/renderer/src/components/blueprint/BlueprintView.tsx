@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import './blueprint.css'
+import { useI18n } from '@/i18n/useI18n'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import {
@@ -30,12 +31,6 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 
-const CANDIDATE_STATUS_LABEL: Record<BlueprintRequirementCandidateStatus, string> = {
-  pending: '待确认',
-  accepted: '已接受',
-  rejected: '已拒绝'
-}
-
 interface CandidateDraft {
   title: string
   description: string
@@ -47,6 +42,7 @@ interface BlueprintViewProps {
 }
 
 export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
+  const { t } = useI18n('blueprint')
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
@@ -200,7 +196,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
 
   const handleCreateConfirm = async (name: string) => {
     setCreateDialogOpen(false)
-    const bp = await createBlueprint({ name, rootTitle: '根任务', rootType: 'epic' })
+    const bp = await createBlueprint({ name, rootTitle: t('blueprint:view.rootTask'), rootType: 'epic' })
     if (bp) {
       setSelectedId(bp.id)
       loadBlueprint(bp.id)
@@ -257,7 +253,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         parentId: draft.parentId || undefined
       })
       if (!created) {
-        setNoticeError('接受失败：候选需求不存在或目标父节点无效')
+        setNoticeError(t('blueprint:view.acceptFailed'))
         return
       }
       await loadBlueprint(candidate.blueprintId)
@@ -277,7 +273,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         candidateId: candidate.id
       })
       if (!rejected) {
-        setNoticeError('拒绝失败：候选需求不存在')
+        setNoticeError(t('blueprint:view.rejectFailed'))
         return
       }
       await loadCandidates(candidate.blueprintId, candidateStatus, workspacePath)
@@ -288,18 +284,18 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
 
   const candidateStatusOptions = (['pending', 'accepted', 'rejected'] as BlueprintRequirementCandidateStatus[]).map((status) => ({
     value: status,
-    label: CANDIDATE_STATUS_LABEL[status]
+    label: t(`blueprint:view.candidateStatus.${status}`)
   }))
 
   const candidateParentOptions = currentBlueprint
     ? [
-        { value: '', label: '按建议父节点' },
+        { value: '', label: t('blueprint:view.parentSuggested') },
         ...currentBlueprint.nodeIds.map((nodeId) => ({
           value: nodeId,
           label: currentBlueprint.nodes[nodeId]?.title ?? nodeId
         }))
       ]
-    : [{ value: '', label: '按建议父节点' }]
+    : [{ value: '', label: t('blueprint:view.parentSuggested') }]
   const isBlueprintEmpty = !currentBlueprint || currentBlueprint.nodeIds.length === 0
 
   return (
@@ -311,25 +307,25 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
             value={selectedId ?? ''}
             onChange={handleSelect}
             disabled={blueprints.length === 0}
-            placeholder="（暂无蓝图）"
+            placeholder={t('blueprint:view.noBlueprints')}
             options={
               blueprints.length === 0
-                ? [{ value: '', label: '（暂无蓝图）' }]
+                ? [{ value: '', label: t('blueprint:view.noBlueprints') }]
                 : blueprints.map((b) => ({ value: b.id, label: b.name }))
             }
             className="blueprint-select blueprint-select--toolbar"
             getPortalContainer={getSelectPortalContainer}
           />
-          <button className="blueprint-btn blueprint-btn--primary" onClick={handleCreate}>+ 新建</button>
+          <button className="blueprint-btn blueprint-btn--primary" onClick={handleCreate}>{t('blueprint:view.newBlueprint')}</button>
           <button className="blueprint-btn" onClick={handleRename} disabled={!selectedId}>
-            重命名
+            {t('blueprint:view.rename')}
           </button>
           <button className="blueprint-btn blueprint-btn--danger" onClick={handleDelete} disabled={!selectedId}>
-            删除
+            {t('blueprint:action.delete')}
           </button>
         </div>
         <div className="blueprint-toolbar__spacer" />
-        {loading ? <span className="blueprint-toolbar__loading">加载中…</span> : null}
+        {loading ? <span className="blueprint-toolbar__loading">{t('blueprint:toolbar.loading')}</span> : null}
         {error ? <span className="blueprint-toolbar__error">{error}</span> : null}
       </div>
 
@@ -339,25 +335,25 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
             <div className="bp-janus-notice">
               <div>
                 <div className="bp-janus-notice__title">
-                  {analysisNotice.applied ? 'Janus 分析完成' : 'Janus 分析未应用'}
+                  {analysisNotice.applied ? t('blueprint:view.janusAnalysisDone') : t('blueprint:view.janusAnalysisNotApplied')}
                 </div>
                 <div className="bp-janus-notice__body">
-                  {analysisNotice.nodeTitle} · {analysisNotice.result.summary || analysisNotice.error || '无摘要'}
+                  {analysisNotice.nodeTitle} · {analysisNotice.result.summary || analysisNotice.error || t('blueprint:detailPanel.noSummary')}
                 </div>
               </div>
-              <button className="bp-janus-notice__close" onClick={() => setAnalysisNotice(null)}>关闭</button>
+              <button className="bp-janus-notice__close" onClick={() => setAnalysisNotice(null)}>{t('blueprint:view.close')}</button>
             </div>
           ) : null}
 
           {discoveredNotice ? (
             <div className="bp-janus-notice bp-janus-notice--discovered">
               <div>
-                <div className="bp-janus-notice__title">候选需求已入库 · {discoveredNotice.nodeTitle}</div>
+                <div className="bp-janus-notice__title">{t('blueprint:view.discoveredNoticeTitle', { nodeTitle: discoveredNotice.nodeTitle })}</div>
                 <div className="bp-janus-notice__body">
-                  {discoveredNotice.candidateIds?.length ?? discoveredNotice.discovered.length} 条候选已写入 Inbox
+                  {t('blueprint:view.discoveredNoticeBody', { count: discoveredNotice.candidateIds?.length ?? discoveredNotice.discovered.length })}
                 </div>
               </div>
-              <button className="bp-janus-notice__close" onClick={() => setDiscoveredNotice(null)}>关闭</button>
+              <button className="bp-janus-notice__close" onClick={() => setDiscoveredNotice(null)}>{t('blueprint:view.close')}</button>
               {noticeError ? <div className="bp-janus-notice__error">{noticeError}</div> : null}
             </div>
           ) : null}
@@ -373,14 +369,14 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
               onClick={() => setInboxExpanded((v) => !v)}
               aria-expanded={inboxExpanded}
               data-attention={pendingCandidateCount > 0 ? 'true' : 'false'}
-              aria-label={inboxExpanded ? '收起候选需求列表' : '展开候选需求列表'}
+              aria-label={inboxExpanded ? t('blueprint:view.collapseInbox') : t('blueprint:view.expandInbox')}
             >
               <span className={`bp-candidate-inbox__chevron${inboxExpanded ? ' bp-candidate-inbox__chevron--open' : ''}`} aria-hidden="true" />
-              <strong>候选需求 Inbox</strong>
+              <strong>{t('blueprint:view.inboxTitle')}</strong>
               {pendingCandidateCount > 0 ? <span className="bp-candidate-inbox__dot" aria-hidden="true" /> : null}
             </button>
             <span className="bp-candidate-inbox__count">
-              {candidateLoading ? '刷新中...' : `${candidates.length} 条${CANDIDATE_STATUS_LABEL[candidateStatus]}`}
+              {candidateLoading ? t('blueprint:action.refreshing') : t('blueprint:view.inboxCount', { count: candidates.length, status: t(`blueprint:view.candidateStatus.${candidateStatus}`) })}
             </span>
             <div className="bp-candidate-inbox__tools">
               <Select
@@ -392,7 +388,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
               />
               <RefreshIconButton
                 accent="orange"
-                label="刷新候选需求"
+                label={t('blueprint:view.refreshCandidates')}
                 loading={candidateLoading}
                 onClick={() => void loadCandidates()}
               />
@@ -402,7 +398,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
           {inboxExpanded ? (
             <>
               {!candidateLoading && candidates.length === 0 ? (
-                <div className="bp-candidate-inbox__empty">暂无{CANDIDATE_STATUS_LABEL[candidateStatus]}候选</div>
+                <div className="bp-candidate-inbox__empty">{t('blueprint:view.inboxEmpty', { status: t(`blueprint:view.candidateStatus.${candidateStatus}`) })}</div>
               ) : null}
               {noticeError ? <div className="bp-candidate-inbox__error">{noticeError}</div> : null}
 
@@ -419,9 +415,9 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
                     return (
                       <div className="bp-candidate-card" key={candidate.id}>
                         <div className="bp-candidate-card__meta">
-                          <span>{CANDIDATE_STATUS_LABEL[candidate.status]}</span>
+                          <span>{t(`blueprint:view.candidateStatus.${candidate.status}`)}</span>
                           <span>{Math.round(candidate.confidence * 100)}%</span>
-                          <span>来源：{sourceNode?.title ?? candidate.sourceNodeId}</span>
+                          <span>{t('blueprint:view.source', { name: sourceNode?.title ?? candidate.sourceNodeId })}</span>
                         </div>
 
                         {editable ? (
@@ -456,15 +452,15 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
                           {editable ? (
                             <div className="bp-candidate-card__actions">
                               <button className="blueprint-btn blueprint-btn--primary" onClick={() => handleAcceptCandidate(candidate)}>
-                                接受
+                                {t('blueprint:view.accept')}
                               </button>
                               <button className="blueprint-btn" onClick={() => handleRejectCandidate(candidate)}>
-                                拒绝
+                                {t('blueprint:view.reject')}
                               </button>
                             </div>
                           ) : (
                             <span className="bp-candidate-card__decision">
-                              {candidate.acceptedNodeId ? `节点 ${candidate.acceptedNodeId.slice(0, 8)}` : candidate.decisionNote || '已留痕'}
+                              {candidate.acceptedNodeId ? t('blueprint:view.decisionNode', { id: candidate.acceptedNodeId.slice(0, 8) }) : candidate.decisionNote || t('blueprint:view.decisionLogged')}
                             </span>
                           )}
                         </div>
@@ -486,35 +482,35 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         />
       ) : (
         <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>
-          {blueprints.length === 0 ? '点击「+ 新建蓝图」开始' : '请选择一个蓝图'}
+          {blueprints.length === 0 ? t('blueprint:view.emptyCreateHint') : t('blueprint:view.emptySelectHint')}
         </div>
       )}
 
       <PromptDialog
         open={createDialogOpen}
-        title="新建蓝图"
-        label="蓝图名称"
-        placeholder="输入蓝图名称"
-        defaultValue={`蓝图-${new Date().toLocaleDateString()}`}
+        title={t('blueprint:view.newBlueprintTitle')}
+        label={t('blueprint:view.blueprintName')}
+        placeholder={t('blueprint:view.blueprintNamePlaceholder')}
+        defaultValue={t('blueprint:view.blueprintNameDefault', { date: new Date().toLocaleDateString() })}
         onConfirm={handleCreateConfirm}
         onCancel={() => setCreateDialogOpen(false)}
       />
       <PromptDialog
         open={renameDialogOpen}
-        title="重命名蓝图"
-        label="蓝图名称"
-        placeholder="输入蓝图名称"
+        title={t('blueprint:view.renameBlueprintTitle')}
+        label={t('blueprint:view.blueprintName')}
+        placeholder={t('blueprint:view.blueprintNamePlaceholder')}
         defaultValue={blueprints.find((b) => b.id === selectedId)?.name ?? ''}
-        validate={(v) => (v.trim() ? null : '名称不能为空')}
+        validate={(v) => (v.trim() ? null : t('blueprint:view.nameRequired'))}
         onConfirm={(value) => void handleRenameConfirm(value)}
         onCancel={() => setRenameDialogOpen(false)}
       />
       <PromptDialog
         open={deleteTarget !== null}
-        title="删除蓝图"
-        description={<>确认删除蓝图「<strong className="prompt-dialog__emphasis">{deleteTarget?.name}</strong>」吗？此操作不可恢复。</>}
+        title={t('blueprint:view.deleteBlueprintTitle')}
+        description={<>{t('blueprint:view.deleteBlueprintDescPrefix')}<strong className="prompt-dialog__emphasis">{deleteTarget?.name}</strong>{t('blueprint:view.deleteBlueprintDescSuffix')}</>}
         confirmOnly
-        confirmText="删除"
+        confirmText={t('blueprint:action.delete')}
         tone="danger"
         onConfirm={() => void handleDeleteConfirm()}
         onCancel={() => setDeleteTarget(null)}

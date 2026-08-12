@@ -16,6 +16,7 @@ import {
   startProjectPolling,
 } from '@/services/project'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectRunningList.module.css'
 
 interface ProjectRunningListProps {
@@ -33,6 +34,7 @@ export function ProjectRunningList({
   config,
   onEditSettings,
 }: ProjectRunningListProps) {
+  const { t } = useI18n('editor')
   const [projects, setProjects] = useState<RunningProjectSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,8 +72,8 @@ export function ProjectRunningList({
       }
     } catch (err) {
       if (!isCurrent() || !isLatest()) return
-      const failure = getRunningProjectFailureState(
-        err instanceof Error ? err.message : 'Failed to load projects',
+const failure = getRunningProjectFailureState(
+        err instanceof Error ? err.message : t('editor:project.loadProjectsFailed'),
         [],
       )
       errorTrackerRef.current.record('list')
@@ -94,7 +96,7 @@ export function ProjectRunningList({
       if (errorTrackerRef.current.clear(errorCheckpoint)) setError(null)
     } catch (err) {
       if (!isCurrent() || !isLatest() || selectedProjectIdRef.current !== id) return
-      const error = err instanceof Error ? err.message : 'Failed to load project output'
+      const error = err instanceof Error ? err.message : t('editor:project.loadOutputFailed')
       const failure = getRunningProjectFailureState(error, [], id)
       errorTrackerRef.current.record('output')
       setError(failure.error)
@@ -143,9 +145,9 @@ export function ProjectRunningList({
       onSuccess: () => {
         if (errorTrackerRef.current.clear(errorCheckpoint)) setError(null)
       },
-      onError: (err) => {
+onError: (err) => {
         errorTrackerRef.current.record('run')
-        setError(err instanceof Error ? err.message : 'Failed to run project')
+        setError(err instanceof Error ? err.message : t('editor:project.runProjectFailed'))
       },
       onFinally: () => setLoading(false),
     })
@@ -162,9 +164,9 @@ export function ProjectRunningList({
       onSuccess: () => {
         if (errorTrackerRef.current.clear(errorCheckpoint)) setError(null)
       },
-      onError: (err) => {
+onError: (err) => {
         errorTrackerRef.current.record('stop')
-        setError(err instanceof Error ? err.message : 'Failed to stop project')
+        setError(err instanceof Error ? err.message : t('editor:project.stopProjectFailed'))
       },
       onFinally: () => setLoading(false),
     })
@@ -177,7 +179,7 @@ export function ProjectRunningList({
       {/* 头部：配置信息 + 启动按钮 */}
       <div className={styles.header}>
         <div className={styles.info}>
-          <h2>{config?.projectName || '未命名项目'}</h2>
+          <h2>{config?.projectName || t('editor:project.untitledProject')}</h2>
           <p className={styles.path}>{projectPath}</p>
           {config && (
             <div className={styles.configs}>
@@ -187,7 +189,7 @@ export function ProjectRunningList({
                   onClick={() => handleRun(cfg.name)}
                   disabled={loading}
                   className={styles.runBtn}
-                  title={`启动 ${cfg.name} 配置`}
+                  title={t('editor:project.runConfigTitle', { name: cfg.name })}
                 >
                   ▶ {cfg.name}
                 </button>
@@ -196,7 +198,7 @@ export function ProjectRunningList({
           )}
         </div>
         <button onClick={onEditSettings} className={styles.editBtn}>
-          ⚙️ 设置
+          {t('editor:project.settingsButton')}
         </button>
       </div>
 
@@ -207,14 +209,14 @@ export function ProjectRunningList({
         {/* 左侧：项目列表 */}
         <div className={styles.projectList}>
           <div className={styles.listHeader}>
-            <span>运行中的项目 ({projects.length})</span>
+            <span>{t('editor:project.runningProjects', { count: projects.length })}</span>
           </div>
 
           {projects.length === 0 ? (
             <div className={styles.empty}>
-              <p>暂无运行中的项目</p>
+              <p>{t('editor:project.noRunningProjects')}</p>
               {config && (
-                <p>点击上方"启动"按钮开始运行</p>
+                <p>{t('editor:project.startHint')}</p>
               )}
             </div>
           ) : (
@@ -244,19 +246,19 @@ export function ProjectRunningList({
                         <button
                           type="button"
                           className={styles.embedOpenBtn}
-                          title="在内嵌浏览器中打开"
+                          title={t('editor:project.openInEmbedBrowser')}
                           onClick={e => {
                             e.stopPropagation()
                             void useWorkspaceStore.getState().openBrowserInWorkspace(`http://localhost:${project.port}`)
                           }}
                         >
-                          内嵌
+                          {t('editor:project.embed')}
                         </button>
                       </span>
                     )}
                   </div>
                   <div className={styles.uptime}>
-                    PID {project.pid} • {formatUptime(project.uptime)}
+                    {t('editor:project.pidUptime', { pid: project.pid, uptime: formatUptime(project.uptime) })}
                   </div>
                 </div>
 
@@ -266,7 +268,7 @@ export function ProjectRunningList({
                     handleStop(project.id)
                   }}
                   className={styles.stopBtn}
-                  title="停止项目"
+                  title={t('editor:project.stopProjectTitle')}
                 >
                   ⊘
                 </button>
@@ -279,15 +281,15 @@ export function ProjectRunningList({
         {selectedProject && (
           <div className={styles.logPanel}>
             <div className={styles.logHeader}>
-              <span>日志输出</span>
+              <span>{t('editor:project.logOutput')}</span>
               <span className={styles.logTime}>
-                {selectedProject.uptime > 0 && `运行 ${formatUptime(selectedProject.uptime)}`}
+                {selectedProject.uptime > 0 && t('editor:project.runningUptime', { uptime: formatUptime(selectedProject.uptime) })}
               </span>
             </div>
 
             <div className={styles.logContent}>
               {selectedOutput.length === 0 ? (
-                <p className={styles.logEmpty}>等待输出...</p>
+                <p className={styles.logEmpty}>{t('editor:project.waitingOutput')}</p>
               ) : (
                 selectedOutput.map((line, idx) => (
                   <div key={idx} className={styles.logLine}>
@@ -298,7 +300,7 @@ export function ProjectRunningList({
             </div>
 
             <div className={styles.logFooter}>
-              <p>💡 点击项目列表中的端口链接直接打开浏览器</p>
+              <p>{t('editor:project.portHint')}</p>
             </div>
           </div>
         )}

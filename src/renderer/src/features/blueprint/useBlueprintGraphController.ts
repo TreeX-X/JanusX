@@ -9,9 +9,9 @@ import { updateBlueprint } from '@/services/blueprint'
 import type { Blueprint } from '@/services/blueprint'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'
 import {
-  computeBlueprintLayout,
+  collectSubtreeIds,
   computeBlueprintSubtreeLayout,
-  createDefaultLayoutRecovery,
+  computeVisibleBlueprintLayout,
   deriveBlueprintFlow,
   deriveBlueprintCardData
 } from './canvas-layout'
@@ -140,6 +140,11 @@ export function useBlueprintGraphController({
   const [edges, setEdges] = useState<Edge[]>([])
   const [restoreSnapshot, setRestoreSnapshot] = useState<Layout | null>(null)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
+  /**
+   * 持久化的"钉住"位置：仅包含用户拖拽过的节点（初始取自 canvasLayout）。
+   * 未钉住的节点跟随自动布局，折叠/展开时可回流；null 表示尚未从当前蓝图初始化。
+   */
+  const pinnedRef = useRef<Layout | null>(null)
   const blueprintIdRef = useRef(blueprintId)
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
@@ -188,6 +193,7 @@ export function useBlueprintGraphController({
       void saveControllerRef.current!.switchBlueprint(blueprintId)
       blueprintIdRef.current = blueprintId
       positionsRef.current = {}
+      pinnedRef.current = null
       setRestoreSnapshot(null)
     }
   }, [blueprintId])
@@ -201,11 +207,13 @@ export function useBlueprintGraphController({
       setNodes([])
       setEdges([])
       positionsRef.current = {}
+      pinnedRef.current = null
       return
     }
+    if (pinnedRef.current === null) pinnedRef.current = { ...(blueprint.canvasLayout ?? {}) }
     const flow = deriveBlueprintFlow(
       blueprint,
-      positionsRef.current,
+      pinnedRef.current,
       workspaceNameById,
       focusedNodeIds,
       focusActive,
@@ -219,7 +227,7 @@ export function useBlueprintGraphController({
   useEffect(() => {
     if (!blueprint) return
     const dataById = new Map(
-      deriveBlueprintFlow(blueprint, positionsRef.current, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds)
+      deriveBlueprintFlow(blueprint, pinnedRef.current ?? undefined, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds)
         .nodes.map((node) => [node.id, node.data])
     )
     setNodes((current) => patchBlueprintCardNodes(current, dataById))
@@ -230,46 +238,52 @@ export function useBlueprintGraphController({
     for (const change of changes) {
       if (change.type === 'position' && change.position) {
         positionsRef.current[change.id] = change.position
+        ;(pinnedRef.current ??= {})[change.id] = change.position
         moved = true
       } else if (change.type === 'select') {
         onSelectionChange(change.selected ? change.id : null)
       }
     }
     setNodes((current) => applyNodeChanges(changes, current))
-    if (moved) saveControllerRef.current!.schedule(positionsRef.current)
+    if (moved) saveControllerRef.current!.schedule(pinnedRef.current!)
   }, [onSelectionChange])
 
-  const applyLayout = useCallback(async (layout: Record<string, { x: number; y: number }>) => {
-    positionsRef.current = layout
+  const applyLayout = useCallback(async (layout: Record<string, { x: number; y: number }>, pins: Layout) => {
+    positionsRef.current = { ...positionsRef.current, ...layout }
+    pinnedRef.current = pins
     setNodes((current) => current.map((node) => ({
       ...node,
       position: layout[node.id] ?? node.position
     })))
-    await saveControllerRef.current!.saveNow(layout)
+    await saveControllerRef.current!.saveNow(pins)
   }, [])
 
   const autoLayout = useCallback(async () => {
     if (!blueprint) return
-    await applyLayout(computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {}))
-  }, [applyLayout, blueprint])
+    await applyLayout(computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, {}), {})
+  }, [applyLayout, blueprint, collapsedNodeIds])
 
   const layoutSubtree = useCallback(async (nodeId: string) => {
     if (!blueprint?.nodes[nodeId]) return
-    await applyLayout(computeBlueprintSubtreeLayout(blueprint, nodeId, positionsRef.current))
+    const next = computeBlueprintSubtreeLayout(blueprint, nodeId, positionsRef.current)
+    const pins = { ...(pinnedRef.current ?? {}) }
+    for (const id of collectSubtreeIds(blueprint, nodeId)) {
+      if (next[id]) pins[id] = next[id]
+    }
+    await applyLayout(next, pins)
   }, [applyLayout, blueprint])
 
   const restoreDefaultLayout = useCallback(async () => {
     if (!blueprint) return
-    const recovery = createDefaultLayoutRecovery(blueprint, positionsRef.current)
-    setRestoreSnapshot(recovery.previous)
-    await applyLayout(recovery.next)
-  }, [applyLayout, blueprint])
+    setRestoreSnapshot({ ...positionsRef.current })
+    await applyLayout(computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, {}), {})
+  }, [applyLayout, blueprint, collapsedNodeIds])
 
   const undoRestoreDefaultLayout = useCallback(async () => {
     if (!restoreSnapshot) return
     const previous = restoreSnapshot
     setRestoreSnapshot(null)
-    await applyLayout(previous)
+    await applyLayout(previous, { ...previous })
   }, [applyLayout, restoreSnapshot])
 
   return {

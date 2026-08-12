@@ -4,6 +4,7 @@ import { FileExplorerTool } from '@/components/FileExplorerTool'
 import { GitPanel } from '@/components/GitPanel'
 import { KnowledgeAssist } from '@/components/knowledge'
 import type { RightToolId } from '@/right-tools/types'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './RightDock.module.css'
 
 interface RightToolHostProps {
@@ -104,16 +105,21 @@ class ToolErrorBoundary extends Component<ToolErrorBoundaryProps, ToolErrorBound
 
   render() {
     if (this.state.failed) {
-      return (
-        <div className={styles.toolError} role="alert">
-          <span>工具内容加载失败</span>
-          <div>
-            <button type="button" onClick={this.retry}>重试</button>
-            <button type="button" onClick={this.props.onClose}>关闭</button>
-          </div>
-        </div>
-      )
+      return <ToolErrorFallback onClose={() => this.props.onClose()} onRetry={this.retry} />
     }
     return <div key={this.state.retryKey} className={styles.toolContent}>{this.props.children}</div>
   }
+}
+
+function ToolErrorFallback({ onClose, onRetry }: { onClose: () => void; onRetry: () => void }) {
+  const { t } = useI18n('common')
+  return (
+    <div className={styles.toolError} role="alert">
+      <span>{t('common:rightTool.toolLoadFailed')}</span>
+      <div>
+        <button type="button" onClick={onRetry}>{t('common:action.retry')}</button>
+        <button type="button" onClick={onClose}>{t('common:action.close')}</button>
+      </div>
+    </div>
+  )
 }

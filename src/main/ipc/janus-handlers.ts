@@ -35,9 +35,12 @@ import {
 } from '../../shared/ipc/janus'
 import type {
   BlueprintMaintenanceApplyInput,
+  BlueprintMaintenanceAuditListInput,
   BlueprintMaintenanceMessageInput,
   BlueprintMaintenanceProposalInput,
   BlueprintMaintenanceStartInput,
+  BlueprintMaintenanceUndoApplyInput,
+  BlueprintMaintenanceUndoPrepareInput,
 } from '../../shared/janus/maintenance-types'
 
 export function registerJanusHandlers(): void {
@@ -74,6 +77,10 @@ export function registerJanusHandlers(): void {
 
   ipcMain.handle(JANUS_COMMAND_CHANNELS.maintenanceList, async () => blueprintMaintenanceService.list())
   ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceAuditList,
+    async (_event, input: BlueprintMaintenanceAuditListInput) => blueprintMaintenanceService.listAudits(input)
+  )
+  ipcMain.handle(
     JANUS_COMMAND_CHANNELS.maintenanceStart,
     async (_event, input: BlueprintMaintenanceStartInput) => blueprintMaintenanceService.start(input)
   )
@@ -96,6 +103,14 @@ export function registerJanusHandlers(): void {
   ipcMain.handle(
     JANUS_COMMAND_CHANNELS.maintenanceComplete,
     async (_event, taskId: string) => blueprintMaintenanceService.complete(taskId)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceUndoPrepare,
+    async (_event, input: BlueprintMaintenanceUndoPrepareInput) => blueprintMaintenanceService.prepareUndo(input)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenanceUndoApply,
+    async (_event, input: BlueprintMaintenanceUndoApplyInput) => blueprintMaintenanceService.applyUndo(input)
   )
 
   // ───────────── 节点操作（§6.2） ─────────────

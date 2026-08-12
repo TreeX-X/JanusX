@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from '@/i18n/useI18n'
 import { useCheckpointStore } from '@/stores/checkpoint'
 import { useOfficeStore } from '@/stores/office'
 import { useRightToolStore } from '@/stores/right-tools'
@@ -446,7 +447,10 @@ export default function App() {
               style={{
                 backfaceVisibility: 'hidden',
                 background: 'var(--bg-deep)',
+                pointerEvents: blueprintMode ? 'none' : 'auto',
               }}
+              {...(blueprintMode ? { inert: '' } : {})}
+              aria-hidden={blueprintMode}
             >
               {mountWorkspacePane && (
                 <div
@@ -477,7 +481,10 @@ export default function App() {
                 backfaceVisibility: 'hidden',
                 transform: 'rotateX(180deg)',
                 background: 'radial-gradient(circle at center, #1d1d21 0%, var(--bg-deep) 100%)',
+                pointerEvents: blueprintMode ? 'auto' : 'none',
               }}
+              {...(!blueprintMode ? { inert: '' } : {})}
+              aria-hidden={!blueprintMode}
             >
               <Suspense fallback={null}>
                 <BlueprintFocusView />
@@ -572,6 +579,7 @@ export default function App() {
 }
 
 function EmptyWorkspace() {
+  const { t } = useI18n()
   const addWorkspace = useWorkspaceStore((s) => s.addWorkspace)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
   const setLoadState = useAppStore((s) => s.setLoadState)
@@ -609,7 +617,7 @@ function EmptyWorkspace() {
           }}
         />
       </div>
-      <div className="text-sm text-[#666]">开始使用 JanusX</div>
+      <div className="text-sm text-[#666]">{t('common:emptyWorkspace.title')}</div>
       <button
         onClick={handleAdd}
         className="px-5 py-2.5 rounded-md text-[13px] cursor-pointer transition-colors"
@@ -619,7 +627,7 @@ function EmptyWorkspace() {
           color: '#ff7830',
         }}
       >
-        选择工作区文件夹
+        {t('common:emptyWorkspace.chooseFolder')}
       </button>
     </div>
   )

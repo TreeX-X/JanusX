@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './QuantumTopologyPreview.module.css'
 
 interface QuantumTopologyPreviewProps {
@@ -39,6 +40,7 @@ export function QuantumTopologyPreview({
   showTag = false,
   className = '',
 }: QuantumTopologyPreviewProps) {
+  const { t } = useI18n('common')
   const { nodes, edges, hexTag } = useMemo(() => {
     const rawHash = hashString(seed + (name ?? ''))
     const hex = (rawHash % 0xff).toString(16).padStart(2, '0').toUpperCase()
@@ -97,8 +99,8 @@ export function QuantumTopologyPreview({
     <div
       className={`${styles.topologyContainer} ${active ? styles.topologyActive : ''} ${className}`}
       style={{ width: dimensions.width, height: dimensions.height }}
-      title={name ? `量子拓扑图谱 · ${name} (${hexTag})` : `量子拓扑节点 (${hexTag})`}
-      aria-label="工作区量子拓扑图谱"
+      title={name ? t('common:quantumTopology.titleWithName', { name, hexTag }) : t('common:quantumTopology.titleNoName', { hexTag })}
+      aria-label={t('common:quantumTopology.ariaLabel')}
     >
       <svg className={styles.topologySvg} viewBox="0 0 100 100">
         <defs>

@@ -1,6 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'
+import { STATUS_VISUALS } from '@/components/blueprint/blueprintStatus'
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2, critical: 3 } as const
 const SEVERITY_LABEL = ['低', '中', '高', '严重'] as const
@@ -37,6 +38,8 @@ export function deriveBlueprintCardData(
     progress: node.progress,
     workspaceName: node.workspaceId ? workspaceNameById[node.workspaceId] ?? node.workspaceSnapshot?.name ?? null : null,
     boundTerminalId: node.boundTerminalId,
+    childCount: (node.children ?? []).filter((childId) => blueprint.nodes[childId]).length,
+    collapsed,
     childSummary: node.children?.length ? `${node.children.filter((id) => blueprint.nodes[id]?.status === 'done').length}/${node.children.length} 子项完成` : undefined,
     issueSummary: openIssues.length ? `${openIssues.length} 问题 · ${SEVERITY_LABEL[highestSeverity]}` : undefined,
     blockedReason: node.status === 'blocked' ? (openIssues[0]?.title || '状态阻塞') : undefined,
@@ -51,6 +54,25 @@ const NODE_W = 240
 const NODE_H = 110
 const X_GAP = 32
 const Y_GAP = 64
+/** 网格行距比层级行距更紧凑，让同父叶子读作一个分组块 */
+const GRID_ROW_GAP = 48
+/** 兄弟子树之间的额外间距，用于视觉分组 */
+const SUBTREE_GAP = 64
+/** 独立根树之间的间距 */
+const ROOT_GAP = 120
+const GRID_MAX_COLS = 4
+const ROW_PITCH = NODE_H + Y_GAP
+const GRID_ROW_PITCH = NODE_H + GRID_ROW_GAP
+
+/** 叶子网格列数：接近正方形，上限 GRID_MAX_COLS，避免画布单向铺开 */
+function gridColumns(count: number): number {
+  return Math.max(1, Math.min(GRID_MAX_COLS, Math.ceil(Math.sqrt(count))))
+}
+
+function gridBlockWidth(count: number): number {
+  const cols = gridColumns(count)
+  return cols * NODE_W + (cols - 1) * X_GAP
+}
 
 export function computeBlueprintLayout(
   nodes: Record<string, BlueprintNode>,
@@ -65,24 +87,69 @@ export function computeBlueprintLayout(
     else roots.push(id)
   }
   roots.sort((a, b) => (a === rootNodeId ? -1 : b === rootNodeId ? 1 : 0))
-  const positions: Record<string, { x: number; y: number }> = {}
-  let cursor = 0
-  const place = (id: string, depth: number): number => {
+
+  const splitChildren = (id: string) => {
     const children = childrenOf[id] ?? []
-    if (children.length === 0) {
-      const x = cursor * (NODE_W + X_GAP)
-      cursor++
-      positions[id] = { x, y: depth * (NODE_H + Y_GAP) }
-      return x
+    return {
+      branches: children.filter((childId) => (childrenOf[childId] ?? []).length > 0),
+      leaves: children.filter((childId) => (childrenOf[childId] ?? []).length === 0)
     }
-    const childXs = children.map((childId) => place(childId, depth + 1))
-    const x = childXs.reduce((sum, childX) => sum + childX, 0) / childXs.length
-    positions[id] = { x, y: depth * (NODE_H + Y_GAP) }
-    return x
   }
+
+  const widths: Record<string, number> = {}
+  const measure = (id: string): number => {
+    const { branches, leaves } = splitChildren(id)
+    const units = branches.map(measure)
+    if (leaves.length) units.push(gridBlockWidth(leaves.length))
+    widths[id] = units.length
+      ? Math.max(NODE_W, units.reduce((sum, width) => sum + width, 0) + SUBTREE_GAP * (units.length - 1))
+      : NODE_W
+    return widths[id]
+  }
+
+  const positions: Record<string, { x: number; y: number }> = {}
+  const place = (id: string, left: number, depth: number): void => {
+    const width = widths[id]
+    const { branches, leaves } = splitChildren(id)
+    const y = depth * ROW_PITCH
+    if (!branches.length && !leaves.length) {
+      positions[id] = { x: left + (width - NODE_W) / 2, y }
+      return
+    }
+    const unitWidths = branches.map((childId) => widths[childId])
+    if (leaves.length) unitWidths.push(gridBlockWidth(leaves.length))
+    const unitsTotal = unitWidths.reduce((sum, unitWidth) => sum + unitWidth, 0) + SUBTREE_GAP * (unitWidths.length - 1)
+    let cursor = left + (width - unitsTotal) / 2
+    let extentLeft = Number.POSITIVE_INFINITY
+    let extentRight = Number.NEGATIVE_INFINITY
+    const track = (x: number) => {
+      extentLeft = Math.min(extentLeft, x)
+      extentRight = Math.max(extentRight, x + NODE_W)
+    }
+    for (const childId of branches) {
+      place(childId, cursor, depth + 1)
+      track(positions[childId].x)
+      cursor += widths[childId] + SUBTREE_GAP
+    }
+    if (leaves.length) {
+      const cols = gridColumns(leaves.length)
+      leaves.forEach((leafId, index) => {
+        const position = {
+          x: cursor + (index % cols) * (NODE_W + X_GAP),
+          y: (depth + 1) * ROW_PITCH + Math.floor(index / cols) * GRID_ROW_PITCH
+        }
+        positions[leafId] = position
+        track(position.x)
+      })
+    }
+    positions[id] = { x: (extentLeft + extentRight) / 2 - NODE_W / 2, y }
+  }
+
+  let rootLeft = 0
   for (const rootId of roots) {
-    place(rootId, 0)
-    cursor += 0.5
+    measure(rootId)
+    place(rootId, rootLeft, 0)
+    rootLeft += widths[rootId] + ROOT_GAP
   }
   for (const id of Object.keys(canvasLayout)) {
     if (nodes[id] && canvasLayout[id]) positions[id] = canvasLayout[id]
@@ -90,12 +157,8 @@ export function computeBlueprintLayout(
   return positions
 }
 
-export function computeBlueprintSubtreeLayout(
-  blueprint: Blueprint,
-  nodeId: string,
-  current: Record<string, { x: number; y: number }>,
-): Record<string, { x: number; y: number }> {
-  if (!blueprint.nodes[nodeId]) return current
+/** 收集 nodeId 及其全部后代（含 nodeId 自身） */
+export function collectSubtreeIds(blueprint: Blueprint, nodeId: string): Set<string> {
   const subtreeIds = new Set<string>()
   const visit = (id: string) => {
     if (subtreeIds.has(id) || !blueprint.nodes[id]) return
@@ -105,6 +168,40 @@ export function computeBlueprintSubtreeLayout(
     }
   }
   visit(nodeId)
+  return subtreeIds
+}
+
+/** 折叠集合展开为被隐藏的后代 id 集合 */
+export function collectHiddenNodeIds(blueprint: Blueprint, collapsedNodeIds: Set<string>): Set<string> {
+  const hidden = new Set<string>()
+  const hideDescendants = (id: string) => blueprint.nodeIds.forEach((childId) => {
+    if (blueprint.nodes[childId]?.parentId === id && !hidden.has(childId)) { hidden.add(childId); hideDescendants(childId) }
+  })
+  collapsedNodeIds.forEach(hideDescendants)
+  return hidden
+}
+
+/** 只对折叠后可见的树计算布局，折叠子树时画布随之收紧 */
+export function computeVisibleBlueprintLayout(
+  blueprint: Blueprint,
+  collapsedNodeIds: Set<string>,
+  overrides: Blueprint['canvasLayout'],
+): Record<string, { x: number; y: number }> {
+  const hidden = collectHiddenNodeIds(blueprint, collapsedNodeIds)
+  const visibleNodes: Record<string, BlueprintNode> = {}
+  for (const id of blueprint.nodeIds) {
+    if (!hidden.has(id) && blueprint.nodes[id]) visibleNodes[id] = blueprint.nodes[id]
+  }
+  return computeBlueprintLayout(visibleNodes, blueprint.rootNodeId, overrides ?? {})
+}
+
+export function computeBlueprintSubtreeLayout(
+  blueprint: Blueprint,
+  nodeId: string,
+  current: Record<string, { x: number; y: number }>,
+): Record<string, { x: number; y: number }> {
+  if (!blueprint.nodes[nodeId]) return current
+  const subtreeIds = collectSubtreeIds(blueprint, nodeId)
 
   const defaults = computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})
   const anchor = current[nodeId] ?? defaults[nodeId] ?? { x: 0, y: 0 }
@@ -120,33 +217,16 @@ export function computeBlueprintSubtreeLayout(
   return next
 }
 
-export function createDefaultLayoutRecovery(
-  blueprint: Blueprint,
-  current: Record<string, { x: number; y: number }>,
-): {
-  previous: Record<string, { x: number; y: number }>
-  next: Record<string, { x: number; y: number }>
-} {
-  return {
-    previous: { ...current },
-    next: computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {}),
-  }
-}
-
 export function deriveBlueprintFlow(
   blueprint: Blueprint,
-  existing: Record<string, { x: number; y: number }>,
+  overrides: Blueprint['canvasLayout'] | undefined,
   workspaceNameById: Record<string, string>,
   focusedNodeIds: Set<string>,
   focusActive: boolean,
   collapsedNodeIds: Set<string> = new Set(),
 ): { nodes: Node<BlueprintNodeData, 'blueprint'>[]; edges: Edge[] } {
-  const layout = computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, blueprint.canvasLayout ?? {})
-  const hidden = new Set<string>()
-  const hideDescendants = (id: string) => blueprint.nodeIds.forEach((childId) => {
-    if (blueprint.nodes[childId]?.parentId === id && !hidden.has(childId)) { hidden.add(childId); hideDescendants(childId) }
-  })
-  collapsedNodeIds.forEach(hideDescendants)
+  const hidden = collectHiddenNodeIds(blueprint, collapsedNodeIds)
+  const layout = computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, overrides ?? blueprint.canvasLayout ?? {})
   const nodes: Node<BlueprintNodeData, 'blueprint'>[] = blueprint.nodeIds
     .filter((id) => !hidden.has(id))
     .filter((id) => blueprint.nodes[id])
@@ -156,7 +236,7 @@ export function deriveBlueprintFlow(
       return {
         id,
         type: 'blueprint',
-        position: existing[id] ?? layout[id] ?? { x: 0, y: 0 },
+        position: layout[id] ?? { x: 0, y: 0 },
         data: deriveBlueprintCardData(blueprint, node, workspaceNameById, focused, focusActive, collapsedNodeIds.has(id)),
       }
     })
@@ -164,14 +244,17 @@ export function deriveBlueprintFlow(
     .filter((id) => !hidden.has(id))
     .filter((id) => {
       const node = blueprint.nodes[id]
-      return node && node.parentId && blueprint.nodes[node.parentId]
+      return node && node.parentId && blueprint.nodes[node.parentId] && !hidden.has(node.parentId)
     })
     .map((id) => ({
       id: `e-${blueprint.nodes[id].parentId}->${id}`,
       source: blueprint.nodes[id].parentId as string,
       target: id,
       type: 'blueprintAdaptive',
-      style: { stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1.5 },
+      style: {
+        stroke: `${STATUS_VISUALS[blueprint.nodes[id].status]?.color ?? '#888888'}66`,
+        strokeWidth: 1.6
+      },
     }))
   return { nodes, edges }
 }

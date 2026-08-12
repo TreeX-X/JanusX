@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { RotateCcw } from 'lucide-react'
+import { useI18n } from '@/i18n/useI18n'
 
 interface WorkbenchErrorBoundaryProps {
   children: ReactNode
@@ -14,6 +15,23 @@ export function retryWorkbenchErrorBoundary(
   state: WorkbenchErrorBoundaryState,
 ): WorkbenchErrorBoundaryState {
   return { failed: false, retryKey: state.retryKey + 1 }
+}
+
+function WorkbenchErrorFallback({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n('common')
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--bg-deep)] text-[var(--text)]" role="alert">
+      <div className="text-sm font-medium">{t('common:errorBoundary.workbenchFailed')}</div>
+      <button
+        type="button"
+        className="inline-flex h-8 items-center gap-2 rounded border border-white/15 bg-white/[0.06] px-3 text-xs hover:bg-white/10"
+        onClick={onRetry}
+      >
+        <RotateCcw size={14} aria-hidden="true" />
+        {t('common:errorBoundary.remount')}
+      </button>
+    </div>
+  )
 }
 
 export class WorkbenchErrorBoundary extends Component<
@@ -36,19 +54,7 @@ export class WorkbenchErrorBoundary extends Component<
 
   render() {
     if (this.state.failed) {
-      return (
-        <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--bg-deep)] text-[var(--text)]" role="alert">
-          <div className="text-sm font-medium">工作区渲染已中断</div>
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-2 rounded border border-white/15 bg-white/[0.06] px-3 text-xs hover:bg-white/10"
-            onClick={this.retry}
-          >
-            <RotateCcw size={14} aria-hidden="true" />
-            重新挂载
-          </button>
-        </div>
-      )
+      return <WorkbenchErrorFallback onRetry={this.retry} />
     }
 
     return <div key={this.state.retryKey} className="h-full"><>{this.props.children}</></div>

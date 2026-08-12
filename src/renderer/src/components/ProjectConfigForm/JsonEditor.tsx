@@ -8,6 +8,7 @@
 import { useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import { configureMonacoRuntime } from '@/lib/monaco-runtime'
+import { useI18n } from '@/i18n/useI18n'
 
 configureMonacoRuntime()
 import styles from './JsonEditor.module.css'
@@ -38,10 +39,11 @@ const handleBeforeMount = (monaco: any) => {
 }
 
 function LoadingIndicator() {
+  const { t } = useI18n('editor')
   return (
     <div className={styles.loading} style={{ background: '#151517' }}>
       <div className={styles.loadingInner}>
-        <span style={{ color: '#555', fontSize: 12 }}>Loading</span>
+        <span style={{ color: '#555', fontSize: 12 }}>{t('editor:config.loading')}</span>
         <span className={styles.loadingDot} />
       </div>
     </div>
@@ -53,6 +55,7 @@ function LoadingIndicator() {
  * 基于 @monaco-editor/react 的完整 JSON 编辑体验
  */
 export function JsonEditor({ value, onChange, readOnly = false }: JsonEditorProps) {
+  const { t } = useI18n('editor')
   const handleChange = useCallback(
     (val: string | undefined) => {
       onChange(val || '')
@@ -91,7 +94,7 @@ export function JsonEditor({ value, onChange, readOnly = false }: JsonEditorProp
         />
       </div>
       <div className={styles.hint}>
-        直接编辑 JSON 配置。格式错误会在保存时提示。
+        {t('editor:config.jsonHint')}
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { FileViewerContent } from '@/components/FileViewerContent'
 import { useEditorStore } from '@/stores/editor'
 import { Maximize2, PanelRightOpen, Pin, PinOff, Save, Search } from 'lucide-react'
 import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
+import { useI18n } from '@/i18n/useI18n'
 
 interface EditorWindowParams {
   filePath: string
@@ -18,28 +19,29 @@ function getEditorWindowParams(): EditorWindowParams | null {
 }
 
 function WindowTrafficLights() {
+  const { t } = useI18n('common')
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
   return (
     <div className="relative z-10 flex shrink-0 gap-2" style={noDrag}>
       <button
         type="button"
-        aria-label="Close"
-        title="Close"
+        aria-label={t('common:trafficLight.close')}
+        title={t('common:trafficLight.close')}
         onClick={() => window.electron.window.close()}
         className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
       />
       <button
         type="button"
-        aria-label="Minimize"
-        title="Minimize"
+        aria-label={t('common:trafficLight.minimize')}
+        title={t('common:trafficLight.minimize')}
         onClick={() => window.electron.window.minimize()}
         className="h-3 w-3 rounded-full bg-[#ffbd2e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
       />
       <button
         type="button"
-        aria-label="Maximize"
-        title="Maximize"
+        aria-label={t('common:trafficLight.maximize')}
+        title={t('common:trafficLight.maximize')}
         onClick={() => window.electron.window.maximize()}
         className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
       />
@@ -48,6 +50,7 @@ function WindowTrafficLights() {
 }
 
 export function StandaloneFileEditor() {
+  const { t } = useI18n('editor')
   const findEditorRef = useRef<FindableEditor | null>(null)
   const editorParams = useMemo(() => getEditorWindowParams(), [])
   const openFiles = useEditorStore((state) => state.openFiles)
@@ -110,7 +113,7 @@ export function StandaloneFileEditor() {
   useEffect(() => { findEditorRef.current = null }, [activeFileId])
 
   useEffect(() => {
-    document.title = activeFile ? `${activeFile.isDirty ? '* ' : ''}${activeFile.name} - JanusX` : 'JanusX Editor'
+    document.title = activeFile ? t('editor:fileEditor.documentTitle', { prefix: activeFile.isDirty ? '* ' : '', name: activeFile.name }) : t('editor:fileEditor.windowTitle')
   }, [activeFile])
 
   const handleContentChange = useCallback((content: string) => {
@@ -175,7 +178,7 @@ export function StandaloneFileEditor() {
                 <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{file.name}</span>
                 <button
                   type="button"
-                  aria-label={`关闭 ${file.name}`}
+                  aria-label={t('editor:fileEditor.closeTab', { name: file.name })}
                   className="ml-1 shrink-0 border-0 bg-transparent p-0 text-[#666] hover:text-[#ff7474]"
                   onClick={(event) => {
                     event.stopPropagation()
@@ -194,8 +197,8 @@ export function StandaloneFileEditor() {
           {canFind && (
             <button
               type="button"
-              aria-label="查找"
-              title="查找 (Ctrl+F)"
+              aria-label={t('editor:fileEditor.find')}
+              title={t('editor:fileEditor.findTitle')}
               onClick={() => void openEditorFind(findEditorRef.current)}
               onMouseDown={(event) => event.stopPropagation()}
               className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#888] transition-colors hover:border-white/[0.14] hover:text-white"
@@ -206,8 +209,8 @@ export function StandaloneFileEditor() {
           <button
             type="button"
             aria-pressed={isPinned}
-            aria-label={isPinned ? '\u53d6\u6d88\u7a97\u53e3\u7f6e\u9876' : '\u9501\u5b9a\u7a97\u53e3\u7f6e\u9876'}
-            title={isPinned ? '\u53d6\u6d88\u7a97\u53e3\u7f6e\u9876' : '\u9501\u5b9a\u7a97\u53e3\u7f6e\u9876'}
+            aria-label={isPinned ? t('editor:fileEditor.unpinWindow') : t('editor:fileEditor.pinWindow')}
+            title={isPinned ? t('editor:fileEditor.unpinWindow') : t('editor:fileEditor.pinWindow')}
             onClick={() => void togglePinned()}
             onMouseDown={(event) => event.stopPropagation()}
             className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors"
@@ -221,8 +224,8 @@ export function StandaloneFileEditor() {
           </button>
           <button
             type="button"
-            aria-label="Maximize editor window"
-            title="Maximize editor window"
+            aria-label={t('editor:fileEditor.maximizeWindow')}
+            title={t('editor:fileEditor.maximizeWindow')}
             onClick={() => void window.electron.window.maximize()}
             onMouseDown={(event) => event.stopPropagation()}
             className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
@@ -231,8 +234,8 @@ export function StandaloneFileEditor() {
           </button>
           <button
             type="button"
-            aria-label={'\u5d4c\u5165\u4e3b\u7a97\u53e3\u5de5\u4f5c\u533a'}
-            title={'\u5d4c\u5165\u4e3b\u7a97\u53e3\u5de5\u4f5c\u533a'}
+            aria-label={t('editor:fileEditor.embedToMain')}
+            title={t('editor:fileEditor.embedToMain')}
             disabled={!activeFile || !editorParams}
             onClick={() => void embedInWorkspace()}
             onMouseDown={(event) => event.stopPropagation()}
@@ -245,8 +248,8 @@ export function StandaloneFileEditor() {
           <button
             type="button"
             onClick={() => activeFileId && void saveFile(activeFileId)}
-            aria-label={'\u4fdd\u5b58'}
-            title={'\u4fdd\u5b58'}
+            aria-label={t('editor:fileEditor.save')}
+            title={t('editor:fileEditor.save')}
             onMouseDown={(event) => event.stopPropagation()}
             className="flex h-7 w-7 items-center justify-center rounded transition-colors"
             style={{
@@ -265,7 +268,7 @@ export function StandaloneFileEditor() {
           <FileViewerContent key={activeFile.id} file={activeFile} diffOriginalContent={baselineContent} onContentChange={handleContentChange} onEditorMount={handleEditorMount} />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-[#666]">
-            Missing file information
+            {t('editor:fileEditor.missingFileInfo')}
           </div>
         )}
       </div>

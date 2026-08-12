@@ -25,6 +25,7 @@ import type { FileNode, GitFileChange } from '@/types'
 import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
 import { FileTreeItem } from '@/components/file-tree/FileTreeItem'
+import { useI18n } from '@/i18n/useI18n'
 import styles from '@/components/file-tree/file-tree.module.css'
 import {
   FileTreeContextMenu,
@@ -56,13 +57,14 @@ interface NamingDialogState {
   defaultValue: string
 }
 
-const NAMING_DIALOG_COPY: Record<NamingDialogState['mode'], { title: string; label: string }> = {
-  'create-file': { title: '新建文件', label: '文件名' },
-  'create-directory': { title: '新建文件夹', label: '文件夹名' },
-  rename: { title: '重命名', label: '新名称' },
+const NAMING_DIALOG_KEYS: Record<NamingDialogState['mode'], { titleKey: string; labelKey: string }> = {
+  'create-file': { titleKey: 'editor:fileTree.naming.createFile.title', labelKey: 'editor:fileTree.naming.createFile.label' },
+  'create-directory': { titleKey: 'editor:fileTree.naming.createDirectory.title', labelKey: 'editor:fileTree.naming.createDirectory.label' },
+  'rename': { titleKey: 'editor:fileTree.naming.rename.title', labelKey: 'editor:fileTree.naming.rename.label' },
 }
 
 export function FileExplorerTool({ active = true }: { active?: boolean }) {
+  const { t } = useI18n('editor')
   const fileTree = useWorkspaceStore((s) => s.fileTree)
   const fileTreeLoadState = useWorkspaceStore((s) => s.fileTreeLoadState)
   const activeFilePath = useWorkspaceStore((s) => s.activeFilePath)
@@ -159,7 +161,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         await loadWorkspaceFileTree(workspacePath, () => getActiveWorkspacePath() === workspacePath)
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || '目录刷新失败')
+      setErrorMessage(err?.message || t('editor:fileTree.reloadFailed'))
     } finally {
       if (path) {
         setLoadingDirectoryKeys((current) => {
@@ -280,12 +282,12 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
           }
         : {
             node: null,
-            name: '工作区',
+            name: t('editor:fileTree.workspaceRoot'),
             path: '',
             type: 'directory',
           },
     })
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (!active) {
@@ -328,16 +330,16 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       try {
         const result = await operation()
         if (!result.success) {
-          setErrorMessage(result.error || '文件操作失败')
+          setErrorMessage(result.error || t('editor:fileTree.operationFailed'))
           return null
         }
         return result
       } catch (err: any) {
-        setErrorMessage(err.message || '文件操作失败')
+        setErrorMessage(err.message || t('editor:fileTree.operationFailed'))
         return null
       }
     },
-    [],
+    [t],
   )
 
   const handleOpenContextTarget = useCallback(() => {
@@ -391,9 +393,9 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   )
 
   const validateEntryName = useCallback((name: string): string | null => {
-    if (!isValidEntryName(name)) return '名称不能为空，且不能包含 / 或 \\'
+    if (!isValidEntryName(name)) return t('editor:fileTree.nameInvalid')
     return null
-  }, [])
+  }, [t])
 
   const handleNamingConfirm = useCallback(
     async (name: string) => {
@@ -514,7 +516,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     })
   }, [getActiveWorkspace, pendingDelete, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
-  const namingCopy = namingDialog ? NAMING_DIALOG_COPY[namingDialog.mode] : null
+  const namingCopy = namingDialog ? NAMING_DIALOG_KEYS[namingDialog.mode] : null
 
   return (
     <>
@@ -528,7 +530,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
               border: '1px solid rgba(255, 255, 255, 0.08)',
               color: '#d4d4d4',
             }}
-            placeholder="搜索文件..."
+            placeholder={t('editor:fileTree.searchPlaceholder')}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -543,7 +545,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
           ref={fileTreeViewportRef}
           data-testid="file-explorer-content"
           aria-busy={fileTreeLoadState === 'loading' || fileTreeLoadState === 'revealing'}
-          aria-label="文件浏览器内容"
+          aria-label={t('editor:fileTree.ariaContent')}
           className={`no-scrollbar min-h-0 flex-1 overflow-y-auto p-1.5 text-xs ${styles.treeViewport}`}
           onContextMenu={(event) => {
             event.preventDefault()
@@ -554,16 +556,16 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         >
           <div className={`min-h-full ${styles.tree}`} data-file-tree-phase={fileTreeLoadState}>
             {fileTreeLoadState === 'loading' ? (
-              <div className={styles.loadingState} role="status">正在加载文件树…</div>
+              <div className={styles.loadingState} role="status">{t('editor:fileTree.loading')}</div>
             ) : fileTreeLoadState === 'error' ? (
               <div className={styles.loadError} role="alert">
-                <span>无法读取文件树</span>
-                <button type="button" onClick={retryFileTreeLoad}>重试</button>
+                <span>{t('editor:fileTree.loadError')}</span>
+                <button type="button" onClick={retryFileTreeLoad}>{t('common:action.retry')}</button>
               </div>
             ) : visibleTree.length === 0 ? (
               <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-3">
                 <div className="text-[#555]">
-                  {fileTree.length === 0 ? '未加载工作区' : '无匹配文件'}
+                  {fileTree.length === 0 ? t('editor:fileTree.emptyWorkspace') : t('editor:fileTree.noMatch')}
                 </div>
               </div>
             ) : (
@@ -624,8 +626,8 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
       <PromptDialog
         open={namingDialog !== null}
-        title={namingCopy?.title ?? ''}
-        label={namingCopy?.label}
+        title={namingCopy ? t(namingCopy.titleKey) : ''}
+        label={namingCopy ? t(namingCopy.labelKey) : undefined}
         defaultValue={namingDialog?.defaultValue}
         validate={validateEntryName}
         onConfirm={(value) => void handleNamingConfirm(value)}
@@ -634,14 +636,14 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
       <PromptDialog
         open={pendingDelete !== null}
-        title="确认删除"
+        title={t('editor:fileTree.deleteTitle')}
         description={
           <>
-            确认删除「<strong className="prompt-dialog__emphasis">{pendingDelete?.targetName}</strong>」吗？此操作不可恢复。
+            {t('editor:fileTree.deleteConfirmPrefix')}<strong className="prompt-dialog__emphasis">{pendingDelete?.targetName}</strong>{t('editor:fileTree.deleteConfirmSuffix')}
           </>
         }
         confirmOnly
-        confirmText="删除"
+        confirmText={t('editor:fileTree.deleteConfirmButton')}
         tone="danger"
         onConfirm={() => void handleConfirmDelete()}
         onCancel={() => setPendingDelete(null)}
@@ -649,11 +651,11 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
       <PromptDialog
         open={errorMessage !== null}
-        title="操作失败"
+        title={t('editor:fileTree.errorTitle')}
         description={errorMessage}
         confirmOnly
         hideCancel
-        confirmText="知道了"
+        confirmText={t('editor:fileTree.errorDismiss')}
         onConfirm={() => setErrorMessage(null)}
         onCancel={() => setErrorMessage(null)}
       />

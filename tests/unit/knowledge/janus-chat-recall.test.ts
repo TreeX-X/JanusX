@@ -32,7 +32,24 @@ vi.mock('../../../src/main/llm/ai-runtime', () => ({
   streamText,
 }))
 vi.mock('../../../src/main/agent/runtime/runtime', () => ({
-  workspaceAgentRuntime: { getSession, executeFunctionCall },
+  workspaceAgentRuntime: {
+    getSession,
+    executeFunctionCall,
+    registry: {
+      list: () => [
+        'workspace.list', 'workspace.search', 'workspace.read', 'workspace.edit', 'workspace.create',
+        'project.detect', 'project.generate-config', 'project.apply-config', 'project.list-processes',
+        'project.process-output', 'project.start-process', 'project.stop-process',
+        'git.status', 'git.log', 'git.diff', 'git.stage', 'git.unstage', 'git.commit', 'git.pull', 'git.push',
+        'command.run',
+      ].map((name) => ({
+        name,
+        description: name,
+        inputSchema: { type: 'object', additionalProperties: true },
+        actionRisk: name === 'workspace.edit' ? 'write' : 'read',
+      })),
+    },
+  },
 }))
 
 import { registerLlmHandlers } from '../../../src/main/ipc/llm-handlers'
@@ -235,7 +252,7 @@ describe('Janus Chat knowledge recall', () => {
     })
 
     expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
-      maxSteps: 20,
+      maxSteps: 1,
       tools: expect.objectContaining({
         workspace_list: expect.any(Object),
         workspace_read: expect.any(Object),
@@ -250,6 +267,7 @@ describe('Janus Chat knowledge recall', () => {
         expect.objectContaining({ role: 'system', content: expect.stringContaining('workspaceId=workspace-b') }),
       ]),
     }))
+    expect((streamText.mock.calls[0][0] as any).tools.workspace_read.execute).toBeUndefined()
     expect(capture).toHaveBeenCalledTimes(4)
   })
 
@@ -339,32 +357,37 @@ describe('Janus Chat knowledge recall', () => {
       }
     })
     streamText
+      .mockImplementationOnce(async () => ({
+        textStream: (async function* () {})(),
+        toolCalls: Promise.resolve([{
+          toolCallId: 'read-1', toolName: 'workspace_read',
+          args: { workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 },
+        }]),
+      }))
       .mockImplementationOnce(async (options: any) => {
-        const read = await options.tools.workspace_read.execute({
-          workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096,
-        })
-        expect(read).toMatchObject({ retryable: true, reasonCode: 'TARGET_CHANGED' })
+        expect(options.messages.at(-1).content[0].result).toMatchObject({ retryable: true, reasonCode: 'TARGET_CHANGED' })
         return {
           textStream: (async function* () {})(),
-          responseMessages: Promise.resolve([
-            { role: 'assistant', content: 'The read changed and should be retried.' },
-          ]),
+          toolCalls: Promise.resolve([{
+            toolCallId: 'read-2', toolName: 'workspace_read',
+            args: { workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 },
+          }]),
         }
       })
-      .mockImplementationOnce(async (options: any) => {
-        expect(options.messages[0].content).toContain('previous tool sequence ended')
-        await options.tools.workspace_read.execute({ workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 })
-        await options.tools.workspace_edit.execute({
-          workspaceId: 'workspace-a',
-          path: 'src/main.ts',
-          expectedHash: 'a'.repeat(64),
-          replacements: [{ oldText: 'before', newText: 'after' }],
-        })
-        return {
-          textStream: (async function* () { yield '修改完成。' })(),
-          responseMessages: Promise.resolve([]),
-        }
-      })
+      .mockImplementationOnce(async () => ({
+        textStream: (async function* () {})(),
+        toolCalls: Promise.resolve([{
+          toolCallId: 'edit-1', toolName: 'workspace_edit',
+          args: {
+            workspaceId: 'workspace-a', path: 'src/main.ts', expectedHash: 'a'.repeat(64),
+            replacements: [{ oldText: 'before', newText: 'after' }],
+          },
+        }]),
+      }))
+      .mockImplementationOnce(async () => ({
+        textStream: (async function* () { yield '修改完成。' })(),
+        toolCalls: Promise.resolve([]),
+      }))
     const registration = registerAndFindHandler('llm:chat-stream')
     const reply = vi.fn()
 
@@ -381,7 +404,7 @@ describe('Janus Chat knowledge recall', () => {
       }],
     })
 
-    expect(streamText).toHaveBeenCalledTimes(2)
+    expect(streamText).toHaveBeenCalledTimes(4)
     expect(executeFunctionCall.mock.calls.map(([input]) => input.call.toolName)).toEqual([
       'workspace.read',
       'workspace.read',

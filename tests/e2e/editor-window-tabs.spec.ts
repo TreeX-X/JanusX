@@ -2,6 +2,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { createDesktopTestEnv } from './desktop-test-env'
 
 type EditorWindowAPI = Window & {
   electron: {
@@ -35,7 +36,7 @@ test('file opens share one workspace editor window and switch existing tabs', as
 
     application = await electron.launch({
       args: [entry, `--user-data-dir=${userDataDir}`],
-      env: { ...process.env, ELECTRON_RENDERER_URL: '', NODE_ENV: 'production' },
+      env: createDesktopTestEnv(root),
     })
     const mainPage = await application.firstWindow({ timeout: 30_000 })
 

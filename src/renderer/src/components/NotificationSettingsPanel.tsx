@@ -14,12 +14,14 @@ import {
   type FeishuControlStatus,
 } from '../../../shared/notifications'
 import { RefreshIconButton } from './ui/RefreshIconButton'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './NotificationSettingsPanel.module.css'
 
 type StatusState = 'idle' | 'loading' | 'saving' | 'saved' | 'error'
 type TestStatusState = 'idle' | 'testing' | 'success' | 'error'
 
 export function NotificationSettingsPanel() {
+  const { t } = useI18n('settings')
   const [settings, setSettings] = useState<AgentNotificationSettings>(
     DEFAULT_AGENT_NOTIFICATION_SETTINGS,
   )
@@ -42,7 +44,7 @@ export function NotificationSettingsPanel() {
         state: 'error',
         enabled: false,
         configured: false,
-        error: 'Unable to read Feishu control status',
+        error: t('settings:notification.error.controlUnavailable'),
         updatedAt: Date.now(),
       })
     } finally {
@@ -63,7 +65,7 @@ export function NotificationSettingsPanel() {
       })
       .catch((err) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Failed to load notification settings')
+        setError(err instanceof Error ? err.message : t('settings:notification.error.load'))
         setStatus('error')
       })
     void refreshControlStatus()
@@ -156,7 +158,7 @@ export function NotificationSettingsPanel() {
       setStatus('saved')
       void refreshControlStatus()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save notification settings')
+      setError(err instanceof Error ? err.message : t('settings:notification.error.save'))
       setStatus('error')
     }
   }
@@ -168,14 +170,14 @@ export function NotificationSettingsPanel() {
       const result = await testFeishuNotification(draft.remote)
       if (result.ok) {
         setTestStatus('success')
-        setTestMessage('飞书测试通知已发送')
+        setTestMessage(t('settings:notification.test.success'))
       } else {
         setTestStatus('error')
-        setTestMessage(result.reason ?? '飞书测试通知发送失败')
+        setTestMessage(result.reason ?? t('settings:notification.test.failure'))
       }
     } catch (err) {
       setTestStatus('error')
-      setTestMessage(err instanceof Error ? err.message : '飞书测试通知发送失败')
+      setTestMessage(err instanceof Error ? err.message : t('settings:notification.test.failure'))
     }
   }
 
@@ -191,24 +193,24 @@ export function NotificationSettingsPanel() {
   return (
     <div className={styles.panel}>
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>桌面通知 Desktop Notifications</h3>
+        <h3 className={styles.sectionTitle}>{t('settings:notification.section.desktop')}</h3>
         <SettingSwitch
-          label="启用桌面通知"
-          hint="Agent 终端任务结束后，使用系统通知中心提醒。"
+          label={t('settings:notification.toggle.desktop.label')}
+          hint={t('settings:notification.toggle.desktop.hint')}
           checked={draft.desktopEnabled}
           disabled={isBusy}
           onChange={(checked) => updateDraft('desktopEnabled', checked)}
         />
         <SettingSwitch
-          label="任务完成时提醒"
-          hint="成功完成的 Agent 会话会在超过时长阈值后提醒。"
+          label={t('settings:notification.toggle.onComplete.label')}
+          hint={t('settings:notification.toggle.onComplete.hint')}
           checked={draft.notifyOnSuccess}
           disabled={isBusy || !draft.desktopEnabled}
           onChange={(checked) => updateDraft('notifyOnSuccess', checked)}
         />
         <SettingSwitch
-          label="任务失败时提醒"
-          hint="失败提醒独立控制，适合保留更高优先级的异常提醒。"
+          label={t('settings:notification.toggle.onFailure.label')}
+          hint={t('settings:notification.toggle.onFailure.hint')}
           checked={draft.notifyOnFailure}
           disabled={isBusy || !draft.desktopEnabled}
           onChange={(checked) => updateDraft('notifyOnFailure', checked)}
@@ -216,11 +218,11 @@ export function NotificationSettingsPanel() {
       </section>
 
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>运行时长阈值 Runtime</h3>
+        <h3 className={styles.sectionTitle}>{t('settings:notification.section.runtime')}</h3>
         <div className={styles.row}>
           <div className={styles.label}>
-            <span className={styles.labelText}>终端工作超过多久后提醒</span>
-            <span className={styles.hint}>设为 0 秒时，每个完成的 Agent 任务都会提醒。</span>
+            <span className={styles.labelText}>{t('settings:notification.row.completeThreshold.label')}</span>
+            <span className={styles.hint}>{t('settings:notification.row.completeThreshold.hint')}</span>
           </div>
           <div className={styles.numberControl}>
             <input
@@ -233,24 +235,24 @@ export function NotificationSettingsPanel() {
               disabled={isBusy || !draft.desktopEnabled}
               onChange={(event) => handleNumberChange('minDurationSeconds', event.target.value)}
             />
-            <span className={styles.unit}>sec</span>
+            <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
           </div>
         </div>
       </section>
 
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>失败详情 Failure Details</h3>
+        <h3 className={styles.sectionTitle}>{t('settings:notification.section.failure')}</h3>
         <SettingSwitch
-          label="包含简短错误信息"
-          hint="过长或嘈杂的 Agent 输出会在进入系统通知前截断。"
+          label={t('settings:notification.toggle.includeErrorMessage.label')}
+          hint={t('settings:notification.toggle.includeErrorMessage.hint')}
           checked={draft.includeErrorMessage}
           disabled={isBusy || !draft.desktopEnabled || !draft.notifyOnFailure}
           onChange={(checked) => updateDraft('includeErrorMessage', checked)}
         />
         <div className={styles.row}>
           <div className={styles.label}>
-            <span className={styles.labelText}>错误信息长度</span>
-            <span className={styles.hint}>允许范围为 40 到 500 个字符。</span>
+            <span className={styles.labelText}>{t('settings:notification.row.errorMessageLength.label')}</span>
+            <span className={styles.hint}>{t('settings:notification.row.errorMessageLength.hint')}</span>
           </div>
           <div className={styles.numberControl}>
             <input
@@ -268,52 +270,52 @@ export function NotificationSettingsPanel() {
               }
               onChange={(event) => handleNumberChange('errorMessageMaxLength', event.target.value)}
             />
-            <span className={styles.unit}>chars</span>
+            <span className={styles.unit}>{t('settings:notification.unit.chars')}</span>
           </div>
         </div>
       </section>
 
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>远程提醒 Remote Notify</h3>
+        <h3 className={styles.sectionTitle}>{t('settings:notification.section.remote')}</h3>
         <SettingSwitch
-          label="启用远程提醒"
-          hint="Agent 完成、失败或等待处理时，向已启用的远程通道发送提醒。"
+          label={t('settings:notification.toggle.remote.label')}
+          hint={t('settings:notification.toggle.remote.hint')}
           checked={draft.remote.enabled}
           disabled={isBusy}
           onChange={(checked) => updateRemoteDraft('enabled', checked)}
         />
         <SettingSwitch
-          label="完成时发送"
-          hint="成功完成的 Agent 会话会按远程阈值发送提醒。"
+          label={t('settings:notification.toggle.remoteComplete.label')}
+          hint={t('settings:notification.toggle.remoteComplete.hint')}
           checked={draft.remote.notifyOnCompleted}
           disabled={isBusy || !draft.remote.enabled}
           onChange={(checked) => updateRemoteDraft('notifyOnCompleted', checked)}
         />
         <SettingSwitch
-          label="失败时发送"
-          hint="失败事件会立即进入远程提醒，不受完成提醒开关影响。"
+          label={t('settings:notification.toggle.remoteFailure.label')}
+          hint={t('settings:notification.toggle.remoteFailure.hint')}
           checked={draft.remote.notifyOnFailed}
           disabled={isBusy || !draft.remote.enabled}
           onChange={(checked) => updateRemoteDraft('notifyOnFailed', checked)}
         />
         <SettingSwitch
-          label="等待处理时发送"
-          hint="等待授权或输入的 attention 事件会发送到远程通道。"
+          label={t('settings:notification.toggle.remoteAttention.label')}
+          hint={t('settings:notification.toggle.remoteAttention.hint')}
           checked={draft.remote.notifyOnAttention}
           disabled={isBusy || !draft.remote.enabled}
           onChange={(checked) => updateRemoteDraft('notifyOnAttention', checked)}
         />
         <SettingSwitch
-          label="等待授权时发送"
-          hint="授权请求会作为独立类型发送，便于后续接入审批按钮。"
+          label={t('settings:notification.toggle.remoteApproval.label')}
+          hint={t('settings:notification.toggle.remoteApproval.hint')}
           checked={draft.remote.notifyOnApproval}
           disabled={isBusy || !draft.remote.enabled}
           onChange={(checked) => updateRemoteDraft('notifyOnApproval', checked)}
         />
         <div className={styles.row}>
           <div className={styles.label}>
-            <span className={styles.labelText}>远程完成提醒阈值</span>
-            <span className={styles.hint}>仅作用于完成事件；失败和等待处理会立即发送。</span>
+            <span className={styles.labelText}>{t('settings:notification.row.remoteCompleteThreshold.label')}</span>
+            <span className={styles.hint}>{t('settings:notification.row.remoteCompleteThreshold.hint')}</span>
           </div>
           <div className={styles.numberControl}>
             <input
@@ -331,8 +333,8 @@ export function NotificationSettingsPanel() {
         </div>
         <div className={styles.row}>
           <div className={styles.label}>
-            <span className={styles.labelText}>去重窗口</span>
-            <span className={styles.hint}>同一事件在窗口期内不会重复发送到同一 provider。</span>
+            <span className={styles.labelText}>{t('settings:notification.row.dedupeWindow.label')}</span>
+            <span className={styles.hint}>{t('settings:notification.row.dedupeWindow.hint')}</span>
           </div>
           <div className={styles.numberControl}>
             <input
@@ -345,13 +347,13 @@ export function NotificationSettingsPanel() {
               disabled={isBusy || !draft.remote.enabled}
               onChange={(event) => handleRemoteNumberChange('dedupeWindowSeconds', event.target.value)}
             />
-            <span className={styles.unit}>sec</span>
+            <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
           </div>
         </div>
         <div className={styles.row}>
           <div className={styles.label}>
-            <span className={styles.labelText}>发送超时</span>
-            <span className={styles.hint}>provider 在超时后会失败返回，不阻塞本地通知流程。</span>
+            <span className={styles.labelText}>{t('settings:notification.row.sendTimeout.label')}</span>
+            <span className={styles.hint}>{t('settings:notification.row.sendTimeout.hint')}</span>
           </div>
           <div className={styles.numberControl}>
             <input
@@ -364,24 +366,24 @@ export function NotificationSettingsPanel() {
               disabled={isBusy || !draft.remote.enabled}
               onChange={(event) => handleRemoteNumberChange('timeoutSeconds', event.target.value)}
             />
-            <span className={styles.unit}>sec</span>
+            <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
           </div>
         </div>
       </section>
 
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>飞书 Feishu</h3>
+        <h3 className={styles.sectionTitle}>{t('settings:notification.section.feishu')}</h3>
         <SettingSwitch
-          label="启用飞书提醒"
-          hint="使用飞书群机器人 webhook，或自建应用 app_id/app_secret 发送卡片消息。"
+          label={t('settings:notification.toggle.feishu.label')}
+          hint={t('settings:notification.toggle.feishu.hint')}
           checked={draft.remote.providers.feishu.enabled}
           disabled={isBusy || !draft.remote.enabled}
           onChange={(checked) => updateFeishuDraft('enabled', checked)}
         />
         <div className={styles.row}>
           <div className={styles.label}>
-            <span className={styles.labelText}>发送模式</span>
-            <span className={styles.hint}>Webhook 适合群机器人；App 适合自建应用发送到 chat/open_id。</span>
+            <span className={styles.labelText}>{t('settings:notification.row.feishuMode.label')}</span>
+            <span className={styles.hint}>{t('settings:notification.row.feishuMode.hint')}</span>
           </div>
           <select
             className={styles.select}
@@ -389,14 +391,14 @@ export function NotificationSettingsPanel() {
             disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
             onChange={(event) => handleFeishuModeChange(event.target.value === 'app' ? 'app' : 'webhook')}
           >
-            <option value="webhook">Webhook</option>
-            <option value="app">App</option>
+            <option value="webhook">{t('settings:notification.option.webhook')}</option>
+            <option value="app">{t('settings:notification.option.app')}</option>
           </select>
         </div>
         {draft.remote.providers.feishu.mode === 'webhook' ? (
           <TextInputRow
-            label="Webhook URL"
-            hint="飞书群机器人 webhook 地址。"
+            label={t('settings:notification.row.webhookUrl.label')}
+            hint={t('settings:notification.row.webhookUrl.hint')}
             value={draft.remote.providers.feishu.webhookUrl}
             disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
             onChange={(value) => updateFeishuDraft('webhookUrl', value)}
@@ -404,15 +406,15 @@ export function NotificationSettingsPanel() {
         ) : (
           <>
             <TextInputRow
-              label="App ID"
-              hint="飞书开放平台自建应用 app_id。"
+              label={t('settings:notification.row.appId.label')}
+              hint={t('settings:notification.row.appId.hint')}
               value={draft.remote.providers.feishu.appId}
               disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
               onChange={(value) => updateFeishuDraft('appId', value)}
             />
             <TextInputRow
-              label="App Secret"
-              hint="留空表示保留已保存的 secret；只有输入新值时才会替换。"
+              label={t('settings:notification.row.appSecret.label')}
+              hint={t('settings:notification.row.appSecret.hint')}
               type="password"
               value={draft.remote.providers.feishu.appSecret}
               disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
@@ -420,8 +422,8 @@ export function NotificationSettingsPanel() {
             />
             <div className={styles.row}>
               <div className={styles.label}>
-                <span className={styles.labelText}>Receive ID Type</span>
-                <span className={styles.hint}>目标 ID 类型，和下方 receive_id 保持一致。</span>
+                <span className={styles.labelText}>{t('settings:notification.row.receiveIdType.label')}</span>
+                <span className={styles.hint}>{t('settings:notification.row.receiveIdType.hint')}</span>
               </div>
               <select
                 className={styles.select}
@@ -434,27 +436,27 @@ export function NotificationSettingsPanel() {
                   )
                 }
               >
-                <option value="chat_id">chat_id</option>
-                <option value="open_id">open_id</option>
+                <option value="chat_id">{t('settings:notification.option.chatId')}</option>
+                <option value="open_id">{t('settings:notification.option.openId')}</option>
               </select>
             </div>
             <TextInputRow
-              label="Receive ID"
-              hint="飞书 chat_id 或 open_id。"
+              label={t('settings:notification.row.receiveId.label')}
+              hint={t('settings:notification.row.receiveId.hint')}
               value={draft.remote.providers.feishu.receiveId}
               disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
               onChange={(value) => updateFeishuDraft('receiveId', value)}
             />
             <SettingSwitch
-              label="启用飞书双向控制"
-              hint="仅 App 模式可用；消息和签名卡片动作只接受白名单 open_id。"
+              label={t('settings:notification.toggle.feishuControl.label')}
+              hint={t('settings:notification.toggle.feishuControl.hint')}
               checked={draft.remote.providers.feishu.inboundControlEnabled}
               disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
               onChange={(checked) => updateFeishuDraft('inboundControlEnabled', checked)}
             />
             <TextAreaRow
-              label="操作者 open_id 白名单"
-              hint="每行一个 ou_...；保存时自动移除空值、无效值和重复值。"
+              label={t('settings:notification.row.allowedOpenIds.label')}
+              hint={t('settings:notification.row.allowedOpenIds.hint')}
               value={draft.remote.providers.feishu.allowedOpenIds.join('\n')}
               disabled={isBusy || !draft.remote.providers.feishu.enabled}
               onChange={(value) => updateFeishuDraft(
@@ -463,71 +465,71 @@ export function NotificationSettingsPanel() {
               )}
             />
             <TextInputRow
-              label="群聊 prompt 前缀"
-              hint="群聊必须 @机器人或使用这个非保留 /name 前缀。"
+              label={t('settings:notification.row.groupPromptPrefix.label')}
+              hint={t('settings:notification.row.groupPromptPrefix.hint')}
               value={draft.remote.providers.feishu.groupPromptPrefix}
               disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
               onChange={(value) => updateFeishuDraft('groupPromptPrefix', value)}
             />
             <ControlNumberRow
-              label="绑定有效期"
-              hint="飞书会话到终端的绑定到期后自动失效。"
+              label={t('settings:notification.row.bindingTtl.label')}
+              hint={t('settings:notification.row.bindingTtl.hint')}
               value={draft.remote.providers.feishu.bindingTtlMinutes}
               min={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.min}
               max={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.max}
-              unit="min"
+              unit={t('settings:notification.unit.min')}
               disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
               onChange={(value) => handleFeishuNumberChange('bindingTtlMinutes', value)}
             />
             <ControlNumberRow
-              label="卡片动作有效期"
-              hint="签名按钮超过该时间后不可再使用。"
+              label={t('settings:notification.row.cardActionTtl.label')}
+              hint={t('settings:notification.row.cardActionTtl.hint')}
               value={draft.remote.providers.feishu.actionTokenTtlMinutes}
               min={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.min}
               max={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.max}
-              unit="min"
+              unit={t('settings:notification.unit.min')}
               disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
               onChange={(value) => handleFeishuNumberChange('actionTokenTtlMinutes', value)}
             />
             <ControlNumberRow
-              label="审计保留期"
-              hint="超过该时间的 Companion 审计 JSONL 记录会被清理。"
+              label={t('settings:notification.row.auditRetentionDays.label')}
+              hint={t('settings:notification.row.auditRetentionDays.hint')}
               value={draft.remote.providers.feishu.auditRetentionDays}
               min={FEISHU_CONTROL_LIMITS.auditRetentionDays.min}
               max={FEISHU_CONTROL_LIMITS.auditRetentionDays.max}
-              unit="days"
+              unit={t('settings:notification.unit.days')}
               disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
               onChange={(value) => handleFeishuNumberChange('auditRetentionDays', value)}
             />
             <ControlNumberRow
-              label="最大 follow-up 长度"
-              hint="超过限制的 prompt 会在提交终端前被拒绝。"
+              label={t('settings:notification.row.maxFollowUpLength.label')}
+              hint={t('settings:notification.row.maxFollowUpLength.hint')}
               value={draft.remote.providers.feishu.maxPromptLength}
               min={FEISHU_CONTROL_LIMITS.maxPromptLength.min}
               max={FEISHU_CONTROL_LIMITS.maxPromptLength.max}
-              unit="chars"
+              unit={t('settings:notification.unit.chars')}
               disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
               onChange={(value) => handleFeishuNumberChange('maxPromptLength', value)}
             />
             <div className={styles.controlStatus}>
               <div className={styles.label}>
-                <span className={styles.labelText}>入站连接状态</span>
+                <span className={styles.labelText}>{t('settings:notification.row.controlStatus.label')}</span>
                 <span className={styles.hint}>
                   {controlStatus
                     ? `${controlStatus.state} / ${controlStatus.configured ? 'configured' : 'not configured'} / ${new Date(controlStatus.updatedAt).toLocaleString()}`
-                    : 'Status unavailable'}
+                    : t('settings:notification.row.controlStatus.unavailable')}
                 </span>
                 {controlStatus?.error && <span className={styles.statusError}>{controlStatus.error}</span>}
               </div>
               <RefreshIconButton
                 accent="orange"
-                label="Refresh Feishu control status"
+                label={t('settings:notification.action.refreshFeishu')}
                 loading={statusRefreshing}
                 onClick={() => { void refreshControlStatus() }}
               />
             </div>
             <p className={styles.controlNotice}>
-              Webhook 仅支持通知。直接文本必须先绑定终端；群聊必须 @机器人或使用前缀。远程控制不会暴露任意 shell。
+              {t('settings:notification.controlNotice')}
             </p>
           </>
         )}
@@ -538,7 +540,7 @@ export function NotificationSettingsPanel() {
             onClick={handleTestFeishu}
             disabled={isBusy || isTesting || !draft.remote.providers.feishu.enabled}
           >
-            {isTesting ? '测试中...' : '测试飞书通知'}
+            {isTesting ? t('settings:notification.action.testing') : t('settings:notification.action.testFeishu')}
           </button>
           <span
             className={
@@ -556,9 +558,9 @@ export function NotificationSettingsPanel() {
 
       <div className={styles.footer}>
         <div className={statusClass}>
-          {status === 'loading' && '加载中...'}
-          {status === 'saving' && '保存中...'}
-          {status === 'saved' && '已保存'}
+          {status === 'loading' && t('settings:footer.loading')}
+          {status === 'saving' && t('settings:footer.saving')}
+          {status === 'saved' && t('settings:footer.saved')}
           {status === 'error' && error}
         </div>
         <div className={styles.actions}>
@@ -568,7 +570,7 @@ export function NotificationSettingsPanel() {
             onClick={handleReset}
             disabled={isBusy}
           >
-            重置 Reset
+            {t('settings:footer.reset')}
           </button>
           <button
             type="button"
@@ -576,7 +578,7 @@ export function NotificationSettingsPanel() {
             onClick={handleSave}
             disabled={isBusy}
           >
-            保存 Save
+            {t('settings:footer.save')}
           </button>
         </div>
       </div>

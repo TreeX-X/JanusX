@@ -5,11 +5,13 @@ import {
   type KnowledgeSettings,
 } from '@/services/knowledge-settings'
 import { DEFAULT_KNOWLEDGE_SETTINGS } from '../../../shared/knowledge-settings'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './NotificationSettingsPanel.module.css'
 
 type StatusState = 'idle' | 'loading' | 'saving' | 'saved' | 'error'
 
 export function KnowledgeSettingsPanel() {
+  const { t } = useI18n('settings')
   const [settings, setSettings] = useState<KnowledgeSettings>(DEFAULT_KNOWLEDGE_SETTINGS)
   const [draft, setDraft] = useState<KnowledgeSettings>(DEFAULT_KNOWLEDGE_SETTINGS)
   const [status, setStatus] = useState<StatusState>('loading')
@@ -28,14 +30,14 @@ export function KnowledgeSettingsPanel() {
       })
       .catch((err) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : '知识库设置加载失败')
+        setError(err instanceof Error ? err.message : t('settings:knowledge.error.load'))
         setStatus('error')
       })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [t])
 
   const updateDraft = (enabled: boolean) => {
     setDraft((current) => ({ ...current, enabled }))
@@ -60,7 +62,7 @@ export function KnowledgeSettingsPanel() {
       setDraft(next)
       setStatus('saved')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '知识库设置保存失败')
+      setError(err instanceof Error ? err.message : t('settings:knowledge.error.save'))
       setStatus('error')
     }
   }
@@ -76,19 +78,19 @@ export function KnowledgeSettingsPanel() {
   return (
     <div className={styles.panel}>
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>知识采集</h3>
+        <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.capture')}</h3>
         <SettingSwitch
-          label="启用知识库记录"
-          hint="开启后，JanusX 会把 hook 驱动的 Agent 对话与任务事件写入当前工作区知识库。"
+          label={t('settings:knowledge.toggle.enable.label')}
+          hint={t('settings:knowledge.toggle.enable.hint')}
           checked={draft.enabled}
           disabled={isBusy}
           onChange={updateDraft}
         />
         <div className={styles.row}>
           <div className={styles.label}>
-            <span className={styles.labelText}>采集边界</span>
+            <span className={styles.labelText}>{t('settings:knowledge.row.boundary.label')}</span>
             <span className={styles.hint}>
-              AI 终端记录只依赖 hook 生命周期事件，不解析原始终端输入。关闭通知提醒不会关闭后台 hook 处理。
+              {t('settings:knowledge.row.boundary.hint')}
             </span>
           </div>
         </div>
@@ -96,9 +98,9 @@ export function KnowledgeSettingsPanel() {
 
       <div className={styles.footer}>
         <div className={statusClass}>
-          {status === 'loading' && '加载中...'}
-          {status === 'saving' && '保存中...'}
-          {status === 'saved' && '已保存'}
+          {status === 'loading' && t('settings:footer.loading')}
+          {status === 'saving' && t('settings:footer.saving')}
+          {status === 'saved' && t('settings:footer.saved')}
           {status === 'error' && error}
         </div>
         <div className={styles.actions}>
@@ -108,7 +110,7 @@ export function KnowledgeSettingsPanel() {
             onClick={handleReset}
             disabled={isBusy}
           >
-            重置
+            {t('settings:footer.reset')}
           </button>
           <button
             type="button"
@@ -116,7 +118,7 @@ export function KnowledgeSettingsPanel() {
             onClick={handleSave}
             disabled={isBusy}
           >
-            保存
+            {t('settings:footer.save')}
           </button>
         </div>
       </div>

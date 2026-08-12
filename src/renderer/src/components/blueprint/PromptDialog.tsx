@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useI18n } from '@/i18n/useI18n'
 
 export interface PromptDialogProps {
   open: boolean
@@ -36,12 +37,15 @@ export function PromptDialog({
   confirmOnly = false,
   hideCancel = false,
   tone = 'primary',
-  confirmText = '确定',
-  cancelText = '取消',
+  confirmText,
+  cancelText,
   onConfirm,
   onCancel,
   validate
 }: PromptDialogProps) {
+  const { t } = useI18n('common')
+  const resolvedConfirmText = confirmText ?? t('common:action.ok')
+  const resolvedCancelText = cancelText ?? t('common:action.cancel')
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -134,7 +138,7 @@ export function PromptDialog({
         <div className="prompt-dialog__actions">
           {!hideCancel && (
             <button type="button" className="blueprint-btn" onClick={onCancel}>
-              {cancelText}
+              {resolvedCancelText}
             </button>
           )}
           <button
@@ -143,7 +147,7 @@ export function PromptDialog({
             onClick={submit}
             disabled={!canConfirm}
           >
-            {confirmText}
+            {resolvedConfirmText}
           </button>
         </div>
       </div>

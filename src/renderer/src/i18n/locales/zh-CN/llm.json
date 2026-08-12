@@ -1,0 +1,85 @@
+{
+  "title": {
+    "label": "LLM 引擎",
+    "meta": "Providers"
+  },
+  "runtime": {
+    "available": "默认模型可用",
+    "unavailable": "默认模型不可用",
+    "unconfigured": "尚未配置默认模型",
+    "detecting": "正在检测默认模型",
+    "synced": "已从安装版同步 {{count}} 个 Provider",
+    "unchanged": "安装版配置已同步",
+    "sourceMissing": "未发现可同步的安装版配置",
+    "failed": "安装版配置同步失败",
+    "formal": "当前使用正式配置目录",
+    "latencySuffix": " · {{latency}}ms",
+    "refreshTitle": "重新检测 LLM 连接"
+  },
+  "provider": {
+    "configuredTitle": "已配置服务 Providers",
+    "defaultBadge": "默认",
+    "typeVertex": "Vertex AI",
+    "typeOpenai": "OpenAI Compatible",
+    "setAsDefault": "设为默认",
+    "edit": "编辑",
+    "delete": "删除",
+    "editTitle": "编辑服务",
+    "addTitle": "添加服务",
+    "typeLabel": "服务类型 Provider Type",
+    "typeOptionOpenai": "OpenAI 兼容接口 (URL + Key)",
+    "typeOptionVertex": "Google Vertex AI (GCP 认证)"
+  },
+  "openai": {
+    "sectionTitle": "OpenAI 兼容接口",
+    "nameLabel": "服务名称 Provider Name",
+    "namePlaceholder": "My OpenAI Provider",
+    "baseUrlLabel": "接口地址 Base URL",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "apiKeyLabel": "访问密钥 API Key",
+    "apiKeyPlaceholder": "sk-...",
+    "modelLabel": "默认模型 Default Model",
+    "modelPlaceholder": "gpt-4o, deepseek-chat..."
+  },
+  "vertex": {
+    "sectionTitle": "Google Vertex AI",
+    "nameLabel": "服务名称 Provider Name",
+    "namePlaceholder": "Vertex AI",
+    "projectIdLabel": "GCP 项目 ID",
+    "projectIdPlaceholder": "my-gcp-project",
+    "regionLabel": "区域 Region",
+    "authModeLabel": "认证方式 Auth Mode",
+    "authModeServiceAccount": "服务账号 Service Account (邮箱 + 私钥)",
+    "authModeJsonPaste": "粘贴完整 JSON Key",
+    "authModeAdc": "应用默认凭证 ADC",
+    "clientEmailLabel": "客户端邮箱 Client Email",
+    "clientEmailPlaceholder": "xxx@my-project.iam.gserviceaccount.com",
+    "privateKeyLabel": "私钥 Private Key",
+    "privateKeyPlaceholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+    "privateKeyHint": "将 GCP JSON 密钥里的转义换行转换为实际换行。",
+    "formatKey": "格式化",
+    "saJsonLabel": "服务账号 JSON",
+    "saJsonPlaceholder": "{\"type\":\"service_account\",\"project_id\":\"...\"}",
+    "adcNotice": "测试前需先执行 <code>gcloud auth application-default login</code>。",
+    "proxyLabel": "HTTP 代理 Proxy",
+    "proxyPlaceholder": "http://127.0.0.1:7890",
+    "proxyHint": "访问 Google 服务需要代理时填写。",
+    "modelLabel": "默认模型 Default Model"
+  },
+  "test": {
+    "testing": "测试连接中...",
+    "connected": "已连接 [{{latency}}ms]",
+    "connectionFailed": "连接失败：{{error}}",
+    "unknownError": "未知错误",
+    "error": "错误：{{message}}",
+    "networkFailed": "网络失败",
+    "button": "测试连接"
+  },
+  "save": {
+    "saving": "保存中...",
+    "update": "更新 Update",
+    "save": "保存 Save",
+    "saveFailed": "保存失败：{{error}}",
+    "error": "错误：{{message}}"
+  }
+}

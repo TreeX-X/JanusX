@@ -335,7 +335,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   const hooksInstalledThisSession = new Set<Exclude<CheckpointEngine, 'shell' | 'manual'>>()
 
   async function ensureHooksInstalled(engine: Exclude<CheckpointEngine, 'shell' | 'manual'>): Promise<void> {
-    if (hooksInstalledThisSession.has(engine)) return
+    if (hooksInstalledThisSession.has(engine) && await hookConfigManager.isInstalled(engine)) return
     await hookConfigManager.ensureInstalled(engine)
     hooksInstalledThisSession.add(engine)
   }
@@ -400,7 +400,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   ipcMain.handle(TERMINAL_INVOKE_CHANNELS.warmup, async (_event, payload?: TerminalWarmupRequest) => {
     const requested = Array.isArray(payload?.engines)
       ? payload.engines.filter((engine): engine is WarmupEngine => typeof engine === 'string' && isWarmupEngine(engine))
-      : [...AGENT_CLI_COMMANDS]
+      : []
 
     await Promise.all([
       hookBridge.start().catch(() => undefined),

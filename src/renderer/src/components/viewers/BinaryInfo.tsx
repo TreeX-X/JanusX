@@ -1,3 +1,5 @@
+import { useI18n } from '@/i18n/useI18n'
+
 interface BinaryInfoProps {
   fileName: string
   size?: number
@@ -11,6 +13,7 @@ function formatSize(bytes: number): string {
 }
 
 export function BinaryInfo({ fileName, size }: BinaryInfoProps) {
+  const { t } = useI18n('editor')
   return (
     <div
       className="flex flex-col items-center justify-center flex-1 gap-3"
@@ -41,7 +44,7 @@ export function BinaryInfo({ fileName, size }: BinaryInfoProps) {
         <span style={{ color: '#555', fontSize: 11 }}>{formatSize(size)}</span>
       )}
       <span style={{ color: '#444', fontSize: 11, marginTop: 4 }}>
-        不支持预览此文件类型
+        {t('editor:binaryInfo.notSupported')}
       </span>
     </div>
   )

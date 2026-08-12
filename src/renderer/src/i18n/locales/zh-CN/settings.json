@@ -1,0 +1,227 @@
+{
+  "title": "设置中心",
+  "brand": "设置中心",
+  "tab": {
+    "general": {
+      "title": "通用",
+      "subtitle": "General · 语言与外观偏好",
+      "nav": "通用",
+      "navMeta": "Language"
+    },
+    "notifications": {
+      "title": "通知提醒",
+      "subtitle": "Notifications · Agent 终端任务完成与失败提醒策略",
+      "nav": "通知提醒",
+      "navMeta": "System reminders"
+    },
+    "knowledge": {
+      "title": "知识库",
+      "subtitle": "Knowledge Engine · 采集开关与 observation 记录策略",
+      "nav": "知识库",
+      "navMeta": "记忆采集"
+    },
+    "llm": {
+      "title": "LLM 引擎",
+      "subtitle": "LLM Engine · Provider 凭证、默认模型与连接检测",
+      "nav": "LLM 引擎",
+      "navMeta": "Providers"
+    },
+    "models": {
+      "title": "模型目录",
+      "subtitle": "Model Catalog · 浏览模型能力、价格与上下文信息",
+      "nav": "模型目录",
+      "navMeta": "Models"
+    }
+  },
+  "general": {
+    "language": {
+      "label": "界面语言",
+      "help": "切换后立即生效，重启后保持上次选择",
+      "followSystem": "跟随系统"
+    }
+  },
+  "footer": {
+    "loading": "加载中...",
+    "saving": "保存中...",
+    "saved": "已保存",
+    "reset": "重置",
+    "save": "保存"
+  },
+  "notification": {
+    "section": {
+      "desktop": "桌面通知 Desktop Notifications",
+      "runtime": "运行时长阈值 Runtime",
+      "failure": "失败详情 Failure Details",
+      "remote": "远程提醒 Remote Notify",
+      "feishu": "飞书 Feishu"
+    },
+    "toggle": {
+      "desktop": {
+        "label": "启用桌面通知",
+        "hint": "Agent 终端任务结束后，使用系统通知中心提醒。"
+      },
+      "onComplete": {
+        "label": "任务完成时提醒",
+        "hint": "成功完成的 Agent 会话会在超过时长阈值后提醒。"
+      },
+      "onFailure": {
+        "label": "任务失败时提醒",
+        "hint": "失败提醒独立控制，适合保留更高优先级的异常提醒。"
+      },
+      "includeErrorMessage": {
+        "label": "包含简短错误信息",
+        "hint": "过长或嘈杂的 Agent 输出会在进入系统通知前截断。"
+      },
+      "remote": {
+        "label": "启用远程提醒",
+        "hint": "Agent 完成、失败或等待处理时，向已启用的远程通道发送提醒。"
+      },
+      "remoteComplete": {
+        "label": "完成时发送",
+        "hint": "成功完成的 Agent 会话会按远程阈值发送提醒。"
+      },
+      "remoteFailure": {
+        "label": "失败时发送",
+        "hint": "失败事件会立即进入远程提醒，不受完成提醒开关影响。"
+      },
+      "remoteAttention": {
+        "label": "等待处理时发送",
+        "hint": "等待授权或输入的 attention 事件会发送到远程通道。"
+      },
+      "remoteApproval": {
+        "label": "等待授权时发送",
+        "hint": "授权请求会作为独立类型发送，便于后续接入审批按钮。"
+      },
+      "feishu": {
+        "label": "启用飞书提醒",
+        "hint": "使用飞书群机器人 webhook，或自建应用 app_id/app_secret 发送卡片消息。"
+      },
+      "feishuControl": {
+        "label": "启用飞书双向控制",
+        "hint": "仅 App 模式可用；消息和签名卡片动作只接受白名单 open_id。"
+      }
+    },
+    "row": {
+      "completeThreshold": {
+        "label": "终端工作超过多久后提醒",
+        "hint": "设为 0 秒时，每个完成的 Agent 任务都会提醒。"
+      },
+      "errorMessageLength": {
+        "label": "错误信息长度",
+        "hint": "允许范围为 40 到 500 个字符。"
+      },
+      "remoteCompleteThreshold": {
+        "label": "远程完成提醒阈值",
+        "hint": "仅作用于完成事件；失败和等待处理会立即发送。"
+      },
+      "dedupeWindow": {
+        "label": "去重窗口",
+        "hint": "同一事件在窗口期内不会重复发送到同一 provider。"
+      },
+      "sendTimeout": {
+        "label": "发送超时",
+        "hint": "provider 在超时后会失败返回，不阻塞本地通知流程。"
+      },
+      "feishuMode": {
+        "label": "发送模式",
+        "hint": "Webhook 适合群机器人；App 适合自建应用发送到 chat/open_id。"
+      },
+      "receiveIdType": {
+        "label": "Receive ID Type",
+        "hint": "目标 ID 类型，和下方 receive_id 保持一致。"
+      },
+      "controlStatus": {
+        "label": "入站连接状态",
+        "unavailable": "Status unavailable"
+      },
+      "allowedOpenIds": {
+        "label": "操作者 open_id 白名单",
+        "hint": "每行一个 ou_...；保存时自动移除空值、无效值和重复值。"
+      },
+      "groupPromptPrefix": {
+        "label": "群聊 prompt 前缀",
+        "hint": "群聊必须 @机器人或使用这个非保留 /name 前缀。"
+      },
+      "bindingTtl": {
+        "label": "绑定有效期",
+        "hint": "飞书会话到终端的绑定到期后自动失效。"
+      },
+      "cardActionTtl": {
+        "label": "卡片动作有效期",
+        "hint": "签名按钮超过该时间后不可再使用。"
+      },
+      "auditRetentionDays": {
+        "label": "审计保留期",
+        "hint": "超过该时间的 Companion 审计 JSONL 记录会被清理。"
+      },
+      "maxFollowUpLength": {
+        "label": "最大 follow-up 长度",
+        "hint": "超过限制的 prompt 会在提交终端前被拒绝。"
+      },
+      "webhookUrl": {
+        "label": "Webhook URL",
+        "hint": "飞书群机器人 webhook 地址。"
+      },
+      "appId": {
+        "label": "App ID",
+        "hint": "飞书开放平台自建应用 app_id。"
+      },
+      "appSecret": {
+        "label": "App Secret",
+        "hint": "留空表示保留已保存的 secret；只有输入新值时才会替换。"
+      },
+      "receiveId": {
+        "label": "Receive ID",
+        "hint": "飞书 chat_id 或 open_id。"
+      }
+    },
+    "unit": {
+      "sec": "sec",
+      "chars": "chars",
+      "min": "min",
+      "days": "days"
+    },
+    "option": {
+      "webhook": "Webhook",
+      "app": "App",
+      "chatId": "chat_id",
+      "openId": "open_id"
+    },
+    "action": {
+      "refreshFeishu": "Refresh Feishu control status",
+      "testFeishu": "测试飞书通知",
+      "testing": "测试中..."
+    },
+    "test": {
+      "success": "飞书测试通知已发送",
+      "failure": "飞书测试通知发送失败"
+    },
+    "controlNotice": "Webhook 仅支持通知。直接文本必须先绑定终端；群聊必须 @机器人或使用前缀。远程控制不会暴露任意 shell。",
+    "error": {
+      "controlUnavailable": "Unable to read Feishu control status",
+      "load": "Failed to load notification settings",
+      "save": "Failed to save notification settings"
+    }
+  },
+  "knowledge": {
+    "section": {
+      "capture": "知识采集"
+    },
+    "toggle": {
+      "enable": {
+        "label": "启用知识库记录",
+        "hint": "开启后，JanusX 会把 hook 驱动的 Agent 对话与任务事件写入当前工作区知识库。"
+      }
+    },
+    "row": {
+      "boundary": {
+        "label": "采集边界",
+        "hint": "AI 终端记录只依赖 hook 生命周期事件，不解析原始终端输入。关闭通知提醒不会关闭后台 hook 处理。"
+      }
+    },
+    "error": {
+      "load": "知识库设置加载失败",
+      "save": "知识库设置保存失败"
+    }
+  }
+}

@@ -90,8 +90,25 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
         const workspaceId = boundedString(trace.workspaceId, MAX_ID_LENGTH)
         const status = boundedString(trace.status, MAX_ID_LENGTH)
         const summary = boundedString(trace.summary, MAX_TRACE_FIELD_LENGTH)
+        const turnId = boundedString(trace.turnId, MAX_ID_LENGTH) ?? undefined
+        const argsDigest = boundedString(trace.argsDigest, MAX_TRACE_FIELD_LENGTH) ?? undefined
+        const resultDigest = boundedString(trace.resultDigest, MAX_TRACE_FIELD_LENGTH) ?? undefined
+        const errorDetail = boundedString(trace.errorDetail, MAX_TRACE_FIELD_LENGTH) ?? undefined
+        const startedAt = finiteTimestamp(trace.startedAt) ?? undefined
+        const completedAt = finiteTimestamp(trace.completedAt) ?? undefined
         return toolName && workspaceId && status && summary
-          ? [{ toolName, workspaceId, status, summary }]
+          ? [{
+              toolName,
+              workspaceId,
+              status,
+              summary,
+              ...(turnId ? { turnId } : {}),
+              ...(argsDigest ? { argsDigest } : {}),
+              ...(resultDigest ? { resultDigest } : {}),
+              ...(errorDetail ? { errorDetail } : {}),
+              ...(startedAt !== undefined ? { startedAt } : {}),
+              ...(completedAt !== undefined ? { completedAt } : {}),
+            }]
           : []
       })
     : []

@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ModalCloseButton } from './ModalCloseButton'
+import { GeneralSettingsPanel } from './GeneralSettingsPanel'
 import { NotificationSettingsPanel } from './NotificationSettingsPanel'
 import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
 import { ModelCatalogPanel } from './ModelCatalogPanel'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-type SettingsTab = 'notifications' | 'knowledge' | 'llm' | 'models'
+type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'llm' | 'models'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -15,37 +17,10 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_META: Record<
-  SettingsTab,
-  { title: string; subtitle: string; nav: string; navMeta: string }
-> = {
-  notifications: {
-    title: '通知提醒',
-    subtitle: 'Notifications · Agent 终端任务完成与失败提醒策略',
-    nav: '通知提醒',
-    navMeta: 'System reminders',
-  },
-  knowledge: {
-    title: '知识库',
-    subtitle: 'Knowledge Engine · 采集开关与 observation 记录策略',
-    nav: '知识库',
-    navMeta: '记忆采集',
-  },
-  llm: {
-    title: 'LLM 引擎',
-    subtitle: 'LLM Engine · Provider 凭证、默认模型与连接检测',
-    nav: 'LLM 引擎',
-    navMeta: 'Providers',
-  },
-  models: {
-    title: '模型目录',
-    subtitle: 'Model Catalog · 浏览模型能力、价格与上下文信息',
-    nav: '模型目录',
-    navMeta: 'Models',
-  },
-}
+const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'llm', 'models']
 
 export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications' }: AppSettingsModalProps) {
+  const { t } = useI18n('settings')
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
 
   useEffect(() => {
@@ -54,7 +29,10 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
 
   if (!isOpen) return null
 
-  const meta = TAB_META[activeTab]
+  const meta = {
+    title: t(`settings:tab.${activeTab}.title`),
+    subtitle: t(`settings:tab.${activeTab}.subtitle`),
+  }
 
   return createPortal(
     <div className={styles.backdrop}>
@@ -62,44 +40,19 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
         <aside className={styles.sidebar}>
           <div className={styles.brand}>
             <span className={styles.brandTitle}>JanusX</span>
-            <span className={styles.brandMeta}>设置中心</span>
+            <span className={styles.brandMeta}>{t('settings:brand')}</span>
           </div>
-          <button
-            type="button"
-            className={`${styles.tabButton} ${
-              activeTab === 'notifications' ? styles.tabButtonActive : ''
-            }`}
-            onClick={() => setActiveTab('notifications')}
-          >
-            <span className={styles.tabLabel}>{TAB_META.notifications.nav}</span>
-            <span className={styles.tabMeta}>{TAB_META.notifications.navMeta}</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.tabButton} ${
-              activeTab === 'knowledge' ? styles.tabButtonActive : ''
-            }`}
-            onClick={() => setActiveTab('knowledge')}
-          >
-            <span className={styles.tabLabel}>{TAB_META.knowledge.nav}</span>
-            <span className={styles.tabMeta}>{TAB_META.knowledge.navMeta}</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.tabButton} ${activeTab === 'llm' ? styles.tabButtonActive : ''}`}
-            onClick={() => setActiveTab('llm')}
-          >
-            <span className={styles.tabLabel}>{TAB_META.llm.nav}</span>
-            <span className={styles.tabMeta}>{TAB_META.llm.navMeta}</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.tabButton} ${activeTab === 'models' ? styles.tabButtonActive : ''}`}
-            onClick={() => setActiveTab('models')}
-          >
-            <span className={styles.tabLabel}>{TAB_META.models.nav}</span>
-            <span className={styles.tabMeta}>{TAB_META.models.navMeta}</span>
-          </button>
+          {TAB_ORDER.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              <span className={styles.tabLabel}>{t(`settings:tab.${tab}.nav`)}</span>
+              <span className={styles.tabMeta}>{t(`settings:tab.${tab}.navMeta`)}</span>
+            </button>
+          ))}
         </aside>
 
         <section className={styles.content}>
@@ -112,6 +65,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
           </header>
 
           <main className={styles.body}>
+            {activeTab === 'general' && <GeneralSettingsPanel />}
             {activeTab === 'notifications' && <NotificationSettingsPanel />}
             {activeTab === 'knowledge' && <KnowledgeSettingsPanel />}
             {activeTab === 'llm' && <LlmConfigModal embedded />}

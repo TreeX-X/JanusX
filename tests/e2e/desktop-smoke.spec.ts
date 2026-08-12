@@ -5,6 +5,7 @@ import { join, resolve } from 'path'
 import type { ProjectAPI } from '../../src/shared/ipc/project'
 import type { TerminalAPI } from '../../src/shared/ipc/terminal'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
+import { createDesktopTestEnv } from './desktop-test-env'
 
 interface DesktopAPI {
   project: ProjectAPI
@@ -114,9 +115,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     application = await electron.launch({
       args: [entry, `--user-data-dir=${userDataDir}`],
       env: {
-        ...process.env,
-        ELECTRON_RENDERER_URL: '',
-        NODE_ENV: 'production',
+        ...createDesktopTestEnv(fixtureRoot),
       },
     })
     page = await application.firstWindow({ timeout: 30_000 })

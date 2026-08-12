@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './RightDock.module.css'
 
 interface RightToolTabsProps {
@@ -11,6 +12,7 @@ interface RightToolTabsProps {
 }
 
 export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }: RightToolTabsProps) {
+  const { t } = useI18n('common')
   const [focusedToolId, setFocusedToolId] = useState<RightToolId | null>(activeToolId)
   const tabRefs = useRef(new Map<RightToolId, HTMLDivElement>())
   const tablistRef = useRef<HTMLDivElement>(null)
@@ -77,7 +79,7 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
         ref={tablistRef}
         className={styles.tabs}
         role="tablist"
-        aria-label="已打开的右侧工具"
+        aria-label={t('common:rightTool.openTabsAria')}
         onWheel={handleWheel}
         onScroll={updateOverflow}
       >
@@ -105,8 +107,8 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
             <button
               type="button"
               className={styles.tabClose}
-              aria-label={`关闭 ${tool.title}`}
-              title={`关闭 ${tool.title}`}
+              aria-label={t('common:rightTool.closeAria', { title: tool.title })}
+              title={t('common:rightTool.closeTitle', { title: tool.title })}
               onClick={(event) => {
                 event.stopPropagation()
                 onClose(tool.id)

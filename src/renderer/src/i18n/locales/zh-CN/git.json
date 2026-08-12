@@ -1,0 +1,53 @@
+{
+  "noWorkspace": "未加载工作区",
+  "branch": {
+    "currentFallback": "当前分支",
+    "upstreamUnset": "未设置 upstream"
+  },
+  "statusSummary": {
+    "modified": "{{count}} 修改",
+    "added": "{{count}} 添加",
+    "deleted": "{{count}} 删除"
+  },
+  "staged": {
+    "title": "暂存区",
+    "unstageAll": "全部取消暂存"
+  },
+  "changes": {
+    "title": "更改",
+    "stageAll": "全部暂存"
+  },
+  "clean": "工作区干净",
+  "history": {
+    "title": "提交历史"
+  },
+  "commit": {
+    "placeholder": "提交消息...",
+    "button": "提交"
+  },
+  "remote": {
+    "executing": "执行中...",
+    "branchLabel": "分支",
+    "remoteLabel": "远端",
+    "pushButton": "Push",
+    "pullButton": "Pull",
+    "push": {
+      "title": "确认 Push",
+      "actionLabel": "确认 Push",
+      "description": "将本地提交推送到远端分支。",
+      "hint": "执行前请确认当前分支、远端目标和待推送提交均符合预期。"
+    },
+    "pull": {
+      "title": "确认 Pull",
+      "actionLabel": "确认 Pull",
+      "description": "从远端分支拉取并合并最新变更。",
+      "hint": "Pull 可能触发合并或冲突，请确认当前工作区状态允许拉取。"
+    }
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}}分钟前",
+    "hoursAgo": "{{count}}小时前",
+    "daysAgo": "{{count}}天前"
+  }
+}

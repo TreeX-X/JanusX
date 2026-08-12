@@ -1,0 +1,51 @@
+{
+  "vendor": {
+    "unknown": "Unknown"
+  },
+  "search": {
+    "label": "Search model name or ID",
+    "placeholder": "Search model name or ID"
+  },
+  "refresh": {
+    "updating": "Updating",
+    "retry": "Retry",
+    "updateCatalog": "Update catalog",
+    "retryUpdate": "Retry update"
+  },
+  "summary": {
+    "loading": "Loading model catalog...",
+    "count": "{{modelCount}} models / {{vendorCount}} vendors",
+    "sourceOnline": "Online catalog",
+    "sourceBundled": "Bundled catalog",
+    "stale": " / stale"
+  },
+  "message": {
+    "updated": "Updated {{count}} models",
+    "updateFailed": "Update failed; keeping the current catalog"
+  },
+  "error": {
+    "loadFailed": "Model catalog failed to load",
+    "loadFailedTitle": "Model catalog could not be loaded"
+  },
+  "empty": {
+    "noResultsTitle": "No matching models",
+    "noResultsHint": "Try a model name or complete ID",
+    "emptyTitle": "No models available",
+    "emptyHint": "Use Update catalog to retry the latest snapshot"
+  },
+  "model": {
+    "contextUnknown": "Context unknown",
+    "updatedTimeUnknown": "Updated time unknown",
+    "tokensSuffix": "{{value}} tokens",
+    "priceFormat": "${{price}} / 1M tokens"
+  },
+  "meta": {
+    "context": "Context",
+    "maxOutput": "Max output",
+    "input": "Input",
+    "output": "Output",
+    "capabilities": "Capabilities",
+    "inputPrice": "Input price",
+    "outputPrice": "Output price"
+  }
+}

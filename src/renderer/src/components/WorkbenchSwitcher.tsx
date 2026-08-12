@@ -1,16 +1,18 @@
 import { useAppStore, type ActiveWorkbench } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './WorkbenchSwitcher.module.css'
 
 type WorkbenchId = Exclude<ActiveWorkbench, null>
 
-const WORKBENCHES: Array<{ id: WorkbenchId; label: string }> = [
-  { id: 'blueprint', label: 'Blueprint' },
-  { id: 'knowledge', label: 'Knowledge' },
+const WORKBENCHES: Array<{ id: WorkbenchId; labelKey: string }> = [
+  { id: 'blueprint', labelKey: 'common:workbench.blueprint' },
+  { id: 'knowledge', labelKey: 'common:workbench.knowledge' },
 ]
 
 export function WorkbenchSwitcher() {
+  const { t } = useI18n()
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const toggleWorkbench = useAppStore((s) => s.toggleWorkbench)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
@@ -25,20 +27,22 @@ export function WorkbenchSwitcher() {
     return isActive ? 'active' : 'idle'
   }
 
-  const getButtonTitle = (itemId: WorkbenchId, label: string, isActive: boolean) => {
-    if (itemId !== 'blueprint') return `${isActive ? 'Close' : 'Open'} ${label} Workbench`
-    if (pendingCandidateCount > 0) return `${isActive ? 'Close' : 'Open'} Blueprint Workbench - ${pendingCandidateCount} pending`
-    if (activeSession) return `${isActive ? 'Close' : 'Open'} Blueprint Workbench - node focused`
-    return `${isActive ? 'Close' : 'Open'} Blueprint Workbench`
+  const getButtonTitle = (itemId: WorkbenchId, labelKey: string, isActive: boolean) => {
+    const action = isActive ? t('common:workbench.close') : t('common:workbench.open')
+    const label = t(labelKey)
+    if (itemId !== 'blueprint') return t('common:workbench.titleAction', { action, label })
+    if (pendingCandidateCount > 0) return t('common:workbench.titleWithPending', { action, label, count: pendingCandidateCount })
+    if (activeSession) return t('common:workbench.titleWithFocus', { action, label })
+    return t('common:workbench.titleAction', { action, label })
   }
 
   return (
-    <div className={styles.switcher} data-open={activeWorkbench ?? 'none'} aria-label="Workbench switcher">
+    <div className={styles.switcher} data-open={activeWorkbench ?? 'none'} aria-label={t('common:workbench.switcherAria')}>
       {WORKBENCHES.map((item) => {
         const isActive = activeWorkbench === item.id
         const status = getButtonStatus(item.id, isActive)
         const badge = item.id === 'blueprint' ? pendingCandidateCount : 0
-        const title = getButtonTitle(item.id, item.label, isActive)
+        const title = getButtonTitle(item.id, item.labelKey, isActive)
         return (
           <button
             key={item.id}
@@ -53,7 +57,7 @@ export function WorkbenchSwitcher() {
           >
             <WorkbenchIcon id={item.id} className={styles.icon} />
             <span className={styles.led} aria-hidden="true" />
-            {badge > 0 ? <span className={styles.badge} title={`${badge} pending requirement${badge > 1 ? 's' : ''}`}>{badge > 9 ? '9+' : badge}</span> : null}
+            {badge > 0 ? <span className={styles.badge} title={t('common:workbench.badgeTitle', { count: badge })}>{badge > 9 ? '9+' : badge}</span> : null}
           </button>
         )
       })}

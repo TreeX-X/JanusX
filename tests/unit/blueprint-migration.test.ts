@@ -62,4 +62,44 @@ describe('blueprint migration boundary', () => {
     expect(root.features[1].description).toBe('Duplicate\nFull legacy description')
     expect(root.features).toHaveLength(4)
   })
+
+  it('migrates v2 data to v3: workspace binding trio and empty relations', () => {
+    const blueprint = blueprintFixture()
+    blueprint.nodes.root.workspaceId = 'ws-1'
+
+    expect(migrateBlueprint(blueprint)).toBe(true)
+    expect(blueprint.schemaVersion).toBe(BLUEPRINT_SCHEMA_VERSION)
+    expect(blueprint.relations).toEqual([])
+    expect(blueprint.nodes.root.primaryWorkspaceId).toBe('ws-1')
+    expect(blueprint.nodes.root.workspaceId).toBe('ws-1')
+    expect(blueprint.nodes.root.linkedWorkspaceIds).toEqual([])
+    expect(migrateBlueprint(blueprint)).toBe(false)
+  })
+
+  it('sanitizes persisted relations: drops invalid entries and normalizes related-to', () => {
+    const blueprint = blueprintFixture()
+    const relation = (id: string, source: string, target: string, type: string) => ({
+      id, sourceNodeId: source, targetNodeId: target, type, createdAt: '', updatedAt: ''
+    })
+    blueprint.relations = [
+      relation('ok', 'root', 'a', 'related-to'),
+      relation('dup-symmetric', 'a', 'root', 'related-to'),
+      relation('self', 'a', 'a', 'depends-on'),
+      relation('ghost', 'a', 'missing', 'blocks'),
+      relation('cycle-1', 'root', 'a', 'depends-on'),
+      relation('cycle-2', 'a', 'root', 'depends-on'),
+    ] as Blueprint['relations']
+
+    migrateBlueprint(blueprint)
+
+    const ids = blueprint.relations.map((item) => item.id)
+    expect(ids).toContain('ok')
+    expect(ids).not.toContain('dup-symmetric')
+    expect(ids).not.toContain('self')
+    expect(ids).not.toContain('ghost')
+    // One edge of the depends-on cycle is dropped so the graph is acyclic.
+    expect(ids.filter((id) => id.startsWith('cycle-'))).toHaveLength(1)
+    const kept = blueprint.relations.find((item) => item.id === 'ok')!
+    expect(kept.sourceNodeId < kept.targetNodeId).toBe(true)
+  })
 })

@@ -1,6 +1,7 @@
 import { Files, GitBranch, History, Sparkles, type LucideIcon } from 'lucide-react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './RightDock.module.css'
 
 interface RightToolRailProps {
@@ -14,18 +15,24 @@ export function RightToolRail({
   activeToolId,
   onToggleTool,
 }: RightToolRailProps) {
+  const { t } = useI18n('common')
   return (
-    <div className={styles.rail} role="toolbar" aria-label="右侧工具">
+    <div className={styles.rail} role="toolbar" aria-label={t('common:rightTool.railAria')}>
       <div className={styles.railTools}>
         {RIGHT_TOOL_REGISTRY.map((tool) => {
           const state = activeToolId === tool.id ? 'active' : openToolIds.includes(tool.id) ? 'open' : 'closed'
+          const stateLabel = state === 'active'
+            ? t('common:rightTool.railStateActive')
+            : state === 'open'
+              ? t('common:rightTool.railStateOpen')
+              : t('common:rightTool.railStateClosed')
           return (
             <button
               key={tool.id}
               type="button"
               className={styles.railButton}
               data-state={state}
-              aria-label={`${tool.ariaLabel}，${state === 'active' ? '当前' : state === 'open' ? '已打开' : '已关闭'}`}
+              aria-label={t('common:rightTool.railButtonAria', { label: tool.ariaLabel, state: stateLabel })}
               aria-pressed={state === 'active'}
               title={tool.title}
               onClick={() => onToggleTool(tool.id)}

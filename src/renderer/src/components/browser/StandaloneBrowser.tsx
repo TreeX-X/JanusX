@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { PanelRightOpen } from 'lucide-react'
 import { BrowserSurface } from './BrowserSurface'
 import { embedBrowserSurface } from '@/services/browser'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './StandaloneBrowser.module.css'
 
 /**
@@ -9,6 +10,7 @@ import styles from './StandaloneBrowser.module.css'
  * 关闭窗口即销毁 surface（主进程监听 closed）；嵌入由主进程 re-parent 后关窗。
  */
 export function StandaloneBrowser() {
+  const { t } = useI18n('common')
   const surfaceId = useMemo(() => new URLSearchParams(window.location.search).get('surfaceId'), [])
 
   const handleEmbed = useCallback(() => {
@@ -18,7 +20,7 @@ export function StandaloneBrowser() {
   }, [surfaceId])
 
   if (!surfaceId) {
-    return <div className={styles.missing}>Missing surfaceId</div>
+    return <div className={styles.missing}>{t('common:browser.missingSurfaceId')}</div>
   }
 
   return (
@@ -27,27 +29,27 @@ export function StandaloneBrowser() {
         <div className={styles.traffic}>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t('common:trafficLight.close')}
             className={styles.close}
             onClick={() => window.electron.window.close()}
           />
           <button
             type="button"
-            aria-label="Minimize"
+            aria-label={t('common:trafficLight.minimize')}
             className={styles.minimize}
             onClick={() => window.electron.window.minimize()}
           />
           <button
             type="button"
-            aria-label="Maximize"
+            aria-label={t('common:trafficLight.maximize')}
             className={styles.maximize}
             onClick={() => window.electron.window.maximize()}
           />
         </div>
-        <span className={styles.title}>JanusX Browser</span>
-        <button type="button" className={styles.embedBtn} onClick={handleEmbed} title="嵌入主窗口">
+        <span className={styles.title}>{t('common:browser.title')}</span>
+        <button type="button" className={styles.embedBtn} onClick={handleEmbed} title={t('common:browser.embedToMain')}>
           <PanelRightOpen size={12} />
-          嵌入主窗口
+          {t('common:browser.embedToMain')}
         </button>
       </div>
       <div className={styles.body}>

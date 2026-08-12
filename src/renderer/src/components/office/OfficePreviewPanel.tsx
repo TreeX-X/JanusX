@@ -4,6 +4,7 @@ import { encodeTerminalPaste } from '../../../../shared/terminalPaste'
 import { officeService } from '@/services/office'
 import { useOfficeStore } from '@/stores/office'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from '@/i18n/useI18n'
 import { OfficeFileList } from './OfficeFileList'
 import { OfficePreviewFrame } from './OfficePreviewFrame'
 import { OfficeSetupGate } from './OfficeSetupGate'
@@ -16,6 +17,7 @@ import {
 } from './OfficePromptPreview'
 
 export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: string | null; onClose: () => void }) {
+  const { t } = useI18n('editor')
   const tabs = useOfficeStore((state) => state.tabs)
   const activeTabIds = useOfficeStore((state) => state.activeTabIds)
   const openPreview = useOfficeStore((state) => state.openPreview)
@@ -99,17 +101,17 @@ export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: stri
   useEffect(() => {
     if (activeTab?.errorCode === 'NOT_INSTALLED' || activeTab?.errorCode === 'INCOMPATIBLE') setSetupOpen(true)
   }, [activeTab?.errorCode])
-  if (!workspaceId) return <div className="flex h-full items-center justify-center text-xs text-[#666]">请选择工作区</div>
+  if (!workspaceId) return <div className="flex h-full items-center justify-center text-xs text-[#666]">{t('editor:office.selectWorkspace')}</div>
 
   return <div className="relative flex h-full min-h-0 flex-col bg-[var(--bg-deep)]">
     <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.08] px-3">
       <div className="min-w-0">
-        <span className="text-[10px] font-semibold tracking-[0.14em] text-[#ff7830]">OFFICE PREVIEW</span>
+        <span className="text-[10px] font-semibold tracking-[0.14em] text-[#ff7830]">{t('editor:office.panelTitle')}</span>
       </div>
-      <button type="button" className="ml-auto mr-1 text-[9px] text-[#777] hover:text-white" onClick={() => setSetupOpen(true)}>OFFICECLI</button>
+      <button type="button" className="ml-auto mr-1 text-[9px] text-[#777] hover:text-white" onClick={() => setSetupOpen(true)}>{t('editor:office.officecliButton')}</button>
       <button
         type="button"
-        aria-label="Close Office preview"
+        aria-label={t('editor:office.closeAria')}
         className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-visible text-[#777] hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#ff7830]"
         onClick={onClose}
       >
@@ -119,21 +121,21 @@ export function OfficePreviewPanel({ workspaceId, onClose }: { workspaceId: stri
         </span>
       </button>
     </div>
-    <div className="border-b border-white/[0.06] px-3 py-2 text-[10px] leading-4 text-[#777]">实时刷新仅适用于 OfficeCLI 写入；其他修改请从磁盘重新加载。</div>
+    <div className="border-b border-white/[0.06] px-3 py-2 text-[10px] leading-4 text-[#777]">{t('editor:office.refreshHint')}</div>
     <OfficeFileList workspaceId={workspaceId} onOpen={(relPath) => void openPreview(workspaceId, relPath)} />
     {workspaceTabs.length > 0 && <div className="flex overflow-x-auto border-b border-white/[0.06]">
       {workspaceTabs.map((tab) => <button key={tab.tabId} type="button" className="flex min-w-0 items-center gap-1 border-r border-white/[0.06] px-2 py-1.5 text-[10px]" style={{ color: tab.tabId === activeTab?.tabId ? '#eee' : '#777' }} onClick={() => activateTab(workspaceId, tab.tabId)}>
         <span className="max-w-32 truncate">{tab.relPath}</span>
-        <span role="button" aria-label={`关闭 ${tab.relPath}`} className="px-1 text-[#666] hover:text-white" onClick={(event) => { event.stopPropagation(); void closeTab(tab.tabId) }}>×</span>
+        <span role="button" aria-label={t('editor:office.closeTabAria', { relPath: tab.relPath })} className="px-1 text-[#666] hover:text-white" onClick={(event) => { event.stopPropagation(); void closeTab(tab.tabId) }}>×</span>
       </button>)}
     </div>}
     {activeTab ? <>
       <div className="flex items-center justify-end gap-2 border-b border-white/[0.06] px-2 py-1">
-        <button className="text-[10px] text-[#888] hover:text-white disabled:opacity-30" onClick={() => void showPrompt()}>插入 OfficeCLI 用法</button>
-        <button className="text-[10px] text-[#888] hover:text-white disabled:opacity-30" disabled={!activeTab.previewLeaseId || activeTab.status === 'reloading'} onClick={() => void reloadTab(activeTab.tabId)}>从磁盘重新加载</button>
+        <button className="text-[10px] text-[#888] hover:text-white disabled:opacity-30" onClick={() => void showPrompt()}>{t('editor:office.insertPrompt')}</button>
+        <button className="text-[10px] text-[#888] hover:text-white disabled:opacity-30" disabled={!activeTab.previewLeaseId || activeTab.status === 'reloading'} onClick={() => void reloadTab(activeTab.tabId)}>{t('editor:office.reloadFromDisk')}</button>
       </div>
       <div className="min-h-0 flex-1"><OfficePreviewFrame port={activeTab.port} status={activeTab.status} errorCode={activeTab.errorCode} manualInstall={manualInstall} onRetry={retryActiveTab} onClose={() => void closeTab(activeTab.tabId)} /></div>
-    </> : <div className="flex min-h-32 flex-1 items-center justify-center text-xs text-[#666]">从上方列表选择 Office 文档</div>}
+    </> : <div className="flex min-h-32 flex-1 items-center justify-center text-xs text-[#666]">{t('editor:office.selectFromList')}</div>}
     {promptPreview && <OfficePromptPreview preview={promptPreview} terminal={activeTerminal} onPaste={pastePrompt} onClose={() => setPromptPreview(null)} />}
     {setupOpen && <OfficeSetupGate workspaceId={workspaceId} onClose={() => setSetupOpen(false)} onReady={() => { setSetupOpen(false); if (activeTab?.status === 'error') retryActiveTab() }} />}
   </div>

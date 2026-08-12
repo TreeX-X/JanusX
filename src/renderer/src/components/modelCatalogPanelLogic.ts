@@ -1,6 +1,6 @@
 import type { AiModelRegistryEntry, ModelCatalogSnapshot } from '@janusx/llm-core'
 
-export const UNKNOWN_VENDOR = 'Unknown'
+export const UNKNOWN_VENDOR = '__unknown_vendor__'
 
 export interface ModelCatalogGroup {
   vendor: string

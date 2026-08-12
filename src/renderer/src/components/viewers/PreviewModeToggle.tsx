@@ -1,3 +1,5 @@
+import { useI18n } from '@/i18n/useI18n'
+
 export type PreviewMode = 'editor' | 'split' | 'preview'
 
 interface PreviewModeToggleProps {
@@ -5,13 +7,13 @@ interface PreviewModeToggleProps {
   onChange: (value: PreviewMode) => void
 }
 
-const modes: Array<{ value: PreviewMode; label: string }> = [
-  { value: 'editor', label: '代码' },
-  { value: 'split', label: '双栏' },
-  { value: 'preview', label: '预览' },
-]
-
 export function PreviewModeToggle({ value, onChange }: PreviewModeToggleProps) {
+  const { t } = useI18n('editor')
+  const modes: Array<{ value: PreviewMode; label: string }> = [
+    { value: 'editor', label: t('editor:previewMode.code') },
+    { value: 'split', label: t('editor:previewMode.split') },
+    { value: 'preview', label: t('editor:previewMode.preview') },
+  ]
   return (
     <div
       className="flex shrink-0 overflow-hidden rounded"

@@ -198,6 +198,19 @@ export class ConfigService {
   getRegisteredCLIs(): GlobalConfig['registeredCLIs'] {
     return this.config?.registeredCLIs ?? DEFAULT_CONFIG.registeredCLIs
   }
+
+  async getLanguage(): Promise<string | null> {
+    const config = await this.get()
+    const lang = config.language
+    return lang === 'zh-CN' || lang === 'en' ? lang : null
+  }
+
+  async setLanguage(lang: string): Promise<void> {
+    if (lang !== 'zh-CN' && lang !== 'en') {
+      throw new Error(`Unsupported language: ${lang}`)
+    }
+    await this.update({ language: lang })
+  }
 }
 
 export const configService = new ConfigService()

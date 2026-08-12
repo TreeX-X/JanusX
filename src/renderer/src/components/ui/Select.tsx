@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './Select.module.css'
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
@@ -49,6 +50,7 @@ export function Select({
   ariaLabel,
   getPortalContainer
 }: SelectProps) {
+  const { t } = useI18n('common')
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
@@ -171,7 +173,7 @@ export function Select({
             onPointerDown={(event) => event.stopPropagation()}
           >
             {options.length === 0 && (
-              <div className={styles.empty}>（无选项）</div>
+              <div className={styles.empty}>{t('common:select.empty')}</div>
             )}
             {options.map((o) => {
               const isSel = o.value === value

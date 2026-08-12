@@ -1,0 +1,53 @@
+{
+  "noWorkspace": "No workspace loaded",
+  "branch": {
+    "currentFallback": "Current branch",
+    "upstreamUnset": "No upstream set"
+  },
+  "statusSummary": {
+    "modified": "{{count}} modified",
+    "added": "{{count}} added",
+    "deleted": "{{count}} deleted"
+  },
+  "staged": {
+    "title": "Staged",
+    "unstageAll": "Unstage all"
+  },
+  "changes": {
+    "title": "Changes",
+    "stageAll": "Stage all"
+  },
+  "clean": "Working tree clean",
+  "history": {
+    "title": "Commit history"
+  },
+  "commit": {
+    "placeholder": "Commit message...",
+    "button": "Commit"
+  },
+  "remote": {
+    "executing": "Working...",
+    "branchLabel": "Branch",
+    "remoteLabel": "Remote",
+    "pushButton": "Push",
+    "pullButton": "Pull",
+    "push": {
+      "title": "Confirm Push",
+      "actionLabel": "Confirm Push",
+      "description": "Push local commits to the remote branch.",
+      "hint": "Before executing, confirm the current branch, remote target, and pending commits are as expected."
+    },
+    "pull": {
+      "title": "Confirm Pull",
+      "actionLabel": "Confirm Pull",
+      "description": "Pull and merge the latest changes from the remote branch.",
+      "hint": "Pull may trigger a merge or conflicts. Confirm the working tree state allows pulling."
+    }
+  },
+  "time": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}} h ago",
+    "daysAgo": "{{count}} d ago"
+  }
+}

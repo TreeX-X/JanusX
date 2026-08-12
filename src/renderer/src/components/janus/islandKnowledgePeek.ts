@@ -65,9 +65,12 @@ export function invalidateKnowledgePeek(state: IslandKnowledgePeekState): Island
   return { ...EMPTY_ISLAND_KNOWLEDGE_PEEK, version: state.version + 1 }
 }
 
-export function formatKnowledgeMatch(score: number): string {
-  if (!Number.isFinite(score)) return 'MATCHED'
-  if (score >= 0.75) return 'STRONG MATCH'
-  if (score >= 0.45) return 'GOOD MATCH'
-  return 'RELATED'
+export function formatKnowledgeMatch(
+  score: number,
+  t: (key: string) => string = (key) => key,
+): string {
+  if (!Number.isFinite(score)) return t('janus:island.knowledge.matchFallback')
+  if (score >= 0.75) return t('janus:island.knowledge.matchStrong')
+  if (score >= 0.45) return t('janus:island.knowledge.matchGood')
+  return t('janus:island.knowledge.matchRelated')
 }

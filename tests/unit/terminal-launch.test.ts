@@ -114,6 +114,17 @@ describe('terminal-launch', () => {
     expect(warmup).toHaveBeenCalledWith({ engines: ['claude'] })
   })
 
+  it('does not install external hooks during generic warmup', async () => {
+    const warmup = window.electron.terminal.warmup as ReturnType<typeof vi.fn>
+    warmup.mockResolvedValue({ ok: true })
+
+    const { warmTerminalCreatePath } = await import('../../src/renderer/src/lib/terminal-launch')
+    warmTerminalCreatePath()
+    await Promise.resolve()
+
+    expect(warmup).toHaveBeenCalledWith({ engines: [] })
+  })
+
   it('launches optimistically with wait status before create resolves', async () => {
     const getDefaultShell = window.electron.system.getDefaultShell as ReturnType<typeof vi.fn>
     const create = window.electron.terminal.create as ReturnType<typeof vi.fn>

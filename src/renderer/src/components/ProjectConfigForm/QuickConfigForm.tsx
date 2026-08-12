@@ -8,6 +8,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import type { LaunchConfig, ProjectTypeSchema, SchemaField } from '@/types/project'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './QuickConfigForm.module.css'
 import { Select } from '../ui/Select'
 
@@ -23,6 +24,7 @@ interface QuickConfigFormProps {
  * 只显示关键配置字段
  */
 export function QuickConfigForm({ config, schema, onChange }: QuickConfigFormProps) {
+  const { t } = useI18n('editor')
   const [selectedConfigIndex, setSelectedConfigIndex] = useState(0)
 
   const currentConfiguration = useMemo(() => {
@@ -53,7 +55,7 @@ export function QuickConfigForm({ config, schema, onChange }: QuickConfigFormPro
   )
 
   if (!config || !schema || !currentConfiguration) {
-    return <div className={styles.empty}>无可用配置</div>
+    return <div className={styles.empty}>{t('editor:config.noConfig')}</div>
   }
 
   return (
@@ -87,7 +89,7 @@ export function QuickConfigForm({ config, schema, onChange }: QuickConfigFormPro
 
       {/* 提示文本 */}
       <div className={styles.hint}>
-        <p>这里只显示常用字段，完整内容可在“高级编辑”中查看。</p>
+        <p>{t('editor:config.formHint')}</p>
       </div>
     </div>
   )
@@ -170,6 +172,7 @@ interface ArrayEditorProps {
 }
 
 function ArrayEditor({ value, onChange }: ArrayEditorProps) {
+  const { t } = useI18n('editor')
   const handleAddItem = () => {
     onChange([...value, ''])
   }
@@ -193,19 +196,19 @@ function ArrayEditor({ value, onChange }: ArrayEditorProps) {
             value={item}
             onChange={e => handleUpdateItem(idx, e.target.value)}
             className={styles.input}
-            placeholder={`项 ${idx + 1}`}
+            placeholder={t('editor:config.itemPlaceholder', { index: idx + 1 })}
           />
           <button
             onClick={() => handleRemoveItem(idx)}
             className={styles.removeBtn}
-            title="删除"
+            title={t('editor:config.deleteItemTitle')}
           >
             −
           </button>
         </div>
       ))}
       <button onClick={handleAddItem} className={styles.addBtn}>
-        + 添加项
+        {t('editor:config.addItem')}
       </button>
     </div>
   )
@@ -221,6 +224,7 @@ interface ObjectEditorProps {
 }
 
 function ObjectEditor({ value, onChange }: ObjectEditorProps) {
+  const { t } = useI18n('editor')
   const entries = Object.entries(value || {})
 
   const handleAddEntry = () => {
@@ -258,7 +262,7 @@ function ObjectEditor({ value, onChange }: ObjectEditorProps) {
             type="text"
             value={key}
             onChange={e => handleUpdateKey(key, e.target.value)}
-            placeholder="变量名"
+            placeholder={t('editor:config.variableNamePlaceholder')}
             className={styles.input}
           />
           <span className={styles.equals}>=</span>
@@ -266,20 +270,20 @@ function ObjectEditor({ value, onChange }: ObjectEditorProps) {
             type="text"
             value={val}
             onChange={e => handleUpdateValue(key, e.target.value)}
-            placeholder="值"
+            placeholder={t('editor:config.valuePlaceholder')}
             className={styles.input}
           />
           <button
             onClick={() => handleRemoveEntry(key)}
             className={styles.removeBtn}
-            title="删除"
+            title={t('editor:config.deleteItemTitle')}
           >
             −
           </button>
         </div>
       ))}
       <button onClick={handleAddEntry} className={styles.addBtn}>
-        + 添加变量
+        {t('editor:config.addVariable')}
       </button>
     </div>
   )

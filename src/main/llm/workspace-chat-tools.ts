@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ExecuteToolInput, ToolResult } from '../../shared/ipc/agent-runtime'
 import { redactPolicyValue } from '../agent/runtime/policy-gate'
+import { toolResultToModelValue } from '../agent/runtime/tool-result'
 
 interface WorkspaceChatRuntime {
   executeFunctionCall(input: ExecuteToolInput, callerId?: string): Promise<ToolResult>
@@ -19,26 +20,6 @@ interface WorkspaceChatToolOptions {
  * here would abort the whole streamText call and cut the reply off mid-stream,
  * so every non-completed status becomes structured data instead of an error.
  */
-function toModelResult(result: ToolResult): unknown {
-  if (result.status === 'completed') return result.output
-  const denied = result.reasonCode === 'APPROVAL_DENIED'
-  const targetChanged = result.reasonCode === 'TARGET_CHANGED'
-  return {
-    ok: false,
-    status: result.status,
-    reasonCode: result.reasonCode,
-    ...(denied
-      ? { userDenied: true, guidance: 'The user declined this action in the approval dialog. Do not retry it; acknowledge the decision and continue helping.' }
-      : targetChanged
-        ? {
-            retryable: true,
-            error: result.error || `${result.toolName} ${result.status}`,
-            guidance: 'The file changed during this read attempt. The workspace is not locked. Call workspace_read once more to obtain the current content and SHA-256 before editing.',
-          }
-        : { error: result.error || `${result.toolName} ${result.status}` }),
-  }
-}
-
 export function createWorkspaceChatTools(options: WorkspaceChatToolOptions) {
   const execute = async (toolName: string, input: Record<string, unknown>) => {
     const workspaceId = typeof input.workspaceId === 'string' ? input.workspaceId : ''
@@ -57,7 +38,7 @@ export function createWorkspaceChatTools(options: WorkspaceChatToolOptions) {
       },
     }, options.callerId)
     options.onToolResult?.(result)
-    return toModelResult(result)
+    return toolResultToModelValue(result)
   }
 
   const workspaceId = z.string().min(1).describe('The exact workspaceId from the attached workspace list.')
@@ -384,7 +365,7 @@ function createCommandPreview(input: Record<string, unknown>) {
   }
 }
 
-function createToolPreview(toolName: string, input: Record<string, unknown>) {
+export function createToolPreview(toolName: string, input: Record<string, unknown>) {
   const path = String(input.path ?? '')
   switch (toolName) {
     case 'workspace.edit': return createEditPreview(path, input.replacements)

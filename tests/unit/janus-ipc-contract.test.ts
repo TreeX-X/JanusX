@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   scheduleAnalyze: vi.fn(),
   setMainWindow: vi.fn(),
   maintenanceList: vi.fn(),
+  maintenanceAuditList: vi.fn(),
   maintenanceStart: vi.fn(),
   maintenanceMessage: vi.fn(),
   maintenancePropose: vi.fn(),
@@ -76,6 +77,7 @@ vi.mock('../../src/main/janus/analyzer', () => ({
 vi.mock('../../src/main/janus/maintenance/service', () => ({
   blueprintMaintenanceService: {
     list: mocks.maintenanceList,
+    listAudits: mocks.maintenanceAuditList,
     start: mocks.maintenanceStart,
     message: mocks.maintenanceMessage,
     propose: mocks.maintenancePropose,
@@ -133,9 +135,9 @@ describe('Janus IPC contract', () => {
     const commands = Object.values(JANUS_COMMAND_CHANNELS)
     const events = Object.values(JANUS_EVENT_CHANNELS)
 
-    expect(commands).toHaveLength(29)
+    expect(commands).toHaveLength(32)
     expect(events).toHaveLength(3)
-    expect(new Set([...commands, ...events]).size).toBe(32)
+    expect(new Set([...commands, ...events]).size).toBe(35)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining(commands)
     )
@@ -170,6 +172,7 @@ describe('Janus IPC contract', () => {
       discovered: { title: 'New', description: 'New task', suggestedParent: '', confidence: 0.8 },
     }
     const maintenanceStart = { blueprintId: 'bp-1' } as Parameters<JanusAPI['startMaintenanceTask']>[0]
+    const maintenanceAudits = { blueprintId: 'bp-1', taskId: 'task-1' }
     const maintenanceMessage = { taskId: 'task-1', content: '继续讨论' }
     const maintenanceProposal = { taskId: 'task-1' }
     const maintenanceApply = { taskId: 'task-1', changeSetId: 'set-1', operationIds: ['op-1'] }
@@ -197,6 +200,7 @@ describe('Janus IPC contract', () => {
     await janusApi.rejectRequirementCandidate(rejectPayload)
     await janusApi.acceptDiscovered(discoveredPayload)
     await janusApi.listMaintenanceTasks()
+    await janusApi.listMaintenanceAudits(maintenanceAudits)
     await janusApi.startMaintenanceTask(maintenanceStart)
     await janusApi.sendMaintenanceMessage(maintenanceMessage)
     await janusApi.generateMaintenanceProposal(maintenanceProposal)
@@ -228,6 +232,7 @@ describe('Janus IPC contract', () => {
       [JANUS_COMMAND_CHANNELS.rejectRequirementCandidate, rejectPayload],
       [JANUS_COMMAND_CHANNELS.acceptDiscovered, discoveredPayload],
       [JANUS_COMMAND_CHANNELS.maintenanceList],
+      [JANUS_COMMAND_CHANNELS.maintenanceAuditList, maintenanceAudits],
       [JANUS_COMMAND_CHANNELS.maintenanceStart, maintenanceStart],
       [JANUS_COMMAND_CHANNELS.maintenanceMessage, maintenanceMessage],
       [JANUS_COMMAND_CHANNELS.maintenancePropose, maintenanceProposal],

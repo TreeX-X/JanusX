@@ -23,6 +23,7 @@ import ProjectTypeSelector from './ProjectTypeSelector'
 import QuickConfigForm from './ProjectConfigForm/QuickConfigForm'
 import JsonEditor from './ProjectConfigForm/JsonEditor'
 import ProjectLaunchAssistant from './ProjectLaunchAssistant'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectSettings.module.css'
 
 interface ProjectSettingsProps {
@@ -50,6 +51,7 @@ export function ProjectSettings({
   onSave,
   onCancel,
 }: ProjectSettingsProps) {
+  const { t } = useI18n('editor')
   const [detection, setDetection] = useState<DetectResult | null>(null)
   const [config, setConfig] = useState<LaunchConfig | null>(null)
   const [baselineConfig, setBaselineConfig] = useState<LaunchConfig | null>(null)
@@ -156,7 +158,7 @@ export function ProjectSettings({
       }
     } catch (err) {
       if (!isCurrent()) return
-      setError(err instanceof Error ? err.message : 'Failed to initialize')
+      setError(err instanceof Error ? err.message : t('editor:project.initFailed'))
     } finally {
       if (isCurrent()) setLoading(false)
     }
@@ -206,9 +208,9 @@ export function ProjectSettings({
       setUnsavedChanges(true)
       setError(null)
     } catch (err) {
-      setError(`Invalid JSON: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      setError(t('editor:project.invalidJson', { message: err instanceof Error ? err.message : t('editor:project.unknownError') }))
     }
-  }, [])
+  }, [t])
 
   const handleAssistantConfig = useCallback((nextConfig: LaunchConfig) => {
     setConfig(structuredClone(nextConfig))
@@ -219,7 +221,7 @@ export function ProjectSettings({
 
   const handleAnalyze = useCallback(async (): Promise<WorkspaceLaunchAnalysis | null> => {
     if (!workspaceId || !workspaceRoot) {
-      setError('当前工作区缺少可验证的 workspaceId，无法启动 Janus 分析。')
+      setError(t('editor:project.missingWorkspaceId'))
       return null
     }
     setAnalyzing(true)
@@ -237,7 +239,7 @@ export function ProjectSettings({
       if (!baselineConfig && !unsavedChanges) handleAssistantConfig(result.candidateConfig)
       return result
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '工作区分析失败')
+      setError(reason instanceof Error ? reason.message : t('editor:project.workspaceAnalysisFailed'))
       return null
     } finally {
       setAnalyzing(false)
@@ -306,7 +308,7 @@ export function ProjectSettings({
       return true
     } catch (err) {
       if (!isCurrent()) return false
-      setError(err instanceof Error ? err.message : 'Failed to save')
+      setError(err instanceof Error ? err.message : t('editor:project.saveFailed'))
       return false
     } finally {
       if (isCurrent()) setSaving(false)
@@ -319,13 +321,16 @@ export function ProjectSettings({
     try {
       const result = await projectService.test(projectPath, script ?? suggestedTestScript)
       setTaskResult(result)
-      if (result.exitCode !== 0 || result.timedOut) throw new Error(`${result.command} 未通过${result.timedOut ? '（超时）' : `（退出码 ${result.exitCode}）`}`)
+      if (result.exitCode !== 0 || result.timedOut) throw new Error(t('editor:project.testNotPassed', {
+        command: result.command,
+        suffix: result.timedOut ? t('editor:project.testTimeoutSuffix') : t('editor:project.testExitCodeSuffix', { exitCode: result.exitCode }),
+      }))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '测试执行失败')
+      setError(reason instanceof Error ? reason.message : t('editor:project.testFailed'))
     } finally {
       setExecuting(null)
     }
-  }, [projectPath, suggestedTestScript])
+  }, [projectPath, suggestedTestScript, t])
 
   const handleRun = useCallback(async (overrideConfig?: LaunchConfig) => {
     const configToRun = overrideConfig ?? config
@@ -337,11 +342,11 @@ export function ProjectSettings({
       await projectService.start(projectPath, configToRun.configurations[0]?.name)
       setRunningProjects(await projectService.listByWorkspace(projectPath))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '项目启动失败')
+      setError(reason instanceof Error ? reason.message : t('editor:project.runFailed'))
     } finally {
       setExecuting(null)
     }
-  }, [config, handleSave, projectPath, unsavedChanges])
+  }, [config, handleSave, projectPath, t, unsavedChanges])
 
   const handleStop = useCallback(async () => {
     if (runningProjects.length === 0) return
@@ -351,12 +356,12 @@ export function ProjectSettings({
       await Promise.all(runningProjects.map((project) => projectService.stop(project.id)))
       setRunningProjects([])
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '项目停止失败')
+      setError(reason instanceof Error ? reason.message : t('editor:project.stopFailed'))
       setRunningProjects(await projectService.listByWorkspace(projectPath).catch(() => []))
     } finally {
       setExecuting(null)
     }
-  }, [projectPath, runningProjects])
+  }, [projectPath, runningProjects, t])
 
   const resolvePendingApproval = useCallback((approved: boolean) => {
     if (!pendingApproval) return
@@ -376,7 +381,7 @@ export function ProjectSettings({
       <div className={styles.container}>
         <div className={styles.loading}>
           <div className={styles.spinner} />
-          <p>加载配置...</p>
+          <p>{t('editor:project.loadingConfig')}</p>
         </div>
       </div>
     )
@@ -384,9 +389,9 @@ export function ProjectSettings({
 
   return (
     <div className={styles.container}>
-      <nav className={styles.sidebar} aria-label="项目类型">
+      <nav className={styles.sidebar} aria-label={t('editor:project.navAriaLabel')}>
         <div className={styles.sidebarHeader}>
-          <h3>运行类型</h3>
+          <h3>{t('editor:project.runType')}</h3>
           {detection && (
             <span className={styles.confidence}>
               {Math.round(detection.confidence * 100)}%
@@ -409,11 +414,11 @@ export function ProjectSettings({
         <div className={styles.contextBar}>
           <div>
             <strong>{config?.projectName || projectPath.split(/[/\\]/).pop()}</strong>
-            <span>{detection?.detectedFeatures.join(' · ') || '等待项目证据'}</span>
+            <span>{detection?.detectedFeatures.join(' · ') || t('editor:project.waitingEvidence')}</span>
           </div>
           <div className={styles.contextMeta}>
             {suggestedTestScript && <code>{suggestedTestScript}</code>}
-            {runningProjects.length > 0 && <span className={styles.runningState}>{runningProjects.length} 个进程运行中</span>}
+            {runningProjects.length > 0 && <span className={styles.runningState}>{t('editor:project.processesRunning', { count: runningProjects.length })}</span>}
           </div>
         </div>
         <div className={styles.tabs}>
@@ -421,20 +426,20 @@ export function ProjectSettings({
             className={`${styles.tab} ${activeView === 'quick' ? styles.tabActive : ''}`}
             onClick={() => setActiveView('quick')}
           >
-            快速配置
+            {t('editor:project.tabQuick')}
           </button>
           <button
             className={`${styles.tab} ${activeView === 'advanced' ? styles.tabActive : ''}`}
             onClick={() => setActiveView('advanced')}
           >
-            高级编辑
+            {t('editor:project.tabAdvanced')}
           </button>
           {configDiff.length > 0 && (
             <button
               className={`${styles.tab} ${activeView === 'diff' ? styles.tabActive : ''}`}
               onClick={() => setActiveView('diff')}
             >
-              配置差异 <span className={styles.diffCount}>{configDiff.length}</span>
+              {t('editor:project.tabDiff')} <span className={styles.diffCount}>{configDiff.length}</span>
             </button>
           )}
         </div>
@@ -445,7 +450,7 @@ export function ProjectSettings({
           ) : activeView === 'diff' ? (
             <div className={styles.diffList} aria-label="Project configuration changes">
               {configDiff.length === 0 ? (
-                <div className={styles.diffEmpty}>配置与当前版本一致</div>
+                <div className={styles.diffEmpty}>{t('editor:project.diffEmpty')}</div>
               ) : configDiff.map((entry) => (
                 <div key={entry.path} className={styles.diffRow} data-kind={entry.kind}>
                   <div className={styles.diffPath}><span>{entry.kind}</span>{entry.path}</div>
@@ -466,9 +471,9 @@ export function ProjectSettings({
         {error && <div className={styles.errorBanner}>{error}</div>}
         {pendingApproval ? (
           <div className={styles.approvalBar}>
-            <span>Janus 请求写入运行配置</span>
-            <button onClick={() => resolvePendingApproval(false)}>拒绝</button>
-            <button onClick={() => resolvePendingApproval(true)} className={styles.approveButton}>批准</button>
+            <span>{t('editor:project.approvalRequest')}</span>
+            <button onClick={() => resolvePendingApproval(false)}>{t('editor:project.reject')}</button>
+            <button onClick={() => resolvePendingApproval(true)} className={styles.approveButton}>{t('editor:project.approve')}</button>
           </div>
         ) : null}
 
@@ -477,31 +482,31 @@ export function ProjectSettings({
             <summary>
               <SquareTerminal size={13} />
               {taskResult.command}
-              <span data-success={taskResult.exitCode === 0}>{taskResult.exitCode === 0 ? '通过' : `退出 ${taskResult.exitCode}`}</span>
+              <span data-success={taskResult.exitCode === 0}>{taskResult.exitCode === 0 ? t('editor:project.testPassed') : t('editor:project.testExited', { exitCode: taskResult.exitCode })}</span>
             </summary>
             <pre>{taskResult.output.slice(-120).join('\n')}</pre>
           </details>
         )}
 
         <div className={styles.commandBar}>
-          <button onClick={() => void handleAnalyze()} disabled={analyzing || executing !== null} title="读取工作区并更新分析">
-            <ScanSearch size={14} /> {analyzing ? '分析中' : '分析'}
+          <button onClick={() => void handleAnalyze()} disabled={analyzing || executing !== null} title={t('editor:project.analyzeTitle')}>
+            <ScanSearch size={14} /> {analyzing ? t('editor:project.analyzing') : t('editor:project.analyze')}
           </button>
-          <button onClick={() => void handleTest()} disabled={executing !== null || !suggestedTestScript} title={suggestedTestScript ? `运行 ${suggestedTestScript}` : '未发现测试脚本'}>
-            <TestTube2 size={14} /> {executing === 'test' ? '测试中' : '测试'}
+          <button onClick={() => void handleTest()} disabled={executing !== null || !suggestedTestScript} title={suggestedTestScript ? t('editor:project.testTitle', { script: suggestedTestScript }) : t('editor:project.testNoScriptTitle')}>
+            <TestTube2 size={14} /> {executing === 'test' ? t('editor:project.testing') : t('editor:project.test')}
           </button>
           <span className={styles.commandSpacer} />
-          {onCancel && <button onClick={onCancel}>关闭</button>}
+          {onCancel && <button onClick={onCancel}>{t('common:action.close')}</button>}
           {runningProjects.length > 0 && (
-            <button onClick={() => void handleStop()} disabled={executing !== null} title="停止当前工作区进程">
-              <Square size={13} /> {executing === 'stop' ? '停止中' : '停止'}
+            <button onClick={() => void handleStop()} disabled={executing !== null} title={t('editor:project.stopTitle')}>
+              <Square size={13} /> {executing === 'stop' ? t('editor:project.stopping') : t('editor:project.stop')}
             </button>
           )}
-          <button onClick={() => void handleSave()} disabled={!unsavedChanges || saving || executing !== null} title="保存运行配置">
-            <Save size={14} /> {saving ? '等待审批' : '保存'}
+          <button onClick={() => void handleSave()} disabled={!unsavedChanges || saving || executing !== null} title={t('editor:project.saveTitle')}>
+            <Save size={14} /> {saving ? t('editor:project.waitingApproval') : t('common:action.save')}
           </button>
-          <button className={styles.runButton} onClick={() => void handleRun()} disabled={saving || executing !== null || !config} title="启动当前配置">
-            <Play size={14} /> {executing === 'run' ? '启动中' : '启动'}
+          <button className={styles.runButton} onClick={() => void handleRun()} disabled={saving || executing !== null || !config} title={t('editor:project.runTitle')}>
+            <Play size={14} /> {executing === 'run' ? t('editor:project.running') : t('editor:project.run')}
           </button>
         </div>
       </main>

@@ -70,8 +70,10 @@ describe('AgentHookConfigManager', () => {
     expect(parsed.hooks.Notification[0].matcher).toBe('permission_prompt|idle_prompt')
     expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('-EventName')
     expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('janusx-agent-hook.ps1')
-    expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('-Command')
-    expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).not.toContain('-File')
+      expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('-Command')
+      expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).not.toContain('-File')
+      expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('Test-Path -LiteralPath')
+      expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).not.toContain('$utf8')
   })
 
   it('removes legacy JanusX hook commands during install', async () => {
@@ -207,6 +209,22 @@ describe('AgentHookConfigManager', () => {
     } finally {
       electronApp.isPackaged = true
     }
+  })
+
+  it('detects an incomplete install so a later terminal can repair the hooks', async () => {
+    const homeDir = await createTempDir()
+    const userDataDir = join(homeDir, 'userData')
+    const manager = makeManager(homeDir, { userDataDir, platform: 'win32' })
+
+    await manager.ensureInstalled('claude')
+    expect(await manager.isInstalled('claude')).toBe(true)
+    await writeFile(manager.getWindowsHookScriptPath(), '', 'utf8')
+    const settingsPath = manager.getClaudeSettingsPath()
+    const settings = JSON.parse(await readFile(settingsPath, 'utf8')) as { hooks: Record<string, unknown[]> }
+    settings.hooks.UserPromptSubmit = []
+    await writeFile(settingsPath, JSON.stringify(settings), 'utf8')
+
+    expect(await manager.isInstalled('claude')).toBe(false)
   })
 
   it('creates an opencode plugin directory and injects OPENCODE_CONFIG_DIR', async () => {

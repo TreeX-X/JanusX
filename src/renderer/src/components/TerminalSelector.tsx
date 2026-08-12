@@ -7,6 +7,7 @@ import {
   warmDefaultShellCache,
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
+import { useI18n } from '@/i18n/useI18n'
 
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -29,6 +30,7 @@ interface TerminalOptionProps {
 }
 
 function TerminalOption({ preset, name, busy, onClick, onHover }: TerminalOptionProps) {
+  const { t } = useI18n('terminal')
   return (
     <div
       onClick={busy ? undefined : onClick}
@@ -59,13 +61,14 @@ function TerminalOption({ preset, name, busy, onClick, onHover }: TerminalOption
         <img src={ICONS[preset]} alt={name} className="w-9 h-9" />
       </div>
       <div className="text-[13px] font-medium text-[#d4d4d4] leading-none text-center">
-        {busy ? 'Starting…' : name}
+        {busy ? t('terminal:selector.starting') : name}
       </div>
     </div>
   )
 }
 
 export function TerminalSelector() {
+  const { t } = useI18n('terminal')
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const [launchingPreset, setLaunchingPreset] = useState<TerminalPreset | null>(null)
 
@@ -111,9 +114,9 @@ export function TerminalSelector() {
       }}
     >
       <div className="flex flex-col items-center gap-2 text-center">
-        <div className="text-sm text-[#8a8a8a] font-medium">选择终端类型</div>
+        <div className="text-sm text-[#8a8a8a] font-medium">{t('terminal:selector.title')}</div>
         <div className="text-[11px] text-[#5f5f5f] max-w-[520px] leading-relaxed">
-          选择一个类型后自动创建终端。
+          {t('terminal:selector.hint')}
         </div>
       </div>
       <div

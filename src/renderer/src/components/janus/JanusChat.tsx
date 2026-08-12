@@ -4,11 +4,14 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronDown, CircleCheck, CircleX, LoaderCircle, PanelRightOpen, Pencil, Plus, ShieldX, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
+import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import { useOptionalJanusChatController } from './JanusChatProvider'
 import { MarkdownContent, StreamingText } from '../chat/ChatContent'
 import { Select } from '../ui/Select'
+import { useI18n } from '@/i18n/useI18n'
+import { ToolCallGroup } from './ToolCallCard'
 
 type SelectionMenu = 'provider' | 'model'
 
@@ -17,6 +20,10 @@ function getProviderMenuOptions(options: ChatModelOption[]): ChatModelOption[] {
     .map((providerId) => options.find((option) => option.providerId === providerId && option.isProviderDefault)
       ?? options.find((option) => option.providerId === providerId))
     .filter((option): option is ChatModelOption => option !== undefined)
+}
+
+function formatMessageTime(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(timestamp)
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -46,6 +53,7 @@ interface JanusChatProps {
   activeModel?: ChatModelOption | null
   modelNotice?: string | null
   resourceController?: JanusResourceController
+  toolTraces?: ChatToolTraceEntry[]
   conversationController?: UseJanusChatReturn | null
   onSelectModel?: (providerId: string, modelId: string) => void
   /** 发送一条用户消�?*/
@@ -148,6 +156,7 @@ export function JanusChat({
   activeModel = null,
   modelNotice = null,
   resourceController,
+  toolTraces = [],
   conversationController,
   onSelectModel = () => {},
   onSend,
@@ -158,6 +167,7 @@ export function JanusChat({
   onOpenLlmConfig,
   onAddToWorkspace,
 }: JanusChatProps) {
+  const { t } = useI18n('janus')
   const [input, setInput] = useState('')
   const [rows, setRows] = useState(1)
   const [showNewMessageBadge, setShowNewMessageBadge] = useState(false)
@@ -179,6 +189,11 @@ export function JanusChat({
   const contextConversations = useOptionalJanusChatController()
   const conversations = conversationController ?? contextConversations
 
+  const copyMessage = useCallback((content: string) => {
+    if (!navigator.clipboard) return
+    void navigator.clipboard.writeText(content).catch(() => undefined)
+  }, [])
+
   const inputHistory = messages
     .filter((message) => message.role === 'user')
     .map((message) => message.content)
@@ -187,6 +202,17 @@ export function JanusChat({
     ? modelOptions.filter((option) => option.providerId === activeModel.providerId)
     : modelOptions
   const menuOptions = selectionMenu === 'provider' ? providerOptions : activeProviderModels
+  const workspaceNames = new Map((resourceController?.resources ?? []).map((resource) => [resource.workspaceId, resource.workspaceName]))
+  const lastAssistantMessageId = [...messages].reverse().find((message) => message.role === 'assistant')?.id
+  const liveToolTraces: ChatToolTraceEntry[] = (resourceController?.activities ?? [])
+    .filter((activity) => activity.status === 'requested' || activity.status === 'running' || activity.status === 'approval')
+    .map((activity) => ({
+      toolName: activity.toolName,
+      workspaceId: '',
+      status: activity.status,
+      summary: activity.summary ?? activity.toolName,
+      turnId: 'live',
+    }))
 
   // 聚焦定时器句柄，effect 清理时清除，避免视图可见性变化打断流
   const focusTimerRef = useRef<number | null>(null)
@@ -449,10 +475,10 @@ export function JanusChat({
 
   if (!visible) return null
 
-  const isNoProviderError = error === '未配置默�?LLM Provider'
+  const isNoProviderError = error === t('janus:chat.model.notice.noProviderError')
   const canClear = messages.length > 0 || !!pendingContent || !!error
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
-  const activeModelLabel = activeModel?.modelId ?? 'No model configured'
+  const activeModelLabel = activeModel?.modelId ?? t('janus:chat.model.noneConfigured')
   const attachedWorkspaceIds = new Set(resourceController?.resources.map((resource) => resource.workspaceId) ?? [])
   const attachableWorkspaces = resourceController?.availableWorkspaces.filter((workspace) =>
     !attachedWorkspaceIds.has(workspace.id)) ?? []
@@ -471,25 +497,25 @@ export function JanusChat({
           <button
             type="button"
             className="janus-chat-thread-trigger"
-            aria-label="Select conversation"
+            aria-label={t('janus:chat.thread.selectAria')}
             aria-expanded={threadMenuOpen}
             onClick={() => setThreadMenuOpen((open) => !open)}
             disabled={workspace || !conversations}
           >
             <span>
-              <span className="janus-chat-toolbar-kicker">Thread</span>
-              <strong>{conversations?.conversationTitle ?? 'Janus'}</strong>
+              <span className="janus-chat-toolbar-kicker">{t('janus:chat.thread.kicker')}</span>
+              <strong>{conversations?.conversationTitle ?? t('janus:chat.thread.fallbackTitle')}</strong>
             </span>
             {!workspace && conversations && <ChevronDown size={13} aria-hidden="true" />}
           </button>
           {threadMenuOpen && !workspace && conversations && (
-            <div className="janus-chat-thread-menu" role="menu" aria-label="Conversations">
+            <div className="janus-chat-thread-menu" role="menu" aria-label={t('janus:chat.thread.menuHeader')}>
               <div className="janus-chat-thread-menu-header">
-                <span>Conversations</span>
+                <span>{t('janus:chat.thread.menuHeader')}</span>
                 <button
                   type="button"
-                  aria-label="New conversation"
-                  title="New conversation"
+                  aria-label={t('janus:chat.thread.newAria')}
+                  title={t('janus:chat.thread.newTitle')}
                   onClick={() => {
                     conversations.createConversation()
                     setRenamingConversationId(null)
@@ -509,7 +535,7 @@ export function JanusChat({
                       <input
                         autoFocus
                         value={renamingTitle}
-                        aria-label="Conversation title"
+                        aria-label={t('janus:chat.thread.titleAria')}
                         onChange={(event) => setRenamingTitle(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === 'Escape') setRenamingConversationId(null)
@@ -534,21 +560,21 @@ export function JanusChat({
                       >
                         <strong>
                           {conversation.isStreaming && (
-                            <LoaderCircle size={11} className="janus-runtime-tool-spinner" aria-label="Generating" />
-                          )}
-                          {!conversation.isStreaming && conversation.hasError && (
-                            <CircleX size={11} aria-label="Conversation error" />
-                          )}
-                          {conversation.title}
-                        </strong>
-                        <span>{conversation.messageCount} messages</span>
+                             <LoaderCircle size={11} className="janus-runtime-tool-spinner" aria-label={t('janus:chat.thread.generatingAria')} />
+                           )}
+                           {!conversation.isStreaming && conversation.hasError && (
+                             <CircleX size={11} aria-label={t('janus:chat.thread.errorAria')} />
+                           )}
+                           {conversation.title}
+                         </strong>
+                         <span>{t('janus:chat.thread.messagesCount', { count: conversation.messageCount })}</span>
                       </button>
                     )}
                     <button
                       type="button"
                       className="janus-chat-thread-action"
-                      aria-label={`Rename ${conversation.title}`}
-                      title="Rename conversation"
+                      aria-label={t('janus:chat.thread.renameAria', { title: conversation.title })}
+                      title={t('janus:chat.thread.renameTitle')}
                       onClick={() => {
                         setRenamingConversationId(conversation.id)
                         setRenamingTitle(conversation.title)
@@ -559,10 +585,10 @@ export function JanusChat({
                     <button
                       type="button"
                       className="janus-chat-thread-action danger"
-                      aria-label={`Delete ${conversation.title}`}
-                      title="Delete conversation"
+                      aria-label={t('janus:chat.thread.deleteAria', { title: conversation.title })}
+                      title={t('janus:chat.thread.deleteTitle')}
                       onClick={() => {
-                        if (window.confirm(`Delete conversation "${conversation.title}"?`)) {
+                        if (window.confirm(t('janus:chat.thread.deleteConfirm', { title: conversation.title }))) {
                           conversations.deleteConversation(conversation.id)
                         }
                       }}
@@ -580,17 +606,17 @@ export function JanusChat({
           <button
             className="janus-chat-tool-button"
             onClick={handleOpenLlmConfig}
-            title="配置 LLM"
+            title={t('janus:chat.model.openLlmTitle')}
             type="button"
           >
-            模型
+            {t('janus:chat.model.openLlmButton')}
           </button>
         </div>
       </div>
 
       {resourceController && (
         <>
-        <div className="janus-resource-scope" aria-label="Workspace resources">
+        <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
           <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
                 <div
@@ -603,8 +629,8 @@ export function JanusChat({
                   <button
                     type="button"
                     className="janus-resource-remove"
-                    aria-label={`Remove ${resource.workspaceName}`}
-                    title={`Remove ${resource.workspaceName}`}
+                    aria-label={t('janus:chat.resource.removeAria', { name: resource.workspaceName })}
+                    title={t('janus:chat.resource.removeTitle', { name: resource.workspaceName })}
                     onClick={() => resourceController.detachWorkspace(resource.workspaceId)}
                   >
                     <X size={11} strokeWidth={1.8} aria-hidden="true" />
@@ -613,11 +639,11 @@ export function JanusChat({
             ))}
           </div>
           {attachableWorkspaces.length > 0 && (
-            <div className="janus-resource-attach" title="Attach workspace">
+            <div className="janus-resource-attach" title={t('janus:chat.resource.attachTitle')}>
               <Select
-                ariaLabel="Attach workspace"
+                ariaLabel={t('janus:chat.resource.attachAria')}
                 value=""
-                placeholder="Add workspace"
+                placeholder={t('janus:chat.resource.attachPlaceholder')}
                 prefix={<Plus size={12} strokeWidth={1.8} aria-hidden="true" />}
                 options={attachableWorkspaces.map((workspace) => ({
                   value: workspace.id,
@@ -636,8 +662,8 @@ export function JanusChat({
               type="button"
               className="janus-chat-workspace-action"
               onClick={onAddToWorkspace}
-              aria-label="Embed Chat in current workspace"
-              title="Embed Chat in current workspace"
+              aria-label={t('janus:chat.resource.embedAria')}
+              title={t('janus:chat.resource.embedTitle')}
             >
               <PanelRightOpen size={13} strokeWidth={1.75} aria-hidden="true" />
             </button>
@@ -648,14 +674,14 @@ export function JanusChat({
           return (
             <div
               className="janus-runtime-approval"
-              aria-label="Workspace edit approval"
+              aria-label={t('janus:chat.approval.regionAria')}
               aria-live="polite"
               role="region"
             >
               <div className="janus-runtime-approval-header">
                 <div className="janus-runtime-approval-heading">
-                  <span>Workspace action</span>
-                  <strong>Approval required</strong>
+                  <span>{t('janus:chat.approval.heading')}</span>
+                  <strong>{t('janus:chat.approval.headingStrong')}</strong>
                 </div>
                 <span className="janus-runtime-approval-tool" title={approval.toolName}>
                   {approval.toolName} / {approval.actionRisk}
@@ -673,27 +699,27 @@ export function JanusChat({
                   type="button"
                   className="janus-runtime-approval-reject"
                   onClick={() => resourceController.resolveApproval(approval.id, false)}
-                  title="Reject workspace action"
-                  aria-label="Reject workspace action"
+                  title={t('janus:chat.approval.rejectTitle')}
+                  aria-label={t('janus:chat.approval.rejectAria')}
                 >
                   <ShieldX size={13} aria-hidden="true" />
-                  <span>Reject</span>
+                  <span>{t('janus:chat.approval.reject')}</span>
                 </button>
                 <button
                   type="button"
                   className="janus-runtime-approval-approve"
                   onClick={() => resourceController.resolveApproval(approval.id, true)}
-                  title="Approve workspace action"
-                  aria-label="Approve workspace action"
+                  title={t('janus:chat.approval.approveTitle')}
+                  aria-label={t('janus:chat.approval.approveAria')}
                 >
                   <Check size={13} aria-hidden="true" />
-                  <span>Approve</span>
+                  <span>{t('janus:chat.approval.approve')}</span>
                 </button>
               </div>
             </div>
           )
         })() : resourceController.activities.length > 0 && (
-          <div className="janus-runtime-activity" aria-label="Workspace tool activity">
+          <div className="janus-runtime-activity" aria-label={t('janus:chat.activity.aria')}>
             {(() => {
               const activity = resourceController.activities.at(-1)!
               const pending = activity.status === 'requested' || activity.status === 'running'
@@ -733,15 +759,28 @@ export function JanusChat({
           >
             <div className="janus-chat-message-meta">
               <div className="janus-chat-message-author">
-                {msg.role === 'user' ? 'You' : 'JANUSX'}
+                {msg.role === 'user' ? t('janus:chat.author.user') : t('janus:chat.author.assistant')}
               </div>
+              <time className="janus-chat-message-time" dateTime={new Date(msg.timestamp).toISOString()}>
+                {formatMessageTime(msg.timestamp)}
+              </time>
+              <div className="janus-chat-message-edit-actions">
+                <button
+                  className="janus-chat-message-edit"
+                  type="button"
+                  title={t('janus:chat.message.copyTitle')}
+                  aria-label={t('janus:chat.message.copyAria')}
+                  onClick={() => copyMessage(msg.content)}
+                >
+                  <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
+                </button>
               {msg.role === 'user' && editingMessageId === msg.id ? (
-                <div className="janus-chat-message-edit-actions">
+                <>
                   <button
                     className="janus-chat-message-edit"
                     type="button"
-                    title="取消修改"
-                    aria-label="取消修改"
+                    title={t('janus:chat.edit.cancelTitle')}
+                    aria-label={t('janus:chat.edit.cancelAria')}
                     onClick={cancelMessageEdit}
                   >
                     <X size={13} strokeWidth={1.8} aria-hidden="true" />
@@ -749,26 +788,38 @@ export function JanusChat({
                   <button
                     className="janus-chat-message-edit"
                     type="button"
-                    title="确认修改并重新生成"
-                    aria-label="确认修改并重新生成"
+                    title={t('janus:chat.edit.confirmTitle')}
+                    aria-label={t('janus:chat.edit.confirmAria')}
                     onClick={() => confirmMessageEdit(msg.id)}
                     disabled={!editingContent.trim() || isStreaming}
                   >
                     <Check size={13} strokeWidth={1.8} aria-hidden="true" />
                   </button>
-                </div>
+                </>
               ) : msg.role === 'user' ? (
                 <button
                   className="janus-chat-message-edit"
                   type="button"
-                  title="编辑并重新提问"
-                  aria-label="编辑并重新提问"
+                  title={t('janus:chat.edit.editTitle')}
+                  aria-label={t('janus:chat.edit.editAria')}
                   onClick={() => handleEditMessage(msg)}
                   disabled={isStreaming}
                 >
                   <Pencil size={13} strokeWidth={1.8} aria-hidden="true" />
                 </button>
+              ) : msg.id === lastAssistantMessageId ? (
+                <button
+                  className="janus-chat-message-edit"
+                  type="button"
+                  title={t('janus:chat.message.retryTitle')}
+                  aria-label={t('janus:chat.message.retryAria')}
+                  onClick={onRetry}
+                  disabled={isStreaming}
+                >
+                  <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
+                </button>
               ) : null}
+              </div>
             </div>
             {editingMessageId === msg.id ? (
               <textarea
@@ -785,12 +836,18 @@ export function JanusChat({
                     confirmMessageEdit(msg.id)
                   }
                 }}
-                aria-label="编辑历史问题"
+                aria-label={t('janus:chat.edit.historyAria')}
                 rows={Math.min(6, Math.max(2, (editingContent.match(/\n/g) || []).length + 1))}
               />
             ) : (
               <div className="janus-chat-message-content">
                 <MarkdownContent content={msg.content} />
+                {msg.role === 'assistant' && (
+                  <ToolCallGroup
+                    entries={toolTraces.filter((entry) => entry.turnId === msg.id || (entry.turnId !== msg.id && msg.id === lastAssistantMessageId))}
+                    workspaceNames={workspaceNames}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -798,7 +855,7 @@ export function JanusChat({
 
         {(isStreaming || pendingContent) && (
           <div className="janus-chat-message assistant streaming">
-            <div className="janus-chat-message-author">JANUSX</div>
+            <div className="janus-chat-message-author">{t('janus:chat.author.assistant')}</div>
             <div className="janus-chat-message-content">
               {pendingContent ? (
                 <StreamingText content={pendingContent} />
@@ -807,8 +864,9 @@ export function JanusChat({
                   <span className="janus-chat-dot" />
                   <span className="janus-chat-dot" />
                   <span className="janus-chat-dot" />
-                </div>
+                  </div>
               )}
+              <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} />
             </div>
           </div>
         )}
@@ -818,11 +876,11 @@ export function JanusChat({
             <div className="janus-chat-error-text">{error}</div>
             <div className="janus-chat-error-actions">
               <button className="janus-chat-retry" onClick={handleRetry}>
-                重试
+                {t('common:action.retry')}
               </button>
               {isNoProviderError && (
                 <button className="janus-chat-config-llm" onClick={handleOpenLlmConfig}>
-                  配置 LLM
+                  {t('janus:chat.error.configureLlm')}
                 </button>
               )}
             </div>
@@ -841,7 +899,7 @@ export function JanusChat({
             scrollToBottom('smooth')
           }}
         >
-          新消息
+          {t('janus:chat.newMessage')}
         </button>
       )}
 
@@ -852,7 +910,7 @@ export function JanusChat({
             ref={inputRef}
             className="janus-chat-input"
             rows={rows}
-            placeholder="Message Janus or execute command..."
+            placeholder={t('janus:chat.inputPlaceholder')}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
@@ -864,8 +922,8 @@ export function JanusChat({
               className="janus-chat-stop"
               onClick={handleStop}
               style={{ '--accent-color': modeColor } as React.CSSProperties}
-              title="停止生成"
-              aria-label="停止生成"
+              title={t('janus:chat.stop.title')}
+              aria-label={t('janus:chat.stop.aria')}
               type="button"
             >
               <StopIcon />
@@ -877,33 +935,33 @@ export function JanusChat({
             type="button"
             className="janus-chat-model-tag"
             onClick={() => openSelectionMenu('model')}
-            title="Ctrl+P open model menu"
+            title={t('janus:chat.model.menuShortcutTitle')}
           >
-            <span>Model:</span>
+            <span>{t('janus:chat.model.tagLabel')}</span>
             <strong>{activeModelLabel}</strong>
           </button>
           <div className="janus-chat-status-actions">
             <div className="janus-chat-shortcuts">
-              <span>JANUS.md</span>
-              <span><kbd>tab</kbd> providers</span>
-              <span><kbd>ctrl+p</kbd> models</span>
+              <span>{t('janus:chat.shortcuts.janusMd')}</span>
+              <span><kbd>tab</kbd> {t('janus:chat.shortcuts.providers')}</span>
+              <span><kbd>ctrl+p</kbd> {t('janus:chat.shortcuts.models')}</span>
             </div>
             <button
               className="janus-chat-clear-button"
               onClick={handleClear}
               disabled={!canClear}
-              title="清空当前对话"
-              aria-label="清空当前对话"
+              title={t('janus:chat.clear.title')}
+              aria-label={t('janus:chat.clear.aria')}
               type="button"
             >
               <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
           {selectionMenu && (
-            <div className="janus-chat-model-menu" role="listbox" aria-label={`${selectionMenu} selection`}>
+            <div className="janus-chat-model-menu" role="listbox" aria-label={t('janus:chat.selectionMenu.aria', { kind: selectionMenu })}>
               <div className="janus-chat-model-menu-heading">
-                <strong>{selectionMenu === 'provider' ? 'Providers' : 'Models'}</strong>
-                <span>↑ ↓ ← → · Enter</span>
+                <strong>{selectionMenu === 'provider' ? t('janus:chat.model.providersHeading') : t('janus:chat.model.modelsHeading')}</strong>
+                <span>{t('janus:chat.model.menuNavHint')}</span>
               </div>
               {menuOptions.map((option, index) => (
                 <button
@@ -924,7 +982,7 @@ export function JanusChat({
               ))}
               {menuOptions.length === 0 && (
                 <div className="janus-chat-model-menu-empty">
-                  No configured {selectionMenu}
+                  {t('janus:chat.model.noConfigured', { kind: selectionMenu })}
                 </div>
               )}
             </div>

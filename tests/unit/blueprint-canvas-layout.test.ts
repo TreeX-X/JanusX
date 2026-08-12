@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   computeBlueprintLayout,
   computeBlueprintSubtreeLayout,
-  createDefaultLayoutRecovery,
+  computeVisibleBlueprintLayout,
   deriveBlueprintFlow,
   deriveBlueprintCardData
 } from '../../src/renderer/src/features/blueprint/canvas-layout'
-import type { Blueprint } from '../../src/renderer/src/services/blueprint'
+import type { Blueprint, BlueprintNode } from '../../src/renderer/src/services/blueprint'
 
 describe('blueprint canvas layout', () => {
   it('derives stable nodes and parent edges while preserving saved positions', () => {
@@ -18,12 +18,72 @@ describe('blueprint canvas layout', () => {
       },
     } as unknown as Blueprint
 
-    const result = deriveBlueprintFlow(blueprint, {}, {}, new Set(['child']), true)
+    const result = deriveBlueprintFlow(blueprint, undefined, {}, new Set(['child']), true)
 
     expect(result.nodes).toHaveLength(2)
     expect(result.nodes.find((node) => node.id === 'root')?.position).toEqual({ x: 42, y: 24 })
     expect(result.nodes.find((node) => node.id === 'child')?.data.searchMatched).toBe(true)
     expect(result.edges).toEqual([expect.objectContaining({ source: 'root', target: 'child' })])
+    expect(result.edges[0].style?.stroke).toBe('#22c55e66')
+  })
+
+  it('wraps wide leaf sets into a near-square grid instead of a single row', () => {
+    const leafIds = Array.from({ length: 9 }, (_, index) => `leaf-${index}`)
+    const nodes = {
+      root: { id: 'root', parentId: null },
+      ...Object.fromEntries(leafIds.map((id) => [id, { id, parentId: 'root' }]))
+    } as unknown as Record<string, BlueprintNode>
+
+    const layout = computeBlueprintLayout(nodes, 'root', {})
+
+    expect(layout['leaf-0']).toEqual({ x: 0, y: 174 })
+    expect(layout['leaf-4']).toEqual({ x: 272, y: 332 })
+    expect(layout['leaf-8']).toEqual({ x: 544, y: 490 })
+    expect(layout.root).toEqual({ x: 272, y: 0 })
+    const maxX = Math.max(...leafIds.map((id) => layout[id].x))
+    expect(maxX).toBe(544)
+  })
+
+  it('separates sibling subtrees and centers parents over the children extent', () => {
+    const nodes = {
+      root: { id: 'root', parentId: null },
+      b1: { id: 'b1', parentId: 'root' },
+      l1: { id: 'l1', parentId: 'b1' },
+      b2: { id: 'b2', parentId: 'root' },
+      l2: { id: 'l2', parentId: 'b2' },
+    } as unknown as Record<string, BlueprintNode>
+
+    const layout = computeBlueprintLayout(nodes, 'root', {})
+
+    expect(layout.b2.x - layout.b1.x).toBe(304)
+    expect(layout.root).toEqual({ x: 152, y: 0 })
+    expect(layout.b1.y).toBe(174)
+    expect(layout.l1.y).toBe(348)
+  })
+
+  it('compacts the canvas around visible nodes when subtrees are collapsed', () => {
+    const leafIds = Array.from({ length: 10 }, (_, index) => `t-${index}`)
+    const blueprint = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'm1', 'm2', ...leafIds], canvasLayout: {},
+      nodes: {
+        root: { id: 'root', title: 'Root', type: 'epic', status: 'planning', progress: 0, parentId: null, children: ['m1', 'm2'] },
+        m1: { id: 'm1', title: 'M1', type: 'feature', status: 'planning', progress: 0, parentId: 'root', children: leafIds.slice(0, 5) },
+        m2: { id: 'm2', title: 'M2', type: 'feature', status: 'planning', progress: 0, parentId: 'root', children: leafIds.slice(5) },
+        ...Object.fromEntries(leafIds.map((id, index) => [id, {
+          id, title: id, type: 'task', status: 'planning', progress: 0,
+          parentId: index < 5 ? 'm1' : 'm2', children: []
+        }]))
+      },
+    } as unknown as Blueprint
+
+    const collapsed = new Set(['m1', 'm2'])
+    const result = deriveBlueprintFlow(blueprint, {}, {}, new Set(), false, collapsed)
+
+    expect(result.nodes.map((node) => node.id).sort()).toEqual(['m1', 'm2', 'root'])
+    const m1 = result.nodes.find((node) => node.id === 'm1')!
+    const m2 = result.nodes.find((node) => node.id === 'm2')!
+    expect(m2.position.x - m1.position.x).toBe(272)
+    expect(computeVisibleBlueprintLayout(blueprint, collapsed, {}).m2).toEqual(m2.position)
   })
 
   it('lays out only the selected subtree and preserves unrelated manual branches', () => {
@@ -55,20 +115,6 @@ describe('blueprint canvas layout', () => {
     } as unknown as Blueprint
 
     expect(computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})).toEqual({ root: { x: 0, y: 0 } })
-  })
-
-  it('retains the previous manual layout for undoing a default-layout restore', () => {
-    const blueprint = {
-      id: 'bp', rootNodeId: 'root', nodeIds: ['root'], canvasLayout: {},
-      nodes: { root: { id: 'root', parentId: null } },
-    } as unknown as Blueprint
-    const current = { root: { x: 420, y: 210 } }
-
-    const recovery = createDefaultLayoutRecovery(blueprint, current)
-
-    expect(recovery.next.root).toEqual({ x: 0, y: 0 })
-    expect(recovery.previous).toEqual(current)
-    expect(recovery.previous).not.toBe(current)
   })
 
   it('derives truthful issue and analysis signals and removes them when source data is resolved', () => {

@@ -56,7 +56,7 @@ export function warmDefaultShellCache(): void {
 
 /**
  * Fire-and-forget main-process prewarm for terminal creation:
- * CLI path cache, hook bridge/config install, officecli binary cache.
+ * CLI path cache, optional engine hook install, officecli binary cache.
  */
 export function warmTerminalCreatePath(
   engines?: Array<Exclude<TerminalPreset, 'shell'> | 'shell'>,
@@ -64,7 +64,7 @@ export function warmTerminalCreatePath(
   if (!window.electron?.terminal) return
   const list = engines
     ?.filter((engine): engine is Exclude<TerminalPreset, 'shell'> => engine !== 'shell')
-  void window.electron.terminal.warmup(list?.length ? { engines: list } : undefined).catch(() => undefined)
+  void window.electron.terminal.warmup({ engines: list ?? [] }).catch(() => undefined)
 }
 
 export function waitForTerminalMount(): Promise<void> {

@@ -1,0 +1,123 @@
+{
+  "status": {
+    "running": "运行中",
+    "wait": "等待",
+    "error": "异常"
+  },
+  "model": {
+    "na": "无模型",
+    "detecting": "检测模型中"
+  },
+  "telemetry": {
+    "quality": {
+      "authoritative": "精确",
+      "derived": "推导",
+      "declared": "已声明",
+      "estimated": "估算",
+      "unknown": "未知"
+    },
+    "binding": {
+      "exact": "精确",
+      "pending": "待定"
+    },
+    "contextUnknown": "上下文未知",
+    "sessionSuffix": "会话",
+    "compactionNotReported": "未报告",
+    "sourceUnknown": "未知",
+    "windowSourceRuntime": "运行时遥测"
+  },
+  "context": {
+    "popoverTitle": "运行时上下文",
+    "row": {
+      "runtimeWindow": "运行时窗口",
+      "modelCapacity": "模型容量",
+      "sessionInput": "会话输入",
+      "sessionOutput": "会话输出",
+      "cacheRead": "缓存读取",
+      "cacheWrite": "缓存写入",
+      "sessionTotal": "会话合计",
+      "sessionBinding": "会话绑定",
+      "compactions": "上下文压缩次数",
+      "modelChanged": "模型变更",
+      "usageSource": "用量来源",
+      "windowSource": "窗口来源",
+      "updated": "更新时间"
+    }
+  },
+  "error": {
+    "unknown": "未知错误"
+  },
+  "sessions": {
+    "countSuffix": "个会话"
+  },
+  "engine": {
+    "manual": "手动",
+    "shell": "Shell",
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "opencode": "OpenCode"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前"
+  },
+  "checkpoint": {
+    "filterSource": "过滤来源",
+    "filterAll": "工作区全部来源",
+    "create": "+ 创建还原点",
+    "manualDefault": "手动还原点",
+    "loading": "加载中...",
+    "empty": "暂无还原点",
+    "expand": "展开",
+    "collapse": "收起",
+    "promptMeta": "{{lines}} 行 · {{chars}} 字符",
+    "changedFiles": "{{count}} 个差异文件",
+    "diff": "对比 Diff",
+    "restore": "还原到此处",
+    "diffPreview": "Diff 预览",
+    "diffEmpty": "没有差异文件",
+    "diffLoading": "加载差异...",
+    "branch": "branch: {{branch}}",
+    "confirmTitle": "确认还原",
+    "confirmBody": "将工作区恢复到 #{{index}}。编号更大的还原点会从列表中移除。",
+    "targetState": "目标状态",
+    "replaceNotice": "当前工作区将被替换为该还原点记录的文件状态",
+    "pruneWarn": "将移除 {{count}} 个后续还原点，保留当前还原点及之前的历史。",
+    "conflictFiles": "{{count}} 个冲突文件",
+    "conflictBadge": "存在冲突",
+    "conflictHint": "冲突文件需要手动处理。",
+    "restoreDoneHint": "还原完成后，右侧列表会自动刷新。",
+    "confirmRestore": "确认还原"
+  },
+  "provider": {
+    "claude": "Claude",
+    "codex": "Codex",
+    "opencode": "OpenCode",
+    "shell": "Shell"
+  },
+  "selector": {
+    "title": "选择终端类型",
+    "hint": "选择一个类型后自动创建终端。",
+    "starting": "启动中…"
+  },
+  "tab": {
+    "closeTerminal": "关闭终端",
+    "killCurrentTerminal": "结束当前终端",
+    "collapseLayout": "结束布局",
+    "newBrowser": "新建浏览器",
+    "closeBrowser": "关闭浏览器",
+    "closeChat": "关闭对话",
+    "noActiveTerminal": "无活动终端",
+    "terminalRuntime": "终端运行状态",
+    "noTelemetryData": "暂无终端运行数据",
+    "focusWorkspaceTitle": "焦点终端工作区：{{name}} · {{path}}",
+    "runtimePanelToggle": "切换 Runtime 状态面板",
+    "janusChatFallback": "Janus 对话",
+    "runtimeAria": "运行时遥测",
+    "tokenSummaryTitle": "输入 {{input}} · 输出 {{output}}"
+  },
+  "paneTree": {
+    "waitingTerminal": "等待加载终端..."
+  }
+}

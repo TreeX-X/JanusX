@@ -8,6 +8,7 @@ import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
 import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { WorkbenchIcon } from '../ui/WorkbenchIcon'
+import { useI18n } from '@/i18n/useI18n'
 import './blueprint.css'
 
 interface BlueprintWorkbenchProps {
@@ -16,6 +17,7 @@ interface BlueprintWorkbenchProps {
 }
 
 export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps) {
+  const { t } = useI18n('blueprint')
   const blueprints = useBlueprintStore((s) => s.blueprints)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const activeSession = useBlueprintStore((s) => s.activeSession)
@@ -55,15 +57,15 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   )
 
   const maintenanceState = useMemo(() => {
-    if (!currentBlueprint) return { tone: 'disabled', label: '未连接' }
-    if (!maintenanceTask) return { tone: 'idle', label: '待命' }
+    if (!currentBlueprint) return { tone: 'disabled', label: t('blueprint:workbench.stateDisconnected') }
+    if (!maintenanceTask) return { tone: 'idle', label: t('blueprint:workbench.stateStandby') }
     if (maintenanceTask.status === 'analyzing' || maintenanceTask.status === 'applying') {
-      return { tone: 'working', label: maintenanceTask.status === 'applying' ? '应用中' : '分析中' }
+      return { tone: 'working', label: maintenanceTask.status === 'applying' ? t('blueprint:workbench.stateApplying') : t('blueprint:workbench.stateAnalyzing') }
     }
-    if (maintenanceTask.status === 'proposal-ready') return { tone: 'attention', label: '待审批' }
-    if (maintenanceTask.status === 'failed' || maintenanceTask.status === 'stale') return { tone: 'error', label: '需处理' }
-    return { tone: 'active', label: '对话中' }
-  }, [currentBlueprint, maintenanceTask])
+    if (maintenanceTask.status === 'proposal-ready') return { tone: 'attention', label: t('blueprint:workbench.statePendingReview') }
+    if (maintenanceTask.status === 'failed' || maintenanceTask.status === 'stale') return { tone: 'error', label: t('blueprint:workbench.stateNeedAttention') }
+    return { tone: 'active', label: t('blueprint:workbench.stateInConversation') }
+  }, [currentBlueprint, maintenanceTask, t])
   const maintenanceIdentityState = maintenanceState.tone === 'working'
     ? 'scanning'
     : maintenanceState.tone === 'error'
@@ -85,33 +87,33 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   return createPortal(
     <BlueprintSelectPortalContext.Provider value={selectPortalNode}>
       <div className="blueprint-workbench-backdrop">
-        <section className="blueprint-workbench-shell" aria-label="Blueprint Workbench">
+        <section className="blueprint-workbench-shell" aria-label={t('blueprint:workbench.ariaLabel')}>
         <header className="blueprint-workbench-header">
           <div className="blueprint-workbench-header-left">
             <span className="blueprint-workbench-icon-badge" aria-hidden="true">
               <WorkbenchIcon id="blueprint" />
             </span>
             <nav className="blueprint-workbench-breadcrumb" aria-label="Breadcrumb">
-              <span className="blueprint-workbench-bc-current">Blueprint Workbench</span>
+              <span className="blueprint-workbench-bc-current">{t('blueprint:workbench.breadcrumb')}</span>
             </nav>
           </div>
 
           <div className="blueprint-workbench-metrics" aria-label="Blueprint summary">
             <div className="blueprint-workbench-metric">
-              <span className="blueprint-workbench-metric__label">Blueprints</span>
+              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricBlueprints')}</span>
               <strong className="blueprint-workbench-metric__value">{Math.max(blueprints.length, currentBlueprint ? 1 : 0)}</strong>
             </div>
             <div className="blueprint-workbench-metric">
-              <span className="blueprint-workbench-metric__label">Nodes</span>
+              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricNodes')}</span>
               <strong className="blueprint-workbench-metric__value">{nodeCount}</strong>
             </div>
             <div className="blueprint-workbench-metric" data-attention={pendingCandidateCount > 0 ? 'true' : 'false'}>
-              <span className="blueprint-workbench-metric__label">Inbox</span>
+              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricInbox')}</span>
               <strong className="blueprint-workbench-metric__value">{pendingCandidateCount}</strong>
             </div>
             <div className="blueprint-workbench-metric blueprint-workbench-metric--focus" data-attention={focusedTitle ? 'true' : 'false'}>
-              <span className="blueprint-workbench-metric__label">Focus</span>
-              <strong className="blueprint-workbench-metric__value" title={focusedTitle || undefined}>{focusedTitle || '—'}</strong>
+              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricFocus')}</span>
+              <strong className="blueprint-workbench-metric__value" title={focusedTitle || undefined}>{focusedTitle || t('blueprint:workbench.metricFocusFallback')}</strong>
             </div>
           </div>
 
@@ -121,7 +123,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
               className="blueprint-janus-capsule"
               data-state={maintenanceState.tone}
               disabled={!currentBlueprint}
-              aria-label={`打开 Janus Copilot 控制台，当前状态：${maintenanceState.label}`}
+              aria-label={t('blueprint:workbench.copilotOpenAria', { state: maintenanceState.label })}
               aria-expanded={maintenanceOpen}
               onClick={() => {
                 if (!currentBlueprint) return
@@ -140,19 +142,19 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
                 showHalo={false}
                 showScanline={false}
                 className="blueprint-janus-capsule__identity"
-                aria-label={`Janus ${maintenanceState.label}`}
+                aria-label={t('blueprint:workbench.copilotIdentityAria', { state: maintenanceState.label })}
               />
-              <span className="blueprint-janus-capsule__name">JANUS // COPILOT</span>
+              <span className="blueprint-janus-capsule__name">{t('blueprint:workbench.copilotName')}</span>
               <span className="blueprint-janus-capsule__status">
                 {maintenanceState.tone === 'working'
-                  ? 'RUNNING'
+                  ? t('blueprint:workbench.statusRunning')
                   : maintenanceState.tone === 'attention'
-                    ? 'ACTION_REQUIRED'
+                    ? t('blueprint:workbench.statusActionRequired')
                     : maintenanceState.tone === 'error'
-                      ? 'ERROR'
+                      ? t('blueprint:workbench.statusError')
                       : maintenanceState.tone === 'disabled'
-                        ? 'OFFLINE'
-                        : 'IDLE'}
+                        ? t('blueprint:workbench.statusOffline')
+                        : t('blueprint:workbench.statusIdle')}
               </span>
               <ChevronRight className="blueprint-janus-capsule__chevron" size={13} aria-hidden="true" />
             </button>
@@ -160,8 +162,8 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
               type="button"
               className="blueprint-workbench-close"
               onClick={onClose}
-              aria-label="Close Blueprint Workbench"
-              title="Close Blueprint Workbench"
+              aria-label={t('blueprint:workbench.closeAria')}
+              title={t('blueprint:workbench.closeTitle')}
             >
               <span aria-hidden="true" />
             </button>

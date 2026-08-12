@@ -2,6 +2,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { createDesktopTestEnv } from './desktop-test-env'
 
 test('editor find widget controls remain clickable in a compact preview window', async () => {
   const entry = resolve('out/main/index.js')
@@ -20,7 +21,7 @@ test('editor find widget controls remain clickable in a compact preview window',
 
     application = await electron.launch({
       args: [entry, `--user-data-dir=${userDataDir}`],
-      env: { ...process.env, ELECTRON_RENDERER_URL: '', NODE_ENV: 'production' },
+      env: createDesktopTestEnv(root),
     })
     page = await application.firstWindow({ timeout: 30_000 })
     const rendererUrl = new URL(page.url())

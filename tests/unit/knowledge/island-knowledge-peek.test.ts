@@ -108,9 +108,9 @@ describe('Island knowledge peek state', () => {
   })
 
   it('uses bounded qualitative match labels instead of percentages', () => {
-    expect(formatKnowledgeMatch(0.9)).toBe('STRONG MATCH')
-    expect(formatKnowledgeMatch(0.5)).toBe('GOOD MATCH')
-    expect(formatKnowledgeMatch(0.1)).toBe('RELATED')
+    expect(formatKnowledgeMatch(0.9)).toBe('janus:island.knowledge.matchStrong')
+    expect(formatKnowledgeMatch(0.5)).toBe('janus:island.knowledge.matchGood')
+    expect(formatKnowledgeMatch(0.1)).toBe('janus:island.knowledge.matchRelated')
   })
 
   it.each([

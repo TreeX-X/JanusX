@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JanusMode } from './JanusEye'
 import { JanusChat } from './JanusChat'
 import type { Message } from './useJanusChat'
+import { useI18n } from '@/i18n/useI18n'
 
 /* ════════════════════════════════════════════════════════════
    JanusExpanded — 展开面板组件
@@ -53,6 +54,7 @@ export function JanusExpanded({
   onChatClear,
   onOpenLlmConfig,
 }: JanusExpandedProps) {
+  const { t } = useI18n('janus')
   const [collapsing, setCollapsing] = useState(false)
   const [enteredFromCollapsed, setEnteredFromCollapsed] = useState(true)
   const shellRef = useRef<HTMLDivElement | null>(null)
@@ -103,33 +105,33 @@ export function JanusExpanded({
 
   // 按钮文案显示「下一目标态」
   const nextViewLabel =
-    view === 'dual' ? '◎ 仅视觉' : view === 'vision' ? '◎ 仅对话' : '◎ 双栏'
+    view === 'dual' ? t('janus:expanded.viewToggle.visionOnly') : view === 'vision' ? t('janus:expanded.viewToggle.chatOnly') : t('janus:expanded.viewToggle.dual')
 
   /*-- 状态文本 --*/
   const modeLabel =
-    mode === 'analytics' ? 'ANALYTICS' : mode === 'running' ? 'RUNNING' : 'ORDER'
+    mode === 'analytics' ? t('janus:expanded.modeLabel.analytics') : mode === 'running' ? t('janus:expanded.modeLabel.running') : t('janus:expanded.modeLabel.order')
 
   const statusText =
     isRunning
-      ? 'RUNNING // ACTIVE'
+      ? t('janus:expanded.status.runningActive')
       : mode === 'analytics'
-        ? 'ANALYTICS // PROCESSING...'
-        : 'ORDER // IDLE'
+        ? t('janus:expanded.status.analyticsProcessing')
+        : t('janus:expanded.status.orderIdle')
 
   /*-- 模式颜色 --*/
   const modeColor = mode === 'running' ? '#00ff88' : '#ff7830'
   const peekTitle = useMemo(() => {
-    if (isRunning) return 'Running'
-    if (mode === 'analytics') return 'Analyzing'
-    if (mode === 'sleep') return 'Idle'
-    return 'Ready'
-  }, [isRunning, mode])
+    if (isRunning) return t('janus:expanded.peek.running')
+    if (mode === 'analytics') return t('janus:expanded.peek.analyzing')
+    if (mode === 'sleep') return t('janus:expanded.peek.idle')
+    return t('janus:expanded.peek.ready')
+  }, [isRunning, mode, t])
   const peekSubtitle = useMemo(() => {
-    if (isRunning) return 'Workspace active'
-    if (mode === 'analytics') return 'Blueprint view engaged'
-    if (mode === 'sleep') return 'No workspace selected'
-    return 'Double-click to open'
-  }, [isRunning, mode])
+    if (isRunning) return t('janus:expanded.peek.workspaceActive')
+    if (mode === 'analytics') return t('janus:expanded.peek.blueprintEngaged')
+    if (mode === 'sleep') return t('janus:expanded.peek.noWorkspace')
+    return t('janus:expanded.peek.doubleClickToOpen')
+  }, [isRunning, mode, t])
 
   /*-- 粒子系统 --*/
   const [particles, setParticles] = useState<Array<{
@@ -193,7 +195,7 @@ export function JanusExpanded({
         data-stage={stage}
         data-view={view}
         role="region"
-        aria-label="Janus Island"
+        aria-label={t('janus:expanded.regionAria')}
         onDoubleClick={handleDoubleClick}
         onAnimationEnd={collapsing ? handleCollapseEnd : undefined}
       >
@@ -231,9 +233,9 @@ export function JanusExpanded({
             <div
               className="text-[11px] font-bold uppercase tracking-[1px] flex items-center gap-1.5 island-title"
             >
-              <span>◎</span> JANUS ENGINE
+              <span>◎</span> {t('janus:expanded.engineBrand')}
             </div>
-            <div className="text-[9px] text-[#52525b]">Esc / 外部点击收起</div>
+            <div className="text-[9px] text-[#52525b]">{t('janus:expanded.dismissHint')}</div>
           </div>
 
           <div
@@ -302,7 +304,7 @@ export function JanusExpanded({
             }}
           >
             <span className="flex items-center gap-2">
-              <span>神性协议终端</span>
+              <span>{t('janus:expanded.divineProtocol')}</span>
               <button
                 className="janus-chat-toggle"
                 onClick={cycleView}
@@ -312,7 +314,7 @@ export function JanusExpanded({
               </button>
             </span>
             <span className="text-[10px] font-bold tracking-[1px] island-footer-right">
-              MODE: {modeLabel}
+              {t('janus:expanded.footerMode', { mode: modeLabel })}
             </span>
           </div>
           </>

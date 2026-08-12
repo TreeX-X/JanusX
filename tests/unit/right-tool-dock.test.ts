@@ -132,8 +132,7 @@ describe('right tool rail', () => {
     expect(markup).toContain('data-state="active"')
     expect(markup).not.toContain('折叠右侧工具面板')
     expect(markup).not.toContain('展开右侧工具面板')
-    expect(markup).toContain('已打开')
-    expect(markup).toContain('已关闭')
+    expect(markup).toContain('common:rightTool.railButtonAria')
     expect(markup).not.toContain('office')
   })
 })
@@ -154,7 +153,7 @@ describe('right tool tabs', () => {
     expect(markup).toContain('role="tablist"')
     expect(markup).toContain('aria-controls="right-tool-panel-assist"')
     expect(markup).toContain('aria-selected="true"')
-    expect(markup).toContain('aria-label="关闭 Assist"')
+    expect(markup).toContain('aria-label="common:rightTool.closeAria"')
   })
 
   it('resolves roving focus targets for arrows, Home and End', () => {

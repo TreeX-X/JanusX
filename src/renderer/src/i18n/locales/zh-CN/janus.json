@@ -1,0 +1,304 @@
+{
+  "chat": {
+    "author": {
+      "user": "你",
+      "assistant": "JANUSX"
+    },
+    "thread": {
+      "kicker": "Thread",
+      "fallbackTitle": "Janus",
+      "selectAria": "选择对话",
+      "menuHeader": "对话",
+      "newAria": "新建对话",
+      "newTitle": "新建对话",
+      "titleAria": "对话标题",
+      "generatingAria": "生成中",
+      "errorAria": "对话错误",
+      "messagesCount": "{{count}} 条消息",
+      "renameAria": "重命名 {{title}}",
+      "renameTitle": "重命名对话",
+      "deleteAria": "删除 {{title}}",
+      "deleteTitle": "删除对话",
+      "deleteConfirm": "确认删除对话 \"{{title}}\"？"
+    },
+    "model": {
+      "noneConfigured": "未配置模型",
+      "openLlmTitle": "配置 LLM",
+      "openLlmButton": "模型",
+      "tagLabel": "模型：",
+      "menuShortcutTitle": "Ctrl+P 打开模型菜单",
+      "providersHeading": "Providers",
+      "modelsHeading": "Models",
+      "menuNavHint": "↑ ↓ ← → · Enter",
+      "noConfigured": "未配置 {{kind}}",
+      "notice": {
+        "noProviderError": "未配置默认 LLM Provider"
+      }
+    },
+    "error": {
+      "retry": "重试",
+      "configureLlm": "配置 LLM"
+    },
+    "edit": {
+      "cancelTitle": "取消修改",
+      "cancelAria": "取消修改",
+      "confirmTitle": "确认修改并重新生成",
+      "confirmAria": "确认修改并重新生成",
+      "editTitle": "编辑并重新提问",
+      "editAria": "编辑并重新提问",
+      "historyAria": "编辑历史问题"
+    },
+    "message": {
+      "copyTitle": "复制消息",
+      "copyAria": "复制消息",
+      "retryTitle": "重新生成此回复",
+      "retryAria": "重新生成此回复"
+    },
+    "newMessage": "新消息",
+    "inputPlaceholder": "向 Janus 发送消息或执行命令…",
+    "stop": {
+      "title": "停止生成",
+      "aria": "停止生成"
+    },
+    "clear": {
+      "title": "清空当前对话",
+      "aria": "清空当前对话"
+    },
+    "shortcuts": {
+      "janusMd": "JANUS.md",
+      "providers": "tab providers",
+      "models": "ctrl+p models"
+    },
+    "selectionMenu": {
+      "aria": "{{kind}} 选择"
+    },
+    "resource": {
+      "scopeAria": "工作区资源",
+      "removeAria": "移除 {{name}}",
+      "removeTitle": "移除 {{name}}",
+      "attachTitle": "附加工作区",
+      "attachAria": "附加工作区",
+      "attachPlaceholder": "添加工作区",
+      "embedTitle": "将对话嵌入当前工作区",
+      "embedAria": "将对话嵌入当前工作区"
+    },
+    "approval": {
+      "regionAria": "工作区编辑审批",
+      "heading": "工作区操作",
+      "headingStrong": "需要审批",
+      "rejectTitle": "拒绝工作区操作",
+      "rejectAria": "拒绝工作区操作",
+      "reject": "拒绝",
+      "approveTitle": "批准工作区操作",
+      "approveAria": "批准工作区操作",
+      "approve": "批准"
+    },
+    "activity": {
+      "aria": "工作区工具活动"
+    },
+    "tool": {
+      "groupAria": "工具调用",
+      "expandTitle": "展开详情",
+      "collapseTitle": "收起详情",
+      "argsLabel": "参数",
+      "resultLabel": "结果",
+      "errorLabel": "错误",
+      "duration": "{{ms}}ms",
+      "workspaceAt": "@ {{name}}",
+      "status": {
+        "requested": "请求中",
+        "approval": "等待审批",
+        "running": "执行中",
+        "completed": "完成",
+        "failed": "失败",
+        "cancelled": "已取消"
+      },
+      "copySummaryTitle": "复制工具摘要",
+      "copySummaryAria": "复制工具摘要",
+      "copied": "已复制"
+    },
+    "kind": {
+      "provider": "provider",
+      "model": "model"
+    }
+  },
+  "island": {
+    "aria": {
+      "openIsland": "打开 Janus Island",
+      "closeKnowledgePeek": "关闭知识预览",
+      "openOfficePreview": "打开 {{path}} 的 Office 预览"
+    },
+    "peek": {
+      "title": {
+        "proposalReady": "蓝图提案已就绪",
+        "needsAttention": "蓝图需要关注",
+        "officeReady": "Office 文件已就绪",
+        "knowledge": "知识",
+        "knowledgeRecalled": "已召回知识",
+        "maintenance": "蓝图维护"
+      },
+      "subtitle": {
+        "noKnowledgeMatch": "无知识匹配",
+        "knowledgeCount": "{{count}} 项 | {{match}} | {{kind}}: {{title}}"
+      }
+    },
+    "status": {
+      "blueprintApproval": "BLUEPRINT // 需要审批",
+      "blueprintAttention": "BLUEPRINT // 关注",
+      "officeOpenPreview": "OFFICE // 打开预览",
+      "knowledgeNoMatch": "KNOWLEDGE // 无匹配",
+      "knowledgeTruncated": "KNOWLEDGE // 已截断",
+      "knowledgeReady": "KNOWLEDGE // 就绪",
+      "blueprintStatus": "BLUEPRINT // {{status}}",
+      "blueprintFocused": "BLUEPRINT // 聚焦",
+      "runningActive": "RUNNING // 活动中",
+      "analyticsProcessing": "ANALYTICS // 处理中…",
+      "orderIdle": "ORDER // 空闲"
+    },
+    "modeLabel": {
+      "blueprint": "BLUEPRINT",
+      "analytics": "ANALYTICS",
+      "running": "RUNNING",
+      "order": "ORDER"
+    },
+    "expanded": {
+      "brand": "JANUS",
+      "viewSwitchAria": "Janus 展开视图",
+      "view": {
+        "monitor": "监控",
+        "chat": "对话"
+      },
+      "dismissHint": "Esc / 双击收起",
+      "coreVisualization": "核心可视化",
+      "missionOverview": "任务概览",
+      "roleSelected": "{{role}} 已选中",
+      "identityLabel": "身份",
+      "workspaceLabel": "工作区",
+      "statusLabel": "状态",
+      "engineLabel": "引擎",
+      "mainIdentity": "MAIN",
+      "officeArtifacts": "Office 产物",
+      "officeAvailable": "{{count}} 个可用",
+      "subagentRuntimes": "子代理运行时",
+      "focusedTerminal": "聚焦终端",
+      "noTerminalFocus": "无终端聚焦",
+      "runtimeAria": "子代理运行时框架",
+      "noRuns": "暂无 SubAgent 运行",
+      "noRunsHint": "聚焦终端的 SubAgent 运行将显示在此",
+      "waitingForEvent": "等待运行时事件",
+      "focus": "聚焦",
+      "captionJanus": "Janus",
+      "openMaintenance": "打开维护",
+      "cancelAnalysis": "取消分析",
+      "openBlueprint": "打开蓝图"
+    },
+    "activeNodeFallback": "无活动蓝图节点",
+    "workspaceFallback": "工作区",
+    "knowledge": {
+      "matchStrong": "强匹配",
+      "matchGood": "良好匹配",
+      "matchRelated": "相关",
+      "matchFallback": "已匹配"
+    },
+    "age": {
+      "unknown": "未知",
+      "now": "刚刚",
+      "seconds": "{{n}}秒",
+      "minutes": "{{n}}分",
+      "hours": "{{n}}时"
+    }
+  },
+  "expanded": {
+    "regionAria": "Janus Island",
+    "engineBrand": "JANUS ENGINE",
+    "dismissHint": "Esc / 点击外部收起",
+    "divineProtocol": "神性协议终端",
+    "footerMode": "MODE: {{mode}}",
+    "viewToggle": {
+      "visionOnly": "◎ 仅视觉",
+      "chatOnly": "◎ 仅对话",
+      "dual": "◎ 双栏"
+    },
+    "peek": {
+      "running": "运行中",
+      "analyzing": "分析中",
+      "idle": "空闲",
+      "ready": "就绪",
+      "workspaceActive": "工作区活动",
+      "blueprintEngaged": "蓝图视图已启用",
+      "noWorkspace": "未选择工作区",
+      "doubleClickToOpen": "双击打开"
+    },
+    "modeLabel": {
+      "analytics": "ANALYTICS",
+      "running": "RUNNING",
+      "order": "ORDER"
+    },
+    "status": {
+      "runningActive": "RUNNING // ACTIVE",
+      "analyticsProcessing": "ANALYTICS // PROCESSING...",
+      "orderIdle": "ORDER // IDLE"
+    }
+  },
+  "workSession": {
+    "label": "工作会话"
+  },
+  "identity": {
+    "eyeAria": "Janus 眼睛 - {{mode}} 模式",
+    "ariaFallback": "{{name}} {{state}} 身份",
+    "mode": {
+      "idle": "空闲",
+      "ready": "就绪",
+      "scanning": "扫描眼",
+      "running": "运行中"
+    },
+    "state": {
+      "default": "默认",
+      "scanning": "扫描眼",
+      "running": "运行中",
+      "done": "完成",
+      "failed": "失败"
+    },
+    "agent": {
+      "main": "Main Claude",
+      "coder": "coderX",
+      "evaluator": "evaluatorX",
+      "abstracter": "abstracterX",
+      "prompter": "promptMasterX",
+      "teammate": "coder-teammate",
+      "subagent": "通用"
+    },
+    "roleTag": {
+      "main": "MAIN",
+      "coder": "CODER",
+      "evaluator": "EVAL",
+      "abstracter": "ABS",
+      "prompter": "PROMPT",
+      "teammate": "TEAM",
+      "subagent": "SUB"
+    }
+  },
+  "subagent": {
+    "status": {
+      "queued": "queued",
+      "running": "running",
+      "waitingApproval": "approval",
+      "done": "done",
+      "failed": "failed",
+      "cancelled": "cancelled"
+    }
+  },
+  "terminal": {
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "opencode": "OpenCode",
+      "shell": "Shell"
+    },
+    "status": {
+      "running": "running",
+      "error": "error",
+      "wait": "wait"
+    }
+  }
+}

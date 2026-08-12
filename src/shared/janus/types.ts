@@ -138,6 +138,27 @@ export interface BlueprintAnalysis {
   createdAt: string
 }
 
+export type BlueprintRelationType =
+  | 'depends-on'
+  | 'blocks'
+  | 'related-to'
+  | 'implements'
+
+export interface BlueprintRelation {
+  id: string
+  sourceNodeId: string
+  targetNodeId: string
+  type: BlueprintRelationType
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BlueprintNodeWorkspaceBinding {
+  primaryWorkspaceId: string | null
+  linkedWorkspaceIds: string[]
+}
+
 export interface BlueprintNode {
   id: string
   title: string
@@ -155,7 +176,10 @@ export interface BlueprintNode {
   issues: BlueprintIssue[]
   activities: BlueprintActivity[]
   analyses: BlueprintAnalysis[]
+  /** @deprecated Mirror of primaryWorkspaceId kept for legacy readers; write both via store APIs. */
   workspaceId: string | null
+  primaryWorkspaceId: string | null
+  linkedWorkspaceIds: string[]
   workspaceSnapshot: WorkspaceSnapshot | null
   boundTerminalId: string | null
   terminalHistory: string[]
@@ -178,6 +202,7 @@ export interface Blueprint {
   rootNodeId: string
   nodeIds: string[]
   nodes: Record<string, BlueprintNode>
+  relations: BlueprintRelation[]
   requirementCandidates: BlueprintRequirementCandidate[]
   mountedTo: string | null
   canvasLayout: Record<string, { x: number; y: number }>

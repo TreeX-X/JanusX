@@ -6,7 +6,6 @@ import type { ChatStreamEvent, ChatStreamRequest } from '../../../src/shared/ipc
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import { JanusChatProvider, useJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
-import { CONVERSATION_STORAGE_KEY } from '../../../src/renderer/src/components/janus/janusChatConversations'
 import {
   INITIAL_ISLAND_CONTROLLER_STATE,
   reduceIslandController,
@@ -60,7 +59,7 @@ Object.assign(window.electron.llm, {
   },
 })
 
-localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify({
+const conversationFixture = {
   version: 1,
   activeConversationId: 'thread-streaming',
   conversations: [
@@ -83,7 +82,14 @@ localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify({
       toolTraces: [],
     },
   ],
-}))
+}
+
+Object.assign(window.electron, {
+  janusChat: {
+    load: async () => conversationFixture,
+    save: async () => undefined,
+  },
+})
 
 const workspaceOne = {
   id: 'workspace-1',

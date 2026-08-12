@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto'
 import type { Blueprint, BlueprintFeatureItem, BlueprintNode } from './types'
+import { sanitizeRelations } from '../../shared/janus/relations'
 
-export const BLUEPRINT_SCHEMA_VERSION = 2
+export const BLUEPRINT_SCHEMA_VERSION = 3
 
 type VersionedBlueprint = Blueprint & { schemaVersion?: number }
 
@@ -126,6 +127,32 @@ export function reconcileBlueprintTree(blueprint: Blueprint): boolean {
   return changed
 }
 
+/**
+ * Keeps the workspace binding trio coherent on every load:
+ * primaryWorkspaceId is canonical, the legacy workspaceId field mirrors it,
+ * and linkedWorkspaceIds never contains the primary or duplicates.
+ */
+export function reconcileNodeWorkspaceBinding(node: BlueprintNode): boolean {
+  let changed = false
+  if (node.primaryWorkspaceId === undefined) {
+    node.primaryWorkspaceId = node.workspaceId ?? null
+    changed = true
+  }
+  if (node.workspaceId !== node.primaryWorkspaceId) {
+    node.workspaceId = node.primaryWorkspaceId
+    changed = true
+  }
+  const linked = Array.isArray(node.linkedWorkspaceIds) ? node.linkedWorkspaceIds : []
+  const normalized = linked.filter((id, index) =>
+    typeof id === 'string' && id !== node.primaryWorkspaceId && linked.indexOf(id) === index)
+  if (!Array.isArray(node.linkedWorkspaceIds)
+    || normalized.length !== node.linkedWorkspaceIds.length) {
+    node.linkedWorkspaceIds = normalized
+    changed = true
+  }
+  return changed
+}
+
 export function migrateBlueprint(blueprint: Blueprint): boolean {
   const versioned = blueprint as VersionedBlueprint
   let changed = reconcileBlueprintTree(blueprint)
@@ -141,8 +168,20 @@ export function migrateBlueprint(blueprint: Blueprint): boolean {
     blueprint.contentRevision = Number.isInteger(blueprint.contentRevision)
       ? Math.max(0, blueprint.contentRevision)
       : 0
+    versioned.schemaVersion = 2
+    changed = true
+  }
+  if (version < 3) {
     versioned.schemaVersion = BLUEPRINT_SCHEMA_VERSION
     changed = true
+  }
+  const sanitized = sanitizeRelations(blueprint.relations, new Set(Object.keys(blueprint.nodes)))
+  if (sanitized.changed) {
+    blueprint.relations = sanitized.relations
+    changed = true
+  }
+  for (const node of Object.values(blueprint.nodes)) {
+    changed = reconcileNodeWorkspaceBinding(node) || changed
   }
   return changed
 }

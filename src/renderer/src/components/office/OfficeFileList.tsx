@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { OfficeErrorCode, OfficeFileEntry } from '../../../../shared/office'
 import { officeService } from '../../services/office'
+import { useI18n } from '@/i18n/useI18n'
 
 const sortEntries = (entries: OfficeFileEntry[]) => [...entries].sort((a, b) => b.mtimeMs - a.mtimeMs)
 const formatSize = (size: number) => size < 1024 ? `${size} B` : `${(size / 1024).toFixed(size < 10240 ? 1 : 0)} KB`
@@ -16,6 +17,7 @@ export function visibleOfficeFileState(state: OfficeFileListState, workspaceId: 
 }
 
 export function OfficeFileList({ workspaceId, onOpen }: { workspaceId: string; onOpen: (relPath: string) => void }) {
+  const { t } = useI18n('editor')
   const [state, setState] = useState<OfficeFileListState>({ workspaceId, entries: [] })
   const visible = visibleOfficeFileState(state, workspaceId)
 
@@ -33,8 +35,8 @@ export function OfficeFileList({ workspaceId, onOpen }: { workspaceId: string; o
     return () => { disposed = true; unsubscribe() }
   }, [workspaceId])
 
-  if (visible.errorCode) return <div className="p-3 text-xs text-[#888]">文件列表不可用（{visible.errorCode}）</div>
-  if (visible.entries.length === 0) return <div className="p-3 text-xs text-[#666]">当前工作区没有 Office 文档</div>
+  if (visible.errorCode) return <div className="p-3 text-xs text-[#888]">{t('editor:office.fileListUnavailable', { errorCode: visible.errorCode })}</div>
+  if (visible.entries.length === 0) return <div className="p-3 text-xs text-[#666]">{t('editor:office.noOfficeDocs')}</div>
   return <div className="max-h-44 overflow-y-auto border-b border-white/[0.06]">
     {visible.entries.map((entry) => <button type="button" key={entry.relPath} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.04]" onClick={() => onOpen(entry.relPath)}>
       <span className="min-w-0 flex-1 truncate text-xs text-[#bbb]" title={entry.relPath}>{entry.relPath}</span>

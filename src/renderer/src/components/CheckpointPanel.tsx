@@ -1,27 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useCheckpointStore, type CheckpointSummary } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
 import { Select } from './ui/Select'
 
-const ENGINE_LABELS: Record<string, string> = {
-  manual: '手动',
-  shell: 'Shell',
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-}
-
-function formatDate(iso: string): string {
+function formatDate(iso: string, t: (k: string, opt?: Record<string, unknown>) => string): string {
   const d = new Date(iso)
   const now = new Date()
   const diffMs = now.getTime() - d.getTime()
   const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin} 分钟前`
+  if (diffMin < 1) return t('terminal:time.justNow')
+  if (diffMin < 60) return t('terminal:time.minutesAgo', { count: diffMin })
   const diffHour = Math.floor(diffMin / 60)
-  if (diffHour < 24) return `${diffHour} 小时前`
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  if (diffHour < 24) return t('terminal:time.hoursAgo', { count: diffHour })
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 /** Color config for engine tags */
@@ -54,6 +47,15 @@ const ENGINE_TAG_STYLES: Record<string, { color: string; bg: string; border: str
 }
 
 export function CheckpointPanel() {
+  const { t } = useI18n('terminal')
+  const engineLabel = (key: string): string => {
+    if (key === 'manual') return t('terminal:engine.manual')
+    if (key === 'shell') return t('terminal:engine.shell')
+    if (key === 'claude') return t('terminal:engine.claude')
+    if (key === 'codex') return t('terminal:engine.codex')
+    if (key === 'opencode') return t('terminal:engine.opencode')
+    return key
+  }
   const {
     checkpoints,
     loading,
@@ -134,18 +136,18 @@ export function CheckpointPanel() {
           className="uppercase font-semibold"
           style={{ fontSize: 10, color: '#555' }}
         >
-          过滤来源
+          {t('terminal:checkpoint.filterSource')}
         </span>
         <Select
           value={filter}
           onChange={setFilter}
           options={[
-            { value: 'all', label: '工作区全部来源' },
-            { value: 'manual', label: '手动' },
-            { value: 'shell', label: 'Shell' },
-            { value: 'claude', label: 'Claude Code' },
-            { value: 'codex', label: 'Codex' },
-            { value: 'opencode', label: 'OpenCode' }
+            { value: 'all', label: t('terminal:checkpoint.filterAll') },
+            { value: 'manual', label: t('terminal:engine.manual') },
+            { value: 'shell', label: t('terminal:engine.shell') },
+            { value: 'claude', label: t('terminal:engine.claude') },
+            { value: 'codex', label: t('terminal:engine.codex') },
+            { value: 'opencode', label: t('terminal:engine.opencode') }
           ]}
           className="flex-1 rounded"
           style={{
@@ -160,7 +162,7 @@ export function CheckpointPanel() {
             await createCheckpoint({
               terminalId: 'manual',
               engine: 'manual',
-              prompt: '手动还原点',
+              prompt: t('terminal:checkpoint.manualDefault'),
               cwd: activeWorkspace.path,
             })
           }}
@@ -171,7 +173,7 @@ export function CheckpointPanel() {
             color: '#ff7830',
           }}
         >
-          + 创建还原点
+          {t('terminal:checkpoint.create')}
         </button>
       </div>
 
@@ -197,7 +199,7 @@ export function CheckpointPanel() {
 
         {loading && (
           <div className="pointer-events-none absolute right-3 top-3 z-[2] text-[#555] text-xs">
-            加载中...
+            {t('terminal:checkpoint.loading')}
           </div>
         )}
 
@@ -209,7 +211,7 @@ export function CheckpointPanel() {
 
         {!loading && filteredCheckpoints.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-2">
-            <div className="text-[#555] text-xs">暂无还原点</div>
+            <div className="text-[#555] text-xs">{t('terminal:checkpoint.empty')}</div>
           </div>
         )}
 
@@ -273,7 +275,7 @@ export function CheckpointPanel() {
                       padding: '1px 6px',
                     }}
                   >
-                    {ENGINE_LABELS[cp.engine] ?? cp.engine}
+                    {engineLabel(cp.engine)}
                   </span>
                   <span
                     style={{
@@ -324,7 +326,7 @@ export function CheckpointPanel() {
                           cursor: 'pointer',
                         }}
                       >
-                        展开
+                        {t('terminal:checkpoint.expand')}
                       </button>
                     </span>
                   )}
@@ -338,7 +340,7 @@ export function CheckpointPanel() {
                       marginBottom: 4,
                     }}
                   >
-                    {promptLineCount} 行 · {cp.prompt.length} 字符
+                    {t('terminal:checkpoint.promptMeta', { lines: promptLineCount, chars: cp.prompt.length })}
                   </div>
                 )}
                 {shouldShowPromptToggle && isPromptExpanded && (
@@ -357,7 +359,7 @@ export function CheckpointPanel() {
                       padding: 0,
                     }}
                   >
-                    收起
+                    {t('terminal:checkpoint.collapse')}
                   </button>
                 )}
 
@@ -374,7 +376,7 @@ export function CheckpointPanel() {
                 >
                   <div className="flex justify-between">
                     <span className="overflow-hidden overflow-ellipsis whitespace-nowrap">
-                      {cp.changedFileCount} 个差异文件
+                      {t('terminal:checkpoint.changedFiles', { count: cp.changedFileCount })}
                     </span>
                     {cp.changedFileCount > 0 && (
                       <span style={{ color: '#4ec9b0' }}>+{cp.changedFileCount}</span>
@@ -413,7 +415,7 @@ export function CheckpointPanel() {
                       e.currentTarget.style.color = '#888'
                     }}
                   >
-                    对比 Diff
+                    {t('terminal:checkpoint.diff')}
                   </button>
                   <button
                     onClick={() => {
@@ -437,7 +439,7 @@ export function CheckpointPanel() {
                       e.currentTarget.style.borderColor = 'rgba(255,120,48,0.2)'
                     }}
                   >
-                    还原到此处
+                    {t('terminal:checkpoint.restore')}
                   </button>
                 </div>
 
@@ -460,7 +462,7 @@ export function CheckpointPanel() {
                         background: 'rgba(255,255,255,0.02)',
                       }}
                     >
-                      Diff 预览
+                      {t('terminal:checkpoint.diffPreview')}
                     </div>
                     <pre
                       className="overflow-x-auto m-0"
@@ -490,10 +492,10 @@ export function CheckpointPanel() {
                               </div>
                             ))
                         ) : (
-                          <div style={{ color: '#666' }}>没有差异文件</div>
+                          <div style={{ color: '#666' }}>{t('terminal:checkpoint.diffEmpty')}</div>
                         )
                       ) : (
-                        <div style={{ color: '#555' }}>加载差异...</div>
+                        <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffLoading')}</div>
                       )}
                     </pre>
                   </div>
@@ -506,7 +508,7 @@ export function CheckpointPanel() {
                 >
                   <span>branch: {cp.branch}</span>
                   <span>
-                    {formatDate(cp.createdAt)} · {cp.branch}
+                    {formatDate(cp.createdAt, t)} · {cp.branch}
                   </span>
                 </div>
               </div>
@@ -547,7 +549,7 @@ export function CheckpointPanel() {
                 className="font-semibold"
                 style={{ fontSize: 13, color: '#fff' }}
               >
-                确认还原
+                {t('terminal:checkpoint.confirmTitle')}
               </div>
               <ModalCloseButton
                 onClose={() => {
@@ -561,7 +563,7 @@ export function CheckpointPanel() {
             {/* Modal body */}
             <div style={{ padding: 16 }}>
               <div style={{ fontSize: 12, color: '#999', marginBottom: 12, lineHeight: 1.6 }}>
-                将工作区恢复到 #{restoreTarget.conversationIndex}。编号更大的还原点会从列表中移除。
+                {t('terminal:checkpoint.confirmBody', { index: restoreTarget.conversationIndex })}
               </div>
 
               <div
@@ -597,7 +599,7 @@ export function CheckpointPanel() {
                         color: '#d4d4d4',
                       }}
                     >
-                      {restoreTarget.changedFileCount} 个差异文件
+                      {t('terminal:checkpoint.changedFiles', { count: restoreTarget.changedFileCount })}
                     </span>
                     <span
                       className="rounded"
@@ -609,11 +611,11 @@ export function CheckpointPanel() {
                         padding: '2px 6px',
                       }}
                     >
-                      目标状态
+                      {t('terminal:checkpoint.targetState')}
                     </span>
                   </div>
                   <div style={{ fontSize: 11, color: '#666' }}>
-                    当前工作区将被替换为该还原点记录的文件状态
+                    {t('terminal:checkpoint.replaceNotice')}
                   </div>
                 </div>
 
@@ -628,7 +630,7 @@ export function CheckpointPanel() {
                       color: '#999',
                     }}
                   >
-                    将移除 {restorePruneCount} 个后续还原点，保留当前还原点及之前的历史。
+                    {t('terminal:checkpoint.pruneWarn', { count: restorePruneCount })}
                   </div>
                 )}
 
@@ -649,7 +651,7 @@ export function CheckpointPanel() {
                           color: '#d4d4d4',
                         }}
                       >
-                        {conflicts.length} 个冲突文件
+                        {t('terminal:checkpoint.conflictFiles', { count: conflicts.length })}
                       </span>
                       <span
                         className="rounded"
@@ -661,7 +663,7 @@ export function CheckpointPanel() {
                           padding: '2px 6px',
                         }}
                       >
-                        存在冲突
+                        {t('terminal:checkpoint.conflictBadge')}
                       </span>
                     </div>
                     {conflicts.map((c) => (
@@ -683,8 +685,8 @@ export function CheckpointPanel() {
 
               <div style={{ fontSize: 11, color: '#666', lineHeight: 1.5 }}>
                 {conflicts.length > 0
-                  ? '冲突文件需要手动处理。'
-                  : '还原完成后，右侧列表会自动刷新。'}
+                  ? t('terminal:checkpoint.conflictHint')
+                  : t('terminal:checkpoint.restoreDoneHint')}
               </div>
             </div>
 
@@ -721,7 +723,7 @@ export function CheckpointPanel() {
                   e.currentTarget.style.color = '#888'
                 }}
               >
-                取消
+                {t('common:action.cancel')}
               </button>
               <button
                 onClick={handleRestore}
@@ -743,7 +745,7 @@ export function CheckpointPanel() {
                   e.currentTarget.style.borderColor = 'rgba(255,120,48,0.3)'
                 }}
               >
-                确认还原
+                {t('terminal:checkpoint.confirmRestore')}
               </button>
             </div>
           </div>

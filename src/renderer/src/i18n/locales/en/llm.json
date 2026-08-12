@@ -1,0 +1,85 @@
+{
+  "title": {
+    "label": "LLM Engine",
+    "meta": "Providers"
+  },
+  "runtime": {
+    "available": "Default model available",
+    "unavailable": "Default model unavailable",
+    "unconfigured": "No default model configured",
+    "detecting": "Detecting default model",
+    "synced": "Synced {{count}} providers from installed edition",
+    "unchanged": "Installed edition config already synced",
+    "sourceMissing": "No installable edition config found to sync",
+    "failed": "Installed edition config sync failed",
+    "formal": "Using the official config directory",
+    "latencySuffix": " · {{latency}}ms",
+    "refreshTitle": "Re-detect LLM connection"
+  },
+  "provider": {
+    "configuredTitle": "Configured Providers",
+    "defaultBadge": "Default",
+    "typeVertex": "Vertex AI",
+    "typeOpenai": "OpenAI Compatible",
+    "setAsDefault": "Set as default",
+    "edit": "Edit",
+    "delete": "Delete",
+    "editTitle": "Edit provider",
+    "addTitle": "Add provider",
+    "typeLabel": "Provider Type",
+    "typeOptionOpenai": "OpenAI-compatible endpoint (URL + Key)",
+    "typeOptionVertex": "Google Vertex AI (GCP auth)"
+  },
+  "openai": {
+    "sectionTitle": "OpenAI-compatible endpoint",
+    "nameLabel": "Provider Name",
+    "namePlaceholder": "My OpenAI Provider",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "apiKeyLabel": "API Key",
+    "apiKeyPlaceholder": "sk-...",
+    "modelLabel": "Default Model",
+    "modelPlaceholder": "gpt-4o, deepseek-chat..."
+  },
+  "vertex": {
+    "sectionTitle": "Google Vertex AI",
+    "nameLabel": "Provider Name",
+    "namePlaceholder": "Vertex AI",
+    "projectIdLabel": "GCP Project ID",
+    "projectIdPlaceholder": "my-gcp-project",
+    "regionLabel": "Region",
+    "authModeLabel": "Auth Mode",
+    "authModeServiceAccount": "Service Account (email + private key)",
+    "authModeJsonPaste": "Paste full JSON key",
+    "authModeAdc": "Application Default Credentials (ADC)",
+    "clientEmailLabel": "Client Email",
+    "clientEmailPlaceholder": "xxx@my-project.iam.gserviceaccount.com",
+    "privateKeyLabel": "Private Key",
+    "privateKeyPlaceholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+    "privateKeyHint": "Convert escaped newlines from the GCP JSON key into real newlines.",
+    "formatKey": "Format",
+    "saJsonLabel": "Service Account JSON",
+    "saJsonPlaceholder": "{\"type\":\"service_account\",\"project_id\":\"...\"}",
+    "adcNotice": "Run <code>gcloud auth application-default login</code> before testing.",
+    "proxyLabel": "HTTP Proxy",
+    "proxyPlaceholder": "http://127.0.0.1:7890",
+    "proxyHint": "Fill in when a proxy is required to reach Google services.",
+    "modelLabel": "Default Model"
+  },
+  "test": {
+    "testing": "Testing connection...",
+    "connected": "Connected [{{latency}}ms]",
+    "connectionFailed": "Connection failed: {{error}}",
+    "unknownError": "Unknown error",
+    "error": "Error: {{message}}",
+    "networkFailed": "Network failed",
+    "button": "Test connection"
+  },
+  "save": {
+    "saving": "Saving...",
+    "update": "Update",
+    "save": "Save",
+    "saveFailed": "Save failed: {{error}}",
+    "error": "Error: {{message}}"
+  }
+}

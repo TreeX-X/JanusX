@@ -11,6 +11,7 @@ import type { RightToolId } from '@/right-tools/types'
 import { useAppStore } from '@/stores/app'
 import { useRightToolStore } from '@/stores/right-tools'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from '@/i18n/useI18n'
 import {
   clampRightToolPanelWidth,
   RIGHT_TOOL_PANEL_MIN_WIDTH,
@@ -40,6 +41,7 @@ export function RightDock({
   forcedCollapsed,
   onResizingChange,
 }: RightDockProps) {
+  const { t } = useI18n('common')
   const openToolIds = useRightToolStore((state) => state.openToolIds)
   const activeToolId = useRightToolStore((state) => state.activeToolId)
   const panelWidth = useRightToolStore((state) => state.panelWidth)
@@ -138,7 +140,7 @@ export function RightDock({
   }
 
   return (
-    <aside className={styles.dock} data-collapsed={effectiveCollapsed} aria-label="右侧工具 Dock">
+    <aside className={styles.dock} data-collapsed={effectiveCollapsed} aria-label={t('common:rightDock.dockAria')}>
       <div
         className={styles.panel}
         style={{ width: renderedPanelWidth }}
@@ -151,7 +153,7 @@ export function RightDock({
             className={styles.resizeHandle}
             data-resizing={resizing}
             role="separator"
-            aria-label="调整右侧工具面板宽度"
+            aria-label={t('common:rightDock.resizeAria')}
             aria-orientation="vertical"
             aria-valuemin={RIGHT_TOOL_PANEL_MIN_WIDTH}
             aria-valuemax={Math.round(maximum)}
@@ -174,8 +176,8 @@ export function RightDock({
             <button
               type="button"
               className={styles.headerCollapse}
-              aria-label="折叠右侧工具面板"
-              title="折叠面板"
+              aria-label={t('common:rightDock.collapseAria')}
+              title={t('common:rightDock.collapseTitle')}
               onClick={togglePanel}
             >
               <PanelRightClose size={15} strokeWidth={1.6} aria-hidden="true" />

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createHoldToConfirmController, isHoldConfirmKey } from '@/lib/hold-to-confirm'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './HoldToConfirm.module.css'
 
 const DEFAULT_HOLD_DURATION_MS = 1000
@@ -18,6 +19,7 @@ export function HoldToConfirm({
   as = 'button', children, className = '', disabled = false, label,
   onConfirm, style,
 }: HoldToConfirmProps) {
+  const { t } = useI18n('common')
   const [holding, setHolding] = useState(false)
   const confirmRef = useRef(onConfirm)
   confirmRef.current = onConfirm
@@ -42,8 +44,8 @@ export function HoldToConfirm({
   }
   const cancel = () => controllerRef.current?.cancel()
   const sharedProps = {
-    'aria-label': `${label}，长按确认`,
-    title: `${label}（长按确认）`,
+    'aria-label': t('common:holdToConfirm.aria', { label }),
+    title: t('common:holdToConfirm.title', { label }),
     className: `${styles.control} ${holding ? styles.holding : ''} ${className}`,
     style: { ...style, '--hold-duration': `${DEFAULT_HOLD_DURATION_MS}ms` } as CSSProperties,
     onClick: (event: React.MouseEvent<HTMLElement>) => {

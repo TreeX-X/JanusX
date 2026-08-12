@@ -13,6 +13,7 @@ import {
   getDefaultProvider,
   getLlmRuntimeStatus,
 } from '@/services/llm'
+import { useI18n } from '@/i18n/useI18n'
 import type { ProviderSettings } from '@janusx/llm-core'
 import type { LlmRuntimeStatus } from '../../../shared/ipc/llm'
 
@@ -43,6 +44,7 @@ function notifyJanusLlmConfigChanged(preferDefault: boolean, updatedProviderId?:
 }
 
 export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: LlmConfigModalProps) {
+  const { t } = useI18n('llm')
   const modalRootRef = useRef<HTMLDivElement | null>(null)
   const [providerType, setProviderType] = useState<ProviderType>('openai-compatible')
   const [providers, setProviders] = useState<ProviderSettings[]>([])
@@ -203,7 +205,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
 
   const handleTest = async () => {
     try {
-      setTestStatus({ state: 'testing', message: 'Testing connection...' })
+      setTestStatus({ state: 'testing', message: t('llm:test.testing') })
       const settings = buildSettings()
       const testModel =
         providerType === 'vertex-ai'
@@ -215,19 +217,19 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       if (result.success) {
         setTestStatus({
           state: 'success',
-          message: `Connected [${result.latency || 0}ms]`,
+          message: t('llm:test.connected', { latency: result.latency || 0 }),
           latency: result.latency,
         })
       } else {
         setTestStatus({
           state: 'error',
-          message: `Connection failed: ${result.error || 'Unknown error'}`,
+          message: t('llm:test.connectionFailed', { error: result.error || t('llm:test.unknownError') }),
         })
       }
     } catch (error: any) {
       setTestStatus({
         state: 'error',
-        message: `Error: ${error.message || 'Network failed'}`,
+        message: t('llm:test.error', { message: error.message || t('llm:test.networkFailed') }),
       })
     }
   }
@@ -249,11 +251,11 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
         }, 500)
       } else {
         setSaveStatus('error')
-        setTestStatus({ state: 'error', message: `Save failed: ${result.error}` })
+        setTestStatus({ state: 'error', message: t('llm:save.saveFailed', { error: result.error }) })
       }
     } catch (error: any) {
       setSaveStatus('error')
-      setTestStatus({ state: 'error', message: `Error: ${error.message}` })
+      setTestStatus({ state: 'error', message: t('llm:save.error', { message: error.message }) })
     }
   }
 
@@ -267,7 +269,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
         <div className={styles.configHeader}>
           <div className={styles.configTitle}>
             <i className={styles.statusDot}></i>
-            LLM 引擎 <span className={styles.titleMeta}>Providers</span>
+            {t('llm:title.label')} <span className={styles.titleMeta}>{t('llm:title.meta')}</span>
           </div>
           {onClose && <ModalCloseButton onClose={() => { onClose(); resetForm() }} />}
         </div>
@@ -279,33 +281,35 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
             <span className={styles.runtimeIndicator} />
             <div>
               <strong>{runtimeStatus.connection.state === 'available'
-                ? '默认模型可用'
+                ? t('llm:runtime.available')
                 : runtimeStatus.connection.state === 'unavailable'
-                  ? '默认模型不可用'
+                  ? t('llm:runtime.unavailable')
                   : runtimeStatus.connection.state === 'unconfigured'
-                    ? '尚未配置默认模型'
-                    : '正在检测默认模型'}</strong>
+                    ? t('llm:runtime.unconfigured')
+                    : t('llm:runtime.detecting')}</strong>
               <span>{runtimeStatus.profileSync.state === 'synchronized'
-                ? `已从安装版同步 ${runtimeStatus.profileSync.importedProviderCount} 个 Provider`
+                ? t('llm:runtime.synced', { count: runtimeStatus.profileSync.importedProviderCount })
                 : runtimeStatus.profileSync.state === 'unchanged'
-                  ? '安装版配置已同步'
+                  ? t('llm:runtime.unchanged')
                   : runtimeStatus.profileSync.state === 'source-missing'
-                    ? '未发现可同步的安装版配置'
+                    ? t('llm:runtime.sourceMissing')
                     : runtimeStatus.profileSync.state === 'failed'
-                      ? '安装版配置同步失败'
-                      : '当前使用正式配置目录'}
-                {runtimeStatus.connection.latency !== undefined ? ` · ${runtimeStatus.connection.latency}ms` : ''}
+                      ? t('llm:runtime.failed')
+                      : t('llm:runtime.formal')}
+                {runtimeStatus.connection.latency !== undefined
+                  ? t('llm:runtime.latencySuffix', { latency: runtimeStatus.connection.latency })
+                  : ''}
               </span>
               {runtimeStatus.connection.error && <small>{runtimeStatus.connection.error}</small>}
             </div>
-            <button type="button" onClick={() => void refreshRuntimeStatus()} disabled={runtimeChecking} title="重新检测 LLM 连接">
+            <button type="button" onClick={() => void refreshRuntimeStatus()} disabled={runtimeChecking} title={t('llm:runtime.refreshTitle')}>
               <RefreshCw size={13} className={runtimeChecking ? styles.spinning : undefined} />
             </button>
           </div>
         )}
         {providers.length > 0 && (
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>已配置服务 Providers</h3>
+            <h3 className={styles.sectionTitle}>{t('llm:provider.configuredTitle')}</h3>
             <div className={styles.providerList}>
               {providers.map((provider) => (
                 <div
@@ -318,11 +322,11 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                     <div className={styles.providerName}>
                       {provider.name}
                       {defaultProviderId === provider.id && (
-                        <span className={styles.providerBadge}>默认</span>
+                        <span className={styles.providerBadge}>{t('llm:provider.defaultBadge')}</span>
                       )}
                     </div>
                     <div className={styles.providerModel}>
-                      {provider.authType === 'vertex-ai' ? 'Vertex AI' : 'OpenAI Compatible'}
+                      {provider.authType === 'vertex-ai' ? t('llm:provider.typeVertex') : t('llm:provider.typeOpenai')}
                       {provider.modelId ? ` / ${provider.modelId}` : ''}
                     </div>
                   </div>
@@ -333,7 +337,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                         className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact} ${styles.btnAccent}`}
                         onClick={() => handleSetDefault(provider.id)}
                       >
-                        设为默认
+                        {t('llm:provider.setAsDefault')}
                       </button>
                     )}
                     <button
@@ -341,14 +345,14 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                       className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
                       onClick={() => handleEdit(provider)}
                     >
-                      编辑
+                      {t('llm:provider.edit')}
                     </button>
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact} ${styles.btnDanger}`}
                       onClick={() => handleDelete(provider.id)}
                     >
-                      删除
+                      {t('common:action.delete')}
                     </button>
                   </div>
                 </div>
@@ -358,9 +362,9 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
         )}
 
         <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>{editingId ? '编辑服务' : '添加服务'}</h3>
+          <h3 className={styles.sectionTitle}>{editingId ? t('llm:provider.editTitle') : t('llm:provider.addTitle')}</h3>
           <div className={styles.formGroup}>
-            <label>服务类型 Provider Type</label>
+            <label>{t('llm:provider.typeLabel')}</label>
             <Select
               className={`${styles.configInput} ${styles.selectInput}`}
               value={providerType}
@@ -370,8 +374,8 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                 setTestStatus({ state: 'idle', message: '' })
               }}
               options={[
-                { value: 'openai-compatible', label: 'OpenAI 兼容接口 (URL + Key)' },
-                { value: 'vertex-ai', label: 'Google Vertex AI (GCP 认证)' },
+                { value: 'openai-compatible', label: t('llm:provider.typeOptionOpenai') },
+                { value: 'vertex-ai', label: t('llm:provider.typeOptionVertex') },
               ]}
             />
           </div>
@@ -379,40 +383,40 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
 
         {providerType === 'openai-compatible' && (
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>OpenAI 兼容接口</h3>
+            <h3 className={styles.sectionTitle}>{t('llm:openai.sectionTitle')}</h3>
             <div className={styles.formGroup}>
-              <label>服务名称 Provider Name</label>
+              <label>{t('llm:openai.nameLabel')}</label>
               <input
                 className={styles.configInput}
-                placeholder="My OpenAI Provider"
+                placeholder={t('llm:openai.namePlaceholder')}
                 value={openaiName}
                 onChange={(event) => setOpenaiName(event.target.value)}
               />
             </div>
             <div className={styles.formGroup}>
-              <label>接口地址 Base URL</label>
+              <label>{t('llm:openai.baseUrlLabel')}</label>
               <input
                 className={styles.configInput}
-                placeholder="https://api.openai.com/v1"
+                placeholder={t('llm:openai.baseUrlPlaceholder')}
                 value={openaiBaseURL}
                 onChange={(event) => setOpenaiBaseURL(event.target.value)}
               />
             </div>
             <div className={styles.formGroup}>
-              <label>访问密钥 API Key</label>
+              <label>{t('llm:openai.apiKeyLabel')}</label>
               <input
                 type="password"
                 className={styles.configInput}
-                placeholder="sk-..."
+                placeholder={t('llm:openai.apiKeyPlaceholder')}
                 value={openaiApiKey}
                 onChange={(event) => setOpenaiApiKey(event.target.value)}
               />
             </div>
             <div className={styles.formGroup}>
-              <label>默认模型 Default Model</label>
+              <label>{t('llm:openai.modelLabel')}</label>
               <input
                 className={styles.configInput}
-                placeholder="gpt-4o, deepseek-chat..."
+                placeholder={t('llm:openai.modelPlaceholder')}
                 value={openaiModel}
                 onChange={(event) => setOpenaiModel(event.target.value)}
               />
@@ -422,27 +426,27 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
 
         {providerType === 'vertex-ai' && (
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>Google Vertex AI</h3>
+            <h3 className={styles.sectionTitle}>{t('llm:vertex.sectionTitle')}</h3>
             <div className={styles.formGroup}>
-              <label>服务名称 Provider Name</label>
+              <label>{t('llm:vertex.nameLabel')}</label>
               <input
                 className={styles.configInput}
-                placeholder="Vertex AI"
+                placeholder={t('llm:vertex.namePlaceholder')}
                 value={vertexName}
                 onChange={(event) => setVertexName(event.target.value)}
               />
             </div>
             <div className={styles.formGroup}>
-              <label>GCP 项目 ID</label>
+              <label>{t('llm:vertex.projectIdLabel')}</label>
               <input
                 className={styles.configInput}
-                placeholder="my-gcp-project"
+                placeholder={t('llm:vertex.projectIdPlaceholder')}
                 value={vertexProjectId}
                 onChange={(event) => setVertexProjectId(event.target.value)}
               />
             </div>
             <div className={styles.formGroup}>
-              <label>区域 Region</label>
+              <label>{t('llm:vertex.regionLabel')}</label>
               <Select
                 className={`${styles.configInput} ${styles.selectInput}`}
                 value={vertexRegion}
@@ -452,7 +456,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
               />
             </div>
             <div className={styles.formGroup}>
-              <label>认证方式 Auth Mode</label>
+              <label>{t('llm:vertex.authModeLabel')}</label>
               <Select
                 className={`${styles.configInput} ${styles.selectInput}`}
                 value={vertexAuthMode}
@@ -461,9 +465,9 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                   setVertexAuthMode(value as 'service-account' | 'adc' | 'json-paste')
                 }
                 options={[
-                  { value: 'service-account', label: '服务账号 Service Account (邮箱 + 私钥)' },
-                  { value: 'json-paste', label: '粘贴完整 JSON Key' },
-                  { value: 'adc', label: '应用默认凭证 ADC' },
+                  { value: 'service-account', label: t('llm:vertex.authModeServiceAccount') },
+                  { value: 'json-paste', label: t('llm:vertex.authModeJsonPaste') },
+                  { value: 'adc', label: t('llm:vertex.authModeAdc') },
                 ]}
               />
             </div>
@@ -471,32 +475,32 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
             {vertexAuthMode === 'service-account' && (
               <>
                 <div className={styles.formGroup}>
-                  <label>客户端邮箱 Client Email</label>
+                  <label>{t('llm:vertex.clientEmailLabel')}</label>
                   <input
                     className={styles.configInput}
-                    placeholder="xxx@my-project.iam.gserviceaccount.com"
+                    placeholder={t('llm:vertex.clientEmailPlaceholder')}
                     value={vertexClientEmail}
                     onChange={(event) => setVertexClientEmail(event.target.value)}
                   />
                 </div>
                 <div className={styles.formGroup}>
-                  <label>私钥 Private Key</label>
+                  <label>{t('llm:vertex.privateKeyLabel')}</label>
                   <textarea
                     className={`${styles.configInput} ${styles.textareaInput}`}
-                    placeholder={`-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----`}
+                    placeholder={t('llm:vertex.privateKeyPlaceholder')}
                     value={vertexPrivateKey}
                     onChange={(event) => setVertexPrivateKey(event.target.value)}
                   />
                   <div className={styles.inlineHintRow}>
                     <div className={styles.inlineHint}>
-                      将 GCP JSON 密钥里的转义换行转换为实际换行。
+                      {t('llm:vertex.privateKeyHint')}
                     </div>
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
                       onClick={() => setVertexPrivateKey(vertexPrivateKey.replace(/\\n/g, '\n'))}
                     >
-                      格式化
+                      {t('llm:vertex.formatKey')}
                     </button>
                   </div>
                 </div>
@@ -505,10 +509,10 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
 
             {vertexAuthMode === 'json-paste' && (
               <div className={styles.formGroup}>
-                <label>服务账号 JSON</label>
+                <label>{t('llm:vertex.saJsonLabel')}</label>
                 <textarea
                   className={`${styles.configInput} ${styles.textareaInput}`}
-                  placeholder='{"type":"service_account","project_id":"..."}'
+                  placeholder={t('llm:vertex.saJsonPlaceholder')}
                   value={vertexSaJSON}
                   onChange={(event) => setVertexSaJSON(event.target.value)}
                 />
@@ -517,22 +521,22 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
 
             {vertexAuthMode === 'adc' && (
               <div className={styles.notice}>
-                测试前需先执行 <code>gcloud auth application-default login</code>。
+                {t('llm:vertex.adcNotice')}
               </div>
             )}
 
             <div className={styles.formGroup}>
-              <label>HTTP 代理 Proxy</label>
+              <label>{t('llm:vertex.proxyLabel')}</label>
               <input
                 className={styles.configInput}
-                placeholder="http://127.0.0.1:7890"
+                placeholder={t('llm:vertex.proxyPlaceholder')}
                 value={vertexProxy}
                 onChange={(event) => setVertexProxy(event.target.value)}
               />
-              <div className={styles.inlineHint}>访问 Google 服务需要代理时填写。</div>
+              <div className={styles.inlineHint}>{t('llm:vertex.proxyHint')}</div>
             </div>
             <div className={styles.formGroup}>
-              <label>默认模型 Default Model</label>
+              <label>{t('llm:vertex.modelLabel')}</label>
               <Select
                 className={`${styles.configInput} ${styles.selectInput}`}
                 value={vertexModel}
@@ -557,7 +561,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
         </div>
         <div className={styles.footerActions}>
           <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={handleTest}>
-            测试连接
+            {t('llm:test.button')}
           </button>
           <button
             type="button"
@@ -565,7 +569,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
             onClick={handleSave}
             disabled={saveStatus === 'saving'}
           >
-            {saveStatus === 'saving' ? '保存中...' : editingId ? '更新 Update' : '保存 Save'}
+            {saveStatus === 'saving' ? t('llm:save.saving') : editingId ? t('llm:save.update') : t('llm:save.save')}
           </button>
         </div>
       </div>

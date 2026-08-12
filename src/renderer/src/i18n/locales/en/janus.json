@@ -1,0 +1,304 @@
+{
+  "chat": {
+    "author": {
+      "user": "You",
+      "assistant": "JANUSX"
+    },
+    "thread": {
+      "kicker": "Thread",
+      "fallbackTitle": "Janus",
+      "selectAria": "Select conversation",
+      "menuHeader": "Conversations",
+      "newAria": "New conversation",
+      "newTitle": "New conversation",
+      "titleAria": "Conversation title",
+      "generatingAria": "Generating",
+      "errorAria": "Conversation error",
+      "messagesCount": "{{count}} messages",
+      "renameAria": "Rename {{title}}",
+      "renameTitle": "Rename conversation",
+      "deleteAria": "Delete {{title}}",
+      "deleteTitle": "Delete conversation",
+      "deleteConfirm": "Delete conversation \"{{title}}\"?"
+    },
+    "model": {
+      "noneConfigured": "No model configured",
+      "openLlmTitle": "Configure LLM",
+      "openLlmButton": "Model",
+      "tagLabel": "Model:",
+      "menuShortcutTitle": "Ctrl+P open model menu",
+      "providersHeading": "Providers",
+      "modelsHeading": "Models",
+      "menuNavHint": "↑ ↓ ← → · Enter",
+      "noConfigured": "No configured {{kind}}",
+      "notice": {
+        "noProviderError": "No default LLM Provider configured"
+      }
+    },
+    "error": {
+      "retry": "Retry",
+      "configureLlm": "Configure LLM"
+    },
+    "edit": {
+      "cancelTitle": "Cancel edit",
+      "cancelAria": "Cancel edit",
+      "confirmTitle": "Confirm edit and regenerate",
+      "confirmAria": "Confirm edit and regenerate",
+      "editTitle": "Edit and resubmit",
+      "editAria": "Edit and resubmit",
+      "historyAria": "Edit history question"
+    },
+    "message": {
+      "copyTitle": "Copy message",
+      "copyAria": "Copy message",
+      "retryTitle": "Regenerate this response",
+      "retryAria": "Regenerate this response"
+    },
+    "newMessage": "New message",
+    "inputPlaceholder": "Message Janus or execute command...",
+    "stop": {
+      "title": "Stop generating",
+      "aria": "Stop generating"
+    },
+    "clear": {
+      "title": "Clear current conversation",
+      "aria": "Clear current conversation"
+    },
+    "shortcuts": {
+      "janusMd": "JANUS.md",
+      "providers": "tab providers",
+      "models": "ctrl+p models"
+    },
+    "selectionMenu": {
+      "aria": "{{kind}} selection"
+    },
+    "resource": {
+      "scopeAria": "Workspace resources",
+      "removeAria": "Remove {{name}}",
+      "removeTitle": "Remove {{name}}",
+      "attachTitle": "Attach workspace",
+      "attachAria": "Attach workspace",
+      "attachPlaceholder": "Add workspace",
+      "embedTitle": "Embed Chat in current workspace",
+      "embedAria": "Embed Chat in current workspace"
+    },
+    "approval": {
+      "regionAria": "Workspace edit approval",
+      "heading": "Workspace action",
+      "headingStrong": "Approval required",
+      "rejectTitle": "Reject workspace action",
+      "rejectAria": "Reject workspace action",
+      "reject": "Reject",
+      "approveTitle": "Approve workspace action",
+      "approveAria": "Approve workspace action",
+      "approve": "Approve"
+    },
+    "activity": {
+      "aria": "Workspace tool activity"
+    },
+    "tool": {
+      "groupAria": "Tool calls",
+      "expandTitle": "Expand details",
+      "collapseTitle": "Collapse details",
+      "argsLabel": "Args",
+      "resultLabel": "Result",
+      "errorLabel": "Error",
+      "duration": "{{ms}}ms",
+      "workspaceAt": "@ {{name}}",
+      "status": {
+        "requested": "Requested",
+        "approval": "Awaiting approval",
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "copySummaryTitle": "Copy tool summary",
+      "copySummaryAria": "Copy tool summary",
+      "copied": "Copied"
+    },
+    "kind": {
+      "provider": "provider",
+      "model": "model"
+    }
+  },
+  "island": {
+    "aria": {
+      "openIsland": "Open Janus Island",
+      "closeKnowledgePeek": "Close knowledge peek",
+      "openOfficePreview": "Open Office preview for {{path}}"
+    },
+    "peek": {
+      "title": {
+        "proposalReady": "Blueprint proposal ready",
+        "needsAttention": "Blueprint needs attention",
+        "officeReady": "Office file ready",
+        "knowledge": "Knowledge",
+        "knowledgeRecalled": "Knowledge recalled",
+        "maintenance": "Blueprint maintenance"
+      },
+      "subtitle": {
+        "noKnowledgeMatch": "No knowledge match",
+        "knowledgeCount": "{{count}} items | {{match}} | {{kind}}: {{title}}"
+      }
+    },
+    "status": {
+      "blueprintApproval": "BLUEPRINT // APPROVAL REQUIRED",
+      "blueprintAttention": "BLUEPRINT // ATTENTION",
+      "officeOpenPreview": "OFFICE // OPEN PREVIEW",
+      "knowledgeNoMatch": "KNOWLEDGE // NO MATCH",
+      "knowledgeTruncated": "KNOWLEDGE // TRUNCATED",
+      "knowledgeReady": "KNOWLEDGE // READY",
+      "blueprintStatus": "BLUEPRINT // {{status}}",
+      "blueprintFocused": "BLUEPRINT // FOCUSED",
+      "runningActive": "RUNNING // ACTIVE",
+      "analyticsProcessing": "ANALYTICS // PROCESSING...",
+      "orderIdle": "ORDER // IDLE"
+    },
+    "modeLabel": {
+      "blueprint": "BLUEPRINT",
+      "analytics": "ANALYTICS",
+      "running": "RUNNING",
+      "order": "ORDER"
+    },
+    "expanded": {
+      "brand": "JANUS",
+      "viewSwitchAria": "Janus expanded view",
+      "view": {
+        "monitor": "Monitor",
+        "chat": "Chat"
+      },
+      "dismissHint": "Esc / double-click to collapse",
+      "coreVisualization": "Core visualization",
+      "missionOverview": "mission overview",
+      "roleSelected": "{{role}} selected",
+      "identityLabel": "IDENTITY",
+      "workspaceLabel": "WORKSPACE",
+      "statusLabel": "STATUS",
+      "engineLabel": "ENGINE",
+      "mainIdentity": "MAIN",
+      "officeArtifacts": "Office artifacts",
+      "officeAvailable": "{{count}} available",
+      "subagentRuntimes": "Subagent runtimes",
+      "focusedTerminal": "focused terminal",
+      "noTerminalFocus": "no terminal focus",
+      "runtimeAria": "Subagent runtime framework",
+      "noRuns": "No SubAgent runs",
+      "noRunsHint": "Focused terminal SubAgent runs will appear here",
+      "waitingForEvent": "Waiting for runtime event",
+      "focus": "Focus",
+      "captionJanus": "Janus",
+      "openMaintenance": "Open Maintenance",
+      "cancelAnalysis": "Cancel Analysis",
+      "openBlueprint": "Open Blueprint"
+    },
+    "activeNodeFallback": "No active blueprint node",
+    "workspaceFallback": "Workspace",
+    "knowledge": {
+      "matchStrong": "STRONG MATCH",
+      "matchGood": "GOOD MATCH",
+      "matchRelated": "RELATED",
+      "matchFallback": "MATCHED"
+    },
+    "age": {
+      "unknown": "unknown",
+      "now": "now",
+      "seconds": "{{n}}s",
+      "minutes": "{{n}}m",
+      "hours": "{{n}}h"
+    }
+  },
+  "expanded": {
+    "regionAria": "Janus Island",
+    "engineBrand": "JANUS ENGINE",
+    "dismissHint": "Esc / click outside to collapse",
+    "divineProtocol": "Divine Protocol Terminal",
+    "footerMode": "MODE: {{mode}}",
+    "viewToggle": {
+      "visionOnly": "◎ Vision only",
+      "chatOnly": "◎ Chat only",
+      "dual": "◎ Dual pane"
+    },
+    "peek": {
+      "running": "Running",
+      "analyzing": "Analyzing",
+      "idle": "Idle",
+      "ready": "Ready",
+      "workspaceActive": "Workspace active",
+      "blueprintEngaged": "Blueprint view engaged",
+      "noWorkspace": "No workspace selected",
+      "doubleClickToOpen": "Double-click to open"
+    },
+    "modeLabel": {
+      "analytics": "ANALYTICS",
+      "running": "RUNNING",
+      "order": "ORDER"
+    },
+    "status": {
+      "runningActive": "RUNNING // ACTIVE",
+      "analyticsProcessing": "ANALYTICS // PROCESSING...",
+      "orderIdle": "ORDER // IDLE"
+    }
+  },
+  "workSession": {
+    "label": "Work session"
+  },
+  "identity": {
+    "eyeAria": "Janus eye - {{mode}} mode",
+    "ariaFallback": "{{name}} {{state}} identity",
+    "mode": {
+      "idle": "Idle",
+      "ready": "Ready",
+      "scanning": "Scanning Eye",
+      "running": "Running"
+    },
+    "state": {
+      "default": "Default",
+      "scanning": "Scanning Eye",
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "agent": {
+      "main": "Main Claude",
+      "coder": "coderX",
+      "evaluator": "evaluatorX",
+      "abstracter": "abstracterX",
+      "prompter": "promptMasterX",
+      "teammate": "coder-teammate",
+      "subagent": "general-purpose"
+    },
+    "roleTag": {
+      "main": "MAIN",
+      "coder": "CODER",
+      "evaluator": "EVAL",
+      "abstracter": "ABS",
+      "prompter": "PROMPT",
+      "teammate": "TEAM",
+      "subagent": "SUB"
+    }
+  },
+  "subagent": {
+    "status": {
+      "queued": "queued",
+      "running": "running",
+      "waitingApproval": "approval",
+      "done": "done",
+      "failed": "failed",
+      "cancelled": "cancelled"
+    }
+  },
+  "terminal": {
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "opencode": "OpenCode",
+      "shell": "Shell"
+    },
+    "status": {
+      "running": "running",
+      "error": "error",
+      "wait": "wait"
+    }
+  }
+}

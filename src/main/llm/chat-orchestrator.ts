@@ -16,8 +16,8 @@ import { LLM_CHANNELS } from '../../shared/ipc/llm'
 import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../shared/ipc/llm'
 import type { ToolResult } from '../../shared/ipc/agent-runtime'
 import { workspaceAgentRuntime } from '../agent/runtime/runtime'
-import { createWorkspaceChatSystemPrompt, createWorkspaceChatTools } from './workspace-chat-tools'
-import { streamText } from './ai-runtime'
+import { createToolPreview, createWorkspaceChatSystemPrompt, createWorkspaceChatTools } from './workspace-chat-tools'
+import { createJanusRuntimeToolsForResources, createVercelModelTools, createVercelStream, runJanusAgentLoop, type JanusAgentMessage } from '../agent/loop'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -110,15 +110,17 @@ function boundedText(value: string, maxChars: number): string {
 }
 
 /** Compress a runtime tool result into one trace line the next turn can replay. */
-export function toolTraceEntryFromResult(result: ToolResult): ChatToolTraceEntry {
+export function toolTraceEntryFromResult(result: ToolResult, turnId?: string): ChatToolTraceEntry {
   const output = result.output as Record<string, unknown> | undefined
   const parts: string[] = []
+  let argsDigest: string | undefined
+  let resultDigest: string | undefined
   if (output && typeof output === 'object') {
-    if (typeof output.path === 'string') parts.push(output.path)
+    if (typeof output.path === 'string') { parts.push(output.path); argsDigest = String(output.path) }
     if (typeof output.sha256 === 'string') parts.push(`sha256=${output.sha256}`)
     if (typeof output.query === 'string') parts.push(`query="${output.query}"`)
-    if (Array.isArray(output.matches)) parts.push(`${output.matches.length} matches`)
-    if (Array.isArray(output.entries)) parts.push(`${output.entries.length} entries`)
+    if (Array.isArray(output.matches)) { parts.push(`${output.matches.length} matches`); resultDigest = `${output.matches.length} matches` }
+    if (Array.isArray(output.entries)) { parts.push(`${output.entries.length} entries`); resultDigest = `${output.entries.length} entries` }
     if (typeof output.checkpointId === 'string') parts.push(`checkpoint=${output.checkpointId}`)
   }
   if (result.status !== 'completed') {
@@ -129,7 +131,22 @@ export function toolTraceEntryFromResult(result: ToolResult): ChatToolTraceEntry
     workspaceId: result.workspaceId,
     status: result.status,
     summary: boundedText(parts.join(', ') || result.summary, TOOL_TRACE_SUMMARY_MAX_CHARS),
+    turnId,
+    argsDigest: argsDigest ? boundedText(argsDigest, 200) : undefined,
+    resultDigest: resultDigest ? boundedText(resultDigest, 200) : undefined,
+    errorDetail: result.status !== 'completed' ? sanitizeTraceError(result) : undefined,
+    startedAt: result.startedAt ? Date.parse(result.startedAt) : undefined,
+    completedAt: result.completedAt ? Date.parse(result.completedAt) : undefined,
   }
+}
+
+function sanitizeTraceError(result: ToolResult): string | undefined {
+  const reason = result.reasonCode === 'APPROVAL_DENIED'
+    ? 'User denied the approval'
+    : result.reasonCode === 'APPROVAL_CANCELLED'
+      ? 'Session cancelled while awaiting approval'
+      : result.error
+  return reason ? boundedText(reason, 400) : undefined
 }
 
 /** Render prior tool traces as a system message so the model keeps hashes/paths across turns. */
@@ -187,16 +204,6 @@ function emptyResponseFeedback(toolTraces: ChatToolTraceEntry[], userRequestedMu
     return '工作区工具调用已经结束，但模型没有返回可显示的结论。请重试该请求。'
   }
   return '本次响应已经结束，但模型没有返回可显示内容，也没有执行工作区操作。请重试。'
-}
-
-async function resolvedStreamValue<T>(value: unknown, fallback: T): Promise<T> {
-  try {
-    return value && typeof (value as PromiseLike<T>).then === 'function'
-      ? await (value as PromiseLike<T>)
-      : fallback
-  } catch {
-    return fallback
-  }
 }
 
 function injectKnowledgeContext(messages: ChatMessage[], compactContext: string): ChatMessage[] {
@@ -415,53 +422,53 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         runtime: workspaceAgentRuntime,
         resources: trustedResources,
         callerId: `renderer:${event.sender?.id ?? 'unknown'}`,
-        onToolResult: (result) => { executedToolTraces.push(toolTraceEntryFromResult(result)) },
       })
     }
 
     const model = await llmService.getLanguageModel(providerId, actualModelId)
 
-    const modelMessages = formattedMessages.map(m => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    }))
-    const runStream = (runMessages: unknown[]) => streamText({
-      model: model as any,
-      messages: runMessages as any,
-      abortSignal: controller.signal,
-      ...(workspaceTools ? { tools: workspaceTools, maxSteps: CHAT_MAX_STEPS } : {}),
-    })
-    const consumeStream = async (result: { textStream: AsyncIterable<string> }) => {
-      let runText = ''
-      for await (const delta of result.textStream) {
-        if (controller.signal.aborted) break
-        if (!runText && streamedText.trim()) {
-          queueDelta('\n\n')
-          streamedText += '\n\n'
-        }
-        queueDelta(delta)
-        runText += delta
-        streamedText += delta
-      }
-    }
-
-    const firstResult = await runStream(modelMessages)
-    await consumeStream(firstResult)
-
     const userRequestedMutation = hasExplicitWorkspaceMutationIntent(latestUserQuery(formattedMessages))
-    const mutationAttempted = executedToolTraces.some((entry) => WORKSPACE_MUTATION_TOOLS.has(entry.toolName))
-    if (!controller.signal.aborted && workspaceTools
-      && (!streamedText.trim() || (userRequestedMutation && !mutationAttempted))) {
-      const responseMessages = await resolvedStreamValue<unknown[]>((firstResult as any).responseMessages, [])
-      const traceContext = responseMessages.length === 0 ? toolTraceHistoryMessage(executedToolTraces) : null
-      const recoveryResult = await runStream([
-        { role: 'system', content: workspaceRecoveryPrompt(userRequestedMutation && !mutationAttempted) },
-        ...modelMessages,
-        ...(traceContext ? [traceContext] : []),
-        ...responseMessages,
-      ])
-      await consumeStream(recoveryResult)
-    }
+    let recoveryIssued = false
+    const modelMessages: JanusAgentMessage[] = formattedMessages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    }))
+    const modelTools = workspaceTools ? createVercelModelTools(workspaceTools) : undefined
+    const loopTools = workspaceTools
+      ? createJanusRuntimeToolsForResources(workspaceAgentRuntime, trustedResources, {
+          callerId: `renderer:${event.sender?.id ?? 'unknown'}`,
+          preview: createToolPreview,
+        })
+        .map((tool) => ({ ...tool, name: tool.name.replaceAll('.', '_').replaceAll('-', '_') }))
+        .filter((tool) => !!modelTools?.[tool.name])
+      : []
+    await runJanusAgentLoop(modelMessages, {
+      tools: loopTools,
+      stream: createVercelStream({ model, tools: modelTools }),
+      maxTurns: CHAT_MAX_STEPS,
+      afterToolCall: async ({ result }) => {
+        const runtimeResult = result.details as ToolResult | undefined
+        if (runtimeResult?.toolName) executedToolTraces.push(toolTraceEntryFromResult(runtimeResult, requestId))
+        return result
+      },
+      getFollowUpMessages: async () => {
+        const mutationAttempted = executedToolTraces.some((entry) => WORKSPACE_MUTATION_TOOLS.has(entry.toolName))
+        const needsRecovery = !!workspaceTools
+          && !recoveryIssued
+          && (!streamedText.trim() || (userRequestedMutation && !mutationAttempted))
+        if (!needsRecovery) return []
+        recoveryIssued = true
+        return [{
+          role: 'system',
+          content: workspaceRecoveryPrompt(userRequestedMutation && !mutationAttempted),
+        }]
+      },
+      onEvent: (loopEvent) => {
+        if (loopEvent.type !== 'message_update' || controller.signal.aborted) return
+        queueDelta(loopEvent.delta)
+        streamedText += loopEvent.delta
+      },
+    }, controller.signal)
 
     if (!controller.signal.aborted && !streamedText.trim()) {
       const feedback = emptyResponseFeedback(executedToolTraces, userRequestedMutation)

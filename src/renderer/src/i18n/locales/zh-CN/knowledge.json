@@ -1,0 +1,170 @@
+{
+  "aria": {
+    "section": "知识助手",
+    "query": "知识查询",
+    "openWorkbench": "打开知识库工作台",
+    "engine": "知识引擎",
+    "close": "关闭知识引擎",
+    "paneCount": "{{title}} 数量",
+    "results": "知识结果",
+    "selectedDetail": "已选知识详情"
+  },
+  "action": {
+    "search": "搜索",
+    "wait": "等待",
+    "copyContext": "复制上下文",
+    "refresh": "刷新知识引擎",
+    "close": "关闭",
+    "approve": "批准",
+    "reject": "拒绝",
+    "archive": "归档",
+    "working": "处理中..."
+  },
+  "search": {
+    "placeholder": {
+      "active": "回忆已接受的知识",
+      "idle": "选择一个工作区"
+    }
+  },
+  "state": {
+    "noWorkspace": {
+      "title": "无工作区",
+      "detail": "助手作用域为当前工作区。"
+    },
+    "ready": {
+      "title": "就绪",
+      "detail": "搜索已接受的事实、Wiki 页面与图谱关系。"
+    },
+    "loading": {
+      "title": "搜索中",
+      "detail": "正在对已接受的工作区知识排序。"
+    },
+    "error": {
+      "title": "回忆不可用"
+    },
+    "degraded": {
+      "title": "回忆降级"
+    },
+    "noMatches": {
+      "title": "无匹配",
+      "detail": "没有已接受的知识匹配此查询。"
+    }
+  },
+  "status": {
+    "copied": "上下文已复制",
+    "copyFailed": "复制失败",
+    "bounded": "结果已截断"
+  },
+  "result": {
+    "meta": {
+      "count": "{{count}} / {{eligible}}",
+      "chars": "{{chars}} / {{max}} 字符"
+    },
+    "truncated": "已截断"
+  },
+  "detail": {
+    "selected": "已选择",
+    "refs": "引用",
+    "source": "来源",
+    "updated": "更新时间",
+    "none": "无",
+    "acceptedTruth": "已接受真相"
+  },
+  "error": {
+    "recallFailed": "知识回忆失败",
+    "loadFailed": "知识工作台加载失败",
+    "actionFailed": "{{action}} 失败",
+    "revokeFailed": "撤销失败"
+  },
+  "tab": {
+    "inbox": "收件箱",
+    "library": "知识库",
+    "wiki": "Wiki",
+    "graph": "图谱",
+    "search": "搜索实验室",
+    "audit": "审计"
+  },
+  "breadcrumb": {
+    "engine": "知识引擎"
+  },
+  "badge": {
+    "demoData": "演示数据"
+  },
+  "paneTitle": {
+    "inbox": "待审候选",
+    "library": "知识库"
+  },
+  "state2": {
+    "useActiveView": "使用当前视图浏览这些记录",
+    "loadingRecords": "正在加载知识记录",
+    "workbenchUnavailable": "工作台不可用"
+  },
+  "inbox": {
+    "empty": {
+      "title": "无待审候选",
+      "detail": "任务结束后运行抽取以填充审核队列。"
+    }
+  },
+  "library": {
+    "empty": {
+      "title": "知识库为空",
+      "detail": "审核后的已接受知识将出现在此处。"
+    }
+  },
+  "wiki": {
+    "empty": {
+      "title": "无 Wiki 补丁",
+      "detail": "抽取尚未提出任何 Wiki 变更。"
+    }
+  },
+  "graph": {
+    "empty": {
+      "title": "无图谱候选",
+      "detail": "抽取尚未提出任何图谱关系。"
+    }
+  },
+  "audit": {
+    "empty": {
+      "title": "无审计事件",
+      "detail": "治理动作发生时会出现在此处。"
+    }
+  },
+  "searchLab": {
+    "controlledRecall": "受控回忆",
+    "bm25": "BM25",
+    "placeholder": "搜索事实、Wiki 补丁、观察记录...",
+    "enterQuery": "输入查询以搜索知识索引",
+    "searching": "正在搜索知识索引",
+    "unavailable": {
+      "title": "知识搜索不可用",
+      "detail": "无法访问索引时不显示本地预览。"
+    },
+    "noMatches": {
+      "title": "无匹配的知识卡片",
+      "detail": "尝试更宽泛的词或先捕获更多知识。"
+    }
+  },
+  "card": {
+    "sourceRefs": "{{count}} 个来源引用",
+    "statusAccepted": "已接受",
+    "statusActive": "活跃"
+  },
+  "list": {
+    "empty": "此视图中无知识"
+  },
+  "inspector": {
+    "empty": "选择一条知识记录",
+    "provenance": "溯源",
+    "confidence": "置信度",
+    "status": "状态",
+    "created": "创建时间",
+    "sourceRefs": "来源引用",
+    "files": "文件",
+    "none": "无",
+    "conflict": "冲突：{{detail}}",
+    "demoNotice": "演示回退为只读。捕获或抽取真实知识记录以启用审核。"
+  },
+  "time": {
+    "unknown": "未知"
+  }
+}

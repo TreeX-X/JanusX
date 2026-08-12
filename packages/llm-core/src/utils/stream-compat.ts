@@ -152,10 +152,46 @@ function normalizeFinishReason(reason: unknown): string {
   return 'unknown'
 }
 
+function tokenTotal(value: unknown): number {
+  if (typeof value === 'number') return value
+  if (value && typeof value === 'object' && typeof (value as any).total === 'number') {
+    return (value as any).total
+  }
+  return 0
+}
+
 function normalizeUsage(usage: any): { promptTokens: number; completionTokens: number } {
   return {
-    promptTokens: usage?.promptTokens ?? usage?.inputTokens ?? 0,
-    completionTokens: usage?.completionTokens ?? usage?.outputTokens ?? 0
+    promptTokens: tokenTotal(usage?.promptTokens ?? usage?.inputTokens),
+    completionTokens: tokenTotal(usage?.completionTokens ?? usage?.outputTokens)
+  }
+}
+
+function normalizeGenerateResult(result: Record<string, any>): Record<string, any> {
+  if (!Array.isArray(result.content)) return result
+
+  const text = result.content
+    .filter((part: Record<string, any>) => part.type === 'text' && typeof part.text === 'string')
+    .map((part: Record<string, any>) => part.text)
+    .join('')
+  const toolCalls = result.content
+    .filter((part: Record<string, any>) => part.type === 'tool-call')
+    .map((part: Record<string, any>) => ({
+      toolCallType: 'function',
+      toolCallId: part.toolCallId,
+      toolName: normalizeToolName(part.toolName),
+      args: typeof part.input === 'string' ? part.input : JSON.stringify(part.input ?? {}),
+      ...(part.providerMetadata !== undefined
+        ? { experimental_providerMetadata: part.providerMetadata }
+        : {}),
+    }))
+
+  return {
+    ...result,
+    text: text || result.text,
+    toolCalls: toolCalls.length ? toolCalls : result.toolCalls,
+    finishReason: normalizeFinishReason(result.finishReason),
+    usage: normalizeUsage(result.usage),
   }
 }
 
@@ -238,8 +274,9 @@ export function withAiSdkV1StreamCompatibility(model: LanguageModelV1): Language
     supportsStructuredOutputs: source.supportsStructuredOutputs,
     supportedUrls: source.supportedUrls,
     supportsUrl: source.supportsUrl?.bind(source),
-    doGenerate(options: any) {
-      return source.doGenerate(callOptions(options))
+    async doGenerate(options: any) {
+      const result = await source.doGenerate(callOptions(options))
+      return source.specificationVersion === 'v3' ? normalizeGenerateResult(result) : result
     },
     async doStream(options: any) {
       const result = await source.doStream(callOptions(options))

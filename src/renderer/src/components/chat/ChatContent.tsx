@@ -1,12 +1,14 @@
 import { memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useI18n } from '@/i18n/useI18n'
 
 /**
  * memo：流式期间父组件每次 delta 都会重渲染整个消息列表，
  * 历史消息 content 不变时跳过 react-markdown 的整段重解析（audit P1）。
  */
 export const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
+  const { t } = useI18n('common')
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -20,9 +22,9 @@ export const MarkdownContent = memo(function MarkdownContent({ content }: { cont
               <button
                 className="janus-chat-copy-code"
                 onClick={() => navigator.clipboard.writeText(codeText).catch(() => {})}
-                title="复制"
+                title={t('common:chat.copy')}
               >
-                复制
+                {t('common:chat.copy')}
               </button>
               <code>{children}</code>
             </div>

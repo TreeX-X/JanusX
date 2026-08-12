@@ -5,6 +5,7 @@ export const SYSTEM_CHANNELS = {
   openEditor: 'editor-window:open', refreshEditor: 'editor-window:refresh', editorReady: 'editor-window:ready', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
   setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get',
   toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show',
+  getLanguage: 'app:getLanguage', setLanguage: 'app:setLanguage',
 } as const
 
 export interface RuntimeTelemetryRequest {
@@ -51,6 +52,8 @@ export interface WindowAPI {
 export interface SystemAPI {
   getDefaultShell(): Promise<string>; getPlatform(): Promise<NodeJS.Platform>
   getRuntimeTelemetry(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null>
+  getLanguage(): Promise<string | null>
+  setLanguage(lang: string): Promise<void>
 }
 export interface DesktopToastAPI {
   ready(): void; action(action: 'activate' | 'dismiss'): void

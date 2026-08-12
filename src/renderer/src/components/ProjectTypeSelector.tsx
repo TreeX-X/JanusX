@@ -7,6 +7,7 @@
 
 import type { ProjectType, ProjectTypeSchema } from '@/types/project'
 import { Check } from 'lucide-react'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectTypeSelector.module.css'
 
 interface ProjectTypeSelectorProps {
@@ -26,6 +27,7 @@ export function ProjectTypeSelector({
   detectedType,
   onChange,
 }: ProjectTypeSelectorProps) {
+  const { t } = useI18n('editor')
   const sorted = schemas.sort((a, b) => a.displayName.localeCompare(b.displayName))
 
   return (
@@ -45,7 +47,7 @@ export function ProjectTypeSelector({
             <div className={styles.typeContent}>
               <div className={styles.typeName}>
                 {schema.displayName}
-                {isAutoSelected && <span className={styles.autoBadge}>自动检测</span>}
+                {isAutoSelected && <span className={styles.autoBadge}>{t('editor:project.autoDetected')}</span>}
               </div>
               <div className={styles.typeDesc}>{schema.description}</div>
             </div>

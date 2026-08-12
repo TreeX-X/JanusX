@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import type { OpenFile } from '@/types'
 import { PanelRightClose, PanelRightOpen, Save, Search } from 'lucide-react'
 import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
+import { useI18n } from '@/i18n/useI18n'
 
 /*-- P4: 查看器栈（Monaco/HTML/Markdown viewer）按需分包，编辑器未打开文件时不加载 --*/
 const FileViewerContent = lazy(() =>
@@ -85,6 +86,7 @@ function TabItem({
 }
 
 export function FileEditor() {
+  const { t } = useI18n('editor')
   const findEditorRef = useRef<FindableEditor | null>(null)
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
   const openFiles = useEditorStore((s) => s.openFiles)
@@ -159,7 +161,7 @@ export function FileEditor() {
 
   if (!isVisible || openFiles.length === 0) return null
 
-  const title = activeFile ? activeFile.name : 'Editor'
+  const title = activeFile ? activeFile.name : t('editor:fileEditor.title')
 
   return (
     <FloatingPanel
@@ -189,8 +191,8 @@ export function FileEditor() {
           {canFind && (
             <button
               type="button"
-              aria-label="查找"
-              title="查找 (Ctrl+F)"
+              aria-label={t('editor:fileEditor.find')}
+              title={t('editor:fileEditor.findTitle')}
               onClick={() => void openEditorFind(findEditorRef.current)}
               className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#888] transition-colors hover:border-white/[0.14] hover:text-white"
             >
@@ -200,8 +202,8 @@ export function FileEditor() {
           {!isEmbedded && (
             <button
               type="button"
-              aria-label={'\u5d4c\u5165\u4e2d\u90e8\u5de5\u4f5c\u533a'}
-              title={'\u5d4c\u5165\u4e2d\u90e8\u5de5\u4f5c\u533a'}
+              aria-label={t('editor:fileEditor.embedToWorkspace')}
+              title={t('editor:fileEditor.embedToWorkspace')}
               onClick={() => setEmbedded(true)}
               className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
             >
@@ -211,8 +213,8 @@ export function FileEditor() {
           {isEmbedded && (
             <button
               type="button"
-              aria-label={'返回独立浮窗'}
-              title={'返回独立浮窗'}
+              aria-label={t('editor:fileEditor.detachToFloat')}
+              title={t('editor:fileEditor.detachToFloat')}
               onClick={() => void detachEditor()}
               className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
             >
@@ -222,8 +224,8 @@ export function FileEditor() {
           {canSave && (
             <button
               type="button"
-              aria-label={'\u4fdd\u5b58'}
-              title={'\u4fdd\u5b58'}
+              aria-label={t('editor:fileEditor.save')}
+              title={t('editor:fileEditor.save')}
               onClick={() => activeFileId && void saveFile(activeFileId)}
               className="flex h-7 w-7 items-center justify-center rounded transition-colors"
               style={{

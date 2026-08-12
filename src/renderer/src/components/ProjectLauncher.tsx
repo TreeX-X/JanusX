@@ -12,6 +12,7 @@ import {
   executeCurrentTask,
   projectService,
 } from '@/services/project'
+import { useI18n } from '@/i18n/useI18n'
 import ProjectSettings from './ProjectSettings'
 import styles from './ProjectLauncher.module.css'
 
@@ -30,6 +31,7 @@ interface ProjectLauncherProps {
  * 2. 运行模式 - 显示运行中的项目
  */
 export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, projectRelativePath = '', candidateConfig = null }: ProjectLauncherProps) {
+  const { t } = useI18n('editor')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const loadGuardRef = useRef(createLatestRequestGuard())
@@ -47,7 +49,7 @@ export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, proje
     await executeCurrentTask(isCurrent, () => projectService.readConfig(projectPath), {
       onSuccess: () => undefined,
       onError: (err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load config')
+        setError(err instanceof Error ? err.message : t('editor:project.loadConfigFailed'))
       },
       onFinally: () => setLoading(false),
     })
@@ -58,7 +60,7 @@ export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, proje
       <div className={styles.container}>
         <div className={styles.loadingState}>
           <div className={styles.spinner} />
-          <p>检测项目...</p>
+          <p>{t('editor:project.detectingProject')}</p>
         </div>
       </div>
     )
@@ -70,7 +72,7 @@ export function ProjectLauncher({ projectPath, workspaceId, workspaceRoot, proje
         <div className={styles.errorState}>
           <p className={styles.errorText}>{error}</p>
           <button onClick={() => loadConfig()} className={styles.retryBtn}>
-            重试
+            {t('common:action.retry')}
           </button>
         </div>
       </div>

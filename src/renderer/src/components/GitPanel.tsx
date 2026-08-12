@@ -2,34 +2,19 @@ import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useGitStore } from '@/stores/git'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from '@/i18n/useI18n'
+import type { TFunction } from 'i18next'
 import type { GitFileChange } from '@/types'
 import { ModalCloseButton } from './ModalCloseButton'
 
 type GitRemoteAction = 'push' | 'pull'
 const GIT_HISTORY_LIMIT = 100
 
-const REMOTE_ACTION_META: Record<
-  GitRemoteAction,
-  { title: string; actionLabel: string; description: string; hint: string }
-> = {
-  push: {
-    title: '确认 Push',
-    actionLabel: '确认 Push',
-    description: '将本地提交推送到远端分支。',
-    hint: '执行前请确认当前分支、远端目标和待推送提交均符合预期。',
-  },
-  pull: {
-    title: '确认 Pull',
-    actionLabel: '确认 Pull',
-    description: '从远端分支拉取并合并最新变更。',
-    hint: 'Pull 可能触发合并或冲突，请确认当前工作区状态允许拉取。',
-  },
-}
-
 export function GitPanel({ active = true }: { active?: boolean }) {
   const { status, commits, loading, error, fetchLog, stageFiles, unstageFiles, commitChanges, pushChanges, pullChanges } = useGitStore()
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const { t } = useI18n('git')
   const [commitMsg, setCommitMsg] = useState('')
   const [confirmAction, setConfirmAction] = useState<GitRemoteAction | null>(null)
 
@@ -104,7 +89,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   if (!cwd) {
     return (
       <div className="flex-1 flex items-center justify-center text-xs text-[#555]">
-        未加载工作区
+        {t('git:noWorkspace')}
       </div>
     )
   }
@@ -115,9 +100,16 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   const addedCount = status?.changes.filter((c) => c.status === 'A' || c.status === '??').length ?? 0
   const deletedCount = status?.changes.filter((c) => c.status === 'D').length ?? 0
 
-  const confirmMeta = confirmAction ? REMOTE_ACTION_META[confirmAction] : null
-  const branchName = status?.branch.name ?? '当前分支'
-  const upstreamName = status?.branch.upstream ?? '未设置 upstream'
+  const remoteMeta = confirmAction
+    ? {
+        title: t(`git:remote.${confirmAction}.title`),
+        actionLabel: t(`git:remote.${confirmAction}.actionLabel`),
+        description: t(`git:remote.${confirmAction}.description`),
+        hint: t(`git:remote.${confirmAction}.hint`),
+      }
+    : null
+  const branchName = status?.branch.name ?? t('git:branch.currentFallback')
+  const upstreamName = status?.branch.upstream ?? t('git:branch.upstreamUnset')
 
   return (
     <>
@@ -157,15 +149,15 @@ export function GitPanel({ active = true }: { active?: boolean }) {
       <div className="flex gap-3 px-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#e5c07b' }} />
-          <span className="text-[#888]">{modifiedCount} 修改</span>
+          <span className="text-[#888]">{t('git:statusSummary.modified', { count: modifiedCount })}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ec9b0' }} />
-          <span className="text-[#888]">{addedCount} 添加</span>
+          <span className="text-[#888]">{t('git:statusSummary.added', { count: addedCount })}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#e06c75' }} />
-          <span className="text-[#888]">{deletedCount} 删除</span>
+          <span className="text-[#888]">{t('git:statusSummary.deleted', { count: deletedCount })}</span>
         </div>
       </div>
 
@@ -184,13 +176,13 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               className="px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase flex justify-between items-center"
               style={{ color: '#555', background: 'rgba(255, 255, 255, 0.02)' }}
             >
-              <span>暂存区</span>
+              <span>{t('git:staged.title')}</span>
               <button
                 onClick={handleUnstageAll}
                 className="text-[10px] normal-case tracking-normal font-normal transition-colors hover:text-[#ff7830]"
                 style={{ color: '#666' }}
               >
-                全部取消暂存
+                {t('git:staged.unstageAll')}
               </button>
             </div>
             {stagedChanges.map((file) => (
@@ -206,13 +198,13 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               className="px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase flex justify-between items-center"
               style={{ color: '#555', background: 'rgba(255, 255, 255, 0.02)' }}
             >
-              <span>更改</span>
+              <span>{t('git:changes.title')}</span>
               <button
                 onClick={handleStageAll}
                 className="text-[10px] normal-case tracking-normal font-normal transition-colors hover:text-[#ff7830]"
                 style={{ color: '#666' }}
               >
-                全部暂存
+                {t('git:changes.stageAll')}
               </button>
             </div>
             {unstagedChanges.map((file) => (
@@ -224,7 +216,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
         {status?.clean && (
           <div className="flex flex-col items-center justify-center py-8 gap-2 text-[#555]">
             <div className="w-5 h-5 rounded-full border border-[#333] flex items-center justify-center text-[10px]">✓</div>
-            <span>工作区干净</span>
+            <span>{t('git:clean')}</span>
           </div>
         )}
 
@@ -235,7 +227,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               className="px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase"
               style={{ color: '#555', background: 'rgba(255, 255, 255, 0.02)' }}
             >
-              提交历史
+              {t('git:history.title')}
             </div>
             {commits.map((commit) => (
               <div
@@ -251,7 +243,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                   <div className="flex gap-2 mt-0.5 text-[10px] text-[#555]">
                     <span>{commit.shortHash}</span>
                     <span>{commit.author}</span>
-                    <span>{formatDate(commit.date)}</span>
+                    <span>{formatDate(commit.date, t)}</span>
                   </div>
                 </div>
               </div>
@@ -271,7 +263,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             value={commitMsg}
             onChange={(e) => setCommitMsg(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCommit()}
-            placeholder="提交消息..."
+            placeholder={t('git:commit.placeholder')}
             className="flex-1 h-7 rounded px-2.5 text-xs transition-colors focus:outline-none focus:bg-[rgba(255,255,255,0.05)] focus:border-[rgba(255,120,48,0.4)]"
             style={{
               background: 'rgba(255, 255, 255, 0.04)',
@@ -289,7 +281,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               color: '#ff7830',
             }}
           >
-            提交
+            {t('git:commit.button')}
           </button>
         </div>
         <div className="flex gap-1.5 mt-1.5">
@@ -299,7 +291,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             disabled={loading}
             className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[#888] cursor-pointer transition-[background,border-color,color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[#ffb27d] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[#888] disabled:hover:shadow-none"
           >
-            Push
+            {t('git:remote.pushButton')}
           </button>
           <button
             type="button"
@@ -307,12 +299,12 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             disabled={loading}
             className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[#888] cursor-pointer transition-[background,border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[#ffb27d] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[#888] disabled:hover:shadow-none"
           >
-            Pull
+            {t('git:remote.pullButton')}
           </button>
         </div>
       </div>
     </div>
-    {active && confirmMeta && createPortal(
+    {active && remoteMeta && createPortal(
       <div
         className="fixed inset-0 flex items-center justify-center"
         style={{
@@ -344,14 +336,14 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               style={{ fontSize: 13, color: '#fff', gap: 6 }}
             >
               <span style={{ color: '#ff7830' }}>{confirmAction === 'push' ? '↑' : '↓'}</span>
-              {confirmMeta.title}
+              {remoteMeta.title}
             </div>
             <ModalCloseButton onClose={() => setConfirmAction(null)} />
           </div>
 
           <div style={{ padding: '16px 16px 18px' }}>
             <div style={{ fontSize: 12, color: '#999', lineHeight: 1.6 }}>
-              {confirmMeta.description}
+              {remoteMeta.description}
             </div>
             <div
               style={{
@@ -366,10 +358,10 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               }}
             >
               <div>
-                分支 <strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{branchName}</strong>
+                <span>{t('git:remote.branchLabel')} </span><strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{branchName}</strong>
               </div>
               <div>
-                远端 <strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{upstreamName}</strong>
+                <span>{t('git:remote.remoteLabel')} </span><strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{upstreamName}</strong>
               </div>
             </div>
             <div
@@ -384,7 +376,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                 lineHeight: 1.5,
               }}
             >
-              {confirmMeta.hint}
+              {remoteMeta.hint}
             </div>
           </div>
 
@@ -417,7 +409,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                 e.currentTarget.style.color = '#999'
               }}
             >
-              取消
+              {t('common:action.cancel')}
             </button>
             <button
               type="button"
@@ -442,7 +434,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                 e.currentTarget.style.borderColor = 'rgba(255,120,48,0.3)'
               }}
             >
-              {loading ? '执行中...' : confirmMeta.actionLabel}
+              {loading ? t('git:remote.executing') : remoteMeta.actionLabel}
             </button>
           </div>
         </div>
@@ -483,7 +475,7 @@ function GitFileItem({ file, onToggle }: { file: GitFileChange; onToggle: (file:
   )
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, t: TFunction): string {
   try {
     const d = new Date(dateStr)
     const now = new Date()
@@ -492,10 +484,10 @@ function formatDate(dateStr: string): string {
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
 
-    if (diffMins < 1) return '刚刚'
-    if (diffMins < 60) return `${diffMins}分钟前`
-    if (diffHours < 24) return `${diffHours}小时前`
-    if (diffDays < 7) return `${diffDays}天前`
+    if (diffMins < 1) return t('git:time.justNow')
+    if (diffMins < 60) return t('git:time.minutesAgo', { count: diffMins })
+    if (diffHours < 24) return t('git:time.hoursAgo', { count: diffHours })
+    if (diffDays < 7) return t('git:time.daysAgo', { count: diffDays })
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
   } catch {
     return dateStr

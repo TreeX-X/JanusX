@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useBrowserStore } from '@/stores/browser'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useI18n } from '@/i18n/useI18n'
 import {
   activateBrowserTab,
   closeBrowserTab,
@@ -41,6 +42,7 @@ interface BrowserSurfaceProps {
  * 网页本体是主进程持有的 WebContentsView，始终盖在 body 占位层上方。
  */
 export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, onRequestEmbed }: BrowserSurfaceProps) {
+  const { t } = useI18n('common')
   const surface = useBrowserStore((s) => s.surfaces[surfaceId])
   /*-- tab 拖拽期间隐藏原生视图：WebContentsView 盖在 DOM 之上会吞掉 dragover，落点区只有先让位才能命中 --*/
   const tabDragInFlight = useWorkspaceStore((s) => s.tabDragInFlight)
@@ -122,7 +124,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   }, [addressDraft, activeTab, surfaceId])
 
   if (missing) {
-    return <div className={styles.missing}>Browser surface 已关闭</div>
+    return <div className={styles.missing}>{t('common:browser.surfaceClosed')}</div>
   }
 
   const isEmpty = !surface || surface.tabs.length === 0
@@ -141,14 +143,14 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
                 aria-selected={isActive}
                 data-active={isActive}
                 className={styles.tab}
-                title={tab.title || tab.url || '新标签页'}
+                title={tab.title || tab.url || t('common:browser.newTab')}
                 onClick={() => void activateBrowserTab(surfaceId, tab.tabId)}
               >
                 {tab.isLoading ? <Loader2 size={11} className={styles.spin} /> : <Globe size={11} />}
-                <span className={styles.tabTitle}>{tab.title || tab.url || '新标签页'}</span>
+                <span className={styles.tabTitle}>{tab.title || tab.url || t('common:browser.newTab')}</span>
                 <span
                   className={styles.tabClose}
-                  title="关闭标签页"
+                  title={t('common:browser.closeTab')}
                   onClick={(event) => {
                     event.stopPropagation()
                     void closeBrowserTab(surfaceId, tab.tabId)
@@ -162,8 +164,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
           <button
             type="button"
             className={styles.iconBtn}
-            title="新建标签页"
-            aria-label="新建标签页"
+            title={t('common:browser.openNewTab')}
+            aria-label={t('common:browser.openNewTab')}
             onClick={() => void openBrowserTab(surfaceId)}
           >
             <Plus size={12} />
@@ -173,8 +175,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         <button
           type="button"
           className={styles.iconBtn}
-          title="后退"
-          aria-label="后退"
+          title={t('common:browser.back')}
+          aria-label={t('common:browser.back')}
           disabled={!activeTab?.canGoBack}
           onClick={() => activeTab && void browserTabGoBack(surfaceId, activeTab.tabId)}
         >
@@ -183,8 +185,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         <button
           type="button"
           className={styles.iconBtn}
-          title="前进"
-          aria-label="前进"
+          title={t('common:browser.forward')}
+          aria-label={t('common:browser.forward')}
           disabled={!activeTab?.canGoForward}
           onClick={() => activeTab && void browserTabGoForward(surfaceId, activeTab.tabId)}
         >
@@ -193,8 +195,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         <button
           type="button"
           className={styles.iconBtn}
-          title="刷新"
-          aria-label="刷新"
+          title={t('common:browser.reload')}
+          aria-label={t('common:browser.reload')}
           disabled={!activeTab}
           onClick={() => activeTab && void reloadBrowserTab(surfaceId, activeTab.tabId)}
         >
@@ -204,8 +206,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         <input
           className={styles.address}
           value={addressDraft}
-          placeholder="输入网址，回车打开"
-          aria-label="地址栏"
+          placeholder={t('common:browser.addressPlaceholder')}
+          aria-label={t('common:browser.addressAria')}
           spellCheck={false}
           onChange={(event) => setAddressDraft(event.target.value)}
           onFocus={() => setAddressFocused(true)}
@@ -221,7 +223,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         <span
           className={styles.agentDot}
           data-active={surface?.agentControlled ?? false}
-          title={surface?.agentControlled ? 'Agent 控制中' : 'Agent 未接管'}
+          title={surface?.agentControlled ? t('common:browser.agentActive') : t('common:browser.agentIdle')}
         >
           Agent
         </span>
@@ -230,8 +232,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
           <button
             type="button"
             className={styles.iconBtn}
-            title="弹出为独立窗口"
-            aria-label="弹出为独立窗口"
+            title={t('common:browser.popOut')}
+            aria-label={t('common:browser.popOut')}
             onClick={onRequestPopOut}
           >
             <ExternalLink size={12} />
@@ -241,8 +243,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
           <button
             type="button"
             className={styles.iconBtn}
-            title="嵌入主窗口"
-            aria-label="嵌入主窗口"
+            title={t('common:browser.embedToMain')}
+            aria-label={t('common:browser.embedToMain')}
             onClick={onRequestEmbed}
           >
             <PanelRightOpen size={12} />
@@ -253,9 +255,9 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
       <div ref={bodyRef} className={styles.body}>
         {isEmpty && (
           <div className={styles.empty}>
-            <span>没有打开的标签页</span>
+            <span>{t('common:browser.noTabs')}</span>
             <button type="button" onClick={() => void openBrowserTab(surfaceId)}>
-              新建标签页
+              {t('common:browser.openNewTab')}
             </button>
           </div>
         )}

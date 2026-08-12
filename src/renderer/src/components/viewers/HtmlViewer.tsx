@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
 import { MonacoViewer } from './MonacoViewer'
 import type { FindableEditor } from '@/lib/editor-find'
+import { useI18n } from '@/i18n/useI18n'
 
 interface HtmlViewerProps {
   content: string
@@ -11,6 +12,7 @@ interface HtmlViewerProps {
 }
 
 export function HtmlViewer({ content, originalContent, onChange, onEditorMount }: HtmlViewerProps) {
+  const { t } = useI18n('editor')
   const [splitRatio, setSplitRatio] = useState(50)
   const [scriptsEnabled, setScriptsEnabled] = useState(false)
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
@@ -78,7 +80,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
         }}
       >
         <span className="uppercase tracking-wider" style={{ fontSize: 10, color: '#555' }}>
-          HTML
+          {t('editor:htmlViewer.htmlLabel')}
         </span>
         <div className="flex items-center gap-2">
           {showPreview && (
@@ -97,7 +99,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
                 e.currentTarget.style.background = 'rgba(255, 120, 48, 0.06)'
               }}
             >
-              {scriptsEnabled ? '禁用脚本' : '启用脚本'}
+              {scriptsEnabled ? t('editor:htmlViewer.disableScripts') : t('editor:htmlViewer.enableScripts')}
             </button>
           )}
           <PreviewModeToggle value={previewMode} onChange={setPreviewMode} />
@@ -117,7 +119,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
                 borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
               }}
             >
-              EDITOR
+              {t('editor:htmlViewer.editorLabel')}
             </div>
             <div className="flex-1 overflow-hidden" style={{ height: '100%', position: 'relative' }}>
               <MonacoViewer
@@ -163,7 +165,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
               }}
             >
               <span className="uppercase tracking-wider" style={{ fontSize: 10, color: '#555' }}>
-                PREVIEW
+                {t('editor:htmlViewer.previewLabel')}
               </span>
             </div>
             <div className="flex-1 overflow-hidden" style={{ height: '100%', position: 'relative' }}>
@@ -172,7 +174,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
                 sandbox={sandboxValue}
                 className="border-0"
                 style={{ background: '#ffffff', position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-                title="HTML Preview"
+                title={t('editor:htmlViewer.iframeTitle')}
               />
             </div>
           </div>

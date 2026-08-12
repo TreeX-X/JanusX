@@ -1,0 +1,123 @@
+{
+  "status": {
+    "running": "Running",
+    "wait": "Waiting",
+    "error": "Error"
+  },
+  "model": {
+    "na": "model n/a",
+    "detecting": "detecting model"
+  },
+  "telemetry": {
+    "quality": {
+      "authoritative": "Exact",
+      "derived": "Derived",
+      "declared": "Configured",
+      "estimated": "Estimated",
+      "unknown": "Unknown"
+    },
+    "binding": {
+      "exact": "Exact",
+      "pending": "Pending"
+    },
+    "contextUnknown": "ctx unknown",
+    "sessionSuffix": "session",
+    "compactionNotReported": "Not reported",
+    "sourceUnknown": "unknown",
+    "windowSourceRuntime": "Runtime telemetry"
+  },
+  "context": {
+    "popoverTitle": "Runtime context",
+    "row": {
+      "runtimeWindow": "Runtime window",
+      "modelCapacity": "Model capacity",
+      "sessionInput": "Session input",
+      "sessionOutput": "Session output",
+      "cacheRead": "Cache read",
+      "cacheWrite": "Cache write",
+      "sessionTotal": "Session total",
+      "sessionBinding": "Session binding",
+      "compactions": "Context compactions",
+      "modelChanged": "Model changed",
+      "usageSource": "Usage source",
+      "windowSource": "Window source",
+      "updated": "Updated"
+    }
+  },
+  "error": {
+    "unknown": "Unknown error"
+  },
+  "sessions": {
+    "countSuffix": "sessions"
+  },
+  "engine": {
+    "manual": "Manual",
+    "shell": "Shell",
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "opencode": "OpenCode"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}} h ago"
+  },
+  "checkpoint": {
+    "filterSource": "Filter source",
+    "filterAll": "All sources in workspace",
+    "create": "+ Create checkpoint",
+    "manualDefault": "Manual checkpoint",
+    "loading": "Loading...",
+    "empty": "No checkpoints",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "promptMeta": "{{lines}} lines · {{chars}} chars",
+    "changedFiles": "{{count}} changed files",
+    "diff": "Diff",
+    "restore": "Restore here",
+    "diffPreview": "Diff preview",
+    "diffEmpty": "No changed files",
+    "diffLoading": "Loading diff...",
+    "branch": "branch: {{branch}}",
+    "confirmTitle": "Confirm restore",
+    "confirmBody": "Workspace will be restored to #{{index}}. Checkpoints with higher indices will be removed from the list.",
+    "targetState": "Target state",
+    "replaceNotice": "The current workspace will be replaced with the file state recorded at this checkpoint.",
+    "pruneWarn": "{{count}} subsequent checkpoint(s) will be removed, keeping this checkpoint and prior history.",
+    "conflictFiles": "{{count}} conflict file(s)",
+    "conflictBadge": "Conflicts",
+    "conflictHint": "Conflict files need manual handling.",
+    "restoreDoneHint": "The right list refreshes automatically after restore.",
+    "confirmRestore": "Confirm restore"
+  },
+  "provider": {
+    "claude": "Claude",
+    "codex": "Codex",
+    "opencode": "OpenCode",
+    "shell": "Shell"
+  },
+  "selector": {
+    "title": "Select terminal type",
+    "hint": "Select a type to create a terminal automatically.",
+    "starting": "Starting…"
+  },
+  "tab": {
+    "closeTerminal": "Close terminal",
+    "killCurrentTerminal": "End current terminal",
+    "collapseLayout": "End layout",
+    "newBrowser": "New Browser",
+    "closeBrowser": "Close Browser",
+    "closeChat": "Close Chat",
+    "noActiveTerminal": "No active terminal",
+    "terminalRuntime": "Terminal Runtime",
+    "noTelemetryData": "No terminal runtime data",
+    "focusWorkspaceTitle": "Focused terminal workspace: {{name}} · {{path}}",
+    "runtimePanelToggle": "Toggle Runtime status panel",
+    "janusChatFallback": "Janus Chat",
+    "runtimeAria": "Runtime telemetry",
+    "tokenSummaryTitle": "Input {{input}} · Output {{output}}"
+  },
+  "paneTree": {
+    "waitingTerminal": "Waiting for terminal..."
+  }
+}

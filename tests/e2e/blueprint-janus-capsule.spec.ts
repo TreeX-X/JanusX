@@ -3,6 +3,7 @@ import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
+import { createDesktopTestEnv } from './desktop-test-env'
 
 type TestWindow = Window & { electron: { workspace: WorkspaceAPI } }
 
@@ -20,7 +21,7 @@ test('JanusX capsule opens blueprint conversation without resizing the canvas', 
 
     application = await electron.launch({
       args: [entry, `--user-data-dir=${userDataDir}`],
-      env: { ...process.env, ELECTRON_RENDERER_URL: '', NODE_ENV: 'production' },
+      env: createDesktopTestEnv(root),
     })
     const page = await application.firstWindow({ timeout: 30_000 })
     await page.setViewportSize({ width: 1280, height: 820 })
@@ -29,7 +30,7 @@ test('JanusX capsule opens blueprint conversation without resizing the canvas', 
       workspacePath,
     )
     await page.reload()
-    await page.getByRole('button', { name: /Open Blueprint Workbench/ }).click()
+    await page.getByRole('button', { name: /打开蓝图工作台|Open Blueprint Workbench/ }).click()
     await expect(page.getByRole('button', { name: /新建/ })).toBeVisible()
 
     await page.getByRole('button', { name: /新建/ }).click()
@@ -48,7 +49,7 @@ test('JanusX capsule opens blueprint conversation without resizing the canvas', 
     await expect(capsule).toHaveAttribute('aria-expanded', 'true')
     const conversation = page.getByRole('complementary', { name: 'Janus Copilot 控制台' })
     await expect(conversation).toBeVisible()
-    await expect(page.getByText('COPILOT CONTROL', { exact: true })).toBeVisible()
+    await expect(page.getByText(/^(COPILOT CONTROL|COPILOT 控制台)$/)).toBeVisible()
     const conversationBoxBeforeDetail = await conversation.boundingBox()
 
     await page.locator('.react-flow__node').first().dblclick()

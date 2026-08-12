@@ -1,0 +1,151 @@
+{
+  "action": {
+    "confirm": "确认",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "retry": "重试",
+    "close": "关闭",
+    "ok": "确定",
+    "yes": "是",
+    "no": "否"
+  },
+  "status": {
+    "loading": "加载中…",
+    "unknown": "未知",
+    "error": "错误",
+    "ready": "就绪"
+  },
+  "unit": {
+    "tokens": "tokens"
+  },
+  "workspace": {
+    "label": "工作区",
+    "ariaLabel": "工作区侧栏",
+    "add": "添加工作区",
+    "collapse": "收起侧栏",
+    "collapseAria": "收起工作区侧栏",
+    "expand": "展开侧栏",
+    "expandAria": "展开工作区侧栏",
+    "empty": "暂无工作区",
+    "delete": {
+      "title": "删除工作区",
+      "confirm": "确认删除工作区 {{name}} 吗？此操作不会删除磁盘上的文件，但会移除该工作区下的所有终端会话和还原点记录。",
+      "checkpointWarning": "终端快照和 Checkpoint 数据将被清除"
+    },
+    "terminal": {
+      "add": "添加终端",
+      "empty": "暂无终端"
+    },
+    "runConfiguration": "运行配置…",
+    "renameGroup": "重命名分组…",
+    "removeFromGroup": "移出分组",
+    "deleteWorkspace": "删除工作区",
+    "ungroup": "解除分组",
+    "groupExpand": "展开分组 {{name}}",
+    "groupCollapse": "折叠分组 {{name}}",
+    "groupNameAria": "分组名称",
+    "groupCountTitle": "{{name}} · {{count}} 个工作区",
+    "wsAriaLabel": "{{name}}，拖动可排序或分组，右键打开运行配置",
+    "wsTitle": "{{prefix}}{{name}} · 拖动排序或分组 · 右键打开运行配置",
+    "terminalListCollapse": "折叠 {{name}} 终端列表 ({{count}})",
+    "terminalListExpand": "展开 {{name}} 终端列表 ({{count}})",
+    "terminalListCollapseShort": "折叠终端列表 ({{count}})",
+    "terminalListExpandShort": "展开终端列表 ({{count}})",
+    "terminalCountTitle": "{{total}} 个终端 · {{running}} 个运行中{{errors}}",
+    "terminalCountErrorsSuffix": " · {{count}} 个异常",
+    "terminalStatusTitle": "终端状态：{{label}}",
+    "presetIconAlt": "{{preset}} 图标",
+    "launcherTitle": "工作区启动配置"
+  },
+  "browser": {
+    "missingSurfaceId": "Missing surfaceId",
+    "title": "JanusX Browser",
+    "embedToMain": "嵌入主窗口",
+    "surfaceClosed": "Browser surface 已关闭",
+    "newTab": "新标签页",
+    "closeTab": "关闭标签页",
+    "openNewTab": "新建标签页",
+    "back": "后退",
+    "forward": "前进",
+    "reload": "刷新",
+    "addressPlaceholder": "输入网址，回车打开",
+    "addressAria": "地址栏",
+    "agentActive": "Agent 控制中",
+    "agentIdle": "Agent 未接管",
+    "popOut": "弹出为独立窗口",
+    "noTabs": "没有打开的标签页"
+  },
+  "chat": {
+    "copy": "复制"
+  },
+  "statusBar": {
+    "waitingWorkspace": "等待加载工作区",
+    "workspaceLoaded": "已加载工作区",
+    "waitingTerminal": "等待选择终端",
+    "terminalActiveFocused": "{{name}} · {{status}}",
+    "terminalActiveNoFocus": "{{count}} 个终端 · 未聚焦",
+    "blueprintRunning": "蓝图画布引擎运行中",
+    "ready": "就绪"
+  },
+  "titlebar": {
+    "settings": "Settings",
+    "settingsReveal": ":: SETTINGS",
+    "closeConfirmTitle": "确认关闭",
+    "closeConfirmDesc": "确定要退出 JanusX 吗？未保存的内容可能丢失。",
+    "closeConfirmExit": "退出"
+  },
+  "rightDock": {
+    "dockAria": "右侧工具 Dock",
+    "resizeAria": "调整右侧工具面板宽度",
+    "collapseAria": "折叠右侧工具面板",
+    "collapseTitle": "折叠面板"
+  },
+  "rightTool": {
+    "openTabsAria": "已打开的右侧工具",
+    "closeAria": "关闭 {{title}}",
+    "closeTitle": "关闭 {{title}}",
+    "railAria": "右侧工具",
+    "railStateActive": "当前",
+    "railStateOpen": "已打开",
+    "railStateClosed": "已关闭",
+    "railButtonAria": "{{label}}，{{state}}",
+    "toolLoadFailed": "工具内容加载失败"
+  },
+  "quantumTopology": {
+    "titleWithName": "量子拓扑图谱 · {{name}} ({{hexTag}})",
+    "titleNoName": "量子拓扑节点 ({{hexTag}})",
+    "ariaLabel": "工作区量子拓扑图谱"
+  },
+  "holdToConfirm": {
+    "aria": "{{label}}，长按确认",
+    "title": "{{label}}（长按确认）"
+  },
+  "select": {
+    "empty": "（无选项）"
+  },
+  "errorBoundary": {
+    "workbenchFailed": "工作区渲染已中断",
+    "remount": "重新挂载"
+  },
+  "emptyWorkspace": {
+    "title": "开始使用 JanusX",
+    "chooseFolder": "选择工作区文件夹"
+  },
+  "workbench": {
+    "blueprint": "蓝图",
+    "knowledge": "知识库",
+    "open": "打开",
+    "close": "关闭",
+    "switcherAria": "工作台切换器",
+    "titleAction": "{{action}}{{label}}工作台",
+    "titleWithPending": "{{action}}{{label}}工作台 · 待处理 {{count}} 项",
+    "titleWithFocus": "{{action}}{{label}}工作台 · 节点聚焦中",
+    "badgeTitle": "{{count}} 项待处理需求"
+  },
+  "trafficLight": {
+    "close": "关闭",
+    "minimize": "最小化",
+    "maximize": "最大化"
+  }
+}

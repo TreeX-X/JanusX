@@ -107,7 +107,7 @@ describe('file explorer delete confirmation', () => {
 
     if (route === 'Cancel') {
       const cancelButton = findElement(dialog, (element) =>
-        element.type === 'button' && Children.toArray(element.props.children).join('') === '取消')
+        element.type === 'button' && Children.toArray(element.props.children).join('') === 'common:action.cancel')
       ;(cancelButton.props.onClick as () => void)()
     } else if (route === 'Escape') {
       const modal = findElement(dialog, (element) => element.props.role === 'dialog')

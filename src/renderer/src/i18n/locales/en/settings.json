@@ -1,0 +1,227 @@
+{
+  "title": "Settings",
+  "brand": "Settings",
+  "tab": {
+    "general": {
+      "title": "General",
+      "subtitle": "General · Language and appearance preferences",
+      "nav": "General",
+      "navMeta": "Language"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "Notifications · Agent terminal task completion and failure alerts",
+      "nav": "Notifications",
+      "navMeta": "System reminders"
+    },
+    "knowledge": {
+      "title": "Knowledge",
+      "subtitle": "Knowledge Engine · Capture toggles and observation recording",
+      "nav": "Knowledge",
+      "navMeta": "Memory capture"
+    },
+    "llm": {
+      "title": "LLM Engines",
+      "subtitle": "LLM Engine · Provider credentials, default model and connection test",
+      "nav": "LLM Engines",
+      "navMeta": "Providers"
+    },
+    "models": {
+      "title": "Model Catalog",
+      "subtitle": "Model Catalog · Browse model capabilities, pricing and context info",
+      "nav": "Model Catalog",
+      "navMeta": "Models"
+    }
+  },
+  "general": {
+    "language": {
+      "label": "Interface language",
+      "help": "Takes effect immediately, persists across restarts",
+      "followSystem": "Follow system"
+    }
+  },
+  "footer": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "reset": "Reset",
+    "save": "Save"
+  },
+  "notification": {
+    "section": {
+      "desktop": "Desktop Notifications",
+      "runtime": "Runtime threshold",
+      "failure": "Failure Details",
+      "remote": "Remote Notify",
+      "feishu": "Feishu"
+    },
+    "toggle": {
+      "desktop": {
+        "label": "Enable desktop notifications",
+        "hint": "Notify via system notification center after Agent terminal tasks finish."
+      },
+      "onComplete": {
+        "label": "Notify on completion",
+        "hint": "Successfully completed Agent sessions notify after the runtime threshold."
+      },
+      "onFailure": {
+        "label": "Notify on failure",
+        "hint": "Failure notifications are independently controlled for higher-priority alerts."
+      },
+      "includeErrorMessage": {
+        "label": "Include short error message",
+        "hint": "Long or noisy Agent output is truncated before entering system notifications."
+      },
+      "remote": {
+        "label": "Enable remote notifications",
+        "hint": "Send alerts to enabled remote channels on completion, failure, or pending action."
+      },
+      "remoteComplete": {
+        "label": "Send on completion",
+        "hint": "Successfully completed Agent sessions send via remote threshold."
+      },
+      "remoteFailure": {
+        "label": "Send on failure",
+        "hint": "Failure events send immediately, bypassing the completion toggle."
+      },
+      "remoteAttention": {
+        "label": "Send on pending action",
+        "hint": "Attention events waiting for authorization or input send to remote channels."
+      },
+      "remoteApproval": {
+        "label": "Send on approval request",
+        "hint": "Authorization requests send as a distinct type for future approval buttons."
+      },
+      "feishu": {
+        "label": "Enable Feishu notifications",
+        "hint": "Use a Feishu group robot webhook or a custom app (app_id/app_secret) to send card messages."
+      },
+      "feishuControl": {
+        "label": "Enable Feishu bidirectional control",
+        "hint": "App mode only; message and signed card actions only accept whitelisted open_ids."
+      }
+    },
+    "row": {
+      "completeThreshold": {
+        "label": "Notify after terminal runs for",
+        "hint": "Set to 0 seconds to notify on every completed Agent task."
+      },
+      "errorMessageLength": {
+        "label": "Error message length",
+        "hint": "Allowed range is 40 to 500 characters."
+      },
+      "remoteCompleteThreshold": {
+        "label": "Remote completion threshold",
+        "hint": "Only applies to completion events; failure and pending send immediately."
+      },
+      "dedupeWindow": {
+        "label": "Deduplication window",
+        "hint": "The same event will not be sent twice to the same provider within this window."
+      },
+      "sendTimeout": {
+        "label": "Send timeout",
+        "hint": "Provider fails after timeout without blocking local notification flow."
+      },
+      "feishuMode": {
+        "label": "Send mode",
+        "hint": "Webhook for group robots; App for custom apps sending to chat/open_id."
+      },
+      "receiveIdType": {
+        "label": "Receive ID Type",
+        "hint": "Target ID type, must match the receive_id below."
+      },
+      "controlStatus": {
+        "label": "Inbound control status",
+        "unavailable": "Status unavailable"
+      },
+      "allowedOpenIds": {
+        "label": "Allowed operator open_ids",
+        "hint": "One ou_... per line; empty, invalid, and duplicate values are removed on save."
+      },
+      "groupPromptPrefix": {
+        "label": "Group chat prompt prefix",
+        "hint": "Group chats must @mention the robot or use this non-reserved /name prefix."
+      },
+      "bindingTtl": {
+        "label": "Binding validity",
+        "hint": "Feishu-session-to-terminal bindings expire automatically after this duration."
+      },
+      "cardActionTtl": {
+        "label": "Card action validity",
+        "hint": "Signed buttons cannot be used after this time."
+      },
+      "auditRetentionDays": {
+        "label": "Audit retention period",
+        "hint": "Companion audit JSONL records older than this are cleaned up."
+      },
+      "maxFollowUpLength": {
+        "label": "Max follow-up length",
+        "hint": "Prompts exceeding this limit are rejected before submitting to the terminal."
+      },
+      "webhookUrl": {
+        "label": "Webhook URL",
+        "hint": "Feishu group robot webhook URL."
+      },
+      "appId": {
+        "label": "App ID",
+        "hint": "Feishu Open Platform custom app app_id."
+      },
+      "appSecret": {
+        "label": "App Secret",
+        "hint": "Leave blank to keep the saved secret; a new value replaces it."
+      },
+      "receiveId": {
+        "label": "Receive ID",
+        "hint": "Feishu chat_id or open_id."
+      }
+    },
+    "unit": {
+      "sec": "sec",
+      "chars": "chars",
+      "min": "min",
+      "days": "days"
+    },
+    "option": {
+      "webhook": "Webhook",
+      "app": "App",
+      "chatId": "chat_id",
+      "openId": "open_id"
+    },
+    "action": {
+      "refreshFeishu": "Refresh Feishu control status",
+      "testFeishu": "Test Feishu notification",
+      "testing": "Testing..."
+    },
+    "test": {
+      "success": "Feishu test notification sent",
+      "failure": "Feishu test notification failed"
+    },
+    "controlNotice": "Webhook supports notifications only. Direct text must bind a terminal first; group chats must @mention the robot or use a prefix. Remote control never exposes an arbitrary shell.",
+    "error": {
+      "controlUnavailable": "Unable to read Feishu control status",
+      "load": "Failed to load notification settings",
+      "save": "Failed to save notification settings"
+    }
+  },
+  "knowledge": {
+    "section": {
+      "capture": "Knowledge capture"
+    },
+    "toggle": {
+      "enable": {
+        "label": "Enable knowledge recording",
+        "hint": "When enabled, JanusX writes hook-driven Agent conversations and task events into the current workspace knowledge base."
+      }
+    },
+    "row": {
+      "boundary": {
+        "label": "Capture boundary",
+        "hint": "AI terminal records rely only on hook lifecycle events, never raw terminal input. Disabling notifications does not disable background hook processing."
+      }
+    },
+    "error": {
+      "load": "Failed to load knowledge settings",
+      "save": "Failed to save knowledge settings"
+    }
+  }
+}

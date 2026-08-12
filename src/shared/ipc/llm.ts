@@ -31,6 +31,9 @@ export interface ChatRequest {
 export interface ChatStreamRequest extends ChatRequest { requestId: string }
 export interface ChatStreamEvent { requestId: string; delta?: string; done?: boolean; error?: string }
 
+/** Tool-call status surfaced to the chat UI. Kept as a literal union so cards can branch on it. */
+export type ChatToolTraceStatus = 'requested' | 'approval' | 'running' | 'completed' | 'failed' | 'cancelled'
+
 /** One executed workspace tool call, replayed into the next turn's history so the model keeps its working context. */
 export interface ChatToolTraceEntry {
   toolName: string
@@ -38,6 +41,16 @@ export interface ChatToolTraceEntry {
   status: string
   /** Compact human/model-readable outcome, e.g. "read src/main.ts (sha256 ab12…, 2.1KB)". Bounded. */
   summary: string
+  /** Stable id of the assistant turn this call belongs to. Lets cards be inlined under the right message. */
+  turnId?: string
+  /** Short display digest of the tool arguments (path/query/etc), already redacted. */
+  argsDigest?: string
+  /** Short display digest of the tool result (hash/count/etc), already redacted. */
+  resultDigest?: string
+  /** Error detail shown when the card is expanded; already redacted. */
+  errorDetail?: string
+  startedAt?: number
+  completedAt?: number
 }
 export interface ChatToolTraceEvent { requestId: string; entries: ChatToolTraceEntry[] }
 

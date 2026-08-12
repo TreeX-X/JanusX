@@ -66,14 +66,20 @@ function conversationController(overrides: Partial<UseJanusChatReturn> = {}): Us
 }
 
 describe('Janus resource scope UI', () => {
-  it('exposes clear and edit-again actions for the current conversation', () => {
+  it('exposes message metadata and current-conversation actions', () => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,
-      messages: [{ id: 'prompt-1', role: 'user', content: 'Revise this prompt', timestamp: 1 }],
+      messages: [
+        { id: 'prompt-1', role: 'user', content: 'Revise this prompt', timestamp: 1 },
+        { id: 'answer-1', role: 'assistant', content: 'Answer', timestamp: 2 },
+      ],
     }))
 
-    expect(markup).toContain('aria-label="清空当前对话"')
-    expect(markup).toContain('aria-label="编辑并重新提问"')
+    expect(markup).toContain('aria-label="janus:chat.clear.aria"')
+    expect(markup).toContain('aria-label="janus:chat.edit.editAria"')
+    expect(markup.match(/aria-label="janus:chat.message.copyAria"/g)).toHaveLength(2)
+    expect(markup).toContain('aria-label="janus:chat.message.retryAria"')
+    expect(markup.match(/class="janus-chat-message-time"/g)).toHaveLength(2)
   })
 
   it('shows one compact workspace attachment menu without scope or analyze chrome', () => {
@@ -92,12 +98,12 @@ describe('Janus resource scope UI', () => {
       }),
     }))
 
-    expect(markup).toContain('aria-label="Workspace resources"')
-    expect(markup).toContain('aria-label="Attach workspace"')
+    expect(markup).toContain('aria-label="janus:chat.resource.scopeAria"')
+    expect(markup).toContain('aria-label="janus:chat.resource.attachAria"')
     expect(markup).toContain('aria-haspopup="listbox"')
     expect(markup).toContain('aria-expanded="false"')
-    expect(markup).toContain('Add workspace')
-    expect(markup).toMatch(/aria-label="Attach workspace"[^>]*>\s*<span[^>]*><svg/)
+    expect(markup).toContain('janus:chat.resource.attachPlaceholder')
+    expect(markup).toMatch(/aria-label="janus:chat.resource.attachAria"[^>]*>\s*<span[^>]*><svg/)
     expect(markup).not.toContain('<select')
     expect(markup).not.toContain('>Scope<')
     expect(markup).not.toContain('>Global<')
@@ -111,7 +117,7 @@ describe('Janus resource scope UI', () => {
       conversationController: conversationController(),
     }))
 
-    expect(markup).toMatch(/aria-label="Select conversation"[^>]*aria-expanded="false"(?![^>]*disabled)/)
+    expect(markup).toMatch(/aria-label="janus:chat.thread.selectAria"[^>]*aria-expanded="false"(?![^>]*disabled)/)
   })
 
   it.each([
@@ -124,7 +130,7 @@ describe('Janus resource scope UI', () => {
       resourceController: controller({ resources }),
     }))
 
-    expect(markup).toContain('aria-label="Embed Chat in current workspace"')
+    expect(markup).toContain('aria-label="janus:chat.resource.embedAria"')
     expect(markup).not.toContain('data-active=')
   })
 
@@ -142,7 +148,7 @@ describe('Janus resource scope UI', () => {
     expect(markup).toContain('class="janus-resource-label"')
     expect(markup).not.toContain('janus-resource-select')
     expect(markup).not.toContain('data-active=')
-    expect(markup).toContain('aria-label="Remove Two"')
+    expect(markup).toContain('aria-label="janus:chat.resource.removeAria"')
   })
 
   it('renders compact Runtime tool activity below the workspace scope', () => {
@@ -153,7 +159,7 @@ describe('Janus resource scope UI', () => {
       }),
     }))
 
-    expect(markup).toContain('aria-label="Workspace tool activity"')
+    expect(markup).toContain('aria-label="janus:chat.activity.aria"')
     expect(markup).toContain('workspace.read')
     expect(markup).toContain('running')
   })
@@ -184,14 +190,14 @@ describe('Janus resource scope UI', () => {
       }),
     }))
 
-    expect(markup).toContain('aria-label="Workspace edit approval"')
+    expect(markup).toContain('aria-label="janus:chat.approval.regionAria"')
     expect(markup).toContain('role="region"')
-    expect(markup).toContain('Approval required')
+    expect(markup).toContain('janus:chat.approval.heading')
     expect(markup).toContain('Edit README.md with 1 exact replacement')
     expect(markup).toContain('Replacement 1')
-    expect(markup).toContain('aria-label="Approve workspace action"')
-    expect(markup).toContain('aria-label="Reject workspace action"')
-    expect(markup).toContain('>Approve</span>')
-    expect(markup).toContain('>Reject</span>')
+    expect(markup).toContain('aria-label="janus:chat.approval.approveAria"')
+    expect(markup).toContain('aria-label="janus:chat.approval.rejectAria"')
+    expect(markup).toContain('>janus:chat.approval.approve</span>')
+    expect(markup).toContain('>janus:chat.approval.reject</span>')
   })
 })

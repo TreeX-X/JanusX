@@ -1,0 +1,170 @@
+{
+  "aria": {
+    "section": "Knowledge Assist",
+    "query": "Knowledge query",
+    "openWorkbench": "Open Knowledge Workbench",
+    "engine": "Knowledge Engine",
+    "close": "Close Knowledge Engine",
+    "paneCount": "{{title}} count",
+    "results": "Knowledge results",
+    "selectedDetail": "Selected knowledge detail"
+  },
+  "action": {
+    "search": "Search",
+    "wait": "Wait",
+    "copyContext": "Copy context",
+    "refresh": "Refresh Knowledge Engine",
+    "close": "Close",
+    "approve": "Approve",
+    "reject": "Reject",
+    "archive": "Archive",
+    "working": "Working..."
+  },
+  "search": {
+    "placeholder": {
+      "active": "Recall accepted knowledge",
+      "idle": "Select a workspace"
+    }
+  },
+  "state": {
+    "noWorkspace": {
+      "title": "No workspace",
+      "detail": "Assist is scoped to the active workspace."
+    },
+    "ready": {
+      "title": "Ready",
+      "detail": "Search accepted facts, wiki pages, and graph relations."
+    },
+    "loading": {
+      "title": "Searching",
+      "detail": "Ranking accepted workspace knowledge."
+    },
+    "error": {
+      "title": "Recall unavailable"
+    },
+    "degraded": {
+      "title": "Recall degraded"
+    },
+    "noMatches": {
+      "title": "No matches",
+      "detail": "No accepted knowledge matched this query."
+    }
+  },
+  "status": {
+    "copied": "Context copied",
+    "copyFailed": "Copy failed",
+    "bounded": "Bounded result"
+  },
+  "result": {
+    "meta": {
+      "count": "{{count}} of {{eligible}}",
+      "chars": "{{chars}}/{{max}} chars"
+    },
+    "truncated": "truncated"
+  },
+  "detail": {
+    "selected": "Selected",
+    "refs": "Refs",
+    "source": "Source",
+    "updated": "Updated",
+    "none": "none",
+    "acceptedTruth": "accepted truth"
+  },
+  "error": {
+    "recallFailed": "Knowledge recall failed",
+    "loadFailed": "Knowledge workbench load failed",
+    "actionFailed": "{{action}} failed",
+    "revokeFailed": "Revoke failed"
+  },
+  "tab": {
+    "inbox": "Inbox",
+    "library": "Library",
+    "wiki": "Wiki",
+    "graph": "Graph",
+    "search": "Search Lab",
+    "audit": "Audit"
+  },
+  "breadcrumb": {
+    "engine": "Knowledge Engine"
+  },
+  "badge": {
+    "demoData": "DEMO DATA"
+  },
+  "paneTitle": {
+    "inbox": "Proposed Candidates",
+    "library": "Knowledge Library"
+  },
+  "state2": {
+    "useActiveView": "Use the active view to browse these records",
+    "loadingRecords": "Loading knowledge records",
+    "workbenchUnavailable": "Workbench unavailable"
+  },
+  "inbox": {
+    "empty": {
+      "title": "No proposed candidates",
+      "detail": "Run extraction after a task to populate the review queue."
+    }
+  },
+  "library": {
+    "empty": {
+      "title": "Library is empty",
+      "detail": "Accepted knowledge will appear here after review."
+    }
+  },
+  "wiki": {
+    "empty": {
+      "title": "No wiki patches",
+      "detail": "Extraction has not proposed any wiki changes."
+    }
+  },
+  "graph": {
+    "empty": {
+      "title": "No graph candidates",
+      "detail": "Extraction has not proposed any graph relationships."
+    }
+  },
+  "audit": {
+    "empty": {
+      "title": "No audit events",
+      "detail": "Governance actions will appear here when they occur."
+    }
+  },
+  "searchLab": {
+    "controlledRecall": "CONTROLLED RECALL",
+    "bm25": "BM25",
+    "placeholder": "Search facts, wiki patches, observations...",
+    "enterQuery": "Enter a query to search the knowledge index",
+    "searching": "Searching the knowledge index",
+    "unavailable": {
+      "title": "Knowledge search unavailable",
+      "detail": "No local preview is shown when the index cannot be reached."
+    },
+    "noMatches": {
+      "title": "No matching knowledge cards",
+      "detail": "Try a broader term or capture more knowledge first."
+    }
+  },
+  "card": {
+    "sourceRefs": "{{count}} source refs",
+    "statusAccepted": "accepted",
+    "statusActive": "active"
+  },
+  "list": {
+    "empty": "No knowledge in this view"
+  },
+  "inspector": {
+    "empty": "Select a knowledge record",
+    "provenance": "Provenance",
+    "confidence": "Confidence",
+    "status": "Status",
+    "created": "Created",
+    "sourceRefs": "Source Refs",
+    "files": "Files",
+    "none": "none",
+    "conflict": "Conflict: {{detail}}",
+    "demoNotice": "Demo fallback is read-only. Capture or extract real knowledge records to enable review."
+  },
+  "time": {
+    "unknown": "unknown"
+  }
+}

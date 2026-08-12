@@ -2,6 +2,7 @@ import React, { lazy, Suspense, type ErrorInfo, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { installElectronApiFallback } from './lib/electron-api-fallback'
 import { initBrowserEventSubscriptions } from './stores/browser'
+import { initI18n } from './i18n'
 import './styles/globals.css'
 import './components/janus/janus-island.css'
 
@@ -22,6 +23,9 @@ installElectronApiFallback()
 
 /*-- browser 事件订阅：主窗口与独立浏览器窗口共用此入口，各窗口各自订阅一份 --*/
 initBrowserEventSubscriptions()
+
+/*-- i18n：异步初始化，语言探测 + 资源加载完成后 React 树挂载，避免首屏 fallback 闪烁 --*/
+const i18nReady = initI18n()
 
 const searchParams = new URLSearchParams(window.location.search)
 const isEditorWindow = searchParams.get('editorWindow') === '1'
@@ -113,8 +117,10 @@ const rootContent = isEditorWindow ? (
   </Suspense>
 )
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    {rootContent}
-  </React.StrictMode>
-)
+void i18nReady.then(() => {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      {rootContent}
+    </React.StrictMode>
+  )
+})

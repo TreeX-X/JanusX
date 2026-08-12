@@ -1,5 +1,6 @@
 import type { Ref } from 'react'
-import { getJanusModeIdentity, type JanusMode } from './janusIdentity'
+import type { JanusMode } from './janusIdentity'
+import { useI18n } from '@/i18n/useI18n'
 
 export type { JanusMode } from './janusIdentity'
 
@@ -20,7 +21,13 @@ export interface JanusEyeProps {
  * 组件仅负责渲染正确的 DOM 结构与 data 属性。
  */
 export function JanusEye({ mode, className, leftRef, rightRef }: JanusEyeProps) {
-  const identity = getJanusModeIdentity(mode)
+  const { t } = useI18n('janus')
+  const modeLabelKeyMap: Record<JanusMode, string> = {
+    sleep: 'janus:identity.mode.idle',
+    order: 'janus:identity.mode.ready',
+    analytics: 'janus:identity.mode.scanning',
+    running: 'janus:identity.mode.running',
+  }
 
   return (
     <div
@@ -35,7 +42,7 @@ export function JanusEye({ mode, className, leftRef, rightRef }: JanusEyeProps) 
       }}
       data-janus-mode={mode}
       role="img"
-      aria-label={`Janus eye - ${identity.label} mode`}
+      aria-label={t('janus:identity.eyeAria', { mode: t(modeLabelKeyMap[mode]) })}
     >
       {mode === 'sleep' ? (
         <div className="janus-eye-mini" />

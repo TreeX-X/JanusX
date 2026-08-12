@@ -356,7 +356,7 @@ describe('Office renderer lifecycle', () => {
   })
   it('renders stable error copy from the shared code', () => {
     const markup = renderToStaticMarkup(createElement(OfficePreviewFrame, { status: 'error', errorCode: 'TOO_MANY', onRetry: () => {}, onClose: () => {} }))
-    expect(markup).toContain('已打开过多预览')
+    expect(markup).toContain('editor:office.errorTooMany')
   })
   it('renders concrete locked manual-install metadata', () => {
     const copy = getOfficeErrorCopy('NOT_INSTALLED', {
@@ -370,7 +370,7 @@ describe('Office renderer lifecycle', () => {
     })
     expect(copy).toContain('1.2.3')
     expect(copy).toContain('https://example.test/releases/v1.2.3')
-    expect(copy).toContain('手动安装')
+    expect(copy).toContain('editor:office.errorNotInstalled')
     expect(copy).toContain('download；verify')
   })
   it('keeps Office out of the fixed Panel and inserts its conditional workspace before it', () => {
@@ -397,7 +397,7 @@ describe('Office renderer lifecycle', () => {
   })
   it('uses an unclipped fixed hit target and source-safe close icon', () => {
     const source = readFileSync(new URL('../../../src/renderer/src/components/office/OfficePreviewPanel.tsx', import.meta.url), 'utf8')
-    const start = source.indexOf('aria-label="Close Office preview"')
+    const start = source.indexOf("aria-label={t('editor:office.closeAria')}")
     const closeControl = source.slice(start, start + 900)
     expect(start).toBeGreaterThan(0)
     expect(closeControl).toContain('h-8 w-8 shrink-0')

@@ -10,20 +10,19 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import type { AgentSession, ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
-import type { ChatWorkspaceResource } from '../../../../shared/ipc/llm'
+import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../../shared/ipc/llm'
 import type {
   JanusChatMessage,
   JanusChatStorageSnapshot,
   PersistedJanusConversation,
 } from '../../../../shared/ipc/janus-chat'
 import {
-  CONVERSATION_STORAGE_KEY,
   MAX_TOOL_TRACES,
   NEW_CONVERSATION_TITLE,
   capChatMessages,
   createJanusConversation,
   getRetryTurn,
-  loadLocalConversationSnapshot,
+  createInitialSnapshot,
   titleFromMessages,
 } from './janusChatConversations'
 import {
@@ -83,6 +82,8 @@ export interface UseJanusChatReturn {
   activeModel: ChatModelOption | null
   modelNotice: string | null
   latestRecallTrace: KnowledgeRecallTrace | null
+  /** Tool-call trace entries recorded for this conversation, used to inline tool cards under messages. */
+  toolTraces: ChatToolTraceEntry[]
   resourceController: JanusResourceController
   send: (text: string) => void
   rewrite: (messageId: string, text: string) => void
@@ -165,7 +166,7 @@ function workspaceResources(
 export function useJanusChat(): UseJanusChatRegistryReturn {
   const availableWorkspaces = useWorkspaceStore((state) => state.workspaces)
   const initialRef = useRef<JanusChatStorageSnapshot>()
-  initialRef.current ??= loadLocalConversationSnapshot()
+  initialRef.current ??= createInitialSnapshot()
 
   const [conversations, setConversations] = useState(initialRef.current.conversations)
   const [islandConversationId, setIslandConversationId] = useState(initialRef.current.activeConversationId)
@@ -295,17 +296,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [])
 
   useEffect(() => {
-    try {
-      const snapshot: JanusChatStorageSnapshot = {
-        version: 1,
-        activeConversationId: islandConversationId,
-        conversations,
-      }
-      localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(snapshot))
-      if (persistenceReady) void window.electron.janusChat?.save(snapshot).catch(() => undefined)
-    } catch {
-      // Chat remains usable if renderer persistence is unavailable.
+    if (!persistenceReady) return
+    const snapshot: JanusChatStorageSnapshot = {
+      version: 1,
+      activeConversationId: islandConversationId,
+      conversations,
     }
+    void window.electron.janusChat?.save(snapshot).catch(() => undefined)
   }, [conversations, islandConversationId, persistenceReady])
 
   const loadConfiguredModels = useCallback(async (): Promise<ChatModelOption[]> => {
@@ -754,6 +751,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       activeModel,
       modelNotice: runtime.modelNotice,
       latestRecallTrace: runtime.latestRecallTrace,
+      toolTraces: conversation?.toolTraces ?? [],
       resourceController: {
         resources,
         availableWorkspaces,

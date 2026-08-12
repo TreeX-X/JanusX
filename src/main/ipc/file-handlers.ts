@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
-import { readFile, writeFile, stat } from 'fs/promises'
 import { extname } from 'path'
 import { FILE_CHANNELS } from '../../shared/ipc/workspace'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/renderer-authorization'
+import { janusWorkspaceFs } from '../agent/environment/janus-workspace-fs'
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -17,21 +17,17 @@ const MIME_MAP: Record<string, string> = {
 
 export function registerFileHandlers(authorize: RendererActionAuthorizer = authorizeRendererAction): void {
   ipcMain.handle(FILE_CHANNELS.read, async (_event, filePath: string) => {
-    try {
-      const [content, info] = await Promise.all([
-        readFile(filePath, 'utf-8'),
-        stat(filePath),
-      ])
-      return { content, encoding: 'utf-8', size: info.size, mtime: info.mtimeMs }
-    } catch (err: any) {
-      return { error: err.message || 'Failed to read file' }
-    }
+    const result = await janusWorkspaceFs.readText(filePath)
+    return result.ok
+      ? { content: result.value.content, encoding: 'utf-8', size: result.value.size, mtime: result.value.mtime }
+      : { error: result.error.message || 'Failed to read file' }
   })
 
   ipcMain.handle(FILE_CHANNELS.save, async (event, filePath: string, content: string) => {
     try {
       if (!await authorize(event, { workspaceRoot: filePath, toolName: 'legacy.file.save', actionRisk: 'write', source: 'renderer-user', preview: { summary: 'Save file changes', paths: [filePath], detail: `${content.length} characters`, truncated: false } })) return { error: 'File save denied by workspace policy' }
-      await writeFile(filePath, content, 'utf-8')
+      const result = await janusWorkspaceFs.writeText(filePath, content)
+      if (!result.ok) throw result.error
       return { success: true }
     } catch (err: any) {
       return { error: err.message || 'Failed to save file' }
@@ -40,10 +36,12 @@ export function registerFileHandlers(authorize: RendererActionAuthorizer = autho
 
   ipcMain.handle(FILE_CHANNELS.readBinary, async (_event, filePath: string) => {
     try {
-      const [buffer, info] = await Promise.all([readFile(filePath), stat(filePath)])
+      const result = await janusWorkspaceFs.readBinary(filePath)
+      if (!result.ok) throw result.error
+      const { buffer, size, mtime } = result.value
       const ext = extname(filePath).toLowerCase()
       const mimeType = MIME_MAP[ext] || 'application/octet-stream'
-      return { base64: buffer.toString('base64'), mimeType, size: info.size, mtime: info.mtimeMs }
+      return { base64: buffer.toString('base64'), mimeType, size, mtime }
     } catch (err: any) {
       return { error: err.message || 'Failed to read binary file' }
     }
@@ -51,8 +49,9 @@ export function registerFileHandlers(authorize: RendererActionAuthorizer = autho
 
   ipcMain.handle(FILE_CHANNELS.stat, async (_event, filePath: string) => {
     try {
-      const s = await stat(filePath)
-      return { size: s.size, mtime: s.mtimeMs, isFile: s.isFile() }
+      const result = await janusWorkspaceFs.stat(filePath)
+      if (!result.ok) throw result.error
+      return result.value
     } catch (err: any) {
       return { error: err.message || 'Failed to stat file' }
     }

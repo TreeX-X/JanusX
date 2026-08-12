@@ -13,6 +13,7 @@ import { CLITerminal } from './CLITerminal'
 import { HoldToConfirm } from './ui/HoldToConfirm'
 import { JanusChatPane } from './janus/JanusChatPane'
 import { useOptionalJanusChatController } from './janus/JanusChatProvider'
+import { useI18n } from '@/i18n/useI18n'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
@@ -58,8 +59,9 @@ import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 
 function JanusChatTabTitle({ conversationId }: { conversationId: string }) {
+  const { t } = useI18n('terminal')
   const chat = useOptionalJanusChatController()
-  return chat?.conversations.find((conversation) => conversation.id === conversationId)?.title ?? 'Janus Chat'
+  return chat?.conversations.find((conversation) => conversation.id === conversationId)?.title ?? t('terminal:tab.janusChatFallback')
 }
 
 const PRESET_ICONS: Record<TerminalPreset, string> = {
@@ -88,16 +90,16 @@ const TERMINAL_MENU_COLLAPSED_SIZE = 24
 const TERMINAL_MENU_EXPANDED_WIDTH = 166
 const TERMINAL_MENU_EXPANDED_HEIGHT = 28
 
-function providerLabel(preset: TerminalPreset): string {
+function providerLabel(preset: TerminalPreset, t: (key: string) => string): string {
   switch (preset) {
     case 'claude':
-      return 'Claude'
+      return t('terminal:provider.claude')
     case 'codex':
-      return 'Codex'
+      return t('terminal:provider.codex')
     case 'opencode':
-      return 'OpenCode'
+      return t('terminal:provider.opencode')
     case 'shell':
-      return 'Shell'
+      return t('terminal:provider.shell')
   }
 }
 
@@ -127,9 +129,9 @@ function formatExactTokenCount(value?: number): string {
   return value === undefined ? 'unknown' : value.toLocaleString('en-US')
 }
 
-function modelLabel(terminal: Terminal): string {
-  if (terminal.preset === 'shell') return 'model n/a'
-  return terminal.detectedModel ?? 'detecting model'
+function modelLabel(terminal: Terminal, t: (k: string) => string): string {
+  if (terminal.preset === 'shell') return t('terminal:model.na')
+  return terminal.detectedModel ?? t('terminal:model.detecting')
 }
 
 function contextWindow(terminal: Terminal): number | undefined {
@@ -140,12 +142,12 @@ function contextWindow(terminal: Terminal): number | undefined {
   ).effectiveWindow
 }
 
-function telemetryQualityLabel(terminal: Terminal): string {
-  if (terminal.telemetryConfidence === 'authoritative') return 'Exact'
-  if (terminal.telemetryConfidence === 'derived') return 'Derived'
-  if (terminal.telemetryConfidence === 'declared') return 'Configured'
-  if (terminal.telemetryConfidence === 'estimated') return 'Estimated'
-  return 'Unknown'
+function telemetryQualityLabel(terminal: Terminal, t: (k: string) => string): string {
+  if (terminal.telemetryConfidence === 'authoritative') return t('terminal:telemetry.quality.authoritative')
+  if (terminal.telemetryConfidence === 'derived') return t('terminal:telemetry.quality.derived')
+  if (terminal.telemetryConfidence === 'declared') return t('terminal:telemetry.quality.declared')
+  if (terminal.telemetryConfidence === 'estimated') return t('terminal:telemetry.quality.estimated')
+  return t('terminal:telemetry.quality.unknown')
 }
 
 function contextRatio(terminal: Terminal): number | undefined {
@@ -181,12 +183,12 @@ function mixColor(a: number[], b: number[], t: number): string {
   return `rgb(${r}, ${g}, ${bl})`
 }
 
-function contextLabel(terminal: Terminal): string {
-  if (terminal.contextTokens === undefined) return 'ctx unknown'
+function contextLabel(terminal: Terminal, t: (k: string) => string): string {
+  if (terminal.contextTokens === undefined) return t('terminal:telemetry.contextUnknown')
   const used = terminal.contextTokens
   const windowTokens = contextWindow(terminal)
   if (!windowTokens) return `${formatTokenCount(used)} ctx`
-  return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} session`
+  return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} ${t('terminal:telemetry.sessionSuffix')}`
 }
 
 function contextPercentLabel(terminal: Terminal): string {
@@ -195,6 +197,7 @@ function contextPercentLabel(terminal: Terminal): string {
 }
 
 function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
+  const { t } = useI18n('terminal')
   const markerRef = useRef<HTMLSpanElement | null>(null)
   const popoverRef = useRef<HTMLSpanElement | null>(null)
   const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
@@ -206,19 +209,19 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
   )
   const windowTokens = windows.effectiveWindow
   const rows = [
-    ['Runtime window', formatExactTokenCount(windows.runtimeWindow)],
-    ['Model capacity', formatExactTokenCount(windows.modelCapacity)],
-    ['Session input', formatExactTokenCount(terminal.inputTokens)],
-    ['Session output', formatExactTokenCount(terminal.outputTokens)],
-    ['Cache read', formatExactTokenCount(terminal.cacheReadTokens)],
-    ['Cache write', formatExactTokenCount(terminal.cacheWriteTokens)],
-    ['Session total', formatExactTokenCount(terminal.totalTokens)],
-    ['Session binding', terminal.telemetrySessionBinding === 'exact' ? 'Exact' : 'Pending'],
-    ['Context compactions', terminal.compactionCountConfidence === 'exact' ? String(terminal.compactionCount ?? 0) : 'Not reported'],
-    ['Model changed', formatAge(terminal.modelChangedAt)],
-    ['Usage source', `${telemetryQualityLabel(terminal)} · ${terminal.telemetrySource ?? 'unknown'}`],
-    ['Window source', windows.effectiveSource === 'runtime' ? 'Runtime telemetry' : windows.effectiveSource],
-    ['Updated', formatAge(terminal.telemetryUpdatedAt)],
+    [t('terminal:context.row.runtimeWindow'), formatExactTokenCount(windows.runtimeWindow)],
+    [t('terminal:context.row.modelCapacity'), formatExactTokenCount(windows.modelCapacity)],
+    [t('terminal:context.row.sessionInput'), formatExactTokenCount(terminal.inputTokens)],
+    [t('terminal:context.row.sessionOutput'), formatExactTokenCount(terminal.outputTokens)],
+    [t('terminal:context.row.cacheRead'), formatExactTokenCount(terminal.cacheReadTokens)],
+    [t('terminal:context.row.cacheWrite'), formatExactTokenCount(terminal.cacheWriteTokens)],
+    [t('terminal:context.row.sessionTotal'), formatExactTokenCount(terminal.totalTokens)],
+    [t('terminal:context.row.sessionBinding'), terminal.telemetrySessionBinding === 'exact' ? t('terminal:telemetry.binding.exact') : t('terminal:telemetry.binding.pending')],
+    [t('terminal:context.row.compactions'), terminal.compactionCountConfidence === 'exact' ? String(terminal.compactionCount ?? 0) : t('terminal:telemetry.compactionNotReported')],
+    [t('terminal:context.row.modelChanged'), formatAge(terminal.modelChangedAt)],
+    [t('terminal:context.row.usageSource'), `${telemetryQualityLabel(terminal, t)} · ${terminal.telemetrySource ?? t('terminal:telemetry.sourceUnknown')}`],
+    [t('terminal:context.row.windowSource'), windows.effectiveSource === 'runtime' ? t('terminal:telemetry.windowSourceRuntime') : windows.effectiveSource],
+    [t('terminal:context.row.updated'), formatAge(terminal.telemetryUpdatedAt)],
   ]
 
   useEffect(() => {
@@ -275,7 +278,7 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
     >
       <span className="mb-2 flex items-end justify-between gap-3">
         <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">Runtime context</span>
+          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">{t('terminal:context.popoverTitle')}</span>
           <span className="mt-0.5 block truncate text-[13px] text-[#f2f2f2]">
             {formatExactTokenCount(terminal.contextTokens)} / {formatExactTokenCount(windowTokens)}
           </span>
@@ -359,10 +362,11 @@ interface PaneTreeViewProps {
 }
 
 function PaneTreeView(props: PaneTreeViewProps) {
+  const { t } = useI18n('terminal')
   if (!props.node) {
     return (
       <div className="flex h-full items-center justify-center text-sm font-mono text-[#666]">
-        等待加载终端...
+        {t('terminal:paneTree.waitingTerminal')}
       </div>
     )
   }
@@ -559,6 +563,7 @@ function LeafPane({
   onToggleTerminalMenu,
   onCreateTerminal,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
+  const { t } = useI18n('terminal')
   const [dragHint, setDragHint] = useState<{ zone: PaneDropHint; ratio: number } | null>(null)
   const isFocused = leaf.id === focusedPaneId
   const showFocus = showFocusChrome && isFocused
@@ -735,7 +740,7 @@ function LeafPane({
                 background: isActive ? 'var(--shell-canvas)' : undefined,
                 boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.045)' : 'none',
               }}
-              title={terminal ? `${providerLabel(terminal.preset)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
+              title={terminal ? `${providerLabel(terminal.preset, t)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
               {tab.type === 'janus-chat' && (
                 <span className="janus-chat-tab-eyes" role="img" aria-label="JanusX">
@@ -772,7 +777,7 @@ function LeafPane({
               {tab.type === 'terminal' ? (
                 <HoldToConfirm
                   as="span"
-                  label="关闭终端"
+                  label={t('terminal:tab.closeTerminal')}
                   className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                   style={{ color: '#b86b6b' }}
                   onConfirm={() => onKillTerminalFromTab(tab.terminalId)}
@@ -782,7 +787,7 @@ function LeafPane({
               ) : (
                 <span
                   tabIndex={-1}
-                  title={tab.type === 'browser' ? 'Close Browser' : 'Close Chat'}
+                  title={tab.type === 'browser' ? t('terminal:tab.closeBrowser') : t('terminal:tab.closeChat')}
                   className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                   style={{ color: '#999' }}
                   onClick={(event) => {
@@ -815,8 +820,8 @@ function LeafPane({
           </span>
           <button
             type="button"
-            title="New Browser"
-            aria-label="New Browser"
+            title={t('terminal:tab.newBrowser')}
+            aria-label={t('terminal:tab.newBrowser')}
             className="flex h-6 w-6 items-center justify-center rounded border text-[11px] leading-none transition-colors hover:bg-[rgba(255,120,48,0.1)]"
             style={{ borderColor: 'rgba(255,255,255,0.08)', color: '#999' }}
             onClick={(event) => {
@@ -828,7 +833,7 @@ function LeafPane({
           </button>
           <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} />
           <HoldToConfirm
-            label="结束当前终端"
+            label={t('terminal:tab.killCurrentTerminal')}
             disabled={!activeTerminal}
             className="flex h-6 w-6 items-center justify-center rounded border text-[14px] leading-none transition-colors enabled:hover:bg-[rgba(255,88,88,0.1)] disabled:cursor-not-allowed disabled:opacity-35"
             style={{ borderColor: 'rgba(255,255,255,0.08)', color: activeTerminal ? '#b86b6b' : '#666' }}
@@ -929,7 +934,7 @@ function LeafPane({
                       Terminal failed to start
                     </div>
                     <div className="text-[11px] leading-relaxed text-[#8a8a8a]">
-                      {terminal.errorMessage || 'Unknown error'}
+                      {terminal.errorMessage || t('terminal:error.unknown')}
                     </div>
                     <button
                       type="button"
@@ -966,6 +971,7 @@ function LeafPane({
 }
 
 export function TerminalArea() {
+  const { t } = useI18n('terminal')
   useTerminalLifecycle()
   // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树
   const {
@@ -1258,7 +1264,7 @@ export function TerminalArea() {
           style={{ background: 'transparent' }}
         >
           <HoldToConfirm
-            label="结束布局"
+            label={t('terminal:tab.collapseLayout')}
             onConfirm={collapsePaneLayout}
             className="flex h-4 w-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent font-mono text-[14px] leading-none opacity-28 transition-[opacity,background,color] hover:bg-[rgba(255,255,255,0.045)] hover:opacity-75 focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.28)]"
             style={{ color: 'rgba(255,255,255,0.74)' }}
@@ -1361,7 +1367,7 @@ export function TerminalArea() {
           className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)] ${drawerOpen ? 'pr-32' : 'pr-3'}`}
           onClick={() => setDrawerOpen((value) => !value)}
           aria-expanded={drawerOpen}
-          aria-label="切换 Runtime 状态面板"
+          aria-label={t('terminal:tab.runtimePanelToggle')}
         >
           <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
             <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
@@ -1383,7 +1389,7 @@ export function TerminalArea() {
                       borderColor: 'rgba(255,255,255,0.055)',
                       color: 'var(--shell-dim)',
                     }}
-                    title={`焦点终端工作区：${focusedTerminalWorkspace.name} · ${focusedTerminalWorkspace.path}`}
+                    title={t('terminal:tab.focusWorkspaceTitle', { name: focusedTerminalWorkspace.name, path: focusedTerminalWorkspace.path })}
                   >
                     <span
                       aria-hidden="true"
@@ -1401,7 +1407,7 @@ export function TerminalArea() {
                     color: '#8a8a8a',
                   }}
                 >
-                  <span className="truncate">{modelLabel(activeTerminal)}</span>
+                  <span className="truncate">{modelLabel(activeTerminal, t)}</span>
                 </span>
                 <span
                   className="group relative inline-flex h-5 shrink-0 items-center rounded border px-2 font-mono"
@@ -1411,7 +1417,7 @@ export function TerminalArea() {
                     color: contextRatioColor(contextRatio(activeTerminal)),
                   }}
                 >
-                  {contextLabel(activeTerminal)}
+                  {contextLabel(activeTerminal, t)}
                   <ContextUsagePopover terminal={activeTerminal} />
                 </span>
               </span>
@@ -1421,7 +1427,7 @@ export function TerminalArea() {
             {activeTerminal && (
               <span
                 className="group relative hidden h-5 w-20 items-center md:inline-flex"
-                title={`Context: ${contextLabel(activeTerminal)}`}
+                title={`Context: ${contextLabel(activeTerminal, t)}`}
               >
                 <span
                   className="h-1 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)]"
@@ -1449,13 +1455,13 @@ export function TerminalArea() {
                     background: 'rgba(255,255,255,0.018)',
                     color: '#777',
                   }}
-                  title={`${providerLabel(terminal.preset)} · ${modelLabel(terminal)} · ${contextLabel(terminal)}`}
+                  title={`${providerLabel(terminal.preset, t)} · ${modelLabel(terminal, t)} · ${contextLabel(terminal, t)}`}
                 >
                   <span
                     className="h-[5px] w-[5px] shrink-0 rounded-full"
                     style={{ background: accentColor(terminal.status) }}
                   />
-                  <span className="truncate">{providerLabel(terminal.preset)}</span>
+                  <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                 </span>
               ))}
               {otherTerminals.length > 3 && (
@@ -1486,7 +1492,7 @@ export function TerminalArea() {
                 onPasteToTerminal={(data) => window.electron.terminal.input(activeTerminalId, data)}
               />
             ) : (
-              <div className="grid h-full place-items-center text-[#666]">No active terminal</div>
+              <div className="grid h-full place-items-center text-[#666]">{t('terminal:tab.noActiveTerminal')}</div>
             ) : (
               <section
                 className="min-h-0 overflow-hidden border"
@@ -1494,15 +1500,15 @@ export function TerminalArea() {
                   borderColor: 'rgba(255,120,48,0.12)',
                   background: 'linear-gradient(180deg, rgba(255,120,48,0.035), rgba(255,255,255,0.01))',
                 }}
-                aria-label="Runtime telemetry"
+                aria-label={t('terminal:tab.runtimeAria')}
               >
               <div className="flex h-8 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,120,48,0.12)' }}>
-                <span className="text-[#ffb27d]">Terminal Runtime</span>
-                <span className="text-[#666]">{terminals.length} sessions</span>
+                <span className="text-[#ffb27d]">{t('terminal:tab.terminalRuntime')}</span>
+                <span className="text-[#666]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
               </div>
               <div className="max-h-[141px] overflow-auto">
                 {terminals.length === 0 ? (
-                  <div className="px-2.5 py-4 text-[#555]">暂无终端运行数据</div>
+                  <div className="px-2.5 py-4 text-[#555]">{t('terminal:tab.noTelemetryData')}</div>
                 ) : (
                   terminals.map((terminal) => (
                     <button
@@ -1514,7 +1520,7 @@ export function TerminalArea() {
                         background: terminal.id === activeTerminalId ? 'rgba(255,120,48,0.055)' : 'transparent',
                       }}
                       onClick={() => setActiveTerminal(terminal.id)}
-                      title={`${providerLabel(terminal.preset)} · ${terminal.cwd}`}
+                      title={`${providerLabel(terminal.preset, t)} · ${terminal.cwd}`}
                     >
                       <span className="flex min-w-0 items-center gap-1.5 text-[#d4d4d4]">
                         <span
@@ -1524,7 +1530,7 @@ export function TerminalArea() {
                             boxShadow: `0 0 8px ${accentColor(terminal.status)}66`,
                           }}
                         />
-                        <span className="truncate">{providerLabel(terminal.preset)}</span>
+                        <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                       </span>
                       <span
                         className="inline-flex h-5 min-w-0 items-center border px-2"
@@ -1534,7 +1540,7 @@ export function TerminalArea() {
                           color: '#8a8a8a',
                         }}
                       >
-                        <span className="truncate">{modelLabel(terminal)}</span>
+                        <span className="truncate">{modelLabel(terminal, t)}</span>
                       </span>
                       <span className="group relative grid min-w-0 grid-cols-[1fr_auto] items-center gap-2">
                         <span
@@ -1549,10 +1555,10 @@ export function TerminalArea() {
                             }}
                           />
                         </span>
-                        <span className="whitespace-nowrap" style={{ color: contextRatioColor(contextRatio(terminal)) }}>{contextLabel(terminal)}</span>
+                        <span className="whitespace-nowrap" style={{ color: contextRatioColor(contextRatio(terminal)) }}>{contextLabel(terminal, t)}</span>
                         <ContextUsagePopover terminal={terminal} />
                       </span>
-                      <span className="text-right text-[#555]" title={`input ${formatTokenCount(terminal.inputTokens)} · output ${formatTokenCount(terminal.outputTokens)}`}>
+                      <span className="text-right text-[#555]" title={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
                         {formatAge(terminal.telemetryUpdatedAt)}
                       </span>
                     </button>

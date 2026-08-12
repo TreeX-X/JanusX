@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { streamText } from 'ai'
+import { generateObject, streamText } from 'ai'
 import { z } from 'zod'
 import { withAiSdkV1StreamCompatibility } from '../src/utils/stream-compat'
 
@@ -17,6 +17,74 @@ async function readStream(stream: ReadableStream<any>): Promise<any[]> {
 }
 
 describe('stream compatibility', () => {
+  it('normalizes a v3 non-streaming JSON response for AI SDK v1 generateObject', async () => {
+    const model = withAiSdkV1StreamCompatibility({
+      specificationVersion: 'v3',
+      provider: 'test',
+      modelId: 'test-model',
+      supportsStructuredOutputs: true,
+      doGenerate: async () => ({
+        content: [{ type: 'text', text: '{"summary":"Ready","operations":[]}' }],
+        finishReason: { unified: 'stop', raw: 'STOP' },
+        usage: {
+          inputTokens: { total: 12, noCache: 12, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 7, text: 7, reasoning: 0 },
+        },
+        warnings: [],
+      }),
+      doStream: async () => ({
+        stream: new ReadableStream({ start: (controller) => controller.close() }),
+      }),
+    } as any)
+
+    const result = await generateObject({
+      model,
+      mode: 'json',
+      schema: z.object({ summary: z.string(), operations: z.array(z.unknown()) }),
+      prompt: 'Generate a proposal',
+    })
+
+    expect(result.object).toEqual({ summary: 'Ready', operations: [] })
+    expect(result.finishReason).toBe('stop')
+    expect(result.usage).toEqual({ promptTokens: 12, completionTokens: 7, totalTokens: 19 })
+  })
+
+  it('normalizes v3 non-streaming tool calls and metadata', async () => {
+    const model = withAiSdkV1StreamCompatibility({
+      specificationVersion: 'v3',
+      provider: 'test',
+      modelId: 'test-model',
+      doGenerate: async () => ({
+        content: [{
+          type: 'tool-call',
+          toolCallId: 'call-1',
+          toolName: 'janusx_workspace_tools:list_dir',
+          input: { path: 'src' },
+          providerMetadata: { vertex: { thoughtSignature: 'signature-3' } },
+        }],
+        finishReason: { unified: 'tool-calls' },
+        usage: { inputTokens: { total: 4 }, outputTokens: { total: 2 } },
+      }),
+      doStream: async () => ({
+        stream: new ReadableStream({ start: (controller) => controller.close() }),
+      }),
+    } as any)
+
+    const result = await model.doGenerate({} as any)
+
+    expect(result).toMatchObject({
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 4, completionTokens: 2 },
+      toolCalls: [{
+        toolCallType: 'function',
+        toolCallId: 'call-1',
+        toolName: 'workspace_list',
+        args: '{"path":"src"}',
+        experimental_providerMetadata: { vertex: { thoughtSignature: 'signature-3' } },
+      }],
+    })
+  })
+
   it('maps AI SDK v1 tools into the v3 provider call contract', async () => {
     let receivedOptions: any
     const model = {

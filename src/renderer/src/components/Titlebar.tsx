@@ -14,6 +14,7 @@ import { officeService } from '@/services/office'
 import { startOfficeDiscovery } from '@/components/office/officeDiscovery'
 import { useOfficeStore } from '@/stores/office'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { useI18n } from '@/i18n/useI18n'
 
 /*-- P4: 蓝图工作台（@xyflow 画布链）按需分包，未打开蓝图工作台时不加载 --*/
 const BlueprintWorkbench = lazy(() =>
@@ -27,6 +28,7 @@ const BlueprintWorkbench = lazy(() =>
    ════════════════════════════════════════════════════════════ */
 
 export function Titlebar() {
+  const { t } = useI18n('common')
   const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const { stage: islandStage, knowledge: knowledgePeek } = island
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
@@ -43,6 +45,7 @@ export function Titlebar() {
     activeModel,
     modelNotice,
     latestRecallTrace,
+    toolTraces,
     resourceController,
     send: handleChatSend,
     rewrite: handleChatRewrite,
@@ -217,7 +220,7 @@ export function Titlebar() {
       <div
         className="absolute left-[70px] flex items-center gap-2 titlebar-no-drag cursor-pointer group"
         onClick={handleSettingsTriggerClick}
-        title="Settings"
+        title={t('common:titlebar.settings')}
       >
         {/* X 形图标（悬浮时变成两个横杠） */}
         <div className="relative w-4 h-4">
@@ -249,7 +252,7 @@ export function Titlebar() {
             transform: 'translateX(-8px) scale(0.9)',
           }}
         >
-          :: SETTINGS
+          {t('common:titlebar.settingsReveal')}
         </span>
       </div>
 
@@ -264,10 +267,10 @@ export function Titlebar() {
           open={closeConfirmOpen}
           confirmOnly
           tone="danger"
-          title="确认关闭"
-          description="确定要退出 JanusX 吗？未保存的内容可能丢失。"
-          confirmText="退出"
-          cancelText="取消"
+          title={t('common:titlebar.closeConfirmTitle')}
+          description={t('common:titlebar.closeConfirmDesc')}
+          confirmText={t('common:titlebar.closeConfirmExit')}
+          cancelText={t('common:action.cancel')}
           onConfirm={handleCloseConfirm}
           onCancel={handleCloseCancel}
         />,
@@ -315,6 +318,7 @@ export function Titlebar() {
           onOpenLlmConfig={handleOpenLlmConfig}
           onAddChatToWorkspace={activeWorkspaceId ? handleAddChatToWorkspace : undefined}
           resourceController={resourceController}
+          toolTraces={toolTraces}
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
           knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}

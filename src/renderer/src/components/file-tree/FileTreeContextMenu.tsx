@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { FileNode } from '@/types'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './file-tree.module.css'
 
 export interface FileTreeContextMenuTarget {
@@ -37,6 +38,7 @@ export function FileTreeContextMenu({
   onRename,
   onDelete,
 }: FileTreeContextMenuProps) {
+  const { t } = useI18n('editor')
   const menuRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ x: menu.x, y: menu.y })
 
@@ -64,37 +66,37 @@ export function FileTreeContextMenu({
     >
       {menu.target.type === 'file' && (
         <button type="button" className={styles.menuItem} onClick={onOpen}>
-          打开
+          {t('editor:fileTree.contextMenu.open')}
         </button>
       )}
       <button type="button" className={styles.menuItem} onClick={() => onCreate('file')}>
-        新建文件
+        {t('editor:fileTree.contextMenu.newFile')}
       </button>
       <button type="button" className={styles.menuItem} onClick={() => onCreate('directory')}>
-        新建文件夹
+        {t('editor:fileTree.contextMenu.newDirectory')}
       </button>
       <div className={styles.menuSeparator} />
       <button type="button" className={styles.menuItem} onClick={() => onCopyPath('relative')}>
-        复制相对路径
+        {t('editor:fileTree.contextMenu.copyRelativePath')}
       </button>
       <button type="button" className={styles.menuItem} onClick={() => onCopyPath('absolute')}>
-        复制绝对路径
+        {t('editor:fileTree.contextMenu.copyAbsolutePath')}
       </button>
       <button type="button" className={styles.menuItem} onClick={onReveal}>
-        在资源管理器中显示
+        {t('editor:fileTree.contextMenu.revealInExplorer')}
       </button>
       {menu.target.node && (
         <>
           <div className={styles.menuSeparator} />
           <button type="button" className={styles.menuItem} onClick={onRename}>
-            重命名
+            {t('editor:fileTree.contextMenu.rename')}
           </button>
           <button
             type="button"
             className={`${styles.menuItem} ${styles.menuItemDanger}`}
             onClick={onDelete}
           >
-            删除
+            {t('editor:fileTree.contextMenu.delete')}
           </button>
         </>
       )}

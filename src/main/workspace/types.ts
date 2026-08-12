@@ -48,6 +48,7 @@ export interface UpdateWorkspaceDto {
 
 export interface GlobalConfig {
   theme: 'dark' | 'light'
+  language?: string
   defaultTerminalPreset: string
   defaultShell: string
   registeredCLIs: CLIRegistration[]

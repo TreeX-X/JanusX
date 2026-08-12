@@ -1,0 +1,151 @@
+{
+  "action": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "retry": "Retry",
+    "close": "Close",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "status": {
+    "loading": "Loading…",
+    "unknown": "Unknown",
+    "error": "Error",
+    "ready": "Ready"
+  },
+  "unit": {
+    "tokens": "tokens"
+  },
+  "workspace": {
+    "label": "Workspaces",
+    "ariaLabel": "Workspace sidebar",
+    "add": "Add workspace",
+    "collapse": "Collapse sidebar",
+    "collapseAria": "Collapse workspace sidebar",
+    "expand": "Expand sidebar",
+    "expandAria": "Expand workspace sidebar",
+    "empty": "No workspaces",
+    "delete": {
+      "title": "Delete workspace",
+      "confirm": "Delete workspace {{name}}? This does not delete files on disk, but removes all terminal sessions and checkpoint records under this workspace.",
+      "checkpointWarning": "Terminal snapshots and checkpoint data will be cleared"
+    },
+    "terminal": {
+      "add": "Add terminal",
+      "empty": "No terminals"
+    },
+    "runConfiguration": "Run configuration…",
+    "renameGroup": "Rename group…",
+    "removeFromGroup": "Remove from group",
+    "deleteWorkspace": "Delete workspace",
+    "ungroup": "Ungroup",
+    "groupExpand": "Expand group {{name}}",
+    "groupCollapse": "Collapse group {{name}}",
+    "groupNameAria": "Group name",
+    "groupCountTitle": "{{name}} · {{count}} workspaces",
+    "wsAriaLabel": "{{name}}, drag to reorder or group, right-click for run configuration",
+    "wsTitle": "{{prefix}}{{name}} · Drag to reorder or group · Right-click for run configuration",
+    "terminalListCollapse": "Collapse {{name}} terminal list ({{count}})",
+    "terminalListExpand": "Expand {{name}} terminal list ({{count}})",
+    "terminalListCollapseShort": "Collapse terminal list ({{count}})",
+    "terminalListExpandShort": "Expand terminal list ({{count}})",
+    "terminalCountTitle": "{{total}} terminals · {{running}} running{{errors}}",
+    "terminalCountErrorsSuffix": " · {{count}} error(s)",
+    "terminalStatusTitle": "Terminal status: {{label}}",
+    "presetIconAlt": "{{preset}} icon",
+    "launcherTitle": "Workspace launch configuration"
+  },
+  "browser": {
+    "missingSurfaceId": "Missing surfaceId",
+    "title": "JanusX Browser",
+    "embedToMain": "Embed into main window",
+    "surfaceClosed": "Browser surface closed",
+    "newTab": "New tab",
+    "closeTab": "Close tab",
+    "openNewTab": "New tab",
+    "back": "Back",
+    "forward": "Forward",
+    "reload": "Reload",
+    "addressPlaceholder": "Enter URL and press Enter",
+    "addressAria": "Address bar",
+    "agentActive": "Agent in control",
+    "agentIdle": "Agent not in control",
+    "popOut": "Pop out to standalone window",
+    "noTabs": "No open tabs"
+  },
+  "chat": {
+    "copy": "Copy"
+  },
+  "statusBar": {
+    "waitingWorkspace": "Waiting for workspace",
+    "workspaceLoaded": "Workspace loaded",
+    "waitingTerminal": "Waiting for terminal selection",
+    "terminalActiveFocused": "{{name}} · {{status}}",
+    "terminalActiveNoFocus": "{{count}} terminals · no focus",
+    "blueprintRunning": "Blueprint canvas engine running",
+    "ready": "Ready"
+  },
+  "titlebar": {
+    "settings": "Settings",
+    "settingsReveal": ":: SETTINGS",
+    "closeConfirmTitle": "Confirm close",
+    "closeConfirmDesc": "Are you sure you want to quit JanusX? Unsaved changes may be lost.",
+    "closeConfirmExit": "Quit"
+  },
+  "rightDock": {
+    "dockAria": "Right tools dock",
+    "resizeAria": "Resize right tool panel",
+    "collapseAria": "Collapse right tool panel",
+    "collapseTitle": "Collapse panel"
+  },
+  "rightTool": {
+    "openTabsAria": "Open right tools",
+    "closeAria": "Close {{title}}",
+    "closeTitle": "Close {{title}}",
+    "railAria": "Right tools",
+    "railStateActive": "current",
+    "railStateOpen": "open",
+    "railStateClosed": "closed",
+    "railButtonAria": "{{label}}, {{state}}",
+    "toolLoadFailed": "Tool content failed to load"
+  },
+  "quantumTopology": {
+    "titleWithName": "Quantum topology · {{name}} ({{hexTag}})",
+    "titleNoName": "Quantum topology node ({{hexTag}})",
+    "ariaLabel": "Workspace quantum topology"
+  },
+  "holdToConfirm": {
+    "aria": "{{label}}, hold to confirm",
+    "title": "{{label}} (hold to confirm)"
+  },
+  "select": {
+    "empty": "(no options)"
+  },
+  "errorBoundary": {
+    "workbenchFailed": "Workbench rendering has crashed",
+    "remount": "Remount"
+  },
+  "emptyWorkspace": {
+    "title": "Get started with JanusX",
+    "chooseFolder": "Choose a workspace folder"
+  },
+  "workbench": {
+    "blueprint": "Blueprint",
+    "knowledge": "Knowledge",
+    "open": "Open",
+    "close": "Close",
+    "switcherAria": "Workbench switcher",
+    "titleAction": "{{action}} {{label}} workbench",
+    "titleWithPending": "{{action}} {{label}} workbench - {{count}} pending",
+    "titleWithFocus": "{{action}} {{label}} workbench - node focused",
+    "badgeTitle": "{{count}} pending requirement"
+  },
+  "trafficLight": {
+    "close": "Close",
+    "minimize": "Minimize",
+    "maximize": "Maximize"
+  }
+}

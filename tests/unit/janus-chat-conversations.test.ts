@@ -88,4 +88,31 @@ describe('Janus Chat conversation domain', () => {
     expect(snapshot?.conversations[0].messages).toHaveLength(200)
     expect(snapshot?.conversations[0].toolTraces).toHaveLength(48)
   })
+
+  it('preserves bounded tool-card details across persistence', () => {
+    const value = conversation('trace')
+    value.toolTraces = [{
+      toolName: 'workspace.read',
+      workspaceId: 'workspace',
+      status: 'completed',
+      summary: 'read file',
+      turnId: 'turn-1',
+      argsDigest: 'src/main.ts',
+      resultDigest: '42 lines',
+      startedAt: 10,
+      completedAt: 20,
+    }]
+    const normalized = normalizeJanusChatSnapshot({
+      version: 1,
+      activeConversationId: value.id,
+      conversations: [value],
+    })
+    expect(normalized?.conversations[0].toolTraces[0]).toMatchObject({
+      turnId: 'turn-1',
+      argsDigest: 'src/main.ts',
+      resultDigest: '42 lines',
+      startedAt: 10,
+      completedAt: 20,
+    })
+  })
 })

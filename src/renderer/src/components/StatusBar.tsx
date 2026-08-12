@@ -1,7 +1,9 @@
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
+import { useI18n } from '@/i18n/useI18n'
 
 export function StatusBar() {
+  const { t } = useI18n('common')
   const terminals = useWorkspaceStore((s) => s.terminals)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const loadState = useAppStore((s) => s.loadState)
@@ -10,12 +12,12 @@ export function StatusBar() {
   const focusedTerminal = activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null
 
   const statusText: Record<string, string> = {
-    'no-workspace': '等待加载工作区',
-    'workspace-loaded': '已加载工作区',
-    'no-terminal': '等待选择终端',
+    'no-workspace': t('common:statusBar.waitingWorkspace'),
+    'workspace-loaded': t('common:statusBar.workspaceLoaded'),
+    'no-terminal': t('common:statusBar.waitingTerminal'),
     'terminal-active': focusedTerminal
-      ? `${focusedTerminal.name} · ${focusedTerminal.status}`
-      : `${terminals.length} 个终端 · 未聚焦`,
+      ? t('common:statusBar.terminalActiveFocused', { name: focusedTerminal.name, status: focusedTerminal.status })
+      : t('common:statusBar.terminalActiveNoFocus', { count: terminals.length }),
   }
 
   return (
@@ -35,7 +37,7 @@ export function StatusBar() {
             boxShadow: '0 0 6px rgba(255, 120, 48, 0.6)',
           }}
         />
-        <span>{blueprintMode ? '蓝图画布引擎运行中' : (statusText[loadState] ?? '就绪')}</span>
+        <span>{blueprintMode ? t('common:statusBar.blueprintRunning') : (statusText[loadState] ?? t('common:statusBar.ready'))}</span>
       </div>
       <span>v0.1.0</span>
     </footer>

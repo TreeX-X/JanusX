@@ -9,6 +9,7 @@ import {
 } from '@/services/workspace-launch-assistant'
 import { useStreamingPrinter } from '@/hooks/useStreamingPrinter'
 import { MarkdownContent, StreamingText } from './chat/ChatContent'
+import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectSettings.module.css'
 
 type Message = { role: 'user' | 'assistant'; content: string }
@@ -29,12 +30,13 @@ interface ProjectLaunchAssistantProps {
 export function ProjectLaunchAssistant({
   analysis, config, busy, runningProjects, onAnalyze, onConfig, onSave, onTest, onRun, onStop,
 }: ProjectLaunchAssistantProps) {
+  const { t } = useI18n('editor')
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: '告诉我这个工作区实际怎样启动。我可以按你的说明覆盖自动识别结果、生成配置，并管理 JanusX 启动的进程。',
+    content: t('editor:launcher.greeting'),
   }])
   const abortRef = useRef<(() => void) | null>(null)
   const streamIdRef = useRef(0)
@@ -83,7 +85,7 @@ export function ProjectLaunchAssistant({
     try {
       const workspaceAnalysis = analysis ?? await onAnalyze()
       if (streamIdRef.current !== streamId) return
-      if (!workspaceAnalysis) throw new Error('工作区分析未完成')
+      if (!workspaceAnalysis) throw new Error(t('editor:project.analysisIncomplete'))
       reset()
       setStreaming(true)
       const { abort } = streamWorkspaceLaunchAssistant({
@@ -109,7 +111,7 @@ export function ProjectLaunchAssistant({
               if (streamIdRef.current !== streamId) return
               setMessages((current) => [...current, {
                 role: 'assistant',
-                content: error instanceof Error ? error.message : '运行助手动作执行失败',
+                content: error instanceof Error ? error.message : t('editor:launcher.actionFailed'),
               }])
             } finally {
               if (streamIdRef.current === streamId) setSending(false)
@@ -135,7 +137,7 @@ export function ProjectLaunchAssistant({
       if (streamIdRef.current !== streamId) return
       setMessages((current) => [...current, {
         role: 'assistant',
-        content: error instanceof Error ? error.message : '运行助手请求失败',
+        content: error instanceof Error ? error.message : t('editor:launcher.requestFailed'),
       }])
       setSending(false)
     }
@@ -146,7 +148,7 @@ export function ProjectLaunchAssistant({
       <div className={styles.assistantHeader}>
         <div>
           <strong>Janus</strong>
-          <span>{analysis ? '已读取工作区' : '等待分析'}</span>
+          <span>{analysis ? t('editor:launcher.workspaceRead') : t('editor:launcher.waitingAnalysis')}</span>
         </div>
       </div>
       <div className={styles.messages}>
@@ -174,7 +176,7 @@ export function ProjectLaunchAssistant({
               void send()
             }
           }}
-          placeholder="例如：生成适合开发调试的配置并运行测试"
+          placeholder={t('editor:launcher.inputPlaceholder')}
           rows={3}
           disabled={sending || busy}
         />
@@ -182,7 +184,7 @@ export function ProjectLaunchAssistant({
           className={styles.sendButton}
           onClick={() => streaming ? stop() : void send()}
           disabled={!streaming && (!input.trim() || sending || busy)}
-          title={streaming ? '停止生成' : '发送'}
+          title={streaming ? t('editor:launcher.stopGeneration') : t('editor:launcher.send')}
         >
           {streaming
             ? <Square size={11} fill="currentColor" />
