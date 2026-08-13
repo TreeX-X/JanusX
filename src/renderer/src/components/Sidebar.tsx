@@ -181,17 +181,12 @@ function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
 
   return (
     <span
-      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] font-medium"
+      className="relative inline-flex h-5 shrink-0 items-center gap-1 overflow-hidden rounded-[3px] px-1.5 font-mono text-[9px] font-medium"
       style={{ color: visual.color, background: visual.background }}
       title={t('common:workspace.terminalStatusTitle', { label })}
     >
+      {status === 'running' && <span className="term-status-orbit" aria-hidden="true" />}
       <span className="relative flex h-2.5 w-2.5 items-center justify-center">
-        {status === 'running' && (
-          <span
-            className="absolute h-2 w-2 rounded-full opacity-30 motion-safe:animate-ping motion-reduce:animate-none"
-            style={{ background: visual.color }}
-          />
-        )}
         <Icon size={10} strokeWidth={2} className="relative" aria-hidden="true" />
       </span>
       {label}
@@ -864,13 +859,9 @@ export function Sidebar() {
                           <img src={terminalIcon} alt="" className="h-3 w-3 opacity-70" />
                           <span>{terminalActivity.total}</span>
                           <span
-                            className={`h-1 w-1 rounded-full ${terminalActivity.running > 0 ? 'motion-safe:animate-pulse motion-reduce:animate-none' : ''}`}
+                            className="h-1.5 w-1.5 rounded-full transition-colors"
                             style={{
-                              background: terminalActivity.errors > 0
-                                ? '#ff6666'
-                                : terminalActivity.running > 0
-                                  ? '#58c98d'
-                                  : '#55555b',
+                              background: terminalActivity.errors > 0 ? '#ff6666' : terminalActivity.running > 0 ? '#58c98d' : '#55555b',
                             }}
                           />
                         </span>
@@ -905,6 +896,9 @@ export function Sidebar() {
                         ) : (
                           workspaceTerminals.map((terminal) => {
                             const isFocusedTerminal = isActive && terminal.id === activeTerminalId
+                            const presetLabel = terminalPresetLabel(terminal.preset, t)
+                            const displayName = terminal.name || presetLabel
+                            const showPresetLabel = displayName.trim().toLocaleLowerCase() !== presetLabel.trim().toLocaleLowerCase()
                             return (
                               <div
                                 key={terminal.id}
@@ -921,25 +915,27 @@ export function Sidebar() {
                                   background: isFocusedTerminal ? 'rgba(255,120,48,0.055)' : 'transparent',
                                   color: isFocusedTerminal ? '#d8d8d8' : '#8a8a8a',
                                 }}
-                                title={`${terminalPresetLabel(terminal.preset, t)} · ${terminal.cwd}`}
+                                title={`${presetLabel} · ${terminal.cwd}`}
                               >
                                 <span
                                   className="flex h-[18px] w-[18px] items-center justify-center"
-                                  title={terminalPresetLabel(terminal.preset, t)}
+                                  title={presetLabel}
                                 >
                                   <img
                                     src={TERMINAL_PRESET_ICONS[terminal.preset]}
-                                    alt={t('common:workspace.presetIconAlt', { preset: terminalPresetLabel(terminal.preset, t) })}
+                                    alt={t('common:workspace.presetIconAlt', { preset: presetLabel })}
                                     className="h-3.5 w-3.5 object-contain"
                                   />
                                 </span>
                                 <span className="min-w-0">
                                   <span className="block truncate font-mono text-[11px]">
-                                    {terminal.name || terminalPresetLabel(terminal.preset, t)}
+                                    {displayName}
                                   </span>
-                                  <span className="block truncate text-[9px] text-[#55555b]">
-                                    {terminalPresetLabel(terminal.preset, t)}
-                                  </span>
+                                  {showPresetLabel && (
+                                    <span className="block truncate text-[9px] text-[#55555b]">
+                                      {presetLabel}
+                                    </span>
+                                  )}
                                 </span>
                                 <TerminalStatusIndicator status={terminal.status} />
                               </div>

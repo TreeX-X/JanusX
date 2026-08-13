@@ -414,6 +414,40 @@ body {
   50% { opacity: 0.4; transform: scale(0.85); }
 }
 
+@property --term-orbit-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* 终端运行态：光带沿徽章边框匀速走圈 */
+.term-status-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--term-orbit-angle),
+    transparent 0deg 286deg,
+    currentColor 322deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: term-status-orbit 2.4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes term-status-orbit {
+  to { --term-orbit-angle: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-status-orbit { animation: none; opacity: 0.5; }
+}
+
 /*-- 长按工作区视觉反馈：径向渐变波纹从中心扩散 --*/
 .ws.long-pressing {
   color: #fff !important;

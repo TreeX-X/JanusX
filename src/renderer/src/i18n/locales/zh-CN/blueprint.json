@@ -52,7 +52,6 @@
     "addRoot": "+ 新建根节点",
     "childNode": "+ 子节点",
     "nodeDetail": "节点详情",
-    "enterWork": "进入工作",
     "startWork": "开始工作",
     "enterTerminal": "进入终端",
     "focusHierarchy": "聚焦层级",
@@ -95,21 +94,24 @@
     "search": "搜索蓝图节点",
     "prevMatch": "上一个搜索匹配",
     "nextMatch": "下一个搜索匹配",
-    "commonWork": "常用工作",
-    "utility": "实用工具",
+    "nodeActions": "节点操作",
+    "utility": "画布与更多操作",
     "collapseMore": "收起更多操作",
     "expandMore": "展开更多操作",
     "enterWorkSession": "进入选中节点工作会话",
     "toggleSubtree": "折叠或展开选中子树",
-    "closeNodeDetail": "关闭节点详情",
-    "analysisLayoutDelete": "分析、布局和删除"
+    "closeNodeDetail": "关闭节点详情"
   },
   "toolbar": {
     "loading": "加载中…",
     "recent": "最近",
     "times": "次",
-    "descendantLevel": "子孙层级",
-    "matchCount": "{{count}} 个匹配"
+    "descendantLevel": "聚焦深度",
+    "matchCount": "{{count}} 个匹配",
+    "zoneNode": "选中节点",
+    "zoneFocus": "查找与聚焦",
+    "zoneCanvas": "画布与布局",
+    "zoneDanger": "危险操作"
   },
   "contextMenu": {
     "nodeDetail": "节点详情",

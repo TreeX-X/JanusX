@@ -492,7 +492,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
         <div className="bp-maintenance-panel__identity">
           <div><span>{t('blueprint:maintenance.engineLabel')}</span><strong>{t('blueprint:maintenance.controlLabel')}</strong></div>
         </div>
-        <button type="button" onClick={onClose} aria-label={t('blueprint:maintenance.closeConsole')} title={t('common:action.close')}>
+        <button type="button" className="bp-panel-close" onClick={onClose} aria-label={t('blueprint:maintenance.closeConsole')} title={t('common:action.close')}>
           <X size={16} aria-hidden="true" />
         </button>
       </header>

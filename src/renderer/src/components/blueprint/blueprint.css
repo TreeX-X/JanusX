@@ -78,11 +78,18 @@
   min-width: 0;
 }
 
-.blueprint-toolbar__group--primary {
+.blueprint-toolbar__group--node {
   flex-wrap: wrap;
   justify-content: flex-end;
-  padding-left: 12px;
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: opacity 0.15s;
+}
+
+.blueprint-toolbar__group--node[data-active='false'] {
+  opacity: 0.75;
 }
 
 .blueprint-toolbar__group--utility {
@@ -133,9 +140,14 @@
   flex: 0 0 116px;
 }
 
-.blueprint-toolbar__search {
-  width: 180px;
+.blueprint-toolbar__search-wrap {
+  position: relative;
   flex: 0 1 180px;
+  min-width: 0;
+}
+
+.blueprint-toolbar__search {
+  width: 100%;
 }
 
 .blueprint-btn {
@@ -198,9 +210,9 @@
 
 .blueprint-toolbar__panel {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px;
   padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
@@ -217,17 +229,40 @@
 }
 
 .blueprint-toolbar__panel-wrap--expanded {
-  max-height: 96px;
+  max-height: 220px;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
 }
 
-.blueprint-toolbar__panel-actions {
+.blueprint-toolbar__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.blueprint-toolbar__zone-title {
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.blueprint-toolbar__zone-body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.blueprint-toolbar__zone--danger {
+  margin-left: auto;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 90, 60, 0.25);
+  border-radius: 6px;
+  background: rgba(255, 90, 60, 0.04);
 }
 
 .blueprint-toolbar__commit-limit {
@@ -267,9 +302,18 @@
 }
 
 .blueprint-toolbar__match-count {
-  font-size: 11px;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.92);
+  font-size: 10px;
   color: #a7a7a7;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .bp-janus-notices {
@@ -777,17 +821,16 @@
 .bp-node-detail {
   position: absolute;
   top: 50px;
-  left: 10px;
+  left: 12px;
   z-index: 900;
   width: 438px;
   max-width: calc(100% - 24px);
   max-height: calc(100% - 68px);
   overflow: auto;
-  background: linear-gradient(180deg, rgba(18, 18, 18, 0.985), rgba(12, 12, 12, 0.985));
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 10px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.56);
-  backdrop-filter: blur(22px);
+  background: rgba(13, 13, 15, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  box-shadow: 18px 0 48px rgba(0, 0, 0, 0.42), 0 12px 32px rgba(0, 0, 0, 0.34);
   padding: 0;
 }
 
@@ -798,23 +841,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 14px 14px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
-  background: rgba(15, 15, 15, 0.96);
-  backdrop-filter: blur(18px);
+  flex-wrap: wrap;
+  gap: 0 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 13, 15, 0.98);
 }
 
 .bp-node-detail__eyebrow {
-  font-size: 10px;
-  color: #737373;
+  font-size: 9px;
+  color: #666;
   text-transform: uppercase;
   letter-spacing: 0;
   margin-bottom: 4px;
 }
 
 .bp-node-detail__title {
-  color: #e4e4e4;
+  color: #eee;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
@@ -841,22 +884,25 @@
   border: 1px solid rgba(255, 255, 255, 0.055);
 }
 
-.bp-node-detail__close {
-  flex: 0 0 auto;
+/* —— 面板共用关闭按钮 —— */
+.bp-panel-close {
   width: 28px;
   height: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.065);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 0;
   border-radius: 6px;
   background: transparent;
   color: #777;
   cursor: pointer;
-  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+  transition: background 140ms ease, color 140ms ease;
 }
 
-.bp-node-detail__close:hover {
-  color: #e4e4e4;
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.045);
+.bp-panel-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ddd;
 }
 
 .bp-node-detail__section {
@@ -1486,7 +1532,8 @@
 .bp-node-detail__actions {
   display: flex;
   gap: 8px;
-  margin: 0 14px 14px;
+  width: 100%;
+  margin: 10px 0 0;
 }
 
 .bp-node-detail__actions .blueprint-btn {
@@ -1509,8 +1556,8 @@
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: rgba(3, 3, 4, 0.82);
-  backdrop-filter: blur(20px);
+  background: rgba(5, 5, 7, 0.55);
+  backdrop-filter: blur(6px);
 }
 
 /* 工作台专属下拉承载层：z-index 12001 恰好高于遮罩 12000，
@@ -1832,19 +1879,6 @@
 .bp-maintenance-panel__identity > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .bp-maintenance-panel__identity span { color: #666; font-size: 9px; }
 .bp-maintenance-panel__identity strong { color: #eee; font-size: 14px; }
-.bp-maintenance-panel__header button {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #777;
-  cursor: pointer;
-}
-.bp-maintenance-panel__header button:hover { background: rgba(255, 255, 255, 0.05); color: #ddd; }
 
 .bp-maintenance-panel__tabs {
   flex: 0 0 auto;
@@ -2427,12 +2461,11 @@
   }
 
   .blueprint-toolbar--canvas .blueprint-toolbar__actions,
-  .blueprint-toolbar--canvas .blueprint-toolbar__group,
-  .blueprint-toolbar__panel-actions {
+  .blueprint-toolbar--canvas .blueprint-toolbar__group {
     width: 100%;
   }
 
-  .blueprint-toolbar--canvas .blueprint-toolbar__group--primary {
+  .blueprint-toolbar--canvas .blueprint-toolbar__group--node {
     justify-content: flex-start;
   }
 
@@ -2441,7 +2474,7 @@
     flex-wrap: wrap;
   }
 
-  .blueprint-toolbar__search {
+  .blueprint-toolbar__search-wrap {
     flex: 1 1 180px;
     min-width: 160px;
   }
@@ -2451,7 +2484,7 @@
   }
 
   .blueprint-toolbar__panel-wrap--expanded {
-    max-height: 180px;
+    max-height: 320px;
   }
 
   .bp-analysis-history {

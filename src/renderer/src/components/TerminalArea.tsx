@@ -1497,13 +1497,13 @@ export function TerminalArea() {
               <section
                 className="min-h-0 overflow-hidden border"
                 style={{
-                  borderColor: 'rgba(255,120,48,0.12)',
-                  background: 'linear-gradient(180deg, rgba(255,120,48,0.035), rgba(255,255,255,0.01))',
+                  borderColor: 'rgba(255,255,255,0.07)',
+                  background: 'rgba(255,255,255,0.012)',
                 }}
                 aria-label={t('terminal:tab.runtimeAria')}
               >
-              <div className="flex h-8 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,120,48,0.12)' }}>
-                <span className="text-[#ffb27d]">{t('terminal:tab.terminalRuntime')}</span>
+              <div className="flex h-8 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>
+                <span className="text-[#8a8a8a]">{t('terminal:tab.terminalRuntime')}</span>
                 <span className="text-[#666]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
               </div>
               <div className="max-h-[141px] overflow-auto">
@@ -1514,10 +1514,10 @@ export function TerminalArea() {
                     <button
                       key={terminal.id}
                       type="button"
-                      className="grid w-full cursor-pointer grid-cols-[92px_minmax(96px,140px)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,120,48,0.045)] focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.35)]"
+                      className="grid w-full cursor-pointer grid-cols-[92px_minmax(96px,140px)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.03)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
                       style={{
                         borderColor: 'rgba(255,255,255,0.035)',
-                        background: terminal.id === activeTerminalId ? 'rgba(255,120,48,0.055)' : 'transparent',
+                        background: terminal.id === activeTerminalId ? 'rgba(255,255,255,0.05)' : 'transparent',
                       }}
                       onClick={() => setActiveTerminal(terminal.id)}
                       title={`${providerLabel(terminal.preset, t)} · ${terminal.cwd}`}

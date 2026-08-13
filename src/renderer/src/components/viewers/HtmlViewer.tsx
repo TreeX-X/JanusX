@@ -14,7 +14,7 @@ interface HtmlViewerProps {
 export function HtmlViewer({ content, originalContent, onChange, onEditorMount }: HtmlViewerProps) {
   const { t } = useI18n('editor')
   const [splitRatio, setSplitRatio] = useState(50)
-  const [scriptsEnabled, setScriptsEnabled] = useState(false)
+  const [scriptsEnabled, setScriptsEnabled] = useState(true)
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
   const [previewContent, setPreviewContent] = useState(content)
   const isDragging = useRef(false)
@@ -64,7 +64,9 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
     setScriptsEnabled((v) => !v)
   }, [])
 
-  const sandboxValue = scriptsEnabled ? 'allow-same-origin allow-scripts' : 'allow-same-origin'
+  const sandboxValue = scriptsEnabled
+    ? 'allow-same-origin allow-scripts allow-forms allow-modals allow-popups'
+    : 'allow-same-origin'
   const showEditor = previewMode !== 'preview'
   const showPreview = previewMode !== 'editor'
   const isSplit = previewMode === 'split'
@@ -170,7 +172,8 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
             </div>
             <div className="flex-1 overflow-hidden" style={{ height: '100%', position: 'relative' }}>
               <iframe
-                srcDoc={`<style>html,body{margin:0;padding:0;height:100%;overflow:auto}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:rgba(0,0,0,0.03)}::-webkit-scrollbar-thumb{background:rgba(255,120,48,0.4);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:rgba(255,120,48,0.65)}</style>${previewContent}`}
+                key={scriptsEnabled ? 'scripts-on' : 'scripts-off'}
+                srcDoc={`${previewContent}<style>::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:rgba(0,0,0,0.03)}::-webkit-scrollbar-thumb{background:rgba(255,120,48,0.4);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:rgba(255,120,48,0.65)}</style>`}
                 sandbox={sandboxValue}
                 className="border-0"
                 style={{ background: '#ffffff', position: 'absolute', inset: 0, width: '100%', height: '100%' }}

@@ -20,6 +20,7 @@ import {
   type NodeMouseHandler
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { X } from 'lucide-react'
 
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -745,13 +746,18 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
 
           <div className="blueprint-toolbar__actions">
             <div className="blueprint-toolbar__group blueprint-toolbar__group--focus" role="group" aria-label={t('blueprint:ariaLabel.focus')}>
-              <input
-                className="blueprint-toolbar__search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.currentTarget.value)}
-                placeholder={t('blueprint:search.placeholder')}
-                aria-label={t('blueprint:ariaLabel.search')}
-              />
+              <div className="blueprint-toolbar__search-wrap">
+                <input
+                  className="blueprint-toolbar__search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                  placeholder={t('blueprint:search.placeholder')}
+                  aria-label={t('blueprint:ariaLabel.search')}
+                />
+                {focusActive ? (
+                  <span className="blueprint-toolbar__match-count">{t('blueprint:toolbar.matchCount', { count: focusedNodeCount })}</span>
+                ) : null}
+              </div>
               <Select
                 value={statusFilter}
                 onChange={(value) => setStatusFilter(value as StatusFilter)}
@@ -759,28 +765,26 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                 className="blueprint-select blueprint-select--status-filter"
                 getPortalContainer={getSelectPortalContainer}
               />
-              {focusActive ? (
-                <span className="blueprint-toolbar__match-count">{t('blueprint:toolbar.matchCount', { count: focusedNodeCount })}</span>
-              ) : null}
-              {searchFilterActive ? <>
-                <button className="blueprint-btn" onClick={() => focusMatch(-1)} disabled={!searchMatchIds.length} aria-label={t('blueprint:ariaLabel.prevMatch')}>{t('blueprint:action.prevMatch')}</button>
-                <button className="blueprint-btn" onClick={() => focusMatch(1)} disabled={!searchMatchIds.length} aria-label={t('blueprint:ariaLabel.nextMatch')}>{t('blueprint:action.nextMatch')}</button>
-              </> : null}
-              {focusActive ? (
-                <button
-                  className="blueprint-btn"
-                  onClick={() => {
-                    setSearchQuery('')
-                    setStatusFilter('all')
-                  }}
-                >
-                  {t('blueprint:action.clear')}
-                </button>
-              ) : null}
+              <button className="blueprint-btn" onClick={() => focusMatch(-1)} disabled={!searchMatchIds.length} title={t('blueprint:action.prevMatch')} aria-label={t('blueprint:ariaLabel.prevMatch')}>‹</button>
+              <button className="blueprint-btn" onClick={() => focusMatch(1)} disabled={!searchMatchIds.length} title={t('blueprint:action.nextMatch')} aria-label={t('blueprint:ariaLabel.nextMatch')}>›</button>
+              <button
+                className="blueprint-btn"
+                onClick={() => {
+                  setSearchQuery('')
+                  setStatusFilter('all')
+                }}
+                disabled={!searchFilterActive}
+              >
+                {t('blueprint:action.clear')}
+              </button>
             </div>
 
-            <div className="blueprint-toolbar__group blueprint-toolbar__group--primary" role="group" aria-label={t('blueprint:ariaLabel.commonWork')}>
-              <button className="blueprint-btn blueprint-btn--primary" onClick={addRoot}>{t('blueprint:action.addRoot')}</button>
+            <div
+              className="blueprint-toolbar__group blueprint-toolbar__group--node"
+              role="group"
+              aria-label={t('blueprint:ariaLabel.nodeActions')}
+              data-active={selectedId ? 'true' : 'false'}
+            >
               <button className="blueprint-btn" onClick={() => selectedId && addChild(selectedId)} disabled={!selectedId}>
                 {t('blueprint:action.childNode')}
               </button>
@@ -788,7 +792,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                 {t('blueprint:action.nodeDetail')}
               </button>
               <button className="blueprint-btn" onClick={() => selectedNode && void activateWorkSession(selectedNode)} disabled={!selectedNode} aria-label={t('blueprint:ariaLabel.enterWorkSession')}>
-                {t('blueprint:action.enterWork')}
+                {t('blueprint:action.startWork')}
               </button>
               <button className={`blueprint-btn${localFocusActive ? ' blueprint-btn--active' : ''}`} onClick={() => setLocalFocusActive((value) => !value)} disabled={!selectedId} aria-pressed={localFocusActive}>
                 {localFocusActive ? t('blueprint:action.exitLocalFocus') : t('blueprint:action.focusHierarchy')}
@@ -796,6 +800,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
             </div>
 
             <div className="blueprint-toolbar__group blueprint-toolbar__group--utility" role="group" aria-label={t('blueprint:ariaLabel.utility')}>
+              <button className="blueprint-btn blueprint-btn--primary" onClick={addRoot}>{t('blueprint:action.addRoot')}</button>
               <button
                 className={`blueprint-btn blueprint-toolbar__toggle${toolbarExpanded ? ' blueprint-toolbar__toggle--active' : ''}`}
                 onClick={() => setToolbarExpanded((current) => !current)}
@@ -815,50 +820,69 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           aria-hidden={!toolbarExpanded}
         >
           <div className="blueprint-toolbar__panel">
-            <div className="blueprint-toolbar__panel-actions" role="group" aria-label={t('blueprint:ariaLabel.analysisLayoutDelete')}>
-              <label className="blueprint-toolbar__commit-limit">
-                <span>{t('blueprint:toolbar.recent')}</span>
-                <input
-                  type="number"
-                  min={ANALYSIS_COMMIT_LIMIT_MIN}
-                  max={ANALYSIS_COMMIT_LIMIT_MAX}
-                  value={analysisCommitLimit}
-                  onChange={(event) => setAnalysisCommitLimit(event.target.value)}
-                  onBlur={() => setAnalysisCommitLimit(String(normalizeAnalysisCommitLimit(analysisCommitLimit)))}
-                />
-                <span>{t('blueprint:toolbar.times')}</span>
-              </label>
-              <button className="blueprint-btn" onClick={analyzeSelected} disabled={!selectedId || analyzing}>
-                {analyzing ? t('blueprint:action.analyzing') : t('blueprint:action.analyzeSelected')}
-              </button>
-              <label className="blueprint-toolbar__commit-limit"><span>{t('blueprint:toolbar.descendantLevel')}</span><input type="number" min={0} max={8} value={descendantDepth} onChange={(event) => setDescendantDepth(Math.max(0, Math.min(8, Number(event.target.value) || 0)))} /></label>
-              <button className="blueprint-btn" onClick={() => focusMatch(0)} disabled={!searchMatchIds.length}>{t('blueprint:action.locateMatch')}</button>
-              <button className="blueprint-btn" onClick={fitView}>{t('blueprint:action.fitCanvas')}</button>
-              <button className="blueprint-btn" onClick={() => void autoLayout()}>{t('blueprint:action.autoLayout')}</button>
-              <button
-                className="blueprint-btn"
-                onClick={() => selectedId && void layoutSubtree(selectedId)}
-                disabled={!selectedId}
-              >
-                {t('blueprint:action.layoutSubtree')}
-              </button>
-              <button className="blueprint-btn" onClick={() => selectedId && toggleCollapse(selectedId)} disabled={!selectedId} aria-label={t('blueprint:ariaLabel.toggleSubtree')}>
-                {selectedId && collapsedNodeIds.has(selectedId) ? t('blueprint:action.expandSubtree') : t('blueprint:action.collapseSubtree')}
-              </button>
-              <button
-                className="blueprint-btn"
-                onClick={() => setRestoreLayoutConfirmOpen(true)}
-              >
-                {t('blueprint:action.restoreDefaultLayout')}
-              </button>
-              {canUndoRestoreDefaultLayout ? (
-                <button className="blueprint-btn" onClick={() => void undoRestoreDefaultLayout()}>
+            <div className="blueprint-toolbar__zone" role="group" aria-label={t('blueprint:toolbar.zoneNode')}>
+              <span className="blueprint-toolbar__zone-title">{t('blueprint:toolbar.zoneNode')}</span>
+              <div className="blueprint-toolbar__zone-body">
+                <label className="blueprint-toolbar__commit-limit">
+                  <span>{t('blueprint:toolbar.recent')}</span>
+                  <input
+                    type="number"
+                    min={ANALYSIS_COMMIT_LIMIT_MIN}
+                    max={ANALYSIS_COMMIT_LIMIT_MAX}
+                    value={analysisCommitLimit}
+                    onChange={(event) => setAnalysisCommitLimit(event.target.value)}
+                    onBlur={() => setAnalysisCommitLimit(String(normalizeAnalysisCommitLimit(analysisCommitLimit)))}
+                  />
+                  <span>{t('blueprint:toolbar.times')}</span>
+                </label>
+                <button className="blueprint-btn" onClick={analyzeSelected} disabled={!selectedId || analyzing}>
+                  {analyzing ? t('blueprint:action.analyzing') : t('blueprint:action.analyzeSelected')}
+                </button>
+                <button
+                  className="blueprint-btn"
+                  onClick={() => selectedId && void layoutSubtree(selectedId)}
+                  disabled={!selectedId}
+                >
+                  {t('blueprint:action.layoutSubtree')}
+                </button>
+                <button className="blueprint-btn" onClick={() => selectedId && toggleCollapse(selectedId)} disabled={!selectedId} aria-label={t('blueprint:ariaLabel.toggleSubtree')}>
+                  {selectedId && collapsedNodeIds.has(selectedId) ? t('blueprint:action.expandSubtree') : t('blueprint:action.collapseSubtree')}
+                </button>
+              </div>
+            </div>
+
+            <div className="blueprint-toolbar__zone" role="group" aria-label={t('blueprint:toolbar.zoneFocus')}>
+              <span className="blueprint-toolbar__zone-title">{t('blueprint:toolbar.zoneFocus')}</span>
+              <div className="blueprint-toolbar__zone-body">
+                <label className="blueprint-toolbar__commit-limit"><span>{t('blueprint:toolbar.descendantLevel')}</span><input type="number" min={0} max={8} value={descendantDepth} onChange={(event) => setDescendantDepth(Math.max(0, Math.min(8, Number(event.target.value) || 0)))} /></label>
+                <button className="blueprint-btn" onClick={() => focusMatch(0)} disabled={!searchMatchIds.length}>{t('blueprint:action.locateMatch')}</button>
+              </div>
+            </div>
+
+            <div className="blueprint-toolbar__zone" role="group" aria-label={t('blueprint:toolbar.zoneCanvas')}>
+              <span className="blueprint-toolbar__zone-title">{t('blueprint:toolbar.zoneCanvas')}</span>
+              <div className="blueprint-toolbar__zone-body">
+                <button className="blueprint-btn" onClick={fitView}>{t('blueprint:action.fitCanvas')}</button>
+                <button className="blueprint-btn" onClick={() => void autoLayout()}>{t('blueprint:action.autoLayout')}</button>
+                <button
+                  className="blueprint-btn"
+                  onClick={() => setRestoreLayoutConfirmOpen(true)}
+                >
+                  {t('blueprint:action.restoreDefaultLayout')}
+                </button>
+                <button className="blueprint-btn" onClick={() => void undoRestoreDefaultLayout()} disabled={!canUndoRestoreDefaultLayout}>
                   {t('blueprint:action.undoRestore')}
                 </button>
-              ) : null}
-              <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
-                {t('blueprint:action.deleteSelected')}
-              </button>
+              </div>
+            </div>
+
+            <div className="blueprint-toolbar__zone blueprint-toolbar__zone--danger" role="group" aria-label={t('blueprint:toolbar.zoneDanger')}>
+              <span className="blueprint-toolbar__zone-title">{t('blueprint:toolbar.zoneDanger')}</span>
+              <div className="blueprint-toolbar__zone-body">
+                <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
+                  {t('blueprint:action.deleteSelected')}
+                </button>
+              </div>
             </div>
             {loading ? <span className="blueprint-toolbar__loading">{t('blueprint:toolbar.loading')}</span> : null}
           </div>
@@ -973,9 +997,31 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                 <span>{Math.max(0, Math.min(100, detailNode.progress))}%</span>
               </div>
             </div>
-            <button className="bp-node-detail__close" onClick={() => setDetailNodeId(null)} aria-label={t('blueprint:ariaLabel.closeNodeDetail')}>
-              ×
+            <button className="bp-panel-close" onClick={() => setDetailNodeId(null)} aria-label={t('blueprint:ariaLabel.closeNodeDetail')} title={t('common:action.close')}>
+              <X size={16} aria-hidden="true" />
             </button>
+            <div className="bp-node-detail__actions">
+              <button
+                className="blueprint-btn blueprint-btn--primary"
+                onClick={() => requestMaintenanceOpen({ blueprintId, nodeId: detailNode.id })}
+              >
+                {t('blueprint:action.maintainNode')}
+              </button>
+              <button
+                className="blueprint-btn"
+                onClick={() => activateWorkSession(detailNode)}
+                disabled={!detailNode.workspaceId || detailWorkspaceMissing}
+              >
+                {t('blueprint:action.startWork')}
+              </button>
+              <button
+                className="blueprint-btn"
+                onClick={() => focusOrCreateTerminal(detailNode, terminalPreset)}
+                disabled={!detailNode.workspaceId || detailWorkspaceMissing}
+              >
+                {t('blueprint:action.enterTerminal')}
+              </button>
+            </div>
           </div>
 
           <div className="bp-node-detail__section bp-node-detail__section--identity">
@@ -1174,7 +1220,16 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           </div>
 
           <div className="bp-node-detail__section bp-node-detail__section--system">
-            <label className="bp-node-detail__label">{t('blueprint:detailPanel.bindWorkspace')}</label>
+            <div className="bp-node-detail__section-head">
+              <label className="bp-node-detail__label">{t('blueprint:detailPanel.bindWorkspace')}</label>
+              <button
+                className="bp-node-detail__feature-add"
+                onClick={() => bindNodeWorkspace(detailNode.id, '')}
+                disabled={!detailNode.workspaceId}
+              >
+                {t('blueprint:action.unbindWorkspace')}
+              </button>
+            </div>
             <Select
               value={detailNode.workspaceId ?? ''}
               onChange={(value) => bindNodeWorkspace(detailNode.id, value)}
@@ -1187,6 +1242,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               dropdownClassName="bp-node-detail__dropdown"
               getPortalContainer={getSelectPortalContainer}
             />
+            {detailWorkspaceMissing ? (
+              <div className="bp-node-detail__warning">
+                {t('blueprint:detailPanel.workspaceMissing')}
+                {detailNode.workspaceSnapshot ? ` ${t('blueprint:detailPanel.workspaceSnapshot', { name: detailNode.workspaceSnapshot.name, path: detailNode.workspaceSnapshot.path })}` : ''}
+              </div>
+            ) : null}
           </div>
 
           <div className="bp-node-detail__section bp-node-detail__section--system">
@@ -1384,43 +1445,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               {(detailNode.activities ?? []).length === 0 ? <div className="bp-node-detail__empty">{t('blueprint:detailPanel.noActivity')}</div> : null}
             </div>
           </div>
-
-          <div className="bp-node-detail__actions">
-            <button
-              className="blueprint-btn blueprint-btn--primary"
-              onClick={() => requestMaintenanceOpen({ blueprintId, nodeId: detailNode.id })}
-            >
-              {t('blueprint:action.maintainNode')}
-            </button>
-            <button
-              className="blueprint-btn"
-              onClick={() => activateWorkSession(detailNode)}
-              disabled={!detailNode.workspaceId || detailWorkspaceMissing}
-            >
-              {t('blueprint:action.startWork')}
-            </button>
-            <button
-              className="blueprint-btn"
-              onClick={() => focusOrCreateTerminal(detailNode, terminalPreset)}
-              disabled={!detailNode.workspaceId || detailWorkspaceMissing}
-            >
-              {t('blueprint:action.enterTerminal')}
-            </button>
-            <button
-              className="blueprint-btn"
-              onClick={() => bindNodeWorkspace(detailNode.id, '')}
-              disabled={!detailNode.workspaceId}
-            >
-              {t('blueprint:action.unbindWorkspace')}
-            </button>
-
-          </div>
-          {detailWorkspaceMissing ? (
-            <div className="bp-node-detail__warning">
-              {t('blueprint:detailPanel.workspaceMissing')}
-              {detailNode.workspaceSnapshot ? ` ${t('blueprint:detailPanel.workspaceSnapshot', { name: detailNode.workspaceSnapshot.name, path: detailNode.workspaceSnapshot.path })}` : ''}
-            </div>
-          ) : null}
         </aside>
       ) : null}
       <PromptDialog

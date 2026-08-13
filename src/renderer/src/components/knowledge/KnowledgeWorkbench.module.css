@@ -6,8 +6,8 @@
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: rgba(3, 3, 4, 0.82);
-  backdrop-filter: blur(20px);
+  background: rgba(5, 5, 7, 0.55);
+  backdrop-filter: blur(6px);
 }
 
 .shell {

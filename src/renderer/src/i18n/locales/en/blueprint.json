@@ -52,7 +52,6 @@
     "addRoot": "+ New Root Node",
     "childNode": "+ Child Node",
     "nodeDetail": "Node Detail",
-    "enterWork": "Enter Work",
     "startWork": "Start Work",
     "enterTerminal": "Open Terminal",
     "focusHierarchy": "Focus Hierarchy",
@@ -95,21 +94,24 @@
     "search": "Search blueprint nodes",
     "prevMatch": "Previous search match",
     "nextMatch": "Next search match",
-    "commonWork": "Common Actions",
-    "utility": "Utilities",
+    "nodeActions": "Node actions",
+    "utility": "Canvas and more actions",
     "collapseMore": "Collapse more actions",
     "expandMore": "Expand more actions",
     "enterWorkSession": "Enter selected node work session",
     "toggleSubtree": "Collapse or expand selected subtree",
-    "closeNodeDetail": "Close node detail",
-    "analysisLayoutDelete": "Analysis, layout and delete"
+    "closeNodeDetail": "Close node detail"
   },
   "toolbar": {
     "loading": "Loading…",
     "recent": "Last",
     "times": "commits",
-    "descendantLevel": "Descendant Level",
-    "matchCount": "{{count}} matches"
+    "descendantLevel": "Focus Depth",
+    "matchCount": "{{count}} matches",
+    "zoneNode": "Selected Node",
+    "zoneFocus": "Search & Focus",
+    "zoneCanvas": "Canvas & Layout",
+    "zoneDanger": "Danger Zone"
   },
   "contextMenu": {
     "nodeDetail": "Node Detail",
