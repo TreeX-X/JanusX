@@ -9,16 +9,24 @@
 }
 
 .panel {
-  position: relative;
+  position: absolute;
+  top: 0;
+  right: 48px;
+  bottom: 0;
   display: flex;
   min-width: 0;
   height: 100%;
   flex-direction: column;
   overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 150ms ease, transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.panel[hidden] {
-  display: none;
+.panel[data-visible='false'] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(12px);
 }
 
 .panelHeader {
@@ -241,6 +249,9 @@
 }
 
 .rail {
+  position: relative;
+  z-index: 2;
+  margin-left: auto;
   display: flex;
   width: 48px;
   flex: 0 0 48px;
@@ -250,6 +261,10 @@
   padding: 6px 0;
   border-left: 1px solid var(--shell-border);
   background: var(--shell-chrome-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel { transition: none; }
 }
 
 .dock[data-collapsed='true'] .rail { border-left-color: transparent; }

@@ -676,3 +676,50 @@ body {
   background: rgba(255, 255, 255, 0.06) !important;
 }
 
+/* Keep both sidebar presentations mounted so width and content animate as one surface. */
+.workspace-sidebar {
+  position: relative;
+  contain: paint;
+}
+
+.workspace-sidebar__expanded,
+.workspace-sidebar__collapsed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  transition: opacity 150ms ease, transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: opacity, transform;
+}
+
+.workspace-sidebar__expanded {
+  width: clamp(252px, 15vw, 288px);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.workspace-sidebar__collapsed {
+  width: 52px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8px);
+}
+
+.workspace-sidebar[data-collapsed='true'] .workspace-sidebar__expanded {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-12px);
+}
+
+.workspace-sidebar[data-collapsed='true'] .workspace-sidebar__collapsed {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 70ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-sidebar__expanded,
+  .workspace-sidebar__collapsed { transition: none; }
+}

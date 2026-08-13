@@ -144,7 +144,7 @@ export function RightDock({
       <div
         className={styles.panel}
         style={{ width: renderedPanelWidth }}
-        hidden={!contentVisible}
+        data-visible={contentVisible}
         aria-hidden={!contentVisible}
         {...(!contentVisible ? { inert: '' } : {})}
         data-testid="right-tool-panel-shell"

@@ -637,7 +637,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="flex flex-col overflow-hidden"
+      className="workspace-sidebar flex flex-col overflow-hidden"
       style={{
         background: 'var(--shell-chrome)',
         borderRight: '1px solid var(--shell-border)',
@@ -646,8 +646,7 @@ export function Sidebar() {
       aria-label={t('common:workspace.ariaLabel')}
     >
       {/* 展开态 */}
-      {!sidebarCollapsed && (
-        <>
+      <div className="workspace-sidebar__expanded" aria-hidden={sidebarCollapsed} {...(sidebarCollapsed ? { inert: '' } : {})}>
           <div
             className="flex h-9 items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
             style={{ color: 'var(--shell-muted)', borderBottom: '1px solid var(--shell-border)' }}
@@ -967,12 +966,10 @@ export function Sidebar() {
               </>
             )}
           </div>
-        </>
-      )}
+      </div>
 
       {/* 收起态 */}
-      {sidebarCollapsed && (
-        <div className="flex flex-1 flex-col items-center gap-1 overflow-hidden py-1.5">
+      <div className="workspace-sidebar__collapsed flex flex-1 flex-col items-center gap-1 overflow-hidden py-1.5" aria-hidden={!sidebarCollapsed} {...(!sidebarCollapsed ? { inert: '' } : {})}>
           <button
             onClick={toggleSidebar}
             title={t('common:workspace.expand')}
@@ -1047,8 +1044,7 @@ export function Sidebar() {
               </div>
             )
           })}
-        </div>
-      )}
+      </div>
       {contextMenu && (
         <WorkspaceContextMenu
           menu={contextMenu}

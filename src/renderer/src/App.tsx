@@ -57,6 +57,7 @@ type IdleWindow = Window & {
 
 const SIDE_PANEL_WIDTH = 'clamp(252px, 15vw, 288px)'
 const SIDE_PANEL_COLLAPSED_WIDTH = '52px'
+const SIDE_PANEL_TRANSITION_MS = 240
 const OFFICE_PREVIEW_WIDTH = 'clamp(300px, 30vw, 480px)'
 const OFFICE_CLOSE_DURATION_MS = 200
 const OFFICE_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
@@ -411,7 +412,7 @@ export default function App() {
           }${isEditorEmbedded ? `${editorColumnWidth}px ` : ''}${rightDockLayout.dockWidth}px`,
           transition: officeResizing || rightDockResizing || editorResizing
             ? 'none'
-            : `grid-template-columns ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
+            : `grid-template-columns ${SIDE_PANEL_TRANSITION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
         }}
       >
         <Sidebar />
