@@ -12,6 +12,7 @@ export interface AppShutdownDeps {
   killTerminals?: ShutdownStep
   killAgents?: ShutdownStep
   stopProjects?: ShutdownStep
+  stopLanguageServices?: ShutdownStep
   stopOfficeWatches?: ShutdownStep
   disposeOfficeArtifactIndexes?: ShutdownStep
   disposeWatchers?: ShutdownStep
@@ -104,6 +105,7 @@ export class AppShutdown {
       ['stopOfficeWatches', this.deps.stopOfficeWatches],
       ['killAgents', this.deps.killAgents],
       ['stopProjects', this.deps.stopProjects],
+      ['stopLanguageServices', this.deps.stopLanguageServices],
       ['disposeOfficeArtifactIndexes', this.deps.disposeOfficeArtifactIndexes],
       ['disposeWatchers', this.deps.disposeWatchers],
       ['disposeTerminalSession', this.deps.disposeTerminalSession],

@@ -14,6 +14,7 @@ describe('file editor tabs', () => {
       isVisible: false,
       isEmbedded: false,
       embeddedWidth: 560,
+      navigationTarget: null,
     })
     vi.stubGlobal('window', {
       electron: {
@@ -85,6 +86,21 @@ describe('file editor tabs', () => {
       isEmbedded: true,
       embeddedWidth: 640,
     })
+  })
+
+  it('opens a definition target in a reused tab and exposes its selection once', async () => {
+    const editor = useEditorStore.getState()
+    const selection = { startLineNumber: 4, startColumn: 3, endLineNumber: 4, endColumn: 9 }
+
+    await editor.openFile('C:\\workspace\\src\\target.ts', 'C:\\workspace')
+    await editor.openFileAt('c:/workspace/src/target.ts', 'C:\\workspace', selection)
+
+    const target = useEditorStore.getState().navigationTarget
+    expect(useEditorStore.getState().openFiles).toHaveLength(1)
+    expect(target).toMatchObject({ fileId: 'c:/workspace/src/target.ts', selection })
+
+    useEditorStore.getState().consumeNavigationTarget(target!.requestId)
+    expect(useEditorStore.getState().navigationTarget).toBeNull()
   })
 
   it('keeps the preview embed action and the resizable workspace column wired', () => {

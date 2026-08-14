@@ -2,15 +2,23 @@ import { MonacoViewer, MarkdownViewer, HtmlViewer, ImageViewer, BinaryInfo } fro
 import { getMonacoLanguage } from '@/lib/file-utils'
 import type { FindableEditor } from '@/lib/editor-find'
 import type { OpenFile } from '@/types'
+import type { DefinitionTarget } from '@/lib/monaco-definition'
+import type { EditorNavigationTarget } from '@/stores/editor'
 
 interface FileViewerContentProps {
   file: OpenFile
   onContentChange: (content: string) => void
   onEditorMount?: (editor: FindableEditor | null) => void
   diffOriginalContent?: string
+  workspacePath?: string
+  navigationTarget?: EditorNavigationTarget | null
+  onDefinitionNavigate?: (target: DefinitionTarget) => void
+  onNavigationComplete?: (requestId: number) => void
+  definitionActionLabel?: string
+  definitionErrorMessage?: string
 }
 
-export function FileViewerContent({ file, onContentChange, onEditorMount, diffOriginalContent }: FileViewerContentProps) {
+export function FileViewerContent({ file, onContentChange, onEditorMount, diffOriginalContent, workspacePath, navigationTarget, onDefinitionNavigate, onNavigationComplete, definitionActionLabel, definitionErrorMessage }: FileViewerContentProps) {
   if (file.isLoading) {
     return (
       <div
@@ -51,6 +59,13 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
           content={file.content}
           language={getMonacoLanguage(file.path)}
           originalContent={diffOriginalContent}
+          modelPath={file.absolutePath}
+          workspacePath={workspacePath}
+          navigationTarget={navigationTarget?.fileId === file.id ? navigationTarget : null}
+          onDefinitionNavigate={onDefinitionNavigate}
+          onNavigationComplete={onNavigationComplete}
+          definitionActionLabel={definitionActionLabel}
+          definitionErrorMessage={definitionErrorMessage}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />

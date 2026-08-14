@@ -3,8 +3,9 @@ import { useEditorStore } from '@/stores/editor'
 import { FloatingPanel } from '@/components/FloatingPanel'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { OpenFile } from '@/types'
+import type { DefinitionTarget } from '@/lib/monaco-definition'
 import { PanelRightClose, PanelRightOpen, Save, Search } from 'lucide-react'
-import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
+import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
 
 /*-- P4: 查看器栈（Monaco/HTML/Markdown viewer）按需分包，编辑器未打开文件时不加载 --*/
@@ -12,11 +13,28 @@ const FileViewerContent = lazy(() =>
   import('@/components/FileViewerContent').then((m) => ({ default: m.FileViewerContent }))
 )
 
-function ViewerContent({ file, onEditorMount }: { file: OpenFile; onEditorMount: (editor: FindableEditor | null) => void }) {
+function ViewerContent({ file, workspacePath, onEditorMount }: { file: OpenFile; workspacePath: string | null; onEditorMount: (editor: FindableEditor | null) => void }) {
+  const { t } = useI18n('editor')
   const updateContent = useEditorStore((s) => s.updateContent)
+  const openFileAt = useEditorStore((s) => s.openFileAt)
+  const navigationTarget = useEditorStore((s) => s.navigationTarget)
+  const consumeNavigationTarget = useEditorStore((s) => s.consumeNavigationTarget)
+  const handleDefinitionNavigate = useCallback((target: DefinitionTarget) => {
+    if (workspacePath) void openFileAt(target.absolutePath, workspacePath, target.selection)
+  }, [openFileAt, workspacePath])
   return (
     <Suspense fallback={null}>
-      <FileViewerContent file={file} onContentChange={(content) => updateContent(file.id, content)} onEditorMount={onEditorMount} />
+      <FileViewerContent
+        file={file}
+        workspacePath={workspacePath ?? undefined}
+        navigationTarget={navigationTarget}
+        onDefinitionNavigate={handleDefinitionNavigate}
+        onNavigationComplete={consumeNavigationTarget}
+        definitionActionLabel={t('editor:fileEditor.goToDefinition')}
+        definitionErrorMessage={t('editor:fileEditor.cppDefinitionUnavailable')}
+        onContentChange={(content) => updateContent(file.id, content)}
+        onEditorMount={onEditorMount}
+      />
     </Suspense>
   )
 }
@@ -113,6 +131,17 @@ export function FileEditor() {
   }, [])
 
   useEffect(() => () => unwatchFindControlsRef.current?.(), [])
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!isEditorDefinitionShortcut(event) || !findEditorRef.current || !isMonacoKeyboardEvent(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      void openEditorDefinition(findEditorRef.current)
+    }
+    document.addEventListener('keydown', handler, true)
+    return () => document.removeEventListener('keydown', handler, true)
+  }, [])
 
   // Ctrl+S / Cmd+S save shortcut
   useEffect(() => {
@@ -242,7 +271,7 @@ export function FileEditor() {
     >
       {/* Viewer area */}
       <div className="flex-1 overflow-hidden" style={{ background: '#151517', height: '100%', position: 'relative' }}>
-        {activeFile && <ViewerContent key={activeFile.id} file={activeFile} onEditorMount={handleEditorMount} />}
+        {activeFile && <ViewerContent key={activeFile.id} file={activeFile} workspacePath={activeWorkspacePath} onEditorMount={handleEditorMount} />}
       </div>
     </FloatingPanel>
   )

@@ -1,4 +1,5 @@
 import type { FileAPI, FileTreeAPI, WorkspaceAPI } from '../../../shared/ipc/workspace'
+import type { LanguageServiceAPI } from '../../../shared/ipc/language-service'
 import type { TerminalAPI } from '../../../shared/ipc/terminal'
 import type { ProjectAPI } from '../../../shared/ipc/project'
 import type { BrowserAPI } from '../../../shared/ipc/browser'
@@ -21,6 +22,7 @@ interface ElectronAPI {
   workspace: WorkspaceAPI
   fileTree: FileTreeAPI
   file: FileAPI
+  languageService: LanguageServiceAPI
   terminal: TerminalAPI
   project: ProjectAPI
   browser: BrowserAPI

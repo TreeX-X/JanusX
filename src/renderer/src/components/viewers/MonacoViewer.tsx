@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
+import type { Monaco } from '@monaco-editor/react'
+import type { editor as MonacoEditor, IDisposable } from 'monaco-editor'
+import { Uri } from 'monaco-editor/esm/vs/editor/editor.main'
 import type { FindableEditor } from '@/lib/editor-find'
 import { defineJanusxDarkTheme, JANUSX_DARK_THEME_NAME } from '@/lib/monaco-theme'
 import { configureMonacoRuntime } from '@/lib/monaco-runtime'
+import { registerDefinitionNavigation, type DefinitionTarget } from '@/lib/monaco-definition'
+import type { EditorNavigationTarget } from '@/stores/editor'
 
 configureMonacoRuntime()
 
@@ -13,6 +18,13 @@ interface MonacoViewerProps {
   readOnly?: boolean
   onEditorMount?: (editor: FindableEditor | null) => void
   originalContent?: string
+  modelPath?: string
+  workspacePath?: string
+  navigationTarget?: EditorNavigationTarget | null
+  onDefinitionNavigate?: (target: DefinitionTarget) => void
+  onNavigationComplete?: (requestId: number) => void
+  definitionActionLabel?: string
+  definitionErrorMessage?: string
 }
 
 function LoadingIndicator() {
@@ -32,10 +44,13 @@ function LoadingIndicator() {
   )
 }
 
-export function MonacoViewer({ content, language, onChange, readOnly = false, onEditorMount, originalContent }: MonacoViewerProps) {
-  const editorRef = useRef<FindableEditor | null>(null)
+export function MonacoViewer({ content, language, onChange, readOnly = false, onEditorMount, originalContent, modelPath, workspacePath, navigationTarget, onDefinitionNavigate, onNavigationComplete, definitionActionLabel, definitionErrorMessage }: MonacoViewerProps) {
+  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const contentRef = useRef(content)
   const diffChangeSubscriptionRef = useRef<{ dispose(): void } | null>(null)
+  const definitionActionRef = useRef<IDisposable | null>(null)
+  const definitionErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [definitionError, setDefinitionError] = useState<string | null>(null)
   contentRef.current = content
   const handleChange = useCallback(
     (value: string | undefined) => {
@@ -48,19 +63,34 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
     defineJanusxDarkTheme(monaco)
   }, [])
 
-  const handleMount = useCallback((editor: FindableEditor) => {
+  const revealNavigationTarget = useCallback((editor: MonacoEditor.IStandaloneCodeEditor, target: EditorNavigationTarget | null | undefined) => {
+    if (!target) return
+    editor.setSelection(target.selection)
+    editor.revealRangeInCenter(target.selection)
+    editor.focus()
+    onNavigationComplete?.(target.requestId)
+  }, [onNavigationComplete])
+
+  const showDefinitionError = useCallback(() => {
+    if (!definitionErrorMessage) return
+    if (definitionErrorTimerRef.current) clearTimeout(definitionErrorTimerRef.current)
+    setDefinitionError(definitionErrorMessage)
+    definitionErrorTimerRef.current = setTimeout(() => setDefinitionError(null), 5000)
+  }, [definitionErrorMessage])
+
+  const handleMount = useCallback((editor: MonacoEditor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor
     onEditorMount?.(editor)
-  }, [onEditorMount])
+    definitionActionRef.current?.dispose()
+    definitionActionRef.current = workspacePath && onDefinitionNavigate && definitionActionLabel
+      ? registerDefinitionNavigation(editor, monaco, workspacePath, definitionActionLabel, onDefinitionNavigate, showDefinitionError)
+      : null
+    revealNavigationTarget(editor, navigationTarget)
+  }, [definitionActionLabel, navigationTarget, onDefinitionNavigate, onEditorMount, revealNavigationTarget, showDefinitionError, workspacePath])
 
-  const handleDiffMount = useCallback((editor: {
-    getModifiedEditor(): FindableEditor & {
-      getValue(): string
-      onDidChangeModelContent(callback: () => void): { dispose(): void }
-    }
-  }) => {
+  const handleDiffMount = useCallback((editor: MonacoEditor.IStandaloneDiffEditor, monaco: Monaco) => {
     const modifiedEditor = editor.getModifiedEditor()
-    handleMount(modifiedEditor)
+    handleMount(modifiedEditor, monaco)
     diffChangeSubscriptionRef.current?.dispose()
     diffChangeSubscriptionRef.current = modifiedEditor.onDidChangeModelContent(() => {
       const value = modifiedEditor.getValue()
@@ -70,8 +100,14 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
 
   useEffect(() => () => {
     diffChangeSubscriptionRef.current?.dispose()
+    definitionActionRef.current?.dispose()
+    if (definitionErrorTimerRef.current) clearTimeout(definitionErrorTimerRef.current)
     if (editorRef.current) onEditorMount?.(null)
   }, [onEditorMount])
+
+  useEffect(() => {
+    if (editorRef.current) revealNavigationTarget(editorRef.current, navigationTarget)
+  }, [navigationTarget, revealNavigationTarget])
 
   const commonOptions = {
     fontSize: 13,
@@ -86,12 +122,24 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
 
   return (
     <div className="relative h-full w-full overflow-hidden" style={{ background: '#0a0a0a' }}>
+      {definitionError && (
+        <div
+          role="status"
+          className="absolute bottom-3 right-3 z-10 max-w-[min(360px,calc(100%-24px))] border px-3 py-2 text-xs shadow-lg"
+          style={{ color: '#d4d4d4', background: '#202024', borderColor: '#45454d' }}
+        >
+          {definitionError}
+        </div>
+      )}
       {originalContent !== undefined ? (
         <DiffEditor
           height="100%"
           language={language}
           original={originalContent}
           modified={content}
+          originalModelPath={modelPath ? `${monacoFileUri(modelPath)}?janusx-original=git` : undefined}
+          modifiedModelPath={modelPath ? monacoFileUri(modelPath) : undefined}
+          keepCurrentModifiedModel
           theme={JANUSX_DARK_THEME_NAME}
           loading={<LoadingIndicator />}
           options={{ ...commonOptions, renderSideBySide: false, readOnly, originalEditable: false, domReadOnly: readOnly }}
@@ -103,6 +151,8 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           height="100%"
           language={language}
           value={content}
+          path={modelPath ? monacoFileUri(modelPath) : undefined}
+          keepCurrentModel
           onChange={handleChange}
           theme={JANUSX_DARK_THEME_NAME}
           loading={<LoadingIndicator />}
@@ -113,4 +163,8 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
       )}
     </div>
   )
+}
+
+function monacoFileUri(filePath: string): string {
+  return Uri.file(filePath).toString()
 }

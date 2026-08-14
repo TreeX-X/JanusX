@@ -148,7 +148,9 @@
     "unpinWindow": "Unpin window",
     "maximizeWindow": "Maximize editor window",
     "embedToMain": "Embed into main workspace",
-    "missingFileInfo": "Missing file information"
+    "missingFileInfo": "Missing file information",
+    "goToDefinition": "Go to Definition",
+    "cppDefinitionUnavailable": "C/C++ navigation is unavailable. Verify that clangd is installed and the project configuration can be resolved."
   },
   "htmlViewer": {
     "htmlLabel": "HTML",

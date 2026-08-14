@@ -10,6 +10,7 @@ import {
   type FileTreeAPI,
   type WorkspaceAPI,
 } from '../shared/ipc/workspace'
+import { LANGUAGE_SERVICE_CHANNELS, type LanguageServiceAPI } from '../shared/ipc/language-service'
 import {
   TERMINAL_EVENT_CHANNELS,
   TERMINAL_INVOKE_CHANNELS,
@@ -66,6 +67,11 @@ const fileAPI: FileAPI = {
   save: (filePath, content) => ipcRenderer.invoke(FILE_CHANNELS.save, filePath, content),
   readBinary: (filePath) => ipcRenderer.invoke(FILE_CHANNELS.readBinary, filePath),
   stat: (filePath) => ipcRenderer.invoke(FILE_CHANNELS.stat, filePath),
+  sourceFiles: (workspacePath) => ipcRenderer.invoke(FILE_CHANNELS.sourceFiles, workspacePath),
+}
+
+const languageServiceAPI: LanguageServiceAPI = {
+  definition: (request) => ipcRenderer.invoke(LANGUAGE_SERVICE_CHANNELS.definition, request),
 }
 
 function subscribeIpcEvent<T>(channel: string, callback: (event: T) => void): () => void {
@@ -345,6 +351,7 @@ contextBridge.exposeInMainWorld('electron', {
   workspace: workspaceAPI,
   fileTree: fileTreeAPI,
   file: fileAPI,
+  languageService: languageServiceAPI,
   terminal: terminalAPI,
   project: projectAPI,
   browser: browserAPI,

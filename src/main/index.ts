@@ -134,6 +134,7 @@ async function bootstrapApp(): Promise<void> {
     { registerWindowIpc },
     { feishuInboundRuntime },
     { BrowserSurfaceManager },
+    { clangdManager },
   ] = await Promise.all([
     import('./ipc/handlers'),
     import('./ipc/project-handlers'),
@@ -152,6 +153,7 @@ async function bootstrapApp(): Promise<void> {
     import('./windows/register-window-ipc'),
     import('./remote-notifications/feishu-inbound/runtime'),
     import('./browser/surface-manager'),
+    import('./language-service/clangd-manager'),
   ])
 
   let mainWindow: BrowserWindow | null = null
@@ -171,6 +173,7 @@ async function bootstrapApp(): Promise<void> {
     killTerminals: () => terminalManager.killAll(),
     killAgents: () => agentStreamManager.killAll(),
     stopProjects: () => stopAllProjects(),
+    stopLanguageServices: () => clangdManager.disposeAll(),
     stopOfficeWatches: () => officeWatchPool.stopAll(),
     disposeOfficeArtifactIndexes: () => officeArtifactIndex.disposeAll(),
     disposeWatchers: () => disposeWorkspaceWatchers(),

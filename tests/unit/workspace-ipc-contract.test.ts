@@ -7,6 +7,10 @@ import {
   type FileTreeAPI,
   type WorkspaceAPI,
 } from '../../src/shared/ipc/workspace'
+import {
+  LANGUAGE_SERVICE_CHANNELS,
+  type LanguageServiceAPI,
+} from '../../src/shared/ipc/language-service'
 
 const invoke = vi.fn()
 const on = vi.fn()
@@ -16,6 +20,7 @@ let exposedApi: {
   workspace: WorkspaceAPI
   fileTree: FileTreeAPI
   file: FileAPI
+  languageService: LanguageServiceAPI
 }
 
 vi.mock('electron', () => ({
@@ -36,8 +41,10 @@ beforeAll(async () => {
   await import('../../src/preload/index')
   const { registerWorkspaceHandlers } = await import('../../src/main/ipc/handlers')
   const { registerFileHandlers } = await import('../../src/main/ipc/file-handlers')
+  const { registerLanguageServiceHandlers } = await import('../../src/main/ipc/language-service-handlers')
   registerWorkspaceHandlers(() => null)
   registerFileHandlers()
+  registerLanguageServiceHandlers()
 })
 
 describe('Workspace/File IPC contract', () => {
@@ -52,6 +59,7 @@ describe('Workspace/File IPC contract', () => {
       ...Object.values(WORKSPACE_CHANNELS),
       ...Object.values(FILE_TREE_CHANNELS).filter((channel) => channel !== FILE_TREE_CHANNELS.changed),
       ...Object.values(FILE_CHANNELS),
+      ...Object.values(LANGUAGE_SERVICE_CHANNELS),
     ]
     const registered = handle.mock.calls.map(([channel]) => channel)
 
@@ -67,11 +75,20 @@ describe('Workspace/File IPC contract', () => {
     await exposedApi.fileTree.children(input.path, 'src')
     await exposedApi.fileTree.move(input.path, 'src/demo.ts', 'archive')
     await exposedApi.file.save('C:\\workspace\\demo\\note.md', 'content')
+    const definitionRequest = {
+      workspacePath: input.path,
+      filePath: 'C:\\workspace\\demo\\main.cpp',
+      language: 'cpp' as const,
+      content: 'int main() {}',
+      position: { line: 0, character: 4 },
+    }
+    await exposedApi.languageService.definition(definitionRequest)
 
     expect(invoke).toHaveBeenNthCalledWith(1, WORKSPACE_CHANNELS.create, input)
     expect(invoke).toHaveBeenNthCalledWith(2, FILE_TREE_CHANNELS.children, input.path, 'src')
     expect(invoke).toHaveBeenNthCalledWith(3, FILE_TREE_CHANNELS.move, input.path, 'src/demo.ts', 'archive')
     expect(invoke).toHaveBeenNthCalledWith(4, FILE_CHANNELS.save, 'C:\\workspace\\demo\\note.md', 'content')
+    expect(invoke).toHaveBeenNthCalledWith(5, LANGUAGE_SERVICE_CHANNELS.definition, definitionRequest)
   })
 
   it('preserves file-tree event payload and unsubscribe semantics', () => {

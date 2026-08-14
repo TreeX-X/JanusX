@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { useEditorStore } from '@/stores/editor'
 import { Maximize2, PanelRightOpen, Pin, PinOff, Save, Search } from 'lucide-react'
-import { isEditorFindShortcut, isMonacoKeyboardEvent, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
+import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
+import type { DefinitionTarget } from '@/lib/monaco-definition'
 
 interface EditorWindowParams {
   filePath: string
@@ -60,6 +61,9 @@ export function StandaloneFileEditor() {
   const closeFile = useEditorStore((state) => state.closeFile)
   const updateContent = useEditorStore((state) => state.updateContent)
   const saveFile = useEditorStore((state) => state.saveFile)
+  const openFileAt = useEditorStore((state) => state.openFileAt)
+  const navigationTarget = useEditorStore((state) => state.navigationTarget)
+  const consumeNavigationTarget = useEditorStore((state) => state.consumeNavigationTarget)
   const activeFile = openFiles.find((file) => file.id === activeFileId) ?? null
   const [baselineContent, setBaselineContent] = useState<string | undefined>(undefined)
   const [isPinned, setIsPinned] = useState(false)
@@ -71,6 +75,17 @@ export function StandaloneFileEditor() {
   }, [])
 
   useEffect(() => () => unwatchFindControlsRef.current?.(), [])
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!isEditorDefinitionShortcut(event) || !findEditorRef.current || !isMonacoKeyboardEvent(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      void openEditorDefinition(findEditorRef.current)
+    }
+    document.addEventListener('keydown', handler, true)
+    return () => document.removeEventListener('keydown', handler, true)
+  }, [])
 
   useEffect(() => {
     if (!editorParams) return
@@ -119,6 +134,10 @@ export function StandaloneFileEditor() {
   const handleContentChange = useCallback((content: string) => {
     if (activeFileId) updateContent(activeFileId, content)
   }, [activeFileId, updateContent])
+
+  const handleDefinitionNavigate = useCallback((target: DefinitionTarget) => {
+    if (editorParams) void openFileAt(target.absolutePath, editorParams.workspacePath, target.selection)
+  }, [editorParams, openFileAt])
 
   const togglePinned = useCallback(async () => {
     const result = await window.electron.window.setAlwaysOnTop(!isPinned)
@@ -265,7 +284,19 @@ export function StandaloneFileEditor() {
       </div>
       <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
         {activeFile ? (
-          <FileViewerContent key={activeFile.id} file={activeFile} diffOriginalContent={baselineContent} onContentChange={handleContentChange} onEditorMount={handleEditorMount} />
+          <FileViewerContent
+            key={activeFile.id}
+            file={activeFile}
+            workspacePath={editorParams?.workspacePath}
+            navigationTarget={navigationTarget}
+            onDefinitionNavigate={handleDefinitionNavigate}
+            onNavigationComplete={consumeNavigationTarget}
+            definitionActionLabel={t('editor:fileEditor.goToDefinition')}
+            definitionErrorMessage={t('editor:fileEditor.cppDefinitionUnavailable')}
+            diffOriginalContent={baselineContent}
+            onContentChange={handleContentChange}
+            onEditorMount={handleEditorMount}
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-[#666]">
             {t('editor:fileEditor.missingFileInfo')}

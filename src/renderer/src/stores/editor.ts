@@ -162,8 +162,11 @@ interface EditorStore {
   isVisible: boolean
   isEmbedded: boolean
   embeddedWidth: number
+  navigationTarget: EditorNavigationTarget | null
 
   openFile: (absolutePath: string, workspacePath: string) => Promise<void>
+  openFileAt: (absolutePath: string, workspacePath: string, selection: EditorSelection) => Promise<void>
+  consumeNavigationTarget: (requestId: number) => void
   closeFile: (id: string) => void
   setActiveFile: (id: string) => void
   markDirty: (id: string) => void
@@ -177,12 +180,28 @@ interface EditorStore {
   setEmbeddedWidth: (width: number) => void
 }
 
+export interface EditorSelection {
+  startLineNumber: number
+  startColumn: number
+  endLineNumber: number
+  endColumn: number
+}
+
+export interface EditorNavigationTarget {
+  requestId: number
+  fileId: string
+  selection: EditorSelection
+}
+
+let navigationRequestId = 0
+
 export const useEditorStore = create<EditorStore>((set, get) => ({
   openFiles: [],
   activeFileId: null,
   isVisible: false,
   isEmbedded: false,
   embeddedWidth: 560,
+  navigationTarget: null,
 
   openFile: async (absolutePath, workspacePath) => {
     const id = getEditorFileId(absolutePath)
@@ -228,6 +247,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
+  openFileAt: async (absolutePath, workspacePath, selection) => {
+    await get().openFile(absolutePath, workspacePath)
+    const fileId = getEditorFileId(absolutePath)
+    if (!get().openFiles.some((file) => file.id === fileId)) return
+    set({
+      activeFileId: fileId,
+      isVisible: true,
+      navigationTarget: { requestId: ++navigationRequestId, fileId, selection },
+    })
+  },
+
+  consumeNavigationTarget: (requestId) => {
+    set((state) => state.navigationTarget?.requestId === requestId ? { navigationTarget: null } : {})
+  },
+
   closeFile: (id) => {
     set(s => {
       const filtered = s.openFiles.filter(f => f.id !== id)
@@ -241,11 +275,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         activeFileId: newActive,
         isVisible: filtered.length > 0 ? s.isVisible : false,
         isEmbedded: filtered.length > 0 ? s.isEmbedded : false,
+        navigationTarget: s.navigationTarget?.fileId === id ? null : s.navigationTarget,
       }
     })
   },
 
-  setActiveFile: (id) => set({ activeFileId: id }),
+  setActiveFile: (id) => set({ activeFileId: id, navigationTarget: null }),
 
   markDirty: (id) => {
     set(s => ({
@@ -282,7 +317,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
-  closePanel: () => set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: false }),
+  closePanel: () => set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: false, navigationTarget: null }),
   hidePanel: () => set({ isVisible: false, isEmbedded: false }),
   showPanel: () => set(s => ({ isVisible: s.openFiles.length > 0 })),
   togglePanel: () => set(s => ({ isVisible: s.openFiles.length > 0 ? !s.isVisible : false })),

@@ -15,6 +15,7 @@ import { registerJanusHandlers } from './janus-handlers'
 import { registerJanusChatHandlers } from './janus-chat-handlers'
 import { registerKnowledgeHandlers } from './knowledge-handlers'
 import { registerLanguageHandlers } from './language-handlers'
+import { registerLanguageServiceHandlers } from './language-service-handlers'
 import { registerLlmHandlers } from './llm-handlers'
 import { registerOfficeHandlers } from './office-handlers'
 import { registerProjectHandlers } from './project-handlers'
@@ -96,6 +97,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerRuntimeTelemetryHandlers()
   registerSettingsHandlers()
   registerLanguageHandlers()
+  registerLanguageServiceHandlers()
   registerSubAgentRunHandlers()
   registerKnowledgeHandlers()
   registerOfficeHandlers({

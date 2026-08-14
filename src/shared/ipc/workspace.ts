@@ -24,6 +24,7 @@ export const FILE_CHANNELS = {
   save: 'file:save',
   readBinary: 'file:readBinary',
   stat: 'file:stat',
+  sourceFiles: 'file:sourceFiles',
 } as const
 
 export interface CLIConfig {
@@ -127,6 +128,18 @@ export interface FileSaveResult {
   error?: string
 }
 
+export interface WorkspaceSourceFile {
+  path: string
+  content: string
+  language: 'typescript' | 'javascript'
+}
+
+export interface WorkspaceSourceFilesResult {
+  files: WorkspaceSourceFile[]
+  truncated: boolean
+  error?: string
+}
+
 export interface WorkspaceAPI {
   initialize(): Promise<WorkspaceInitResult>
   list(): Promise<Workspace[]>
@@ -153,4 +166,5 @@ export interface FileAPI {
   save(filePath: string, content: string): Promise<FileSaveResult>
   readBinary(filePath: string): Promise<FileBinaryResult>
   stat(filePath: string): Promise<FileStatResult>
+  sourceFiles(workspacePath: string): Promise<WorkspaceSourceFilesResult>
 }
