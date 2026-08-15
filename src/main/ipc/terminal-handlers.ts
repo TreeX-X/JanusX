@@ -50,9 +50,8 @@ interface TerminalCpState {
   // in flight; concurrent create requests with the same id are rejected.
   creationLocked: boolean
   pendingSubmitTexts: string[]
-  // Output-flow heuristic for AI CLI display status (engine !== 'shell').
-  // flowStatus mirrors the last status pushed to the renderer so we only
-  // emit events on transitions, not on every data chunk.
+  // Retained for lifecycle cleanup compatibility. AI activity status is
+  // sourced exclusively from agent hooks, never inferred from PTY output.
   flowStatus: 'wait' | 'running'
   flowTimer: ReturnType<typeof setTimeout> | null
   lastDataAt: number
@@ -62,10 +61,6 @@ interface TerminalCpState {
 
 const terminalStates = new Map<string, TerminalCpState>()
 
-// Idle debounce for AI CLI output streams. When no pty data arrives for this
-// window, the terminal is considered back at an input prompt (wait). Spinner
-// / token output keeps the timer reset, holding the state at running.
-const TERMINAL_FLOW_IDLE_MS = 1200
 let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null
 
 /**
@@ -704,41 +699,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         if (seq === null) return
         queueTerminalData(id, data, seq)
 
-        // AI CLI output-flow heuristic: emit running on first chunk of a burst,
-        // debounce back to wait after IDLE_MS of silence. Shell terminals opt out
-        // entirely and never receive a status event from this path.
-        // P3: 不再每 chunk clearTimeout+setTimeout，改记录 lastDataAt +
-        // 单个按空闲差值自续期的检查定时器。
-        if (engine !== 'shell') {
-          const st = terminalStates.get(id)
-          if (st) {
-            if (st.hookStatus) return
-            if (st.flowStatus !== 'running') {
-              st.flowStatus = 'running'
-              sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
-            }
-            st.lastDataAt = Date.now()
-            if (!st.flowTimer) {
-              const checkIdle = () => {
-                try {
-                  const current = terminalStates.get(id)
-                  if (!current) return
-                  const idleFor = Date.now() - current.lastDataAt
-                  if (idleFor < TERMINAL_FLOW_IDLE_MS) {
-                    current.flowTimer = setTimeout(checkIdle, TERMINAL_FLOW_IDLE_MS - idleFor)
-                    return
-                  }
-                  current.flowStatus = 'wait'
-                  current.flowTimer = null
-                  sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'wait' })
-                } catch (timerErr) {
-                  console.error(`[terminal ${id}] flow timer error:`, timerErr)
-                }
-              }
-              st.flowTimer = setTimeout(checkIdle, TERMINAL_FLOW_IDLE_MS)
-            }
-          }
-        }
+        // PTY output includes user input echo, prompt redraws and ANSI repaint
+        // sequences. It is deliberately not used to infer AI activity.
       } catch (err) {
         console.error(`[terminal ${id}] onData error:`, err)
       }
