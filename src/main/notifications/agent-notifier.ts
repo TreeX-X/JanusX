@@ -1,4 +1,5 @@
-import { BrowserWindow, Notification } from 'electron'
+import { BrowserWindow } from 'electron'
+import * as electron from 'electron'
 import type { AgentEvent, AgentSpawnOptions } from '../agent/types'
 import {
   DEFAULT_AGENT_NOTIFICATION_SETTINGS,
@@ -72,9 +73,12 @@ function sendNativeNotification(
   payload: DesktopToastPayload,
   options: AgentNotificationOptions,
 ): boolean {
-  if (!Notification.isSupported()) return false
+  const NativeNotification = (electron as typeof electron & {
+    Notification?: typeof import('electron').Notification
+  }).Notification
+  if (!NativeNotification || !NativeNotification.isSupported()) return false
   try {
-    const notification = new Notification({ title: payload.title, body: payload.body })
+    const notification = new NativeNotification({ title: payload.title, body: payload.body })
     notification.on('click', () => focusMainWindow(mainWindow, options))
     notification.on('failed', (_event, error) => {
       options.onDesktopToastFailure?.(String(error || 'native-notification-failed'))

@@ -7,6 +7,9 @@ const desktopToastMock = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   BrowserWindow: class BrowserWindow {},
+  Notification: class Notification {
+    static isSupported() { return false }
+  },
 }))
 
 vi.mock('../../src/main/notifications/desktop-toast-window', () => ({
