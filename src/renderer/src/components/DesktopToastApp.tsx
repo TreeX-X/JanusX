@@ -54,14 +54,13 @@ export function DesktopToastApp() {
 
   useEffect(() => {
     document.body.classList.add('desktop-toast-body')
-    window.electron.desktopToast.ready()
-
     const unsubscribe = window.electron.desktopToast.onShow((payload) => {
       const nextToast = normalizePayload(payload)
       if (!nextToast) return
       setClosing(false)
       setToast(nextToast)
     })
+    window.electron.desktopToast.ready()
 
     return () => {
       document.body.classList.remove('desktop-toast-body')

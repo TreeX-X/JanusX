@@ -108,9 +108,19 @@ function showLocalNotification(
   const payload = createNotificationPayload(input)
   let desktopShown = false
   const sendRendererFallback = (): boolean => sendRendererNotification(mainWindow, payload)
-  const sendFallback = (): boolean => (
-    sendNativeNotification(mainWindow, payload, options) || sendRendererFallback()
-  )
+  const sendFallback = (): boolean => {
+    const nativeDelivered = sendNativeNotification(mainWindow, payload, options)
+    if (nativeDelivered) {
+      console.warn(`[notifications] using native fallback for ${payload.type}`)
+      return true
+    }
+
+    const rendererDelivered = sendRendererFallback()
+    if (rendererDelivered) {
+      console.warn(`[notifications] using main-renderer fallback for ${payload.type}`)
+    }
+    return rendererDelivered
+  }
   const desktopDelivered = desktopToastWindow.show(payload, {
     onClick: () => focusMainWindow(mainWindow, options),
     onShown: () => {

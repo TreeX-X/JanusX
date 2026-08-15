@@ -1,7 +1,7 @@
 import { BrowserWindow, app, ipcMain, screen, type IpcMainEvent } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import { join } from 'path'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
+import { loadRendererWindow } from '../windows/renderer-loader'
 
 export interface DesktopToastPayload {
   id: string
@@ -90,7 +90,9 @@ class DesktopToastWindow {
       focusable: false,
       backgroundColor: '#00000000',
       webPreferences: {
-        preload: join(__dirname, '../preload/index.mjs'),
+        // This module is emitted under out/main/chunks in production and
+        // development builds; the preload bundle is emitted under out/preload.
+        preload: join(__dirname, '../../preload/index.mjs'),
         sandbox: false,
       },
     })
@@ -103,7 +105,14 @@ class DesktopToastWindow {
       }
     })
     win.webContents.on('did-fail-load', (_event, _code, description) => {
-      this.currentOptions?.onError?.(description || 'desktop-toast-load-failed')
+      const reason = description || 'desktop-toast-load-failed'
+      console.error(`[desktop-toast] renderer failed to load: ${reason}`)
+      this.currentOptions?.onError?.(reason)
+    })
+    win.webContents.on('render-process-gone', (_event, details) => {
+      const reason = `desktop-toast-renderer-gone:${details.reason || 'unknown'}`
+      console.error(`[desktop-toast] ${reason}`)
+      this.currentOptions?.onError?.(reason)
     })
 
     this.toastWindow = win
@@ -116,16 +125,11 @@ class DesktopToastWindow {
   }
 
   private async loadToastApp(win: BrowserWindow): Promise<void> {
-    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-      const url = new URL(process.env['ELECTRON_RENDERER_URL'])
-      url.searchParams.set('desktopToast', '1')
-      await win.loadURL(url.toString())
-      return
-    }
-
-    await win.loadFile(join(__dirname, '../renderer/index.html'), {
-      query: { desktopToast: '1' },
-    })
+    await loadRendererWindow(
+      win,
+      (url) => url.searchParams.set('desktopToast', '1'),
+      { desktopToast: '1' },
+    )
   }
 
   private positionWindow(win: BrowserWindow): void {
@@ -194,6 +198,7 @@ class DesktopToastWindow {
     const win = this.toastWindow
     if (!win || win.isDestroyed() || event.sender !== win.webContents) return
     this.rendererReady = true
+    console.debug('[desktop-toast] renderer ready')
     this.flush()
   }
 

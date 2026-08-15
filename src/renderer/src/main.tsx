@@ -117,10 +117,18 @@ const rootContent = isEditorWindow ? (
   </Suspense>
 )
 
-void i18nReady.then(() => {
+const renderRoot = () => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       {rootContent}
-    </React.StrictMode>
+    </React.StrictMode>,
   )
-})
+}
+
+// Toasts do not use translations. Mount this lightweight surface immediately
+// so it can acknowledge readiness before the notification timeout expires.
+if (isDesktopToast) {
+  renderRoot()
+} else {
+  void i18nReady.then(renderRoot)
+}
