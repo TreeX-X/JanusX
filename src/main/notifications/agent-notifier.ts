@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, Notification } from 'electron'
 import type { AgentEvent, AgentSpawnOptions } from '../agent/types'
 import {
   DEFAULT_AGENT_NOTIFICATION_SETTINGS,
@@ -67,6 +67,27 @@ function sendRendererNotification(
   return true
 }
 
+function sendNativeNotification(
+  mainWindow: BrowserWindow,
+  payload: DesktopToastPayload,
+  options: AgentNotificationOptions,
+): boolean {
+  if (!Notification.isSupported()) return false
+  try {
+    const notification = new Notification({ title: payload.title, body: payload.body })
+    notification.on('click', () => focusMainWindow(mainWindow, options))
+    notification.on('failed', (_event, error) => {
+      options.onDesktopToastFailure?.(String(error || 'native-notification-failed'))
+      sendRendererNotification(mainWindow, payload)
+    })
+    notification.show()
+    return true
+  } catch (error) {
+    options.onDesktopToastFailure?.(error instanceof Error ? error.message : String(error))
+    return false
+  }
+}
+
 function createNotificationPayload(payload: AgentNotificationPayload): DesktopToastPayload {
   return {
     id: `${payload.type}:${payload.engine}:${Date.now()}`,
@@ -83,6 +104,9 @@ function showLocalNotification(
   const payload = createNotificationPayload(input)
   let desktopShown = false
   const sendRendererFallback = (): boolean => sendRendererNotification(mainWindow, payload)
+  const sendFallback = (): boolean => (
+    sendNativeNotification(mainWindow, payload, options) || sendRendererFallback()
+  )
   const desktopDelivered = desktopToastWindow.show(payload, {
     onClick: () => focusMainWindow(mainWindow, options),
     onShown: () => {
@@ -91,11 +115,11 @@ function showLocalNotification(
     },
     onError: (error) => {
       options.onDesktopToastFailure?.(error)
-      if (!desktopShown) sendRendererFallback()
+      if (!desktopShown) sendFallback()
     },
   })
 
-  return desktopDelivered || sendRendererFallback()
+  return desktopDelivered || sendFallback()
 }
 
 export function notifyAgentEvent(

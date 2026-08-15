@@ -56,6 +56,8 @@ interface TerminalCpState {
   flowStatus: 'wait' | 'running'
   flowTimer: ReturnType<typeof setTimeout> | null
   lastDataAt: number
+  // Hook lifecycle is authoritative once observed; ignore prompt echoes.
+  hookStatus?: 'running' | 'wait' | 'error'
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
@@ -301,6 +303,28 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       sendToRenderer(getMainWindow(), AGENT_CHANNELS.hookEvent, event)
     },
     onResolvedPayload: (payload, terminal) => {
+      const state = terminalStates.get(terminal.terminalId)
+      const event = payload.event.toLowerCase()
+      const rawStatus = JSON.stringify(payload.raw ?? '')
+      const startsTurn = payload.source === 'opencode'
+        ? event === 'session.status' && /busy|running/i.test(rawStatus)
+        : event === 'userpromptsubmit'
+      const completesTurn = payload.source === 'opencode'
+        ? event === 'session.idle'
+        : event === 'stop'
+      const failsTurn = payload.source === 'opencode'
+        ? event === 'session.error'
+        : event === 'stopfailure' || event === 'posttoolusefailure'
+      const needsAttention = payload.source === 'opencode'
+        ? event === 'permission.asked'
+        : event === 'permissionrequest' || event === 'notification'
+      if (state && (startsTurn || completesTurn || failsTurn || needsAttention)) {
+        state.hookStatus = startsTurn ? 'running' : failsTurn ? 'error' : 'wait'
+        sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, {
+          id: terminal.terminalId,
+          status: state.hookStatus,
+        })
+      }
       companionSessionState.handleHookPayload(payload)
       agentTurnRecorder.handleHookPayload(payload)
       if (payload.sessionId) {
@@ -479,6 +503,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       flowStatus: 'wait',
       flowTimer: null,
       lastDataAt: 0,
+      hookStatus: undefined,
     })
 
     const launchProgram = resolveTerminalLaunchProgram(
@@ -653,6 +678,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       flowStatus: 'wait',
       flowTimer: null,
       lastDataAt: 0,
+      hookStatus: undefined,
     })
 
     // AC5/AC6: capture the pid of the pty we are about to register callbacks
@@ -686,6 +712,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         if (engine !== 'shell') {
           const st = terminalStates.get(id)
           if (st) {
+            if (st.hookStatus) return
             if (st.flowStatus !== 'running') {
               st.flowStatus = 'running'
               sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, { id, status: 'running' })
