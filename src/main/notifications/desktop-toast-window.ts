@@ -32,6 +32,7 @@ class DesktopToastWindow {
   private currentPayload: DesktopToastPayload | null = null
   private currentOptions: DesktopToastOptions | null = null
   private hideTimer: ReturnType<typeof setTimeout> | null = null
+  private readyTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor() {
     ipcMain.on(SYSTEM_CHANNELS.toastReady, this.handleReady)
@@ -46,11 +47,21 @@ class DesktopToastWindow {
 
     this.currentPayload = payload
     this.currentOptions = options
+    this.clearReadyTimer()
 
     try {
       const win = this.ensureWindow()
       this.positionWindow(win)
       this.flush()
+      if (!this.rendererReady) {
+        const expectedPayload = payload
+        this.readyTimer = setTimeout(() => {
+          this.readyTimer = null
+          if (this.currentPayload !== expectedPayload || this.rendererReady) return
+          this.currentOptions?.onError?.('desktop-toast-renderer-not-ready')
+        }, 1500)
+        this.readyTimer.unref?.()
+      }
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -132,6 +143,8 @@ class DesktopToastWindow {
     const win = this.toastWindow
     if (!win || win.isDestroyed() || !this.rendererReady || !this.currentPayload) return
 
+    this.clearReadyTimer()
+
     if (this.hideTimer) {
       clearTimeout(this.hideTimer)
       this.hideTimer = null
@@ -148,6 +161,7 @@ class DesktopToastWindow {
   }
 
   private hide(): void {
+    this.clearReadyTimer()
     if (this.hideTimer) {
       clearTimeout(this.hideTimer)
       this.hideTimer = null
@@ -157,6 +171,12 @@ class DesktopToastWindow {
     if (win && !win.isDestroyed()) win.hide()
     this.currentPayload = null
     this.currentOptions = null
+  }
+
+  private clearReadyTimer(): void {
+    if (!this.readyTimer) return
+    clearTimeout(this.readyTimer)
+    this.readyTimer = null
   }
 
   /** Destroy the toast window so it cannot keep the app alive on quit. */
