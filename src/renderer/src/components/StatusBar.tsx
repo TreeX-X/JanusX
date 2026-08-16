@@ -39,7 +39,7 @@ export function StatusBar() {
         />
         <span>{blueprintMode ? t('common:statusBar.blueprintRunning') : (statusText[loadState] ?? t('common:statusBar.ready'))}</span>
       </div>
-      <span>v0.1.0</span>
+      <span>v0.8.0</span>
     </footer>
   )
 }

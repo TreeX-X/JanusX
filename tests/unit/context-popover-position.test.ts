@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getContextPopoverPosition } from '../../src/renderer/src/components/context-popover-position'
 
-const popover = { width: 270, height: 160 }
+const popover = { width: 320, height: 230 }
 const viewport = { width: 1000, height: 700 }
 
 describe('context popover anchor position', () => {
@@ -10,7 +10,7 @@ describe('context popover anchor position', () => {
       { top: 300, bottom: 320, left: 400, width: 100 },
       popover,
       viewport,
-    )).toEqual({ top: 132, left: 315, placement: 'above' })
+    )).toEqual({ top: 62, left: 290, placement: 'above' })
   })
 
   it('opens below a trigger near the top edge', () => {
@@ -18,7 +18,7 @@ describe('context popover anchor position', () => {
       { top: 20, bottom: 40, left: 400, width: 100 },
       popover,
       viewport,
-    )).toEqual({ top: 48, left: 315, placement: 'below' })
+    )).toEqual({ top: 48, left: 290, placement: 'below' })
   })
 
   it('clamps horizontally at both viewport edges', () => {
@@ -31,7 +31,7 @@ describe('context popover anchor position', () => {
       { top: 300, bottom: 320, left: 980, width: 20 },
       popover,
       viewport,
-    ).left).toBe(722)
+    ).left).toBe(672)
   })
 
   it('chooses the roomier side and vertically clamps when neither side fits', () => {

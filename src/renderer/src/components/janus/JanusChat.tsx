@@ -758,9 +758,11 @@ export function JanusChat({
             className={`janus-chat-message ${msg.role}`}
           >
             <div className="janus-chat-message-meta">
-              <div className="janus-chat-message-author">
-                {msg.role === 'user' ? t('janus:chat.author.user') : t('janus:chat.author.assistant')}
-              </div>
+              {msg.role === 'assistant' && (
+                <div className="janus-chat-message-author">
+                  {t('janus:chat.author.assistant')}
+                </div>
+              )}
               <time className="janus-chat-message-time" dateTime={new Date(msg.timestamp).toISOString()}>
                 {formatMessageTime(msg.timestamp)}
               </time>

@@ -28,9 +28,30 @@
   },
   "context": {
     "popoverTitle": "运行时上下文",
+    "openDetailsAria": "打开运行时上下文详情",
+    "updatedAgo": "{{age}}前更新",
+    "section": {
+      "capacity": "上下文容量",
+      "session": "会话 Token",
+      "telemetry": "遥测状态"
+    },
+    "source": {
+      "provider-event": "Provider 事件",
+      "history": "会话历史",
+      "terminal-text": "终端文本",
+      "model-registry": "模型注册表",
+      "configuration": "配置"
+    },
+    "windowSource": {
+      "runtime": "运行时遥测",
+      "model-registry": "模型注册表",
+      "estimated": "估算",
+      "unknown": "未知"
+    },
     "row": {
       "runtimeWindow": "运行时窗口",
       "modelCapacity": "模型容量",
+      "remaining": "剩余",
       "sessionInput": "会话输入",
       "sessionOutput": "会话输出",
       "cacheRead": "缓存读取",

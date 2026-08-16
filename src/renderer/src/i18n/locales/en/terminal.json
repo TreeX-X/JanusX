@@ -28,9 +28,30 @@
   },
   "context": {
     "popoverTitle": "Runtime context",
+    "openDetailsAria": "Open runtime context details",
+    "updatedAgo": "Updated {{age}} ago",
+    "section": {
+      "capacity": "Context capacity",
+      "session": "Session tokens",
+      "telemetry": "Telemetry status"
+    },
+    "source": {
+      "provider-event": "Provider event",
+      "history": "Session history",
+      "terminal-text": "Terminal text",
+      "model-registry": "Model registry",
+      "configuration": "Configuration"
+    },
+    "windowSource": {
+      "runtime": "Runtime telemetry",
+      "model-registry": "Model registry",
+      "estimated": "Estimated",
+      "unknown": "Unknown"
+    },
     "row": {
       "runtimeWindow": "Runtime window",
       "modelCapacity": "Model capacity",
+      "remaining": "Remaining",
       "sessionInput": "Session input",
       "sessionOutput": "Session output",
       "cacheRead": "Cache read",

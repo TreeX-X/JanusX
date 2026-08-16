@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { Globe, SquareTerminal, X } from 'lucide-react'
@@ -126,7 +126,7 @@ function formatTokenCount(value?: number): string {
 }
 
 function formatExactTokenCount(value?: number): string {
-  return value === undefined ? 'unknown' : value.toLocaleString('en-US')
+  return value === undefined ? '' : value.toLocaleString('en-US')
 }
 
 function modelLabel(terminal: Terminal, t: (k: string) => string): string {
@@ -193,81 +193,146 @@ function contextLabel(terminal: Terminal, t: (k: string) => string): string {
 
 function contextPercentLabel(terminal: Terminal): string {
   const ratio = contextRatio(terminal)
-  return ratio === undefined ? 'unknown' : `${(ratio * 100).toFixed(1)}%`
+  return ratio === undefined ? '--' : `${(ratio * 100).toFixed(1)}%`
 }
 
-function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
+interface ContextUsagePopoverProps {
+  terminal: Terminal
+  children: ReactNode
+  className: string
+  style?: CSSProperties
+  interactive?: boolean
+  clickable?: boolean
+}
+
+type ContextPopoverRow = [label: string, value: string]
+
+function ContextPopoverRows({ rows }: { rows: ContextPopoverRow[] }) {
+  return rows.map(([label, value]) => (
+    <div key={label} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-1">
+      <span className="truncate text-[#858585]">{label}</span>
+      <span className="min-w-0 max-w-[170px] truncate text-right text-[#ededed]">{value}</span>
+    </div>
+  ))
+}
+
+function ContextUsagePopover({
+  terminal,
+  children,
+  className,
+  style,
+  interactive = true,
+  clickable = false,
+}: ContextUsagePopoverProps) {
   const { t } = useI18n('terminal')
-  const markerRef = useRef<HTMLSpanElement | null>(null)
-  const popoverRef = useRef<HTMLSpanElement | null>(null)
+  const popoverId = useId()
+  const triggerRef = useRef<HTMLButtonElement | HTMLSpanElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
   const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
-  const [popoverSize, setPopoverSize] = useState<PopoverSize>({ width: 270, height: 160 })
+  const [openMode, setOpenMode] = useState<'closed' | 'preview' | 'details'>('closed')
+  const [popoverSize, setPopoverSize] = useState<PopoverSize>({ width: 320, height: 230 })
   const windows = resolveContextWindows(
     terminal.preset,
     terminal.detectedModel,
     terminal.contextWindowTokens,
   )
   const windowTokens = windows.effectiveWindow
-  const rows = [
-    [t('terminal:context.row.runtimeWindow'), formatExactTokenCount(windows.runtimeWindow)],
-    [t('terminal:context.row.modelCapacity'), formatExactTokenCount(windows.modelCapacity)],
-    [t('terminal:context.row.sessionInput'), formatExactTokenCount(terminal.inputTokens)],
-    [t('terminal:context.row.sessionOutput'), formatExactTokenCount(terminal.outputTokens)],
-    [t('terminal:context.row.cacheRead'), formatExactTokenCount(terminal.cacheReadTokens)],
-    [t('terminal:context.row.cacheWrite'), formatExactTokenCount(terminal.cacheWriteTokens)],
-    [t('terminal:context.row.sessionTotal'), formatExactTokenCount(terminal.totalTokens)],
+  const remainingTokens = windowTokens !== undefined && terminal.contextTokens !== undefined
+    ? Math.max(0, windowTokens - terminal.contextTokens)
+    : undefined
+  const compacted = terminal.compactionCountConfidence === 'exact'
+    ? String(terminal.compactionCount ?? 0)
+    : undefined
+  const sessionSummaryRows = [
+    terminal.inputTokens === undefined ? null : [t('terminal:context.row.sessionInput'), formatExactTokenCount(terminal.inputTokens)],
+    terminal.outputTokens === undefined ? null : [t('terminal:context.row.sessionOutput'), formatExactTokenCount(terminal.outputTokens)],
+    terminal.totalTokens === undefined ? null : [t('terminal:context.row.sessionTotal'), formatExactTokenCount(terminal.totalTokens)],
+  ].filter((row): row is ContextPopoverRow => row !== null)
+  const capacityRows = [
+    windows.runtimeWindow === undefined ? null : [t('terminal:context.row.runtimeWindow'), formatExactTokenCount(windows.runtimeWindow)],
+    windows.modelCapacity === undefined ? null : [t('terminal:context.row.modelCapacity'), formatExactTokenCount(windows.modelCapacity)],
+    remainingTokens === undefined ? null : [t('terminal:context.row.remaining'), formatExactTokenCount(remainingTokens)],
+    compacted === undefined ? null : [t('terminal:context.row.compactions'), compacted],
+  ].filter((row): row is ContextPopoverRow => row !== null)
+  const sessionDetailRows = [
+    terminal.inputTokens === undefined ? null : [t('terminal:context.row.sessionInput'), formatExactTokenCount(terminal.inputTokens)],
+    terminal.outputTokens === undefined ? null : [t('terminal:context.row.sessionOutput'), formatExactTokenCount(terminal.outputTokens)],
+    terminal.cacheReadTokens === undefined ? null : [t('terminal:context.row.cacheRead'), formatExactTokenCount(terminal.cacheReadTokens)],
+    terminal.cacheWriteTokens === undefined ? null : [t('terminal:context.row.cacheWrite'), formatExactTokenCount(terminal.cacheWriteTokens)],
+    terminal.totalTokens === undefined ? null : [t('terminal:context.row.sessionTotal'), formatExactTokenCount(terminal.totalTokens)],
+  ].filter((row): row is ContextPopoverRow => row !== null)
+  const telemetrySource = terminal.telemetrySource
+    ? t(`terminal:context.source.${terminal.telemetrySource}`)
+    : null
+  const telemetryRows = [
     [t('terminal:context.row.sessionBinding'), terminal.telemetrySessionBinding === 'exact' ? t('terminal:telemetry.binding.exact') : t('terminal:telemetry.binding.pending')],
-    [t('terminal:context.row.compactions'), terminal.compactionCountConfidence === 'exact' ? String(terminal.compactionCount ?? 0) : t('terminal:telemetry.compactionNotReported')],
-    [t('terminal:context.row.modelChanged'), formatAge(terminal.modelChangedAt)],
-    [t('terminal:context.row.usageSource'), `${telemetryQualityLabel(terminal, t)} · ${terminal.telemetrySource ?? t('terminal:telemetry.sourceUnknown')}`],
-    [t('terminal:context.row.windowSource'), windows.effectiveSource === 'runtime' ? t('terminal:telemetry.windowSourceRuntime') : windows.effectiveSource],
-    [t('terminal:context.row.updated'), formatAge(terminal.telemetryUpdatedAt)],
-  ]
+    terminal.modelChangedAt === undefined ? null : [t('terminal:context.row.modelChanged'), formatAge(terminal.modelChangedAt)],
+    telemetrySource === null ? null : [t('terminal:context.row.usageSource'), `${telemetryQualityLabel(terminal, t)} · ${telemetrySource}`],
+    [t('terminal:context.row.windowSource'), t(`terminal:context.windowSource.${windows.effectiveSource}`)],
+    terminal.telemetryUpdatedAt === undefined ? null : [t('terminal:context.row.updated'), formatAge(terminal.telemetryUpdatedAt)],
+  ].filter((row): row is ContextPopoverRow => row !== null)
 
-  useEffect(() => {
-    const trigger = markerRef.current?.parentElement
-    if (!trigger) return
-    const show = () => {
-      const rect = trigger.getBoundingClientRect()
-      setAnchorRect({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width })
-    }
-    const hide = () => setAnchorRect(null)
-    trigger.addEventListener('mouseenter', show)
-    trigger.addEventListener('mouseleave', hide)
-    return () => {
-      trigger.removeEventListener('mouseenter', show)
-      trigger.removeEventListener('mouseleave', hide)
-    }
+  const open = useCallback((mode: 'preview' | 'details') => {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setAnchorRect({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width })
+    setOpenMode(mode)
+  }, [])
+
+  const close = useCallback(() => {
+    setOpenMode('closed')
+    setAnchorRect(null)
   }, [])
 
   useLayoutEffect(() => {
-    if (!anchorRect || !popoverRef.current) return
+    if (openMode === 'closed' || !popoverRef.current) return
     const rect = popoverRef.current.getBoundingClientRect()
     if (rect.width !== popoverSize.width || rect.height !== popoverSize.height) {
       setPopoverSize({ width: rect.width, height: rect.height })
     }
-  }, [anchorRect, popoverSize.height, popoverSize.width])
+  }, [openMode, popoverSize.height, popoverSize.width])
 
   useEffect(() => {
-    if (!anchorRect) return
-    const hide = () => setAnchorRect(null)
-    window.addEventListener('resize', hide)
-    window.addEventListener('scroll', hide, true)
+    if (openMode === 'closed') return
+    const handleViewportChange = () => close()
+    window.addEventListener('resize', handleViewportChange)
+    window.addEventListener('scroll', handleViewportChange, true)
     return () => {
-      window.removeEventListener('resize', hide)
-      window.removeEventListener('scroll', hide, true)
+      window.removeEventListener('resize', handleViewportChange)
+      window.removeEventListener('scroll', handleViewportChange, true)
     }
-  }, [anchorRect])
+  }, [close, openMode])
+
+  useEffect(() => {
+    if (openMode !== 'details') return
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) close()
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [close, openMode])
+
+  useEffect(() => close(), [close, terminal.id])
 
   const position = anchorRect
     ? getContextPopoverPosition(anchorRect, popoverSize, { width: window.innerWidth, height: window.innerHeight })
     : null
 
   const popover = position && createPortal(
-    <span
+    <div
+      id={popoverId}
       ref={popoverRef}
-      role="tooltip"
-      className="pointer-events-none fixed z-50 w-[270px] overflow-hidden rounded-[10px] border px-3.5 py-3 text-left font-mono text-[12px] shadow-[0_18px_42px_rgba(0,0,0,0.48)]"
+      role={openMode === 'details' ? 'dialog' : 'tooltip'}
+      aria-label={t('terminal:context.popoverTitle')}
+      className={`fixed z-50 w-[320px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border px-4 py-3.5 text-left font-mono text-[11px] shadow-[0_18px_42px_rgba(0,0,0,0.48)] ${openMode === 'details' ? 'pointer-events-auto max-h-[calc(100vh-16px)]' : 'pointer-events-none'}`}
       style={{
         top: position.top,
         left: position.left,
@@ -276,21 +341,25 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
         color: '#e8e8e8',
       }}
     >
-      <span className="mb-2 flex items-end justify-between gap-3">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#858585]">{t('terminal:context.popoverTitle')}</span>
-          <span className="mt-0.5 block truncate text-[13px] text-[#f2f2f2]">
-            {formatExactTokenCount(terminal.contextTokens)} / {formatExactTokenCount(windowTokens)}
+          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#8c8c8c]">{t('terminal:context.popoverTitle')}</span>
+          <span className="mt-1 block truncate text-[12px] text-[#d9d9d9]">
+            {terminal.contextTokens === undefined || windowTokens === undefined
+              ? t('terminal:telemetry.contextUnknown')
+              : `${formatExactTokenCount(terminal.contextTokens)} / ${formatExactTokenCount(windowTokens)}`}
           </span>
         </span>
-        <span
-          className="shrink-0 text-[18px] leading-none"
-          style={{ color: contextRatioColor(contextRatio(terminal)) }}
-        >
-          {contextPercentLabel(terminal)}
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="rounded border border-[rgba(255,255,255,0.08)] px-1.5 py-0.5 text-[9px] uppercase text-[#929292]">
+            {telemetryQualityLabel(terminal, t)}
+          </span>
+          <span className="text-[18px] leading-none" style={{ color: contextRatioColor(contextRatio(terminal)) }}>
+            {contextPercentLabel(terminal)}
+          </span>
         </span>
-      </span>
-      <span className="mb-2 block h-1.5 overflow-hidden rounded-full bg-[rgba(255,255,255,0.07)]">
+      </div>
+      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-[rgba(255,255,255,0.07)]">
         <span
           className="block h-full rounded-full"
           style={{
@@ -298,22 +367,123 @@ function ContextUsagePopover({ terminal }: { terminal: Terminal }) {
             background: contextRatioColor(contextRatio(terminal)),
           }}
         />
-      </span>
-      {rows.map(([label, value]) => (
-        <span key={label} className="flex min-w-0 items-center justify-between gap-3 py-1">
-          <span className="shrink-0 text-[#8b8b8b]">{label}</span>
-          <span className="min-w-0 truncate text-right text-[#f4f4f4]">{value}</span>
-        </span>
-      ))}
-    </span>,
+      </div>
+      {(remainingTokens !== undefined || compacted !== undefined) && (
+        <div className="grid grid-cols-2 gap-x-5 border-t border-[rgba(255,255,255,0.07)] py-2.5">
+          {remainingTokens !== undefined && (
+            <div className="min-w-0">
+              <div className="text-[9px] uppercase text-[#777]">{t('terminal:context.row.remaining')}</div>
+              <div className="mt-1 truncate text-[13px] text-[#ededed]">{formatExactTokenCount(remainingTokens)}</div>
+            </div>
+          )}
+          {compacted !== undefined && (
+            <div className="min-w-0">
+              <div className="text-[9px] uppercase text-[#777]">{t('terminal:context.row.compactions')}</div>
+              <div className="mt-1 truncate text-[13px] text-[#ededed]">{compacted}</div>
+            </div>
+          )}
+        </div>
+      )}
+      {openMode === 'preview' ? (
+        sessionSummaryRows.length > 0 && (
+          <div className="border-t border-[rgba(255,255,255,0.07)] pt-2.5">
+            <div className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.session')}</div>
+            <ContextPopoverRows rows={sessionSummaryRows} />
+          </div>
+        )
+      ) : (
+        <div className="space-y-3 border-t border-[rgba(255,255,255,0.07)] pt-3">
+          {capacityRows.length > 0 && (
+            <section>
+              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.capacity')}</h3>
+              <ContextPopoverRows rows={capacityRows} />
+            </section>
+          )}
+          {sessionDetailRows.length > 0 && (
+            <section className="border-t border-[rgba(255,255,255,0.07)] pt-3">
+              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.session')}</h3>
+              <ContextPopoverRows rows={sessionDetailRows} />
+            </section>
+          )}
+          {telemetryRows.length > 0 && (
+            <section className="border-t border-[rgba(255,255,255,0.07)] pt-3">
+              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.telemetry')}</h3>
+              <ContextPopoverRows rows={telemetryRows} />
+            </section>
+          )}
+        </div>
+      )}
+      {terminal.telemetryUpdatedAt !== undefined && openMode === 'preview' && (
+        <div className="mt-2.5 border-t border-[rgba(255,255,255,0.07)] pt-2 text-[9px] text-[#686868]">
+          {t('terminal:context.updatedAgo', { age: formatAge(terminal.telemetryUpdatedAt) })}
+        </div>
+      )}
+    </div>,
     document.body,
   )
 
+  const triggerEvents = {
+    onMouseEnter: () => {
+      if (openMode === 'closed') open('preview')
+    },
+    onMouseLeave: () => {
+      if (openMode === 'preview') close()
+    },
+  }
+
+  if (!interactive) {
+    return (
+      <span
+        ref={(node) => { triggerRef.current = node }}
+        className={className}
+        style={style}
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        aria-controls={clickable && openMode === 'details' ? popoverId : undefined}
+        aria-expanded={clickable ? openMode === 'details' : undefined}
+        aria-haspopup={clickable ? 'dialog' : undefined}
+        aria-label={clickable ? t('terminal:context.openDetailsAria') : undefined}
+        onClick={clickable ? (event) => {
+          event.stopPropagation()
+          openMode === 'details' ? close() : open('details')
+        } : undefined}
+        onKeyDown={clickable ? (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            event.stopPropagation()
+            openMode === 'details' ? close() : open('details')
+          }
+        } : undefined}
+        {...triggerEvents}
+      >
+        {children}
+        {popover}
+      </span>
+    )
+  }
+
   return (
-    <>
-      <span ref={markerRef} className="hidden" aria-hidden="true" />
+    <button
+      ref={(node) => { triggerRef.current = node }}
+      type="button"
+      className={className}
+      style={style}
+      aria-controls={openMode === 'details' ? popoverId : undefined}
+      aria-expanded={openMode === 'details'}
+      aria-haspopup="dialog"
+      aria-label={t('terminal:context.openDetailsAria')}
+      onFocus={() => {
+        if (openMode === 'closed') open('preview')
+      }}
+      onBlur={() => {
+        if (openMode === 'preview') close()
+      }}
+      onClick={() => openMode === 'details' ? close() : open('details')}
+      {...triggerEvents}
+    >
+      {children}
       {popover}
-    </>
+    </button>
   )
 }
 
@@ -1362,15 +1532,21 @@ export function TerminalArea() {
           height: getDrawerHeight(drawerOpen, drawerView),
         }}
       >
-        <button
-          type="button"
-          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)] ${drawerOpen ? 'pr-32' : 'pr-3'}`}
+        <div
+          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] ${drawerOpen ? 'pr-32' : 'pr-3'}`}
           onClick={() => setDrawerOpen((value) => !value)}
-          aria-expanded={drawerOpen}
-          aria-label={t('terminal:tab.runtimePanelToggle')}
         >
           <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
-            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+            <button
+              type="button"
+              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
+              onClick={(event) => {
+                event.stopPropagation()
+                setDrawerOpen((value) => !value)
+              }}
+              aria-expanded={drawerOpen}
+              aria-label={t('terminal:tab.runtimePanelToggle')}
+            >
               <span
                 className="h-[7px] w-[7px] transition-transform"
                 style={{
@@ -1379,7 +1555,7 @@ export function TerminalArea() {
                   transform: drawerOpen ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
                 }}
               />
-            </span>
+            </button>
             {activeTerminal ? (
               <span className="flex min-w-0 items-center gap-1.5">
                 {focusedTerminalWorkspace && (
@@ -1409,7 +1585,10 @@ export function TerminalArea() {
                 >
                   <span className="truncate">{modelLabel(activeTerminal, t)}</span>
                 </span>
-                <span
+                <ContextUsagePopover
+                  terminal={activeTerminal}
+                  interactive={false}
+                  clickable
                   className="group relative inline-flex h-5 shrink-0 items-center rounded border px-2 font-mono"
                   style={{
                     borderColor: `${contextRatioColor(contextRatio(activeTerminal))}33`,
@@ -1418,30 +1597,10 @@ export function TerminalArea() {
                   }}
                 >
                   {contextLabel(activeTerminal, t)}
-                  <ContextUsagePopover terminal={activeTerminal} />
-                </span>
+                </ContextUsagePopover>
               </span>
             ) : (
               <span className="truncate font-mono text-[#666]">No model or context data</span>
-            )}
-            {activeTerminal && (
-              <span
-                className="group relative hidden h-5 w-20 items-center md:inline-flex"
-                title={`Context: ${contextLabel(activeTerminal, t)}`}
-              >
-                <span
-                  className="h-1 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)]"
-                >
-                  <span
-                    className="block h-full rounded-full transition-[width,background] duration-300"
-                    style={{
-                      width: `${Math.round((contextRatio(activeTerminal) ?? 0) * 100)}%`,
-                      background: contextRatioColor(contextRatio(activeTerminal)),
-                    }}
-                  />
-                </span>
-                <ContextUsagePopover terminal={activeTerminal} />
-              </span>
             )}
           </div>
           <div className="flex h-full shrink-0 items-center gap-2 text-[10px]">
@@ -1471,7 +1630,7 @@ export function TerminalArea() {
               )}
             </div>
           </div>
-        </button>
+        </div>
         <DrawerViewTabs
           open={drawerOpen}
           activeView={drawerView}
@@ -1542,7 +1701,11 @@ export function TerminalArea() {
                       >
                         <span className="truncate">{modelLabel(terminal, t)}</span>
                       </span>
-                      <span className="group relative grid min-w-0 grid-cols-[1fr_auto] items-center gap-2">
+                      <ContextUsagePopover
+                        terminal={terminal}
+                        interactive={false}
+                        className="group relative grid min-w-0 grid-cols-[1fr_auto] items-center gap-2"
+                      >
                         <span
                           className="h-1 overflow-hidden rounded-full"
                           style={{ background: 'rgba(255,255,255,0.06)' }}
@@ -1556,8 +1719,7 @@ export function TerminalArea() {
                           />
                         </span>
                         <span className="whitespace-nowrap" style={{ color: contextRatioColor(contextRatio(terminal)) }}>{contextLabel(terminal, t)}</span>
-                        <ContextUsagePopover terminal={terminal} />
-                      </span>
+                      </ContextUsagePopover>
                       <span className="text-right text-[#555]" title={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
                         {formatAge(terminal.telemetryUpdatedAt)}
                       </span>
