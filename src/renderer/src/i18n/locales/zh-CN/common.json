@@ -99,7 +99,9 @@
     "dockAria": "右侧工具 Dock",
     "resizeAria": "调整右侧工具面板宽度",
     "collapseAria": "折叠右侧工具面板",
-    "collapseTitle": "折叠面板"
+    "collapseTitle": "折叠面板",
+    "expandAria": "展开右侧工具面板",
+    "expandTitle": "展开面板"
   },
   "rightTool": {
     "openTabsAria": "已打开的右侧工具",
@@ -110,7 +112,13 @@
     "railStateOpen": "已打开",
     "railStateClosed": "已关闭",
     "railButtonAria": "{{label}}，{{state}}",
-    "toolLoadFailed": "工具内容加载失败"
+    "toolLoadFailed": "工具内容加载失败",
+    "tool": {
+      "files": { "title": "文件", "shortTitle": "文件", "ariaLabel": "打开文件工具" },
+      "git": { "title": "Git", "shortTitle": "Git", "ariaLabel": "打开 Git 工具" },
+      "checkpoints": { "title": "还原点", "shortTitle": "还原点", "ariaLabel": "打开还原点工具" },
+      "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "打开 Assist 工具" }
+    }
   },
   "quantumTopology": {
     "titleWithName": "量子拓扑图谱 · {{name}} ({{hexTag}})",

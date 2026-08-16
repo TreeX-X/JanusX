@@ -1,12 +1,14 @@
+import type { TypedI18nKey } from '@/i18n/types'
+
 export type RightToolId = 'files' | 'git' | 'checkpoints' | 'assist'
 
 export type RightToolIconKind = 'files' | 'git' | 'checkpoints' | 'assist'
 
 export interface RightToolDefinition {
   id: RightToolId
-  title: string
-  shortTitle: string
-  ariaLabel: string
+  titleKey: TypedI18nKey
+  shortTitleKey: TypedI18nKey
+  ariaLabelKey: TypedI18nKey
   icon: RightToolIconKind
   order: number
   instancePolicy: 'single'

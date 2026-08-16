@@ -37,7 +37,9 @@ interface AppStore {
 export const useAppStore = create<AppStore>((set) => ({
   loadState: 'no-workspace',
   sidebarCollapsed: false,
-  panelCollapsed: false,
+  // Start with the tool rail visible and the content panel folded. A tool
+  // opened from the rail expands it through the right-tool transition.
+  panelCollapsed: true,
   blueprintMode: false,
   activeWorkbench: null,
   flipDuration: 650,

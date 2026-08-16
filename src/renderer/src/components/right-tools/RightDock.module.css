@@ -172,15 +172,6 @@
 .tabClose::after { transform: rotate(-45deg); }
 .tabClose:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
 
-.headerCollapse {
-  width: 30px;
-  flex: 0 0 30px;
-  color: var(--shell-dim);
-  transition: color 140ms ease, background 140ms ease;
-}
-
-.headerCollapse:hover { color: var(--shell-text); background: var(--shell-hover); }
-
 .host,
 .toolPanel,
 .toolContent {

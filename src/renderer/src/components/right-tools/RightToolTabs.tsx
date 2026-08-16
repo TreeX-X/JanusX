@@ -103,12 +103,12 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
             onFocus={() => setFocusedToolId(tool.id)}
             onKeyDown={(event) => handleKeyDown(event, tool.id)}
           >
-            <span className={styles.tabLabel}>{tool.shortTitle}</span>
+            <span className={styles.tabLabel}>{t(tool.shortTitleKey)}</span>
             <button
               type="button"
               className={styles.tabClose}
-              aria-label={t('common:rightTool.closeAria', { title: tool.title })}
-              title={t('common:rightTool.closeTitle', { title: tool.title })}
+              aria-label={t('common:rightTool.closeAria', { title: t(tool.titleKey) })}
+              title={t('common:rightTool.closeTitle', { title: t(tool.titleKey) })}
               onClick={(event) => {
                 event.stopPropagation()
                 onClose(tool.id)

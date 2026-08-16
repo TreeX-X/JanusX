@@ -135,6 +135,22 @@ describe('right tool rail', () => {
     expect(markup).toContain('common:rightTool.railButtonAria')
     expect(markup).not.toContain('office')
   })
+
+  it('provides a dedicated panel expansion control when the rail is collapsed', () => {
+    const markup = renderToStaticMarkup(
+      createElement(RightToolRail, {
+        openToolIds: [],
+        activeToolId: null,
+        onToggleTool: vi.fn(),
+        collapsed: true,
+        onExpandPanel: vi.fn(),
+      }),
+    )
+
+    expect(markup).toContain('aria-controls="right-tool-panel"')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain('common:rightDock.expandAria')
+  })
 })
 
 describe('right tool tabs', () => {

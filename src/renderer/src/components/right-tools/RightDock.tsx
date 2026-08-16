@@ -6,7 +6,6 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
-import { PanelRightClose } from 'lucide-react'
 import type { RightToolId } from '@/right-tools/types'
 import { useAppStore } from '@/stores/app'
 import { useRightToolStore } from '@/stores/right-tools'
@@ -135,6 +134,10 @@ export function RightDock({
 
   const handleRailTool = (toolId: RightToolId) => {
     const manualCollapsed = useAppStore.getState().panelCollapsed
+    // A responsive/Office forced collapse has no meaningful toggle action for
+    // the already active tool. Keep the manual preference untouched instead
+    // of toggling it and immediately restoring it in the same event.
+    if (forcedCollapsed && activeToolId === toolId) return
     toggleFromRail(toolId)
     if (forcedCollapsed) useAppStore.getState().setPanelCollapsed(manualCollapsed)
   }
@@ -143,6 +146,7 @@ export function RightDock({
     <aside className={styles.dock} data-collapsed={effectiveCollapsed} aria-label={t('common:rightDock.dockAria')}>
       <div
         className={styles.panel}
+        id="right-tool-panel"
         style={{ width: renderedPanelWidth }}
         data-visible={contentVisible}
         aria-hidden={!contentVisible}
@@ -173,15 +177,6 @@ export function RightDock({
               onActivate={activateTool}
               onClose={closeTool}
             />
-            <button
-              type="button"
-              className={styles.headerCollapse}
-              aria-label={t('common:rightDock.collapseAria')}
-              title={t('common:rightDock.collapseTitle')}
-              onClick={togglePanel}
-            >
-              <PanelRightClose size={15} strokeWidth={1.6} aria-hidden="true" />
-            </button>
           </div>
           <RightToolHost
             openToolIds={openToolIds}
@@ -196,6 +191,11 @@ export function RightDock({
         openToolIds={openToolIds}
         activeToolId={activeToolId}
         onToggleTool={handleRailTool}
+        collapsed={effectiveCollapsed}
+        forcedCollapsed={forcedCollapsed}
+        onTogglePanel={() => {
+          if (!forcedCollapsed) togglePanel()
+        }}
       />
     </aside>
   )

@@ -99,7 +99,9 @@
     "dockAria": "Right tools dock",
     "resizeAria": "Resize right tool panel",
     "collapseAria": "Collapse right tool panel",
-    "collapseTitle": "Collapse panel"
+    "collapseTitle": "Collapse panel",
+    "expandAria": "Expand right tool panel",
+    "expandTitle": "Expand panel"
   },
   "rightTool": {
     "openTabsAria": "Open right tools",
@@ -110,7 +112,13 @@
     "railStateOpen": "open",
     "railStateClosed": "closed",
     "railButtonAria": "{{label}}, {{state}}",
-    "toolLoadFailed": "Tool content failed to load"
+    "toolLoadFailed": "Tool content failed to load",
+    "tool": {
+      "files": { "title": "Files", "shortTitle": "Files", "ariaLabel": "Open Files tool" },
+      "git": { "title": "Git", "shortTitle": "Git", "ariaLabel": "Open Git tool" },
+      "checkpoints": { "title": "Checkpoints", "shortTitle": "Checkpoints", "ariaLabel": "Open Checkpoints tool" },
+      "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "Open Assist tool" }
+    }
   },
   "quantumTopology": {
     "titleWithName": "Quantum topology · {{name}} ({{hexTag}})",

@@ -355,10 +355,6 @@ export default function App() {
     }
   }, [finishEditorResize, finishOfficeResize])
 
-  useEffect(() => {
-    if (officeVisible) useAppStore.getState().setPanelCollapsed(true)
-  }, [officeVisible])
-
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
   const flipperElRef = useRef<HTMLDivElement | null>(null)
 

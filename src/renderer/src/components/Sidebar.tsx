@@ -641,7 +641,7 @@ export function Sidebar() {
       aria-label={t('common:workspace.ariaLabel')}
     >
       {/* 展开态 */}
-      <div className="workspace-sidebar__expanded" aria-hidden={sidebarCollapsed} {...(sidebarCollapsed ? { inert: '' } : {})}>
+      <div id="workspace-sidebar-content" className="workspace-sidebar__expanded" aria-hidden={sidebarCollapsed} {...(sidebarCollapsed ? { inert: '' } : {})}>
           <div
             className="flex h-9 items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
             style={{ color: 'var(--shell-muted)', borderBottom: '1px solid var(--shell-border)' }}
@@ -662,6 +662,8 @@ export function Sidebar() {
               <button
                 onClick={toggleSidebar}
                 title={t('common:workspace.collapse')}
+                aria-expanded={!sidebarCollapsed}
+                aria-controls="workspace-sidebar-content"
                 className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{ color: 'var(--shell-dim)' }}
                 aria-label={t('common:workspace.collapseAria')}
@@ -972,6 +974,8 @@ export function Sidebar() {
             className="mb-1 flex h-9 w-9 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
             style={{ color: 'var(--shell-dim)' }}
             aria-label={t('common:workspace.expandAria')}
+            aria-expanded={false}
+            aria-controls="workspace-sidebar-content"
           >
             <PanelLeftOpen size={15} strokeWidth={1.6} aria-hidden="true" />
           </button>
