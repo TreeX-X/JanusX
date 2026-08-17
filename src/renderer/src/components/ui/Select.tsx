@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+﻿import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './Select.module.css'
@@ -101,10 +101,10 @@ export function Select({
       setOpen(false)
     }
     document.addEventListener('keydown', onKey, true)
-    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('mousedown', onPointer, true)
     return () => {
       document.removeEventListener('keydown', onKey, true)
-      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('mousedown', onPointer, true)
     }
   }, [open])
 

@@ -15,6 +15,22 @@ import { ToolCallGroup } from './ToolCallCard'
 
 type SelectionMenu = 'provider' | 'model'
 
+interface ChatShortcutEvent {
+  key: string
+  altKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+  isComposing: boolean
+}
+
+export function resolveChatSelectionShortcut(event: ChatShortcutEvent): SelectionMenu | null {
+  if (event.isComposing || event.altKey || event.shiftKey) return null
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') return 'model'
+  if (!event.ctrlKey && !event.metaKey && event.key === 'Tab') return 'provider'
+  return null
+}
+
 function getProviderMenuOptions(options: ChatModelOption[]): ChatModelOption[] {
   return [...new Set(options.map((option) => option.providerId))]
     .map((providerId) => options.find((option) => option.providerId === providerId && option.isProviderDefault)
@@ -184,6 +200,8 @@ export function JanusChat({
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const editInputRef = useRef<HTMLTextAreaElement>(null)
   const chatRootRef = useRef<HTMLDivElement>(null)
+  const threadSelectorRef = useRef<HTMLDivElement>(null)
+  const selectionMenuRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
   const historyDraftRef = useRef('')
   const contextConversations = useOptionalJanusChatController()
@@ -246,7 +264,11 @@ export function JanusChat({
   // 聚焦输入框；流的实际生命周期�?useJanusChat 持有，视图可见性变化不�?abort �?
   useEffect(() => {
     if (visible && focused) {
-      focusTimerRef.current = window.setTimeout(() => inputRef.current?.focus(), 100)
+      chatRootRef.current?.focus({ preventScroll: true })
+      focusTimerRef.current = window.setTimeout(() => {
+        const inputElement = inputRef.current
+        if (inputElement && !inputElement.disabled) inputElement.focus()
+      }, 100)
     }
     return () => {
       if (focusTimerRef.current !== null) {
@@ -366,30 +388,41 @@ export function JanusChat({
     })
   }, [cancelMessageEdit, editingMessageId, messages])
 
-  const handleChatKeyDownCapture = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
-      e.preventDefault()
-      e.stopPropagation()
-      openSelectionMenu('model')
+  const handleChatKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const shortcutMenu = resolveChatSelectionShortcut({
+      key: event.key,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      isComposing: event.nativeEvent.isComposing,
+    })
+    if (shortcutMenu) {
+      event.preventDefault()
+      event.stopPropagation()
+      openSelectionMenu(shortcutMenu)
       return
     }
-    if (e.key === 'Tab' && !e.shiftKey) {
-      e.preventDefault()
-      openSelectionMenu('provider')
-      return
+    if (selectionMenu && handleMenuKey(event.key)) {
+      event.preventDefault()
+      event.stopPropagation()
     }
-    if (handleMenuKey(e.key)) {
-      e.preventDefault()
-      e.stopPropagation()
-      return
-    }
-  }, [handleMenuKey, openSelectionMenu])
+  }, [handleMenuKey, openSelectionMenu, selectionMenu])
 
   const handleChatPointerDownCapture = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement
     if (target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return
     chatRootRef.current?.focus({ preventScroll: true })
   }, [])
+
+  const handleSelectionTriggerPointerDown = useCallback((
+    event: React.PointerEvent<HTMLButtonElement>,
+    menu: SelectionMenu,
+  ) => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    openSelectionMenu(menu)
+  }, [openSelectionMenu])
 
   // 快捷键：Enter 发送，Shift+Enter 换行
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -432,22 +465,78 @@ export function JanusChat({
     if (!visible) return
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       const chatRoot = chatRootRef.current
-      if (!chatRoot?.contains(document.activeElement)) return
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
+      if (!chatRoot) return
+
+      const activeElement = document.activeElement
+      const activeChat = activeElement instanceof Element
+        ? activeElement.closest('.janus-chat')
+        : null
+      // A DOM-focused Chat always owns its shortcuts. Otherwise the workspace
+      // focus state chooses the owner, so switching tabs does not depend on a
+      // browser focus update landing in exactly the same frame.
+      if (activeChat ? activeChat !== chatRoot : !focused) return
+
+      const shortcutMenu = resolveChatSelectionShortcut(event)
+      if (shortcutMenu) {
         event.preventDefault()
         event.stopPropagation()
-        openSelectionMenu('model')
+        openSelectionMenu(shortcutMenu)
         return
       }
-      if (!selectionMenu || event.target === inputRef.current) return
-      if (handleMenuKey(event.key)) {
+      if (selectionMenu && handleMenuKey(event.key)) {
         event.preventDefault()
         event.stopPropagation()
       }
     }
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement
+      const activeChat = activeElement instanceof Element
+        ? activeElement.closest('.janus-chat')
+        : null
+      // The Chat's own capture handler owns events inside Chat. Document-level
+      // capture is only the fallback for terminal/editor focus, where xterm can
+      // otherwise consume the event before it reaches window.
+      if (activeChat) return
+      handleGlobalKeyDown(event)
+    }
+    document.addEventListener('keydown', handleDocumentKeyDown, true)
     window.addEventListener('keydown', handleGlobalKeyDown, true)
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true)
-  }, [handleMenuKey, openSelectionMenu, selectionMenu, visible])
+    return () => {
+      document.removeEventListener('keydown', handleDocumentKeyDown, true)
+      window.removeEventListener('keydown', handleGlobalKeyDown, true)
+    }
+  }, [focused, handleMenuKey, openSelectionMenu, selectionMenu, visible])
+
+  useEffect(() => {
+    if (!threadMenuOpen && !selectionMenu) return
+
+    const closeMenusOutside = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (threadMenuOpen && !threadSelectorRef.current?.contains(target)) {
+        setThreadMenuOpen(false)
+      }
+      if (
+        selectionMenu
+        && !selectionMenuRef.current?.contains(target)
+        && !(target instanceof Element && target.closest('[data-selection-trigger], .janus-chat-model-tag'))
+      ) {
+        setSelectionMenu(null)
+      }
+    }
+    const closeMenusOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setThreadMenuOpen(false)
+      setSelectionMenu(null)
+    }
+
+    document.addEventListener('pointerdown', closeMenusOutside, true)
+    document.addEventListener('keydown', closeMenusOnEscape, true)
+    return () => {
+      document.removeEventListener('pointerdown', closeMenusOutside, true)
+      document.removeEventListener('keydown', closeMenusOnEscape, true)
+    }
+  }, [selectionMenu, threadMenuOpen])
 
   // 停止生成
   const handleStop = useCallback(() => {
@@ -493,7 +582,7 @@ export function JanusChat({
       onDoubleClick={(e) => e.stopPropagation()}
     >
       <div className="janus-chat-toolbar">
-        <div className="janus-chat-thread-selector">
+        <div ref={threadSelectorRef} className="janus-chat-thread-selector">
           <button
             type="button"
             className="janus-chat-thread-trigger"
@@ -936,6 +1025,7 @@ export function JanusChat({
           <button
             type="button"
             className="janus-chat-model-tag"
+            onPointerDown={(event) => handleSelectionTriggerPointerDown(event, 'model')}
             onClick={() => openSelectionMenu('model')}
             title={t('janus:chat.model.menuShortcutTitle')}
           >
@@ -945,8 +1035,24 @@ export function JanusChat({
           <div className="janus-chat-status-actions">
             <div className="janus-chat-shortcuts">
               <span>{t('janus:chat.shortcuts.janusMd')}</span>
-              <span><kbd>tab</kbd> {t('janus:chat.shortcuts.providers')}</span>
-              <span><kbd>ctrl+p</kbd> {t('janus:chat.shortcuts.models')}</span>
+              <button
+                type="button"
+                data-selection-trigger="provider"
+                aria-label={t('janus:chat.selectionMenu.aria', { kind: 'provider' })}
+                onPointerDown={(event) => handleSelectionTriggerPointerDown(event, 'provider')}
+                onClick={() => openSelectionMenu('provider')}
+              >
+                <kbd>tab</kbd> {t('janus:chat.shortcuts.providers')}
+              </button>
+              <button
+                type="button"
+                data-selection-trigger="model"
+                aria-label={t('janus:chat.selectionMenu.aria', { kind: 'model' })}
+                onPointerDown={(event) => handleSelectionTriggerPointerDown(event, 'model')}
+                onClick={() => openSelectionMenu('model')}
+              >
+                <kbd>ctrl+p</kbd> {t('janus:chat.shortcuts.models')}
+              </button>
             </div>
             <button
               className="janus-chat-clear-button"
@@ -960,7 +1066,13 @@ export function JanusChat({
             </button>
           </div>
           {selectionMenu && (
-            <div className="janus-chat-model-menu" role="listbox" aria-label={t('janus:chat.selectionMenu.aria', { kind: selectionMenu })}>
+            <div
+              ref={selectionMenuRef}
+              className="janus-chat-model-menu"
+              role="listbox"
+              data-selection-menu={selectionMenu}
+              aria-label={t('janus:chat.selectionMenu.aria', { kind: selectionMenu })}
+            >
               <div className="janus-chat-model-menu-heading">
                 <strong>{selectionMenu === 'provider' ? t('janus:chat.model.providersHeading') : t('janus:chat.model.modelsHeading')}</strong>
                 <span>{t('janus:chat.model.menuNavHint')}</span>

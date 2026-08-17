@@ -6,6 +6,7 @@ import type { ChatStreamEvent, ChatStreamRequest } from '../../../src/shared/ipc
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import { JanusChatProvider, useJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
+import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import {
   INITIAL_ISLAND_CONTROLLER_STATE,
   reduceIslandController,
@@ -353,8 +354,15 @@ function Harness() {
   )
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <JanusChatProvider>
-    <Harness />
-  </JanusChatProvider>,
-)
+async function boot() {
+  // Specs assert English copy; pin the language so host locale cannot flip it.
+  await initI18n()
+  await changeLanguage('en')
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <JanusChatProvider>
+      <Harness />
+    </JanusChatProvider>,
+  )
+}
+
+void boot()

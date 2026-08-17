@@ -6,22 +6,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function buildDevRendererUrlCandidates(baseUrl: URL): string[] {
-  const candidates = new Set<string>([baseUrl.toString()])
-  const basePort = Number(baseUrl.port)
-  if (!Number.isFinite(basePort) || basePort <= 0) return Array.from(candidates)
-  for (let port = basePort; port <= basePort + 5; port++) {
-    const candidate = new URL(baseUrl.toString())
-    if (candidate.hostname === 'localhost') candidate.hostname = '127.0.0.1'
-    candidate.port = String(port)
-    candidate.pathname = '/'
-    candidate.search = ''
-    candidate.hash = ''
-    candidates.add(candidate.toString())
-  }
-  return Array.from(candidates)
-}
-
 async function canReachRenderer(url: string): Promise<boolean> {
   try {
     const response = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(1_000) })
@@ -32,9 +16,18 @@ async function canReachRenderer(url: string): Promise<boolean> {
 }
 
 async function resolveDevRendererUrl(rawUrl: string): Promise<string> {
-  const candidates = buildDevRendererUrlCandidates(new URL(rawUrl))
+  // Electron-Vite sets this URL to the server belonging to the current
+  // process. Never scan neighbouring ports: an older dev server may still be
+  // alive there, which silently loads stale renderer code after a restart.
+  const candidates = new Set<string>([rawUrl])
+  const normalized = new URL(rawUrl)
+  if (normalized.hostname === 'localhost') {
+    normalized.hostname = '127.0.0.1'
+    candidates.add(normalized.toString())
+  }
+  const urls = Array.from(candidates)
   for (let attempt = 0; attempt < 20; attempt++) {
-    for (const candidate of candidates) {
+    for (const candidate of urls) {
       if (await canReachRenderer(candidate)) return candidate
     }
     await delay(250)

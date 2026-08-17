@@ -655,6 +655,7 @@ export function JanusIsland({
                   key={item}
                   type="button"
                   className="janus-expanded-view-button"
+                  data-view={item}
                   data-active={view === item}
                   aria-pressed={view === item}
                   onClick={() => setView(item)}
@@ -819,9 +820,14 @@ export function JanusIsland({
             </div>
 
             <JanusChat
-              visible
+              // Only the active Island Chat view may own global chat shortcuts.
+              // Keeping the hidden Monitor/collapsed instance mounted would let
+              // it intercept Tab/Ctrl+P and open a menu outside the viewport.
+              visible={stage === 'expanded' && view === 'chat'}
               docked
-              focused={focusedTabId !== 'janus-chat'}
+              // A focused workspace Chat pane outranks the Island instance, so
+              // both never claim the same global shortcut press.
+              focused={!focusedTabId?.startsWith('janus-chat')}
               modeColor={modeColor}
               messages={messages}
               pendingContent={pendingContent}

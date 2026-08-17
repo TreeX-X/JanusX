@@ -7,14 +7,14 @@ import {
 } from './islandInteraction'
 
 /* ════════════════════════════════════════════════════════════
-   useIslandGesture �?灵动岛手势识�?Hook
+   useIslandGesture �?灵动岛手势识�?Hook
    设计原型：JanusX-Divine-System-Focus-Snap-Edition
 
-   识别：长�?(Focus & Snap) / 下拉拖拽 (弹性阻�? / 双击
+   识别：长�?(Focus & Snap) / 下拉拖拽 (弹性阻�? / 双击
    ════════════════════════════════════════════════════════════ */
 
-const SWIPE_THRESHOLD = 60          // 翻转阈�?px
-const VELOCITY_THRESHOLD = 0.5      // 快甩阈�?px/ms
+const SWIPE_THRESHOLD = 60          // 翻转阈�?px
+const VELOCITY_THRESHOLD = 0.5      // 快甩阈�?px/ms
 const LONG_PRESS_DURATION = 550     // 长按时长 ms（设计原型值）
 const PRESS_DELAY = 100             // 按压延迟 ms
 
@@ -40,12 +40,12 @@ export function useIslandGesture({
 }: IslandGestureOptions) {
   const islandRef = useRef<HTMLDivElement>(null)
   const pullHintRef = useRef<HTMLDivElement>(null)
-  /** 左眼元素 ref �?长按蓄力时向中间平移 */
+  /** 左眼元素 ref �?长按蓄力时向中间平移 */
   const eyeLeftRef = useRef<HTMLDivElement>(null)
-  /** 右眼元素 ref �?长按蓄力时向中间平移 */
+  /** 右眼元素 ref �?长按蓄力时向中间平移 */
   const eyeRightRef = useRef<HTMLDivElement>(null)
 
-  /*-- 内部状�?--*/
+  /*-- 内部状�?--*/
   const isPointerDown = useRef(false)
   const isDragging = useRef(false)
   const hasTriggeredLongPress = useRef(false)
@@ -53,7 +53,7 @@ export function useIslandGesture({
   const startY = useRef(0)
   const currentDragY = useRef(0)
 
-  /*-- 定时�?--*/
+  /*-- 定时�?--*/
   const pressDelayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressFrame = useRef<number>(0)
   const pressStartTime = useRef(0)
@@ -63,7 +63,7 @@ export function useIslandGesture({
   const flipRequestRef = useRef(0)
   const flipFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  /*-- 双击检�?--*/
+  /*-- 双击检�?--*/
   const lastTapTime = useRef(0)
   const lastTapPoint = useRef<TapPoint | null>(null)
   const pendingSingleTapTimer = useRef<number | null>(null)
@@ -83,8 +83,8 @@ export function useIslandGesture({
     }
   }, [])
 
-  /*══════════════════════════════════════════════════════════�?
-    长按蓄力 (Focus & Snap) �?无色物理压缩 + 双眼靠拢
+  /*══════════════════════════════════════════════════════════�?
+    长按蓄力 (Focus & Snap) �?无色物理压缩 + 双眼靠拢
     ════════════════════════════════════════════════════════════*/
   const startLongPressProgress = useCallback(() => {
     pressStartTime.current = Date.now()
@@ -95,7 +95,7 @@ export function useIslandGesture({
 
     // 暂停 CSS 过渡，JS 逐帧接管
     island.style.transition = 'none'
-    // 修复：直接添加到 island 元素上，匹配 CSS 选择�?.janus-island.is-charging
+    // 修复：直接添加到 island 元素上，匹配 CSS 选择�?.janus-island.is-charging
     island.classList.add('is-charging')
 
     function tick() {
@@ -104,12 +104,12 @@ export function useIslandGesture({
         1,
       )
 
-      // 物理压缩：横向缩窄、纵向压�?
+      // 物理压缩：横向缩窄、纵向压�?
       const scaleX = 1 - progress * 0.08
       const scaleY = 1 - progress * 0.12
       if (island) island.style.transform = `scale(${scaleX}, ${scaleY})`
 
-      // 视线聚焦：双眼受压向中间靠拢（CSS gap 3px �?单边 1.5px 即重合）
+      // 视线聚焦：双眼受压向中间靠拢（CSS gap 3px �?单边 1.5px 即重合）
       const eyeMove = progress * 1.5
       if (leftEye) leftEye.style.transform = `translateX(${eyeMove}px)`
       if (rightEye) rightEye.style.transform = `translateX(${-eyeMove}px)`
@@ -148,7 +148,7 @@ export function useIslandGesture({
     const rightEye = eyeRightRef.current
 
     if (island) island.style.transition = ''
-    // 修复：从 island 元素移除 .is-charging �?
+    // 修复：从 island 元素移除 .is-charging �?
     island?.classList.remove('is-charging')
 
     // 清空 JS 注入的眼位移
@@ -160,14 +160,16 @@ export function useIslandGesture({
     }
   }, [])
 
-  /*══════════════════════════════════════════════════════════�?
+  /*══════════════════════════════════════════════════════════�?
     Pointer 事件处理
     ════════════════════════════════════════════════════════════*/
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!e.isPrimary || e.button !== 0) return
       if (isInteractiveIslandDescendant(e.target, e.currentTarget)) return
-      e.preventDefault()
+      // In expanded mode, preventDefault() on pointerdown would suppress the
+      // subsequent mousedown event, breaking Select dropdown outside-click detection.
+      if (enableComplexGestures) e.preventDefault()
 
       const now = Date.now()
       const point = { x: e.clientX, y: e.clientY }
@@ -227,7 +229,7 @@ export function useIslandGesture({
       if (!isPointerDown.current || !enableComplexGestures) return
       const deltaY = e.clientY - startY.current
 
-      // 拖拽判定：超�?5px 垂直位移
+      // 拖拽判定：超�?5px 垂直位移
       if (
         !isDragging.current &&
         Math.abs(deltaY) > 5 &&
@@ -252,7 +254,7 @@ export function useIslandGesture({
         currentDragY.current = deltaY
         useAppStore.getState().setIsIslandDragging(true)
 
-        // 动量记录（最�?5 帧）
+        // 动量记录（最�?5 帧）
         const now = performance.now()
         const history = velocityHistory.current
         history.push({ y: deltaY, t: now })
@@ -266,13 +268,13 @@ export function useIslandGesture({
         const island = islandRef.current
         if (island) island.style.transform = `translateY(${offset}px)`
 
-        // 拖拽进度 �?翻转容器实时旋转预览
+        // 拖拽进度 �?翻转容器实时旋转预览
         if (onDragProgress) {
           const progress = Math.min(deltaY / SWIPE_THRESHOLD, 1)
           onDragProgress(deltaY, progress)
         }
 
-        // 下拉引导提示 �?跟随岛屿移动，避免遮�?
+        // 下拉引导提示 �?跟随岛屿移动，避免遮�?
         const hint = pullHintRef.current
         if (hint) {
           if (deltaY > 20 && !isRunning) {
@@ -348,7 +350,7 @@ export function useIslandGesture({
           island.style.transform = 'translateY(0)'
         }
 
-        // 达到翻转阈�?�?切换蓝图
+        // 达到翻转阈�?�?切换蓝图
         if (currentDragY.current >= SWIPE_THRESHOLD) {
           const requestId = ++flipRequestRef.current
           let flipApplied = false
@@ -379,7 +381,7 @@ export function useIslandGesture({
         currentDragY.current = 0
         velocityHistory.current = []
       } else {
-        // 非拖�?�?检查双�?
+        // 非拖�?�?检查双�?
         if (enableComplexGestures && !hasTriggeredLongPress.current && Math.hypot(e.clientX - startX.current, e.clientY - startY.current) <= 12) {
           cancelLongPressProgress()
           const now = Date.now()

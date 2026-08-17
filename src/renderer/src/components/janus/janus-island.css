@@ -2947,10 +2947,16 @@ body.is-running {
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 9px;
 }
+.janus-island-shell .janus-resource-attach-select {
+  border: none;
+}
 
-.janus-resource-attach-select:hover:not(:disabled),
-.janus-resource-attach-select:focus-visible {
-  border-color: rgba(255,120,48,0.28);
+.janus-island-shell .janus-resource-attach-select:hover:not(:disabled),
+.janus-island-shell .janus-resource-attach-select:focus-visible,
+.janus-island-shell .janus-resource-attach-select[aria-expanded="true"] {
+  border: none;
+  box-shadow: none;
+  background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.82);
 }
 
@@ -5252,6 +5258,11 @@ body.is-running {
   overflow: visible;
 }
 
+/* 空态选择器（4422 行）优先级更高，会带回 overflow:hidden 裁掉弹出菜单 */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--empty .janus-chat-input-wrapper {
+  overflow: visible;
+}
+
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper::before {
   content: none;
 }
@@ -6455,6 +6466,29 @@ body.is-running {
   color: rgba(255, 255, 255, 0.58);
   font: inherit;
   font-weight: 700;
+}
+
+.janus-chat-shortcuts button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.janus-chat-shortcuts button:hover,
+.janus-chat-shortcuts button:focus-visible {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.janus-chat-shortcuts button:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.48);
+  outline-offset: 2px;
 }
 
 .janus-chat--workspace .janus-chat-model-menu {

@@ -22,7 +22,7 @@ function harness(page: Page) {
 }
 
 function islandExpandedChatButton(page: Page) {
-  return page.locator('.janus-island .janus-expanded-view-button', { hasText: /^Chat$/ })
+  return page.locator('.janus-island .janus-expanded-view-button[data-view="chat"]')
 }
 
 async function expectContainedAttachLayout(trigger: Locator) {
@@ -207,7 +207,7 @@ test('Island Chat action docks the shared presentation and closes only its works
   await expect(workspaceChat.locator('textarea')).toBeFocused()
 
   await page.keyboard.press('Control+P')
-  await expect(workspaceChat.getByRole('listbox', { name: 'model selection' })).toBeVisible()
+  await expect(workspaceChat.locator('[role="listbox"][data-selection-menu="model"]')).toBeVisible()
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Enter')
   await expect(harness(page)).toHaveAttribute('data-active-model', 'model-a2')
@@ -219,7 +219,7 @@ test('Island Chat action docks the shared presentation and closes only its works
   await workspaceChat.locator('textarea').focus()
   await expect(page.locator('.janus-island .janus-chat textarea')).not.toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(workspaceChat.getByRole('listbox', { name: 'provider selection' })).toBeVisible()
+  await expect(workspaceChat.locator('[role="listbox"][data-selection-menu="provider"]')).toBeVisible()
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('Enter')
   await expect(harness(page)).toHaveAttribute('data-active-provider', 'provider-b')
@@ -266,8 +266,8 @@ test('Chat rewrites a previous turn in place, removes its reply, and clears the 
 
   const chat = page.locator('.janus-island .janus-chat')
   const composer = chat.locator('.janus-chat-input')
-  await chat.getByRole('button', { name: '编辑并重新提问' }).last().click()
-  const editor = chat.getByRole('textbox', { name: '编辑历史问题' })
+  await chat.getByRole('button', { name: 'Edit and resubmit' }).last().click()
+  const editor = chat.getByRole('textbox', { name: 'Edit history question' })
   await expect(editor).toBeFocused()
   await expect(editor).toHaveValue('Latest recalled prompt')
   await expect(composer).toHaveValue('')
@@ -282,7 +282,7 @@ test('Chat rewrites a previous turn in place, removes its reply, and clears the 
   await expect(chat.getByText('Latest controller response')).toHaveCount(0)
   await expect(chat.getByText('Shared controller message')).toBeVisible()
 
-  const clear = chat.getByRole('button', { name: '清空当前对话' })
+  const clear = chat.getByRole('button', { name: 'Clear current conversation' })
   await expect(clear).toBeVisible()
   await clear.click()
   await expect(harness(page)).toHaveAttribute('data-clear-count', '1')
@@ -298,8 +298,9 @@ test('model menu stays visible and keyboard-operable while Chat is streaming', a
   await islandExpandedChatButton(page).click()
 
   const chat = page.locator('.janus-island .janus-chat')
+  await expect(chat).toBeFocused()
   await chat.locator('.janus-chat-model-tag').click()
-  const menu = chat.getByRole('listbox', { name: 'model selection' })
+  const menu = chat.locator('[role="listbox"][data-selection-menu="model"]')
   await expect(menu).toBeVisible()
   await expect(chat.locator('.janus-chat-input-wrapper')).toHaveCSS('overflow', 'visible')
   await page.keyboard.press('ArrowRight')
@@ -332,6 +333,10 @@ test('Island Chat switches conversations while the current thread is streaming',
   await expect(threadMenu.getByText('Other thread', { exact: true })).toBeVisible()
   await expect(threadMenu.getByLabel('Generating')).toBeVisible()
   await expect(threadMenu.getByLabel('Conversation error')).toBeVisible()
+  // Click the messages area centre: (8,8) sits under the open dropdown.
+  await chat.locator('.janus-chat-messages').click()
+  await expect(threadMenu).toHaveCount(0)
+  await threadTrigger.click()
   await threadMenu.locator('.janus-chat-thread-row', { hasText: 'Other thread' }).locator('.janus-chat-thread-main').click()
 
   await expect(threadTrigger).toContainText('Other thread')
@@ -351,11 +356,10 @@ test('Tab and Ctrl+P menus respond to every arrow key', async ({ page }) => {
   await islandExpandedChatButton(page).click()
 
   const chat = page.locator('.janus-island .janus-chat')
-  await page.waitForTimeout(150)
-  await chat.getByText('Shared controller message').click()
-  await expect(chat).toBeFocused()
+  const input = chat.locator('textarea')
+  await expect(input).toBeFocused()
   await page.keyboard.press('Control+P')
-  const modelMenu = chat.getByRole('listbox', { name: 'model selection' })
+  const modelMenu = chat.locator('[role="listbox"][data-selection-menu="model"]')
   await expect(modelMenu).toBeVisible()
   const selectedModel = modelMenu.locator('[role="option"][aria-selected="true"]')
   await expect(selectedModel).toContainText('model-a1')
@@ -371,11 +375,34 @@ test('Tab and Ctrl+P menus respond to every arrow key', async ({ page }) => {
   await expect(modelMenu).toHaveCount(0)
 
   await page.keyboard.press('Tab')
-  const providerMenu = chat.getByRole('listbox', { name: 'provider selection' })
+  const providerMenu = chat.locator('[role="listbox"][data-selection-menu="provider"]')
   await expect(providerMenu).toBeVisible()
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('Enter')
   await expect(harness(page)).toHaveAttribute('data-active-provider', 'provider-b')
+
+  await chat.locator('[data-selection-trigger="model"]').click()
+  await expect(chat.locator('[role="listbox"][data-selection-menu="model"]')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await chat.locator('[data-selection-trigger="provider"]').click()
+  await expect(chat.locator('[role="listbox"][data-selection-menu="provider"]')).toBeVisible()
+})
+
+test('Tab and Ctrl+P menus work before any conversation exists', async ({ page }) => {
+  await page.goto('/?providerStream=1')
+  await page.getByTestId('reopen-island').click()
+  await islandExpandedChatButton(page).click()
+
+  const chat = page.locator('.janus-island .janus-chat')
+  await expect(chat).toHaveClass(/janus-chat--empty/)
+  // The empty-state wrapper must not clip the pop-up menu (visibility checks
+  // alone cannot catch overflow clipping).
+  await expect(chat.locator('.janus-chat-input-wrapper')).toHaveCSS('overflow', 'visible')
+  await page.keyboard.press('Control+P')
+  await expect(chat.locator('[role="listbox"][data-selection-menu="model"]')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await chat.locator('[data-selection-trigger="provider"]').click()
+  await expect(chat.locator('[role="listbox"][data-selection-menu="provider"]')).toBeVisible()
 })
 
 test('typing while the Chat root is focused does not outline the whole Chat', async ({ page }) => {
