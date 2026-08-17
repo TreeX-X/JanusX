@@ -11,6 +11,7 @@ import { useOptionalJanusChatController } from './JanusChatProvider'
 import { MarkdownContent, StreamingText } from '../chat/ChatContent'
 import { Select } from '../ui/Select'
 import { useI18n } from '@/i18n/useI18n'
+import { PromptDialog } from '../blueprint/PromptDialog'
 import { ToolCallGroup } from './ToolCallCard'
 
 type SelectionMenu = 'provider' | 'model'
@@ -195,6 +196,7 @@ export function JanusChat({
   const [threadMenuOpen, setThreadMenuOpen] = useState(false)
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [renamingTitle, setRenamingTitle] = useState('')
+  const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string } | null>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -676,11 +678,7 @@ export function JanusChat({
                       className="janus-chat-thread-action danger"
                       aria-label={t('janus:chat.thread.deleteAria', { title: conversation.title })}
                       title={t('janus:chat.thread.deleteTitle')}
-                      onClick={() => {
-                        if (window.confirm(t('janus:chat.thread.deleteConfirm', { title: conversation.title }))) {
-                          conversations.deleteConversation(conversation.id)
-                        }
-                      }}
+                      onClick={() => setPendingDeleteConversation({ id: conversation.id, title: conversation.title })}
                     >
                       <Trash2 size={12} aria-hidden="true" />
                     </button>
@@ -1104,6 +1102,22 @@ export function JanusChat({
         </div>
       </div>
       {modelNotice && <div className="janus-chat-model-notice">{modelNotice}</div>}
+      <PromptDialog
+        open={pendingDeleteConversation !== null}
+        title={t('janus:chat.thread.deleteTitle')}
+        description={t('janus:chat.thread.deleteConfirm', { title: pendingDeleteConversation?.title ?? '' })}
+        confirmOnly
+        tone="danger"
+        confirmText={t('common:action.delete')}
+        cancelText={t('common:action.cancel')}
+        onConfirm={() => {
+          if (pendingDeleteConversation && conversations) {
+            conversations.deleteConversation(pendingDeleteConversation.id)
+          }
+          setPendingDeleteConversation(null)
+        }}
+        onCancel={() => setPendingDeleteConversation(null)}
+      />
     </div>
   )
 }

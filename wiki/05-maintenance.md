@@ -1,6 +1,6 @@
-# Wiki Maintenance
+﻿# Wiki Maintenance
 
-Last analyzed: 2026-07-17
+Last analyzed: 2026-08-17
 
 ## Purpose
 
@@ -16,7 +16,11 @@ Update this wiki when any of these change:
 - a major UI workflow changes,
 - a file is split/renamed and existing tables become misleading,
 - new test areas are added,
-- project commands or package workspace layout changes.
+- project commands or package workspace layout changes,
+- a new shared contract file is added under `src/shared/`,
+- a new tool set is added to the agent runtime,
+- a new remote notification provider is added,
+- i18n locale bundles or the i18n pipeline changes.
 
 ## Maintenance Rules
 
@@ -27,6 +31,7 @@ Update this wiki when any of these change:
 5. Do not duplicate long code snippets. Link to source paths and describe responsibilities.
 6. Prefer tables for file ownership and flows for runtime behavior.
 7. Update `Last analyzed` date when a page is materially reviewed.
+8. Update `log.md` with a dated summary of what changed.
 
 ## Fast Refresh Checklist
 
@@ -34,16 +39,18 @@ Run these inspections before updating:
 
 ```bash
 rg --files
-rg -n "register.*Handlers|ipcMain\\.handle|ipcMain\\.on" src/main
+rg -n "register.*Handlers|ipcMain\.handle|ipcMain\.on" src/main
 rg -n "window\.electron\.(invoke|send|on)|ALLOWED_.*CHANNELS" src tests # regression check; expected result is empty
 rg -n "export function|export class|export interface|export type" src/main src/renderer/src packages/llm-core/src
 rg -n "describe\\(" tests packages/llm-core/tests
+rg --files src/shared/ipc # verify all IPC contract files are documented
+rg -n "registerTool\|RegisteredTool" src/main/agent/runtime/tools # verify tool sets
 ```
 
 Then update:
 
 - `README.md` if the read order or major entry points changed.
-- `01-architecture.md` if layer boundaries or persistence changed.
+- `01-architecture.md` if layer boundaries, IPC domains, or persistence changed.
 - `02-module-map.md` if subsystem ownership changed.
 - `03-runtime-flows.md` if behavior or IPC flow changed.
 - `04-file-index.md` if files moved or new key files appeared.
@@ -57,6 +64,9 @@ Then update:
 | Decide whether Project lifecycle events need a renderer consumer | Events remain main-internal while renderer synchronization uses guarded polling |
 | Confirm whether root distribution needs an explicit LLM Core workspace dependency | Current build and built-Electron smoke pass, but packaged-release layout should be confirmed |
 | Large cohesive Blueprint/Terminal views | Named controller boundaries exist; extract more only when a new responsibility warrants it |
+| Decide whether additional remote notification providers beyond Feishu are needed | Currently only Feishu provider is implemented |
+| Decide whether companion gateway needs additional providers beyond `feishu` | `CompanionProvider` type is currently limited to `'feishu'` |
+| Decide whether browser surface event contract needs agent control events for non-agent use | `BrowserAgentControlEvent` exists but is agent-scoped |
 
 ## Suggested Agent Opening Prompt
 
