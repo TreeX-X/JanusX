@@ -158,7 +158,7 @@ export interface FileTreeAPI {
   move(rootPath: string, sourceRelativePath: string, targetDirectoryRelativePath: string): Promise<OperationResult>
   delete(rootPath: string, relativePath: string): Promise<OperationResult>
   reveal(rootPath: string, relativePath: string): Promise<OperationResult>
-  onChanged(callback: (workspacePath: string) => void): () => void
+  onChanged(callback: (payload: { workspacePath: string; changedFilePath?: string | null }) => void): () => void
 }
 
 export interface FileAPI {

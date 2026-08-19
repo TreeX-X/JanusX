@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { useEditorStore } from '@/stores/editor'
-import { Maximize2, PanelRightOpen, Pin, PinOff, Save, Search } from 'lucide-react'
+import { Maximize2, PanelRightOpen, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
 import type { DefinitionTarget } from '@/lib/monaco-definition'
@@ -19,7 +19,7 @@ function getEditorWindowParams(): EditorWindowParams | null {
   return { filePath, workspacePath }
 }
 
-function WindowTrafficLights() {
+function WindowTrafficLights({ onClose }: { onClose: () => void }) {
   const { t } = useI18n('common')
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
@@ -29,7 +29,7 @@ function WindowTrafficLights() {
         type="button"
         aria-label={t('common:trafficLight.close')}
         title={t('common:trafficLight.close')}
-        onClick={() => window.electron.window.close()}
+        onClick={onClose}
         className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
       />
       <button
@@ -61,6 +61,7 @@ export function StandaloneFileEditor() {
   const closeFile = useEditorStore((state) => state.closeFile)
   const updateContent = useEditorStore((state) => state.updateContent)
   const saveFile = useEditorStore((state) => state.saveFile)
+  const reloadOpenFile = useEditorStore((state) => state.reloadOpenFile)
   const openFileAt = useEditorStore((state) => state.openFileAt)
   const navigationTarget = useEditorStore((state) => state.navigationTarget)
   const consumeNavigationTarget = useEditorStore((state) => state.consumeNavigationTarget)
@@ -91,11 +92,23 @@ export function StandaloneFileEditor() {
     if (!editorParams) return
     void openFile(editorParams.filePath, editorParams.workspacePath)
     const unsubscribe = window.electron.window.onEditorRefresh((payload) => {
-      void openFile(payload.filePath, payload.workspacePath)
+      void reloadOpenFile(payload.filePath)
     })
     window.electron.window.editorReady()
     return unsubscribe
   }, [editorParams, openFile])
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const dirtyFiles = openFiles.filter((f) => f.isDirty && f.viewType !== 'image' && f.viewType !== 'binary')
+      if (dirtyFiles.length > 0) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [openFiles])
 
   useEffect(() => {
     let cancelled = false
@@ -154,6 +167,25 @@ export function StandaloneFileEditor() {
     })
   }, [activeFile, editorParams])
 
+  const handleWindowClose = useCallback(async () => {
+    const dirtyFiles = openFiles.filter((f) => f.isDirty && f.viewType !== 'image' && f.viewType !== 'binary')
+    if (dirtyFiles.length > 0) {
+      const names = dirtyFiles.map((f) => f.name).join(', ')
+      const result = await window.electron.dialog.showMessageBox({
+        message: `Save changes to ${names}?`,
+        detail: 'You have unsaved changes that will be lost.',
+        buttons: ['Save All', "Don't Save", 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+      })
+      if (result.response === 2) return
+      if (result.response === 0) {
+        for (const f of dirtyFiles) await saveFile(f.id)
+      }
+    }
+    void window.electron.window.close()
+  }, [openFiles, saveFile])
+
   const titlebarDrag = { WebkitAppRegion: 'drag' } as CSSProperties
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
   const canSave = Boolean(activeFile && activeFile.viewType !== 'image' && activeFile.viewType !== 'binary')
@@ -176,7 +208,7 @@ export function StandaloneFileEditor() {
           style={titlebarDrag}
           aria-hidden="true"
         />
-        <WindowTrafficLights />
+        <WindowTrafficLights onClose={handleWindowClose} />
         <div
           data-editor-drag-region
           className="flex min-w-0 flex-1 self-stretch items-end overflow-x-auto"
@@ -194,13 +226,34 @@ export function StandaloneFileEditor() {
                 onClick={() => setActiveFile(file.id)}
               >
                 {file.isDirty ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff7830]" /> : null}
+                {file.externalChanged ? (
+                  <button
+                    type="button"
+                    className="shrink-0 border-0 bg-transparent p-0 text-[#4fc3f7] hover:text-[#7fdcff]"
+                    title="Disk version changed ? click to reload"
+                    onClick={(event) => { event.stopPropagation(); void reloadOpenFile(file.absolutePath) }}
+                  >
+                    <RefreshCw size={11} strokeWidth={2} />
+                  </button>
+                ) : null}
                 <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{file.name}</span>
                 <button
                   type="button"
                   aria-label={t('editor:fileEditor.closeTab', { name: file.name })}
                   className="ml-1 shrink-0 border-0 bg-transparent p-0 text-[#666] hover:text-[#ff7474]"
-                  onClick={(event) => {
+                  onClick={async (event) => {
                     event.stopPropagation()
+                    if (file.isDirty && file.viewType !== 'image' && file.viewType !== 'binary') {
+                      const result = await window.electron.dialog.showMessageBox({
+                        message: `Save changes to ${file.name}?`,
+                        detail: 'You have unsaved changes that will be lost.',
+                        buttons: ['Save', "Don't Save", 'Cancel'],
+                        defaultId: 0,
+                        cancelId: 2,
+                      })
+                      if (result.response === 2) return
+                      if (result.response === 0) await saveFile(file.id)
+                    }
                     closeFile(file.id)
                     if (openFiles.length === 1) void window.electron.window.close()
                   }}

@@ -1,4 +1,7 @@
-import type { AgentHookPayload } from '../notifications/agent-hook-types'
+import {
+  JANUSX_SYNTHETIC_HOOK_EVENTS,
+  type AgentHookPayload,
+} from '../notifications/agent-hook-types'
 
 export type CompanionEngine = 'claude' | 'codex' | 'opencode'
 
@@ -48,7 +51,19 @@ export class CompanionSessionState {
       this.setPendingApproval(payload.terminalId)
       return
     }
-    if (['Stop', 'SessionEnd', 'TaskCompleted', 'session.idle', 'session.error'].includes(payload.event)) {
+    if (
+      [
+        'Stop',
+        'SessionEnd',
+        'TaskCompleted',
+        'session.idle',
+        'session.error',
+        // A synthetic turn end invalidates any approval prompt that died with the turn.
+        JANUSX_SYNTHETIC_HOOK_EVENTS.apiError,
+        JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted,
+        JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned,
+      ].includes(payload.event)
+    ) {
       this.clearPendingApproval(payload.terminalId)
     }
   }

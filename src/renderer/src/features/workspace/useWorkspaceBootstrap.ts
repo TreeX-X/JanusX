@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/stores/app'
-import { invalidateEditorFileCache } from '@/stores/editor'
+import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGitStore } from '@/stores/git'
 import { getActiveWorkspacePath, loadWorkspaceFileTree } from './actions'
@@ -32,12 +32,14 @@ export function useWorkspaceBootstrap(): void {
     }).catch(() => useAppStore.setState({ loadState: 'no-workspace' }))
   }, [])
 
-  useEffect(() => window.electron.fileTree.onChanged((workspacePath) => {
+  useEffect(() => window.electron.fileTree.onChanged((payload) => {
+    const workspacePath = payload.workspacePath
     const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
     const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
     if (!activeWorkspace || activeWorkspace.path !== workspacePath) return
     invalidateEditorFileCache(workspacePath)
     void useGitStore.getState().fetchStatus(workspacePath)
     void loadWorkspaceFileTree(workspacePath, () => getActiveWorkspacePath() === workspacePath).catch(() => {})
+    void useEditorStore.getState().reloadOpenFiles(workspacePath, payload.changedFilePath ?? null)
   }), [])
 }

@@ -99,4 +99,5 @@ export interface OpenFile {
   isDirty: boolean
   isLoading: boolean
   error?: string
+  externalChanged?: boolean
 }

@@ -299,7 +299,9 @@ export function registerOfficeHandlers(options: RegisterOfficeHandlersOptions): 
       if (!request.ok) return officeError('INVALID_REQUEST', ERROR_MESSAGES.INVALID_REQUEST)
       if (!options.installer) return officeError('UNAVAILABLE', ERROR_MESSAGES.UNAVAILABLE)
       try {
-        await resolveTrustedOfficeWorkspace(request.value.workspaceId, resolveWorkspaceRoot)
+        if (request.value.workspaceId) {
+          await resolveTrustedOfficeWorkspace(request.value.workspaceId, resolveWorkspaceRoot)
+        }
         if (channel === OFFICE_INVOKE_CHANNELS.installerStatus) {
           return officeOk(publicInstallStatus(await options.installer.status()))
         }

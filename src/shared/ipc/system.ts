@@ -1,6 +1,6 @@
 export const SYSTEM_CHANNELS = {
   defaultShell: 'system:getDefaultShell', platform: 'system:getPlatform',
-  openDirectory: 'dialog:openDirectory', saveFile: 'dialog:saveFile',
+  openDirectory: 'dialog:openDirectory', saveFile: 'dialog:saveFile', showMessageBox: 'dialog:showMessageBox',
   minimize: 'window:minimize', maximize: 'window:maximize', close: 'window:close',
   openEditor: 'editor-window:open', refreshEditor: 'editor-window:refresh', editorReady: 'editor-window:ready', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
   setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get',
@@ -39,6 +39,7 @@ export interface DesktopToastPayload {
 export interface DialogAPI {
   openDirectory(): Promise<{ canceled: boolean; filePaths: string[] }>
   saveFile(options: { defaultName?: string; extension?: string }): Promise<{ canceled: boolean; filePath?: string }>
+  showMessageBox(options: { message: string; detail?: string; buttons: string[]; defaultId?: number; cancelId?: number }): Promise<{ response: number }>
 }
 export interface WindowAPI {
   minimize(): Promise<void>; maximize(): Promise<void>; close(): Promise<void>

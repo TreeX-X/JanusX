@@ -109,6 +109,18 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
     if (editorRef.current) revealNavigationTarget(editorRef.current, navigationTarget)
   }, [navigationTarget, revealNavigationTarget])
 
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const currentValue = editor.getValue()
+    if (currentValue !== content) {
+      const position = editor.getPosition()
+      editor.setValue(content)
+      if (position) editor.setPosition(position)
+    }
+  }, [content])
+
+
   const commonOptions = {
     fontSize: 13,
     fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace",

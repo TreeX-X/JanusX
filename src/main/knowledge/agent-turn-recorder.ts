@@ -1,6 +1,10 @@
 import type { AgentEngine } from '../agent/types'
 import { configService } from '../config/service'
-import type { AgentHookPayload, RegisteredHookTerminal } from '../notifications/agent-hook-types'
+import {
+  JANUSX_SYNTHETIC_HOOK_EVENTS,
+  type AgentHookPayload,
+  type RegisteredHookTerminal,
+} from '../notifications/agent-hook-types'
 import { knowledgeObservationService } from './observation-service'
 
 interface ActiveTurn {
@@ -32,7 +36,14 @@ export interface AgentTurnRecorderEvent {
 
 const START_EVENTS = new Set(['UserPromptSubmit'])
 const COMPLETION_EVENTS = new Set(['Stop'])
-const FAILURE_EVENTS = new Set(['StopFailure', 'PostToolUseFailure'])
+const FAILURE_EVENTS = new Set([
+  'StopFailure',
+  'PostToolUseFailure',
+  // Synthetic aborts (transcript sentinel / pty exit): the turn ended without
+  // a completion hook, record it as failed instead of leaking an open turn.
+  JANUSX_SYNTHETIC_HOOK_EVENTS.apiError,
+  JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned,
+])
 const ATTENTION_EVENTS = new Set(['PermissionRequest', 'Notification'])
 
 function normalizePath(value?: string): string | undefined {

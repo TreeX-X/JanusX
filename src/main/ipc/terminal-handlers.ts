@@ -10,6 +10,12 @@ import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
 import { AgentHookConfigManager } from '../notifications/agent-hook-config'
 import { AgentHookCoordinator } from '../notifications/agent-hook-coordinator'
+import { AgentTurnSentinel } from '../notifications/agent-turn-sentinel'
+import {
+  JANUSX_SYNTHETIC_HOOK_EVENTS,
+  type AgentHookPayload,
+  type AgentHookSource,
+} from '../notifications/agent-hook-types'
 import {
   AgentHookDiagnostics,
   summarizeCoordinatorEvent,
@@ -57,6 +63,9 @@ interface TerminalCpState {
   lastDataAt: number
   // Hook lifecycle is authoritative once observed; ignore prompt echoes.
   hookStatus?: 'running' | 'wait' | 'error'
+  // Set when JanusX itself initiated the kill (kill IPC / same-id replace) so
+  // pty exit with an open turn reads as a silent user interrupt, not a crash.
+  userKillRequested?: boolean
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
@@ -292,24 +301,75 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     }
   }
 
+  // Single ingest point for CLI-origin (bridge) and main-process synthetic
+  // (sentinel / pty-exit) hook payloads: identical diagnostics + coordinator path.
+  function ingestHookPayload(payload: AgentHookPayload): void {
+    hookDiagnostics.record(summarizeHookPayload(payload))
+    hookCoordinator.handleHookPayload(payload)
+  }
+
+  // Secondary deterministic turn-end source: Claude's Stop hook does not fire
+  // when a turn aborts on an API error or user interrupt, which used to leave
+  // the sidebar on "running" forever with no notification. The sentinel tails
+  // the session transcript (event-driven, no timeouts) and reports those ends.
+  const turnSentinel = new AgentTurnSentinel({
+    onSignal: (signal) => {
+      ingestHookPayload({
+        source: signal.engine,
+        event:
+          signal.kind === 'api-error'
+            ? JANUSX_SYNTHETIC_HOOK_EVENTS.apiError
+            : JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted,
+        terminalId: signal.terminalId,
+        message: signal.message,
+        timestamp: new Date().toISOString(),
+      })
+    },
+    onDiagnostic: (record) => {
+      hookDiagnostics.record({
+        stage: `sentinel-${record.stage}`,
+        terminalId: record.terminalId,
+        detail: record.detail,
+      })
+    },
+  })
+
   const hookCoordinator = new AgentHookCoordinator(getMainWindow, {
     onEvent: (event) => {
       hookDiagnostics.record(summarizeCoordinatorEvent(event))
       sendToRenderer(getMainWindow(), AGENT_CHANNELS.hookEvent, event)
     },
+    onTurnStarted: (turn) => {
+      // Transcript sentinel is claude-specific: opencode reports session.error
+      // itself and codex has no transcript contract yet (pty-exit still covers it).
+      if (turn.source !== 'claude') return
+      turnSentinel.beginTurn({
+        terminalId: turn.terminalId,
+        engine: turn.engine,
+        transcriptPath: turn.transcriptPath,
+        sessionId: turn.sessionId,
+      })
+    },
+    onTurnEnded: (terminalId) => {
+      turnSentinel.endTurn(terminalId)
+    },
     onResolvedPayload: (payload, terminal) => {
       const state = terminalStates.get(terminal.terminalId)
       const event = payload.event.toLowerCase()
       const rawStatus = JSON.stringify(payload.raw ?? '')
+      const syntheticFails =
+        event === JANUSX_SYNTHETIC_HOOK_EVENTS.apiError || event === JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned
+      const syntheticCompletes =
+        event === JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted || event === 'sessionend'
       const startsTurn = payload.source === 'opencode'
         ? event === 'session.status' && /busy|running/i.test(rawStatus)
         : event === 'userpromptsubmit'
-      const completesTurn = payload.source === 'opencode'
+      const completesTurn = syntheticCompletes || (payload.source === 'opencode'
         ? event === 'session.idle'
-        : event === 'stop'
-      const failsTurn = payload.source === 'opencode'
+        : event === 'stop')
+      const failsTurn = syntheticFails || (payload.source === 'opencode'
         ? event === 'session.error'
-        : event === 'stopfailure' || event === 'posttoolusefailure'
+        : event === 'stopfailure' || event === 'posttoolusefailure')
       const needsAttention = payload.source === 'opencode'
         ? event === 'permission.asked'
         : event === 'permissionrequest' || event === 'notification'
@@ -331,7 +391,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         ).catch(() => undefined)
         void refresh()
       }
-      if (/stop|complete|idle/i.test(payload.event)) {
+      if (/stop|complete|idle|janusx\.turn\./i.test(payload.event)) {
         const refresh = () => refreshRuntimeTelemetry(
           terminal.terminalId,
           terminal.engine as Exclude<CheckpointEngine, 'shell' | 'manual'>,
@@ -345,8 +405,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   })
   const hookBridge = new AgentHookBridge({
     onPayload: (payload) => {
-      hookDiagnostics.record(summarizeHookPayload(payload))
-      hookCoordinator.handleHookPayload(payload)
+      ingestHookPayload(payload)
     },
   })
   const hookConfigManager = new AgentHookConfigManager()
@@ -378,6 +437,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       terminalStates.clear()
       hooksInstalledThisSession.clear()
       hookCoordinator.dispose()
+      turnSentinel.dispose()
       companionSessionState.clear()
       agentTurnRecorder.dispose()
       agentTurnRecorder.setEventSink(undefined)
@@ -409,6 +469,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         terminalStates.clear()
         hooksInstalledThisSession.clear()
         hookCoordinator.dispose()
+        turnSentinel.dispose()
         companionSessionState.clear()
         agentTurnRecorder.dispose()
         agentTurnRecorder.setEventSink(undefined)
@@ -460,6 +521,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     // callback cannot kill the new pty and the old flowTimer cannot push
     // status events into the new terminal (Vector A/D/E).
     if (priorState) {
+      // Same-id replace is a user action; the old pty's exit must not read as a crash.
+      priorState.userKillRequested = true
       if (priorState.flowTimer) {
         clearTimeout(priorState.flowTimer)
         priorState.flowTimer = null
@@ -733,6 +796,26 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         const state0 = terminalStates.get(id)
         if (state0?.creationLocked) return
 
+        // Turn-end reconciliation: a pty death with a turn still open means no
+        // completion hook will ever arrive. Route a synthetic end through the
+        // hook pipeline before teardown so sidebar status and desktop
+        // notification both settle. JanusX-initiated kills and app shutdown
+        // are user actions: correct silently instead of raising a failure toast.
+        if (state0 && state0.engine !== 'shell' && hookCoordinator.hasActiveTurn(id)) {
+          const silent = state0.userKillRequested === true || appShutdown.isQuitting
+          ingestHookPayload({
+            source: state0.engine as AgentHookSource,
+            event: silent
+              ? JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted
+              : JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned,
+            terminalId: id,
+            message: silent
+              ? undefined
+              : `${state0.engine} process exited (code ${exitCode}) while a turn was still running`,
+            timestamp: new Date().toISOString(),
+          })
+        }
+
         flushTerminalData(id)
         sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.exit, { id, exitCode })
         terminalManager.kill(id)
@@ -834,9 +917,12 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
 
   ipcMain.handle(TERMINAL_INVOKE_CHANNELS.kill, async (_event, { id }: { id: string }) => {
     const st = terminalStates.get(id)
-    if (st?.flowTimer) {
-      clearTimeout(st.flowTimer)
-      st.flowTimer = null
+    if (st) {
+      st.userKillRequested = true
+      if (st.flowTimer) {
+        clearTimeout(st.flowTimer)
+        st.flowTimer = null
+      }
     }
     dropPendingTerminalData(id)
     terminalManager.kill(id)

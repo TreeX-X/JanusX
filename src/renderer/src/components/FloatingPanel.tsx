@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback, type CSSProperties } from 're
 interface FloatingPanelProps {
   visible: boolean
   title: string
-  onClose: () => void
+  onClose: () => void | Promise<void>
   children: React.ReactNode
   titlebarContent?: React.ReactNode
   titlebarActions?: React.ReactNode

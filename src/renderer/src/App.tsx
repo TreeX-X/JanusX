@@ -445,6 +445,8 @@ export default function App() {
                 backfaceVisibility: 'hidden',
                 background: 'var(--bg-deep)',
                 pointerEvents: blueprintMode ? 'none' : 'auto',
+                opacity: blueprintMode ? 0 : 1,
+                transition: isIslandDragging ? 'none' : `opacity ${flipDuration}ms ease-in-out`,
               }}
               {...(blueprintMode ? { inert: '' } : {})}
               aria-hidden={blueprintMode}
@@ -479,6 +481,8 @@ export default function App() {
                 transform: 'rotateX(180deg)',
                 background: 'radial-gradient(circle at center, #1d1d21 0%, var(--bg-deep) 100%)',
                 pointerEvents: blueprintMode ? 'auto' : 'none',
+                opacity: blueprintMode ? 1 : 0,
+                transition: isIslandDragging ? 'none' : `opacity ${flipDuration}ms ease-in-out`,
               }}
               {...(!blueprintMode ? { inert: '' } : {})}
               aria-hidden={!blueprintMode}

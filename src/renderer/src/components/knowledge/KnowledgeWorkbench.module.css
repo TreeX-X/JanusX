@@ -8,6 +8,12 @@
   padding: 40px;
   background: rgba(5, 5, 7, 0.55);
   backdrop-filter: blur(6px);
+  animation: workbench-backdrop-in 0.3s ease-out;
+}
+
+.backdrop[data-closing="true"] {
+  animation: workbench-backdrop-out 0.32s ease-in forwards;
+  pointer-events: none;
 }
 
 .shell {
@@ -28,9 +34,29 @@
   animation: knowledge-workbench-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.shell[data-closing="true"] {
+  animation: knowledge-workbench-out 0.32s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+
 @keyframes knowledge-workbench-in {
   from { opacity: 0; transform: scale(0.97) translateY(16px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes knowledge-workbench-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.97) translateY(16px); }
+}
+
+@keyframes workbench-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes workbench-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .header {

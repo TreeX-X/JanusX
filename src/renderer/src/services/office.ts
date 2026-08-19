@@ -9,6 +9,8 @@ import {
   type OfficeResult,
   type OfficeStopPreviewRequest,
   type OfficeWatchEvictedEvent,
+  type OfficeInstallerStatusRequest,
+  type OfficeInstallerCancelRequest,
   type OfficeWorkspaceRequest,
   type OfficecliPublicInfo,
   type OfficeInstallerProgressEvent,
@@ -24,9 +26,9 @@ export interface OfficeService {
   stopPreview(request: OfficeStopPreviewRequest): Promise<OfficeResult<null>>
   reloadPreview(request: OfficeReloadPreviewRequest): Promise<OfficeResult<OfficePreviewLease>>
   buildPrompt(request: OfficeBuildPromptRequest): Promise<OfficeResult<OfficePrompt>>
-  installerStatus(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerStatus(request: OfficeInstallerStatusRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
   installerStart(request: OfficeInstallerStartRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
-  installerCancel(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerCancel(request: OfficeInstallerCancelRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
   installerRemove(request: OfficeInstallerRemoveRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
   onInstallerProgress(listener: (event: OfficeInstallerProgressEvent) => void): () => void
   onFilesChanged(listener: (event: OfficeFilesChangedEvent) => void): () => void

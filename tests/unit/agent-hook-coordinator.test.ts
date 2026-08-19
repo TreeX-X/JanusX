@@ -86,6 +86,7 @@ describe('AgentHookCoordinator', () => {
         hookEvent: 'Stop',
         startedAt: new Date(1_000).toISOString(),
         endedAt: new Date(35_000).toISOString(),
+        kind: 'done',
         failed: false,
         message: 'done',
       },
@@ -205,5 +206,159 @@ describe('AgentHookCoordinator', () => {
       reason: 'ambiguous-terminal',
       delivered: false,
     })
+  })
+})
+
+describe('AgentHookCoordinator synthetic turn ends', () => {
+  const claudeTerminal: RegisteredHookTerminal = {
+    terminalId: 'term-claude',
+    engine: 'claude',
+    workspaceId: 'workspace-1',
+    cwd: 'C:/repo',
+  }
+
+  function startClaudeTurn(coordinator: AgentHookCoordinator): void {
+    coordinator.registerTerminal(claudeTerminal)
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'UserPromptSubmit',
+      terminalId: 'term-claude',
+      sessionId: 'session-1',
+      raw: { session_id: 'session-1', transcript_path: 'C:/transcripts/session-1.jsonl' },
+    })
+  }
+
+  it('completes an active turn as failed on a sentinel api-error event', async () => {
+    let now = 1_000
+    const { coordinator, completions, events } = createCoordinator(() => now)
+
+    startClaudeTurn(coordinator)
+    now = 60_000
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'janusx.turn.api-error',
+      terminalId: 'term-claude',
+      message: 'API Error: 429 rate_limit_error',
+    })
+    await Promise.resolve()
+
+    expect(completions).toEqual([
+      expect.objectContaining({
+        turnId: 'term-claude:1000',
+        hookEvent: 'janusx.turn.api-error',
+        kind: 'failed',
+        failed: true,
+        message: 'API Error: 429 rate_limit_error',
+      }),
+    ])
+    expect(lifecycleTypes(events)).toEqual(['started', 'failed'])
+  })
+
+  it('drops synthetic end signals when no turn is active (first signal wins)', async () => {
+    const { coordinator, completions, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal(claudeTerminal)
+    for (const event of ['janusx.turn.api-error', 'janusx.turn.interrupted', 'janusx.turn.orphaned']) {
+      coordinator.handleHookPayload({ source: 'claude', event, terminalId: 'term-claude' })
+    }
+    await Promise.resolve()
+
+    expect(completions).toHaveLength(0)
+    expect(lifecycleTypes(events)).toEqual(['ignored', 'ignored', 'ignored'])
+    expect(events.at(-1)).toMatchObject({ reason: 'no-active-turn', delivered: false })
+  })
+
+  it('completes an active turn silently as interrupted on a user interrupt', async () => {
+    const { coordinator, completions, events } = createCoordinator(() => 1_000)
+
+    startClaudeTurn(coordinator)
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'janusx.turn.interrupted',
+      terminalId: 'term-claude',
+    })
+    await Promise.resolve()
+
+    expect(completions).toEqual([
+      expect.objectContaining({ kind: 'interrupted', failed: false }),
+    ])
+    expect(lifecycleTypes(events)).toEqual(['started', 'interrupted'])
+  })
+
+  it('treats SessionEnd as an interrupt only while a turn is active', async () => {
+    const { coordinator, completions, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal(claudeTerminal)
+    coordinator.handleHookPayload({ source: 'claude', event: 'SessionEnd', terminalId: 'term-claude' })
+    await Promise.resolve()
+    expect(completions).toHaveLength(0)
+    expect(events.at(-1)).toMatchObject({ type: 'ignored', reason: 'no-active-turn' })
+
+    startClaudeTurn(coordinator)
+    coordinator.handleHookPayload({ source: 'claude', event: 'SessionEnd', terminalId: 'term-claude' })
+    await Promise.resolve()
+    expect(completions).toEqual([
+      expect.objectContaining({ hookEvent: 'SessionEnd', kind: 'interrupted' }),
+    ])
+    expect(lifecycleTypes(events)).toEqual(['ignored', 'started', 'interrupted'])
+  })
+
+  it('keeps fallback delivery for a real Stop hook arriving after a sentinel abort', async () => {
+    const { coordinator, completions } = createCoordinator(() => 1_000)
+
+    startClaudeTurn(coordinator)
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'janusx.turn.api-error',
+      terminalId: 'term-claude',
+    })
+    // A late Stop means the sentinel judged too early; the completion corrects it.
+    coordinator.handleHookPayload({ source: 'claude', event: 'Stop', terminalId: 'term-claude' })
+    await Promise.resolve()
+
+    expect(completions.map((completion) => completion.kind)).toEqual(['failed', 'done'])
+  })
+
+  it('notifies turn lifecycle callbacks with transcript binding info', () => {
+    const started: unknown[] = []
+    const ended: string[] = []
+    const coordinator = new AgentHookCoordinator(() => null, {
+      now: () => 1_000,
+      deliverCompletion: () => true,
+      deliverAttention: () => true,
+      onTurnStarted: (turn) => started.push(turn),
+      onTurnEnded: (terminalId) => ended.push(terminalId),
+    })
+
+    coordinator.registerTerminal(claudeTerminal)
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'UserPromptSubmit',
+      terminalId: 'term-claude',
+      sessionId: 'session-1',
+      raw: { transcript_path: 'C:/transcripts/session-1.jsonl' },
+    })
+    expect(started).toEqual([
+      {
+        terminalId: 'term-claude',
+        engine: 'claude',
+        source: 'claude',
+        sessionId: 'session-1',
+        transcriptPath: 'C:/transcripts/session-1.jsonl',
+      },
+    ])
+
+    coordinator.handleHookPayload({ source: 'claude', event: 'Stop', terminalId: 'term-claude' })
+    expect(ended).toEqual(['term-claude'])
+
+    // Unregister with an open turn must also release the sentinel binding.
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'UserPromptSubmit',
+      terminalId: 'term-claude',
+    })
+    coordinator.unregisterTerminal('term-claude')
+    expect(ended).toEqual(['term-claude', 'term-claude'])
+    expect(coordinator.hasActiveTurn('term-claude')).toBe(false)
   })
 })

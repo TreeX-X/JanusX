@@ -3,6 +3,8 @@ import { isAbsolute, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DefinitionRequest, DefinitionResult, LanguageServiceErrorCode } from '../../shared/ipc/language-service'
 import { ClangdClient } from './clangd-client'
+import { BinaryResolver } from './binary-resolver'
+import { getDescriptorByLanguage } from './registry'
 
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
 
@@ -25,6 +27,24 @@ function classifyError(error: unknown): DefinitionResult {
 
 export class ClangdManager {
   private readonly sessions = new Map<string, Promise<ClangdClient>>()
+  private readonly resolvers = new Map<string, BinaryResolver>()
+
+  configureManagedBinaryPath(path: string | undefined): void {
+    const resolver = this.getResolver()
+    resolver.configureManagedBinaryPath(path)
+    void this.disposeAll()
+  }
+
+  private getResolver(): BinaryResolver {
+    const descriptor = getDescriptorByLanguage('cpp')
+    if (!descriptor) throw new Error('No language service descriptor for C/C++')
+    let resolver = this.resolvers.get(descriptor.id)
+    if (!resolver) {
+      resolver = new BinaryResolver(descriptor)
+      this.resolvers.set(descriptor.id, resolver)
+    }
+    return resolver
+  }
 
   async definition(request: DefinitionRequest): Promise<DefinitionResult> {
     if (!request || !['c', 'cpp'].includes(request.language)
@@ -46,9 +66,16 @@ export class ClangdManager {
       return errorResult('outside-workspace', 'Source file is outside the active workspace')
     }
 
+    const descriptor = getDescriptorByLanguage(request.language)
+    if (!descriptor) return errorResult('clangd-not-found', 'No language service available for ' + request.language)
+
+    const resolver = this.getResolver()
+    const resolved = await resolver.resolve()
+    if (!resolved) return errorResult('clangd-not-found', 'clangd was not found. Click to install.')
+
     const key = process.platform === 'win32' ? root.toLowerCase() : root
     try {
-      const client = await this.getClient(key, root)
+      const client = await this.getClient(key, root, resolved.path, descriptor.spawnArgs)
       const definition = await client.definition({
         filePath,
         language: request.language,
@@ -89,10 +116,10 @@ export class ClangdManager {
     await Promise.all(clients.map((client) => client?.dispose()))
   }
 
-  private getClient(key: string, workspacePath: string): Promise<ClangdClient> {
+  private getClient(key: string, workspacePath: string, binaryPath: string, spawnArgs: readonly string[]): Promise<ClangdClient> {
     const current = this.sessions.get(key)
     if (current) return current
-    const created = ClangdClient.create(workspacePath)
+    const created = ClangdClient.create(workspacePath, { binaryPath, spawnArgs })
     this.sessions.set(key, created)
     void created.catch(() => {
       if (this.sessions.get(key) === created) this.sessions.delete(key)

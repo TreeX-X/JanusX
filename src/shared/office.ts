@@ -30,9 +30,9 @@ export interface OfficeAPI {
   stopPreview(request: OfficeStopPreviewRequest): Promise<OfficeResult<null>>
   reloadPreview(request: OfficeReloadPreviewRequest): Promise<OfficeResult<OfficePreviewLease>>
   buildPrompt(request: OfficeBuildPromptRequest): Promise<OfficeResult<OfficePrompt>>
-  installerStatus(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerStatus(request: OfficeInstallerStatusRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
   installerStart(request: OfficeInstallerStartRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
-  installerCancel(request: OfficeWorkspaceRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
+  installerCancel(request: OfficeInstallerCancelRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
   installerRemove(request: OfficeInstallerRemoveRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
   onInstallerProgress(listener: (event: OfficeInstallerProgressEvent) => void): () => void
   onFilesChanged(listener: (event: OfficeFilesChangedEvent) => void): () => void
@@ -154,12 +154,22 @@ export interface OfficeManagedInstallStatus {
   error?: string
 }
 
-export interface OfficeInstallerStartRequest extends OfficeWorkspaceRequest {
+export interface OfficeInstallerStatusRequest {
+  workspaceId?: string
+}
+
+export interface OfficeInstallerCancelRequest {
+  workspaceId?: string
+}
+
+export interface OfficeInstallerStartRequest {
+  workspaceId?: string
   confirmed: true
   repair?: boolean
 }
 
-export interface OfficeInstallerRemoveRequest extends OfficeWorkspaceRequest {
+export interface OfficeInstallerRemoveRequest {
+  workspaceId?: string
   confirmed: true
 }
 
@@ -170,9 +180,9 @@ export type OfficeInvokeRequestMap = {
   [OFFICE_INVOKE_CHANNELS.stopPreview]: OfficeStopPreviewRequest
   [OFFICE_INVOKE_CHANNELS.reloadPreview]: OfficeReloadPreviewRequest
   [OFFICE_INVOKE_CHANNELS.buildPrompt]: OfficeBuildPromptRequest
-  [OFFICE_INVOKE_CHANNELS.installerStatus]: OfficeWorkspaceRequest
+  [OFFICE_INVOKE_CHANNELS.installerStatus]: OfficeInstallerStatusRequest
   [OFFICE_INVOKE_CHANNELS.installerStart]: OfficeInstallerStartRequest
-  [OFFICE_INVOKE_CHANNELS.installerCancel]: OfficeWorkspaceRequest
+  [OFFICE_INVOKE_CHANNELS.installerCancel]: OfficeInstallerCancelRequest
   [OFFICE_INVOKE_CHANNELS.installerRemove]: OfficeInstallerRemoveRequest
 }
 
@@ -214,15 +224,17 @@ export function validateOfficeInvokeRequest<C extends OfficeInvokeChannel>(
   channel: C,
   input: unknown,
 ): ValidationResult<OfficeInvokeRequestMap[C]> {
-  if (!isRecord(input) || !isWorkspaceId(input.workspaceId)) return { ok: false }
+  if (!isRecord(input)) return { ok: false }
 
   if (channel === OFFICE_INVOKE_CHANNELS.installerStatus || channel === OFFICE_INVOKE_CHANNELS.installerCancel) {
+    if (input.workspaceId !== undefined && !isWorkspaceId(input.workspaceId)) return { ok: false }
     return hasOnlyKeys(input, ['workspaceId'])
       ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
       : { ok: false }
   }
 
   if (channel === OFFICE_INVOKE_CHANNELS.installerStart) {
+    if (input.workspaceId !== undefined && !isWorkspaceId(input.workspaceId)) return { ok: false }
     return hasOnlyKeys(input, ['workspaceId', 'confirmed', 'repair']) && input.confirmed === true &&
       (input.repair === undefined || typeof input.repair === 'boolean')
       ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
@@ -230,10 +242,13 @@ export function validateOfficeInvokeRequest<C extends OfficeInvokeChannel>(
   }
 
   if (channel === OFFICE_INVOKE_CHANNELS.installerRemove) {
+    if (input.workspaceId !== undefined && !isWorkspaceId(input.workspaceId)) return { ok: false }
     return hasOnlyKeys(input, ['workspaceId', 'confirmed']) && input.confirmed === true
       ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
       : { ok: false }
   }
+
+  if (!isWorkspaceId(input.workspaceId)) return { ok: false }
 
   if (channel === OFFICE_INVOKE_CHANNELS.detect || channel === OFFICE_INVOKE_CHANNELS.listFiles) {
     return hasOnlyKeys(input, ['workspaceId'])

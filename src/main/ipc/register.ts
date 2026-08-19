@@ -5,6 +5,8 @@ import type { OfficeWatchPool } from '../office/office-watch-pool'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 import { createProductionOfficeOperations } from '../office/office-handler-operations'
 import type { BrowserSurfaceManager } from '../browser/surface-manager'
+import type { ManagedBinaryInstaller } from '../language-service/installer'
+import type { LanguageServiceId } from '../../shared/ipc/language-service'
 import { registerAgentHandlers } from './agent-handlers'
 import { registerBrowserHandlers } from './browser-handlers'
 import { registerCheckpointHandlers } from './checkpoint-handlers'
@@ -16,6 +18,7 @@ import { registerJanusChatHandlers } from './janus-chat-handlers'
 import { registerKnowledgeHandlers } from './knowledge-handlers'
 import { registerLanguageHandlers } from './language-handlers'
 import { registerLanguageServiceHandlers } from './language-service-handlers'
+import { registerLanguageServiceInstallerHandlers, type LanguageServiceInstallerHandlerOptions } from './language-service-installer-handlers'
 import { registerLlmHandlers } from './llm-handlers'
 import { registerOfficeHandlers } from './office-handlers'
 import { registerProjectHandlers } from './project-handlers'
@@ -38,6 +41,7 @@ export interface RegisterApplicationIpcOptions {
   officeArtifactIndex: OfficeArtifactIndex
   officecliInstaller: OfficecliInstaller
   browserSurfaces: BrowserSurfaceManager
+  languageServiceInstallers: ReadonlyMap<LanguageServiceId, ManagedBinaryInstaller>
 }
 
 /** 幂等守卫：重复调用不再触发 "Attempted to register a second handler"。 */
@@ -98,6 +102,10 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerSettingsHandlers()
   registerLanguageHandlers()
   registerLanguageServiceHandlers()
+  registerLanguageServiceInstallerHandlers({
+    getAllowedWindows: options.getAllowedWindows,
+    installers: options.languageServiceInstallers,
+  })
   registerSubAgentRunHandlers()
   registerKnowledgeHandlers()
   registerOfficeHandlers({

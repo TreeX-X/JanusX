@@ -1558,6 +1558,12 @@
   padding: 40px;
   background: rgba(5, 5, 7, 0.55);
   backdrop-filter: blur(6px);
+  animation: workbench-backdrop-in 0.3s ease-out;
+}
+
+.blueprint-workbench-backdrop[data-closing="true"] {
+  animation: workbench-backdrop-out 0.32s ease-in forwards;
+  pointer-events: none;
 }
 
 /* 工作台专属下拉承载层：z-index 12001 恰好高于遮罩 12000，
@@ -1595,6 +1601,11 @@
     0 30px 70px rgba(0, 0, 0, 0.85),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   animation: blueprint-workbench-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.blueprint-workbench-shell[data-closing="true"] {
+  animation: blueprint-workbench-out 0.32s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
 }
 
 .blueprint-workbench-header {
@@ -2176,6 +2187,35 @@
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes blueprint-workbench-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97) translateY(16px);
+  }
+}
+
+@keyframes workbench-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes workbench-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 

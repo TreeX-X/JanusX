@@ -17,9 +17,18 @@
     "errorTitle": "操作失败",
     "errorDismiss": "知道了",
     "naming": {
-      "createFile": { "title": "新建文件", "label": "文件名" },
-      "createDirectory": { "title": "新建文件夹", "label": "文件夹名" },
-      "rename": { "title": "重命名", "label": "新名称" }
+      "createFile": {
+        "title": "新建文件",
+        "label": "文件名"
+      },
+      "createDirectory": {
+        "title": "新建文件夹",
+        "label": "文件夹名"
+      },
+      "rename": {
+        "title": "重命名",
+        "label": "新名称"
+      }
     },
     "contextMenu": {
       "open": "打开",
@@ -150,7 +159,11 @@
     "embedToMain": "嵌入主窗口工作区",
     "missingFileInfo": "Missing file information",
     "goToDefinition": "转到定义",
-    "cppDefinitionUnavailable": "C/C++ 导航不可用，请确认 clangd 已安装且工程配置可解析。"
+    "cppDefinitionUnavailable": "C/C++ 导航不可用，请确认 clangd 已安装且工程配置可解析。",
+    "cppDefinitionInstallPrompt": "C/C++ 导航需要 clangd。点击安装。",
+    "cppDefinitionInstalling": "正在安装 clangd...",
+    "cppDefinitionInstallFailed": "安装 clangd 失败。{{error}}",
+    "cppDefinitionInstallComplete": "clangd 已安装。C/C++ 导航已就绪。"
   },
   "htmlViewer": {
     "htmlLabel": "HTML",

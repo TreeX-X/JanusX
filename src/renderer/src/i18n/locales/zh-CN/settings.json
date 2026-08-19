@@ -223,5 +223,56 @@
       "load": "知识库设置加载失败",
       "save": "知识库设置保存失败"
     }
+  },
+  "officeCli": {
+    "title": "OfficeCLI",
+    "subtitle": "管理 Office CLI 二进制，用于 Office 文档预览与 prompt 生成",
+    "loading": "加载中...",
+    "name": "OfficeCLI",
+    "desc": "管理 .docx/.xlsx/.pptx 预览与 prompt 生成的二进制，按需安装。",
+    "state": {
+      "notInstalled": "未安装",
+      "ready": "就绪",
+      "busy": "处理中...",
+      "failed": "失败"
+    },
+    "label": {
+      "version": "版本",
+      "source": "来源"
+    },
+    "action": {
+      "install": "安装",
+      "repair": "修复",
+      "remove": "移除",
+      "cancel": "取消",
+      "working": "处理中..."
+    }
+  },
+  "languageService": {
+    "title": "语言服务",
+    "subtitle": "托管安装的代码导航语言服务器",
+    "loading": "加载中...",
+    "state": {
+      "notInstalled": "未安装",
+      "ready": "就绪",
+      "busy": "处理中...",
+      "failed": "失败"
+    },
+    "label": {
+      "version": "版本",
+      "source": "来源"
+    },
+    "action": {
+      "install": "安装",
+      "repair": "修复",
+      "remove": "移除",
+      "working": "处理中..."
+    },
+    "service": {
+      "clangd": {
+        "name": "clangd",
+        "desc": "C/C++ 代码导航（转到定义）。托管二进制，按需安装。"
+      }
+    }
   }
 }

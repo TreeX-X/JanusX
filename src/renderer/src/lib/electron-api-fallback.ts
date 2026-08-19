@@ -34,6 +34,13 @@ export function installElectronApiFallback(): void {
         target: null,
         error: { code: 'server-error', message: 'Electron language service API is unavailable' },
       }),
+      installer: {
+        status: () => Promise.resolve({ serviceId: 'clangd', state: 'not-installed', location: '' }),
+        start: () => Promise.resolve({ serviceId: 'clangd', state: 'failed', location: '', error: 'Electron API unavailable' }),
+        cancel: () => Promise.resolve({ serviceId: 'clangd', state: 'not-installed', location: '' }),
+        remove: () => Promise.resolve({ serviceId: 'clangd', state: 'not-installed', location: '' }),
+        onInstallerProgress: () => () => {},
+      },
     },
     terminal: {
       warmup: () => Promise.resolve({ ok: true }),
@@ -186,7 +193,7 @@ export function installElectronApiFallback(): void {
       getFeishuControlStatus: unavailable,
     },
     subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
-    dialog: { openDirectory: unavailable, saveFile: unavailable },
+    dialog: { openDirectory: unavailable, saveFile: unavailable, showMessageBox: unavailable },
     window: {
       minimize: unavailable,
       maximize: unavailable,

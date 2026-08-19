@@ -431,6 +431,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
           setActiveFilePath(remapPath(currentActive, oldPath, newPath))
         }
         await reloadDirectory(parentPath)
+        void useGitStore.getState().fetchStatus(workspace.path)
         return
       }
 
@@ -446,6 +447,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         setExpandedPaths((current) => new Set(current).add(dialog.path))
       }
       if (dialog.mode === 'create-file' && result.path) setActiveFilePath(result.path)
+      void useGitStore.getState().fetchStatus(workspace.path)
     },
     [getActiveWorkspace, namingDialog, reloadDirectory, runFileTreeMutation, setActiveFilePath],
   )
@@ -480,6 +482,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     if (targetDirectoryPath !== sourceParentPath) {
       await reloadDirectory(targetDirectoryPath, sourceWorkspacePath)
     }
+    void useGitStore.getState().fetchStatus(workspace.path)
   }, [getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
   const handleDeleteContextTarget = useCallback(() => {
@@ -514,6 +517,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         if (currentActive && isPathInScope(currentActive, targetPath)) setActiveFilePath(null)
       },
     })
+    void useGitStore.getState().fetchStatus(request.workspacePath)
   }, [getActiveWorkspace, pendingDelete, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
   const namingCopy = namingDialog ? NAMING_DIALOG_KEYS[namingDialog.mode] : null

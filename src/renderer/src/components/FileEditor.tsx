@@ -4,7 +4,7 @@ import { FloatingPanel } from '@/components/FloatingPanel'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { OpenFile } from '@/types'
 import type { DefinitionTarget } from '@/lib/monaco-definition'
-import { PanelRightClose, PanelRightOpen, Save, Search } from 'lucide-react'
+import { PanelRightClose, PanelRightOpen, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
 
@@ -44,11 +44,13 @@ function TabItem({
   isActive,
   onSelect,
   onClose,
+  onReload,
 }: {
   file: OpenFile
   isActive: boolean
   onSelect: () => void
   onClose: (e: React.MouseEvent) => void
+  onReload: () => void
 }) {
   const [hovered, setHovered] = useState(false)
 
@@ -69,6 +71,23 @@ function TabItem({
           className="w-1.5 h-1.5 rounded-full shrink-0"
           style={{ background: '#ff7830' }}
         />
+      )}
+      {file.externalChanged && (
+        <button
+          className="shrink-0 flex items-center justify-center"
+          style={{
+            color: '#4fc3f7',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            lineHeight: 1,
+          }}
+          title="Disk version changed ? click to reload"
+          onClick={(e) => { e.stopPropagation(); onReload() }}
+        >
+          <RefreshCw size={11} strokeWidth={2} />
+        </button>
       )}
       <span className="overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">
         {file.name}
@@ -115,6 +134,7 @@ export function FileEditor() {
   const closePanel = useEditorStore((s) => s.closePanel)
   const hidePanel = useEditorStore((s) => s.hidePanel)
   const saveFile = useEditorStore((s) => s.saveFile)
+  const reloadOpenFile = useEditorStore((s) => s.reloadOpenFile)
   const isEmbedded = useEditorStore((s) => s.isEmbedded)
   const setEmbedded = useEditorStore((s) => s.setEmbedded)
   const activeWorkspacePath = useWorkspaceStore((s) =>
@@ -166,14 +186,41 @@ export function FileEditor() {
     findEditorRef.current = null
   }, [activeFileId])
 
-  const handleClose = useCallback(() => {
+  const handleClose = useCallback(async () => {
+    const dirtyFiles = openFiles.filter((f) => f.isDirty && f.viewType !== 'image' && f.viewType !== 'binary')
+    if (dirtyFiles.length > 0) {
+      const names = dirtyFiles.map((f) => f.name).join(', ')
+      const result = await window.electron.dialog.showMessageBox({
+        message: `Save changes to ${names}?`,
+        detail: 'You have unsaved changes that will be lost.',
+        buttons: ['Save All', "Don't Save", 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+      })
+      if (result.response === 2) return
+      if (result.response === 0) {
+        for (const f of dirtyFiles) await saveFile(f.id)
+      }
+    }
     closePanel()
-  }, [closePanel])
+  }, [closeFile, closePanel, openFiles, saveFile])
 
-  const handleTabClose = useCallback((id: string, e: React.MouseEvent) => {
+  const handleTabClose = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    const file = openFiles.find((f) => f.id === id)
+    if (file?.isDirty && file.viewType !== 'image' && file.viewType !== 'binary') {
+      const result = await window.electron.dialog.showMessageBox({
+        message: `Save changes to ${file.name}?`,
+        detail: 'You have unsaved changes that will be lost.',
+        buttons: ['Save', "Don't Save", 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+      })
+      if (result.response === 2) return
+      if (result.response === 0) await saveFile(id)
+    }
     closeFile(id)
-  }, [closeFile])
+  }, [closeFile, openFiles, saveFile])
 
   const detachEditor = useCallback(async () => {
     if (!activeFile || !activeWorkspacePath) return
@@ -211,6 +258,7 @@ export function FileEditor() {
               isActive={file.id === activeFileId}
               onSelect={() => setActiveFile(file.id)}
               onClose={(e) => handleTabClose(file.id, e)}
+              onReload={() => void reloadOpenFile(file.absolutePath)}
             />
           ))}
         </div>

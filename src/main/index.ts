@@ -163,7 +163,7 @@ async function bootstrapApp(): Promise<void> {
     ...(mainWindow && !mainWindow.isDestroyed() ? [mainWindow] : []),
     ...editorWindows.list(),
   ]
-  const { resolveOfficeWorkspaceRoot, officecliInstaller, officeWatchPool, officeArtifactIndex } =
+  const { resolveOfficeWorkspaceRoot, officecliInstaller, officeWatchPool, officeArtifactIndex, languageServiceInstallers } =
     createApplicationServices(getOfficeWindows)
 
   appShutdown.configure({
@@ -200,6 +200,7 @@ async function bootstrapApp(): Promise<void> {
       officeArtifactIndex,
       officecliInstaller,
       browserSurfaces,
+      languageServiceInstallers,
     })
     registerWindowIpc(editorWindows, () => mainWindow)
     feishuInboundRuntime.configure(mainWindow)

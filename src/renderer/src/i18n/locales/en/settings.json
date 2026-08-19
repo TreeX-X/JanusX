@@ -223,5 +223,56 @@
       "load": "Failed to load knowledge settings",
       "save": "Failed to save knowledge settings"
     }
+  },
+  "officeCli": {
+    "title": "OfficeCLI",
+    "subtitle": "Managed Office CLI binary for Office document preview and prompt generation",
+    "loading": "Loading...",
+    "name": "OfficeCLI",
+    "desc": "Managed binary for .docx/.xlsx/.pptx preview and prompt generation. Installs on demand.",
+    "state": {
+      "notInstalled": "Not Installed",
+      "ready": "Ready",
+      "busy": "Working...",
+      "failed": "Failed"
+    },
+    "label": {
+      "version": "Version",
+      "source": "Source"
+    },
+    "action": {
+      "install": "Install",
+      "repair": "Repair",
+      "remove": "Remove",
+      "cancel": "Cancel",
+      "working": "Working..."
+    }
+  },
+  "languageService": {
+    "title": "Language Services",
+    "subtitle": "Managed language servers for code navigation",
+    "loading": "Loading...",
+    "state": {
+      "notInstalled": "Not Installed",
+      "ready": "Ready",
+      "busy": "Working...",
+      "failed": "Failed"
+    },
+    "label": {
+      "version": "Version",
+      "source": "Source"
+    },
+    "action": {
+      "install": "Install",
+      "repair": "Repair",
+      "remove": "Remove",
+      "working": "Working..."
+    },
+    "service": {
+      "clangd": {
+        "name": "clangd",
+        "desc": "C/C++ code navigation (Go to Definition). Managed binary; installs on demand."
+      }
+    }
   }
 }

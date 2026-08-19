@@ -5,12 +5,15 @@ import { configService } from '../config/service'
 import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
 import type { RemoteNotificationType } from '../remote-notifications/types'
 import { notifyAgentAttention, notifyAgentEvent } from './agent-notifier'
-import type {
-  AgentHookCompletion,
-  AgentHookCoordinatorEvent,
-  AgentHookPayload,
-  AgentHookSource,
-  RegisteredHookTerminal,
+import {
+  JANUSX_SYNTHETIC_HOOK_EVENTS,
+  type AgentHookCompletion,
+  type AgentHookCompletionKind,
+  type AgentHookCoordinatorEvent,
+  type AgentHookPayload,
+  type AgentHookSource,
+  type AgentHookTurnStart,
+  type RegisteredHookTerminal,
 } from './agent-hook-types'
 
 interface ActiveHookTurn {
@@ -19,6 +22,8 @@ interface ActiveHookTurn {
   engine: AgentEngine
   source: AgentHookSource
   startedAtMs: number
+  sessionId?: string
+  transcriptPath?: string
 }
 
 interface AgentHookCoordinatorOptions {
@@ -27,6 +32,8 @@ interface AgentHookCoordinatorOptions {
   deliverAttention?: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => Promise<boolean> | boolean
   onEvent?: (event: AgentHookCoordinatorEvent) => void
   onResolvedPayload?: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => void
+  onTurnStarted?: (turn: AgentHookTurnStart) => void
+  onTurnEnded?: (terminalId: string) => void
 }
 
 interface TerminalResolution {
@@ -38,6 +45,11 @@ const COMPLETION_EVENTS = new Set(['Stop'])
 const FAILURE_EVENTS = new Set(['StopFailure', 'PostToolUseFailure'])
 const APPROVAL_EVENTS = new Set(['PermissionRequest'])
 const START_EVENTS = new Set(['UserPromptSubmit'])
+const SYNTHETIC_FAILURE_EVENTS = new Set<string>([
+  JANUSX_SYNTHETIC_HOOK_EVENTS.apiError,
+  JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned,
+])
+const INTERRUPT_EVENTS = new Set<string>([JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted, 'SessionEnd'])
 
 function toIsoString(timestampMs: number): string {
   return new Date(timestampMs).toISOString()
@@ -99,8 +111,42 @@ function isCompletionEvent(payload: AgentHookPayload): boolean {
 }
 
 function isFailureEvent(payload: AgentHookPayload): boolean {
+  if (SYNTHETIC_FAILURE_EVENTS.has(payload.event)) return true
   if (payload.source === 'opencode') return payload.event === 'session.error'
   return FAILURE_EVENTS.has(payload.event)
+}
+
+function isInterruptEvent(payload: AgentHookPayload): boolean {
+  return INTERRUPT_EVENTS.has(payload.event)
+}
+
+/**
+ * Synthetic turn-end signals and SessionEnd are reconciliation sources: they
+ * only close a turn that is actually open. The first end signal to arrive wins;
+ * later ones are dropped so multiple sources can never double-notify. Real
+ * CLI completion hooks (Stop/session.idle) keep their fallback delivery even
+ * without a tracked turn — if one arrives after a sentinel abort, the sentinel
+ * was wrong and the late completion is the correction.
+ */
+function requiresActiveTurn(payload: AgentHookPayload): boolean {
+  return SYNTHETIC_FAILURE_EVENTS.has(payload.event) || INTERRUPT_EVENTS.has(payload.event)
+}
+
+function resolveTurnEndKind(payload: AgentHookPayload): AgentHookCompletionKind | null {
+  if (isInterruptEvent(payload)) return 'interrupted'
+  if (isFailureEvent(payload)) return 'failed'
+  if (isCompletionEvent(payload)) return 'done'
+  return null
+}
+
+function getRawString(raw: unknown, keys: string[]): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return undefined
 }
 
 function isAttentionEvent(payload: AgentHookPayload): boolean {
@@ -137,6 +183,8 @@ export class AgentHookCoordinator {
   private readonly deliverAttention: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => Promise<boolean> | boolean
   private readonly onEvent?: (event: AgentHookCoordinatorEvent) => void
   private readonly onResolvedPayload?: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => void
+  private readonly onTurnStarted?: (turn: AgentHookTurnStart) => void
+  private readonly onTurnEnded?: (terminalId: string) => void
 
   constructor(
     private readonly getMainWindow: () => BrowserWindow | null,
@@ -147,6 +195,8 @@ export class AgentHookCoordinator {
     this.deliverAttention = options.deliverAttention ?? ((payload, terminal) => this.defaultDeliverAttention(payload, terminal))
     this.onEvent = options.onEvent
     this.onResolvedPayload = options.onResolvedPayload
+    this.onTurnStarted = options.onTurnStarted
+    this.onTurnEnded = options.onTurnEnded
   }
 
   registerTerminal(terminal: RegisteredHookTerminal): void {
@@ -155,12 +205,21 @@ export class AgentHookCoordinator {
 
   unregisterTerminal(terminalId: string): void {
     this.terminals.delete(terminalId)
-    this.activeTurns.delete(terminalId)
+    if (this.activeTurns.delete(terminalId)) {
+      this.onTurnEnded?.(terminalId)
+    }
+  }
+
+  hasActiveTurn(terminalId: string): boolean {
+    return this.activeTurns.has(terminalId)
   }
 
   dispose(): void {
     this.terminals.clear()
-    this.activeTurns.clear()
+    for (const terminalId of [...this.activeTurns.keys()]) {
+      this.activeTurns.delete(terminalId)
+      this.onTurnEnded?.(terminalId)
+    }
   }
 
   handleHookPayload(payload: AgentHookPayload): void {
@@ -207,13 +266,21 @@ export class AgentHookCoordinator {
       return
     }
 
-    if (isFailureEvent(normalizedPayload)) {
-      this.completeTurn(normalizedPayload, terminal, true)
-      return
-    }
-
-    if (isCompletionEvent(normalizedPayload)) {
-      this.completeTurn(normalizedPayload, terminal, false)
+    const turnEndKind = resolveTurnEndKind(normalizedPayload)
+    if (turnEndKind) {
+      if (requiresActiveTurn(normalizedPayload) && !this.activeTurns.has(terminal.terminalId)) {
+        this.emit({
+          type: 'ignored',
+          terminalId: terminal.terminalId,
+          engine: terminal.engine,
+          source: normalizedPayload.source,
+          hookEvent: normalizedPayload.event,
+          reason: 'no-active-turn',
+          delivered: false,
+        })
+        return
+      }
+      this.completeTurn(normalizedPayload, terminal, turnEndKind)
       return
     }
 
@@ -280,9 +347,18 @@ export class AgentHookCoordinator {
       engine: terminal.engine,
       source: payload.source,
       startedAtMs: now,
+      sessionId: payload.sessionId,
+      transcriptPath: getRawString(payload.raw, ['transcript_path', 'transcriptPath']),
     }
 
     this.activeTurns.set(terminal.terminalId, turn)
+    this.onTurnStarted?.({
+      terminalId: terminal.terminalId,
+      engine: terminal.engine,
+      source: payload.source,
+      sessionId: turn.sessionId,
+      transcriptPath: turn.transcriptPath,
+    })
     this.emit({
       type: 'started',
       terminalId: terminal.terminalId,
@@ -319,7 +395,11 @@ export class AgentHookCoordinator {
       })
   }
 
-  private completeTurn(payload: AgentHookPayload, terminal: RegisteredHookTerminal, failed: boolean): void {
+  private completeTurn(
+    payload: AgentHookPayload,
+    terminal: RegisteredHookTerminal,
+    kind: AgentHookCompletionKind,
+  ): void {
     const activeTurn = this.activeTurns.get(terminal.terminalId)
     const endedAtMs = this.now()
     const completion: AgentHookCompletion = {
@@ -330,16 +410,20 @@ export class AgentHookCoordinator {
       hookEvent: payload.event,
       startedAt: activeTurn ? toIsoString(activeTurn.startedAtMs) : undefined,
       endedAt: toIsoString(endedAtMs),
-      failed,
+      kind,
+      failed: kind === 'failed',
       message: payload.message,
     }
 
-    this.activeTurns.delete(terminal.terminalId)
+    if (this.activeTurns.delete(terminal.terminalId)) {
+      this.onTurnEnded?.(terminal.terminalId)
+    }
 
+    const lifecycle = kind === 'failed' ? 'failed' : kind === 'interrupted' ? 'interrupted' : 'completed'
     Promise.resolve(this.deliverCompletion(completion))
       .then((delivered) => {
         this.emit({
-          type: failed ? 'failed' : 'completed',
+          type: lifecycle,
           terminalId: terminal.terminalId,
           turnId: completion.turnId,
           engine: terminal.engine,
@@ -363,6 +447,9 @@ export class AgentHookCoordinator {
   }
 
   private async defaultDeliverCompletion(completion: AgentHookCompletion): Promise<boolean> {
+    // User-initiated ends (interrupt, kill, session teardown) correct the
+    // status silently: the user is at the keyboard, a toast would be noise.
+    if (completion.kind === 'interrupted') return false
     const mainWindow = this.getMainWindow()
     if (!mainWindow) return false
     const settings = await configService.getNotificationSettings()

@@ -17,9 +17,18 @@
     "errorTitle": "Operation failed",
     "errorDismiss": "Got it",
     "naming": {
-      "createFile": { "title": "New file", "label": "File name" },
-      "createDirectory": { "title": "New folder", "label": "Folder name" },
-      "rename": { "title": "Rename", "label": "New name" }
+      "createFile": {
+        "title": "New file",
+        "label": "File name"
+      },
+      "createDirectory": {
+        "title": "New folder",
+        "label": "Folder name"
+      },
+      "rename": {
+        "title": "Rename",
+        "label": "New name"
+      }
     },
     "contextMenu": {
       "open": "Open",
@@ -150,7 +159,11 @@
     "embedToMain": "Embed into main workspace",
     "missingFileInfo": "Missing file information",
     "goToDefinition": "Go to Definition",
-    "cppDefinitionUnavailable": "C/C++ navigation is unavailable. Verify that clangd is installed and the project configuration can be resolved."
+    "cppDefinitionUnavailable": "C/C++ navigation is unavailable. Verify that clangd is installed and the project configuration can be resolved.",
+    "cppDefinitionInstallPrompt": "C/C++ navigation requires clangd. Click to install.",
+    "cppDefinitionInstalling": "Installing clangd...",
+    "cppDefinitionInstallFailed": "Failed to install clangd. {{error}}",
+    "cppDefinitionInstallComplete": "clangd installed. C/C++ navigation is ready."
   },
   "htmlViewer": {
     "htmlLabel": "HTML",

@@ -213,8 +213,9 @@ function emitWorkspaceFsChange(
     workspacePath,
     setTimeout(() => {
       watcherTimers.delete(workspacePath)
+      const changedFilePath = filename ? join(workspacePath, filename.toString()) : null
       for (const window of windows) {
-        sendToRenderer(window, FILE_TREE_CHANNELS.changed, workspacePath)
+        sendToRenderer(window, FILE_TREE_CHANNELS.changed, { workspacePath, changedFilePath })
       }
     }, 150),
   )
@@ -442,6 +443,16 @@ export function registerWorkspaceHandlers(
       : await dialog.showSaveDialog(saveOptions)
     return { canceled: result.canceled, ...(result.filePath ? { filePath: result.filePath } : {}) }
   })
+
+  ipcMain.handle(SYSTEM_CHANNELS.showMessageBox, async (_event, options: unknown) => {
+    const mainWindow = getMainWindow()
+    const opts = options as { message: string; detail?: string; buttons: string[]; defaultId?: number; cancelId?: number }
+    const result = mainWindow
+      ? await dialog.showMessageBox(mainWindow, opts)
+      : await dialog.showMessageBox(opts)
+    return { response: result.response }
+  })
+
 
   ipcMain.handle(SYSTEM_CHANNELS.defaultShell, () => {
     if (process.platform === 'win32') return 'powershell.exe'

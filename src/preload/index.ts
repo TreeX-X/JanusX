@@ -10,7 +10,7 @@ import {
   type FileTreeAPI,
   type WorkspaceAPI,
 } from '../shared/ipc/workspace'
-import { LANGUAGE_SERVICE_CHANNELS, type LanguageServiceAPI } from '../shared/ipc/language-service'
+import { LANGUAGE_SERVICE_CHANNELS, LANGUAGE_SERVICE_EVENT_CHANNELS, type LanguageServiceAPI } from '../shared/ipc/language-service'
 import {
   TERMINAL_EVENT_CHANNELS,
   TERMINAL_INVOKE_CHANNELS,
@@ -56,7 +56,7 @@ const fileTreeAPI: FileTreeAPI = {
   delete: (rootPath, relativePath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.delete, rootPath, relativePath),
   reveal: (rootPath, relativePath) => ipcRenderer.invoke(FILE_TREE_CHANNELS.reveal, rootPath, relativePath),
   onChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, workspacePath: string) => callback(workspacePath)
+    const handler = (_event: Electron.IpcRendererEvent, payload: { workspacePath: string; changedFilePath?: string | null }) => callback(payload)
     ipcRenderer.on(FILE_TREE_CHANNELS.changed, handler)
     return () => ipcRenderer.removeListener(FILE_TREE_CHANNELS.changed, handler)
   },
@@ -72,6 +72,13 @@ const fileAPI: FileAPI = {
 
 const languageServiceAPI: LanguageServiceAPI = {
   definition: (request) => ipcRenderer.invoke(LANGUAGE_SERVICE_CHANNELS.definition, request),
+  installer: {
+    status: (request) => ipcRenderer.invoke(LANGUAGE_SERVICE_CHANNELS.installerStatus, request),
+    start: (request) => ipcRenderer.invoke(LANGUAGE_SERVICE_CHANNELS.installerStart, request),
+    cancel: (request) => ipcRenderer.invoke(LANGUAGE_SERVICE_CHANNELS.installerCancel, request),
+    remove: (request) => ipcRenderer.invoke(LANGUAGE_SERVICE_CHANNELS.installerRemove, request),
+    onInstallerProgress: (listener) => subscribeIpcEvent(LANGUAGE_SERVICE_EVENT_CHANNELS.installerProgress, listener),
+  },
 }
 
 function subscribeIpcEvent<T>(channel: string, callback: (event: T) => void): () => void {
@@ -314,6 +321,7 @@ const subAgentRunAPI: SubAgentRunAPI = {
 const dialogAPI: DialogAPI = {
   openDirectory: () => ipcRenderer.invoke(SYSTEM_CHANNELS.openDirectory),
   saveFile: (options) => ipcRenderer.invoke(SYSTEM_CHANNELS.saveFile, options),
+  showMessageBox: (options) => ipcRenderer.invoke(SYSTEM_CHANNELS.showMessageBox, options),
 }
 const windowAPI: WindowAPI = {
   minimize: () => ipcRenderer.invoke(SYSTEM_CHANNELS.minimize),

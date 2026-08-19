@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   applyKnowledgeCandidate,
@@ -66,6 +66,24 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewError, setReviewError] = useState('')
+
+  // Delayed unmount: keep portal alive during exit animation
+  const [rendered, setRendered] = useState(isOpen)
+  const closingRef = useRef(false)
+  useEffect(() => {
+    if (isOpen) {
+      closingRef.current = false
+      setRendered(true)
+      return
+    }
+    if (!rendered) return
+    closingRef.current = true
+    const timer = setTimeout(() => {
+      closingRef.current = false
+      setRendered(false)
+    }, 320)
+    return () => clearTimeout(timer)
+  }, [isOpen, rendered])
 
   const refresh = async () => {
     setSelectedSearch(null)
@@ -169,7 +187,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     } finally { setReviewBusy(false) }
   }
 
-  if (!isOpen) return null
+  if (!rendered) return null
+  const isClosing = closingRef.current
 
   const sidebarCards = snapshot ? cardsForTab(snapshot, tab) : []
   const paneTitle = tab === 'inbox' ? t('knowledge:paneTitle.inbox') : tab === 'library' ? t('knowledge:paneTitle.library') : TAB_LABELS[tab]
@@ -183,8 +202,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   }[tab]
 
   return createPortal(
-    <div className={styles.backdrop}>
-      <section className={styles.shell} aria-label={t('knowledge:aria.engine')}>
+    <div className={styles.backdrop} data-closing={isClosing ? "true" : undefined}>
+      <section className={styles.shell} data-closing={isClosing ? "true" : undefined} aria-label={t('knowledge:aria.engine')}>
         <header className={styles.header}>
           <div className={styles.headerLeft}>
             <span className={styles.iconBadge} aria-hidden="true">

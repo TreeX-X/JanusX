@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
@@ -31,6 +31,24 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   // 零尺寸 + overflow visible，不拦截点击、不裁切子节点。
   // Select 通过 getPortalContainer 把浮层挂进这里，进入比遮罩更高的层叠上下文。
   const [selectPortalNode, setSelectPortalNode] = useState<HTMLDivElement | null>(null)
+
+  // Delayed unmount: keep portal alive during exit animation
+  const [rendered, setRendered] = useState(isOpen)
+  const closingRef = useRef(false)
+  useEffect(() => {
+    if (isOpen) {
+      closingRef.current = false
+      setRendered(true)
+      return
+    }
+    if (!rendered) return
+    closingRef.current = true
+    const timer = setTimeout(() => {
+      closingRef.current = false
+      setRendered(false)
+    }, 320)
+    return () => clearTimeout(timer)
+  }, [isOpen, rendered])
 
   useEffect(() => {
     if (!isOpen) return
@@ -74,7 +92,8 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         ? 'running'
         : 'default'
 
-  if (!isOpen) return null
+  if (!rendered) return null
+  const isClosing = closingRef.current
 
   const nodeCount = currentBlueprint?.nodeIds.length ?? 0
   const pendingCandidateCount =
@@ -86,8 +105,8 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
 
   return createPortal(
     <BlueprintSelectPortalContext.Provider value={selectPortalNode}>
-      <div className="blueprint-workbench-backdrop">
-        <section className="blueprint-workbench-shell" aria-label={t('blueprint:workbench.ariaLabel')}>
+      <div className="blueprint-workbench-backdrop" data-closing={isClosing ? "true" : undefined}>
+        <section className="blueprint-workbench-shell" data-closing={isClosing ? "true" : undefined} aria-label={t('blueprint:workbench.ariaLabel')}>
         <header className="blueprint-workbench-header">
           <div className="blueprint-workbench-header-left">
             <span className="blueprint-workbench-icon-badge" aria-hidden="true">

@@ -172,6 +172,9 @@ interface EditorStore {
   markDirty: (id: string) => void
   updateContent: (id: string, content: string) => void
   saveFile: (id: string) => Promise<void>
+  reloadOpenFile: (absolutePath: string) => Promise<void>
+  reloadOpenFiles: (workspacePath: string, changedFilePath?: string | null) => Promise<void>
+  hasDirtyFiles: () => boolean
   closePanel: () => void
   hidePanel: () => void
   showPanel: () => void
@@ -316,6 +319,54 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       console.error('Save failed:', err)
     }
   },
+
+
+  reloadOpenFile: async (absolutePath) => {
+    const id = getEditorFileId(absolutePath)
+    const file = get().openFiles.find(f => f.id === id)
+    if (!file) return
+
+    if (file.isDirty) {
+      set(s => ({
+        openFiles: s.openFiles.map(f =>
+          f.id === id ? { ...f, externalChanged: true } : f
+        ),
+      }))
+      return
+    }
+
+    try {
+      loadedFileCache.delete(id)
+      const snapshot = await loadFileSnapshot(absolutePath, file.viewType)
+      set(s => ({
+        openFiles: s.openFiles.map(f =>
+          f.id === id ? { ...f, ...snapshot, externalChanged: false, isLoading: false } : f
+        ),
+      }))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      set(s => ({
+        openFiles: s.openFiles.map(f =>
+          f.id === id ? { ...f, error: msg } : f
+        ),
+      }))
+    }
+  },
+
+  reloadOpenFiles: async (workspacePath, changedFilePath) => {
+    if (changedFilePath) {
+      await get().reloadOpenFile(changedFilePath)
+      return
+    }
+    const files = get().openFiles.filter(f =>
+      !f.isDirty && isPathInWorkspace(f.absolutePath, workspacePath)
+    )
+    for (const file of files) {
+      await get().reloadOpenFile(file.absolutePath)
+    }
+  },
+
+  hasDirtyFiles: () => get().openFiles.some(f => f.isDirty),
 
   closePanel: () => set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: false, navigationTarget: null }),
   hidePanel: () => set({ isVisible: false, isEmbedded: false }),

@@ -132,6 +132,6 @@ describe('file editor tabs', () => {
     expect(standaloneEditorSource).toContain("t('editor:fileEditor.unpinWindow')")
     expect(standaloneEditorSource).toContain('window.electron.window.editorReady()')
     expect(standaloneEditorSource).toContain('window.electron.window.onEditorRefresh((payload) =>')
-    expect(standaloneEditorSource).toContain('void openFile(payload.filePath, payload.workspacePath)')
+    expect(standaloneEditorSource).toContain('void reloadOpenFile(payload.filePath)')
   })
 })

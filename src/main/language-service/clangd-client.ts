@@ -5,6 +5,12 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { NativeSourceLanguage } from '../../shared/ipc/language-service'
 
+export interface ClangdClientOptions {
+  binaryPath: string
+  spawnArgs: readonly string[]
+}
+
+
 const MAX_MESSAGE_BYTES = 16 * 1024 * 1024
 const INITIALIZE_TIMEOUT_MS = 10_000
 const DEFINITION_TIMEOUT_MS = 8_000
@@ -165,11 +171,11 @@ export class ClangdClient {
     })
   }
 
-  static async create(workspacePath: string): Promise<ClangdClient> {
+  static async create(workspacePath: string, options: ClangdClientOptions): Promise<ClangdClient> {
     const compileCommandsDirectory = await findCompilationDatabase(workspacePath)
-    const args = ['--background-index', '--header-insertion=never', '--log=error']
+    const args = [...options.spawnArgs]
     if (compileCommandsDirectory) args.push(`--compile-commands-dir=${compileCommandsDirectory}`)
-    const child = spawn('clangd', args, {
+    const child = spawn(options.binaryPath, args, {
       cwd: workspacePath,
       env: createProcessEnvironment(),
       stdio: 'pipe',

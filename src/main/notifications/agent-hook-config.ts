@@ -49,6 +49,8 @@ const CLAUDE_HOOKS: HookCommandSpec[] = [
   { event: 'Notification', matcher: 'permission_prompt|idle_prompt' },
   { event: 'Stop' },
   { event: 'StopFailure' },
+  // Fires on CLI exit/clear/logout: closes a still-open turn before the pty dies.
+  { event: 'SessionEnd' },
 ]
 
 const CODEX_HOOKS: HookCommandSpec[] = [
