@@ -9,6 +9,7 @@ export interface SelectOption {
   value: string
   label: string
   disabled?: boolean
+  depth?: number
 }
 
 export interface SelectProps {
@@ -77,7 +78,10 @@ export function Select({
   // 滚动/resize 时关闭，避免定位错乱
   useEffect(() => {
     if (!open) return
-    const close = () => setOpen(false)
+    const close = (event: Event) => {
+      if (event.type === 'scroll' && listRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
     window.addEventListener('resize', close)
     window.addEventListener('scroll', close, true)
     return () => {
@@ -182,9 +186,11 @@ export function Select({
                   key={o.value}
                   role="option"
                   aria-selected={isSel}
+                  aria-disabled={o.disabled || undefined}
                   className={`${styles.option} ${
                     isSel ? styles.optionSelected : ''
                   } ${o.disabled ? styles.optionDisabled : ''}`}
+                  style={o.depth ? { paddingLeft: `${10 + o.depth * 14}px` } : undefined}
                   onClick={() => handleSelect(o)}
                 >
                   {o.label}

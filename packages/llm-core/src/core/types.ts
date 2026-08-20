@@ -102,6 +102,10 @@ export interface ProviderSettings {
   /* ────── 模型配置 ────── */
   /** 默认模型 ID（实际使用） */
   modelId?: string
+  /** Provider 下可用的模型 ID 列表 */
+  models?: string[]
+  /** Provider 下的默认模型 ID */
+  defaultModelId?: string
   /** 测试模型 ID（连接测试） */
   testModelId?: string
 

@@ -303,7 +303,28 @@ describe('AgentHookCoordinator synthetic turn ends', () => {
     expect(lifecycleTypes(events)).toEqual(['ignored', 'started', 'interrupted'])
   })
 
-  it('keeps fallback delivery for a real Stop hook arriving after a sentinel abort', async () => {
+  it('does not let a late Stop overwrite an authoritative synthetic failure', async () => {
+    const { coordinator, completions, events } = createCoordinator(() => 1_000)
+
+    startClaudeTurn(coordinator)
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'janusx.turn.api-error',
+      terminalId: 'term-claude',
+    })
+    coordinator.handleHookPayload({ source: 'claude', event: 'Stop', terminalId: 'term-claude' })
+    await Promise.resolve()
+
+    expect(completions.map((completion) => completion.kind)).toEqual(['failed'])
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'ignored',
+      hookEvent: 'Stop',
+      reason: 'turn-already-ended',
+      delivered: false,
+    }))
+  })
+
+  it('accepts normal completion again after the next turn starts', async () => {
     const { coordinator, completions } = createCoordinator(() => 1_000)
 
     startClaudeTurn(coordinator)
@@ -312,7 +333,11 @@ describe('AgentHookCoordinator synthetic turn ends', () => {
       event: 'janusx.turn.api-error',
       terminalId: 'term-claude',
     })
-    // A late Stop means the sentinel judged too early; the completion corrects it.
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'UserPromptSubmit',
+      terminalId: 'term-claude',
+    })
     coordinator.handleHookPayload({ source: 'claude', event: 'Stop', terminalId: 'term-claude' })
     await Promise.resolve()
 

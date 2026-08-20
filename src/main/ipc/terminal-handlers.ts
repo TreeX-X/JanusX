@@ -43,6 +43,12 @@ import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
 import { companionSessionState } from '../companion/session-state'
 import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
 import { terminalContextCoordinator } from '../runtime-telemetry/coordinator'
+import { createTerminalColorQueryResponder } from '../../shared/terminalColorQuery'
+import {
+  createTerminalServiceErrorDetector,
+  isTerminalInterrupt,
+  type TerminalServiceErrorDetector,
+} from '../notifications/terminal-turn-signals'
 
 // Track checkpoint state per terminal
 interface TerminalCpState {
@@ -265,6 +271,7 @@ async function resolveOfficecliLaunchAssets(): Promise<{
 export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | null): void {
   getHostWindow = getMainWindow
   const hookDiagnostics = new AgentHookDiagnostics()
+  const serviceErrorDetectors = new Map<string, TerminalServiceErrorDetector>()
   agentTurnRecorder.setEventSink((event) => {
     hookDiagnostics.record({
       stage: `knowledge-${event.type}`,
@@ -374,6 +381,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         ? event === 'permission.asked'
         : event === 'permissionrequest' || event === 'notification'
       if (state && (startsTurn || completesTurn || failsTurn || needsAttention)) {
+        if (startsTurn) serviceErrorDetectors.get(terminal.terminalId)?.reset()
         state.hookStatus = startsTurn ? 'running' : failsTurn ? 'error' : 'wait'
         sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, {
           id: terminal.terminalId,
@@ -435,6 +443,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     disposeTerminalSession: () => {
       for (const id of [...pendingTerminalData.keys()]) dropPendingTerminalData(id)
       terminalStates.clear()
+      serviceErrorDetectors.clear()
       hooksInstalledThisSession.clear()
       hookCoordinator.dispose()
       turnSentinel.dispose()
@@ -467,6 +476,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       .finally(() => {
         void terminalManager.killAll()
         terminalStates.clear()
+        serviceErrorDetectors.clear()
         hooksInstalledThisSession.clear()
         hookCoordinator.dispose()
         turnSentinel.dispose()
@@ -667,6 +677,11 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         rows: typeof rows === 'number' ? rows : undefined,
         env: hookEnv,
       }, office.pathDir)
+      if (engine === 'codex') {
+        serviceErrorDetectors.set(id, createTerminalServiceErrorDetector())
+      } else {
+        serviceErrorDetectors.delete(id)
+      }
       // Only soft-revalidate when create had no officecli cache; avoid clearing a warm cache mid-flight.
       if (!office.pathDir && !office.binaryPath) {
         void officecliManager.refreshAgentPathDir().catch(() => undefined)
@@ -746,6 +761,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     // state (Vector A/E). The guard skips stale callbacks whose pty no longer
     // matches the current instance for this id.
     const registeredPid = instance.pty.pid
+    const colorQueryResponder = engine === 'codex'
+      ? createTerminalColorQueryResponder()
+      : null
 
     // PTY output: keep a bounded replay buffer so remounted terminals can recover
     // after workspace switches, then forward live data to the renderer.
@@ -756,6 +774,24 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         // AC5: skip stale callbacks from a replaced pty.
         const current = terminalManager.getInstance(id)
         if (current && current.pty.pid !== registeredPid) return
+
+        const colorQueryResponse = colorQueryResponder?.push(data)
+        if (colorQueryResponse) {
+          terminalManager.write(id, colorQueryResponse)
+        }
+
+        if (hookCoordinator.hasActiveTurn(id)) {
+          const serviceError = serviceErrorDetectors.get(id)?.push(data)
+          if (serviceError) {
+            ingestHookPayload({
+              source: 'codex',
+              event: JANUSX_SYNTHETIC_HOOK_EVENTS.apiError,
+              terminalId: id,
+              message: serviceError,
+              timestamp: new Date().toISOString(),
+            })
+          }
+        }
 
         const seq = terminalManager.appendOutput(id, data)
         // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
@@ -846,6 +882,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
           analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
         }
         terminalStates.delete(id)
+        serviceErrorDetectors.delete(id)
         companionSessionState.unregisterTerminal(id)
         hookCoordinator.unregisterTerminal(id)
         agentTurnRecorder.unregisterTerminal(id)
@@ -854,6 +891,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         console.error(`[terminal ${id}] onExit error:`, err)
         // Best-effort cleanup so a partial failure does not leak state.
         try { terminalStates.delete(id) } catch {}
+        try { serviceErrorDetectors.delete(id) } catch {}
         try { companionSessionState.unregisterTerminal(id) } catch {}
         try { hookCoordinator.unregisterTerminal(id) } catch {}
         try { agentTurnRecorder.unregisterTerminal(id) } catch {}
@@ -879,7 +917,10 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     return { pid: instance.pty.pid }
     } catch (error) {
       rollbackTerminalCreation({
-        clearState: () => { terminalStates.delete(id) },
+        clearState: () => {
+          terminalStates.delete(id)
+          serviceErrorDetectors.delete(id)
+        },
         unregisterCompanion: () => companionSessionState.unregisterTerminal(id),
         unregisterHook: () => hookCoordinator.unregisterTerminal(id),
         unregisterRecorder: () => agentTurnRecorder.unregisterTerminal(id),
@@ -895,8 +936,17 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     createTerminalLifecycle(config)
   ))
 
-  // Input handler: forward to PTY only.
+  // Ctrl+C ends the active turn without exiting the interactive CLI process.
   ipcMain.on(TERMINAL_SEND_CHANNELS.input, (_event, { id, data }: TerminalInputPayload) => {
+    const state = terminalStates.get(id)
+    if (state && state.engine !== 'shell' && isTerminalInterrupt(data) && hookCoordinator.hasActiveTurn(id)) {
+      ingestHookPayload({
+        source: state.engine as AgentHookSource,
+        event: JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted,
+        terminalId: id,
+        timestamp: new Date().toISOString(),
+      })
+    }
     terminalManager.write(id, data)
   })
 

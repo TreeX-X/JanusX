@@ -2874,6 +2874,32 @@ body.is-running {
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
 }
 
+.janus-resource-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.48);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.janus-resource-group-toggle svg {
+  transition: transform 0.16s ease;
+}
+
+.janus-resource-scope--expanded .janus-resource-group-toggle svg {
+  transform: rotate(180deg);
+}
+
 .janus-resource-list {
   display: flex;
   min-width: 0;
@@ -2884,12 +2910,50 @@ body.is-running {
   scrollbar-width: none;
 }
 
+.janus-resource-scope--expanded {
+  align-items: flex-start;
+}
+
+.janus-resource-scope--expanded .janus-resource-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  align-items: start;
+  max-height: 116px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+
+.janus-resource-scope--expanded .janus-resource-list::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.janus-resource-scope--expanded .janus-resource-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.18);
+  border-radius: 4px;
+}
+
+.janus-resource-scope--expanded .janus-resource-chip {
+  max-width: none;
+  width: 100%;
+}
+
+.janus-resource-scope--expanded .janus-resource-label {
+  padding-left: 8px;
+}
+
+.janus-resource-scope--expanded .janus-resource-attach {
+  grid-column: 1 / -1;
+}
+
 .janus-resource-list::-webkit-scrollbar { display: none; }
 
 .janus-resource-chip {
   display: flex;
   min-width: 0;
-  max-width: 180px;
+  max-width: 132px;
   height: 23px;
   flex: 0 0 auto;
   align-items: center;
@@ -2964,6 +3028,10 @@ body.is-running {
   z-index: 10050 !important;
   max-width: 240px;
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+.janus-resource-attach-dropdown [role='option'][aria-selected='false'] {
+  min-height: 24px;
 }
 
 .janus-runtime-activity {

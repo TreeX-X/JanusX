@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { RefreshCw } from 'lucide-react'
+import { Plus, RefreshCw, Trash2 } from 'lucide-react'
 import styles from './LlmConfigModal.module.css'
 import { ModalCloseButton } from './ModalCloseButton'
 import { Select } from './ui/Select'
@@ -67,7 +67,8 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
   const [vertexClientEmail, setVertexClientEmail] = useState('')
   const [vertexPrivateKey, setVertexPrivateKey] = useState('')
   const [vertexSaJSON, setVertexSaJSON] = useState('')
-  const [vertexModel, setVertexModel] = useState('gemini-3.6-flash')
+  const [vertexModels, setVertexModels] = useState<string[]>([''])
+  const [vertexDefaultModel, setVertexDefaultModel] = useState('')
   const [vertexProxy, setVertexProxy] = useState('')
 
   const [testStatus, setTestStatus] = useState<{
@@ -91,7 +92,8 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
     setVertexClientEmail('')
     setVertexPrivateKey('')
     setVertexSaJSON('')
-    setVertexModel('gemini-3.6-flash')
+    setVertexModels([''])
+    setVertexDefaultModel('')
     setVertexProxy('')
     setTestStatus({ state: 'idle', message: '' })
     setSaveStatus('idle')
@@ -154,7 +156,9 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       setVertexClientEmail(provider.vertexAI?.clientEmail || '')
       setVertexPrivateKey(provider.vertexAI?.privateKey || '')
       setVertexSaJSON(provider.vertexAI?.serviceAccountJSON || '')
-      setVertexModel(provider.modelId || 'gemini-3.6-flash')
+      const models = provider.models?.length ? provider.models : provider.modelId ? [provider.modelId] : ['']
+      setVertexModels(models)
+      setVertexDefaultModel(provider.defaultModelId || provider.modelId || models.find(Boolean) || '')
       setVertexProxy(provider.vertexAI?.proxy || '')
     } else {
       setProviderType('openai-compatible')
@@ -174,11 +178,17 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
 
   const buildSettings = (): ProviderSettings => {
     if (providerType === 'vertex-ai') {
+      const models = vertexModels.map((model) => model.trim()).filter(Boolean)
+      const defaultModelId = models.includes(vertexDefaultModel.trim())
+        ? vertexDefaultModel.trim()
+        : models[0] || ''
       return {
         id: editingId || `vertex-ai-${Date.now()}`,
         name: vertexName || 'Vertex AI',
         authType: 'vertex-ai' as any,
-        modelId: vertexModel,
+        modelId: defaultModelId,
+        models,
+        defaultModelId,
         enabled: true,
         vertexAI: {
           projectId: vertexProjectId,
@@ -209,7 +219,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       const settings = buildSettings()
       const testModel =
         providerType === 'vertex-ai'
-          ? vertexModel || 'gemini-3.6-flash'
+          ? vertexDefaultModel || vertexModels.find(Boolean) || ''
           : openaiModel || 'gpt-3.5-turbo'
 
       const result = await testConnection({ ...settings, testModel })
@@ -238,6 +248,11 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
     try {
       setSaveStatus('saving')
       const settings = buildSettings()
+      if (providerType === 'vertex-ai' && !vertexModels.some((model) => model.trim())) {
+        setSaveStatus('error')
+        setTestStatus({ state: 'error', message: t('llm:vertex.modelRequired') })
+        return
+      }
       const result = await saveProvider(settings)
 
       if (result.success) {
@@ -327,7 +342,9 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                     </div>
                     <div className={styles.providerModel}>
                       {provider.authType === 'vertex-ai' ? t('llm:provider.typeVertex') : t('llm:provider.typeOpenai')}
-                      {provider.modelId ? ` / ${provider.modelId}` : ''}
+                      {provider.authType === 'vertex-ai'
+                        ? ` / ${(provider.models?.length ? provider.models : [provider.modelId]).filter(Boolean).join(', ')}`
+                        : provider.modelId ? ` / ${provider.modelId}` : ''}
                     </div>
                   </div>
                   <div className={styles.providerActions}>
@@ -537,19 +554,39 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
             </div>
             <div className={styles.formGroup}>
               <label>{t('llm:vertex.modelLabel')}</label>
+              {vertexModels.map((model, index) => (
+                <div className={styles.inlineHintRow} key={`vertex-model-${index}`}>
+                  <input
+                    className={styles.configInput}
+                    value={model}
+                    onChange={(event) => setVertexModels((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
+                    placeholder="vertex-model-id"
+                  />
+                  <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`} onClick={() => {
+                    setVertexModels((current) => {
+                      const next = current.length === 1 ? [''] : current.filter((_, itemIndex) => itemIndex !== index)
+                      if (!next.some((item) => item.trim() === vertexDefaultModel.trim())) {
+                        setVertexDefaultModel(next.find((item) => item.trim())?.trim() || '')
+                      }
+                      return next
+                    })
+                  }} title={t('llm:vertex.removeModel')}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`} onClick={() => setVertexModels((current) => [...current, ''])}>
+                <Plus size={14} /> {t('llm:vertex.addModel')}
+              </button>
+              <label>{t('llm:vertex.defaultModelLabel')}</label>
               <Select
                 className={`${styles.configInput} ${styles.selectInput}`}
-                value={vertexModel}
+                value={vertexDefaultModel}
                 getPortalContainer={getModalPortalContainer}
-                onChange={setVertexModel}
-                options={[
-                  { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-                  { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-                  { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview' },
-                  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-                  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-                ]}
+                onChange={setVertexDefaultModel}
+                options={vertexModels.filter((model) => model.trim()).map((model) => ({ value: model.trim(), label: model.trim() }))}
               />
+              <div className={styles.inlineHint}>{t('llm:vertex.modelHint')}</div>
             </div>
           </section>
         )}

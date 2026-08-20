@@ -168,7 +168,8 @@ export function registerLlmHandlers(): void {
         throw new Error(`Provider "${providerId}" 未配置`)
       }
 
-      const actualModelId = modelId || settings.modelId || 'gemini-3.6-flash'
+      const actualModelId = modelId || settings.modelId || ''
+      if (!actualModelId) throw new Error('No model ID configured')
 
       // 过滤掉空内容的消息
       let formattedMessages = messages

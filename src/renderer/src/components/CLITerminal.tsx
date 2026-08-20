@@ -36,6 +36,10 @@ import { createTerminalOutputScheduler } from '@/lib/terminal-output-scheduler'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { TerminalDataEvent, TerminalReplayResult } from '../../../shared/ipc/terminal'
+import {
+  isDefaultColorQuery,
+  TERMINAL_DEFAULT_COLORS,
+} from '../../../shared/terminalColorQuery'
 
 interface CLITerminalProps {
   terminalId: string
@@ -162,10 +166,10 @@ export function CLITerminal({
     const term = new Terminal({
       theme: {
         /*-- 与 --shell-canvas 对齐：终端画布与中部工作台同色，避免 pane 内出现色阶断层 --*/
-        background: '#151517',
-        foreground: '#d4d4d4',
+        background: TERMINAL_DEFAULT_COLORS.background,
+        foreground: TERMINAL_DEFAULT_COLORS.foreground,
         cursor: '#ff7830',
-        cursorAccent: '#151517',
+        cursorAccent: TERMINAL_DEFAULT_COLORS.background,
         selectionBackground: 'rgba(255, 120, 48, 0.18)',
         black: '#1f1f23',
         red: '#e06c75',
@@ -204,6 +208,16 @@ export function CLITerminal({
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
+
+    const terminalPreset = useWorkspaceStore.getState().terminals.find(
+      (terminal) => terminal.id === terminalId,
+    )?.preset
+    const colorQueryDisposables = terminalPreset === 'codex'
+      ? [
+          term.parser.registerOscHandler(10, isDefaultColorQuery),
+          term.parser.registerOscHandler(11, isDefaultColorQuery),
+        ]
+      : []
 
     const hostElement = containerRef.current
     const hostParent = hostElement.parentElement
@@ -510,6 +524,7 @@ export function CLITerminal({
       bufferChangeDisposable.dispose()
       win32InputModeEnableDisposable.dispose()
       win32InputModeDisableDisposable.dispose()
+      for (const disposable of colorQueryDisposables) disposable.dispose()
       delete hostElement.dataset.bufferType
       scrollbarElement?.removeEventListener('pointerdown', handleScrollbarPointerDown, true)
       window.removeEventListener('pointerup', finishScrollbarInteraction)

@@ -64,7 +64,12 @@
     "proxyLabel": "HTTP 代理 Proxy",
     "proxyPlaceholder": "http://127.0.0.1:7890",
     "proxyHint": "访问 Google 服务需要代理时填写。",
-    "modelLabel": "默认模型 Default Model"
+    "modelLabel": "默认模型 Default Model",
+    "modelHint": "可添加多个模型 ID；选中的默认模型用于新对话。",
+    "modelRequired": "必须填写至少一个 Vertex 模型 ID。",
+    "addModel": "添加模型",
+    "removeModel": "删除模型",
+    "defaultModelLabel": "默认模型"
   },
   "test": {
     "testing": "测试连接中...",

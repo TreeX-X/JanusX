@@ -64,7 +64,12 @@
     "proxyLabel": "HTTP Proxy",
     "proxyPlaceholder": "http://127.0.0.1:7890",
     "proxyHint": "Fill in when a proxy is required to reach Google services.",
-    "modelLabel": "Default Model"
+    "modelLabel": "Default Model",
+    "modelHint": "Add one or more model IDs. The selected default is used for new chats.",
+    "modelRequired": "A Vertex model ID is required.",
+    "addModel": "Add model",
+    "removeModel": "Remove model",
+    "defaultModelLabel": "Default model"
   },
   "test": {
     "testing": "Testing connection...",

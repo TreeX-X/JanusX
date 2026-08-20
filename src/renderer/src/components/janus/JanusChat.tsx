@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleX, Copy, FolderTree, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import { useOptionalJanusChatController } from './JanusChatProvider'
@@ -194,6 +194,7 @@ export function JanusChat({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
   const [threadMenuOpen, setThreadMenuOpen] = useState(false)
+  const [workspaceScopeExpanded, setWorkspaceScopeExpanded] = useState(true)
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [renamingTitle, setRenamingTitle] = useState('')
   const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string } | null>(null)
@@ -573,6 +574,21 @@ export function JanusChat({
   const attachedWorkspaceIds = new Set(resourceController?.resources.map((resource) => resource.workspaceId) ?? [])
   const attachableWorkspaces = resourceController?.availableWorkspaces.filter((workspace) =>
     !attachedWorkspaceIds.has(workspace.id)) ?? []
+  const attachableWorkspaceOptions = [
+    ...attachableWorkspaces.filter((workspace) => !workspace.sidebarGroup).map((workspace) => ({
+      value: workspace.id,
+      label: workspace.name,
+    })),
+    ...Array.from(new Map(attachableWorkspaces.filter((workspace) => workspace.sidebarGroup).map((workspace) => [workspace.sidebarGroup!.id, workspace.sidebarGroup!])).values())
+      .flatMap((group) => [
+        { value: `group:${group.id}`, label: group.name, depth: 0, disabled: true },
+        ...attachableWorkspaces.filter((workspace) => workspace.sidebarGroup?.id === group.id).map((workspace) => ({
+          value: workspace.id,
+          label: workspace.name,
+          depth: 1,
+        })),
+      ]),
+  ]
 
   return (
     <div
@@ -703,7 +719,17 @@ export function JanusChat({
 
       {resourceController && (
         <>
-        <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
+        <div className={`janus-resource-scope${workspaceScopeExpanded ? ' janus-resource-scope--expanded' : ''}`} aria-label={t('janus:chat.resource.scopeAria')}>
+          <button
+            type="button"
+            className="janus-resource-group-toggle"
+            aria-expanded={workspaceScopeExpanded}
+            aria-label={t('janus:chat.resource.scopeAria')}
+            onClick={() => setWorkspaceScopeExpanded((expanded) => !expanded)}
+          >
+            <ChevronDown size={12} aria-hidden="true" />
+            <FolderTree size={12} aria-hidden="true" />
+          </button>
           <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
                 <div
@@ -732,10 +758,7 @@ export function JanusChat({
                 value=""
                 placeholder={t('janus:chat.resource.attachPlaceholder')}
                 prefix={<Plus size={12} strokeWidth={1.8} aria-hidden="true" />}
-                options={attachableWorkspaces.map((workspace) => ({
-                  value: workspace.id,
-                  label: workspace.name,
-                }))}
+                options={attachableWorkspaceOptions}
                 className="janus-resource-attach-select"
                 dropdownClassName="janus-resource-attach-dropdown"
                 onChange={(workspaceId) => {

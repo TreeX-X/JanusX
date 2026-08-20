@@ -334,6 +334,11 @@
   gap: 12px;
 }
 
+.inlineHintRow input {
+  min-width: 0;
+  flex: 1;
+}
+
 .inlineHint {
   color: var(--shell-dim);
   font-size: 11px;
@@ -397,6 +402,10 @@
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   height: var(--so-control-h);
   border-radius: var(--so-radius);
   border: 1px solid var(--so-field-border);

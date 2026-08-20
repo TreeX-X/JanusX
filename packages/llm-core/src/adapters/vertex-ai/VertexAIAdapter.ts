@@ -185,91 +185,19 @@ export class VertexAIAdapter implements ProviderExtension {
     }
   }
 
-  async listModels(_settings: ProviderSettings): Promise<ModelInfo[]> {
-    return [
-      {
-        id: 'gemini-3.6-flash',
-        name: 'Gemini 3.6 Flash',
-        providerId: this.id,
-        capabilities: { chat: true },
-        contextWindow: 1048576,
-        maxOutputTokens: 65536,
-        supportsFunctionCalling: true,
-        supportsVision: true,
-        description: 'Latest fast model'
-      },
-      {
-        id: 'gemini-3.5-flash',
-        name: 'Gemini 3.5 Flash',
-        providerId: this.id,
-        capabilities: { chat: true },
-        contextWindow: 1048576,
-        maxOutputTokens: 65536,
-        supportsFunctionCalling: true,
-        supportsVision: true,
-        description: 'Latest fast model'
-      },
-      {
-        id: 'gemini-3-pro-preview',
-        name: 'Gemini 3 Pro Preview',
-        providerId: this.id,
-        capabilities: { chat: true },
-        contextWindow: 1048576,
-        maxOutputTokens: 65536,
-        supportsFunctionCalling: true,
-        supportsVision: true,
-        description: 'Latest pro model with thinking'
-      },
-      {
-        id: 'gemini-2.5-pro',
-        name: 'Gemini 2.5 Pro',
-        providerId: this.id,
-        capabilities: { chat: true },
-        contextWindow: 1048576,
-        maxOutputTokens: 65536,
-        supportsFunctionCalling: true,
-        supportsVision: true,
-        description: 'Pro with thinking'
-      },
-      {
-        id: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash',
-        providerId: this.id,
-        capabilities: { chat: true },
-        contextWindow: 1048576,
-        maxOutputTokens: 65536,
-        supportsFunctionCalling: true,
-        supportsVision: true,
-        description: 'Fast with thinking'
-      },
-      {
-        id: 'gemini-2.0-flash-001',
-        name: 'Gemini 2.0 Flash',
-        providerId: this.id,
-        capabilities: { chat: true },
-        contextWindow: 1048576,
-        maxOutputTokens: 8192,
-        supportsFunctionCalling: true,
-        supportsVision: true,
-        description: 'Fast multimodal'
-      },
-      {
-        id: 'text-embedding-005',
-        name: 'Text Embedding 005',
-        providerId: this.id,
-        capabilities: { embedding: true },
-        contextWindow: 2048,
-        description: 'Latest text embedding model'
-      },
-      {
-        id: 'gemini-embedding-2-preview',
-        name: 'Gemini Embedding 2',
-        providerId: this.id,
-        capabilities: { embedding: true },
-        contextWindow: 2048,
-        description: 'Next-gen embedding model'
-      }
-    ]
+  async listModels(settings: ProviderSettings): Promise<ModelInfo[]> {
+    const modelIds = [...new Set((settings.models ?? [settings.modelId ?? ''])
+      .map((modelId) => modelId.trim())
+      .filter(Boolean))]
+    return modelIds.map((modelId) => ({
+          id: modelId,
+          name: modelId,
+          providerId: this.id,
+          capabilities: { chat: true },
+          supportsFunctionCalling: true,
+          supportsVision: true,
+          description: 'Configured Vertex AI model',
+        }))
   }
 
   async validateSettings(settings: ProviderSettings): Promise<ValidationResult> {
@@ -303,7 +231,7 @@ export class VertexAIAdapter implements ProviderExtension {
   }
 
   getDefaultModel(settings: ProviderSettings): string {
-    return settings.modelId || 'gemini-3.6-flash'
+    return settings.defaultModelId || settings.modelId || settings.models?.[0] || ''
   }
 
   async initialize(_settings: ProviderSettings): Promise<void> {

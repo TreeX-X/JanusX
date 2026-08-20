@@ -415,11 +415,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  min-width: 0;
 }
 
 .lsMetaItem {
+  min-width: 0;
+  max-width: 100%;
   font-size: 11px;
   color: var(--shell-muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .lsCardError {

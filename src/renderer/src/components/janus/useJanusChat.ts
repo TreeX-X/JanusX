@@ -310,17 +310,18 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       const [providers, defaultProvider] = await Promise.all([getProviders(), getDefaultProvider()])
       const enabledProviders = providers.filter((provider) => provider.enabled !== false)
       const options = (await Promise.all(enabledProviders.map(async (provider) => {
-        const configuredModelId = provider.modelId
-          || (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')
+        const configuredModelIds = provider.models?.length
+          ? provider.models
+          : [provider.modelId || (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')]
         const models = await listModels(provider.id).catch(() => [])
-        const modelIds = [...new Set([...models.map((model) => model.id), configuredModelId].filter(Boolean))]
+        const modelIds = [...new Set([...models.map((model) => model.id), ...configuredModelIds].filter(Boolean))]
         return modelIds.map((modelId) => ({
           providerId: provider.id,
           providerName: provider.name,
           modelId,
           label: `${provider.name} / ${modelId}`,
           isDefault: defaultProvider?.provider.id === provider.id && defaultProvider.modelId === modelId,
-          isProviderDefault: configuredModelId === modelId,
+          isProviderDefault: (provider.defaultModelId || provider.modelId) === modelId,
         }))
       }))).flat()
       modelOptionsRef.current = options

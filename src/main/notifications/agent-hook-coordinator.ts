@@ -178,6 +178,7 @@ function buildAttentionRemoteEventId(
 export class AgentHookCoordinator {
   private readonly terminals = new Map<string, RegisteredHookTerminal>()
   private readonly activeTurns = new Map<string, ActiveHookTurn>()
+  private readonly syntheticTurnEnds = new Set<string>()
   private readonly now: () => number
   private readonly deliverCompletion: (completion: AgentHookCompletion) => Promise<boolean> | boolean
   private readonly deliverAttention: (payload: AgentHookPayload, terminal: RegisteredHookTerminal) => Promise<boolean> | boolean
@@ -205,6 +206,7 @@ export class AgentHookCoordinator {
 
   unregisterTerminal(terminalId: string): void {
     this.terminals.delete(terminalId)
+    this.syntheticTurnEnds.delete(terminalId)
     if (this.activeTurns.delete(terminalId)) {
       this.onTurnEnded?.(terminalId)
     }
@@ -216,6 +218,7 @@ export class AgentHookCoordinator {
 
   dispose(): void {
     this.terminals.clear()
+    this.syntheticTurnEnds.clear()
     for (const terminalId of [...this.activeTurns.keys()]) {
       this.activeTurns.delete(terminalId)
       this.onTurnEnded?.(terminalId)
@@ -254,6 +257,25 @@ export class AgentHookCoordinator {
       workspaceId: terminal.workspaceId,
       cwd: payload.cwd ?? terminal.cwd,
     }
+
+    const turnEndKind = resolveTurnEndKind(normalizedPayload)
+    if (
+      turnEndKind &&
+      !requiresActiveTurn(normalizedPayload) &&
+      !this.activeTurns.has(terminal.terminalId) &&
+      this.syntheticTurnEnds.has(terminal.terminalId)
+    ) {
+      this.emit({
+        type: 'ignored',
+        terminalId: terminal.terminalId,
+        engine: terminal.engine,
+        source: normalizedPayload.source,
+        hookEvent: normalizedPayload.event,
+        reason: 'turn-already-ended',
+        delivered: false,
+      })
+      return
+    }
     this.onResolvedPayload?.(normalizedPayload, terminal)
 
     if (isStartEvent(normalizedPayload)) {
@@ -266,7 +288,6 @@ export class AgentHookCoordinator {
       return
     }
 
-    const turnEndKind = resolveTurnEndKind(normalizedPayload)
     if (turnEndKind) {
       if (requiresActiveTurn(normalizedPayload) && !this.activeTurns.has(terminal.terminalId)) {
         this.emit({
@@ -341,6 +362,7 @@ export class AgentHookCoordinator {
 
   private startTurn(payload: AgentHookPayload, terminal: RegisteredHookTerminal): ActiveHookTurn {
     const now = this.now()
+    this.syntheticTurnEnds.delete(terminal.terminalId)
     const turn: ActiveHookTurn = {
       id: `${terminal.terminalId}:${now}`,
       terminalId: terminal.terminalId,
@@ -401,6 +423,9 @@ export class AgentHookCoordinator {
     kind: AgentHookCompletionKind,
   ): void {
     const activeTurn = this.activeTurns.get(terminal.terminalId)
+    if (requiresActiveTurn(payload)) {
+      this.syntheticTurnEnds.add(terminal.terminalId)
+    }
     const endedAtMs = this.now()
     const completion: AgentHookCompletion = {
       turnId: activeTurn?.id ?? `${terminal.terminalId}:${endedAtMs}`,
