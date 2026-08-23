@@ -23,7 +23,6 @@ export function JanusChatPane({ focused, conversationId }: { focused: boolean; c
       onStop={chat.stop}
       onRetry={chat.retry}
       onClear={chat.clear}
-      onOpenLlmConfig={() => window.dispatchEvent(new Event('janus:open-llm-settings'))}
       resourceController={chat.resourceController}
       conversationController={chat}
     />

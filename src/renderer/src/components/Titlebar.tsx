@@ -35,6 +35,7 @@ export function Titlebar() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<'notifications' | 'llm'>('notifications')
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
 
+  const conversationController = useJanusChatController()
   const {
     conversationId,
     messages,
@@ -53,7 +54,7 @@ export function Titlebar() {
     retry: handleChatRetry,
     clear: handleChatClear,
     selectModel: handleChatSelectModel,
-  } = useJanusChatController()
+  } = conversationController
 
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
@@ -172,16 +173,6 @@ export function Titlebar() {
   const handleCloseCancel = useCallback(() => {
     setCloseConfirmOpen(false)
   }, [])
-
-  const handleOpenLlmConfig = useCallback(() => {
-    setSettingsInitialTab('llm')
-    setSettingsModalOpen(true)
-  }, [])
-
-  useEffect(() => {
-    window.addEventListener('janus:open-llm-settings', handleOpenLlmConfig)
-    return () => window.removeEventListener('janus:open-llm-settings', handleOpenLlmConfig)
-  }, [handleOpenLlmConfig])
 
   const handleAddChatToWorkspace = useCallback(() => {
     const workspaceStore = useWorkspaceStore.getState()
@@ -315,7 +306,7 @@ export function Titlebar() {
           onChatStop={handleChatStop}
           onChatRetry={handleChatRetry}
           onChatClear={handleChatClearAndInvalidatePeek}
-          onOpenLlmConfig={handleOpenLlmConfig}
+          conversationController={conversationController}
           onAddChatToWorkspace={activeWorkspaceId ? handleAddChatToWorkspace : undefined}
           resourceController={resourceController}
           toolTraces={toolTraces}

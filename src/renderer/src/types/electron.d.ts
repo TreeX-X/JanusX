@@ -12,6 +12,7 @@ import type { CheckpointAPI } from '../../../shared/ipc/checkpoint'
 import type { GitAPI } from '../../../shared/ipc/git'
 import type { LlmAPI } from '../../../shared/ipc/llm'
 import type { JanusChatAPI } from '../../../shared/ipc/janus-chat'
+import type { JanusRoundtableAPI } from '../../../shared/ipc/janus-roundtable'
 import type { NotificationSettingsAPI } from '../../../shared/ipc/settings'
 import type { DesktopToastAPI, DialogAPI, SystemAPI, WindowAPI } from '../../../shared/ipc/system'
 
@@ -31,6 +32,7 @@ interface ElectronAPI {
   office: OfficeAPI
   llm: LlmAPI
   janusChat?: JanusChatAPI
+  janusRoundtable?: JanusRoundtableAPI
   agent: AgentAPI
   agentRuntime: AgentRuntimeAPI
   checkpoint: CheckpointAPI

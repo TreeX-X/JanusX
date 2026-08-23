@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronDown, CircleCheck, CircleX, Copy, FolderTree, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import { useOptionalJanusChatController } from './JanusChatProvider'
@@ -83,8 +83,6 @@ interface JanusChatProps {
   onRetry: () => void
   /** 清空对话 */
   onClear: () => void
-  /** 打开 LLM 配置面板 */
-  onOpenLlmConfig: () => void
   onAddToWorkspace?: () => void
 }
 
@@ -174,14 +172,13 @@ export function JanusChat({
   modelNotice = null,
   resourceController,
   toolTraces = [],
-  conversationController,
+  conversationController: controllerOverride = null,
   onSelectModel = () => {},
   onSend,
   onRewrite,
   onStop,
   onRetry,
   onClear,
-  onOpenLlmConfig,
   onAddToWorkspace,
 }: JanusChatProps) {
   const { t } = useI18n('janus')
@@ -194,7 +191,6 @@ export function JanusChat({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
   const [threadMenuOpen, setThreadMenuOpen] = useState(false)
-  const [workspaceScopeExpanded, setWorkspaceScopeExpanded] = useState(true)
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [renamingTitle, setRenamingTitle] = useState('')
   const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string } | null>(null)
@@ -208,7 +204,7 @@ export function JanusChat({
   const isAtBottomRef = useRef(true)
   const historyDraftRef = useRef('')
   const contextConversations = useOptionalJanusChatController()
-  const conversations = conversationController ?? contextConversations
+  const conversations = controllerOverride ?? contextConversations
 
   const copyMessage = useCallback((content: string) => {
     if (!navigator.clipboard) return
@@ -551,11 +547,6 @@ export function JanusChat({
     onRetry()
   }, [onRetry])
 
-  // 打开 LLM 配置面板（由 Titlebar 透传回调控制�?
-  const handleOpenLlmConfig = useCallback(() => {
-    onOpenLlmConfig()
-  }, [onOpenLlmConfig])
-
   // 清空对话
   const handleClear = useCallback(() => {
     onClear()
@@ -567,7 +558,6 @@ export function JanusChat({
 
   if (!visible) return null
 
-  const isNoProviderError = error === t('janus:chat.model.notice.noProviderError')
   const canClear = messages.length > 0 || !!pendingContent || !!error
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
   const activeModelLabel = activeModel?.modelId ?? t('janus:chat.model.noneConfigured')
@@ -594,11 +584,95 @@ export function JanusChat({
     <div
       ref={chatRootRef}
       tabIndex={-1}
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${docked && conversations && !workspace ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
       onKeyDownCapture={handleChatKeyDownCapture}
       onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
     >
+      {docked && conversations && !workspace && (
+        <aside className="janus-chat-sidebar" aria-label={t('janus:chat.thread.menuHeader')}>
+          <div className="janus-chat-sidebar-header">
+            <div>
+              <span className="janus-chat-sidebar-kicker">{t('janus:chat.thread.kicker')}</span>
+              <strong>{t('janus:chat.thread.menuHeader')}</strong>
+            </div>
+            <button
+              type="button"
+              className="janus-chat-new-thread"
+              aria-label={t('janus:chat.thread.newAria')}
+              title={t('janus:chat.thread.newTitle')}
+              onClick={() => {
+                conversations.createConversation()
+                setRenamingConversationId(null)
+              }}
+            >
+              <Plus size={14} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="janus-chat-sidebar-list">
+            {conversations.conversations.map((conversation) => (
+              <div key={conversation.id} className="janus-chat-sidebar-row" data-active={conversation.id === conversations.conversationId}>
+                {renamingConversationId === conversation.id ? (
+                  <input
+                    autoFocus
+                    value={renamingTitle}
+                    aria-label={t('janus:chat.thread.titleAria')}
+                    onChange={(event) => setRenamingTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setRenamingConversationId(null)
+                      if (event.key === 'Enter') {
+                        conversations.renameConversation(conversation.id, renamingTitle)
+                        setRenamingConversationId(null)
+                      }
+                    }}
+                    onBlur={() => {
+                      conversations.renameConversation(conversation.id, renamingTitle)
+                      setRenamingConversationId(null)
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="janus-chat-sidebar-main"
+                    onClick={() => conversations.selectConversation(conversation.id)}
+                  >
+                    <strong>
+                      {conversation.isStreaming && <LoaderCircle size={11} className="janus-runtime-tool-spinner" aria-hidden="true" />}
+                      {!conversation.isStreaming && conversation.hasError && <CircleX size={11} aria-hidden="true" />}
+                      {conversation.title}
+                    </strong>
+                    <span>{t('janus:chat.thread.messagesCount', { count: conversation.messageCount })}</span>
+                  </button>
+                )}
+                <div className="janus-chat-sidebar-actions">
+                  <button
+                    type="button"
+                    className="janus-chat-thread-action"
+                    aria-label={t('janus:chat.thread.renameAria', { title: conversation.title })}
+                    title={t('janus:chat.thread.renameTitle')}
+                    onClick={() => {
+                      setRenamingConversationId(conversation.id)
+                      setRenamingTitle(conversation.title)
+                    }}
+                  >
+                    <Pencil size={11} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="janus-chat-thread-action danger"
+                    aria-label={t('janus:chat.thread.deleteAria', { title: conversation.title })}
+                    title={t('janus:chat.thread.deleteTitle')}
+                    onClick={() => setPendingDeleteConversation({ id: conversation.id, title: conversation.title })}
+                  >
+                    <Trash2 size={11} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+      )}
+      <div className="janus-chat-main">
       <div className="janus-chat-toolbar">
         <div ref={threadSelectorRef} className="janus-chat-thread-selector">
           <button
@@ -704,32 +778,11 @@ export function JanusChat({
             </div>
           )}
         </div>
-        <div className="janus-chat-toolbar-actions">
-
-          <button
-            className="janus-chat-tool-button"
-            onClick={handleOpenLlmConfig}
-            title={t('janus:chat.model.openLlmTitle')}
-            type="button"
-          >
-            {t('janus:chat.model.openLlmButton')}
-          </button>
-        </div>
       </div>
 
       {resourceController && (
         <>
-        <div className={`janus-resource-scope${workspaceScopeExpanded ? ' janus-resource-scope--expanded' : ''}`} aria-label={t('janus:chat.resource.scopeAria')}>
-          <button
-            type="button"
-            className="janus-resource-group-toggle"
-            aria-expanded={workspaceScopeExpanded}
-            aria-label={t('janus:chat.resource.scopeAria')}
-            onClick={() => setWorkspaceScopeExpanded((expanded) => !expanded)}
-          >
-            <ChevronDown size={12} aria-hidden="true" />
-            <FolderTree size={12} aria-hidden="true" />
-          </button>
+        <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
           <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
                 <div
@@ -990,11 +1043,6 @@ export function JanusChat({
               <button className="janus-chat-retry" onClick={handleRetry}>
                 {t('common:action.retry')}
               </button>
-              {isNoProviderError && (
-                <button className="janus-chat-config-llm" onClick={handleOpenLlmConfig}>
-                  {t('janus:chat.error.configureLlm')}
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -1125,6 +1173,7 @@ export function JanusChat({
         </div>
       </div>
       {modelNotice && <div className="janus-chat-model-notice">{modelNotice}</div>}
+      </div>
       <PromptDialog
         open={pendingDeleteConversation !== null}
         title={t('janus:chat.thread.deleteTitle')}

@@ -25,7 +25,6 @@ interface JanusExpandedProps {
   onChatStop: () => void
   onChatRetry: () => void
   onChatClear: () => void
-  onOpenLlmConfig: () => void
 }
 
 /** mode → CSS class for large eye container */
@@ -52,7 +51,6 @@ export function JanusExpanded({
   onChatStop,
   onChatRetry,
   onChatClear,
-  onOpenLlmConfig,
 }: JanusExpandedProps) {
   const { t } = useI18n('janus')
   const [collapsing, setCollapsing] = useState(false)
@@ -291,7 +289,6 @@ export function JanusExpanded({
               onStop={onChatStop}
               onRetry={onChatRetry}
               onClear={onChatClear}
-              onOpenLlmConfig={onOpenLlmConfig}
             />
           </div>
 

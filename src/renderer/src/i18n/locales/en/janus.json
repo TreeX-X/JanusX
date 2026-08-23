@@ -166,7 +166,8 @@
       "viewSwitchAria": "Janus expanded view",
       "view": {
         "monitor": "Monitor",
-        "chat": "Chat"
+        "chat": "Chat",
+        "roundtable": "Roundtable"
       },
       "dismissHint": "Esc / double-click to collapse",
       "coreVisualization": "Core visualization",

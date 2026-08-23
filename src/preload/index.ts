@@ -31,6 +31,7 @@ import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoin
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
+import { JANUS_ROUNDTABLE_CHANNELS, type JanusRoundtableAPI } from '../shared/ipc/janus-roundtable'
 import { NOTIFICATION_SETTINGS_CHANNELS, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 
@@ -305,6 +306,17 @@ const janusChatAPI: JanusChatAPI = {
   save: (snapshot) => ipcRenderer.invoke(JANUS_CHAT_CHANNELS.save, snapshot).then(() => undefined),
 }
 
+const janusRoundtableAPI: JanusRoundtableAPI = {
+  list: () => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.list),
+  get: (sessionId) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.get, sessionId),
+  create: (input) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.create, input),
+  updateWorkspaces: (input) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.updateWorkspaces, input),
+  advance: (input) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.advance, input),
+  end: (sessionId) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.end, sessionId),
+  exportMarkdown: (sessionId, directory, fileName) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.exportMarkdown, sessionId, directory, fileName),
+  onProgress: (listener) => subscribeIpcEvent(JANUS_ROUNDTABLE_CHANNELS.progress, listener),
+}
+
 const notificationSettingsAPI: NotificationSettingsAPI = {
   get: () => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.get),
   update: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.update, settings),
@@ -368,6 +380,7 @@ contextBridge.exposeInMainWorld('electron', {
   office: officeAPI,
   llm: llmAPI,
   janusChat: janusChatAPI,
+  janusRoundtable: janusRoundtableAPI,
   agent: agentAPI,
   agentRuntime: agentRuntimeAPI,
   checkpoint: checkpointAPI,

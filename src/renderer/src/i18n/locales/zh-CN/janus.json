@@ -166,7 +166,8 @@
       "viewSwitchAria": "Janus 展开视图",
       "view": {
         "monitor": "监控",
-        "chat": "对话"
+        "chat": "对话",
+        "roundtable": "圆桌"
       },
       "dismissHint": "Esc / 双击收起",
       "coreVisualization": "核心可视化",
