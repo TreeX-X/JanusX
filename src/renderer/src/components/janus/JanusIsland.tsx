@@ -701,6 +701,7 @@ export function JanusIsland({
                           identity={previewIdentity}
                           state={previewState}
                           size="lg"
+                          showScanline={false}
                           className="janus-monitor-identity"
                           aria-label={`${monitorTitle} monitor identity`}
                         />
@@ -743,22 +744,20 @@ export function JanusIsland({
                   </div>
                 </div>
                 <div className="janus-monitor-right">
-                  {officeArtifacts.length > 0 && (
-                    <div className="janus-monitor-panel janus-office-artifacts">
-                      <div className="janus-monitor-section-title">
-                        <span>{t('janus:island.expanded.officeArtifacts')}</span>
-                        <em>{t('janus:island.expanded.officeAvailable', { count: officeArtifacts.length })}</em>
-                      </div>
-                      <div className="janus-office-artifact-list">
-                        {officeArtifacts.map((entry) => (
-                          <button key={entry.relPath} type="button" onClick={() => onOpenOfficeArtifact?.(entry.relPath)}>
-                            <span>{entry.relPath}</span>
-                            <em>{entry.ext.slice(1)}</em>
-                          </button>
-                        ))}
-                      </div>
+                  <div className="janus-monitor-panel janus-office-artifacts">
+                    <div className="janus-monitor-section-title">
+                      <span>{t('janus:island.expanded.officeArtifacts')}</span>
+                      <em>{t('janus:island.expanded.officeAvailable', { count: officeArtifacts.length })}</em>
                     </div>
-                  )}
+                    <div className="janus-office-artifact-list">
+                      {officeArtifacts.map((entry) => (
+                        <button key={entry.relPath} type="button" onClick={() => onOpenOfficeArtifact?.(entry.relPath)}>
+                          <span>{entry.relPath}</span>
+                          <em>{entry.ext.slice(1)}</em>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="janus-monitor-panel janus-runtime-panel">
                     <div className="janus-monitor-section-title">
                       <span>{t('janus:island.expanded.subagentRuntimes')}</span>

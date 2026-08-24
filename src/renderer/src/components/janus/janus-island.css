@@ -6101,6 +6101,187 @@ body.is-running {
   }
 }
 
+/* Monitor proportions follow the reference studio layout: the runtime column
+   carries the vertical space while the identity preview stays compact. */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-grid {
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-left {
+  gap: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-core-panel {
+  flex: 1 1 auto;
+  min-height: 248px;
+  max-height: none;
+  padding: 9px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-section-title {
+  margin-bottom: 9px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-crt {
+  min-height: 0;
+  border-radius: 6px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity {
+  width: 96px;
+  height: 96px;
+  border: 2px solid var(--c);
+  background: radial-gradient(circle, color-mix(in srgb, var(--c) 18%, transparent), #111115 64%);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--cg) 50%, transparent), inset 0 0 18px rgba(0,0,0,0.8);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-ring-outer {
+  inset: -8px;
+  border: 1px dashed color-mix(in srgb, var(--c) 48%, transparent);
+  opacity: 1;
+  box-shadow: none;
+  animation: janus-monitor-ring-spin 14s linear infinite;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-ring-inner {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-eye {
+  width: 10px;
+  height: 18px;
+  border: 0;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 0 7px #fff, 0 0 14px var(--c), 0 0 22px var(--cg);
+  clip-path: none;
+  filter: none;
+  animation: janus-monitor-blink 4s ease-in-out infinite;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-eye:last-child {
+  animation-delay: 0.08s;
+}
+
+@keyframes janus-monitor-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.12); }
+}
+
+@keyframes janus-monitor-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-stats {
+  gap: 8px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-stat {
+  padding: 9px 10px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.015);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-panel {
+  padding: 9px;
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-core-panel {
+    max-height: none;
+    min-height: 220px;
+  }
+}
+
+/* Runtime rows stay close to the panel surface; role color is an accent, not
+   a card fill. */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run {
+  min-height: 54px;
+  padding: 8px 9px;
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 13%, rgba(255,255,255,0.08));
+  border-radius: 6px;
+  background: rgba(255,255,255,0.014);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.018);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run::before {
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--janus-runtime-role-color) 54%, transparent);
+  content: '';
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run:hover {
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 22%, rgba(255,255,255,0.1));
+  background: rgba(255,255,255,0.024);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 28%, rgba(255,255,255,0.1));
+  background: rgba(255,255,255,0.028);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--janus-runtime-role-color) 8%, transparent);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run > .janus-identity-core[data-size="pod"] {
+  width: 32px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--janus-runtime-role-color) 58%, rgba(255,255,255,0.12));
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.72);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-ring-outer {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-ring-inner {
+  display: block;
+  inset: 1px;
+  border: 1px solid color-mix(in srgb, var(--janus-runtime-role-color) 78%, #fff);
+  opacity: 0.9;
+  transform: none;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--janus-runtime-role-color) 32%, transparent);
+  animation: none;
+}
+
+@keyframes janus-runtime-blink {
+  0%, 91%, 100% { transform: scaleY(1); }
+  93% { transform: scaleY(0.12); }
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-eye {
+  width: 5px;
+  height: 9px;
+  border: 0;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 0 5px #fff, 0 0 9px var(--janus-runtime-role-color);
+  clip-path: none;
+  filter: none;
+  animation: janus-runtime-blink 4.2s ease-in-out infinite;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-eye:last-child {
+  animation-delay: 0.08s;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run-title strong {
+  color: rgba(255,255,255,0.8);
+  font-weight: 600;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run-event {
+  color: rgba(255,255,255,0.36);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run-status {
+  color: color-mix(in srgb, var(--janus-runtime-role-color) 64%, rgba(255,255,255,0.48));
+}
+
 /* Keep expanded content sharp without changing the host's centering geometry. */
 .janus-island-shell[data-stage="expanded"] .janus-expanded-shell,
 .janus-island-shell[data-stage="expanded"] .janus-expanded-body {
