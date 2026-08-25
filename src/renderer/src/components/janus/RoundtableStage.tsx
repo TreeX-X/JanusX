@@ -97,45 +97,53 @@ export function RoundtableStage({ participants, workingRole, ended, onSelectPart
             const isWorking = workingRole === participant.id
             const isSelected = selectedRole === participant.id
             return (
-              <button
+              <div
                 key={participant.id}
-                type="button"
-                className="janus-roundtable-seat"
-                data-selected={isSelected}
-                data-working={isWorking}
-                data-ended={ended}
-                style={{ '--seat-angle': `${angle}deg`, '--seat-color': participant.color } as CSSProperties}
-                aria-pressed={isSelected}
-                aria-label={`${participant.name}，${participant.label}`}
-                onMouseEnter={() => setHoveredRole(participant.id)}
-                onMouseLeave={() => setHoveredRole(null)}
-                onFocus={() => setHoveredRole(participant.id)}
-                onBlur={() => setHoveredRole(null)}
-                onClick={() => selectParticipant(participant.id)}
+                className="janus-roundtable-seat-slot"
+                data-hovered={hoveredRole === participant.id}
+                style={{
+                  '--seat-angle': `${angle}deg`,
+                  '--seat-color': participant.color,
+                } as CSSProperties}
               >
-                <span className="janus-roundtable-seat-pod">
-                  <span className="janus-roundtable-seat-pod-face janus-roundtable-seat-pod-face--front">
-                    <JanusIdentityCore
-                      identity={participant.identity}
-                      size="pod"
-                      state={isWorking ? 'running' : ended ? 'done' : 'default'}
-                      showHalo={false}
-                      showScanline={false}
-                      aria-label={participant.name}
-                    />
+                <button
+                  type="button"
+                  className="janus-roundtable-seat"
+                  data-selected={isSelected}
+                  data-working={isWorking}
+                  data-ended={ended}
+                  aria-pressed={isSelected}
+                  aria-label={`${participant.name}，${participant.label}`}
+                  onMouseEnter={() => setHoveredRole(participant.id)}
+                  onMouseLeave={() => setHoveredRole(null)}
+                  onFocus={() => setHoveredRole(participant.id)}
+                  onBlur={() => setHoveredRole(null)}
+                  onClick={() => selectParticipant(participant.id)}
+                >
+                  <span className="janus-roundtable-seat-pod">
+                    <span className="janus-roundtable-seat-pod-face janus-roundtable-seat-pod-face--front">
+                      <JanusIdentityCore
+                        identity={participant.identity}
+                        size="pod"
+                        state={isWorking ? 'running' : ended ? 'done' : 'default'}
+                        showHalo={false}
+                        showScanline={false}
+                        aria-label={participant.name}
+                      />
+                    </span>
+                    <span className="janus-roundtable-seat-pod-face janus-roundtable-seat-pod-face--back" aria-hidden="true">
+                      <JanusIdentityCore
+                        identity={participant.identity}
+                        size="pod"
+                        state={isWorking ? 'running' : ended ? 'done' : 'default'}
+                        showHalo={false}
+                        showScanline={false}
+                      />
+                    </span>
                   </span>
-                  <span className="janus-roundtable-seat-pod-face janus-roundtable-seat-pod-face--back" aria-hidden="true">
-                    <JanusIdentityCore
-                      identity={participant.identity}
-                      size="pod"
-                      state={isWorking ? 'running' : ended ? 'done' : 'default'}
-                      showHalo={false}
-                      showScanline={false}
-                    />
-                  </span>
-                </span>
-                <span className="janus-roundtable-seat-link" aria-hidden="true" />
-              </button>
+                  <span className="janus-roundtable-seat-link" aria-hidden="true" />
+                </button>
+              </div>
             )
           })}
         </div>

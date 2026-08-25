@@ -1269,7 +1269,7 @@
   perspective: none;
   transform: rotateZ(var(--seat-angle)) translateY(-145px) rotateX(-90deg) rotateY(180deg) !important;
   transform-style: preserve-3d;
-  transition: filter .3s ease;
+  transition: none;
 }
 
 .janus-roundtable-seat:hover,
@@ -1290,7 +1290,7 @@
   height: 62px;
   margin: 0;
   overflow: visible !important;
-  transform: translateZ(28px) !important;
+  transform: none !important;
   transform-style: preserve-3d;
   perspective: none;
   z-index: 4;
@@ -1664,4 +1664,125 @@
 /* The reference layout has no laser/connector below each participant. */
 .janus-roundtable-seat-link {
   display: none !important;
+}
+
+/* Reference interaction contract: the radial 3D pose belongs to a fixed
+   slot, while its button is only a generous hit target. Moving the button
+   itself made the pointer leave its own target and caused hover flicker. */
+.janus-roundtable-seat-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  z-index: 5;
+  pointer-events: auto;
+  transform: rotateZ(var(--seat-angle)) translateY(-145px)
+    rotateX(-90deg) rotateY(180deg) !important;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+}
+
+.janus-roundtable-seat-slot .janus-roundtable-seat,
+.janus-roundtable-seat-slot .janus-roundtable-seat:hover,
+.janus-roundtable-seat-slot .janus-roundtable-seat:focus-visible,
+.janus-roundtable-seat-slot .janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-seat-slot .janus-roundtable-seat[data-working="true"] {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 62px;
+  height: 62px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  overflow: visible !important;
+  transform: none !important;
+  transform-style: preserve-3d;
+  transition: none;
+  filter: none !important;
+}
+
+/* Keep the reference pod origin intact while giving the button a stable,
+   larger pointer target around it. The transparent hit surface never moves. */
+.janus-roundtable-seat-slot .janus-roundtable-seat::before {
+  position: absolute;
+  left: -48px;
+  top: -68px;
+  width: 96px;
+  height: 116px;
+  content: '';
+  pointer-events: auto;
+}
+
+.janus-roundtable-seat-slot[data-hovered="true"] .janus-roundtable-seat,
+.janus-roundtable-seat-slot .janus-roundtable-seat:focus-visible {
+  z-index: 8;
+  filter: none !important;
+}
+
+.janus-roundtable-stage:hover .janus-roundtable-scene--orbit,
+.janus-roundtable-stage:has(.janus-roundtable-seat:hover) .janus-roundtable-scene--orbit,
+.janus-roundtable-stage:has(.janus-roundtable-seat:focus-visible) .janus-roundtable-scene--orbit,
+.janus-roundtable-stage:has(.janus-roundtable-seat:hover) .janus-roundtable-orbit-anchor,
+.janus-roundtable-stage:has(.janus-roundtable-seat:focus-visible) .janus-roundtable-orbit-anchor {
+  animation-play-state: running !important;
+}
+
+.janus-roundtable-seat-slot .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot .janus-roundtable-seat[data-selected="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot .janus-roundtable-seat[data-working="true"] .janus-roundtable-seat-pod {
+  left: -31px;
+  top: -50px;
+  width: 62px;
+  height: 62px;
+  animation: none !important;
+  transform: translateZ(28px) !important;
+  transform-style: preserve-3d;
+  transition: none;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-seat-slot[data-hovered="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat-slot .janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot[data-hovered="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot .janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod {
+  transform: translateZ(28px) !important;
+}
+
+/* Hover is intentionally visual-neutral. The reference seat keeps its exact
+   world transform while the pointer enters/leaves; no projected jump or
+   return animation is allowed. */
+.janus-roundtable-scene--orbit .janus-roundtable-seat-slot:hover .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat-slot[data-hovered="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot:hover .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot[data-hovered="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot .janus-roundtable-seat:hover .janus-roundtable-seat-pod,
+.janus-roundtable-seat-slot .janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod {
+  transform: translateZ(28px) !important;
+  filter: none !important;
+}
+
+.janus-roundtable-seat-slot:hover .janus-roundtable-seat-pod-face--front,
+.janus-roundtable-seat-slot[data-hovered="true"] .janus-roundtable-seat-pod-face--front,
+.janus-roundtable-seat-slot .janus-roundtable-seat:hover .janus-roundtable-seat-pod-face--front,
+.janus-roundtable-seat-slot .janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod-face--front {
+  transform: scale(1.04) !important;
+  filter: none !important;
+}
+
+.janus-roundtable-seat-slot:hover .janus-roundtable-seat-pod-face--back,
+.janus-roundtable-seat-slot[data-hovered="true"] .janus-roundtable-seat-pod-face--back,
+.janus-roundtable-seat-slot .janus-roundtable-seat:hover .janus-roundtable-seat-pod-face--back,
+.janus-roundtable-seat-slot .janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod-face--back {
+  transform: rotateY(180deg) translateZ(1px) scale(1.04) !important;
+  filter: none !important;
+}
+
+@media (max-width: 760px) {
+  .janus-roundtable-seat-slot {
+    transform: rotateZ(var(--seat-angle)) translateY(-116px)
+      rotateX(-90deg) rotateY(180deg) !important;
+  }
 }
