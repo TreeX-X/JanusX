@@ -1,0 +1,661 @@
+/* Janus Chat workspace pane 鈥?same Chat language as Island chat view */
+.janus-chat--workspace {
+  position: relative;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  flex: 1 1 auto;
+  padding: 0 28px 18px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  text-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.janus-chat--workspace .janus-chat-toolbar {
+  display: none;
+}
+
+.janus-chat--workspace .janus-chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 20px 0 0;
+  gap: 24px;
+  scroll-behavior: smooth;
+}
+
+.janus-chat--workspace.janus-chat--empty .janus-chat-messages {
+  justify-content: center;
+}
+
+.janus-chat--workspace .janus-chat-empty {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 240px;
+  justify-content: center;
+  text-align: center;
+  opacity: 1;
+}
+
+.janus-chat--workspace .janus-chat-terminal-banner {
+  position: relative;
+  width: min(680px, 100%);
+  margin: 0 0 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(224, 230, 236, 0.9);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+.janus-chat--workspace .janus-chat-terminal-banner::before {
+  content: none;
+}
+
+.janus-chat--workspace .janus-chat-terminal-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.janus-chat--workspace .janus-chat-pixel-char {
+  display: grid;
+  grid-template-columns: repeat(4, 14px);
+  grid-template-rows: repeat(5, 14px);
+  gap: 4px;
+}
+
+.janus-chat--workspace .janus-chat-pixel-char[data-cells="4"] {
+  grid-template-columns: repeat(4, 14px);
+}
+
+.janus-chat--workspace .janus-chat-pixel-char[data-cells="5"] {
+  grid-template-columns: repeat(5, 14px);
+}
+
+.janus-chat--workspace .janus-chat-pixel-char--x {
+  margin-left: 4px;
+}
+
+.janus-chat--workspace .janus-chat-pixel-char span {
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.janus-chat--workspace .janus-chat-pixel-char span.active {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-pixel-char span.x-orange {
+  background: #ff7830;
+  box-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-pixel-char span.x-gray {
+  background: #8a8f98;
+}
+
+.janus-chat--workspace .janus-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 85%;
+  opacity: 1;
+  animation: none;
+  filter: none;
+  text-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-message.user {
+  align-self: flex-end;
+}
+
+.janus-chat--workspace .janus-chat-message.assistant {
+  align-self: flex-start;
+  max-width: 85%;
+}
+
+.janus-chat--workspace .janus-chat-message-author {
+  color: rgba(255, 255, 255, 0.62);
+  filter: none;
+  text-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-message.assistant .janus-chat-message-author {
+  color: #ff8a45;
+}
+
+.janus-chat--workspace .janus-chat-message-content {
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #f1f3f5;
+  font-size: 13px;
+  line-height: 1.62;
+  filter: none;
+  text-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-chat--workspace .janus-chat-message.user .janus-chat-message-content {
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+  padding: 3px 0 6px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 120, 48, 0.62);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+.janus-chat--workspace .janus-chat-message.assistant .janus-chat-message-content {
+  padding: 4px 0 4px 16px;
+  border: 0;
+  border-left: 2px solid #ff7830;
+  border-radius: 0;
+  background: transparent;
+  color: #e5e7eb;
+}
+
+.janus-chat--workspace .janus-chat-streaming-cursor {
+  background: #ff7830;
+  box-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-loading {
+  justify-content: flex-start;
+}
+
+.janus-chat--workspace .janus-chat-error-card {
+  align-self: flex-start;
+  max-width: min(360px, 72%);
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 120, 90, 0.18);
+  border-left: 2px solid rgba(255, 120, 90, 0.76);
+  border-radius: 8px;
+  background: rgba(80, 22, 18, 0.22);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+.janus-chat--workspace .janus-chat-error-text {
+  color: rgba(255, 150, 130, 0.9);
+  font-size: 12px;
+}
+
+.janus-chat--workspace .janus-chat-error-actions {
+  justify-content: flex-start;
+}
+
+.janus-chat--workspace .janus-chat-retry,
+.janus-chat--workspace .janus-chat-config-llm {
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.janus-chat--workspace .janus-chat-input-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 0;
+  width: min(720px, 100%);
+  max-width: none;
+  margin: 0 auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: #111113;
+  box-shadow: none;
+  overflow: visible;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-chat--workspace .janus-chat-input-wrapper::before {
+  content: none;
+}
+
+.janus-chat--workspace .janus-chat-input-wrapper:focus-within {
+  border-color: rgba(255, 120, 48, 0.64);
+  box-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-composer-row {
+  position: relative;
+  order: 1;
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+}
+
+.janus-chat--workspace .janus-chat-composer-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 0;
+  background: #ff7830;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.janus-chat--workspace .janus-chat-input {
+  min-height: 58px;
+  max-height: 160px;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 13px;
+  line-height: 18px;
+  caret-color: #ffffff;
+  text-shadow: none;
+  filter: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-chat--workspace .janus-chat-input:focus {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.janus-chat--workspace .janus-chat-stop {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  margin: 8px 8px 8px 10px;
+  border-radius: 6px;
+  color: rgba(255, 150, 150, 0.86);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.janus-chat--workspace .janus-chat-status-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 8px 14px 9px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
+  background: rgba(0, 0, 0, 0.16);
+  filter: none;
+  text-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-model-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+  filter: none;
+  text-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-model-tag::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 7px rgba(16, 185, 129, 0.76);
+}
+
+.janus-chat--workspace .janus-chat-model-tag strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.84);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-chat--workspace .janus-chat-shortcuts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  color: rgba(255, 255, 255, 0.28);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+  filter: none;
+  text-shadow: none;
+}
+
+.janus-chat--workspace .janus-chat-shortcuts > span:first-child {
+  color: rgba(255, 120, 48, 0.75);
+}
+
+.janus-chat--workspace .janus-chat-shortcuts kbd {
+  color: rgba(255, 255, 255, 0.58);
+  font: inherit;
+  font-weight: 700;
+}
+
+.janus-chat-shortcuts button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.janus-chat-shortcuts button:hover,
+.janus-chat-shortcuts button:focus-visible {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.janus-chat-shortcuts button:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.48);
+  outline-offset: 2px;
+}
+
+.janus-chat--workspace .janus-chat-model-menu {
+  position: absolute;
+  left: 16px;
+  bottom: calc(100% + 8px);
+  z-index: 80;
+  display: grid;
+  gap: 4px;
+  width: min(360px, calc(100% - 32px));
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(8, 8, 10, 0.98);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.45);
+}
+
+.janus-chat--workspace .janus-chat-model-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  text-align: left;
+}
+
+.janus-chat--workspace .janus-chat-model-menu button:hover,
+.janus-chat--workspace .janus-chat-model-menu button[data-active="true"],
+.janus-chat--workspace .janus-chat-model-menu button[data-highlighted="true"] {
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.janus-chat--workspace .janus-chat-model-menu strong {
+  overflow: hidden;
+  color: rgba(255, 120, 48, 0.88);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-chat-model-menu-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 9px 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.38);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.janus-chat-model-menu-heading strong {
+  color: rgba(255, 120, 48, 0.9);
+  font-size: 10px;
+}
+
+.janus-chat-model-menu-empty {
+  padding: 12px 9px;
+  color: rgba(255, 255, 255, 0.34);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  text-align: center;
+}
+
+.janus-chat--workspace .janus-chat-model-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  z-index: 90;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 120, 48, 0.22);
+  border-radius: 4px;
+  background: rgba(12, 12, 14, 0.96);
+  color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.38);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+}
+
+/* Embedding targets the external active workspace, independently of attached resources. */
+.janus-chat-workspace-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  opacity: 0.68;
+  cursor: pointer;
+  transition:
+    opacity 0.16s ease,
+    color 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.janus-chat-workspace-action:hover,
+.janus-chat-workspace-action:focus-visible {
+  opacity: 1;
+}
+
+.janus-chat-workspace-action:hover,
+.janus-chat-workspace-action:focus-visible {
+  color: #ffb27d;
+  border-color: rgba(255, 120, 48, 0.22);
+  background: rgba(255, 120, 48, 0.1);
+  outline: none;
+}
+
+.janus-chat-workspace-action:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 120, 48, 0.28);
+}
+
+.janus-tool-call-group {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.janus-tool-card {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: rgba(10, 12, 16, 0.72);
+  color: rgba(255, 255, 255, 0.72);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+}
+
+.janus-tool-card--running,
+.janus-tool-card--requested {
+  border-color: rgba(255, 178, 125, 0.35);
+}
+
+.janus-tool-card--failed,
+.janus-tool-card--cancelled {
+  border-color: rgba(255, 96, 96, 0.38);
+}
+
+.janus-tool-card-head {
+  display: flex;
+  align-items: center;
+  min-height: 27px;
+  gap: 6px;
+  padding: 4px 7px;
+}
+
+.janus-tool-card-toggle,
+.janus-tool-card-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.janus-tool-card-toggle:disabled { cursor: default; }
+.janus-tool-card-toggle:hover:not(:disabled),
+.janus-tool-card-copy:hover { background: rgba(255, 255, 255, 0.08); }
+.janus-tool-card-toggle-spacer { width: 11px; }
+.janus-tool-card-name { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, 0.9); }
+.janus-tool-card-workspace,
+.janus-tool-card-status,
+.janus-tool-card-duration { color: rgba(255, 255, 255, 0.42); white-space: nowrap; }
+.janus-tool-card-status--failed,
+.janus-tool-card-status--cancelled { color: #ff8c8c; }
+.janus-tool-card-status--completed { color: #8fd5ae; }
+.janus-tool-card-duration { display: inline-flex; align-items: center; gap: 3px; }
+.janus-tool-card-copy { color: rgba(255, 178, 125, 0.88); font-size: 9px; }
+.janus-tool-card-body { display: grid; gap: 7px; padding: 7px 9px 9px 31px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.janus-tool-card-section { display: grid; gap: 3px; min-width: 0; }
+.janus-tool-card-section-label { color: rgba(255, 255, 255, 0.42); font-size: 9px; font-weight: 500; text-transform: uppercase; }
+.janus-tool-card-code,
+.janus-tool-card-error { overflow: auto; margin: 0; color: rgba(255, 255, 255, 0.7); font-family: inherit; font-size: 10px; white-space: pre-wrap; word-break: break-word; }
+.janus-tool-card-section--error .janus-tool-card-error { color: #ffadad; }
+
+@media (max-width: 720px) {
+  .janus-chat--workspace {
+    padding: 0 16px 14px;
+  }
+
+  .janus-chat--workspace .janus-chat-pixel-char {
+    grid-template-columns: repeat(4, 11px);
+    grid-template-rows: repeat(5, 11px);
+    gap: 3px;
+  }
+
+  .janus-chat--workspace .janus-chat-pixel-char[data-cells="5"] {
+    grid-template-columns: repeat(5, 11px);
+  }
+
+  .janus-chat--workspace .janus-chat-status-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.janus-roundtable-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: var(--janus-panel-bg-expanded, #09090c);
+  animation: janus-roundtable-enter 180ms ease-out;
+}
+
+.janus-roundtable-overlay--embedded { position: relative; height: 100%; }
+.janus-roundtable-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.janus-roundtable-header { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 12px; border-bottom: 1px solid var(--shell-border, rgba(255,255,255,.1)); }
+.janus-roundtable-title { display: flex; align-items: center; gap: 7px; min-width: 0; color: #ff9a5d; }
+.janus-roundtable-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.janus-roundtable-title small { color: rgba(255,255,255,.45); font-size: 10px; white-space: nowrap; }
+.janus-roundtable-header .janus-roundtable-title { flex: 1; }
+.janus-roundtable-icon { display: inline-grid; width: 28px; height: 28px; place-items: center; flex: 0 0 auto; border: 0; border-radius: 4px; background: transparent; color: rgba(255,255,255,.62); }
+.janus-roundtable-icon:hover { background: rgba(255,255,255,.08); color: #fff; }
+.janus-roundtable-body { display: grid; flex: 1; min-height: 0; grid-template-columns: 170px minmax(0,1fr) 230px; }
+.janus-roundtable-participants, .janus-roundtable-state { overflow: auto; padding: 12px; background: rgba(255,255,255,.015); }
+.janus-roundtable-participants { border-right: 1px solid var(--shell-border, rgba(255,255,255,.08)); }
+.janus-roundtable-state { border-left: 1px solid var(--shell-border, rgba(255,255,255,.08)); }
+.janus-roundtable-center { min-width: 0; min-height: 0; }
+.janus-roundtable-center .janus-chat { height: 100%; }
+.janus-roundtable-section-label { margin-bottom: 10px; color: rgba(255,255,255,.43); font-size: 10px; text-transform: uppercase; }
+.janus-roundtable-role { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: rgba(255,255,255,.76); }
+.janus-roundtable-role > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.janus-roundtable-role small, .janus-roundtable-role em { color: rgba(255,255,255,.42); font-size: 9px; font-style: normal; }
+.janus-roundtable-role[data-working="true"] em { color: #ff9a5d; }
+.janus-roundtable-user-mark { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid rgba(255,120,48,.4); border-radius: 50%; color: #ff9a5d; font-size: 11px; }
+.janus-roundtable-state section { margin: 0 0 12px; }
+.janus-roundtable-state section strong { color: rgba(255,255,255,.72); font-size: 10px; }
+.janus-roundtable-state section p, .janus-roundtable-state section small { display: block; margin: 5px 0 0; color: rgba(255,255,255,.47); font-size: 10px; line-height: 1.45; }
+.janus-roundtable-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--shell-border, rgba(255,255,255,.08)); }
+.janus-roundtable-controls button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 29px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 4px; background: rgba(255,255,255,.03); color: rgba(255,255,255,.72); font-size: 10px; }
+.janus-roundtable-controls .janus-roundtable-primary { border-color: rgba(255,120,48,.38); color: #ff9a5d; }
+.janus-roundtable-controls .janus-roundtable-danger { border-color: rgba(220,85,85,.3); color: #d88d8d; }
+.janus-roundtable-controls button:hover:not(:disabled) { background: rgba(255,120,48,.11); }
+.janus-roundtable-error { position: absolute; right: 16px; bottom: 16px; max-width: min(420px, calc(100% - 32px)); padding: 8px 10px; border: 1px solid rgba(220,85,85,.32); border-radius: 4px; background: #211315; color: #f0b4b4; font-size: 11px; }
+@keyframes janus-roundtable-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 820px) { .janus-roundtable-body { grid-template-columns: 130px minmax(0,1fr) 185px; } }
+@media (max-width: 620px) { .janus-roundtable-header { flex-wrap: wrap; } .janus-roundtable-body { grid-template-columns: 1fr; overflow: auto; } .janus-roundtable-participants, .janus-roundtable-state { border: 0; } .janus-roundtable-center { min-height: 300px; } }

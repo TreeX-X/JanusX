@@ -1,0 +1,1667 @@
+/* High-fidelity roundtable foundation: a decision stage on the left and a
+   structured working deck on the right. Existing session controls remain in
+   place while the visual surface is rebuilt around them. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-overlay--embedded {
+  background: #08080c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-header {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-expanded-bottombar {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-expanded-body,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-panel,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  height: 100%;
+  min-height: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.9fr);
+  position: relative;
+  background: #08080c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants > * {
+  pointer-events: auto;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants .janus-roundtable-section-label {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  margin: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-role {
+  margin: 22px 0 0;
+  padding: 5px 7px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(8,8,12,0.78);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at 50% 46%, rgba(255,120,48,0.09), transparent 28%),
+    linear-gradient(rgba(255,120,48,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,120,48,0.035) 1px, transparent 1px),
+    radial-gradient(circle at center, #111116 0%, #030305 76%);
+  background-size: auto, 24px 24px, 24px 24px, auto;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(42%, 260px);
+  aspect-ratio: 1;
+  border: 2px solid rgba(255,85,0,0.68);
+  border-radius: 50%;
+  box-shadow: 0 0 28px rgba(255,85,0,0.22), inset 0 0 24px rgba(255,120,48,0.12);
+  content: '';
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(30%, 180px);
+  aspect-ratio: 1;
+  border: 1px dashed rgba(255,120,48,0.3);
+  border-radius: 50%;
+  content: '';
+  animation: janus-roundtable-stage-spin 20s linear infinite;
+  pointer-events: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat {
+  position: relative;
+  z-index: 3;
+  height: 100%;
+  padding: 56px 18px 12px;
+  background: transparent;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  padding: 14px;
+  border-left: 0;
+  background: #08080c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state::before {
+  display: block;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(216,195,158,0.16);
+  color: rgba(216,195,158,0.72);
+  content: 'JANUS MIND SCHEMATIC';
+  font: 10px 'SF Mono', Consolas, monospace;
+  letter-spacing: 0.12em;
+}
+
+@keyframes janus-roundtable-stage-spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center,
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+    grid-column: 1;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+    min-height: 360px;
+  }
+}
+
+/* Chat management is a side rail in the expanded Island, never a top stack. */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--with-sidebar {
+  display: grid !important;
+  grid-template-columns: 208px minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  flex-direction: row !important;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+}
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--with-sidebar > .janus-chat-sidebar { grid-column: 1; grid-row: 1; height: 100%; }
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--with-sidebar > .janus-chat-main { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; }
+
+/* Final roundtable contract: decision stage at left, parchment archive over
+   a discussion-only Chat surface at right. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-expanded-body,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-overlay--embedded,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-panel,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  height: 100%;
+  min-height: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(380px, 1fr);
+  grid-template-rows: minmax(190px, 0.42fr) minmax(280px, 0.58fr);
+  overflow: hidden;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants > * {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  grid-row: 1;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  margin: 14px 14px 10px;
+  padding: 22px;
+  overflow: auto;
+  border: 1px solid rgba(216, 195, 158, 0.24);
+  border-radius: 6px;
+  background-color: #12100e;
+  background-image:
+    radial-gradient(circle at center, transparent 28%, rgba(6, 5, 4, 0.96) 100%),
+    linear-gradient(135deg, transparent 42%, rgba(139, 115, 85, 0.06) 50%, transparent 58%),
+    repeating-linear-gradient(rgba(216, 195, 158, 0.018) 0 1px, transparent 1px 16px);
+  box-shadow: inset 0 0 35px rgba(5, 4, 3, 0.92), 0 8px 28px rgba(0, 0, 0, 0.62);
+  color: #c5b69e;
+  scrollbar-color: rgba(216, 195, 158, 0.16) transparent;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state::before {
+  display: block;
+  margin: 0 0 14px;
+  padding: 0 0 9px;
+  border-bottom: 1px solid rgba(216, 195, 158, 0.18);
+  color: #caa770;
+  content: 'JANUS MIND SCHEMATIC';
+  font: 700 11px Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.14em;
+  text-align: center;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state::after {
+  position: absolute;
+  inset: 6px;
+  border: 1px double rgba(216, 195, 158, 0.08);
+  border-radius: 4px;
+  content: '';
+  pointer-events: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state .janus-roundtable-section-label,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state section {
+  position: relative;
+  z-index: 1;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state section {
+  margin: 0 0 8px;
+  padding-left: 11px;
+  border-left: 1px dashed rgba(216, 195, 158, 0.14);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-top: 1px solid rgba(216, 195, 158, 0.12);
+  background: #09090c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center::before,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center::after {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat--docked {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0 14px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-resource-scope {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 36px;
+  margin: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-messages {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 14px 2px 8px;
+  gap: 8px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper {
+  display: flex;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 0.75fr) minmax(180px, 0.55fr) minmax(300px, 1fr);
+    overflow: auto;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+    margin: 8px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: 300px;
+  }
+}
+
+/* The participant column now hosts the interactive stage instead of the
+   legacy text list. Keep this explicit after the legacy roundtable rules. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants > .janus-roundtable-stage {
+  display: flex;
+}
+
+/* Reference-stage override: the left pane is a continuous 3D scene. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: auto;
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants > .janus-roundtable-stage {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  min-height: 0;
+}
+.janus-roundtable-scene--orbit .janus-roundtable-table,
+.janus-roundtable-scene--orbit .janus-roundtable-seats {
+  animation: janus-roundtable-orbit 24s linear infinite;
+}
+.janus-roundtable-scene--orbit .janus-roundtable-seat:hover,
+.janus-roundtable-scene--orbit .janus-roundtable-seat:focus-visible,
+.janus-roundtable-scene--orbit .janus-roundtable-seat[data-selected="true"] {
+  animation-play-state: paused;
+}
+@keyframes janus-roundtable-orbit {
+  0% { transform: translate(-50%, -50%) rotateX(58deg) rotateZ(0deg); }
+  50% { transform: translate(-50%, -50%) rotateX(58deg) rotateZ(180deg); }
+  100% { transform: translate(-50%, -50%) rotateX(58deg) rotateZ(360deg); }
+}
+.janus-roundtable-seat-pod {
+  position: relative;
+  transform-style: preserve-3d;
+  perspective: 360px;
+}
+.janus-roundtable-seat-pod-face {
+  position: absolute;
+  inset: 4px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--seat-color), transparent 30%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgba(255,255,255,.16), transparent 25%), radial-gradient(circle, #191a21, #05060a 78%);
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+.janus-roundtable-seat-pod-face--back { transform: rotateY(180deg); }
+.janus-roundtable-seat-pod-face .janus-identity-core { transform: scale(.74); }
+.janus-roundtable-seat-pod::after {
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 50%;
+  content: '';
+  transform: translateZ(8px);
+  pointer-events: none;
+}
+.janus-roundtable-scene--orbit .janus-roundtable-seat-pod { animation: janus-roundtable-pod-float 3.6s ease-in-out infinite alternate; }
+.janus-roundtable-seat:nth-child(2) .janus-roundtable-seat-pod { animation-delay: -.8s; }
+.janus-roundtable-seat:nth-child(3) .janus-roundtable-seat-pod { animation-delay: -1.6s; }
+.janus-roundtable-seat:nth-child(4) .janus-roundtable-seat-pod { animation-delay: -2.4s; }
+@keyframes janus-roundtable-pod-float {
+  from { transform: translateZ(3px) rotateY(-8deg); }
+  to { transform: translateZ(14px) rotateY(8deg); }
+}
+.janus-roundtable-scroll {
+  transform-style: preserve-3d;
+  animation: janus-roundtable-scroll-float 4s ease-in-out infinite alternate;
+}
+@keyframes janus-roundtable-scroll-float {
+  from { transform: translate(-50%, -50%) translateZ(24px) rotateX(12deg) rotateY(-8deg); }
+  to { transform: translate(-50%, -50%) translateZ(38px) rotateX(20deg) rotateY(8deg); }
+}
+.janus-roundtable-scroll:hover,
+.janus-roundtable-scroll:focus-visible { animation-play-state: paused; }
+.janus-roundtable-scroll-sheet {
+  border-radius: 2px;
+  background: linear-gradient(90deg, #503a27 0%, #e8d4b0 16%, #fff7e8 50%, #e8d4b0 84%, #503a27 100%);
+  box-shadow: inset 0 0 8px rgba(96,58,24,.55), 0 8px 18px rgba(0,0,0,.8), 0 0 12px rgba(216,195,158,.14);
+}
+.janus-roundtable-scroll-sheet::after {
+  position: absolute;
+  inset: 6px 9px;
+  border-top: 1px solid rgba(94,59,29,.28);
+  border-bottom: 1px solid rgba(94,59,29,.24);
+  content: '';
+}
+.janus-roundtable-scroll-roll { border: 1px solid rgba(255,231,186,.42); box-shadow: inset 0 0 5px rgba(0,0,0,.65), 0 0 9px rgba(216,195,158,.3); }
+.janus-roundtable-focus-readout {
+  position: absolute;
+  left: 50%;
+  top: calc(52% + 78px);
+  z-index: 5;
+  max-width: 150px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255,120,48,.24);
+  background: rgba(7,8,11,.76);
+  color: rgba(255,255,255,.56);
+  font: 9px ui-monospace, monospace;
+  letter-spacing: .08em;
+  text-align: center;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.janus-roundtable-camera-controls {
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  top: calc(52% + 106px);
+  transform: translateX(-50%);
+}
+
+/* Match the reference HTML camera HUD and make every participant a standing
+   pod around the table, facing inward instead of lying on the table plane. */
+.janus-roundtable-camera-controls {
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 8px;
+  background: rgba(10,10,13,.86);
+  backdrop-filter: blur(8px);
+}
+.janus-roundtable-camera-controls button {
+  min-height: 25px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255,255,255,.48);
+  font: 10px ui-monospace, monospace;
+  white-space: nowrap;
+}
+.janus-roundtable-camera-controls button[data-active="true"] {
+  border: 1px solid rgba(255,120,48,.42);
+  background: rgba(255,120,48,.16);
+  color: #ffad78;
+}
+.janus-roundtable-table {
+  display: block;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.janus-roundtable-table-slab {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transform-style: preserve-3d;
+}
+.janus-roundtable-table-slab--bottom {
+  transform: translateZ(-16px);
+  border: 4px solid #0d0c10;
+  background: #020203;
+  box-shadow: 0 0 30px rgba(0,0,0,.8);
+}
+.janus-roundtable-table-slab--rim {
+  transform: translateZ(-8px);
+  border: 6px solid #ff5500;
+  background: transparent;
+  box-shadow: 0 0 25px rgba(255,85,0,.4);
+  filter: blur(1px);
+  opacity: .8;
+}
+.janus-roundtable-table-slab--top {
+  transform: translateZ(0);
+  border: 4px solid #1c1a22;
+  background: radial-gradient(circle at center, #0e0e12 40%, #030305 100%);
+  box-shadow: inset 0 0 20px rgba(255,120,48,.15);
+}
+.janus-roundtable-table-slab--top::after {
+  position: absolute;
+  inset: 8%;
+  border: 1px solid rgba(255,120,48,.18);
+  border-radius: 50%;
+  content: '';
+}
+.janus-roundtable-seat {
+  /* Reference HTML uses rotateX(-90deg) + rotateY(180deg) to stand each pod
+     upright in the tilted scene while keeping its face toward the table. */
+  transform: rotate(var(--seat-angle)) translateY(-142px) rotateX(-90deg) rotateY(180deg);
+}
+.janus-roundtable-seat:hover,
+.janus-roundtable-seat:focus-visible,
+.janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-seat[data-working="true"] {
+  transform: rotate(var(--seat-angle)) translateY(-142px) translateZ(16px) rotateX(-90deg) rotateY(180deg) scale(1.08);
+}
+.janus-roundtable-seat-label {
+  transform: rotateX(90deg) rotateY(180deg);
+}
+.janus-roundtable-seat-link {
+  transform: rotateX(90deg) rotateY(180deg);
+}
+.janus-roundtable-scene--top .janus-roundtable-seat,
+.janus-roundtable-scene--top .janus-roundtable-seat:hover,
+.janus-roundtable-scene--top .janus-roundtable-seat:focus-visible,
+.janus-roundtable-scene--top .janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-scene--top .janus-roundtable-seat[data-working="true"] {
+  transform: rotate(var(--seat-angle)) translateY(-142px) rotateX(-90deg) rotateY(180deg);
+}
+.janus-roundtable-scene--low .janus-roundtable-table,
+.janus-roundtable-scene--low .janus-roundtable-seats { transform: translate(-50%, -50%) rotateX(72deg) rotateZ(-18deg); }
+.janus-roundtable-scene--low .janus-roundtable-seat,
+.janus-roundtable-scene--low .janus-roundtable-seat:hover,
+.janus-roundtable-scene--low .janus-roundtable-seat:focus-visible,
+.janus-roundtable-scene--low .janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-scene--low .janus-roundtable-seat[data-working="true"] {
+  transform: rotate(var(--seat-angle)) translateY(-142px) rotateX(-90deg) rotateY(180deg);
+}
+
+/* Reference alignment pass: every roundtable element shares one geometric
+   center. The prior 52% anchor left the HUD and orbit ring visibly offset. */
+.janus-roundtable-table,
+.janus-roundtable-seats,
+.janus-roundtable-scroll {
+  top: 50%;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-scroll {
+  animation: janus-roundtable-scroll-orbit 24s linear infinite;
+}
+
+@keyframes janus-roundtable-scroll-orbit {
+  0% { transform: translate(-50%, -50%) translateZ(28px) rotateX(15deg) rotateY(10deg) rotateZ(0deg); }
+  50% { transform: translate(-50%, -50%) translateZ(38px) rotateX(20deg) rotateY(-8deg) rotateZ(180deg); }
+  100% { transform: translate(-50%, -50%) translateZ(28px) rotateX(15deg) rotateY(10deg) rotateZ(360deg); }
+}
+
+.janus-roundtable-focus-readout {
+  top: auto;
+  bottom: 48px;
+}
+
+.janus-roundtable-camera-controls {
+  top: auto;
+  right: 50%;
+  bottom: 14px;
+  transform: translateX(50%);
+  padding: 4px;
+  border: 1px solid rgba(255, 120, 48, 0.24);
+  border-radius: 5px;
+  background: rgba(8, 8, 12, 0.9);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45), inset 0 0 14px rgba(255, 120, 48, 0.05);
+}
+
+.janus-roundtable-camera-controls button {
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.48);
+  font: 10px ui-monospace, monospace;
+  letter-spacing: 0.04em;
+}
+
+.janus-roundtable-camera-controls button[data-active="true"] {
+  border-color: rgba(255, 120, 48, 0.56);
+  background: rgba(255, 120, 48, 0.14);
+  color: #ffad78;
+}
+
+/* Charcoal codex treatment from the reference HTML, kept as a floating
+   surface so the shared record reads like a physical archive. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+  border-color: rgba(216, 195, 158, 0.28);
+  background-color: #12100e;
+  background-image:
+    radial-gradient(circle at center, transparent 28%, rgba(6, 5, 4, 0.98) 100%),
+    linear-gradient(135deg, transparent 42%, rgba(139, 115, 85, 0.08) 50%, transparent 58%),
+    radial-gradient(circle at 75% 20%, rgba(139, 115, 85, 0.08), transparent 42%),
+    repeating-linear-gradient(rgba(216, 195, 158, 0.02) 0 1px, transparent 1px 16px);
+  box-shadow: inset 0 0 35px rgba(5, 4, 3, 0.95), 0 8px 30px rgba(0, 0, 0, 0.72);
+  color: #dfd2be;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state::after {
+  inset: 6px;
+  border-color: rgba(216, 195, 158, 0.1);
+}
+
+@media (max-width: 760px) {
+  .janus-roundtable-camera-controls {
+    right: 50%;
+    bottom: 10px;
+    max-width: calc(100% - 20px);
+    overflow-x: auto;
+  }
+}
+
+/* One transform chain for the whole physical scene. The anchor fills the
+   stage so its 50% origin is the actual scene center, independent of the
+   table's own size or the left pane's aspect ratio. */
+.janus-roundtable-orbit-anchor {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.janus-roundtable-orbit-anchor > .janus-roundtable-table,
+.janus-roundtable-orbit-anchor > .janus-roundtable-seats,
+.janus-roundtable-orbit-anchor > .janus-roundtable-scroll {
+  pointer-events: auto;
+}
+
+.janus-roundtable-orbit-anchor > .janus-roundtable-table {
+  pointer-events: none;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-orbit-anchor {
+  animation: janus-roundtable-camera-orbit 24s linear infinite;
+}
+
+.janus-roundtable-scene--top .janus-roundtable-orbit-anchor {
+  transform: rotateX(0deg) rotateZ(0deg) scale(.94);
+}
+
+.janus-roundtable-scene--iso .janus-roundtable-orbit-anchor {
+  transform: rotateX(58deg) rotateZ(-18deg);
+}
+
+.janus-roundtable-scene--low .janus-roundtable-orbit-anchor {
+  transform: rotateX(72deg) rotateZ(-18deg);
+}
+
+@keyframes janus-roundtable-camera-orbit {
+  0% { transform: rotateX(62deg) rotateZ(-4deg); }
+  50% { transform: rotateX(62deg) rotateZ(176deg); }
+  100% { transform: rotateX(62deg) rotateZ(356deg); }
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-table,
+.janus-roundtable-scene--orbit .janus-roundtable-seats {
+  animation: none;
+}
+
+.janus-roundtable-orbit-anchor > .janus-roundtable-table,
+.janus-roundtable-orbit-anchor > .janus-roundtable-seats {
+  transform: translate(-50%, -50%) !important;
+}
+
+.janus-roundtable-scroll {
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+  animation: janus-roundtable-scroll-float 4s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-scroll {
+  animation: janus-roundtable-scroll-float 4s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+}
+
+.janus-roundtable-scroll-sheet,
+.janus-roundtable-scroll-roll,
+.janus-roundtable-scroll-ribbon {
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+}
+
+.janus-roundtable-scroll-sheet {
+  transform: rotateX(-12deg) translateZ(2px);
+  background:
+    linear-gradient(90deg, #3c291b 0%, #c3a77c 12%, #f2dfb9 28%, #fff5dc 50%, #e1c798 78%, #4b321e 100%),
+    repeating-linear-gradient(0deg, rgba(86, 51, 22, .12) 0 1px, transparent 1px 5px);
+  box-shadow: inset 0 0 8px rgba(74, 42, 17, .7), 0 8px 18px rgba(0, 0, 0, .82), 0 0 14px rgba(216, 195, 158, .18);
+}
+
+.janus-roundtable-scroll-roll {
+  transform: translateZ(6px) rotateY(12deg);
+}
+
+.janus-roundtable-scroll-roll--right {
+  transform: translateZ(6px) rotateY(-12deg);
+}
+
+.janus-roundtable-scroll-ribbon {
+  transform: translateZ(9px);
+}
+
+.janus-roundtable-focus-readout {
+  left: 50%;
+  bottom: 52px;
+  top: auto;
+  transform: translateX(-50%);
+}
+
+.janus-roundtable-camera-controls {
+  left: 50%;
+  right: auto;
+  bottom: 12px;
+  top: auto;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  z-index: 12;
+}
+
+/* Reset the legacy absolute stage rule. During view switches the grid item
+   can retain a stale containing block, which moves the 3D scene while the
+   participant column stays put. A normal in-flow stage always inherits the
+   current grid area dimensions. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  position: relative !important;
+  display: block !important;
+  contain: layout;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants > .janus-roundtable-stage {
+  position: relative !important;
+  inset: auto !important;
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+.janus-roundtable-scene {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(100%, 440px);
+  height: min(100%, 440px);
+  flex: none;
+  perspective: none;
+  transform: translate(-50%, -50%);
+  transform-origin: 50% 50%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The reference has one camera scene, not a nested transformed scene. Keep
+   the semantic anchor in the DOM but remove it from the transform tree. */
+.janus-roundtable-orbit-anchor {
+  display: contents;
+  transform: none !important;
+  animation: none !important;
+}
+
+.janus-roundtable-scene--orbit {
+  animation: janus-roundtable-scene-orbit 24s linear infinite;
+}
+
+.janus-roundtable-scene--top {
+  transform: translate(-50%, -50%) rotateX(0deg) rotateZ(0deg) scale(.94);
+}
+
+.janus-roundtable-scene--iso {
+  transform: translate(-50%, -50%) rotateX(58deg) rotateZ(-18deg);
+}
+
+.janus-roundtable-scene--low {
+  transform: translate(-50%, -50%) rotateX(72deg) rotateZ(-18deg);
+}
+
+@keyframes janus-roundtable-scene-orbit {
+  0% { transform: translate(-50%, -50%) rotateX(62deg) rotateZ(-4deg); }
+  50% { transform: translate(-50%, -50%) rotateX(62deg) rotateZ(176deg); }
+  100% { transform: translate(-50%, -50%) rotateX(62deg) rotateZ(356deg); }
+}
+
+.janus-roundtable-stage {
+  position: relative;
+  display: block;
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+  overflow: hidden;
+}
+
+.janus-roundtable-floor {
+  inset: -60px;
+  pointer-events: none;
+}
+
+.janus-roundtable-table,
+.janus-roundtable-seats {
+  width: min(59%, 260px);
+}
+
+.janus-roundtable-table-slab--rim {
+  border: 5px solid #ff5500;
+  box-shadow: 0 0 18px rgba(255, 85, 0, .28);
+  filter: none;
+  opacity: .82;
+}
+
+.janus-roundtable-table-slab--top {
+  border-color: #1c1a22;
+  box-shadow: inset 0 0 18px rgba(255, 120, 48, .1);
+}
+
+.janus-roundtable-seats {
+  z-index: 4;
+  pointer-events: auto;
+}
+
+.janus-roundtable-seat {
+  z-index: 5;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants::before,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants::after,
+.janus-roundtable-table::after,
+.janus-roundtable-table-rim {
+  display: none !important;
+}
+
+/* Final reference contract: this block intentionally comes last so legacy
+   responsive rules cannot change the scene center or visual proportions. */
+.janus-roundtable-table,
+.janus-roundtable-seats {
+  width: min(260px, calc(100% - 40px)) !important;
+  height: min(260px, calc(100% - 40px)) !important;
+  top: 50% !important;
+  transform-origin: 50% 50%;
+}
+.janus-roundtable-table-slab--bottom { transform: translateZ(-16px) !important; }
+.janus-roundtable-table-slab--rim {
+  transform: translateZ(-8px) !important;
+  border: 6px solid #ff5500 !important;
+  box-shadow: 0 0 25px rgba(255,85,0,.4) !important;
+  filter: blur(1px) !important;
+  opacity: .8 !important;
+}
+.janus-roundtable-table-slab--top { transform: translateZ(0) !important; }
+.janus-roundtable-table-hud { inset: 12px !important; border-color: rgba(255,120,48,.3) !important; }
+.janus-roundtable-table-hud::before {
+  position: absolute;
+  inset: 12px;
+  border: 2px double #ff7830;
+  border-radius: 50%;
+  content: '';
+  opacity: .4;
+}
+.janus-roundtable-scroll {
+  width: 72px !important;
+  height: 72px !important;
+  top: 50% !important;
+  transform: translate3d(-36px,-36px,1px) !important;
+}
+.janus-roundtable-scroll-sheet { left:14px !important; top:4px !important; width:32px !important; height:32px !important; border-radius:0 !important; }
+.janus-roundtable-scroll-roll { top:2px !important; width:10px !important; height:36px !important; border-radius:0 !important; }
+.janus-roundtable-scroll-roll--left { left:6px !important; }
+.janus-roundtable-scroll-roll--right { left:44px !important; right:auto !important; }
+.janus-roundtable-scroll-ribbon { left:14px !important; top:-1px !important; width:4px !important; height:34px !important; }
+.janus-roundtable-scroll::after {
+  position:absolute; left:50%; top:50%; width:76px; height:76px;
+  border:1px dashed rgba(216,195,158,.25); border-radius:50%; content:'';
+  pointer-events:none; transform:translate(-50%,-50%) translateZ(5px) rotateX(45deg);
+  animation:janus-roundtable-scroll-halo 12s linear infinite;
+}
+@keyframes janus-roundtable-scroll-halo { to { transform:translate(-50%,-50%) translateZ(5px) rotateX(45deg) rotate(-360deg); } }
+.janus-roundtable-seat {
+  transform: translate(-50%,-50%) rotate(var(--seat-angle)) translateY(-145px) rotate(calc(var(--seat-angle) * -1)) !important;
+}
+.janus-roundtable-seat:hover,
+.janus-roundtable-seat:focus-visible,
+.janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-seat[data-working="true"] {
+  transform: translate(-50%,-50%) rotate(var(--seat-angle)) translateY(-145px) translateZ(16px) rotate(calc(var(--seat-angle) * -1)) scale(1.08) !important;
+}
+.janus-roundtable-seat-pod::before {
+  position:absolute; inset:-5px; border:1px dashed var(--seat-color); border-radius:50%;
+  content:''; opacity:.45; pointer-events:none; animation:janus-roundtable-seat-halo 12s linear infinite;
+}
+@keyframes janus-roundtable-seat-halo { to { transform:rotate(360deg); } }
+@media (max-width:760px) {
+  .janus-roundtable-seat { transform:translate(-50%,-50%) rotate(var(--seat-angle)) translateY(-122px) rotate(calc(var(--seat-angle) * -1)) !important; }
+  .janus-roundtable-seat:hover,
+  .janus-roundtable-seat:focus-visible,
+  .janus-roundtable-seat[data-selected="true"],
+  .janus-roundtable-seat[data-working="true"] { transform:translate(-50%,-50%) rotate(var(--seat-angle)) translateY(-122px) translateZ(14px) rotate(calc(var(--seat-angle) * -1)) scale(1.05) !important; }
+}
+
+/* Reference HTML geometry: one 440px camera scene, a 260px layered table,
+   and upright 62px pods orbiting at the table's 145px radius. Keep these
+   values in the terminal override so older cascade blocks cannot drift the
+   left-hand roundtable out of alignment. */
+.janus-roundtable-stage {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+  background: radial-gradient(circle at center, #111116 0%, #030305 100%);
+}
+
+.janus-roundtable-scene {
+  width: min(440px, calc(100% - 24px));
+  height: min(440px, calc(100% - 24px));
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+}
+
+.janus-roundtable-table,
+.janus-roundtable-seats {
+  width: min(260px, calc(100% - 40px)) !important;
+  height: min(260px, calc(100% - 40px)) !important;
+}
+
+.janus-roundtable-seat-pod {
+  width: 62px;
+  height: 62px;
+}
+
+.janus-roundtable-seat-pod-face .janus-identity-core {
+  transform: scale(.78);
+}
+
+.janus-roundtable-scroll {
+  width: 72px !important;
+  height: 72px !important;
+}
+
+@media (max-width: 760px) {
+  .janus-roundtable-scene {
+    width: min(440px, calc(100% - 12px));
+    height: min(440px, calc(100% - 12px));
+  }
+
+  .janus-roundtable-table,
+  .janus-roundtable-seats {
+    width: min(260px, calc(100% - 24px)) !important;
+    height: min(260px, calc(100% - 24px)) !important;
+  }
+}
+
+/* Keep the camera pivot fixed. A percentage translate in the same transform
+   chain as rotateX/rotateZ makes the projected centre drift on every orbit
+   frame; centering with inset + auto margins leaves rotation around the true
+   middle of the left pane. */
+.janus-roundtable-scene {
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  transform: rotateX(62deg) rotateZ(-4deg);
+}
+
+.janus-roundtable-scene--orbit {
+  animation: janus-roundtable-scene-orbit-fixed 24s linear infinite;
+}
+
+.janus-roundtable-scene--top { transform: rotateX(0deg) rotateZ(0deg) scale(.94); }
+.janus-roundtable-scene--iso { transform: rotateX(58deg) rotateZ(-18deg); }
+.janus-roundtable-scene--low { transform: rotateX(72deg) rotateZ(-18deg); }
+
+@keyframes janus-roundtable-scene-orbit-fixed {
+  0% { transform: rotateX(62deg) rotateZ(-4deg); }
+  50% { transform: rotateX(62deg) rotateZ(176deg); }
+  100% { transform: rotateX(62deg) rotateZ(356deg); }
+}
+
+/* The reference table uses a saturated orange chassis ring. The previous
+   blurred, semi-transparent rim read as a grey edge at normal pane sizes. */
+.janus-roundtable-table-slab--rim {
+  border: 6px solid #ff5500 !important;
+  box-shadow: 0 0 25px rgba(255, 85, 0, .55), 0 0 8px rgba(255, 120, 48, .42) !important;
+  filter: none !important;
+  opacity: .96 !important;
+}
+
+.janus-roundtable-table-slab--top {
+  border-color: #282027 !important;
+  box-shadow: inset 0 0 24px rgba(255, 120, 48, .18), 0 0 10px rgba(255, 85, 0, .14) !important;
+}
+
+/* The shared stage-spin keyframe includes a centering translate for other
+   rings. Applying it to the inset table HUD made that ring interpolate from
+   no translation to -50% on every cycle, producing the visible drift/reset.
+   The HUD is already positioned by inset, so its animation must be rotation
+   only. */
+.janus-roundtable-table-hud {
+  animation-name: janus-roundtable-hud-spin !important;
+  transform-origin: 50% 50%;
+}
+
+@keyframes janus-roundtable-hud-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Upright conference pods: the final sizing pass previously replaced the
+   reference node transform with a flat polar placement. Rotate each seat
+   onto the vertical plane first, then distribute it around the table. */
+.janus-roundtable-seat {
+  width: 86px;
+  height: 124px;
+  transform: translate(-50%, -50%) rotate(var(--seat-angle)) translateY(-160px)
+    translateZ(24px) !important;
+  transform-style: preserve-3d;
+  perspective: 1200px;
+}
+
+.janus-roundtable-seat:hover,
+.janus-roundtable-seat:focus-visible,
+.janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-seat[data-working="true"] {
+  transform: translate(-50%, -50%) rotate(var(--seat-angle)) translateY(-160px)
+    translateZ(40px) scale(1.08) !important;
+}
+
+.janus-roundtable-seat-label {
+  position: absolute;
+  left: 50%;
+  top: -80px;
+  z-index: 40;
+  display: grid !important;
+  gap: 2px;
+  min-width: 64px;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--seat-color), transparent 72%);
+  border-radius: 3px;
+  background: rgba(8, 8, 12, .52);
+  text-align: center;
+  text-shadow: 0 2px 5px #000;
+  opacity: 1 !important;
+  visibility: visible !important;
+  /* The seat rotates around the table; counter-rotate only the label so its
+     text stays upright and remains visually separated from the identity pod. */
+  transform: translateX(-50%) rotate(calc(var(--seat-angle) * -1)) scaleX(-1) !important;
+  transform-origin: 50% 100%;
+  transform-style: flat;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+  pointer-events: none;
+}
+
+/* Side-on seats are intentionally represented by their pod silhouette; keep
+   their narrow labels out of the camera edge while the front/back labels stay
+   readable and clear of the circular frames. */
+.janus-roundtable-seat:nth-child(1) .janus-roundtable-seat-label,
+.janus-roundtable-seat:nth-child(3) .janus-roundtable-seat-label {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-seat-label {
+  transform: translateX(-50%) rotateX(-62deg)
+    rotate(calc(var(--seat-angle) * -1)) scaleX(-1) !important;
+}
+
+.janus-roundtable-scene--iso .janus-roundtable-seat-label {
+  transform: translateX(-50%) rotateX(-58deg)
+    rotate(calc(var(--seat-angle) * -1)) scaleX(-1) !important;
+}
+
+.janus-roundtable-scene--low .janus-roundtable-seat-label {
+  transform: translateX(-50%) rotateX(-72deg)
+    rotate(calc(var(--seat-angle) * -1)) scaleX(-1) !important;
+}
+
+.janus-roundtable-seat-label strong,
+.janus-roundtable-seat-label small {
+  position: relative;
+  z-index: 41;
+  display: block;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.janus-roundtable-seat-label strong { color: color-mix(in srgb, var(--seat-color), #fff 22%); font-size: 9px; font-weight: 600; }
+.janus-roundtable-seat-label small { color: rgba(255,255,255,.42); font-size: 7px; white-space: nowrap; }
+
+.janus-roundtable-seat-link {
+  transform: rotateX(90deg) rotateY(180deg);
+  transform-origin: 50% 0;
+}
+
+.janus-roundtable-seat-pod {
+  transform-style: preserve-3d;
+  perspective: 360px;
+  position: relative;
+  overflow: visible;
+  transform: rotateX(-90deg) rotateY(180deg) !important;
+}
+
+/* Do not animate transform on the pod: the legacy float keyframe replaces
+   the required upright rotation and turns every participant flat again. */
+.janus-roundtable-scene--orbit .janus-roundtable-seat-pod {
+  animation: none !important;
+  transform: rotateX(-90deg) rotateY(180deg) !important;
+}
+
+.janus-roundtable-stage,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  overflow: visible !important;
+}
+
+/* The upright pod extends beyond the original flat scene bounds. Keep the
+   complete 3D draw chain open so its lower rim is not clipped by legacy
+   overflow rules. */
+.janus-roundtable-scene,
+.janus-roundtable-orbit-anchor,
+.janus-roundtable-seats,
+.janus-roundtable-seat,
+.janus-roundtable-seat-pod {
+  overflow: visible !important;
+}
+
+.janus-roundtable-seats {
+  z-index: 10 !important;
+  transform-style: preserve-3d;
+  overflow: visible !important;
+}
+.janus-roundtable-seat { z-index: 20 !important; }
+
+/* The vertical pod is taller in projected space than the original flat
+   76x92 button box. Keep every layer of the identity face paintable so the
+   lower edge is not clipped when the node tilts toward the viewer. */
+.janus-roundtable-seat,
+.janus-roundtable-seat-pod,
+.janus-roundtable-seat-pod-face,
+.janus-roundtable-seat-pod-face .janus-identity-core {
+  overflow: visible !important;
+  clip-path: none;
+  mask: none;
+}
+
+.janus-roundtable-seat-pod-face {
+  inset: 2px;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
+/* Keep one physical pod rim. The original front face already carries the
+   identity border; adding another rim layer produced a doubled halo. */
+.janus-roundtable-seat-pod::after {
+  display: none !important;
+}
+
+.janus-roundtable-seat-pod-face--front {
+  inset: 0;
+  z-index: 2;
+  border-width: 2px;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
+.janus-roundtable-seat-pod-face--back {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .janus-roundtable-seat {
+    width: 86px;
+    height: 112px;
+    transform: translate(-50%, -50%) rotate(var(--seat-angle)) translateY(-140px)
+      translateZ(20px) !important;
+  }
+
+  .janus-roundtable-seat:hover,
+  .janus-roundtable-seat:focus-visible,
+  .janus-roundtable-seat[data-selected="true"],
+  .janus-roundtable-seat[data-working="true"] {
+    transform: translate(-50%, -50%) rotate(var(--seat-angle)) translateY(-140px)
+      translateZ(34px) scale(1.05) !important;
+  }
+}
+
+/* Final reference geometry. The HTML prototype places a zero-size orbit node
+   at the scene centre, then stands its 62px pod with the camera-facing
+   rotateX/rotateY pair. Keeping that transform on the node (and nowhere on
+   the pod) prevents projected circles from becoming clipped ellipses. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-stage {
+  padding: 0;
+  overflow: visible !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  overflow: visible !important;
+  contain: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-scene {
+  width: min(440px, calc(100% - 24px));
+  height: min(440px, calc(100% - 24px));
+  perspective: none;
+  overflow: visible !important;
+}
+
+.janus-roundtable-orbit-anchor {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.janus-roundtable-table,
+.janus-roundtable-seats {
+  top: 50% !important;
+  left: 50% !important;
+  width: 260px !important;
+  height: 260px !important;
+  transform-style: preserve-3d;
+}
+
+.janus-roundtable-table {
+  z-index: 1;
+}
+
+.janus-roundtable-seats {
+  z-index: 3 !important;
+  pointer-events: none;
+  overflow: visible !important;
+}
+
+.janus-roundtable-seat {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 62px;
+  height: 62px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  overflow: visible !important;
+  transform-origin: 0 0;
+  perspective: none;
+  transform: rotateZ(var(--seat-angle)) translateY(-145px) rotateX(-90deg) rotateY(180deg) !important;
+  transform-style: preserve-3d;
+  transition: filter .3s ease;
+}
+
+.janus-roundtable-seat:hover,
+.janus-roundtable-seat:focus-visible,
+.janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-seat[data-working="true"] {
+  z-index: 8;
+  filter: brightness(1.18);
+  transform: rotateZ(var(--seat-angle)) translateY(-145px) rotateX(-90deg) rotateY(180deg) !important;
+}
+
+.janus-roundtable-seat-pod {
+  position: absolute;
+  left: -31px;
+  top: -50px;
+  display: block;
+  width: 62px;
+  height: 62px;
+  margin: 0;
+  overflow: visible !important;
+  transform: translateZ(28px) !important;
+  transform-style: preserve-3d;
+  perspective: none;
+  z-index: 4;
+  transition: transform .3s cubic-bezier(.22, .8, .25, 1), filter .3s ease;
+}
+
+.janus-roundtable-seat:hover .janus-roundtable-seat-pod,
+.janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod,
+.janus-roundtable-seat[data-selected="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-seat[data-working="true"] .janus-roundtable-seat-pod {
+  transform: translateZ(40px) scale(1.12) !important;
+}
+
+.janus-roundtable-seat-pod-face {
+  position: absolute;
+  inset: 0 !important;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden !important;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
+.janus-roundtable-seat-pod-face--front {
+  z-index: 2;
+}
+
+.janus-roundtable-seat-pod-face--back {
+  display: none;
+}
+
+.janus-roundtable-seat-pod-face .janus-identity-core {
+  width: 44px;
+  height: 44px;
+  transform: none !important;
+}
+
+/* Text is intentionally outside the 3D scene. The pod needs to rotate in
+   world space to face the table, while its caption needs to stay horizontal
+   in screen space. This also keeps every caption above its pod at all times. */
+.janus-roundtable-seat-labels {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label {
+  position: absolute;
+  z-index: 1;
+  display: grid !important;
+  gap: 2px;
+  min-width: 64px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--seat-color), transparent 42%);
+  border-radius: 4px;
+  background: rgba(8, 8, 12, .95);
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 2px 5px #000;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateX(-50%) !important;
+  pointer-events: none;
+  will-change: left, top;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="0"] {
+  left: 21%;
+  top: 36%;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="1"] {
+  left: 50%;
+  top: 22%;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="2"] {
+  left: 79%;
+  top: 35%;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="3"] {
+  left: 50%;
+  top: 52%;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label strong,
+.janus-roundtable-seat-labels .janus-roundtable-seat-label small {
+  display: block;
+  position: relative;
+  z-index: 13;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label strong {
+  color: color-mix(in srgb, var(--seat-color), #fff 22%);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.janus-roundtable-seat-labels .janus-roundtable-seat-label small {
+  color: rgba(255,255,255,.56);
+  font-size: 7px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.janus-roundtable-seat-link {
+  position: absolute;
+  left: 0;
+  top: auto;
+  bottom: -25px;
+  width: 2px;
+  height: 135px;
+  background: linear-gradient(to top, transparent, var(--seat-color) 50%, #fff 100%);
+  opacity: .25;
+  transform: rotateX(90deg);
+  transform-origin: bottom center;
+  pointer-events: none;
+}
+
+.janus-roundtable-seat[data-working="true"] .janus-roundtable-seat-link,
+.janus-roundtable-seat[data-selected="true"] .janus-roundtable-seat-link {
+  opacity: .9;
+  box-shadow: 0 0 10px var(--seat-color);
+}
+
+.janus-roundtable-seat-pod::before {
+  position: absolute;
+  inset: -5px;
+  border: 1px dashed var(--seat-color);
+  border-radius: 50%;
+  content: '';
+  opacity: .42;
+  pointer-events: none;
+  animation: janus-roundtable-seat-halo 12s linear infinite;
+}
+
+.janus-roundtable-seat-pod::after {
+  display: none !important;
+}
+
+@keyframes janus-roundtable-seat-halo {
+  to { transform: rotate(360deg); }
+}
+
+.janus-roundtable-scene--orbit {
+  animation: janus-roundtable-reference-orbit 40s linear infinite !important;
+  transform: rotateX(60deg) rotateZ(-30deg);
+}
+
+@keyframes janus-roundtable-reference-orbit {
+  from {
+    transform: rotateX(60deg) rotateZ(-30deg);
+  }
+  to {
+    transform: rotateX(60deg) rotateZ(-390deg);
+  }
+}
+
+.janus-roundtable-stage:hover .janus-roundtable-scene--orbit,
+.janus-roundtable-stage:has(.janus-roundtable-seat:hover) .janus-roundtable-scene--orbit,
+.janus-roundtable-stage:has(.janus-roundtable-seat:focus-visible) .janus-roundtable-scene--orbit {
+  animation-play-state: paused !important;
+}
+
+/* Keep the stage's box fixed inside Island. The camera moves only its inner
+   anchor, so the orbit cannot shift the roundtable panel up or down. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-scene {
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  margin: 0;
+  transform: translate(-50%, -50%) !important;
+  animation: none !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-stage {
+  min-height: 0 !important;
+  height: 100% !important;
+  align-self: stretch;
+  transform: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  overflow: visible !important;
+}
+
+.janus-roundtable-orbit-anchor {
+  display: block !important;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+}
+
+@property --janus-roundtable-orbit-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: -30deg;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-orbit-anchor {
+  --janus-roundtable-orbit-angle: -30deg;
+  animation: janus-roundtable-orbit-angle 40s linear infinite !important;
+  transform: rotateX(60deg) rotateZ(var(--janus-roundtable-orbit-angle)) !important;
+}
+
+@keyframes janus-roundtable-orbit-angle {
+  to { --janus-roundtable-orbit-angle: -390deg; }
+}
+
+.janus-roundtable-scene--top .janus-roundtable-orbit-anchor {
+  transform: rotateX(0deg) rotateZ(0deg) scale(.94) !important;
+}
+
+.janus-roundtable-scene--iso .janus-roundtable-orbit-anchor {
+  transform: rotateX(58deg) rotateZ(-18deg) !important;
+}
+
+.janus-roundtable-scene--low .janus-roundtable-orbit-anchor {
+  transform: rotateX(72deg) rotateZ(-18deg) !important;
+}
+
+/* The seat already has the reference HTML's upright rotateX/rotateY pair.
+   The former orbit-only pod rule applied it a second time, flattening every
+   participant until hover overrode it. */
+.janus-roundtable-scene--orbit .janus-roundtable-seat-pod {
+  animation: none !important;
+  transform: rotateY(180deg) rotateX(90deg) rotateZ(calc(0deg - var(--seat-angle)))
+    rotateZ(calc(0deg - var(--janus-roundtable-orbit-angle))) rotateX(-60deg) translateZ(28px) !important;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-seat:hover .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat[data-selected="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat[data-working="true"] .janus-roundtable-seat-pod {
+  transform: rotateY(180deg) rotateX(90deg) rotateZ(calc(0deg - var(--seat-angle)))
+    rotateZ(calc(0deg - var(--janus-roundtable-orbit-angle))) rotateX(-60deg) translateZ(40px) scale(1.12) !important;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-seat-pod-face--back {
+  display: grid !important;
+  transform: rotateY(180deg) translateZ(1px);
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
+.janus-roundtable-seat-pod-face {
+  overflow: visible !important;
+}
+
+/* Final reference alignment: the seat node owns the complete radial/upright
+   transform, exactly like the HTML prototype. Pods stay neutral so every
+   participant faces inward instead of being rotated toward the screen. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-stage,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-panel {
+  overflow: visible !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-expanded-body {
+  overflow: visible !important;
+  contain: none !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-scene {
+  width: min(440px, calc(100% - 12px));
+  height: min(440px, calc(100% - 12px));
+  perspective: 1000px;
+  perspective-origin: 50% 50%;
+  transform: translate(-50%, -50%) !important;
+  transform-style: preserve-3d;
+  overflow: visible !important;
+}
+
+.janus-roundtable-scene--orbit .janus-roundtable-orbit-anchor {
+  transform: rotateX(60deg) rotateZ(var(--janus-roundtable-orbit-angle)) !important;
+}
+
+.janus-roundtable-seat,
+.janus-roundtable-seat:hover,
+.janus-roundtable-seat:focus-visible,
+.janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-seat[data-working="true"] {
+  width: 62px;
+  height: 62px;
+  transform: rotateZ(var(--seat-angle)) translateY(-145px)
+    rotateX(-90deg) rotateY(180deg) !important;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+}
+
+.janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat:hover .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat:focus-visible .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat[data-selected="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-scene--orbit .janus-roundtable-seat[data-working="true"] .janus-roundtable-seat-pod {
+  left: -31px;
+  top: -50px;
+  width: 62px;
+  height: 62px;
+  transform: translateZ(28px) !important;
+  transform-style: preserve-3d;
+}
+
+.janus-roundtable-seat-pod-face--front {
+  display: grid !important;
+  transform: none !important;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
+.janus-roundtable-seat-pod-face--back {
+  display: grid !important;
+  transform: rotateY(180deg) translateZ(1px) !important;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-scene {
+    width: min(440px, calc(100% - 16px));
+    height: min(440px, calc(100% - 16px));
+  }
+
+  .janus-roundtable-table,
+  .janus-roundtable-seats {
+    width: 224px !important;
+    height: 224px !important;
+  }
+
+  .janus-roundtable-seat {
+    transform: rotateZ(var(--seat-angle)) translateY(-116px) rotateX(-90deg) rotateY(180deg) !important;
+  }
+
+  .janus-roundtable-seat:hover,
+  .janus-roundtable-seat:focus-visible,
+  .janus-roundtable-seat[data-selected="true"],
+  .janus-roundtable-seat[data-working="true"] {
+    transform: rotateZ(var(--seat-angle)) translateY(-116px) rotateX(-90deg) rotateY(180deg) !important;
+  }
+
+  .janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="0"] { left: 19%; top: 24%; }
+  .janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="1"] { left: 50%; top: 2%; }
+  .janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="2"] { left: 81%; top: 24%; }
+    .janus-roundtable-seat-labels .janus-roundtable-seat-label[data-seat-index="3"] { left: 50%; top: 46%; }
+}
+
+/* Keep the 3D scene transparent. An opaque scene background is composited
+   in front of transformed descendants by Chromium, cutting the far half of
+   the table and the upper participants at a flat horizontal edge. Paint the
+   backdrop on the stage instead, like the reference HTML viewport. */
+.janus-roundtable-stage {
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 120, 48, .09), transparent 34%),
+    #07080b !important;
+}
+
+.janus-roundtable-scene {
+  background: transparent !important;
+}
+
+/* The reference layout has no laser/connector below each participant. */
+.janus-roundtable-seat-link {
+  display: none !important;
+}

@@ -1,30 +1,17 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useAppStore } from '@/stores/app'
+import { useBlueprintStore } from '@/stores/blueprint'
+import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { useI18n } from '@/i18n/useI18n'
 import { JanusEye } from './JanusEye'
 import { useIslandGesture } from './useIslandGesture'
 import { useJanusState } from './useJanusState'
-import { projectService, type ProjectConfig } from '@/services/project'
-import type { Terminal, Workspace } from '@/types'
-import { JanusChat } from './JanusChat'
-import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
-import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
-import { useBlueprintStore } from '@/stores/blueprint'
-import { useWorkspaceStore } from '@/stores/workspace'
-import { useSubAgentRunStore } from '@/stores/subagent-run'
 import { STATUS_VISUALS } from '../blueprint/blueprintStatus'
-import { JanusIdentityCore } from './JanusIdentityCore'
-import {
-  getJanusAgentIdentity,
-  type JanusAgentIdentityId,
-  type JanusIdentityState,
-} from './janusIdentity'
-import type { SubAgentRun, SubAgentRunRole, SubAgentRunStatus } from '../../../../shared/subAgentRun'
-import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
-import type { OfficeFileEntry } from '../../../../shared/office'
 import { formatKnowledgeMatch } from './islandKnowledgePeek'
-import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
-import { useI18n } from '@/i18n/useI18n'
-import { JanusRoundtablePane } from './JanusRoundtablePane'
+import { JanusIslandExpandedShell } from './JanusIslandExpandedShell'
+import { faceClass } from './janusIslandRuntime'
+import type { JanusExpandedView, JanusIslandProps } from './janusIslandTypes'
+import { useProjectRunning } from './useProjectRunning'
 
 /* ════════════════════════════════════════════════════════════
    JanusIsland �?52×26px 折叠态胶�?
@@ -32,237 +19,7 @@ import { JanusRoundtablePane } from './JanusRoundtablePane'
    ════════════════════════════════════════════════════════════ */
 
 /** useProjectRunning �?管理项目运行状�?*/
-function useProjectRunning(activeWorkspace: Workspace | undefined) {
-  const janusRunning = useAppStore((s) => s.janusRunning)
-  const setJanusRunning = useAppStore((s) => s.setJanusRunning)
-  const setRunningProjects = useAppStore((s) => s.setRunningProjects)
-  const [workspaceConfig, setWorkspaceConfig] = useState<ProjectConfig | null>(null)
-  const configRef = useRef<ProjectConfig | null>(null)
-  // P6: 轮询结果无变化时跳过 setState，避免每 3s 的新引用触发无意义重渲染
-  const configKeyRef = useRef<string>('')
-  const runningKeyRef = useRef<string>('')
 
-  useEffect(() => {
-    if (!activeWorkspace) {
-      setWorkspaceConfig(null)
-      setRunningProjects([])
-      setJanusRunning(false)
-      configRef.current = null
-      configKeyRef.current = ''
-      runningKeyRef.current = ''
-      return
-    }
-
-    const loadData = async () => {
-      try {
-        const config = await projectService.readConfig(activeWorkspace.path)
-        configRef.current = config
-        const configKey = JSON.stringify(config)
-        if (configKeyRef.current !== configKey) {
-          configKeyRef.current = configKey
-          setWorkspaceConfig(config)
-        }
-        const running = await projectService.listByWorkspace(activeWorkspace.path)
-        const runningKey = JSON.stringify(running)
-        if (runningKeyRef.current !== runningKey) {
-          runningKeyRef.current = runningKey
-          setRunningProjects(running)
-          setJanusRunning(running.length > 0)
-        }
-      } catch (err) {
-        console.error('Failed to load workspace data:', err)
-      }
-    }
-
-    loadData()
-    const interval = setInterval(loadData, 3000)
-    return () => clearInterval(interval)
-  }, [activeWorkspace, setJanusRunning, setRunningProjects])
-
-  useEffect(() => { configRef.current = workspaceConfig }, [workspaceConfig])
-
-  const toggleRunning = useCallback(async () => {
-    if (!activeWorkspace || !configRef.current) return
-    try {
-      if (janusRunning) {
-        const running = await projectService.listByWorkspace(activeWorkspace.path)
-        await Promise.all(running.map((p) => projectService.stop(p.id)))
-        setJanusRunning(false)
-        setRunningProjects([])
-      } else {
-        const cfg = configRef.current
-        const defaultConfig =
-          cfg.configurations.find((c) => c.name === 'dev') || cfg.configurations[0]
-        if (defaultConfig) {
-          const success = await projectService.start(activeWorkspace.path, defaultConfig.name)
-          if (success) {
-            const running = await projectService.listByWorkspace(activeWorkspace.path)
-            setJanusRunning(running.length > 0)
-            setRunningProjects(running)
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Failed to toggle project:', err)
-    }
-  }, [activeWorkspace, janusRunning, setJanusRunning, setRunningProjects])
-
-  return { janusRunning, toggleRunning }
-}
-
-interface JanusIslandProps {
-  stage?: 'collapsed' | 'peek' | 'expanded'
-  onSingleActivate: () => void
-  onDoubleActivate: () => void
-  onDismiss: () => void
-  messages: Message[]
-  pendingContent: string
-  isStreaming: boolean
-  error: string | null
-  modelOptions: ChatModelOption[]
-  activeModel: ChatModelOption | null
-  modelNotice: string | null
-  onChatSelectModel: (providerId: string, modelId: string) => void
-  onChatSend: (text: string) => void
-  onChatRewrite: (messageId: string, text: string) => void
-  onChatStop: () => void
-  onChatRetry: () => void
-  onChatClear: () => void
-  conversationController?: UseJanusChatReturn | null
-  onAddChatToWorkspace?: () => void
-  resourceController: JanusResourceController
-  toolTraces?: ChatToolTraceEntry[]
-  knowledgeTrace?: KnowledgeRecallTrace | null
-  knowledgePeekActive?: boolean
-  knowledgePeekEmpty?: boolean
-  officeNotice?: OfficeFileEntry | null
-  officeArtifacts?: OfficeFileEntry[]
-  onOpenOfficeArtifact?: (relPath: string) => void
-}
-
-type JanusExpandedView = 'monitor' | 'chat' | 'roundtable'
-
-const SUBAGENT_STATUS_KEY: Record<SubAgentRunStatus, string> = {
-  queued: 'janus:subagent.status.queued',
-  running: 'janus:subagent.status.running',
-  'waiting-approval': 'janus:subagent.status.waitingApproval',
-  done: 'janus:subagent.status.done',
-  failed: 'janus:subagent.status.failed',
-  cancelled: 'janus:subagent.status.cancelled',
-}
-
-type TFunc = (key: string, opts?: Record<string, unknown>) => string
-
-function roleIdentity(role: SubAgentRunRole): JanusAgentIdentityId {
-  switch (role) {
-    case 'main':
-      return 'main'
-    case 'coder':
-      return 'coder'
-    case 'evaluator':
-      return 'evaluator'
-    case 'abstracter':
-      return 'abstracter'
-    case 'prompter':
-      return 'prompter'
-    case 'subagent':
-    case 'custom':
-      return 'subagent'
-  }
-}
-
-function runIdentityState(status: SubAgentRunStatus): JanusIdentityState {
-  switch (status) {
-    case 'running':
-      return 'running'
-    case 'waiting-approval':
-      return 'scanning'
-    case 'done':
-      return 'done'
-    case 'failed':
-    case 'cancelled':
-      return 'failed'
-    case 'queued':
-      return 'default'
-  }
-}
-
-function previewIdentityState(run: SubAgentRun | null): JanusIdentityState {
-  if (!run) return 'default'
-  if (run.role === 'main') {
-    if (run.status === 'waiting-approval') return 'scanning'
-    if (run.status === 'failed' || run.status === 'cancelled') return 'failed'
-    if (run.status === 'done') return 'done'
-    return 'default'
-  }
-  return runIdentityState(run.status)
-}
-
-function formatRunAge(value: string, t: TFunc): string {
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) return t('janus:island.age.unknown')
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
-  if (seconds < 5) return t('janus:island.age.now')
-  if (seconds < 60) return t('janus:island.age.seconds', { n: seconds })
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return t('janus:island.age.minutes', { n: minutes })
-  return t('janus:island.age.hours', { n: Math.floor(minutes / 60) })
-}
-
-function terminalProviderLabel(preset: Terminal['preset'], t: TFunc): string {
-  switch (preset) {
-    case 'claude':
-      return t('janus:terminal.provider.claude')
-    case 'codex':
-      return t('janus:terminal.provider.codex')
-    case 'opencode':
-      return t('janus:terminal.provider.opencode')
-    case 'shell':
-      return t('janus:terminal.provider.shell')
-  }
-}
-
-function terminalStatusLabel(status: Terminal['status'], t: TFunc): string {
-  switch (status) {
-    case 'running':
-      return t('janus:terminal.status.running')
-    case 'error':
-      return t('janus:terminal.status.error')
-    case 'wait':
-      return t('janus:terminal.status.wait')
-  }
-}
-
-function runEngineLabel(run: SubAgentRun, t: TFunc): string {
-  return run.engine ? terminalProviderLabel(run.engine, t) : run.source
-}
-function runRoleLabel(role: SubAgentRunRole, t: TFunc): string {
-  const id = roleIdentity(role)
-  const keyMap: Record<JanusAgentIdentityId, string> = {
-    main: 'janus:identity.roleTag.main',
-    coder: 'janus:identity.roleTag.coder',
-    evaluator: 'janus:identity.roleTag.evaluator',
-    abstracter: 'janus:identity.roleTag.abstracter',
-    prompter: 'janus:identity.roleTag.prompter',
-    teammate: 'janus:identity.roleTag.teammate',
-    subagent: 'janus:identity.roleTag.subagent',
-  }
-  return t(keyMap[id])
-}
-
-function runtimeRoleStyle(role: SubAgentRunRole): CSSProperties {
-  const identity = getJanusAgentIdentity(roleIdentity(role))
-  return {
-    '--janus-runtime-role-color': identity.color,
-    '--janus-runtime-role-glow': identity.glow,
-  } as CSSProperties
-}
-
-function faceClass(mode: 'sleep' | 'order' | 'analytics' | 'running'): string {
-  if (mode === 'analytics') return 'mode-analytics'
-  if (mode === 'running') return 'mode-running'
-  return 'mode-order'
-}
 
 export function JanusIsland({
   stage = 'collapsed',
@@ -299,15 +56,6 @@ export function JanusIsland({
   const shellRef = useRef<HTMLDivElement | null>(null)
   const conversationStartedRef = useRef(false)
   const [view, setView] = useState<JanusExpandedView>('monitor')
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
-  const [particles, setParticles] = useState<Array<{ id: number; left: number; size: number; duration: number }>>([])
-  const pidRef = useRef(0)
-  const subAgentRuns = useSubAgentRunStore((s) => s.runs)
-  const fetchSubAgentRuns = useSubAgentRunStore((s) => s.fetchRuns)
-  const subscribeToSubAgentRuns = useSubAgentRunStore((s) => s.subscribeToEvents)
-  const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
-  const focusedTabId = useWorkspaceStore((s) => s.focusedTabId)
-  const terminals = useWorkspaceStore((s) => s.terminals)
   const maintenanceTasks = useBlueprintMaintenanceStore((state) => state.tasks)
   const requestMaintenanceOpen = useBlueprintMaintenanceStore((state) => state.requestOpen)
   const cancelMaintenance = useBlueprintMaintenanceStore((state) => state.cancel)
@@ -439,96 +187,10 @@ export function JanusIsland({
   const activeNodeTitle = activeNode?.title || t('janus:island.activeNodeFallback')
   const workspaceLabel = activeSession?.workspaceName ?? activeWorkspace?.name ?? t('janus:island.workspaceFallback')
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
-  const activeTerminal = useMemo(
-    () => activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null,
-    [activeTerminalId, terminals]
-  )
-  const runsById = useMemo(() => new Map(subAgentRuns.map((run) => [run.id, run])), [subAgentRuns])
-  const monitoredRun = useMemo(
-    () => activeTerminalId
-      ? subAgentRuns.find((run) => run.terminalId === activeTerminalId || run.rootTerminalId === activeTerminalId) ?? null
-      : null,
-    [activeTerminalId, subAgentRuns]
-  )
-  const activeMissionId = monitoredRun?.missionId ?? activeTerminalId ?? null
-  const activeRootRunId = monitoredRun?.rootRunId ?? monitoredRun?.id ?? (activeTerminalId ? `terminal:${activeTerminalId}` : null)
-  const missionSubAgentRuns = useMemo(() => {
-    if (!activeTerminalId) return []
-
-    const belongsToActiveMission = (run: SubAgentRun): boolean => {
-      if (run.terminalId === activeTerminalId || run.rootTerminalId === activeTerminalId) return true
-      if (activeMissionId && run.missionId === activeMissionId) return true
-      if (activeRootRunId && run.rootRunId === activeRootRunId) return true
-
-      const visited = new Set<string>()
-      let parentId = run.parentRunId
-      while (parentId && !visited.has(parentId)) {
-        visited.add(parentId)
-        const parent = runsById.get(parentId)
-        if (!parent) return false
-        if (parent.terminalId === activeTerminalId || parent.rootTerminalId === activeTerminalId) return true
-        if (activeMissionId && parent.missionId === activeMissionId) return true
-        if (activeRootRunId && (parent.id === activeRootRunId || parent.rootRunId === activeRootRunId)) return true
-        parentId = parent.parentRunId
-      }
-      return false
-    }
-
-    return subAgentRuns.filter(belongsToActiveMission)
-  }, [activeMissionId, activeRootRunId, activeTerminalId, runsById, subAgentRuns])
-  const visibleSubAgentRuns = useMemo(() => missionSubAgentRuns.slice(0, 6), [missionSubAgentRuns])
-  const mainMissionRun = useMemo(
-    () => missionSubAgentRuns.find((run) => run.role === 'main') ?? null,
-    [missionSubAgentRuns]
-  )
-  const defaultMonitorRun = useMemo(
-    () => mainMissionRun ?? monitoredRun ?? null,
-    [mainMissionRun, monitoredRun]
-  )
-  const selectedMonitorRun = useMemo(() => {
-    if (!selectedRunId) return null
-    return missionSubAgentRuns.find((run) => run.id === selectedRunId) ?? null
-  }, [missionSubAgentRuns, selectedRunId])
-  const previewRun = selectedMonitorRun ?? defaultMonitorRun
-  const previewIdentity = previewRun ? roleIdentity(previewRun.role) : 'main'
-  const previewState = previewIdentityState(previewRun)
-  const previewIdentitySpec = getJanusAgentIdentity(previewIdentity)
-  const monitorTitle = previewRun?.title ?? activeTerminal?.name ?? activeNodeTitle
-  const monitorStatusText = previewRun
-    ? `${runEngineLabel(previewRun, t)} // ${t(SUBAGENT_STATUS_KEY[previewRun.status])}`
-    : activeTerminal
-      ? `${terminalProviderLabel(activeTerminal.preset, t)} // ${terminalStatusLabel(activeTerminal.status, t)}`
-      : statusText
-
-  const focusRunTerminal = useCallback((run: SubAgentRun) => {
-    if (!run.terminalId) return
-    const workspaceState = useWorkspaceStore.getState()
-    if (workspaceState.terminals.some((terminal) => terminal.id === run.terminalId)) {
-      workspaceState.setActiveTerminal(run.terminalId)
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchSubAgentRuns()
-    return subscribeToSubAgentRuns()
-  }, [fetchSubAgentRuns, subscribeToSubAgentRuns])
-
-  useEffect(() => {
-    setSelectedRunId((current) => {
-      if (current && visibleSubAgentRuns.some((run) => run.id === current)) return current
-      return mainMissionRun?.id ?? monitoredRun?.id ?? null
-    })
-  }, [mainMissionRun, monitoredRun, visibleSubAgentRuns])
 
   useEffect(() => {
     if (stage === 'peek') setView('monitor')
   }, [stage])
-
-  useEffect(() => {
-    if (!selectedRunId) return
-    if (missionSubAgentRuns.some((run) => run.id === selectedRunId)) return
-    setSelectedRunId(null)
-  }, [missionSubAgentRuns, selectedRunId])
 
   useEffect(() => {
     const hadConversation = conversationStartedRef.current
@@ -558,25 +220,6 @@ export function JanusIsland({
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [onDismiss, stage])
-
-  useEffect(() => {
-    if (stage !== 'expanded') {
-      setParticles([])
-      return
-    }
-    const active = !!activeNode || mode === 'analytics' || janusRunning
-    const speed = active ? 200 : 800
-    const spawn = () => {
-      const id = ++pidRef.current
-      const left = 20 + Math.random() * 60
-      const size = active && Math.random() > 0.5 ? 6 : Math.random() > 0.8 ? 12 : 6
-      const duration = active ? 1.5 + Math.random() * 2 : 3 + Math.random() * 4
-      setParticles((prev) => [...prev, { id, left, size, duration }])
-      window.setTimeout(() => setParticles((prev) => prev.filter((p) => p.id !== id)), duration * 1000)
-    }
-    const interval = window.setInterval(spawn, speed)
-    return () => window.clearInterval(interval)
-  }, [activeNode, janusRunning, mode, stage])
 
   useEffect(() => {
     document.body.classList.toggle('is-running', janusRunning)
@@ -645,268 +288,42 @@ export function JanusIsland({
           </div>
         </div>
 
-        <div className="janus-expanded-shell">
-          <div className="janus-expanded-topbar">
-            <div className="janus-expanded-brand island-title">
-              <span>*</span> {t('janus:island.expanded.brand')}
-            </div>
-            <div className="janus-expanded-view-switch" aria-label={t('janus:island.expanded.viewSwitchAria')}>
-              {(['monitor', 'chat', 'roundtable'] as JanusExpandedView[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  role="tab"
-                  className="janus-expanded-view-button"
-                  data-view={item}
-                  data-active={view === item}
-                  aria-pressed={view === item}
-                  aria-selected={view === item}
-                  onClick={() => setView(item)}
-                >
-                  {item === 'monitor'
-                    ? t('janus:island.expanded.view.monitor')
-                    : item === 'chat'
-                      ? t('janus:island.expanded.view.chat')
-                      : t('janus:island.expanded.view.roundtable')}
-                </button>
-              ))}
-            </div>
-            <div className="janus-expanded-meta">
-              <span className="janus-expanded-meta-text">{t('janus:island.expanded.dismissHint')}</span>
-            </div>
-          </div>
-
-          <div className="janus-expanded-body">
-            <div className="janus-feedback-panel">
-              <div className="janus-monitor-grid">
-                <div className="janus-monitor-left">
-                  <div className="janus-monitor-panel janus-monitor-core-panel">
-                    <div className="janus-monitor-section-title">
-                      <span>{t('janus:island.expanded.coreVisualization')}</span>
-                      <em>{previewRun ? t('janus:island.expanded.roleSelected', { role: runRoleLabel(previewRun.role, t) }) : t('janus:island.expanded.missionOverview')}</em>
-                    </div>
-                    <div className="janus-monitor-crt">
-                      <div className="warp-grid" />
-                      <div className="scanline" />
-                      <div className="pixel-overlay" />
-                      {particles.map(({ id, left, size, duration }) => (
-                        <div
-                          key={id}
-                          className="particle"
-                          style={{ left: `${left}%`, width: size, height: size, animation: `float-up ${duration}s ease-in forwards` }}
-                        />
-                      ))}
-                      <div className="levitation-wrapper">
-                        <JanusIdentityCore
-                          identity={previewIdentity}
-                          state={previewState}
-                          size="lg"
-                          showScanline={false}
-                          className="janus-monitor-identity"
-                          aria-label={`${monitorTitle} monitor identity`}
-                        />
-                      </div>
-                      <div className="janus-status-text">{monitorTitle}</div>
-                    </div>
-                  </div>
-
-                  <div className="janus-monitor-stats">
-                    <div className="janus-monitor-stat">
-                      <span>{t('janus:island.expanded.identityLabel')}</span>
-                      <strong style={{ color: previewRun ? previewIdentitySpec.color : undefined }}>
-                        {previewRun ? runRoleLabel(previewRun.role, t) : t('janus:island.expanded.mainIdentity')}
-                      </strong>
-                    </div>
-                    <div className="janus-monitor-stat">
-                      <span>{t('janus:island.expanded.workspaceLabel')}</span>
-                      <strong>{workspaceLabel}</strong>
-                    </div>
-                    <div className="janus-monitor-stat">
-                      <span>{t('janus:island.expanded.statusLabel')}</span>
-                      <strong>
-                        {previewRun
-                          ? t(SUBAGENT_STATUS_KEY[previewRun.status]).toUpperCase()
-                          : activeTerminal
-                            ? terminalStatusLabel(activeTerminal.status, t).toUpperCase()
-                            : modeLabel}
-                      </strong>
-                    </div>
-                    <div className="janus-monitor-stat">
-                      <span>{t('janus:island.expanded.engineLabel')}</span>
-                      <strong style={{ color: previewRun ? previewIdentitySpec.color : activeTerminal ? modeColor : undefined }}>
-                        {previewRun
-                          ? runEngineLabel(previewRun, t).toUpperCase()
-                          : activeTerminal
-                            ? terminalProviderLabel(activeTerminal.preset, t).toUpperCase()
-                            : monitorStatusText}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-                <div className="janus-monitor-right">
-                  <div className="janus-monitor-panel janus-office-artifacts">
-                    <div className="janus-monitor-section-title">
-                      <span>{t('janus:island.expanded.officeArtifacts')}</span>
-                      <em>{t('janus:island.expanded.officeAvailable', { count: officeArtifacts.length })}</em>
-                    </div>
-                    <div className="janus-office-artifact-list">
-                      {officeArtifacts.map((entry) => (
-                        <button key={entry.relPath} type="button" onClick={() => onOpenOfficeArtifact?.(entry.relPath)}>
-                          <span>{entry.relPath}</span>
-                          <em>{entry.ext.slice(1)}</em>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="janus-monitor-panel janus-runtime-panel">
-                    <div className="janus-monitor-section-title">
-                      <span>{t('janus:island.expanded.subagentRuntimes')}</span>
-                      <em>{activeTerminal ? t('janus:island.expanded.focusedTerminal') : t('janus:island.expanded.noTerminalFocus')}</em>
-                    </div>
-                    <div className="janus-runtime-list" aria-label={t('janus:island.expanded.runtimeAria')}>
-                      {visibleSubAgentRuns.length === 0 ? (
-                        <div className="janus-runtime-placeholder">
-                          <div className="janus-runtime-core">
-                            <span className="janus-runtime-eye" />
-                            <span className="janus-runtime-eye" />
-                          </div>
-                          <div className="janus-runtime-meta">
-                            <strong>{t('janus:island.expanded.noRuns')}</strong>
-                            <span>{t('janus:island.expanded.noRunsHint')}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        visibleSubAgentRuns.map((run) => (
-                          <button
-                            key={run.id}
-                            type="button"
-                            className="janus-runtime-run"
-                            data-status={run.status}
-                            data-selected={previewRun?.id === run.id}
-                            aria-pressed={previewRun?.id === run.id}
-                            style={runtimeRoleStyle(run.role)}
-                            onClick={() => setSelectedRunId(run.id)}
-                          >
-                            <JanusIdentityCore
-                              identity={roleIdentity(run.role)}
-                              state={previewIdentityState(run)}
-                              size="pod"
-                              aria-label={`${run.title} ${run.status}`}
-                            />
-                            <div className="janus-runtime-run-main">
-                              <div className="janus-runtime-run-title">
-                                <strong>{run.title}</strong>
-                                <span>{runEngineLabel(run, t)}</span>
-                              </div>
-                              <div className="janus-runtime-run-event">{run.lastEvent ?? t('janus:island.expanded.waitingForEvent')}</div>
-                            </div>
-                            <div className="janus-runtime-run-side">
-                              <span className="janus-runtime-run-status">{t(SUBAGENT_STATUS_KEY[run.status])}</span>
-                              <span>{formatRunAge(run.updatedAt, t)}</span>
-                              {run.terminalId ? (
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    focusRunTerminal(run)
-                                  }}
-                                >
-                                  {t('janus:island.expanded.focus')}
-                                </button>
-                              ) : null}
-                            </div>
-                          </button>
-                        ))
-                      )}
-
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {view === 'roundtable' ? (
-              <JanusRoundtablePane
-                embedded
-                resourceController={resourceController}
-                onClose={() => setView('chat')}
-                center={(onRoundtableSend, roundtableMessages, workingRole) => <JanusChat
-                  visible={stage === 'expanded' && view === 'roundtable'}
-                  docked
-                  focused={!focusedTabId?.startsWith('janus-chat')}
-                  modeColor={modeColor}
-                  messages={roundtableMessages}
-                  pendingContent=""
-                  isStreaming={false}
-                  error={null}
-                  modelOptions={modelOptions}
-                  activeModel={activeModel}
-                  modelNotice={workingRole ? `${workingRole} 正在整理本轮讨论...` : modelNotice}
-                  onSelectModel={onChatSelectModel}
-                  onSend={onRoundtableSend}
-                  onRewrite={onChatRewrite}
-                  onStop={() => undefined}
-                  onRetry={onChatRetry}
-                  onClear={onChatClear}
-                  resourceController={resourceController}
-                  toolTraces={toolTraces}
-                />}
-              />
-            ) : <JanusChat
-              // Only the active Island Chat view may own global chat shortcuts.
-              // Keeping the hidden Monitor/collapsed instance mounted would let
-              // it intercept Tab/Ctrl+P and open a menu outside the viewport.
-              visible={stage === 'expanded' && view === 'chat'}
-              docked
-              // A focused workspace Chat pane outranks the Island instance, so
-              // both never claim the same global shortcut press.
-              focused={!focusedTabId?.startsWith('janus-chat')}
-              modeColor={modeColor}
-              messages={messages}
-              pendingContent={pendingContent}
-              isStreaming={isStreaming}
-              error={error}
-              modelOptions={modelOptions}
-              activeModel={activeModel}
-              modelNotice={modelNotice}
-              onSelectModel={onChatSelectModel}
-              onSend={onChatSend}
-              onRewrite={onChatRewrite}
-              onStop={onChatStop}
-              onRetry={onChatRetry}
-              onClear={onChatClear}
-              conversationController={conversationController}
-              resourceController={resourceController}
-              toolTraces={toolTraces}
-              onAddToWorkspace={onAddChatToWorkspace}
-            />}
-          </div>
-
-          <div className="janus-expanded-bottombar">
-            <div className="janus-expanded-caption">
-              <span>{t('janus:island.expanded.captionJanus')}</span>
-              <span className="janus-expanded-caption-divider" />
-              <span>{statusText}</span>
-            </div>
-            <div className="janus-expanded-actions">
-              {maintenanceTask ? (
-                <>
-                  <button type="button" className="janus-expanded-action-button" onClick={handleOpenMaintenance}>
-                    {t('janus:island.expanded.openMaintenance')}
-                  </button>
-                  {(maintenanceTask.status === 'analyzing' || maintenanceTask.status === 'draft') ? (
-                    <button type="button" className="janus-expanded-action-button" onClick={() => void cancelMaintenance(maintenanceTask.id)}>
-                      {t('janus:island.expanded.cancelAnalysis')}
-                    </button>
-                  ) : null}
-                </>
-              ) : null}
-              <button type="button" className="janus-expanded-action-button" onClick={handleOpenBlueprintWorkbench}>
-                {t('janus:island.expanded.openBlueprint')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <JanusIslandExpandedShell
+          stage={stage}
+          view={view}
+          setView={setView}
+          mode={mode}
+          janusRunning={janusRunning}
+          activeNode={!!activeNode}
+          activeNodeTitle={activeNodeTitle}
+          workspaceLabel={workspaceLabel}
+          modeLabel={modeLabel}
+          modeColor={modeColor}
+          statusText={statusText}
+          maintenanceTask={maintenanceTask}
+          onOpenMaintenance={handleOpenMaintenance}
+          onCancelMaintenance={(taskId) => void cancelMaintenance(taskId)}
+          onOpenBlueprintWorkbench={handleOpenBlueprintWorkbench}
+          officeArtifacts={officeArtifacts}
+          onOpenOfficeArtifact={onOpenOfficeArtifact}
+          messages={messages}
+          pendingContent={pendingContent}
+          isStreaming={isStreaming}
+          error={error}
+          modelOptions={modelOptions}
+          activeModel={activeModel}
+          modelNotice={modelNotice}
+          onChatSelectModel={onChatSelectModel}
+          onChatSend={onChatSend}
+          onChatRewrite={onChatRewrite}
+          onChatStop={onChatStop}
+          onChatRetry={onChatRetry}
+          onChatClear={onChatClear}
+          conversationController={conversationController}
+          onAddChatToWorkspace={onAddChatToWorkspace}
+          resourceController={resourceController}
+          toolTraces={toolTraces}
+        />
       </div>
     </div>
   )

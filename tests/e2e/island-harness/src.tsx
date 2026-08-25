@@ -90,6 +90,16 @@ Object.assign(window.electron, {
     load: async () => conversationFixture,
     save: async () => undefined,
   },
+  janusRoundtable: {
+    list: async () => [],
+    get: async () => null,
+    create: async () => { throw new Error('Not used by the layout harness') },
+    updateWorkspaces: async () => { throw new Error('Not used by the layout harness') },
+    advance: async () => { throw new Error('Not used by the layout harness') },
+    end: async () => { throw new Error('Not used by the layout harness') },
+    exportMarkdown: async () => { throw new Error('Not used by the layout harness') },
+    onProgress: () => () => undefined,
+  },
 })
 
 const workspaceOne = {

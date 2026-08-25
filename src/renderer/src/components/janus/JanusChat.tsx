@@ -54,6 +54,8 @@ interface JanusChatProps {
   docked?: boolean
   /** Fill a central workspace pane instead of using Island geometry. */
   workspace?: boolean
+  /** Embed only the discussion, composer, and workspace attachment controls. */
+  discussionOnly?: boolean
   /** Only the focused presentation owns input focus and global shortcuts. */
   focused?: boolean
   /** 当前模式颜色 */
@@ -161,6 +163,7 @@ export function JanusChat({
   visible,
   docked = false,
   workspace = false,
+  discussionOnly = false,
   focused = true,
   modeColor,
   messages,
@@ -461,7 +464,7 @@ export function JanusChat({
   }, [handleSend, historyIndex, input, inputHistory, replaceInput])
 
   useEffect(() => {
-    if (!visible) return
+    if (!visible || discussionOnly) return
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       const chatRoot = chatRootRef.current
       if (!chatRoot) return
@@ -504,7 +507,7 @@ export function JanusChat({
       document.removeEventListener('keydown', handleDocumentKeyDown, true)
       window.removeEventListener('keydown', handleGlobalKeyDown, true)
     }
-  }, [focused, handleMenuKey, openSelectionMenu, selectionMenu, visible])
+  }, [discussionOnly, focused, handleMenuKey, openSelectionMenu, selectionMenu, visible])
 
   useEffect(() => {
     if (!threadMenuOpen && !selectionMenu) return
@@ -584,12 +587,12 @@ export function JanusChat({
     <div
       ref={chatRootRef}
       tabIndex={-1}
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${docked && conversations && !workspace ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !workspace && !discussionOnly ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
       onKeyDownCapture={handleChatKeyDownCapture}
       onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {docked && conversations && !workspace && (
+      {docked && conversations && !workspace && !discussionOnly && (
         <aside className="janus-chat-sidebar" aria-label={t('janus:chat.thread.menuHeader')}>
           <div className="janus-chat-sidebar-header">
             <div>
@@ -673,7 +676,7 @@ export function JanusChat({
         </aside>
       )}
       <div className="janus-chat-main">
-      <div className="janus-chat-toolbar">
+      {!discussionOnly && <div className="janus-chat-toolbar">
         <div ref={threadSelectorRef} className="janus-chat-thread-selector">
           <button
             type="button"
@@ -778,12 +781,12 @@ export function JanusChat({
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {resourceController && (
         <>
         <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
-          <div className="janus-resource-list">
+          {!discussionOnly && <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
                 <div
                   key={resource.workspaceId}
@@ -803,7 +806,7 @@ export function JanusChat({
                   </button>
                 </div>
             ))}
-          </div>
+          </div>}
           {attachableWorkspaces.length > 0 && (
             <div className="janus-resource-attach" title={t('janus:chat.resource.attachTitle')}>
               <Select
@@ -832,7 +835,7 @@ export function JanusChat({
             </button>
           )}
         </div>
-        {resourceController.pendingApprovals[0] ? (() => {
+        {!discussionOnly && (resourceController.pendingApprovals[0] ? (() => {
           const approval = resourceController.pendingApprovals[0]
           return (
             <div
@@ -899,7 +902,7 @@ export function JanusChat({
               )
             })()}
           </div>
-        )}
+        ))}
         </>
       )}
 
@@ -929,7 +932,7 @@ export function JanusChat({
               <time className="janus-chat-message-time" dateTime={new Date(msg.timestamp).toISOString()}>
                 {formatMessageTime(msg.timestamp)}
               </time>
-              <div className="janus-chat-message-edit-actions">
+              {!discussionOnly && <div className="janus-chat-message-edit-actions">
                 <button
                   className="janus-chat-message-edit"
                   type="button"
@@ -984,7 +987,7 @@ export function JanusChat({
                   <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               ) : null}
-              </div>
+              </div>}
             </div>
             {editingMessageId === msg.id ? (
               <textarea
@@ -1090,7 +1093,7 @@ export function JanusChat({
             </button>
           )}
         </div>
-        <div className="janus-chat-status-bar">
+        {!discussionOnly && <div className="janus-chat-status-bar">
           <button
             type="button"
             className="janus-chat-model-tag"
@@ -1170,7 +1173,7 @@ export function JanusChat({
               )}
             </div>
           )}
-        </div>
+        </div>}
       </div>
       {modelNotice && <div className="janus-chat-model-notice">{modelNotice}</div>}
       </div>

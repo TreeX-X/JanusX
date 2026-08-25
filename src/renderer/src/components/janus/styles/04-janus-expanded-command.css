@@ -1,0 +1,961 @@
+/* Command Console expanded layout */
+.janus-island-shell[data-stage="expanded"] {
+  width: min(980px, calc(100vw - 56px));
+  height: min(620px, calc(100vh - 80px));
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-shell {
+  gap: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-topbar {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr);
+  align-items: center;
+  padding: 0 2px 10px;
+}
+
+.janus-expanded-view-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.035);
+}
+
+.janus-expanded-view-button {
+  height: 24px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255,255,255,0.54);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.janus-expanded-view-button[data-active="true"] {
+  background: rgba(255,255,255,0.1);
+  color: #f4f4f5;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 14px var(--janus-hover-glow-soft);
+}
+
+.janus-expanded-view-button:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.075);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-meta {
+  justify-self: end;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-body {
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.janus-feedback-panel {
+  flex: 0 0 38%;
+  min-height: 150px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012)),
+    rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+.janus-feedback-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.janus-feedback-header > div:first-child {
+  min-width: 0;
+}
+
+.janus-feedback-eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: rgba(255,255,255,0.42);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.janus-feedback-header strong {
+  display: block;
+  color: rgba(255,255,255,0.88);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-feedback-status {
+  flex: 0 0 auto;
+  padding-top: 2px;
+  font-size: 10px;
+  font-family: 'SF Mono', monospace;
+}
+
+.janus-feedback-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.janus-feedback-chips span {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 0 8px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.035);
+  color: rgba(255,255,255,0.66);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-feedback-surface {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.janus-feedback-surface .janus-crt {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.janus-feedback-footer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 18px;
+}
+
+.janus-feedback-footer span {
+  color: rgba(255,255,255,0.38);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.janus-feedback-footer p {
+  margin: 0;
+  color: rgba(255,255,255,0.58);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-panel {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 8px 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-chips,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-surface,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-footer {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-panel {
+  flex: 1 1 auto;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+  flex: 0 0 146px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-messages {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-toolbar {
+  padding-bottom: 6px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-feedback-panel,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-chat--docked {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-overlay--embedded {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat--docked {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.012)),
+    rgba(0,0,0,0.48);
+}
+
+.janus-chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.janus-chat-toolbar > div:first-child {
+  min-width: 0;
+}
+
+.janus-chat-thread-selector {
+  position: relative;
+}
+
+.janus-chat-thread-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.janus-chat-thread-trigger:disabled {
+  cursor: default;
+}
+
+.janus-chat-thread-trigger > span {
+  min-width: 0;
+}
+
+.janus-chat-thread-trigger strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-chat-thread-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 80;
+  width: min(300px, calc(100vw - 48px));
+  max-height: 320px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  background: rgba(17,18,20,0.98);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.42);
+}
+
+.janus-chat-thread-menu-header,
+.janus-chat-thread-row {
+  display: flex;
+  align-items: center;
+}
+
+.janus-chat-thread-menu-header {
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 8px 0 11px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.52);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.janus-chat-thread-menu-header button,
+.janus-chat-thread-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+}
+
+.janus-chat-thread-menu-header button:hover,
+.janus-chat-thread-action:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+
+.janus-chat-thread-action.danger:hover {
+  color: #ff8b8b;
+}
+
+.janus-chat-thread-list {
+  max-height: 284px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.janus-chat-thread-row {
+  gap: 2px;
+  min-height: 42px;
+  padding: 3px;
+  border-radius: 4px;
+}
+
+.janus-chat-thread-row[data-active="true"] {
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--janus-current);
+}
+
+.janus-chat-thread-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 5px 7px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.janus-chat-thread-main strong,
+.janus-chat-thread-main span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-chat-thread-main strong {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.janus-chat-thread-main span {
+  color: rgba(255,255,255,0.38);
+  font-size: 9px;
+}
+
+.janus-chat-thread-row input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid rgba(255,120,48,0.4);
+  border-radius: 4px;
+  outline: none;
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  font: inherit;
+}
+
+.janus-chat-toolbar-kicker {
+  display: block;
+  margin-bottom: 2px;
+  color: rgba(255,255,255,0.4);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.janus-chat-toolbar strong {
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.janus-chat-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.janus-chat-tool-button {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.045);
+  color: rgba(255,255,255,0.68);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.janus-chat-tool-button:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.16);
+  color: #fff;
+}
+
+.janus-chat-tool-button.danger:hover:not(:disabled) {
+  border-color: rgba(255,100,100,0.32);
+  color: #ff8b8b;
+}
+
+.janus-chat-tool-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.janus-resource-scope {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+.janus-resource-list {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.janus-resource-list::-webkit-scrollbar { display: none; }
+
+.janus-resource-chip {
+  display: flex;
+  min-width: 0;
+  max-width: 132px;
+  height: 23px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.54);
+}
+
+.janus-resource-label {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.janus-resource-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-resource-remove {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  color: rgba(255,255,255,0.34);
+}
+
+.janus-resource-remove:hover {
+  color: #ff8b8b;
+  background: rgba(255,88,88,0.08);
+}
+
+.janus-resource-attach {
+  display: flex;
+  height: 23px;
+  flex: 0 0 auto;
+  align-items: center;
+  color: rgba(255,255,255,0.48);
+}
+
+.janus-resource-attach-select {
+  width: 112px;
+  height: 23px;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.58);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
+}
+.janus-island-shell .janus-resource-attach-select {
+  border: none;
+}
+
+.janus-island-shell .janus-resource-attach-select:hover:not(:disabled),
+.janus-island-shell .janus-resource-attach-select:focus-visible,
+.janus-island-shell .janus-resource-attach-select[aria-expanded="true"] {
+  border: none;
+  box-shadow: none;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.82);
+}
+
+.janus-resource-attach-dropdown {
+  z-index: 10050 !important;
+  max-width: 240px;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+.janus-resource-attach-dropdown [role='option'][aria-selected='false'] {
+  min-height: 24px;
+}
+
+.janus-runtime-activity {
+  display: flex;
+  min-height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.045);
+  color: rgba(255,255,255,0.46);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
+}
+
+.janus-runtime-tool-name {
+  overflow: hidden;
+  color: rgba(255,255,255,0.7);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-runtime-tool-state {
+  margin-right: auto;
+  color: rgba(255,255,255,0.34);
+}
+
+.janus-runtime-activity button {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.66);
+  background: transparent;
+}
+
+.janus-runtime-activity button:hover {
+  border-color: rgba(255,120,48,0.35);
+  color: #ff985f;
+}
+
+.janus-runtime-approval {
+  position: relative;
+  display: flex;
+  min-height: 128px;
+  flex: 0 0 auto;
+  flex-direction: column;
+  margin: 8px 0 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 6px;
+  background: rgba(20,21,23,0.96);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.2);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+.janus-runtime-approval-header {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.025);
+}
+
+.janus-runtime-approval-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.janus-runtime-approval-heading > span {
+  color: rgba(255,255,255,0.4);
+  font-size: 8px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.janus-runtime-approval-heading > strong {
+  color: rgba(255,255,255,0.92);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.janus-runtime-approval-tool {
+  max-width: 52%;
+  overflow: hidden;
+  padding: 4px 6px;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.52);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-runtime-approval-preview {
+  max-height: 210px;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 11px 12px 12px;
+  color: rgba(255,255,255,0.76);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.janus-runtime-approval-preview > strong {
+  display: block;
+  color: rgba(255,255,255,0.86);
+  font-size: 11px;
+  font-weight: 550;
+  text-wrap: pretty;
+}
+
+.janus-runtime-approval-preview > span {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255,255,255,0.42);
+  font-size: 9px;
+  overflow-wrap: anywhere;
+}
+
+.janus-runtime-approval-preview pre {
+  max-height: 120px;
+  margin: 10px -12px -12px;
+  overflow: auto;
+  padding: 9px 12px 10px;
+  border-top: 1px solid rgba(255,255,255,0.065);
+  background: rgba(0,0,0,0.16);
+  color: rgba(255,255,255,0.64);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.janus-runtime-approval-actions {
+  display: flex;
+  min-height: 45px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 7px 9px;
+  border-top: 1px solid rgba(255,255,255,0.075);
+}
+
+.janus-runtime-approval-actions button {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.035);
+  color: rgba(255,255,255,0.68);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.janus-runtime-approval-actions button:hover,
+.janus-runtime-approval-actions button:focus-visible {
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.065);
+  color: rgba(255,255,255,0.92);
+  outline: none;
+}
+
+.janus-runtime-approval-actions .janus-runtime-approval-approve {
+  border-color: rgba(255,120,48,0.28);
+  background: rgba(255,120,48,0.105);
+  color: #efad84;
+}
+
+.janus-runtime-approval-actions .janus-runtime-approval-approve:hover,
+.janus-runtime-approval-actions .janus-runtime-approval-approve:focus-visible {
+  border-color: rgba(255,120,48,0.42);
+  background: rgba(255,120,48,0.15);
+  color: #ffd1b5;
+}
+
+@media (max-width: 520px) {
+  .janus-runtime-approval {
+    min-height: 118px;
+  }
+
+  .janus-runtime-approval-header {
+    gap: 8px;
+  }
+
+  .janus-runtime-approval-tool {
+    max-width: 46%;
+  }
+
+  .janus-runtime-approval-preview pre {
+    max-height: 72px;
+  }
+}
+
+.janus-runtime-tool-spinner {
+  animation: janus-spin 0.85s linear infinite;
+}
+
+@keyframes janus-spin {
+  to { transform: rotate(360deg); }
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-messages {
+  padding: 10px 2px;
+  gap: 8px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-message {
+  max-width: 92%;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-message.assistant {
+  max-width: 100%;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-message-content {
+  padding: 8px 11px;
+  font-size: 13px;
+  line-height: 1.58;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-message.assistant .janus-chat-message-content {
+  background: transparent;
+  color: rgba(255,255,255,0.78);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-message.user .janus-chat-message-content {
+  color: rgba(255,255,255,0.9);
+}
+
+.janus-chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  max-width: 520px;
+}
+
+.janus-chat-suggestions button {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.045);
+  color: rgba(255,255,255,0.68);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.janus-chat-suggestions button:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  border-color: var(--accent-color, var(--janus-current));
+  color: #fff;
+}
+
+.janus-chat-suggestions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.045);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+}
+
+.janus-chat-composer-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(255,255,255,0.42);
+  font-size: 10px;
+}
+
+.janus-chat-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input {
+  min-height: 44px;
+  max-height: 112px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: rgba(0,0,0,0.34);
+  color: rgba(255,255,255,0.88);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input::placeholder {
+  color: rgba(255,255,255,0.38);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 56px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:not(:disabled) {
+  color: #0b0b0c;
+  background: var(--accent-color, var(--janus-current));
+  border-color: transparent;
+  box-shadow: 0 0 18px var(--janus-hover-glow-soft);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop {
+  color: #ff9a9a;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-code-block code {
+  font-size: 12px;
+  white-space: pre;
+  overflow-x: auto;
+  word-break: normal;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-copy-code {
+  opacity: 0.78;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-empty {
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-empty-icon {
+  opacity: 0.8;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-empty-text {
+  color: rgba(255,255,255,0.78);
+  font-size: 13px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-empty-hint {
+  color: rgba(255,255,255,0.45);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .janus-island-shell[data-stage="expanded"] {
+    width: min(calc(100vw - 24px), 720px);
+    height: min(calc(100vh - 72px), 640px);
+  }
+
+  .janus-island-shell[data-stage="expanded"] .janus-expanded-topbar {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .janus-expanded-view-switch {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .janus-expanded-view-button {
+    flex: 1;
+  }
+
+  .janus-island-shell[data-stage="expanded"] .janus-expanded-meta {
+    justify-self: start;
+  }
+
+  .janus-feedback-panel {
+    flex-basis: 34%;
+  }
+
+  .janus-chat-composer-meta {
+    flex-direction: column;
+    gap: 3px;
+  }
+}

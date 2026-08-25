@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { Download, Play, Square, UsersRound, X } from 'lucide-react'
+import { Download, Play, Square, UsersRound } from 'lucide-react'
 import type { RoundtableProgressEvent, RoundtableSession, RoundtableRole, RoundtableWorkspaceDependency } from '../../../../shared/ipc/janus-roundtable'
 import type { JanusResourceController, Message } from './useJanusChat'
-import { JanusIdentityCore } from './JanusIdentityCore'
 import { roundtableMessagesToChat } from './roundtable-chat'
+import { RoundtableStage, type RoundtableStageParticipant } from './RoundtableStage'
 
 interface JanusRoundtablePaneProps {
   className?: string
@@ -14,18 +14,18 @@ interface JanusRoundtablePaneProps {
   center?: (onSend: (text: string) => void, messages: Message[], workingRole: RoundtableRole | null) => ReactNode
 }
 
-const roleLabels = [
-  { id: 'host' as const, name: 'JanusX', label: '主持人', identity: 'main' as const },
-  { id: 'agent-1' as const, name: 'Agent-1', label: '议题解决者', identity: 'coder' as const },
-  { id: 'agent-2' as const, name: 'Agent-2', label: '议题完善者', identity: 'evaluator' as const },
+const stageParticipants: RoundtableStageParticipant[] = [
+  { id: 'user', name: '用户', label: '提议人', identity: 'teammate', color: '#94a3b8' },
+  { id: 'host', name: 'JanusX', label: '主持人', identity: 'main', color: '#ff7830' },
+  { id: 'agent-1', name: 'Agent-1', label: '议题解决者', identity: 'coder', color: '#67d8ff' },
+  { id: 'agent-2', name: 'Agent-2', label: '议题完善者', identity: 'evaluator', color: '#b79cff' },
 ]
 
-export function JanusRoundtablePane({ className, onClose, initialSessionId, embedded = false, resourceController, center }: JanusRoundtablePaneProps) {
+export function JanusRoundtablePane({ className, initialSessionId, embedded = false, resourceController, center }: JanusRoundtablePaneProps) {
   const api = window.electron.janusRoundtable
   const [session, setSession] = useState<RoundtableSession | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [closing, setClosing] = useState(false)
   const [workingRole, setWorkingRole] = useState<RoundtableRole | null>(null)
   const activeSessionIdRef = useRef(initialSessionId)
   const sessionRef = useRef<RoundtableSession | null>(null)
@@ -134,11 +134,6 @@ export function JanusRoundtablePane({ className, onClose, initialSessionId, embe
   }
 
   const stopPointerPropagation = (event: ReactPointerEvent) => event.stopPropagation()
-  const requestClose = () => {
-    if (closing) return
-    setClosing(true)
-    window.setTimeout(onClose, 220)
-  }
   const handleCenterSend = (text: string) => {
     if (!text.trim() || busy) return
     if (!session) {
@@ -164,7 +159,7 @@ export function JanusRoundtablePane({ className, onClose, initialSessionId, embe
 
   return (
     <div
-      className={`janus-roundtable-overlay${embedded ? ' janus-roundtable-overlay--embedded' : ''}${closing ? ' janus-roundtable-overlay--closing' : ''}${className ? ` ${className}` : ''}`}
+      className={`janus-roundtable-overlay${embedded ? ' janus-roundtable-overlay--embedded' : ''}${className ? ` ${className}` : ''}`}
       role="dialog"
       aria-modal={!embedded}
       aria-label="圆桌会议"
@@ -182,18 +177,15 @@ export function JanusRoundtablePane({ className, onClose, initialSessionId, embe
             {session && <small>第 {session.currentRound} 轮 · {session.status === 'active' ? '进行中' : '已结束'}</small>}
             {!session && <small>准备开始</small>}
           </div>
-          <button type="button" className="janus-roundtable-icon" onClick={requestClose} title="关闭"><X size={15} /></button>
         </header>
 
         <div className="janus-roundtable-body">
               <aside className="janus-roundtable-participants" aria-label="参与者">
-                <div className="janus-roundtable-section-label">参与者</div>
-                <div className="janus-roundtable-role user"><span className="janus-roundtable-user-mark">U</span><span><strong>用户</strong><small>提议人</small></span></div>
-                {roleLabels.map((role, index) => {
-                  const isWorking = workingRole === role.id
-                  const status = isWorking ? '工作中' : session?.status === 'ended' ? '已完成' : '待命'
-                  return <div className={`janus-roundtable-role janus-roundtable-role--enter-${index + 1}`} data-working={isWorking} key={role.id}><JanusIdentityCore identity={role.identity} size="pod" state={isWorking ? 'running' : session?.status === 'ended' ? 'done' : 'default'} showHalo={false} showScanline={false} /><span><strong>{role.name}</strong><small>{role.label}</small><em>{status}</em></span></div>
-                })}
+                <RoundtableStage
+                  participants={stageParticipants}
+                  workingRole={workingRole}
+                  ended={session?.status === 'ended'}
+                />
               </aside>
               <main className="janus-roundtable-center">{center?.(handleCenterSend, roundtableMessagesToChat(session?.messages ?? [], workingRole, session?.currentRound ?? 0), workingRole)}</main>
               <aside className="janus-roundtable-state"><div className="janus-roundtable-section-label">共享文档{session ? ` v${session.sharedState.version}` : ''}</div>{session ? [['需求', session.sharedState.requirements], ['待解决', session.sharedState.openIssues], ['已解决', session.sharedState.resolvedIssues], ['方案', session.sharedState.proposals], ['风险', session.sharedState.risks], ['行动项', session.sharedState.actionItems]].map(([label, items]) => <section key={label as string}><strong>{label as string}</strong>{(items as string[]).length ? (items as string[]).map((item, index) => <p key={`${label}-${index}`}>{item}</p>) : <small>暂无</small>}</section>) : <small>开始会议后，JanusX 会在此整理共享结构化数据。</small>}

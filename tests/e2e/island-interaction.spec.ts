@@ -25,6 +25,10 @@ function islandExpandedChatButton(page: Page) {
   return page.locator('.janus-island .janus-expanded-view-button[data-view="chat"]')
 }
 
+function islandExpandedRoundtableButton(page: Page) {
+  return page.locator('.janus-island .janus-expanded-view-button[data-view="roundtable"]')
+}
+
 async function expectContainedAttachLayout(trigger: Locator) {
   const triggerBox = await trigger.boundingBox()
   const prefixBox = await trigger.locator(':scope > span').nth(0).boundingBox()
@@ -159,6 +163,39 @@ test('expanded Chat remains clickable while Island background double activation 
 
   await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
   await expect(harness(page)).toHaveAttribute('data-double-count', '2')
+})
+
+test('Roundtable keeps parchment above a discussion-only Chat with workspace attachment', async ({ page }) => {
+  const island = page.locator('.janus-island')
+  await tap(island)
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await islandExpandedRoundtableButton(page).click()
+
+  const parchment = island.locator('.janus-roundtable-state')
+  const discussion = island.locator('.janus-roundtable-center .janus-chat--discussion-only')
+  await expect(parchment).toBeVisible()
+  const stage = island.locator('.janus-roundtable-stage')
+  await expect(stage).toBeVisible()
+  await expect(stage.locator('.janus-roundtable-seat')).toHaveCount(4)
+  await expect(stage.getByRole('button', { name: '动态' })).toBeVisible()
+  await stage.getByRole('button', { name: /JanusX，主持人/ }).click()
+  await expect(stage.getByRole('button', { name: /JanusX，主持人/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(discussion).toBeVisible()
+  await expect(discussion.getByRole('button', { name: 'Attach workspace' })).toBeVisible()
+  await expect(discussion.locator('textarea')).toBeVisible()
+  await expect(discussion.locator('.janus-chat-sidebar, .janus-chat-toolbar, .janus-chat-status-bar')).toHaveCount(0)
+
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 720, height: 720 }]) {
+    await page.setViewportSize(viewport)
+    const parchmentBox = await parchment.boundingBox()
+    const discussionBox = await discussion.boundingBox()
+    expect(parchmentBox).not.toBeNull()
+    expect(discussionBox).not.toBeNull()
+    expect(parchmentBox!.y + parchmentBox!.height).toBeLessThanOrEqual(discussionBox!.y + 1)
+    await page.screenshot({ path: test.info().outputPath(`roundtable-${viewport.width}.png`) })
+  }
 })
 
 test('Island Chat action docks the shared presentation and closes only its workspace view', async ({ page }) => {

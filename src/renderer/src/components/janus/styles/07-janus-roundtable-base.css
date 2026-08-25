@@ -1,0 +1,626 @@
+/* Interactive four-seat roundtable stage. The seat ring is data-driven so
+   additional participants can be added without changing the markup. */
+.janus-roundtable-stage {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: #07080b;
+}
+.janus-roundtable-scene {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  perspective: 820px;
+  transform-style: preserve-3d;
+  background: radial-gradient(circle at 50% 52%, rgba(255, 120, 48, 0.08), transparent 38%), #07080b;
+}
+.janus-roundtable-scene--orbit .janus-roundtable-table-hud { animation-duration: 12s; }
+.janus-roundtable-scene--top { perspective: none; }
+.janus-roundtable-scene--top .janus-roundtable-table { transform: translate(-50%, -50%) rotateX(0deg) scale(0.94); }
+.janus-roundtable-scene--top .janus-roundtable-seats { transform: translate(-50%, -50%) rotateX(0deg); }
+.janus-roundtable-scene--orbit .janus-roundtable-table { transform: translate(-50%, -50%) rotateX(62deg) rotateZ(-4deg); }
+.janus-roundtable-scene--orbit .janus-roundtable-seats { transform: translate(-50%, -50%) rotateX(62deg) rotateZ(-4deg); }
+.janus-roundtable-scene--iso .janus-roundtable-table { transform: translate(-50%, -50%) rotateX(58deg) rotateZ(-18deg); }
+.janus-roundtable-scene--iso .janus-roundtable-seats { transform: translate(-50%, -50%) rotateX(58deg) rotateZ(-18deg); }
+.janus-roundtable-floor {
+  position: absolute;
+  inset: 8% 8% 4%;
+  border-radius: 50%;
+  background-image: linear-gradient(rgba(255,120,48,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,120,48,.04) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: radial-gradient(circle, #000 30%, transparent 75%);
+  opacity: .8;
+}
+.janus-roundtable-table,
+.janus-roundtable-seats {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: min(52%, 310px);
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  transition: transform .45s cubic-bezier(.22,.8,.25,1);
+}
+.janus-roundtable-table {
+  border: 4px solid #242027;
+  border-radius: 50%;
+  background: radial-gradient(circle, #111116 35%, #030305 100%);
+  box-shadow: 0 18px 28px rgba(0,0,0,.62), inset 0 0 24px rgba(255,120,48,.16);
+  pointer-events: none;
+}
+.janus-roundtable-table::after {
+  position: absolute;
+  inset: 8%;
+  border: 1px solid rgba(255,120,48,.18);
+  border-radius: 50%;
+  content: '';
+}
+.janus-roundtable-table-rim {
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(255,85,0,.66);
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(255,85,0,.3);
+}
+.janus-roundtable-table-hud {
+  position: absolute;
+  inset: 14%;
+  border: 1px dashed rgba(255,120,48,.36);
+  border-radius: 50%;
+  animation: janus-roundtable-stage-spin 20s linear infinite;
+}
+.janus-roundtable-seats { pointer-events: none; }
+.janus-roundtable-seat {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 76px;
+  height: 92px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: rotate(var(--seat-angle)) translateY(-142px) rotate(calc(var(--seat-angle) * -1));
+  transform-style: preserve-3d;
+  transition: transform .3s ease, filter .3s ease;
+}
+.janus-roundtable-seat:hover,
+.janus-roundtable-seat:focus-visible,
+.janus-roundtable-seat[data-selected="true"],
+.janus-roundtable-seat[data-working="true"] {
+  z-index: 3;
+  filter: brightness(1.18);
+  transform: rotate(var(--seat-angle)) translateY(-142px) translateZ(16px) rotate(calc(var(--seat-angle) * -1)) scale(1.08);
+}
+.janus-roundtable-seat-pod {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  margin: 0 auto;
+  place-items: center;
+  border: 1px solid var(--seat-color);
+  border-radius: 50%;
+  background: radial-gradient(circle, #18171c, #07080b 72%);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.025), 0 0 16px color-mix(in srgb, var(--seat-color), transparent 48%);
+}
+.janus-roundtable-seat[data-working="true"] .janus-roundtable-seat-pod,
+.janus-roundtable-seat[data-selected="true"] .janus-roundtable-seat-pod { box-shadow: 0 0 0 3px color-mix(in srgb, var(--seat-color), transparent 70%), 0 0 24px var(--seat-color); }
+.janus-roundtable-seat-label {
+  display: grid;
+  gap: 2px;
+  margin-top: 5px;
+  text-align: center;
+  text-shadow: 0 2px 5px #000;
+}
+.janus-roundtable-seat-label strong { color: var(--seat-color); font-size: 10px; }
+.janus-roundtable-seat-label small { color: rgba(255,255,255,.5); font-size: 8px; white-space: nowrap; }
+.janus-roundtable-seat-link {
+  position: absolute;
+  left: 50%;
+  top: 54px;
+  width: 1px;
+  height: 68px;
+  background: linear-gradient(to bottom, var(--seat-color), transparent);
+  opacity: .25;
+}
+.janus-roundtable-seat[data-working="true"] .janus-roundtable-seat-link { opacity: .9; box-shadow: 0 0 10px var(--seat-color); }
+.janus-roundtable-scroll {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 2;
+  width: 72px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transform: translate(-50%, -50%) translateZ(28px);
+  transition: transform .35s ease, filter .35s ease;
+}
+.janus-roundtable-scroll:hover,
+.janus-roundtable-scroll:focus-visible { filter: brightness(1.18); transform: translate(-50%, -50%) translateZ(42px) scale(1.08); }
+.janus-roundtable-scroll-sheet { position: absolute; left: 18px; top: 9px; width: 36px; height: 34px; border-block: 1px solid rgba(216,195,158,.45); background: linear-gradient(90deg, #503a27, #fcf5e8 50%, #503a27); box-shadow: 0 7px 14px rgba(0,0,0,.7); }
+.janus-roundtable-scroll-roll { position: absolute; top: 7px; width: 11px; height: 38px; border-radius: 6px; background: linear-gradient(90deg, #321e12, #ebd8b5 50%, #321e12); box-shadow: 0 0 8px rgba(216,195,158,.22); }
+.janus-roundtable-scroll-roll--left { left: 12px; }
+.janus-roundtable-scroll-roll--right { right: 12px; }
+.janus-roundtable-scroll-ribbon { position: absolute; left: 34px; top: 8px; width: 5px; height: 36px; background: #8e1c1c; box-shadow: 0 0 7px rgba(142,28,28,.7); }
+.janus-roundtable-stage-header { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 8px 14px; border-top: 1px solid rgba(255,255,255,.08); background: rgba(5,6,9,.88); }
+.janus-roundtable-stage-header > div { display: grid; gap: 2px; min-width: 0; }
+.janus-roundtable-stage-kicker { color: rgba(255,120,48,.58); font: 9px ui-monospace, monospace; letter-spacing: .12em; }
+.janus-roundtable-stage-header strong { overflow: hidden; color: rgba(255,255,255,.82); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.janus-roundtable-stage-status { color: rgba(255,255,255,.46); font-size: 10px; }
+.janus-roundtable-camera-controls { position: absolute; right: 12px; bottom: 54px; z-index: 4; display: flex; gap: 4px; }
+.janus-roundtable-camera-controls button { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 4px 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 3px; background: rgba(8,8,12,.82); color: rgba(255,255,255,.5); font-size: 9px; }
+.janus-roundtable-camera-controls button[data-active="true"], .janus-roundtable-camera-controls button:hover { border-color: rgba(255,120,48,.5); color: #ff9a5d; }
+@media (max-width: 760px) {
+  .janus-roundtable-table, .janus-roundtable-seats { width: min(64%, 270px); }
+  .janus-roundtable-seat { transform: rotate(var(--seat-angle)) translateY(-122px) rotate(calc(var(--seat-angle) * -1)); }
+  .janus-roundtable-seat:hover, .janus-roundtable-seat:focus-visible, .janus-roundtable-seat[data-selected="true"], .janus-roundtable-seat[data-working="true"] { transform: rotate(var(--seat-angle)) translateY(-122px) translateZ(14px) rotate(calc(var(--seat-angle) * -1)) scale(1.05); }
+}
+
+/* Final roundtable layout contract. Keep this after the legacy roundtable
+   rules so the stage and workspace cannot be reordered by older selectors. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-expanded-body {
+  display: block;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-overlay--embedded,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-panel,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(340px, .9fr);
+  grid-template-rows: minmax(190px, .42fr) minmax(280px, .58fr);
+  overflow: hidden;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: block;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255,120,48,0.09), transparent 28%),
+    linear-gradient(rgba(255,120,48,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,120,48,0.035) 1px, transparent 1px),
+    radial-gradient(circle at center, #111116 0%, #030305 76%);
+  background-size: auto, 24px 24px, 24px 24px, auto;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants > * {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  background: #09090c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center::before,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center::after {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: #09090c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-toolbar,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-messages,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper {
+  display: flex;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-messages {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 2px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+  position: absolute;
+  right: 14px;
+  bottom: 82px;
+  z-index: 6;
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, .75fr) minmax(180px, .55fr) minmax(300px, 1fr);
+    overflow: auto;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: 300px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state { grid-column: 1; grid-row: 2; display: block; min-height: 180px; }
+}
+
+
+/* Roundtable second pass: the stage is intentionally empty of agent avatars;
+   the right deck carries the conversation and consensus record. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-title span,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-title small {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-title svg {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.9fr);
+  grid-template-rows: minmax(0, 1fr) 196px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at 50% 46%, rgba(255,120,48,0.09), transparent 28%),
+    linear-gradient(rgba(255,120,48,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,120,48,0.035) 1px, transparent 1px),
+    radial-gradient(circle at center, #111116 0%, #030305 76%);
+  background-size: auto, 24px 24px, 24px 24px, auto;
+  overflow: hidden;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(42%, 260px);
+  aspect-ratio: 1;
+  border: 2px solid rgba(255,85,0,0.68);
+  border-radius: 50%;
+  box-shadow: 0 0 28px rgba(255,85,0,0.22), inset 0 0 24px rgba(255,120,48,0.12);
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(30%, 180px);
+  aspect-ratio: 1;
+  border: 1px dashed rgba(255,120,48,0.3);
+  border-radius: 50%;
+  content: '';
+  animation: janus-roundtable-stage-spin 20s linear infinite;
+  pointer-events: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants > * {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  border: 0;
+  background: #08080c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat {
+  height: 100%;
+  padding: 0 14px 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 0;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-left: 0;
+  background: #08080c;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state section {
+  display: block;
+  margin: 0 0 6px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state > small {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state .janus-roundtable-section-label {
+  margin-bottom: 7px;
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(260px, 1fr) minmax(280px, 1fr);
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-participants {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 260px;
+    border-right: 0;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+    display: none;
+  }
+}
+
+/* Monitor proportions follow the reference studio layout: the runtime column
+   carries the vertical space while the identity preview stays compact. */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-grid {
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-left {
+  gap: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-core-panel {
+  flex: 1 1 auto;
+  min-height: 248px;
+  max-height: none;
+  padding: 9px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-section-title {
+  margin-bottom: 9px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-crt {
+  min-height: 0;
+  border-radius: 6px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity {
+  width: 96px;
+  height: 96px;
+  border: 2px solid var(--c);
+  background: radial-gradient(circle, color-mix(in srgb, var(--c) 18%, transparent), #111115 64%);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--cg) 50%, transparent), inset 0 0 18px rgba(0,0,0,0.8);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-ring-outer {
+  inset: -8px;
+  border: 1px dashed color-mix(in srgb, var(--c) 48%, transparent);
+  opacity: 1;
+  box-shadow: none;
+  animation: janus-monitor-ring-spin 14s linear infinite;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-ring-inner {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-eye {
+  width: 10px;
+  height: 18px;
+  border: 0;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 0 7px #fff, 0 0 14px var(--c), 0 0 22px var(--cg);
+  clip-path: none;
+  filter: none;
+  animation: janus-monitor-blink 4s ease-in-out infinite;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-identity .janus-identity-eye:last-child {
+  animation-delay: 0.08s;
+}
+
+@keyframes janus-monitor-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.12); }
+}
+
+@keyframes janus-monitor-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-stats {
+  gap: 8px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-stat {
+  padding: 9px 10px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.015);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-panel {
+  padding: 9px;
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-monitor-core-panel {
+    max-height: none;
+    min-height: 220px;
+  }
+}
+
+/* Runtime rows stay close to the panel surface; role color is an accent, not
+   a card fill. */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run {
+  min-height: 54px;
+  padding: 8px 9px;
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 13%, rgba(255,255,255,0.08));
+  border-radius: 6px;
+  background: rgba(255,255,255,0.014);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.018);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run::before {
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--janus-runtime-role-color) 54%, transparent);
+  content: '';
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run:hover {
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 22%, rgba(255,255,255,0.1));
+  background: rgba(255,255,255,0.024);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--janus-runtime-role-color) 28%, rgba(255,255,255,0.1));
+  background: rgba(255,255,255,0.028);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--janus-runtime-role-color) 8%, transparent);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run > .janus-identity-core[data-size="pod"] {
+  width: 32px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--janus-runtime-role-color) 58%, rgba(255,255,255,0.12));
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.72);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-ring-outer {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-ring-inner {
+  display: block;
+  inset: 1px;
+  border: 1px solid color-mix(in srgb, var(--janus-runtime-role-color) 78%, #fff);
+  opacity: 0.9;
+  transform: none;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--janus-runtime-role-color) 32%, transparent);
+  animation: none;
+}
+
+@keyframes janus-runtime-blink {
+  0%, 91%, 100% { transform: scaleY(1); }
+  93% { transform: scaleY(0.12); }
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-eye {
+  width: 5px;
+  height: 9px;
+  border: 0;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 0 5px #fff, 0 0 9px var(--janus-runtime-role-color);
+  clip-path: none;
+  filter: none;
+  animation: janus-runtime-blink 4.2s ease-in-out infinite;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run .janus-identity-eye:last-child {
+  animation-delay: 0.08s;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run-title strong {
+  color: rgba(255,255,255,0.8);
+  font-weight: 600;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run-event {
+  color: rgba(255,255,255,0.36);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-runtime-run-status {
+  color: color-mix(in srgb, var(--janus-runtime-role-color) 64%, rgba(255,255,255,0.48));
+}
+
+/* Keep expanded content sharp without changing the host's centering geometry. */
+.janus-island-shell[data-stage="expanded"] .janus-expanded-shell,
+.janus-island-shell[data-stage="expanded"] .janus-expanded-body {
+  transform: none;
+  will-change: auto;
+  filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-collapsed-core,
+.janus-island-shell[data-stage="expanded"] .janus-peek-shell {
+  transform: none;
+  filter: none;
+}
+
+/* Knowledge recall presentation within the existing level-one peek. */
+.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] {
+  width: min(420px, calc(100vw - 24px));
+}
+
+.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-copy {
+  max-width: 250px;
+}
+
+.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-subtitle {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-statusline {
+    display: none;
+  }
+}

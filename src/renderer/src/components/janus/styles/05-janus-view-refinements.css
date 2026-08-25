@@ -1,0 +1,2218 @@
+/* Focused view model: Monitor owns the stage, Chat owns the thread. */
+.janus-island-shell[data-stage="expanded"] .janus-expanded-body {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-panel,
+.janus-island-shell[data-stage="expanded"] .janus-chat--docked {
+  transition:
+    opacity 0.22s ease,
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    flex-basis 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-panel {
+  grid-row: 1;
+  flex: none;
+  min-height: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat--docked {
+  grid-row: 2;
+  flex: none;
+  overflow: hidden;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-expanded-body {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-panel {
+  grid-row: 1;
+  display: flex;
+  max-height: 58px;
+  min-height: 0;
+  padding: 9px 12px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-header {
+  align-items: center;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-eyebrow {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-header strong {
+  font-size: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+  grid-row: 2;
+  min-height: 0;
+  height: 100%;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-messages,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper {
+  display: flex;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+  padding: 12px;
+  border-color: rgba(255,255,255,0.09);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)),
+    rgba(0,0,0,0.56);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-panel {
+  grid-row: 1;
+  min-height: 0;
+  padding: 14px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+  grid-row: 2;
+  flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-toolbar,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-messages,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-new-message-badge {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-composer-meta {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input {
+  min-height: 40px;
+  max-height: 64px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button:focus-visible,
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:focus-visible,
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop:focus-visible,
+.janus-island-shell[data-stage="expanded"] .janus-chat-tool-button:focus-visible,
+.janus-island-shell[data-stage="expanded"] .janus-chat-input:focus-visible {
+  outline: 1px solid var(--accent-color, var(--janus-current));
+  outline-offset: 2px;
+}
+
+/* Two-state refinement: Monitor owns the stage, Chat owns the thread. */
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-switch {
+  padding: 2px;
+  background: rgba(255,255,255,0.028);
+  border-color: rgba(255,255,255,0.07);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button {
+  min-width: 78px;
+  height: 26px;
+  font-size: 10.5px;
+  letter-spacing: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button[data-active="true"] {
+  background: rgba(255,255,255,0.12);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) minmax(118px, auto);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-panel {
+  grid-row: 1;
+  min-height: 0;
+  padding: 14px;
+  border-radius: 20px;
+  border-color: rgba(255,255,255,0.065);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.034), rgba(255,255,255,0.01)),
+    rgba(0,0,0,0.62);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-surface {
+  border-radius: 16px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+  grid-row: 2;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: min(760px, 100%);
+  min-height: 118px;
+  max-height: 170px;
+  margin: 0 auto;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)),
+    rgba(0,0,0,0.54);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.26);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-toolbar,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-new-message-badge {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-messages {
+  display: flex;
+  min-height: 0;
+  padding: 0 2px 8px;
+  gap: 5px;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 100%);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty {
+  height: auto;
+  min-height: 32px;
+  align-items: flex-start;
+  justify-content: center;
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty-icon,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty-text,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-suggestions {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty-hint {
+  margin: 0;
+  color: rgba(255,255,255,0.46);
+  font-size: 11px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message {
+  max-width: 94%;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message-content {
+  padding: 5px 8px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  background: transparent;
+  border-color: rgba(255,255,255,0.045);
+  color: rgba(255,255,255,0.66);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message.user .janus-chat-message-content {
+  background: rgba(255,255,255,0.055);
+  color: rgba(255,255,255,0.78);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message.assistant .janus-chat-message-content {
+  background: rgba(255,255,255,0.025);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  width: 100%;
+  margin: 0;
+  padding: 8px;
+  border-radius: 14px;
+  border-color: rgba(255,255,255,0.075);
+  background: rgba(0,0,0,0.3);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-composer-meta {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input {
+  min-height: 38px;
+  max-height: 64px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  background: rgba(255,255,255,0.035);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop {
+  height: 38px;
+  min-width: 52px;
+  border-radius: 11px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-expanded-body {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-panel {
+  max-height: 52px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.026);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+  min-height: 0;
+  height: 100%;
+  padding: 14px;
+  border-radius: 20px;
+  border-color: rgba(255,255,255,0.075);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012)),
+    rgba(0,0,0,0.62);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar {
+  padding-bottom: 10px;
+  border-bottom-color: rgba(255,255,255,0.055);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar-kicker {
+  color: rgba(255,255,255,0.38);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar strong {
+  font-size: 14px;
+  color: rgba(255,255,255,0.86);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-messages {
+  padding: 14px 4px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-content {
+  border-radius: 14px;
+  background: rgba(255,255,255,0.032);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant .janus-chat-message-content {
+  border-color: rgba(255,255,255,0.045);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper {
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025)),
+    rgba(0,0,0,0.42);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-tool-button {
+  color: rgba(255,255,255,0.58);
+  background: rgba(255,255,255,0.035);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-suggestions button {
+  height: 28px;
+  color: rgba(255,255,255,0.62);
+  background: rgba(255,255,255,0.035);
+}
+
+/* Minimal premium pass: fewer labels, calmer hierarchy, cleaner thread. */
+.janus-island-shell[data-stage="expanded"] {
+  width: min(900px, calc(100vw - 72px));
+  height: min(570px, calc(100vh - 92px));
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-island {
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.045), transparent 30%),
+    #030303;
+  border-color: rgba(255,255,255,0.075);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    0 22px 70px rgba(0,0,0,0.68),
+    0 0 20px rgba(255,255,255,0.025);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-shell {
+  inset: 18px;
+  gap: 12px;
+  padding: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-topbar {
+  grid-template-columns: 1fr auto 1fr;
+  min-height: 30px;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-brand {
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  color: rgba(255,255,255,0.64);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-brand span {
+  color: var(--janus-current);
+  opacity: 0.78;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-meta-text {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-mode-pill {
+  height: 22px;
+  padding: 0 9px;
+  border-color: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.5);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-switch {
+  padding: 2px;
+  gap: 2px;
+  background: rgba(255,255,255,0.035);
+  border-color: rgba(255,255,255,0.065);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button {
+  min-width: 72px;
+  height: 24px;
+  padding: 0 12px;
+  color: rgba(255,255,255,0.46);
+  font-size: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button[data-active="true"] {
+  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.105);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-bottombar {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-header,
+.janus-island-shell[data-stage="expanded"] .janus-feedback-chips,
+.janus-island-shell[data-stage="expanded"] .janus-feedback-footer {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface {
+  height: 100%;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at center, var(--janus-hover-glow-soft), transparent 38%),
+    rgba(255,255,255,0.018);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface .janus-crt {
+  border: 1px solid rgba(255,255,255,0.045);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,0.035), rgba(0,0,0,0.1) 36%, rgba(0,0,0,0.42) 100%);
+  box-shadow:
+    inset 0 0 60px rgba(0,0,0,0.78),
+    inset 0 1px 0 rgba(255,255,255,0.035);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-status-text {
+  margin-top: 22px;
+  color: rgba(255,255,255,0.48);
+  font-size: 10px;
+  letter-spacing: 1.6px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-panel {
+  min-height: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+  width: min(640px, 100%);
+  min-height: 104px;
+  max-height: 142px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,0.055);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.028);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-toolbar,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-new-message-badge {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-messages {
+  display: flex;
+  padding: 0 2px 7px;
+  gap: 3px;
+  opacity: 0.92;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message:not(:last-of-type) {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message {
+  max-width: 100%;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message-content {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.58);
+  font-size: 11.5px;
+  line-height: 1.45;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message.user .janus-chat-message-content {
+  color: rgba(255,255,255,0.72);
+  background: transparent;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty {
+  align-items: flex-start;
+  justify-content: center;
+  height: 100%;
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty-icon,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty-text,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-suggestions {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-empty-hint {
+  margin: 0;
+  padding-left: 4px;
+  color: rgba(255,255,255,0.38);
+  font-size: 11px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-composer-meta {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input {
+  min-height: 38px;
+  max-height: 56px;
+  padding: 9px 12px;
+  border-color: rgba(255,255,255,0.055);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.28);
+  color: rgba(255,255,255,0.78);
+  font-size: 12.5px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop {
+  height: 38px;
+  min-width: 50px;
+  border-radius: 14px;
+  font-size: 11px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-panel {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+  grid-row: 1;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar {
+  padding: 0 0 12px;
+  border-bottom-color: rgba(255,255,255,0.045);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar-kicker {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar strong {
+  color: rgba(255,255,255,0.72);
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: 0.5px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-tool-button {
+  height: 25px;
+  padding: 0 8px;
+  border-color: rgba(255,255,255,0.055);
+  background: rgba(255,255,255,0.024);
+  color: rgba(255,255,255,0.46);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-messages {
+  padding: 14px 0;
+  gap: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message {
+  max-width: 86%;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant {
+  max-width: 94%;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-content {
+  padding: 9px 12px;
+  border-radius: 15px;
+  border-color: rgba(255,255,255,0.045);
+  background: rgba(255,255,255,0.028);
+  color: rgba(255,255,255,0.76);
+  font-size: 13px;
+  line-height: 1.62;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user .janus-chat-message-content {
+  background: rgba(255,255,255,0.075);
+  color: rgba(255,255,255,0.88);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper {
+  padding: 9px;
+  border-radius: 18px;
+  border-color: rgba(255,255,255,0.065);
+  background: rgba(255,255,255,0.028);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-meta {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border-color: transparent;
+  background: rgba(0,0,0,0.25);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop {
+  height: 44px;
+  min-width: 56px;
+  border-radius: 14px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-empty {
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-empty-icon {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-empty-text {
+  color: rgba(255,255,255,0.62);
+  font-size: 12px;
+  letter-spacing: 0.8px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-empty-hint {
+  color: rgba(255,255,255,0.36);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-suggestions {
+  margin-top: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-suggestions button {
+  height: 28px;
+  border-color: rgba(255,255,255,0.055);
+  background: rgba(255,255,255,0.024);
+  color: rgba(255,255,255,0.52);
+}
+
+@media (max-width: 900px) {
+  .janus-island-shell[data-stage="expanded"] {
+    width: min(calc(100vw - 24px), 720px);
+    height: min(calc(100vh - 72px), 620px);
+  }
+
+  .janus-island-shell[data-stage="expanded"] .janus-expanded-topbar {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .janus-island-shell[data-stage="expanded"] .janus-expanded-view-switch {
+    justify-self: center;
+    width: auto;
+  }
+
+  .janus-island-shell[data-stage="expanded"] .janus-expanded-view-button {
+    min-width: 64px;
+  }
+}
+
+/* Island dialog refinement: quieter surface, consistent compact chat, softer feedback. */
+.janus-island-shell[data-stage="expanded"] {
+  width: min(880px, calc(100vw - 72px));
+  height: min(560px, calc(100vh - 92px));
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-island {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.008)),
+    #030303;
+  border-color: rgba(255,255,255,0.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.035),
+    0 22px 64px rgba(0,0,0,0.66);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface {
+  background: rgba(255,255,255,0.014);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface .janus-crt {
+  border-color: rgba(255,255,255,0.04);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,0.026), rgba(0,0,0,0.18) 38%, rgba(0,0,0,0.48) 100%);
+  box-shadow:
+    inset 0 0 48px rgba(0,0,0,0.72),
+    inset 0 1px 0 rgba(255,255,255,0.026);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-switch {
+  background: rgba(255,255,255,0.024);
+  border-color: rgba(255,255,255,0.055);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button {
+  color: rgba(255,255,255,0.42);
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button:hover {
+  color: rgba(255,255,255,0.72);
+  background: rgba(255,255,255,0.045);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button[data-active="true"] {
+  color: rgba(255,255,255,0.78);
+  background: rgba(255,255,255,0.062);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.035);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-view-button:active,
+.janus-island-shell[data-stage="expanded"] .janus-chat-tool-button:active,
+.janus-island-shell[data-stage="expanded"] .janus-chat-suggestions button:active,
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:active,
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop:active {
+  transform: none;
+  background: rgba(255,255,255,0.052);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input:focus,
+.janus-island-shell[data-stage="expanded"] .janus-chat-input:focus-visible {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.28);
+  box-shadow: none;
+  outline: 1px solid rgba(255,255,255,0.09);
+  outline-offset: 1px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-tool-button,
+.janus-island-shell[data-stage="expanded"] .janus-chat-suggestions button {
+  border-color: rgba(255,255,255,0.045);
+  background: rgba(255,255,255,0.018);
+  color: rgba(255,255,255,0.48);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-tool-button:hover:not(:disabled),
+.janus-island-shell[data-stage="expanded"] .janus-chat-suggestions button:hover:not(:disabled) {
+  border-color: rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.7);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:not(:disabled) {
+  color: rgba(255,255,255,0.84);
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.07);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:hover:not(:disabled) {
+  color: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.095);
+  border-color: rgba(255,255,255,0.1);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop {
+  color: rgba(255,170,170,0.76);
+  background: rgba(255,255,255,0.045);
+  border-color: rgba(255,255,255,0.07);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop:hover {
+  color: rgba(255,190,190,0.88);
+  background: rgba(255,255,255,0.065);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) 176px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+  width: min(700px, 100%);
+  height: 176px;
+  min-height: 176px;
+  max-height: 176px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.02);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-messages {
+  display: flex;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 4px 8px;
+  gap: 6px;
+  opacity: 0.94;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.16) transparent;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 8px), transparent 100%);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-messages::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-messages::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message:not(:last-of-type) {
+  display: block;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message {
+  max-width: 96%;
+  animation: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message.user {
+  max-width: 82%;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message-content {
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,0.035);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.018);
+  color: rgba(255,255,255,0.62);
+  font-size: 11.5px;
+  line-height: 1.48;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message.user .janus-chat-message-content {
+  color: rgba(255,255,255,0.76);
+  background: rgba(255,255,255,0.045);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  width: 100%;
+  margin: 0;
+  padding: 7px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input {
+  min-height: 38px;
+  max-height: 54px;
+  padding: 9px 12px;
+  border-color: rgba(255,255,255,0.05);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.25);
+  color: rgba(255,255,255,0.76);
+}
+
+@media (max-width: 900px) {
+  .janus-island-shell[data-stage="expanded"] {
+    width: min(calc(100vw - 24px), 720px);
+    height: min(calc(100vh - 72px), 620px);
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+    width: 100%;
+  }
+}
+
+/* === JanusX pixel logo + opencode composer final pass === */
+/* 瑕嗙洊鏃ц鍒欙細鍍忕礌 X銆佸幓闄?monitor 鏂规銆乷pencode 鏂规杈撳叆銆傚彧杩藉姞锛屼笉淇敼鏃у潡銆?*/
+
+/* 鈹€鈹€ 1. 鍍忕礌 logo锛欽anus 鏂囧瓧 + 鍍忕礌鏂归樀 X 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12em;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: clamp(44px, 8.5vw, 82px);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #f6f3ea;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.22), 0 14px 34px rgba(0,0,0,0.42);
+  image-rendering: pixelated;
+  text-rendering: geometricPrecision;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-main {
+  display: inline-block;
+  image-rendering: pixelated;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-x {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.72em;
+  height: 0.72em;
+  color: transparent;
+  font: inherit;
+  line-height: 1;
+  text-shadow: none;
+}
+
+/* 娓呴櫎鏃?clip-path 浼厓绱犺儗鏅?*/
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-x::before,
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-x::after {
+  content: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 10px rgba(255,122,26,0.28));
+}
+
+/* 绌?wordmark-mark 榛樿鍦ㄦ姌鍙犳€佸瓨鍦紝杩欓噷鏄惧紡闅愯棌閬垮厤涓庡儚绱?logo 鍐茬獊 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-mark {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-empty-hint {
+  margin-top: 6px;
+  color: rgba(255,255,255,0.34);
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+}
+
+@media (max-width: 560px) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+    font-size: 42px;
+  }
+}
+
+/* 鈹€鈹€ 2. 鍘绘帀 monitor CRT 鏂规 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+/* 璁?CRT 鍐呭铻嶅叆闈㈡澘榛戝簳锛屾棤鍐呭祵鏂规銆佹棤娣遍櫡闃村奖 */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-surface,
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface {
+  border-radius: 0;
+  background: #020203;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-surface .janus-crt,
+.janus-island-shell[data-stage="expanded"] .janus-feedback-surface .janus-crt,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-crt,
+.janus-island-shell[data-stage="expanded"] .janus-crt {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  background: #020203;
+  box-shadow: none;
+}
+
+/* running 鑴夊啿鍏変篃鍒敤 box-shadow 鍑归櫡 */
+.janus-island-shell[data-stage="expanded"] .janus-crt.running {
+  animation: none;
+  box-shadow: none;
+}
+
+/* 鎵弿绾挎瀬寮卞寲锛屽嚑涔庝笉鍙 */
+.janus-island-shell[data-stage="expanded"] .scanline {
+  opacity: 0.04;
+  background: linear-gradient(to bottom, transparent 70%, rgba(255,255,255,0.06) 71%);
+  background-size: 100% 12px;
+  animation-duration: 24s;
+}
+
+/* 鍍忕礌闄嶅櫔鍑犱箮璐撮粦鑹诧紝寮卞寲 */
+.janus-island-shell[data-stage="expanded"] .pixel-overlay {
+  opacity: 0.025;
+  background-image:
+    repeating-linear-gradient(transparent, transparent 7px, rgba(255,255,255,0.1) 7px, rgba(255,255,255,0.1) 8px),
+    repeating-linear-gradient(90deg, transparent, transparent 7px, rgba(255,255,255,0.07) 7px, rgba(255,255,255,0.07) 8px);
+}
+
+/* warp-grid 寮卞寲锛屽幓鎺夋柟妗嗘劅 */
+.janus-island-shell[data-stage="expanded"] .warp-grid,
+.janus-island-shell[data-stage="expanded"] .warp-grid.running {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  opacity: 0.18;
+}
+
+.janus-island-shell[data-stage="expanded"] .warp-grid.running {
+  background-image:
+    linear-gradient(rgba(0,255,136,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,136,0.05) 1px, transparent 1px);
+}
+
+/* 鈹€鈹€ 3. opencode 鏂规杈撳叆妗?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--empty .janus-chat-input-wrapper,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: #08080a;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper:focus-within {
+  border-color: rgba(255,122,26,0.34);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.24), 0 0 0 1px rgba(255,122,26,0.08);
+}
+
+/* composer-row 鍦ㄤ笂 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-row {
+  order: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  min-height: 46px;
+  padding: 0;
+}
+
+/* prompt 鍓嶇紑 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-prompt-prefix {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,122,26,0.78);
+  background: transparent;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-prompt-prefix::after {
+  content: none;
+}
+
+/* textarea 鑷€傚簲 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input {
+  flex: 1 1 auto;
+  min-height: 46px;
+  max-height: 150px;
+  padding: 14px 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.9);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: none;
+  resize: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input:focus,
+.janus-island-shell[data-stage="expanded"] .janus-chat-input:focus-visible {
+  outline: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-input::placeholder {
+  color: rgba(255,255,255,0.26);
+}
+
+/* 鍙戦€?/ 鍋滄鎸夐挳锛氭柟妗嗭紝鍙充晶 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop {
+  flex: 0 0 auto;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  margin: 4px 6px 4px 0;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.6);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: none;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+/* 鍙戦€侊細姗欒壊濉厖锛堝懠搴?X 鐨勬锛?*/
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send:not(:disabled) {
+  color: #0a0a0b;
+  background: #ff7a1a;
+  border-color: rgba(255,122,26,0.55);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:hover:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:hover:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-send:hover:not(:disabled) {
+  color: #050505;
+  background: #ff8a2e;
+  border-color: rgba(255,138,46,0.6);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-send:disabled {
+  color: rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.05);
+  box-shadow: none;
+}
+
+/* 鍋滄锛氭殫鐏?*/
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop {
+  color: rgba(255,180,180,0.8);
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-stop:hover,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop:hover,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-stop:hover {
+  color: rgba(255,200,200,0.92);
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: none;
+}
+
+/* composer-meta footer锛氬湪涓?*/
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-composer-meta {
+  order: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.42);
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.32);
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta .janus-chat-composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 3px;
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.62);
+  font-size: 9.5px;
+  letter-spacing: 0.4px;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta .janus-chat-composer-hint {
+  color: rgba(255,255,255,0.28);
+  font-size: 9.5px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* monitor 瑙嗗浘鐨勮緭鍏ユ鍦?docked 鍐咃紝鎭㈠涓€浣撳舰鎬?*/
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  width: 100%;
+  margin: 0;
+}
+
+/* 娓呮帀鎶樺彔鎬佹棫闃村奖娈嬬暀锛堜粎鍦?expanded 涓嬬敓鏁堬紝涓嶅奖鍝嶅叾瀹冪姸鎬侊級 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper:hover .janus-chat-clear {
+  opacity: 0.9;
+}
+
+/* === JanusX v2 tweak: pixel JANUS + bg scanline + bare composer + monitor no input === */
+
+/* 鈹€鈹€ 1. Monitor 瑙嗗浘闅愯棌杈撳叆鍖?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+/* 璁?monitor 瑙嗗浘鍙墿 CRT 鍙嶉闈㈡澘锛屽簳閮ㄤ笉鍐嶆湁杈撳叆妗?*/
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-input-wrapper {
+  display: none !important;
+}
+
+/* monitor 涓?docked 鏀剁缉涓?0 楂樺害銆佹棤杈规銆佹棤鑳屾櫙銆佹棤 padding */
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat--docked {
+  display: none !important;
+}
+
+/* 璁?feedback-surface 鍦?monitor 瑙嗗浘涓崰婊?panel锛坓rid 琛屽彧鍓?1fr锛?*/
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-feedback-panel {
+  grid-row: 1 / -1 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+/* 鈹€鈹€ 2. 鍍忕礌 JANUS + X 缁熶竴楂樺害 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus,
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+  display: inline-block;
+  height: 0.7em;
+  width: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  shape-rendering: crispEdges;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 10px rgba(255,122,26,0.24));
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus {
+  margin-right: 0.18em;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  gap: 0.05em;
+  letter-spacing: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark-main {
+  display: inline-flex;
+  align-items: center;
+  font-size: inherit;
+  line-height: 1;
+}
+
+/* 鈹€鈹€ 3. 鎵弿绾夸綔涓哄彲瑙佽儗鏅汗鐞?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .scanline {
+  opacity: 0.14 !important;
+  background: linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(255, 255, 255, 0.06) 3px 4px
+  ) !important;
+  background-size: 100% 4px !important;
+  animation: scan-crt 8s linear infinite !important;
+}
+
+/* monitor 瑙嗗浘涓嬩篃淇濈暀鍙鎵弿绾匡紝閾哄湪 feedback-surface 榛戝簳涓?*/
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .scanline {
+  opacity: 0.14 !important;
+  z-index: 21 !important;
+  overflow: hidden;
+}
+
+/* 鈹€鈹€ 4. composer 鍘绘帀 footer 琛岋紝鍗曡绱у噾 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-meta,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-composer-meta {
+  display: none !important;
+}
+
+/* input-wrapper 楂樺害/padding 璋冩暣涓哄崟琛岀揣鍑戯紙鏃?footer 鍒嗛殧绾匡級 */
+.janus-island-shell[data-stage="expanded"] .janus-chat-input-wrapper {
+  padding: 0;
+  gap: 0;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-composer-row {
+  min-height: 44px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper {
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: #08080a;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (max-width: 560px) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus,
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+    height: 0.62em;
+  }
+}
+
+/* === JanusX v3: digital pixel LED wordmark + grid backdrop === */
+/* 瑕嗙洊鏃ц鍒欙細LED 鐞ョ弨鑹茶皟 + 鐐归樀缃戞牸鑳屾櫙 + LED 鍙戝厜鍏夋檿銆傚彧杩藉姞锛屼笉淇敼鏃у潡銆?*/
+
+/* 鈹€鈹€ 1. LED 灞忓箷鏆楄儗鏉?+ 缃戞牸搴?grid锛坵ordmark 瀹瑰櫒锛?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  position: relative;
+  padding: 0.16em 0.28em 0.18em;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.42);
+  /* 鐐归樀 LED 缃戞牸搴曠汗锛氱瓑璺濆渾鐐归樀 */
+  background-image:
+    radial-gradient(circle, rgba(255, 180, 80, 0.16) 1px, transparent 1.3px);
+  background-size: 10px 10px;
+  background-position: center center;
+  /* 杈圭紭铏氬寲鏀惰竟锛岄伩鍏嶇‖鐭╁舰 grid */
+  -webkit-mask-image: radial-gradient(ellipse 78% 70% at center, #000 42%, transparent 88%);
+  mask-image: radial-gradient(ellipse 78% 70% at center, #000 42%, transparent 88%);
+}
+
+/* 鈹€鈹€ 2. JANUS 鍍忕礌鏂归樀锛歀ED 鏆栨 + 纾峰厜鍏夋檿 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus {
+  filter: drop-shadow(0 0 6px rgba(255, 160, 60, 0.55));
+  animation: janus-led-flicker 4.2s ease-in-out infinite;
+}
+
+/* 鈹€鈹€ 3. X 鍍忕礌鏂归樀锛氱櫧绾?LED 鏆栫櫧 + 姗欑嚎 LED 姗欏彂鍏?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+  filter:
+    drop-shadow(0 0 5px rgba(255, 243, 224, 0.45))
+    drop-shadow(0 0 6px rgba(255, 122, 26, 0.55));
+  animation: janus-led-flicker 4.2s ease-in-out 0.6s infinite;
+}
+
+/* 鈹€鈹€ 4. LED 鍒锋柊寰剦鍔紙鍏嬪埗锛宱pacity 0.92 鈫?1锛?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+@keyframes janus-led-flicker {
+  0%, 100% { opacity: 1; }
+  47%      { opacity: 0.92; }
+  53%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-janus,
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-x {
+    animation: none;
+  }
+}
+
+/* === JanusX v4: minecraft blocky wordmark === */
+/* 瑕嗙洊 v2/v3 瑙勫垯锛氬悎骞跺崟 SVG銆佺鏁ｆ柟鍧椼€佹竻闄ょ綉鏍?mask/闂儊锛屽彧鐣欐殩鑹插井鍏夈€傛棫鍧椾笉鍒犮€?*/
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-pixel-logo {
+  display: block;
+  height: 0.95em;
+  width: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  shape-rendering: crispEdges;
+  animation: none !important;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  background: transparent !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  border-radius: 0;
+  filter: drop-shadow(0 2px 6px rgba(255, 160, 60, 0.25)) drop-shadow(0 0 14px rgba(255, 120, 40, 0.16));
+}
+
+@media (max-width: 560px) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-logo {
+    height: 0.7em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat-pixel-logo {
+    animation: none;
+  }
+}
+
+/* === JanusX Dev Studio chat restore === */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-expanded-body {
+  grid-template-rows: minmax(0, 1fr) !important;
+  gap: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-feedback-panel {
+  display: none !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+  display: flex !important;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0 40px 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-toolbar {
+  display: flex;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 20px 0 0;
+  gap: 24px;
+  scroll-behavior: smooth;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--empty .janus-chat-messages {
+  justify-content: center;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-empty {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 240px;
+  justify-content: center;
+  text-align: center;
+  opacity: 1;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-wordmark {
+  margin-bottom: 24px;
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.5));
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo {
+  height: 28px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo rect[fill="#ffd089"],
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo rect[fill="#fff3e0"] {
+  fill: #71717a;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo rect[fill="#ff7a1a"] {
+  fill: #ff7830;
+}
+
+.janus-chat-empty-title {
+  margin-bottom: 8px;
+  color: rgba(255,255,255,0.94);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.janus-chat-empty-subtitle {
+  color: rgba(255,255,255,0.34);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-banner {
+  position: relative;
+  width: min(680px, 100%);
+  margin: 0 0 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(224,230,236,0.9);
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-banner::before {
+  content: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char {
+  display: grid;
+  grid-template-columns: repeat(4, 14px);
+  grid-template-rows: repeat(5, 14px);
+  gap: 4px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char[data-cells="4"] {
+  grid-template-columns: repeat(4, 14px);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char[data-cells="5"] {
+  grid-template-columns: repeat(5, 14px);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char--x {
+  margin-left: 4px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char span {
+  border-radius: 1px;
+  background: rgba(255,255,255,0.055);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char span.active {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char span.x-orange {
+  background: #ff7830;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char span.x-gray {
+  background: #8a8f98;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-ascii {
+  position: relative;
+  display: grid;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: #dce8f4;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: clamp(10px, 2.2vw, 22px);
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: 0;
+  text-shadow:
+    2px 2px 0 #050506,
+    3px 3px 0 rgba(255,120,48,0.42),
+    0 0 16px rgba(220,232,244,0.12);
+  white-space: pre;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-ascii span {
+  display: block;
+  background:
+    linear-gradient(90deg, rgba(255,120,48,0.3) 1px, transparent 1px),
+    linear-gradient(180deg, #f2f6f8, #aab8c4);
+  background-size: 8px 100%, 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-logo-x path {
+  fill: none;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-x-shadow-light {
+  stroke: #d7b38f;
+  stroke-width: 16px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-x-shadow-dark {
+  stroke: #050506;
+  stroke-width: 17px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-x-outline {
+  stroke: #d9e6f3;
+  stroke-width: 15px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-x-grey {
+  stroke: #8a8f98;
+  stroke-width: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-x-orange {
+  stroke: #ff7830;
+  stroke-width: 10px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-logo-x {
+  display: block;
+  flex: 0 0 clamp(40px, 11vw, 72px);
+  width: clamp(40px, 11vw, 72px);
+  height: auto;
+  margin-bottom: -3px;
+  overflow: visible;
+  filter: drop-shadow(0 0 13px rgba(255,120,48,0.14));
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-wordmark,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-empty-title {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 85%;
+  opacity: 1;
+  animation: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user {
+  align-self: flex-end;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant {
+  align-self: flex-start;
+  max-width: 85%;
+}
+
+.janus-chat-message-author {
+  color: rgba(255,255,255,0.5);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.janus-chat-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.janus-chat-message-time {
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.janus-chat-message.user .janus-chat-message-meta {
+  justify-content: flex-end;
+}
+
+.janus-chat-message-edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.janus-chat-inline-editor {
+  width: min(520px, 70vw);
+  max-width: 100%;
+  min-width: min(240px, 70vw);
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.065);
+  color: rgba(255, 255, 255, 0.95);
+  caret-color: #ff8a45;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.janus-chat-inline-editor:focus {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.janus-chat-message-edit,
+.janus-chat-clear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.janus-chat-message-edit {
+  opacity: 0.48;
+}
+
+.janus-chat-message.user:hover .janus-chat-message-edit,
+.janus-chat-message.user:focus-within .janus-chat-message-edit,
+.janus-chat-message.assistant:hover .janus-chat-message-edit,
+.janus-chat-message.assistant:focus-within .janus-chat-message-edit {
+  opacity: 1;
+}
+
+.janus-chat-message-edit:hover:not(:disabled),
+.janus-chat-clear-button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.janus-chat-clear-button:hover:not(:disabled) {
+  color: rgba(255, 151, 151, 0.9);
+}
+
+.janus-chat-message-edit:focus-visible,
+.janus-chat-clear-button:focus-visible {
+  opacity: 1;
+  outline: 1px solid rgba(255, 255, 255, 0.42);
+  outline-offset: 1px;
+}
+
+.janus-chat-message-edit:disabled,
+.janus-chat-clear-button:disabled {
+  opacity: 0.24;
+  cursor: not-allowed;
+}
+
+.janus-chat-message.user .janus-chat-message-author {
+  text-align: right;
+}
+
+.janus-chat-message.assistant .janus-chat-message-author {
+  color: rgba(255,120,48,0.84);
+}
+
+.janus-chat-status-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-content {
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  line-height: 1.62;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user .janus-chat-message-content {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.95);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant .janus-chat-message-content {
+  padding: 4px 0 4px 16px;
+  border: 0;
+  border-left: 2px solid #ff7830;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.88);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-streaming-cursor {
+  background: #ff7830;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-loading {
+  justify-content: flex-start;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-error-card {
+  align-self: flex-start;
+  max-width: min(360px, 72%);
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,120,90,0.18);
+  border-left: 2px solid rgba(255,120,90,0.76);
+  border-radius: 8px;
+  background: rgba(80,22,18,0.22);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.24);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-error-text {
+  color: rgba(255,150,130,0.9);
+  font-size: 12px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-error-actions {
+  justify-content: flex-start;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-retry,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-config-llm {
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.055);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 4px;
+  background: #111113;
+  box-shadow: none;
+  overflow: visible;
+}
+
+/* 绌烘€侀€夋嫨鍣紙4422 琛岋級浼樺厛绾ф洿楂橈紝浼氬甫鍥?overflow:hidden 瑁佹帀寮瑰嚭鑿滃崟 */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--empty .janus-chat-input-wrapper {
+  overflow: visible;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper::before {
+  content: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper:focus-within {
+  border-color: rgba(255,120,48,0.64);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-row {
+  position: relative;
+  min-height: 58px;
+  align-items: center;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 0;
+  background: #ff7830;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input {
+  min-height: 58px;
+  max-height: 160px;
+  padding: 18px 20px 18px 20px;
+  color: rgba(255,255,255,0.96);
+  font-size: 13px;
+  line-height: 18px;
+  caret-color: #ffffff;
+  text-shadow: none;
+  filter: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input::placeholder {
+  color: rgba(255,255,255,0.42);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  margin: 8px 8px 8px 10px;
+  border-radius: 6px;
+  color: rgba(255,255,255,0.72);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop {
+  color: rgba(255,150,150,0.86);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-status-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 8px 14px 9px 20px;
+  border-top: 1px solid rgba(255,255,255,0.035);
+  background: rgba(0,0,0,0.16);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-author,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-content,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-streaming-text,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-status-bar,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-tag,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-shortcuts {
+  filter: none;
+  text-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-author {
+  color: rgba(255,255,255,0.62);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant .janus-chat-message-author {
+  color: #ff8a45;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message-content {
+  color: #f1f3f5;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user .janus-chat-message-content {
+  border-color: rgba(255,255,255,0.2);
+  color: #ffffff;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant .janus-chat-message-content {
+  color: #e5e7eb;
+}
+
+.janus-chat-message.user .janus-chat-message-content,
+.janus-island-shell[data-stage="expanded"] .janus-chat-message.user .janus-chat-message-content,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.user .janus-chat-message-content,
+.janus-island-shell[data-stage="expanded"][data-view="monitor"] .janus-chat-message.user .janus-chat-message-content {
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+  padding: 3px 0 6px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 120, 48, 0.62);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-chat-message.user .janus-chat-message-content {
+  padding: 4px 0 7px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.42);
+  cursor: pointer;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-tag::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 7px rgba(16,185,129,0.76);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-tag strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255,255,255,0.84);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-shortcuts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  color: rgba(255,255,255,0.28);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-shortcuts > span:first-child {
+  color: rgba(255,120,48,0.75);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-shortcuts kbd {
+  color: rgba(255,255,255,0.58);
+  font: inherit;
+  font-weight: 700;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu {
+  position: absolute;
+  left: 16px;
+  bottom: calc(100% + 8px);
+  z-index: 80;
+  display: grid;
+  gap: 4px;
+  width: min(360px, calc(100% - 32px));
+  padding: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(8,8,10,0.98);
+  box-shadow: 0 18px 34px rgba(0,0,0,0.45);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  text-align: left;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button:hover,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button[data-active="true"],
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu button[data-highlighted="true"] {
+  background: rgba(255,255,255,0.055);
+  color: rgba(255,255,255,0.78);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu strong {
+  overflow: hidden;
+  color: rgba(255,120,48,0.88);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  z-index: 90;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border: 1px solid rgba(255,120,48,0.22);
+  border-radius: 4px;
+  background: rgba(12,12,14,0.96);
+  color: rgba(255,255,255,0.78);
+  box-shadow: 0 12px 26px rgba(0,0,0,0.38);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  pointer-events: none;
+  animation: janus-chat-notice-in 180ms ease;
+}
+
+@keyframes janus-chat-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes janus-chat-notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (max-width: 640px) {
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--docked {
+    padding: 0 18px 16px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-banner {
+    padding: 1px 0 7px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-banner::before {
+    margin-bottom: 6px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-logo {
+    gap: 8px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char {
+    grid-template-columns: repeat(4, 6px);
+    grid-template-rows: repeat(5, 6px);
+    gap: 2px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-char[data-cells="5"] {
+    grid-template-columns: repeat(5, 6px);
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-ascii {
+    font-size: 10px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-terminal-logo-x {
+    flex-basis: 42px;
+    width: 42px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-status-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 12px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-shortcuts {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message,
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-message.assistant {
+    max-width: 94%;
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-pixel-logo {
+    height: 22px;
+  }
+}
