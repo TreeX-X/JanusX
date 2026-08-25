@@ -27,6 +27,7 @@ export function JanusRoundtablePane({ className, initialSessionId, embedded = fa
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [workingRole, setWorkingRole] = useState<RoundtableRole | null>(null)
+  const [parchmentOpen, setParchmentOpen] = useState(false)
   const activeSessionIdRef = useRef(initialSessionId)
   const sessionRef = useRef<RoundtableSession | null>(null)
   const hydratedSessionRef = useRef(false)
@@ -48,6 +49,7 @@ export function JanusRoundtablePane({ className, initialSessionId, embedded = fa
 
   useEffect(() => {
     activeSessionIdRef.current = initialSessionId
+    setParchmentOpen(false)
     if (!api || !initialSessionId) return
     let cancelled = false
     setBusy(true)
@@ -179,12 +181,14 @@ export function JanusRoundtablePane({ className, initialSessionId, embedded = fa
           </div>
         </header>
 
-        <div className="janus-roundtable-body">
+        <div className="janus-roundtable-body" data-parchment-open={parchmentOpen}>
               <aside className="janus-roundtable-participants" aria-label="参与者">
                 <RoundtableStage
                   participants={stageParticipants}
                   workingRole={workingRole}
                   ended={session?.status === 'ended'}
+                  parchmentOpen={parchmentOpen}
+                  onToggleParchment={() => setParchmentOpen((open) => !open)}
                 />
               </aside>
               <main className="janus-roundtable-center">{center?.(handleCenterSend, roundtableMessagesToChat(session?.messages ?? [], workingRole, session?.currentRound ?? 0), workingRole)}</main>

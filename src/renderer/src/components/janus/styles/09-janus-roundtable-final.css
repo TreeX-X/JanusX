@@ -1786,3 +1786,271 @@
       rotateX(-90deg) rotateY(180deg) !important;
   }
 }
+
+/* Reference parchment interaction: the button is a stable outer projector,
+   while the artwork floats inside it. Separating these transforms keeps the
+   parchment centred during orbit and lets hover lift it without a lateral jump. */
+.janus-roundtable-scroll {
+  position: absolute;
+  left: 50% !important;
+  top: 50% !important;
+  width: 72px !important;
+  height: 72px !important;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transform: translate3d(-36px, -36px, 1px) !important;
+  transform-style: preserve-3d;
+  /* Do not apply filter here. Chromium flattens transformed descendants when
+     a filtered ancestor is hovered, turning the 3D scroll into a 2D card. */
+  transition: transform .45s cubic-bezier(.22, .8, .25, 1);
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+  filter: none !important;
+  outline: none;
+  animation: none !important;
+  z-index: 6;
+}
+
+.janus-roundtable-scroll:hover,
+.janus-roundtable-scroll:focus-visible {
+  transform: translate3d(-36px, -36px, 16px) scale3d(1.08, 1.08, 1) !important;
+  filter: none !important;
+  outline: none;
+}
+
+.janus-roundtable-scroll[data-open="true"],
+.janus-roundtable-scroll[data-open="true"]:hover,
+.janus-roundtable-scroll[data-open="true"]:focus-visible {
+  transform: translate3d(-36px, -36px, 28px) scale3d(1.08, 1.08, 1) !important;
+  filter: none !important;
+}
+
+.janus-roundtable-scroll::-moz-focus-inner {
+  border: 0;
+}
+
+.janus-roundtable-scroll-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60px;
+  height: 40px;
+  margin: -20px 0 0 -30px;
+  display: block;
+  transform: translateZ(28px) rotateX(15deg) rotateY(10deg);
+  transform-style: preserve-3d;
+  animation: janus-roundtable-scroll-core-float 4s cubic-bezier(.4, 0, .2, 1) infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes janus-roundtable-scroll-core-float {
+  from { transform: translateZ(24px) rotateX(15deg) rotateY(-8deg) rotateZ(-2deg); }
+  to { transform: translateZ(34px) rotateX(23deg) rotateY(8deg) rotateZ(2deg); }
+}
+
+.janus-roundtable-scroll-sheet,
+.janus-roundtable-scroll-roll,
+.janus-roundtable-scroll-ribbon {
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+}
+
+.janus-roundtable-scroll-sheet {
+  left: 14px !important;
+  top: 4px !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-top: 1px solid rgba(216, 195, 158, .5);
+  border-bottom: 1px solid rgba(216, 195, 158, .5);
+  border-radius: 2px !important;
+  background:
+    linear-gradient(90deg, #503a27 0%, #d8bf94 16%, #fff4dc 50%, #e3c99d 84%, #503a27 100%),
+    repeating-linear-gradient(0deg, rgba(86, 51, 22, .12) 0 1px, transparent 1px 5px) !important;
+  box-shadow: inset 0 0 8px rgba(74, 42, 17, .7), 0 8px 18px rgba(0, 0, 0, .82),
+    0 0 14px rgba(216, 195, 158, .2) !important;
+  transform: translateZ(1px);
+}
+
+.janus-roundtable-scroll-sheet::after {
+  position: absolute;
+  inset: 6px 8px;
+  border-top: 1px solid rgba(94, 59, 29, .3);
+  border-bottom: 1px solid rgba(94, 59, 29, .25);
+  content: '';
+}
+
+.janus-roundtable-scroll-roll {
+  top: 2px !important;
+  width: 10px !important;
+  height: 36px !important;
+  border: 1px solid rgba(255, 231, 186, .48);
+  border-radius: 5px;
+  background: linear-gradient(90deg, #321e12 0%, #c9a979 38%, #f0dbb5 50%, #c9a979 62%, #321e12 100%) !important;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, .65), 0 0 9px rgba(216, 195, 158, .34) !important;
+}
+
+.janus-roundtable-scroll-roll--left { left: 6px !important; }
+.janus-roundtable-scroll-roll--right { left: 44px !important; right: auto !important; }
+
+.janus-roundtable-scroll-ribbon {
+  left: 14px !important;
+  top: -1px !important;
+  width: 4px !important;
+  height: 34px !important;
+  background: #8e1c1c !important;
+  box-shadow: 0 0 6px rgba(142, 28, 28, .8), inset 0 0 3px rgba(255, 50, 50, .5) !important;
+  transform: translateZ(5px);
+}
+
+.janus-roundtable-scroll::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 76px;
+  height: 76px;
+  border: 1px dashed rgba(216, 195, 158, .34);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(216, 195, 158, .12);
+  content: '';
+  pointer-events: none;
+  transform: translate(-50%, -50%) translateZ(5px) rotateX(45deg);
+  animation: janus-roundtable-scroll-halo 12s linear infinite;
+}
+
+@keyframes janus-roundtable-scroll-halo {
+  to { transform: translate(-50%, -50%) translateZ(5px) rotateX(45deg) rotate(-360deg); }
+}
+
+/* The shared parchment panel is closed until the centre scroll is clicked.
+   When closed, the conversation rail expands into the vacated right column. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body[data-parchment-open="false"] {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body[data-parchment-open="false"] .janus-roundtable-state {
+  display: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body[data-parchment-open="false"] .janus-roundtable-center {
+  grid-row: 1;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body[data-parchment-open="true"] .janus-roundtable-state {
+  display: block;
+  animation: janus-roundtable-parchment-open .42s cubic-bezier(.22, .8, .25, 1) both;
+}
+
+@keyframes janus-roundtable-parchment-open {
+  from { opacity: 0; transform: translateY(-10px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 760px) {
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body[data-parchment-open="false"] {
+    grid-template-rows: minmax(240px, .75fr) minmax(300px, 1fr);
+  }
+
+  .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-body[data-parchment-open="false"] .janus-roundtable-center {
+    grid-row: 2;
+  }
+}
+
+/* Camera changes interpolate on the shared 3D pivot instead of replacing the
+   whole scene transform in one frame. Orbit is temporarily held at its
+   reference pose while entering it, so the spin starts only after the lift. */
+.janus-roundtable-orbit-anchor {
+  transition: transform .9s cubic-bezier(.22, .8, .25, 1);
+}
+
+.janus-roundtable-scene--camera-transitioning .janus-roundtable-orbit-anchor {
+  transition: transform .9s cubic-bezier(.22, .8, .25, 1) !important;
+}
+
+.janus-roundtable-scene--camera-transitioning.janus-roundtable-scene--orbit .janus-roundtable-orbit-anchor {
+  animation: none !important;
+  transform: rotateX(60deg) rotateZ(-30deg) !important;
+}
+
+/* Camera controls mirror the physical camera: active modes rise slightly,
+   their indicator grows in place, and a short scan confirms the transition. */
+.janus-roundtable-camera-controls {
+  transition: border-color .35s ease, box-shadow .35s ease, background-color .35s ease;
+}
+
+.janus-roundtable-camera-controls button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transform: translateY(0);
+  transition: transform .38s cubic-bezier(.22, .8, .25, 1), color .28s ease,
+    background-color .28s ease, border-color .28s ease, box-shadow .38s ease;
+}
+
+.janus-roundtable-camera-controls button svg {
+  transition: transform .52s cubic-bezier(.22, .8, .25, 1), color .28s ease;
+}
+
+.janus-roundtable-camera-controls button::after {
+  position: absolute;
+  right: 7px;
+  bottom: 2px;
+  left: 7px;
+  height: 1px;
+  border-radius: 1px;
+  background: #ff9b61;
+  box-shadow: 0 0 7px rgba(255, 120, 48, .78);
+  content: '';
+  opacity: 0;
+  transform: scaleX(.25);
+  transition: opacity .28s ease, transform .42s cubic-bezier(.22, .8, .25, 1);
+}
+
+.janus-roundtable-camera-controls button[data-active="true"] {
+  border-color: rgba(255, 120, 48, .74);
+  background: rgba(255, 120, 48, .18);
+  box-shadow: inset 0 0 12px rgba(255, 120, 48, .12), 0 3px 10px rgba(0, 0, 0, .28);
+  color: #ffd0ae;
+  transform: translateY(-1px);
+}
+
+.janus-roundtable-camera-controls button[data-active="true"]::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.janus-roundtable-camera-controls button[data-active="true"] svg {
+  color: #ff9b61;
+  transform: rotate(-10deg) scale(1.08);
+}
+
+.janus-roundtable-camera-controls[data-camera="orbit"] button[data-active="true"] svg {
+  animation: janus-roundtable-camera-orbit-icon 2.8s linear infinite;
+}
+
+.janus-roundtable-camera-controls[data-transitioning="true"] {
+  border-color: rgba(255, 120, 48, .5);
+  box-shadow: 0 0 14px rgba(255, 120, 48, .14), inset 0 0 14px rgba(255, 120, 48, .08);
+}
+
+.janus-roundtable-camera-controls[data-transitioning="true"] button[data-active="true"]::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 28%, rgba(255, 214, 175, .3) 50%, transparent 72%);
+  content: '';
+  animation: janus-roundtable-camera-control-scan .9s ease-out both;
+}
+
+@keyframes janus-roundtable-camera-control-scan {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
+}
+
+@keyframes janus-roundtable-camera-orbit-icon {
+  to { transform: rotate(350deg) scale(1.08); }
+}

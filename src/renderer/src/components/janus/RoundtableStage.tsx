@@ -17,6 +17,8 @@ interface RoundtableStageProps {
   workingRole: RoundtableRole | null
   ended: boolean
   onSelectParticipant?: (role: RoundtableRole) => void
+  parchmentOpen?: boolean
+  onToggleParchment?: () => void
 }
 
 type CameraMode = 'orbit' | 'top' | 'iso' | 'low'
@@ -27,11 +29,20 @@ const CAMERA_LABELS: Partial<Record<CameraMode, string>> = {
   iso: '等距',
 }
 
-export function RoundtableStage({ participants, workingRole, ended, onSelectParticipant }: RoundtableStageProps) {
+export function RoundtableStage({
+  participants,
+  workingRole,
+  ended,
+  onSelectParticipant,
+  parchmentOpen = false,
+  onToggleParchment,
+}: RoundtableStageProps) {
   const [cameraMode, setCameraMode] = useState<CameraMode>('orbit')
+  const [cameraTransitioning, setCameraTransitioning] = useState(false)
   const [selectedRole, setSelectedRole] = useState<RoundtableRole | null>(null)
   const [hoveredRole, setHoveredRole] = useState<RoundtableRole | null>(null)
   const stageRef = useRef<HTMLElement>(null)
+  const cameraTransitionTimerRef = useRef<number | null>(null)
   const selectedParticipant = useMemo(
     () => participants.find((participant) => participant.id === (hoveredRole ?? selectedRole)) ?? null,
     [hoveredRole, participants, selectedRole],
@@ -62,14 +73,29 @@ export function RoundtableStage({ participants, workingRole, ended, onSelectPart
     return () => cancelAnimationFrame(frame)
   }, [cameraMode, visibleParticipants.length])
 
+  useEffect(() => () => {
+    if (cameraTransitionTimerRef.current !== null) window.clearTimeout(cameraTransitionTimerRef.current)
+  }, [])
+
   const selectParticipant = (role: RoundtableRole) => {
     setSelectedRole(role)
     onSelectParticipant?.(role)
   }
 
+  const changeCameraMode = (mode: CameraMode) => {
+    if (mode === cameraMode) return
+    if (cameraTransitionTimerRef.current !== null) window.clearTimeout(cameraTransitionTimerRef.current)
+    setCameraTransitioning(true)
+    setCameraMode(mode)
+    cameraTransitionTimerRef.current = window.setTimeout(() => {
+      cameraTransitionTimerRef.current = null
+      setCameraTransitioning(false)
+    }, 900)
+  }
+
   return (
     <section ref={stageRef} className="janus-roundtable-stage" aria-label="圆桌参会者">
-      <div className={`janus-roundtable-scene janus-roundtable-scene--${cameraMode}`}>
+      <div className={`janus-roundtable-scene janus-roundtable-scene--${cameraMode}${cameraTransitioning ? ' janus-roundtable-scene--camera-transitioning' : ''}`}>
         <div className="janus-roundtable-floor" aria-hidden="true" />
         <div className="janus-roundtable-orbit-anchor">
         <div className="janus-roundtable-table" aria-hidden="true">
@@ -83,13 +109,17 @@ export function RoundtableStage({ participants, workingRole, ended, onSelectPart
         <button
           type="button"
           className="janus-roundtable-scroll"
-          aria-label="打开共享羊皮卷"
-          onClick={() => setCameraMode((current) => current === 'top' ? 'iso' : 'top')}
+          data-open={parchmentOpen}
+          aria-label={parchmentOpen ? '关闭共享羊皮卷' : '打开共享羊皮卷'}
+          aria-pressed={parchmentOpen}
+          onClick={onToggleParchment}
         >
-          <span className="janus-roundtable-scroll-sheet" />
-          <span className="janus-roundtable-scroll-roll janus-roundtable-scroll-roll--left" />
-          <span className="janus-roundtable-scroll-roll janus-roundtable-scroll-roll--right" />
-          <span className="janus-roundtable-scroll-ribbon" />
+          <span className="janus-roundtable-scroll-core" aria-hidden="true">
+            <span className="janus-roundtable-scroll-sheet" />
+            <span className="janus-roundtable-scroll-roll janus-roundtable-scroll-roll--left" />
+            <span className="janus-roundtable-scroll-roll janus-roundtable-scroll-roll--right" />
+            <span className="janus-roundtable-scroll-ribbon" />
+          </span>
         </button>
         <div className="janus-roundtable-seats">
           {visibleParticipants.map((participant, index) => {
@@ -167,9 +197,15 @@ export function RoundtableStage({ participants, workingRole, ended, onSelectPart
       <div className="janus-roundtable-focus-readout" aria-live="polite">
         {selectedParticipant?.name ?? (workingRole ? '正在发言' : ended ? '会议已结束' : '四席会议单元')}
       </div>
-      <div className="janus-roundtable-camera-controls" role="toolbar" aria-label="圆桌视角">
+      <div
+        className="janus-roundtable-camera-controls"
+        role="toolbar"
+        aria-label="圆桌视角"
+        data-camera={cameraMode}
+        data-transitioning={cameraTransitioning}
+      >
         {(['orbit', 'top', 'iso', 'low'] as CameraMode[]).map((mode) => (
-          <button key={mode} type="button" data-active={cameraMode === mode} onClick={() => setCameraMode(mode)}>
+          <button key={mode} type="button" data-active={cameraMode === mode} onClick={() => changeCameraMode(mode)}>
             {mode === 'orbit' ? <Eye size={12} /> : mode === 'top' ? <Layers3 size={12} /> : <Crosshair size={12} />}
             {CAMERA_LABELS[mode] ?? mode.toUpperCase()}
           </button>
