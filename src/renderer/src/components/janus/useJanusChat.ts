@@ -9,7 +9,8 @@ import {
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
-import type { AgentSession, ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
+import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
+import { getAgentSettings } from '@/services/agent-settings'
 import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../../shared/ipc/llm'
 import type {
   JanusChatMessage,
@@ -32,6 +33,7 @@ import {
 } from './janusResources'
 import {
   EMPTY_JANUS_RUNTIME_STATE,
+  reduceChatAgentEvent,
   reduceJanusRuntimeState,
   runtimeEventSessionId,
   type JanusRuntimeState,
@@ -96,6 +98,8 @@ export interface UseJanusChatReturn {
   selectConversation: (conversationId: string) => void
   renameConversation: (conversationId: string, title: string) => void
   deleteConversation: (conversationId: string) => void
+  approvalMode: AgentApprovalMode
+  setApprovalMode: (mode: AgentApprovalMode) => void
 }
 
 export interface UseJanusChatRegistryReturn {
@@ -110,24 +114,23 @@ interface ConversationRuntime {
   modelNotice: string | null
   latestRecallTrace: KnowledgeRecallTrace | null
   agent: JanusRuntimeState
+  approvalMode: AgentApprovalMode
 }
 
 interface RuntimeHandles {
   generation: number
   active: boolean
   abort: (() => void) | null
+  assistantMessageId: string | null
   pendingBuffer: string
   flushTimer: number | null
   noticeTimer: number | null
   sessions: Map<string, AgentSession>
 }
 
-const SYSTEM_PROMPT = typeof window === 'undefined'
-  ? ''
-  : (window as Partial<Window>).electron?.janusPersona ?? ''
 const HISTORY_MESSAGE_LIMIT = 24
 
-function emptyRuntime(): ConversationRuntime {
+function emptyRuntime(approvalMode: AgentApprovalMode = 'per-action'): ConversationRuntime {
   return {
     pendingContent: '',
     isStreaming: false,
@@ -135,6 +138,7 @@ function emptyRuntime(): ConversationRuntime {
     modelNotice: null,
     latestRecallTrace: null,
     agent: EMPTY_JANUS_RUNTIME_STATE,
+    approvalMode,
   }
 }
 
@@ -143,6 +147,7 @@ function createRuntimeHandles(): RuntimeHandles {
     generation: 0,
     active: false,
     abort: null,
+    assistantMessageId: null,
     pendingBuffer: '',
     flushTimer: null,
     noticeTimer: null,
@@ -173,6 +178,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   const [runtimeStates, setRuntimeStates] = useState<Record<string, ConversationRuntime>>({})
   const [modelOptions, setModelOptions] = useState<ChatModelOption[]>([])
   const [persistenceReady, setPersistenceReady] = useState(false)
+  const [defaultApprovalMode, setDefaultApprovalMode] = useState<AgentApprovalMode>('per-action')
 
   const conversationsRef = useRef(conversations)
   const runtimesRef = useRef(runtimeStates)
@@ -271,6 +277,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     if (cancelAgentSessions) cancelSessions(handles)
   }, [cancelSessions, clearFlushTimer, getHandles])
+
+  useEffect(() => {
+    void getAgentSettings().then((settings) => setDefaultApprovalMode(normalizeAgentApprovalMode(settings.approvalMode))).catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -403,12 +413,14 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     requestedResources: WorkspaceResource[],
   ): Promise<ChatWorkspaceResource[]> => {
     const handles = getHandles(id)
+    const approvalMode = runtimesRef.current[id]?.approvalMode ?? defaultApprovalMode
     const resolved = await Promise.all(requestedResources.map(async (resource) => {
       let session = handles.sessions.get(resource.workspaceId)
       if (!session || session.status !== 'running') {
         session = await window.electron.agentRuntime.createSession({
           workspaceId: resource.workspaceId,
           workspaceRoot: resource.workspacePath,
+          approvalMode,
         })
         handles.sessions.set(resource.workspaceId, session)
       }
@@ -425,13 +437,14 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       return { ...current, agentSessionId: session.id }
     }))
     return resolved.filter((resource): resource is ChatWorkspaceResource => resource !== null)
-  }, [getHandles])
+  }, [defaultApprovalMode, getHandles])
 
-  const commitAssistant = useCallback((id: string, content: string) => {
+  const commitAssistant = useCallback((id: string, content: string, messageId?: string) => {
     if (!content.trim()) return
+    const assistantMessageId = messageId ?? crypto.randomUUID()
     updateConversation(id, (conversation) => {
       const messages = capChatMessages([...conversation.messages, {
-        id: crypto.randomUUID(),
+        id: assistantMessageId,
         role: 'assistant' as const,
         content,
         timestamp: Date.now(),
@@ -450,6 +463,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.active = true
     handles.abort?.()
     handles.abort = null
+    handles.assistantMessageId = crypto.randomUUID()
     clearFlushTimer(handles)
     handles.pendingBuffer = ''
 
@@ -466,10 +480,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       isStreaming: true,
       error: null,
       latestRecallTrace: null,
+      agent: EMPTY_JANUS_RUNTIME_STATE,
     }))
 
     const chatMessages: ChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
       ...history.slice(-HISTORY_MESSAGE_LIMIT).map((message) => ({
         role: message.role,
         content: message.content,
@@ -501,7 +515,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           const final = flushPending(id)
           handles.pendingBuffer = ''
           setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
-          commitAssistant(id, final)
+          commitAssistant(id, final, handles.assistantMessageId ?? undefined)
+          handles.assistantMessageId = null
         },
         (error) => {
           if (handles.generation !== generation) return
@@ -515,11 +530,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             isStreaming: false,
             error,
           }))
-          commitAssistant(id, final)
+          commitAssistant(id, final, handles.assistantMessageId ?? undefined)
+          handles.assistantMessageId = null
         },
         {
           ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
           sourceTag: 'janus-chat',
+          conversationId: id,
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
           onRecallTrace: (trace) => {
@@ -529,11 +546,24 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           },
           onToolTrace: (entries) => {
             if (handles.generation !== generation) return
+            const assistantMessageId = handles.assistantMessageId
+            if (!assistantMessageId) return
             updateConversation(id, (current) => ({
               ...current,
-              toolTraces: [...current.toolTraces, ...entries].slice(-MAX_TOOL_TRACES),
+              toolTraces: [
+                ...current.toolTraces,
+                ...entries.map((entry) => ({ ...entry, turnId: assistantMessageId })),
+              ].slice(-MAX_TOOL_TRACES),
               updatedAt: Date.now(),
             }))
+          },
+          onAgentEvent: (agentEvent) => {
+            if (handles.generation === generation) {
+              setRuntime(id, (current) => ({
+                ...current,
+                agent: reduceChatAgentEvent(current.agent, agentEvent),
+              }))
+            }
           },
         },
       )
@@ -541,6 +571,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     })().catch((reason: unknown) => {
       if (handles.generation !== generation) return
       handles.active = false
+      handles.assistantMessageId = null
       setRuntime(id, (current) => ({
         ...current,
         isStreaming: false,
@@ -561,7 +592,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const final = flushPending(id)
     handles.pendingBuffer = ''
     setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
-    commitAssistant(id, final)
+    commitAssistant(id, final, handles.assistantMessageId ?? undefined)
+    handles.assistantMessageId = null
   }, [commitAssistant, flushPending, setRuntime])
 
   const send = useCallback((id: string, text: string) => {
@@ -676,6 +708,20 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     }, 1800)
   }, [getHandles, setRuntime, updateConversation])
 
+  const setApprovalMode = useCallback((id: string, mode: AgentApprovalMode) => {
+    const normalized = normalizeAgentApprovalMode(mode)
+    const handles = getHandles(id)
+    setRuntime(id, (current) => ({ ...current, approvalMode: normalized }))
+    for (const session of handles.sessions.values()) {
+      void window.electron.agentRuntime.setApprovalMode(session.id, normalized).then((updated) => {
+        if (!updated) setRuntime(id, (current) => ({ ...current, error: 'Unable to switch Agent permission mode' }))
+      }).catch((error: unknown) => setRuntime(id, (current) => ({
+        ...current,
+        error: error instanceof Error ? error.message : 'Unable to switch Agent permission mode',
+      })))
+    }
+  }, [getHandles, setRuntime])
+
   const createConversation = useCallback(() => {
     const conversation = createJanusConversation()
     updateConversations((current) => [conversation, ...current])
@@ -732,7 +778,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       ? requestedId
       : islandConversationId
     const conversation = conversations.find((item) => item.id === id) ?? conversations[0]
-    const runtime = runtimeStates[id] ?? emptyRuntime()
+    const runtime = runtimeStates[id] ?? emptyRuntime(defaultApprovalMode)
     const resources = conversation ? workspaceResources(conversation, availableWorkspaces) : []
     const activeModel = modelOptions.find((option) =>
       option.providerId === conversation?.providerId && option.modelId === conversation?.modelId)
@@ -773,6 +819,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       selectConversation,
       renameConversation,
       deleteConversation,
+      approvalMode: runtime.approvalMode,
+      setApprovalMode: (mode) => setApprovalMode(id, mode),
     }
   }, [
     attachWorkspace,
@@ -780,6 +828,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     clear,
     conversations,
     createConversation,
+    defaultApprovalMode,
     deleteConversation,
     detachWorkspace,
     islandConversationId,
@@ -793,6 +842,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     selectConversation,
     selectModel,
     send,
+    setApprovalMode,
     stop,
     summaries,
   ])

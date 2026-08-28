@@ -61,6 +61,8 @@ function conversationController(overrides: Partial<UseJanusChatReturn> = {}): Us
     selectConversation: vi.fn(),
     renameConversation: vi.fn(),
     deleteConversation: vi.fn(),
+    approvalMode: 'per-action',
+    setApprovalMode: vi.fn(),
     ...overrides,
   }
 }
@@ -162,6 +164,49 @@ describe('Janus resource scope UI', () => {
     expect(markup).toContain('aria-label="janus:chat.activity.aria"')
     expect(markup).toContain('workspace.read')
     expect(markup).toContain('running')
+  })
+
+  it('renders an explicit Agent permission mode switch', () => {
+    const setApprovalMode = vi.fn()
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      conversationController: conversationController({ approvalMode: 'auto-run', setApprovalMode }),
+    }))
+    expect(markup).toContain('aria-label="janus:chat.permission.aria"')
+    expect(markup).toContain('janus-chat-permission-select')
+  })
+
+  it('keeps completed live tool cards visible while the response is still streaming', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      isStreaming: true,
+      resourceController: controller({
+        activities: [{ correlationId: 'call-1', toolName: 'workspace.read', status: 'completed', argsDigest: 'path' }],
+      }),
+    }))
+
+    expect(markup).toContain('workspace.read')
+    expect(markup).toContain('janus:chat.tool.status.completed')
+  })
+
+  it('renders a persisted tool trace only below its matching assistant response', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      messages: [
+        { id: 'answer-1', role: 'assistant', content: 'First answer', timestamp: 1 },
+        { id: 'answer-2', role: 'assistant', content: 'Second answer', timestamp: 2 },
+      ],
+      toolTraces: [{
+        toolName: 'workspace.read',
+        workspaceId: 'workspace-1',
+        status: 'completed',
+        summary: 'Read README.md',
+        turnId: 'answer-1',
+      }],
+    }))
+
+    expect(markup.match(/data-turn="answer-1"/g)).toHaveLength(1)
+    expect(markup).not.toContain('data-turn="answer-2"')
   })
 
   it('renders the custom workspace edit preview before approval', () => {

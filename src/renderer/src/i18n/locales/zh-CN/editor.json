@@ -8,6 +8,8 @@
     "noMatch": "无匹配文件",
     "reloadFailed": "目录刷新失败",
     "operationFailed": "文件操作失败",
+    "openInVSCode": "在 VS Code 中打开工作区",
+    "openVSCodeFailed": "无法打开 VS Code",
     "nameInvalid": "名称不能为空，且不能包含 / 或 \\",
     "workspaceRoot": "工作区",
     "deleteTitle": "确认删除",

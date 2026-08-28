@@ -20,6 +20,8 @@ describe('runtime tool adapter', () => {
     const preview = vi.fn(() => ({ summary: 'Read', paths: ['README.md'], truncated: false }))
     const [tool] = createJanusRuntimeTools(host, 'session', { callerId: 'renderer', preview })
     const output = await tool.execute({ id: 'call', name: tool.name, arguments: { workspaceId: 'ws', path: 'README.md' } }, new AbortController().signal)
+    expect(tool.name).toBe('workspace_read')
+    expect(tool.canonicalName).toBe('workspace.read')
     expect(tool.description).toBe('Read a file')
     expect(tool.executionMode).toBe('parallel')
     expect(output).toMatchObject({ isError: false })
@@ -39,7 +41,7 @@ describe('runtime tool adapter', () => {
     const readOnly = createJanusRuntimeReadOnlyTools(host, 'session')
     const output = await all[0].execute({ id: 'call', name: all[0].name, arguments: {} }, new AbortController().signal)
     expect(output).toMatchObject({ isError: true })
-    expect(readOnly.map((tool) => tool.name)).toEqual(['workspace.read'])
+    expect(readOnly.map((tool) => tool.name)).toEqual(['workspace_read'])
   })
 
   it('routes a shared tool surface to the session selected by workspaceId', async () => {

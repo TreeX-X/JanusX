@@ -7,8 +7,14 @@ import {
   redactWorkingValue,
   settleApprovalDecision,
 } from '../../../src/main/agent/runtime/policy-gate'
+import { normalizeAgentApprovalMode } from '../../../src/shared/ipc/agent-runtime'
 
 describe('workspace read policy', () => {
+  it('normalizes unknown permission settings to strict approval', () => {
+    expect(normalizeAgentApprovalMode(undefined)).toBe('per-action')
+    expect(normalizeAgentApprovalMode('unexpected')).toBe('per-action')
+    expect(normalizeAgentApprovalMode('auto-run')).toBe('auto-run')
+  })
   it.each([
     'src/index.ts',
     'docs/environment.md',
@@ -84,6 +90,21 @@ describe('workspace read policy', () => {
       })
     },
   )
+
+  it.each(['write', 'create', 'config-apply', 'run', 'restore', 'delete', 'external-command', 'network'] as const)(
+    'allows ordinary %s in auto-run mode without approval',
+    (actionRisk) => {
+      expect(evaluateWorkspaceActionPolicy({ actionRisk, approvalMode: 'auto-run' })).toMatchObject({
+        outcome: 'allow', approvalPolicy: 'auto-run', approvalDecision: 'not-required', reasonCode: 'AUTO_RUN_ALLOWED',
+      })
+    },
+  )
+
+  it('keeps sensitive paths denied in auto-run mode', () => {
+    expect(evaluateWorkspaceActionPolicy({ actionRisk: 'write', relativePath: '.env', approvalMode: 'auto-run' })).toMatchObject({
+      outcome: 'deny', approvalPolicy: 'none', reasonCode: 'SENSITIVE_PATH',
+    })
+  })
 
   it('denies sensitive targets and redacts secret-bearing fields', () => {
     expect(evaluateWorkspaceActionPolicy({ actionRisk: 'write', relativePath: '.env' })).toMatchObject({

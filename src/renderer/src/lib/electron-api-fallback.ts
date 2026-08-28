@@ -117,6 +117,7 @@ export function installElectronApiFallback(): void {
     },
     janus: {
       listBlueprints: () => unavailableJanus(),
+      listBlueprintSummaries: () => unavailableJanus(),
       loadBlueprint: () => unavailableJanus(),
       createBlueprint: () => unavailableJanus(),
       updateBlueprint: () => unavailableJanus(),
@@ -164,7 +165,7 @@ export function installElectronApiFallback(): void {
       getModelCatalog: unavailable, refreshModelCatalog: unavailable, getAdapters: unavailable,
       getDefaultProvider: unavailable, chat: unavailable, startChatStream: () => {}, abortChat: unavailable,
       onDelta: () => () => {}, onDone: () => () => {}, onError: () => () => {}, onRecallTrace: () => () => {},
-      onToolTrace: () => () => {},
+      onToolTrace: () => () => {}, onAgentEvent: () => () => {},
     },
     agent: {
       start: unavailable, cancel: unavailable, cancelAll: unavailable, listSessions: unavailable,
@@ -173,6 +174,7 @@ export function installElectronApiFallback(): void {
     agentRuntime: {
       createSession: unavailable, executeTool: unavailable, cancelSession: unavailable,
       resolveApproval: () => Promise.resolve(false), getSession: () => Promise.resolve(null),
+      setApprovalMode: () => Promise.resolve(null),
       queryPolicyAudit: () => Promise.resolve([]),
       executeFunctionCall: unavailable, executePlannerStep: unavailable,
       onEvent: () => () => {},
@@ -192,6 +194,10 @@ export function installElectronApiFallback(): void {
       testFeishu: unavailable,
       getFeishuControlStatus: unavailable,
     },
+    agentSettings: {
+      get: () => Promise.resolve({ approvalMode: 'per-action' as const }),
+      update: () => Promise.resolve({ approvalMode: 'per-action' as const }),
+    },
     subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
     dialog: { openDirectory: unavailable, saveFile: unavailable, showMessageBox: unavailable },
     window: {
@@ -205,7 +211,7 @@ export function installElectronApiFallback(): void {
       onEditorEmbedded: () => () => {},
       onEditorRefresh: () => () => {},
     },
-    system: { getDefaultShell: unavailable, getPlatform: unavailable, getRuntimeTelemetry: unavailable, getLanguage: () => Promise.resolve(null), setLanguage: unavailable },
+    system: { getDefaultShell: unavailable, getPlatform: unavailable, openVSCode: unavailable, getRuntimeTelemetry: unavailable, getLanguage: () => Promise.resolve(null), setLanguage: unavailable },
     desktopToast: { ready: () => {}, action: () => {}, onShow: () => () => {} },
     janusPersona: '',
   }

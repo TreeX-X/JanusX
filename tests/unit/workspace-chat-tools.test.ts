@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ToolResult } from '../../src/shared/ipc/agent-runtime'
-import { createWorkspaceChatSystemPrompt, createWorkspaceChatTools } from '../../src/main/llm/workspace-chat-tools'
+import { createWorkspaceChatTools } from '../../src/main/llm/workspace-chat-tools'
+import type { ToolManifest } from '../../src/main/agent/runtime/tool-manifest'
 
 function result(overrides: Partial<ToolResult> = {}): ToolResult {
   return {
@@ -24,6 +25,23 @@ const resources = new Map([
 ])
 
 describe('workspace chat tools', () => {
+  it('uses active manifest descriptions for Provider-visible tools', () => {
+    const toolManifests: ToolManifest[] = [{
+      canonicalName: 'workspace.read', providerName: 'workspace_read', version: 1,
+      description: 'Read bounded workspace evidence from the Runtime manifest.', actionRisk: 'read',
+      inputSchema: { type: 'object' },
+    }]
+    const tools = createWorkspaceChatTools({
+      runtime: { executeFunctionCall: vi.fn() },
+      resources,
+      callerId: 'renderer:7',
+      toolManifests,
+    })
+
+    expect(tools.workspace_read.description).toBe(toolManifests[0].description)
+    expect(tools.workspace_edit.description).toContain('exact, unambiguous replacements')
+  })
+
   it('routes each call through the explicitly requested trusted workspace session', async () => {
     const executeFunctionCall = vi.fn().mockResolvedValue(result())
     const tools = createWorkspaceChatTools({
@@ -189,6 +207,24 @@ describe('workspace chat tools', () => {
     }, 'renderer:7')
   })
 
+  it('routes a unified diff edit with its own bounded approval preview', async () => {
+    const executeFunctionCall = vi.fn().mockResolvedValue(result({ toolName: 'workspace.edit' }))
+    const tools = createWorkspaceChatTools({ runtime: { executeFunctionCall }, resources, callerId: 'renderer:7' })
+    const unifiedDiff = ['--- a/README.md', '+++ b/README.md', '@@ -1 +1 @@', '-before', '+after', ''].join('\n')
+
+    await tools.workspace_edit.execute({
+      workspaceId: 'workspace-1', path: 'README.md', expectedHash: 'a'.repeat(64), unifiedDiff,
+    })
+
+    expect(executeFunctionCall).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      call: expect.objectContaining({
+        toolName: 'workspace.edit',
+        preview: { summary: 'Edit README.md with a unified diff', paths: ['README.md'], detail: unifiedDiff, truncated: false },
+      }),
+    }, 'renderer:7')
+  })
+
   it('exposes shared launch configuration and process tools with approval previews', async () => {
     const executeFunctionCall = vi.fn().mockResolvedValue(result({ output: { ok: true } }))
     const tools = createWorkspaceChatTools({
@@ -255,15 +291,4 @@ describe('workspace chat tools', () => {
     })
   })
 
-  it('treats detection as evidence and explicit launch intent as authoritative', () => {
-    const prompt = createWorkspaceChatSystemPrompt(resources)
-
-    expect(prompt).toContain('Project detection is evidence, not a command')
-    expect(prompt).toContain('Explicit user statements')
-    expect(prompt).toContain('project_generate_config.launch')
-    expect(prompt).toContain('project_list_processes')
-    expect(prompt).toContain('git_status')
-    expect(prompt).toContain('command_run')
-    expect(prompt).toContain('manage unrelated operating-system processes')
-  })
 })

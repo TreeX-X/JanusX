@@ -20,6 +20,12 @@
       "nav": "Knowledge",
       "navMeta": "Memory capture"
     },
+    "agent": {
+      "title": "Agent Permissions",
+      "subtitle": "Agent Permissions - Default approval mode for JanusX Agent sessions",
+      "nav": "Agent Permissions",
+      "navMeta": "Approval mode"
+    },
     "llm": {
       "title": "LLM Engines",
       "subtitle": "LLM Engine · Provider credentials, default model and connection test",
@@ -223,6 +229,16 @@
       "load": "Failed to load knowledge settings",
       "save": "Failed to save knowledge settings"
     }
+  },
+  "agent": {
+    "section": { "permissions": "Permission defaults" },
+    "default": {
+      "label": "Default approval mode",
+      "hint": "New Agent sessions inherit this mode. You can switch the active Janus Chat session directly.",
+      "mode": { "perAction": "Approve every action", "autoRun": "Auto-run all actions" }
+    },
+    "safety": "Auto-run still enforces workspace boundaries, sensitive-path denial, input validation, checkpoints and audit records.",
+    "error": { "load": "Failed to load Agent permission settings", "save": "Failed to save Agent permission settings" }
   },
   "officeCli": {
     "title": "OfficeCLI",

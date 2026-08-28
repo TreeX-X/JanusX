@@ -177,4 +177,17 @@ describe('Island Chat workspace store orchestration', () => {
     expect(state.paneTree).toBeNull()
     expect(state.activeTerminalId).toBeNull()
   })
+
+  it('keeps Chat when removing the last terminal from a split layout', () => {
+    setTerminalPane()
+    useWorkspaceStore.getState().openJanusChatInWorkspace()
+
+    useWorkspaceStore.getState().removeTerminal('terminal-1')
+
+    const state = useWorkspaceStore.getState()
+    expect(state.terminals).toEqual([])
+    expect(getLeafPanes(state.paneTree).flatMap((leaf) => leaf.tabs).map((tab) => tab.id)).toEqual(['janus-chat'])
+    expect(state.focusedTabId).toBe('janus-chat')
+    expect(state.activeTerminalId).toBeNull()
+  })
 })

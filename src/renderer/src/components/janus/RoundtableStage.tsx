@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Crosshair, Eye, Layers3 } from 'lucide-react'
-import type { RoundtableRole } from '../../../../shared/ipc/janus-roundtable'
 import { JanusIdentityCore } from './JanusIdentityCore'
 import type { JanusAgentIdentityId } from './janusIdentity'
+
+export type RoundtableRole = 'user' | 'host' | 'agent-1' | 'agent-2'
 
 export interface RoundtableStageParticipant {
   id: RoundtableRole

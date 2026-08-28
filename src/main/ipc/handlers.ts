@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { spawn } from 'child_process'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { watch, type FSWatcher } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { basename, join, relative, resolve } from 'path'
@@ -15,6 +15,8 @@ import {
 import { sortWorkspaceSidebar } from '../../shared/workspace-sidebar'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/renderer-authorization'
+import { resolveCLIPath } from '../agent/cli-resolver'
+import { buildVSCodeLaunchArgs } from '../ide-launch'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
@@ -461,6 +463,32 @@ export function registerWorkspaceHandlers(
 
   ipcMain.handle(SYSTEM_CHANNELS.platform, () => {
     return process.platform
+  })
+
+  ipcMain.handle(SYSTEM_CHANNELS.openVSCode, async (_event, rootPath: string) => {
+    const workspacePath = resolve(rootPath)
+    try {
+      if (!(await stat(workspacePath)).isDirectory()) return fileTreeResult(false, 'Workspace path is not a directory')
+
+      const codePath = await resolveCLIPath('code')
+      if (!codePath) return fileTreeResult(false, 'VS Code command was not found')
+
+      const profilePath = join(app.getPath('userData'), `vscode-workspace-profile-${process.pid}`)
+      await new Promise<void>((complete, fail) => {
+        const child = spawn(codePath, buildVSCodeLaunchArgs(workspacePath, profilePath), {
+          detached: true,
+          stdio: 'ignore',
+        })
+        child.once('error', fail)
+        child.once('spawn', () => {
+          child.unref()
+          complete()
+        })
+      })
+      return fileTreeResult(true)
+    } catch (error) {
+      return fileTreeResult(false, error instanceof Error ? error.message : 'Failed to open VS Code')
+    }
   })
 
   ipcMain.handle(FILE_TREE_CHANNELS.load, async (_event, rootPath: string) => {

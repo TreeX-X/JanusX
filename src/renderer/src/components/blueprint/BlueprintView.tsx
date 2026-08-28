@@ -6,7 +6,7 @@
  *  样式见 ./blueprint.css。
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './blueprint.css'
 import { useI18n } from '@/i18n/useI18n'
 import { useBlueprintStore } from '@/stores/blueprint'
@@ -39,10 +39,17 @@ interface CandidateDraft {
 
 interface BlueprintViewProps {
   density?: 'embedded' | 'workbench'
+  onDetailOpenChange?: (open: boolean) => void
+  onRegisterFlush?: (flush: () => Promise<boolean>) => void
 }
 
-export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
+export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegisterFlush }: BlueprintViewProps) {
   const { t } = useI18n('blueprint')
+  const flushRef = useRef<(() => Promise<boolean>) | null>(null)
+  const registerFlush = useCallback((flush: () => Promise<boolean>) => {
+    flushRef.current = flush
+    onRegisterFlush?.(flush)
+  }, [onRegisterFlush])
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
@@ -187,9 +194,10 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
     void loadCandidates()
   }, [loadCandidates])
 
-  const handleSelect = (id: string) => {
+  const handleSelect = async (id: string) => {
+    await flushRef.current?.()
     setSelectedId(id)
-    loadBlueprint(id)
+    await loadBlueprint(id)
   }
 
   const handleCreate = () => setCreateDialogOpen(true)
@@ -199,7 +207,6 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
     const bp = await createBlueprint({ name, rootTitle: t('blueprint:view.rootTask'), rootType: 'epic' })
     if (bp) {
       setSelectedId(bp.id)
-      loadBlueprint(bp.id)
     }
   }
 
@@ -219,7 +226,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
     setRenameDialogOpen(false)
     if (!id) return
     const ok = await renameBlueprint(id, name)
-    if (ok) loadBlueprint(id)
+    if (ok) setSelectedId(id)
   }
 
   const handleDeleteConfirm = async () => {
@@ -305,7 +312,7 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         <div className="blueprint-toolbar__group blueprint-toolbar__group--manager">
           <Select
             value={selectedId ?? ''}
-            onChange={handleSelect}
+            onChange={(id) => { void handleSelect(id) }}
             disabled={blueprints.length === 0}
             placeholder={t('blueprint:view.noBlueprints')}
             options={
@@ -479,10 +486,12 @@ export function BlueprintView({ density = 'embedded' }: BlueprintViewProps) {
         <BlueprintCanvas
           key={currentBlueprint.id}
           blueprintId={currentBlueprint.id}
+          onDetailOpenChange={onDetailOpenChange}
+          onRegisterFlush={registerFlush}
         />
       ) : (
-        <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>
-          {blueprints.length === 0 ? t('blueprint:view.emptyCreateHint') : t('blueprint:view.emptySelectHint')}
+        <div className="blueprint-view__loading-state" aria-live="polite">
+          {loading ? t('blueprint:toolbar.loading') : blueprints.length === 0 ? t('blueprint:view.emptyCreateHint') : t('blueprint:view.emptySelectHint')}
         </div>
       )}
 

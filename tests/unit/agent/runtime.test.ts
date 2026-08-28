@@ -111,6 +111,29 @@ describe('WorkspaceAgentRuntime', () => {
     expect(events).toEqual(['session-created', 'tool-requested', 'policy-decided', 'approval-requested', 'policy-decided', 'tool-started', 'tool-completed'])
   })
 
+  it('runs mutation tools immediately in auto-run mode and exposes the mode', async () => {
+    const execute = vi.fn(async () => 'auto')
+    const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
+    runtime.registry.register({ ...echoTool(execute), actionRisk: 'write' })
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd(), approvalMode: 'auto-run' })
+    expect(session.approvalMode).toBe('auto-run')
+    const result = await runtime.executeTool({ sessionId: session.id, call: { toolName: 'workspace.echo', input: { text: 'ok' }, preview: { summary: 'write', paths: ['file.txt'], truncated: false } } })
+    expect(result).toMatchObject({ status: 'completed', reasonCode: 'AUTO_RUN_ALLOWED', policyDecision: { approvalPolicy: 'auto-run' } })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches a session mode for its owner and applies it to later calls', async () => {
+    const execute = vi.fn(async () => 'switched')
+    const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
+    runtime.registry.register({ ...echoTool(execute), actionRisk: 'run' })
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd() }, 'renderer:1')
+    expect(runtime.setApprovalMode(session.id, 'auto-run', 'renderer:2')).toBeNull()
+    expect(runtime.setApprovalMode(session.id, 'auto-run', 'renderer:1')).toMatchObject({ approvalMode: 'auto-run' })
+    const result = await runtime.executeTool({ sessionId: session.id, call: { toolName: 'workspace.echo', input: { text: 'ok' } } }, 'renderer:1')
+    expect(result.status).toBe('completed')
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
   it('supports synchronous approval without exposing execution input to listeners', async () => {
     const execute = vi.fn(async (input) => input)
     const runtime = new WorkspaceAgentRuntime(async () => process.cwd())

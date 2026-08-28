@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { statSync } from 'node:fs'
-import type { AgentRuntimeEvent, AgentSession, ApprovalPreview, ApprovalResult, CreateAgentSessionInput, ExecuteToolInput, PolicyAuditQuery, PolicyDecision, PolicyDecisionRecord, ToolResult } from '../../../shared/ipc/agent-runtime'
+import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentRuntimeEvent, type AgentSession, type ApprovalPreview, type ApprovalResult, type CreateAgentSessionInput, type ExecuteToolInput, type PolicyAuditQuery, type PolicyDecision, type PolicyDecisionRecord, type ToolResult } from '../../../shared/ipc/agent-runtime'
 import { ToolRegistry, type RegisteredTool } from './registry'
 import type { ResolveWorkspaceRoot } from '../../office/office-workspace-guard'
 import { createPolicyDecisionRecord, evaluateWorkspaceActionPolicy, redactPolicyValue, redactWorkingValue, sanitizePolicyText, settleApprovalDecision } from './policy-gate'
@@ -10,7 +10,7 @@ import { FilePolicyAuditStore, MemoryPolicyAuditStore, type PolicyAuditStore } f
 type Listener = (event: AgentRuntimeEvent) => void
 type ApprovalOutcome = 'approved' | 'denied' | 'cancelled' | 'timed-out'
 interface PendingApproval { resolve: (outcome: ApprovalOutcome) => void; callerId: string; expected: Omit<ApprovalResult, 'approved' | 'approvalId'> }
-interface ActiveSession extends AgentSession { controller: AbortController; pending: Map<string, PendingApproval>; activeCalls: Set<Promise<void>>; ended: boolean }
+interface ActiveSession extends AgentSession { controller: AbortController; pending: Map<string, PendingApproval>; activeCalls: Set<Promise<void>>; ended: boolean; ownerId: string }
 class ToolTimeoutError extends Error {}
 const PATH_DENIAL_CODES = new Set(['ABSOLUTE_PATH', 'PATH_TRAVERSAL', 'OUTSIDE_WORKSPACE', 'TARGET_CHANGED', 'WORKSPACE_UNAVAILABLE', 'TARGET_UNAVAILABLE', 'TARGET_NOT_REGULAR'])
 
@@ -43,7 +43,7 @@ export class WorkspaceAgentRuntime {
     return record
   }
 
-  async createSession(input: CreateAgentSessionInput): Promise<AgentSession> {
+  async createSession(input: CreateAgentSessionInput, ownerId = 'internal'): Promise<AgentSession> {
     if (!input.workspaceId?.trim() || !input.workspaceRoot?.trim() || !this.resolveWorkspaceRoot) throw new Error('workspaceId and workspaceRoot are required')
     const trustedRoot = await this.resolveWorkspaceRoot(input.workspaceId)
     if (!trustedRoot) throw new Error('Workspace is not registered')
@@ -51,7 +51,7 @@ export class WorkspaceAgentRuntime {
     if ((await realpath(input.workspaceRoot)) !== root) throw new Error('workspaceRoot does not match registered workspace')
     if (!statSync(root).isDirectory()) throw new Error('workspaceRoot must be a directory')
     const now = new Date().toISOString()
-    const session: ActiveSession = { id: randomUUID(), workspace: { workspaceId: input.workspaceId, workspaceRoot: root }, status: 'running', createdAt: now, updatedAt: now, timeoutMs: input.timeoutMs ?? 120_000, controller: new AbortController(), pending: new Map(), activeCalls: new Set(), ended: false }
+    const session: ActiveSession = { id: randomUUID(), workspace: { workspaceId: input.workspaceId, workspaceRoot: root }, status: 'running', createdAt: now, updatedAt: now, timeoutMs: input.timeoutMs ?? 120_000, approvalMode: normalizeAgentApprovalMode(input.approvalMode), controller: new AbortController(), pending: new Map(), activeCalls: new Set(), ended: false, ownerId }
     this.sessions.set(session.id, session)
     this.emit({ type: 'session-created', session: this.publicSession(session) })
     return this.publicSession(session)
@@ -82,6 +82,7 @@ export class WorkspaceAgentRuntime {
       actionRisk: tool.actionRisk,
       evidenceConfidence: input.call.evidenceConfidence,
       relativePath,
+      approvalMode: session.approvalMode,
     })
     let policyRecord = await this.recordPolicyDecision(session, correlationId, tool.name, executionInput, policyDecision)
     if (policyDecision.outcome === 'deny') {
@@ -171,6 +172,15 @@ export class WorkspaceAgentRuntime {
     if (!pending || pending.callerId !== callerId || Object.entries(pending.expected).some(([key, expected]) => value[key as keyof ApprovalResult] !== expected)) return false
     session!.pending.delete(value.approvalId); pending.resolve(value.approved ? 'approved' : 'denied'); return true
   }
+  setApprovalMode(sessionId: string, mode: AgentApprovalMode, callerId = 'internal'): AgentSession | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || (session.ownerId !== callerId && callerId !== 'internal')) return null
+    if (session.status !== 'running') return this.publicSession(session)
+    session.approvalMode = normalizeAgentApprovalMode(mode)
+    session.updatedAt = new Date().toISOString()
+    this.emit({ type: 'session-updated', session: this.publicSession(session) })
+    return this.publicSession(session)
+  }
   executeFunctionCall(input: ExecuteToolInput, callerId = 'internal'): Promise<ToolResult> { return this.executeTool({ ...input, call: { ...input.call, source: 'function-calling' } }, callerId) }
   executePlannerStep(input: ExecuteToolInput, callerId = 'internal'): Promise<ToolResult> { return this.executeTool({ ...input, call: { ...input.call, source: 'planner' } }, callerId) }
   getSession(id: string): AgentSession | null { const session = this.sessions.get(id); return session ? this.publicSession(session) : null }
@@ -188,7 +198,7 @@ export class WorkspaceAgentRuntime {
       truncated: preview.truncated,
     }
   }
-  private publicSession(session: ActiveSession): AgentSession { return { id: session.id, workspace: { ...session.workspace }, status: session.status, createdAt: session.createdAt, updatedAt: session.updatedAt, timeoutMs: session.timeoutMs } }
+  private publicSession(session: ActiveSession): AgentSession { return { id: session.id, workspace: { ...session.workspace }, status: session.status, createdAt: session.createdAt, updatedAt: session.updatedAt, timeoutMs: session.timeoutMs, approvalMode: session.approvalMode } }
   private endSession(session: ActiveSession): void { if (session.ended) return; session.ended = true; this.emit({ type: 'session-ended', session: this.publicSession(session) }) }
   private endSessionWhenIdle(session: ActiveSession): void { if (session.status !== 'running' && session.activeCalls.size === 0) this.endSession(session) }
   private settleApprovals(session: ActiveSession, outcome: ApprovalOutcome): void { session.pending.forEach(({ resolve }) => resolve(outcome)); session.pending.clear() }

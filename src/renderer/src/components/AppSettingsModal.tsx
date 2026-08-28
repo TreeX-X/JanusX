@@ -6,10 +6,11 @@ import { NotificationSettingsPanel } from './NotificationSettingsPanel'
 import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
 import { ModelCatalogPanel } from './ModelCatalogPanel'
+import { AgentSettingsPanel } from './AgentSettingsPanel'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'llm' | 'models'
+type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -17,7 +18,7 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'llm', 'models']
+const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models']
 
 export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications' }: AppSettingsModalProps) {
   const { t } = useI18n('settings')
@@ -68,6 +69,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
             {activeTab === 'general' && <GeneralSettingsPanel />}
             {activeTab === 'notifications' && <NotificationSettingsPanel />}
             {activeTab === 'knowledge' && <KnowledgeSettingsPanel />}
+            {activeTab === 'agent' && <AgentSettingsPanel />}
             {activeTab === 'llm' && <LlmConfigModal embedded />}
             {activeTab === 'models' && <ModelCatalogPanel />}
           </main>

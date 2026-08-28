@@ -13,7 +13,7 @@ const FileViewerContent = lazy(() =>
   import('@/components/FileViewerContent').then((m) => ({ default: m.FileViewerContent }))
 )
 
-function ViewerContent({ file, workspacePath, onEditorMount }: { file: OpenFile; workspacePath: string | null; onEditorMount: (editor: FindableEditor | null) => void }) {
+function ViewerContent({ file, workspacePath, onEditorMount }: { file: OpenFile; workspacePath: string | null; onEditorMount?: (editor: FindableEditor | null) => void }) {
   const { t } = useI18n('editor')
   const updateContent = useEditorStore((s) => s.updateContent)
   const openFileAt = useEditorStore((s) => s.openFileAt)
@@ -319,7 +319,7 @@ export function FileEditor() {
     >
       {/* Viewer area */}
       <div className="flex-1 overflow-hidden" style={{ background: '#151517', height: '100%', position: 'relative' }}>
-        {activeFile && <ViewerContent key={activeFile.id} file={activeFile} workspacePath={activeWorkspacePath} onEditorMount={handleEditorMount} />}
+        {activeFile && <ViewerContent key={`${activeFile.id}:${activeFile.absolutePath}`} file={activeFile} workspacePath={activeWorkspacePath} onEditorMount={handleEditorMount} />}
       </div>
     </FloatingPanel>
   )

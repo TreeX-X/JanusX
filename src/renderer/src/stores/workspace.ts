@@ -305,7 +305,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   removeTerminal: (id) =>
     set((s) => {
       const terminals = s.terminals.filter((t) => t.id !== id)
-      const paneTree = terminals.length > 0 ? removeTerminalFromPaneTree(s.paneTree, id) : null
+      // Remove only the terminal view; non-terminal pane content such as Janus Chat
+      // must survive when the terminal was the last terminal in the workspace.
+      const paneTree = removeTerminalFromPaneTree(s.paneTree, id)
       const focus = resolvePaneFocus(paneTree, s.focusedPaneId, s.focusedTabId)
       return {
         terminals,

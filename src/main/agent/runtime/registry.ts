@@ -1,4 +1,5 @@
 import type { ToolCall, ToolDefinition, ToolInputSchema } from '../../../shared/ipc/agent-runtime'
+import { createToolManifests, type ToolManifest } from './tool-manifest'
 
 export interface RegisteredTool extends ToolDefinition {
   execute: (input: Record<string, unknown>, context: { workspaceId: string; workspaceRoot: string; signal: AbortSignal }) => Promise<unknown> | unknown
@@ -52,6 +53,7 @@ export class ToolRegistry {
   }
   get(name: string): RegisteredTool | undefined { return this.tools.get(name) }
   list(): ToolDefinition[] { return [...this.tools.values()].map(({ execute: _execute, ...definition }) => definition) }
+  listManifests(): ToolManifest[] { return createToolManifests(this.list()) }
   validateCall(call: ToolCall): RegisteredTool {
     const tool = this.tools.get(call.toolName)
     if (!tool) throw new Error(`Unknown tool: ${call.toolName}`)

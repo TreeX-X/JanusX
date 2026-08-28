@@ -132,6 +132,40 @@ describe('file editor tabs', () => {
     expect(standaloneEditorSource).toContain("t('editor:fileEditor.unpinWindow')")
     expect(standaloneEditorSource).toContain('window.electron.window.editorReady()')
     expect(standaloneEditorSource).toContain('window.electron.window.onEditorRefresh((payload) =>')
-    expect(standaloneEditorSource).toContain('void reloadOpenFile(payload.filePath)')
+    expect(standaloneEditorSource).toContain('void openFile(payload.filePath, payload.workspacePath)')
+
+    const monacoViewerSource = readFileSync(
+      new URL('../../src/renderer/src/components/viewers/MonacoViewer.tsx', import.meta.url),
+      'utf8',
+    )
+    expect(monacoViewerSource).toContain('editorRef.current.saveViewState()')
+    expect(monacoViewerSource).toContain('editor.restoreViewState(viewState)')
+    expect(monacoViewerSource).toContain('window.requestAnimationFrame')
+    expect(monacoViewerSource).toContain('editor.onDidScrollChange(saveViewState)')
+    expect(monacoViewerSource).toContain('editor.onDidChangeCursorPosition(saveViewState)')
+    expect(monacoViewerSource).toContain('editor.getModel()?.setValue(content)')
+    expect(monacoViewerSource).not.toContain('keepCurrentModel')
+    expect(monacoViewerSource).not.toContain('keepCurrentModifiedModel')
+    const markdownViewerSource = readFileSync(
+      new URL('../../src/renderer/src/components/viewers/MarkdownViewer.tsx', import.meta.url),
+      'utf8',
+    )
+    const globalStyles = readFileSync(
+      new URL('../../src/renderer/src/styles/globals.css', import.meta.url),
+      'utf8',
+    )
+    expect(markdownViewerSource).toContain('<PreviewScrollArea>')
+    expect(globalStyles).toContain('.preview-scrollbar-thumb')
+    expect(globalStyles).toContain('.preview-scroll-area.is-expanded .preview-scrollbar-thumb')
+    const previewScrollSource = readFileSync(
+      new URL('../../src/renderer/src/components/viewers/PreviewScrollArea.tsx', import.meta.url),
+      'utf8',
+    )
+    expect(previewScrollSource).toContain('preview-scrollbar-thumb')
+    expect(previewScrollSource).toContain('setPointerCapture')
+    expect(monacoViewerSource).toContain('modelPath')
+    expect(standaloneEditorSource).toContain('baselineFileId === activeFile.id || baselineCache.has(activeFile.id)')
+    expect(standaloneEditorSource).toContain('baselineCache.has(activeFile.id)')
+    expect(standaloneEditorSource).toContain('baselineCache.set(activeFile.id, content)')
   })
 })

@@ -86,6 +86,35 @@ describe('blueprint canvas layout', () => {
     expect(computeVisibleBlueprintLayout(blueprint, collapsed, {}).m2).toEqual(m2.position)
   })
 
+  it('keeps saved positions when collapse visibility changes', () => {
+    const blueprint = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'branch', 'leaf'],
+      canvasLayout: {
+        root: { x: 120, y: 40 },
+        branch: { x: 480, y: 260 },
+        leaf: { x: 820, y: 540 },
+      },
+      nodes: {
+        root: { id: 'root', parentId: null, children: ['branch'] },
+        branch: { id: 'branch', parentId: 'root', children: ['leaf'] },
+        leaf: { id: 'leaf', parentId: 'branch', children: [] },
+      },
+    } as unknown as Blueprint
+
+    const collapsed = deriveBlueprintFlow(blueprint, blueprint.canvasLayout, {}, new Set(), false, new Set(['branch']))
+    const expanded = deriveBlueprintFlow(blueprint, blueprint.canvasLayout, {}, new Set(), false, new Set())
+
+    expect(collapsed.nodes.map((node) => [node.id, node.position])).toEqual([
+      ['root', { x: 120, y: 40 }],
+      ['branch', { x: 480, y: 260 }],
+    ])
+    expect(expanded.nodes.map((node) => [node.id, node.position])).toEqual([
+      ['root', { x: 120, y: 40 }],
+      ['branch', { x: 480, y: 260 }],
+      ['leaf', { x: 820, y: 540 }],
+    ])
+  })
+
   it('lays out only the selected subtree and preserves unrelated manual branches', () => {
     const blueprint = {
       id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'left', 'leaf', 'right'], canvasLayout: {},
@@ -115,6 +144,16 @@ describe('blueprint canvas layout', () => {
     } as unknown as Blueprint
 
     expect(computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})).toEqual({ root: { x: 0, y: 0 } })
+  })
+
+  it('reuses cached visible layout for the same blueprint and inputs', () => {
+    const blueprint = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root'], canvasLayout: {},
+      nodes: { root: { id: 'root', parentId: null, children: [] } },
+    } as unknown as Blueprint
+    const first = computeVisibleBlueprintLayout(blueprint, new Set(), {})
+    const second = computeVisibleBlueprintLayout(blueprint, new Set(), {})
+    expect(second).toBe(first)
   })
 
   it('derives truthful issue and analysis signals and removes them when source data is resolved', () => {

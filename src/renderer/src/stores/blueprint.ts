@@ -8,7 +8,7 @@
 
 import { create } from 'zustand'
 import {
-  listBlueprints,
+  listBlueprintSummaries,
   loadBlueprint,
   createBlueprint as createBlueprintIPC,
   deleteBlueprint as deleteBlueprintIPC,
@@ -17,11 +17,24 @@ import {
   deleteNode as deleteNodeIPC,
   focusNode as focusNodeIPC,
   type Blueprint,
+  type BlueprintSummary,
   type BlueprintCreateInput,
   type BlueprintNode
 } from '@/services/blueprint'
 
 const GLOBAL_BLUEPRINT_SCOPE = '__global__'
+
+function toBlueprintSummary(blueprint: Blueprint): BlueprintSummary {
+  return {
+    id: blueprint.id,
+    name: blueprint.name,
+    description: blueprint.description,
+    contentRevision: blueprint.contentRevision,
+    nodeCount: blueprint.nodeIds.length,
+    createdAt: blueprint.createdAt,
+    updatedAt: blueprint.updatedAt,
+  }
+}
 
 export interface ActiveBlueprintSession {
   blueprintId: string
@@ -35,12 +48,14 @@ export interface ActiveBlueprintSession {
 
 interface BlueprintStore {
   /** 应用级全局蓝图摘要列表 */
-  blueprints: Blueprint[]
+  blueprints: BlueprintSummary[]
   /** 当前打开的蓝图（含 nodes 树） */
   currentBlueprint: Blueprint | null
   /** 当前通过“开始工作”激活的节点协作会话 */
   activeSession: ActiveBlueprintSession | null
   loading: boolean
+  loadingBlueprintId: string | null
+  loadState: 'idle' | 'listing' | 'loading' | 'refreshing' | 'error'
   error: string | null
 
   /** 拉取应用级全局蓝图列表；参数仅为兼容旧调用 */
@@ -67,51 +82,76 @@ interface BlueprintStore {
     nodeId: string,
     patch: Partial<Blueprint['nodes'][string]>
   ) => Promise<void>
+  mergeCanvasLayout: (blueprintId: string, canvasLayout: Blueprint['canvasLayout']) => void
   /** 删除节点，成功后重新拉取 currentBlueprint */
   deleteNode: (blueprintId: string, nodeId: string) => Promise<boolean>
   /** 分析完成后，重新拉取 currentBlueprint 以同步 analyzer 写入的字段 */
   refreshAfterAnalysis: () => Promise<void>
 }
 
-export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
+export const useBlueprintStore = create<BlueprintStore>((set, get) => {
+  let loadRequestId = 0
+  let listRequest: Promise<void> | null = null
+  let listRequestKey: string | null = null
+  const blueprintRequests = new Map<string, Promise<void>>()
+
+  return {
   blueprints: [],
   currentBlueprint: null,
   activeSession: null,
   loading: false,
+  loadingBlueprintId: null,
+  loadState: 'idle',
   error: null,
 
   loadBlueprints: async (workspacePath) => {
-    set({ loading: true, error: null })
-    try {
-      const list = await listBlueprints(workspacePath ?? GLOBAL_BLUEPRINT_SCOPE)
-      set({ blueprints: list ?? [], loading: false })
-    } catch (err: unknown) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-        loading: false
-      })
-    }
+    const requestKey = workspacePath ?? GLOBAL_BLUEPRINT_SCOPE
+    if (listRequest && listRequestKey === requestKey) return listRequest
+    set({ loading: true, loadState: 'listing', error: null })
+    listRequestKey = requestKey
+    listRequest = (async () => {
+      try {
+        const list = await listBlueprintSummaries(requestKey)
+        set({ blueprints: list ?? [], loading: false, loadState: 'idle' })
+      } catch (err: unknown) {
+        set({ error: err instanceof Error ? err.message : String(err), loading: false, loadState: 'error' })
+      } finally {
+        listRequest = null
+        listRequestKey = null
+      }
+    })()
+    return listRequest
   },
 
   loadBlueprint: async (id) => {
-    set({ loading: true, error: null })
-    try {
-      const bp = await loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, id)
-      set((s) => {
-        const active = s.activeSession
-        const nextNode = active && bp?.id === active.blueprintId ? bp.nodes[active.nodeId] : null
-        return {
-          currentBlueprint: bp,
-          activeSession: active && nextNode ? { ...active, nodeSnapshot: nextNode } : active,
-          loading: false
-        }
-      })
-    } catch (err: unknown) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-        loading: false
-      })
-    }
+    const existingRequest = blueprintRequests.get(id)
+    if (existingRequest) return existingRequest
+    const requestId = ++loadRequestId
+    set({ loading: true, loadingBlueprintId: id, loadState: get().currentBlueprint ? 'refreshing' : 'loading', error: null })
+    const request = (async () => {
+      try {
+        const bp = await loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, id)
+        if (requestId !== loadRequestId) return
+        set((s) => {
+          const active = s.activeSession
+          const nextNode = active && bp?.id === active.blueprintId ? bp.nodes[active.nodeId] : null
+          return {
+            currentBlueprint: bp,
+            activeSession: active && nextNode ? { ...active, nodeSnapshot: nextNode } : active,
+            loading: false,
+            loadingBlueprintId: null,
+            loadState: 'idle'
+          }
+        })
+      } catch (err: unknown) {
+        if (requestId !== loadRequestId) return
+        set({ error: err instanceof Error ? err.message : String(err), loading: false, loadingBlueprintId: null, loadState: 'error' })
+      } finally {
+        blueprintRequests.delete(id)
+      }
+    })()
+    blueprintRequests.set(id, request)
+    return request
   },
 
   createBlueprint: async (input) => {
@@ -119,7 +159,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
     try {
       const bp = await createBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, input)
       set((s) => ({
-        blueprints: [...s.blueprints, bp],
+        blueprints: [...s.blueprints, toBlueprintSummary(bp)],
         currentBlueprint: bp,
         loading: false
       }))
@@ -145,7 +185,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
         const next = s.blueprints.filter((bp) => bp.id !== id)
         return {
           blueprints: next,
-          currentBlueprint: s.currentBlueprint?.id === id ? next[0] ?? null : s.currentBlueprint,
+          currentBlueprint: s.currentBlueprint?.id === id ? null : s.currentBlueprint,
           activeSession: s.activeSession?.blueprintId === id ? null : s.activeSession,
           loading: false
         }
@@ -171,7 +211,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
         return false
       }
       set((s) => ({
-        blueprints: s.blueprints.map((item) => (item.id === id ? bp : item)),
+        blueprints: s.blueprints.map((item) => (item.id === id ? toBlueprintSummary(bp) : item)),
         currentBlueprint: s.currentBlueprint?.id === id ? bp : s.currentBlueprint,
         loading: false
       }))
@@ -254,6 +294,12 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
     }
   },
 
+  mergeCanvasLayout: (blueprintId, canvasLayout) => {
+    set((s) => s.currentBlueprint?.id === blueprintId
+      ? { currentBlueprint: { ...s.currentBlueprint, canvasLayout } }
+      : s)
+  },
+
   deleteNode: async (blueprintId, nodeId) => {
     const current = get().currentBlueprint
     if (!current || current.id !== blueprintId) {
@@ -290,4 +336,5 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
     if (!current) return
     await get().loadBlueprint(current.id)
   }
-}))
+  }
+})

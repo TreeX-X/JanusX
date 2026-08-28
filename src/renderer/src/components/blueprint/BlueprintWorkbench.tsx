@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { JanusIdentityCore } from '@/components/janus/JanusIdentityCore'
 import { BlueprintView } from './BlueprintView'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
+import { BlueprintDetailPortalContext } from './blueprintDetailPortal'
 import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
-import { WorkbenchIcon } from '../ui/WorkbenchIcon'
 import { useI18n } from '@/i18n/useI18n'
 import './blueprint.css'
 
@@ -16,50 +16,64 @@ interface BlueprintWorkbenchProps {
   onClose: () => void
 }
 
+const WORKBENCH_CARD_ENTER_STAGGER_MS = 60
+const WORKBENCH_CARD_ENTER_DURATION_MS = 260
+const WORKBENCH_CARD_EXIT_STAGGER_MS = 60
+const WORKBENCH_CARD_EXIT_DURATION_MS = 260
+const WORKBENCH_EXIT_BUFFER_MS = 60
+
+const cardStyle = (index: number): CSSProperties => ({
+  '--card-index': index
+} as CSSProperties)
+
+interface WorkbenchCardPlan {
+  detailOpen: boolean
+  janusOpen: boolean
+}
+
 export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps) {
   const { t } = useI18n('blueprint')
-  const blueprints = useBlueprintStore((s) => s.blueprints)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
-  const activeSession = useBlueprintStore((s) => s.activeSession)
   const maintenanceTasks = useBlueprintMaintenanceStore((s) => s.tasks)
   const maintenanceInitialized = useBlueprintMaintenanceStore((s) => s.initialized)
   const openRequest = useBlueprintMaintenanceStore((s) => s.openRequest)
   const initializeMaintenance = useBlueprintMaintenanceStore((s) => s.initialize)
   const requestOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
-  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
+  const [maintenanceOpen, setMaintenanceOpen] = useState(true)
+  const [detailOpen, setDetailOpen] = useState(false)
   // 工作台专属下拉承载层：z-index 12001，恰好高于遮罩 12000；
   // 零尺寸 + overflow visible，不拦截点击、不裁切子节点。
   // Select 通过 getPortalContainer 把浮层挂进这里，进入比遮罩更高的层叠上下文。
   const [selectPortalNode, setSelectPortalNode] = useState<HTMLDivElement | null>(null)
+  const [detailPortalNode, setDetailPortalNode] = useState<HTMLDivElement | null>(null)
+  const activeCardPlanRef = useRef<WorkbenchCardPlan>({ detailOpen, janusOpen: maintenanceOpen })
+  activeCardPlanRef.current = { detailOpen, janusOpen: maintenanceOpen }
+  const [phase, setPhase] = useState<'hidden' | 'open' | 'closing'>(isOpen ? 'open' : 'hidden')
+  const [closingPlan, setClosingPlan] = useState<WorkbenchCardPlan>({ detailOpen: false, janusOpen: true })
+  const requestClose = useCallback(() => {
+    setClosingPlan({ detailOpen, janusOpen: maintenanceOpen })
+    setPhase('closing')
+  }, [detailOpen, maintenanceOpen])
 
-  // Delayed unmount: keep portal alive during exit animation
-  const [rendered, setRendered] = useState(isOpen)
-  const closingRef = useRef(false)
   useEffect(() => {
     if (isOpen) {
-      closingRef.current = false
-      setRendered(true)
+      setPhase('open')
       return
     }
-    if (!rendered) return
-    closingRef.current = true
-    const timer = setTimeout(() => {
-      closingRef.current = false
-      setRendered(false)
-    }, 320)
-    return () => clearTimeout(timer)
-  }, [isOpen, rendered])
+    setClosingPlan(activeCardPlanRef.current)
+    setPhase((current) => current === 'hidden' ? current : 'closing')
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (maintenanceOpen) setMaintenanceOpen(false)
-      else onClose()
+      else requestClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, maintenanceOpen, onClose])
+  }, [isOpen, maintenanceOpen, requestClose])
 
   useEffect(() => {
     if (isOpen && openRequest) setMaintenanceOpen(true)
@@ -92,50 +106,45 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         ? 'running'
         : 'default'
 
-  if (!rendered) return null
-  const isClosing = closingRef.current
-
-  const nodeCount = currentBlueprint?.nodeIds.length ?? 0
-  const pendingCandidateCount =
-    currentBlueprint?.requirementCandidates?.filter((candidate) => candidate.status === 'pending').length ?? 0
-  const focusedTitle =
-    activeSession && currentBlueprint?.id === activeSession.blueprintId
-      ? currentBlueprint.nodes[activeSession.nodeId]?.title ?? activeSession.nodeSnapshot.title
-      : activeSession?.nodeSnapshot.title ?? ''
+  if (phase === 'hidden') return null
+  const isClosing = phase === 'closing'
+  const cardPlan = isClosing ? closingPlan : { detailOpen, janusOpen: maintenanceOpen }
+  const cardCount = 2 + Number(cardPlan.janusOpen) + Number(cardPlan.detailOpen)
+  const exitDuration = WORKBENCH_CARD_EXIT_DURATION_MS
+    + Math.max(0, cardCount - 1) * WORKBENCH_CARD_EXIT_STAGGER_MS
+    + WORKBENCH_EXIT_BUFFER_MS
+  const canvasCardIndex = cardPlan.detailOpen ? 2 : 1
+  const janusCardIndex = cardPlan.detailOpen ? 3 : 2
 
   return createPortal(
     <BlueprintSelectPortalContext.Provider value={selectPortalNode}>
-      <div className="blueprint-workbench-backdrop" data-closing={isClosing ? "true" : undefined}>
-        <section className="blueprint-workbench-shell" data-closing={isClosing ? "true" : undefined} aria-label={t('blueprint:workbench.ariaLabel')}>
-        <header className="blueprint-workbench-header">
-          <div className="blueprint-workbench-header-left">
-            <span className="blueprint-workbench-icon-badge" aria-hidden="true">
-              <WorkbenchIcon id="blueprint" />
-            </span>
-            <nav className="blueprint-workbench-breadcrumb" aria-label="Breadcrumb">
-              <span className="blueprint-workbench-bc-current">{t('blueprint:workbench.breadcrumb')}</span>
-            </nav>
+      <BlueprintDetailPortalContext.Provider value={detailPortalNode}>
+      <div
+        className="blueprint-workbench-backdrop"
+        data-closing={isClosing ? "true" : undefined}
+        onAnimationEnd={(event) => {
+          if (!isClosing || event.target !== event.currentTarget) return
+          setPhase('hidden')
+          onClose()
+        }}
+        style={{ '--workbench-exit-duration': `${exitDuration}ms` } as CSSProperties}
+      >
+        <section
+          className="blueprint-workbench-shell"
+          data-closing={isClosing ? "true" : undefined}
+          data-card-count={cardCount}
+          style={{
+            '--card-count': cardCount,
+            '--card-enter-stagger': `${WORKBENCH_CARD_ENTER_STAGGER_MS}ms`,
+            '--card-enter-duration': `${WORKBENCH_CARD_ENTER_DURATION_MS}ms`,
+            '--card-exit-stagger': `${WORKBENCH_CARD_EXIT_STAGGER_MS}ms`,
+          } as CSSProperties}
+          aria-label={t('blueprint:workbench.ariaLabel')}
+        >
+        <header className="blueprint-workbench-topbar" style={cardStyle(0)}>
+          <div className="blueprint-workbench-tab" title={currentBlueprint?.name ?? t('blueprint:workbench.breadcrumb')}>
+            {currentBlueprint?.name ?? t('blueprint:workbench.breadcrumb')}
           </div>
-
-          <div className="blueprint-workbench-metrics" aria-label="Blueprint summary">
-            <div className="blueprint-workbench-metric">
-              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricBlueprints')}</span>
-              <strong className="blueprint-workbench-metric__value">{Math.max(blueprints.length, currentBlueprint ? 1 : 0)}</strong>
-            </div>
-            <div className="blueprint-workbench-metric">
-              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricNodes')}</span>
-              <strong className="blueprint-workbench-metric__value">{nodeCount}</strong>
-            </div>
-            <div className="blueprint-workbench-metric" data-attention={pendingCandidateCount > 0 ? 'true' : 'false'}>
-              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricInbox')}</span>
-              <strong className="blueprint-workbench-metric__value">{pendingCandidateCount}</strong>
-            </div>
-            <div className="blueprint-workbench-metric blueprint-workbench-metric--focus" data-attention={focusedTitle ? 'true' : 'false'}>
-              <span className="blueprint-workbench-metric__label">{t('blueprint:workbench.metricFocus')}</span>
-              <strong className="blueprint-workbench-metric__value" title={focusedTitle || undefined}>{focusedTitle || t('blueprint:workbench.metricFocusFallback')}</strong>
-            </div>
-          </div>
-
           <div className="blueprint-workbench-actions">
             <button
               type="button"
@@ -180,7 +189,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
             <button
               type="button"
               className="blueprint-workbench-close"
-              onClick={onClose}
+              onClick={requestClose}
               aria-label={t('blueprint:workbench.closeAria')}
               title={t('blueprint:workbench.closeTitle')}
             >
@@ -189,9 +198,25 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
           </div>
         </header>
 
-        <div className="blueprint-workbench-body">
-          <BlueprintView density="workbench" />
-          {maintenanceOpen ? <BlueprintMaintenancePanel onClose={() => setMaintenanceOpen(false)} /> : null}
+        <div
+          className="blueprint-workbench-body"
+          data-janus-open={cardPlan.janusOpen ? 'true' : 'false'}
+          data-detail-open={cardPlan.detailOpen ? 'true' : 'false'}
+        >
+          <div
+            ref={setDetailPortalNode}
+            className="blueprint-workbench-detail-slot"
+            data-open={cardPlan.detailOpen ? 'true' : 'false'}
+            style={cardStyle(1)}
+          />
+          <div className="blueprint-workbench-card blueprint-workbench-card--canvas" style={cardStyle(canvasCardIndex)}>
+            <BlueprintView density="workbench" onDetailOpenChange={setDetailOpen} />
+          </div>
+          {cardPlan.janusOpen ? (
+            <aside className="blueprint-workbench-card blueprint-workbench-card--janus" style={cardStyle(janusCardIndex)}>
+              <BlueprintMaintenancePanel onClose={() => setMaintenanceOpen(false)} />
+            </aside>
+          ) : null}
         </div>
       </section>
     </div>
@@ -202,6 +227,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         />,
         document.body
       )}
+      </BlueprintDetailPortalContext.Provider>
     </BlueprintSelectPortalContext.Provider>,
     document.body,
   )

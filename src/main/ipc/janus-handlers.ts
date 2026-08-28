@@ -51,6 +51,10 @@ export function registerJanusHandlers(): void {
     return blueprintStore.listBlueprints(cwd)
   })
 
+  ipcMain.handle(JANUS_COMMAND_CHANNELS.listBlueprintSummaries, async (_e, cwd: string) => {
+    return blueprintStore.listBlueprintSummaries(cwd)
+  })
+
   ipcMain.handle(JANUS_COMMAND_CHANNELS.loadBlueprint, async (_e, cwd: string, id: string) => {
     return blueprintStore.loadBlueprint(cwd, id)
   })

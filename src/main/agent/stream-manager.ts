@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import { randomUUID } from 'crypto'
 import type { AgentEngine, AgentEvent, AgentSpawnOptions, StreamSession } from './types'
+import { normalizeAgentApprovalMode } from '../../shared/ipc/agent-runtime'
 import { resolveCLIPath } from './cli-resolver'
 import { createParser } from './parsers'
 
@@ -66,7 +67,7 @@ export class AgentStreamManager {
       throw new Error(`CLI not found for engine: ${options.engine}`)
     }
 
-    const args = this.buildArgs(options.engine, options.prompt, options.cwd, options.model)
+    const args = this.buildArgs(options.engine, options.prompt, options.cwd, options.model, options.approvalMode)
     const abortController = new AbortController()
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
@@ -149,14 +150,15 @@ export class AgentStreamManager {
     })
   }
 
-  private buildArgs(engine: AgentEngine, prompt: string, cwd: string, model?: string): string[] {
+  private buildArgs(engine: AgentEngine, prompt: string, cwd: string, model?: string, approvalMode?: AgentSpawnOptions['approvalMode']): string[] {
+    const autoRun = normalizeAgentApprovalMode(approvalMode) === 'auto-run'
     switch (engine) {
       case 'claude':
-        return ['-p', prompt, '--output-format', 'stream-json', '--include-partial-messages', '--verbose', '--no-session-persistence', '--permission-mode', 'acceptEdits']
+        return ['-p', prompt, '--output-format', 'stream-json', '--include-partial-messages', '--verbose', '--no-session-persistence', '--permission-mode', autoRun ? 'bypassPermissions' : 'default']
       case 'codex':
-        return ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox', '--', prompt]
+        return ['exec', '--json', '--skip-git-repo-check', ...(autoRun ? ['--dangerously-bypass-approvals-and-sandbox'] : []), '--', prompt]
       case 'opencode': {
-        const args = ['run', '--format', 'json', '--dir', cwd, '--dangerously-skip-permissions']
+        const args = ['run', '--format', 'json', '--dir', cwd, ...(autoRun ? ['--dangerously-skip-permissions'] : [])]
         if (model) args.push('--model', model)
         args.push('--', prompt)
         return args

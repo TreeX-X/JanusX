@@ -1,3 +1,5 @@
+import type { OperationResult } from './workspace'
+
 export const SYSTEM_CHANNELS = {
   defaultShell: 'system:getDefaultShell', platform: 'system:getPlatform',
   openDirectory: 'dialog:openDirectory', saveFile: 'dialog:saveFile', showMessageBox: 'dialog:showMessageBox',
@@ -6,6 +8,9 @@ export const SYSTEM_CHANNELS = {
   setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get',
   toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show',
   getLanguage: 'app:getLanguage', setLanguage: 'app:setLanguage',
+  openVSCode: 'system:openVSCode',
+  prepareQuit: 'app:prepareQuit',
+  prepareQuitAck: 'app:prepareQuitAck',
 } as const
 
 export interface RuntimeTelemetryRequest {
@@ -52,9 +57,11 @@ export interface WindowAPI {
 }
 export interface SystemAPI {
   getDefaultShell(): Promise<string>; getPlatform(): Promise<NodeJS.Platform>
+  openVSCode(workspacePath: string): Promise<OperationResult>
   getRuntimeTelemetry(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null>
   getLanguage(): Promise<string | null>
   setLanguage(lang: string): Promise<void>
+  onPrepareQuit(callback: () => Promise<void> | void): () => void
 }
 export interface DesktopToastAPI {
   ready(): void; action(action: 'activate' | 'dismiss'): void

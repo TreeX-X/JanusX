@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import {
   getActiveWorkspacePath,
@@ -76,6 +77,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const [pendingDelete, setPendingDelete] = useState<PendingFileTreeDelete | null>(null)
   const [namingDialog, setNamingDialog] = useState<NamingDialogState | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [openingVSCode, setOpeningVSCode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
   const [loadingDirectoryKeys, setLoadingDirectoryKeys] = useState<Set<string>>(() => new Set())
@@ -182,6 +184,19 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       { visualTransition: true },
     )
   }, [activeWorkspacePath])
+
+  const openWorkspaceInVSCode = useCallback(async () => {
+    if (!activeWorkspacePath || openingVSCode) return
+    setOpeningVSCode(true)
+    try {
+      const result = await window.electron.system.openVSCode(activeWorkspacePath)
+      if (!result.success) setErrorMessage(result.error || t('editor:fileTree.openVSCodeFailed'))
+    } catch (error: any) {
+      setErrorMessage(error?.message || t('editor:fileTree.openVSCodeFailed'))
+    } finally {
+      setOpeningVSCode(false)
+    }
+  }, [activeWorkspacePath, openingVSCode, t])
 
   useEffect(() => {
     if (!activeWorkspacePath) return
@@ -525,10 +540,10 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   return (
     <>
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="p-2">
+        <div className="flex gap-1.5 p-2">
           <input
             type="text"
-            className="h-7 w-full rounded px-2.5 text-xs transition-colors focus:border-[rgba(255,120,48,0.4)] focus:bg-[rgba(255,255,255,0.05)] focus:outline-none"
+            className="h-7 min-w-0 flex-1 rounded px-2.5 text-xs transition-colors focus:border-[rgba(255,120,48,0.4)] focus:bg-[rgba(255,255,255,0.05)] focus:outline-none"
             style={{
               background: 'rgba(255, 255, 255, 0.04)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -544,6 +559,16 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
               }
             }}
           />
+          <button
+            type="button"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[rgba(255,255,255,0.08)] text-[#999] transition-colors hover:border-[rgba(255,120,48,0.4)] hover:text-[#ff7830] disabled:cursor-not-allowed disabled:opacity-40"
+            title={t('editor:fileTree.openInVSCode')}
+            aria-label={t('editor:fileTree.openInVSCode')}
+            disabled={!activeWorkspacePath || openingVSCode}
+            onClick={() => void openWorkspaceInVSCode()}
+          >
+            <ExternalLink size={14} aria-hidden="true" />
+          </button>
         </div>
         <div
           ref={fileTreeViewportRef}

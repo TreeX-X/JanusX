@@ -20,6 +20,12 @@
       "nav": "知识库",
       "navMeta": "记忆采集"
     },
+    "agent": {
+      "title": "Agent 鏉冮檺",
+      "subtitle": "Agent Permissions - JanusX Agent 浼氳瘽榛樿瀹℃壒妯″紡",
+      "nav": "Agent 鏉冮檺",
+      "navMeta": "瀹℃壒妯″紡"
+    },
     "llm": {
       "title": "LLM 引擎",
       "subtitle": "LLM Engine · Provider 凭证、默认模型与连接检测",
@@ -223,6 +229,16 @@
       "load": "知识库设置加载失败",
       "save": "知识库设置保存失败"
     }
+  },
+  "agent": {
+    "section": { "permissions": "鏉冮檺榛樿" },
+    "default": {
+      "label": "榛樿瀹℃壒妯″紡",
+      "hint": "鏂板缓 Agent 浼氳瘽浼氱户鎵挎妯″紡锛屽綋鍓嶄細璇濆彲鐩存帴鍒囨崲",
+      "mode": { "perAction": "姣忔鎿嶄綔閮介渶瀹℃壒", "autoRun": "鑷姩杩愯鍏ㄩ儴鎿嶄綔" }
+    },
+    "safety": "鑷姩杩愯浠嶄細寮哄埗宸ヤ綔鍖哄煙闄愬埗銆佹晱鎰熻矾寰勬嫆缁濄€佽緭鍏ユ牎楠屻€佺増鏈揩鐓у拰瀹¤璁板綍",
+    "error": { "load": "鍔犺浇 Agent 鏉冮檺璁剧疆澶辫触", "save": "淇濆瓨 Agent 鏉冮檺璁剧疆澶辫触" }
   },
   "officeCli": {
     "title": "OfficeCLI",

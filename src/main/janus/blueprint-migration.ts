@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import type { Blueprint, BlueprintFeatureItem, BlueprintNode } from './types'
 import { sanitizeRelations } from '../../shared/janus/relations'
 
-export const BLUEPRINT_SCHEMA_VERSION = 3
+export const BLUEPRINT_SCHEMA_VERSION = 4
 
 type VersionedBlueprint = Blueprint & { schemaVersion?: number }
 
@@ -156,6 +156,21 @@ export function reconcileNodeWorkspaceBinding(node: BlueprintNode): boolean {
 export function migrateBlueprint(blueprint: Blueprint): boolean {
   const versioned = blueprint as VersionedBlueprint
   let changed = reconcileBlueprintTree(blueprint)
+  if (blueprint.collapsedNodeIds !== undefined
+    && blueprint.collapsedNodeIds !== null
+    && !Array.isArray(blueprint.collapsedNodeIds)) {
+    blueprint.collapsedNodeIds = null
+    changed = true
+  }
+  if (Array.isArray(blueprint.collapsedNodeIds)) {
+    const validIds = new Set(Object.keys(blueprint.nodes))
+    const normalized = [...new Set(blueprint.collapsedNodeIds.filter((id) => validIds.has(id)))]
+    if (normalized.length !== blueprint.collapsedNodeIds.length
+      || normalized.some((id, index) => id !== blueprint.collapsedNodeIds![index])) {
+      blueprint.collapsedNodeIds = normalized
+      changed = true
+    }
+  }
   const version = Number.isInteger(versioned.schemaVersion) ? versioned.schemaVersion as number : 0
   if (version < 1) {
     for (const node of Object.values(blueprint.nodes)) {
@@ -172,6 +187,14 @@ export function migrateBlueprint(blueprint: Blueprint): boolean {
     changed = true
   }
   if (version < 3) {
+    versioned.schemaVersion = BLUEPRINT_SCHEMA_VERSION
+    changed = true
+  }
+  if (version < 4) {
+    if (blueprint.collapsedNodeIds === undefined) {
+      blueprint.collapsedNodeIds = null
+      changed = true
+    }
     versioned.schemaVersion = BLUEPRINT_SCHEMA_VERSION
     changed = true
   }

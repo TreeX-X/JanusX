@@ -79,6 +79,7 @@ function toWorkspaceSnapshot(workspace: WorkspaceRecord): WorkspaceSnapshot {
 
 export class BlueprintStore {
   private cache = new Map<string, Blueprint>()
+  private workspaceRecordsCache: WorkspaceRecord[] | null = null
   private indexCache: WorkspaceIndex | null = null
   private migratedWorkspaces = new Set<string>()
   private mutex = new ReentrantAsyncLock()
@@ -113,6 +114,7 @@ export class BlueprintStore {
   }
 
   private async listWorkspaceRecords(): Promise<WorkspaceRecord[]> {
+    if (this.workspaceRecordsCache) return this.workspaceRecordsCache
     try {
       const files = await fs.readdir(workspacesDir())
       const records: WorkspaceRecord[] = []
@@ -121,6 +123,7 @@ export class BlueprintStore {
         const record = await readJson<WorkspaceRecord>(join(workspacesDir(), file))
         if (record?.id && record.name && record.path) records.push(record)
       }
+      this.workspaceRecordsCache = records
       return records
     } catch {
       return []
@@ -206,6 +209,29 @@ export class BlueprintStore {
           this.cache.set(id, bp)
           out.push(bp)
         }
+      }
+      return out
+    })
+  }
+
+  async listBlueprintSummaries(workspace: string) {
+    return this.locked(async () => {
+      await this.migrateLegacyWorkspace(workspace)
+      const idx = await this.loadIndex(workspace)
+      const out = []
+      for (const id of idx.blueprints) {
+        const bp = this.cache.get(id) ?? (await readJson<Blueprint>(blueprintFile(id)))
+        if (!bp) continue
+        this.cache.set(id, bp)
+        out.push({
+          id: bp.id,
+          name: bp.name,
+          description: bp.description,
+          contentRevision: bp.contentRevision,
+          nodeCount: bp.nodeIds.length,
+          createdAt: bp.createdAt,
+          updatedAt: bp.updatedAt,
+        })
       }
       return out
     })
@@ -316,6 +342,7 @@ export class BlueprintStore {
         requirementCandidates: [],
         mountedTo: null,
         canvasLayout: {},
+        collapsedNodeIds: null,
         createdAt: ts,
         updatedAt: ts
       }
@@ -331,7 +358,7 @@ export class BlueprintStore {
   async updateBlueprint(
     workspace: string,
     id: string,
-    patch: Partial<Pick<Blueprint, 'name' | 'description' | 'canvasLayout'>>
+    patch: Partial<Pick<Blueprint, 'name' | 'description' | 'canvasLayout' | 'collapsedNodeIds'>>
   ): Promise<Blueprint | null> {
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, id)
@@ -339,6 +366,11 @@ export class BlueprintStore {
       if (patch.name !== undefined) bp.name = patch.name
       if (patch.description !== undefined) bp.description = patch.description
       if (patch.canvasLayout !== undefined) bp.canvasLayout = patch.canvasLayout
+      if (patch.collapsedNodeIds !== undefined) {
+        bp.collapsedNodeIds = patch.collapsedNodeIds === null
+          ? null
+          : [...new Set(patch.collapsedNodeIds.filter((id) => typeof id === 'string' && bp.nodes[id]))]
+      }
       bp.updatedAt = nowIso()
       await this.persistBlueprint(id, bp, patch.name !== undefined || patch.description !== undefined)
       return bp
@@ -571,6 +603,9 @@ export class BlueprintStore {
       }
       delete bp.nodes[nodeId]
       bp.nodeIds = bp.nodeIds.filter((n) => n !== nodeId)
+      if (Array.isArray(bp.collapsedNodeIds)) {
+        bp.collapsedNodeIds = bp.collapsedNodeIds.filter((id) => id !== nodeId)
+      }
       bp.relations = (bp.relations ?? []).filter(
         (relation) => relation.sourceNodeId !== nodeId && relation.targetNodeId !== nodeId
       )

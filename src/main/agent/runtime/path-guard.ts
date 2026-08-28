@@ -1,4 +1,5 @@
 import { constants } from 'fs'
+import { createHash } from 'node:crypto'
 import { open, realpath, stat } from 'fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'path'
 
@@ -27,6 +28,16 @@ export interface WorkspaceReadAuthorization {
 export type WorkspaceReadAuthorizer = (
   target: TrustedWorkspaceTarget,
 ) => WorkspaceReadAuthorization | Promise<WorkspaceReadAuthorization>
+
+const MAX_HASHED_RANGE_FILE_BYTES = 16 * 1024 * 1024
+
+export interface WorkspaceFileRange {
+  content: Buffer
+  offset: number
+  size: number
+  sha256: string
+  truncated: boolean
+}
 
 interface CanonicalWorkspaceTarget extends TrustedWorkspaceTarget {
   rootPath: string
@@ -242,6 +253,68 @@ async function readStableWorkspaceFile(
   }
 }
 
+async function hashOpenFile(handle: Awaited<ReturnType<typeof open>>, size: number): Promise<string> {
+  const hash = createHash('sha256')
+  const buffer = Buffer.allocUnsafe(64 * 1024)
+  for (let offset = 0; offset < size;) {
+    const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, size - offset), offset)
+    if (bytesRead === 0) throw new WorkspacePathGuardError('TARGET_CHANGED', 'Workspace target changed while reading')
+    hash.update(buffer.subarray(0, bytesRead))
+    offset += bytesRead
+  }
+  return hash.digest('hex')
+}
+
+async function readStableWorkspaceFileRange(
+  workspaceRoot: string,
+  requestedPath: string,
+  offset: number,
+  maxBytes: number,
+  authorize: WorkspaceReadAuthorizer,
+): Promise<WorkspaceFileRange | null> {
+  const target = await resolveCanonicalWorkspaceTarget(workspaceRoot, requestedPath)
+  if (target.kind !== 'file') {
+    throw new WorkspacePathGuardError('TARGET_NOT_REGULAR', 'Workspace target is not a regular file')
+  }
+
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    const noFollow = constants.O_NOFOLLOW ?? 0
+    handle = await open(target.targetPath, constants.O_RDONLY | noFollow)
+    const openedStat = await handle.stat({ bigint: true })
+    if (!openedStat.isFile() || !hasStableIdentity(openedStat)) return null
+    const size = Number(openedStat.size)
+    if (!Number.isSafeInteger(size)) throw new WorkspacePathGuardError('FILE_TOO_LARGE', 'Workspace file is too large to read safely')
+    if (size > MAX_HASHED_RANGE_FILE_BYTES) throw new WorkspacePathGuardError('FILE_TOO_LARGE', 'Workspace file exceeds the bounded range read limit')
+
+    const freshTarget = await resolveCanonicalWorkspaceTarget(workspaceRoot, requestedPath)
+    if (freshTarget.kind !== 'file') return null
+    const freshStat = await stat(freshTarget.targetPath, { bigint: true })
+    if (!sameWorkspaceFileIdentity(openedStat, freshStat)) return null
+
+    const authorization = await authorize({ relativePath: freshTarget.relativePath, kind: freshTarget.kind })
+    if (!authorization || authorization.outcome !== 'allow') {
+      throw new WorkspaceReadDeniedError(authorization?.reasonCode || 'READ_NOT_AUTHORIZED')
+    }
+
+    const bytes = Math.min(maxBytes, Math.max(0, size - offset))
+    const content = Buffer.allocUnsafe(bytes)
+    for (let readOffset = 0; readOffset < bytes;) {
+      const { bytesRead } = await handle.read(content, readOffset, bytes - readOffset, offset + readOffset)
+      if (bytesRead === 0) return null
+      readOffset += bytesRead
+    }
+    const sha256 = await hashOpenFile(handle, size)
+    const finalTarget = await resolveCanonicalWorkspaceTarget(workspaceRoot, requestedPath)
+    if (finalTarget.kind !== 'file') return null
+    const finalStat = await stat(finalTarget.targetPath, { bigint: true })
+    if (!sameWorkspaceFileIdentity(openedStat, finalStat) || Number(finalStat.size) !== size) return null
+    return { content, offset, size, sha256, truncated: offset + bytes < size }
+  } finally {
+    await handle?.close().catch(() => undefined)
+  }
+}
+
 export async function readWorkspaceFile(
   workspaceRoot: string,
   requestedPath: string,
@@ -257,6 +330,28 @@ export async function readWorkspaceFile(
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const content = await readStableWorkspaceFile(workspaceRoot, requestedPath, maxBytes, authorize)
       if (content !== null) return content
+    }
+    throw new WorkspacePathGuardError('TARGET_CHANGED', 'Workspace target changed during authorization')
+  } catch (error) {
+    if (error instanceof WorkspacePathGuardError || error instanceof WorkspaceReadDeniedError) throw error
+    throw new WorkspacePathGuardError('TARGET_UNAVAILABLE', 'Workspace file is unavailable')
+  }
+}
+
+export async function readWorkspaceFileRange(
+  workspaceRoot: string,
+  requestedPath: string,
+  offset: number,
+  maxBytes: number,
+  authorize: WorkspaceReadAuthorizer,
+): Promise<WorkspaceFileRange> {
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes >= Number.MAX_SAFE_INTEGER) {
+    throw new WorkspacePathGuardError('INVALID_READ_LIMIT', 'Workspace file read range is invalid')
+  }
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const read = await readStableWorkspaceFileRange(workspaceRoot, requestedPath, offset, maxBytes, authorize)
+      if (read !== null) return read
     }
     throw new WorkspacePathGuardError('TARGET_CHANGED', 'Workspace target changed during authorization')
   } catch (error) {

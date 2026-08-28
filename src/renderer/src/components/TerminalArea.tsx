@@ -944,26 +944,28 @@ function LeafPane({
                     : terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
                 </span>
               )}
-              {tab.type === 'terminal' ? (
+              {tab.type === 'terminal' || tab.type === 'janus-chat' ? (
                 <HoldToConfirm
                   as="span"
-                  label={t('terminal:tab.closeTerminal')}
+                  label={tab.type === 'terminal' ? t('terminal:tab.closeTerminal') : t('terminal:tab.closeChat')}
                   className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
-                  style={{ color: '#b86b6b' }}
-                  onConfirm={() => onKillTerminalFromTab(tab.terminalId)}
+                  style={{ color: tab.type === 'terminal' ? '#b86b6b' : '#999' }}
+                  onConfirm={() => {
+                    if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId)
+                    else onClosePaneTab(leaf.id, tab.id)
+                  }}
                 >
                   <X size={12} strokeWidth={1.8} />
                 </HoldToConfirm>
               ) : (
                 <span
                   tabIndex={-1}
-                  title={tab.type === 'browser' ? t('terminal:tab.closeBrowser') : t('terminal:tab.closeChat')}
+                  title={t('terminal:tab.closeBrowser')}
                   className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
                   style={{ color: '#999' }}
                   onClick={(event) => {
                     event.stopPropagation()
-                    if (tab.type === 'browser') onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
-                    else onClosePaneTab(leaf.id, tab.id)
+                    onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
                   }}
                 >
                   <X size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -1204,7 +1206,6 @@ export function TerminalArea() {
   // launchingPreset pattern. Prevents double-click / rapid preset selection
   // from firing two concurrent terminal:create requests for the same preset.
   const [launchingPreset, setLaunchingPreset] = useState(false)
-
   const terminalsById = useMemo(() => {
     const map = new Map<string, Terminal>()
     for (const snapshot of Object.values(terminalSnapshots)) {

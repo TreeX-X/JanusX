@@ -11,9 +11,14 @@ import {
   type RemoteNotificationSettings,
   type RemoteSendResult,
 } from '../../shared/notifications'
-import { NOTIFICATION_SETTINGS_CHANNELS } from '../../shared/ipc/settings'
+import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS } from '../../shared/ipc/settings'
 
 export function registerSettingsHandlers(): void {
+  ipcMain.handle(AGENT_SETTINGS_CHANNELS.get, async () => ({ approvalMode: await configService.getAgentApprovalMode() }))
+  ipcMain.handle(AGENT_SETTINGS_CHANNELS.update, async (_event, settings: { approvalMode?: unknown }) => ({
+    approvalMode: await configService.updateAgentApprovalMode(settings?.approvalMode),
+  }))
+
   ipcMain.handle(NOTIFICATION_SETTINGS_CHANNELS.get, async () => {
     return toAgentNotificationSettingsView(await configService.getNotificationSettings())
   })

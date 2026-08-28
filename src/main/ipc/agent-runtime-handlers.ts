@@ -1,5 +1,6 @@
 import type { BrowserWindow, IpcMain } from 'electron'
-import { AGENT_RUNTIME_CHANNELS, type ApprovalResult, type CreateAgentSessionInput, type ExecuteToolInput } from '../../shared/ipc/agent-runtime'
+import { AGENT_RUNTIME_CHANNELS, type ApprovalResult, type CreateAgentSessionInput, type ExecuteToolInput, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
+import { configService } from '../config/service'
 import { workspaceAgentRuntime } from '../agent/runtime/runtime'
 import { registerWorkspaceTools } from '../agent/runtime/tools/workspace-tools'
 import { registerProjectTools } from '../agent/runtime/tools/project-tools'
@@ -19,11 +20,12 @@ export function registerAgentRuntimeHandlers(windowGetter: () => BrowserWindow |
   registerGitTools(workspaceAgentRuntime.registry)
   registerCommandTools(workspaceAgentRuntime.registry)
   registered = true
-  ipcMain.handle(AGENT_RUNTIME_CHANNELS.createSession, (_event, input: CreateAgentSessionInput) => workspaceAgentRuntime.createSession(input))
+  ipcMain.handle(AGENT_RUNTIME_CHANNELS.createSession, async (event, input: CreateAgentSessionInput) => workspaceAgentRuntime.createSession({ ...input, approvalMode: input.approvalMode ?? await configService.getAgentApprovalMode() }, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.executeTool, (event, input: ExecuteToolInput) => workspaceAgentRuntime.executeTool(input, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.cancelSession, (_event, sessionId: string) => workspaceAgentRuntime.cancelSession(sessionId))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.resolveApproval, (event, input: ApprovalResult) => workspaceAgentRuntime.resolveApproval(input, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.getSession, (_event, sessionId: string) => workspaceAgentRuntime.getSession(sessionId))
+  ipcMain.handle(AGENT_RUNTIME_CHANNELS.setApprovalMode, (event, input: { sessionId: string; mode: AgentApprovalMode }) => workspaceAgentRuntime.setApprovalMode(input.sessionId, input.mode, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.queryPolicyAudit, (_event, query) => workspaceAgentRuntime.queryPolicyAudit(query))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.executeFunctionCall, (event, input: ExecuteToolInput) => workspaceAgentRuntime.executeFunctionCall(input, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.executePlannerStep, (event, input: ExecuteToolInput) => workspaceAgentRuntime.executePlannerStep(input, `renderer:${event.sender.id}`))

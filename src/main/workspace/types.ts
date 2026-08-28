@@ -1,5 +1,6 @@
 import type { AgentNotificationSettings } from '../../shared/notifications'
 import type { KnowledgeSettings } from '../../shared/knowledge-settings'
+import type { AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 
 export interface Workspace {
   id: string
@@ -55,6 +56,7 @@ export interface GlobalConfig {
   recentWorkspaces: string[]
   notificationSettings: AgentNotificationSettings
   knowledgeSettings: KnowledgeSettings
+  agentApprovalMode: AgentApprovalMode
 }
 
 export interface CLIRegistration {

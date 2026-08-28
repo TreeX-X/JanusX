@@ -35,6 +35,22 @@ describe('BlueprintStore graph invariants', () => {
     expect((await store.loadBlueprint('__global__', blueprint.id))?.contentRevision).toBe(1)
   })
 
+  it('persists collapse state without treating an empty list as uninitialized', async () => {
+    const store = new BlueprintStore()
+    const blueprint = await store.createBlueprint('__global__', { name: 'Collapse state' })
+
+    expect(blueprint.collapsedNodeIds).toBeNull()
+    await store.updateBlueprint('__global__', blueprint.id, {
+      collapsedNodeIds: [blueprint.rootNodeId, blueprint.rootNodeId, 'missing']
+    })
+    expect((await store.loadBlueprint('__global__', blueprint.id))?.collapsedNodeIds).toEqual([blueprint.rootNodeId])
+
+    await store.updateBlueprint('__global__', blueprint.id, { collapsedNodeIds: [] })
+    const loaded = await store.loadBlueprint('__global__', blueprint.id)
+    expect(loaded?.collapsedNodeIds).toEqual([])
+    expect(loaded?.contentRevision).toBe(0)
+  })
+
   it('preserves parent-child consistency through create, move, delete, and root promotion', async () => {
     const store = new BlueprintStore()
     const blueprint = await store.createBlueprint('__global__', { name: 'Graph' })

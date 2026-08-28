@@ -25,6 +25,8 @@ export function JanusChatPane({ focused, conversationId }: { focused: boolean; c
       onClear={chat.clear}
       resourceController={chat.resourceController}
       conversationController={chat}
+      approvalMode={chat.approvalMode}
+      onApprovalModeChange={chat.setApprovalMode}
     />
   )
 }

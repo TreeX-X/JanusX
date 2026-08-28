@@ -112,7 +112,7 @@ describe('AgentStreamManager', () => {
           '--include-partial-messages',
           '--verbose',
           '--no-session-persistence',
-          '--permission-mode', 'acceptEdits',
+          '--permission-mode', 'bypassPermissions',
         ],
       ],
       [
@@ -142,12 +142,20 @@ describe('AgentStreamManager', () => {
       resolveCLIPathMock.mockResolvedValue(cliPath)
       const AgentStreamManager = await importManager()
       const manager = new AgentStreamManager()
-      await startAndClose(manager, { engine, prompt, cwd })
+      await startAndClose(manager, { engine, prompt, cwd, approvalMode: 'auto-run' })
       expect(spawnMock).toHaveBeenCalledWith(
         cliPath,
         expectedArgs,
         expect.objectContaining({ cwd }),
       )
+    })
+
+    it('uses the engine approval flow in strict mode', async () => {
+      resolveCLIPathMock.mockResolvedValue('/usr/bin/codex')
+      const AgentStreamManager = await importManager()
+      const manager = new AgentStreamManager()
+      await startAndClose(manager, { engine: 'codex', prompt: 'strict', cwd: '/workdir', approvalMode: 'per-action' })
+      expect(spawnMock.mock.calls[0][1]).toEqual(['exec', '--json', '--skip-git-repo-check', '--', 'strict'])
     })
 
     it('opencode engine includes --model when provided', async () => {

@@ -146,7 +146,7 @@ Use this as a lookup table before opening source.
 | `src/main/llm/ModelCatalogService.ts` | `ModelCatalogService` - model registry access, OpenRouter normalization |
 | `src/main/llm/chat-orchestrator.ts` | chat message/stream management, tool trace, workspace mutation intent, abort |
 | `src/main/llm/ai-runtime.ts` | Vercel AI SDK model resolution |
-| `src/main/llm/workspace-chat-tools.ts` | `createWorkspaceChatTools`, `createWorkspaceChatSystemPrompt`, `createToolPreview` |
+| `src/main/llm/workspace-chat-tools.ts` | `createWorkspaceChatTools`, `createToolPreview` |
 | `src/main/llm/development-config-sync.ts` | `synchronizeInstalledLlmConfig`, `getDevelopmentLlmSyncStatus` |
 
 ## Janus and Blueprint

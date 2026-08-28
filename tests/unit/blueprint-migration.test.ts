@@ -76,6 +76,18 @@ describe('blueprint migration boundary', () => {
     expect(migrateBlueprint(blueprint)).toBe(false)
   })
 
+  it('keeps an explicit empty collapsed state distinct from an uninitialized one', () => {
+    const blueprint = blueprintFixture()
+    blueprint.schemaVersion = 3
+
+    expect(migrateBlueprint(blueprint)).toBe(true)
+    expect(blueprint.collapsedNodeIds).toBeNull()
+
+    blueprint.collapsedNodeIds = []
+    expect(migrateBlueprint(blueprint)).toBe(false)
+    expect(blueprint.collapsedNodeIds).toEqual([])
+  })
+
   it('sanitizes persisted relations: drops invalid entries and normalizes related-to', () => {
     const blueprint = blueprintFixture()
     const relation = (id: string, source: string, target: string, type: string) => ({

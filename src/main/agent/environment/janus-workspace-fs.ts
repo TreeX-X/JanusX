@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { extname, relative, resolve, sep } from 'node:path'
 import { writeFileAtomic } from '../../lib/atomic-file'
-import { readWorkspaceFile, type WorkspaceReadAuthorizer } from '../runtime/path-guard'
+import { readWorkspaceFile, readWorkspaceFileRange, type WorkspaceFileRange, type WorkspaceReadAuthorizer } from '../runtime/path-guard'
 import { isSensitivePath } from '../runtime/policy-gate'
 import type { BlueprintEvidenceManifest } from '../../../shared/janus/maintenance-types'
 
@@ -134,6 +134,35 @@ export class JanusWorkspaceFs {
       const content = await readWorkspaceFile(workspaceRoot, requestedPath, maxBytes, authorize)
       if (!isTextBuffer(content)) throw new Error('Workspace file is not UTF-8 text')
       return { ok: true, value: content }
+    } catch (error) { return failure(error) }
+  }
+
+  async readWorkspaceTextRange(
+    workspaceRoot: string,
+    requestedPath: string,
+    offset: number,
+    maxBytes: number,
+    authorize: WorkspaceReadAuthorizer,
+  ): Promise<JanusResult<WorkspaceFileRange>> {
+    try {
+      const read = await readWorkspaceFileRange(workspaceRoot, requestedPath, offset, maxBytes, authorize)
+      let start = 0
+      while (start < read.content.length && (read.content[start] & 0xc0) === 0x80) start += 1
+      let end = read.content.length
+      while (end > start && !isTextBuffer(read.content.subarray(start, end))) end -= 1
+      if (end < read.content.length - 3 || (end === start && read.content.length > 0)) {
+        throw new Error('Workspace file is not UTF-8 text')
+      }
+      const content = read.content.subarray(start, end)
+      return {
+        ok: true,
+        value: {
+          ...read,
+          content,
+          offset: read.offset + start,
+          truncated: read.truncated || start > 0 || end < read.content.length,
+        },
+      }
     } catch (error) { return failure(error) }
   }
 

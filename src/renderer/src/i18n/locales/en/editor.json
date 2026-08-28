@@ -8,6 +8,8 @@
     "noMatch": "No matching files",
     "reloadFailed": "Directory reload failed",
     "operationFailed": "File operation failed",
+    "openInVSCode": "Open workspace in VS Code",
+    "openVSCodeFailed": "Unable to open VS Code",
     "nameInvalid": "Name cannot be empty, and cannot contain / or \\",
     "workspaceRoot": "Workspace",
     "deleteTitle": "Confirm delete",

@@ -4,6 +4,7 @@ export const AGENT_RUNTIME_CHANNELS = {
   cancelSession: 'agent-runtime:cancel-session',
   resolveApproval: 'agent-runtime:resolve-approval',
   getSession: 'agent-runtime:get-session',
+  setApprovalMode: 'agent-runtime:set-approval-mode',
   queryPolicyAudit: 'agent-runtime:query-policy-audit',
   executeFunctionCall: 'agent-runtime:execute-function-call',
   executePlannerStep: 'agent-runtime:execute-planner-step',
@@ -26,13 +27,15 @@ export type ActionRisk =
   | 'delete'
   | 'external-command'
   | 'network'
-export type ApprovalPolicy = 'none' | 'per-action'
+export type AgentApprovalMode = 'per-action' | 'auto-run'
+export type ApprovalPolicy = 'none' | 'per-action' | 'auto-run'
 export type ApprovalDecision = 'not-required' | 'pending' | 'approved' | 'denied' | 'cancelled' | 'timed-out'
 export type PolicyOutcome = 'allow' | 'deny' | 'approval-required'
 export type PolicyReasonCode =
   | 'READ_ALLOWED'
   | 'READ_ONLY_ALLOWED'
   | 'ACTION_REQUIRES_APPROVAL'
+  | 'AUTO_RUN_ALLOWED'
   | 'APPROVAL_GRANTED'
   | 'APPROVAL_DENIED'
   | 'APPROVAL_CANCELLED'
@@ -133,6 +136,7 @@ export interface AgentSession {
   createdAt: string
   updatedAt: string
   timeoutMs: number
+  approvalMode: AgentApprovalMode
 }
 
 export interface ApprovalRequest {
@@ -162,6 +166,7 @@ export interface ApprovalResult {
 
 export type AgentRuntimeEvent =
   | { type: 'session-created'; session: AgentSession }
+  | { type: 'session-updated'; session: AgentSession }
   | { type: 'tool-requested'; sessionId: string; correlationId: string; toolName: string }
   | { type: 'policy-decided'; decision: PolicyDecisionRecord }
   | { type: 'approval-requested'; request: ApprovalRequest }
@@ -172,8 +177,12 @@ export type AgentRuntimeEvent =
   | { type: 'tool-cancelled'; result: ToolResult }
   | { type: 'session-ended'; session: AgentSession }
 
-export interface CreateAgentSessionInput { workspaceId: string; workspaceRoot: string; timeoutMs?: number }
+export interface CreateAgentSessionInput { workspaceId: string; workspaceRoot: string; timeoutMs?: number; approvalMode?: AgentApprovalMode }
 export interface ExecuteToolInput { sessionId: string; call: ToolCall }
+
+export function normalizeAgentApprovalMode(value: unknown): AgentApprovalMode {
+  return value === 'auto-run' ? 'auto-run' : 'per-action'
+}
 
 export interface AgentRuntimeAPI {
   createSession(input: CreateAgentSessionInput): Promise<AgentSession>
@@ -182,6 +191,7 @@ export interface AgentRuntimeAPI {
   resolveApproval(input: ApprovalResult): Promise<boolean>
   queryPolicyAudit(query?: PolicyAuditQuery): Promise<PolicyDecisionRecord[]>
   getSession(sessionId: string): Promise<AgentSession | null>
+  setApprovalMode(sessionId: string, mode: AgentApprovalMode): Promise<AgentSession | null>
   executeFunctionCall(input: ExecuteToolInput): Promise<ToolResult>
   executePlannerStep(input: ExecuteToolInput): Promise<ToolResult>
   onEvent(callback: (event: AgentRuntimeEvent) => void): () => void

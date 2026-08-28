@@ -75,6 +75,7 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
         <MarkdownViewer
           content={file.content}
           originalContent={diffOriginalContent}
+          modelPath={file.absolutePath}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />
@@ -84,6 +85,7 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
         <HtmlViewer
           content={file.content}
           originalContent={diffOriginalContent}
+          modelPath={file.absolutePath}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />

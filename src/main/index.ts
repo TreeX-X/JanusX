@@ -1,4 +1,4 @@
-import { app, BrowserWindow, crashReporter } from 'electron'
+import { app, BrowserWindow, crashReporter, ipcMain } from 'electron'
 import { isAgentHookClientInvocation, runAgentHookClient } from './notifications/agent-hook-client'
 import { configureApplicationProfile, configureChromiumSessionPaths } from './bootstrap/session'
 
@@ -157,6 +157,8 @@ async function bootstrapApp(): Promise<void> {
   ])
 
   let mainWindow: BrowserWindow | null = null
+  let quitAck: (() => void) | null = null
+  ipcMain.on('app:prepareQuitAck', () => { quitAck?.(); quitAck = null })
   const editorWindows = new EditorWindowManager()
   const browserSurfaces = new BrowserSurfaceManager({ getMainWindow: () => mainWindow })
   const getOfficeWindows = (): BrowserWindow[] => [
@@ -234,7 +236,14 @@ async function bootstrapApp(): Promise<void> {
   app.on('before-quit', (event) => {
     if (appShutdown.isQuitting) return
     event.preventDefault()
-    void appShutdown.beginQuit({ reason: 'before-quit' })
+    const ack = mainWindow && !mainWindow.isDestroyed()
+      ? new Promise<void>((resolve) => {
+          quitAck = resolve
+          mainWindow!.webContents.send('app:prepareQuit')
+          setTimeout(resolve, 1_000).unref?.()
+        })
+      : Promise.resolve()
+    void ack.then(() => appShutdown.beginQuit({ reason: 'before-quit' }))
   })
 
   // I-2 [P2] AC1: await app.whenReady() inside bootstrapApp's async flow so

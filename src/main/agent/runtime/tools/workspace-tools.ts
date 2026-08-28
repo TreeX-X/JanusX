@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'fs/promises'
 import { join, resolve } from 'path'
 import { resolveWorkspaceTarget } from '../path-guard'
@@ -10,6 +9,7 @@ import {
   atomicReplaceWorkspaceFile,
   createWorkspaceFile,
   prepareWorkspaceEdit,
+  prepareWorkspaceUnifiedDiffEdit,
   MAX_WORKSPACE_EDIT_BYTES,
   type WorkspaceExactReplacement,
 } from '../file-transaction'
@@ -31,6 +31,7 @@ export const workspaceReadTool: RegisteredTool = {
     properties: {
       workspaceId: { type: 'string' },
       path: { type: 'string' },
+      offset: { type: 'number' },
       maxBytes: { type: 'number' },
     },
     required: ['workspaceId', 'path'],
@@ -39,36 +40,44 @@ export const workspaceReadTool: RegisteredTool = {
   execute: async (input, context) => {
     const workspaceId = input.workspaceId
     const requestedPath = input.path
+    const offset = input.offset ?? 0
     const maxBytes = input.maxBytes ?? DEFAULT_MAX_BYTES
     if (typeof workspaceId !== 'string' || workspaceId !== context.workspaceId) {
       throw new Error('workspace.read workspaceId must match the active workspace resource')
     }
     if (typeof requestedPath !== 'string') throw new Error('workspace.read path must be a string')
+    if (!Number.isSafeInteger(offset) || Number(offset) < 0) {
+      throw new Error('workspace.read offset must be a non-negative integer')
+    }
     if (!Number.isSafeInteger(maxBytes) || Number(maxBytes) < 0 || Number(maxBytes) > MAX_MAX_BYTES) {
       throw new Error(`workspace.read maxBytes must be an integer between 0 and ${MAX_MAX_BYTES}`)
     }
     if (context.signal.aborted) throw new Error('workspace.read cancelled')
 
-    const read = await janusWorkspaceFs.readWorkspaceText(
+    const read = await janusWorkspaceFs.readWorkspaceTextRange(
       context.workspaceRoot,
       requestedPath,
+      Number(offset),
       Number(maxBytes),
       evaluateWorkspaceReadPolicy,
     )
     if (!read.ok) throw read.error
-    const content = read.value
+    const range = read.value
     if (context.signal.aborted) throw new Error('workspace.read cancelled')
 
     // sha256 is always computed from disk content: edits to unmasked regions
     // still match, and only the masked credential itself becomes uneditable.
-    const { text, redacted } = redactHighConfidenceSecrets(content.toString('utf-8'))
+    const { text, redacted } = redactHighConfidenceSecrets(range.content.toString('utf-8'))
     return {
       workspaceId,
       path: requestedPath,
       encoding: 'utf-8',
-      size: content.byteLength,
+      size: range.size,
+      offset: range.offset,
+      bytes: range.content.byteLength,
+      truncated: range.truncated,
       content: text,
-      sha256: createHash('sha256').update(content).digest('hex'),
+      sha256: range.sha256,
       contentRedacted: redacted,
       ...(redacted ? {
         redactionNotice: 'High-confidence credential material was masked as [REDACTED]. The sha256 covers the original file; masked regions cannot be used as oldText in workspace.edit.',
@@ -79,7 +88,7 @@ export const workspaceReadTool: RegisteredTool = {
 
 export const workspaceEditTool: RegisteredTool = {
   name: 'workspace.edit',
-  description: 'Apply bounded exact text replacements to an existing workspace file after approval',
+  description: 'Apply bounded exact replacements or one unified diff to an existing workspace file after approval',
   actionRisk: 'write',
   inputSchema: {
     type: 'object',
@@ -88,24 +97,30 @@ export const workspaceEditTool: RegisteredTool = {
       path: { type: 'string' },
       expectedHash: { type: 'string' },
       replacements: { type: 'array' },
+      unifiedDiff: { type: 'string' },
     },
-    required: ['workspaceId', 'path', 'expectedHash', 'replacements'],
+    required: ['workspaceId', 'path', 'expectedHash'],
     additionalProperties: false,
   },
   execute: async (input, context) => {
     if (input.workspaceId !== context.workspaceId) {
       throw new Error('workspace.edit workspaceId must match the active workspace resource')
     }
-    if (typeof input.path !== 'string' || typeof input.expectedHash !== 'string' || !Array.isArray(input.replacements)) {
+    if (typeof input.path !== 'string' || typeof input.expectedHash !== 'string') {
       throw new Error('workspace.edit input is invalid')
     }
+    const hasReplacements = input.replacements !== undefined
+    const hasUnifiedDiff = input.unifiedDiff !== undefined
+    if (hasReplacements === hasUnifiedDiff) {
+      throw new Error('workspace.edit requires exactly one of replacements or unifiedDiff')
+    }
+    if (hasReplacements && !Array.isArray(input.replacements)) throw new Error('workspace.edit replacements must be an array')
+    if (hasUnifiedDiff && typeof input.unifiedDiff !== 'string') throw new Error('workspace.edit unifiedDiff must be a string')
     if (context.signal.aborted) throw new Error('workspace.edit cancelled')
-    let prepared = await prepareWorkspaceEdit(
-      context.workspaceRoot,
-      input.path,
-      input.expectedHash,
-      input.replacements as WorkspaceExactReplacement[],
-    )
+    const prepare = () => hasUnifiedDiff
+      ? prepareWorkspaceUnifiedDiffEdit(context.workspaceRoot, input.path as string, input.expectedHash as string, input.unifiedDiff as string)
+      : prepareWorkspaceEdit(context.workspaceRoot, input.path as string, input.expectedHash as string, input.replacements as WorkspaceExactReplacement[])
+    let prepared = await prepare()
     await checkpointManager.initialize(context.workspaceRoot)
     const checkpoint = await checkpointManager.createCheckpoint({
       terminalId: `workspace-chat:${context.workspaceId}`,
@@ -114,12 +129,7 @@ export const workspaceEditTool: RegisteredTool = {
       cwd: context.workspaceRoot,
     })
     if (context.signal.aborted) throw new Error('workspace.edit cancelled')
-    prepared = await prepareWorkspaceEdit(
-      context.workspaceRoot,
-      input.path,
-      input.expectedHash,
-      input.replacements as WorkspaceExactReplacement[],
-    )
+    prepared = await prepare()
     await atomicReplaceWorkspaceFile(context.workspaceRoot, prepared)
     return {
       workspaceId: context.workspaceId,
@@ -127,6 +137,7 @@ export const workspaceEditTool: RegisteredTool = {
       changedPaths: [prepared.path],
       previousHash: prepared.previousHash,
       sha256: prepared.nextHash,
+      editMode: prepared.editMode,
       replacements: prepared.replacements,
       bytes: Buffer.byteLength(prepared.nextContent),
       checkpointId: checkpoint.id,

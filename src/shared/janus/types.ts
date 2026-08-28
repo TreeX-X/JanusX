@@ -206,6 +206,8 @@ export interface Blueprint {
   requirementCandidates: BlueprintRequirementCandidate[]
   mountedTo: string | null
   canvasLayout: Record<string, { x: number; y: number }>
+  /** Persisted collapsed node ids; null/undefined means not initialized yet. */
+  collapsedNodeIds?: string[] | null
   createdAt: string
   updatedAt: string
 }

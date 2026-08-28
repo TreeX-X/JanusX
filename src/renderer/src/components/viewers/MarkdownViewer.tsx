@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
 import { MARKDOWN_COMPONENTS } from './markdown-components'
 import { MonacoViewer } from './MonacoViewer'
+import { PreviewScrollArea } from './PreviewScrollArea'
 import type { FindableEditor } from '@/lib/editor-find'
 
 interface MarkdownViewerProps {
@@ -11,9 +12,10 @@ interface MarkdownViewerProps {
   originalContent?: string
   onChange: (value: string) => void
   onEditorMount?: (editor: FindableEditor | null) => void
+  modelPath?: string
 }
 
-export function MarkdownViewer({ content, originalContent, onChange, onEditorMount }: MarkdownViewerProps) {
+export function MarkdownViewer({ content, originalContent, onChange, onEditorMount, modelPath }: MarkdownViewerProps) {
   const [splitRatio, setSplitRatio] = useState(50)
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
   const isDragging = useRef(false)
@@ -84,6 +86,7 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
             content={content}
             language="markdown"
             originalContent={originalContent}
+            modelPath={modelPath}
             onChange={onChange}
             onEditorMount={onEditorMount}
           />
@@ -127,8 +130,9 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
         >
           PREVIEW
         </div>
+        <PreviewScrollArea>
         <div
-          className="flex-1 overflow-auto"
+          className="flex-1"
           style={{
             padding: 16,
             background: '#0a0a0a',
@@ -145,6 +149,7 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
             </ReactMarkdown>
           </div>
         </div>
+        </PreviewScrollArea>
       </div>
       )}
       </div>

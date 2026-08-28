@@ -1,4 +1,5 @@
 import type { SubAgentRun, SubAgentRunRemovedEvent, SubAgentRunRole, SubAgentRunSource, SubAgentRunUpdatedEvent } from '../subAgentRun'
+import type { AgentApprovalMode } from './agent-runtime'
 
 export const AGENT_CHANNELS = {
   start: 'agent:start',
@@ -44,6 +45,7 @@ export interface AgentSpawnOptions {
   nodeId?: string
   workspaceId?: string
   workspacePath?: string
+  approvalMode?: AgentApprovalMode
 }
 
 export interface AgentSessionInfo {

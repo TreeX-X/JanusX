@@ -28,6 +28,7 @@ import type {
 
 export const JANUS_COMMAND_CHANNELS = {
   listBlueprints: 'blueprint:list',
+  listBlueprintSummaries: 'blueprint:list-summaries',
   loadBlueprint: 'blueprint:load',
   createBlueprint: 'blueprint:create',
   updateBlueprint: 'blueprint:update',
@@ -61,6 +62,16 @@ export const JANUS_COMMAND_CHANNELS = {
   maintenanceUndoApply: 'blueprint:maintenance:undo:apply',
 } as const
 
+export interface BlueprintSummary {
+  id: string
+  name: string
+  description: string
+  contentRevision: number
+  nodeCount: number
+  createdAt: string
+  updatedAt: string
+}
+
 export const JANUS_EVENT_CHANNELS = {
   analysis: 'janus:island:analysis',
   discovered: 'janus:island:discovered',
@@ -78,6 +89,7 @@ export interface BlueprintUpdatePatch {
   name?: string
   description?: string
   canvasLayout?: Record<string, { x: number; y: number }>
+  collapsedNodeIds?: string[] | null
 }
 
 export type NodeCreateInput = Partial<BlueprintNode> & {
@@ -181,6 +193,7 @@ export interface IslandDiscoveredEvent {
 
 export interface JanusAPI {
   listBlueprints(cwd: string): Promise<Blueprint[] | null>
+  listBlueprintSummaries(cwd: string): Promise<BlueprintSummary[] | null>
   loadBlueprint(cwd: string, id: string): Promise<Blueprint | null>
   createBlueprint(cwd: string, input: BlueprintCreateInput): Promise<Blueprint>
   updateBlueprint(cwd: string, id: string, patch: BlueprintUpdatePatch): Promise<Blueprint | null>

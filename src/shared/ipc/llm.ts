@@ -13,7 +13,7 @@ export const LLM_CHANNELS = {
   getCatalog: 'llm:model-catalog:get', refreshCatalog: 'llm:model-catalog:refresh', getAdapters: 'llm:get-adapters',
   getDefaultProvider: 'llm:get-default-provider', chat: 'llm:chat', chatStream: 'llm:chat-stream', abort: 'llm:chat:abort',
   delta: 'llm:chat:delta', done: 'llm:chat:done', error: 'llm:chat:error', recallTrace: 'llm:chat:recall-trace',
-  toolTrace: 'llm:chat:tool-trace',
+  toolTrace: 'llm:chat:tool-trace', agentEvent: 'llm:chat:agent-event',
 } as const
 
 export interface ChatMessage { role: 'user' | 'assistant' | 'system'; content: string }
@@ -24,7 +24,7 @@ export interface ChatWorkspaceResource {
   agentSessionId: string
 }
 export interface ChatRequest {
-  messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat'; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
+  messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat'; conversationId?: string; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
   /** Compact trace of tool calls from earlier turns, replayed into the model's context. */
   toolTraces?: ChatToolTraceEntry[]
 }
@@ -33,6 +33,25 @@ export interface ChatStreamEvent { requestId: string; delta?: string; done?: boo
 
 /** Tool-call status surfaced to the chat UI. Kept as a literal union so cards can branch on it. */
 export type ChatToolTraceStatus = 'requested' | 'approval' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+/**
+ * Safe, request-scoped Agent lifecycle events for the Chat renderer.
+ * Tool argument values and raw tool output never leave the Main Process here.
+ */
+export type ChatAgentEvent =
+  | { type: 'agent_start'; requestId: string }
+  | { type: 'text_delta'; requestId: string; delta: string }
+  | { type: 'reasoning_delta'; requestId: string; delta: string }
+  | { type: 'tool_call_start'; requestId: string; callId: string; toolName?: string }
+  | { type: 'tool_call_delta'; requestId: string; callId: string; argumentDeltaLength: number }
+  | { type: 'tool_call_ready'; requestId: string; callId: string; toolName: string; argumentKeys: string[] }
+  | { type: 'tool_execution_start'; requestId: string; callId: string; toolName: string }
+  | { type: 'tool_execution_update'; requestId: string; callId: string; toolName: string }
+  | { type: 'tool_execution_end'; requestId: string; callId: string; toolName: string; status: ChatToolTraceStatus }
+  | { type: 'model_finish'; requestId: string; reason: 'stop' | 'tool_calls' | 'length' | 'unknown' }
+  | { type: 'model_error'; requestId: string; code: string; retryable: boolean }
+  | { type: 'stream_end'; requestId: string; cancelled: boolean }
+  | { type: 'stream_error'; requestId: string; error: string }
 
 /** One executed workspace tool call, replayed into the next turn's history so the model keeps its working context. */
 export interface ChatToolTraceEntry {
@@ -88,6 +107,7 @@ export interface LlmAPI {
   onDelta(callback: (payload: ChatStreamEvent) => void): () => void
   onDone(callback: (payload: ChatStreamEvent) => void): () => void
   onError(callback: (payload: ChatStreamEvent) => void): () => void
+  onAgentEvent(callback: (payload: ChatAgentEvent) => void): () => void
   onRecallTrace(callback: (payload: KnowledgeRecallTrace) => void): () => void
   onToolTrace(callback: (payload: ChatToolTraceEvent) => void): () => void
 }

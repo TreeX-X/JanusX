@@ -11,6 +11,13 @@ const MAX_ARGUMENTS = 100
 const MAX_OUTPUT_BYTES = 64 * 1024
 const WINDOWS_SHELL_META = /[&|<>^\r\n]/
 
+export type CommandExecutionMode = 'direct' | 'windows-shell-shim'
+
+/** Windows package-manager shims and .cmd/.bat files need cmd.exe compatibility. */
+export function commandExecutionMode(program: string, platform: NodeJS.Platform = process.platform): CommandExecutionMode {
+  return requiresCommandShell(program, platform) ? 'windows-shell-shim' : 'direct'
+}
+
 function appendBounded(chunks: Buffer[], chunk: Buffer, state: { bytes: number; truncated: boolean }): void {
   if (state.bytes >= MAX_OUTPUT_BYTES) {
     state.truncated = true
@@ -28,9 +35,17 @@ function executeCommand(
   cwd: string,
   timeoutMs: number,
   signal: AbortSignal,
-): Promise<{ exitCode: number | null; stdout: string; stderr: string; timedOut: boolean; outputTruncated: boolean }> {
+): Promise<{
+  exitCode: number | null
+  stdout: string
+  stderr: string
+  timedOut: boolean
+  outputTruncated: boolean
+  executionMode: CommandExecutionMode
+}> {
   return new Promise((resolve, reject) => {
-    const useShell = requiresCommandShell(program)
+    const executionMode = commandExecutionMode(program)
+    const useShell = executionMode === 'windows-shell-shim'
     if (useShell && args.some((arg) => WINDOWS_SHELL_META.test(arg))) {
       reject(new Error('command.run shell-backed arguments contain unsupported metacharacters'))
       return
@@ -80,6 +95,7 @@ function executeCommand(
         stderr: Buffer.concat(stderr).toString('utf-8'),
         timedOut,
         outputTruncated: stdoutState.truncated || stderrState.truncated,
+        executionMode,
       })
     })
   })

@@ -21,6 +21,7 @@ import type {
   ListCandidatesPayload,
   NodeCreateInput,
   RejectCandidatePayload,
+  BlueprintSummary,
 } from '../../../shared/ipc/janus'
 import type {
   BlueprintMaintenanceApplyInput,
@@ -76,6 +77,7 @@ export type {
   ListCandidatesPayload,
   NodeCreateInput,
   RejectCandidatePayload,
+  BlueprintSummary,
 } from '../../../shared/ipc/janus'
 export type {
   BlueprintChangeSet,
@@ -99,6 +101,10 @@ export type {
 
 export function listBlueprints(cwd: string): Promise<Blueprint[] | null> {
   return window.electron.janus.listBlueprints(cwd)
+}
+
+export function listBlueprintSummaries(cwd: string): Promise<BlueprintSummary[] | null> {
+  return window.electron.janus.listBlueprintSummaries(cwd)
 }
 
 export function loadBlueprint(cwd: string, id: string): Promise<Blueprint | null> {

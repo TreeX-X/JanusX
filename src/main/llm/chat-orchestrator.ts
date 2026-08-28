@@ -13,11 +13,16 @@ import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeContextService } from '../knowledge/context-service'
 import type { KnowledgeContextResult, KnowledgeRecallTrace } from '../../shared/knowledge'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
-import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../shared/ipc/llm'
+import type { ChatAgentEvent, ChatToolTraceEntry, ChatWorkspaceResource } from '../../shared/ipc/llm'
 import type { ToolResult } from '../../shared/ipc/agent-runtime'
 import { workspaceAgentRuntime } from '../agent/runtime/runtime'
-import { createToolPreview, createWorkspaceChatSystemPrompt, createWorkspaceChatTools } from './workspace-chat-tools'
+import { createToolManifests } from '../agent/runtime/tool-manifest'
+import { createToolPreview, createWorkspaceChatTools } from './workspace-chat-tools'
 import { createJanusRuntimeToolsForResources, createVercelModelTools, createVercelStream, runJanusAgentLoop, type JanusAgentMessage } from '../agent/loop'
+import { toAgentStreamEvent } from '../agent/stream'
+import { toChatAgentEvent } from './chat-agent-events'
+import { ChatSessionRuntime } from './chat-session-runtime'
+import { buildChatSystemPrompt } from './system-prompt-builder'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -32,6 +37,7 @@ export interface ChatStreamRequest {
   providerId: string
   modelId?: string
   sourceTag?: 'janus-chat'
+  conversationId?: string
   workspaceId?: string
   workspacePath?: string
   workspaceResources?: ChatWorkspaceResource[]
@@ -40,6 +46,25 @@ export interface ChatStreamRequest {
 
 /** Active streaming chat abort controllers (module-scoped for shutdown). */
 const abortControllers = new Map<string, AbortController>()
+const chatSessions = new Map<string, ChatSessionRuntime>()
+const MAX_CHAT_SESSIONS = 32
+
+function getChatSession(conversationId: string): ChatSessionRuntime {
+  const existing = chatSessions.get(conversationId)
+  if (existing) {
+    chatSessions.delete(conversationId)
+    chatSessions.set(conversationId, existing)
+    return existing
+  }
+  const session = new ChatSessionRuntime()
+  chatSessions.set(conversationId, session)
+  while (chatSessions.size > MAX_CHAT_SESSIONS) {
+    const oldest = chatSessions.keys().next().value
+    if (!oldest) break
+    chatSessions.delete(oldest)
+  }
+  return session
+}
 
 const JANUS_CHAT_MAX_ITEMS = 5
 const JANUS_CHAT_MAX_CHARS = 3_000
@@ -326,7 +351,7 @@ interface ChatStreamReplyTarget {
 
 /** 流式对话编排：由 llm-handlers 的 ipcMain.on(chatStream) 委托调用 */
 export async function handleChatStream(event: ChatStreamReplyTarget, request: ChatStreamRequest): Promise<void> {
-  const { requestId, messages, providerId, modelId, sourceTag, workspaceId, workspacePath, workspaceResources, toolTraces } = request
+  const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces } = request
 
   // 重复 requestId：先中止旧流，避免旧 controller 被覆盖后失去 cancel 句柄
   const previous = abortControllers.get(requestId)
@@ -345,7 +370,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
   // 窗口销毁后 event.reply 会抛异常并造成 unhandled rejection，统一守卫
   const sendEvent = (
-    channel: typeof LLM_CHANNELS.delta | typeof LLM_CHANNELS.done | typeof LLM_CHANNELS.error | typeof LLM_CHANNELS.recallTrace | typeof LLM_CHANNELS.toolTrace,
+    channel: typeof LLM_CHANNELS.delta | typeof LLM_CHANNELS.done | typeof LLM_CHANNELS.error | typeof LLM_CHANNELS.recallTrace | typeof LLM_CHANNELS.toolTrace | typeof LLM_CHANNELS.agentEvent,
     payload: unknown,
   ) => {
     if (typeof event.sender?.isDestroyed === 'function' && event.sender.isDestroyed()) return
@@ -359,6 +384,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
   const sendError = (message: string) => {
     sendEvent(LLM_CHANNELS.error, { requestId, error: message })
   }
+  const sendAgentEvent = (agentEvent: ChatAgentEvent) => sendEvent(LLM_CHANNELS.agentEvent, agentEvent)
 
   // delta 合批：累积增量，40ms 定时 flush；循环结束/异常前强制 flush
   let pendingDelta = ''
@@ -414,19 +440,39 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     let workspaceTools: ReturnType<typeof createWorkspaceChatTools> | undefined
     if (trustedResources.size > 0) {
       const traceHistory = toolTraceHistoryMessage(Array.isArray(toolTraces) ? toolTraces.slice(-TOOL_TRACE_MAX_ENTRIES) : [])
-      formattedMessages = [
-        { role: 'system', content: createWorkspaceChatSystemPrompt(trustedResources) },
-        ...(traceHistory ? [traceHistory] : []),
-        ...formattedMessages,
-      ]
+      const allToolManifests = workspaceAgentRuntime.registry.listManifests?.()
+        ?? createToolManifests(workspaceAgentRuntime.registry.list())
       workspaceTools = createWorkspaceChatTools({
         runtime: workspaceAgentRuntime,
         resources: trustedResources,
         callerId: `renderer:${event.sender?.id ?? 'unknown'}`,
+        toolManifests: allToolManifests,
       })
+      const activeToolManifests = allToolManifests
+        .filter((manifest) => Object.hasOwn(workspaceTools ?? {}, manifest.providerName))
+      formattedMessages = [
+        { role: 'system', content: buildChatSystemPrompt({ resources: trustedResources, toolManifests: activeToolManifests }) },
+        ...(traceHistory ? [traceHistory] : []),
+        ...formattedMessages,
+      ]
+    } else {
+      formattedMessages = [
+        { role: 'system', content: buildChatSystemPrompt({ resources: trustedResources, toolManifests: [] }) },
+        ...formattedMessages,
+      ]
     }
 
     const model = await llmService.getLanguageModel(providerId, actualModelId)
+    const modelListingService = llmService as typeof llmService & {
+      listModels?: (provider: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
+    }
+    const modelInfo = typeof modelListingService.listModels === 'function'
+      ? (await modelListingService.listModels(providerId).catch(() => [])).find((candidate) => candidate.id === actualModelId)
+      : undefined
+    if (trustedResources.size > 0 && modelInfo?.supportsFunctionCalling === false) {
+      throw new Error(`Model "${actualModelId}" does not support Function Calling required by attached workspaces`)
+    }
+    const chatSession = getChatSession(conversationId ?? requestId)
 
     const userRequestedMutation = hasExplicitWorkspaceMutationIntent(latestUserQuery(formattedMessages))
     let recoveryIssued = false
@@ -440,16 +486,19 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
           callerId: `renderer:${event.sender?.id ?? 'unknown'}`,
           preview: createToolPreview,
         })
-        .map((tool) => ({ ...tool, name: tool.name.replaceAll('.', '_').replaceAll('-', '_') }))
-        .filter((tool) => !!modelTools?.[tool.name])
+          .filter((tool) => !!modelTools?.[tool.name])
       : []
     await runJanusAgentLoop(modelMessages, {
       tools: loopTools,
       stream: createVercelStream({ model, tools: modelTools }),
+      transformContext: async (context) => chatSession.buildContext(context, { model: modelInfo }),
       maxTurns: CHAT_MAX_STEPS,
       afterToolCall: async ({ result }) => {
         const runtimeResult = result.details as ToolResult | undefined
-        if (runtimeResult?.toolName) executedToolTraces.push(toolTraceEntryFromResult(runtimeResult, requestId))
+        if (runtimeResult?.toolName) {
+          chatSession.recordToolResult(runtimeResult)
+          executedToolTraces.push(toolTraceEntryFromResult(runtimeResult, requestId))
+        }
         return result
       },
       getFollowUpMessages: async () => {
@@ -465,9 +514,13 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         }]
       },
       onEvent: (loopEvent) => {
-        if (loopEvent.type !== 'message_update' || controller.signal.aborted) return
-        queueDelta(loopEvent.delta)
-        streamedText += loopEvent.delta
+        if (controller.signal.aborted) return
+        const streamEvent = toAgentStreamEvent(requestId, loopEvent)
+        if (streamEvent) sendAgentEvent(toChatAgentEvent(streamEvent))
+        if (loopEvent.type === 'message_update') {
+          queueDelta(loopEvent.delta)
+          streamedText += loopEvent.delta
+        }
       },
     }, controller.signal)
 
@@ -480,6 +533,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
     // 用户中止：半截回复不写入知识库，直接收尾
     if (controller.signal.aborted) {
+      sendAgentEvent({ type: 'stream_end', requestId, cancelled: true })
       sendEvent(LLM_CHANNELS.done, { requestId })
       return
     }
@@ -521,16 +575,19 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     if (executedToolTraces.length > 0) {
       sendEvent(LLM_CHANNELS.toolTrace, { requestId, entries: executedToolTraces })
     }
+    sendAgentEvent({ type: 'stream_end', requestId, cancelled: false })
     sendEvent(LLM_CHANNELS.delta, { requestId, delta: '', done: true })
     sendEvent(LLM_CHANNELS.done, { requestId })
   } catch (error: any) {
     flushDelta()
     // 用户主动取消时不作为错误上报
     if (controller.signal.aborted || error?.name === 'AbortError') {
+      sendAgentEvent({ type: 'stream_end', requestId, cancelled: true })
       sendEvent(LLM_CHANNELS.done, { requestId })
       return
     }
     console.error('[IPC] llm:chat-stream error:', error.message || error)
+    sendAgentEvent({ type: 'stream_error', requestId, error: error.message || String(error) })
     sendError(error.message || String(error))
   } finally {
     if (deltaTimer) {

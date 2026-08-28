@@ -4,6 +4,7 @@ import { agentStreamManager } from '../agent/stream-manager'
 import { notifyAgentEvent } from '../notifications/agent-notifier'
 import { configService } from '../config/service'
 import type { AgentSpawnOptions } from '../agent/types'
+import { normalizeAgentApprovalMode } from '../../shared/ipc/agent-runtime'
 import { subAgentRunRegistry } from '../agent/subagent-run-registry'
 import type { AgentEvent } from '../agent/types'
 import type { CaptureObservationInput } from '../../shared/knowledge'
@@ -123,44 +124,45 @@ function toObservationPayload(
 
 export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle(AGENT_CHANNELS.start, async (_event, options: AgentSpawnOptions) => {
+    const effectiveOptions: AgentSpawnOptions = { ...options, approvalMode: normalizeAgentApprovalMode(options.approvalMode ?? await configService.getAgentApprovalMode()) }
     const sessionId = randomUUID()
     const startedAt = new Date().toISOString()
 
     subAgentRunRegistry.createRun({
       id: sessionId,
-      source: options.source ?? 'headless',
-      engine: options.engine,
-      role: options.role ?? 'subagent',
+      source: effectiveOptions.source ?? 'headless',
+      engine: effectiveOptions.engine,
+      role: effectiveOptions.role ?? 'subagent',
       status: 'queued',
-      title: options.title ?? `${options.engine} agent`,
-      parentRunId: options.parentRunId,
-      terminalId: options.terminalId,
-      rootRunId: options.rootRunId,
-      rootTerminalId: options.rootTerminalId,
-      missionId: options.missionId,
-      nodeId: options.nodeId,
-      workspaceId: options.workspaceId,
-      workspacePath: options.workspacePath ?? options.cwd,
+      title: effectiveOptions.title ?? `${effectiveOptions.engine} agent`,
+      parentRunId: effectiveOptions.parentRunId,
+      terminalId: effectiveOptions.terminalId,
+      rootRunId: effectiveOptions.rootRunId,
+      rootTerminalId: effectiveOptions.rootTerminalId,
+      missionId: effectiveOptions.missionId,
+      nodeId: effectiveOptions.nodeId,
+      workspaceId: effectiveOptions.workspaceId,
+      workspacePath: effectiveOptions.workspacePath ?? effectiveOptions.cwd,
       startedAt,
       lastEvent: 'Queued',
     })
 
-    if (options.workspacePath ?? options.cwd) {
+    if (effectiveOptions.workspacePath ?? effectiveOptions.cwd) {
       void knowledgeObservationService.capture({
-        workspaceId: options.workspaceId,
-        workspacePath: options.workspacePath ?? options.cwd,
+        workspaceId: effectiveOptions.workspaceId,
+        workspacePath: effectiveOptions.workspacePath ?? effectiveOptions.cwd,
         source: 'agent-stream',
         type: 'conversation-turn',
-        content: options.prompt,
-        summary: options.title ?? `${options.engine} agent prompt`,
+        content: effectiveOptions.prompt,
+        summary: effectiveOptions.title ?? `${effectiveOptions.engine} agent prompt`,
         tags: ['agent-prompt'],
         actor: 'user',
         correlationId: sessionId,
         metadata: {
-          engine: options.engine,
-          title: options.title,
-          role: options.role,
-          source: options.source,
+          engine: effectiveOptions.engine,
+          title: effectiveOptions.title,
+          role: effectiveOptions.role,
+          source: effectiveOptions.source,
         },
       }).catch(() => {})
     }
@@ -183,7 +185,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
               mainWindow,
               {
                 sessionId,
-                engine: options.engine,
+                engine: effectiveOptions.engine,
                 startedAt: agentStreamManager.getSession(sessionId)?.startedAt ?? startedAt,
               },
               event,
@@ -193,20 +195,20 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
           .catch(() => {
             notifyAgentEvent(mainWindow, {
               sessionId,
-              engine: options.engine,
+              engine: effectiveOptions.engine,
               startedAt: agentStreamManager.getSession(sessionId)?.startedAt ?? startedAt,
             }, event)
           })
       }
 
-      const observation = toObservationPayload(event, options, sessionId)
+      const observation = toObservationPayload(event, effectiveOptions, sessionId)
       if (observation) {
         void knowledgeObservationService.capture(observation).catch(() => {})
       }
     })
 
     void agentStreamManager
-      .startWithId(sessionId, options)
+      .startWithId(sessionId, effectiveOptions)
       .then(() => {
         subAgentRunRegistry.updateRun(sessionId, {
           status: 'running',

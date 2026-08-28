@@ -10,7 +10,7 @@ import type {
   ModelCatalogSnapshot,
 } from '@janusx/llm-core'
 import type { KnowledgeRecallTrace } from '../../../shared/knowledge'
-import type { ChatToolTraceEntry, ChatToolTraceEvent, ChatWorkspaceResource, LlmRuntimeStatus } from '../../../shared/ipc/llm'
+import type { ChatAgentEvent, ChatToolTraceEntry, ChatToolTraceEvent, ChatWorkspaceResource, LlmRuntimeStatus } from '../../../shared/ipc/llm'
 
 export type { ChatToolTraceEntry } from '../../../shared/ipc/llm'
 
@@ -134,10 +134,12 @@ export function chatStream(
     providerId?: string
     modelId?: string
     sourceTag?: 'janus-chat'
+    conversationId?: string
     workspaceId?: string
     workspacePath?: string
     workspaceResources?: ChatWorkspaceResource[]
     toolTraces?: ChatToolTraceEntry[]
+    onAgentEvent?: (event: ChatAgentEvent) => void
     onRecallTrace?: (trace: KnowledgeRecallTrace) => void
     onToolTrace?: (entries: ChatToolTraceEntry[]) => void
   }
@@ -145,6 +147,7 @@ export function chatStream(
   const requestId = `llm-chat-${Date.now()}-${++requestSeq}`
   let cleaned = false
   let doneCalled = false
+  let useAgentEvents = false
   let idleTimer: ReturnType<typeof setTimeout> | undefined
 
   const cleanup = () => {
@@ -154,6 +157,7 @@ export function chatStream(
     unsubDelta()
     unsubDone()
     unsubError()
+    unsubAgentEvent()
     unsubRecallTrace()
     unsubToolTrace()
   }
@@ -173,6 +177,7 @@ export function chatStream(
   }
 
   const unsubDelta = window.electron.llm.onDelta((payload) => {
+    if (useAgentEvents) return
     const p = filterByRequest(payload)
     if (!p || p.done) return
     armIdleTimer()
@@ -180,6 +185,7 @@ export function chatStream(
   })
 
   const unsubDone = window.electron.llm.onDone((payload) => {
+    if (useAgentEvents) return
     const p = filterByRequest(payload)
     if (!p || doneCalled) return
     doneCalled = true
@@ -188,12 +194,32 @@ export function chatStream(
   })
 
   const unsubError = window.electron.llm.onError((payload) => {
+    if (useAgentEvents) return
     const p = filterByRequest(payload)
     if (!p) return
     console.error('[chatStream] error accepted:', p.error)
     cleanup()
     onError(p.error ?? '未知错误')
   })
+
+  const agentEventSubscriber = (window.electron.llm as Partial<typeof window.electron.llm>).onAgentEvent
+  const unsubAgentEvent = agentEventSubscriber?.((agentEvent) => {
+    if (agentEvent.requestId !== requestId) return
+    useAgentEvents = true
+    armIdleTimer()
+    options?.onAgentEvent?.(agentEvent)
+    if (agentEvent.type === 'text_delta') {
+      onDelta(agentEvent.delta)
+    } else if (agentEvent.type === 'stream_end') {
+      if (doneCalled) return
+      doneCalled = true
+      cleanup()
+      onDone()
+    } else if (agentEvent.type === 'stream_error') {
+      cleanup()
+      onError(agentEvent.error)
+    }
+  }) ?? (() => {})
 
   const unsubRecallTrace = window.electron.llm.onRecallTrace((payload) => {
     const trace = payload as KnowledgeRecallTrace | undefined
@@ -231,6 +257,7 @@ export function chatStream(
         providerId: def.providerId,
         modelId: def.modelId,
         sourceTag: options?.sourceTag,
+        conversationId: options?.conversationId,
         workspaceId: options?.workspaceId,
         workspacePath: options?.workspacePath,
         workspaceResources: options?.workspaceResources,

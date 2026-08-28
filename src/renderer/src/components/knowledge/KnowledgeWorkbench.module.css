@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: 16px;
   background: rgba(5, 5, 7, 0.55);
   backdrop-filter: blur(6px);
   animation: workbench-backdrop-in 0.3s ease-out;
@@ -17,10 +17,10 @@
 }
 
 .shell {
-  width: min(1380px, calc(100vw - 80px));
-  height: min(840px, calc(100vh - 80px));
-  min-width: 960px;
-  min-height: 620px;
+  width: calc(100vw - 32px);
+  height: calc(100vh - 32px);
+  min-width: 0;
+  min-height: 0;
   display: grid;
   grid-template-rows: 52px minmax(0, 1fr);
   overflow: hidden;

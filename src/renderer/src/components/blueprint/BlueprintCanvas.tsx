@@ -8,7 +8,8 @@
  *  - canvasLayout：拖拽后防抖写回 Blueprint.canvasLayout。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ReactFlow,
   Background,
@@ -29,6 +30,7 @@ import type { TerminalPreset } from '@/types'
 import {
   createNode as createNodeIPC,
   bindTerminal as bindTerminalIPC,
+  updateBlueprint as updateBlueprintIPC,
   type BlueprintFeatureItem,
   type BlueprintIssue,
   type BlueprintIssueSeverity,
@@ -43,10 +45,12 @@ import { STATUS_VISUALS, STATUS_ORDER, NODE_TYPE_LABEL_KEY } from './blueprintSt
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
+import { useBlueprintDetailPortal } from './blueprintDetailPortal'
 import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
 import { launchTerminalPreset } from '@/lib/terminal-launch'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
+import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { collectLocalHierarchyIds, computeInitialCollapsedIds, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 import { useI18n } from '@/i18n/useI18n'
@@ -214,15 +218,22 @@ export interface BlueprintCanvasProps {
   blueprintId: string
   /** 双击节点回调（P3 节点详情入口），MVP 可不传 */
   onNodeOpen?: (nodeId: string) => void
+  onDetailOpenChange?: (open: boolean) => void
+  onRegisterFlush?: (flush: () => Promise<boolean>) => void
 }
 
-export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProps) {
+function BlueprintDetailMount({ target, children }: { target: HTMLDivElement | null; children: ReactNode }) {
+  return target ? createPortal(children, target) : children
+}
+
+export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, onRegisterFlush }: BlueprintCanvasProps) {
   const { t } = useI18n('blueprint')
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
   const updateNode = useBlueprintStore((s) => s.updateNode)
+  const mergeCanvasLayout = useBlueprintStore((s) => s.mergeCanvasLayout)
   const deleteNode = useBlueprintStore((s) => s.deleteNode)
   const focusNodeSession = useBlueprintStore((s) => s.focusNode)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
@@ -236,6 +247,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   // embedded 模式下为 null，Select 回退到 document.body，行为不变。
   const selectPortal = useBlueprintSelectPortal()
   const getSelectPortalContainer = selectPortal ? () => selectPortal : undefined
+  const detailPortal = useBlueprintDetailPortal()
 
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -249,6 +261,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(() => new Set())
   const [matchIndex, setMatchIndex] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [layoutSaveStatus, setLayoutSaveStatus] = useState<BlueprintLayoutSaveStatus>('clean')
   const {
     analyzing,
     analysisCommitLimit,
@@ -274,13 +287,43 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const [restoreLayoutConfirmOpen, setRestoreLayoutConfirmOpen] = useState(false)
 
   const rfInstanceRef = useRef<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>(null)
+  const canvasMainRef = useRef<HTMLDivElement | null>(null)
+  const fitFrameRef = useRef<number | null>(null)
+  const initialFitBlueprintRef = useRef<string | null>(null)
+  const detailOpenRef = useRef<boolean | null>(null)
+  const collapseInitRef = useRef<string | null>(null)
 
   const workspaceNameById = useMemo(
     () => Object.fromEntries(workspaces.map((w) => [w.id, w.name])),
     [workspaces]
   )
   const detailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
+  const detailInCanvas = Boolean(detailNode && !detailPortal)
   const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
+  const initialCollapsedNodeIds = useMemo(
+    () => {
+      if (currentBlueprint?.id !== blueprintId) return new Set<string>()
+      if (currentBlueprint.collapsedNodeIds !== null && currentBlueprint.collapsedNodeIds !== undefined) {
+        return new Set(currentBlueprint.collapsedNodeIds)
+      }
+      return computeInitialCollapsedIds(currentBlueprint.nodes, currentBlueprint.nodeIds)
+    },
+    [blueprintId, currentBlueprint],
+  )
+  const canvasLoadPlan = useMemo(() => {
+    if (!currentBlueprint || currentBlueprint.id !== blueprintId) return null
+    return {
+      blueprintId: currentBlueprint.id,
+      collapsedNodeIds: collapseInitRef.current === currentBlueprint.id
+        ? collapsedNodeIds
+        : initialCollapsedNodeIds,
+    }
+  }, [blueprintId, collapsedNodeIds, currentBlueprint, initialCollapsedNodeIds])
+  const emptyCollapsedNodeIds = useMemo(() => new Set<string>(), [])
+  const effectiveCollapsedNodeIds = useMemo(
+    () => canvasLoadPlan?.collapsedNodeIds ?? emptyCollapsedNodeIds,
+    [canvasLoadPlan, emptyCollapsedNodeIds],
+  )
   const normalizedSearchQuery = useMemo(() => normalizeSearchText(searchQuery), [searchQuery])
   const searchFilterActive = normalizedSearchQuery.length > 0 || statusFilter !== 'all'
   const allSearchMatchIds = useMemo(() => currentBlueprint?.nodeIds.filter((id) => {
@@ -288,8 +331,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     return node ? nodeMatchesFocus(node, normalizedSearchQuery, statusFilter) : false
   }) ?? [], [currentBlueprint, normalizedSearchQuery, statusFilter])
   const searchMatchIds = useMemo(() => currentBlueprint
-    ? visibleNodeIds(currentBlueprint.nodes, allSearchMatchIds, collapsedNodeIds)
-    : [], [allSearchMatchIds, collapsedNodeIds, currentBlueprint])
+    ? visibleNodeIds(currentBlueprint.nodes, allSearchMatchIds, effectiveCollapsedNodeIds)
+    : [], [allSearchMatchIds, currentBlueprint, effectiveCollapsedNodeIds])
   const searchMatchKey = searchMatchIds.join('\u0000')
   const focusActive = searchFilterActive || (localFocusActive && !!selectedId)
   const focusedNodeIds = useMemo(() => {
@@ -324,60 +367,132 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
     ]
   }, [currentBlueprint, detailNode, t])
 
-  // 初次加载
-  useEffect(() => {
-    if (blueprintId) loadBlueprint(blueprintId)
-  }, [blueprintId, loadBlueprint])
+  const fitViewWhenReady = useCallback((duration = 180) => {
+    if (fitFrameRef.current !== null) cancelAnimationFrame(fitFrameRef.current)
+    let attempts = 0
+    const settle = () => {
+      fitFrameRef.current = null
+      const container = canvasMainRef.current
+      const instance = rfInstanceRef.current
+      const rect = container?.getBoundingClientRect()
+      if (!instance || !rect || rect.width < 80 || rect.height < 80) {
+        if (attempts < 12) {
+          attempts += 1
+          fitFrameRef.current = requestAnimationFrame(settle)
+        }
+        return
+      }
+      instance.fitView({ padding: 0.2, duration })
+    }
+    fitFrameRef.current = requestAnimationFrame(() => {
+      fitFrameRef.current = requestAnimationFrame(settle)
+    })
+  }, [])
 
-  // 大蓝图初次加载按层级预折叠（每个蓝图只初始化一次，之后尊重用户手动展开/折叠）
-  const collapseInitRef = useRef<string | null>(null)
+  const persistCollapsedNodeIds = useCallback(async (nodeIds: Set<string>) => {
+    const updated = await updateBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, {
+      collapsedNodeIds: [...nodeIds]
+    })
+    if (!updated) throw new Error('Failed to persist blueprint collapse state')
+  }, [blueprintId])
+
+  // 没有历史状态时才按层级预折叠；保存空数组代表用户选择全部展开。
   useEffect(() => {
     if (!currentBlueprint || currentBlueprint.id !== blueprintId) return
     if (collapseInitRef.current === currentBlueprint.id) return
     collapseInitRef.current = currentBlueprint.id
-    const initial = computeInitialCollapsedIds(currentBlueprint.nodes, currentBlueprint.nodeIds)
-    setCollapsedNodeIds(initial)
-    if (initial.size) {
-      window.setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }), 80)
+    const persistedCollapsedNodeIds = currentBlueprint.collapsedNodeIds
+    const nextCollapsedNodeIds = persistedCollapsedNodeIds === null || persistedCollapsedNodeIds === undefined
+      ? initialCollapsedNodeIds
+      : new Set(persistedCollapsedNodeIds)
+    setCollapsedNodeIds(nextCollapsedNodeIds)
+    if (persistedCollapsedNodeIds === null || persistedCollapsedNodeIds === undefined) {
+      void persistCollapsedNodeIds(nextCollapsedNodeIds).catch((error: unknown) => {
+        setActionError(error instanceof Error ? error.message : String(error))
+      })
     }
-  }, [currentBlueprint, blueprintId])
+  }, [currentBlueprint, blueprintId, initialCollapsedNodeIds, persistCollapsedNodeIds])
+
+  useEffect(() => () => {
+    if (fitFrameRef.current !== null) cancelAnimationFrame(fitFrameRef.current)
+  }, [])
 
   const {
     nodes: rfNodes,
     edges: rfEdges,
     onNodesChange,
     autoLayout,
-    reflowVisibleLayout,
     layoutSubtree,
     restoreDefaultLayout,
     undoRestoreDefaultLayout,
-    canUndoRestoreDefaultLayout
+    canUndoRestoreDefaultLayout,
+    flushLayoutSave
   } = useBlueprintGraphController({
     blueprint: currentBlueprint,
     blueprintId,
     workspaceNameById,
     focusedNodeIds,
     focusActive,
-    collapsedNodeIds,
+    collapsedNodeIds: effectiveCollapsedNodeIds,
     onSelectionChange: setSelectedId,
-    onError: setActionError
+    onError: setActionError,
+    onLayoutPersisted: (savedBlueprintId, layout) => mergeCanvasLayout(savedBlueprintId, layout),
+    onLayoutSaveStatus: setLayoutSaveStatus
   })
+  useEffect(() => {
+    const flush = () => { void flushLayoutSave() }
+    document.addEventListener('visibilitychange', flush)
+    window.addEventListener('beforeunload', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', flush)
+      window.removeEventListener('beforeunload', flush)
+    }
+  }, [flushLayoutSave])
+  useEffect(() => window.electron.system.onPrepareQuit(async () => { await flushLayoutSave() }), [flushLayoutSave])
+  useEffect(() => {
+    onRegisterFlush?.(flushLayoutSave)
+    return () => onRegisterFlush?.(() => Promise.resolve(true))
+  }, [flushLayoutSave, onRegisterFlush])
+  const graphReady = !currentBlueprint || currentBlueprint.nodeIds.length === 0 || rfNodes.length > 0
+
+  useEffect(() => {
+    if (!canvasLoadPlan || !rfInstanceRef.current || !rfNodes.length) return
+    if (initialFitBlueprintRef.current === canvasLoadPlan.blueprintId) return
+    initialFitBlueprintRef.current = canvasLoadPlan.blueprintId
+    fitViewWhenReady(0)
+  }, [canvasLoadPlan, fitViewWhenReady, rfNodes.length])
+
+  useEffect(() => {
+    const isDetailOpen = Boolean(detailNode)
+    if (detailOpenRef.current === null) {
+      detailOpenRef.current = isDetailOpen
+      return
+    }
+    if (detailOpenRef.current === isDetailOpen) return
+    detailOpenRef.current = isDetailOpen
+    const timer = window.setTimeout(() => fitViewWhenReady(180), 220)
+    return () => window.clearTimeout(timer)
+  }, [detailNode, fitViewWhenReady])
+
+  useEffect(() => {
+    onDetailOpenChange?.(Boolean(detailNode))
+  }, [detailNode, onDetailOpenChange])
+
+  useEffect(() => () => onDetailOpenChange?.(false), [onDetailOpenChange])
 
   const toggleCollapse = useCallback((nodeId: string) => {
-    const next = new Set(collapsedNodeIds)
-    const expanding = next.delete(nodeId)
-    if (!expanding) next.add(nodeId)
+    const next = new Set(effectiveCollapsedNodeIds)
+    if (!next.delete(nodeId)) next.add(nodeId)
     setCollapsedNodeIds(next)
-    if (expanding) {
-      void reflowVisibleLayout(next).then(() => {
-        window.setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.2, duration: 240 }), 40)
-      })
-    }
-  }, [collapsedNodeIds, reflowVisibleLayout])
+    void persistCollapsedNodeIds(next).catch((error: unknown) => {
+      setActionError(error instanceof Error ? error.message : String(error))
+    })
+  }, [effectiveCollapsedNodeIds, persistCollapsedNodeIds])
   const cardActions = useMemo(() => ({ toggleCollapse }), [toggleCollapse])
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
     (_e, node) => {
+      setSelectedId(node.id)
       setDetailNodeId(node.id)
       if (onNodeOpen) onNodeOpen(node.id)
     },
@@ -698,8 +813,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   )
 
   const fitView = useCallback(() => {
-    rfInstanceRef.current?.fitView({ padding: 0.2, duration: 200 })
-  }, [])
+    fitViewWhenReady(200)
+  }, [fitViewWhenReady])
 
   const focusMatch = useCallback((step: number) => {
     if (!searchMatchIds.length) return
@@ -729,7 +844,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
   const featureActionHint = t('blueprint:feature.actionHint')
 
   return (
-    <div className="blueprint-canvas-wrapper">
+    <div className={`blueprint-canvas-wrapper${detailInCanvas ? ' blueprint-canvas-wrapper--detail-open' : ''}`}>
+      <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'}>
       {/* 画布操作工具栏 */}
       <div className="blueprint-toolbar blueprint-toolbar--canvas">
         <div className="blueprint-toolbar__main">
@@ -846,7 +962,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
                   {t('blueprint:action.layoutSubtree')}
                 </button>
                 <button className="blueprint-btn" onClick={() => selectedId && toggleCollapse(selectedId)} disabled={!selectedId} aria-label={t('blueprint:ariaLabel.toggleSubtree')}>
-                  {selectedId && collapsedNodeIds.has(selectedId) ? t('blueprint:action.expandSubtree') : t('blueprint:action.collapseSubtree')}
+                  {selectedId && effectiveCollapsedNodeIds.has(selectedId) ? t('blueprint:action.expandSubtree') : t('blueprint:action.collapseSubtree')}
                 </button>
               </div>
             </div>
@@ -885,6 +1001,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
               </div>
             </div>
             {loading ? <span className="blueprint-toolbar__loading">{t('blueprint:toolbar.loading')}</span> : null}
+            {layoutSaveStatus !== 'clean' ? <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${layoutSaveStatus}`}>{layoutSaveStatus === 'saving' ? '保存中…' : layoutSaveStatus === 'pending' ? '待保存' : layoutSaveStatus === 'failed' ? '保存失败' : '已保存'}</span> : null}
           </div>
         </div>
 
@@ -892,6 +1009,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
       </div>
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      {!graphReady ? <div className="blueprint-canvas-loading" aria-live="polite" aria-label={t('blueprint:toolbar.loading')} /> : null}
       <BlueprintCardActionsContext.Provider value={cardActions}>
       <ReactFlow
         nodes={rfNodes}
@@ -899,13 +1017,17 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
+        onNodeDragStop={() => { void flushLayoutSave() }}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onNodeContextMenu}
         onInit={(inst) => {
           rfInstanceRef.current = inst
-          inst.fitView({ padding: 0.2 })
+          if (canvasLoadPlan && rfNodes.length && initialFitBlueprintRef.current !== canvasLoadPlan.blueprintId) {
+            initialFitBlueprintRef.current = canvasLoadPlan.blueprintId
+            fitViewWhenReady(0)
+          }
         }}
-        fitView
+        onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
         style={{ background: 'transparent' }}
@@ -984,8 +1106,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
           </div>
         </div>
       ) : null}
+      </div>
 
       {detailNode ? (
+        <BlueprintDetailMount target={detailPortal}>
         <aside className="bp-node-detail" key={detailNode.id}>
           <div className="bp-node-detail__header">
             <div>
@@ -1446,6 +1570,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen }: BlueprintCanvasProp
             </div>
           </div>
         </aside>
+        </BlueprintDetailMount>
       ) : null}
       <PromptDialog
         open={promptState !== null}

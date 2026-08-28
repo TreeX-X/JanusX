@@ -11,6 +11,8 @@ interface EditorWindowParams {
   workspacePath: string
 }
 
+const baselineCache = new Map<string, string | undefined>()
+
 function getEditorWindowParams(): EditorWindowParams | null {
   const params = new URLSearchParams(window.location.search)
   const filePath = params.get('editorFile')
@@ -67,6 +69,7 @@ export function StandaloneFileEditor() {
   const consumeNavigationTarget = useEditorStore((state) => state.consumeNavigationTarget)
   const activeFile = openFiles.find((file) => file.id === activeFileId) ?? null
   const [baselineContent, setBaselineContent] = useState<string | undefined>(undefined)
+  const [baselineFileId, setBaselineFileId] = useState<string | null>(null)
   const [isPinned, setIsPinned] = useState(false)
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
   const handleEditorMount = useCallback((editor: FindableEditor | null) => {
@@ -92,7 +95,10 @@ export function StandaloneFileEditor() {
     if (!editorParams) return
     void openFile(editorParams.filePath, editorParams.workspacePath)
     const unsubscribe = window.electron.window.onEditorRefresh((payload) => {
-      void reloadOpenFile(payload.filePath)
+      // The main process reuses this window for new files. Opening through the
+      // store activates an existing tab and only loads content for a new tab;
+      // reloading here would reset the current editor's scroll position.
+      void openFile(payload.filePath, payload.workspacePath)
     })
     window.electron.window.editorReady()
     return unsubscribe
@@ -112,13 +118,31 @@ export function StandaloneFileEditor() {
 
   useEffect(() => {
     let cancelled = false
-    setBaselineContent(undefined)
-    if (!activeFile || !editorParams || activeFile.viewType === 'image' || activeFile.viewType === 'binary') return
+    if (!activeFile || !editorParams || activeFile.viewType === 'image' || activeFile.viewType === 'binary') {
+      if (activeFile) setBaselineFileId(activeFile.id)
+      return
+    }
+    if (baselineCache.has(activeFile.id)) {
+      setBaselineContent(baselineCache.get(activeFile.id))
+      setBaselineFileId(activeFile.id)
+      return
+    }
+    setBaselineFileId(null)
     void window.electron.git.fileBaseline(editorParams.workspacePath, activeFile.path)
       .then((baseline) => {
-        if (!cancelled) setBaselineContent(baseline?.available ? baseline.content : undefined)
+        if (!cancelled) {
+          const content = baseline?.available ? baseline.content : undefined
+          baselineCache.set(activeFile.id, content)
+          setBaselineContent(content)
+          setBaselineFileId(activeFile.id)
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) {
+          baselineCache.set(activeFile.id, undefined)
+          setBaselineFileId(activeFile.id)
+        }
+      })
     return () => { cancelled = true }
   }, [activeFile?.id, activeFile?.mtime, activeFile?.path, activeFile?.viewType, editorParams])
 
@@ -143,10 +167,6 @@ export function StandaloneFileEditor() {
   useEffect(() => {
     document.title = activeFile ? t('editor:fileEditor.documentTitle', { prefix: activeFile.isDirty ? '* ' : '', name: activeFile.name }) : t('editor:fileEditor.windowTitle')
   }, [activeFile])
-
-  const handleContentChange = useCallback((content: string) => {
-    if (activeFileId) updateContent(activeFileId, content)
-  }, [activeFileId, updateContent])
 
   const handleDefinitionNavigate = useCallback((target: DefinitionTarget) => {
     if (editorParams) void openFileAt(target.absolutePath, editorParams.workspacePath, target.selection)
@@ -188,6 +208,10 @@ export function StandaloneFileEditor() {
 
   const titlebarDrag = { WebkitAppRegion: 'drag' } as CSSProperties
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
+  const hasBaseline = Boolean(activeFile && (baselineFileId === activeFile.id || baselineCache.has(activeFile.id)))
+  const activeBaselineContent = activeFile && baselineCache.has(activeFile.id)
+    ? baselineCache.get(activeFile.id)
+    : baselineContent
   const canSave = Boolean(activeFile && activeFile.viewType !== 'image' && activeFile.viewType !== 'binary')
   const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
 
@@ -335,10 +359,10 @@ export function StandaloneFileEditor() {
           </button>
         )}
       </div>
-      <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-        {activeFile ? (
+      <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+        {activeFile && hasBaseline ? (
           <FileViewerContent
-            key={activeFile.id}
+            key={`${activeFile.id}:${activeFile.absolutePath}`}
             file={activeFile}
             workspacePath={editorParams?.workspacePath}
             navigationTarget={navigationTarget}
@@ -346,10 +370,12 @@ export function StandaloneFileEditor() {
             onNavigationComplete={consumeNavigationTarget}
             definitionActionLabel={t('editor:fileEditor.goToDefinition')}
             definitionErrorMessage={t('editor:fileEditor.cppDefinitionUnavailable')}
-            diffOriginalContent={baselineContent}
-            onContentChange={handleContentChange}
+            diffOriginalContent={activeBaselineContent}
+            onContentChange={(content) => updateContent(activeFile.id, content)}
             onEditorMount={handleEditorMount}
           />
+        ) : activeFile ? (
+          <div className="flex h-full items-center justify-center text-xs text-[#666]">Loading</div>
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-[#666]">
             {t('editor:fileEditor.missingFileInfo')}

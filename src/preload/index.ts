@@ -31,8 +31,7 @@ import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoin
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
-import { JANUS_ROUNDTABLE_CHANNELS, type JanusRoundtableAPI } from '../shared/ipc/janus-roundtable'
-import { NOTIFICATION_SETTINGS_CHANNELS, type NotificationSettingsAPI } from '../shared/ipc/settings'
+import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 
 const workspaceAPI: WorkspaceAPI = {
@@ -169,6 +168,7 @@ const knowledgeAPI: KnowledgeAPI = {
 
 const janusAPI: JanusAPI = {
   listBlueprints: (cwd) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.listBlueprints, cwd),
+  listBlueprintSummaries: (cwd) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.listBlueprintSummaries, cwd),
   loadBlueprint: (cwd, id) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.loadBlueprint, cwd, id),
   createBlueprint: (cwd, input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.createBlueprint, cwd, input),
   updateBlueprint: (cwd, id, patch) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.updateBlueprint, cwd, id, patch),
@@ -251,6 +251,7 @@ const llmAPI: LlmAPI = {
   onDelta: (callback) => subscribeIpcEvent(LLM_CHANNELS.delta, callback),
   onDone: (callback) => subscribeIpcEvent(LLM_CHANNELS.done, callback),
   onError: (callback) => subscribeIpcEvent(LLM_CHANNELS.error, callback),
+  onAgentEvent: (callback) => subscribeIpcEvent(LLM_CHANNELS.agentEvent, callback),
   onRecallTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.recallTrace, callback),
   onToolTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.toolTrace, callback),
 }
@@ -272,6 +273,7 @@ const agentRuntimeAPI: AgentRuntimeAPI = {
   queryPolicyAudit: (query) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.queryPolicyAudit, query),
   resolveApproval: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.resolveApproval, input),
   getSession: (sessionId) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.getSession, sessionId),
+  setApprovalMode: (sessionId, mode) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.setApprovalMode, { sessionId, mode }),
   executeFunctionCall: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.executeFunctionCall, input),
   executePlannerStep: (input) => ipcRenderer.invoke(AGENT_RUNTIME_CHANNELS.executePlannerStep, input),
   onEvent: (callback) => subscribeIpcEvent(AGENT_RUNTIME_CHANNELS.event, callback),
@@ -306,22 +308,16 @@ const janusChatAPI: JanusChatAPI = {
   save: (snapshot) => ipcRenderer.invoke(JANUS_CHAT_CHANNELS.save, snapshot).then(() => undefined),
 }
 
-const janusRoundtableAPI: JanusRoundtableAPI = {
-  list: () => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.list),
-  get: (sessionId) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.get, sessionId),
-  create: (input) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.create, input),
-  updateWorkspaces: (input) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.updateWorkspaces, input),
-  advance: (input) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.advance, input),
-  end: (sessionId) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.end, sessionId),
-  exportMarkdown: (sessionId, directory, fileName) => ipcRenderer.invoke(JANUS_ROUNDTABLE_CHANNELS.exportMarkdown, sessionId, directory, fileName),
-  onProgress: (listener) => subscribeIpcEvent(JANUS_ROUNDTABLE_CHANNELS.progress, listener),
-}
-
 const notificationSettingsAPI: NotificationSettingsAPI = {
   get: () => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.get),
   update: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.update, settings),
   testFeishu: (settings) => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.testFeishu, settings),
   getFeishuControlStatus: () => ipcRenderer.invoke(NOTIFICATION_SETTINGS_CHANNELS.feishuControlStatus),
+}
+
+const agentSettingsAPI: AgentSettingsAPI = {
+  get: () => ipcRenderer.invoke(AGENT_SETTINGS_CHANNELS.get),
+  update: (settings) => ipcRenderer.invoke(AGENT_SETTINGS_CHANNELS.update, settings),
 }
 
 const subAgentRunAPI: SubAgentRunAPI = {
@@ -349,9 +345,18 @@ const windowAPI: WindowAPI = {
 const systemAPI: SystemAPI = {
   getDefaultShell: () => ipcRenderer.invoke(SYSTEM_CHANNELS.defaultShell),
   getPlatform: () => ipcRenderer.invoke(SYSTEM_CHANNELS.platform),
+  openVSCode: (workspacePath) => ipcRenderer.invoke(SYSTEM_CHANNELS.openVSCode, workspacePath),
   getRuntimeTelemetry: (request) => ipcRenderer.invoke(SYSTEM_CHANNELS.runtimeTelemetry, request),
   getLanguage: () => ipcRenderer.invoke(SYSTEM_CHANNELS.getLanguage),
   setLanguage: (lang) => ipcRenderer.invoke(SYSTEM_CHANNELS.setLanguage, lang),
+  onPrepareQuit: (callback) => {
+    const handler = async () => {
+      await callback()
+      ipcRenderer.send(SYSTEM_CHANNELS.prepareQuitAck)
+    }
+    ipcRenderer.on(SYSTEM_CHANNELS.prepareQuit, handler)
+    return () => ipcRenderer.removeListener(SYSTEM_CHANNELS.prepareQuit, handler)
+  },
 }
 const desktopToastAPI: DesktopToastAPI = {
   ready: () => ipcRenderer.send(SYSTEM_CHANNELS.toastReady),
@@ -380,12 +385,12 @@ contextBridge.exposeInMainWorld('electron', {
   office: officeAPI,
   llm: llmAPI,
   janusChat: janusChatAPI,
-  janusRoundtable: janusRoundtableAPI,
   agent: agentAPI,
   agentRuntime: agentRuntimeAPI,
   checkpoint: checkpointAPI,
   git: gitAPI,
   notificationSettings: notificationSettingsAPI,
+  agentSettings: agentSettingsAPI,
   subAgentRun: subAgentRunAPI,
   dialog: dialogAPI,
   window: windowAPI,

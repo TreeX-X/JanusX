@@ -1311,17 +1311,17 @@
 
     /* 3D 摄像机架构 */
     .rt-viewport {
-      width: 480px;
-      height: 480px;
-      perspective: 1000px;
+      width: 440px;
+      height: 440px;
+      perspective: 1200px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
     .rt-scene {
-      width: 100%;
-      height: 100%;
+      width: 440px;
+      height: 440px;
       position: relative;
       transform-style: preserve-3d;
       transform: rotateX(60deg) rotateZ(-30deg);
@@ -1343,9 +1343,9 @@
       background-image: 
         linear-gradient(rgba(255,120,48,0.06) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,120,48,0.06) 1px, transparent 1px);
-      background-size: 24px 24px;
+      background-size: 20px 20px;
       background-position: center;
-      transform: translateZ(-50px);
+      transform: translateZ(-40px);
       border-radius: 50%;
       mask-image: radial-gradient(circle, black 40%, transparent 80%);
       -webkit-mask-image: radial-gradient(circle, black 40%, transparent 80%);
@@ -1355,8 +1355,8 @@
     .rt-table {
       position: absolute;
       left: 50%; top: 50%;
-      width: 280px; height: 280px;
-      margin-left: -140px; margin-top: -140px;
+      width: 260px; height: 260px;
+      margin-left: -130px; margin-top: -130px;
       transform-style: preserve-3d;
     }
 
@@ -1366,28 +1366,29 @@
       border-radius: 50%;
       background: radial-gradient(circle at center, #111117 40%, #030305 100%);
       border: 4px solid #1c1a24;
-      box-shadow: 0 0 35px rgba(0,0,0,0.9), inset 0 0 25px rgba(255, 120, 48, 0.2);
+      box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(255, 120, 48, 0.15);
     }
     .rt-slab.bottom {
-      transform: translateZ(-20px);
+      transform: translateZ(-16px);
       background: #020204;
-      border-color: #0b0a0e;
+      border-color: #0d0c10;
     }
     .rt-slab.rim {
-      transform: translateZ(-10px);
+      transform: translateZ(-8px);
       border: 6px solid #ff5500;
-      box-shadow: 0 0 30px rgba(255, 85, 0, 0.5);
+      box-shadow: 0 0 25px rgba(255, 85, 0, 0.4);
       filter: blur(1px);
-      opacity: 0.85;
+      opacity: 0.8;
     }
 
     .rt-hud-ring {
       position: absolute;
-      inset: 14px;
+      inset: 12px;
       border-radius: 50%;
-      border: 1px dashed rgba(255, 120, 48, 0.45);
-      animation: rt-spin 22s linear infinite;
+      border: 1px dashed rgba(255, 120, 48, 0.3);
+      animation: rt-spin 20s linear infinite;
     }
+    .rt-hud-ring::before { content: ''; position: absolute; inset: 12px; border-radius: 50%; border: 2px double #ff7830; opacity: 0.4; }
     @keyframes rt-spin { 100% { transform: rotate(360deg); } }
 
     /* 中心全息投影核心 */
@@ -1425,6 +1426,21 @@
       0% { transform: translateZ(28px) rotateX(45deg) rotateY(45deg); }
       100% { transform: translateZ(42px) rotateX(225deg) rotateY(225deg); }
     }
+    /* Source-accurate parchment core used by the standalone roundtable. */
+    .holo-projector { position:absolute; left:50%; top:50%; width:72px; height:72px; transform:translate3d(-36px,-36px,1px); transform-style:preserve-3d; cursor:pointer; transition:transform .4s var(--ease); }
+    .holo-projector:hover { transform:translate3d(-36px,-36px,16px) scale(1.08); }
+    .cyber-scroll-3d { position:absolute; left:50%; top:50%; width:60px; height:40px; margin:-20px 0 0 -30px; transform-style:preserve-3d; transform:translateZ(28px) rotateX(15deg) rotateY(10deg); animation:scroll-float-island 4s cubic-bezier(.4,0,.2,1) infinite alternate; }
+    .scroll-sheet { position:absolute; width:32px; height:32px; left:14px; top:4px; background:linear-gradient(90deg,#503a27 0%,#ebd8b5 20%,#fcf5e8 50%,#ebd8b5 80%,#503a27 100%); border-top:1px solid rgba(216,195,158,.35); border-bottom:1px solid rgba(216,195,158,.35); box-shadow:0 4px 12px rgba(0,0,0,.65); transform-style:preserve-3d; }
+    .scroll-ribbon { position:absolute; left:14px; top:-1px; width:4px; height:34px; background:#8e1c1c; box-shadow:0 0 6px rgba(142,28,28,.8); transform:translateZ(1px); }
+    .scroll-roll { position:absolute; width:10px; height:36px; transform-style:preserve-3d; }
+    .scroll-roll.left { left:6px; top:2px; } .scroll-roll.right { left:44px; top:2px; }
+    .roll-face { position:absolute; width:10px; height:36px; background:linear-gradient(90deg,#321e12,#ebd8b5 50%,#321e12); backface-visibility:visible; }
+    .roll-face.f1 { transform:rotateY(0deg) translateZ(4.5px); } .roll-face.f2 { transform:rotateY(90deg) translateZ(4.5px); background:linear-gradient(90deg,#221208,#c9b48f 50%,#221208); } .roll-face.f3 { transform:rotateY(180deg) translateZ(4.5px); } .roll-face.f4 { transform:rotateY(270deg) translateZ(4.5px); background:linear-gradient(90deg,#221208,#c9b48f 50%,#221208); }
+    .roll-cap { position:absolute; width:9px; height:9px; background:#2a180c; border-radius:50%; left:.5px; } .roll-cap.top { transform:rotateX(90deg) translateZ(4.5px); top:0; } .roll-cap.bottom { transform:rotateX(-90deg) translateZ(31.5px); top:0; }
+    .roll-spindle { position:absolute; width:4px; height:6px; background:linear-gradient(to right,#614631,#ebd8b5,#614631); left:3px; } .roll-spindle.top { transform:rotateX(90deg) translateZ(8px); top:0; } .roll-spindle.bottom { transform:rotateX(-90deg) translateZ(35px); top:0; }
+    .janusx-x-chassis { position:absolute; left:50%; top:50%; width:76px; height:76px; margin:-38px; border:1px dashed rgba(216,195,158,.25); border-radius:50%; transform:translateZ(5px) rotateX(45deg); animation:spin-counter-island 12s linear infinite; pointer-events:none; }
+    @keyframes scroll-float-island { from { transform:translateZ(22px) rotateX(15deg) rotateY(15deg) rotateZ(-3deg); } to { transform:translateZ(34px) rotateX(25deg) rotateY(25deg) rotateZ(3deg); } }
+    @keyframes spin-counter-island { to { transform:translateZ(5px) rotateX(45deg) rotate(-360deg); } }
 
     /* 3D 智能体槽位与双面晶体 Pod */
     .rt-agent-slot {
@@ -2100,9 +2116,13 @@
                       <div class="rt-hud-ring"></div>
                       
                       <!-- 中心全息投影源 -->
-                      <div class="rt-holo-projector">
-                        <div class="rt-holo-beam"></div>
-                        <div class="rt-holo-core"></div>
+                      <div class="holo-projector" id="holoProjectorCore" title="点击展开右侧结构化手稿">
+                        <div class="cyber-scroll-3d">
+                          <div class="scroll-sheet"><div class="scroll-ribbon"></div></div>
+                          <div class="scroll-roll left"><div class="roll-face f1"></div><div class="roll-face f2"></div><div class="roll-face f3"></div><div class="roll-face f4"></div><div class="roll-cap top"></div><div class="roll-cap bottom"></div><div class="roll-spindle top"></div><div class="roll-spindle bottom"></div></div>
+                          <div class="scroll-roll right"><div class="roll-face f1"></div><div class="roll-face f2"></div><div class="roll-face f3"></div><div class="roll-face f4"></div><div class="roll-cap top"></div><div class="roll-cap bottom"></div><div class="roll-spindle top"></div><div class="roll-spindle bottom"></div></div>
+                        </div>
+                        <div class="janusx-x-chassis"></div>
                       </div>
                     </div>
                   </div>

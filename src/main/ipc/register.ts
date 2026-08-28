@@ -15,7 +15,6 @@ import { registerGitHandlers } from './git-handlers'
 import { disposeWorkspaceWatchers, registerWorkspaceHandlers } from './handlers'
 import { registerJanusHandlers } from './janus-handlers'
 import { registerJanusChatHandlers } from './janus-chat-handlers'
-import { registerJanusRoundtableHandlers } from './janus-roundtable-handlers'
 import { registerKnowledgeHandlers } from './knowledge-handlers'
 import { registerLanguageHandlers } from './language-handlers'
 import { registerLanguageServiceHandlers } from './language-service-handlers'
@@ -99,7 +98,6 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerLlmHandlers()
   registerJanusHandlers()
   registerJanusChatHandlers()
-  registerJanusRoundtableHandlers()
   registerRuntimeTelemetryHandlers()
   registerSettingsHandlers()
   registerLanguageHandlers()

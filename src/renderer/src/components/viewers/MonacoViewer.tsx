@@ -9,6 +9,8 @@ import { configureMonacoRuntime } from '@/lib/monaco-runtime'
 import { registerDefinitionNavigation, type DefinitionTarget } from '@/lib/monaco-definition'
 import type { EditorNavigationTarget } from '@/stores/editor'
 
+const editorViewStates = new Map<string, MonacoEditor.ICodeEditorViewState>()
+
 configureMonacoRuntime()
 
 interface MonacoViewerProps {
@@ -48,6 +50,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const contentRef = useRef(content)
   const diffChangeSubscriptionRef = useRef<{ dispose(): void } | null>(null)
+  const viewStateSubscriptionRef = useRef<{ dispose(): void } | null>(null)
   const definitionActionRef = useRef<IDisposable | null>(null)
   const definitionErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [definitionError, setDefinitionError] = useState<string | null>(null)
@@ -81,12 +84,32 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
   const handleMount = useCallback((editor: MonacoEditor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor
     onEditorMount?.(editor)
+    viewStateSubscriptionRef.current?.dispose()
+    if (modelPath) {
+      const saveViewState = () => {
+        const viewState = editor.saveViewState()
+        if (viewState) editorViewStates.set(modelPath, viewState)
+      }
+      const subscriptions = [editor.onDidScrollChange(saveViewState), editor.onDidChangeCursorPosition(saveViewState)]
+      viewStateSubscriptionRef.current = { dispose: () => subscriptions.forEach((subscription) => subscription.dispose()) }
+    }
+    if (modelPath && !navigationTarget) {
+      const viewState = editorViewStates.get(modelPath)
+      if (viewState) {
+        window.requestAnimationFrame(() => {
+          editor.layout()
+          editor.restoreViewState(viewState)
+        })
+      }
+    }
+    const model = editor.getModel()
+    if (model && model.getValue() !== contentRef.current) model.setValue(contentRef.current)
     definitionActionRef.current?.dispose()
     definitionActionRef.current = workspacePath && onDefinitionNavigate && definitionActionLabel
       ? registerDefinitionNavigation(editor, monaco, workspacePath, definitionActionLabel, onDefinitionNavigate, showDefinitionError)
       : null
     revealNavigationTarget(editor, navigationTarget)
-  }, [definitionActionLabel, navigationTarget, onDefinitionNavigate, onEditorMount, revealNavigationTarget, showDefinitionError, workspacePath])
+  }, [definitionActionLabel, modelPath, navigationTarget, onDefinitionNavigate, onEditorMount, revealNavigationTarget, showDefinitionError, workspacePath])
 
   const handleDiffMount = useCallback((editor: MonacoEditor.IStandaloneDiffEditor, monaco: Monaco) => {
     const modifiedEditor = editor.getModifiedEditor()
@@ -100,10 +123,17 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
 
   useEffect(() => () => {
     diffChangeSubscriptionRef.current?.dispose()
+    viewStateSubscriptionRef.current?.dispose()
     definitionActionRef.current?.dispose()
     if (definitionErrorTimerRef.current) clearTimeout(definitionErrorTimerRef.current)
-    if (editorRef.current) onEditorMount?.(null)
-  }, [onEditorMount])
+    if (editorRef.current) {
+      if (modelPath) {
+        const viewState = editorRef.current.saveViewState()
+        if (viewState) editorViewStates.set(modelPath, viewState)
+      }
+      onEditorMount?.(null)
+    }
+  }, [modelPath, onEditorMount])
 
   useEffect(() => {
     if (editorRef.current) revealNavigationTarget(editorRef.current, navigationTarget)
@@ -115,7 +145,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
     const currentValue = editor.getValue()
     if (currentValue !== content) {
       const position = editor.getPosition()
-      editor.setValue(content)
+      editor.getModel()?.setValue(content)
       if (position) editor.setPosition(position)
     }
   }, [content])
@@ -151,7 +181,6 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           modified={content}
           originalModelPath={modelPath ? `${monacoFileUri(modelPath)}?janusx-original=git` : undefined}
           modifiedModelPath={modelPath ? monacoFileUri(modelPath) : undefined}
-          keepCurrentModifiedModel
           theme={JANUSX_DARK_THEME_NAME}
           loading={<LoadingIndicator />}
           options={{ ...commonOptions, renderSideBySide: false, readOnly, originalEditable: false, domReadOnly: readOnly }}
@@ -164,7 +193,6 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           language={language}
           value={content}
           path={modelPath ? monacoFileUri(modelPath) : undefined}
-          keepCurrentModel
           onChange={handleChange}
           theme={JANUSX_DARK_THEME_NAME}
           loading={<LoadingIndicator />}

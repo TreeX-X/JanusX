@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, truncate, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -50,7 +50,7 @@ function autoApprove(runtime: WorkspaceAgentRuntime, approved = true) {
   })
 }
 
-async function executeRead(root: string, path: string, maxBytes?: number) {
+async function executeRead(root: string, path: string, maxBytes?: number, offset?: number) {
   const runtime = new WorkspaceAgentRuntime(async () => root)
   registerWorkspaceTools(runtime.registry)
   const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
@@ -58,7 +58,12 @@ async function executeRead(root: string, path: string, maxBytes?: number) {
     sessionId: session.id,
     call: {
       toolName: 'workspace.read',
-      input: maxBytes === undefined ? { workspaceId: 'workspace-1', path } : { workspaceId: 'workspace-1', path, maxBytes },
+      input: {
+        workspaceId: 'workspace-1',
+        path,
+        ...(maxBytes === undefined ? {} : { maxBytes }),
+        ...(offset === undefined ? {} : { offset }),
+      },
     },
   })
 }
@@ -181,7 +186,7 @@ describe('workspace.read tool', () => {
     expect(result.error).not.toContain(content.toString())
   })
 
-  it('fails closed for outside and oversized files', async () => {
+  it('fails closed for outside files and bounds oversized reads', async () => {
     const state = await temporaryDirectory()
     const root = await temporaryDirectory()
     const outsidePath = join(state, 'outside.txt')
@@ -193,8 +198,49 @@ describe('workspace.read tool', () => {
 
     expect(outside).toMatchObject({ status: 'failed', output: undefined })
     expect(outside.error).not.toContain('outside secret')
-    expect(oversized).toMatchObject({ status: 'failed', output: undefined })
-    expect(oversized.error).not.toContain('larger than limit')
+    expect(oversized).toMatchObject({
+      status: 'completed',
+      output: {
+        content: 'larg',
+        offset: 0,
+        bytes: 4,
+        size: 'larger than limit'.length,
+        truncated: true,
+        sha256: createHash('sha256').update('larger than limit').digest('hex'),
+      },
+    })
+  })
+
+  it('reads a bounded range with the complete file hash', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'large.txt'), '0123456789abcdef', 'utf-8')
+
+    const result = await executeRead(root, 'large.txt', 4, 6)
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      output: {
+        content: '6789',
+        offset: 6,
+        bytes: 4,
+        size: 16,
+        truncated: true,
+        sha256: createHash('sha256').update('0123456789abcdef').digest('hex'),
+      },
+    })
+  })
+
+  it('rejects a range read whose full hash would exceed the file safety bound', async () => {
+    const root = await temporaryDirectory()
+    const file = join(root, 'too-large.txt')
+    await writeFile(file, 'x')
+    await truncate(file, 16 * 1024 * 1024 + 1)
+
+    await expect(executeRead(root, 'too-large.txt', 1)).resolves.toMatchObject({
+      status: 'failed',
+      reasonCode: 'FILE_TOO_LARGE',
+      output: undefined,
+    })
   })
 
   it('requires the explicit workspace resource id to match the session', async () => {
@@ -246,6 +292,21 @@ describe('workspace.edit tool', () => {
     })
   }
 
+  async function executeUnifiedDiff(root: string, expectedHash: string, unifiedDiff: string, approved = true) {
+    const runtime = new WorkspaceAgentRuntime(async () => root)
+    registerWorkspaceTools(runtime.registry)
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: root })
+    autoApprove(runtime, approved)
+    return runtime.executeTool({
+      sessionId: session.id,
+      call: {
+        toolName: 'workspace.edit',
+        input: { workspaceId: 'workspace-1', path: 'notes.txt', expectedHash, unifiedDiff },
+        preview: { summary: 'Edit notes.txt with a unified diff', paths: ['notes.txt'], detail: unifiedDiff, truncated: false },
+      },
+    })
+  }
+
   it('applies an approved hash-bound replacement and returns a checkpoint', async () => {
     const root = await temporaryDirectory()
     await writeFile(join(root, 'notes.txt'), 'hello workspace', 'utf-8')
@@ -275,6 +336,25 @@ describe('workspace.edit tool', () => {
     })
   })
 
+  it('does not return partial UTF-8 characters at a byte range boundary', async () => {
+    const root = await temporaryDirectory()
+    const source = 'a你b好c'
+    await writeFile(join(root, 'unicode.txt'), source, 'utf-8')
+
+    const result = await executeRead(root, 'unicode.txt', 5, 2)
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      output: {
+        content: 'b',
+        offset: 4,
+        bytes: 1,
+        truncated: true,
+        sha256: createHash('sha256').update(source).digest('hex'),
+      },
+    })
+  })
+
   it('applies an edit when Electron omits the path stat device on Windows', async () => {
     const root = await temporaryDirectory()
     await writeFile(join(root, 'notes.txt'), 'hello workspace', 'utf-8')
@@ -297,6 +377,88 @@ describe('workspace.edit tool', () => {
 
     expect(result).toMatchObject({ status: 'cancelled', output: undefined })
     expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('hello workspace')
+  })
+
+  it('applies an approved, hash-bound single-file unified diff atomically', async () => {
+    const root = await temporaryDirectory()
+    const source = 'first\nbefore\nlast\n'
+    await writeFile(join(root, 'notes.txt'), source, 'utf-8')
+    const diff = [
+      'diff --git a/notes.txt b/notes.txt',
+      'index 1111111..2222222 100644',
+      '--- a/notes.txt',
+      '+++ b/notes.txt',
+      '@@ -1,3 +1,3 @@',
+      ' first',
+      '-before',
+      '+after',
+      ' last',
+      '',
+    ].join('\n')
+
+    const result = await executeUnifiedDiff(root, createHash('sha256').update(source).digest('hex'), diff)
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      output: {
+        path: 'notes.txt',
+        changedPaths: ['notes.txt'],
+        editMode: 'unified_diff',
+        replacements: 1,
+        sha256: createHash('sha256').update('first\nafter\nlast\n').digest('hex'),
+        checkpointId: expect.any(String),
+      },
+    })
+    expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('first\nafter\nlast\n')
+  })
+
+  it('preserves the standard trailing newline when a unified diff creates a file body', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'notes.txt'), '', 'utf-8')
+    const diff = ['--- a/notes.txt', '+++ b/notes.txt', '@@ -0,0 +1 @@', '+first', ''].join('\n')
+
+    await expect(executeUnifiedDiff(root, createHash('sha256').update('').digest('hex'), diff)).resolves.toMatchObject({
+      status: 'completed',
+      output: { sha256: createHash('sha256').update('first\n').digest('hex') },
+    })
+    expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe('first\n')
+  })
+
+  it('rejects unified diffs with stale content, mismatched paths, or multiple file sections without writing', async () => {
+    const root = await temporaryDirectory()
+    const source = 'before\n'
+    await writeFile(join(root, 'notes.txt'), source, 'utf-8')
+    const expectedHash = createHash('sha256').update(source).digest('hex')
+    const mismatchedContext = ['--- a/notes.txt', '+++ b/notes.txt', '@@ -1 +1 @@', '-different', '+after', ''].join('\n')
+    const mismatchedPath = ['--- a/other.txt', '+++ b/other.txt', '@@ -1 +1 @@', '-before', '+after', ''].join('\n')
+    const multipleFiles = [
+      '--- a/notes.txt', '+++ b/notes.txt', '@@ -1 +1 @@', '-before', '+after',
+      '--- a/other.txt', '+++ b/other.txt', '@@ -1 +1 @@', '-x', '+y', '',
+    ].join('\n')
+
+    for (const diff of [mismatchedContext, mismatchedPath, multipleFiles]) {
+      await expect(executeUnifiedDiff(root, expectedHash, diff)).resolves.toMatchObject({
+        status: 'failed',
+      })
+      expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe(source)
+    }
+  })
+
+  it('does not write a unified diff when the hash is stale or approval is denied', async () => {
+    const root = await temporaryDirectory()
+    const source = 'before\n'
+    await writeFile(join(root, 'notes.txt'), source, 'utf-8')
+    const diff = ['--- a/notes.txt', '+++ b/notes.txt', '@@ -1 +1 @@', '-before', '+after', ''].join('\n')
+
+    await expect(executeUnifiedDiff(root, '0'.repeat(64), diff)).resolves.toMatchObject({
+      status: 'failed',
+      reasonCode: 'TARGET_CHANGED',
+    })
+    await expect(executeUnifiedDiff(root, createHash('sha256').update(source).digest('hex'), diff, false)).resolves.toMatchObject({
+      status: 'cancelled',
+      reasonCode: 'APPROVAL_DENIED',
+    })
+    expect(await readFile(join(root, 'notes.txt'), 'utf-8')).toBe(source)
   })
 
   it('fails closed on a stale hash or ambiguous replacement', async () => {

@@ -2,6 +2,7 @@ import { extname } from 'path'
 import { randomUUID } from 'node:crypto'
 import type {
   ActionRisk,
+  AgentApprovalMode,
   ApprovalDecision,
   EvidenceConfidence,
   PolicyDecision,
@@ -112,6 +113,7 @@ export function evaluateWorkspaceActionPolicy(input: {
   actionRisk: ActionRisk
   evidenceConfidence?: EvidenceConfidence
   relativePath?: string
+  approvalMode?: AgentApprovalMode
 }): PolicyDecision {
   const evidenceConfidence = input.evidenceConfidence && EVIDENCE_CONFIDENCE_VALUES.has(input.evidenceConfidence)
     ? input.evidenceConfidence
@@ -134,6 +136,16 @@ export function evaluateWorkspaceActionPolicy(input: {
       approvalPolicy: 'none',
       approvalDecision: 'not-required',
       reasonCode: input.actionRisk === 'read' ? 'READ_ALLOWED' : 'READ_ONLY_ALLOWED',
+    }
+  }
+  if (input.approvalMode === 'auto-run') {
+    return {
+      outcome: 'allow',
+      evidenceConfidence,
+      actionRisk: input.actionRisk,
+      approvalPolicy: 'auto-run',
+      approvalDecision: 'not-required',
+      reasonCode: 'AUTO_RUN_ALLOWED',
     }
   }
   return {

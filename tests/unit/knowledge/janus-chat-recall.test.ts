@@ -359,30 +359,42 @@ describe('Janus Chat knowledge recall', () => {
     streamText
       .mockImplementationOnce(async () => ({
         textStream: (async function* () {})(),
-        toolCalls: Promise.resolve([{
-          toolCallId: 'read-1', toolName: 'workspace_read',
-          args: { workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 },
-        }]),
+        fullStream: (async function* () {
+          yield { type: 'tool-call-streaming-start', toolCallId: 'read-1', toolName: 'workspace_read' }
+          yield { type: 'tool-call-delta', toolCallId: 'read-1', toolName: 'workspace_read', argsTextDelta: '{"workspaceId":"workspace-a",' }
+          yield { type: 'tool-call-delta', toolCallId: 'read-1', toolName: 'workspace_read', argsTextDelta: '"path":"src/main.ts","maxBytes":4096}' }
+          yield {
+            type: 'tool-call', toolCallId: 'read-1', toolName: 'workspace_read',
+            args: { workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 },
+          }
+          yield { type: 'finish', finishReason: 'tool-calls' }
+        })(),
       }))
       .mockImplementationOnce(async (options: any) => {
         expect(options.messages.at(-1).content[0].result).toMatchObject({ retryable: true, reasonCode: 'TARGET_CHANGED' })
         return {
           textStream: (async function* () {})(),
-          toolCalls: Promise.resolve([{
-            toolCallId: 'read-2', toolName: 'workspace_read',
-            args: { workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 },
-          }]),
+          fullStream: (async function* () {
+            yield {
+              type: 'tool-call', toolCallId: 'read-2', toolName: 'workspace_read',
+              args: { workspaceId: 'workspace-a', path: 'src/main.ts', maxBytes: 4096 },
+            }
+            yield { type: 'finish', finishReason: 'tool-calls' }
+          })(),
         }
       })
       .mockImplementationOnce(async () => ({
         textStream: (async function* () {})(),
-        toolCalls: Promise.resolve([{
-          toolCallId: 'edit-1', toolName: 'workspace_edit',
-          args: {
-            workspaceId: 'workspace-a', path: 'src/main.ts', expectedHash: 'a'.repeat(64),
-            replacements: [{ oldText: 'before', newText: 'after' }],
-          },
-        }]),
+        fullStream: (async function* () {
+          yield {
+            type: 'tool-call', toolCallId: 'edit-1', toolName: 'workspace_edit',
+            args: {
+              workspaceId: 'workspace-a', path: 'src/main.ts', expectedHash: 'a'.repeat(64),
+              replacements: [{ oldText: 'before', newText: 'after' }],
+            },
+          }
+          yield { type: 'finish', finishReason: 'tool-calls' }
+        })(),
       }))
       .mockImplementationOnce(async () => ({
         textStream: (async function* () { yield '修改完成。' })(),
@@ -410,6 +422,17 @@ describe('Janus Chat knowledge recall', () => {
       'workspace.read',
       'workspace.edit',
     ])
+    const agentEvents = reply.mock.calls
+      .filter(([channel]) => channel === 'llm:chat:agent-event')
+      .map(([, payload]) => payload)
+    expect(agentEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'tool_call_start', callId: 'read-1', toolName: 'workspace_read' }),
+      expect.objectContaining({ type: 'tool_call_delta', callId: 'read-1', argumentDeltaLength: expect.any(Number) }),
+      expect.objectContaining({ type: 'tool_call_ready', callId: 'read-1', toolName: 'workspace_read', argumentKeys: ['workspaceId', 'path', 'maxBytes'] }),
+      expect.objectContaining({ type: 'tool_execution_start', callId: 'read-1', toolName: 'workspace_read' }),
+      expect.objectContaining({ type: 'tool_execution_end', callId: 'edit-1', toolName: 'workspace_edit', status: 'completed' }),
+      expect.objectContaining({ type: 'stream_end', cancelled: false }),
+    ]))
     expect(reply).toHaveBeenCalledWith('llm:chat:delta', expect.objectContaining({
       requestId: 'stream-edit-recovery',
       delta: '修改完成。',

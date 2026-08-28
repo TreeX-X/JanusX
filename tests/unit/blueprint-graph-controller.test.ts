@@ -5,7 +5,8 @@ import type { Blueprint } from '../../src/renderer/src/services/blueprint'
 import { deriveBlueprintFlow } from '../../src/renderer/src/features/blueprint/canvas-layout'
 import {
   BlueprintLayoutSaveController,
-  patchBlueprintCardNodes
+  patchBlueprintCardNodes,
+  splitNodeBatches
 } from '../../src/renderer/src/features/blueprint/useBlueprintGraphController'
 
 function cardData(title: string): BlueprintNodeData {
@@ -22,6 +23,24 @@ function cardData(title: string): BlueprintNodeData {
 }
 
 describe('blueprint graph controller seams', () => {
+  it('splits large graphs into bounded render batches', () => {
+    expect(splitNodeBatches([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
+  })
+
+  it('keeps only edges whose endpoints have been mounted', () => {
+    const blueprint = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'child'], canvasLayout: {},
+      nodes: {
+        root: { id: 'root', parentId: null, children: ['child'], status: 'planned', progress: 0 },
+        child: { id: 'child', parentId: 'root', children: [], status: 'planned', progress: 0 },
+      },
+    } as unknown as Blueprint
+    const flow = deriveBlueprintFlow(blueprint, {}, {}, new Set(), false)
+    const mounted = new Set(['root'])
+    expect(flow.edges.filter((edge) => mounted.has(edge.source) && mounted.has(edge.target))).toEqual([])
+    mounted.add('child')
+    expect(flow.edges.filter((edge) => mounted.has(edge.source) && mounted.has(edge.target))).toHaveLength(1)
+  })
   it('replaces only card nodes whose derived data changed', () => {
     const first = { id: 'first', position: { x: 0, y: 0 }, data: cardData('First') } as Node<BlueprintNodeData, 'blueprint'>
     const second = { id: 'second', position: { x: 0, y: 0 }, data: cardData('Second') } as Node<BlueprintNodeData, 'blueprint'>
@@ -82,5 +101,19 @@ describe('blueprint graph controller seams', () => {
     expect(persist).toHaveBeenCalledTimes(2)
     expect(errors[0]).toContain('disk unavailable')
     expect(errors.at(-1)).toBeNull()
+  })
+
+  it('automatically retries a failed save', async () => {
+    vi.useFakeTimers()
+    let attempts = 0
+    const persist = vi.fn(async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('temporary')
+    })
+    const controller = new BlueprintLayoutSaveController('bp', persist, vi.fn(), 0)
+    controller.schedule({ root: { x: 1, y: 1 } })
+    await vi.runAllTimersAsync()
+    expect(persist).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
   })
 })

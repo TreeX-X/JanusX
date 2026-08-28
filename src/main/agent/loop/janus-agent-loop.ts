@@ -1,3 +1,5 @@
+import type { AgentUsage, NormalizedProviderError } from '../stream/types'
+
 /**
  * Policy-free agent loop shared by chat, project configuration, and blueprint tools.
  *
@@ -44,7 +46,13 @@ export type JanusAgentEvent =
   | { type: 'turn_end'; turn: number; message: JanusAgentMessage; toolResults: JanusAgentMessage[] }
   | { type: 'message_start'; message: JanusAgentMessage }
   | { type: 'message_update'; delta: string }
+  | { type: 'reasoning_update'; delta: string }
   | { type: 'message_end'; message: JanusAgentMessage }
+  | { type: 'tool_call_start'; callId: string; name?: string }
+  | { type: 'tool_call_update'; callId: string; name?: string; argumentsDelta: string }
+  | { type: 'tool_call_ready'; call: JanusToolCall }
+  | { type: 'model_finish'; reason: 'stop' | 'tool_calls' | 'length' | 'unknown'; usage?: AgentUsage }
+  | { type: 'model_error'; error: NormalizedProviderError }
   | { type: 'tool_execution_start'; call: JanusToolCall }
   | { type: 'tool_execution_update'; call: JanusToolCall; partialResult: unknown }
   | { type: 'tool_execution_end'; call: JanusToolCall; result: JanusAgentToolResult; isError: boolean }

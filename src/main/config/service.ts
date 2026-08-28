@@ -17,6 +17,7 @@ import {
   normalizeKnowledgeSettings,
   type KnowledgeSettings,
 } from '../../shared/knowledge-settings'
+import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 
 const DEFAULT_CONFIG: GlobalConfig = {
   theme: 'dark',
@@ -41,6 +42,7 @@ const DEFAULT_CONFIG: GlobalConfig = {
   recentWorkspaces: [],
   notificationSettings: DEFAULT_AGENT_NOTIFICATION_SETTINGS,
   knowledgeSettings: DEFAULT_KNOWLEDGE_SETTINGS,
+  agentApprovalMode: 'per-action',
 }
 
 export class ConfigService {
@@ -61,6 +63,7 @@ export class ConfigService {
         ...parsed,
         notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
         knowledgeSettings: normalizeKnowledgeSettings(parsed.knowledgeSettings),
+        agentApprovalMode: normalizeAgentApprovalMode(parsed.agentApprovalMode),
       }
     } catch (error) {
       // 解析失败（文件存在但损坏）时先备份，避免默认配置覆盖后用户数据无法恢复
@@ -113,6 +116,9 @@ export class ConfigService {
           ...current.knowledgeSettings,
           ...partial.knowledgeSettings,
         })
+      }
+      if (partial.agentApprovalMode !== undefined) {
+        this.config.agentApprovalMode = normalizeAgentApprovalMode(partial.agentApprovalMode)
       }
       await this.persist()
       return this.config
@@ -185,6 +191,16 @@ export class ConfigService {
     })
     await this.update({ knowledgeSettings })
     return knowledgeSettings
+  }
+
+  async getAgentApprovalMode(): Promise<AgentApprovalMode> {
+    return normalizeAgentApprovalMode((await this.get()).agentApprovalMode)
+  }
+
+  async updateAgentApprovalMode(mode: unknown): Promise<AgentApprovalMode> {
+    const normalized = normalizeAgentApprovalMode(mode)
+    await this.update({ agentApprovalMode: normalized })
+    return normalized
   }
 
   async addRecentWorkspace(id: string): Promise<void> {

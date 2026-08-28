@@ -9,9 +9,10 @@ interface HtmlViewerProps {
   originalContent?: string
   onChange: (value: string) => void
   onEditorMount?: (editor: FindableEditor | null) => void
+  modelPath?: string
 }
 
-export function HtmlViewer({ content, originalContent, onChange, onEditorMount }: HtmlViewerProps) {
+export function HtmlViewer({ content, originalContent, onChange, onEditorMount, modelPath }: HtmlViewerProps) {
   const { t } = useI18n('editor')
   const [splitRatio, setSplitRatio] = useState(50)
   const [scriptsEnabled, setScriptsEnabled] = useState(true)
@@ -128,6 +129,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
                 content={content}
                 language="html"
                 originalContent={originalContent}
+                modelPath={modelPath}
                 onChange={onChange}
                 onEditorMount={onEditorMount}
               />
@@ -173,7 +175,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount }
             <div className="flex-1 overflow-hidden" style={{ height: '100%', position: 'relative' }}>
               <iframe
                 key={scriptsEnabled ? 'scripts-on' : 'scripts-off'}
-                srcDoc={`${previewContent}<style>::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:rgba(0,0,0,0.03)}::-webkit-scrollbar-thumb{background:rgba(255,120,48,0.4);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:rgba(255,120,48,0.65)}</style>`}
+                srcDoc={`${previewContent}<style>html{scrollbar-width:auto}html::-webkit-scrollbar{width:12px;height:12px}html::-webkit-scrollbar-track{background:rgba(0,0,0,0.03)}html::-webkit-scrollbar-thumb{background:rgba(255,120,48,0.42);border:4px solid transparent;background-clip:padding-box;border-radius:8px;transition:background 120ms ease,border-width 140ms ease}html.preview-scroll-active::-webkit-scrollbar-thumb,html::-webkit-scrollbar-thumb:hover,html::-webkit-scrollbar-thumb:active{background:rgba(255,120,48,0.72);border-width:1px}</style><script>document.addEventListener('mousemove',function(e){document.documentElement.classList.toggle('preview-scroll-active',e.clientX>=window.innerWidth-18)});document.addEventListener('mouseleave',function(){document.documentElement.classList.remove('preview-scroll-active')})</script>`}
                 sandbox={sandboxValue}
                 className="border-0"
                 style={{ background: '#ffffff', position: 'absolute', inset: 0, width: '100%', height: '100%' }}

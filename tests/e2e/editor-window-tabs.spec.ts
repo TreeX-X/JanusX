@@ -60,6 +60,8 @@ test('file opens share one workspace editor window and switch existing tabs', as
     const tabs = editorPage.locator('[data-editor-tab]')
     await expect(tabs).toHaveCount(2)
     await expect(tabs.filter({ hasText: 'second.ts' })).toHaveAttribute('data-active', 'true')
+    const code = editorPage.locator('.monaco-editor .view-lines')
+    await expect(code).toContainText('export const second = true')
 
     const dragRegion = editorPage.locator('[data-editor-drag-region]')
     const dragStrip = editorPage.locator('[data-editor-window-drag-strip]')
@@ -82,6 +84,8 @@ test('file opens share one workspace editor window and switch existing tabs', as
     await expect(editorWindows(application)).toHaveLength(1)
     await expect(tabs).toHaveCount(2)
     await expect(tabs.filter({ hasText: 'first.ts' })).toHaveAttribute('data-active', 'true')
+    await expect(code).toContainText('export const first = true')
+    await expect(code).not.toContainText('export const second = true')
   } finally {
     if (application) await application.close().catch(() => undefined)
     if (root) await rm(root, { recursive: true, force: true })

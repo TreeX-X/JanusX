@@ -1,9 +1,11 @@
 import type { ApprovalPreview, ActionRisk, ToolDefinition, ToolResult } from '../../../shared/ipc/agent-runtime'
 import type { JanusAgentTool, JanusAgentToolResult, JanusToolCall } from './janus-agent-loop'
 import { toolResultToModelValue } from '../runtime/tool-result'
+import { createToolManifests, type ToolManifest } from '../runtime/tool-manifest'
 
 interface RuntimeToolRegistry {
   list(): ToolDefinition[]
+  listManifests?(): ToolManifest[]
 }
 
 export interface JanusRuntimeToolHost {
@@ -23,6 +25,7 @@ export interface JanusRuntimeToolHost {
 
 export type JanusRuntimeAgentTool = JanusAgentTool & {
   label: string
+  canonicalName: string
   description: string
   parameters: ToolDefinition['inputSchema']
   actionRisk: ActionRisk
@@ -61,18 +64,19 @@ function resultToAgentResult(result: ToolResult): JanusAgentToolResult {
 
 function createRuntimeTool(
   host: JanusRuntimeToolHost,
-  definition: ToolDefinition,
+  manifest: ToolManifest,
   sessionId: string | ((input: Record<string, unknown>) => string | undefined),
   callerId: string,
   preview?: JanusRuntimeToolPreview,
 ): JanusRuntimeAgentTool {
   return {
-    name: definition.name,
-    label: definition.name,
-    description: definition.description,
-    parameters: definition.inputSchema,
-    actionRisk: definition.actionRisk,
-    executionMode: READ_ONLY_RISKS.has(definition.actionRisk) ? 'parallel' : 'sequential',
+    name: manifest.providerName,
+    label: manifest.canonicalName,
+    canonicalName: manifest.canonicalName,
+    description: manifest.description,
+    parameters: manifest.inputSchema,
+    actionRisk: manifest.actionRisk,
+    executionMode: READ_ONLY_RISKS.has(manifest.actionRisk) ? 'parallel' : 'sequential',
     execute: async (call: JanusToolCall, signal) => {
       if (signal.aborted) return { content: 'Tool execution cancelled', isError: true }
       const input = asInput(call.arguments)
@@ -81,17 +85,21 @@ function createRuntimeTool(
       const result = await host.executeFunctionCall({
         sessionId: resolvedSessionId,
         call: {
-          toolName: definition.name,
+          toolName: manifest.canonicalName,
           input,
           correlationId: call.id,
           source: 'function-calling',
           evidenceConfidence: 'medium',
-          ...(preview ? { preview: preview(definition.name, input) } : {}),
+          ...(preview ? { preview: preview(manifest.canonicalName, input) } : {}),
         },
       }, callerId)
       return resultToAgentResult(result)
     },
   }
+}
+
+function manifests(host: JanusRuntimeToolHost): ToolManifest[] {
+  return host.registry.listManifests?.() ?? createToolManifests(host.registry.list())
 }
 
 export function createJanusRuntimeTools(
@@ -100,7 +108,7 @@ export function createJanusRuntimeTools(
   options: { callerId?: string; preview?: JanusRuntimeToolPreview } = {},
 ): JanusRuntimeAgentTool[] {
   const callerId = options.callerId ?? 'janus-agent-loop'
-  return host.registry.list().map((definition) => createRuntimeTool(host, definition, sessionId, callerId, options.preview))
+  return manifests(host).map((manifest) => createRuntimeTool(host, manifest, sessionId, callerId, options.preview))
 }
 
 export function createJanusRuntimeCodingTools(
@@ -130,7 +138,7 @@ export function createJanusRuntimeToolsForResources(
     return resources.get(workspaceId)?.sessionId
   }
   const callerId = options.callerId ?? 'janus-agent-loop'
-  return host.registry.list().map((definition) => createRuntimeTool(host, definition, resolveSession, callerId, options.preview))
+  return manifests(host).map((manifest) => createRuntimeTool(host, manifest, resolveSession, callerId, options.preview))
 }
 
 export function createJanusRuntimeReadOnlyToolsForResources(

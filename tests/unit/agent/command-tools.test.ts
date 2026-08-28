@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorkspaceAgentRuntime } from '../../../src/main/agent/runtime/runtime'
-import { registerCommandTools } from '../../../src/main/agent/runtime/tools/command-tools'
+import { commandExecutionMode, registerCommandTools } from '../../../src/main/agent/runtime/tools/command-tools'
 
 const temporaryDirectories: string[] = []
 
@@ -36,6 +36,13 @@ afterEach(async () => {
 })
 
 describe('command Agent Runtime tool', () => {
+  it('uses the Windows shell only for the explicit compatibility shim set', () => {
+    expect(commandExecutionMode('npm', 'win32')).toBe('windows-shell-shim')
+    expect(commandExecutionMode('scripts/start.cmd', 'win32')).toBe('windows-shell-shim')
+    expect(commandExecutionMode('node.exe', 'win32')).toBe('direct')
+    expect(commandExecutionMode('node', 'linux')).toBe('direct')
+  })
+
   it('runs one structured command and returns bounded output and exit state', async () => {
     const { runtime, session } = await createRuntime()
     approve(runtime)
@@ -50,7 +57,10 @@ describe('command Agent Runtime tool', () => {
     })
     expect(result).toMatchObject({
       status: 'completed',
-      output: { ok: true, exitCode: 0, stdout: 'command-ok', stderr: '', timedOut: false, outputTruncated: false },
+      output: {
+        ok: true, exitCode: 0, stdout: 'command-ok', stderr: '', timedOut: false,
+        outputTruncated: false, executionMode: 'direct',
+      },
     })
   })
 
