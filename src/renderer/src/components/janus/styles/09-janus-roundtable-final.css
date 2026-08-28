@@ -1911,19 +1911,38 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 76px;
-  height: 76px;
-  border: 1px dashed rgba(216, 195, 158, .34);
+  width: 92px;
+  height: 92px;
+  border: 1px solid rgba(255, 220, 164, .62);
   border-radius: 50%;
-  box-shadow: 0 0 12px rgba(216, 195, 158, .12);
+  background: radial-gradient(circle, rgba(255, 190, 92, .16) 0%, rgba(255, 190, 92, .07) 42%, transparent 72%);
+  box-shadow:
+    0 0 10px rgba(255, 198, 112, .42),
+    0 0 24px rgba(255, 166, 72, .28),
+    inset 0 0 12px rgba(255, 225, 170, .16);
   content: '';
   pointer-events: none;
   transform: translate(-50%, -50%) translateZ(5px) rotateX(45deg);
-  animation: janus-roundtable-scroll-halo 12s linear infinite;
+  animation: janus-roundtable-scroll-halo 12s linear infinite, janus-roundtable-scroll-halo-pulse 3.8s ease-in-out infinite;
 }
 
 @keyframes janus-roundtable-scroll-halo {
   to { transform: translate(-50%, -50%) translateZ(5px) rotateX(45deg) rotate(-360deg); }
+}
+
+@keyframes janus-roundtable-scroll-halo-pulse {
+  0%, 100% { opacity: .62; }
+  50% { opacity: .95; }
+}
+
+.janus-roundtable-scroll:hover::after,
+.janus-roundtable-scroll:focus-visible::after,
+.janus-roundtable-scroll[data-open="true"]::after {
+  border-color: rgba(255, 231, 186, .88);
+  box-shadow:
+    0 0 14px rgba(255, 210, 132, .58),
+    0 0 32px rgba(255, 166, 72, .38),
+    inset 0 0 16px rgba(255, 235, 190, .22);
 }
 
 /* The shared parchment panel is closed until the centre scroll is clicked.
@@ -2109,12 +2128,79 @@
 
 .janus-roundtable-scroll[data-open="true"]:hover::after,
 .janus-roundtable-scroll[data-open="true"]:focus-visible::after {
-  border-color: rgba(236, 242, 246, .64);
-  box-shadow: 0 0 16px rgba(210, 220, 230, .22);
+  border-color: rgba(255, 231, 186, .9);
+  box-shadow:
+    0 0 16px rgba(255, 210, 132, .62),
+    0 0 34px rgba(255, 166, 72, .42),
+    inset 0 0 18px rgba(255, 235, 190, .24);
   animation-duration: 7s;
 }
 
 .janus-roundtable-scroll[data-open="true"]:hover .janus-roundtable-scroll-core,
 .janus-roundtable-scroll[data-open="true"]:focus-visible .janus-roundtable-scroll-core {
   animation-duration: 2.8s;
+}
+/* Black-orange HUD: restrained software palette. Orange survives only as
+   thin borders, text, and a 1px seat indicator — never a filled color block,
+   so the toolbar reads as part of the dark roundtable chrome. */
+.janus-roundtable-focus-readout {
+  border-color: rgba(255, 120, 48, .26) !important;
+  background: rgba(8, 8, 10, .82) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .42) !important;
+  color: rgba(255, 175, 120, .74) !important;
+}
+
+.janus-roundtable-camera-controls {
+  border-color: rgba(255, 255, 255, .1) !important;
+  background: rgba(8, 8, 10, .9) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .42) !important;
+}
+
+/* Kill the inner double frame added by the parchment pass; keep it flat. */
+.janus-roundtable-camera-controls::after {
+  display: none !important;
+}
+
+.janus-roundtable-camera-controls button {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, .52) !important;
+}
+
+.janus-roundtable-camera-controls button:hover {
+  border-color: rgba(255, 120, 48, .32) !important;
+  background: transparent !important;
+  color: #ffae72 !important;
+}
+
+/* Active: thin orange border + orange text only. No inset glow, no fill —
+   the 1px underline is the single saturated mark. */
+.janus-roundtable-camera-controls button[data-active="true"] {
+  border-color: rgba(255, 120, 48, .44) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #ff9b61 !important;
+}
+
+.janus-roundtable-camera-controls button[data-active="true"] svg {
+  color: #ff9b61 !important;
+}
+
+.janus-roundtable-camera-controls button::after {
+  background: #ff7a30 !important;
+  box-shadow: 0 0 5px rgba(255, 120, 48, .6) !important;
+}
+
+.janus-roundtable-camera-controls[data-transitioning="true"] {
+  border-color: rgba(255, 120, 48, .4) !important;
+  box-shadow: 0 0 12px rgba(255, 120, 48, .12) !important;
+}
+
+.janus-roundtable-camera-controls[data-transitioning="true"] button[data-active="true"]::before {
+  background: linear-gradient(105deg, transparent 28%, rgba(255, 180, 120, .2) 50%, transparent 72%);
+}
+/* Override the legacy 350deg loop: the roundtable glyph must spin a full
+   360deg so seats revolve around the table without a visible snap. */
+@keyframes janus-roundtable-camera-orbit-icon {
+  to { transform: rotate(360deg) scale(1.08); }
 }

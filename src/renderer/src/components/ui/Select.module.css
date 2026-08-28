@@ -64,7 +64,9 @@
 
 .dropdown {
   position: fixed;
-  z-index: 3000;
+  /* Settings and other modal surfaces can sit above the app shell. Keep the
+     portal menu above those surfaces so options remain clickable. */
+  z-index: 11000;
   box-sizing: border-box;
   background: rgba(20, 20, 20, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);

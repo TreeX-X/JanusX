@@ -1,7 +1,32 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Crosshair, Eye, Layers3 } from 'lucide-react'
+import { Crosshair, Layers3 } from 'lucide-react'
 import { JanusIdentityCore } from './JanusIdentityCore'
 import type { JanusAgentIdentityId } from './janusIdentity'
+
+// A round-table glyph: a central table ringed by four seats, mirroring the
+// 3D scene. Used as the "动态" (orbit) camera-mode icon; its spin animation
+// under active orbit reads as seats revolving around the table.
+function RoundtableIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="3.6" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="20.4" cy="12" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="20.4" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="3.6" cy="12" r="1.9" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
 
 export type RoundtableRole = 'user' | 'host' | 'agent-1' | 'agent-2'
 
@@ -207,7 +232,7 @@ export function RoundtableStage({
       >
         {(['orbit', 'top', 'iso', 'low'] as CameraMode[]).map((mode) => (
           <button key={mode} type="button" data-active={cameraMode === mode} onClick={() => changeCameraMode(mode)}>
-            {mode === 'orbit' ? <Eye size={12} /> : mode === 'top' ? <Layers3 size={12} /> : <Crosshair size={12} />}
+            {mode === 'orbit' ? <RoundtableIcon size={12} /> : mode === 'top' ? <Layers3 size={12} /> : <Crosshair size={12} />}
             {CAMERA_LABELS[mode] ?? mode.toUpperCase()}
           </button>
         ))}

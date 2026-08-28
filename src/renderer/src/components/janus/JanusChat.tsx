@@ -343,7 +343,11 @@ export function JanusChat({
 
   const selectMenuOption = useCallback((option: ChatModelOption | { value: AgentApprovalMode; label: string }) => {
     if (selectionMenu === 'permission') {
-      onApprovalModeChange?.((option as PermissionOption).value)
+      const nextMode = (option as PermissionOption).value
+      // Some Chat hosts provide the controller but omit the legacy callback;
+      // use the controller as the canonical permission-mode update path.
+      const updateApprovalMode = onApprovalModeChange ?? conversations?.setApprovalMode
+      updateApprovalMode?.(nextMode)
     } else if (selectionMenu === 'provider') {
       const modelOption = option as ChatModelOption
       const providerModel = modelOptions.find((candidate) =>
@@ -355,7 +359,7 @@ export function JanusChat({
       onSelectModel(modelOption.providerId, modelOption.modelId)
     }
     setSelectionMenu(null)
-  }, [modelOptions, onApprovalModeChange, onSelectModel, selectionMenu])
+  }, [conversations, modelOptions, onApprovalModeChange, onSelectModel, selectionMenu])
 
   const handleMenuKey = useCallback((key: string): boolean => {
     if (!selectionMenu) return false
@@ -557,10 +561,13 @@ export function JanusChat({
       setSelectionMenu(null)
     }
 
-    document.addEventListener('pointerdown', closeMenusOutside, true)
+    // Let menu items receive their pointer/click sequence before handling
+    // clicks outside the menu. Capture-phase closing can unmount the menu
+    // before the permission option's click handler runs.
+    document.addEventListener('pointerdown', closeMenusOutside)
     document.addEventListener('keydown', closeMenusOnEscape, true)
     return () => {
-      document.removeEventListener('pointerdown', closeMenusOutside, true)
+      document.removeEventListener('pointerdown', closeMenusOutside)
       document.removeEventListener('keydown', closeMenusOnEscape, true)
     }
   }, [selectionMenu, threadMenuOpen])
@@ -1151,8 +1158,9 @@ export function JanusChat({
               </button>
               <button
                 type="button"
+                className="janus-chat-permission-select"
                 data-selection-trigger="permission"
-                aria-label={t('janus:chat.selectionMenu.aria', { kind: 'permission' })}
+                aria-label={t('janus:chat.permission.aria')}
                 onPointerDown={(event) => handleSelectionTriggerPointerDown(event, 'permission')}
                 onClick={() => openSelectionMenu('permission')}
               >
@@ -1177,6 +1185,7 @@ export function JanusChat({
               role="listbox"
               data-selection-menu={selectionMenu}
               aria-label={t('janus:chat.selectionMenu.aria', { kind: selectionMenu })}
+              onPointerDown={(event) => event.stopPropagation()}
             >
               <div className="janus-chat-model-menu-heading">
                 <strong>{selectionMenu === 'provider' ? t('janus:chat.model.providersHeading') : selectionMenu === 'model' ? t('janus:chat.model.modelsHeading') : t('janus:chat.permission.label')}</strong>

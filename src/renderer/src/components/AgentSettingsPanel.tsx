@@ -58,7 +58,12 @@ export function AgentSettingsPanel() {
           <span className={styles.labelText}>{t('settings:agent.default.label')}</span>
           <span className={styles.hint}>{t('settings:agent.default.hint')}</span>
         </div>
-        <Select value={draft.approvalMode} onChange={(value) => updateDraft(normalizeAgentApprovalMode(value))} options={options} ariaLabel={t('settings:agent.default.label')} />
+        <Select
+          value={draft.approvalMode}
+          onChange={(value) => updateDraft(normalizeAgentApprovalMode(value))}
+          options={options}
+          ariaLabel={t('settings:agent.default.label')}
+        />
       </div>
       <p className={styles.hint}>{t('settings:agent.safety')}</p>
     </section>

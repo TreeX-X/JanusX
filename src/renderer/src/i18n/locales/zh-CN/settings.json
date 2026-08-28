@@ -21,10 +21,10 @@
       "navMeta": "记忆采集"
     },
     "agent": {
-      "title": "Agent 鏉冮檺",
-      "subtitle": "Agent Permissions - JanusX Agent 浼氳瘽榛樿瀹℃壒妯″紡",
-      "nav": "Agent 鏉冮檺",
-      "navMeta": "瀹℃壒妯″紡"
+      "title": "Agent 权限",
+      "subtitle": "Agent Permissions - JanusX Agent 会话默认审批模式",
+      "nav": "Agent 权限",
+      "navMeta": "审批模式"
     },
     "llm": {
       "title": "LLM 引擎",
@@ -231,14 +231,14 @@
     }
   },
   "agent": {
-    "section": { "permissions": "鏉冮檺榛樿" },
+    "section": { "permissions": "权限默认设置" },
     "default": {
-      "label": "榛樿瀹℃壒妯″紡",
-      "hint": "鏂板缓 Agent 浼氳瘽浼氱户鎵挎妯″紡锛屽綋鍓嶄細璇濆彲鐩存帴鍒囨崲",
-      "mode": { "perAction": "姣忔鎿嶄綔閮介渶瀹℃壒", "autoRun": "鑷姩杩愯鍏ㄩ儴鎿嶄綔" }
+      "label": "默认审批模式",
+      "hint": "新建 Agent 会话会继承此模式；当前会话可直接切换。",
+      "mode": { "perAction": "每次操作都需审批", "autoRun": "自动运行全部操作" }
     },
-    "safety": "鑷姩杩愯浠嶄細寮哄埗宸ヤ綔鍖哄煙闄愬埗銆佹晱鎰熻矾寰勬嫆缁濄€佽緭鍏ユ牎楠屻€佺増鏈揩鐓у拰瀹¤璁板綍",
-    "error": { "load": "鍔犺浇 Agent 鏉冮檺璁剧疆澶辫触", "save": "淇濆瓨 Agent 鏉冮檺璁剧疆澶辫触" }
+    "safety": "自动运行仍会强制执行工作区范围限制、敏感路径拒绝、输入校验、版本快照和审计记录。",
+    "error": { "load": "加载 Agent 权限设置失败", "save": "保存 Agent 权限设置失败" }
   },
   "officeCli": {
     "title": "OfficeCLI",

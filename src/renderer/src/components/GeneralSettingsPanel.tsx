@@ -25,8 +25,8 @@ export function GeneralSettingsPanel() {
             value={currentLanguage}
             onChange={(value) => setLanguage(value as typeof SUPPORTED_LANGUAGES[number])}
             options={languageOptions}
-            ariaLabel={t('settings:general.language.label')}
             className={styles.generalSelect}
+            ariaLabel={t('settings:general.language.label')}
           />
         </div>
       </div>
