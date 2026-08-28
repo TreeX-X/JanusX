@@ -3,18 +3,20 @@
  * @description �?Janus 数字形象风格一致的对话界面
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
+import type { AgentApprovalMode } from '../../../../shared/ipc/agent-runtime'
 import { useOptionalJanusChatController } from './JanusChatProvider'
 import { MarkdownContent, StreamingText } from '../chat/ChatContent'
-import { Select } from '../ui/Select'
 import { useI18n } from '@/i18n/useI18n'
 import { PromptDialog } from '../blueprint/PromptDialog'
 import { ToolCallGroup } from './ToolCallCard'
+import { Select } from '../ui/Select'
 
-type SelectionMenu = 'provider' | 'model'
+type SelectionMenu = 'provider' | 'model' | 'permission'
+type PermissionOption = { value: AgentApprovalMode; label: string }
 
 interface ChatShortcutEvent {
   key: string
@@ -26,7 +28,9 @@ interface ChatShortcutEvent {
 }
 
 export function resolveChatSelectionShortcut(event: ChatShortcutEvent): SelectionMenu | null {
-  if (event.isComposing || event.altKey || event.shiftKey) return null
+  if (event.isComposing || event.altKey) return null
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'f') return 'permission'
+  if (event.shiftKey) return null
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') return 'model'
   if (!event.ctrlKey && !event.metaKey && event.key === 'Tab') return 'provider'
   return null
@@ -86,6 +90,8 @@ interface JanusChatProps {
   /** 清空对话 */
   onClear: () => void
   onAddToWorkspace?: () => void
+  approvalMode?: AgentApprovalMode
+  onApprovalModeChange?: (mode: AgentApprovalMode) => void
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -183,6 +189,8 @@ export function JanusChat({
   onRetry,
   onClear,
   onAddToWorkspace,
+  approvalMode,
+  onApprovalModeChange,
 }: JanusChatProps) {
   const { t } = useI18n('janus')
   const [input, setInput] = useState('')
@@ -208,6 +216,7 @@ export function JanusChat({
   const historyDraftRef = useRef('')
   const contextConversations = useOptionalJanusChatController()
   const conversations = controllerOverride ?? contextConversations
+  const activeApprovalMode = approvalMode ?? conversations?.approvalMode ?? 'per-action'
 
   const copyMessage = useCallback((content: string) => {
     if (!navigator.clipboard) return
@@ -221,16 +230,20 @@ export function JanusChat({
   const activeProviderModels = activeModel
     ? modelOptions.filter((option) => option.providerId === activeModel.providerId)
     : modelOptions
+  const permissionOptions = useMemo<PermissionOption[]>(() => [
+    { value: 'per-action', label: t('janus:chat.permission.perAction') },
+    { value: 'auto-run', label: t('janus:chat.permission.autoRun') },
+  ], [t])
   const menuOptions = selectionMenu === 'provider' ? providerOptions : activeProviderModels
   const workspaceNames = new Map((resourceController?.resources ?? []).map((resource) => [resource.workspaceId, resource.workspaceName]))
   const lastAssistantMessageId = [...messages].reverse().find((message) => message.role === 'assistant')?.id
   const liveToolTraces: ChatToolTraceEntry[] = (resourceController?.activities ?? [])
-    .filter((activity) => activity.status === 'requested' || activity.status === 'running' || activity.status === 'approval')
     .map((activity) => ({
       toolName: activity.toolName,
       workspaceId: '',
       status: activity.status,
       summary: activity.summary ?? activity.toolName,
+      argsDigest: activity.argsDigest,
       turnId: 'live',
     }))
 
@@ -308,6 +321,13 @@ export function JanusChat({
   }, [])
 
   const openSelectionMenu = useCallback((menu: SelectionMenu) => {
+    if (menu === 'permission') {
+      const activeIndex = permissionOptions.findIndex((option) => option.value === activeApprovalMode)
+      setSelectionMenu(menu)
+      setMenuIndex(activeIndex >= 0 ? activeIndex : 0)
+      window.requestAnimationFrame(() => inputRef.current?.focus())
+      return
+    }
     const options = menu === 'provider'
       ? getProviderMenuOptions(modelOptions)
       : activeModel
@@ -319,19 +339,23 @@ export function JanusChat({
     setSelectionMenu(menu)
     setMenuIndex(activeIndex >= 0 ? activeIndex : 0)
     window.requestAnimationFrame(() => inputRef.current?.focus())
-  }, [activeModel, modelOptions])
+  }, [activeApprovalMode, activeModel, modelOptions, permissionOptions])
 
-  const selectMenuOption = useCallback((option: ChatModelOption) => {
-    if (selectionMenu === 'provider') {
+  const selectMenuOption = useCallback((option: ChatModelOption | { value: AgentApprovalMode; label: string }) => {
+    if (selectionMenu === 'permission') {
+      onApprovalModeChange?.((option as PermissionOption).value)
+    } else if (selectionMenu === 'provider') {
+      const modelOption = option as ChatModelOption
       const providerModel = modelOptions.find((candidate) =>
-        candidate.providerId === option.providerId && candidate.isProviderDefault)
-        ?? modelOptions.find((candidate) => candidate.providerId === option.providerId)
+        candidate.providerId === modelOption.providerId && candidate.isProviderDefault)
+        ?? modelOptions.find((candidate) => candidate.providerId === modelOption.providerId)
       if (providerModel) onSelectModel(providerModel.providerId, providerModel.modelId)
     } else {
-      onSelectModel(option.providerId, option.modelId)
+      const modelOption = option as ChatModelOption
+      onSelectModel(modelOption.providerId, modelOption.modelId)
     }
     setSelectionMenu(null)
-  }, [modelOptions, onSelectModel, selectionMenu])
+  }, [modelOptions, onApprovalModeChange, onSelectModel, selectionMenu])
 
   const handleMenuKey = useCallback((key: string): boolean => {
     if (!selectionMenu) return false
@@ -341,18 +365,19 @@ export function JanusChat({
     }
     if (['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(key)) {
       const direction = key === 'ArrowUp' || key === 'ArrowLeft' ? -1 : 1
-      setMenuIndex((current) => menuOptions.length
-        ? (current + direction + menuOptions.length) % menuOptions.length
+      const optionsLength = selectionMenu === 'permission' ? permissionOptions.length : menuOptions.length
+      setMenuIndex((current) => optionsLength
+        ? (current + direction + optionsLength) % optionsLength
         : 0)
       return true
     }
     if (key === 'Enter') {
-      const option = menuOptions[menuIndex]
+      const option = selectionMenu === 'permission' ? permissionOptions[menuIndex] : menuOptions[menuIndex]
       if (option) selectMenuOption(option)
       return true
     }
     return false
-  }, [menuIndex, menuOptions, selectMenuOption, selectionMenu])
+  }, [menuIndex, menuOptions, permissionOptions, selectMenuOption, selectionMenu])
 
   const replaceInput = useCallback((value: string) => {
     setInput(value)
@@ -1012,7 +1037,7 @@ export function JanusChat({
                 <MarkdownContent content={msg.content} />
                 {msg.role === 'assistant' && (
                   <ToolCallGroup
-                    entries={toolTraces.filter((entry) => entry.turnId === msg.id || (entry.turnId !== msg.id && msg.id === lastAssistantMessageId))}
+                    entries={toolTraces.filter((entry) => entry.turnId === msg.id)}
                     workspaceNames={workspaceNames}
                   />
                 )}
@@ -1106,7 +1131,6 @@ export function JanusChat({
           </button>
           <div className="janus-chat-status-actions">
             <div className="janus-chat-shortcuts">
-              <span>{t('janus:chat.shortcuts.janusMd')}</span>
               <button
                 type="button"
                 data-selection-trigger="provider"
@@ -1124,6 +1148,15 @@ export function JanusChat({
                 onClick={() => openSelectionMenu('model')}
               >
                 <kbd>ctrl+p</kbd> {t('janus:chat.shortcuts.models')}
+              </button>
+              <button
+                type="button"
+                data-selection-trigger="permission"
+                aria-label={t('janus:chat.selectionMenu.aria', { kind: 'permission' })}
+                onPointerDown={(event) => handleSelectionTriggerPointerDown(event, 'permission')}
+                onClick={() => openSelectionMenu('permission')}
+              >
+                <kbd>ctrl+f</kbd> {t('janus:chat.shortcuts.permission')}
               </button>
             </div>
             <button
@@ -1146,27 +1179,32 @@ export function JanusChat({
               aria-label={t('janus:chat.selectionMenu.aria', { kind: selectionMenu })}
             >
               <div className="janus-chat-model-menu-heading">
-                <strong>{selectionMenu === 'provider' ? t('janus:chat.model.providersHeading') : t('janus:chat.model.modelsHeading')}</strong>
+                <strong>{selectionMenu === 'provider' ? t('janus:chat.model.providersHeading') : selectionMenu === 'model' ? t('janus:chat.model.modelsHeading') : t('janus:chat.permission.label')}</strong>
                 <span>{t('janus:chat.model.menuNavHint')}</span>
               </div>
-              {menuOptions.map((option, index) => (
+              {(selectionMenu === 'permission' ? permissionOptions : menuOptions).map((option, index) => {
+                const permissionOption = option as PermissionOption
+                const modelOption = option as ChatModelOption
+                return (
                 <button
-                  key={`${option.providerId}:${option.modelId}`}
+                  key={selectionMenu === 'permission' ? permissionOption.value : `${modelOption.providerId}:${modelOption.modelId}`}
                   type="button"
                   role="option"
                   aria-selected={index === menuIndex}
-                  data-active={selectionMenu === 'provider'
-                    ? activeModel?.providerId === option.providerId
-                    : activeModel?.providerId === option.providerId && activeModel.modelId === option.modelId}
+                  data-active={selectionMenu === 'permission'
+                    ? activeApprovalMode === permissionOption.value
+                    : selectionMenu === 'provider'
+                    ? activeModel?.providerId === modelOption.providerId
+                    : activeModel?.providerId === modelOption.providerId && activeModel.modelId === modelOption.modelId}
                   data-highlighted={index === menuIndex}
                   onMouseEnter={() => setMenuIndex(index)}
                   onClick={() => selectMenuOption(option)}
                 >
-                  <span>{option.providerName}</span>
-                  <strong>{option.modelId}</strong>
+                  {selectionMenu === 'permission' ? <strong>{permissionOption.label}</strong> : <><span>{modelOption.providerName}</span><strong>{modelOption.modelId}</strong></>}
                 </button>
-              ))}
-              {menuOptions.length === 0 && (
+                )
+              })}
+              {selectionMenu !== 'permission' && menuOptions.length === 0 && (
                 <div className="janus-chat-model-menu-empty">
                   {t('janus:chat.model.noConfigured', { kind: selectionMenu })}
                 </div>

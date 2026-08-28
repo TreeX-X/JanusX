@@ -2124,6 +2124,10 @@
   white-space: nowrap;
 }
 
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-menu[data-selection-menu="permission"] button strong {
+  color: inherit;
+}
+
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-model-notice {
   position: absolute;
   left: 50%;

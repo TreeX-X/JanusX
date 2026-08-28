@@ -1,5 +1,6 @@
 /* Janus Chat workspace pane 鈥?same Chat language as Island chat view */
 .janus-chat--workspace {
+  container: janus-chat-workspace / inline-size;
   position: relative;
   inset: auto;
   display: flex;
@@ -26,6 +27,15 @@
 
 .janus-chat--workspace .janus-chat-toolbar {
   display: none;
+}
+
+.janus-chat--workspace .janus-chat-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .janus-chat--workspace .janus-chat-messages {
@@ -306,9 +316,10 @@
 .janus-chat--workspace .janus-chat-status-bar {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   min-height: 34px;
   padding: 8px 14px 9px 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.035);
@@ -319,9 +330,11 @@
 
 .janus-chat--workspace .janus-chat-model-tag {
   display: inline-flex;
+  flex: 1 1 140px;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
   border: 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.42);
@@ -352,11 +365,29 @@
   white-space: nowrap;
 }
 
+.janus-chat-permission-select {
+  flex: 0 1 170px;
+  min-width: 0;
+}
+
+.janus-chat-permission-dropdown {
+  min-width: 180px;
+}
+
+.janus-chat--workspace .janus-chat-model-tag > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .janus-chat--workspace .janus-chat-shortcuts {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
   color: rgba(255, 255, 255, 0.28);
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 10px;
@@ -470,6 +501,10 @@
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 10px;
   text-align: center;
+}
+
+.janus-chat--workspace .janus-chat-model-menu[data-selection-menu="permission"] button strong {
+  color: inherit;
 }
 
 .janus-chat--workspace .janus-chat-model-notice {
@@ -597,7 +632,7 @@
 .janus-tool-card-error { overflow: auto; margin: 0; color: rgba(255, 255, 255, 0.7); font-family: inherit; font-size: 10px; white-space: pre-wrap; word-break: break-word; }
 .janus-tool-card-section--error .janus-tool-card-error { color: #ffadad; }
 
-@media (max-width: 720px) {
+@container janus-chat-workspace (max-width: 720px) {
   .janus-chat--workspace {
     padding: 0 16px 14px;
   }
@@ -615,6 +650,29 @@
   .janus-chat--workspace .janus-chat-status-bar {
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .janus-chat--workspace .janus-chat-status-actions {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+
+  .janus-chat--workspace .janus-chat-shortcuts {
+    gap: 6px 10px;
+    white-space: normal;
+  }
+}
+
+@container janus-chat-workspace (max-width: 420px) {
+  .janus-chat--workspace .janus-chat-permission-select,
+  .janus-chat--workspace .janus-chat-model-tag,
+  .janus-chat--workspace .janus-chat-status-actions {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .janus-chat--workspace .janus-chat-status-actions {
+    justify-content: space-between;
   }
 }
 

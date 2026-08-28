@@ -35,6 +35,13 @@
         "noProviderError": "未配置默认 LLM Provider"
       }
     },
+    "permission": {
+      "label": "权限",
+      "shortcutTitle": "Ctrl+F 打开权限菜单",
+      "aria": "Agent 权限模式",
+      "perAction": "每次操作都需审批",
+      "autoRun": "自动运行全部操作"
+    },
     "error": {
       "retry": "重试",
       "configureLlm": "配置 LLM"
@@ -66,8 +73,9 @@
     },
     "shortcuts": {
       "janusMd": "JANUS.md",
-      "providers": "tab providers",
-      "models": "ctrl+p models"
+      "providers": "Providers",
+      "models": "Models",
+      "permission": "Permission"
     },
     "selectionMenu": {
       "aria": "{{kind}} 选择"

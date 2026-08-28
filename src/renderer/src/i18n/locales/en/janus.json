@@ -35,6 +35,13 @@
         "noProviderError": "No default LLM Provider configured"
       }
     },
+    "permission": {
+      "label": "Permission",
+      "shortcutTitle": "Ctrl+F open permission menu",
+      "aria": "Agent permission mode",
+      "perAction": "Approve every action",
+      "autoRun": "Auto-run all actions"
+    },
     "error": {
       "retry": "Retry",
       "configureLlm": "Configure LLM"
@@ -66,8 +73,9 @@
     },
     "shortcuts": {
       "janusMd": "JANUS.md",
-      "providers": "tab providers",
-      "models": "ctrl+p models"
+      "providers": "Providers",
+      "models": "Models",
+      "permission": "Permission"
     },
     "selectionMenu": {
       "aria": "{{kind}} selection"

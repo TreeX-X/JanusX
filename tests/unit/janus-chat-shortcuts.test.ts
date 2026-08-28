@@ -24,6 +24,11 @@ describe('Janus Chat selection shortcuts', () => {
     expect(shortcut('P', { metaKey: true })).toBe('model')
   })
 
+  it('opens permission modes with Ctrl+F or Cmd+F', () => {
+    expect(shortcut('f', { ctrlKey: true })).toBe('permission')
+    expect(shortcut('F', { metaKey: true })).toBe('permission')
+  })
+
   it('does not claim composition or modified navigation keys', () => {
     expect(shortcut('Tab', { isComposing: true })).toBeNull()
     expect(shortcut('Tab', { altKey: true })).toBeNull()
