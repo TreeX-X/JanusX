@@ -1,28 +1,74 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useGitStore } from '@/stores/git'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
 import type { TFunction } from 'i18next'
 import type { GitFileChange } from '@/types'
+import type { GitCommitChange } from '../../../shared/ipc/git'
 import { ModalCloseButton } from './ModalCloseButton'
+import { PromptDialog } from './blueprint/PromptDialog'
+import { Eye, Minus, Plus, RotateCcw } from 'lucide-react'
+import { useEditorStore } from '@/stores/editor'
 
 type GitRemoteAction = 'push' | 'pull'
 const GIT_HISTORY_LIMIT = 100
 
 export function GitPanel({ active = true }: { active?: boolean }) {
-  const { status, commits, loading, error, fetchLog, stageFiles, unstageFiles, commitChanges, pushChanges, pullChanges } = useGitStore()
+  const { status, commits, loading, error, fetchLog, stageFiles, unstageFiles, discardChange, commitChangesByHash, commitChanges, pushChanges, pullChanges } = useGitStore()
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const cwd = workspaces.find((w) => w.id === activeWorkspaceId)?.path
   const { t } = useI18n('git')
   const [commitMsg, setCommitMsg] = useState('')
   const [confirmAction, setConfirmAction] = useState<GitRemoteAction | null>(null)
+  const [discardTarget, setDiscardTarget] = useState<GitFileChange | null>(null)
+  const [expandedCommit, setExpandedCommit] = useState<string | null>(null)
+  const [commitFiles, setCommitFiles] = useState<Record<string, GitCommitChange[]>>({})
+  const [commitFilesLoading, setCommitFilesLoading] = useState<string | null>(null)
+  const openFile = useEditorStore((state) => state.openFile)
+  const [hoveredCommit, setHoveredCommit] = useState<{ commit: typeof commits[number]; top: number; left: number } | null>(null)
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const loadCommitPreview = useCallback(async (commit: typeof commits[number]) => {
+    if (!cwd || commitFiles[commit.hash]) return
+    setCommitFilesLoading(commit.hash)
+    const files = await commitChangesByHash(cwd, commit.hash)
+    setCommitFiles((current) => ({ ...current, [commit.hash]: files }))
+    setCommitFilesLoading((current) => current === commit.hash ? null : current)
+  }, [commitChangesByHash, commitFiles, cwd])
+
+  const clearHoverTimers = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    hoverTimerRef.current = null
+    closeTimerRef.current = null
+  }, [])
+
+  const schedulePreview = useCallback((commit: typeof commits[number], target: HTMLElement) => {
+    clearHoverTimers()
+    const rect = target.getBoundingClientRect()
+    hoverTimerRef.current = setTimeout(() => {
+      const previewWidth = 280
+      const left = Math.max(8, rect.left - previewWidth - 8)
+      const top = Math.max(8, Math.min(window.innerHeight - 220, rect.top))
+      setHoveredCommit({ commit, top, left })
+      void loadCommitPreview(commit)
+    }, 280)
+  }, [clearHoverTimers, loadCommitPreview])
+
+  const schedulePreviewClose = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    closeTimerRef.current = setTimeout(() => setHoveredCommit(null), 140)
+  }, [])
+
+  useEffect(() => () => clearHoverTimers(), [clearHoverTimers])
 
   useEffect(() => {
     if (!active) setConfirmAction(null)
   }, [active])
 
-  const cwd = workspaces.find((w) => w.id === activeWorkspaceId)?.path
   const refreshGitData = useCallback(async () => {
     if (!cwd) return
     await fetchLog(cwd, GIT_HISTORY_LIMIT)
@@ -85,6 +131,28 @@ export function GitPanel({ active = true }: { active?: boolean }) {
     },
     [cwd, stageFiles, unstageFiles]
   )
+
+  const handleOpenFile = useCallback((file: GitFileChange) => {
+    if (!cwd) return
+    void openFile(`${cwd}/${file.path}`.replace(/\\/g, '/'), cwd)
+  }, [cwd, openFile])
+
+  const handleDiscard = useCallback(async () => {
+    if (!cwd || !discardTarget) return
+    await discardChange(cwd, discardTarget.path)
+    setDiscardTarget(null)
+  }, [cwd, discardChange, discardTarget])
+
+  const handleToggleCommit = useCallback(async (hash: string) => {
+    if (expandedCommit === hash) { setExpandedCommit(null); return }
+    setExpandedCommit(hash)
+    if (commitFiles[hash]) return
+    if (!cwd) return
+    setCommitFilesLoading(hash)
+    const files = await commitChangesByHash(cwd, hash)
+    setCommitFiles((current) => ({ ...current, [hash]: files }))
+    setCommitFilesLoading(null)
+  }, [commitFiles, commitChangesByHash, cwd, expandedCommit])
 
   if (!cwd) {
     return (
@@ -186,7 +254,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               </button>
             </div>
             {stagedChanges.map((file) => (
-              <GitFileItem key={`staged-${file.path}`} file={file} onToggle={handleToggleStage} />
+              <GitFileItem key={`staged-${file.path}`} file={file} onToggle={handleToggleStage} onOpen={handleOpenFile} onDiscard={setDiscardTarget} />
             ))}
           </div>
         )}
@@ -208,7 +276,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               </button>
             </div>
             {unstagedChanges.map((file) => (
-              <GitFileItem key={`unstaged-${file.path}`} file={file} onToggle={handleToggleStage} />
+              <GitFileItem key={`unstaged-${file.path}`} file={file} onToggle={handleToggleStage} onOpen={handleOpenFile} onDiscard={setDiscardTarget} />
             ))}
           </div>
         )}
@@ -232,13 +300,19 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             {commits.map((commit) => (
               <div
                 key={commit.hash}
-                className="px-3 py-2 flex items-start gap-2 transition-colors hover:bg-[rgba(255,255,255,0.02)]"
+                tabIndex={0}
+                onMouseEnter={(event) => schedulePreview(commit, event.currentTarget)}
+                onMouseLeave={schedulePreviewClose}
+                onFocus={(event) => schedulePreview(commit, event.currentTarget)}
+                onBlur={schedulePreviewClose}
+                onClick={() => void handleToggleCommit(commit.hash)}
+                className="relative px-3 py-2 transition-colors hover:bg-[rgba(255,255,255,0.02)]"
               >
                 <div
-                  className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
+                  className="absolute left-3 top-3 w-1.5 h-1.5 rounded-full"
                   style={{ background: '#ff7830' }}
                 />
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 pl-4">
                   <div className="text-[#d4d4d4] truncate">{commit.message}</div>
                   <div className="flex gap-2 mt-0.5 text-[10px] text-[#555]">
                     <span>{commit.shortHash}</span>
@@ -246,11 +320,65 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                     <span>{formatDate(commit.date, t)}</span>
                   </div>
                 </div>
+                {expandedCommit === commit.hash && (
+                  <div className="mt-2 border-t border-[rgba(255,255,255,0.06)] pt-1.5 pl-4">
+                    {commitFilesLoading === commit.hash ? <div className="py-2 text-[10px] text-[#666]">{t('git:history.loadingChanges')}</div> : (commitFiles[commit.hash] ?? []).map((file) => (
+                      <div key={file.path} className="flex items-center gap-1.5 py-1 text-[10px]">
+                        <span className="min-w-0 flex-1 truncate text-[#999]">{file.path}</span>
+                        {file.additions !== null && <span className="text-[#4ec9b0]">+{file.additions}</span>}
+                        {file.deletions !== null && <span className="text-[#e06c75]">-{file.deletions}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {hoveredCommit && createPortal(
+        <div
+          role="tooltip"
+          onMouseEnter={() => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+          }}
+          onMouseLeave={schedulePreviewClose}
+          className="fixed z-[1100] w-[280px] max-h-[220px] overflow-y-auto rounded-md px-3 py-2.5 text-[11px] shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
+          style={{
+            top: hoveredCommit.top,
+            left: hoveredCommit.left,
+            background: 'rgba(24,24,24,0.98)',
+            border: '1px solid rgba(255,120,48,0.28)',
+          }}
+        >
+          <div className="font-medium leading-4 text-[#f0f0f0] break-words">{hoveredCommit.commit.message}</div>
+          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-[#888]">
+            <span>{hoveredCommit.commit.shortHash}</span>
+            <span>{hoveredCommit.commit.author}</span>
+            <span>{new Date(hoveredCommit.commit.date).toLocaleString()}</span>
+          </div>
+          {commitFilesLoading === hoveredCommit.commit.hash && <div className="mt-2 text-[10px] text-[#777]">{t('git:history.loadingChanges')}</div>}
+          {commitFilesLoading !== hoveredCommit.commit.hash && commitFiles[hoveredCommit.commit.hash] && (() => {
+            const files = commitFiles[hoveredCommit.commit.hash]
+            const additions = files.reduce((sum, file) => sum + (file.additions ?? 0), 0)
+            const deletions = files.reduce((sum, file) => sum + (file.deletions ?? 0), 0)
+            return <>
+              <div className="mt-2 flex items-center gap-2 border-t border-[rgba(255,255,255,0.08)] pt-2 text-[10px]">
+                <span className="text-[#aaa]">{t('git:history.filesCount', { count: files.length })}</span>
+                <span className="text-[#4ec9b0]">+{additions}</span>
+                <span className="text-[#e06c75]">-{deletions}</span>
+              </div>
+              <div className="mt-1.5 space-y-0.5">
+                {files.slice(0, 5).map((file) => <div key={file.path} className="truncate text-[10px] text-[#888]">{file.path}</div>)}
+                {files.length > 5 && <div className="text-[10px] text-[#666]">{t('git:history.moreFiles', { count: files.length - 5 })}</div>}
+              </div>
+            </>
+          })()}
+          {!commitFiles[hoveredCommit.commit.hash] && commitFilesLoading !== hoveredCommit.commit.hash && <div className="mt-2 text-[10px] text-[#777]">{t('git:history.previewHint')}</div>}
+        </div>,
+        document.body,
+      )}
 
       {/* Commit input */}
       <div
@@ -304,6 +432,17 @@ export function GitPanel({ active = true }: { active?: boolean }) {
         </div>
       </div>
     </div>
+    {discardTarget && active && (
+      <PromptDialog
+        open
+        title={t('git:discard.title')}
+        description={t('git:discard.description', { path: discardTarget.path })}
+        confirmText={t('git:discard.confirm')}
+        cancelText={t('common:action.cancel')}
+        onCancel={() => setDiscardTarget(null)}
+        onConfirm={() => void handleDiscard()}
+      />
+    )}
     {active && remoteMeta && createPortal(
       <div
         className="fixed inset-0 flex items-center justify-center"
@@ -445,7 +584,8 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   )
 }
 
-function GitFileItem({ file, onToggle }: { file: GitFileChange; onToggle: (file: GitFileChange) => void }) {
+function GitFileItem({ file, onToggle, onOpen, onDiscard }: { file: GitFileChange; onToggle: (file: GitFileChange) => void; onOpen: (file: GitFileChange) => void; onDiscard: (file: GitFileChange) => void }) {
+  const { t } = useI18n('git')
   const statusColors: Record<string, { bg: string; fg: string }> = {
     M: { bg: 'rgba(229, 192, 123, 0.15)', fg: '#e5c07b' },
     A: { bg: 'rgba(78, 201, 176, 0.15)', fg: '#4ec9b0' },
@@ -458,8 +598,7 @@ function GitFileItem({ file, onToggle }: { file: GitFileChange; onToggle: (file:
 
   return (
     <div
-      onClick={() => onToggle(file)}
-      className="flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.03)]"
+      className="group flex items-center gap-2 px-3 py-1.5 transition-colors hover:bg-[rgba(255,255,255,0.03)]"
     >
       <span
         className="w-4 h-4 rounded-sm flex items-center justify-center text-[9px] font-bold shrink-0"
@@ -467,12 +606,21 @@ function GitFileItem({ file, onToggle }: { file: GitFileChange; onToggle: (file:
       >
         {file.status === '??' ? '?' : file.status}
       </span>
-      <span className="flex-1 truncate text-[#999]">{file.path}</span>
+      <button type="button" onClick={() => onOpen(file)} className="flex-1 min-w-0 truncate text-left text-[#999] hover:text-[#d4d4d4]" title={file.path}>{file.path}</button>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <FileActionButton label={t('git:changes.open')} icon={<Eye size={13} />} onClick={() => onOpen(file)} />
+        <FileActionButton label={file.staged ? t('git:changes.unstage') : t('git:changes.stage')} icon={file.staged ? <Minus size={13} /> : <Plus size={13} />} onClick={() => onToggle(file)} />
+        <FileActionButton label={t('git:changes.discard')} icon={<RotateCcw size={13} />} onClick={() => onDiscard(file)} danger />
+      </div>
       {file.staged && (
         <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ec9b0' }} />
       )}
     </div>
   )
+}
+
+function FileActionButton({ label, icon, onClick, danger = false }: { label: string; icon: ReactNode; onClick: () => void; danger?: boolean }) {
+  return <button type="button" aria-label={label} title={label} onClick={onClick} className={`flex h-5 w-5 items-center justify-center rounded text-[#777] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#ddd] ${danger ? 'hover:text-[#e06c75]' : ''}`}>{icon}</button>
 }
 
 function formatDate(dateStr: string, t: TFunction): string {

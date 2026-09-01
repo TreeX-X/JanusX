@@ -15,11 +15,24 @@
   },
   "changes": {
     "title": "Changes",
-    "stageAll": "Stage all"
+    "stageAll": "Stage all",
+    "open": "Open file",
+    "stage": "Stage change",
+    "unstage": "Unstage change",
+    "discard": "Discard change"
+  },
+  "discard": {
+    "title": "Discard changes?",
+    "description": "Discard all local changes in {{path}}? This cannot be undone.",
+    "confirm": "Discard"
   },
   "clean": "Working tree clean",
   "history": {
-    "title": "Commit history"
+    "title": "Commit history",
+    "previewHint": "Click to expand changed files",
+    "loadingChanges": "Loading changed files...",
+    "filesCount": "{{count}} files",
+    "moreFiles": "+{{count}} more files"
   },
   "commit": {
     "placeholder": "Commit message...",

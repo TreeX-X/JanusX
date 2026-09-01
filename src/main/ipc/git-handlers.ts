@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { getStatus, getLog, stage, unstage, commit, push, pull, getFileBaseline } from '../git/service'
+import { getStatus, getLog, stage, unstage, discard, getCommitChanges, commit, push, pull, getFileBaseline } from '../git/service'
 import { analyzer } from '../janus/analyzer'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { GIT_CHANNELS } from '../../shared/ipc/git'
@@ -50,6 +50,23 @@ export function registerGitHandlers(): void {
     }).catch(() => {})
     return getStatus(cwd)
   })
+
+  ipcMain.handle(GIT_CHANNELS.discard, async (_event, cwd: string, relativePath: string) => {
+    const status = await discard(cwd, relativePath)
+    void knowledgeObservationService.capture({
+      workspacePath: cwd,
+      source: 'tool',
+      type: 'git-event',
+      content: `git discard ${relativePath}`,
+      summary: 'Git discard change',
+      fileRefs: [relativePath],
+      tags: ['git-discard'],
+      actor: 'user',
+    }).catch(() => {})
+    return status
+  })
+
+  ipcMain.handle(GIT_CHANNELS.commitChanges, (_event, cwd: string, hash: string) => getCommitChanges(cwd, hash))
 
   ipcMain.handle(GIT_CHANNELS.commit, async (_event, cwd: string, message: string) => {
     await commit(cwd, message)

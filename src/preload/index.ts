@@ -300,6 +300,8 @@ const gitAPI: GitAPI = {
   commit: (cwd, message) => ipcRenderer.invoke(GIT_CHANNELS.commit, cwd, message),
   push: (cwd) => ipcRenderer.invoke(GIT_CHANNELS.push, cwd),
   pull: (cwd) => ipcRenderer.invoke(GIT_CHANNELS.pull, cwd),
+  discard: (cwd, relativePath) => ipcRenderer.invoke(GIT_CHANNELS.discard, cwd, relativePath),
+  commitChanges: (cwd, hash) => ipcRenderer.invoke(GIT_CHANNELS.commitChanges, cwd, hash),
   fileBaseline: (cwd, relativePath) => ipcRenderer.invoke(GIT_CHANNELS.fileBaseline, cwd, relativePath),
 }
 

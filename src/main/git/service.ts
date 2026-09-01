@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'child_process'
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat, readFile, rm } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'util'
 import type { GitFileChange } from '../../shared/ipc/git'
@@ -212,6 +212,25 @@ export async function unstage(cwd: string, paths: string[]) {
     : git(cwd, 'rm', '--cached', '--', ...paths))
 }
 
+export async function discard(cwd: string, relativePath: string) {
+  const absolutePath = resolve(cwd, relativePath)
+  const safePath = relative(resolve(cwd), absolutePath)
+  if (!safePath || safePath === '..' || safePath.startsWith(`..${sep}`) || isAbsolute(safePath)) {
+    throw new Error('Git file path is outside the workspace')
+  }
+  const status = await getStatus(cwd)
+  const change = status.changes.find((item) => item.path === relativePath)
+  if (!change) throw new Error('File is no longer changed')
+  if (change.status === '??') {
+    await rm(absolutePath, { recursive: true, force: true })
+  } else if (change.staged) {
+    await git(cwd, 'restore', '--staged', '--worktree', '--', relativePath)
+  } else {
+    await git(cwd, 'restore', '--', relativePath)
+  }
+  return getStatus(cwd)
+}
+
 export async function commit(cwd: string, message: string) {
   await git(cwd, 'commit', '-m', message)
 }
@@ -363,4 +382,16 @@ export async function getCommitRange(
 /** 取某个 commit 的完整 diff 文本（patch 形式，含改动内容，不含 commit message）。 */
 export async function getCommitDiff(cwd: string, hash: string): Promise<string> {
   return git(cwd, 'diff-tree', '-p', '--no-color', '--root', hash).catch(() => '')
+}
+
+export async function getCommitChanges(cwd: string, hash: string) {
+  if (!/^[0-9a-f]{7,40}$/i.test(hash)) throw new Error('Invalid commit hash')
+  const raw = await git(cwd, 'show', '--format=', '--numstat', '--find-renames', hash)
+  if (!raw) return []
+  return raw.split(/\r?\n/).filter(Boolean).map((line) => {
+    const [add, del, ...pathParts] = line.split('\t')
+    const path = pathParts.join('\t')
+    const status = add === '0' && del !== '0' ? 'D' : add !== '0' && del === '0' ? 'A' : 'M'
+    return { path, status, additions: add === '-' ? null : Number(add), deletions: del === '-' ? null : Number(del) }
+  })
 }

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { GitStatus, GitCommit } from '@/types'
+import type { GitCommitChange } from '../../../shared/ipc/git'
 
 interface GitStore {
   status: GitStatus | null
@@ -15,6 +16,8 @@ interface GitStore {
   commitChanges: (cwd: string, message: string) => Promise<boolean>
   pushChanges: (cwd: string) => Promise<boolean>
   pullChanges: (cwd: string) => Promise<boolean>
+  discardChange: (cwd: string, path: string) => Promise<boolean>
+  commitChangesByHash: (cwd: string, hash: string) => Promise<GitCommitChange[]>
 }
 
 interface PendingStatusRefresh {
@@ -149,5 +152,22 @@ export const useGitStore = create<GitStore>((set) => ({
       set({ error: err.message, loading: false })
       return false
     }
+  },
+
+  discardChange: async (cwd, path) => {
+    set({ loading: true, error: null, statusCwd: normalizeCwd(cwd) })
+    try {
+      const status = await window.electron.git.discard(cwd, path)
+      const statusCwd = supersedePendingRefresh(cwd)
+      set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
+      return true
+    } catch (err: any) {
+      set({ error: err.message, loading: false })
+      return false
+    }
+  },
+
+  commitChangesByHash: async (cwd, hash) => {
+    try { return await window.electron.git.commitChanges(cwd, hash) } catch (err: any) { set({ error: err.message }); return [] }
   },
 }))

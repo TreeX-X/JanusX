@@ -186,7 +186,7 @@ export function installElectronApiFallback(): void {
     },
     git: {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,
-      commit: unavailable, push: unavailable, pull: unavailable, fileBaseline: unavailable,
+      commit: unavailable, push: unavailable, pull: unavailable, discard: unavailable, commitChanges: unavailable, fileBaseline: unavailable,
     },
     notificationSettings: {
       get: unavailable,

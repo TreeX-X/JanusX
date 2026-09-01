@@ -15,11 +15,24 @@
   },
   "changes": {
     "title": "更改",
-    "stageAll": "全部暂存"
+    "stageAll": "全部暂存",
+    "open": "打开文件",
+    "stage": "暂存更改",
+    "unstage": "取消暂存",
+    "discard": "放弃更改"
+  },
+  "discard": {
+    "title": "放弃更改？",
+    "description": "确定放弃 {{path}} 中的全部本地更改吗？此操作无法撤销。",
+    "confirm": "放弃更改"
   },
   "clean": "工作区干净",
   "history": {
-    "title": "提交历史"
+    "title": "提交历史",
+    "previewHint": "点击展开修改的文件",
+    "loadingChanges": "正在加载修改的文件...",
+    "filesCount": "{{count}} 个文件",
+    "moreFiles": "另外 {{count}} 个文件"
   },
   "commit": {
     "placeholder": "提交消息...",
