@@ -76,6 +76,15 @@
   flex-direction: column;
   gap: 6px;
   scrollbar-width: none;
+  overflow-anchor: none;
+}
+
+.janus-chat--restoring-scroll .janus-chat-messages {
+  scroll-behavior: auto !important;
+}
+
+.janus-chat--restoring-scroll .janus-chat-message {
+  animation: none !important;
 }
 
 .janus-chat-messages::-webkit-scrollbar {

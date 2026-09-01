@@ -3,7 +3,7 @@
  * @description �?Janus 数字形象风格一致的对话界面
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
@@ -205,6 +205,7 @@ export function JanusChat({
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [renamingTitle, setRenamingTitle] = useState('')
   const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string } | null>(null)
+  const [isRestoringScroll, setIsRestoringScroll] = useState(true)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -213,6 +214,15 @@ export function JanusChat({
   const threadSelectorRef = useRef<HTMLDivElement>(null)
   const selectionMenuRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
+  // A chat pane can stay mounted while hidden by the roundtable view.  The
+  // first layout after it becomes visible must land at the latest message
+  // immediately; otherwise the normal smooth-scroll effect animates the
+  // entire history from the top of the newly laid out container.
+  const immediateScrollRef = useRef(true)
+  // Start hidden so a freshly mounted, visible Chat is treated as an
+  // activation as well. Chat is conditionally mounted alongside Roundtable.
+  const previousVisibleRef = useRef(false)
+  const previousMessageCountRef = useRef(messages.length)
   const historyDraftRef = useRef('')
   const contextConversations = useOptionalJanusChatController()
   const conversations = controllerOverride ?? contextConversations
@@ -252,6 +262,13 @@ export function JanusChat({
 
   // 滚动到底�?
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    if (behavior === 'auto') {
+      // Bypass CSS scroll-behavior so history hydration never animates.
+      container.scrollTop = container.scrollHeight
+      return
+    }
     messagesEndRef.current?.scrollIntoView({ behavior })
   }, [])
 
@@ -267,13 +284,39 @@ export function JanusChat({
     }
   }, [])
 
+  useLayoutEffect(() => {
+    const becameVisible = visible && !previousVisibleRef.current
+    previousVisibleRef.current = visible
+    if (!becameVisible) return
+
+    immediateScrollRef.current = true
+    const container = messagesContainerRef.current
+    if (container) container.scrollTop = container.scrollHeight
+    isAtBottomRef.current = true
+    setShowNewMessageBadge(false)
+    setIsRestoringScroll(true)
+    const frame = window.requestAnimationFrame(() => {
+      const current = messagesContainerRef.current
+      if (current) current.scrollTop = current.scrollHeight
+      setIsRestoringScroll(false)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [visible])
+
   // 消息/流式内容变化时自动滚动（仅当用户已在底部�?
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isAtBottomRef.current) {
-      scrollToBottom(pendingContent ? 'auto' : 'smooth')
+      // Conversation history may hydrate after the pane mounts. Treat the
+      // empty -> populated transition like initial layout so it never plays
+      // a long smooth-scroll animation through persisted messages.
+      const hydratedHistory = previousMessageCountRef.current === 0 && messages.length > 0
+      const behavior = immediateScrollRef.current || hydratedHistory || pendingContent ? 'auto' : 'smooth'
+      immediateScrollRef.current = false
+      scrollToBottom(behavior)
     } else {
       setShowNewMessageBadge(true)
     }
+    previousMessageCountRef.current = messages.length
   }, [messages, pendingContent, scrollToBottom])
 
   // 聚焦输入框；流的实际生命周期�?useJanusChat 持有，视图可见性变化不�?abort �?
@@ -619,7 +662,7 @@ export function JanusChat({
     <div
       ref={chatRootRef}
       tabIndex={-1}
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !workspace && !discussionOnly ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !workspace && !discussionOnly ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
       onKeyDownCapture={handleChatKeyDownCapture}
       onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
