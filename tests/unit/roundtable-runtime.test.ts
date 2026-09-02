@@ -59,4 +59,14 @@ describe('RoundtableRuntime', () => {
     expect(state.facts.length).toBe(5)
     expect(state.facts.some((fact) => fact.kind === 'decision' && fact.status === 'confirmed')).toBe(true)
   })
+
+  it('preserves workspace snapshot and context across hydrate', async () => {
+    const runtime = new RoundtableRuntime(agents, template)
+    const state = await runtime.start({ prompt: 'Workspace topic', workspaceResources: [{ workspaceId: 'w1', workspaceName: 'Project', workspacePath: 'C:/project' }] })
+    const restored = new RoundtableRuntime(agents, template)
+    restored.hydrate(state)
+    expect(restored.getState().workspaceResources).toEqual(state.workspaceResources)
+    expect(restored.getState().workspaceContextFiles).toEqual(state.workspaceContextFiles)
+    expect(restored.getState().facts).toEqual(state.facts)
+  })
 })

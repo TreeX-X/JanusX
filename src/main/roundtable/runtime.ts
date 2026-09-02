@@ -41,7 +41,14 @@ export class RoundtableRuntime {
 
   onEvent(listener: (event: RoundtableEventEnvelope) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   getState(): RoundtableState { return { ...this.state, participants: [...this.state.participants], cards: [...this.state.cards], errors: [...this.state.errors], facts: [...this.state.facts], eventIds: [...this.state.eventIds], workspaceResources: [...this.state.workspaceResources], workspaceContextFiles: [...(this.state.workspaceContextFiles ?? [])] } }
-  hydrate(state: RoundtableState): void { this.state = { ...state, participants: [...state.participants], cards: [...state.cards], errors: [...state.errors], facts: [...state.facts], eventIds: [...state.eventIds] } }
+  hydrate(state: RoundtableState): void {
+    this.state = {
+      ...state,
+      participants: [...(state.participants ?? [])], cards: [...(state.cards ?? [])], errors: [...(state.errors ?? [])],
+      facts: [...(state.facts ?? [])], eventIds: [...(state.eventIds ?? [])], workspaceResources: [...(state.workspaceResources ?? [])],
+      workspaceContextFiles: [...(state.workspaceContextFiles ?? [])], workspaceContext: state.workspaceContext ?? '',
+    }
+  }
   addFact(fact: RoundtableFact): void { this.state = { ...this.state, facts: [...this.state.facts.filter((item) => item.id !== fact.id), fact], version: this.state.version + 1 } }
 
   async start(input: string | { prompt: string; workspaceResources?: RoundtableWorkspaceResource[] }): Promise<RoundtableState> {
