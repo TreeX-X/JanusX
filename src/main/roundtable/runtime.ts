@@ -3,6 +3,7 @@ import type { AgentResultCard, FixtureAgent, RoundtableEvent, RoundtableEventEnv
 import { EMPTY_ROUNDTABLE_STATE, reduceRoundtableEvent } from '../../shared/roundtable/state'
 import { defaultRoundtableWorkflow, participantsForRole, validateWorkflowTemplate, type ParticipantInstance, type WorkflowTemplate } from '../../shared/roundtable/workflow-template'
 import { AgentRegistry } from './agent-registry'
+import { janusWorkspaceFs } from '../agent/environment/janus-workspace-fs'
 
 type GraphState = {
   sessionId: string
@@ -12,6 +13,7 @@ type GraphState = {
   cards: AgentResultCard[]
   errors: string[]
   workspaceResources: RoundtableWorkspaceResource[]
+  workspaceContext: string
 }
 
 const GraphAnnotation = Annotation.Root({
@@ -20,6 +22,7 @@ const GraphAnnotation = Annotation.Root({
   cards: Annotation<AgentResultCard[]>({ reducer: (left, right) => left.concat(right), default: () => [] }),
   errors: Annotation<string[]>({ reducer: (left, right) => left.concat(right), default: () => [] }),
   workspaceResources: Annotation<RoundtableWorkspaceResource[]>({ reducer: (_left, right) => right, default: () => [] }),
+  workspaceContext: Annotation<string>({ reducer: (_left, right) => right, default: () => '' }),
 })
 
 export class RoundtableRuntime {
@@ -46,7 +49,12 @@ export class RoundtableRuntime {
     const workspaceResources = typeof input === 'string' ? [] : (input.workspaceResources ?? []).map((resource) => ({ ...resource }))
     if (!value || this.state.phase !== 'idle') throw new Error('A non-empty input is required to start an idle roundtable')
     const sessionId = `session-${Date.now()}`
-    this.state = { ...EMPTY_ROUNDTABLE_STATE, phase: 'running', sessionId, roundNumber: 1, userInput: value, participants: this.allParticipants(), workspaceResources }
+    const contextParts: string[] = []
+    for (const resource of workspaceResources) {
+      const result = await janusWorkspaceFs.collectTextEvidence(resource.workspacePath, resource.workspaceId, new AbortController().signal, { maxFiles: 40, maxFileBytes: 12 * 1024, maxContextBytes: 96 * 1024 })
+      if (result.ok) contextParts.push(`\n### Workspace: ${resource.workspaceName} (${resource.workspacePath})\n${result.value.context}`)
+    }
+    this.state = { ...EMPTY_ROUNDTABLE_STATE, phase: 'running', sessionId, roundNumber: 1, userInput: value, participants: this.allParticipants(), workspaceResources, workspaceContext: contextParts.join('\n') }
     this.emit({ type: 'session:created', sessionId, workflowId: this.template.id, workflowVersion: this.template.version })
     this.state = { ...this.state, roundNumber: 1, userInput: value, participants: this.allParticipants() }
     return this.runRound(value, 'initial-input')
@@ -71,7 +79,7 @@ export class RoundtableRuntime {
     const roundId = `${sessionId}-round-${roundNumber}`
     this.emit({ type: 'round:started', sessionId, roundId, roundNumber, trigger, userInput })
     const graph = this.buildGraph(roundId)
-    const result = await graph.invoke({ sessionId, roundId, roundNumber: this.state.roundNumber, userInput, cards: [], errors: [], workspaceResources: this.state.workspaceResources })
+    const result = await graph.invoke({ sessionId, roundId, roundNumber: this.state.roundNumber, userInput, cards: [], errors: [], workspaceResources: this.state.workspaceResources, workspaceContext: this.state.workspaceContext ?? '' })
     // Agent events have already been reduced into state; only the lifecycle event changes phase.
     void result
     this.state = { ...this.state, roundNumber, userInput }
@@ -107,7 +115,7 @@ export class RoundtableRuntime {
     this.emit({ type: 'agent:queued', sessionId, roundId, agentId: participant.id, role: participant.role })
     this.emit({ type: 'agent:working', sessionId, roundId, agentId: participant.id, role: participant.role })
     try {
-      const summary = await this.agents.get(participant.id)?.run({ sessionId, roundId, roundNumber: state.roundNumber, userInput: state.userInput, priorCards: state.cards, workspaceResources: this.state.workspaceResources })
+      const summary = await this.agents.get(participant.id)?.run({ sessionId, roundId, roundNumber: state.roundNumber, userInput: state.userInput, priorCards: state.cards, workspaceResources: this.state.workspaceResources, workspaceContext: this.state.workspaceContext })
         ?? `Fixture result for ${participant.id}`
       const now = new Date().toISOString()
       const card: AgentResultCard = {

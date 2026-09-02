@@ -1,7 +1,7 @@
 import type { RoundtableEvent, RoundtableEventEnvelope, RoundtableState } from './events'
 
 export const EMPTY_ROUNDTABLE_STATE: RoundtableState = {
-  phase: 'idle', roundNumber: 0, participants: [], cards: [], errors: [], facts: [], eventIds: [], version: 0, workspaceResources: [],
+  phase: 'idle', roundNumber: 0, participants: [], cards: [], errors: [], facts: [], eventIds: [], version: 0, workspaceResources: [], workspaceContextFiles: [],
 }
 
 export function reduceRoundtableEvent(state: RoundtableState, event: RoundtableEventEnvelope | RoundtableEvent): RoundtableState {
