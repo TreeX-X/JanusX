@@ -83,7 +83,10 @@ export function JanusRoundtablePane({
       }
       if (!current || current.phase === 'idle' || current.phase === 'ended') {
         if (!window.electron.roundtable) return
-        const next = await window.electron.roundtable.start(text)
+        const next = await window.electron.roundtable.start({
+          prompt: text,
+          workspaceResources: resourceController.resources.map(({ workspaceId, workspacePath, workspaceName }) => ({ workspaceId, workspacePath, workspaceName })),
+        })
         updateState(next)
         return
       }

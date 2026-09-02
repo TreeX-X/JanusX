@@ -1,4 +1,4 @@
-import type { RoundtableEventEnvelope, RoundtableState } from '../../shared/roundtable/events'
+import type { RoundtableEventEnvelope, RoundtableState, RoundtableWorkspaceResource } from '../../shared/roundtable/events'
 import { defaultRoundtableWorkflow } from '../../shared/roundtable/workflow-template'
 import { RoundtableRuntime } from './runtime'
 import { llmService } from '../llm/LlmService'
@@ -11,16 +11,16 @@ export class RoundtableService {
 
   onEvent(listener: (event: RoundtableEventEnvelope) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
 
-  async start(input: string): Promise<RoundtableState> {
+  async start(input: string | { prompt: string; workspaceResources?: RoundtableWorkspaceResource[] }): Promise<RoundtableState> {
     const runtime = this.createRuntime()
-    const state = await runtime.start(input)
+    const state = await runtime.start(typeof input === 'string' ? { prompt: input } : input)
     this.sessions.set(state.sessionId!, runtime)
     return state
   }
 
   private createRuntime(): RoundtableRuntime {
     const agents = Object.fromEntries(defaultRoundtableWorkflow.participants.flatMap((spec) => spec.instances).map((participant) => [participant.id, {
-      run: async ({ userInput, priorCards }: { userInput?: string; priorCards: any[] }) => {
+      run: async ({ userInput, priorCards, workspaceResources }: { userInput?: string; priorCards: any[]; workspaceResources?: RoundtableWorkspaceResource[] }) => {
         const fallback = `${participant.role} reviewed "${userInput ?? 'the shared state'}" with ${priorCards.length} prior results.`
         try {
           const target = await llmService.getDefaultModel()
@@ -33,7 +33,7 @@ export class RoundtableService {
               : 'Synthesize the discussion into a concise host summary.'
           const result = await generateText({ model: model as any, messages: [
             { role: 'system', content: `You are the ${participant.role} in a structured roundtable. ${roleInstruction} Return concise markdown.` },
-            { role: 'user', content: `Topic: ${userInput ?? 'Continue from shared state'}\nPrior results:\n${priorCards.map((card) => card.summary ?? '').join('\n')}` },
+            { role: 'user', content: `Topic: ${userInput ?? 'Continue from shared state'}\nWorkspace resources (read-only context):\n${(workspaceResources ?? []).map((resource) => `${resource.workspaceName}: ${resource.workspacePath}`).join('\n') || 'None attached'}\nPrior results:\n${priorCards.map((card) => card.summary ?? '').join('\n')}` },
           ] })
           return result.text?.trim() || fallback
         } catch {

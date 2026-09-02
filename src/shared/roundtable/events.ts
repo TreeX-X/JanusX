@@ -18,6 +18,11 @@ export interface AgentResultCard {
   evidenceRefs?: string[]
   requiresUserAction?: boolean
 }
+export interface RoundtableWorkspaceResource {
+  workspaceId: string
+  workspacePath: string
+  workspaceName: string
+}
 
 export type RoundtableFactStatus = 'confirmed' | 'proposal' | 'concern' | 'pending-validation' | 'rejected' | 'resolved'
 
@@ -54,6 +59,7 @@ export interface RoundtableState {
   facts: RoundtableFact[]
   eventIds: string[]
   version: number
+  workspaceResources: RoundtableWorkspaceResource[]
 }
 
 export type RoundtableEvent =
@@ -69,5 +75,5 @@ export type RoundtableEvent =
 export type RoundtableEventEnvelope = RoundtableEvent & { eventId: string; occurredAt: string }
 
 export interface FixtureAgent {
-  run(input: { sessionId: string; roundId: string; roundNumber: number; userInput?: string; priorCards: AgentResultCard[] }): Promise<string>
+  run(input: { sessionId: string; roundId: string; roundNumber: number; userInput?: string; priorCards: AgentResultCard[]; workspaceResources?: RoundtableWorkspaceResource[] }): Promise<string>
 }

@@ -672,3 +672,52 @@ type WorkflowTemplate = {
 | Agent 公有事实池 | 已实现基础版 | 结构化事实和来源可追溯 |
 | 人类可读羊皮纸 | 待实现 | 当前仍是事实分类投影，缺少主持人整理 |
 | 最终整理与导出 | 部分实现 | 有 Markdown 导出路径，完整整理和文件保存 UI 待完善 |
+## 13. 2026-09-02 / 工作区上下文接入计划
+
+当前核对确认：添加工作区目前只对普通 Janus Chat 生效，尚未接入圆桌 Runtime。普通 Chat 会保存 `conversation.attachedWorkspaceIds` 并创建 workspace session；圆桌 Agent 只收到用户输入和前序卡片摘要，不接收工作区路径、文件内容或工具，因此目前不能宣称 Agent 能围绕需求与工作区进行讨论。
+
+### 分阶段实施计划
+
+1. **会话数据契约**：扩展 `roundtable:start/advance` 携带 `workspaceResources`，并在 `RoundtableState` 保存资源快照，验证事件日志和恢复状态可还原。
+2. **只读工作区上下文**：复用安全 workspace session，为 Agent 提供结构摘要、文件索引和用户指定文件；默认禁止写文件、命令和 Git 修改。
+3. **共享公有事实池**：让 Refiner、Challenger、Host 读取同一版本的工作区事实，引用记录路径、行号或事件 ID，并区分 confirmed/proposal/concern/pending-validation。
+4. **人类可读羊皮纸**：新增独立 `HumanReadableParchment`，由 Host 整理结论、决策、依据、风险和行动；原始输出、状态和来源改为可展开追溯信息。
+5. **恢复与端到端验收**：覆盖绑定工作区、Agent 读取文件、多轮讨论、卡片详情、羊皮纸草稿、结束和导出，并增加超时、取消、重复事件和大仓库测试。
+
+### 实施状态
+
+| 能力 | 状态 | 下一步 |
+|---|---|---|
+| 普通 Chat 添加工作区 | 已实现 | 保持现有行为 |
+| 圆桌绑定工作区资源 | 未实现 | 阶段 1：扩展 IPC 与状态契约 |
+| 圆桌 Agent 只读工作区 | 未实现 | 阶段 2：复用安全读取适配器 |
+| 多 Agent 共享工作区公有池 | 未实现 | 阶段 3：上下文版本与来源追踪 |
+| 人类可读羊皮纸 | 待实现 | 阶段 4：主持人整理模型 |
+| 恢复与完整端到端验收 | 部分实现 | 阶段 5：补齐测试与真实链路 |
+
+## 14. 2026-09-02 / 阶段 1 实施记录：圆桌绑定工作区资源
+
+### 已完成
+
+- 新增 `RoundtableWorkspaceResource` 契约，统一记录 `workspaceId`、`workspaceName`、`workspacePath`。
+- `roundtable:start` 支持传入 `{ prompt, workspaceResources }`，并保留字符串输入兼容。
+- 圆桌 Renderer 从当前 `resourceController.resources` 生成工作区资源快照后再启动会话。
+- `RoundtableState` 保存会话级 `workspaceResources` 快照；后续轮次沿用该快照，不随 UI 临时变化漂移。
+- Runtime 的 Agent 输入契约携带工作区资源，当前模型提示词会明确列出只读工作区路径。
+- IPC、Preload、Main Service、Runtime 和共享类型已完成贯通。
+- 既有圆桌 Runtime 与状态单元测试通过。
+
+### 阶段 1 边界
+
+本阶段只完成“资源绑定和上下文传递”，尚未实现文件读取工具、工作区内容摘要、权限审批或写操作。Agent 当前知道绑定了哪些工作区路径，但还不能因此读取项目文件；这些能力属于阶段 2。
+
+### 状态
+
+| 能力 | 状态 |
+|---|---|
+| 圆桌启动携带工作区资源 | 已实现 |
+| 圆桌状态保存资源快照 | 已实现 |
+| 后续轮次复用资源快照 | 已实现 |
+| Agent 接收工作区路径上下文 | 已实现基础版 |
+| Agent 读取工作区文件 | 阶段 2 待实现 |
+| 工作区权限与只读策略 | 阶段 2 待实现 |

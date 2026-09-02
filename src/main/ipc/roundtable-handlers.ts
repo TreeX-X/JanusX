@@ -5,7 +5,7 @@ import { roundtableService } from '../roundtable/service'
 
 let subscribed = false
 export function registerRoundtableHandlers(getMainWindow: () => BrowserWindow | null): void {
-  ipcMain.handle(ROUNDTABLE_CHANNELS.start, (_event, input: string) => roundtableService.start(input))
+  ipcMain.handle(ROUNDTABLE_CHANNELS.start, (_event, input) => roundtableService.start(input))
   ipcMain.handle(ROUNDTABLE_CHANNELS.advance, (_event, sessionId: string, input?: string) => roundtableService.advance(sessionId, input))
   ipcMain.handle(ROUNDTABLE_CHANNELS.end, (_event, sessionId: string) => roundtableService.end(sessionId))
   ipcMain.handle(ROUNDTABLE_CHANNELS.state, (_event, sessionId: string) => roundtableService.getState(sessionId))
