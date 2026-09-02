@@ -12,13 +12,13 @@ const parchmentSections = [
 ]
 
 export function JanusRoundtableParchment({ detailed = false, document }: JanusRoundtableParchmentProps) {
-  const sections = document ? [
-    { title: 'CURRENT CONCLUSION', content: document.conclusion },
-    { title: 'CONFIRMED DECISIONS', content: document.decisions.map((item) => `[${item.status}] ${item.content}`).join('\n') || 'No confirmed decisions yet.' },
-    { title: 'KEY EVIDENCE', content: document.evidence.map((item) => item.content).join('\n') || 'No evidence recorded yet.' },
-    { title: 'OPEN QUESTIONS & RISKS', content: [...document.unresolved, ...document.risks].map((item) => `[${item.status}] ${item.content}`).join('\n') || 'No unresolved items yet.' },
-    { title: 'NEXT ACTIONS', content: document.actions.map((item) => item.content).join('\n') || 'No actions yet.' },
-    { title: 'SOURCE INDEX', content: document.sourceEventIds.join(', ') || 'No source events yet.' },
+  const human = document?.humanReadable
+  const sections = human ? [
+    { title: 'CURRENT CONCLUSION', content: human.conclusion },
+    { title: 'CONFIRMED DECISIONS', content: human.decisions.join('\n') || 'No confirmed decisions yet.' },
+    { title: 'KEY EVIDENCE', content: human.evidence.join('\n') || 'No evidence recorded yet.' },
+    { title: 'OPEN QUESTIONS & RISKS', content: human.risks.join('\n') || 'No unresolved items yet.' },
+    { title: 'NEXT ACTIONS', content: human.actions.join('\n') || 'No actions yet.' },
   ] : parchmentSections
   return (
     <div className="janus-roundtable-parchment" data-detailed={detailed}>
@@ -42,9 +42,9 @@ export function JanusRoundtableParchment({ detailed = false, document }: JanusRo
               <p>{section.content}</p>
             </section>
           ))}
-          <section>
+          <section className="janus-roundtable-parchment-traceability">
             <h3>SOURCE INDEX</h3>
-            <p>The discussion has not started. No rounds, files, or tool results are available.</p>
+            <p>{human?.draft ? 'DRAFT · ' : ''}{human?.sourceEventIds.join(', ') || 'The discussion has not started.'}</p>
           </section>
         </div>
       ) : null}

@@ -46,6 +46,18 @@ export interface ParchmentDocument {
   actions: RoundtableFact[]
   unresolved: RoundtableFact[]
   sourceEventIds: string[]
+  humanReadable: HumanReadableParchment
+}
+
+export interface HumanReadableParchment {
+  title: string
+  conclusion: string
+  decisions: string[]
+  evidence: string[]
+  risks: string[]
+  actions: string[]
+  draft: boolean
+  sourceEventIds: string[]
 }
 
 export interface RoundtableState {
