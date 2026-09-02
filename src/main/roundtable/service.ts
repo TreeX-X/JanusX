@@ -20,7 +20,7 @@ export class RoundtableService {
 
   private createRuntime(): RoundtableRuntime {
     const agents = Object.fromEntries(defaultRoundtableWorkflow.participants.flatMap((spec) => spec.instances).map((participant) => [participant.id, {
-      run: async ({ userInput, priorCards, workspaceResources, workspaceContext }: { userInput?: string; priorCards: any[]; workspaceResources?: RoundtableWorkspaceResource[]; workspaceContext?: string }) => {
+      run: async ({ userInput, priorCards, priorFacts, workspaceResources, workspaceContext }: { userInput?: string; priorCards: any[]; priorFacts?: any[]; workspaceResources?: RoundtableWorkspaceResource[]; workspaceContext?: string }) => {
         const fallback = `${participant.role} reviewed "${userInput ?? 'the shared state'}" with ${priorCards.length} prior results.`
         try {
           const target = await llmService.getDefaultModel()
@@ -33,7 +33,7 @@ export class RoundtableService {
               : 'Synthesize the discussion into a concise host summary.'
           const result = await generateText({ model: model as any, messages: [
             { role: 'system', content: `You are the ${participant.role} in a structured roundtable. ${roleInstruction} Return concise markdown.` },
-            { role: 'user', content: `Topic: ${userInput ?? 'Continue from shared state'}\nWorkspace resources (read-only context):\n${(workspaceResources ?? []).map((resource) => `${resource.workspaceName}: ${resource.workspacePath}`).join('\n') || 'None attached'}\nWorkspace evidence:\n${workspaceContext || 'No readable workspace evidence attached.'}\nPrior results:\n${priorCards.map((card) => card.summary ?? '').join('\n')}` },
+            { role: 'user', content: `Topic: ${userInput ?? 'Continue from shared state'}\nWorkspace resources (read-only context):\n${(workspaceResources ?? []).map((resource) => `${resource.workspaceName}: ${resource.workspacePath}`).join('\n') || 'None attached'}\nWorkspace evidence:\n${workspaceContext || 'No readable workspace evidence attached.'}\nShared facts:\n${(priorFacts ?? []).map((fact) => `[${fact.status}] ${fact.title}: ${fact.content}`).join('\n')}\nPrior results:\n${priorCards.map((card) => card.summary ?? '').join('\n')}` },
           ] })
           return result.text?.trim() || fallback
         } catch {

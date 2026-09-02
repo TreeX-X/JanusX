@@ -40,7 +40,7 @@ export class RoundtableRuntime {
   }
 
   onEvent(listener: (event: RoundtableEventEnvelope) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
-  getState(): RoundtableState { return { ...this.state, participants: [...this.state.participants], cards: [...this.state.cards], errors: [...this.state.errors] } }
+  getState(): RoundtableState { return { ...this.state, participants: [...this.state.participants], cards: [...this.state.cards], errors: [...this.state.errors], facts: [...this.state.facts], eventIds: [...this.state.eventIds], workspaceResources: [...this.state.workspaceResources], workspaceContextFiles: [...(this.state.workspaceContextFiles ?? [])] } }
   hydrate(state: RoundtableState): void { this.state = { ...state, participants: [...state.participants], cards: [...state.cards], errors: [...state.errors], facts: [...state.facts], eventIds: [...state.eventIds] } }
   addFact(fact: RoundtableFact): void { this.state = { ...this.state, facts: [...this.state.facts.filter((item) => item.id !== fact.id), fact], version: this.state.version + 1 } }
 
@@ -50,11 +50,16 @@ export class RoundtableRuntime {
     if (!value || this.state.phase !== 'idle') throw new Error('A non-empty input is required to start an idle roundtable')
     const sessionId = `session-${Date.now()}`
     const contextParts: string[] = []
+    const contextFiles: string[] = []
     for (const resource of workspaceResources) {
       const result = await janusWorkspaceFs.collectTextEvidence(resource.workspacePath, resource.workspaceId, new AbortController().signal, { maxFiles: 40, maxFileBytes: 12 * 1024, maxContextBytes: 96 * 1024 })
-      if (result.ok) contextParts.push(`\n### Workspace: ${resource.workspaceName} (${resource.workspacePath})\n${result.value.context}`)
+      if (result.ok) {
+        contextParts.push(`\n### Workspace: ${resource.workspaceName} (${resource.workspacePath})\n${result.value.context}`)
+        contextFiles.push(...result.value.manifest.files.map((file) => `${resource.workspaceName}/${file.path}`))
+      }
     }
-    this.state = { ...EMPTY_ROUNDTABLE_STATE, phase: 'running', sessionId, roundNumber: 1, userInput: value, participants: this.allParticipants(), workspaceResources, workspaceContext: contextParts.join('\n') }
+    const workspaceFacts: RoundtableFact[] = contextFiles.map((path) => ({ id: `workspace-${sessionId}-${path}`, kind: 'evidence', status: 'confirmed', title: 'Workspace file', content: path, sourceEventIds: [], updatedAt: new Date().toISOString() }))
+    this.state = { ...EMPTY_ROUNDTABLE_STATE, phase: 'running', sessionId, roundNumber: 1, userInput: value, participants: this.allParticipants(), workspaceResources, workspaceContext: contextParts.join('\n'), workspaceContextFiles: contextFiles, facts: workspaceFacts }
     this.emit({ type: 'session:created', sessionId, workflowId: this.template.id, workflowVersion: this.template.version })
     this.state = { ...this.state, roundNumber: 1, userInput: value, participants: this.allParticipants() }
     return this.runRound(value, 'initial-input')
@@ -115,14 +120,14 @@ export class RoundtableRuntime {
     this.emit({ type: 'agent:queued', sessionId, roundId, agentId: participant.id, role: participant.role })
     this.emit({ type: 'agent:working', sessionId, roundId, agentId: participant.id, role: participant.role })
     try {
-      const summary = await this.agents.get(participant.id)?.run({ sessionId, roundId, roundNumber: state.roundNumber, userInput: state.userInput, priorCards: state.cards, workspaceResources: this.state.workspaceResources, workspaceContext: this.state.workspaceContext })
+      const summary = await this.agents.get(participant.id)?.run({ sessionId, roundId, roundNumber: state.roundNumber, userInput: state.userInput, priorCards: state.cards, priorFacts: this.state.facts, workspaceResources: this.state.workspaceResources, workspaceContext: this.state.workspaceContext })
         ?? `Fixture result for ${participant.id}`
       const now = new Date().toISOString()
       const card: AgentResultCard = {
         id: `${roundId}-${participant.id}`, sessionId, roundId, agentId: participant.id,
         role: participant.role, title: `${participant.role} result`, status: 'completed', summary,
         sections: [{ id: 'summary', title: 'Summary', markdown: summary }],
-        evidenceRefs: state.cards.map((item) => item.id),
+        evidenceRefs: [...(this.state.workspaceContextFiles ?? []), ...state.cards.map((item) => item.id)],
         requiresUserAction: participant.role === 'host' && summary.includes('?'),
         createdAt: now, updatedAt: now, sourceEventIds: [],
       }

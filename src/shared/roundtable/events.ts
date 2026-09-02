@@ -77,5 +77,5 @@ export type RoundtableEvent =
 export type RoundtableEventEnvelope = RoundtableEvent & { eventId: string; occurredAt: string }
 
 export interface FixtureAgent {
-  run(input: { sessionId: string; roundId: string; roundNumber: number; userInput?: string; priorCards: AgentResultCard[]; workspaceResources?: RoundtableWorkspaceResource[]; workspaceContext?: string }): Promise<string>
+  run(input: { sessionId: string; roundId: string; roundNumber: number; userInput?: string; priorCards: AgentResultCard[]; priorFacts?: RoundtableFact[]; workspaceResources?: RoundtableWorkspaceResource[]; workspaceContext?: string }): Promise<string>
 }
