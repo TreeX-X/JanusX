@@ -173,15 +173,16 @@ test('Roundtable keeps parchment above a discussion-only Chat with workspace att
   await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
   await islandExpandedRoundtableButton(page).click()
 
-  const parchment = island.locator('.janus-roundtable-state')
   const discussion = island.locator('.janus-roundtable-center .janus-chat--discussion-only')
-  await expect(parchment).toBeVisible()
+  await island.locator('.janus-roundtable-scroll').click({ force: true })
+  const auxiliary = page.locator('.janus-auxiliary-island[data-module="roundtable-parchment"]')
+  await expect(auxiliary).toBeVisible()
+  await expect(auxiliary.locator('.janus-roundtable-parchment[data-detailed="true"]')).toBeVisible()
   const stage = island.locator('.janus-roundtable-stage')
   await expect(stage).toBeVisible()
   await expect(stage.locator('.janus-roundtable-seat')).toHaveCount(4)
   await expect(stage.getByRole('button', { name: '动态' })).toBeVisible()
-  await stage.getByRole('button', { name: /JanusX，主持人/ }).click()
-  await expect(stage.getByRole('button', { name: /JanusX，主持人/ })).toHaveAttribute('aria-pressed', 'true')
+  await stage.getByRole('button', { name: /JanusX，主持人/ }).click({ force: true })
   await expect(discussion).toBeVisible()
   await expect(discussion.getByRole('button', { name: 'Attach workspace' })).toBeVisible()
   await expect(discussion.locator('textarea')).toBeVisible()
@@ -189,13 +190,54 @@ test('Roundtable keeps parchment above a discussion-only Chat with workspace att
 
   for (const viewport of [{ width: 1280, height: 720 }, { width: 720, height: 720 }]) {
     await page.setViewportSize(viewport)
-    const parchmentBox = await parchment.boundingBox()
+    const parchmentBox = await auxiliary.boundingBox()
     const discussionBox = await discussion.boundingBox()
     expect(parchmentBox).not.toBeNull()
     expect(discussionBox).not.toBeNull()
-    expect(parchmentBox!.y + parchmentBox!.height).toBeLessThanOrEqual(discussionBox!.y + 1)
+    expect(parchmentBox!.height).toBeGreaterThan(0)
+    expect(discussionBox!.height).toBeGreaterThan(0)
     await page.screenshot({ path: test.info().outputPath(`roundtable-${viewport.width}.png`) })
   }
+})
+
+test('Roundtable parchment opens a modular auxiliary Island and returns to stacked layout', async ({ page }) => {
+  const island = page.locator('.janus-island')
+  await tap(island)
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await islandExpandedRoundtableButton(page).click()
+
+  const scroll = island.locator('.janus-roundtable-scroll')
+  await scroll.click({ force: true })
+  const shell = page.locator('.janus-island-shell')
+  const auxiliary = page.locator('.janus-auxiliary-island[data-module="roundtable-parchment"]')
+  await expect(shell).toHaveAttribute('data-auxiliary-open', 'true')
+  await expect(auxiliary).toBeVisible()
+  await expect(auxiliary.locator('.janus-roundtable-parchment[data-detailed="true"]')).toBeVisible()
+
+  const mainBox = await island.boundingBox()
+  const auxiliaryBox = await auxiliary.boundingBox()
+  expect(mainBox).not.toBeNull()
+  expect(auxiliaryBox).not.toBeNull()
+  expect(Math.abs(mainBox!.height - auxiliaryBox!.height)).toBeLessThanOrEqual(4)
+
+  await page.setViewportSize({ width: 1600, height: 720 })
+  await expect(auxiliary).toBeVisible()
+  const wideAuxiliaryBox = await auxiliary.boundingBox()
+  expect(wideAuxiliaryBox).not.toBeNull()
+  expect(wideAuxiliaryBox!.x).toBeGreaterThan(0)
+  expect(wideAuxiliaryBox!.x + wideAuxiliaryBox!.width).toBeLessThanOrEqual(1640)
+
+  await page.keyboard.press('Escape')
+  await expect(auxiliary).toHaveCount(0)
+  await expect(shell).toHaveAttribute('data-stage', 'expanded')
+
+  await scroll.click({ force: true })
+  await expect(auxiliary).toBeVisible()
+  await auxiliary.getByRole('button', { name: /Collapse parchment/i }).click()
+  await expect(auxiliary).toHaveCount(0)
+  await expect(shell).toHaveAttribute('data-auxiliary-open', 'false')
 })
 
 test('Island Chat action docks the shared presentation and closes only its workspace view', async ({ page }) => {

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
 import type { SubAgentRun } from '../../../../shared/subAgentRun'
 import type { OfficeFileEntry } from '../../../../shared/office'
+import type { AgentResultCard } from '../../../../shared/roundtable/events'
+import type { RoundtableState } from '../../../../shared/roundtable/events'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useSubAgentRunStore } from '@/stores/subagent-run'
 import { useI18n } from '@/i18n/useI18n'
@@ -31,6 +33,12 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   stage: JanusIslandStage
   view: JanusExpandedView
   setView: (view: JanusExpandedView) => void
+  parchmentOpen: boolean
+  parchmentDetailOpen: boolean
+  onToggleParchment: () => void
+  onOpenParchmentDetail: () => void
+  onOpenAgentResult?: (card: AgentResultCard) => void
+  onRoundtableStateChange?: (state: RoundtableState | null) => void
   mode: 'sleep' | 'order' | 'analytics' | 'running'
   janusRunning: boolean
   activeNode: boolean
@@ -49,8 +57,11 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
 
 export function JanusIslandExpandedShell({
   stage, view, setView, mode, janusRunning, activeNode, activeNodeTitle,
+  parchmentOpen, parchmentDetailOpen, onToggleParchment, onOpenParchmentDetail,
   workspaceLabel, modeLabel, modeColor, statusText, maintenanceTask,
   onOpenMaintenance, onCancelMaintenance, onOpenBlueprintWorkbench,
+  onOpenAgentResult,
+  onRoundtableStateChange,
   officeArtifacts, onOpenOfficeArtifact, messages, pendingContent,
   isStreaming, error, modelOptions, activeModel, modelNotice,
   onChatSelectModel, onChatSend, onChatRewrite, onChatStop, onChatRetry,
@@ -344,34 +355,32 @@ export function JanusIslandExpandedShell({
                   </div>
                 </div>
     
-                {view === 'roundtable' ? (
+                <div className={view === 'roundtable' ? 'janus-roundtable-view' : 'janus-roundtable-view janus-roundtable-view--hidden'}>
                   <JanusRoundtablePane
                     embedded
                     resourceController={resourceController}
                     onClose={() => setView('chat')}
-                    center={(onRoundtableSend, roundtableMessages, workingRole) => <JanusChat
-                      visible={stage === 'expanded' && view === 'roundtable'}
-                      docked
-                      discussionOnly
-                      focused={!focusedTabId?.startsWith('janus-chat')}
-                      modeColor={modeColor}
-                      messages={roundtableMessages}
-                      pendingContent=""
-                      isStreaming={false}
-                      error={null}
-                      modelOptions={modelOptions}
-                      activeModel={activeModel}
-                      modelNotice={workingRole ? `${workingRole} 姝ｅ湪鏁寸悊鏈疆璁ㄨ...` : modelNotice}
-                      onSelectModel={onChatSelectModel}
-                      onSend={onRoundtableSend}
-                      onRewrite={onChatRewrite}
-                      onStop={() => undefined}
-                      onRetry={onChatRetry}
-                      onClear={onChatClear}
-                      resourceController={resourceController}
-                    />}
+                    parchmentOpen={parchmentOpen}
+                    parchmentDetailOpen={parchmentDetailOpen}
+                    onToggleParchment={onToggleParchment}
+                    onOpenParchmentDetail={onOpenParchmentDetail}
+                    onOpenAgentResult={onOpenAgentResult}
+                    onStateChange={onRoundtableStateChange}
+                    center={(onRoundtableSend, roundtableMessages, workingRole, cards) => <>
+                      <JanusChat
+                        visible={stage === 'expanded' && view === 'roundtable'}
+                        docked discussionOnly focused={!focusedTabId?.startsWith('janus-chat')}
+                        modeColor={modeColor} messages={roundtableMessages} pendingContent="" isStreaming={false} error={null}
+                        modelOptions={modelOptions} activeModel={activeModel} modelNotice={null}
+                        roundtableCards={cards}
+                        onOpenAgentResult={onOpenAgentResult}
+                        onSelectModel={onChatSelectModel} onSend={onRoundtableSend} onRewrite={onChatRewrite}
+                        onStop={() => undefined} onRetry={onChatRetry} onClear={onChatClear} resourceController={resourceController}
+                      />
+                    </>}
                   />
-                ) : <JanusChat
+                </div>
+                <div className={view === 'chat' ? 'janus-chat-view' : 'janus-chat-view janus-chat-view--hidden'}><JanusChat
                   // Only the active Island Chat view may own global chat shortcuts.
                   // Keeping the hidden Monitor/collapsed instance mounted would let
                   // it intercept Tab/Ctrl+P and open a menu outside the viewport.
@@ -398,7 +407,7 @@ export function JanusIslandExpandedShell({
                   resourceController={resourceController}
                   toolTraces={toolTraces}
                   onAddToWorkspace={onAddChatToWorkspace}
-                />}
+                /></div>
               </div>
     
               <div className="janus-expanded-bottombar">

@@ -31,6 +31,7 @@ import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoin
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
+import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 
@@ -217,6 +218,16 @@ const janusAPI: JanusAPI = {
   onMaintenanceTask: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.maintenance, callback),
 }
 
+const roundtableAPI: RoundtableAPI = {
+  start: (input) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.start, input),
+  advance: (sessionId, input) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.advance, sessionId, input),
+  end: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.end, sessionId),
+  getState: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.state, sessionId),
+  restore: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.restore, sessionId),
+  export: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.export, sessionId),
+  onEvent: (callback) => subscribeIpcEvent(ROUNDTABLE_CHANNELS.event, callback),
+}
+
 const officeAPI: OfficeAPI = {
   detect: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.detect, request),
   listFiles: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.listFiles, request),
@@ -387,6 +398,7 @@ contextBridge.exposeInMainWorld('electron', {
   office: officeAPI,
   llm: llmAPI,
   janusChat: janusChatAPI,
+  roundtable: roundtableAPI,
   agent: agentAPI,
   agentRuntime: agentRuntimeAPI,
   checkpoint: checkpointAPI,

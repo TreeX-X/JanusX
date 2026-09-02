@@ -46,6 +46,7 @@
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
     "@janusx/llm-core": "file:packages/llm-core",
+    "@langchain/langgraph": "^1.4.13",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@monaco-editor/react": "^4.7.0",

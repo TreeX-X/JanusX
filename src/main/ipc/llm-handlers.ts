@@ -73,7 +73,20 @@ export async function refreshLlmRuntimeStatus(): Promise<LlmRuntimeStatus> {
 export function registerLlmHandlers(): void {
   ipcMain.handle(LLM_CHANNELS.runtimeStatus, () => refreshLlmRuntimeStatus())
   ipcMain.handle(LLM_CHANNELS.getCatalog, () => getModelCatalogService().getCatalog())
-  ipcMain.handle(LLM_CHANNELS.refreshCatalog, () => getModelCatalogService().refresh())
+  ipcMain.handle(LLM_CHANNELS.refreshCatalog, async () => {
+    const catalogService = getModelCatalogService()
+
+    // Refreshing the catalog uses the main-process fetch implementation. Make
+    // sure proxy detection has completed before the first request, then retry
+    // once after re-detecting the proxy when the request fails.
+    await llmService.initialize()
+    let result = await catalogService.refresh()
+    if (!result.success) {
+      await llmService.initialize()
+      result = await catalogService.refresh()
+    }
+    return result
+  })
 
   // 获取所有 Provider 配置
   ipcMain.handle(LLM_CHANNELS.getProviders, async () => {

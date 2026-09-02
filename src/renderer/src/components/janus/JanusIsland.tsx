@@ -9,8 +9,16 @@ import { useJanusState } from './useJanusState'
 import { STATUS_VISUALS } from '../blueprint/blueprintStatus'
 import { formatKnowledgeMatch } from './islandKnowledgePeek'
 import { JanusIslandExpandedShell } from './JanusIslandExpandedShell'
+import {
+  JanusAuxiliaryIsland,
+  type JanusAuxiliaryModuleDescriptor,
+  type JanusAuxiliaryModuleType,
+} from './JanusAuxiliaryIsland'
+import { JanusRoundtableParchment } from './JanusRoundtableParchment'
 import { faceClass } from './janusIslandRuntime'
 import type { JanusExpandedView, JanusIslandProps } from './janusIslandTypes'
+import type { RoundtableState } from '../../../../shared/roundtable/events'
+import { projectParchment } from '../../../../shared/roundtable/parchment'
 import { useProjectRunning } from './useProjectRunning'
 
 /* ════════════════════════════════════════════════════════════
@@ -56,6 +64,11 @@ export function JanusIsland({
   const shellRef = useRef<HTMLDivElement | null>(null)
   const conversationStartedRef = useRef(false)
   const [view, setView] = useState<JanusExpandedView>('monitor')
+  const [parchmentOpen, setParchmentOpen] = useState(false)
+  const [auxiliaryModule, setAuxiliaryModule] = useState<JanusAuxiliaryModuleType | null>(null)
+  const [activeAgentCard, setActiveAgentCard] = useState<import('../../../../shared/roundtable/events').AgentResultCard | null>(null)
+  const [roundtableState, setRoundtableState] = useState<RoundtableState | null>(null)
+  const [auxiliaryClosing, setAuxiliaryClosing] = useState(false)
   const maintenanceTasks = useBlueprintMaintenanceStore((state) => state.tasks)
   const requestMaintenanceOpen = useBlueprintMaintenanceStore((state) => state.requestOpen)
   const cancelMaintenance = useBlueprintMaintenanceStore((state) => state.cancel)
@@ -193,6 +206,34 @@ export function JanusIsland({
   }, [stage])
 
   useEffect(() => {
+    if (stage === 'expanded' && view === 'roundtable') return
+    setAuxiliaryModule(null)
+    if (stage === 'collapsed') setParchmentOpen(false)
+  }, [stage, view])
+
+  const requestCloseAuxiliary = useCallback(() => {
+    if (!auxiliaryModule || auxiliaryClosing) return
+    setAuxiliaryClosing(true)
+    window.setTimeout(() => {
+      setAuxiliaryModule(null)
+      setAuxiliaryClosing(false)
+      setParchmentOpen(false)
+    }, 260)
+  }, [auxiliaryModule, auxiliaryClosing])
+
+  useEffect(() => {
+    if (!auxiliaryModule) return
+    const handleAuxiliaryEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      requestCloseAuxiliary()
+    }
+    document.addEventListener('keydown', handleAuxiliaryEscape, true)
+    return () => document.removeEventListener('keydown', handleAuxiliaryEscape, true)
+  }, [auxiliaryModule, auxiliaryClosing, requestCloseAuxiliary])
+
+  useEffect(() => {
     const hadConversation = conversationStartedRef.current
     conversationStartedRef.current = hasConversation
     if (stage === 'expanded' && hasConversation && !hadConversation) {
@@ -221,6 +262,15 @@ export function JanusIsland({
     }
   }, [onDismiss, stage])
 
+  const auxiliaryDescriptor: JanusAuxiliaryModuleDescriptor | null = auxiliaryModule === 'roundtable-parchment'
+    ? {
+        id: 'janus-roundtable-parchment-detail',
+        type: 'roundtable-parchment',
+        title: '共享羊皮纸',
+        ariaLabel: '共享羊皮纸详细内容',
+      }
+    : auxiliaryModule === 'agent-result' ? { id: 'janus-agent-result-detail', type: 'agent-result', title: 'Agent 结果', ariaLabel: 'Agent 结果详情' } : null
+
   useEffect(() => {
     document.body.classList.toggle('is-running', janusRunning)
     return () => { document.body.classList.remove('is-running') }
@@ -233,6 +283,8 @@ export function JanusIsland({
       data-stage={stage}
       data-view={view}
       data-mode={mode}
+      data-auxiliary-open={auxiliaryDescriptor ? 'true' : 'false'}
+      data-auxiliary-module={auxiliaryDescriptor?.type ?? 'none'}
       data-peek-kind={officeNotice ? 'office' : 'knowledge'}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
@@ -292,6 +344,24 @@ export function JanusIsland({
           stage={stage}
           view={view}
           setView={setView}
+          parchmentOpen={parchmentOpen}
+          parchmentDetailOpen={auxiliaryModule === 'roundtable-parchment'}
+          onToggleParchment={() => {
+            if (auxiliaryModule === 'roundtable-parchment') {
+              requestCloseAuxiliary()
+              return
+            }
+            setParchmentOpen(true)
+            setAuxiliaryClosing(false)
+            setAuxiliaryModule('roundtable-parchment')
+          }}
+          onOpenParchmentDetail={() => {
+            setParchmentOpen(true)
+            setAuxiliaryClosing(false)
+            setAuxiliaryModule('roundtable-parchment')
+          }}
+          onOpenAgentResult={(card) => { setActiveAgentCard(card); setAuxiliaryModule('agent-result'); setAuxiliaryClosing(false) }}
+          onRoundtableStateChange={setRoundtableState}
           mode={mode}
           janusRunning={janusRunning}
           activeNode={!!activeNode}
@@ -325,6 +395,18 @@ export function JanusIsland({
           toolTraces={toolTraces}
         />
       </div>
+      {stage === 'expanded' && auxiliaryDescriptor ? (
+        <JanusAuxiliaryIsland module={auxiliaryDescriptor} closing={auxiliaryClosing} onClose={requestCloseAuxiliary}>
+          {auxiliaryModule === 'roundtable-parchment' ? <JanusRoundtableParchment detailed document={roundtableState ? projectParchment(roundtableState) : undefined} /> : <div key={activeAgentCard?.id ?? 'agent-result-empty'} className="janus-agent-result-detail">
+            <div className="janus-agent-result-detail__eyebrow">AGENT RESULT // {activeAgentCard?.status?.toUpperCase() ?? 'WAITING'}</div>
+            <h2>{activeAgentCard?.title ?? 'Agent 结果'}</h2>
+            <p className="janus-agent-result-detail__summary">{activeAgentCard?.summary ?? '暂无可用结果'}</p>
+            {activeAgentCard?.sections?.map((section) => <section key={section.id}><h3>{section.title}</h3><p>{section.markdown}</p></section>)}
+            {!!activeAgentCard?.evidenceRefs?.length && <div className="janus-agent-result-detail__evidence"><strong>Evidence</strong><span>{activeAgentCard.evidenceRefs.join(' · ')}</span></div>}
+            {activeAgentCard && <small>Updated {new Date(activeAgentCard.updatedAt || activeAgentCard.createdAt).toLocaleString()}</small>}
+          </div>}
+        </JanusAuxiliaryIsland>
+      ) : null}
     </div>
   )
 }

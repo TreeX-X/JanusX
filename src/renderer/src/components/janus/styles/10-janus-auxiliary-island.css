@@ -1,0 +1,359 @@
+/* A shared auxiliary work surface. The outer chrome deliberately mirrors the
+   expanded Janus Island; modules only own the content canvas inside it. */
+.janus-island-shell {
+  --janus-auxiliary-gap: 10px;
+  --janus-auxiliary-width: clamp(420px, 32vw, 560px);
+  --janus-auxiliary-shift: calc((var(--janus-auxiliary-width) + var(--janus-auxiliary-gap)) / 2);
+}
+
+.janus-auxiliary-island {
+  position: absolute;
+  left: calc(100% + var(--janus-auxiliary-gap));
+  top: 0;
+  z-index: 4;
+  width: var(--janus-auxiliary-width);
+  height: 100%;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 26px;
+  background: #08080a !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .04),
+    0 18px 44px rgba(0, 0, 0, .62),
+    0 0 18px rgba(255, 120, 48, .05);
+  color: rgba(255, 255, 255, .78);
+  pointer-events: auto;
+  animation: janus-auxiliary-enter .28s cubic-bezier(.16, 1, .3, 1) both;
+}
+.janus-island-shell[data-auxiliary-open="true"] { overflow: visible !important; }
+.janus-expanded:has(.janus-island-shell[data-auxiliary-open="true"]) { overflow: visible !important; }
+.janus-auxiliary-island { z-index: 100 !important; }
+
+.janus-auxiliary-island--closing {
+  pointer-events: none;
+  animation: janus-auxiliary-exit .24s cubic-bezier(.4, 0, .8, .2) both;
+}
+
+.janus-auxiliary-shell {
+  position: relative;
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: #08080a;
+}
+
+.janus-auxiliary-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+
+.janus-auxiliary-header--minimal {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  height: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+.janus-auxiliary-header--minimal .janus-auxiliary-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  pointer-events: auto;
+}
+
+.janus-auxiliary-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: calc(100% - 72px);
+  color: rgba(255, 255, 255, .78);
+  font: 600 11px "Cascadia Mono", "SF Mono", Consolas, monospace;
+  letter-spacing: .14em;
+}
+
+.janus-auxiliary-close,
+.janus-roundtable-parchment-expand {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 1px solid rgba(202, 167, 112, .34);
+  border-radius: 2px;
+  background: #1a1410;
+  box-shadow: inset 0 1px 0 rgba(255, 231, 186, .08);
+  color: #caa770;
+  cursor: pointer;
+  transition: border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+/* The center parchment now opens the auxiliary Island directly. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-parchment-expand {
+  display: none !important;
+}
+
+.janus-auxiliary-close {
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+  border-radius: 2px;
+}
+
+.janus-roundtable-parchment-origin {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  margin-top: 0;
+  padding: 9px 0 8px;
+  border-top: 1px solid rgba(216, 195, 158, .12);
+  border-bottom: 1px solid rgba(216, 195, 158, .12);
+}
+.janus-roundtable-parchment-origin strong { color: #ead2aa; font: 700 15px Georgia, "Times New Roman", serif; }
+.janus-roundtable-parchment-origin span { color: rgba(216, 205, 184, .72); font: 11px Georgia, "Times New Roman", serif; }
+.janus-roundtable-parchment-origin small { grid-column: 1 / -1; color: rgba(202, 167, 112, .58); font: 8px "Cascadia Mono", "SF Mono", Consolas, monospace; letter-spacing: .16em; }
+
+.janus-greek-expand-mark,
+.janus-greek-close-mark {
+  display: block;
+  font: 700 22px/1 Georgia, "Times New Roman", serif;
+  letter-spacing: 0;
+  transform: scaleX(.78);
+  font-size: 0;
+}
+
+.janus-greek-expand-mark::before,
+.janus-greek-close-mark::before {
+  display: block;
+  font-size: 22px;
+}
+
+.janus-greek-expand-mark::before { content: '\03A3'; }
+.janus-greek-close-mark::before { content: '\03BB'; font-size: 20px; }
+
+.janus-greek-close-mark {
+  font-size: 0;
+}
+
+.janus-auxiliary-close:hover,
+.janus-roundtable-parchment-expand:hover {
+  border-color: rgba(216, 195, 158, .64);
+  box-shadow: inset 0 1px 0 rgba(255, 231, 186, .14), 0 0 10px rgba(202, 167, 112, .1);
+  color: #ead2aa;
+}
+
+.janus-auxiliary-close:focus-visible,
+.janus-roundtable-parchment-expand:focus-visible {
+  outline: 2px solid rgba(255, 174, 112, .72);
+  outline-offset: 2px;
+}
+
+.janus-auxiliary-content {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #08080a;
+}
+.janus-auxiliary-content > * { min-height: 100%; box-sizing: border-box; }
+
+.janus-auxiliary-content .janus-roundtable-parchment {
+  height: 100%;
+  overflow: auto;
+}
+.janus-agent-result-detail { position: relative; z-index: 1; box-sizing: border-box; height: 100%; overflow: auto; padding: 34px 28px; color: rgba(255,255,255,.78); background: #101014; }
+.janus-agent-result-detail__eyebrow { margin-bottom: 12px; color: #ff9a5c; font: 10px ui-monospace, monospace; letter-spacing: .12em; }
+.janus-agent-result-detail h2 { margin: 0 0 18px; font-size: 18px; }
+.janus-agent-result-detail__summary { padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.janus-agent-result-detail h3 { margin: 18px 0 6px; color: #ffb36b; font-size: 12px; }
+.janus-agent-result-detail p { margin: 0; white-space: pre-wrap; line-height: 1.6; font-size: 13px; }
+.janus-agent-result-detail small { display: block; margin-top: 18px; color: rgba(255,255,255,.45); }
+.janus-agent-result-detail__evidence { display: grid; gap: 6px; margin-top: 18px; padding: 10px 12px; border-left: 2px solid #ff7830; background: rgba(255,120,48,.08); font: 11px/1.5 ui-monospace, monospace; }
+.janus-agent-result-detail__evidence strong { color: #ffb36b; font-size: 10px; letter-spacing: .08em; }
+.janus-agent-result-detail__summary:empty { min-height: 24px; }
+
+.janus-roundtable-parchment-expand {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  border-radius: 50%;
+  border-color: rgba(229, 194, 126, .62);
+  background:
+    linear-gradient(145deg, rgba(245, 215, 158, .18), transparent 48%),
+    #21170e;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 231, 186, .06),
+    inset 0 -3px 5px rgba(85, 42, 17, .32),
+    0 2px 8px rgba(0, 0, 0, .22);
+  transform: rotate(-8deg);
+}
+
+.janus-roundtable-parchment-expand:hover {
+  transform: rotate(0deg) translateY(-1px);
+}
+
+.janus-roundtable-parchment {
+  position: relative;
+  z-index: 1;
+  color: #c5b69e;
+  scrollbar-color: rgba(216, 195, 158, .22) transparent;
+}
+
+.janus-roundtable-parchment-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 30px;
+}
+
+.janus-auxiliary-content .janus-roundtable-parchment-meta {
+  display: none;
+}
+
+.janus-roundtable-parchment-meta span {
+  color: #caa770;
+  font: 700 12px Georgia, "Times New Roman", serif;
+}
+
+.janus-roundtable-parchment-meta small {
+  color: rgba(216, 195, 158, .46);
+  font: 9px "Cascadia Mono", "SF Mono", Consolas, monospace;
+}
+
+.janus-roundtable-parchment-lead {
+  margin: 12px 0 0;
+  color: rgba(216, 205, 184, .68);
+  font: 12px/1.65 Georgia, "Times New Roman", serif;
+}
+
+.janus-roundtable-parchment[data-detailed="true"] {
+  height: 100%;
+  padding: 34px 30px 42px;
+  border: 1px solid rgba(176, 133, 76, .55);
+  border-radius: 3px;
+  background-color: #2a2118;
+  background-image:
+    radial-gradient(ellipse at center, rgba(225, 190, 127, .12), transparent 68%),
+    repeating-linear-gradient(0deg, rgba(245, 218, 169, .035) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(90deg, rgba(72, 42, 18, .06) 0 1px, transparent 1px 7px);
+  box-shadow: inset 0 0 42px rgba(20, 11, 4, .86), 0 12px 30px rgba(0, 0, 0, .28);
+}
+
+.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-meta {
+  padding: 0 0 12px;
+  border-bottom: 1px solid rgba(216, 195, 158, .16);
+}
+
+.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin {
+  justify-items: center;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  margin-top: 18px;
+  padding: 18px 0 16px;
+  border-top: 1px solid rgba(221, 181, 117, .35);
+  border-bottom: 1px solid rgba(221, 181, 117, .35);
+  text-align: center;
+}
+
+.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin strong {
+  color: #f0d29b;
+  font: 700 22px Georgia, "Times New Roman", serif;
+  letter-spacing: .08em;
+}
+
+.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin span {
+  color: rgba(240, 210, 155, .86);
+  font: 600 11px "Cascadia Mono", "SF Mono", Consolas, monospace;
+  letter-spacing: .18em;
+}
+
+.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin small {
+  grid-column: auto;
+}
+
+.janus-roundtable-parchment-sections {
+  margin-top: 22px;
+}
+
+.janus-roundtable-parchment-sections section {
+  margin: 0;
+  padding: 14px 0;
+  border-top: 1px solid rgba(216, 195, 158, .1);
+}
+
+.janus-roundtable-parchment-sections h3 {
+  margin: 0;
+  color: #caa770;
+  font: 700 12px Georgia, "Times New Roman", serif;
+}
+
+.janus-roundtable-parchment-sections p {
+  margin: 7px 0 0;
+  color: rgba(216, 205, 184, .64);
+  font: 12px/1.65 Georgia, "Times New Roman", serif;
+}
+
+.janus-island-shell[data-stage="expanded"][data-auxiliary-open="true"] {
+  /* Keep the combined main + auxiliary surface inside the viewport. */
+  /* The auxiliary panel is positioned immediately to the right of the main
+     panel. Shift the main panel by half of the auxiliary width plus gap so
+     the combined two-panel surface stays centered as its width changes. */
+  transform: translateX(calc(-50% - var(--janus-auxiliary-shift))) !important;
+  transition: transform .48s cubic-bezier(.22, .8, .25, 1);
+}
+
+@media (max-width: 1100px) {
+  .janus-island-shell {
+    --janus-auxiliary-width: min(420px, calc(100vw - 24px));
+  }
+}
+
+@keyframes janus-auxiliary-enter {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0 round 26px);
+    transform: translateX(-20px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 26px);
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes janus-auxiliary-exit {
+  from { opacity: 1; clip-path: inset(0 0 0 0 round 26px); transform: translateX(0) scale(1); }
+  to { opacity: 0; clip-path: inset(0 100% 0 0 round 26px); transform: translateX(-14px) scale(.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-auxiliary-island {
+    animation: none;
+  }
+  .janus-auxiliary-island--closing {
+    animation: none;
+    opacity: 0;
+  }
+}

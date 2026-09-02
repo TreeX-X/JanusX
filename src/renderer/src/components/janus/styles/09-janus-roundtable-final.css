@@ -1922,12 +1922,14 @@
     inset 0 0 12px rgba(255, 225, 170, .16);
   content: '';
   pointer-events: none;
-  transform: translate(-50%, -50%) translateZ(5px) rotateX(45deg);
+  /* Keep the resting halo parallel to the tabletop. Tilting this 92px plane
+     made its lower half cross the table's Z=0 surface until the scroll rose. */
+  transform: translate(-50%, -50%) translateZ(6px);
   animation: janus-roundtable-scroll-halo 12s linear infinite, janus-roundtable-scroll-halo-pulse 3.8s ease-in-out infinite;
 }
 
 @keyframes janus-roundtable-scroll-halo {
-  to { transform: translate(-50%, -50%) translateZ(5px) rotateX(45deg) rotate(-360deg); }
+  to { transform: translate(-50%, -50%) translateZ(6px) rotate(-360deg); }
 }
 
 @keyframes janus-roundtable-scroll-halo-pulse {
@@ -1967,6 +1969,18 @@
 @keyframes janus-roundtable-parchment-open {
   from { opacity: 0; transform: translateY(-10px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* The parchment is a dedicated right-side auxiliary surface. The embedded
+   roundtable keeps only the stage and discussion rail. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+  display: none !important;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  border-top: 0;
 }
 
 @media (max-width: 760px) {
@@ -2204,3 +2218,109 @@
 @keyframes janus-roundtable-camera-orbit-icon {
   to { transform: rotate(360deg) scale(1.08); }
 }
+.janus-roundtable-advance,
+.janus-roundtable-end {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 5;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 120, 48, .35);
+  border-radius: 4px;
+  background: rgba(28, 18, 12, .92);
+  color: rgba(255, 190, 140, .9);
+  font-size: 11px;
+  cursor: pointer;
+}
+.janus-roundtable-end { right: 120px; }
+.janus-roundtable-agent-deck { position: relative; z-index: 1; display: grid; gap: 9px; }
+.janus-roundtable-inline-deck { display: grid; flex: 0 0 auto; gap: 7px; max-height: 132px; padding: 7px 14px 10px; overflow: auto; border-top: 1px solid rgba(216,195,158,.14); background: rgba(8,8,10,.78); }
+.janus-roundtable-inline-deck .janus-agent-result-card { padding: 8px 10px; }
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+  flex-direction: column;
+  align-items: stretch;
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  order: 2;
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-inline-deck {
+  flex: 0 0 auto;
+  width: 100%;
+  order: 1;
+  box-sizing: border-box;
+  align-content: start;
+  justify-items: start;
+  max-height: 156px;
+  overflow-y: auto;
+  border-top: 0;
+  border-bottom: 1px solid rgba(216,195,158,.14);
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-inline-deck .janus-agent-result-card {
+  width: min(100%, 360px);
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-advance,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-end {
+  position: static;
+  align-self: flex-end;
+  margin: 0 14px 8px 0;
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-end { margin-right: 8px; }
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-advance,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-end { order: 3; }
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state .janus-roundtable-agent-deck { display: none; }
+.janus-roundtable-deck-heading { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(216,195,158,.18); color: #caa770; font: 700 10px Georgia, serif; letter-spacing: .12em; }
+.janus-roundtable-deck-heading small { color: rgba(216,195,158,.52); font: 9px ui-monospace, monospace; letter-spacing: .04em; }
+.janus-roundtable-deck-empty { margin: 18px 0; color: rgba(216,195,158,.5); font: 11px ui-monospace, monospace; text-align: center; }
+.janus-agent-result-card { display: grid; grid-template-columns: auto 1fr; gap: 5px 9px; width: 100%; padding: 11px 12px; border: 1px solid rgba(216,195,158,.2); border-left: 2px solid color-mix(in srgb, #caa770, transparent 25%); border-radius: 3px; background: rgba(255,246,220,.045); color: #e7dcc8; text-align: left; cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+.janus-agent-result-card:hover, .janus-agent-result-card:focus-visible { border-color: rgba(216,195,158,.58); background: rgba(255,246,220,.09); transform: translateX(2px); outline: none; }
+.janus-agent-result-card strong { min-width: 0; overflow: hidden; color: #f0e5d1; font: 700 12px Georgia, serif; text-overflow: ellipsis; white-space: nowrap; }
+.janus-agent-result-card span:last-child { grid-column: 1 / -1; display: -webkit-box; overflow: hidden; color: rgba(231,220,200,.64); font: 10px/1.45 ui-monospace, monospace; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.janus-agent-result-card__status { align-self: center; color: #d7b47d; font: 9px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state { display: block !important; }
+
+/* Roundtable interaction rail: work evidence and conversation advance side by
+   side. Controls stay in a compact toolbar above the dialog and never cover
+   the message list or composer. */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-state {
+  display: none !important;
+}
+.janus-roundtable-dialog-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(216,195,158,.14);
+  background: rgba(13,12,15,.96);
+}
+.janus-roundtable-dialog-status { color: rgba(216,195,158,.62); font: 10px ui-monospace, monospace; letter-spacing: .04em; }
+.janus-roundtable-dialog-actions { display: flex; align-items: center; gap: 8px; }
+.janus-roundtable-dialog-actions .janus-roundtable-advance,
+.janus-roundtable-dialog-actions .janus-roundtable-end {
+  position: static;
+  margin: 0;
+  padding: 5px 9px;
+}
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center > .janus-chat {
+  order: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}
+.janus-chat-agent-card-message { align-self: flex-start; max-width: min(88%, 420px); }
+.janus-chat-agent-card-message .janus-agent-result-card { margin-top: 4px; }
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-resource-scope { min-height: 34px; }
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-resource-list:empty::before { content: '未添加工作区'; color: rgba(255,255,255,.3); font: 10px ui-monospace, monospace; }
+.janus-roundtable-view, .janus-chat-view { display: contents; }
+.janus-roundtable-view--hidden, .janus-chat-view--hidden { display: none !important; }

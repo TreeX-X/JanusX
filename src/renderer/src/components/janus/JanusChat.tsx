@@ -8,6 +8,8 @@ import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRigh
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import type { AgentApprovalMode } from '../../../../shared/ipc/agent-runtime'
+import type { AgentResultCard } from '../../../../shared/roundtable/events'
+import { AgentResultCard as AgentResultCardView } from './AgentResultCard'
 import { useOptionalJanusChatController } from './JanusChatProvider'
 import { MarkdownContent, StreamingText } from '../chat/ChatContent'
 import { useI18n } from '@/i18n/useI18n'
@@ -66,6 +68,9 @@ interface JanusChatProps {
   modeColor: string
   /** 消息列表 */
   messages: Message[]
+  /** Optional roundtable work cards rendered inline with the discussion. */
+  roundtableCards?: AgentResultCard[]
+  onOpenAgentResult?: (card: AgentResultCard) => void
   /** 当前正在流式接收的内�?*/
   pendingContent: string
   /** 是否正在流式输出 */
@@ -179,6 +184,8 @@ export function JanusChat({
   modelOptions = [],
   activeModel = null,
   modelNotice = null,
+  roundtableCards = [],
+  onOpenAgentResult,
   resourceController,
   toolTraces = [],
   conversationController: controllerOverride = null,
@@ -861,7 +868,7 @@ export function JanusChat({
       {resourceController && (
         <>
         <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
-          {!discussionOnly && <div className="janus-resource-list">
+          <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
                 <div
                   key={resource.workspaceId}
@@ -881,7 +888,7 @@ export function JanusChat({
                   </button>
                 </div>
             ))}
-          </div>}
+          </div>
           {attachableWorkspaces.length > 0 && (
             <div className="janus-resource-attach" title={t('janus:chat.resource.attachTitle')}>
               <Select
@@ -993,7 +1000,14 @@ export function JanusChat({
           </div>
         )}
 
-        {messages.map(msg => (
+        {[...messages.map((msg) => ({ kind: 'message' as const, timestamp: msg.timestamp, msg })), ...roundtableCards.map((card) => ({ kind: 'card' as const, timestamp: Date.parse(card.updatedAt || card.createdAt) || 0, card }))]
+          .sort((a, b) => a.timestamp - b.timestamp)
+          .map((entry) => entry.kind === 'card' ? (
+          <div key={entry.card.id} className="janus-chat-message assistant janus-chat-agent-card-message">
+            <div className="janus-chat-message-author">{entry.card.title}</div>
+            <AgentResultCardView card={entry.card} onOpen={() => onOpenAgentResult?.(entry.card)} />
+          </div>
+        ) : (() => { const msg = entry.msg; return (
           <div
             key={msg.id}
             className={`janus-chat-message ${msg.role}`}
@@ -1094,7 +1108,7 @@ export function JanusChat({
               </div>
             )}
           </div>
-        ))}
+        )})() )}
 
         {(isStreaming || pendingContent) && (
           <div className="janus-chat-message assistant streaming">
