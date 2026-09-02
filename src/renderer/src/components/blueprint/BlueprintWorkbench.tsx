@@ -16,7 +16,7 @@ interface BlueprintWorkbenchProps {
   onClose: () => void
 }
 
-const WORKBENCH_CARD_ENTER_STAGGER_MS = 60
+const WORKBENCH_CARD_ENTER_STAGGER_MS = 180
 const WORKBENCH_CARD_ENTER_DURATION_MS = 260
 const WORKBENCH_CARD_EXIT_STAGGER_MS = 60
 const WORKBENCH_CARD_EXIT_DURATION_MS = 260
@@ -49,6 +49,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const activeCardPlanRef = useRef<WorkbenchCardPlan>({ detailOpen, janusOpen: maintenanceOpen })
   activeCardPlanRef.current = { detailOpen, janusOpen: maintenanceOpen }
   const [phase, setPhase] = useState<'hidden' | 'open' | 'closing'>(isOpen ? 'open' : 'hidden')
+  const [revealReady, setRevealReady] = useState(false)
   const [closingPlan, setClosingPlan] = useState<WorkbenchCardPlan>({ detailOpen: false, janusOpen: true })
   const requestClose = useCallback(() => {
     setClosingPlan({ detailOpen, janusOpen: maintenanceOpen })
@@ -57,8 +58,10 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
 
   useEffect(() => {
     if (isOpen) {
+      setRevealReady(false)
       setPhase('open')
-      return
+      const frame = requestAnimationFrame(() => setRevealReady(true))
+      return () => cancelAnimationFrame(frame)
     }
     setClosingPlan(activeCardPlanRef.current)
     setPhase((current) => current === 'hidden' ? current : 'closing')
@@ -132,6 +135,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         <section
           className="blueprint-workbench-shell"
           data-closing={isClosing ? "true" : undefined}
+          data-reveal-ready={revealReady ? "true" : undefined}
           data-card-count={cardCount}
           style={{
             '--card-count': cardCount,

@@ -22,6 +22,11 @@ const NODE_BATCH_SIZE = 8
 type Layout = Record<string, { x: number; y: number }>
 export type BlueprintLayoutSaveStatus = 'clean' | 'pending' | 'saving' | 'saved' | 'failed'
 
+/** Class applied while a blueprint's nodes are entering the canvas. */
+export function blueprintNodeEntryClass(entering: boolean, index: number): string | undefined {
+  return entering ? `bp-flow-node--enter bp-flow-node--enter-${Math.min(index, 8)}` : undefined
+}
+
 export function splitNodeBatches<T>(items: readonly T[], size = NODE_BATCH_SIZE): T[][] {
   if (size <= 0) return [Array.from(items)]
   const batches: T[][] = []
@@ -171,6 +176,7 @@ export function useBlueprintGraphController({
   const [edges, setEdges] = useState<Edge[]>([])
   const [restoreSnapshot, setRestoreSnapshot] = useState<Layout | null>(null)
   const batchFrameRef = useRef<number | null>(null)
+  const entryMarkFrameRef = useRef<number | null>(null)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const dirtyPositionsRef = useRef<Set<string>>(new Set())
   const blueprintRef = useRef<Blueprint | null>(blueprint)
@@ -235,7 +241,17 @@ export function useBlueprintGraphController({
   }, [])
 
   useEffect(() => {
+    // Keep the entry marker unset until the first paint.  During the initial
+    // mount React may replay effects (StrictMode) or the blueprint can be
+    // normalized immediately after loading.  Marking it synchronously caused
+    // the replay/normalization pass to rebuild nodes without the enter class,
+    // so the first opening appeared without animation.
+    if (entryMarkFrameRef.current !== null) {
+      cancelAnimationFrame(entryMarkFrameRef.current)
+      entryMarkFrameRef.current = null
+    }
     if (!blueprint) {
+      enteredBlueprintRef.current = null
       setNodes([])
       setEdges([])
       positionsRef.current = {}
@@ -253,10 +269,12 @@ export function useBlueprintGraphController({
       collapsedNodeIds
     )
     const entering = enteredBlueprintRef.current !== blueprint.id
-    enteredBlueprintRef.current = blueprint.id
     const allNodes = flow.nodes.map((node, index) => ({
       ...node,
-      className: entering ? `bp-flow-node--enter bp-flow-node--enter-${Math.min(index, 8)}` : undefined,
+      className: blueprintNodeEntryClass(entering, index),
+      style: entering
+        ? { ...node.style, '--bp-entry-index': index } as typeof node.style
+        : node.style,
     }))
     const computedPositions = Object.fromEntries(allNodes.map((node) => [node.id, node.position]))
     positionsRef.current = Object.fromEntries(allNodes.map((node) => [node.id, dirtyPositionsRef.current.has(node.id) ? positionsRef.current[node.id] ?? node.position : computedPositions[node.id]]))
@@ -264,7 +282,16 @@ export function useBlueprintGraphController({
     const batches = splitNodeBatches(allNodes)
     let batchIndex = 0
     const mountedNodeIds = new Set((batches[batchIndex++] ?? []).map((node) => node.id))
-    const visibleEdges = () => flow.edges.filter((edge) => mountedNodeIds.has(edge.source) && mountedNodeIds.has(edge.target))
+    const nodeIndexById = new Map(allNodes.map((node, index) => [node.id, index]))
+    const visibleEdges = () => flow.edges
+      .filter((edge) => mountedNodeIds.has(edge.source) && mountedNodeIds.has(edge.target))
+      .map((edge) => ({
+        ...edge,
+        className: entering ? 'bp-flow-edge--enter' : undefined,
+        style: entering
+          ? { ...edge.style, '--bp-edge-entry-index': nodeIndexById.get(edge.target) ?? 0 } as typeof edge.style
+          : edge.style,
+      }))
     setNodes(batches[0] ?? [])
     setEdges(visibleEdges())
     const appendBatch = () => {
@@ -277,6 +304,26 @@ export function useBlueprintGraphController({
       if (batchIndex < batches.length) batchFrameRef.current = requestAnimationFrame(appendBatch)
     }
     if (batchIndex < batches.length) batchFrameRef.current = requestAnimationFrame(appendBatch)
+    if (entering) {
+      entryMarkFrameRef.current = requestAnimationFrame(() => {
+        entryMarkFrameRef.current = null
+        // Only mark the blueprint that is still active; a fast switch must
+        // not suppress the next blueprint's entry animation.
+        if (enteredBlueprintRef.current === null || enteredBlueprintRef.current !== blueprint.id) {
+          enteredBlueprintRef.current = blueprint.id
+        }
+      })
+    }
+    return () => {
+      if (batchFrameRef.current !== null) {
+        cancelAnimationFrame(batchFrameRef.current)
+        batchFrameRef.current = null
+      }
+      if (entryMarkFrameRef.current !== null) {
+        cancelAnimationFrame(entryMarkFrameRef.current)
+        entryMarkFrameRef.current = null
+      }
+    }
   }, [topologyKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

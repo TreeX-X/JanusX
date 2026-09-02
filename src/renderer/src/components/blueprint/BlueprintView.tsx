@@ -55,6 +55,7 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
   const blueprints = useBlueprintStore((s) => s.blueprints)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const loadEpoch = useBlueprintStore((s) => s.loadEpoch)
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprints = useBlueprintStore((s) => s.loadBlueprints)
@@ -484,7 +485,7 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
       {/* 画布 */}
       {currentBlueprint ? (
         <BlueprintCanvas
-          key={currentBlueprint.id}
+          key={`${currentBlueprint.id}:${loadEpoch}`}
           blueprintId={currentBlueprint.id}
           onDetailOpenChange={onDetailOpenChange}
           onRegisterFlush={registerFlush}

@@ -55,6 +55,8 @@ interface BlueprintStore {
   activeSession: ActiveBlueprintSession | null
   loading: boolean
   loadingBlueprintId: string | null
+  /** Increments on every completed blueprint load so views can replay entry motion. */
+  loadEpoch: number
   loadState: 'idle' | 'listing' | 'loading' | 'refreshing' | 'error'
   error: string | null
 
@@ -101,6 +103,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
   activeSession: null,
   loading: false,
   loadingBlueprintId: null,
+  loadEpoch: 0,
   loadState: 'idle',
   error: null,
 
@@ -140,7 +143,8 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
             activeSession: active && nextNode ? { ...active, nodeSnapshot: nextNode } : active,
             loading: false,
             loadingBlueprintId: null,
-            loadState: 'idle'
+            loadState: 'idle',
+            loadEpoch: s.loadEpoch + 1
           }
         })
       } catch (err: unknown) {

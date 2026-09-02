@@ -692,6 +692,12 @@
   animation: blueprint-node-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* A branch edge is revealed with its child node, never ahead of it. */
+.bp-flow-edge--enter {
+  animation: blueprint-edge-enter 140ms ease-out both;
+  animation-delay: calc(320ms + var(--bp-edge-entry-index, 0) * 70ms + 170ms);
+}
+
 .bp-flow-node--enter-1 .bp-node-card { animation-delay: 16ms; }
 .bp-flow-node--enter-2 .bp-node-card { animation-delay: 32ms; }
 .bp-flow-node--enter-3 .bp-node-card { animation-delay: 48ms; }
@@ -701,9 +707,31 @@
 .bp-flow-node--enter-7 .bp-node-card { animation-delay: 112ms; }
 .bp-flow-node--enter-8 .bp-node-card { animation-delay: 128ms; }
 
+/* The workbench canvas is itself revealed by a 260ms rise animation (plus
+   its 60ms card stagger).  Delay node entry until that reveal has completed;
+   otherwise the nodes animate behind an invisible parent on the first lazy
+   open and appear to pop in all at once. */
+.blueprint-view--workbench .bp-flow-node--enter-0 .bp-node-card { animation-delay: 320ms; }
+.blueprint-view--workbench .bp-flow-node--enter-1 .bp-node-card { animation-delay: 336ms; }
+.blueprint-view--workbench .bp-flow-node--enter-2 .bp-node-card { animation-delay: 352ms; }
+.blueprint-view--workbench .bp-flow-node--enter-3 .bp-node-card { animation-delay: 368ms; }
+.blueprint-view--workbench .bp-flow-node--enter-4 .bp-node-card { animation-delay: 384ms; }
+.blueprint-view--workbench .bp-flow-node--enter-5 .bp-node-card { animation-delay: 400ms; }
+.blueprint-view--workbench .bp-flow-node--enter-6 .bp-node-card { animation-delay: 416ms; }
+.blueprint-view--workbench .bp-flow-node--enter-7 .bp-node-card { animation-delay: 432ms; }
+.blueprint-view--workbench .bp-flow-node--enter-8 .bp-node-card { animation-delay: 448ms; }
+.blueprint-view--workbench .bp-flow-node--enter .bp-node-card {
+  animation-delay: calc(320ms + var(--bp-entry-index, 0) * 70ms);
+}
+
 @keyframes blueprint-node-enter {
   from { opacity: 0; transform: translateZ(-32px) scale(0.97); }
   to { opacity: 1; transform: translateZ(0) scale(1); }
+}
+
+@keyframes blueprint-edge-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes blueprint-canvas-loading-pulse {
@@ -1686,6 +1714,16 @@
 .blueprint-workbench-shell[data-closing="true"] {
   animation: none;
   pointer-events: none;
+}
+
+/* Hold the cards invisible for one frame so lazy-loaded workbenches always
+   start their entrance animation from the defined keyframe, rather than
+   painting the final state on the first open. */
+.blueprint-workbench-shell:not([data-reveal-ready='true']) .blueprint-workbench-topbar,
+.blueprint-workbench-shell:not([data-reveal-ready='true']) .blueprint-workbench-card,
+.blueprint-workbench-shell:not([data-reveal-ready='true']) .blueprint-workbench-detail-slot[data-open='true'] {
+  opacity: 0;
+  animation: none;
 }
 
 .blueprint-workbench-topbar {

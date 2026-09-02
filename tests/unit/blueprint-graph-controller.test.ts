@@ -5,6 +5,7 @@ import type { Blueprint } from '../../src/renderer/src/services/blueprint'
 import { deriveBlueprintFlow } from '../../src/renderer/src/features/blueprint/canvas-layout'
 import {
   BlueprintLayoutSaveController,
+  blueprintNodeEntryClass,
   patchBlueprintCardNodes,
   splitNodeBatches
 } from '../../src/renderer/src/features/blueprint/useBlueprintGraphController'
@@ -25,6 +26,12 @@ function cardData(title: string): BlueprintNodeData {
 describe('blueprint graph controller seams', () => {
   it('splits large graphs into bounded render batches', () => {
     expect(splitNodeBatches([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
+  })
+
+  it('assigns a stagger class only during blueprint entry and caps the delay index', () => {
+    expect(blueprintNodeEntryClass(true, 0)).toBe('bp-flow-node--enter bp-flow-node--enter-0')
+    expect(blueprintNodeEntryClass(true, 20)).toBe('bp-flow-node--enter bp-flow-node--enter-8')
+    expect(blueprintNodeEntryClass(false, 0)).toBeUndefined()
   })
 
   it('keeps only edges whose endpoints have been mounted', () => {
