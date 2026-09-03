@@ -15,9 +15,14 @@ export interface AgentResultCard {
   updatedAt: string
   sourceEventIds: string[]
   sections?: Array<{ id: string; title: string; markdown: string }>
-  evidenceRefs?: string[]
+  evidenceRefs?: RoundtableEvidenceRef[]
   requiresUserAction?: boolean
 }
+
+export type RoundtableEvidenceRef =
+  | { kind: 'workspace-file'; workspaceId: string; relativePath: string; sha256?: string; capturedAt?: string; sourceEventId?: string; workspaceVersion?: string; lineStart?: number; lineEnd?: number; origin?: 'snapshot' | 'tool' }
+  | { kind: 'agent-card'; cardId: string; sourceEventId?: string }
+  | { kind: 'event'; eventId: string }
 export interface RoundtableWorkspaceResource {
   workspaceId: string
   workspacePath: string
@@ -56,8 +61,40 @@ export interface HumanReadableParchment {
   evidence: string[]
   risks: string[]
   actions: string[]
+  pending: string[]
+  conflicts: Array<{ topic: string; status: string }>
   draft: boolean
   sourceEventIds: string[]
+}
+
+export interface HostSynthesisConflict {
+  id: string
+  topic: string
+  factIds: string[]
+  status: 'open' | 'resolving' | 'resolved'
+  sourceEventIds: string[]
+}
+
+export interface HostSynthesis {
+  roundNumber: number
+  final: boolean
+  conclusion: string
+  decisions: string[]
+  evidence: string[]
+  pending: string[]
+  conflicts: HostSynthesisConflict[]
+  risks: string[]
+  actions: string[]
+  sourceEventIds: string[]
+  createdAt: string
+}
+
+export interface RoundtableUserMessage {
+  id: string
+  text: string
+  roundNumber: number
+  createdAt: string
+  sourceEventId?: string
 }
 
 export interface RoundtableState {
@@ -74,20 +111,36 @@ export interface RoundtableState {
   workspaceResources: RoundtableWorkspaceResource[]
   workspaceContext?: string
   workspaceContextFiles?: string[]
+  workspaceEvidenceRefs?: Extract<RoundtableEvidenceRef, { kind: 'workspace-file' }>[]
+  hostDrafts?: HostSynthesis[]
+  userMessages: RoundtableUserMessage[]
+  /** Idempotency keys for advance retries: requestId -> created roundNumber. */
+  advanceKeys?: Record<string, number>
 }
 
 export type RoundtableEvent =
   | ({ type: 'session:created'; sessionId: string; workflowId: string; workflowVersion: string })
+  | ({ type: 'workspace:evidence-captured'; sessionId: string; refs: Extract<RoundtableEvidenceRef, { kind: 'workspace-file' }>[] })
+  | ({ type: 'workspace:tool-started'; sessionId: string; roundId: string; agentId: string; toolCallId: string; toolName: string; workspaceId: string })
+  | ({ type: 'workspace:tool-completed'; sessionId: string; roundId: string; agentId: string; toolCallId: string; toolName: string; workspaceId: string; evidenceRef?: Extract<RoundtableEvidenceRef, { kind: 'workspace-file' }> })
+  | ({ type: 'workspace:tool-failed'; sessionId: string; roundId: string; agentId: string; toolCallId: string; toolName: string; workspaceId: string; errorCode: string; error: string })
+  | ({ type: 'workspace:tool-cancelled'; sessionId: string; roundId: string; agentId: string; toolCallId: string; toolName: string; workspaceId: string })
   | ({ type: 'round:started'; sessionId: string; roundId: string; roundNumber: number; trigger: 'initial-input' | 'user-advance'; userInput?: string })
+  | ({ type: 'user:message'; sessionId: string; message: RoundtableUserMessage })
   | ({ type: 'agent:queued'; sessionId: string; roundId: string; agentId: string; role: WorkflowRole })
   | ({ type: 'agent:working'; sessionId: string; roundId: string; agentId: string; role: WorkflowRole })
   | ({ type: 'agent:result'; sessionId: string; roundId: string; card: AgentResultCard })
   | ({ type: 'agent:error'; sessionId: string; roundId: string; agentId: string; role: WorkflowRole; error: string })
   | ({ type: 'round:awaiting-user'; sessionId: string; roundId: string; roundNumber: number })
+  | ({ type: 'host:synthesis'; sessionId: string; roundId: string; synthesis: HostSynthesis })
   | ({ type: 'session:ended'; sessionId: string })
 
 export type RoundtableEventEnvelope = RoundtableEvent & { eventId: string; occurredAt: string }
 
 export interface FixtureAgent {
-  run(input: { sessionId: string; roundId: string; roundNumber: number; userInput?: string; priorCards: AgentResultCard[]; priorFacts?: RoundtableFact[]; workspaceResources?: RoundtableWorkspaceResource[]; workspaceContext?: string }): Promise<string>
+  run(input: { sessionId: string; roundId: string; roundNumber: number; userInput?: string; priorCards: AgentResultCard[]; priorFacts?: RoundtableFact[]; workspaceResources?: RoundtableWorkspaceResource[]; workspaceContext?: string; workspaceTools?: RoundtableWorkspaceToolExecutor }): Promise<string>
+}
+
+export interface RoundtableWorkspaceToolExecutor {
+  execute(name: 'workspace.list' | 'workspace.read' | 'workspace.readRange', input: Record<string, unknown>): Promise<unknown>
 }

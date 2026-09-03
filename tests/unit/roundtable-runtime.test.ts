@@ -1,5 +1,8 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { RoundtableRuntime } from '../../src/main/roundtable/runtime'
+import { RoundtableRuntime, withTimeout } from '../../src/main/roundtable/runtime'
 import { AgentRegistry } from '../../src/main/roundtable/agent-registry'
 import type { FixtureAgent } from '../../src/shared/roundtable/events'
 import type { WorkflowTemplate } from '../../src/shared/roundtable/workflow-template'
@@ -53,20 +56,86 @@ describe('RoundtableRuntime', () => {
     expect(state.errors).toEqual(['r2: timeout'])
   })
 
-  it('derives structured facts and exports a traceable markdown record', async () => {
+  it('derives structured facts and keeps host claims pending without tool evidence', async () => {
     const runtime = new RoundtableRuntime(agents, template)
     const state = await runtime.start('Export topic')
     expect(state.facts.length).toBe(5)
-    expect(state.facts.some((fact) => fact.kind === 'decision' && fact.status === 'confirmed')).toBe(true)
+    // Stage B gate: fixture agents never call workspace tools, so the host
+    // synthesis must not self-confirm.
+    expect(state.facts.some((fact) => fact.kind === 'decision' && fact.status === 'pending-validation')).toBe(true)
+    expect(state.facts.some((fact) => fact.kind === 'decision' && fact.status === 'confirmed')).toBe(false)
   })
 
   it('preserves workspace snapshot and context across hydrate', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'janusx-roundtable-hydrate-'))
+    try {
+      await writeFile(join(dir, 'notes.txt'), 'hydrate me', 'utf-8')
+      const runtime = new RoundtableRuntime(agents, template)
+      const state = await runtime.start({ prompt: 'Workspace topic', workspaceResources: [{ workspaceId: 'w1', workspaceName: 'Project', workspacePath: dir }] })
+      const restored = new RoundtableRuntime(agents, template)
+      restored.hydrate(state)
+      expect(restored.getState().workspaceResources).toEqual(state.workspaceResources)
+      expect(restored.getState().workspaceContextFiles).toEqual(state.workspaceContextFiles)
+      expect(restored.getState().facts).toEqual(state.facts)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('logs user messages on start and non-empty advances, never on empty advances', async () => {
     const runtime = new RoundtableRuntime(agents, template)
-    const state = await runtime.start({ prompt: 'Workspace topic', workspaceResources: [{ workspaceId: 'w1', workspaceName: 'Project', workspacePath: 'C:/project' }] })
+    const types: string[] = []
+    runtime.onEvent((event) => types.push(event.type))
+
+    const first = await runtime.start('Initial requirement')
+    expect(first.userMessages.map((item) => [item.text, item.roundNumber])).toEqual([['Initial requirement', 1]])
+
+    const second = await runtime.advance()
+    expect(second.userMessages).toHaveLength(1)
+
+    const third = await runtime.advance('Add a latency constraint')
+    expect(third.userMessages.map((item) => [item.text, item.roundNumber])).toEqual([
+      ['Initial requirement', 1],
+      ['Add a latency constraint', 3],
+    ])
+    expect(types.filter((type) => type === 'user:message')).toHaveLength(2)
+  })
+
+  it('preserves user messages across hydrate', async () => {
+    const runtime = new RoundtableRuntime(agents, template)
+    const state = await runtime.start('Hydrate messages')
     const restored = new RoundtableRuntime(agents, template)
     restored.hydrate(state)
-    expect(restored.getState().workspaceResources).toEqual(state.workspaceResources)
-    expect(restored.getState().workspaceContextFiles).toEqual(state.workspaceContextFiles)
-    expect(restored.getState().facts).toEqual(state.facts)
+    expect(restored.getState().userMessages).toEqual(state.userMessages)
+    expect(restored.getState().userMessages[0]?.text).toBe('Hydrate messages')
+  })
+
+  it('answers same-key advance retries idempotently while running', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let calls = 0
+    const blocking: Record<string, FixtureAgent> = {
+      r1: { run: async () => { calls += 1; if (calls > 1) await gate; return 'r1 done' } },
+      c1: { run: async () => 'c1 done' },
+      host: { run: async () => 'host done' },
+    }
+    const runtime = new RoundtableRuntime(blocking, template)
+    await runtime.start('Idempotent topic')
+    const pending = runtime.advance('first', 'key-1')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const retry = await runtime.advance('retry-text', 'key-1')
+    expect(retry.phase).toBe('running')
+    expect(retry.roundNumber).toBe(2)
+    await expect(runtime.advance('other', 'key-2')).rejects.toThrow()
+    release()
+    const done = await pending
+    expect(done.phase).toBe('awaiting-user')
+    expect(done.userMessages.map((item) => item.text)).toEqual(['Idempotent topic', 'first'])
+    expect(done.advanceKeys?.['key-1']).toBe(2)
+  })
+
+  it('withTimeout rejects hanging tasks and passes fast ones', async () => {
+    await expect(withTimeout(new Promise(() => undefined), 20, 'WORKSPACE_TOOL_TIMEOUT', 'timed out')).rejects.toMatchObject({ code: 'WORKSPACE_TOOL_TIMEOUT' })
+    await expect(withTimeout(Promise.resolve('ok'), 1000, 'X', 'x')).resolves.toBe('ok')
   })
 })

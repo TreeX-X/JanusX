@@ -50,6 +50,7 @@ export const KNOWLEDGE_CHANNELS = {
   recordFeedback: 'knowledge:feedback:record',
   feedbackSummary: 'knowledge:feedback:summary',
   context: 'knowledge:context',
+  diagnostics: 'knowledge:diagnostics',
   getSettings: 'settings:knowledge:get',
   updateSettings: 'settings:knowledge:update',
 } as const
@@ -120,6 +121,34 @@ export interface RevokeTruthInput {
   workspaceId: string
 }
 
+/** Phase 0 diagnostics: pipeline health snapshot for the Workbench status bar. */
+export interface KnowledgeDiagnosticsQuery {
+  workspaceId?: string
+  recentLimit?: number
+}
+
+export interface KnowledgeWorkspaceDiagnostics {
+  workspaceId: string
+  workspaceName: string
+  observations: number
+  evidence: number
+  /** Observations whose workspaceId had to be guessed from the directory basename. */
+  fallbackWorkspaceIds: number
+  /** Evidence observations not yet consumed by the processing pipeline (all of them until Phase 1 cursors exist). */
+  unprocessedEstimate: number
+  lastObservationAt?: string
+}
+
+export interface KnowledgeDiagnostics {
+  generatedAt: string
+  knowledgeRoot: string
+  recentObservations: Observation[]
+  workspaces: KnowledgeWorkspaceDiagnostics[]
+  candidates: { facts: number; wikiPatches: number; graphEdges: number }
+  truth: { facts: number; wikiPages: number; graphEdges: number }
+  captureFailures: number
+}
+
 export interface KnowledgeAPI {
   contracts: () => Promise<KnowledgeContractsSnapshot>
   bootstrap: (workspacePath?: string) => Promise<KnowledgeBootstrapResult>
@@ -144,6 +173,7 @@ export interface KnowledgeAPI {
   recordFeedback: (input: KnowledgeFeedbackInput) => Promise<void>
   feedbackSummary: (workspaceId?: string) => Promise<KnowledgeFeedbackSummary>
   context: (request: KnowledgeContextRequest) => Promise<KnowledgeContextResult>
+  diagnostics: (query?: KnowledgeDiagnosticsQuery) => Promise<KnowledgeDiagnostics>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }

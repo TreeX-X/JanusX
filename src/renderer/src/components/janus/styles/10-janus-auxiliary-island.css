@@ -178,7 +178,7 @@
   height: 100%;
   overflow: auto;
 }
-.janus-agent-result-detail { position: relative; z-index: 1; box-sizing: border-box; height: 100%; overflow: auto; padding: 34px 28px; color: rgba(255,255,255,.78); background: #101014; }
+.janus-agent-result-detail { position: relative; z-index: 1; box-sizing: border-box; height: 100%; overflow: auto; padding: 34px 28px; color: rgba(255,255,255,.78); background: #000; }
 .janus-agent-result-detail__eyebrow { margin-bottom: 12px; color: #ff9a5c; font: 10px ui-monospace, monospace; letter-spacing: .12em; }
 .janus-agent-result-detail h2 { margin: 0 0 18px; font-size: 18px; }
 .janus-agent-result-detail__summary { padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
@@ -248,71 +248,14 @@
   font: 12px/1.65 Georgia, "Times New Roman", serif;
 }
 
-.janus-roundtable-parchment[data-detailed="true"] {
-  height: 100%;
-  padding: 34px 30px 42px;
-  border: 1px solid rgba(176, 133, 76, .55);
-  border-radius: 3px;
-  background-color: #2a2118;
-  background-image:
-    radial-gradient(ellipse at center, rgba(225, 190, 127, .12), transparent 68%),
-    repeating-linear-gradient(0deg, rgba(245, 218, 169, .035) 0 1px, transparent 1px 5px),
-    repeating-linear-gradient(90deg, rgba(72, 42, 18, .06) 0 1px, transparent 1px 7px);
-  box-shadow: inset 0 0 42px rgba(20, 11, 4, .86), 0 12px 30px rgba(0, 0, 0, .28);
-}
-
-.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-meta {
-  padding: 0 0 12px;
-  border-bottom: 1px solid rgba(216, 195, 158, .16);
-}
-
-.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin {
-  justify-items: center;
-  grid-template-columns: 1fr;
-  gap: 5px;
-  margin-top: 18px;
-  padding: 18px 0 16px;
-  border-top: 1px solid rgba(221, 181, 117, .35);
-  border-bottom: 1px solid rgba(221, 181, 117, .35);
-  text-align: center;
-}
-
-.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin strong {
-  color: #f0d29b;
-  font: 700 22px Georgia, "Times New Roman", serif;
-  letter-spacing: .08em;
-}
-
-.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin span {
-  color: rgba(240, 210, 155, .86);
-  font: 600 11px "Cascadia Mono", "SF Mono", Consolas, monospace;
-  letter-spacing: .18em;
-}
-
-.janus-roundtable-parchment[data-detailed="true"] .janus-roundtable-parchment-origin small {
-  grid-column: auto;
-}
-
-.janus-roundtable-parchment-sections {
-  margin-top: 22px;
-}
-
-.janus-roundtable-parchment-sections section {
-  margin: 0;
-  padding: 14px 0;
-  border-top: 1px solid rgba(216, 195, 158, .1);
-}
-
-.janus-roundtable-parchment-sections h3 {
-  margin: 0;
-  color: #caa770;
-  font: 700 12px Georgia, "Times New Roman", serif;
-}
-
-.janus-roundtable-parchment-sections p {
-  margin: 7px 0 0;
-  color: rgba(216, 205, 184, .64);
-  font: 12px/1.65 Georgia, "Times New Roman", serif;
+/* The detailed parchment shares the agent-result detail visual language
+   (dark archive panel). No paper theme here: the component renders with
+   .janus-agent-result-detail classes, so these rules only clear legacy
+   paper overrides. */
+.janus-auxiliary-content .janus-roundtable-parchment[data-detailed="true"] {
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 .janus-island-shell[data-stage="expanded"][data-auxiliary-open="true"] {

@@ -310,8 +310,110 @@
 
 .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper {
   display: flex;
-  margin-top: 8px;
-  padding-top: 8px;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 4px;
+  background: #0c0c0f;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper:focus-within {
+  border-color: rgba(255,255,255,.16);
+  box-shadow: none;
+}
+
+/* 圆桌发送区：跟随软件整体的扁平不透明语言（纯色、无渐变、无辉光、无毛玻璃），
+   4px 直角；橙色只出现在可发送态的图标与描边上。
+   圆桌未被 05 的 chat/monitor 方形按钮覆盖，会 fallback 到 04 的 56x44 大色块，
+   这里用更高特异性收敛为 32px 紧凑控件，并与输入框垂直居中。 */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-composer-row {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input {
+  padding: 8px 8px 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input:focus {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-stop {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 4px;
+  background: #17171b;
+  color: #8a8f98;
+  font-size: 12px;
+  box-shadow: none;
+  transition: background .12s ease, border-color .12s ease, color .12s ease, transform .06s ease;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send:hover:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-stop:hover:not(:disabled) {
+  border-color: rgba(255,255,255,.18);
+  background: #202027;
+  color: #c9cdd4;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send:active:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-stop:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send:focus-visible,
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-stop:focus-visible {
+  outline: 1px solid rgba(255,122,26,.55);
+  outline-offset: 1px;
+}
+
+/* 可发送态：仍是黑灰底，仅图标变橙 + 描边带一点橙，不做任何橙色填充/辉光 */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send:not(:disabled) {
+  border-color: rgba(255,122,26,.40);
+  background: #17171b;
+  color: #ff8a2e;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send:not(:disabled):hover {
+  border-color: rgba(255,122,26,.55);
+  color: #ffa25e;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send:disabled {
+  border-color: rgba(255,255,255,.06);
+  background: #101013;
+  color: rgba(255,255,255,.20);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 停止态：留在黑灰体系内，仅用暗红图标示意 */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-stop:not(:disabled) {
+  color: rgba(255,154,154,.85);
 }
 
 @media (max-width: 760px) {
@@ -2324,3 +2426,12 @@
 .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-resource-list:empty::before { content: '未添加工作区'; color: rgba(255,255,255,.3); font: 10px ui-monospace, monospace; }
 .janus-roundtable-view, .janus-chat-view { display: contents; }
 .janus-roundtable-view--hidden, .janus-chat-view--hidden { display: none !important; }
+.janus-roundtable-tool-trace { display: grid; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(216,195,158,.18); }
+.janus-roundtable-tool-trace-heading { display: flex; align-items: baseline; justify-content: space-between; color: #caa770; font: 700 10px Georgia, serif; letter-spacing: .12em; }
+.janus-roundtable-tool-trace-heading small { color: rgba(216,195,158,.52); font: 9px ui-monospace, monospace; letter-spacing: .04em; }
+.janus-roundtable-tool-trace-item { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; color: rgba(231,220,200,.72); font: 10px ui-monospace, monospace; }
+.janus-roundtable-tool-trace-item[data-status="failed"] .janus-roundtable-tool-trace-state { color: #e07856; }
+.janus-roundtable-tool-trace-item[data-status="completed"] .janus-roundtable-tool-trace-state { color: #9db87a; }
+.janus-roundtable-tool-trace-error { flex-basis: 100%; }
+.janus-roundtable-tool-trace-error summary { cursor: pointer; color: #e07856; }
+.janus-roundtable-tool-trace-error p { margin: 4px 0 0; color: rgba(231,220,200,.6); white-space: pre-wrap; }

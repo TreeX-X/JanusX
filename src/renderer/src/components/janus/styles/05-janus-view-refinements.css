@@ -2220,3 +2220,46 @@
     height: 22px;
   }
 }
+
+/* Chat 发送控件：与圆桌统一的扁平黑灰语言（纯色不透明、无渐变、无辉光），
+   覆盖上面的橙色填充规则；橙色只出现在可发送态的图标与描边上。 */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop {
+  background: #17171b;
+  border-color: rgba(255,255,255,.09);
+  color: #8a8f98;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:hover:not(:disabled),
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop:hover:not(:disabled) {
+  background: #202027;
+  border-color: rgba(255,255,255,.18);
+  color: #c9cdd4;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:not(:disabled) {
+  background: #17171b;
+  border-color: rgba(255,122,26,.40);
+  color: #ff8a2e;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:not(:disabled):hover {
+  background: #202027;
+  border-color: rgba(255,122,26,.60);
+  color: #ffa25e;
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-send:disabled {
+  background: #101013;
+  border-color: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.20);
+  box-shadow: none;
+}
+
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop:not(:disabled) {
+  color: rgba(255,154,154,.85);
+}

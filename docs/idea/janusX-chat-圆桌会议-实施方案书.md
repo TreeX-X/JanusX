@@ -2,9 +2,11 @@
 
 > 当前状态：圆桌视觉舞台与基础交互已实现；会议引擎正在重构，当前 UI 不具备真实圆桌编排能力。
 >
-> 最近更新：2026-09-01
+> 最近更新：2026-09-03（已按工作区实测校准；§3、§20、§21 为准）
 >
 > 文档用途：维护当前代码事实、已确认产品规则、待实施设计和验收条件。已被实现淘汰的早期布局方案不再保留。
+>
+> 工作区状态提示：`src/main/roundtable/workspace-tools.ts` 为未跟踪新文件，`runtime.ts / service.ts / events.ts / state.ts / roundtable-handlers.ts` 有未提交修改；下文“已完成”包含工作区未提交内容，提交前不得视为基线。
 
 ## 1. 当前产品目标
 
@@ -103,16 +105,19 @@
 | 羊皮卷静止光环显示 | 已实现 | 光环不再穿入桌面导致下半圈缺失 |
 | 共享羊皮纸真实内容 | 部分实现 | 羊皮纸已消费 `projectParchment(roundtableState)`，动态显示结论、决策、依据、风险、行动项和来源；事实已由 Agent 结果自动生成，持久化仍待完善 |
 | 通用附属 Island 与羊皮纸模块 | 已实现 | `JanusAuxiliaryIsland` 提供通用外壳，当前挂载羊皮纸详细模块 |
-| 真实讨论消息流 | 部分实现 | Renderer 已接入 Roundtable IPC，可启动、推进和结束 fixture 会话；真实模型流仍待接入 |
+| 真实讨论消息流 | 部分实现 | Renderer 已接入 Roundtable IPC，可启动、推进和结束会话；用户消息经 `user:message` 事件实时入日志，续写与恢复后消息流完整；真实模型流仍待接入 |
 | Agent 发言状态联动 | 部分实现 | Renderer 已订阅 Runtime 事件并驱动工作投影；真实 Agent 配置仍待完善 |
 | Agent 工作预显与卡片化输出 | 部分实现 | 已有工作事件投影、可聚焦结果卡片和摘要列表；真实模型结果已接入 Runtime，完整详情正文仍待完成 |
-| 卡片详情附属 Island | 部分实现 | `agent-result` 模块已接入附属 Island，支持 sections 与 evidenceRefs 展示；完整事实投影仍待完成 |
-| 用户显式开启轮次 | 未实现 | 当前只能发送消息，不能空输入开启下一轮 |
+| 卡片详情附属 Island | 部分实现 | `agent-result` 模块已接入附属 Island，支持 sections 与结构化 evidenceRefs（含 workspace-file 行号 `#Lx-y` + sha 短码、agent-card、event）展示，并附同一 Agent 的工作区读取轨迹；变更版本事件仍待完成 |
+| 用户显式开启轮次 | 已实现基础版 | “开启下一轮”按钮 + 空输入 `advance('')`；Renderer `dispatchBusy` 防重提交，`advance(requestId)` 幂等键落盘，重试不重轮；重复点击与重试有单测，桌面复核待手动清单 |
+| 结束清理对话框 | 已实现 | 结束会议即清空对话框（消息、卡片、乐观输入、工作投影、详情 Island、session 恢复键），不做已结束会话的持久化恢复；结束后可直接开新议题；状态栏无会话时显示“等待议题”，仅 running 显示“第 N 轮讨论中” |
 | 圆桌编排与轮次推进 | 部分实现 | LangGraph.js、Agent Registry、RoundtableService、IPC 和 UI 生命周期已接入；真实模型适配具备默认模型路径，持久化仍待完成 |
 | 共享结构化状态 | 已实现（内存） | 已建立事实、事件 envelope、版本、幂等 reducer 与羊皮纸投影器；持久化仍待落地 |
-| 会话恢复与持久化 | 部分实现 | 主进程以 JSONL 记录圆桌事件与状态快照，并提供 `roundtable:restore`；恢复使用无副作用 Runtime hydrate，不会重新执行 Agent，跨进程 checkpoint 完整恢复仍待完善 |
-| 最终整理与 Markdown 导出 | 部分实现 | Agent 结果会生成决策/依据/风险事实，并提供 `roundtable:export` Markdown 导出；完整最终整理与文件保存 UI 仍待完善 |
-| 工作区工具与审批 | 未实现 | 圆桌尚未接入资源控制器 |
+| 会话恢复与持久化 | 已实现基础版 | JSONL 轻快照 + context sidecar + `roundtable:restore`；`user:message` 入日志使消息流完整可恢复；`migrateRoundtableState` 做 checkpoint 迁移（v1），崩溃残留 running 经 `markInterrupted` 降级为可续 awaiting-user；Renderer 挂载按 localStorage sessionId 自动恢复 |
+| 最终整理与 Markdown 导出 | 部分实现 | Agent 结果会生成决策/依据/风险事实，并提供 `roundtable:export` Markdown 导出；完整最终整理和文件保存 UI 仍待完善 |
+| 工作区资源绑定与静态快照 | 已实现基础版 | Service 与 Runtime 均按 `workspaceId` 解析注册表并忽略客户端路径，无解析器时仍做 realpath + 目录校验；非法 id、未注册、缺失目录均拒绝启动 |
+| 工作区动态只读工具 | 已实现基础版 | `workspace.list/read/readRange` 经统一 policy（敏感排除、symlink 拒绝、secret 脱敏），四类工具事件、行号级 evidence、`WORKSPACE_TOOL_*` 错误码、取消与 30s 超时已落地；Deck 与卡片详情展示读取轨迹；写/命令/Git 无通道 |
+| 工作区工具审批（写/命令/Git） | 未实现 | 保持禁止；读工具默认只读，写操作无通道 |
 
 ## 4. 已确认的产品规则
 
@@ -670,7 +675,7 @@ type WorkflowTemplate = {
 | 圆桌 Runtime 生命周期 | 已完成 PoC | 已验证启动、轮次闸门、推进和结束 |
 | Agent 结果卡片 | 已实现 | 支持状态、摘要、详情 Island |
 | Agent 公有事实池 | 已实现基础版 | 结构化事实和来源可追溯 |
-| 人类可读羊皮纸 | 待实现 | 当前仍是事实分类投影，缺少主持人整理 |
+| 人类可读羊皮纸 | 已实现基础版 | Host 每轮生成独立草稿（`host:synthesis` 事件入日志），结束时生成终稿；正文取草稿结论/决策/依据/风险/行动/待验证/冲突，DRAFT/FINAL 标记随状态切换；无草稿时降级为规则投影 |
 | 最终整理与导出 | 部分实现 | 有 Markdown 导出路径，完整整理和文件保存 UI 待完善 |
 ## 13. 2026-09-02 / 工作区上下文接入计划
 
@@ -818,3 +823,313 @@ type WorkflowTemplate = {
 | Agent 接收工作区路径上下文 | 已实现基础版 |
 | Agent 读取工作区文件 | 阶段 2 待实现 |
 | 工作区权限与只读策略 | 阶段 2 待实现 |
+
+## 19. 2026-09-03 / 代码 Review 记录与整改计划
+
+本节基于当前仓库实现、已有单元测试和前述阶段记录整理。结论是：圆桌 Runtime 已具备 PoC 级生命周期和工作区静态上下文能力，但尚未达到“安全、可追溯、可动态核验、可恢复的产品 MVP”标准。本次 Review 不把 UI 已接通或测试桩通过等同于真实模型和桌面端到端能力已完成。
+
+### 19.1 Review 发现的问题与风险
+
+1. **工作区路径信任边界不足（高）**
+   - Renderer 当前可将 `workspacePath` 随圆桌 IPC 传入，Main Runtime 直接交给 `collectTextEvidence()`。
+   - 缺少“workspaceId 必须来自主进程已注册工作区”的强校验，也没有在读取前统一执行 realpath、目录边界和符号链接检查。
+   - 风险是错误或伪造 IPC 可能读取未授权目录；现有维护扫描用授权回调不能直接视为圆桌的只读授权策略。
+
+2. **启动上下文过重且重复保存（中高）**
+   - `RoundtableRuntime.start()` 最多读取 40 个文件、总计 96KB，并把原始上下文同时放进 Runtime 状态及每个 Agent 的输入。
+   - 多轮事件快照和 JSONL 日志可能重复保存大字符串，启动大仓库时也会阻塞首轮。
+
+3. **公有事实的来源契约不完整（高）**
+   - 工作区文件目前以 `kind: evidence`、`status: confirmed` 和路径字符串进入 `RoundtableState.facts`，但没有文件 hash、行范围、mtime/version 或对应 source event。
+   - 卡片 `evidenceRefs` 混合工作区路径与卡片 ID，引用类型不明确；未经验证的 Agent 推测也可能被 Host 结果提升为 confirmed。
+
+4. **事实写入责任重复（中）**
+   - Runtime 在 `agent:result` 事件处理中调用 `addFact()`；`RoundtableService.createRuntime()` 的事件监听器也会再次调用。
+   - 相同 ID 虽会覆盖，但 version 可能重复递增，事件日志表达的变更次数与真实变更不一致。
+
+5. **羊皮纸仍是规则投影，不是 Host 整理（高）**
+   - `projectHumanReadableParchment()` 主要按 fact kind/status 分类并截取条目，尚不能合并冲突观点、区分结论与建议，也不能生成真正清晰的自然语言总结。
+   - 因此“Agent 公有池”和“人类羊皮纸”虽已分出模型，语义生产链仍未分离完成。
+
+6. **讨论中的动态读取尚未实现（高）**
+   - Agent 只能收到启动时快照，不能在 Challenger 提问后读取指定文件、行范围或重新核验变更，也没有动态证据事件。
+   - 这仍是工作区参与圆桌讨论的关键缺口。
+
+7. **Renderer 状态源存在丢失风险（中）**
+   - `JanusRoundtablePane` 内部持有 `roundtableState`、`work`、用户消息和乐观运行状态。当前 Chat/圆桌同时挂载可避免普通切换丢失，但 Island 被卸载或重建时仍可能丢失。
+   - 用户消息尚未统一写入圆桌事件日志，恢复后无法保证完整讨论流。
+
+8. **测试未覆盖真实边界（中高）**
+   - 现有测试主要验证 Runtime/reducer/store/hydrate；部分工作区测试使用不存在的 `C:/project`，不能证明真实扫描、敏感目录排除和越权拦截。
+   - 动态工具、多 Agent 共享上下文、Host synthesis、取消/超时/并发和桌面端到端均缺少验收测试。
+
+### 19.2 优化原则与方案
+
+- **先收紧边界，再扩展能力**：所有圆桌读取必须由 Main 根据 `workspaceId` 解析注册资源，Renderer 不再拥有最终路径决定权；统一 realpath、目录边界、只读 policy 和超时取消。
+- **证据引用化**：状态中长期保存文件摘要、hash、版本和引用，不保存每轮重复的完整原文；Agent 按需获取受限片段。
+- **单一事实归一化入口**：由 Runtime reducer（或独立 fact service）负责事实去重、状态升级和 version 递增，Service 只转发事件。
+- **两层输出严格分离**：公有池保留完整结构化事实与来源；Host 生成独立 `HumanReadableParchment` 草稿/最终稿，正文只面向人类，来源折叠追溯。
+- **持久化优先于视图状态**：圆桌 session、用户消息、工具调用和 Host 草稿写入事件日志；Renderer 仅订阅快照，挂载时按 sessionId restore。
+- **真实工作区驱动测试**：测试必须创建临时目录和文件，验证成功、拒绝、过大、缺失、变更和恢复等实际行为。
+
+### 19.3 重新整理后的实施计划
+
+#### 阶段 A：安全边界与数据契约修复（下一阶段）
+
+- Main 进程建立 `workspaceId -> registered realpath` 解析和圆桌专用只读授权策略。
+- 对启动快照和未来工具调用统一做 realpath、边界、敏感路径和 symlink 校验。
+- 新增结构化 `WorkspaceEvidenceRef`：`workspaceId`、相对路径、可选行范围、sha256、capturedAt、sourceEventId、workspaceVersion。
+- 区分 `workspaceFileRef`、`agentCardRef`、`eventRef`，兼容旧快照并保证旧事实不会被错误升级。
+- 合并 Runtime/Service 的重复 `addFact()` 责任，补充幂等和 version 测试。
+
+#### 阶段 B：动态只读工具
+
+- 提供 `workspace.list`、`workspace.read`、`workspace.readRange` 三个只读工具，统一经过阶段 A 的 policy。
+- 工具调用、拒绝、超时和取消都生成事件；结果带 hash、路径、行范围和来源 ID。
+- Agent 结果只能引用结构化 evidence ref，不能把未经读取的路径当作 confirmed 事实。
+- 对文件不存在、超限、并发读取和工作区变更定义稳定错误码与降级行为。
+
+#### 阶段 C：Host 语义整理与羊皮纸
+
+- 定义 Host synthesis 输入/输出 schema，明确结论、已确认决策、待验证事项、冲突观点、风险和行动项。
+- Host 生成独立草稿；用户结束会议后再生成最终稿。公有事实池始终保留全部历史和来源。
+- 羊皮纸正文默认简洁，原始 Agent 输出、状态和证据仅作为可展开追溯信息。
+- 增加冲突观点合并、来源缺失和 Host 失败时的降级测试。
+
+#### 阶段 D：状态、持久化与恢复
+
+- 将 roundtable store 提升为稳定状态源，Renderer 挂载/重建时按 sessionId 恢复。
+- 用户消息、推进、结束、工具调用和 Host 草稿全部进入事件日志。
+- 将大上下文移出频繁快照，使用摘要 hash/version 和独立证据缓存；增加 checkpoint 版本迁移。
+- 覆盖切换 Chat/圆桌、刷新、进程重启、中断恢复和并发事件顺序。
+
+#### 阶段 E：端到端验收与 MVP 门禁
+
+- 验收链路：绑定工作区 → 输入需求 → Agent 动态读取 → Refiner 提案 → Challenger 核验 → Host 整理 → 卡片详情/羊皮纸 → 多轮推进 → 恢复 → 结束 → 导出。
+- 必测边界：越权路径、敏感目录、符号链接、文件缺失、大仓库、读取超时、取消、重复事件、恢复中断和并发。
+- 只有真实模型、真实临时工作区和桌面端到端链路全部通过，才将 MVP 标记为完成。
+
+### 19.4 当前状态总表
+
+| 能力 | 当前判断 | 处理阶段 |
+|---|---|---|
+| Runtime 生命周期与基础轮次 | PoC 已完成 | 维护回归测试 |
+| 工作区资源绑定与静态快照 | 基础版已完成 | 阶段 A 安全加固 |
+| 多 Agent 共享事实池 | 基础版已完成，来源契约不足 | 阶段 A |
+| Agent 讨论中动态读取 | 未完成 | 阶段 B |
+| Host 语义整理羊皮纸 | 已实现基础版（确定性归纳） | 冲突配对、草稿/终稿、降级投影见 §23；LLM 语义重写仍待后续 |
+| 会话/用户消息稳定恢复 | 已实现基础版（§24） | 用户消息入日志、checkpoint 迁移、中断降级、挂载恢复 |
+| 取消、超时、并发和错误降级 | 部分实现（取消/超时可配置/并发追加/幂等重试有单测，无 UI 入口，缺桌面 E2E） | 手动验收后关闭 |
+| 桌面端到端真实模型验收 | 未完成 | 阶段 E |
+| 完整产品 MVP | 尚未达成 | 阶段 A–E 全部完成 |
+
+本 Review 的结论和计划替代此前“阶段 1–5 已完成即可视为 MVP”的宽松表述；后续每完成一个阶段，必须同步更新本节状态、边界和验收证据。
+
+## 20. 2026-09-03 / 阶段 A 实施记录：安全边界与数据契约修复
+
+### 已完成
+
+- 圆桌启动资源由 Main 进程根据 `workspaceId` 从 `userData/janusx/workspaces` 注册表解析，Renderer 提供的 `workspacePath` 不再作为最终授权依据；未注册或无效 workspace 会拒绝启动。
+- 注册路径经过现有 `realpath` 和目录检查，实际读取继续复用 workspace path guard、敏感路径排除和只读扫描策略。
+- 新增结构化 `RoundtableEvidenceRef`：区分 `workspace-file`、`agent-card`、`event` 引用；工作区文件引用记录 workspaceId、相对路径、sha256、capturedAt、workspaceVersion 和来源事件。
+- 新增 `workspace:evidence-captured` 事件；工作区证据事实关联来源事件，不再使用无来源的路径字符串作为唯一追溯信息。
+- fact 写入责任收敛到 Runtime，Service 仅负责事件持久化和广播，避免重复 version 递增。
+- `RoundtableRuntime.hydrate()` 对旧快照缺失的 `workspaceEvidenceRefs` 提供默认值，保留旧 `workspaceContextFiles` 兼容读取。
+- Renderer Agent 详情改为消费联合引用并显示可读的 workspace/card/event 标识。
+
+### 验证
+
+- `tests/unit/roundtable-runtime.test.ts`（6）+ `roundtable-state.test.ts`（2）+ `roundtable-store.test.ts`（1）+ `roundtable-agent-work-projection.test.ts`（2）+ `companion-workspace-registry.test.ts`（2）
+- 2026-09-03 实测共 13 个测试通过（文档此前误写为 10 个，已更正）。
+- 圆桌动态工作区工具（`src/main/roundtable/workspace-tools.ts`）暂无专项单元测试；仅有通用 `tests/unit/agent/workspace-tools.test.ts` 覆盖另一套 Agent 工具，不可替代。
+
+### 阶段 A 边界与剩余风险
+
+- 当前启动阶段仍生成受限大小的上下文快照；工作区全量原文仍随每次 `store.append` 写入 JSONL 快照，存在重复保存与大仓库首轮阻塞风险。
+- `RoundtableRuntime.start()` 仍直接信任传入的 `workspacePath`，registry 强校验只落在 `RoundtableService.start()`；直调 Runtime 可绕过，未达到“Renderer 不再拥有最终路径决定权”。
+- 工作区证据目前以启动快照为基础，`lineStart/lineEnd` 已在类型中预留但从未填充；未经动态读取的 Agent 观点仍可能经 Host 路径被标记为 confirmed，缺少升级门禁。
+- 阶段 A 完成后进入阶段 B：动态只读工具接入与真实临时工作区越权测试。
+- 2026-09-03 工作区实测：阶段 B 地基已在工作区出现（`executeRoundtableWorkspaceTool` + `workspace:tool-started/completed/failed/cancelled` 事件 + Service 侧 LLM `workspace_list/read/read_range` 接线），但未提交、无专项测试、无 UI 呈现，仍按“部分实现（工作区未提交）”处理，不视为阶段 B 完成。
+
+## 21. 2026-09-03 / 工作区实测校准与下一步（阶段 B 收尾）
+
+### 本次校准方法
+
+- 直读 `src/main/roundtable/runtime.ts`、`service.ts`、`workspace-tools.ts`、`store.ts`、`src/shared/roundtable/events.ts|state.ts|parchment.ts`、`src/renderer/src/components/janus/JanusRoundtablePane.tsx|JanusIsland.tsx|AgentResultCard.tsx|agentWorkProjection.ts`。
+- 运行 `npx vitest run` 5 个圆桌相关单测文件：13/13 通过。
+- 运行 `npx tsc --noEmit`：仅 2 个与圆桌无关的既有错误（`handlers.ts` 缺 `shell`、`electron-api-fallback.ts` 缺 `onPrepareQuit`）。
+
+### 与文档的偏差修正（本次已写入）
+
+1. §3“用户显式开启轮次：未实现”已过时：`JanusRoundtablePane` 已有“开启下一轮”按钮 + 空输入 `advance('')`，Runtime 与单测覆盖空输入推进，改为“部分实现”。
+2. §3“工作区工具与审批：未实现”已过时：只读 `workspace.list/read/readRange` 地基已在工作区实现，改为“部分实现（工作区未提交）”，并拆分“写/命令/Git 审批：未实现”。
+3. §20“共 10 个测试通过”错误：实测为 13 个，已更正并列出文件级计数；同时注明圆桌 `workspace-tools` 无专项测试。
+4. §20“动态工具属于阶段 B（未来）”已过时：工具事件与 LLM 接线已在工作区存在，改为“阶段 B 地基已在工作区出现，但未提交、无测试、无 UI，不视为完成”。
+
+### 当前事实快照（工作区含未提交）
+
+- 生命周期/轮次闸门/空输入推进/失败保留/事实生成：PoC 完成，有单测。
+- 阶段 A：registry 解析（仅 Service 层）、结构化 evidence ref、`evidence-captured` 事件、fact 收敛到 Runtime、hydrate 兼容：工作区完成但未提交。
+- 阶段 B：`workspace.list`（depth 0–4、maxEntries 1–1000、跳过 symlink/敏感路径）、`workspace.read/readRange`（offset/maxBytes 校验、UTF-8 检查、secret redact、sha256 回传）、工具四事件、取消信号骨架、LLM 三工具接线：工作区已实现地基；缺专项测试、缺 UI 呈现、缺超时触发、缺行号 evidence 填充、缺错误码矩阵文档。
+- 阶段 C（Host 语义整理）：未开始，`projectHumanReadableParchment()` 仍是规则分类截断（每类 5 条），无冲突合并、无草稿/终稿分离。
+- 阶段 D（状态/持久化）：`userMessages` 仍是 Renderer 本地状态未入 JSONL；`store.append` 每次存全量 state（含 96KB 上下文）；`store.load` 取最后快照而非事件重放；Island 卸载即丢状态。
+- 阶段 E：无桌面端到端真实模型验收；`tests/e2e/tmp-halo-*` 临时文件堆积（11 个），需清理。
+
+### 下一步实施（只做阶段 B 收尾，不开 C/D）
+
+1. 提交前加固 Runtime 信任边界：`Runtime.start()` 内对每个 resource 做 registry 二次解析或显式 `resolveWorkspaceTarget` 边界校验，拒绝未注册 `workspaceId`；补“伪造 workspacePath + 合法 id”“越权 id”“symlink 逃逸”三个单测（真实临时目录）。
+2. 为 `src/main/roundtable/workspace-tools.ts` 补专项单测：真实临时工作区覆盖 list 越界/depth 截断、read 缺失/超限/非文本、readRange offset 合法性、敏感路径跳过、取消信号、并发读取；错误码收敛为 `WORKSPACE_TOOL_*` 并写入文档。
+3. 填充行号级 evidence：工具成功时回填 `relativePath + sha256 + lineStart/lineEnd + sourceEventId`，卡片 `evidenceRefs` 只接受结构化 ref；禁止把未经工具读取的路径标为 confirmed（Host 结果默认 `pending-validation`，除非引用有效 tool evidence）。
+4. 瘦身启动快照：状态中只保留文件摘要/manifest（path + sha256 + version），全量原文移入独立证据缓存或按需 `readRange`；`store.append` 改为事件 + 轻快照，避免每次复制 96KB。
+5. UI 最小呈现（不做大改）：Agent 卡片详情展示工具调用轨迹（toolName/path/状态/errorCode），失败/拒绝可点击展开；`agentWorkProjection` 订阅 `workspace:tool-*` 并在 Deck 显示“读取中/失败”轻态。
+6. 清理与提交：将 `tests/e2e/tmp-halo-*` 移出或删除，提交 `workspace-tools.ts` + roundtable 修改 + 本文档 §3/§20/§21，提交信息注明“阶段 B 地基（未含 C/D）”。
+
+### 验收门（阶段 B 可关闭的条件）
+
+- `npx vitest run` 圆桌 5 文件 + 新增 workspace-tools 专项全部通过，且覆盖越权/敏感/缺失/超限/取消。
+- 真实临时工作区演示：绑定 → 启动快照 → Agent `workspace.read` 指定文件 → 卡片引用可追溯 → 羊皮纸来源索引可定位到文件+hash。
+- JSONL 单事件体积不再随上下文线性膨胀；重复 `advance` 不产生重复轮次。
+- 上述通过后，再开阶段 C（Host 语义整理），不得跳步。
+
+## 22. 2026-09-03 / 阶段 B 收尾 Review 记录
+
+### 实施内容（对照 §21 逐项关闭）
+
+1. **信任边界**：`RoundtableRuntime` 新增 `resolveWorkspace` 注入（`runtime.ts`），`start()` 对每个 resource 做 id 格式校验 + 注册解析 + `realpath` 目录确认，客户端路径直接丢弃；无解析器时仍做本地目录边界校验。`RoundtableService` 注入基于 `userData/janusx/workspaces` 的解析器，形成双层校验。
+2. **错误码**：`workspace-tools.ts` 新增 `RoundtableWorkspaceToolError`（`WORKSPACE_TOOL_WORKSPACE_MISMATCH/CANCELLED/INVALID_RANGE/INVALID_LIST`），底层 path-guard/policy 错误码（`SENSITIVE_PATH`、`TARGET_UNAVAILABLE` 等）原样透出；`Runtime` 侧补充 `WORKSPACE_TOOL_INVALID_WORKSPACE_ID/NOT_ATTACHED/TIMEOUT`。
+3. **行号 evidence + 确认门禁**：`RoundtableEvidenceRef` 新增 `origin: 'snapshot' | 'tool'`；`workspace.read` 回填 `lineStart: 1`，`readRange` 经前缀读取推导绝对行号；`tool-completed` 证据自动打 `sourceEventId`；Host 结果无工具证据时落 `pending-validation`，有 `origin:'tool'` + sha256 时才 `confirmed`。
+4. **快照瘦身**：`store.append` 将 `workspaceContext` 移入 `roundtable-context-<sessionId>.txt` sidecar（同 hash 跳过重写），JSONL 仅存轻快照；`load` 自动回贴，旧全量行兼容。
+5. **UI 轨迹**：`agentWorkProjection` 新增 `toolCalls` 并订阅四类工具事件；Deck 新增 `WORKSPACE READS` 区（最近 5 条，失败可展开 errorCode）；卡片详情 evidence 显示 `#Lx-y` 行号 + sha 短码，并附同一 Agent 读取轨迹。
+6. **清理**：删除 `tests/e2e/tmp-halo-*` 11 个临时文件。
+
+### 验证证据
+
+- `npx vitest run` 7 文件共 **36/36 通过**：runtime 6、workspace-tools 新增 12、workspace-trust 新增 7、store 3、projection 4、state 2、workspace-registry 2。
+- 既有 `roundtable-runtime.test.ts` 两处按新语义更新：hydrate 改用真实临时目录；fixture Host 事实期望由 `confirmed` 改为 `pending-validation`。
+- `npx tsc --noEmit`：仅 2 个与圆桌无关的既有错误（`handlers.ts` 缺 `shell`、`electron-api-fallback.ts` 缺 `onPrepareQuit`），本次修改未新增类型错误。
+
+### 本次 Review 发现的剩余风险（转阶段 C/D）
+
+1. 超时默认 30s 且不可经 IPC 配置；`cancel()` 暂无 UI 入口，仅运行时内部使用。
+2. `readRange` 行号依赖前缀二次读取，大 offset 文件有额外 I/O；失败时行号留空，详情仅显示路径 + hash。
+3. 快照原文仍全量进 LLM 提示词（96KB 上限），大仓库首轮阻塞问题未根治，需阶段 D 做 manifest 化 + 按需读取。
+4. `userMessages` 仍是 Renderer 本地状态，未入 JSONL；Island 卸载即丢，属阶段 D。
+5. 阶段 C 未开始：羊皮纸仍是规则投影，无 Host 语义归纳与冲突合并。
+
+### 状态
+
+阶段 B 视为**收尾完成**，可进入阶段 C（Host 语义整理）。完整产品 MVP 仍需 C/D/E。
+
+## 23. 2026-09-03 / 阶段 C 实施记录：Host 语义整理与羊皮纸
+
+### 设计（两层输出严格分离）
+
+- 公有事实池（`RoundtableState.facts`）保持完整结构化历史；Host 归纳结果存为独立 `HostSynthesis` 草稿序列（`state.hostDrafts`），经 `host:synthesis` 事件入日志。
+- 合成器为纯函数 `synthesizeHostDraft()`（`src/shared/roundtable/host-synthesis.ts`），无模型调用：结论取最新 Host 卡片首句（终稿提示词已要求首句即结论），决策去重、待验证/风险/行动分类截取、concern↔proposal 关键词配对生成 open 冲突（上限 5，中英双分词：英文停用词过滤 + 中文二元字串）。
+- 缺来源事实不阻塞合成，仅贡献空来源链接；空状态返回兜底结论。
+- 每轮 `awaiting-user` 后自动记一笔草稿（`final: false`），`end()` 先记终稿（`final: true`）再结束；合成失败只丢弃该笔草稿，不影响轮次闸门与事实池。
+- 羊皮纸优先取最新草稿（含 DRAFT/FINAL 标记、待验证、冲突），无草稿时降级为原规则投影；`exportMarkdown` 结论优先取草稿并增设 Conflicts 节。
+
+### 实施内容
+
+1. 契约：`HostSynthesis/HostSynthesisConflict`、`state.hostDrafts`、`host:synthesis` 事件、`HumanReadableParchment.pending/conflicts`。
+2. 接线：reducer 按（roundNumber, final）幂等写入；Runtime `getState/hydrate` 深拷贝；`store` 经现有 sidecar 机制持久化草稿（草稿体量小，无需特殊处理）。
+3. 渲染：详情羊皮纸新增 PENDING VALIDATION、CONFLICTS 章节，标题栏显示 DRAFT/FINAL。
+4. 边界：当前为确定性归纳 + 去重配对，非 LLM 语义重写；真实模型下结论首句来自 Host 模型输出，结构仍由合成器保证。
+
+### 验证证据
+
+- 新增 `tests/unit/roundtable-host-synthesis.test.ts` 9 项：空草稿、结论首句、中英冲突配对、冲突上限、缺来源、去重分流、每轮草稿+终稿、reducer 幂等、hydrate 保留。
+- `roundtable-state.test.ts` +2：无草稿降级默认值、有草稿优先结论/待验证/冲突且事实池 intact。
+- 全量圆桌 8 文件 **47/47 通过**（36 + 9 + 2）；`tsc` 仍仅 2 个无关既有错误；eslint 0 errors。
+- C1/C2/C3 三次分段 review：C1 去掉非空断言与重复停用词；C2 修正 `end()` sessionId 收窄；C3 确认详情视图默认折叠不受新章节影响。
+
+### 剩余风险（转阶段 D）
+
+1. 冲突配对是关键词启发式，长难句/隐喻冲突可能漏配或误配，需真实讨论复核阈值（当前 ≥2 关键词）。
+2. `userMessages` 仍未入事件日志；草稿虽已入日志但恢复后用户消息流仍不完整。
+3. 超时不可配置、`cancel()` 无 UI 入口（阶段 B 遗留）。
+
+### 状态
+
+阶段 C 视为**收尾完成**。下一步阶段 D（状态、持久化与恢复）。
+
+## 24. 2026-09-03 / 阶段 D 实施记录：状态、持久化与恢复
+
+### 设计（持久化优先于视图状态）
+
+- 会话、用户消息、推进、结束、工具调用、Host 草稿全部进入事件日志；Renderer 仅订阅快照，挂载时按 sessionId 恢复。
+- 新增 `user:message` 事件与 `state.userMessages`：`start()` 在首轮前记录议题，`advance()` 仅非空补充入日志，空推进不产生空白消息。
+- `migrateRoundtableState`（checkpoint v1）为旧快照补齐缺失字段；`markInterrupted` 将崩溃残留的 running 快照降级为可续 awaiting-user，不伪造历史。
+- Renderer：sessionId 落 localStorage，挂载无状态时自动 `restore`；用户消息改由 state 派生 + 乐观输入经 `reconcilePendingUserMessages` 对账（content, roundNumber 唯一）；`user:message` 事件先于 round-trip 到达，讨论流保持即时。
+
+### 实施内容
+
+1. 契约：`RoundtableUserMessage`、`user:message` 事件、`userMessages`（必填）、`ROUNDTABLE_CHECKPOINT_VERSION`。
+2. 接线：Runtime 收发用户消息、hydrate 深拷贝；`service.restore` 经迁移 + 中断降级后重建 Runtime（无副作用，不重跑 Agent）。
+3. 渲染：Pane 挂载恢复、消息派生、running 阶段误发不再留乐观残影；工具调用轨迹仍为内存投影（恢复后仅卡片证据可追溯，调用过程史不重建）。
+4. Store：验证事件有序返回与并发追加不丢行；sidecar 机制不变（草稿随轻快照持久化）。
+
+### 验证证据
+
+- 新增/扩展单测：reducer 去重（同 eventId/同 messageId）、迁移（缺字段/null）、中断降级、start/advance/空推进消息记录、hydrate 保留、store 有序 + 并发 3 行、乐观对账（含同文不同轮不误删）。
+- 全量圆桌 8 文件 **55/55 通过**；`tsc` 无新增圆桌错误（其余为工作区其他未提交改动及 2 个既有错误）；renderer 改动经 `tsc` 覆盖（本工程无组件单测基建）。
+- D1/D2/D3 三次分段 review：D1 确认 reducer 引用语义；D2 确认并发追加原子性风险可接受（小行单 write）；D3 将 running 误发的乐观消息改为不入队。
+
+### 剩余风险（转阶段 E）
+
+1. 工具调用过程史、queued/working 瞬态不恢复；恢复后 Deck 仅从卡片重建结果态。
+2. 超时不可经 IPC 配置、`cancel()` 无 UI 入口（B 遗留）；冲突启发式待真实复核（C 遗留）。
+3. 桌面端到端真实模型验收仍未做；`advance` 重复点击防抖仍缺（快速双击可能建两轮，幂等键未落盘）。
+
+### 状态
+
+阶段 D 视为**收尾完成**。下一步阶段 E（端到端验收与 MVP 门禁）：真实模型 + 真实工作区全链路、越权/敏感/symlink/缺失/大仓库/超时/取消/重复事件/恢复中断/并发矩阵，以及 `advance` 幂等落盘。
+
+## 25. 2026-09-03 / 阶段 E 实施记录：端到端验收与 MVP 门禁
+
+### 实施内容（自动化可达部分）
+
+1. **advance 幂等落盘**：`advance(input, requestId)`，`state.advanceKeys` 记录 requestId→轮次并随快照持久化；运行中同 key 重试返回当前状态（不抛错、不建轮），异 key 仍抛错；Renderer 侧 `dispatchBusy` 禁止 start/advance/end 重复提交，每次 advance 配唯一 requestId。
+2. **超时可配置**：`roundtable:start` 支持 `toolTimeoutMs`（ intake 校验 1s–120s），Service 透传 Runtime；超时机制抽为可测 `withTimeout`（挂起任务按码拒绝、快任务直通、计时器清理）。
+3. **导出纯函数化**：`exportRoundtableMarkdown(state)` 移入共享层，Service 只做委托，全链路可无 Electron 单测。
+4. **全链路集成测试**（`roundtable-lifecycle.test.ts`）：真实临时工作区绑定 → 启动快照 → Agent 动态 `read` → 提案/核验/整理 → 卡片详情证据 → 补充推进 → store 落盘/恢复 → 结束终稿 → 导出 Markdown；另覆盖大仓库预算（60 文件→≤40 快照、总上下文≤96KB）与无草稿降级导出。
+5. **边界矩阵现状**：越权/敏感/symlink/缺失/取消/重复事件/恢复中断/并发/大仓库/超时机制均有真目录单测；真实模型与桌面 E2E 不在自动化范围，转手动清单。
+
+### E2 自检抓出的真 bug（已修）
+
+1. `tool-completed` 去重键缺 `origin` 与行号：Agent 动态读取同文件会吞掉启动快照 ref。现去重键为 workspaceId + 路径 + sha + origin + 行号，快照与工具证据共存（集成测试双断言锁定）。
+2. 冲突配对误用卡片标题：自动标题（"refiner result"）共享 "result" 一词，导致任意两卡误配。现关键词只取正文、无关键词才回退标题，并加回归单测。
+
+### 验证证据
+
+- 全量圆桌 9 文件 **62/62 通过**（55 + 幂等/超时 2 + 集成 3 + 冲突回归 2）。
+- `tsc`：圆桌/IPC/preload 相关零错误；全量剩余错误均为工作区其他未提交改动及 2 个既有错误。
+- eslint：改动文件 0 errors。
+
+### 手动验收清单（真实模型 + 桌面，自动化未覆盖）
+
+1. 添加工作区 → 提议题 → 首轮三卡出现，Deck 显示 WORKSPACE READS。
+2. 点卡片开详情：sections/evidence（含 `#Lx-y`）可读；失败读取可展开 errorCode。
+3. 空输入“开启下一轮”无空白气泡；带补充推进后羊皮纸更新。
+4. 结束会议 → 羊皮纸变 FINAL → 导出 Markdown 含结论/冲突/来源。
+5. 刷新或重启后圆桌自动恢复上次会话（含用户消息与草稿）。
+6. 进程崩溃模拟（任务管理器杀掉）：重启恢复后停在可续 awaiting-user，不卡 running。
+7. 双击“开启下一轮”只建一轮；弱网重试不丢补充、不重轮。
+
+### MVP 裁决
+
+自动化门禁已全部通过；按 §19“完整产品 MVP 需真实模型与桌面端到端”规则，**MVP 不正式关闭**，待上述手动清单逐项打勾。当前为“代码级 MVP 就绪（automated MVP-ready），发布前须完成手动验收”。
+
+## 26. 2026-09-03 / 羊皮纸详情视觉统一
+
+- 问题：羊皮纸附属 Island 使用米色纸张 + 衬线 + 金色描边的独立风格，与卡片详情（深色档案面板）并置时跳脱。
+- 决策：详情羊皮纸改与 `agent-result` 共用视觉语言——`JanusRoundtableParchment` 详情分支直接渲染 `janus-agent-result-detail` 结构（eyebrow/DRAFT/FINAL、标题、结论摘要、章节、来源索引证据盒）；纸张主题 CSS 整块移除，仅保留内联摘要分支的旧规则（当前唯一调用点恒为 detailed）。
+- 章节与之前一致：已确认决策、关键依据、未决与风险、待验证、冲突、下一步行动；结论仍取 Host 草稿。
+- 验证：`tsc` 相关零错误，eslint 干净；以目视验收为准（与卡片详情并排对比）。
+
+## 27. 2026-09-03 / 发送即显用户消息
+
+- 问题：发送后 `handleSend` 先强制滚到底部，工作卡片时间戳更新、排在用户消息之后，自动滚动把视口钉在底部——用户先看到卡片，自己的消息被顶出可视区。
+- 修复（仅 discussionOnly 圆桌对话，普通 Chat 不动）：发送时不再预滚到底，改记锚点时间；消息渲染后的 layout effect 将视口定位到刚发出的用户消息顶部，之后到达的卡片改为新消息 badge 提示，不再抢夺视口；running 阶段误发无新消息时锚点自动失效。
+- 验证：`tsc` 相关零错误，eslint 干净；以桌面目视验收为准（发送后首屏应为用户消息，卡片在下方）。

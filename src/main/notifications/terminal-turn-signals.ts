@@ -3,9 +3,9 @@ const MAX_ERROR_WINDOW = 2_048
 const ANSI_CSI = /\x1b\[[0-?]*[ -/]*[@-~]/g
 const ANSI_OSC = /\x1b\].*?(?:\x07|\x1b\\)/g
 const SERVICE_ERROR_PATTERNS = [
-  /\b(?:api\s+error|request\s+failed|request\s+error|unexpected\s+status|http\s+error|status\s+code)\b[^\r\n]{0,96}\b(?:429|503)\b/i,
-  /\b(?:429|503)\b[^\r\n]{0,96}\b(?:too\s+many\s+requests|rate[ _-]?limit|service\s+unavailable|temporarily\s+unavailable|overloaded)\b/i,
-  /\b(?:error|failed|failure)\b[^\r\n]{0,96}\b(?:rate[ _-]?limit(?:ed|_error)?|service\s+unavailable|server\s+overloaded)\b/i,
+  /\b(?:api\s+error|request\s+failed|request\s+error|unexpected\s+status|http\s+error|status\s+code)\b[^\r\n]{0,96}\b(?:429|500|502|503|504|529)\b/i,
+  /\b(?:429|500|502|503|504|529)\b[^\r\n]{0,96}\b(?:too\s+many\s+requests|rate[ _-]?limit|service\s+unavailable|temporarily\s+unavailable|overloaded|gateway\s+timeout|bad\s+gateway|internal\s+server\s+error|timeout)\b/i,
+  /\b(?:error|failed|failure)\b[^\r\n]{0,96}\b(?:rate[ _-]?limit(?:ed|_error)?|service\s+unavailable|server\s+overloaded|gateway\s+timeout|timed\s+out)\b/i,
 ]
 
 function plainTerminalText(data: string): string {

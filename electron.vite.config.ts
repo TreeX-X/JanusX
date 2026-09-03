@@ -31,7 +31,8 @@ export default defineConfig({
   renderer: {
     server: {
       host: '127.0.0.1',
-      port: 5173,
+      // 5173 常被 Windows winnat/Hyper-V/WSL2 保留（netsh excludedportrange），会报 EACCES，改用实测空闲的 5799
+      port: Number(process.env.ELECTRON_VITE_PORT) || 5799,
       strictPort: false
     },
     resolve: {

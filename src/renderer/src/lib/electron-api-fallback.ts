@@ -112,6 +112,7 @@ export function installElectronApiFallback(): void {
       recordFeedback: () => unavailableKnowledge(),
       feedbackSummary: () => unavailableKnowledge(),
       context: () => unavailableKnowledge(),
+      diagnostics: () => unavailableKnowledge(),
       getSettings: () => unavailableKnowledge(),
       updateSettings: () => unavailableKnowledge(),
     },

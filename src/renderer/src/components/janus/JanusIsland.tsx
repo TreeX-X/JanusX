@@ -18,6 +18,7 @@ import { JanusRoundtableParchment } from './JanusRoundtableParchment'
 import { faceClass } from './janusIslandRuntime'
 import type { JanusExpandedView, JanusIslandProps } from './janusIslandTypes'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
+import type { RoundtableToolCall } from './agentWorkProjection'
 import { projectParchment } from '../../../../shared/roundtable/parchment'
 import { useProjectRunning } from './useProjectRunning'
 
@@ -68,7 +69,17 @@ export function JanusIsland({
   const [auxiliaryModule, setAuxiliaryModule] = useState<JanusAuxiliaryModuleType | null>(null)
   const [activeAgentCard, setActiveAgentCard] = useState<import('../../../../shared/roundtable/events').AgentResultCard | null>(null)
   const [roundtableState, setRoundtableState] = useState<RoundtableState | null>(null)
+  const [roundtableToolCalls, setRoundtableToolCalls] = useState<RoundtableToolCall[]>([])
   const [auxiliaryClosing, setAuxiliaryClosing] = useState(false)
+
+  // Ending a meeting clears the dialog (pane reports null): drop the detail
+  // island and its card/parchment state so no stale session stays visible.
+  useEffect(() => {
+    if (roundtableState) return
+    setActiveAgentCard(null)
+    setAuxiliaryModule((module) => (module === 'agent-result' || module === 'roundtable-parchment' ? null : module))
+    setParchmentOpen(false)
+  }, [roundtableState])
   const maintenanceTasks = useBlueprintMaintenanceStore((state) => state.tasks)
   const requestMaintenanceOpen = useBlueprintMaintenanceStore((state) => state.requestOpen)
   const cancelMaintenance = useBlueprintMaintenanceStore((state) => state.cancel)
@@ -150,6 +161,38 @@ export function JanusIsland({
     requestMaintenanceOpen({ blueprintId: maintenanceTask.blueprintId, nodeId: maintenanceTask.nodeScope.type === 'blueprint' ? undefined : maintenanceTask.nodeScope.nodeId })
     setActiveWorkbench('blueprint')
   }, [loadBlueprint, maintenanceTask, requestMaintenanceOpen, setActiveWorkbench])
+
+  // Minimal stage-B tool trace for the agent-result detail: the pane owns the
+  // full work projection, the Island only mirrors tool calls so the detail can
+  // show reads/failures next to evidence without re-plumbing props.
+  useEffect(() => window.electron.roundtable?.onEvent((event) => {
+    if (event.type === 'workspace:tool-started') {
+      setRoundtableToolCalls((items) => items.some((item) => item.toolCallId === event.toolCallId)
+        ? items
+        : [...items.slice(-19), { toolCallId: event.toolCallId, toolName: event.toolName, workspaceId: event.workspaceId, agentId: event.agentId, roundId: event.roundId, status: 'started' as const }])
+    } else if (event.type === 'workspace:tool-completed') {
+      setRoundtableToolCalls((items) => {
+        const record: RoundtableToolCall = { toolCallId: event.toolCallId, toolName: event.toolName, workspaceId: event.workspaceId, agentId: event.agentId, roundId: event.roundId, status: 'completed' }
+        const index = items.findIndex((item) => item.toolCallId === event.toolCallId)
+        if (index < 0) return [...items.slice(-19), record]
+        const next = [...items]; next[index] = record; return next
+      })
+    } else if (event.type === 'workspace:tool-failed') {
+      setRoundtableToolCalls((items) => {
+        const record: RoundtableToolCall = { toolCallId: event.toolCallId, toolName: event.toolName, workspaceId: event.workspaceId, agentId: event.agentId, roundId: event.roundId, status: 'failed', errorCode: event.errorCode, error: event.error }
+        const index = items.findIndex((item) => item.toolCallId === event.toolCallId)
+        if (index < 0) return [...items.slice(-19), record]
+        const next = [...items]; next[index] = record; return next
+      })
+    } else if (event.type === 'workspace:tool-cancelled') {
+      setRoundtableToolCalls((items) => {
+        const record: RoundtableToolCall = { toolCallId: event.toolCallId, toolName: event.toolName, workspaceId: event.workspaceId, agentId: event.agentId, roundId: event.roundId, status: 'cancelled' }
+        const index = items.findIndex((item) => item.toolCallId === event.toolCallId)
+        if (index < 0) return [...items.slice(-19), record]
+        const next = [...items]; next[index] = record; return next
+      })
+    }
+  }) ?? (() => undefined), [])
 
   const maintenanceNeedsAttention = maintenanceTask?.status === 'failed' || maintenanceTask?.status === 'stale' || maintenanceTask?.status === 'proposal-ready'
   const peekTitle = useMemo(() => {
@@ -402,7 +445,12 @@ export function JanusIsland({
             <h2>{activeAgentCard?.title ?? 'Agent 结果'}</h2>
             <p className="janus-agent-result-detail__summary">{activeAgentCard?.summary ?? '暂无可用结果'}</p>
             {activeAgentCard?.sections?.map((section) => <section key={section.id}><h3>{section.title}</h3><p>{section.markdown}</p></section>)}
-            {!!activeAgentCard?.evidenceRefs?.length && <div className="janus-agent-result-detail__evidence"><strong>Evidence</strong><span>{activeAgentCard.evidenceRefs.join(' · ')}</span></div>}
+            {!!activeAgentCard?.evidenceRefs?.length && <div className="janus-agent-result-detail__evidence"><strong>Evidence</strong><span>{activeAgentCard.evidenceRefs.map((ref) => ref.kind === 'workspace-file' ? `${ref.workspaceId}/${ref.relativePath}${typeof ref.lineStart === 'number' ? `#L${ref.lineStart}${typeof ref.lineEnd === 'number' && ref.lineEnd !== ref.lineStart ? `-${ref.lineEnd}` : ''}` : ''}${ref.sha256 ? ` · ${ref.sha256.slice(0, 8)}` : ''}` : ref.kind === 'agent-card' ? ref.cardId : ref.eventId).join(' · ')}</span></div>}
+            {(() => {
+              const tools = roundtableToolCalls.filter((item) => item.agentId === activeAgentCard?.agentId)
+              if (!tools.length) return null
+              return <div className="janus-agent-result-detail__evidence"><strong>Workspace reads</strong><span>{tools.map((item) => `${item.toolName}:${item.status}${item.errorCode ? `(${item.errorCode})` : ''}`).join(' · ')}</span></div>
+            })()}
             {activeAgentCard && <small>Updated {new Date(activeAgentCard.updatedAt || activeAgentCard.createdAt).toLocaleString()}</small>}
           </div>}
         </JanusAuxiliaryIsland>

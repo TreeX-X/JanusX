@@ -231,8 +231,7 @@ export function registerJanusHandlers(): void {
         commitLimit: payload.commitLimit
       })
       if (payload.workspacePath && result) {
-        void knowledgeObservationService.capture({
-          workspacePath: payload.workspacePath,
+        void captureForCwd(payload.workspacePath, {
           source: 'git-analyzer',
           type: 'analysis-result',
           content: result.result.summary || `Janus analysis for ${payload.nodeId}`,
@@ -249,7 +248,7 @@ export function registerJanusHandlers(): void {
             progress: result.result.progress,
             status: result.result.status,
           },
-        }).catch(() => {})
+        }).catch(logKnowledgeCaptureFailure)
       }
       return result
     }

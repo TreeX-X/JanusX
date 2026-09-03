@@ -50,6 +50,7 @@ vi.mock('../../src/main/knowledge/search-service', () => ({ knowledgeSearchServi
 vi.mock('../../src/main/knowledge/truth-service', () => ({ knowledgeTruthService: {} }))
 vi.mock('../../src/main/knowledge/context-service', () => ({ knowledgeContextService: {} }))
 vi.mock('../../src/main/knowledge/operations-service', () => ({ knowledgeOperationsService: {} }))
+vi.mock('../../src/main/knowledge/diagnostics-service', () => ({ knowledgeDiagnosticsService: {} }))
 vi.mock('../../src/main/config/service', () => ({
   configService: {
     getKnowledgeSettings: mocks.getKnowledgeSettings,
@@ -80,7 +81,7 @@ describe('Knowledge IPC contract', () => {
 
   it('defines and registers exactly the public channel set without maintenance exposure', () => {
     const channels = Object.values(KNOWLEDGE_CHANNELS)
-    expect(channels).toHaveLength(25)
+    expect(channels).toHaveLength(26)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -129,6 +130,7 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.recordFeedback(feedbackInput)
     await knowledgeApi.feedbackSummary('workspace-1')
     await knowledgeApi.context({ query: 'context', workspaceId: 'workspace-1' })
+    await knowledgeApi.diagnostics({ workspaceId: 'workspace-1', recentLimit: 5 })
     await knowledgeApi.getSettings()
     await knowledgeApi.updateSettings({ enabled: false })
 
@@ -156,6 +158,7 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.recordFeedback, feedbackInput],
       [KNOWLEDGE_CHANNELS.feedbackSummary, 'workspace-1'],
       [KNOWLEDGE_CHANNELS.context, { query: 'context', workspaceId: 'workspace-1' }],
+      [KNOWLEDGE_CHANNELS.diagnostics, { workspaceId: 'workspace-1', recentLimit: 5 }],
       [KNOWLEDGE_CHANNELS.getSettings],
       [KNOWLEDGE_CHANNELS.updateSettings, { enabled: false }],
     ])
@@ -282,12 +285,13 @@ describe('Knowledge IPC contract', () => {
       () => api.recordFeedback({ action: 'open', resultKind: 'fact', workspaceId: 'workspace', outcome: 'error' }),
       () => api.feedbackSummary('workspace'),
       () => api.context({ query: 'fallback', workspaceId: 'workspace' }),
+      () => api.diagnostics(),
       () => api.getSettings(),
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(25)
-    expect(calls).toHaveLength(25)
+    expect(Object.keys(api)).toHaveLength(26)
+    expect(calls).toHaveLength(26)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

@@ -10,10 +10,12 @@ import { knowledgeSearchService } from '../knowledge/search-service'
 import { knowledgeTruthService } from '../knowledge/truth-service'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { knowledgeOperationsService } from '../knowledge/operations-service'
+import { knowledgeDiagnosticsService } from '../knowledge/diagnostics-service'
 import {
   KNOWLEDGE_CHANNELS,
   type AuditQuery,
   type ExtractInput,
+  type KnowledgeDiagnosticsQuery,
   type ReviewCandidateInput,
   type RevokeTruthInput,
 } from '../../shared/ipc/knowledge'
@@ -147,5 +149,10 @@ export function registerKnowledgeHandlers(): void {
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.context, async (_event, request: KnowledgeContextRequest) => {
     return knowledgeContextService.search(request)
+  })
+
+  // Phase 0: read-only pipeline diagnostics for the Workbench status bar.
+  ipcMain.handle(KNOWLEDGE_CHANNELS.diagnostics, async (_event, query?: KnowledgeDiagnosticsQuery) => {
+    return knowledgeDiagnosticsService.snapshot(query ?? {})
   })
 }

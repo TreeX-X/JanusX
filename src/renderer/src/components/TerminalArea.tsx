@@ -1089,7 +1089,10 @@ function LeafPane({
                 focused={workspaceVisible && isFocused && isActive}
                 workspaceVisible={workspaceVisible}
               />
-              {terminal.status === 'error' && (
+              {/* 仅 PTY 真死才弹模态遮罩：创建失败（errorMessage）或非零退出（exitCode）。
+                  Turn 级失败（429/5xx）主进程已只上报 'wait'，此处再加一道兜底，
+                  避免无 message 的裸 'error'（历史残留/误报）锁死输入。 */}
+              {(terminal.status === 'error' && (terminal.errorMessage || terminal.exitCode !== undefined)) && (
                 <div
                   className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
                   style={{ background: 'rgba(10, 10, 10, 0.72)' }}

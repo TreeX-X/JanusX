@@ -20,7 +20,6 @@ function buildReadme(): string {
     '- `observations/` stores append-only raw observations.',
     '- `observations/active/` holds monthly sharded observation files (`YYYY-MM.jsonl`); new records are written here.',
     '- `observations/archive/` holds gzipped archived monthly shards; archived records remain queryable (the read path gunzips and aggregates them).',
-    '- `observations/observations.jsonl` is a legacy flat log kept for backward-compat reads; new writes go to active shards.',
     '- `blobs/` stores gzip-compressed blobs for long observations, content-addressed by sha256.',
     '- `facts/`, `wiki/`, and `graph/` store derived knowledge layers.',
     '- `audit/` records every accepted or rejected mutation.',
@@ -48,10 +47,6 @@ function buildFileSpecs(snapshot: KnowledgeContractsSnapshot): ContractFileSpec[
     {
       relativePath: 'README.md',
       content: `${buildReadme()}\n`,
-    },
-    {
-      relativePath: 'observations/observations.jsonl',
-      content: '',
     },
     {
       relativePath: 'facts/candidates.jsonl',

@@ -111,10 +111,6 @@ describe('KnowledgeObservationService', () => {
     expect(fileContent).toContain('"source":"manual"')
     expect(fileContent).toContain('"type":"user-note"')
     expect(fileContent).toContain('"retentionClass":"evidence"')
-
-    // New writes must not land in the legacy flat file.
-    const legacy = await readFile(join(knowledgeRoot, 'observations/observations.jsonl'), 'utf8')
-    expect(legacy).toBe('')
   })
 
   it('lists global observations and supports workspace scoped filtering', async () => {

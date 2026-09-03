@@ -26,7 +26,6 @@ export const KNOWLEDGE_STORAGE_LAYOUT: KnowledgeStorageLayout = {
     { key: 'storage-layout', relativePath: 'meta/storage-layout.json', format: 'json', purpose: 'Filesystem layout contract snapshot.' },
     { key: 'write-policy', relativePath: 'meta/write-policy.json', format: 'json', purpose: 'Write and review rules snapshot.' },
     { key: 'readme', relativePath: 'README.md', format: 'markdown', purpose: 'Human-readable purpose and maintenance guide.' },
-    { key: 'observations', relativePath: 'observations/observations.jsonl', format: 'jsonl', purpose: 'Legacy flat observation log; superseded by observations/active/*.jsonl for new writes but kept for backward-compat reads.' },
     { key: 'fact-candidates', relativePath: 'facts/candidates.jsonl', format: 'jsonl', purpose: 'Candidate facts awaiting review.' },
     { key: 'facts', relativePath: 'facts/facts.jsonl', format: 'jsonl', purpose: 'Accepted active facts, versioned.' },
     { key: 'wiki-pages-index', relativePath: 'wiki/pages-index.json', format: 'json', purpose: 'Wiki page registry and metadata.' },
@@ -49,7 +48,6 @@ export const KNOWLEDGE_WRITE_POLICY: KnowledgeWritePolicy = {
     'Code truth beats stale memory when the two conflict.',
   ],
   directWriteCollections: [
-    'observations/observations.jsonl',
     'observations/active/*.jsonl',
     'observations/archive/*.jsonl.gz',
     'blobs/*.txt.gz',

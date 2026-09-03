@@ -9,6 +9,7 @@ import { subAgentRunRegistry } from '../agent/subagent-run-registry'
 import type { AgentEvent } from '../agent/types'
 import type { CaptureObservationInput } from '../../shared/knowledge'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { logKnowledgeCaptureFailure } from '../knowledge/workspace-identity'
 import { AGENT_CHANNELS } from '../../shared/ipc/agent'
 
 function summarizeAgentEvent(event: AgentEvent): string {
@@ -164,7 +165,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
           role: effectiveOptions.role,
           source: effectiveOptions.source,
         },
-      }).catch(() => {})
+      }).catch(logKnowledgeCaptureFailure)
     }
 
     // Wire event forwarding to renderer
@@ -203,7 +204,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
 
       const observation = toObservationPayload(event, effectiveOptions, sessionId)
       if (observation) {
-        void knowledgeObservationService.capture(observation).catch(() => {})
+        void knowledgeObservationService.capture(observation).catch(logKnowledgeCaptureFailure)
       }
     })
 

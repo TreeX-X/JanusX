@@ -382,7 +382,13 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         : event === 'permissionrequest' || event === 'notification'
       if (state && (startsTurn || completesTurn || failsTurn || needsAttention)) {
         if (startsTurn) serviceErrorDetectors.get(terminal.terminalId)?.reset()
-        state.hookStatus = startsTurn ? 'running' : failsTurn ? 'error' : 'wait'
+        // Turn 级失败（429 限流 / 5xx 过载 / StopFailure / session.error）时 CLI
+        // 进程仍活着、回到 prompt 等待下一次输入：上报 'wait' 保持终端可用，
+        // 失败通知仍由 hookCoordinator.deliverCompletion 独立下发，不受影响。
+        // 只有 'orphaned'（turn 未结束时 pty 已死，后续 onExit 会确认）才上报
+        // 'error'，与 TerminalStatus“pty 非零退出”的语义对齐，避免误弹遮罩锁死输入。
+        const ptyDead = event === JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned
+        state.hookStatus = startsTurn ? 'running' : ptyDead ? 'error' : 'wait'
         sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, {
           id: terminal.terminalId,
           status: state.hookStatus,

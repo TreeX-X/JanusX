@@ -67,6 +67,10 @@
       "title": "停止生成",
       "aria": "停止生成"
     },
+    "send": {
+      "title": "发送消息（Enter 发送，Shift+Enter / Ctrl+J 换行）",
+      "aria": "发送消息"
+    },
     "clear": {
       "title": "清空当前对话",
       "aria": "清空当前对话"

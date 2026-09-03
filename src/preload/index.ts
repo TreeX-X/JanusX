@@ -163,6 +163,7 @@ const knowledgeAPI: KnowledgeAPI = {
   recordFeedback: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.recordFeedback, input),
   feedbackSummary: (workspaceId) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.feedbackSummary, workspaceId),
   context: (request) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.context, request),
+  diagnostics: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.diagnostics, query),
   getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }
@@ -220,7 +221,7 @@ const janusAPI: JanusAPI = {
 
 const roundtableAPI: RoundtableAPI = {
   start: (input) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.start, input),
-  advance: (sessionId, input) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.advance, sessionId, input),
+  advance: (sessionId, input, requestId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.advance, sessionId, input, requestId),
   end: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.end, sessionId),
   getState: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.state, sessionId),
   restore: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.restore, sessionId),

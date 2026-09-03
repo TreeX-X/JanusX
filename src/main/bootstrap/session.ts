@@ -29,7 +29,26 @@ export function configureApplicationProfile(isHookClient: boolean, argv: string[
   const hasExplicitUserDataDir = argv.some(
     (argument) => argument === '--user-data-dir' || argument.startsWith('--user-data-dir=')
   )
-  if (isHookClient || app.isPackaged || hasExplicitUserDataDir) return
+  if (isHookClient || hasExplicitUserDataDir) return
+
+  // electron-builder's portable target exposes the directory containing the
+  // original portable executable through PORTABLE_EXECUTABLE_DIR. The app
+  // itself runs from a temporary extraction directory, so relying on
+  // Electron's default userData path makes portable and installed builds
+  // share the same single-instance lock and settings. Keep portable state
+  // beside the executable and isolate it from installed/dev profiles.
+  if (app.isPackaged) {
+    const portableRoot = process.env.PORTABLE_EXECUTABLE_DIR?.trim()
+    if (portableRoot) {
+      const portableData = join(portableRoot, 'data')
+      // A portable executable may be launched from read-only media. Keep the
+      // normal Electron profile in that case instead of making startup fail
+      // when services create their first data file.
+      if (canWriteDirectory(portableData)) app.setPath('userData', portableData)
+    }
+    return
+  }
+
   const appDataRoot = app.getPath('appData')
   synchronizeInstalledLlmConfig(appDataRoot)
   app.setPath('userData', join(appDataRoot, 'JanusX-Dev'))

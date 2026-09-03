@@ -23,7 +23,6 @@ import { knowledgeAuditService } from './audit-service'
 const gzipAsync = promisify(gzip)
 const gunzipAsync = promisify(gunzip)
 
-const LEGACY_OBSERVATIONS_FILE = 'observations/observations.jsonl'
 const ACTIVE_OBSERVATIONS_DIR = 'observations/active'
 const ARCHIVE_OBSERVATIONS_DIR = 'observations/archive'
 const BLOBS_DIR = 'blobs'
@@ -221,9 +220,6 @@ async function listObservationShardFiles(): Promise<ShardFile[]> {
     if (shard && shard.lines.length > 0) shards.push(shard)
   }
 
-  const legacy = await readShardFile(LEGACY_OBSERVATIONS_FILE)
-  if (legacy && legacy.lines.length > 0) shards.push(legacy)
-
   return shards
 }
 
@@ -368,6 +364,18 @@ export class KnowledgeObservationService {
 
     observations.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     return observations.slice(0, clampLimit(query.limit))
+  }
+
+  /** Phase 0 diagnostics: every parseable observation across all shards, unsorted and uncapped. */
+  async listAll(): Promise<Observation[]> {
+    const shards = await listObservationShardFiles()
+    const observations: Observation[] = []
+    for (const shard of shards) {
+      for (const entry of parseShardLines(shard)) {
+        if (entry.observation) observations.push(entry.observation)
+      }
+    }
+    return observations
   }
 
   async prune(query: ObservationPruneQuery): Promise<ObservationPruneResult> {

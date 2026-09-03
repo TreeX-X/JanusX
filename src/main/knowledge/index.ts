@@ -14,6 +14,13 @@ export { knowledgeContractService } from './contract-service'
 export { knowledgeAuditService } from './audit-service'
 export { knowledgeObservationService } from './observation-service'
 export { knowledgeExtractService } from './extract-service'
+export { knowledgeDiagnosticsService } from './diagnostics-service'
+export {
+  captureForCwd,
+  logKnowledgeCaptureFailure,
+  resolveWorkspaceIdentity,
+  workspaceProvenanceFor,
+} from './workspace-identity'
 export { knowledgeReviewService } from './review-service'
 export { knowledgeSearchService } from './search-service'
 export { knowledgeTruthService } from './truth-service'

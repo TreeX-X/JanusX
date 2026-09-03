@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
-import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, ShieldX, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, Send, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import type { AgentApprovalMode } from '../../../../shared/ipc/agent-runtime'
@@ -201,7 +201,9 @@ export function JanusChat({
 }: JanusChatProps) {
   const { t } = useI18n('janus')
   const [input, setInput] = useState('')
-  const [rows, setRows] = useState(1)
+  // Composer auto-grows from content (including soft-wrapped long lines) up to
+  // MAX_COMPOSER_HEIGHT, then scrolls internally. Counting '\n' is not enough:
+  // a single long line without newlines would stay one row high and overflow.
   const [showNewMessageBadge, setShowNewMessageBadge] = useState(false)
   const [selectionMenu, setSelectionMenu] = useState<SelectionMenu | null>(null)
   const [menuIndex, setMenuIndex] = useState(0)
@@ -221,6 +223,9 @@ export function JanusChat({
   const threadSelectorRef = useRef<HTMLDivElement>(null)
   const selectionMenuRef = useRef<HTMLDivElement>(null)
   const isAtBottomRef = useRef(true)
+  // Roundtable-only: timestamp of the last send, used to anchor the viewport
+  // on the user's own message instead of the bottom working cards.
+  const pendingUserAnchorTimeRef = useRef<number | null>(null)
   // A chat pane can stay mounted while hidden by the roundtable view.  The
   // first layout after it becomes visible must land at the latest message
   // immediately; otherwise the normal smooth-scroll effect animates the
@@ -326,6 +331,28 @@ export function JanusChat({
     previousMessageCountRef.current = messages.length
   }, [messages, pendingContent, scrollToBottom])
 
+  // Roundtable-only: after sending, land on the user's own message. Working
+  // cards carry fresh timestamps and would otherwise pin the viewport below
+  // the message the user just sent. Later arrivals then show the new-message
+  // badge instead of yanking the viewport.
+  useLayoutEffect(() => {
+    if (!discussionOnly || pendingUserAnchorTimeRef.current == null) return
+    const since = pendingUserAnchorTimeRef.current
+    pendingUserAnchorTimeRef.current = null
+    const container = messagesContainerRef.current
+    if (!container) return
+    const nodes = container.querySelectorAll('.janus-chat-message.user')
+    for (const node of Array.from(nodes)) {
+      const stamp = node.querySelector('time')?.getAttribute('dateTime')
+      const ts = stamp ? Date.parse(stamp) : NaN
+      if (Number.isNaN(ts) || ts < since - 1000) continue
+      const top = (node as HTMLElement).getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop
+      container.scrollTop = Math.max(0, top - 8)
+      isAtBottomRef.current = false
+      break
+    }
+  }, [messages, discussionOnly])
+
   // 聚焦输入框；流的实际生命周期�?useJanusChat 持有，视图可见性变化不�?abort �?
   useEffect(() => {
     if (visible && focused) {
@@ -344,30 +371,48 @@ export function JanusChat({
   }, [focused, visible])
 
   // 发送消息（支持重试传入指定文本�?
+  const MAX_COMPOSER_HEIGHT = 150
+  const autoGrowComposer = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, MAX_COMPOSER_HEIGHT)}px`
+  }, [])
+
+  // Grow/shrink on every value change (covers typing, history recall, send,
+  // clear). Runs in layout phase so no overflow flash is painted.
+  useLayoutEffect(() => {
+    if (!visible) return
+    autoGrowComposer()
+  }, [autoGrowComposer, input, visible])
+
   const handleSend = useCallback(
     (textOverride?: string) => {
       const text = (textOverride ?? input).trim()
       if (!text || isStreaming) return
 
       setInput('')
-      setRows(1)
       setHistoryIndex(null)
       historyDraftRef.current = ''
       setShowNewMessageBadge(false)
-      isAtBottomRef.current = true
-      scrollToBottom('auto')
+      if (discussionOnly) {
+        // The anchor effect positions the viewport on the sent message after
+        // render; pre-scrolling to the bottom would flash the working cards.
+        pendingUserAnchorTimeRef.current = Date.now()
+      } else {
+        isAtBottomRef.current = true
+        scrollToBottom('auto')
+      }
       onSend(text)
     },
-    [input, isStreaming, onSend, scrollToBottom]
+    [input, isStreaming, onSend, scrollToBottom, discussionOnly]
   )
 
-  // 输入变化与自动增高（最�?4 行）
+  // 输入变化；高度由上面的 auto-grow effect 按 scrollHeight 调整，
+  // Shift+Enter 换行、长文本软换行都会长高，到上限后内部滚动。
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value
-    setInput(value)
+    setInput(e.target.value)
     setHistoryIndex(null)
-    const lineCount = (value.match(/\n/g) || []).length + 1
-    setRows(Math.min(4, Math.max(1, lineCount)))
   }, [])
 
   const openSelectionMenu = useCallback((menu: SelectionMenu) => {
@@ -435,7 +480,6 @@ export function JanusChat({
 
   const replaceInput = useCallback((value: string) => {
     setInput(value)
-    setRows(Math.min(4, Math.max(1, (value.match(/\n/g) || []).length + 1)))
     window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(value.length, value.length))
   }, [])
 
@@ -505,7 +549,8 @@ export function JanusChat({
     openSelectionMenu(menu)
   }, [openSelectionMenu])
 
-  // 快捷键：Enter 发送，Shift+Enter 换行
+  // 快捷键：Enter 发送，Shift+Enter 换行。组字中（中文输入法选词）的 Enter
+  // 必须放行，否则选词会误触发送。
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.nativeEvent.isComposing) {
       const textarea = e.currentTarget
@@ -536,7 +581,24 @@ export function JanusChat({
         return
       }
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j' && !e.nativeEvent.isComposing) {
+      // Ctrl+J / Cmd+J 换行（与终端侧多行输入约定一致），不触发发送。
+      e.preventDefault()
+      const textarea = e.currentTarget
+      const start = textarea.selectionStart ?? input.length
+      const end = textarea.selectionEnd ?? input.length
+      setInput(`${input.slice(0, start)}\n${input.slice(end)}`)
+      setHistoryIndex(null)
+      const caret = start + 1
+      window.requestAnimationFrame(() => {
+        const el = inputRef.current
+        if (!el) return
+        el.focus()
+        el.setSelectionRange(caret, caret)
+      })
+      return
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       handleSend()
     }
@@ -636,7 +698,6 @@ export function JanusChat({
   const handleClear = useCallback(() => {
     onClear()
     setInput('')
-    setRows(1)
     setHistoryIndex(null)
     historyDraftRef.current = ''
   }, [onClear])
@@ -1161,7 +1222,8 @@ export function JanusChat({
           <textarea
             ref={inputRef}
             className="janus-chat-input"
-            rows={rows}
+            rows={1}
+            wrap="soft"
             placeholder={t('janus:chat.inputPlaceholder')}
             value={input}
             onChange={handleInputChange}
@@ -1169,7 +1231,7 @@ export function JanusChat({
             disabled={isStreaming}
             style={{ '--accent-color': modeColor } as React.CSSProperties}
           />
-          {isStreaming && (
+          {isStreaming ? (
             <button
               className="janus-chat-stop"
               onClick={handleStop}
@@ -1179,6 +1241,17 @@ export function JanusChat({
               type="button"
             >
               <StopIcon />
+            </button>
+          ) : (
+            <button
+              className="janus-chat-send"
+              onClick={() => handleSend()}
+              disabled={!input.trim()}
+              title={t('janus:chat.send.title')}
+              aria-label={t('janus:chat.send.aria')}
+              type="button"
+            >
+              <Send size={14} strokeWidth={2} aria-hidden="true" />
             </button>
           )}
         </div>

@@ -49,7 +49,7 @@ describe('KnowledgeContractService', () => {
 
   it('does not overwrite existing append-only files on repeated bootstrap', async () => {
     const first = await knowledgeContractService.bootstrapWorkspace(workspacePath)
-    const observationsPath = join(first.knowledgeRoot, 'observations/observations.jsonl')
+    const observationsPath = join(first.knowledgeRoot, 'facts/candidates.jsonl')
 
     await readFile(observationsPath, 'utf8')
     const before = '{"id":"obs-1"}\n'

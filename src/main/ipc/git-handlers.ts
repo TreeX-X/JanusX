@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { getStatus, getLog, stage, unstage, discard, getCommitChanges, commit, push, pull, getFileBaseline } from '../git/service'
 import { analyzer } from '../janus/analyzer'
-import { knowledgeObservationService } from '../knowledge/observation-service'
+import { captureForCwd, logKnowledgeCaptureFailure } from '../knowledge/workspace-identity'
 import { GIT_CHANNELS } from '../../shared/ipc/git'
 
 export function registerGitHandlers(): void {
@@ -21,8 +21,7 @@ export function registerGitHandlers(): void {
 
   ipcMain.handle(GIT_CHANNELS.stage, async (_event, cwd: string, paths: string[]) => {
     await stage(cwd, paths)
-    void knowledgeObservationService.capture({
-      workspacePath: cwd,
+    void captureForCwd(cwd, {
       source: 'tool',
       type: 'git-event',
       content: `git stage ${paths.join(', ')}`,
@@ -31,14 +30,13 @@ export function registerGitHandlers(): void {
       tags: ['git-stage'],
       actor: 'user',
       metadata: { paths },
-    }).catch(() => {})
+    }).catch(logKnowledgeCaptureFailure)
     return getStatus(cwd)
   })
 
   ipcMain.handle(GIT_CHANNELS.unstage, async (_event, cwd: string, paths: string[]) => {
     await unstage(cwd, paths)
-    void knowledgeObservationService.capture({
-      workspacePath: cwd,
+    void captureForCwd(cwd, {
       source: 'tool',
       type: 'git-event',
       content: `git unstage ${paths.join(', ')}`,
@@ -47,14 +45,13 @@ export function registerGitHandlers(): void {
       tags: ['git-unstage'],
       actor: 'user',
       metadata: { paths },
-    }).catch(() => {})
+    }).catch(logKnowledgeCaptureFailure)
     return getStatus(cwd)
   })
 
   ipcMain.handle(GIT_CHANNELS.discard, async (_event, cwd: string, relativePath: string) => {
     const status = await discard(cwd, relativePath)
-    void knowledgeObservationService.capture({
-      workspacePath: cwd,
+    void captureForCwd(cwd, {
       source: 'tool',
       type: 'git-event',
       content: `git discard ${relativePath}`,
@@ -62,7 +59,7 @@ export function registerGitHandlers(): void {
       fileRefs: [relativePath],
       tags: ['git-discard'],
       actor: 'user',
-    }).catch(() => {})
+    }).catch(logKnowledgeCaptureFailure)
     return status
   })
 
@@ -72,42 +69,39 @@ export function registerGitHandlers(): void {
     await commit(cwd, message)
     // Janus Analyzer 入口①：commit 后即时分析焦点节点（fire-and-forget，不阻塞）
     analyzer.scheduleFocusedAnalyze(cwd, 'commit-threshold').catch(err => console.error('[janus] commit trigger failed:', err))
-    void knowledgeObservationService.capture({
-      workspacePath: cwd,
+    void captureForCwd(cwd, {
       source: 'tool',
       type: 'git-event',
       content: message,
       summary: 'Git commit',
       tags: ['git-commit'],
       actor: 'user',
-    }).catch(() => {})
+    }).catch(logKnowledgeCaptureFailure)
     return getStatus(cwd)
   })
 
   ipcMain.handle(GIT_CHANNELS.push, async (_event, cwd: string) => {
     await push(cwd)
-    void knowledgeObservationService.capture({
-      workspacePath: cwd,
+    void captureForCwd(cwd, {
       source: 'tool',
       type: 'git-event',
       content: 'git push',
       summary: 'Git push',
       tags: ['git-push'],
       actor: 'user',
-    }).catch(() => {})
+    }).catch(logKnowledgeCaptureFailure)
   })
 
   ipcMain.handle(GIT_CHANNELS.pull, async (_event, cwd: string) => {
     await pull(cwd)
-    void knowledgeObservationService.capture({
-      workspacePath: cwd,
+    void captureForCwd(cwd, {
       source: 'tool',
       type: 'git-event',
       content: 'git pull',
       summary: 'Git pull',
       tags: ['git-pull'],
       actor: 'user',
-    }).catch(() => {})
+    }).catch(logKnowledgeCaptureFailure)
   })
 
   ipcMain.handle(GIT_CHANNELS.fileBaseline, (_event, cwd: string, relativePath: string) =>

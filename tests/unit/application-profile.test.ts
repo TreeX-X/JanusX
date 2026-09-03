@@ -14,6 +14,7 @@ import { configureApplicationProfile } from '../../src/main/bootstrap/session'
 describe('application profile', () => {
   beforeEach(() => {
     electronApp.isPackaged = false
+    delete process.env.PORTABLE_EXECUTABLE_DIR
     electronApp.getPath.mockClear()
     electronApp.setPath.mockClear()
   })
@@ -31,6 +32,15 @@ describe('application profile', () => {
     configureApplicationProfile(false)
 
     expect(electronApp.setPath).not.toHaveBeenCalled()
+  })
+
+  it('isolates a portable build under the portable executable directory', () => {
+    electronApp.isPackaged = true
+    process.env.PORTABLE_EXECUTABLE_DIR = join('portable-root')
+
+    configureApplicationProfile(false)
+
+    expect(electronApp.setPath).toHaveBeenCalledWith('userData', join('portable-root', 'data'))
   })
 
   it('leaves hook-client profile isolation to the hook bootstrap', () => {

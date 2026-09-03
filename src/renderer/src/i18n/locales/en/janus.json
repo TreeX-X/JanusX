@@ -67,6 +67,10 @@
       "title": "Stop generating",
       "aria": "Stop generating"
     },
+    "send": {
+      "title": "Send message (Enter to send, Shift+Enter for new line)",
+      "aria": "Send message"
+    },
     "clear": {
       "title": "Clear current conversation",
       "aria": "Clear current conversation"
