@@ -198,7 +198,7 @@ export function CheckpointPanel() {
         <div
           className="absolute w-px"
           style={{
-            left: 19,
+            left: 18,
             top: 16,
             bottom: 16,
             background: 'rgba(255,255,255,0.05)',
@@ -233,25 +233,18 @@ export function CheckpointPanel() {
 
           return (
             <div key={cp.id} className="flex gap-3 relative">
-              {/* Timeline node */}
+              {/* Timeline node：选中态只用 2px 橙圈表达，与侧栏/下拉的选中条同语言 */}
               <div
-                className="rounded-full flex items-center justify-center shrink-0 z-[1]"
+                className="rounded-full shrink-0 z-[1]"
                 style={{
-                  width: 15,
-                  height: 15,
+                  width: 12,
+                  height: 12,
                   background: 'rgba(18,18,20,0.85)',
                   border: `2px solid ${isActive ? 'var(--shell-accent)' : '#555'}`,
                   boxShadow: isActive ? '0 0 8px rgba(255,120,48,0.25)' : 'none',
                   marginTop: 2,
                 }}
-              >
-                {isActive && (
-                  <div
-                    className="rounded-full"
-                    style={{ width: 5, height: 5, background: '#ff7830' }}
-                  />
-                )}
-              </div>
+              />
 
               {/* Card body */}
               <div
