@@ -66,6 +66,10 @@ export class KnowledgeContextService {
       workspacePath: request.workspaceId ? undefined : request.workspacePath?.trim() || undefined,
       allowGlobal: request.allowGlobal,
       requireWorkspace: true,
+      agentId: request.agentId?.trim() || undefined,
+      sessionId: request.sessionId?.trim() || undefined,
+      since: request.since?.trim() || undefined,
+      until: request.until?.trim() || undefined,
     })
     if (recalled.degraded) return emptyResult(maxItems, maxChars, recalled.degraded.reason)
 

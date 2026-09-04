@@ -11,6 +11,7 @@ import { knowledgeTruthService } from '../knowledge/truth-service'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { knowledgeOperationsService } from '../knowledge/operations-service'
 import { knowledgeDiagnosticsService } from '../knowledge/diagnostics-service'
+import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import {
   KNOWLEDGE_CHANNELS,
   type AuditQuery,
@@ -18,6 +19,7 @@ import {
   type KnowledgeDiagnosticsQuery,
   type ReviewCandidateInput,
   type RevokeTruthInput,
+  type KnowledgeProcessNowInput,
 } from '../../shared/ipc/knowledge'
 import type {
   CaptureObservationInput,
@@ -154,5 +156,22 @@ export function registerKnowledgeHandlers(): void {
   // Phase 0: read-only pipeline diagnostics for the Workbench status bar.
   ipcMain.handle(KNOWLEDGE_CHANNELS.diagnostics, async (_event, query?: KnowledgeDiagnosticsQuery) => {
     return knowledgeDiagnosticsService.snapshot(query ?? {})
+  })
+
+  // Phase 1: processing queue manual trigger + metrics (deterministic handler is wired in register.ts).
+  ipcMain.handle(KNOWLEDGE_CHANNELS.processNow, async (_event, input?: KnowledgeProcessNowInput) => {
+    return knowledgeProcessingQueue.processNow(input?.workspaceId)
+  })
+
+  ipcMain.handle(KNOWLEDGE_CHANNELS.processingStats, async () => {
+    const stats = await knowledgeProcessingQueue.processingStats()
+    return {
+      generatedAt: stats.generatedAt,
+      pendingTotal: stats.pendingTotal,
+      workspaces: stats.workspaces,
+      failures: stats.failures,
+      lastRunAt: stats.lastRunAt,
+      handlerConfigured: stats.handlerConfigured,
+    }
   })
 }

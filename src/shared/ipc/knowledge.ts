@@ -51,6 +51,8 @@ export const KNOWLEDGE_CHANNELS = {
   feedbackSummary: 'knowledge:feedback:summary',
   context: 'knowledge:context',
   diagnostics: 'knowledge:diagnostics',
+  processNow: 'knowledge:process-now',
+  processingStats: 'knowledge:processing-stats',
   getSettings: 'settings:knowledge:get',
   updateSettings: 'settings:knowledge:update',
 } as const
@@ -93,6 +95,10 @@ export interface ExtractOutput {
   graphEdges: CandidateGraphEdge[]
   degraded?: { reason: string; detail?: string }
   auditEventId?: string
+  /** Phase 2: deterministic candidates upgraded to derivation 'merged' in place (no separate append). */
+  mergedFactCandidateIds?: string[]
+  /** Phase 2: observation ids dropped by the per-batch character budget (oldest first). */
+  droppedObservationIds?: string[]
 }
 
 export type ReviewCandidateType = 'fact' | 'wiki-patch' | 'graph-edge'
@@ -101,6 +107,8 @@ export interface ReviewCandidateInput {
   type: ReviewCandidateType
   id: string
   reviewNotes?: string
+  /** Phase 1 convergence: audit actor override (auto-policy for §4.6 auto-accept). Defaults to 'knowledge-review'. */
+  actor?: string
 }
 
 export interface ReviewResult {
@@ -134,7 +142,7 @@ export interface KnowledgeWorkspaceDiagnostics {
   evidence: number
   /** Observations whose workspaceId had to be guessed from the directory basename. */
   fallbackWorkspaceIds: number
-  /** Evidence observations not yet consumed by the processing pipeline (all of them until Phase 1 cursors exist). */
+  /** Evidence observations after the processing cursor (falls back to all evidence when the cursor is unknown). */
   unprocessedEstimate: number
   lastObservationAt?: string
 }
@@ -147,6 +155,36 @@ export interface KnowledgeDiagnostics {
   candidates: { facts: number; wikiPatches: number; graphEdges: number }
   truth: { facts: number; wikiPages: number; graphEdges: number }
   captureFailures: number
+}
+
+/** Phase 1-1: manual trigger input for the knowledge processing queue. */
+export interface KnowledgeProcessNowInput {
+  workspaceId?: string
+}
+
+/** Phase 1-1: result of a manual queue run. Cursor advances only on handler success. */
+export interface KnowledgeProcessNowResult {
+  processed: number
+  failed: number
+  pending: number
+  advancedWorkspaces: string[]
+  handlerMissing: boolean
+}
+
+export interface KnowledgeProcessingWorkspaceStats {
+  workspaceId: string
+  pending: number
+  lastObservationAt?: string
+}
+
+/** Phase 1-1: queue metrics for the Workbench status bar. */
+export interface KnowledgeProcessingStats {
+  generatedAt: string
+  pendingTotal: number
+  workspaces: KnowledgeProcessingWorkspaceStats[]
+  failures: number
+  lastRunAt: string | null
+  handlerConfigured: boolean
 }
 
 export interface KnowledgeAPI {
@@ -174,6 +212,8 @@ export interface KnowledgeAPI {
   feedbackSummary: (workspaceId?: string) => Promise<KnowledgeFeedbackSummary>
   context: (request: KnowledgeContextRequest) => Promise<KnowledgeContextResult>
   diagnostics: (query?: KnowledgeDiagnosticsQuery) => Promise<KnowledgeDiagnostics>
+  processNow: (input?: KnowledgeProcessNowInput) => Promise<KnowledgeProcessNowResult>
+  processingStats: () => Promise<KnowledgeProcessingStats>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }

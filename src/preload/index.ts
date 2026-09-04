@@ -164,6 +164,8 @@ const knowledgeAPI: KnowledgeAPI = {
   feedbackSummary: (workspaceId) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.feedbackSummary, workspaceId),
   context: (request) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.context, request),
   diagnostics: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.diagnostics, query),
+  processNow: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.processNow, input),
+  processingStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.processingStats),
   getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }

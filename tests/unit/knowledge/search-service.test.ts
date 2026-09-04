@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -6,6 +6,8 @@ import { mkdtemp } from 'fs/promises'
 import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
 import { knowledgeSearchService } from '../../../src/main/knowledge/search-service'
 import type { CandidateFact } from '../../../src/shared/knowledge'
+
+vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
 function makeCandidate(overrides: Partial<CandidateFact> = {}): CandidateFact {
   return {

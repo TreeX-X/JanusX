@@ -277,6 +277,8 @@ class AgentTurnRecorder {
       tags: ['terminal-hook', 'turn-started', terminal.engine],
       actor: hasText(payload.message) ? 'user' : terminal.engine,
       correlationId: turn.id,
+      sessionId: payload.sessionId,
+      agentId: terminal.engine,
       metadata: {
         terminalId: terminal.terminalId,
         engine: terminal.engine,
@@ -303,6 +305,8 @@ class AgentTurnRecorder {
       tags: ['terminal-hook', 'turn-attention', terminal.engine],
       actor: terminal.engine,
       correlationId: activeTurn?.id ?? `terminal:${terminal.terminalId}`,
+      sessionId: payload.sessionId ?? activeTurn?.sessionId,
+      agentId: terminal.engine,
       metadata: {
         terminalId: terminal.terminalId,
         engine: terminal.engine,
@@ -339,6 +343,8 @@ class AgentTurnRecorder {
       tags: ['terminal-hook', failed ? 'turn-failed' : 'turn-completed', terminal.engine],
       actor: terminal.engine,
       correlationId: activeTurn?.id ?? `terminal:${terminal.terminalId}`,
+      sessionId: payload.sessionId ?? activeTurn?.sessionId,
+      agentId: terminal.engine,
       metadata: {
         terminalId: terminal.terminalId,
         engine: terminal.engine,

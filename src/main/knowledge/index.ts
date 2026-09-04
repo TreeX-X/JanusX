@@ -15,6 +15,7 @@ export { knowledgeAuditService } from './audit-service'
 export { knowledgeObservationService } from './observation-service'
 export { knowledgeExtractService } from './extract-service'
 export { knowledgeDiagnosticsService } from './diagnostics-service'
+export { knowledgeProcessingQueue, KnowledgeProcessingQueue } from './processing-queue'
 export {
   captureForCwd,
   logKnowledgeCaptureFailure,

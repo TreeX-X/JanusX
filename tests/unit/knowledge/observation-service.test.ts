@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
+import { knowledgeObservationService, resetObservationServiceEphemeralState } from '../../../src/main/knowledge/observation-service'
 import { knowledgeAuditService } from '../../../src/main/knowledge/audit-service'
 
 function currentShardName(date: Date): string {
@@ -25,6 +25,8 @@ type ObsRecord = {
   actor: string
   createdAt: string
   retentionClass: string
+  contentHash: string
+  dedupeKey: string
   contentLength?: number
   contentPreview?: string
   compactionStatus?: string
@@ -50,6 +52,10 @@ describe('KnowledgeObservationService', () => {
       actor: 'tester',
       createdAt: '2024-01-01T00:00:00.000Z',
       retentionClass: 'evidence',
+      contentHash: 'a'.repeat(64),
+      dedupeKey: 'b'.repeat(64),
+      contentLength: 1,
+      compactionStatus: 'active',
       ...overrides,
     }
   }
@@ -62,6 +68,7 @@ describe('KnowledgeObservationService', () => {
   }
 
   beforeEach(async () => {
+    resetObservationServiceEphemeralState()
     workspacePath = await mkdtemp(join(tmpdir(), 'janusx-observations-'))
     knowledgeRoot = await mkdtemp(join(tmpdir(), 'janusx-global-observations-'))
     process.env.JANUSX_KNOWLEDGE_ROOT = knowledgeRoot
@@ -384,20 +391,20 @@ describe('KnowledgeObservationService', () => {
     expect(audit[0]?.after).toMatchObject({ archivedTo: 'observations/archive/2024-01.jsonl.gz' })
   })
 
-  it.each([
-    ['active', 'compact-1'],
-    [undefined, 'legacy-compact-1'],
-  ] as const)('compactEvidence treats compactionStatus=%s as active target (backward compat)', async (compactionStatus, longId) => {
+  it('compactEvidence compacts explicit active rows and skips rows missing compactionStatus', async () => {
     const longContent = 'A'.repeat(300) // > CONTENT_PREVIEW_CHARS (200)
     await writeShard([
       makeObs({
-        id: longId,
+        id: 'compact-1',
         content: longContent,
         createdAt: '2024-01-15T00:00:00.000Z',
         contentLength: longContent.length,
         contentPreview: longContent.slice(0, 200),
-        ...(compactionStatus !== undefined ? { compactionStatus } : {}),
+        compactionStatus: 'active',
       }),
+      // Phase 1 convergence: no "missing reads as active" compat; the legacy
+      // row is a schema violation and is left untouched.
+      { ...makeObs({ id: 'legacy-compact-1', content: longContent, createdAt: '2024-01-15T00:00:00.000Z', contentLength: longContent.length }), compactionStatus: undefined },
       makeObs({ id: 'compact-keep-1', content: 'short', createdAt: '2024-01-15T00:00:00.000Z', contentLength: 5 }),
     ])
 
@@ -422,7 +429,7 @@ describe('KnowledgeObservationService', () => {
     expect(confirmed.compacted).toBe(1)
 
     const all = await knowledgeObservationService.list({ limit: 200 })
-    const compactedObs = all.find((o) => o.id === longId)
+    const compactedObs = all.find((o) => o.id === 'compact-1')
     const keptObs = all.find((o) => o.id === 'compact-keep-1')
     expect(compactedObs?.compactionStatus).toBe('compacted')
     expect(compactedObs?.compactedAt).toBeTruthy()
@@ -430,11 +437,96 @@ describe('KnowledgeObservationService', () => {
     // Content body preserved (MVP: marking-only, no destruction).
     expect(compactedObs?.content).toBe(longContent)
     expect(keptObs?.compactionStatus).toBe('active')
+    // The legacy row without compactionStatus is skipped, not compacted.
+    expect(all.find((o) => o.id === 'legacy-compact-1')).toBeUndefined()
 
     const audit = await knowledgeAuditService.list({ action: 'observation_compacted' })
     expect(audit).toHaveLength(1)
-    expect(audit[0]?.targetId).toBe(longId)
+    expect(audit[0]?.targetId).toBe('compact-1')
     expect(audit[0]?.after).toMatchObject({ compactionStatus: 'compacted' })
     expect(audit[0]?.provenance.actor).toBe('knowledge-compact')
+  })
+
+  it('returns the existing record without appending on exact-duplicate capture (§3.1)', async () => {
+    const input = {
+      workspaceId: 'ws-dupe',
+      workspaceName: 'Dupe Workspace',
+      workspacePath,
+      source: 'manual' as const,
+      type: 'user-note' as const,
+      content: 'same content twice',
+      actor: 'tester',
+    }
+    const first = await knowledgeObservationService.capture(input)
+    const second = await knowledgeObservationService.capture(input)
+
+    expect(first.dedupeKey).toMatch(/^[0-9a-f]{64}$/)
+    expect(second.id).toBe(first.id)
+    expect(second.dedupeKey).toBe(first.dedupeKey)
+
+    const shardName = currentShardName(new Date(first.createdAt))
+    const fileContent = await readFile(join(knowledgeRoot, 'observations/active', shardName), 'utf8')
+    const lines = fileContent.split('\n').filter((line) => line.trim())
+    expect(lines).toHaveLength(1)
+
+    // Same content in another workspace is a different record.
+    const other = await knowledgeObservationService.capture({ ...input, workspaceId: 'ws-other' })
+    expect(other.id).not.toBe(first.id)
+    expect(other.dedupeKey).not.toBe(first.dedupeKey)
+  })
+
+  it('stores sessionId/agentId first-class and trims blanks (§3.1)', async () => {
+    const observation = await knowledgeObservationService.capture({
+      workspacePath,
+      source: 'agent-stream',
+      type: 'conversation-turn',
+      content: 'agent turn with session',
+      actor: 'engine',
+      sessionId: 'session-1',
+      agentId: 'codex',
+    })
+    expect(observation.sessionId).toBe('session-1')
+    expect(observation.agentId).toBe('codex')
+
+    const listed = await knowledgeObservationService.list({})
+    expect(listed[0]?.sessionId).toBe('session-1')
+    expect(listed[0]?.agentId).toBe('codex')
+
+    const blank = await knowledgeObservationService.capture({
+      workspacePath,
+      source: 'manual',
+      type: 'user-note',
+      content: 'no session here',
+      actor: 'tester',
+      sessionId: '   ',
+    })
+    expect(blank.sessionId).toBeUndefined()
+    expect(blank.agentId).toBeUndefined()
+  })
+
+  it('skips schema-violating rows on read and records one schema_violation audit', async () => {
+    await writeShard([
+      makeObs({ id: 'good-1', content: 'valid row' }),
+      // Missing dedupeKey / contentHash / compactionStatus: schema error, not defaulted.
+      { id: 'bad-1', workspaceId: 'ws', workspaceName: 'ws', workspacePath, source: 'manual', type: 'user-note', content: 'legacy row', fileRefs: [], tags: [], visibility: 'global', actor: 'tester', createdAt: '2024-01-01T00:00:00.000Z', retentionClass: 'evidence' },
+      'not-json-at-all' as unknown as ObsRecord,
+    ] as unknown as ObsRecord[])
+
+    const all = await knowledgeObservationService.list({ limit: 200 })
+    expect(all.map((o) => o.id)).toEqual(['good-1'])
+
+    // Fire-and-forget audit write: poll until it lands.
+    const audit = await vi.waitFor(async () => {
+      const settled = await knowledgeAuditService.list({ action: 'schema_violation' })
+      expect(settled).toHaveLength(1)
+      return settled
+    })
+    expect(audit[0]?.targetType).toBe('observation')
+    expect(audit[0]?.after).toMatchObject({ violationCount: 2 })
+    expect(audit[0]?.provenance.actor).toBe('knowledge-schema-guard')
+
+    // Repeat reads do not spam the audit log for the same rows.
+    await knowledgeObservationService.list({ limit: 200 })
+    expect(await knowledgeAuditService.list({ action: 'schema_violation' })).toHaveLength(1)
   })
 })

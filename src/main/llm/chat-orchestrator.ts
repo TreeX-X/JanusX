@@ -538,16 +538,23 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       return
     }
 
-    const observationTargets: Array<[string, string]> = trustedResources.size > 0
-      ? [...trustedResources].map(([id, resource]) => [id, resource.workspaceRoot])
-      : workspaceId && workspacePath ? [[workspaceId, workspacePath]] : []
+    const observationTargets: Array<{ workspaceId: string; workspacePath: string; sessionId: string }> =
+      trustedResources.size > 0
+        ? [...trustedResources].map(([id, resource]) => ({ workspaceId: id, workspacePath: resource.workspaceRoot, sessionId: resource.sessionId }))
+        : workspaceId && workspacePath
+          ? [{ workspaceId, workspacePath, sessionId: conversationId ?? requestId }]
+          : []
     if (sourceTag === 'janus-chat' && observationTargets.length > 0) {
       const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')
-      for (const [targetWorkspaceId, targetWorkspacePath] of observationTargets) {
+      for (const target of observationTargets) {
+        // Chat rows carry the owning session (agent session, else conversation,
+        // else request); no agentId: chat has no stable agent identity and the
+        // actor + model metadata already distinguish the producer.
+        const sessionId = target.sessionId || conversationId || requestId
         if (userMessage) {
           await knowledgeObservationService.capture({
-            workspaceId: targetWorkspaceId,
-            workspacePath: targetWorkspacePath,
+            workspaceId: target.workspaceId,
+            workspacePath: target.workspacePath,
             source: 'janus-chat',
             type: 'conversation-turn',
             content: userMessage.content,
@@ -555,11 +562,12 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
             tags: ['janus-chat', 'user'],
             actor: 'user',
             correlationId: requestId,
+            sessionId,
           })
         }
         await knowledgeObservationService.capture({
-          workspaceId: targetWorkspaceId,
-          workspacePath: targetWorkspacePath,
+          workspaceId: target.workspaceId,
+          workspacePath: target.workspacePath,
           source: 'janus-chat',
           type: 'conversation-turn',
           content: streamedText,
@@ -567,6 +575,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
           tags: ['janus-chat', 'assistant'],
           actor: 'assistant',
           correlationId: requestId,
+          sessionId,
           metadata: { providerId, modelId: actualModelId },
         })
       }

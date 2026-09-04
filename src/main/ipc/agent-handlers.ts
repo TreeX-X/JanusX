@@ -52,6 +52,8 @@ function toObservationPayload(
     visibility: 'workspace' as const,
     actor: options.engine,
     correlationId: sessionId,
+    sessionId,
+    agentId: options.engine,
     metadata: {
       engine: options.engine,
       sessionId,
@@ -159,6 +161,8 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
         tags: ['agent-prompt'],
         actor: 'user',
         correlationId: sessionId,
+        sessionId,
+        agentId: effectiveOptions.engine,
         metadata: {
           engine: effectiveOptions.engine,
           title: effectiveOptions.title,

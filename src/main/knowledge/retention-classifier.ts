@@ -65,14 +65,15 @@ export function classifyRetention(input: ClassifyRetentionInput): RetentionClass
     return { retentionClass: 'operational', retentionReason: 'lifecycle-event', contentHash: hash, contentLength: length }
   }
 
-  // 7. operational: checkpoint-event
+  // 7-8. evidence: git / checkpoint records feed the Phase 1 deterministic
+  // proposals (§4.4), so they must be evidence — the pipeline only consumes
+  // evidence observations and they must survive auto-prune.
   if (input.type === 'checkpoint-event') {
-    return { retentionClass: 'operational', retentionReason: 'checkpoint-event', contentHash: hash, contentLength: length }
+    return { retentionClass: 'evidence', retentionReason: 'checkpoint-event', contentHash: hash, contentLength: length }
   }
 
-  // 8. operational: git-event
   if (input.type === 'git-event') {
-    return { retentionClass: 'operational', retentionReason: 'git-event', contentHash: hash, contentLength: length }
+    return { retentionClass: 'evidence', retentionReason: 'git-event', contentHash: hash, contentLength: length }
   }
 
   // 9. evidence: tool event without file refs

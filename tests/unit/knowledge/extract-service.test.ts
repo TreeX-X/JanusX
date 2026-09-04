@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import type {
   CandidateFact,
   CandidateGraphEdge,
@@ -24,6 +24,9 @@ vi.mock('../../../src/main/llm/LlmService', () => ({
 vi.mock('../../../src/main/llm/ai-runtime', () => ({
   generateObject: mocks.generateObject,
 }))
+// Phase 2: extract-service now reaches configService (merge-mode fallback)
+// through deterministic-extractor.
+vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
 async function loadService() {
   vi.resetModules()
@@ -233,9 +236,10 @@ describe('KnowledgeExtractService', () => {
     })
     const { knowledgeExtractService } = await loadService()
 
-    const result = await knowledgeExtractService.extract({
-      observations: [makeObservation()],
-    })
+    const result = await knowledgeExtractService.extract(
+      { observations: [makeObservation()] },
+      { sleepMs: async () => {} },
+    )
 
     expect(result.degraded?.reason).toBe('generate-object-failed')
     expect(result.degraded?.detail).toContain('provider-down')
@@ -270,5 +274,306 @@ describe('KnowledgeExtractService', () => {
     expect(graphCandidates).toHaveLength(1)
     const patchCandidates = await knowledgeExtractService.listWikiPatchCandidates()
     expect(patchCandidates).toHaveLength(0)
+  })
+
+  describe('Phase 2: kind / supersedes / timeout / retry / merge', () => {
+    async function seedJsonl(relativePath: string, records: unknown[]): Promise<void> {
+      const absolutePath = join(knowledgeRoot, relativePath)
+      await mkdir(dirname(absolutePath), { recursive: true })
+      const body = records.map((record) => JSON.stringify(record)).join('\n')
+      await writeFile(absolutePath, body.length > 0 ? `${body}\n` : '', 'utf8')
+    }
+
+    function truthProvenance() {
+      return {
+        workspaceId: 'ws-id',
+        workspaceName: 'ws-name',
+        workspacePath: 'C:/work',
+        source: 'manual',
+        sourceObservationIds: ['obs-old'],
+        fileRefs: [],
+        actor: 'tester',
+        createdAt: '2026-07-07T00:00:00.000Z',
+      }
+    }
+
+    function seedTruth(id: string, overrides: Record<string, unknown> = {}) {
+      return {
+        id,
+        content: 'Old persistence uses SQLite.',
+        concepts: [],
+        files: ['src/db.ts'],
+        tags: [],
+        confidence: 0.8,
+        version: 2,
+        status: 'active',
+        kind: 'fact',
+        provenance: truthProvenance(),
+        ...overrides,
+      }
+    }
+
+    function seedDeterministicCandidate(id: string, content: string, confidence: number) {
+      const provenance = {
+        ...truthProvenance(),
+        source: 'tool',
+        sourceObservationIds: ['o1'],
+        fileRefs: ['src/db.ts'],
+        actor: 'knowledge-deterministic',
+      }
+      return {
+        id,
+        type: 'fact',
+        status: 'proposed',
+        fact: {
+          id: `fact-${id}`,
+          content,
+          concepts: [],
+          files: ['src/db.ts'],
+          tags: [],
+          confidence,
+          version: 1,
+          status: 'proposed',
+          kind: 'fact',
+          provenance,
+        },
+        derivation: 'deterministic',
+        evidence: { observationIds: ['o1'], snippets: [content] },
+      }
+    }
+
+    async function readCandidates(): Promise<CandidateFact[]> {
+      const { knowledgeExtractService } = await loadService()
+      return knowledgeExtractService.listFactCandidates()
+    }
+
+    it('maps kind and keeps validated supersedes, drops hallucinated ones', async () => {
+      await seedJsonl('facts/facts.jsonl', [seedTruth('truth-1')])
+      setupLlm({
+        facts: [
+          {
+            content: 'Persistence now uses Postgres.',
+            concepts: [],
+            files: ['src/db.ts'],
+            tags: [],
+            confidence: 0.85,
+            kind: 'decision',
+            supersedes: 'truth-1',
+          },
+          {
+            content: 'Unrelated note.',
+            concepts: [],
+            files: [],
+            tags: [],
+            confidence: 0.5,
+            kind: 'fact',
+            supersedes: 'ghost-id',
+          },
+        ],
+        wikiPatches: [],
+        graphEdges: [],
+      })
+      const { knowledgeExtractService } = await loadService()
+
+      const result = await knowledgeExtractService.extract(
+        { observations: [makeObservation({ id: 'o1' })] },
+        { mode: 'auto', sleepMs: async () => {} },
+      )
+
+      expect(result.facts).toHaveLength(2)
+      expect(result.facts[0]?.fact.kind).toBe('decision')
+      expect(result.facts[0]?.fact.supersedes).toBe('truth-1')
+      expect(result.facts[1]?.fact.kind).toBe('fact')
+      expect(result.facts[1]?.fact.supersedes).toBeUndefined()
+    })
+
+    it('marks candidate-stage conflicts against active truth', async () => {
+      await seedJsonl('facts/facts.jsonl', [seedTruth('truth-1')])
+      setupLlm({
+        facts: [
+          {
+            content: 'Persistence uses Postgres.',
+            concepts: [],
+            files: ['src/db.ts'],
+            tags: [],
+            confidence: 0.8,
+            kind: 'fact',
+          },
+        ],
+        wikiPatches: [],
+        graphEdges: [],
+      })
+      const { knowledgeExtractService } = await loadService()
+
+      const result = await knowledgeExtractService.extract(
+        { observations: [makeObservation({ id: 'o1' })] },
+        { mode: 'auto', sleepMs: async () => {} },
+      )
+
+      expect(result.facts).toHaveLength(1)
+      expect(result.facts[0]?.conflicts).toEqual(['truth-1'])
+    })
+
+    it('degrades on timeout when the model hangs', async () => {
+      setupLlm({ facts: [], wikiPatches: [], graphEdges: [] })
+      mocks.generateObject.mockImplementation(() => new Promise(() => {}))
+      const { knowledgeExtractService } = await loadService()
+
+      const result = await knowledgeExtractService.extract(
+        { observations: [makeObservation()] },
+        { mode: 'auto', timeoutMs: 30, sleepMs: async () => {} },
+      )
+
+      expect(result.facts).toEqual([])
+      expect(result.degraded?.reason).toBe('generate-object-failed')
+      expect(result.degraded?.detail).toContain('timed out')
+      expect(result.auditEventId).toBeUndefined()
+    })
+
+    it('retries invalid output then degrades, calling the model 3 times', async () => {
+      mocks.getDefaultModel.mockResolvedValue({
+        provider: { id: 'openai-compatible' },
+        modelId: 'gpt-test',
+      })
+      mocks.getLanguageModel.mockResolvedValue({ id: 'test-model' })
+      mocks.generateObject.mockResolvedValue({ object: { facts: 'garbage' } })
+      const { knowledgeExtractService } = await loadService()
+
+      const result = await knowledgeExtractService.extract(
+        { observations: [makeObservation()] },
+        { mode: 'auto', sleepMs: async () => {} },
+      )
+
+      expect(result.degraded?.reason).toBe('generate-object-failed')
+      expect(mocks.generateObject).toHaveBeenCalledTimes(3)
+    })
+
+    it('succeeds after one transient failure', async () => {
+      mocks.getDefaultModel.mockResolvedValue({
+        provider: { id: 'openai-compatible' },
+        modelId: 'gpt-test',
+      })
+      mocks.getLanguageModel.mockResolvedValue({ id: 'test-model' })
+      mocks.generateObject
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValue({
+          object: {
+            facts: [
+              {
+                content: 'Recovered fact.',
+                concepts: [],
+                files: [],
+                tags: [],
+                confidence: 0.7,
+                kind: 'fact',
+              },
+            ],
+            wikiPatches: [],
+            graphEdges: [],
+          },
+        })
+      const { knowledgeExtractService } = await loadService()
+
+      const result = await knowledgeExtractService.extract(
+        { observations: [makeObservation()] },
+        { mode: 'auto', sleepMs: async () => {} },
+      )
+
+      expect(result.facts).toHaveLength(1)
+      expect(result.facts[0]?.fact.content).toBe('Recovered fact.')
+      expect(mocks.generateObject).toHaveBeenCalledTimes(2)
+    })
+
+    it('merges LLM output into the matching deterministic candidate instead of appending', async () => {
+      await seedJsonl(
+        'facts/candidates.jsonl',
+        [seedDeterministicCandidate('det-1', 'commit abc: add user index', 0.9)],
+      )
+      setupLlm({
+        facts: [
+          {
+            content: 'commit abc: add user index',
+            concepts: [],
+            files: ['src/db.ts'],
+            tags: [],
+            confidence: 0.95,
+            kind: 'fact',
+          },
+        ],
+        wikiPatches: [],
+        graphEdges: [],
+      })
+      const { knowledgeExtractService } = await loadService()
+
+      const result = await knowledgeExtractService.extract(
+        { observations: [makeObservation({ id: 'o1', content: 'commit abc: add user index' })] },
+        { mode: 'auto', sleepMs: async () => {} },
+      )
+
+      expect(result.facts).toHaveLength(0)
+      expect(result.mergedFactCandidateIds).toEqual(['det-1'])
+      const stored = await readCandidates()
+      expect(stored).toHaveLength(1)
+      expect(stored[0]?.derivation).toBe('merged')
+      expect(stored[0]?.fact.confidence).toBeCloseTo(0.95)
+      expect(stored[0]?.mergedFrom).toHaveLength(2)
+      expect(stored[0]?.mergedFrom).toContain('det-1')
+    })
+
+    it('merge tie-break follows mode on equal confidence', async () => {
+      const detContent = 'Project persistence layer uses Postgres for durability.'
+      const llmContent = 'Project persistence layer uses Postgres for durability and backups.'
+      const observation = makeObservation({ id: 'o1', content: detContent })
+      const llmPayload = {
+        facts: [
+          {
+            content: llmContent,
+            concepts: [],
+            files: [],
+            tags: [],
+            confidence: 0.8,
+            kind: 'fact' as const,
+          },
+        ],
+        wikiPatches: [],
+        graphEdges: [],
+      }
+
+      for (const mode of ['auto', 'llm-preferred'] as const) {
+        await seedJsonl(
+          'facts/candidates.jsonl',
+          [seedDeterministicCandidate('det-tie', detContent, 0.8)],
+        )
+        setupLlm(llmPayload)
+        const { knowledgeExtractService } = await loadService()
+        const result = await knowledgeExtractService.extract(
+          { observations: [observation] },
+          { mode, sleepMs: async () => {} },
+        )
+        expect(result.mergedFactCandidateIds).toEqual(['det-tie'])
+        const stored = await readCandidates()
+        expect(stored).toHaveLength(1)
+        expect(stored[0]?.fact.content).toBe(mode === 'llm-preferred' ? llmContent : detContent)
+      }
+    })
+
+    it('applies the per-batch character budget oldest-first', async () => {
+      const { applyLlmBudget } = await loadService()
+      const big = (id: string, chars: number) => makeObservation({ id, content: 'x'.repeat(chars) })
+
+      // Per-observation cap: 7000 chars -> truncated with a marker.
+      const capped = applyLlmBudget([big('a', 7000)])
+      expect(capped.observations).toHaveLength(1)
+      expect(capped.droppedObservationIds).toEqual([])
+      expect(capped.observations[0]?.content.length).toBeLessThanOrEqual(6100)
+      expect(capped.observations[0]?.content).toContain('[truncated for LLM budget]')
+
+      // Batch cap: 12 x 6000 = 72000 > 60000 -> the two oldest are dropped.
+      const many = Array.from({ length: 12 }, (_, index) => big(`o${index}`, 6000))
+      const budgeted = applyLlmBudget(many)
+      expect(budgeted.droppedObservationIds).toEqual(['o0', 'o1'])
+      expect(budgeted.observations).toHaveLength(10)
+      expect(budgeted.observations[0]?.id).toBe('o2')
+    })
   })
 })

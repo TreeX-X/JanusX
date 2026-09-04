@@ -35,6 +35,7 @@ interface ChatRequest {
   providerId: string
   modelId?: string
   sourceTag?: 'janus-chat'
+  conversationId?: string
   workspaceId?: string
   workspacePath?: string
   workspaceResources?: ChatWorkspaceResource[]
@@ -214,6 +215,9 @@ export function registerLlmHandlers(): void {
 
       if (sourceTag === 'janus-chat' && soleResource) {
         const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')
+        // Non-stream chat has no requestId; the owning session is the attached
+        // agent session, falling back to the chat conversation.
+        const sessionId = soleResource.agentSessionId || request.conversationId
         if (userMessage) {
           await knowledgeObservationService.capture({
             workspaceId: soleResource.workspaceId,
@@ -224,6 +228,7 @@ export function registerLlmHandlers(): void {
             summary: 'Janus Chat user message',
             tags: ['janus-chat', 'user'],
             actor: 'user',
+            sessionId,
           })
         }
         await knowledgeObservationService.capture({
@@ -235,6 +240,7 @@ export function registerLlmHandlers(): void {
           summary: 'Janus Chat assistant response',
           tags: ['janus-chat', 'assistant'],
           actor: 'assistant',
+          sessionId,
           metadata: {
             providerId,
             modelId: actualModelId,

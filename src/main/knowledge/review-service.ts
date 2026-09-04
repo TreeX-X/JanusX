@@ -143,6 +143,14 @@ async function withMutationLock<T>(key: string, operation: () => Promise<T>): Pr
   }
 }
 
+/**
+ * Phase 2: serializes fact-candidate file rewrites from outside the review
+ * loop (the LLM merge step) with review apply/reject on the same lock.
+ */
+export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<T> {
+  return withMutationLock(FACT_CANDIDATES_FILE, operation)
+}
+
 async function restoreJsonl(relativePath: string, records: unknown[]): Promise<void> {
   await writeJsonlAtomic(relativePath, records)
 }
@@ -294,7 +302,7 @@ export class KnowledgeReviewService {
     records[index] = updated
     await writeJsonlAtomic(relativePath, records)
 
-    const provenance = provenanceFromCandidate(updated)
+    const provenance = provenanceFromCandidate(updated, input.actor ?? 'knowledge-review')
     let audit: AuditEvent
     try {
       audit = await knowledgeAuditService.record({
@@ -333,10 +341,12 @@ export class KnowledgeReviewService {
 
     let applied: ReviewResult['applied']
     let rollback: () => Promise<void>
+    let supersededFact: { id: string; version: number } | undefined
     if (type === 'fact') {
       const transaction = await this.applyFact(current as CandidateFact)
       applied = { fact: transaction.value }
       rollback = transaction.rollback
+      supersededFact = transaction.superseded
     } else if (type === 'graph-edge') {
       const transaction = await this.applyGraphEdge(current as CandidateGraphEdge)
       applied = { edge: transaction.value }
@@ -360,7 +370,7 @@ export class KnowledgeReviewService {
       throw error
     }
 
-    const provenance = provenanceFromCandidate(updated)
+    const provenance = provenanceFromCandidate(updated, input.actor ?? 'knowledge-review')
     const targetType = auditTargetType(type)
     try {
     const auditInputs: Parameters<typeof knowledgeAuditService.recordBatch>[0] = [{
@@ -383,6 +393,18 @@ export class KnowledgeReviewService {
           version: applied.page.version,
           title: applied.page.title,
         },
+        provenance,
+      })
+    }
+
+    // Phase 2: supersede archives the old fact alongside the apply.
+    if (type === 'fact' && supersededFact) {
+      auditInputs.push({
+        action: 'fact_superseded',
+        targetType: 'fact',
+        targetId: supersededFact.id,
+        before: { status: 'active', version: supersededFact.version },
+        after: { status: 'archived' },
         provenance,
       })
     }
@@ -416,16 +438,41 @@ export class KnowledgeReviewService {
   private async applyFact(candidate: CandidateFact): Promise<{
     value: MemoryFact
     rollback: () => Promise<void>
+    superseded?: { id: string; version: number }
   }> {
+    const previous = await readJsonl<MemoryFact>(FACTS_FILE)
+    // Phase 2 supersede: a candidate carrying `supersedes` archives the old
+    // active fact and continues its version chain instead of forking a new one.
+    let base = previous
+    let version = candidate.fact.version || 1
+    let superseded: { id: string; version: number } | undefined
+    const targetId = candidate.fact.supersedes?.trim()
+    if (targetId) {
+      const target = previous.find((item) => item.id === targetId)
+      if (!target || target.status !== 'active') {
+        throw new Error(`Cannot supersede ${targetId}: no active truth fact with that id`)
+      }
+      if (target.provenance.workspaceId !== candidate.fact.provenance.workspaceId) {
+        throw new Error(`Cannot supersede ${targetId}: workspace mismatch`)
+      }
+      base = previous.map((item) =>
+        item.id === targetId ? { ...item, status: 'archived' as const } : item,
+      )
+      version = target.version + 1
+      superseded = { id: target.id, version: target.version }
+    }
     const fact: MemoryFact = {
       ...candidate.fact,
       status: 'active',
-      version: candidate.fact.version || 1,
+      version,
     }
-    const previous = await readJsonl<MemoryFact>(FACTS_FILE)
-    const next = [...previous.filter((item) => item.id !== fact.id), fact]
+    const next = [...base.filter((item) => item.id !== fact.id), fact]
     await writeJsonlAtomic(FACTS_FILE, next)
-    return { value: fact, rollback: () => restoreJsonl(FACTS_FILE, previous) }
+    return {
+      value: fact,
+      rollback: () => restoreJsonl(FACTS_FILE, previous),
+      ...(superseded ? { superseded } : {}),
+    }
   }
 
   private async applyGraphEdge(candidate: CandidateGraphEdge): Promise<{

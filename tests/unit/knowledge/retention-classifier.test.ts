@@ -44,6 +44,9 @@ describe('classifyRetention', () => {
     [{ source: 'manual', type: 'user-note', content: 'remember' }, 'user-note'],
     [{ source: 'tool', type: 'tool-call', content: 'noop' }, 'tool-event'],
     [{ source: 'tool', type: 'tool-result', content: 'ok' }, 'tool-event'],
+    // Phase 1: git / checkpoint feed deterministic proposals, so they are evidence.
+    [{ source: 'checkpoint', type: 'checkpoint-event', content: 'snap' }, 'checkpoint-event'],
+    [{ source: 'git-analyzer', type: 'git-event', content: 'commit' }, 'git-event'],
   ] as const)('classifies %s as evidence', (input, retentionReason) => {
     const result = classifyRetention(input)
     expect(result.retentionClass).toBe('evidence')
@@ -52,8 +55,6 @@ describe('classifyRetention', () => {
 
   it.each([
     [{ source: 'agent-stream', type: 'system-event', content: 'task started' }, 'lifecycle-event'],
-    [{ source: 'checkpoint', type: 'checkpoint-event', content: 'snap' }, 'checkpoint-event'],
-    [{ source: 'git-analyzer', type: 'git-event', content: 'commit' }, 'git-event'],
   ] as const)('classifies %s as operational', (input, retentionReason) => {
     const result = classifyRetention(input)
     expect(result.retentionClass).toBe('operational')

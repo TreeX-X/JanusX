@@ -27,6 +27,9 @@ import { registerRuntimeTelemetryHandlers } from './runtime-telemetry-handlers'
 import { registerSettingsHandlers } from './settings-handlers'
 import { registerSubAgentRunHandlers } from './subagent-run-handlers'
 import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './terminal-handlers'
+import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
+import { runDeterministicStage } from '../knowledge/deterministic-extractor'
+import { runLlmStage } from '../knowledge/llm-stage'
 import { terminalManager } from '../terminal/manager'
 import { analyzer } from '../janus/analyzer'
 import { blueprintMaintenanceService } from '../janus/maintenance/service'
@@ -110,6 +113,20 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   })
   registerSubAgentRunHandlers()
   registerKnowledgeHandlers()
+  // Phase 1-2: plug the deterministic stage into the processing queue and
+  // report unprocessed ranges from the persisted cursor on startup.
+  // Phase 2: the LLM stage runs after each deterministic batch (mode/model gated).
+  knowledgeProcessingQueue.configureDeterministicHandler((batch) =>
+    runDeterministicStage(batch).then(() => undefined),
+  )
+  knowledgeProcessingQueue.configureLlmHandler((batch) => runLlmStage(batch))
+  void knowledgeProcessingQueue.startupRestore()
+    .then(({ pendingTotal }) => {
+      if (pendingTotal > 0) console.log(`[knowledge] processing queue restored with ${pendingTotal} pending observations`)
+    })
+    .catch((error: unknown) => {
+      console.error(`[knowledge] queue startup restore failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
   registerOfficeHandlers({
     getAllowedWindows: options.getAllowedWindows,
     resolveWorkspaceRoot: options.resolveWorkspaceRoot,

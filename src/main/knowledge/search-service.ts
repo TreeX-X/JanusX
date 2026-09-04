@@ -60,6 +60,10 @@ export class KnowledgeSearchService {
       workspacePath: normalizeText(query.workspacePath),
       tags: normalizeList(query.tags),
       files: normalizeList(query.files),
+      agentId: normalizeText(query.agentId),
+      sessionId: normalizeText(query.sessionId),
+      since: normalizeText(query.since),
+      until: normalizeText(query.until),
     }
     await knowledgeContractService.bootstrapWorkspace(normalizedQuery.workspacePath)
 

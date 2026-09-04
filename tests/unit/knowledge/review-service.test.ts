@@ -169,6 +169,24 @@ describe('KnowledgeReviewService', () => {
     expect(facts[0]?.status).toBe('active')
   })
 
+  it('honors an explicit actor override in review audits (auto-policy)', async () => {
+    const candidate = makeFactCandidate()
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const { knowledgeReviewService } = await loadService()
+
+    const result = await knowledgeReviewService.applyCandidate({
+      type: 'fact',
+      id: candidate.id,
+      actor: 'auto-policy',
+    })
+
+    expect(result.candidate.status).toBe('applied')
+    expect(result.auditEvents).toHaveLength(2)
+    for (const event of result.auditEvents) {
+      expect(event.provenance.actor).toBe('auto-policy')
+    }
+  })
+
   it('applies a graph-edge candidate into edges.jsonl', async () => {
     const candidate = makeGraphCandidate()
     await seedJsonl('graph/candidates.jsonl', [candidate])
@@ -308,5 +326,99 @@ describe('KnowledgeReviewService', () => {
     expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0]?.status).toBe('proposed')
     expect(await readJsonl<MemoryFact>('facts/facts.jsonl')).toEqual([])
     vi.restoreAllMocks()
+  })
+
+  it('archives the old fact and continues its version on supersede apply', async () => {
+    const oldFact: MemoryFact = {
+      id: 'fact-old',
+      content: 'Persistence uses SQLite.',
+      concepts: [],
+      files: ['src/db.ts'],
+      tags: [],
+      confidence: 0.8,
+      version: 3,
+      status: 'active',
+      kind: 'fact',
+      provenance: provenance({ sourceObservationIds: ['obs-old'] }),
+    }
+    await seedJsonl('facts/facts.jsonl', [oldFact])
+    const candidate = makeFactCandidate({
+      id: 'cand-supersede',
+      derivation: 'llm',
+      evidence: { observationIds: ['obs-new'] },
+      fact: {
+        ...makeFactCandidate().fact,
+        id: 'fact-new',
+        content: 'Persistence uses Postgres.',
+        kind: 'fact',
+        supersedes: 'fact-old',
+        provenance: provenance({ sourceObservationIds: ['obs-new'], actor: 'knowledge-extract' }),
+      },
+    })
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const { knowledgeReviewService } = await loadService()
+
+    const result = await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+
+    expect(result.applied?.fact?.id).toBe('fact-new')
+    expect(result.applied?.fact?.version).toBe(4)
+    expect(result.applied?.fact?.status).toBe('active')
+    expect(result.auditEvents.map((event) => event.action)).toEqual([
+      'candidate_approved',
+      'fact_superseded',
+      'candidate_applied',
+    ])
+    const supersededAudit = result.auditEvents.find((event) => event.action === 'fact_superseded')
+    expect(supersededAudit?.targetId).toBe('fact-old')
+
+    const facts = await readJsonl<MemoryFact>('facts/facts.jsonl')
+    expect(facts).toHaveLength(2)
+    expect(facts.find((fact) => fact.id === 'fact-old')?.status).toBe('archived')
+    expect(facts.find((fact) => fact.id === 'fact-new')?.version).toBe(4)
+  })
+
+  it('refuses to apply a candidate whose supersedes target is missing or inactive', async () => {
+    const archived: MemoryFact = {
+      ...makeFactCandidate().fact,
+      id: 'fact-archived',
+      kind: 'fact',
+      status: 'archived',
+    }
+    await seedJsonl('facts/facts.jsonl', [archived])
+    const dangling = makeFactCandidate({
+      id: 'cand-dangling',
+      derivation: 'llm',
+      evidence: { observationIds: ['obs-new'] },
+      fact: {
+        ...makeFactCandidate().fact,
+        id: 'fact-dangling',
+        kind: 'fact',
+        supersedes: 'fact-missing',
+      },
+    })
+    const stale = makeFactCandidate({
+      id: 'cand-stale',
+      derivation: 'llm',
+      evidence: { observationIds: ['obs-new'] },
+      fact: {
+        ...makeFactCandidate().fact,
+        id: 'fact-stale',
+        kind: 'fact',
+        supersedes: 'fact-archived',
+      },
+    })
+    await seedJsonl('facts/candidates.jsonl', [dangling, stale])
+    const { knowledgeReviewService } = await loadService()
+
+    await expect(
+      knowledgeReviewService.applyCandidate({ type: 'fact', id: 'cand-dangling' }),
+    ).rejects.toThrow(/no active truth fact/i)
+    await expect(
+      knowledgeReviewService.applyCandidate({ type: 'fact', id: 'cand-stale' }),
+    ).rejects.toThrow(/no active truth fact/i)
+
+    const candidates = await readJsonl<CandidateFact>('facts/candidates.jsonl')
+    expect(candidates.map((candidate) => candidate.status)).toEqual(['proposed', 'proposed'])
+    expect(await readJsonl<MemoryFact>('facts/facts.jsonl')).toHaveLength(1)
   })
 })

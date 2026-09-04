@@ -51,6 +51,7 @@ vi.mock('../../src/main/knowledge/truth-service', () => ({ knowledgeTruthService
 vi.mock('../../src/main/knowledge/context-service', () => ({ knowledgeContextService: {} }))
 vi.mock('../../src/main/knowledge/operations-service', () => ({ knowledgeOperationsService: {} }))
 vi.mock('../../src/main/knowledge/diagnostics-service', () => ({ knowledgeDiagnosticsService: {} }))
+vi.mock('../../src/main/knowledge/processing-queue', () => ({ knowledgeProcessingQueue: {} }))
 vi.mock('../../src/main/config/service', () => ({
   configService: {
     getKnowledgeSettings: mocks.getKnowledgeSettings,
@@ -81,7 +82,7 @@ describe('Knowledge IPC contract', () => {
 
   it('defines and registers exactly the public channel set without maintenance exposure', () => {
     const channels = Object.values(KNOWLEDGE_CHANNELS)
-    expect(channels).toHaveLength(26)
+    expect(channels).toHaveLength(28)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -131,6 +132,8 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.feedbackSummary('workspace-1')
     await knowledgeApi.context({ query: 'context', workspaceId: 'workspace-1' })
     await knowledgeApi.diagnostics({ workspaceId: 'workspace-1', recentLimit: 5 })
+    await knowledgeApi.processNow({ workspaceId: 'workspace-1' })
+    await knowledgeApi.processingStats()
     await knowledgeApi.getSettings()
     await knowledgeApi.updateSettings({ enabled: false })
 
@@ -159,6 +162,8 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.feedbackSummary, 'workspace-1'],
       [KNOWLEDGE_CHANNELS.context, { query: 'context', workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.diagnostics, { workspaceId: 'workspace-1', recentLimit: 5 }],
+      [KNOWLEDGE_CHANNELS.processNow, { workspaceId: 'workspace-1' }],
+      [KNOWLEDGE_CHANNELS.processingStats],
       [KNOWLEDGE_CHANNELS.getSettings],
       [KNOWLEDGE_CHANNELS.updateSettings, { enabled: false }],
     ])
@@ -259,6 +264,11 @@ describe('Knowledge IPC contract', () => {
       visibility: 'workspace',
       actor: 'tester',
       createdAt: '2026-07-17T00:00:00.000Z',
+      retentionClass: 'evidence',
+      contentHash: 'a'.repeat(64),
+      dedupeKey: 'b'.repeat(64),
+      contentLength: 7,
+      compactionStatus: 'active',
     }
     const api = window.electron.knowledge
     const calls: Array<() => Promise<unknown>> = [
@@ -286,12 +296,14 @@ describe('Knowledge IPC contract', () => {
       () => api.feedbackSummary('workspace'),
       () => api.context({ query: 'fallback', workspaceId: 'workspace' }),
       () => api.diagnostics(),
+      () => api.processNow({ workspaceId: 'workspace' }),
+      () => api.processingStats(),
       () => api.getSettings(),
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(26)
-    expect(calls).toHaveLength(26)
+    expect(Object.keys(api)).toHaveLength(28)
+    expect(calls).toHaveLength(28)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

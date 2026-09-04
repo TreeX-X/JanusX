@@ -4,6 +4,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { createKnowledgeMcpServer } from '../../../src/main/knowledge/knowledge-mcp-tools'
 import type { KnowledgeContextResult } from '../../../src/shared/knowledge'
 
+vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
+
 const result: KnowledgeContextResult = {
   items: [{
     id: 'fact-1',

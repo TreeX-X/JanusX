@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -11,6 +11,8 @@ import type {
   MemoryFact,
   Observation,
 } from '../../../src/shared/knowledge'
+
+vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
 function fact(id: string, content: string): MemoryFact {
   return {

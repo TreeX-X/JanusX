@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import type {
@@ -8,6 +9,7 @@ import type {
   WikiPageStatus,
 } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
+import { knowledgeAuditService } from './audit-service'
 
 interface WikiPageIndexEntry {
   slug: string
@@ -30,6 +32,60 @@ const GRAPH_RELATIONS = new Set([
   'mentions', 'derived_from', 'supersedes', 'depends_on', 'conflicts_with',
   'implemented_in', 'owned_by', 'used_by_agent',
 ])
+// Phase 1 convergence: MemoryFact.kind is required; records without it are schema errors.
+const FACT_KINDS = new Set(['fact', 'preference', 'decision', 'procedure'])
+
+// Phase 1 convergence: invalid persisted records are reported once (per record)
+// as schema_violation audits instead of being silently filtered.
+const reportedTruthViolations = new Set<string>()
+const TRUTH_VIOLATION_REPORT_LIMIT = 2000
+
+function shortLineHash(line: string): string {
+  return createHash('sha256').update(line, 'utf8').digest('hex').slice(0, 16)
+}
+
+function recordIdOf(value: unknown, line: string): string {
+  if (isRecord(value) && typeof value.id === 'string' && value.id) return value.id
+  return `line:${shortLineHash(line)}`
+}
+
+function reportTruthSchemaViolations(
+  collection: string,
+  targetType: 'fact' | 'wiki' | 'graph',
+  violations: string[],
+): void {
+  // Audit ids must be stable across platforms: readJsonl callers build
+  // `collection` with path.join, which yields backslashes on Windows.
+  const collectionId = collection.replace(/\\/g, '/')
+  const fresh = violations.filter((key) => !reportedTruthViolations.has(`${collectionId}:${key}`))
+  if (fresh.length === 0) return
+  for (const key of fresh) {
+    if (reportedTruthViolations.size >= TRUTH_VIOLATION_REPORT_LIMIT) break
+    reportedTruthViolations.add(`${collectionId}:${key}`)
+  }
+  void knowledgeAuditService.record({
+    action: 'schema_violation',
+    targetType,
+    targetId: collectionId,
+    before: null,
+    after: {
+      violationCount: fresh.length,
+      samples: fresh.slice(0, 5),
+    },
+    provenance: {
+      workspaceId: 'global',
+      workspaceName: 'global',
+      workspacePath: '',
+      source: 'system',
+      sourceObservationIds: [],
+      fileRefs: [],
+      actor: 'knowledge-schema-guard',
+      createdAt: new Date().toISOString(),
+    },
+  }).catch((error: unknown) => {
+    console.error(`[knowledge] schema_violation audit failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
+}
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -58,6 +114,8 @@ function isMemoryFact(value: unknown): value is MemoryFact {
     && hasFiniteNumber(value, 'confidence')
     && hasFiniteNumber(value, 'version')
     && value.status === 'active'
+    && typeof value.kind === 'string'
+    && FACT_KINDS.has(value.kind)
     && hasString(provenance, 'workspaceId')
     && hasString(provenance, 'workspaceName')
     && typeof provenance.workspacePath === 'string'
@@ -98,21 +156,31 @@ function isPublishedWikiEntry(value: unknown): value is WikiPageIndexEntry {
 async function readJsonl<T>(
   relativePath: string,
   isValid: (value: unknown) => value is T,
+  targetType: 'fact' | 'wiki' | 'graph',
 ): Promise<T[]> {
   try {
     const content = await readFile(join(knowledgeRootPath(), relativePath), 'utf8')
-    return content
+    const violations: string[] = []
+    const records = content
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
       .flatMap((line) => {
+        let parsed: unknown
         try {
-          const parsed: unknown = JSON.parse(line)
-          return isValid(parsed) ? [parsed] : []
+          parsed = JSON.parse(line)
         } catch {
+          violations.push(`line:${shortLineHash(line)} (malformed-json)`)
           return []
         }
+        if (!isValid(parsed)) {
+          violations.push(`${recordIdOf(parsed, line)} (schema-mismatch)`)
+          return []
+        }
+        return [parsed]
       })
+    reportTruthSchemaViolations(relativePath, targetType, violations)
+    return records
   } catch {
     return []
   }
@@ -148,9 +216,9 @@ async function readPublishedWikiPages(): Promise<WikiPage[]> {
 export class KnowledgeTruthService {
   async list(): Promise<KnowledgeTruthSnapshot> {
     const [facts, wikiPages, graphEdges] = await Promise.all([
-      readJsonl(join('facts', 'facts.jsonl'), isMemoryFact),
+      readJsonl(join('facts', 'facts.jsonl'), isMemoryFact, 'fact'),
       readPublishedWikiPages(),
-      readJsonl(join('graph', 'edges.jsonl'), isGraphEdge),
+      readJsonl(join('graph', 'edges.jsonl'), isGraphEdge, 'graph'),
     ])
 
     return {

@@ -22,6 +22,18 @@ export type ObservationQueryScope = 'global' | 'workspace'
 
 export type CandidateStatus = 'proposed' | 'approved' | 'rejected' | 'applied'
 
+/** Phase 1: how a candidate was derived (deterministic rule, LLM, or merged). */
+export type Derivation = 'deterministic' | 'llm' | 'merged'
+
+/** Phase 1: what a fact states. Stored on MemoryFact, no new entity types. */
+export type FactKind = 'fact' | 'preference' | 'decision' | 'procedure'
+
+/** Phase 1: evidence chain every derived candidate must carry. */
+export interface CandidateEvidence {
+  observationIds: string[]
+  snippets?: string[]
+}
+
 export type RetentionClass = 'noise' | 'operational' | 'evidence' | 'derived'
 
 export type WikiPageStatus = 'draft' | 'review' | 'published' | 'archived'
@@ -64,6 +76,10 @@ export type AuditAction =
   | 'knowledge_conflict'
   | 'knowledge_feedback'
   | 'reindex'
+  // Phase 1: processing queue run failures.
+  | 'processing_failed'
+  // Phase 1 convergence: persisted records that fail strict schema validation.
+  | 'schema_violation'
   // Phase 5: lifecycle audit actions for observations.
   | 'observation_pruned'
   | 'observation_auto_pruned'
@@ -98,20 +114,26 @@ export interface Observation {
   actor: string
   createdAt: string
   correlationId?: string
+  /** Phase 1 convergence: owning conversation/session (agent turn, chat conversation). Empty when sourceless. */
+  sessionId?: string
+  /** Phase 1 convergence: producing agent identity (engine name, analyzer id). Empty when unknown. */
+  agentId?: string
   metadata?: Record<string, StructuredCloneValue>
-  // Phase 3/4: retention classification (missing defaults to 'evidence').
-  retentionClass?: RetentionClass
+  // Phase 1 convergence: always written by capture; missing on read is a schema violation.
+  retentionClass: RetentionClass
   retentionReason?: string
   // Phase 4: content addressing + blob compression.
-  contentHash?: string
-  contentLength?: number
+  contentHash: string
+  // Phase 1 convergence: exact-dedupe key sha256(workspaceId + type + contentHash), always written by capture.
+  dedupeKey: string
+  contentLength: number
   contentPreview?: string
   blobRef?: string
   originalLength?: number
   truncated?: boolean
   // Phase 5: archive / compact / audit lifecycle.
-  // Missing compactionStatus reads as 'active' (backward compat).
-  compactionStatus?: CompactionStatus
+  // Phase 1 convergence: capture writes 'active'; missing on read is a schema violation.
+  compactionStatus: CompactionStatus
   compactedAt?: string
 }
 
@@ -128,6 +150,8 @@ export interface CaptureObservationInput {
   visibility?: KnowledgeVisibility
   actor?: string
   correlationId?: string
+  sessionId?: string
+  agentId?: string
   metadata?: Record<string, StructuredCloneValue>
 }
 
@@ -186,6 +210,8 @@ export interface MemoryFact {
   supersedes?: string
   status: CandidateStatus | 'active' | 'archived'
   provenance: KnowledgeProvenance
+  /** Phase 1: deterministic/LLM classification of what the fact states. */
+  kind: FactKind
 }
 
 export interface WikiPage {
@@ -253,6 +279,14 @@ export interface KnowledgeContextRequest {
   allowGlobal?: boolean
   maxItems?: number
   maxChars?: number
+  /** Phase 3: filter evidence by producing agent (observations only; truth is shared). */
+  agentId?: string
+  /** Phase 3: filter evidence by owning session (observations only; truth is shared). */
+  sessionId?: string
+  /** Phase 3: only records with createdAt >= since (ISO string). */
+  since?: string
+  /** Phase 3: only records with createdAt <= until (ISO string). */
+  until?: string
 }
 
 export interface KnowledgeContextSourceRefs {
@@ -327,6 +361,13 @@ export interface CandidateFact {
   status: CandidateStatus
   fact: MemoryFact
   reviewNotes?: string
+  /** Phase 1: required derivation + evidence chain (no default-when-missing reads). */
+  derivation: Derivation
+  evidence: CandidateEvidence
+  /** Phase 1: conflicting truth/candidate ids (candidate-stage conflict check). */
+  conflicts?: string[]
+  /** Phase 2: source candidate ids when derivation === 'merged'. */
+  mergedFrom?: string[]
 }
 
 export interface CandidateWikiPatch {
@@ -340,6 +381,13 @@ export interface CandidateWikiPatch {
   confidence: number
   provenance: KnowledgeProvenance
   reviewNotes?: string
+  /** Phase 1: required derivation + evidence chain (no default-when-missing reads). */
+  derivation: Derivation
+  evidence: CandidateEvidence
+  /** Phase 1: conflicting truth/candidate ids (candidate-stage conflict check). */
+  conflicts?: string[]
+  /** Phase 2: source candidate ids when derivation === 'merged'. */
+  mergedFrom?: string[]
 }
 
 export interface CandidateGraphEdge {
@@ -348,6 +396,13 @@ export interface CandidateGraphEdge {
   status: CandidateStatus
   edge: GraphEdge
   reviewNotes?: string
+  /** Phase 1: required derivation + evidence chain (no default-when-missing reads). */
+  derivation: Derivation
+  evidence: CandidateEvidence
+  /** Phase 1: conflicting truth/candidate ids (candidate-stage conflict check). */
+  conflicts?: string[]
+  /** Phase 2: source candidate ids when derivation === 'merged'. */
+  mergedFrom?: string[]
 }
 
 export interface KnowledgeStorageLayout {
@@ -414,6 +469,14 @@ export interface KnowledgeSearchQuery {
   files?: string[]
   source?: KnowledgeSource
   types?: KnowledgeSearchDocumentType[]
+  /** Phase 3: filter evidence by producing agent (observations only; truth is shared). */
+  agentId?: string
+  /** Phase 3: filter evidence by owning session (observations only; truth is shared). */
+  sessionId?: string
+  /** Phase 3: only records with createdAt >= since (ISO string). */
+  since?: string
+  /** Phase 3: only records with createdAt <= until (ISO string). */
+  until?: string
 }
 
 export interface KnowledgeSearchHit {
@@ -428,6 +491,8 @@ export interface KnowledgeSearchHit {
     exactTitle: number
     titlePhrase: number
     bodyPhrase: number
+    confidenceBoost: number
+    freshnessBoost: number
   }
   workspaceId: string
   workspaceName: string
@@ -439,6 +504,9 @@ export interface KnowledgeSearchHit {
   createdAt: string
   confidence?: number
   status?: CandidateStatus | 'active' | 'archived'
+  derivation?: Derivation
+  agentId?: string
+  sessionId?: string
 }
 
 export interface KnowledgeSearchIndexStats {

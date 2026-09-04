@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
@@ -36,6 +36,7 @@ describe('KnowledgeTruthService', () => {
       confidence: 0.8,
       version: 1,
       status,
+      kind: 'fact',
       provenance: {
         workspaceId: 'ws-1',
         workspaceName: 'Workspace',
@@ -103,6 +104,7 @@ describe('KnowledgeTruthService', () => {
       confidence: 0.8,
       version: 1,
       status: 'active',
+      kind: 'fact',
       provenance: {
         workspaceId: 'ws-1',
         workspaceName: 'Workspace',
@@ -149,5 +151,54 @@ describe('KnowledgeTruthService', () => {
       wikiPages: [],
       graphEdges: [validEdge],
     })
+
+    // Schema-violation audits are fire-and-forget; wait for settlement so the
+    // write cannot race teardown's recursive rm (ENOTEMPTY/EPERM on Windows).
+    const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
+    await vi.waitFor(async () => {
+      const audit = await knowledgeAuditService.list({ action: 'schema_violation' })
+      expect(audit.length).toBeGreaterThan(0)
+    })
+  })
+
+  it('skips facts missing kind and records a schema_violation audit (no silent compat)', async () => {
+    const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
+    const kindless = {
+      id: 'fact-kindless',
+      content: 'Legacy fact without kind',
+      concepts: [],
+      files: [],
+      tags: [],
+      confidence: 0.8,
+      version: 1,
+      status: 'active',
+      provenance: {
+        workspaceId: 'ws-1',
+        workspaceName: 'Workspace',
+        workspacePath: 'C:/work',
+        source: 'manual',
+        sourceObservationIds: [],
+        fileRefs: [],
+        actor: 'tester',
+        createdAt: '2026-07-12T00:00:00.000Z',
+      },
+    }
+    await write('facts/facts.jsonl', `${JSON.stringify(kindless)}\n`)
+
+    await expect(new KnowledgeTruthService().list()).resolves.toEqual({
+      facts: [],
+      wikiPages: [],
+      graphEdges: [],
+    })
+
+    // Fire-and-forget audit write: poll until it lands.
+    const audit = await vi.waitFor(async () => {
+      const settled = await knowledgeAuditService.list({ action: 'schema_violation' })
+      expect(settled).toHaveLength(1)
+      return settled
+    })
+    expect(audit[0]?.targetType).toBe('fact')
+    expect(audit[0]?.targetId).toBe('facts/facts.jsonl')
+    expect(audit[0]?.after).toMatchObject({ violationCount: 1 })
   })
 })

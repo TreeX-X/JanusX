@@ -13,6 +13,10 @@ const inputSchema = {
   allowGlobal: z.boolean().optional().describe('Explicitly allow recall across workspaces.'),
   maxItems: z.number().int().min(0).optional().describe('Maximum returned structured items.'),
   maxChars: z.number().int().min(0).optional().describe('Maximum compact-context characters.'),
+  agentId: z.string().optional().describe('Phase 3: filter evidence by producing agent.'),
+  sessionId: z.string().optional().describe('Phase 3: filter evidence by owning session.'),
+  since: z.string().optional().describe('Phase 3: only records created at or after this ISO time.'),
+  until: z.string().optional().describe('Phase 3: only records created at or before this ISO time.'),
 }
 
 const readOnlyAnnotations = {

@@ -8,6 +8,8 @@ import type {
   WikiPage,
 } from '../../../src/shared/knowledge'
 
+vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
+
 function provenance(workspaceId: string, workspacePath: string): KnowledgeProvenance {
   return {
     workspaceId,

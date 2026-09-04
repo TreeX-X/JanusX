@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { gzip, gunzip } from 'zlib'
 import { promisify } from 'util'
 import { appendFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'fs/promises'
@@ -27,7 +27,9 @@ const ACTIVE_OBSERVATIONS_DIR = 'observations/active'
 const ARCHIVE_OBSERVATIONS_DIR = 'observations/archive'
 const BLOBS_DIR = 'blobs'
 const DEFAULT_LIMIT = 50
-const MAX_LIMIT = 200
+// Phase 3 (§8): raised from 200 — recall pages per workspace (500 each) and
+// direct list callers can address a busy workspace without silent truncation.
+const MAX_LIMIT = 500
 // Phase 5: shard age thresholds (30-day months for simple arithmetic).
 const MS_PER_MONTH = 30 * 24 * 60 * 60 * 1000
 const DEFAULT_ARCHIVE_AGE_MONTHS = 3
@@ -79,27 +81,163 @@ function parseTime(value?: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-function parseObservationLine(line: string): Observation | null {
+/** §3.1 exact-dedupe key: sha256(workspaceId + type + contentHash). */
+export function observationDedupeKey(input: {
+  workspaceId: string
+  type: string
+  contentHash?: string
+  content?: string
+}): string {
+  const contentHash = input.contentHash
+    ?? createHash('sha256').update(input.content ?? '', 'utf8').digest('hex')
+  return createHash('sha256')
+    .update(`${input.workspaceId}\0${input.type}\0${contentHash}`, 'utf8')
+    .digest('hex')
+}
+
+// §3.1 capture-time dedupe: in-memory LRU of recent keys (best effort, lost on
+// restart) + same-shard scan inside the write queue.
+const DEDUPE_LRU_LIMIT = 500
+const dedupeCache = new Map<string, Observation>()
+
+function rememberDedupe(key: string, observation: Observation): void {
+  dedupeCache.delete(key)
+  dedupeCache.set(key, observation)
+  while (dedupeCache.size > DEDUPE_LRU_LIMIT) {
+    const oldest = dedupeCache.keys().next()
+    if (oldest.done) break
+    dedupeCache.delete(oldest.value)
+  }
+}
+
+/** Test hook: clears the in-memory dedupe LRU and schema-violation report set. */
+export function resetObservationServiceEphemeralState(): void {
+  dedupeCache.clear()
+  reportedObservationViolations.clear()
+}
+
+const HEX64_RE = /^[0-9a-f]{64}$/
+const KNOWN_SOURCES: ReadonlySet<string> = new Set([
+  'agent-stream', 'checkpoint', 'git-analyzer', 'janus-chat', 'manual', 'tool', 'system',
+])
+const KNOWN_OBSERVATION_TYPES: ReadonlySet<string> = new Set([
+  'conversation-turn', 'tool-call', 'tool-result', 'checkpoint-event',
+  'git-event', 'analysis-result', 'user-note', 'system-event',
+])
+const KNOWN_RETENTION: ReadonlySet<string> = new Set(['noise', 'operational', 'evidence', 'derived'])
+const KNOWN_COMPACTION: ReadonlySet<string> = new Set(['active', 'compacted', 'summarized'])
+
+function isStringRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasNonEmptyString(record: Record<string, unknown>, key: string): boolean {
+  return typeof record[key] === 'string' && (record[key] as string).length > 0
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+/**
+ * Phase 1 convergence: strict schema check. Records missing a required field
+ * (or carrying an unknown enum) are schema errors, not silently defaulted.
+ * Returns the reason, or null when the record is valid.
+ */
+function describeObservationViolation(value: unknown): string | null {
+  if (!isStringRecord(value)) return 'malformed-json'
+  const missing: string[] = []
+  for (const key of [
+    'id', 'workspaceId', 'workspaceName', 'workspacePath', 'source', 'type',
+    'actor', 'createdAt', 'retentionClass', 'contentHash',
+    'dedupeKey', 'contentLength', 'compactionStatus',
+  ]) {
+    if (value[key] === undefined || value[key] === null || value[key] === '') missing.push(key)
+  }
+  // 'content' must be present but may be an empty string: capture trims
+  // whitespace-only input (e.g. empty system-events classified as noise), and
+  // records the system itself wrote must remain readable.
+  if (typeof value.content !== 'string') missing.push('content')
+  if (missing.length > 0) return `missing-fields:${missing.join(',')}`
+  if (!KNOWN_SOURCES.has(value.source as string)) return `unknown-source:${String(value.source)}`
+  if (!KNOWN_OBSERVATION_TYPES.has(value.type as string)) return `unknown-type:${String(value.type)}`
+  if (!KNOWN_RETENTION.has(value.retentionClass as string)) {
+    return `unknown-retention:${String(value.retentionClass)}`
+  }
+  if (typeof value.contentHash !== 'string' || !HEX64_RE.test(value.contentHash)) return 'invalid-content-hash'
+  if (typeof value.dedupeKey !== 'string' || !HEX64_RE.test(value.dedupeKey)) return 'invalid-dedupe-key'
+  if (typeof value.contentLength !== 'number' || !Number.isFinite(value.contentLength)) {
+    return 'invalid-content-length'
+  }
+  if (!KNOWN_COMPACTION.has(value.compactionStatus as string)) {
+    return `unknown-compaction:${String(value.compactionStatus)}`
+  }
+  if (!isStringArray(value.fileRefs)) return 'invalid-file-refs'
+  if (!isStringArray(value.tags)) return 'invalid-tags'
+  return null
+}
+
+export interface ObservationViolation {
+  key: string
+  reason: string
+}
+
+function shortLineHash(line: string): string {
+  return createHash('sha256').update(line, 'utf8').digest('hex').slice(0, 16)
+}
+
+function inspectObservationLine(line: string): { observation: Observation } | { violation: ObservationViolation } | null {
   const trimmed = line.trim()
   if (!trimmed) return null
-
+  let parsed: unknown
   try {
-    const observation = JSON.parse(trimmed) as Observation
-    if (!observation.workspaceName && observation.workspacePath) {
-      observation.workspaceName = normalizeWorkspaceName(observation.workspacePath)
-    }
-    if (!observation.retentionClass) {
-      // Backward compat: unknown retention defaults to evidence (never auto-deleted).
-      observation.retentionClass = 'evidence'
-    }
-    if (!observation.compactionStatus) {
-      // Backward compat: missing compaction status reads as 'active'.
-      observation.compactionStatus = 'active'
-    }
-    return observation
+    parsed = JSON.parse(trimmed)
   } catch {
-    return null
+    return { violation: { key: `line:${shortLineHash(trimmed)}`, reason: 'malformed-json' } }
   }
+  const reason = describeObservationViolation(parsed)
+  if (reason !== null) {
+    const id = isStringRecord(parsed) && typeof parsed.id === 'string' && parsed.id
+      ? parsed.id
+      : `line:${shortLineHash(trimmed)}`
+    return { violation: { key: `observation:${id}:${reason}`, reason } }
+  }
+  return { observation: parsed as Observation }
+}
+
+const SCHEMA_VIOLATION_REPORT_LIMIT = 2000
+const reportedObservationViolations = new Set<string>()
+
+function reportObservationSchemaViolations(violations: ObservationViolation[]): void {
+  const fresh = violations.filter((violation) => !reportedObservationViolations.has(violation.key))
+  if (fresh.length === 0) return
+  for (const violation of fresh) {
+    if (reportedObservationViolations.size >= SCHEMA_VIOLATION_REPORT_LIMIT) break
+    reportedObservationViolations.add(violation.key)
+  }
+  const samples = fresh.slice(0, 5).map((violation) => `${violation.key} (${violation.reason})`)
+  void knowledgeAuditService.record({
+    action: 'schema_violation',
+    targetType: 'observation',
+    targetId: 'ledger',
+    before: null,
+    after: {
+      violationCount: fresh.length,
+      samples,
+    },
+    provenance: {
+      workspaceId: 'global',
+      workspaceName: 'global',
+      workspacePath: '',
+      source: 'system',
+      sourceObservationIds: [],
+      fileRefs: [],
+      actor: 'knowledge-schema-guard',
+      createdAt: new Date().toISOString(),
+    },
+  }).catch((error: unknown) => {
+    console.error(`[knowledge] schema_violation audit failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
 }
 
 function shardRelativePath(createdAtIso: string): string {
@@ -233,8 +371,31 @@ function shardMonthToMs(shardName: string): number | null {
   return Date.UTC(year, month - 1, 1)
 }
 
-function parseShardLines(shard: ShardFile): Array<{ line: string; observation: Observation | null }> {
-  return shard.lines.map((line) => ({ line, observation: parseObservationLine(line) }))
+function parseShardLines(shard: ShardFile): Array<{ line: string; observation: Observation | null; violation?: ObservationViolation }> {
+  return shard.lines.map((line) => {
+    const inspected = inspectObservationLine(line)
+    if (!inspected) return { line, observation: null }
+    if ('violation' in inspected) return { line, observation: null, violation: inspected.violation }
+    return { line, observation: inspected.observation }
+  })
+}
+
+/** Scans one active shard for a previously captured record with the same dedupe key. */
+async function findObservationByDedupeKey(shardPath: string, dedupeKey: string): Promise<Observation | null> {
+  const shard = await readShardFile(shardPath)
+  if (!shard) return null
+  for (const line of shard.lines) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (!isStringRecord(parsed) || parsed.dedupeKey !== dedupeKey) continue
+    const inspected = inspectObservationLine(line)
+    if (inspected && 'observation' in inspected) return inspected.observation
+  }
+  return null
 }
 
 async function writeShardIfChanged(relativePath: string, lines: string[]): Promise<void> {
@@ -275,9 +436,19 @@ export class KnowledgeObservationService {
     })
 
     const createdAt = new Date().toISOString()
+    const workspaceId = normalizeWorkspaceId(workspacePath, input.workspaceId)
+    // §3.1: exact-dedupe key is fixed before the write; a repeat capture of the
+    // same workspace + type + content returns the existing record without append.
+    const dedupeKey = observationDedupeKey({
+      workspaceId,
+      type: input.type,
+      contentHash: classification.contentHash,
+    })
+    const cached = dedupeCache.get(dedupeKey)
+    if (cached) return cached
     const baseObservation: Observation = {
       id: randomUUID(),
-      workspaceId: normalizeWorkspaceId(workspacePath, input.workspaceId),
+      workspaceId,
       workspaceName: normalizeWorkspaceName(workspacePath, input.workspaceName),
       workspacePath,
       source: input.source,
@@ -290,22 +461,44 @@ export class KnowledgeObservationService {
       actor: input.actor?.trim() || 'system',
       createdAt,
       correlationId: input.correlationId?.trim() || undefined,
+      sessionId: normalizeOptionalText(input.sessionId),
+      agentId: normalizeOptionalText(input.agentId),
       metadata: input.metadata,
       retentionClass: classification.retentionClass,
       retentionReason: classification.retentionReason,
       contentHash: classification.contentHash,
+      dedupeKey,
       contentLength: classification.contentLength,
       originalLength: classification.contentLength,
       truncated: false,
+      compactionStatus: 'active',
     }
 
     const observation = await this.applyBlobCompression(baseObservation, fullContent)
 
     const shardPath = shardRelativePath(createdAt)
     const filePath = join(knowledgeRootPath(), shardPath)
-    await this.writeQueue.run(async () => {
+    // Dedupe check and append share the write queue: concurrent captures of the
+    // same content cannot both pass the check before either appends.
+    const duplicate = await this.writeQueue.run(async () => {
+      const existing = await findObservationByDedupeKey(shardPath, dedupeKey)
+      if (existing) return existing
       await mkdir(join(filePath, '..'), { recursive: true })
       await appendFile(filePath, `${JSON.stringify(observation)}\n`, 'utf8')
+      return null
+    })
+    if (duplicate) {
+      rememberDedupe(dedupeKey, duplicate)
+      return duplicate
+    }
+    rememberDedupe(dedupeKey, observation)
+
+    // Phase 1: notify the processing queue (debounced, never blocks capture).
+    // Dynamic import: processing-queue statically depends on this service.
+    void import('./processing-queue').then(({ knowledgeProcessingQueue }) => {
+      knowledgeProcessingQueue.schedule(observation.workspaceId)
+    }).catch((error: unknown) => {
+      console.error(`[knowledge] queue schedule failed: ${error instanceof Error ? error.message : String(error)}`)
     })
 
     return observation
@@ -315,11 +508,11 @@ export class KnowledgeObservationService {
     observation: Observation,
     fullContent: string,
   ): Promise<Observation> {
-    if (observation.contentLength === undefined || observation.contentLength <= BLOB_CONTENT_THRESHOLD) {
+    if (observation.contentLength <= BLOB_CONTENT_THRESHOLD) {
       return observation
     }
 
-    const hash = observation.contentHash ?? ''
+    const hash = observation.contentHash
     const blobRelativePath = `${BLOBS_DIR}/${hash}.txt.gz`
     const blobAbsolutePath = join(knowledgeRootPath(), blobRelativePath)
 
@@ -354,13 +547,16 @@ export class KnowledgeObservationService {
 
     const shards = await listObservationShardFiles()
     const observations: Observation[] = []
+    const violations: ObservationViolation[] = []
     for (const shard of shards) {
       for (const entry of parseShardLines(shard)) {
+        if (entry.violation) violations.push(entry.violation)
         if (entry.observation && matchesFilters(entry.observation, filters)) {
           observations.push(entry.observation)
         }
       }
     }
+    reportObservationSchemaViolations(violations)
 
     observations.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     return observations.slice(0, clampLimit(query.limit))
@@ -370,11 +566,14 @@ export class KnowledgeObservationService {
   async listAll(): Promise<Observation[]> {
     const shards = await listObservationShardFiles()
     const observations: Observation[] = []
+    const violations: ObservationViolation[] = []
     for (const shard of shards) {
       for (const entry of parseShardLines(shard)) {
+        if (entry.violation) violations.push(entry.violation)
         if (entry.observation) observations.push(entry.observation)
       }
     }
+    reportObservationSchemaViolations(violations)
     return observations
   }
 

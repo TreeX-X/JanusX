@@ -18,8 +18,25 @@ import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { Bm25Index } from './search/bm25'
 import { knowledgeTruthService } from './truth-service'
+import { readDerivedObservation, type DerivedObservation } from './deterministic-extractor'
 
-const OBSERVATION_INDEX_LIMIT = 200
+/**
+ * Phase 3 (§8): per-workspace observation cap. Replaces the old global
+ * `OBSERVATION_INDEX_LIMIT = 200` (which starved workspaces whose evidence
+ * fell outside the newest 200 records globally). Documents are grouped by
+ * workspace, newest-first, and capped per workspace so every workspace keeps
+ * a fair recall share. Backed by `listAllObservations` when available.
+ */
+export const OBSERVATION_INDEX_PER_WORKSPACE_LIMIT = 500
+
+/** Phase 3: confidence weight — (confidence ?? 0.5) * CONFIDENCE_WEIGHT. */
+export const RECALL_CONFIDENCE_WEIGHT = 0.5
+/** Phase 3: freshness weight — FRESHNESS_WEIGHT * 0.5^(ageDays / HALF_LIFE). */
+export const RECALL_FRESHNESS_WEIGHT = 0.5
+/** Phase 3: freshness half-life in days. */
+export const RECALL_FRESHNESS_HALF_LIFE_DAYS = 180
+/** Phase 3: embedding is interface-only; recall always ranks with BM25. */
+export const RECALL_RANKER = 'bm25' as const
 
 export type KnowledgeRecallLayer = 'truth' | 'governance'
 
@@ -47,8 +64,34 @@ export interface KnowledgeRecallResult {
 interface RecallSources {
   listTruth(): Promise<KnowledgeTruthSnapshot>
   listObservations(): Promise<Observation[]>
+  /**
+   * Phase 3: full ledger scan for per-workspace paging. Production provides
+   * `observationService.listAll`; hermetic test stubs may omit it (falls back
+   * to `listObservations`).
+   */
+  listAllObservations?: () => Promise<Observation[]>
   resolveObservationContent(observation: Observation): Promise<string>
   readCandidates<T>(relativePath: string): Promise<T[]>
+  /** Phase 1-2: derived index artifacts; absent in hermetic test stubs → skipped. */
+  readDerived?: (observationId: string) => Promise<DerivedObservation | null>
+}
+
+/** Phase 3: pure confidence boost, exported for unit tests. */
+export function confidenceBoostFor(confidence?: number): number {
+  const value = typeof confidence === 'number' && Number.isFinite(confidence)
+    ? Math.min(1, Math.max(0, confidence))
+    : 0.5
+  return value * RECALL_CONFIDENCE_WEIGHT
+}
+
+/** Phase 3: pure freshness boost, exported for unit tests. */
+export function freshnessBoostFor(createdAt: string, nowMs: number): number {
+  const parsed = Date.parse(createdAt)
+  if (!Number.isFinite(parsed)) return 0
+  // Whole-day granularity: millisecond wall-clock jitter between two
+  // consecutive recalls must not change ranking (deterministic tie-breaks).
+  const ageDays = Math.max(0, Math.floor((nowMs - parsed) / 86_400_000))
+  return RECALL_FRESHNESS_WEIGHT * Math.pow(0.5, ageDays / RECALL_FRESHNESS_HALF_LIFE_DAYS)
 }
 
 function compareText(left: string, right: string): number {
@@ -93,7 +136,7 @@ function normalizedPhrase(value: string): string {
   return value.toLowerCase().trim().replace(/\s+/g, ' ')
 }
 
-function lexicalExplanation(hit: KnowledgeSearchHit, query: string, bm25: number) {
+function lexicalExplanation(hit: KnowledgeSearchHit, query: string, bm25: number, nowMs: number) {
   const phrase = normalizedPhrase(query)
   const title = normalizedPhrase(hit.title)
   const body = normalizedPhrase(hit.content)
@@ -102,7 +145,23 @@ function lexicalExplanation(hit: KnowledgeSearchHit, query: string, bm25: number
     exactTitle: title === phrase ? 3 : 0,
     titlePhrase: title !== phrase && title.includes(phrase) ? 1.5 : 0,
     bodyPhrase: body.includes(phrase) ? 0.5 : 0,
+    confidenceBoost: confidenceBoostFor(hit.confidence),
+    freshnessBoost: freshnessBoostFor(hit.createdAt, nowMs),
   }
+}
+
+function parseTimeBound(value?: string): number | undefined {
+  const t = value?.trim()
+  if (!t) return undefined
+  const p = Date.parse(t)
+  return Number.isFinite(p) ? p : undefined
+}
+
+export function recallFilterKey(request: KnowledgeRecallRequest): string {
+  const tags = normalizeList(request.tags).map(normalizeTag).sort()
+  const files = normalizeList(request.files).map(normalizePath).sort()
+  const types = [...(request.types ?? [])].sort()
+  return JSON.stringify([request.layer, request.allowGlobal === true, request.workspaceId?.trim() ?? '', request.workspaceName?.trim() ?? '', request.workspacePath?.trim().toLowerCase() ?? '', request.source ?? '', types, tags, files, request.agentId?.trim() ?? '', request.sessionId?.trim() ?? '', request.since?.trim() ?? '', request.until?.trim() ?? ''])
 }
 
 function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRecallRequest): boolean {
@@ -116,6 +175,20 @@ function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRec
   }
   if (request.source && hit.source !== request.source) return false
   if (request.types?.length && !request.types.includes(hit.type)) return false
+  const agentId = request.agentId?.trim()
+  if (agentId && hit.type === 'observation' && (hit.agentId ?? '') !== agentId) return false
+  const sessionId = request.sessionId?.trim()
+  if (sessionId && hit.type === 'observation' && (hit.sessionId ?? '') !== sessionId) return false
+  const sinceMs = parseTimeBound(request.since)
+  if (sinceMs !== undefined) {
+    const created = Date.parse(hit.createdAt)
+    if (!Number.isFinite(created) || created < sinceMs) return false
+  }
+  const untilMs = parseTimeBound(request.until)
+  if (untilMs !== undefined) {
+    const created = Date.parse(hit.createdAt)
+    if (!Number.isFinite(created) || created > untilMs) return false
+  }
 
   const tags = normalizeList(request.tags).map(normalizeTag)
   const availableTags = new Set(hit.tags.map(normalizeTag))
@@ -130,23 +203,31 @@ function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRec
   )
 }
 
-function observationDocument(observation: Observation, content: string): KnowledgeRecallDocument {
+function observationDocument(
+  observation: Observation,
+  content: string,
+  derived?: DerivedObservation | null,
+): KnowledgeRecallDocument {
+  const tags = derived ? Array.from(new Set([...observation.tags, ...derived.entities])) : observation.tags
+  const fileRefs = derived ? Array.from(new Set([...observation.fileRefs, ...derived.fileRefs])) : observation.fileRefs
   const hit: KnowledgeSearchHit = {
     id: observation.id,
     type: 'observation',
     title: observation.summary ?? content.split('\n')[0] ?? observation.id,
-    content,
+    content: derived && derived.summary ? `${derived.summary}\n${content}` : content,
     score: 0,
     bm25Score: 0,
     workspaceId: observation.workspaceId,
     workspaceName: observation.workspaceName,
     workspacePath: observation.workspacePath,
     source: observation.source,
-    tags: observation.tags,
-    fileRefs: observation.fileRefs,
+    tags,
+    fileRefs,
     sourceObservationIds: [observation.id],
     createdAt: observation.createdAt,
     status: 'active',
+    ...(observation.agentId ? { agentId: observation.agentId } : {}),
+    ...(observation.sessionId ? { sessionId: observation.sessionId } : {}),
   }
   return { key: documentKey(hit), hit }
 }
@@ -171,6 +252,7 @@ function factCandidateDocument(candidate: CandidateFact): KnowledgeRecallDocumen
     createdAt: provenance.createdAt,
     confidence: fact.confidence,
     status: candidate.status,
+    derivation: candidate.derivation,
   }
   return { key: documentKey(hit), hit }
 }
@@ -194,6 +276,7 @@ function wikiPatchDocument(patch: CandidateWikiPatch): KnowledgeRecallDocument {
     createdAt: provenance.createdAt,
     confidence: patch.confidence,
     status: patch.status,
+    derivation: patch.derivation,
   }
   return { key: documentKey(hit), hit }
 }
@@ -217,6 +300,7 @@ function graphCandidateDocument(candidate: CandidateGraphEdge): KnowledgeRecallD
     createdAt: edge.createdAt,
     confidence: edge.confidence,
     status: candidate.status,
+    derivation: candidate.derivation,
   }
   return { key: documentKey(hit), hit }
 }
@@ -338,11 +422,35 @@ function graphDocument(edge: GraphEdge): KnowledgeRecallDocument {
   }
 }
 
+/**
+ * Phase 3: newest-first per-workspace cap. Workspaces are independent recall
+ * scopes; capping globally would hide a quiet workspace behind a noisy one.
+ */
+export function capObservationsPerWorkspace(
+  observations: Observation[],
+  perWorkspaceLimit: number,
+): Observation[] {
+  const byWorkspace = new Map<string, Observation[]>()
+  for (const observation of observations) {
+    const list = byWorkspace.get(observation.workspaceId) ?? []
+    list.push(observation)
+    byWorkspace.set(observation.workspaceId, list)
+  }
+  const capped: Observation[] = []
+  for (const list of byWorkspace.values()) {
+    list
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+      .slice(0, Math.max(0, perWorkspaceLimit))
+      .forEach((observation) => capped.push(observation))
+  }
+  return capped
+}
+
 function truthDocuments(snapshot: KnowledgeTruthSnapshot): KnowledgeRecallDocument[] {
   const documents = [
     ...snapshot.facts.map(factDocument),
     ...snapshot.wikiPages.map(wikiDocument),
-    ...snapshot.graphEdges.map(graphDocument),
+    ...snapshot.graphEdges.filter((edge) => (edge.status ?? 'active') === 'active').map(graphDocument),
   ].sort((left, right) => {
     const keyOrder = compareText(left.key, right.key)
     if (keyOrder !== 0) return keyOrder
@@ -374,9 +482,11 @@ async function readJsonl<T>(relativePath: string): Promise<T[]> {
 
 const defaultSources: RecallSources = {
   listTruth: () => knowledgeTruthService.list(),
-  listObservations: () => knowledgeObservationService.list({ limit: OBSERVATION_INDEX_LIMIT }),
+  listObservations: () => knowledgeObservationService.list({ limit: OBSERVATION_INDEX_PER_WORKSPACE_LIMIT }),
+  listAllObservations: () => knowledgeObservationService.listAll(),
   resolveObservationContent: (observation) => knowledgeObservationService.resolveContent(observation),
   readCandidates: readJsonl,
+  readDerived: (observationId) => readDerivedObservation(observationId),
 }
 
 export class KnowledgeRecallService {
@@ -387,8 +497,12 @@ export class KnowledgeRecallService {
    * 任何写入改变指纹即失效重建。
    */
   private documentsCache = new Map<KnowledgeRecallLayer, { fingerprint: string; documents: KnowledgeRecallDocument[] }>()
+  private indexCache = new Map<string, { fingerprint: string; index: Bm25Index }>()
 
-  constructor(private readonly sources: RecallSources = defaultSources) {}
+  constructor(
+    private readonly sources: RecallSources = defaultSources,
+    private readonly nowMs: () => number = Date.now,
+  ) {}
 
   private async computeFingerprint(): Promise<string> {
     const root = knowledgeRootPath()
@@ -418,12 +532,33 @@ export class KnowledgeRecallService {
   }
 
   private async cachedDocuments(layer: KnowledgeRecallLayer): Promise<KnowledgeRecallDocument[]> {
+    return (await this.cachedDocumentsWithFingerprint(layer)).documents
+  }
+
+  private async cachedDocumentsWithFingerprint(
+    layer: KnowledgeRecallLayer,
+  ): Promise<{ fingerprint: string; documents: KnowledgeRecallDocument[] }> {
     const fingerprint = await this.computeFingerprint()
     const cached = this.documentsCache.get(layer)
-    if (cached && cached.fingerprint === fingerprint) return cached.documents
+    if (cached && cached.fingerprint === fingerprint) return cached
     const documents = await this.buildDocuments(layer)
-    this.documentsCache.set(layer, { fingerprint, documents })
-    return documents
+    const entry = { fingerprint, documents }
+    this.documentsCache.set(layer, entry)
+    return entry
+  }
+
+  private cachedIndex(filterKey: string, fingerprint: string, build: () => Bm25Index): Bm25Index {
+    const key = `${filterKey}@@${fingerprint}`
+    const cached = this.indexCache.get(key)
+    if (cached) return cached.index
+    const index = build()
+    this.indexCache.set(key, { fingerprint, index })
+    while (this.indexCache.size > 50) {
+      const oldest = this.indexCache.keys().next()
+      if (oldest.done) break
+      this.indexCache.delete(oldest.value)
+    }
+    return index
   }
 
   async recall(request: KnowledgeRecallRequest): Promise<KnowledgeRecallResult> {
@@ -433,19 +568,21 @@ export class KnowledgeRecallService {
       return this.emptyResult('missing-workspace')
     }
 
-    const documents = (await this.cachedDocuments(request.layer))
-      .filter((document) => matchesFilters(document, request))
-    const index = new Bm25Index(documents.map((document) => ({
+    const { fingerprint, documents: allDocuments } = await this.cachedDocumentsWithFingerprint(request.layer)
+    const documents = allDocuments.filter((document) => matchesFilters(document, request))
+    const filterKey = recallFilterKey(request)
+    const index = this.cachedIndex(filterKey, fingerprint, () => new Bm25Index(documents.map((document) => ({
       id: document.key,
       text: searchText(document.hit),
-    })))
+    }))))
     const byKey = new Map(documents.map((document) => [document.key, document]))
+    const now = this.nowMs()
     const ranked = index.search(query)
       .sort((left, right) => right.score - left.score || compareText(left.id, right.id))
       .flatMap(({ id, score: bm25 }) => {
         const document = byKey.get(id)
         if (!document) return []
-        const scoreExplanation = lexicalExplanation(document.hit, query, bm25)
+        const scoreExplanation = lexicalExplanation(document.hit, query, bm25, now)
         const score = Object.values(scoreExplanation).reduce((total, value) => total + value, 0)
         return [{ ...document, score, scoreExplanation }]
       })
@@ -467,19 +604,42 @@ export class KnowledgeRecallService {
     const truth = truthDocuments(await this.sources.listTruth())
     if (layer === 'truth') return truth
 
-    const [observations, factCandidates, wikiPatches, graphCandidates] = await Promise.all([
-      this.sources.listObservations(),
+    const [loadedObservations, factCandidates, wikiPatches, graphCandidates] = await Promise.all([
+      this.sources.listAllObservations
+        ? this.sources.listAllObservations()
+        : this.sources.listObservations(),
       this.sources.readCandidates<CandidateFact>('facts/candidates.jsonl'),
       this.sources.readCandidates<CandidateWikiPatch>('wiki/patches.jsonl'),
       this.sources.readCandidates<CandidateGraphEdge>('graph/candidates.jsonl'),
     ])
+    // Phase 3 (§8): per-workspace paging — newest-first cap per workspace so
+    // no workspace starves the index when the ledger grows beyond the old
+    // global 200. Hermetic stubs without listAll keep their provided order.
+    const observations = this.sources.listAllObservations
+      ? capObservationsPerWorkspace(loadedObservations, OBSERVATION_INDEX_PER_WORKSPACE_LIMIT)
+      : loadedObservations
     const observationDocuments = await Promise.all(observations.map(async (observation) => {
-      if (!observation.blobRef) return observationDocument(observation, observation.content)
-      try {
-        return observationDocument(observation, await this.sources.resolveObservationContent(observation))
-      } catch {
-        return observationDocument(observation, observation.contentPreview ?? observation.content)
+      let content: string
+      if (!observation.blobRef) {
+        content = observation.content
+      } else {
+        try {
+          content = await this.sources.resolveObservationContent(observation)
+        } catch {
+          content = observation.contentPreview ?? observation.content
+        }
       }
+      // Phase 1-2: fold the deterministic derived artifact (summary/entities)
+      // into the indexed text; hermetic stubs without a reader skip this.
+      let derived: DerivedObservation | null = null
+      if (this.sources.readDerived) {
+        try {
+          derived = await this.sources.readDerived(observation.id)
+        } catch {
+          derived = null
+        }
+      }
+      return observationDocument(observation, content, derived)
     }))
     return [
       ...observationDocuments,
