@@ -1,12 +1,10 @@
 # JanusX Chat 圆桌会议：设计与实施记录
 
-> 当前状态：圆桌视觉舞台与基础交互已实现；会议引擎正在重构，当前 UI 不具备真实圆桌编排能力。
+> 当前状态：圆桌视觉舞台、会议引擎（LangGraph.js＋真实模型）、持久化恢复、导出与中英文详情均已落地；桌面端到端真实模型验收仍待手动清单（§25）。
 >
-> 最近更新：2026-09-03（已按工作区实测校准；§3、§20、§21 为准）
+> 最近更新：2026-09-04（§28–§36；§3 为准；工作区已干净，`f560645` 之后无未提交圆桌改动）
 >
 > 文档用途：维护当前代码事实、已确认产品规则、待实施设计和验收条件。已被实现淘汰的早期布局方案不再保留。
->
-> 工作区状态提示：`src/main/roundtable/workspace-tools.ts` 为未跟踪新文件，`runtime.ts / service.ts / events.ts / state.ts / roundtable-handlers.ts` 有未提交修改；下文“已完成”包含工作区未提交内容，提交前不得视为基线。
 
 ## 1. 当前产品目标
 
@@ -38,26 +36,26 @@
 - `src/renderer/src/components/janus/RoundtableStage.tsx`
 - `src/renderer/src/components/janus/styles/09-janus-roundtable-final.css`
 
-### 2.2 当前布局
+### 2.2 当前布局（2026-09-04 校准）
 
 桌面宽度下使用两列结构：
 
 ```text
 ┌──────────────────────────────┬──────────────────────┐
-│                              │ 共享羊皮纸（打开时） │
-│                              ├──────────────────────┤
-│      左侧 3D 圆桌舞台        │ discussion-only Chat │
-│                              │                      │
+│                              │ discussion-only Chat │
+│      左侧 3D 圆桌舞台        │ （用户消息＋Agent    │
+│                              │  结果卡片内联）      │
 └──────────────────────────────┴──────────────────────┘
+      ＋右侧等高附属 Island（羊皮纸/agent-result 详情，按需出现）
 ```
 
 - 左侧圆桌跨越完整高度。
-- 右侧默认只显示 Chat。
-- 点击圆桌中心羊皮卷后，右侧切换为“上方羊皮纸 + 下方 Chat”。
-- 再次点击羊皮卷会关闭共享羊皮纸，Chat 恢复占满右侧高度。
+- 中部默认只显示 Chat；Agent 结果卡片内联在对话流中（按时间排序），点击打开附属 Island 详情。
+- 右侧 `janus-roundtable-state` Deck 在展开态圆桌视图下隐藏（CSS），仅保留数据结构。
+- 点击圆桌中心羊皮卷后**直接打开**右侧等高附属 Island 承载完整羊皮纸（2026-08-31 决策，§10）；早期“右侧上方羊皮纸＋下方 Chat”的 stacked 上下布局已不再渲染。
 - 小于 `760px` 时改为纵向堆叠，避免横向内容溢出。
 
-这套上下布局已经替代早期“三栏并排”“底部整宽输入条”和“独立工作区嵌入”等方案。
+这套布局已经替代早期“三栏并排”“右侧 stacked 羊皮纸”“底部整宽输入条”和“独立工作区嵌入”等方案。
 
 ### 2.3 左侧圆桌舞台
 
@@ -79,20 +77,19 @@
 - 羊皮卷光环在静止态与桌面平行，未升起时也能完整显示；
 - 视角切换和羊皮卷开合动画；
 - 基础键盘可访问语义，如 `aria-pressed`、`aria-label` 和 toolbar。
+- 工作席位由运行时 `agent:queued/working` 事件驱动（含主持人 `janusx → host` 席位映射，§29）；live 卡只渲染真实事件，无合成占位。
 
-### 2.4 当前功能边界
+### 2.4 当前功能边界（2026-09-04 重写；旧“视觉骨架”描述作废）
 
-当前圆桌是视觉与交互骨架，不是已经可运行的会议产品：
-
-- `parchmentOpen` 只是 `JanusRoundtablePane` 内的本地 UI 状态；
-- 四名参与者来自静态数组，尚未连接真实会话或运行时 Agent；
-- `workingRole` 固定为 `null`，不会随发言者变化；
-- discussion-only Chat 收到的消息数组为空；
-- Chat 发送处理是空函数，用户输入不会启动圆桌；
-- 当前 UI 没有“用户显式开启下一轮”的控制，也没有区分首次输入与后续轮次；
-- 共享羊皮纸目前只显示“新的圆桌引擎正在重构”的占位内容；
-- 当前主进程和共享 IPC 中没有生效的圆桌编排、持久化、最终整理或导出链路；
-- `onClose` 和 `resourceController` 在当前圆桌组件内尚未实际使用。
+- `parchmentOpen`／附属模块状态由 `JanusIsland` 持有，`JanusRoundtablePane` 为受控组件。
+- 四名参与者来自工作流模板（默认 `janusx/refiner-1/challenger-1`），经 IPC 连接真实 Runtime。
+- `workingRole` 由 `working/queued` 事件派生（含 `janusx → host`），随发言者变化（§29）。
+- discussion-only Chat 显示用户消息与内联 Agent 结果卡片；发送经 `start/advance` 启动或推进轮次。
+- “开启下一轮”按钮支持空输入推进（§35）；`dispatchBusy` 防重提交，`advance(requestId)` 幂等键落盘。
+- 共享羊皮纸消费 `projectParchment(roundtableState)`，显示 Host 草稿结论/决策/依据/风险/行动/待验证/冲突（§23）。
+- 主进程具备完整圆桌编排（LangGraph.js）、JSONL＋sidecar 持久化、`roundtable:export` Markdown 导出（§24–§25、§30）。
+- Agent 失败走 `agent:error` 并在对话框红色横幅展示原文，无静默 fallback（§31）。
+- 结束会议保留 FINAL 终稿＋结束横幅（保存／开新议题），开新议题分阶段退出（§30、§33）。
 
 ## 3. 实施状态
 
@@ -100,23 +97,23 @@
 |---|---|---|
 | Roundtable 页签入口 | 已实现 | 位于展开态 Janus Island 顶部视图切换区 |
 | 左侧 3D 圆桌舞台 | 已实现 | 四席、视角、标签、Hover/Focus/选中 |
-| 中心羊皮卷开合 | 已实现 | 控制右侧共享羊皮纸显示 |
-| 右侧上下布局 | 已实现 | 羊皮纸在上、discussion-only Chat 在下 |
+| 中心羊皮卷开合 | 已实现 | 点击直接打开右侧等高附属 Island（不再是右侧 stacked 布局，§10 决策） |
+| 中部对话与卡片内联 | 已实现 | 用户消息＋Agent 结果卡片按时间排序内联在 discussion-only Chat；右侧 Deck 在展开态隐藏 |
 | 羊皮卷静止光环显示 | 已实现 | 光环不再穿入桌面导致下半圈缺失 |
-| 共享羊皮纸真实内容 | 部分实现 | 羊皮纸已消费 `projectParchment(roundtableState)`，动态显示结论、决策、依据、风险、行动项和来源；事实已由 Agent 结果自动生成，持久化仍待完善 |
-| 通用附属 Island 与羊皮纸模块 | 已实现 | `JanusAuxiliaryIsland` 提供通用外壳，当前挂载羊皮纸详细模块 |
-| 真实讨论消息流 | 部分实现 | Renderer 已接入 Roundtable IPC，可启动、推进和结束会话；用户消息经 `user:message` 事件实时入日志，续写与恢复后消息流完整；真实模型流仍待接入 |
-| Agent 发言状态联动 | 部分实现 | Renderer 已订阅 Runtime 事件并驱动工作投影；真实 Agent 配置仍待完善 |
-| Agent 工作预显与卡片化输出 | 部分实现 | 已有工作事件投影、可聚焦结果卡片和摘要列表；真实模型结果已接入 Runtime，完整详情正文仍待完成 |
-| 卡片详情附属 Island | 部分实现 | `agent-result` 模块已接入附属 Island，支持 sections 与结构化 evidenceRefs（含 workspace-file 行号 `#Lx-y` + sha 短码、agent-card、event）展示，并附同一 Agent 的工作区读取轨迹；变更版本事件仍待完成 |
-| 用户显式开启轮次 | 已实现基础版 | “开启下一轮”按钮 + 空输入 `advance('')`；Renderer `dispatchBusy` 防重提交，`advance(requestId)` 幂等键落盘，重试不重轮；重复点击与重试有单测，桌面复核待手动清单 |
-| 结束清理对话框 | 已实现 | 结束会议即清空对话框（消息、卡片、乐观输入、工作投影、详情 Island、session 恢复键），不做已结束会话的持久化恢复；结束后可直接开新议题；状态栏无会话时显示“等待议题”，仅 running 显示“第 N 轮讨论中” |
-| 圆桌编排与轮次推进 | 部分实现 | LangGraph.js、Agent Registry、RoundtableService、IPC 和 UI 生命周期已接入；真实模型适配具备默认模型路径，持久化仍待完成 |
-| 共享结构化状态 | 已实现（内存） | 已建立事实、事件 envelope、版本、幂等 reducer 与羊皮纸投影器；持久化仍待落地 |
-| 会话恢复与持久化 | 已实现基础版 | JSONL 轻快照 + context sidecar + `roundtable:restore`；`user:message` 入日志使消息流完整可恢复；`migrateRoundtableState` 做 checkpoint 迁移（v1），崩溃残留 running 经 `markInterrupted` 降级为可续 awaiting-user；Renderer 挂载按 localStorage sessionId 自动恢复 |
-| 最终整理与 Markdown 导出 | 已实现基础版 | Markdown 生成（共享纯函数 + `roundtable:export` IPC）+ 结束横幅（保存/复制/开新议题，终稿保留至显式开新议题）+ 羊皮纸详情 DRAFT/FINAL 导出按钮（`running` 禁用，失败/取消不丢会，复制降级）；见 §28 需求、§30 实施 |
+| 共享羊皮纸真实内容 | 已实现基础版 | 羊皮纸消费 `projectParchment(roundtableState)`，优先展示 Host 草稿（结论/决策/依据/风险/行动/待验证/冲突＋DRAFT/FINAL），无草稿降级规则投影；中英文标题见 §32 |
+| 通用附属 Island 与羊皮纸模块 | 已实现 | `JanusAuxiliaryIsland` 通用外壳（`actions` 插槽）＋羊皮纸/`agent-result` 双模块；同一时间单模块 |
+| 真实讨论消息流 | 已实现 | Renderer 经 Roundtable IPC 启动/推进/结束；`user:message` 入日志，续写与恢复后消息流完整；Agent 经全局默认模型真实调用（§31） |
+| Agent 发言状态联动 | 已实现 | `working/queued` 事件驱动席位（含 `janusx → host` 映射）；live 卡仅真实事件，无合成占位（§29） |
+| Agent 工作预显与卡片化输出 | 已实现 | 工作事件投影、摘要卡片、真实 sections/evidence 结果正文；失败经红色横幅显错（§31） |
+| 卡片详情附属 Island | 已实现基础版 | `agent-result` 模块展示 sections 与结构化 evidenceRefs（含 workspace-file 行号 `#Lx-y` + sha 短码、agent-card、event）＋同一 Agent 读取轨迹；中英文标题见 §32；变更版本事件仍待完成 |
+| 用户显式开启轮次 | 已实现 | “开启下一轮”按钮经 `handleCenterSend('')` 空输入推进（§35）；Renderer `dispatchBusy` 防重提交，`advance(requestId)` 幂等键落盘；重复点击与重试有单测 |
+| 结束终稿与开新议题 | 已实现 | 结束保留 FINAL 终稿＋横幅（保存 Markdown／开新议题，§30；复制按钮已移除）；开新议题分阶段退出（附属 240ms＋对话淡出，§33）；状态栏 ended 显示“会议已结束 · FINAL” |
+| 圆桌编排与轮次推进 | 已实现基础版 | LangGraph.js、Agent Registry、RoundtableService、IPC 和 UI 生命周期已接入；Agent 经 `generateText`＋工作区只读工具真实调用，失败抛错不吞（§31） |
+| 共享结构化状态 | 已实现 | 事实、事件 envelope、版本、幂等 reducer、羊皮纸投影器＋JSONL＋sidecar 持久化 |
+| 会话恢复与持久化 | 已实现 | JSONL 轻快照 + context sidecar + `roundtable:restore`；`user:message` 入日志；checkpoint 迁移（v1）；崩溃 running 经 `markInterrupted` 降级可续；挂载按 localStorage sessionId 自动恢复 |
+| 最终整理与 Markdown 导出 | 已实现基础版 | Markdown 生成（共享纯函数 + `roundtable:export` IPC）+ 结束横幅（保存／开新议题，终稿保留至显式开新议题）+ 羊皮纸详情 DRAFT/FINAL 导出按钮（`running` 禁用，失败/取消不丢会；详情导出失败有复制降级）；见 §28 需求、§30 实施 |
 | 工作区资源绑定与静态快照 | 已实现基础版 | Service 与 Runtime 均按 `workspaceId` 解析注册表并忽略客户端路径，无解析器时仍做 realpath + 目录校验；非法 id、未注册、缺失目录均拒绝启动 |
-| 工作区动态只读工具 | 已实现基础版 | `workspace.list/read/readRange` 经统一 policy（敏感排除、symlink 拒绝、secret 脱敏），四类工具事件、行号级 evidence、`WORKSPACE_TOOL_*` 错误码、取消与 30s 超时已落地；Deck 与卡片详情展示读取轨迹；写/命令/Git 无通道 |
+| 工作区动态只读工具 | 已实现基础版 | `workspace.list/read/readRange` 经统一 policy（敏感排除、symlink 拒绝、secret 脱敏），四类工具事件、行号级 evidence、`WORKSPACE_TOOL_*` 错误码、取消与 30s 超时已落地；提示词明示 id 列表＋输入归一化（trim/id/名/路径，§31）；Deck 与卡片详情展示读取轨迹；写/命令/Git 无通道 |
 | 工作区工具审批（写/命令/Git） | 未实现 | 保持禁止；读工具默认只读，写操作无通道 |
 
 ## 4. 已确认的产品规则
@@ -147,6 +144,7 @@
 - JanusX 和 Agent 可以建议结束，但不能自行改变会议终止状态。
 - 用户结束后，JanusX 需要执行一次最终整理，输出结论、分歧、依据、风险、行动项和引用索引。
 - 导出失败不能删除会议历史或最终状态。
+- 结束保留 FINAL 终稿并展示结束横幅（保存 Markdown／开新议题，§30）；只有显式“开新议题”才清空，且为分阶段退出（附属 Island 先收＋对话淡出，§33）。结束横幅无复制按钮（已移除）；羊皮纸详情导出失败时的复制降级保留。
 
 ## 5. 双层文档模型
 
@@ -188,6 +186,8 @@
 
 ### 6.2 目标形态
 
+> 现状偏离（2026-09-04）：默认 stacked 上下布局已不再渲染。点击中心羊皮卷直接打开附属 Island（§10 决策）；中部为对话＋内联卡片，不再有“上方羊皮纸＋下方 Chat”常驻分区。下图保留为设计源意，`stacked` 态仅存于 `ParchmentLayout` 类型字面。
+
 宽屏桌面环境中，用户从羊皮纸控件触发展开后，在主 Island 右侧生成一个与主 Island 等高的详细 Island：
 
 ```text
@@ -224,6 +224,8 @@
 
 ### 6.4 羊皮纸风格控件
 
+> 现状偏离（2026-09-04）：默认布局的 `PanelRightOpen` 展开控件已不存在（无 stacked 分区可展开）；中心羊皮卷本身即入口。详细 Island 保留 `PanelRightClose` 返回（title “Collapse parchment”），header 新增 Download 导出按钮（`running` 禁用，§30）与行内状态；28px 级黄铜描边规范不变。
+
 控件放在共享羊皮纸右上角，使用图标而不是带文字的圆角按钮：
 
 - 默认布局使用 Lucide `PanelRightOpen`，Tooltip 为“展开羊皮纸”；
@@ -254,6 +256,8 @@ type ParchmentLayout = 'stacked' | 'detail-island'
 6. 切换 Monitor、Chat、Roundtable 后再返回时，当前布局是否恢复由后续产品决策确定；首版建议在本次 Island 展开生命周期内恢复。
 
 ### 6.6 详细 Island 内容
+
+> 已落地增补（2026-09-04）：header 导出当前纪要按钮（DRAFT 水印／FINAL，`running` 禁用，失败行内提示＋复制降级，§30）；标题/章节/空态/来源全部随应用语言切换（§32）。
 
 详细 Island 优先解决阅读空间，而不是增加新的操作密度。建议包含：
 
@@ -339,6 +343,8 @@ interface JanusAuxiliaryModuleDescriptor {
 
 ### 6.10 验收条件
 
+> 部分条目已被后续决策替代（2026-09-04）：“默认上下布局不变”“返回上下布局”“返回后恢复章节滚动”中的 stacked 语义不再适用（直达附属 Island）；其余等高/同 token/不重挂载/单模块/`Escape`/响应式/`prefers-reduced-motion` 均有效。
+
 - 默认上下布局和现有羊皮卷开合行为不变；
 - 展开后确实出现一个与主 Island 等高的右侧阅读面；
 - 附属 Island 的背景、边框、圆角、阴影、标题栏和动效与主体 Island 使用同一套 token 和 primitive；
@@ -381,13 +387,15 @@ type AgentResultCard = {
   status: AgentWorkState
   summary: string
   sections: Array<{ id: string; title: string; markdown: string }>
-  evidenceRefs: string[]
+  evidenceRefs: RoundtableEvidenceRef[] // 结构化联合引用（workspace-file/agent-card/event），非 string[]
   requiresUserAction: boolean
   createdAt: string
   updatedAt: string
   sourceEventIds: string[]
 }
 ```
+
+> 已落地勘误（2026-09-04）：`RoundtableStage` 实际接收 `workingRole: RoundtableRole | null`（单席位，非 `workingAgents` 数组）；运行时实际发布 `agent:queued/working/result/error`＋轮次/会话/工具/host 事件，`agent:awaiting-input` 尚未有发送方；`AgentWorkRail` 未独立实现（队列表达并入 live 卡）。
 
 运行时至少发布 `agent:queued`、`agent:working`、`agent:result`、`agent:error`、`agent:awaiting-input` 五类事件。UI 只订阅事件并更新投影；持久化层保存事件和卡片，不保存与卡片重复的第二份正文。
 
@@ -460,12 +468,12 @@ round-N/running
 4. [已完成] 将羊皮纸状态提升到 `JanusIsland`，保证 Chat 不因布局切换重新挂载。
 5. [已完成] 完成宽屏双 Island、窄屏专注视图和键盘交互测试。
 6. [已完成（内存）] 定义共享结构化状态的数据模型和羊皮纸投影器。
-7. [部分完成] 定义 Agent 工作事件与 `AgentResultCard` 投影，完成 Renderer 事件订阅、摘要卡片、`agent-result` 详情 Island 和真实结果章节/证据展示；持久化仍待完成。
-8. 实现用户显式开启轮次：首次非空输入启动第 1 轮，后续支持空输入或补充输入开启下一轮，并加入幂等与防重复提交。
-9. [部分完成] 接入 LangGraph.js fixture Runtime 与 Agent Registry，验证可配置数量的完善/质疑 Agent fan-out/join；真实 Agent 工作队列仍待接入。
-10. 将 `workingRole` 接入真实运行时，完成 Agent 工作队列、轮次等待和结果卡片生命周期。
-11. 重建圆桌运行时的失败恢复和用户结束流程，并将卡片与轮次事件写入圆桌记录。
-12. [部分完成] 已接入 JSONL 事件/快照存储与恢复、事实生成和 `roundtable:export`；仍需工作区只读工具、完整最终整理和导出文件选择 UI。
+7. [已完成] 定义 Agent 工作事件与 `AgentResultCard` 投影，完成 Renderer 事件订阅、摘要卡片、`agent-result` 详情 Island 和真实结果章节/证据展示；JSONL 持久化已落地（§24）。
+8. [已完成] 用户显式开启轮次：首次非空输入启动第 1 轮，后续支持空输入（§35）或补充输入开启下一轮，幂等与防重复提交已落地。
+9. [已完成] LangGraph.js Runtime 与 Agent Registry 真实 Agent（默认模型 `generateText`＋只读工具）已接线；`refiner/challenger` 集合与 fan-out/join 由工作流模板驱动。
+10. [已完成] `workingRole` 接入真实运行时事件（含 `janusx → host`，§29）；live 卡仅真实事件，无合成占位。
+11. [已完成] 失败经 `agent:error`＋对话框红色横幅显错（§31）；结束保留 FINAL＋横幅＋分阶段退出（§30、§33）；卡片与轮次事件写入圆桌记录。
+12. [已完成] JSONL 事件/快照存储与恢复、事实生成、`roundtable:export`、工作区只读工具、最终整理（Host 草稿＋终稿）、导出文件保存 UI（结束横幅＋详情按钮，§30）均已落地。
 
 UI 扩展与会议引擎应分阶段实施。右侧详细 Island 可以先使用真实结构的占位数据完成交互验证，但文档中必须持续标记其数据链路尚未实现。
 
@@ -913,15 +921,15 @@ type WorkflowTemplate = {
 
 | 能力 | 当前判断 | 处理阶段 |
 |---|---|---|
-| Runtime 生命周期与基础轮次 | PoC 已完成 | 维护回归测试 |
-| 工作区资源绑定与静态快照 | 基础版已完成 | 阶段 A 安全加固 |
-| 多 Agent 共享事实池 | 基础版已完成，来源契约不足 | 阶段 A |
-| Agent 讨论中动态读取 | 未完成 | 阶段 B |
-| Host 语义整理羊皮纸 | 已实现基础版（确定性归纳） | 冲突配对、草稿/终稿、降级投影见 §23；LLM 语义重写仍待后续 |
-| 会话/用户消息稳定恢复 | 已实现基础版（§24） | 用户消息入日志、checkpoint 迁移、中断降级、挂载恢复 |
-| 取消、超时、并发和错误降级 | 部分实现（取消/超时可配置/并发追加/幂等重试有单测，无 UI 入口，缺桌面 E2E） | 手动验收后关闭 |
-| 桌面端到端真实模型验收 | 未完成 | 阶段 E |
-| 完整产品 MVP | 尚未达成 | 阶段 A–E 全部完成 |
+| Runtime 生命周期与基础轮次 | 已完成（真实模型） | Agent 经默认模型真实调用，失败显错，回归见 10 文件 69 单测 |
+| 工作区资源绑定与静态快照 | 已完成 | registry 解析（Service＋Runtime 双层）、快照预算、sidecar 瘦身 |
+| 多 Agent 共享事实池 | 已完成 | 结构化 evidence ref、行号回填、Host 确认门禁 |
+| Agent 讨论中动态读取 | 已完成基础版 | `list/read/readRange`＋四事件＋归一化＋NOT_ATTACHED 可恢复错误；写/命令/Git 无通道 |
+| Host 语义整理羊皮纸 | 已实现（确定性归纳） | 冲突配对、草稿/终稿、降级投影见 §23；LLM 语义重写仍待后续 |
+| 会话/用户消息稳定恢复 | 已完成（§24） | 用户消息入日志、checkpoint 迁移、中断降级、挂载恢复、幂等落盘 |
+| 取消、超时、并发和错误降级 | 已完成基础版 | 超时可配置（1–120s）、取消内部可用（无 UI 入口）、并发追加有单测、失败经横幅显错；桌面 E2E 待补 |
+| 桌面端到端真实模型验收 | 部分完成 | 真实模型＋真实工作区全链路已在 dev 跑通（§31 起）；§25 手动清单尚未逐项打勾 |
+| 完整产品 MVP | 未正式关闭 | 自动化门禁通过；待 §25 手动清单逐项打勾 |
 
 本 Review 的结论和计划替代此前“阶段 1–5 已完成即可视为 MVP”的宽松表述；后续每完成一个阶段，必须同步更新本节状态、边界和验收证据。
 
@@ -1121,6 +1129,8 @@ type WorkflowTemplate = {
 
 自动化门禁已全部通过；按 §19“完整产品 MVP 需真实模型与桌面端到端”规则，**MVP 不正式关闭**，待上述手动清单逐项打勾。当前为“代码级 MVP 就绪（automated MVP-ready），发布前须完成手动验收”。
 
+> 跟进（2026-09-04）：真实模型＋真实工作区全链路已在 dev 跑通（Vertex，§31 起）；圆桌单测 10 文件 69/69 通过；手动清单仍未逐项打勾，裁决不变。
+
 ## 26. 2026-09-03 / 羊皮纸详情视觉统一
 
 - 问题：羊皮纸附属 Island 使用米色纸张 + 衬线 + 金色描边的独立风格，与卡片详情（深色档案面板）并置时跳脱。
@@ -1179,12 +1189,12 @@ type WorkflowTemplate = {
 [结束会议] → end() 成功 → 终稿保留，对话区顶部出现 FINAL 横幅
   ┌─────────────────────────────────────┐
   │ 会议已结束 · FINAL 纪要已生成        │
-  │ [保存 Markdown] [复制] [开新议题]    │
+  │ [保存 Markdown] [开新议题]           │
   └─────────────────────────────────────┘
 ```
 
 - 不用原生 `confirm`，用圆桌对话区内横幅 + 附属 Island 自动切到羊皮纸 FINAL，保证用户先看到结论再决定。
-- “开新议题”即当前清空逻辑（删 localStorage 键、清 state/work/pending）；“保存/复制”不清空。
+- “开新议题”分阶段退出后清空（删 localStorage 键、清 state/work/pending，§33）；“保存”不清空。（“复制”按钮已移除，见 §4.3。）
 
 **入口 2 — 羊皮纸详情导出按钮（附属 Island 内）：**
 
@@ -1328,3 +1338,22 @@ type WorkflowTemplate = {
 - 缺陷 1（真 bug）：`handleCenterSend` 首行 `if (!trimmed …) return` 把“开启下一轮”（`handleCenterSend('')`）直接拦截，按钮点死。修复：空输入是合法推进（沿用共享状态），仅新开会议要求非空；空推进不产生乐观气泡/空白消息（与 `advance()` 的非空才入日志一致），失败回滚兼顾无气泡场景。
 - 优化 2：顶部 `开启下一轮/结束会议` 原无任何 `:hover/:active/:focus-visible/:disabled`，现补橙金悬浮高亮＋按压缩进＋键盘轮廓＋禁用态；两按钮加 Tooltip（空输入语义/终稿说明），结束横幅按钮同享。
 - 验证：`tsc` 零错误，eslint 无新增，12/12 通过。桌面目视：悬浮高亮；空点开启下一轮直接进下一轮讨论。
+
+## 36. 2026-09-04 / 全文档工程校准记录
+
+本次逐节对照代码（工作区干净，基线 `f560645`；圆桌单测 10 文件 69/69 通过），修正已偏离的描述，历史决策记录原样保留：
+
+1. 页眉：状态/最近更新/工作区提示重写（引擎、持久化、导出、i18n 均已落地）。
+2. §2.2：stacked 上下布局已不再渲染，改写为实际布局（中部对话＋内联卡片＋按需附属 Island；右侧 Deck 展开态隐藏）。
+3. §2.3：增补事件驱动席位（含 host 映射、无合成占位）。
+4. §2.4：旧“视觉骨架”九条作废，重写为当前边界。
+5. §3：`中心羊皮卷/右侧布局/羊皮纸/消息流/发言联动/卡片/轮次/结束/编排/状态/持久化/导出/工具` 十余行状态与说明校准；结束行去掉已移除的复制按钮。
+6. §4.3：增补终稿保留＋分阶段退出＋复制移除。
+7. §6.2/6.4/6.6/6.10：标注 stacked 假设作废处与实际控件（直达附属、无 PanelRightOpen、header 导出按钮、语言切换）。
+8. §6.11：`evidenceRefs` 改结构化联合引用；`workingRole` 单席位；`agent:awaiting-input` 无发送方；`AgentWorkRail` 未独立实现。
+9. §7：12 项全部标已完成（原 7/9/10/11/12 的“待完成”关闭）。
+10. §19.4：九行结论按现状重写（动态读取/恢复/MVP 门禁等）。
+11. §25：跟进真实链路跑通，裁决不变（手动清单未打勾）。
+12. §28.4：结束横幅图去掉复制按钮。
+
+仍待后续：LLM 语义重写羊皮纸（§19.4）、取消 UI 入口、桌面端到端手动清单（§25）、Pane 工具栏中文迁 i18n（§32 范围外）。

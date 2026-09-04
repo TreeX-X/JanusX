@@ -115,13 +115,40 @@
     "empty": {
       "title": "No wiki patches",
       "detail": "Extraction has not proposed any wiki changes."
+    },
+    "published": {
+      "empty": {
+        "title": "No published pages",
+        "detail": "Approved wiki patches will appear here as pages."
+      }
     }
   },
   "graph": {
     "empty": {
       "title": "No graph candidates",
       "detail": "Extraction has not proposed any graph relationships."
+    },
+    "canvas": {
+      "searchPlaceholder": "Search nodes to locate…",
+      "kindFilter": "Nodes",
+      "edgeFilter": "Relations",
+      "all": "All",
+      "expandEvidence": "Expand evidence",
+      "collapseEvidence": "Collapse evidence",
+      "capped": "Showing {{shown}} of {{total}} nodes",
+      "noMatch": "No nodes match the current filters",
+      "hint": "Click a node for details, double-click to focus one-hop neighbors"
     }
+  },
+  "statusbar": {
+    "label": "Knowledge pipeline status",
+    "pending": "{{count}} pending",
+    "failures": "{{count}} failed",
+    "handlerMissing": "Pipeline not ready",
+    "lastRun": "Last run {{time}}",
+    "neverRun": "Never run",
+    "unavailable": "Status unavailable",
+    "processNow": "Process now"
   },
   "audit": {
     "empty": {
@@ -157,6 +184,8 @@
     "provenance": "Provenance",
     "confidence": "Confidence",
     "status": "Status",
+    "derivation": "Derivation",
+    "factKind": "Fact kind",
     "created": "Created",
     "sourceRefs": "Source Refs",
     "files": "Files",

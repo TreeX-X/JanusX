@@ -51,9 +51,10 @@
   /* Shared control metrics — every panel uses these instead of ad-hoc numbers. */
   --so-rule: var(--shell-border);
   --so-rule-soft: var(--shell-border-soft);
-  --so-field: rgba(255, 255, 255, 0.035);
-  --so-field-border: rgba(255, 255, 255, 0.09);
-  --so-control-h: 34px;
+  /* 输入类控件下沉黑：卡片已经偏黑，输入框要比卡更黑一档，形成“嵌进去”的层级 */
+  --so-field: rgba(0, 0, 0, 0.28);
+  --so-field-border: var(--control-border);
+  --so-control-h: var(--control-h);
   --so-radius: 6px;
   /* Body padding, published as vars so the sticky footers inside each panel can
      bleed to the content edge without hard-coding a number that drifts. */
@@ -270,7 +271,7 @@
 .generalPanel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   padding: 4px 0;
 }
 
@@ -279,10 +280,10 @@
   grid-template-columns: minmax(180px, 1fr) minmax(200px, 1.2fr);
   gap: 24px;
   align-items: start;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--shell-border);
   border-radius: 10px;
-  background: var(--shell-chrome-raised);
+  background: var(--shell-card);
 }
 
 .generalLabelCol {
@@ -312,11 +313,11 @@
 
 .generalSelect {
   width: 100%;
-  height: 32px;
+  height: var(--so-control-h);
   padding: 0 10px;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--control-border);
   border-radius: 6px;
-  background: var(--shell-chrome);
+  background: rgba(0, 0, 0, 0.28);
   color: var(--shell-text);
   font-size: 12px;
   font-family: inherit;
@@ -325,11 +326,11 @@
 }
 
 .generalSelect:hover {
-  border-color: var(--shell-accent-border);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .generalSelect:focus-visible {
-  outline: 1px solid var(--shell-accent-border);
+  outline: 1px solid rgba(255, 255, 255, 0.16);
   outline-offset: -1px;
 }
 
@@ -351,10 +352,10 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--shell-border);
   border-radius: 8px;
-  background: var(--shell-chrome-raised);
+  background: var(--shell-card);
 }
 
 .lsCardHeader {
@@ -461,14 +462,14 @@
 }
 
 .lsButtonPrimary {
-  border-color: rgba(var(--so-accent-rgb), 0.4);
-  color: var(--so-accent-ink);
+  border-color: var(--so-field-border);
+  color: var(--shell-text);
 }
 
 .lsButtonPrimary:hover:not(:disabled) {
-  background: rgba(var(--so-accent-rgb), 0.1);
-  border-color: rgba(var(--so-accent-rgb), 0.62);
-  color: var(--so-accent-hover);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
 }
 
 .lsButtonGhost {

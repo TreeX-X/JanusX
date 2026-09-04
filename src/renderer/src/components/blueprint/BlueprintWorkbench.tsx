@@ -9,6 +9,7 @@ import { BlueprintDetailPortalContext } from './blueprintDetailPortal'
 import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
+import { useWorkbenchPhase } from '@/components/shared/CardFrame'
 import './blueprint.css'
 
 interface BlueprintWorkbenchProps {
@@ -48,23 +49,29 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const [detailPortalNode, setDetailPortalNode] = useState<HTMLDivElement | null>(null)
   const activeCardPlanRef = useRef<WorkbenchCardPlan>({ detailOpen, janusOpen: maintenanceOpen })
   activeCardPlanRef.current = { detailOpen, janusOpen: maintenanceOpen }
-  const [phase, setPhase] = useState<'hidden' | 'open' | 'closing'>(isOpen ? 'open' : 'hidden')
   const [revealReady, setRevealReady] = useState(false)
   const [closingPlan, setClosingPlan] = useState<WorkbenchCardPlan>({ detailOpen: false, janusOpen: true })
+  // Shared card-frame lifecycle (§9): phase machine + stuck-animation safety
+  // net; the closing card plan snapshot stays blueprint business logic.
+  const {
+    phase,
+    isClosing,
+    requestClose: phaseRequestClose,
+    handleExitFinished,
+  } = useWorkbenchPhase(isOpen, { awaitAnimation: true, exitMs: 600, onClose })
   const requestClose = useCallback(() => {
     setClosingPlan({ detailOpen, janusOpen: maintenanceOpen })
-    setPhase('closing')
-  }, [detailOpen, maintenanceOpen])
+    phaseRequestClose()
+  }, [detailOpen, maintenanceOpen, phaseRequestClose])
 
   useEffect(() => {
-    if (isOpen) {
-      setRevealReady(false)
-      setPhase('open')
-      const frame = requestAnimationFrame(() => setRevealReady(true))
-      return () => cancelAnimationFrame(frame)
+    if (!isOpen) {
+      setClosingPlan(activeCardPlanRef.current)
+      return
     }
-    setClosingPlan(activeCardPlanRef.current)
-    setPhase((current) => current === 'hidden' ? current : 'closing')
+    setRevealReady(false)
+    const frame = requestAnimationFrame(() => setRevealReady(true))
+    return () => cancelAnimationFrame(frame)
   }, [isOpen])
 
   useEffect(() => {
@@ -110,7 +117,6 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         : 'default'
 
   if (phase === 'hidden') return null
-  const isClosing = phase === 'closing'
   const cardPlan = isClosing ? closingPlan : { detailOpen, janusOpen: maintenanceOpen }
   const cardCount = 2 + Number(cardPlan.janusOpen) + Number(cardPlan.detailOpen)
   const exitDuration = WORKBENCH_CARD_EXIT_DURATION_MS
@@ -127,8 +133,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         data-closing={isClosing ? "true" : undefined}
         onAnimationEnd={(event) => {
           if (!isClosing || event.target !== event.currentTarget) return
-          setPhase('hidden')
-          onClose()
+          handleExitFinished()
         }}
         style={{ '--workbench-exit-duration': `${exitDuration}ms` } as CSSProperties}
       >

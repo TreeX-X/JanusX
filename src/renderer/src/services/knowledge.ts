@@ -3,6 +3,7 @@ import type {
   CandidateFact,
   CandidateGraphEdge,
   CandidateWikiPatch,
+  GraphEdge,
   KnowledgeCard,
   KnowledgeContextRequest,
   KnowledgeContextResult,
@@ -11,10 +12,14 @@ import type {
   KnowledgeConflict,
   KnowledgeFeedbackInput,
   KnowledgeFeedbackSummary,
+  MemoryFact,
   Observation,
   RetentionStats,
 } from '../../../shared/knowledge'
 import type {
+  KnowledgeProcessNowInput,
+  KnowledgeProcessNowResult,
+  KnowledgeProcessingStats,
   ReviewCandidateInput,
   ReviewCandidateType,
   RevokeTruthInput,
@@ -34,6 +39,9 @@ export interface KnowledgeWorkbenchSnapshot {
   retentionStats: RetentionStats | null
   libraryCards: KnowledgeCard[]
   conflicts: KnowledgeConflict[]
+  /** Phase 4 Graph (§10.1): active truth facts + stored edges for the canvas. */
+  truthFacts?: MemoryFact[]
+  truthEdges?: GraphEdge[]
   loadedAt: string
   usingDemoData: boolean
   errors: string[]
@@ -96,6 +104,8 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     retentionStats,
     libraryCards,
     conflicts,
+    truthFacts: truth.facts,
+    truthEdges: truth.graphEdges,
     loadedAt: new Date().toISOString(),
     usingDemoData: false,
     errors,
@@ -139,6 +149,22 @@ export async function applyKnowledgeCandidate(
 
 export async function revokeKnowledgeTruth(input: RevokeTruthInput): Promise<void> {
   await window.electron.knowledge.revokeTruth(input)
+}
+
+/** Phase 4 status bar (§6): queue metrics; null when the bridge is unavailable. */
+export async function getKnowledgeProcessingStats(): Promise<KnowledgeProcessingStats | null> {
+  try {
+    return await window.electron.knowledge.processingStats()
+  } catch {
+    return null
+  }
+}
+
+/** Phase 4 status bar (§6): manual `knowledge:processNow` trigger. */
+export async function processKnowledgeNow(
+  input?: KnowledgeProcessNowInput,
+): Promise<KnowledgeProcessNowResult> {
+  return window.electron.knowledge.processNow(input)
 }
 
 export async function listKnowledgeConflicts(workspaceId: string): Promise<KnowledgeConflict[]> {

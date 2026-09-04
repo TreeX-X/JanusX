@@ -497,7 +497,7 @@ export default function App() {
         {officeRendered && (
           <section
             ref={officeWorkspaceRef}
-            className="relative min-w-0 overflow-hidden border-l border-white/[0.08]"
+            className="relative min-w-0 overflow-hidden border-l border-white/[0.07]"
             aria-label="Office preview workspace"
             {...(officeClosing ? { inert: '' } : {})}
             style={{
@@ -536,7 +536,7 @@ export default function App() {
         {isEditorEmbedded && (
           <section
             ref={editorWorkspaceRef}
-            className="relative min-w-0 overflow-hidden border-l border-white/[0.08]"
+            className="relative min-w-0 overflow-hidden border-l border-white/[0.07]"
             aria-label="Embedded file editor"
           >
             <div

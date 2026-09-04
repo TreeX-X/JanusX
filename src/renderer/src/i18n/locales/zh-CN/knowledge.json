@@ -115,13 +115,40 @@
     "empty": {
       "title": "无 Wiki 补丁",
       "detail": "抽取尚未提出任何 Wiki 变更。"
+    },
+    "published": {
+      "empty": {
+        "title": "无已发布页面",
+        "detail": "批准 Wiki 补丁后页面会出现在此处。"
+      }
     }
   },
   "graph": {
     "empty": {
       "title": "无图谱候选",
       "detail": "抽取尚未提出任何图谱关系。"
+    },
+    "canvas": {
+      "searchPlaceholder": "搜索节点定位…",
+      "kindFilter": "节点",
+      "edgeFilter": "关系",
+      "all": "全部",
+      "expandEvidence": "展开证据",
+      "collapseEvidence": "收起证据",
+      "capped": "仅显示 {{shown}} / {{total}} 个节点",
+      "noMatch": "无节点匹配当前筛选",
+      "hint": "单击节点查看详情，双击聚焦一跳邻居"
     }
+  },
+  "statusbar": {
+    "label": "知识流水线状态",
+    "pending": "待处理 {{count}}",
+    "failures": "失败 {{count}}",
+    "handlerMissing": "流水线未就绪",
+    "lastRun": "上次 {{time}}",
+    "neverRun": "尚未运行",
+    "unavailable": "状态不可用",
+    "processNow": "立即处理"
   },
   "audit": {
     "empty": {
@@ -157,6 +184,8 @@
     "provenance": "溯源",
     "confidence": "置信度",
     "status": "状态",
+    "derivation": "派生方式",
+    "factKind": "事实类型",
     "created": "创建时间",
     "sourceRefs": "来源引用",
     "files": "文件",

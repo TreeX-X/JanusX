@@ -22,7 +22,7 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-rows: 52px auto minmax(0, 1fr);
   overflow: hidden;
   color: #e7e7e8;
   background-color: #08080a;
@@ -152,6 +152,181 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+/* Phase 4 top status strip (§6): pipeline metrics + manual trigger. */
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 30px;
+  padding: 0 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(9, 9, 11, 0.9);
+  font-size: 11px;
+  color: #a1a1aa;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #52525b;
+}
+
+.statusDot[data-tone="working"] { background: #6ba6ff; }
+.statusDot[data-tone="attention"] { background: #ff995f; }
+.statusDot[data-tone="idle"] { background: #4ade80; }
+
+.statusWarn { color: #ff995f; }
+.statusDim { color: #63636b; overflow: hidden; text-overflow: ellipsis; }
+.statusSpacer { flex: 1 1 auto; }
+
+.statusButton {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #6ba6ff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.statusButton:hover:not(:disabled) { background: rgba(59, 130, 246, 0.18); }
+.statusButton:disabled { opacity: 0.45; cursor: default; }
+
+/* Phase 4 Wiki: published pages above proposed patches. */
+.wikiSections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+/* Phase 4 Graph canvas (§10.1). */
+.graphWrap {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.graphToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: #a1a1aa;
+}
+
+.graphSearch {
+  width: min(220px, 30vw);
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.035);
+  color: #e7e7e8;
+  font-size: 11px;
+}
+
+.graphFilter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graphFilter select {
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #e7e7e8;
+  font-size: 11px;
+}
+
+.graphButton {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e7e7e8;
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graphButton:hover { background: rgba(255, 255, 255, 0.08); }
+
+.graphCount { margin-left: auto; color: #63636b; font-variant-numeric: tabular-nums; }
+
+.graphNotice {
+  padding: 10px 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #a1a1aa;
+  font-size: 11px;
+}
+
+.graphCanvas {
+  min-height: 320px;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: #0a0a0c;
+  overflow: hidden;
+}
+
+.graphHint { color: #63636b; font-size: 10px; }
+
+.graphCanvas :global(.kg-node) {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #141417;
+  color: #e7e7e8;
+  font-size: 11px;
+  padding: 8px 10px;
+  max-width: 240px;
+}
+
+.graphCanvas :global(.kg-node--fact) { border-left-color: #6ba6ff; }
+.graphCanvas :global(.kg-node--proposal) { border-left-color: #ff995f; }
+.graphCanvas :global(.kg-node--wiki) { border-left-color: #4ade80; }
+.graphCanvas :global(.kg-node--entity) { border-left-color: #c084fc; }
+.graphCanvas :global(.kg-node--observation) { border-left-color: #71717a; }
+
+.graphCanvas :global(.kg-node.selected) {
+  border-color: #6ba6ff;
+  box-shadow: 0 0 0 2px rgba(107, 166, 255, 0.35);
+}
+
+.graphCanvas[data-reduced-motion="true"] :global(.react-flow__node),
+.graphCanvas[data-reduced-motion="true"] :global(.react-flow__edge) {
+  transition: none;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop, .shell,
+  .backdrop[data-closing="true"],
+  .shell[data-closing="true"] {
+    animation: none;
+  }
 }
 
 .searchInput,

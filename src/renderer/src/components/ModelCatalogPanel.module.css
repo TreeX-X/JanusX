@@ -36,7 +36,7 @@
 
 .searchInput {
   width: 100%;
-  height: 36px;
+  height: var(--so-control-h);
   padding: 0 12px 0 34px;
   color: var(--shell-text);
   background: var(--so-field);
@@ -50,7 +50,7 @@
 
 .searchInput:focus {
   background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(var(--so-accent-rgb), 0.55);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .searchInput::placeholder { color: #5f6368; }
@@ -60,12 +60,12 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-width: 104px;
-  height: 36px;
-  padding: 0 13px;
-  color: var(--so-accent-ink);
+  min-width: 96px;
+  height: var(--so-control-h);
+  padding: 0 12px;
+  color: var(--shell-text);
   background: transparent;
-  border: 1px solid rgba(var(--so-accent-rgb), 0.4);
+  border: 1px solid var(--so-field-border);
   border-radius: var(--so-radius);
   font: inherit;
   font-size: 12px;
@@ -75,14 +75,14 @@
 }
 
 .refreshButton:hover:not(:disabled) {
-  background: rgba(var(--so-accent-rgb), 0.1);
-  border-color: rgba(var(--so-accent-rgb), 0.62);
-  color: var(--so-accent-hover);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
 }
 .refreshButton:disabled { opacity: 0.5; cursor: wait; }
 
 .inlineButton {
-  height: 30px;
+  height: 28px;
   padding: 0 12px;
   color: var(--shell-muted);
   background: transparent;
@@ -126,14 +126,22 @@
 .messageError { border-color: rgba(215, 139, 146, 0.7); color: #d78b92; }
 .messageSuccess { border-color: rgba(111, 184, 138, 0.7); color: #6fb88a; }
 
+/* 列表整体一张灰卡，与通用页 generalRow 对齐；内部保留发丝线分隔 */
 .groups {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--so-rule-soft);
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  background: var(--shell-card);
+  padding: 4px 8px;
 }
 
 .vendorGroup {
   border-bottom: 1px solid var(--so-rule-soft);
+}
+
+.vendorGroup:last-child {
+  border-bottom: 0;
 }
 
 .vendorHeader,

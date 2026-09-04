@@ -1,0 +1,31 @@
+/* Shared card-workbench primitives (Phase 4, §9). */
+
+.card-frame-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.card-frame-skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+  background-size: 200% 100%;
+  animation: card-frame-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes card-frame-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Reduced motion: no shimmer, no forced movement — static placeholder only. */
+@media (prefers-reduced-motion: reduce) {
+  .card-frame-skeleton-line {
+    animation: none;
+    background: rgba(255, 255, 255, 0.07);
+  }
+}

@@ -66,7 +66,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 30px;
+  min-height: var(--control-h, 30px);
   border: 1px solid var(--shell-border);
   border-radius: 5px;
   background: transparent;
@@ -94,10 +94,10 @@
 }
 
 .contextBar {
-  min-height: 54px;
+  min-height: 48px;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--shell-border);
 }
 
@@ -131,7 +131,7 @@
 
 .tabs {
   display: flex;
-  min-height: 38px;
+  min-height: 34px;
   gap: 2px;
   padding: 0 12px;
   border-bottom: 1px solid var(--shell-border-soft);
@@ -149,7 +149,7 @@
 
 .tab:hover { color: #c6c6ca; }
 .tabActive { border-bottom-color: var(--shell-accent); color: #ececef; }
-.diffCount { margin-left: 5px; color: #d98a5d; font-family: monospace; font-size: 9px; }
+.diffCount { margin-left: 5px; color: var(--shell-muted, #a1a1a1); font-family: monospace; font-size: 9px; }
 
 .formContainer {
   flex: 1;
@@ -158,9 +158,18 @@
   padding: 14px 16px;
 }
 
-.diffList { display: flex; flex-direction: column; }
+/* 变更列表整体一张灰卡，与设置中心 section 卡同 token；内部保留发丝线分隔 */
+.diffList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  background: var(--shell-card, #1c1c1f);
+  padding: 6px 14px;
+}
 .diffEmpty { padding: 18px 0; color: #73737a; font-size: 11px; }
-.diffRow { padding: 8px 2px; border-bottom: 1px solid var(--shell-border-soft); font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 10px; line-height: 1.55; }
+.diffRow { padding: 8px 0; border-bottom: 1px solid var(--shell-border-soft); font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 10px; line-height: 1.55; }
+.diffRow:last-child { border-bottom: 0; }
 .diffPath { display: flex; align-items: center; gap: 8px; color: #d6d6da; }
 .diffPath span { width: 44px; color: #77777e; font-size: 8px; text-transform: uppercase; }
 .diffBefore, .diffAfter { overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -181,16 +190,22 @@
 .approvalBar {
   gap: 7px;
   padding: 7px 14px;
-  border-top: 1px solid rgba(255, 120, 48, 0.16);
+  border-top: 1px solid var(--shell-border);
   color: #b8b8bd;
   font-size: 10px;
 }
 
 .approvalBar span { margin-right: auto; }
 .approvalBar button { min-height: 26px; padding: 0 9px; }
-.approvalBar .approveButton { border-color: rgba(255, 120, 48, 0.35); color: #e6a077; }
+.approvalBar .approveButton { border-color: var(--shell-border); color: #ececef; }
 
-.taskOutput { border-top: 1px solid var(--shell-border-soft); }
+.taskOutput {
+  margin: 0 16px 8px;
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  background: var(--shell-card, #1c1c1f);
+  overflow: hidden;
+}
 .taskOutput summary { min-height: 32px; gap: 7px; padding: 0 14px; color: #8b8b92; cursor: pointer; font-size: 10px; list-style: none; }
 .taskOutput summary span { margin-left: auto; color: #cf787f; }
 .taskOutput summary span[data-success='true'] { color: #68b99c; }
@@ -206,7 +221,7 @@
 .commandBar button { min-width: 70px; padding: 0 10px; }
 .commandBar button:disabled { cursor: default; opacity: 0.35; }
 .commandSpacer { flex: 1; }
-.commandBar .runButton { border-color: rgba(255, 120, 48, 0.3); color: #e6a077; }
+.commandBar .runButton { border-color: var(--shell-border); color: #ececef; }
 
 .assistant {
   display: flex;
@@ -215,16 +230,16 @@
 }
 
 .assistantHeader {
-  min-height: 54px;
+  min-height: 48px;
   justify-content: space-between;
-  padding: 10px 12px 10px 14px;
+  padding: 8px 12px 8px 14px;
   border-bottom: 1px solid var(--shell-border);
 }
 
 .assistantHeader > div { display: flex; flex-direction: column; gap: 2px; }
 .assistantHeader strong { color: #e8e8eb; font-size: 12px; }
 .assistantHeader span { color: #68686f; font-size: 9px; }
-.sendButton { width: 30px; min-height: 30px; padding: 0; }
+.sendButton { width: var(--control-h, 30px); min-height: var(--control-h, 30px); padding: 0; }
 
 .messages {
   display: flex;
@@ -245,7 +260,7 @@
   white-space: pre-wrap;
 }
 
-.assistantMessage { padding-left: 9px; border-left: 1px solid rgba(255, 120, 48, 0.35); }
+.assistantMessage { padding-left: 9px; border-left: 1px solid rgba(255, 255, 255, 0.16); }
 .userMessage { align-self: flex-end; padding: 7px 9px; border: 1px solid rgba(255, 255, 255, 0.065); border-radius: 6px; color: #d1d1d5; }
 .streamingMessage { min-height: 28px; color: #b8b8bd; }
 .streamingMessage :global(.janus-chat-streaming-cursor) { --accent-color: #ff7830; }
@@ -255,11 +270,11 @@
   margin: 10px;
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.018);
+  background: rgba(0, 0, 0, 0.22);
 }
 
-.promptBox:focus-within { border-color: rgba(255, 120, 48, 0.25); }
-.promptBox textarea { width: 100%; min-height: 74px; resize: none; border: 0; outline: 0; background: transparent; padding: 9px 40px 9px 10px; color: #d8d8dc; font: 11px/1.55 inherit; }
+.promptBox:focus-within { border-color: rgba(255, 255, 255, 0.16); }
+.promptBox textarea { width: 100%; min-height: 64px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 40px 8px 10px; color: #d8d8dc; font: 11px/1.55 inherit; }
 .promptBox textarea::placeholder { color: #54545b; }
 .sendButton { position: absolute; right: 6px; bottom: 6px; }
 

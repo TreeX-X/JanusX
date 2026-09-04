@@ -5,14 +5,15 @@
   gap: 8px;
   width: 100%;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--control-border);
   border-radius: 6px;
   color: #d4d4d4;
-  font-size: 13px;
+  font-size: 12px;
   font-family: inherit;
   padding: 0 10px;
-  height: 100%;
+  /* 下拉触发器统一高度：不再靠父级百分百撑（父高不定会导致各处高度漂移） */
+  min-height: var(--control-h, 30px);
   cursor: pointer;
   outline: none;
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
@@ -20,13 +21,13 @@
 }
 
 .trigger:hover:not(:disabled) {
-  border-color: var(--janus-order, #ff7830);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .triggerOpen,
 .trigger:focus-visible {
-  border-color: var(--janus-order, #ff7830);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--janus-order, #ff7830) 40%, transparent);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .trigger:disabled {
@@ -98,7 +99,7 @@
 }
 
 .option {
-  padding: 6px 10px;
+  padding: 5px 10px;
   font-size: 12px;
   color: #d4d4d4;
   border-radius: 4px;
@@ -111,13 +112,13 @@
 }
 
 .option:hover {
-  background: color-mix(in srgb, var(--janus-order, #ff7830) 18%, transparent);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .optionSelected {
-  background: color-mix(in srgb, var(--janus-order, #ff7830) 12%, transparent);
+  background: rgba(255, 255, 255, 0.06);
   font-weight: 600;
-  color: var(--janus-order, #ff7830);
+  color: var(--shell-text, #e8e8e8);
 }
 
 .optionSelected::before {

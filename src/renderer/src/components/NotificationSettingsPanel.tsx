@@ -522,7 +522,7 @@ export function NotificationSettingsPanel() {
                 {controlStatus?.error && <span className={styles.statusError}>{controlStatus.error}</span>}
               </div>
               <RefreshIconButton
-                accent="orange"
+                accent="blue"
                 label={t('settings:notification.action.refreshFeishu')}
                 loading={statusRefreshing}
                 onClick={() => { void refreshControlStatus() }}

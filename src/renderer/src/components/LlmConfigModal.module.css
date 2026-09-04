@@ -29,9 +29,9 @@
   --janus-order: var(--so-accent);
   --so-rule: var(--shell-border);
   --so-rule-soft: var(--shell-border-soft);
-  --so-field: rgba(255, 255, 255, 0.035);
-  --so-field-border: rgba(255, 255, 255, 0.09);
-  --so-control-h: 34px;
+  --so-field: rgba(0, 0, 0, 0.28);
+  --so-field-border: var(--control-border);
+  --so-control-h: var(--control-h);
   --so-radius: 6px;
 }
 
@@ -103,17 +103,20 @@
 .statusDot {
   width: 7px;
   height: 7px;
-  background: var(--so-accent);
+  background: #77777f;
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(var(--so-accent-rgb), 0.34);
 }
 
 .configBody {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 14px;
   overflow-y: auto;
+}
+
+.embeddedPanel .configBody {
+  gap: 14px;
 }
 
 .embeddedPanel .configBody {
@@ -165,19 +168,21 @@
   border-radius: 3px;
 }
 
+/* 每 section 一张灰卡，与通用页 generalRow 对齐 */
 .section {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 0 0 16px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--so-rule-soft);
+  padding: 12px 14px;
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  background: var(--shell-card);
 }
 
 .section:last-child {
-  border-bottom: 0;
+  border-bottom: 1px solid var(--shell-border);
   margin-bottom: 0;
-  padding-bottom: 0;
+  padding-bottom: 12px;
 }
 
 .sectionTitle {
@@ -219,7 +224,7 @@
 
 .configInput:focus {
   background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(var(--so-accent-rgb), 0.55);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .configInput::placeholder {
@@ -307,7 +312,7 @@
 .providerBadge {
   display: inline-flex;
   align-items: center;
-  color: var(--so-accent-ink);
+  color: var(--shell-muted);
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 0.08em;
@@ -345,17 +350,17 @@
   line-height: 1.5;
 }
 
-/* 提示条：去掉填充底，只留一条强调色细线做锚点。 */
+/* 提示条：去掉填充底，只留一条中性细线做锚点。 */
 .notice {
   padding: 2px 0 2px 11px;
-  border-left: 2px solid rgba(var(--so-accent-rgb), 0.55);
+  border-left: 2px solid rgba(255, 255, 255, 0.16);
   color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.55;
 }
 
 .notice code {
-  color: var(--so-accent-ink);
+  color: var(--shell-text);
   font-family: 'SF Mono', Consolas, monospace;
 }
 
@@ -441,12 +446,13 @@
 }
 
 .btnAccent {
-  color: var(--so-accent-ink);
+  color: var(--shell-text);
 }
 
 .btnAccent:hover:not(:disabled) {
-  border-color: rgba(var(--so-accent-rgb), 0.5);
-  color: var(--so-accent-hover);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--shell-text);
 }
 
 .btnDanger {
@@ -459,14 +465,14 @@
 }
 
 .btnPrimary {
-  border-color: rgba(var(--so-accent-rgb), 0.4);
-  color: var(--so-accent-ink);
+  border-color: var(--so-field-border);
+  color: var(--shell-text);
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: rgba(var(--so-accent-rgb), 0.1);
-  border-color: rgba(var(--so-accent-rgb), 0.62);
-  color: var(--so-accent-hover);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
 }
 
 @media (max-width: 720px) {

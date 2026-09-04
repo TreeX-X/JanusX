@@ -9,23 +9,26 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 14px;
   min-height: 100%;
   color: var(--shell-text);
 }
 
+/* 每 section 一张灰卡，与通用页 generalRow 对齐：
+   padding 12px 14px / radius 10px / bg shell-card（偏黑） */
 .section {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 0 0 16px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--so-rule-soft);
+  padding: 12px 14px;
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  background: var(--shell-card);
 }
 
 .section:last-of-type {
-  border-bottom: 0;
-  padding-bottom: 0;
+  border-bottom: 1px solid var(--shell-border);
+  padding-bottom: 12px;
 }
 
 .sectionTitle {
@@ -101,11 +104,11 @@
   transition: transform 0.18s ease, background 0.18s ease;
 }
 
-/* 开关"开"态：轨道保持中性，只让滑块变成强调色。整条轨道染橙会在长列表里
-   变成一排橙色条，正是要避免的色块堆积。 */
+/* 开关"开"态：轨道保持中性灰，只让滑块保留强调色小点。
+   整条轨道染橙会在长列表里变成一排橙色条，正是要避免的色块堆积。 */
 .switch input:checked + .switchTrack {
-  background: rgba(var(--so-accent-rgb), 0.14);
-  border-color: rgba(var(--so-accent-rgb), 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .switch input:checked + .switchTrack::after {
@@ -135,7 +138,7 @@
 
 .input:focus {
   background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(var(--so-accent-rgb), 0.55);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .textInput {
@@ -187,11 +190,11 @@
 
 .select:focus {
   background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(var(--so-accent-rgb), 0.55);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .select option {
-  background: var(--shell-chrome-raised);
+  background: var(--shell-card, #1c1c1f);
   color: var(--shell-text);
 }
 
@@ -274,14 +277,14 @@
 }
 
 .primaryButton {
-  border-color: rgba(var(--so-accent-rgb), 0.4);
-  color: var(--so-accent-ink);
+  border-color: var(--so-field-border);
+  color: var(--shell-text);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: rgba(var(--so-accent-rgb), 0.1);
-  border-color: rgba(var(--so-accent-rgb), 0.62);
-  color: var(--so-accent-hover);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
 }
 
 @media (max-width: 720px) {

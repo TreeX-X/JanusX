@@ -794,17 +794,17 @@ export function Sidebar() {
                             style={{
                               color: isActive ? 'var(--shell-text)' : 'var(--shell-muted)',
                               background: isGroupTarget
-                                ? 'rgba(255,120,48,0.11)'
+                                ? 'var(--shell-accent-soft)'
                                 : isGroupPending
                                   ? 'var(--shell-hover)'
                                   : isActive
-                                    ? 'var(--shell-active)'
+                                    ? 'var(--shell-accent-soft)'
                                     : 'transparent',
                               opacity: isDragged ? 0.42 : 1,
                               boxShadow: isGroupTarget
                                 ? 'inset 0 0 0 1px rgba(255,120,48,0.48), 0 0 12px rgba(255,120,48,0.08)'
                                 : isGroupPending
-                                  ? 'inset 0 0 0 1px rgba(255,255,255,0.1)'
+                                  ? 'inset 0 0 0 1px rgba(255,255,255,0.07)'
                                   : 'none',
                             }}
                           >

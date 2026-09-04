@@ -6,7 +6,9 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+  /* 与设置中心 --so-control-h 同源，单行输入/页签统一高度 */
+  --rc-control-h: var(--control-h, 30px);
 }
 
 .empty {
@@ -18,22 +20,30 @@
   font-size: 13px;
 }
 
-/* 配置选择 */
+/* 配置选择：独立一张灰卡，与设置中心 section 卡同 token */
 .configSelector {
   display: flex;
-  gap: 6px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--shell-border, var(--border));
+  border-radius: 10px;
+  background: var(--shell-card, #1c1c1f);
 }
 
 .configTab {
-  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--rc-control-h);
+  padding: 0 12px;
   background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border);
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
+  line-height: 1.5;
   transition: all 0.2s;
 }
 
@@ -43,16 +53,20 @@
 }
 
 .configTab.active {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: rgba(255, 120, 48, 0.08);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
 }
 
-/* 字段列表 */
+/* 字段列表：整体一张灰卡，字段纵向排布（对齐设置中心多行一卡） */
 .fieldList {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--shell-border, var(--border));
+  border-radius: 10px;
+  background: var(--shell-card, #1c1c1f);
 }
 
 .field {
@@ -76,20 +90,21 @@
 }
 
 .input {
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  height: var(--rc-control-h);
+  padding: 0 9px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--control-border, var(--border));
+  border-radius: 6px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   font-family: 'SF Mono', 'Cascadia Code', monospace;
   transition: border-color 0.2s;
   outline: none;
 }
 
 .input:focus {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .input::placeholder {
@@ -97,19 +112,20 @@
 }
 
 .select {
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  /* 高度由 Select 触发器自身的 min-height(var(--control-h)) 保证，这里只收横向内边距 */
+  padding: 0 9px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--control-border, var(--border));
+  border-radius: 6px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   outline: none;
   transition: border-color 0.2s;
 }
 
 .select:focus {
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .description {
@@ -138,8 +154,8 @@
 }
 
 .removeBtn {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -159,7 +175,8 @@
 }
 
 .addBtn {
-  padding: 6px 12px;
+  min-height: var(--rc-control-h);
+  padding: 0 10px;
   background: transparent;
   color: var(--text-secondary);
   border: 1px dashed var(--border);

@@ -25,6 +25,14 @@
   --shell-pane-chrome: #1e1e1f;
   --shell-chrome: #1e1e20;
   --shell-chrome-raised: #252527;
+  /* 卡片底：在 canvas(#151517) 与 chrome(#1e1e20) 之间取一档偏黑的灰，
+     代替纯 chrome-raised，让卡片“黑里透灰”而不是“灰块”。 */
+  --shell-card: #1c1c1f;
+  /* 单行控件统一高度：两边窗口的所有输入框、下拉触发器、页签按钮都吃这一档，
+     以后想整体调高矮只改这里。紧凑型小按钮（删除/行内操作）各留本地值。 */
+  --control-h: 30px;
+  /* 单行控件统一边框：输入框与下拉触发器共用，主壳分隔统一白 7%，hover/聚焦态统一用白 16%。 */
+  --control-border: rgba(255, 255, 255, 0.07);
   --shell-hover: #2b2b2e;
   --shell-active: #333336;
   --shell-border: rgb(255 255 255 / 0.07);
@@ -37,7 +45,7 @@
      selection bars and text — not filled blocks. See the settings modal. */
   --shell-accent: #f47d43;
   --shell-accent-strong: #ff9159;
-  --shell-accent-soft: rgb(244 125 67 / 0.11);
+  --shell-accent-soft: rgb(244 125 67 / 0.08);
   --shell-accent-border: rgb(244 125 67 / 0.42);
 
   --primary: #ff7830;
