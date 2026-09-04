@@ -1011,17 +1011,17 @@ export function Sidebar() {
                 style={{
                   marginTop: isGroupStart && workspaceIndex > 0 ? 5 : 0,
                   background: isGroupTarget
-                    ? 'rgba(255,120,48,0.11)'
+                    ? 'var(--shell-accent-soft)'
                     : isGroupPending
                       ? 'var(--shell-hover)'
                       : isActive
-                        ? 'var(--shell-active)'
+                        ? 'var(--shell-accent-soft)'
                         : 'transparent',
                   opacity: isDragged ? 0.42 : 1,
                   boxShadow: isGroupTarget
                     ? 'inset 0 0 0 1px rgba(255,120,48,0.45)'
                     : isGroupPending
-                      ? 'inset 0 0 0 1px rgba(255,255,255,0.1)'
+                      ? 'inset 0 0 0 1px rgba(255,255,255,0.07)'
                       : 'none',
                 }}
               >

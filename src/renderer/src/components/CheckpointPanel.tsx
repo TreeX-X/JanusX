@@ -168,9 +168,17 @@ export function CheckpointPanel() {
           }}
           className="h-6 px-2 rounded text-[10px] transition-colors shrink-0"
           style={{
-            background: 'rgba(255,120,48,0.08)',
-            border: '1px solid rgba(255,120,48,0.2)',
-            color: '#ff7830',
+            background: 'transparent',
+            border: '1px solid var(--control-border)',
+            color: 'var(--shell-text)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.045)'
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.borderColor = 'var(--control-border)'
           }}
         >
           {t('terminal:checkpoint.create')}
@@ -232,8 +240,8 @@ export function CheckpointPanel() {
                   width: 15,
                   height: 15,
                   background: 'rgba(18,18,20,0.85)',
-                  border: `2px solid ${isActive ? '#ff7830' : '#555'}`,
-                  boxShadow: isActive ? '0 0 8px rgba(255,120,48,0.4)' : 'none',
+                  border: `2px solid ${isActive ? 'var(--shell-accent)' : '#555'}`,
+                  boxShadow: isActive ? '0 0 8px rgba(255,120,48,0.25)' : 'none',
                   marginTop: 2,
                 }}
               >
@@ -249,18 +257,18 @@ export function CheckpointPanel() {
               <div
                 className="flex-1 min-w-0 transition-colors"
                 style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.04)',
+                  background: 'var(--shell-card)',
+                  border: '1px solid var(--shell-border)',
                   borderRadius: 6,
                   padding: 10,
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
-                  e.currentTarget.style.borderColor = 'rgba(255,120,48,0.2)'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)'
+                  e.currentTarget.style.background = 'var(--shell-card)'
+                  e.currentTarget.style.borderColor = 'var(--shell-border)'
                 }}
               >
                 {/* Header */}
@@ -310,7 +318,7 @@ export function CheckpointPanel() {
                         bottom: 0,
                         right: 0,
                         paddingLeft: 16,
-                        background: 'linear-gradient(90deg, transparent, rgba(18,18,18,0.95) 40%)',
+                        background: 'linear-gradient(90deg, transparent, rgba(28,28,31,0.95) 40%)',
                       }}
                     >
                       <button
@@ -320,7 +328,7 @@ export function CheckpointPanel() {
                         }}
                         style={{
                           fontSize: 10,
-                          color: '#ff7830',
+                          color: '#888',
                           background: 'none',
                           border: 'none',
                           cursor: 'pointer',
@@ -351,7 +359,7 @@ export function CheckpointPanel() {
                     }}
                     style={{
                       fontSize: 10,
-                      color: '#ff7830',
+                      color: '#888',
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
@@ -400,19 +408,19 @@ export function CheckpointPanel() {
                     style={{
                       height: 22,
                       fontSize: 10,
-                      border: '1px solid rgba(255,255,255,0.06)',
-                      background: 'rgba(255,255,255,0.03)',
-                      color: '#888',
+                      border: '1px solid var(--control-border)',
+                      background: 'transparent',
+                      color: 'var(--shell-muted)',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,120,48,0.08)'
-                      e.currentTarget.style.borderColor = 'rgba(255,120,48,0.3)'
-                      e.currentTarget.style.color = '#ff7830'
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.045)'
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'
+                      e.currentTarget.style.color = 'var(--shell-text)'
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'
-                      e.currentTarget.style.color = '#888'
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.borderColor = 'var(--control-border)'
+                      e.currentTarget.style.color = 'var(--shell-muted)'
                     }}
                   >
                     {t('terminal:checkpoint.diff')}
@@ -426,17 +434,17 @@ export function CheckpointPanel() {
                     style={{
                       height: 22,
                       fontSize: 10,
-                      border: '1px solid rgba(255,120,48,0.2)',
-                      background: 'rgba(255,120,48,0.08)',
-                      color: '#ff7830',
+                      border: '1px solid var(--control-border)',
+                      background: 'transparent',
+                      color: 'var(--shell-text)',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,120,48,0.15)'
-                      e.currentTarget.style.borderColor = 'rgba(255,120,48,0.4)'
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.045)'
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,120,48,0.08)'
-                      e.currentTarget.style.borderColor = 'rgba(255,120,48,0.2)'
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.borderColor = 'var(--control-border)'
                     }}
                   >
                     {t('terminal:checkpoint.restore')}
@@ -531,8 +539,8 @@ export function CheckpointPanel() {
             className="overflow-hidden"
             style={{
               width: 460,
-              background: 'rgba(18,18,18,0.98)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--shell-chrome)',
+              border: '1px solid var(--shell-border)',
               borderRadius: 8,
               boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
             }}
@@ -732,17 +740,17 @@ export function CheckpointPanel() {
                   height: 28,
                   padding: '0 16px',
                   fontSize: 11,
-                  border: '1px solid rgba(255,120,48,0.28)',
-                  background: 'rgba(255,120,48,0.1)',
-                  color: '#ff7830',
+                  border: '1px solid var(--control-border)',
+                  background: 'transparent',
+                  color: 'var(--shell-text)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,120,48,0.2)'
-                  e.currentTarget.style.borderColor = 'rgba(255,120,48,0.5)'
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.045)'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,120,48,0.12)'
-                  e.currentTarget.style.borderColor = 'rgba(255,120,48,0.3)'
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.borderColor = 'var(--control-border)'
                 }}
               >
                 {t('terminal:checkpoint.confirmRestore')}
