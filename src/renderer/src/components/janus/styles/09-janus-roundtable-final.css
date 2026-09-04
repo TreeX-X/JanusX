@@ -2333,6 +2333,29 @@
   color: rgba(255, 190, 140, .9);
   font-size: 11px;
   cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease, transform .1s ease;
+}
+.janus-roundtable-advance:hover:not(:disabled),
+.janus-roundtable-end:hover:not(:disabled) {
+  border-color: rgba(255, 120, 48, .75);
+  background: rgba(54, 29, 16, .96);
+  color: #ffd9b8;
+  box-shadow: 0 0 12px rgba(255, 120, 48, .22);
+}
+.janus-roundtable-advance:active:not(:disabled),
+.janus-roundtable-end:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.janus-roundtable-advance:focus-visible,
+.janus-roundtable-end:focus-visible {
+  outline: 2px solid rgba(255, 120, 48, .75);
+  outline-offset: 1px;
+}
+.janus-roundtable-advance:disabled,
+.janus-roundtable-end:disabled {
+  opacity: .45;
+  cursor: not-allowed;
 }
 .janus-roundtable-end { right: 120px; }
 .janus-roundtable-agent-deck { position: relative; z-index: 1; display: grid; gap: 9px; }
@@ -2452,6 +2475,15 @@
 .janus-roundtable-ended-banner__actions .janus-roundtable-end { position: static; margin: 0; padding: 5px 9px; }
 .janus-roundtable-ended-banner__actions button:disabled { opacity: .45; cursor: not-allowed; }
 .janus-roundtable-ended-banner__notice { flex-basis: 100%; color: rgba(216,195,158,.72); font: 10px ui-monospace, monospace; }
+/* Staged new-topic exit: the dialog fades while the auxiliary Island plays
+   its own 240ms exit; state resets only after both finished. */
+.janus-roundtable-center { transition: opacity .22s ease, transform .22s ease; }
+.janus-roundtable-panel--leaving .janus-roundtable-center { opacity: 0; transform: translateY(8px); }
+.janus-roundtable-panel--leaving .janus-roundtable-ended-banner__actions button { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .janus-roundtable-center { transition: none; }
+  .janus-roundtable-panel--leaving .janus-roundtable-center { transform: none; }
+}
 /* Agent failure banner: fail-loud errors surfaced from the runtime. */
 .janus-roundtable-error-banner {
   display: grid;

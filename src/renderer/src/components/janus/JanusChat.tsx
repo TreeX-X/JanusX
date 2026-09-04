@@ -315,7 +315,13 @@ export function JanusChat({
     return () => window.cancelAnimationFrame(frame)
   }, [visible])
 
-  // 消息/流式内容变化时自动滚动（仅当用户已在底部�?
+  // 消息/流式内容/圆桌卡片变化时自动滚动（仅当用户已在底部）。
+  // 注意依赖的是内容签名而不是数组身份：上层（如圆桌）每 render 都可能
+  // 重建数组，旧写法会在每次渲染都触发滚动/提示，造成底部持续被拽走或
+  // 误弹“新信息”。卡片必须纳入签名，否则圆桌结果到达时既不跟随也不提示。
+  const lastMessage = messages[messages.length - 1]
+  const contentSignature = `${messages.length}|${lastMessage?.id ?? ''}|${lastMessage?.timestamp ?? 0}|${pendingContent?.length ?? 0}`
+  const cardsSignature = roundtableCards.map((card) => `${card.id}@${card.updatedAt || card.createdAt}`).join('|')
   useLayoutEffect(() => {
     if (isAtBottomRef.current) {
       // Conversation history may hydrate after the pane mounts. Treat the
@@ -329,7 +335,9 @@ export function JanusChat({
       setShowNewMessageBadge(true)
     }
     previousMessageCountRef.current = messages.length
-  }, [messages, pendingContent, scrollToBottom])
+    // messages.length / pendingContent are encoded in contentSignature; they
+    // are listed explicitly to satisfy exhaustive-deps (no extra runs).
+  }, [contentSignature, cardsSignature, messages.length, pendingContent, scrollToBottom])
 
   // Roundtable-only: after sending, land on the user's own message. Working
   // cards carry fresh timestamps and would otherwise pin the viewport below
@@ -1201,20 +1209,20 @@ export function JanusChat({
         )}
 
         <span ref={messagesEndRef} className="janus-chat-end-anchor" />
-      </div>
 
-      {showNewMessageBadge && (
-        <button
-          className="janus-chat-new-message-badge"
-          onClick={() => {
-            isAtBottomRef.current = true
-            setShowNewMessageBadge(false)
-            scrollToBottom('smooth')
-          }}
-        >
-          {t('janus:chat.newMessage')}
-        </button>
-      )}
+        {showNewMessageBadge && (
+          <button
+            className="janus-chat-new-message-badge"
+            onClick={() => {
+              isAtBottomRef.current = true
+              setShowNewMessageBadge(false)
+              scrollToBottom('smooth')
+            }}
+          >
+            {t('janus:chat.newMessage')}
+          </button>
+        )}
+      </div>
 
       {/* 输入区域 �?opencode 风格方框 composer：单�?prompt + textarea + 按钮 */}
       <div className="janus-chat-input-wrapper" data-has-input={input.length > 0}>

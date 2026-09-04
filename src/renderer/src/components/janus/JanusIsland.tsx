@@ -454,6 +454,7 @@ export function JanusIsland({
             setAuxiliaryModule('roundtable-parchment')
           }}
           onOpenAgentResult={(card) => { setActiveAgentCard(card); setAuxiliaryModule('agent-result'); setAuxiliaryClosing(false) }}
+          onRequestAuxiliaryClose={requestCloseAuxiliary}
           onRoundtableStateChange={setRoundtableState}
           mode={mode}
           janusRunning={janusRunning}

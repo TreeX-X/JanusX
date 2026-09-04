@@ -39,6 +39,7 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   onOpenParchmentDetail: () => void
   onOpenAgentResult?: (card: AgentResultCard) => void
   onRoundtableStateChange?: (state: RoundtableState | null) => void
+  onRequestAuxiliaryClose?: () => void
   mode: 'sleep' | 'order' | 'analytics' | 'running'
   janusRunning: boolean
   activeNode: boolean
@@ -62,6 +63,7 @@ export function JanusIslandExpandedShell({
   onOpenMaintenance, onCancelMaintenance, onOpenBlueprintWorkbench,
   onOpenAgentResult,
   onRoundtableStateChange,
+  onRequestAuxiliaryClose,
   officeArtifacts, onOpenOfficeArtifact, messages, pendingContent,
   isStreaming, error, modelOptions, activeModel, modelNotice,
   onChatSelectModel, onChatSend, onChatRewrite, onChatStop, onChatRetry,
@@ -366,6 +368,7 @@ export function JanusIslandExpandedShell({
                     onOpenParchmentDetail={onOpenParchmentDetail}
                     onOpenAgentResult={onOpenAgentResult}
                     onStateChange={onRoundtableStateChange}
+                    onRequestAuxiliaryClose={onRequestAuxiliaryClose}
                     center={(onRoundtableSend, roundtableMessages, workingRole, cards) => <>
                       <JanusChat
                         visible={stage === 'expanded' && view === 'roundtable'}

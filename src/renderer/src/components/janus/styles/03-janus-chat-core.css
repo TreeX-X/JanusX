@@ -571,12 +571,12 @@
   color: var(--accent-color, var(--janus-current));
 }
 
-/* 鏂版秷鎭窘绔?*/
+/* 新消息提示：sticky 在消息列表内部贴底，永远位于输入框上方，
+   不随输入框高度变化而错位，也不再盖住输入框。 */
 .janus-chat-new-message-badge {
-  position: absolute;
-  bottom: 52px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: sticky;
+  bottom: 10px;
+  align-self: center;
   z-index: 40;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);

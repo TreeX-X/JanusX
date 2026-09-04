@@ -1308,3 +1308,23 @@ type WorkflowTemplate = {
 - 流水线：`i18n:extract` 因仓库配置写死 `$lng` 字面目录已不可用（误产物已删、locale 已从 git 完整恢复），改手动加键；`i18n:types` 重生成（1433 键），`i18n:check` 11 命名空间同步通过。
 - 验证：`tsc` 零错误；两文件 eslint 0 warnings（原中文硬编码 warnings 随之消除）。Pane 工具栏/结束横幅/错误横幅的中文仍为硬编码，不在本次范围，后续批次再迁。
 - 桌面目视待验收：切换语言后两详情标题同步变化。
+
+## 33. 2026-09-04 / 开新议题分阶段退出动效
+
+- 问题：结束后点“开新议题”，附属 Island 与主对话框同一帧闪成空态，无过渡。
+- 机制：`JanusRoundtablePane` 新增 `dismissing` 态 + 300ms 定时；点击后先经新增 `onRequestAuxiliaryClose`（Island 的 `requestCloseAuxiliary`，经 ExpandedShell 透传）播放附属 240ms 退出动画，同时主对话框加 `janus-roundtable-panel--leaving` 做 220ms 淡出下沉；300ms 后才真正清空 state/work/pending 并上报 `null`（此时 Island 的 null-effect 已无事可做，不会抢拍）。3D 舞台保持不动——房间还在，只是纸和对话归位。
+- 防护：退出中按钮禁用防连点；定时器卸载时清理；`prefers-reduced-motion` 下无位移。
+- 验证：`tsc` 零错误，eslint 无新增（仅既有中文文案 warnings），12/12 单测通过。桌面目视：先收附属 Island，再淡对话框，无闪烁。
+
+## 34. 2026-09-04 / 新信息提示触发与位置优化
+
+- 问题 1（误提示）：滚动 effect 依赖数组身份，圆桌每 render 重建消息数组导致每 render 触发——底部被持续拽走、非底部误弹提示；且圆桌卡片到达根本不在依赖里，该提示时不提示。
+- 问题 2（遮挡）：提示用相对整窗的 `absolute bottom: 52px`，盖在输入框上，且随输入框高度错位。
+- 修复：① 依赖改内容签名（消息数/末条 id/时间戳/流长度＋卡片 id/更新时间），真有新内容才动；在底部自动跟随（含卡片到达），拉起后有更新才弹提示。② 提示移入消息列表末尾，`sticky bottom: 10px` 贴底居中，恒位于输入框上方，不占输入区。
+- 验证：`tsc`/eslint 干净。桌面目视：底部看直播无提示自动跟随；拉起后有卡片/消息到达才出现小 pill，点之回到底部。
+
+## 35. 2026-09-04 / 顶部控件悬浮态与空输入开启下一轮
+
+- 缺陷 1（真 bug）：`handleCenterSend` 首行 `if (!trimmed …) return` 把“开启下一轮”（`handleCenterSend('')`）直接拦截，按钮点死。修复：空输入是合法推进（沿用共享状态），仅新开会议要求非空；空推进不产生乐观气泡/空白消息（与 `advance()` 的非空才入日志一致），失败回滚兼顾无气泡场景。
+- 优化 2：顶部 `开启下一轮/结束会议` 原无任何 `:hover/:active/:focus-visible/:disabled`，现补橙金悬浮高亮＋按压缩进＋键盘轮廓＋禁用态；两按钮加 Tooltip（空输入语义/终稿说明），结束横幅按钮同享。
+- 验证：`tsc` 零错误，eslint 无新增，12/12 通过。桌面目视：悬浮高亮；空点开启下一轮直接进下一轮讨论。

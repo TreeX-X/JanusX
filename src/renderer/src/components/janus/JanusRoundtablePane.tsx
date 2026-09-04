@@ -24,6 +24,8 @@ interface JanusRoundtablePaneProps {
   resultCards?: AgentResultCard[]
   onOpenAgentResult?: (card: AgentResultCard) => void
   onStateChange?: (state: RoundtableState | null) => void
+  /** Animated auxiliary close owned by the Island (same rhythm as Collapse). */
+  onRequestAuxiliaryClose?: () => void
 }
 
 const stageParticipants: RoundtableStageParticipant[] = [
@@ -65,6 +67,7 @@ export function JanusRoundtablePane({
   resultCards = [],
   onOpenAgentResult,
   onStateChange,
+  onRequestAuxiliaryClose,
 }: JanusRoundtablePaneProps) {
   void onClose
   void resourceController
@@ -84,6 +87,14 @@ export function JanusRoundtablePane({
   // dialog; the FINAL draft stays until the user starts a new topic.
   const [exportBusy, setExportBusy] = useState(false)
   const [exportNotice, setExportNotice] = useState<string | null>(null)
+  // Staged new-topic exit: the auxiliary Island plays its 240ms exit first
+  // while the dialog fades, and state resets only after both finished —
+  // instead of everything snapping to empty in the same frame.
+  const [dismissing, setDismissing] = useState(false)
+  const dismissTimer = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (dismissTimer.current !== null) window.clearTimeout(dismissTimer.current)
+  }, [])
   const updateState = (next: RoundtableState | null) => {
     setRoundtableState(next)
     if (next?.cards?.length) setWork((current) => ({ ...current, cards: next.cards }))
@@ -167,20 +178,26 @@ export function JanusRoundtablePane({
     const trimmed = text.trim()
     const willStart = !current || current.phase === 'idle' || current.phase === 'ended'
     const willAdvance = !willStart && current.phase === 'awaiting-user' && !!current.sessionId
-    if (!trimmed || (!willStart && !willAdvance)) return
+    // Empty input is a valid advance ("continue from shared state"); only a
+    // fresh start requires non-empty text. Previously `!trimmed` rejected the
+    // "开启下一轮" button outright, making it a dead control.
+    if ((!willStart && !willAdvance) || (willStart && !trimmed)) return
     if (!window.electron.roundtable || dispatchBusy.current) return
     // Optimistic UI: show the user bubble on the right immediately, while the
     // left agent deck shows working cards. The pending entry survives until
     // start()/advance() resolves and updateState() reconciles it against the
-    // confirmed userMessages.
-    const pendingId = `roundtable-user-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    // confirmed userMessages. Empty advances intentionally leave no bubble.
+    const hasSupplement = trimmed.length > 0
+    const pendingId = hasSupplement ? `roundtable-user-${Date.now()}-${Math.random().toString(36).slice(2)}` : null
     const targetRound = willStart ? 1 : (current?.roundNumber ?? 0) + 1
     const pendingTimestamp = Date.now()
     setOptimisticRun(true)
-    setPendingInputs((items) => [...items, {
-      id: pendingId,
-      content: trimmed, roundNumber: targetRound, timestamp: pendingTimestamp,
-    }])
+    if (pendingId) {
+      setPendingInputs((items) => [...items, {
+        id: pendingId,
+        content: trimmed, roundNumber: targetRound, timestamp: pendingTimestamp,
+      }])
+    }
     try {
       if (willStart) {
         dispatchBusy.current = true
@@ -199,7 +216,7 @@ export function JanusRoundtablePane({
         dispatchBusy.current = true
         try {
           const requestId = `advance-${Date.now()}-${Math.random().toString(36).slice(2)}`
-          const next = await window.electron.roundtable.advance(current.sessionId, text, requestId)
+          const next = await window.electron.roundtable.advance(current.sessionId, trimmed, requestId)
           updateState(next)
         } finally {
           dispatchBusy.current = false
@@ -208,7 +225,7 @@ export function JanusRoundtablePane({
     } catch {
       // Dispatch failed: roll back the optimistic bubble so a retry shows a
       // single message. Runtime errors otherwise surface via the event stream.
-      setPendingInputs((items) => items.filter((item) => item.id !== pendingId))
+      if (pendingId) setPendingInputs((items) => items.filter((item) => item.id !== pendingId))
       setOptimisticRun(false)
     }
   }
@@ -217,7 +234,7 @@ export function JanusRoundtablePane({
     if (!window.electron.roundtable) return
     dispatchBusy.current = true
     try {
-      // Retain the FINAL draft: the ended banner offers save/copy/new-topic
+      // Retain the FINAL draft: the ended banner offers save/new-topic
       // on top of the final state instead of discarding it unseen.
       const final = await window.electron.roundtable.end(roundtableState.sessionId)
       updateState({ ...final, phase: 'ended' })
@@ -232,13 +249,23 @@ export function JanusRoundtablePane({
   }
   const handleDismissToNewTopic = () => {
     // Explicit "new topic" is the only path that clears an ended meeting.
-    try { localStorage.removeItem(ROUNDTABLE_SESSION_KEY) } catch { /* private mode */ }
-    setRoundtableState(null)
-    setWork(EMPTY_AGENT_WORK_PROJECTION)
-    setPendingInputs([])
-    setOptimisticRun(false)
-    setExportNotice(null)
-    onStateChange?.(null)
+    // Staged: auxiliary exit (240ms) + dialog fade run first; the reset lands
+    // after, so the room never blinks to empty mid-animation.
+    if (dismissing) return
+    setDismissing(true)
+    onRequestAuxiliaryClose?.()
+    if (dismissTimer.current !== null) window.clearTimeout(dismissTimer.current)
+    dismissTimer.current = window.setTimeout(() => {
+      dismissTimer.current = null
+      try { localStorage.removeItem(ROUNDTABLE_SESSION_KEY) } catch { /* private mode */ }
+      setRoundtableState(null)
+      setWork(EMPTY_AGENT_WORK_PROJECTION)
+      setPendingInputs([])
+      setOptimisticRun(false)
+      setExportNotice(null)
+      setDismissing(false)
+      onStateChange?.(null)
+    }, 300)
   }
   const handleSaveFinal = async () => {
     const sessionId = roundtableState?.sessionId
@@ -320,7 +347,7 @@ export function JanusRoundtablePane({
       onPointerCancel={stopPointerPropagation}
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      <div className="janus-roundtable-panel">
+      <div className={`janus-roundtable-panel${dismissing ? ' janus-roundtable-panel--leaving' : ''}`}>
         <header className="janus-roundtable-header">
           <div className="janus-roundtable-title">
             <UsersRound size={16} aria-hidden="true" />
@@ -343,16 +370,16 @@ export function JanusRoundtablePane({
             <div className="janus-roundtable-dialog-toolbar" aria-label="会议操作">
               <span className="janus-roundtable-dialog-status">{dialogStatus}</span>
               <div className="janus-roundtable-dialog-actions">
-                {roundtableState?.phase === 'awaiting-user' && <button type="button" className="janus-roundtable-advance" onClick={() => void handleCenterSend('')}>开启下一轮</button>}
-                {roundtableState?.phase === 'awaiting-user' && <button type="button" className="janus-roundtable-end" onClick={() => void handleEnd()}>结束会议</button>}
+                {roundtableState?.phase === 'awaiting-user' && <button type="button" className="janus-roundtable-advance" title="沿用当前方案继续讨论（可先在输入框补充想法）" onClick={() => void handleCenterSend('')}>开启下一轮</button>}
+                {roundtableState?.phase === 'awaiting-user' && <button type="button" className="janus-roundtable-end" title="结束会议并生成终稿纪要" onClick={() => void handleEnd()}>结束会议</button>}
               </div>
             </div>
             {roundtableState?.phase === 'ended' ? (
               <div className="janus-roundtable-ended-banner" role="status" aria-label="会议已结束">
                 <span className="janus-roundtable-ended-banner__text">会议已结束 · FINAL 纪要已生成</span>
                 <div className="janus-roundtable-ended-banner__actions">
-                  <button type="button" className="janus-roundtable-advance" disabled={exportBusy} onClick={() => void handleSaveFinal()}>保存 Markdown</button>
-                  <button type="button" className="janus-roundtable-end" onClick={handleDismissToNewTopic}>开新议题</button>
+                  <button type="button" className="janus-roundtable-advance" disabled={exportBusy || dismissing} onClick={() => void handleSaveFinal()}>保存 Markdown</button>
+                  <button type="button" className="janus-roundtable-end" disabled={dismissing} onClick={handleDismissToNewTopic}>开新议题</button>
                 </div>
                 {exportNotice ? <span className="janus-roundtable-ended-banner__notice">{exportNotice}</span> : null}
               </div>
