@@ -313,5 +313,81 @@
       "error": "error",
       "wait": "wait"
     }
+  },
+  "roundtable": {
+    "auxiliary": {
+      "agentResultAria": "Agent result details",
+      "agentResultTitle": "Agent Result",
+      "parchmentAria": "Shared parchment details",
+      "parchmentTitle": "Shared Parchment"
+    },
+    "cardDetail": {
+      "evidence": "Evidence",
+      "eyebrow": "AGENT RESULT",
+      "noSources": "No linked source events.",
+      "sourceIndex": "Source index",
+      "status": {
+        "awaitingInput": "AWAITING INPUT",
+        "cancelled": "CANCELLED",
+        "completed": "COMPLETED",
+        "failed": "FAILED",
+        "queued": "QUEUED",
+        "working": "WORKING"
+      },
+      "summaryFallback": "No result available yet.",
+      "titleFallback": "Agent Result",
+      "updated": "Updated {{time}}",
+      "waiting": "WAITING",
+      "workspaceReads": "Workspace reads"
+    },
+    "export": {
+      "actionAria": "Export parchment Markdown",
+      "actionTitle": "Export current minutes (Markdown)",
+      "canceled": "Save canceled",
+      "copied": "Copied",
+      "copy": "Copy",
+      "failed": "Export failed — copy instead",
+      "lockedTitle": "Round in progress — export unlocks when it completes",
+      "saved": "Saved"
+    },
+    "parchment": {
+      "empty": {
+        "actions": "No actions yet.",
+        "conflicts": "No open conflicts.",
+        "decisions": "No confirmed decisions yet.",
+        "evidence": "No evidence recorded yet.",
+        "pending": "Nothing awaiting validation.",
+        "risks": "No unresolved items yet."
+      },
+      "eyebrow": "DECISION RECORD",
+      "noSources": "The discussion has not started.",
+      "originMeta": "ROUND TABLE / SHARED RECORD",
+      "originSubtitle": "STRUCTURED DECISION RECORD",
+      "placeholder": {
+        "actionsBody": "No actions yet. Only actions confirmed by the host will enter this section.",
+        "actionsTitle": "NEXT ACTIONS",
+        "conclusionBody": "Waiting for a roundtable topic. Confirmed decisions will be organized here after the discussion begins.",
+        "conclusionTitle": "CURRENT CONCLUSION",
+        "questionsBody": "No unresolved items yet. Agent concerns, boundaries, and validation tasks will remain linked to their sources.",
+        "questionsTitle": "OPEN QUESTIONS"
+      },
+      "section": {
+        "actions": "NEXT ACTIONS",
+        "conflicts": "CONFLICTS",
+        "decisions": "CONFIRMED DECISIONS",
+        "evidence": "KEY EVIDENCE",
+        "pending": "PENDING VALIDATION",
+        "risks": "OPEN QUESTIONS & RISKS"
+      },
+      "sourceIndex": "Source index",
+      "state": {
+        "awaitingTopic": "AWAITING TOPIC",
+        "draft": "DRAFT",
+        "final": "FINAL",
+        "waiting": "WAITING"
+      },
+      "summaryFallback": "A concise, traceable record of decisions, evidence, risks, and actions from the roundtable.",
+      "titleFallback": "Roundtable"
+    }
   }
 }

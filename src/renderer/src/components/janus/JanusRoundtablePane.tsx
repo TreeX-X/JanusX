@@ -6,6 +6,7 @@ import type { AgentResultCard } from '../../../../shared/roundtable/events'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
 import { EMPTY_AGENT_WORK_PROJECTION, reconcilePendingUserMessages, reduceAgentWorkEvent, type AgentWorkProjection, type PendingUserInput } from './agentWorkProjection'
 import { AgentResultCard as AgentResultCardView } from './AgentResultCard'
+import { buildRoundtableFilename, fetchRoundtableMarkdown, saveMarkdownViaDialog } from './roundtableExport'
 
 const ROUNDTABLE_SESSION_KEY = 'janusx.roundtable.sessionId'
 
@@ -32,6 +33,24 @@ const stageParticipants: RoundtableStageParticipant[] = [
   { id: 'agent-2', name: 'Agent-2', label: '议题完善者', identity: 'evaluator', color: '#b79cff' },
 ]
 
+/** Map a runtime agent id to its dialog display name and card role. The host
+ * runs as `janusx` (see defaultRoundtableWorkflow); it must not fall through
+ * to the refiner/challenger branches. */
+function describeLiveAgent(agentId: string): { title: string; role: 'host' | 'refiner' | 'challenger' } {
+  if (agentId === 'janusx' || agentId === 'host' || agentId.startsWith('host')) return { title: '主持人', role: 'host' }
+  if (agentId.startsWith('challenger')) return { title: '议题完善者', role: 'challenger' }
+  return { title: '议题解决者', role: 'refiner' }
+}
+
+/** Map a runtime agent id to the 3D stage seat. Unknown ids light nothing. */
+function toWorkingRole(agentId: string | undefined): RoundtableRole | null {
+  if (!agentId) return null
+  if (agentId === 'janusx' || agentId === 'host' || agentId.startsWith('host')) return 'host'
+  if (agentId === 'agent-2' || agentId.startsWith('challenger')) return 'agent-2'
+  if (agentId === 'agent-1' || agentId.startsWith('refiner')) return 'agent-1'
+  return null
+}
+
 export function JanusRoundtablePane({
   className,
   onClose,
@@ -56,12 +75,40 @@ export function JanusRoundtablePane({
   // Stage E: at-most-once dispatch per click. Renderer state lags behind the
   // main process, so rapid clicks would otherwise send duplicate IPC calls.
   const dispatchBusy = useRef(false)
-  // Optimistic UI keeps the work deck responsive while the first runtime event
-  // is still crossing IPC.
+  // Optimistic UI keeps the dialog status responsive while the first runtime
+  // event is still crossing IPC. It intentionally drives STATUS TEXT ONLY —
+  // no synthetic named cards: fake refiner/challenger placeholders flashed on
+  // every send and misled the dialog about who is actually working.
   const [optimisticRun, setOptimisticRun] = useState(false)
+  // Ended-meeting export feedback. Canceled/failed saves never clear the
+  // dialog; the FINAL draft stays until the user starts a new topic.
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportNotice, setExportNotice] = useState<string | null>(null)
   const updateState = (next: RoundtableState | null) => {
     setRoundtableState(next)
     if (next?.cards?.length) setWork((current) => ({ ...current, cards: next.cards }))
+    // Snapshots also carry agent failures (`agentId: message`). Merge them so
+    // errors stay visible even when their events were missed (remount gap).
+    if (next?.errors?.length) setWork((current) => {
+      const errors = { ...current.errors }
+      for (const entry of next.errors) {
+        const sep = entry.indexOf(':')
+        if (sep > 0) errors[entry.slice(0, sep)] = entry.slice(sep + 1).trim()
+      }
+      return Object.keys(errors).length === Object.keys(current.errors).length ? current : { ...current, errors }
+    })
+    if (next && (next.phase === 'awaiting-user' || next.phase === 'ended')) {
+      // The snapshot says the round is over, so the optimistic running status
+      // is over too. Clear it here as well as on the event stream: the IPC
+      // resolve and the event can arrive in either order.
+      setOptimisticRun(false)
+      // The snapshot says the round is over, but its lifecycle events may have
+      // been missed (remount gap, restore). Mirror the reducer's round-boundary
+      // clearing so stale working flags can't outlive the round.
+      setWork((current) => (current.workingAgents.length === 0 && current.queuedAgents.length === 0
+        ? current
+        : { ...current, workingAgents: [], queuedAgents: [] }))
+    }
     if (next) setPendingInputs((items) => reconcilePendingUserMessages(next.userMessages, items))
     onStateChange?.(next)
   }
@@ -170,28 +217,53 @@ export function JanusRoundtablePane({
     if (!window.electron.roundtable) return
     dispatchBusy.current = true
     try {
-      await window.electron.roundtable.end(roundtableState.sessionId)
+      // Retain the FINAL draft: the ended banner offers save/copy/new-topic
+      // on top of the final state instead of discarding it unseen.
+      const final = await window.electron.roundtable.end(roundtableState.sessionId)
+      updateState({ ...final, phase: 'ended' })
+      onOpenParchmentDetail()
     } catch {
-      // End failures still clear the dialog; the error surfaces via events.
+      // End failures keep the dialog: the error surfaces via events and the
+      // user can retry. Per product rule, a failed end must not wipe history.
+      setExportNotice('结束会议失败，请重试。')
     } finally {
       dispatchBusy.current = false
     }
-    // Product rule: ending a meeting clears the dialog. Ended sessions are
-    // not persisted for restore, so drop the session key and all local state.
+  }
+  const handleDismissToNewTopic = () => {
+    // Explicit "new topic" is the only path that clears an ended meeting.
     try { localStorage.removeItem(ROUNDTABLE_SESSION_KEY) } catch { /* private mode */ }
     setRoundtableState(null)
     setWork(EMPTY_AGENT_WORK_PROJECTION)
     setPendingInputs([])
     setOptimisticRun(false)
+    setExportNotice(null)
     onStateChange?.(null)
   }
-  const dialogStatus = !roundtableState || roundtableState.phase === 'idle' || roundtableState.phase === 'ended'
+  const handleSaveFinal = async () => {
+    const sessionId = roundtableState?.sessionId
+    if (!sessionId || exportBusy) return
+    setExportBusy(true)
+    setExportNotice(null)
+    try {
+      const markdown = await fetchRoundtableMarkdown(sessionId)
+      const outcome = await saveMarkdownViaDialog(buildRoundtableFilename({ userInput: roundtableState?.userInput, roundNumber: roundtableState?.roundNumber ?? 0, phase: 'ended' }), markdown)
+      setExportNotice(outcome === 'saved' ? '纪要已保存。' : '已取消保存，终稿仍保留。')
+    } catch {
+      setExportNotice('保存失败，终稿仍保留，请重试。')
+    } finally {
+      setExportBusy(false)
+    }
+  }
+  const dialogStatus = !roundtableState || roundtableState.phase === 'idle'
     ? (optimisticRun || pendingInputs.length > 0
         ? `第 ${pendingInputs[0]?.roundNumber ?? 1} 轮讨论中`
         : '等待议题')
     : roundtableState.phase === 'running'
       ? `第 ${roundtableState.roundNumber} 轮讨论中`
-      : `第 ${roundtableState.roundNumber} 轮已完成`
+      : roundtableState.phase === 'ended'
+        ? '会议已结束 · FINAL'
+        : `第 ${roundtableState.roundNumber} 轮已完成`
   const roundtableMessages: Message[] = [
     ...(roundtableState?.userMessages ?? []).map((item) => ({
       id: item.id, role: 'user' as const, content: item.text, timestamp: Date.parse(item.createdAt) || 0,
@@ -200,15 +272,39 @@ export function JanusRoundtablePane({
       .filter((item) => !(roundtableState?.userMessages.some((msg) => msg.text === item.content && msg.roundNumber === item.roundNumber)))
       .map((item) => ({ id: item.id, role: 'user' as const, content: item.content, timestamp: item.timestamp })),
   ]
-  const activeAgentIds = work.workingAgents.length > 0 ? work.workingAgents : (optimisticRun || roundtableState?.phase === 'running') ? ['refiner-1', 'challenger-1'] : []
-  const liveAgentCards = useMemo<AgentResultCard[]>(() => activeAgentIds.map((agentId) => ({
-    id: `working-${agentId}`, sessionId: roundtableState?.sessionId ?? '', roundId: `round-${roundtableState?.roundNumber ?? 0}`,
-    agentId, role: agentId.startsWith('challenger') ? 'challenger' : 'refiner',
-    title: agentId === 'refiner-1' ? '议题解决者' : '议题完善者', status: 'working', summary: '正在分析本轮上下文并准备结构化结果…',
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), sourceEventIds: [],
-  })), [activeAgentIds, roundtableState?.roundNumber, roundtableState?.sessionId])
+  // History: an optimistic refiner+challenger pair used to fill the
+  // send -> first-event gap, but it flashed fake named cards on every send
+  // and once resurrected mid-round (5 cards instead of 3). Live cards are now
+  // real runtime events only; the gap shows status text + deck empty state.
+  // Live cards are driven EXCLUSIVELY by real runtime events (working, else
+  // queued for inter-stage handoff, e.g. challenger done and host `janusx`
+  // queued). No synthetic placeholders: before the first event the dialog
+  // shows the running status text and the deck keeps its empty state.
+  const liveAgentIds = work.workingAgents.length > 0
+    ? work.workingAgents
+    : work.queuedAgents.length > 0
+      ? work.queuedAgents
+      : []
+  // Stable key: the arrays above are rebuilt every render, so memoizing on
+  // array identity would mint fresh timestamps each render and keep the
+  // placeholders pinned after the real cards.
+  const liveAgentKey = liveAgentIds.join(',')
+  const workingKey = work.workingAgents.join(',')
+  const liveAgentCards = useMemo<AgentResultCard[]>(() => liveAgentKey.split(',').filter(Boolean).map((agentId) => {
+    const isQueuedOnly = !work.workingAgents.includes(agentId)
+    const { title, role } = describeLiveAgent(agentId)
+    return {
+      id: `working-${agentId}`, sessionId: roundtableState?.sessionId ?? '', roundId: `round-${roundtableState?.roundNumber ?? 0}`,
+      agentId, role,
+      title, status: isQueuedOnly ? 'queued' : 'working', summary: isQueuedOnly ? '已排队，等待开始本轮工作…' : '正在分析本轮上下文并准备结构化结果…',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), sourceEventIds: [],
+    }
+    // liveAgentKey/workingKey carry the value semantics; the source arrays
+    // intentionally stay out of the dep list (new identity every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [liveAgentKey, workingKey, roundtableState?.roundNumber, roundtableState?.sessionId])
   const deckCards = [...liveAgentCards, ...work.cards]
-  const workingRole = activeAgentIds[0] === 'refiner-1' ? 'agent-1' : activeAgentIds[0] === 'challenger-1' ? 'agent-2' : null
+  const workingRole = toWorkingRole(liveAgentIds[0])
 
   const stopPointerPropagation = (event: ReactPointerEvent) => event.stopPropagation()
 
@@ -251,6 +347,26 @@ export function JanusRoundtablePane({
                 {roundtableState?.phase === 'awaiting-user' && <button type="button" className="janus-roundtable-end" onClick={() => void handleEnd()}>结束会议</button>}
               </div>
             </div>
+            {roundtableState?.phase === 'ended' ? (
+              <div className="janus-roundtable-ended-banner" role="status" aria-label="会议已结束">
+                <span className="janus-roundtable-ended-banner__text">会议已结束 · FINAL 纪要已生成</span>
+                <div className="janus-roundtable-ended-banner__actions">
+                  <button type="button" className="janus-roundtable-advance" disabled={exportBusy} onClick={() => void handleSaveFinal()}>保存 Markdown</button>
+                  <button type="button" className="janus-roundtable-end" onClick={handleDismissToNewTopic}>开新议题</button>
+                </div>
+                {exportNotice ? <span className="janus-roundtable-ended-banner__notice">{exportNotice}</span> : null}
+              </div>
+            ) : null}
+            {Object.keys(work.errors).length > 0 ? (
+              <div className="janus-roundtable-error-banner" role="alert" aria-label="Agent 失败">
+                {Object.entries(work.errors).map(([agentId, message]) => (
+                  <details key={agentId} className="janus-roundtable-error-item" open={Object.keys(work.errors).length === 1}>
+                    <summary>{agentId} 失败</summary>
+                    <p>{message}</p>
+                  </details>
+                ))}
+              </div>
+            ) : null}
             {center?.(handleCenterSend, roundtableMessages, workingRole, deckCards)}
           </main>
           <aside className="janus-roundtable-state">

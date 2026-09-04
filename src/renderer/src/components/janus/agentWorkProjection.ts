@@ -69,6 +69,18 @@ export function reduceAgentWorkEvent(
       next.queuedAgents = remove(next.queuedAgents, event.agentId)
       next.errors[event.agentId] = event.error
       return next
+    case 'round:started':
+    case 'round:awaiting-user':
+    case 'session:ended': {
+      // Round boundary: any agent still flagged working/queued never delivered
+      // a result or error for this round (lost event, restored snapshot, or a
+      // remount gap). Drop the flags so the synthetic "analyzing" cards in the
+      // dialog disappear instead of lingering after the round ends. Delivered
+      // cards, errors and tool traces are kept as history.
+      next.workingAgents = []
+      next.queuedAgents = []
+      return next
+    }
     case 'workspace:tool-started':
       if (!next.toolCalls.some((item) => item.toolCallId === event.toolCallId)) {
         next.toolCalls.push({ toolCallId: event.toolCallId, toolName: event.toolName, workspaceId: event.workspaceId, agentId: event.agentId, roundId: event.roundId, status: 'started' })

@@ -30,33 +30,108 @@ export class RoundtableService {
     return state
   }
 
-  private createRuntime(options?: { toolTimeoutMs?: number }): RoundtableRuntime {    const agents = Object.fromEntries(defaultRoundtableWorkflow.participants.flatMap((spec) => spec.instances).map((participant) => [participant.id, {
+  private createRuntime(options?: { toolTimeoutMs?: number }): RoundtableRuntime {
+    // Visible in the `npm run dev` terminal: proves the running main process
+    // has the workspaceId-normalization + fail-loud fixes (§31). If a stale
+    // process ever serves roundtables again, this line's absence gives it away.
+    console.info('[roundtable] runtime created (fail-loud + workspaceId normalization active)')
+    const agents = Object.fromEntries(defaultRoundtableWorkflow.participants.flatMap((spec) => spec.instances).map((participant) => [participant.id, {
       run: async ({ userInput, priorCards, priorFacts, workspaceResources, workspaceContext, workspaceTools }: { userInput?: string; priorCards: any[]; priorFacts?: any[]; workspaceResources?: RoundtableWorkspaceResource[]; workspaceContext?: string; workspaceTools?: { execute(name: 'workspace.list' | 'workspace.read' | 'workspace.readRange', input: Record<string, unknown>): Promise<unknown> } }) => {
-        const fallback = `${participant.role} reviewed "${userInput ?? 'the shared state'}" with ${priorCards.length} prior results.`
+        // Fail loudly: a silent one-line fallback here used to masquerade as a
+        // completed card ("refiner reviewed ... with 0 prior results"), leaving
+        // users with empty proposals and no diagnosable error. Errors propagate
+        // to runtime.runAgent, which records agent:error and lets the round
+        // finish with the remaining agents.
+        const target = await llmService.getDefaultModel()
+        if (!target) throw new Error('圆桌会议需要全局默认模型：请在设置 → LLM 中把可用的 Provider 设为默认后重试。')
+        let model
         try {
-          const target = await llmService.getDefaultModel()
-          if (!target) return fallback
-          const model = await llmService.getLanguageModel(target.provider.id, target.modelId)
+          model = await llmService.getLanguageModel(target.provider.id, target.modelId)
+        } catch (error) {
+          throw new Error(`圆桌 Agent 模型创建失败 (${target.provider.id}/${target.modelId})：${error instanceof Error ? error.message : String(error)}`)
+        }
           const roleInstruction = participant.role === 'refiner'
             ? 'Propose a concrete improvement and implementation path.'
             : participant.role === 'challenger'
               ? 'Identify gaps, risks, and assumptions that need validation.'
               : 'Synthesize the discussion into a concise host summary. Start with a one-sentence conclusion, then list open points.'
-          const workspaceId = z.string().min(1).refine((id) => (workspaceResources ?? []).some((resource) => resource.workspaceId === id), 'Workspace is not attached to this roundtable')
-          const tools = workspaceTools ? {
-            workspace_list: { description: 'List a bounded non-sensitive tree in an attached workspace.', parameters: z.object({ workspaceId, path: z.string().default(''), depth: z.number().int().min(0).max(4).default(2), maxEntries: z.number().int().min(1).max(1000).default(200) }), execute: (input: Record<string, unknown>) => workspaceTools.execute('workspace.list', input) },
-            workspace_read: { description: 'Read a bounded UTF-8 file from an attached workspace and return its content and SHA-256.', parameters: z.object({ workspaceId, path: z.string().min(1), maxBytes: z.number().int().min(1).max(256 * 1024).default(128 * 1024) }), execute: (input: Record<string, unknown>) => workspaceTools.execute('workspace.read', input) },
-            workspace_read_range: { description: 'Read a bounded byte range from a UTF-8 file in an attached workspace and return its content and SHA-256.', parameters: z.object({ workspaceId, path: z.string().min(1), offset: z.number().int().min(0), maxBytes: z.number().int().min(1).max(256 * 1024).default(64 * 1024) }), execute: (input: Record<string, unknown>) => workspaceTools.execute('workspace.readRange', input) },
+          // Tool budget: vague inputs make models burn every step on tool
+          // calls and never write prose, which used to surface as an empty
+          // result failure. Cap exploration so text always gets written.
+          // The model only ever sees what the prompt shows: previously the prompt
+          // listed workspace NAME + PATH but never the ID, so the model guessed
+          // (e.g. the name) and the schema-level refine turned the guess into a
+          // fatal InvalidToolArgumentsError that killed the whole agent.
+          // Fix: show exact ids in the prompt + tool descriptions, and validate
+          // attachment inside execute (recoverable tool-result error the model
+          // can retry from) instead of in the schema (fatal framework throw).
+          const attachedIds = (workspaceResources ?? []).map((resource) => resource.workspaceId)
+          // Narrowed once so tool closures keep a non-null executor without assertions.
+          const toolExecutor = workspaceTools
+          // The model keeps passing the workspace NAME (sometimes with stray
+          // whitespace) instead of the id, and this SDK version has no
+          // toolCallRepair: any schema rejection is fatal to the whole agent.
+          // So the schema stays permissive and the id is normalized here —
+          // trim, exact id, case-insensitive id/name, path suffix — before it
+          // reaches the runtime. Only a truly unknown value falls through to
+          // the runtime NOT_ATTACHED check (a recoverable tool-result error).
+          const normalizeWorkspaceId = (raw: unknown): string => {
+            const resources = workspaceResources ?? []
+            const text = String(raw ?? '').trim()
+            if (!text) return text
+            if (resources.some((resource) => resource.workspaceId === text)) return text
+            const lower = text.toLowerCase()
+            const byId = resources.find((resource) => resource.workspaceId.toLowerCase() === lower)
+            if (byId) return byId.workspaceId
+            const byName = resources.find((resource) => resource.workspaceName.toLowerCase() === lower)
+            if (byName) return byName.workspaceId
+            const slash = (value: string) => value.replace(/\\/g, '/').toLowerCase()
+            const byPath = resources.find((resource) => {
+              const root = slash(resource.workspacePath)
+              const candidate = slash(text)
+              return root.endsWith(candidate) || candidate.endsWith(root)
+            })
+            if (byPath) return byPath.workspaceId
+            return text
+          }
+          const bindWorkspaceTool = (executor: NonNullable<typeof workspaceTools>, name: 'workspace.list' | 'workspace.read' | 'workspace.readRange') =>
+            (input: Record<string, unknown>) => executor.execute(name, { ...input, workspaceId: normalizeWorkspaceId(input.workspaceId) })
+          const workspaceId = z.string().min(1).describe(
+            attachedIds.length
+              ? `Copy EXACTLY one of these workspace ids: ${attachedIds.join(', ')}. Never invent, shorten or derive an id from the name or path.`
+              : 'No workspace is attached to this roundtable. Do not call workspace tools.',
+          )
+          const tools = toolExecutor && attachedIds.length ? {
+            workspace_list: { description: 'List a bounded non-sensitive tree in an attached workspace.', parameters: z.object({ workspaceId, path: z.string().default(''), depth: z.number().int().min(0).max(4).default(2), maxEntries: z.number().int().min(1).max(1000).default(200) }), execute: bindWorkspaceTool(toolExecutor, 'workspace.list') },
+            workspace_read: { description: 'Read a bounded UTF-8 file from an attached workspace and return its content and SHA-256.', parameters: z.object({ workspaceId, path: z.string().min(1), maxBytes: z.number().int().min(1).max(256 * 1024).default(128 * 1024) }), execute: bindWorkspaceTool(toolExecutor, 'workspace.read') },
+            workspace_read_range: { description: 'Read a bounded byte range from a UTF-8 file in an attached workspace and return its content and SHA-256.', parameters: z.object({ workspaceId, path: z.string().min(1), offset: z.number().int().min(0), maxBytes: z.number().int().min(1).max(256 * 1024).default(64 * 1024) }), execute: bindWorkspaceTool(toolExecutor, 'workspace.readRange') },
           } : undefined
-          const result = await generateText({ model: model as any, maxSteps: 6, tools, messages: [
-            { role: 'system', content: `You are the ${participant.role} in a structured roundtable. ${roleInstruction} Use workspace tools when a claim requires file evidence. Treat unread paths and unsupported claims as pending validation. Return concise markdown.` },
-            { role: 'user', content: `Topic: ${userInput ?? 'Continue from shared state'}\nWorkspace resources (read-only context):\n${(workspaceResources ?? []).map((resource) => `${resource.workspaceName}: ${resource.workspacePath}`).join('\n') || 'None attached'}\nWorkspace evidence:\n${workspaceContext || 'No readable workspace evidence attached.'}\nShared facts:\n${(priorFacts ?? []).map((fact) => `[${fact.status}] ${fact.title}: ${fact.content}`).join('\n')}\nPrior results:\n${priorCards.map((card) => card.summary ?? '').join('\n')}` },
-          ] })
-          return result.text?.trim() || fallback
-        } catch {
-          return fallback
-        }
-      },
+          const promptMessages = [
+            { role: 'system', content: `You are the ${participant.role} in a structured roundtable. ${roleInstruction} You may call workspace tools at most 2-3 times for file evidence; afterwards you MUST write your findings as markdown text in the same response. Never end your turn with only tool calls and no prose.` },
+            { role: 'user', content: `Topic: ${userInput ?? 'Continue from shared state'}\nWorkspace resources (read-only; copy workspaceId EXACTLY when calling tools):\n${(workspaceResources ?? []).map((resource) => `- id: ${resource.workspaceId} name: ${resource.workspaceName} path: ${resource.workspacePath}`).join('\n') || 'None attached'}\nWorkspace evidence:\n${workspaceContext || 'No readable workspace evidence attached.'}\nShared facts:\n${(priorFacts ?? []).map((fact) => `[${fact.status}] ${fact.title}: ${fact.content}`).join('\n')}\nPrior results:\n${priorCards.map((card) => card.summary ?? '').join('\n')}` },
+          ]
+          const result = await generateText({ model: model as any, maxSteps: 6, tools, messages: promptMessages as any }).catch((error) => {
+            throw new Error(`圆桌 Agent 模型调用失败 (${participant.id}, ${target.provider.id}/${target.modelId})：${error instanceof Error ? error.message : String(error)}`)
+          })
+          let text = result.text?.trim()
+          if (!text) {
+            // The model spent all steps on tools without writing prose. Resume
+            // once with tools disabled, carrying the step history so the tool
+            // findings are not lost; the model only has to write them down.
+            try {
+              const followUp = await generateText({
+                model: model as any,
+                maxSteps: 1,
+                messages: [...promptMessages, ...(result.response?.messages ?? []), { role: 'user', content: 'Write your findings now as concise markdown text. Do not call any more tools.' }] as any,
+              })
+              text = followUp.text?.trim()
+            } catch (error) {
+              throw new Error(`圆桌 Agent 补写结论失败 (${participant.id})：${error instanceof Error ? error.message : String(error)}`)
+            }
+          }
+          if (!text) throw new Error(`圆桌 Agent 返回空结果 (${participant.id}, ${target.provider.id}/${target.modelId})：模型多次均未输出文本，请换个更具体的议题重试。`)
+          return text
+        },
     }]))
     const runtime = new RoundtableRuntime(agents, defaultRoundtableWorkflow, {
       ...(options?.toolTimeoutMs !== undefined ? { toolTimeoutMs: options.toolTimeoutMs } : {}),

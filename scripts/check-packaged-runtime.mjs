@@ -20,6 +20,8 @@ for (const requiredPath of [appAsar, unpackedExecutable]) {
 const asarEntries = new Set(listPackage(appAsar))
 for (const requiredEntry of [
   '\\node_modules\\ai\\package.json',
+  '\\node_modules\\@langchain\\langgraph\\package.json',
+  '\\node_modules\\@langchain\\core\\package.json',
   '\\out\\main\\index.js',
 ]) {
   if (!asarEntries.has(requiredEntry)) throw new Error(`app.asar runtime entry missing: ${requiredEntry}`)

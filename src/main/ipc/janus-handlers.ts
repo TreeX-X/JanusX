@@ -14,6 +14,7 @@ import { blueprintStore } from '../janus/blueprint-store'
 import { analyzer } from '../janus/analyzer'
 import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { captureForCwd, logKnowledgeCaptureFailure } from '../knowledge/workspace-identity'
 import type {
   BlueprintFeatureItem,
   BlueprintNode,

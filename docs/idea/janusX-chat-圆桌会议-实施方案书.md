@@ -114,7 +114,7 @@
 | 圆桌编排与轮次推进 | 部分实现 | LangGraph.js、Agent Registry、RoundtableService、IPC 和 UI 生命周期已接入；真实模型适配具备默认模型路径，持久化仍待完成 |
 | 共享结构化状态 | 已实现（内存） | 已建立事实、事件 envelope、版本、幂等 reducer 与羊皮纸投影器；持久化仍待落地 |
 | 会话恢复与持久化 | 已实现基础版 | JSONL 轻快照 + context sidecar + `roundtable:restore`；`user:message` 入日志使消息流完整可恢复；`migrateRoundtableState` 做 checkpoint 迁移（v1），崩溃残留 running 经 `markInterrupted` 降级为可续 awaiting-user；Renderer 挂载按 localStorage sessionId 自动恢复 |
-| 最终整理与 Markdown 导出 | 部分实现 | Agent 结果会生成决策/依据/风险事实，并提供 `roundtable:export` Markdown 导出；完整最终整理和文件保存 UI 仍待完善 |
+| 最终整理与 Markdown 导出 | 已实现基础版 | Markdown 生成（共享纯函数 + `roundtable:export` IPC）+ 结束横幅（保存/复制/开新议题，终稿保留至显式开新议题）+ 羊皮纸详情 DRAFT/FINAL 导出按钮（`running` 禁用，失败/取消不丢会，复制降级）；见 §28 需求、§30 实施 |
 | 工作区资源绑定与静态快照 | 已实现基础版 | Service 与 Runtime 均按 `workspaceId` 解析注册表并忽略客户端路径，无解析器时仍做 realpath + 目录校验；非法 id、未注册、缺失目录均拒绝启动 |
 | 工作区动态只读工具 | 已实现基础版 | `workspace.list/read/readRange` 经统一 policy（敏感排除、symlink 拒绝、secret 脱敏），四类工具事件、行号级 evidence、`WORKSPACE_TOOL_*` 错误码、取消与 30s 超时已落地；Deck 与卡片详情展示读取轨迹；写/命令/Git 无通道 |
 | 工作区工具审批（写/命令/Git） | 未实现 | 保持禁止；读工具默认只读，写操作无通道 |
@@ -1133,3 +1133,178 @@ type WorkflowTemplate = {
 - 问题：发送后 `handleSend` 先强制滚到底部，工作卡片时间戳更新、排在用户消息之后，自动滚动把视口钉在底部——用户先看到卡片，自己的消息被顶出可视区。
 - 修复（仅 discussionOnly 圆桌对话，普通 Chat 不动）：发送时不再预滚到底，改记锚点时间；消息渲染后的 layout effect 将视口定位到刚发出的用户消息顶部，之后到达的卡片改为新消息 badge 提示，不再抢夺视口；running 阶段误发无新消息时锚点自动失效。
 - 验证：`tsc` 相关零错误，eslint 干净；以桌面目视验收为准（发送后首屏应为用户消息，卡片在下方）。
+
+## 28. 2026-09-04 / 结束导出缺口确认与羊皮纸 mid-meeting 导出需求
+
+### 28.1 代码事实确认：结束会议确实没有文档下载机制
+
+经直读代码确认（`JanusRoundtablePane.tsx:176-195`、`roundtable-handlers.ts:29`、`service.ts:77-79`、`export.ts:8`、`JanusRoundtableParchment.tsx`、`JanusAuxiliaryIsland.tsx`），现状如下：
+
+1. **导出链路是死链**：`roundtable:export`（`service.exportMarkdown` → `exportRoundtableMarkdown` 纯函数）已实现，但 Renderer 全仓零调用（仅 `preload/index.ts:228` 暴露 + `electron-api-fallback.ts:203` 占位）。`JanusRoundtablePane`、`JanusIsland`、`JanusRoundtableParchment` 均未调用。
+2. **`handleEnd` 直接丢弃终稿**：`handleEnd` 调用 `roundtable.end(sessionId)` 后不读取返回的终稿 state、不调用 `export`、不弹保存框，直接 `setRoundtableState(null)` + 清空 `work/pendingInputs/optimisticRun` + 删除 localStorage session 键。用户既看不到 FINAL 羊皮纸，也拿不到文件。
+3. **违反既有产品规则**：§4.3 要求“用户结束后 JanusX 执行最终整理”且“导出失败不能删除会议历史”；当前是“结束即清空，不做已结束会话的持久化恢复”（§3），导出失败/成功都删，且 §25 手动清单第 4 项“结束会议 → 羊皮纸变 FINAL → 导出 Markdown”在当前 `handleEnd` 路径下不可能通过。
+4. **羊皮纸详情无任何导出入口**：`JanusAuxiliaryIsland` 标题栏只有一个 `PanelRightClose` 返回按钮；`JanusRoundtableParchment(detailed)` 只有章节渲染，无 toolbar、无导出按钮、无复制/保存。§6.11 明确“详细 Island 只承载阅读，不重复 Chat 或会议命令”——导出属于阅读面的文档操作，不违反该约束，但当前连文档操作也没有。
+5. **可复用的保存模式已存在**：`note/quick-note-export.ts:39-46` 已确立标准模式 `dialog.saveFile({defaultName, extension})` → `file.save(path, content)`；圆桌导出应复用同一模式，而非另起保存通道。
+
+结论：这不是“文案缺失”，而是“结束链路缺一步 + 详情阅读面缺一个按钮”。§3“最终整理与 Markdown 导出：部分实现”表述仍有效，但需明确拆分为“Markdown 生成已就绪（纯函数+IPC），文件保存 UI（含结束弹窗与 mid-meeting 导出）未实现”。
+
+### 28.2 用户需求分析与完善
+
+用户原始需求两条：
+
+- A. 结束会议应弹出文档下载；
+- B. 羊皮纸详细界面在会议不结束时即可导出。
+
+完善后的理解：
+
+1. **A 不是“多加一个弹窗”，而是修复结束语义**：结束 = 生成终稿（已有 `end()` 写 `final:true` 草稿）→ 向用户呈现终稿 → 提供保存/复制/稍后找回三选一 → 再清空对话框。当前跳过了中间两步。修复时必须保留终稿 state 直到用户明确离开，否则 FINAL 永远不可见。
+2. **B 不是“提前结束”，而是 DRAFT 快照导出**：mid-meeting 导出导的是当前轮的草稿投影（`humanReadable.draft === true`），文件名与内容必须带 DRAFT 水印（轮次、时间、草稿声明），与终稿 FINAL 明确区分，避免用户把半成品当结论外发。
+3. **两个入口共享同一导出源**：都调用 `roundtable:export(sessionId)`（或直接对当前 `roundtableState` 调共享 `exportRoundtableMarkdown` 做预览），差异只在触发时机与默认文件名：`{议题}-round{轮次}-DRAFT-{日期}.md` vs `{议题}-FINAL-{日期}.md`。
+4. **running 阶段必须禁用导出**：Agent 正在写卡片、Host 草稿尚未落盘时导出会拿到撕裂快照。规则为 `running` 禁用两个导出入口（Tooltip 说明“本轮讨论中，待完成后再导出”）；`awaiting-user` 与 `ended(终稿保留期内)` 允许导出。`idle` 无内容时隐藏入口。
+5. **导出失败不丢会**：沿用 §4.3——保存取消/失败只提示，不清空、不关闭详情 Island、不删除 session。结束流程中若保存失败/用户选“稍后”，终稿仍保留在内存 + JSONL 可恢复，直到用户明确开新议题或关闭。
+
+### 28.3 产品规则补充（并入 §4.3）
+
+1. 结束会议流程为：`end()` → 保留终稿 state 并展示 FINAL 羊皮纸 → 弹出“会议已结束，是否保存纪要？”（保存 Markdown / 暂不保存）。选保存则走保存框；任选一项后才允许清空开新议题。（2026-09-04 修订：结束横幅的“复制”按钮已移除，基本用不到；羊皮纸详情导出失败时的复制降级保留。）
+2. Mid-meeting 导出不改变会议状态：不推进轮次、不结束、不写新事件；仅对当前 state 做只读快照导出，内容头必须含 `> DRAFT — 第 N 轮 / 导出时间 / 终稿以结束会议为准`。
+3. 文件名默认：`roundtable-{议题前12字过滤非法字符}-r{N}-{DRAFT|FINAL}-{yyyyMMdd-HHmm}.md`；保存框允许用户改名；取消保存视为 `canceled`，不报错。
+4. 空内容保护：第 1 轮未完成、无任何卡片/事实时，mid-meeting 导出仍允许但内容为占位结论 + “讨论尚未产生结论”提示，不得伪造结论。
+5. 剪贴板为必备降级：保存框不可用/写盘失败时，提供“复制 Markdown”按钮，保证用户总能带走内容。
+
+### 28.4 交互设计
+
+**入口 1 — 结束导出弹窗（`JanusRoundtablePane.handleEnd` 后）：**
+
+```text
+[结束会议] → end() 成功 → 终稿保留，对话区顶部出现 FINAL 横幅
+  ┌─────────────────────────────────────┐
+  │ 会议已结束 · FINAL 纪要已生成        │
+  │ [保存 Markdown] [复制] [开新议题]    │
+  └─────────────────────────────────────┘
+```
+
+- 不用原生 `confirm`，用圆桌对话区内横幅 + 附属 Island 自动切到羊皮纸 FINAL，保证用户先看到结论再决定。
+- “开新议题”即当前清空逻辑（删 localStorage 键、清 state/work/pending）；“保存/复制”不清空。
+
+**入口 2 — 羊皮纸详情导出按钮（附属 Island 内）：**
+
+- 位置：`JanusAuxiliaryIsland` header 右侧（返回按钮左侧）新增图标按钮 `Download`（Lucide），Tooltip“导出当前纪要（Markdown）”；`aria-label="导出羊皮纸 Markdown"`。仅 `roundtable-parchment` 模块显示，`agent-result` 模块不显示。
+- 行为：点击 → `roundtable.export(sessionId)` 取 Markdown → `dialog.saveFile` → `file.save`；成功 Toast/状态提示，失败行内提示 + 提供复制降级。`running` 时禁用（`disabled + Tooltip`），`awaiting-user` 可用，终稿保留期显示“导出 FINAL”。
+- 样式约束：沿用 `janus-auxiliary-close` 同尺寸图标按钮（28px 级），黄铜/旧金语义仅限羊皮纸内容画布，外壳 chrome 保持 Janus 深色规范（§6.3）。
+
+### 28.5 实现边界与验收
+
+实现（不扩大范围）：
+
+1. Renderer 新增 `exportRoundtableMarkdown(sessionId)` 封装：`export` → `saveFile` → `file.save`，复用 `quick-note-export` 模式；文件名由 `roundtableState.userInput + roundNumber + draft` 生成。
+2. `handleEnd` 改为保留终稿：`const final = await end(sessionId)` 后 `updateState({...final, phase:'ended'})` 并展示结束横幅，不立即 `setRoundtableState(null)`；新增“开新议题”才执行现有清空逻辑。`end()` 抛错时不清空、行内提示重试。
+3. `JanusAuxiliaryIsland` header 加可选 `actions` 插槽，羊皮纸模块注入导出按钮；`JanusRoundtableParchment` 不直接调 IPC（保持纯渲染），导出逻辑由 Island 层持有 sessionId 触发。
+4. 单测：`exportRoundtableMarkdown` DRAFT/FINAL 文件名与水印行；`handleEnd` 语义需桌面手动验收（现有工程无组件单测基建，参考 §24 说明）。
+
+验收：
+
+- awaiting-user 时点详情导出 → 存盘 `.md` 含 DRAFT 头 + 当前轮结论；会议继续，不推进轮次。
+- running 时导出按钮禁用，Tooltip 正确。
+- 结束会议 → 看到 FINAL 羊皮纸 + 保存/复制/开新议题；保存取消不丢终稿；保存成功文件含 Conflicts 与来源索引。
+- 导出失败（写盘错）→ 错误提示 + 复制降级可用，会话不丢失（§4.3）。
+- 通过后回写 §3“最终整理与 Markdown 导出”为“已实现基础版（含结束弹窗 + 详情 DRAFT 导出）”，并勾选 §25 手动清单第 4 项。
+
+## 29. 2026-09-04 / 对话框工作状态与残留卡片 bug 修复
+
+### 现象
+
+- 对话框先显示“解决者”→“完善者”，之后本应显示“主持人”工作中，却又显示“解决者”，然后一次性弹出全部结果。
+- 结果卡应为 3 张（解决者/完善者/主持人），实际显示 5 张，末尾残留两张“解决者”“完善者”占位卡。
+
+### 根因（`JanusRoundtablePane.tsx`，已修复）
+
+1. **乐观占位复活**：`activeAgentIds = workingAgents.length ? workingAgents : optimisticRun ? ['refiner-1','challenger-1'] : []`。`optimisticRun` 从发送持续到整轮结束，因此每当 `workingAgents` 为空的瞬间（challenger 结果 → host queued/working 的交接间隙，以及终轮快照先于事件到达的竞态），UI 都会把旧的解决者/完善者占位重新搬出来——交接期盖掉主持人，终轮后则以 `new Date()` 时间戳排在 3 张真实卡片之后，形成“5 张 + 末尾两张残留”。
+2. **主持人映射缺失**：运行时 host 的 agentId 是 `janusx`（见 `defaultRoundtableWorkflow`），但占位标题硬编码 `refiner-1 ? 解决者 : 完善者`，`workingRole` 只认 `refiner-1/challenger-1`。host 工作时标题错显示为“完善者”、3D 座席 `workingRole` 为 `null`（主持人席位不亮）。
+3. **useMemo 依赖数组身份**：`activeAgentIds` 每 render 都是新数组，memo 恒失效，每 render 刷新占位时间戳，占位在按时间排序的对话框里永远沉底。
+
+### 修复
+
+- 新增 `describeLiveAgent` / `toWorkingRole`：`janusx|host*` → 主持人/host 席位，`challenger*` → 完善者/agent-2，`refiner*` → 解决者/agent-1。
+- 占位仅覆盖两段间隙：发送→首个真实事件（乐观，且 `hasSeenWorkEvent` 为 false 时才允许）与级间交接（`working` 为空但 `queued` 非空时显示 queued，如已排队的 `janusx`，状态为 `queued`）。
+- `updateState` 收到 `awaiting-user/ended` 快照即清 `optimisticRun`（与事件流双保险，任一先到都不留幻影）。
+- memo 改按 `liveAgentKey/workingKey` 字符串值依赖，不再每 render 刷新时间戳。
+
+### 验证
+
+- 事件序列仿真（reducer + 新门控）：optimistic → refiner → challenger → `janusx`(queued/working 显示主持人）→ 3 卡 + 零占位 → awaiting-user 干净，无复活。
+- `tsc` 零错误；eslint 改动文件 0 errors（仅既有中文文案 warnings）；`roundtable-agent-work-projection / runtime / state` 24/24 通过。
+- 桌面目视待复核：首轮应依次点亮解决者→完善者→主持人席位，对话框全程 3 张结果卡，无末尾残留。
+
+## 30. 2026-09-04 / 导出功能实施记录（§28 落地）
+
+### 实施内容
+
+1. **导出封装**（新增 `src/renderer/src/components/janus/roundtableExport.ts`）：`buildRoundtableFilename`（`roundtable-{议题12字}-r{N}-{DRAFT|FINAL}-{yyyyMMdd-HHmm}.md`，非 ended 一律 DRAFT）、`withDraftWatermark`（`> DRAFT — 第 N 轮 · 时间 · 终稿以结束会议为准` 头）、`fetchRoundtableMarkdown`（`roundtable:export`）、`saveMarkdownViaDialog`（`dialog.saveFile` → `file.save`，复用 quick-note 模式）、`copyTextToClipboard`（clipboard + execCommand 双降级）。
+2. **结束横幅**（`JanusRoundtablePane`）：`handleEnd` 改为保留终稿（`updateState({...final, phase:'ended'})` + 自动打开羊皮纸 FINAL），对话框顶部出现横幅［保存 Markdown｜复制｜开新议题］；只有“开新议题”执行原清空逻辑。`end()` 失败不清空并行内提示。状态栏 ended 显示“会议已结束 · FINAL”。
+3. **详情导出按钮**（`JanusAuxiliaryIsland` 新增 `actions` 插槽 + `JanusIsland` 注入）：仅 `roundtable-parchment` 模块显示 Download 图标按钮（`agent-result` 不显示）；`running` 禁用（Tooltip 说明等本轮完成），`idle` 隐藏；行内状态（Saved/Copied/Save canceled/失败），失败时出现 Copy 降级按钮。`JanusRoundtableParchment` 保持纯渲染，导出逻辑由 Island 层持 sessionId 触发。
+4. **样式**：`09-janus-roundtable-final.css` 追加结束横幅；`10-janus-auxiliary-island.css` 追加 26px 导出按钮/状态（与收起控件同 chrome）。
+
+### 验证证据
+
+- 新增 `tests/unit/roundtable-export.test.ts` 5 项：DRAFT/FINAL 文件名、非法字符过滤、空议题回退、时间戳格式、水印行。
+- 全量圆桌 9 文件 **67/67 通过**（62 + 5）；`tsc` 零错误；eslint 改动文件 0 errors（仅与文件既有中文文案同类的 i18n warnings）。
+- 桌面目视待验收（§28 验收清单）：awaiting-user 详情导出 DRAFT 不推进轮次；running 禁用；结束见 FINAL 横幅；取消/失败不丢终稿。
+
+## 31. 2026-09-04 / 静默 fallback 改显性失败（圆桌空转排查）
+
+### 现象
+
+- 已设全局默认模型（Vertex AI / gemini-3.6-flash，测试可用）且绑定工作区，首轮三张卡仍是 `refiner reviewed "..." with 0 prior results` 式空话，详情无实质内容。
+
+### 已排除
+
+1. 无默认模型（`getDefaultModel()` 返回 null）：用户已设置默认 Provider，排除。
+2. 模型 ID 推断错误：`VertexAIAdapter.getDefaultModel` 取 `settings.modelId`（gemini-3.6-flash），与用户配置一致，排除（注意 `OpenAICompatibleAdapter.getDefaultModel` 是按 baseURL 硬推断、不读 `modelId`，非 Vertex 用户仍有此坑，待修）。
+3. 工作区未绑定：用户已绑定，启动快照 + 动态 `workspace_read` 路径正常。
+
+### 根因
+
+- `RoundtableService.createRuntime` 的 Agent `run()` 内 `try { ... } catch { return fallback }` 把**所有**模型侧失败（调用抛错、空回复）吞成一句假装完成的卡片，不发 `agent:error`，`work.errors` 也无处渲染——失败和成功长得一样，无法定位。
+- 剩余嫌疑（需一次显错运行确认）：Vertex `generateText` 带 tools + maxSteps 调用抛错，或模型 6 步内只调工具无文本。
+
+### 修复（已实施，未做桌面验证）
+
+1. `service.ts`：删除静默 fallback；无默认模型 / 模型创建失败 / `generateText` 抛错 / 空文本一律抛带上下文的 Error（agentId + provider/model），由 `runtime.runAgent` 记 `agent:error`，本轮其余 Agent 继续。
+2. `JanusRoundtablePane`：对话框新增红色失败横幅（`role="alert"`，单错默认展开），`updateState` 从快照合并 `errors` 防事件丢失。
+3. 待用户重启应用后重开一轮，把横幅原文贴回，再定点修模型调用。
+
+### 后续（用户回传原始报错后定位）
+
+- 原始报错：`Invalid arguments for tool workspace_list ... "Workspace is not attached to this roundtable"`，refiner/challenger/host 三 Agent 同错。
+- 根因：提示词只列工作区 NAME + PATH，从不给 ID，模型只能猜（如传了工作区名 `JanusX`）；而 `workspaceId` schema 上的 `.refine()` 把猜错变成框架级 `AI_InvalidToolArgumentsError`——本版 AI SDK（`ai@3.4.33`，经查无 `toolCallRepair` 选项）对此直接抛错，整个 Agent 死亡，而非变成可重试的 tool-result 错误。
+- 修复（已实施）：① 提示词改列 `- id/name/path` 并要求原文复制 ID；② tool 入参 `workspaceId` 去掉 `.refine()`（留 `min(1)` + describe 指引），归属校验只留在 `runtime.executeWorkspaceTool`（其抛错是可恢复的 tool-result，模型可纠正重试）；③ 无绑定工作区时不传 tools；④ NOT_ATTACHED 错误信息附带有效 id 列表。
+- 验证：`tsc` 零错误，eslint 干净，runtime/lifecycle/trust/state 27/27 通过。待用户重启 dev 重测。
+
+### 再后续（模型仍传名字：" JanusX" 带前导空格）
+
+- 现象：输入后先闪一下“解决者＋完善者”双占位才进入正常解决者 working；且 refiner 仍传 `workspaceId: " JanusX"`（注意前导空格），只剩这一处报错。
+- 分析：① 模型犟：光靠提示词和 describe 约束不住，必须做归一化兜底；② 双占位闪屏是发送→首个真实事件间隙的乐观占位，旧逻辑瞬间即显；③ 另提醒：renderer 热更新会自动生效，但 `service.ts` 改动在主进程，**不重启 `npm run dev` 不生效**——上轮报错也可能仍是旧主进程跑出来的。
+- 修复（已实施）：① `service.ts` 新增 `normalizeWorkspaceId`（trim → 精确 id → 大小写无关 id/名 → 路径后缀），包在 `bindWorkspaceTool` 里，`" JanusX"` 按名命中真实 id；无绑定工作区时不传 tools；② 乐观占位延迟 400ms 出现（首个真实事件先到则直接跳过闪屏，按轮次重 arm）；③ NOT_ATTACHED 信息已带有效 id 列表。
+- 验证：`tsc` 零错误，eslint 干净，5 文件 32/32 通过。待用户重启 dev 重测：预期解决者先 workspace_list 再读文档给真方案，无闪屏、无报错。
+
+### 再后续（双占位闪屏＋"test" 下两 Agent 空结果失败）
+
+- 现象 1：输入后仍快速闪过两个命名卡。原因：乐观占位延迟 400ms 治标不治本——`collectTextEvidence` 等启动开销常超 400ms，占位仍会出现几秒，且两人名并行展示本就违背串行事实。
+- 现象 2：发 `test` 后解决者/完善者报错、主持人正常。推断：无意义输入下模型把 6 步全花在调工具上、没写正文，触发“空结果”失败；主持人提示词要求首句即结论故不受影响。
+- 修复（已实施）：① 显示机制改彻底——删掉合成命名占位，live 卡只由真实 `working/queued` 事件驱动；首事件前只显示“第 N 轮讨论中”状态文案＋Deck 空态；`optimisticRun` 仅保留给状态文案。② 机制兜底——提示词限工具 2-3 次且必须写正文；空文本时自动用 `result.response.messages` 续问一次（禁工具、只让写结论）；仍空才报“换更具体议题重试”。
+- 验证：`tsc` 零错误，eslint 0 errors，5 文件 32/32 通过。待用户重启 dev，用真实议题（非 `test`）重测；如仍有红横幅，贴新原文。
+
+### 再后续（旧主进程导致的 refine 报错复现）
+
+- 现象：三 Agent 报 `Invalid arguments for tool workspace_read ... Type validation failed ... path: [workspaceId] ... Workspace is not attached`，传的仍是名 `JanusX`。
+- 分析：全仓 grep 证实当前代码已无该 `.refine()`——此 zod 错误形状（`code: custom / path: [workspaceId]`）在新代码里**不可能产生**。结论：运行中的主进程是 refine 移除之前的旧版本（renderer 热更新会自动生效，主进程必须重启）。另：`resolveStartResources` 的同名报错与此无关（启动期注册解析，非工具参数校验）。
+- 修复（已实施）：① `createRuntime` 加终端标记行 `[roundtable] runtime created (fail-loud + workspaceId normalization active)`，跑 `npm run dev` 的终端里看到它＝新代码；② 机制侧归一化已就绪，重启后 `"JanusX"` 按名自动命中真实 id，不再致命。
+- 验证：`tsc`/eslint 干净，lifecycle/runtime 13/13 通过。待用户彻底重启 dev（Ctrl+C → 确认 electron 进程退出 → 重跑）后重测。
+
+## 32. 2026-09-04 / 详情标题中英文显示控制
+
+- 范围：羊皮纸详情（`JanusRoundtableParchment` 眉题/六章节/空态/来源/占位分支/终稿态）与卡片详情（`JanusIsland` 内 agent-result 眉题＋六状态/证据/读取轨迹/来源/更新时间/空态）及附属模块标题，全部改走 `t('janus:roundtable.…')`，随应用语言切换。模型生成的卡片标题/正文属数据内容，不翻译。
+- 新增 `janus.json` 中英 `roundtable` 节（52 键）：`auxiliary/parchment/cardDetail/export` 四组；英文沿用原硬编码文案，中文新译。
+- 流水线：`i18n:extract` 因仓库配置写死 `$lng` 字面目录已不可用（误产物已删、locale 已从 git 完整恢复），改手动加键；`i18n:types` 重生成（1433 键），`i18n:check` 11 命名空间同步通过。
+- 验证：`tsc` 零错误；两文件 eslint 0 warnings（原中文硬编码 warnings 随之消除）。Pane 工具栏/结束横幅/错误横幅的中文仍为硬编码，不在本次范围，后续批次再迁。
+- 桌面目视待验收：切换语言后两详情标题同步变化。

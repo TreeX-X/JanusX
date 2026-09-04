@@ -258,7 +258,9 @@ export class RoundtableRuntime {
   private async executeWorkspaceTool(name: 'workspace.list' | 'workspace.read' | 'workspace.readRange', input: Record<string, unknown>, agentId: string, roundId: string): Promise<unknown> {
     const workspaceId = typeof input.workspaceId === 'string' ? input.workspaceId : ''
     const resource = this.state.workspaceResources.find((item) => item.workspaceId === workspaceId)
-    if (!resource) throw workspaceToolError('WORKSPACE_TOOL_NOT_ATTACHED', 'Workspace is not attached to this roundtable')
+    // This throw becomes a tool-result error (not a fatal run error), so name
+    // the valid ids: the model can retry with a corrected workspaceId.
+    if (!resource) throw workspaceToolError('WORKSPACE_TOOL_NOT_ATTACHED', `Workspace "${workspaceId || '(empty)'}" is not attached to this roundtable. Attached ids: ${this.state.workspaceResources.map((item) => item.workspaceId).join(', ') || '(none)'}. Copy one exactly.`)
     const toolCallId = `tool-${Date.now()}-${Math.random().toString(36).slice(2)}`
     this.emit({ type: 'workspace:tool-started', sessionId: this.state.sessionId!, roundId, agentId, toolCallId, toolName: name, workspaceId })
     if (this.controller.signal.aborted) {

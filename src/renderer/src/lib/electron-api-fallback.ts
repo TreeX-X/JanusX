@@ -200,6 +200,7 @@ export function installElectronApiFallback(): void {
       update: () => Promise.resolve({ approvalMode: 'per-action' as const }),
     },
     subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
+    roundtable: { start: unavailable, advance: unavailable, end: unavailable, getState: unavailable, restore: unavailable, export: unavailable, onEvent: () => () => {} },
     dialog: { openDirectory: unavailable, saveFile: unavailable, showMessageBox: unavailable },
     window: {
       minimize: unavailable,
@@ -212,7 +213,7 @@ export function installElectronApiFallback(): void {
       onEditorEmbedded: () => () => {},
       onEditorRefresh: () => () => {},
     },
-    system: { getDefaultShell: unavailable, getPlatform: unavailable, openVSCode: unavailable, getRuntimeTelemetry: unavailable, getLanguage: () => Promise.resolve(null), setLanguage: unavailable },
+    system: { getDefaultShell: unavailable, getPlatform: unavailable, openVSCode: unavailable, getRuntimeTelemetry: unavailable, getLanguage: () => Promise.resolve(null), setLanguage: unavailable, onPrepareQuit: () => () => {} },
     desktopToast: { ready: () => {}, action: () => {}, onShow: () => () => {} },
     janusPersona: '',
   }

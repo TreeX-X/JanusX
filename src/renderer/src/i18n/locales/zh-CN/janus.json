@@ -313,5 +313,81 @@
       "error": "error",
       "wait": "wait"
     }
+  },
+  "roundtable": {
+    "auxiliary": {
+      "agentResultAria": "Agent 结果详情",
+      "agentResultTitle": "Agent 结果",
+      "parchmentAria": "共享羊皮纸详细内容",
+      "parchmentTitle": "共享羊皮纸"
+    },
+    "cardDetail": {
+      "evidence": "证据",
+      "eyebrow": "AGENT 结果",
+      "noSources": "暂无关联来源事件。",
+      "sourceIndex": "来源索引",
+      "status": {
+        "awaitingInput": "等待输入",
+        "cancelled": "已取消",
+        "completed": "已完成",
+        "failed": "失败",
+        "queued": "排队中",
+        "working": "工作中"
+      },
+      "summaryFallback": "暂无可用结果。",
+      "titleFallback": "Agent 结果",
+      "updated": "更新于 {{time}}",
+      "waiting": "等待中",
+      "workspaceReads": "工作区读取"
+    },
+    "export": {
+      "actionAria": "导出羊皮纸 Markdown",
+      "actionTitle": "导出当前纪要（Markdown）",
+      "canceled": "已取消保存",
+      "copied": "已复制",
+      "copy": "复制",
+      "failed": "导出失败，请改用复制",
+      "lockedTitle": "本轮讨论中，完成后可导出",
+      "saved": "已保存"
+    },
+    "parchment": {
+      "empty": {
+        "actions": "暂无行动项。",
+        "conflicts": "暂无未解决分歧。",
+        "decisions": "暂无已确认决策。",
+        "evidence": "暂无已记录依据。",
+        "pending": "暂无待验证事项。",
+        "risks": "暂无未决事项。"
+      },
+      "eyebrow": "决策记录",
+      "noSources": "讨论尚未开始。",
+      "originMeta": "圆桌会议 / 共享记录",
+      "originSubtitle": "结构化决策记录",
+      "placeholder": {
+        "actionsBody": "暂无行动项。只有主持人确认的行动才会进入本节。",
+        "actionsTitle": "下一步行动",
+        "conclusionBody": "等待圆桌议题。讨论开始后，已确认决策将整理到这里。",
+        "conclusionTitle": "当前结论",
+        "questionsBody": "暂无未决事项。Agent 的疑虑、边界与验证任务将保留来源关联。",
+        "questionsTitle": "未决问题"
+      },
+      "section": {
+        "actions": "下一步行动",
+        "conflicts": "分歧",
+        "decisions": "已确认决策",
+        "evidence": "关键依据",
+        "pending": "待验证",
+        "risks": "未决问题与风险"
+      },
+      "sourceIndex": "来源索引",
+      "state": {
+        "awaitingTopic": "等待议题",
+        "draft": "草稿",
+        "final": "终稿",
+        "waiting": "等待中"
+      },
+      "summaryFallback": "来自圆桌会议的简明、可追溯的决策、依据、风险与行动记录。",
+      "titleFallback": "圆桌会议"
+    }
   }
 }

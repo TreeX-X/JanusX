@@ -1,3 +1,4 @@
+import { useI18n } from '@/i18n/useI18n'
 import type { ParchmentDocument } from '../../../../shared/roundtable/events'
 
 interface JanusRoundtableParchmentProps {
@@ -5,30 +6,30 @@ interface JanusRoundtableParchmentProps {
   document?: ParchmentDocument
 }
 
-const parchmentSections = [
-  { title: 'CURRENT CONCLUSION', content: 'Waiting for a roundtable topic. Confirmed decisions will be organized here after the discussion begins.' },
-  { title: 'OPEN QUESTIONS', content: 'No unresolved items yet. Agent concerns, boundaries, and validation tasks will remain linked to their sources.' },
-  { title: 'NEXT ACTIONS', content: 'No actions yet. Only actions confirmed by the host will enter this section.' },
-]
-
 export function JanusRoundtableParchment({ detailed = false, document }: JanusRoundtableParchmentProps) {
+  const { t } = useI18n('janus')
   const human = document?.humanReadable
   if (detailed) {
-    // Shares the agent-result detail visual language (dark archive panel):
-    // same eyebrow, headings, summary rule and evidence box, no paper theme.
+    // Shares the parchment visual language with the agent-result detail:
+    // same Georgia serif headings/body, parchment palette, summary rule
+    // and evidence box on the auxiliary canvas.
     const sections = human ? [
-      { title: 'CONFIRMED DECISIONS', content: human.decisions.join('\n') || 'No confirmed decisions yet.' },
-      { title: 'KEY EVIDENCE', content: human.evidence.join('\n') || 'No evidence recorded yet.' },
-      { title: 'OPEN QUESTIONS & RISKS', content: human.risks.join('\n') || 'No unresolved items yet.' },
-      { title: 'PENDING VALIDATION', content: human.pending.join('\n') || 'Nothing awaiting validation.' },
-      { title: 'CONFLICTS', content: human.conflicts.length ? human.conflicts.map((item) => `[${item.status}] ${item.topic}`).join('\n') : 'No open conflicts.' },
-      { title: 'NEXT ACTIONS', content: human.actions.join('\n') || 'No actions yet.' },
-    ] : parchmentSections
+      { title: t('janus:roundtable.parchment.section.decisions'), content: human.decisions.join('\n') || t('janus:roundtable.parchment.empty.decisions') },
+      { title: t('janus:roundtable.parchment.section.evidence'), content: human.evidence.join('\n') || t('janus:roundtable.parchment.empty.evidence') },
+      { title: t('janus:roundtable.parchment.section.risks'), content: human.risks.join('\n') || t('janus:roundtable.parchment.empty.risks') },
+      { title: t('janus:roundtable.parchment.section.pending'), content: human.pending.join('\n') || t('janus:roundtable.parchment.empty.pending') },
+      { title: t('janus:roundtable.parchment.section.conflicts'), content: human.conflicts.length ? human.conflicts.map((item) => `[${item.status}] ${item.topic}`).join('\n') : t('janus:roundtable.parchment.empty.conflicts') },
+      { title: t('janus:roundtable.parchment.section.actions'), content: human.actions.join('\n') || t('janus:roundtable.parchment.empty.actions') },
+    ] : [
+      { title: t('janus:roundtable.parchment.placeholder.conclusionTitle'), content: t('janus:roundtable.parchment.placeholder.conclusionBody') },
+      { title: t('janus:roundtable.parchment.placeholder.questionsTitle'), content: t('janus:roundtable.parchment.placeholder.questionsBody') },
+      { title: t('janus:roundtable.parchment.placeholder.actionsTitle'), content: t('janus:roundtable.parchment.placeholder.actionsBody') },
+    ]
     return (
       <div className="janus-agent-result-detail janus-roundtable-parchment" data-detailed={detailed}>
-        <div className="janus-agent-result-detail__eyebrow">DECISION RECORD // {human ? (human.draft ? 'DRAFT' : 'FINAL') : 'WAITING'}</div>
-        <h2>{document?.title ?? '圆桌会议'}</h2>
-        <p className="janus-agent-result-detail__summary">{human?.conclusion ?? 'A concise, traceable record of decisions, evidence, risks, and actions from the roundtable.'}</p>
+        <div className="janus-agent-result-detail__eyebrow">{t('janus:roundtable.parchment.eyebrow')} // {human ? (human.draft ? t('janus:roundtable.parchment.state.draft') : t('janus:roundtable.parchment.state.final')) : t('janus:roundtable.parchment.state.waiting')}</div>
+        <h2>{document?.title ?? t('janus:roundtable.parchment.titleFallback')}</h2>
+        <p className="janus-agent-result-detail__summary">{human?.conclusion ?? t('janus:roundtable.parchment.summaryFallback')}</p>
         {sections.map((section) => (
           <section key={section.title}>
             <h3>{section.title}</h3>
@@ -36,8 +37,8 @@ export function JanusRoundtableParchment({ detailed = false, document }: JanusRo
           </section>
         ))}
         <div className="janus-agent-result-detail__evidence">
-          <strong>Source index</strong>
-          <span>{human?.draft ? 'DRAFT · ' : ''}{human?.sourceEventIds.join(', ') || 'The discussion has not started.'}</span>
+          <strong>{t('janus:roundtable.parchment.sourceIndex')}</strong>
+          <span>{human?.draft ? `${t('janus:roundtable.parchment.state.draft')} · ` : ''}{human?.sourceEventIds.join(', ') || t('janus:roundtable.parchment.noSources')}</span>
         </div>
       </div>
     )
@@ -45,16 +46,16 @@ export function JanusRoundtableParchment({ detailed = false, document }: JanusRo
   return (
     <div className="janus-roundtable-parchment" data-detailed={detailed}>
       <div className="janus-roundtable-parchment-meta">
-        <span>DECISION RECORD</span>
-        <small>{human ? (human.draft ? 'DRAFT' : 'FINAL') : 'AWAITING TOPIC'}</small>
+        <span>{t('janus:roundtable.parchment.eyebrow')}</span>
+        <small>{human ? (human.draft ? t('janus:roundtable.parchment.state.draft') : t('janus:roundtable.parchment.state.final')) : t('janus:roundtable.parchment.state.awaitingTopic')}</small>
       </div>
       <div className="janus-roundtable-parchment-origin">
         <strong>JanusX</strong>
-        <span>STRUCTURED DECISION RECORD</span>
-        <small>ROUND TABLE / SHARED RECORD</small>
+        <span>{t('janus:roundtable.parchment.originSubtitle')}</span>
+        <small>{t('janus:roundtable.parchment.originMeta')}</small>
       </div>
       <p className="janus-roundtable-parchment-lead">
-        A concise, traceable record of decisions, evidence, risks, and actions from the roundtable.
+        {t('janus:roundtable.parchment.summaryFallback')}
       </p>
     </div>
   )

@@ -178,15 +178,16 @@
   height: 100%;
   overflow: auto;
 }
-.janus-agent-result-detail { position: relative; z-index: 1; box-sizing: border-box; height: 100%; overflow: auto; padding: 34px 28px; color: rgba(255,255,255,.78); background: #000; }
-.janus-agent-result-detail__eyebrow { margin-bottom: 12px; color: #ff9a5c; font: 10px ui-monospace, monospace; letter-spacing: .12em; }
-.janus-agent-result-detail h2 { margin: 0 0 18px; font-size: 18px; }
-.janus-agent-result-detail__summary { padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
-.janus-agent-result-detail h3 { margin: 18px 0 6px; color: #ffb36b; font-size: 12px; }
-.janus-agent-result-detail p { margin: 0; white-space: pre-wrap; line-height: 1.6; font-size: 13px; }
-.janus-agent-result-detail small { display: block; margin-top: 18px; color: rgba(255,255,255,.45); }
-.janus-agent-result-detail__evidence { display: grid; gap: 6px; margin-top: 18px; padding: 10px 12px; border-left: 2px solid #ff7830; background: rgba(255,120,48,.08); font: 11px/1.5 ui-monospace, monospace; }
-.janus-agent-result-detail__evidence strong { color: #ffb36b; font-size: 10px; letter-spacing: .08em; }
+.janus-agent-result-detail { position: relative; z-index: 1; box-sizing: border-box; height: 100%; overflow: auto; padding: 34px 28px; color: #c5b69e; background: #000; scrollbar-color: rgba(216, 195, 158, .22) transparent; }
+.janus-agent-result-detail__eyebrow { margin-bottom: 12px; color: #caa770; font: 700 10px "Cascadia Mono", "SF Mono", Consolas, monospace; letter-spacing: .14em; }
+.janus-agent-result-detail h2 { margin: 0 0 18px; color: #ead2aa; font: 700 20px Georgia, "Times New Roman", serif; letter-spacing: .02em; }
+.janus-agent-result-detail__summary { padding-bottom: 16px; border-bottom: 1px solid rgba(216, 195, 158, .16); color: rgba(216, 205, 184, .78); font: 12px/1.65 Georgia, "Times New Roman", serif; }
+.janus-agent-result-detail h3 { margin: 18px 0 6px; color: #caa770; font: 700 12px Georgia, "Times New Roman", serif; letter-spacing: .08em; }
+.janus-agent-result-detail p { margin: 0; white-space: pre-wrap; color: rgba(216, 205, 184, .68); font: 12px/1.65 Georgia, "Times New Roman", serif; }
+.janus-agent-result-detail small { display: block; margin-top: 18px; color: rgba(216, 195, 158, .5); font: 10px "Cascadia Mono", "SF Mono", Consolas, monospace; }
+.janus-agent-result-detail__evidence { display: grid; gap: 6px; margin-top: 18px; padding: 10px 12px; border-left: 2px solid rgba(202, 167, 112, .72); background: rgba(255, 246, 220, .045); font: 11px/1.5 ui-monospace, monospace; }
+.janus-agent-result-detail__evidence strong { color: #d7b47d; font-size: 10px; letter-spacing: .08em; }
+.janus-agent-result-detail__evidence span { color: rgba(231, 220, 200, .72); }
 .janus-agent-result-detail__summary:empty { min-height: 24px; }
 
 .janus-roundtable-parchment-expand {
@@ -248,10 +249,12 @@
   font: 12px/1.65 Georgia, "Times New Roman", serif;
 }
 
-/* The detailed parchment shares the agent-result detail visual language
-   (dark archive panel). No paper theme here: the component renders with
-   .janus-agent-result-detail classes, so these rules only clear legacy
-   paper overrides. */
+/* Detailed-open effect shared by the parchment detail and the card detail:
+   both render the parchment visual language (Georgia serif headings/body,
+   parchment palette, parchment summary rule and evidence box) on the
+   auxiliary canvas. Components opt in with [data-detailed="true"]; these
+   rules clear legacy overrides so card and parchment stay consistent. */
+.janus-auxiliary-content .janus-agent-result-detail[data-detailed="true"],
 .janus-auxiliary-content .janus-roundtable-parchment[data-detailed="true"] {
   border: 0;
   background: none;
@@ -299,4 +302,53 @@
     animation: none;
     opacity: 0;
   }
+}
+
+/* Parchment export actions: icon button + inline status, same 26px chrome as
+   the collapse control. Sits left of the close button in the minimal header. */
+.janus-auxiliary-header--minimal .janus-auxiliary-actions {
+  position: absolute;
+  top: 14px;
+  right: 46px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+.janus-auxiliary-export {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  padding: 0 6px;
+  border: 1px solid rgba(202, 167, 112, .34);
+  border-radius: 2px;
+  background: #1a1410;
+  box-shadow: inset 0 1px 0 rgba(255, 231, 186, .08);
+  color: #caa770;
+  font: 600 10px ui-monospace, monospace;
+  cursor: pointer;
+  transition: border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+button.janus-auxiliary-export:not(:has(svg)) {
+  width: auto;
+}
+.janus-auxiliary-export:hover:not(:disabled) {
+  border-color: rgba(202, 167, 112, .7);
+  color: #ead2aa;
+}
+.janus-auxiliary-export:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.janus-auxiliary-export:focus-visible {
+  outline: 2px solid rgba(202, 167, 112, .8);
+  outline-offset: 1px;
+}
+.janus-auxiliary-export-notice {
+  color: rgba(216, 195, 158, .72);
+  font: 10px ui-monospace, monospace;
+  letter-spacing: .04em;
+  white-space: nowrap;
 }

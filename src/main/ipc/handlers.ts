@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { spawn } from 'child_process'
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { watch, type FSWatcher } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { basename, join, relative, resolve } from 'path'

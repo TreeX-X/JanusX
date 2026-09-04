@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Download } from 'lucide-react'
 import { useAppStore } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
@@ -15,6 +16,18 @@ import {
   type JanusAuxiliaryModuleType,
 } from './JanusAuxiliaryIsland'
 import { JanusRoundtableParchment } from './JanusRoundtableParchment'
+import { buildRoundtableFilename, copyTextToClipboard, fetchRoundtableMarkdown, saveMarkdownViaDialog, withDraftWatermark } from './roundtableExport'
+import type { AgentWorkState } from '../../../../shared/roundtable/events'
+
+/** i18n keys for the six card states shown in the agent-result eyebrow. */
+const ROUNDTABLE_CARD_STATUS_KEYS: Record<AgentWorkState, string> = {
+  queued: 'janus:roundtable.cardDetail.status.queued',
+  working: 'janus:roundtable.cardDetail.status.working',
+  completed: 'janus:roundtable.cardDetail.status.completed',
+  failed: 'janus:roundtable.cardDetail.status.failed',
+  'awaiting-input': 'janus:roundtable.cardDetail.status.awaitingInput',
+  cancelled: 'janus:roundtable.cardDetail.status.cancelled',
+}
 import { faceClass } from './janusIslandRuntime'
 import type { JanusExpandedView, JanusIslandProps } from './janusIslandTypes'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
@@ -71,6 +84,43 @@ export function JanusIsland({
   const [roundtableState, setRoundtableState] = useState<RoundtableState | null>(null)
   const [roundtableToolCalls, setRoundtableToolCalls] = useState<RoundtableToolCall[]>([])
   const [auxiliaryClosing, setAuxiliaryClosing] = useState(false)
+  // Parchment detail export (mid-meeting DRAFT or ended FINAL). Read-only
+  // snapshot: never advances the round or ends the meeting.
+  const [parchmentExportBusy, setParchmentExportBusy] = useState(false)
+  const [parchmentExportNotice, setParchmentExportNotice] = useState<string | null>(null)
+
+  const handleParchmentExport = useCallback(async () => {
+    const state = roundtableState
+    if (!state?.sessionId || state.phase === 'idle' || state.phase === 'running' || parchmentExportBusy) return
+    setParchmentExportBusy(true)
+    setParchmentExportNotice(null)
+    try {
+      const raw = await fetchRoundtableMarkdown(state.sessionId)
+      const markdown = state.phase === 'ended' ? raw : withDraftWatermark(raw, state.roundNumber)
+      const outcome = await saveMarkdownViaDialog(buildRoundtableFilename(state), markdown)
+      setParchmentExportNotice(outcome === 'saved' ? 'saved' : 'canceled')
+    } catch {
+      setParchmentExportNotice('error')
+    } finally {
+      setParchmentExportBusy(false)
+    }
+  }, [roundtableState, parchmentExportBusy])
+
+  const handleParchmentCopy = useCallback(async () => {
+    const state = roundtableState
+    if (!state?.sessionId || parchmentExportBusy) return
+    setParchmentExportBusy(true)
+    setParchmentExportNotice(null)
+    try {
+      const raw = await fetchRoundtableMarkdown(state.sessionId)
+      await copyTextToClipboard(state.phase === 'ended' ? raw : withDraftWatermark(raw, state.roundNumber))
+      setParchmentExportNotice('copied')
+    } catch {
+      setParchmentExportNotice('error')
+    } finally {
+      setParchmentExportBusy(false)
+    }
+  }, [roundtableState, parchmentExportBusy])
 
   // Ending a meeting clears the dialog (pane reports null): drop the detail
   // island and its card/parchment state so no stale session stays visible.
@@ -309,10 +359,10 @@ export function JanusIsland({
     ? {
         id: 'janus-roundtable-parchment-detail',
         type: 'roundtable-parchment',
-        title: '共享羊皮纸',
-        ariaLabel: '共享羊皮纸详细内容',
+        title: t('janus:roundtable.auxiliary.parchmentTitle'),
+        ariaLabel: t('janus:roundtable.auxiliary.parchmentAria'),
       }
-    : auxiliaryModule === 'agent-result' ? { id: 'janus-agent-result-detail', type: 'agent-result', title: 'Agent 结果', ariaLabel: 'Agent 结果详情' } : null
+    : auxiliaryModule === 'agent-result' ? { id: 'janus-agent-result-detail', type: 'agent-result', title: t('janus:roundtable.auxiliary.agentResultTitle'), ariaLabel: t('janus:roundtable.auxiliary.agentResultAria') } : null
 
   useEffect(() => {
     document.body.classList.toggle('is-running', janusRunning)
@@ -439,19 +489,48 @@ export function JanusIsland({
         />
       </div>
       {stage === 'expanded' && auxiliaryDescriptor ? (
-        <JanusAuxiliaryIsland module={auxiliaryDescriptor} closing={auxiliaryClosing} onClose={requestCloseAuxiliary}>
-          {auxiliaryModule === 'roundtable-parchment' ? <JanusRoundtableParchment detailed document={roundtableState ? projectParchment(roundtableState) : undefined} /> : <div key={activeAgentCard?.id ?? 'agent-result-empty'} className="janus-agent-result-detail">
-            <div className="janus-agent-result-detail__eyebrow">AGENT RESULT // {activeAgentCard?.status?.toUpperCase() ?? 'WAITING'}</div>
-            <h2>{activeAgentCard?.title ?? 'Agent 结果'}</h2>
-            <p className="janus-agent-result-detail__summary">{activeAgentCard?.summary ?? '暂无可用结果'}</p>
+        <JanusAuxiliaryIsland
+          module={auxiliaryDescriptor}
+          closing={auxiliaryClosing}
+          onClose={requestCloseAuxiliary}
+          actions={auxiliaryModule === 'roundtable-parchment' && roundtableState?.sessionId && roundtableState.phase !== 'idle' ? (
+            <>
+              {parchmentExportNotice ? (
+                <span className="janus-auxiliary-export-notice" role="status">{
+                  parchmentExportNotice === 'saved' ? t('janus:roundtable.export.saved') : parchmentExportNotice === 'copied' ? t('janus:roundtable.export.copied') : parchmentExportNotice === 'canceled' ? t('janus:roundtable.export.canceled') : t('janus:roundtable.export.failed')
+                }</span>
+              ) : null}
+              {parchmentExportNotice === 'error' ? (
+                <button type="button" className="janus-auxiliary-export" disabled={parchmentExportBusy} onClick={() => void handleParchmentCopy()}>
+                  {t('janus:roundtable.export.copy')}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="janus-auxiliary-export"
+                aria-label={t('janus:roundtable.export.actionAria')}
+                title={roundtableState.phase === 'running' ? t('janus:roundtable.export.lockedTitle') : t('janus:roundtable.export.actionTitle')}
+                disabled={parchmentExportBusy || roundtableState.phase === 'running'}
+                onClick={() => void handleParchmentExport()}
+              >
+                <Download size={15} strokeWidth={1.7} aria-hidden="true" />
+              </button>
+            </>
+          ) : undefined}
+        >
+          {auxiliaryModule === 'roundtable-parchment' ? <JanusRoundtableParchment detailed document={roundtableState ? projectParchment(roundtableState) : undefined} /> : <div key={activeAgentCard?.id ?? 'agent-result-empty'} className="janus-agent-result-detail" data-detailed="true">
+            <div className="janus-agent-result-detail__eyebrow">{t('janus:roundtable.cardDetail.eyebrow')} // {activeAgentCard?.status ? t(ROUNDTABLE_CARD_STATUS_KEYS[activeAgentCard.status]) : t('janus:roundtable.cardDetail.waiting')}</div>
+            <h2>{activeAgentCard?.title ?? t('janus:roundtable.cardDetail.titleFallback')}</h2>
+            <p className="janus-agent-result-detail__summary">{activeAgentCard?.summary ?? t('janus:roundtable.cardDetail.summaryFallback')}</p>
             {activeAgentCard?.sections?.map((section) => <section key={section.id}><h3>{section.title}</h3><p>{section.markdown}</p></section>)}
-            {!!activeAgentCard?.evidenceRefs?.length && <div className="janus-agent-result-detail__evidence"><strong>Evidence</strong><span>{activeAgentCard.evidenceRefs.map((ref) => ref.kind === 'workspace-file' ? `${ref.workspaceId}/${ref.relativePath}${typeof ref.lineStart === 'number' ? `#L${ref.lineStart}${typeof ref.lineEnd === 'number' && ref.lineEnd !== ref.lineStart ? `-${ref.lineEnd}` : ''}` : ''}${ref.sha256 ? ` · ${ref.sha256.slice(0, 8)}` : ''}` : ref.kind === 'agent-card' ? ref.cardId : ref.eventId).join(' · ')}</span></div>}
+            {!!activeAgentCard?.evidenceRefs?.length && <div className="janus-agent-result-detail__evidence"><strong>{t('janus:roundtable.cardDetail.evidence')}</strong><span>{activeAgentCard.evidenceRefs.map((ref) => ref.kind === 'workspace-file' ? `${ref.workspaceId}/${ref.relativePath}${typeof ref.lineStart === 'number' ? `#L${ref.lineStart}${typeof ref.lineEnd === 'number' && ref.lineEnd !== ref.lineStart ? `-${ref.lineEnd}` : ''}` : ''}${ref.sha256 ? ` · ${ref.sha256.slice(0, 8)}` : ''}` : ref.kind === 'agent-card' ? ref.cardId : ref.eventId).join(' · ')}</span></div>}
             {(() => {
               const tools = roundtableToolCalls.filter((item) => item.agentId === activeAgentCard?.agentId)
               if (!tools.length) return null
-              return <div className="janus-agent-result-detail__evidence"><strong>Workspace reads</strong><span>{tools.map((item) => `${item.toolName}:${item.status}${item.errorCode ? `(${item.errorCode})` : ''}`).join(' · ')}</span></div>
+              return <div className="janus-agent-result-detail__evidence"><strong>{t('janus:roundtable.cardDetail.workspaceReads')}</strong><span>{tools.map((item) => `${item.toolName}:${item.status}${item.errorCode ? `(${item.errorCode})` : ''}`).join(' · ')}</span></div>
             })()}
-            {activeAgentCard && <small>Updated {new Date(activeAgentCard.updatedAt || activeAgentCard.createdAt).toLocaleString()}</small>}
+            {activeAgentCard && <div className="janus-agent-result-detail__evidence"><strong>{t('janus:roundtable.cardDetail.sourceIndex')}</strong><span>{activeAgentCard.sourceEventIds.join(', ') || t('janus:roundtable.cardDetail.noSources')}</span></div>}
+            {activeAgentCard && <small>{t('janus:roundtable.cardDetail.updated', { time: new Date(activeAgentCard.updatedAt || activeAgentCard.createdAt).toLocaleString() })}</small>}
           </div>}
         </JanusAuxiliaryIsland>
       ) : null}

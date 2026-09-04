@@ -44,4 +44,28 @@ describe('roundtable agent work projection', () => {
     expect(reconcilePendingUserMessages(confirmed, pending).map((item) => item.id)).toEqual(['p2', 'p3'])
     expect(reconcilePendingUserMessages([], pending)).toHaveLength(3)
   })
+
+  it('drops stale working agents when the round finishes without their results', () => {
+    const card = { id: 'c1', sessionId: 's', roundId: 'r', agentId: 'refiner-1', role: 'refiner', title: 'Result', status: 'completed', summary: 'Done', createdAt: '2026-01-01', updatedAt: '2026-01-01', sourceEventIds: ['3'] }
+    let state = reduceAgentWorkEvent(EMPTY_AGENT_WORK_PROJECTION, event({ type: 'agent:working', sessionId: 's', roundId: 'r', agentId: 'refiner-1', role: 'refiner' }, '1'))
+    state = reduceAgentWorkEvent(state, event({ type: 'agent:working', sessionId: 's', roundId: 'r', agentId: 'challenger-1', role: 'challenger' }, '2'))
+    state = reduceAgentWorkEvent(state, event({ type: 'agent:result', sessionId: 's', roundId: 'r', card }, '3'))
+    // challenger never delivered: awaiting-user must not leave it analyzing.
+    state = reduceAgentWorkEvent(state, event({ type: 'round:awaiting-user', sessionId: 's', roundId: 'r', roundNumber: 1 }, '4'))
+    expect(state.workingAgents).toEqual([])
+    expect(state.queuedAgents).toEqual([])
+    expect(state.cards.map((item) => item.id)).toEqual(['c1'])
+  })
+
+  it('resets working agents when a new round starts and when the session ends', () => {
+    let state = reduceAgentWorkEvent(EMPTY_AGENT_WORK_PROJECTION, event({ type: 'agent:queued', sessionId: 's', roundId: 'r1', agentId: 'refiner-1', role: 'refiner' }, '1'))
+    state = reduceAgentWorkEvent(state, event({ type: 'agent:working', sessionId: 's', roundId: 'r1', agentId: 'refiner-1', role: 'refiner' }, '2'))
+    state = reduceAgentWorkEvent(state, event({ type: 'round:started', sessionId: 's', roundId: 'r2', roundNumber: 2, trigger: 'user-advance' }, '3'))
+    expect(state.workingAgents).toEqual([])
+    expect(state.queuedAgents).toEqual([])
+    state = reduceAgentWorkEvent(state, event({ type: 'agent:working', sessionId: 's', roundId: 'r2', agentId: 'challenger-1', role: 'challenger' }, '4'))
+    state = reduceAgentWorkEvent(state, event({ type: 'session:ended', sessionId: 's' }, '5'))
+    expect(state.workingAgents).toEqual([])
+    expect(state.queuedAgents).toEqual([])
+  })
 })
