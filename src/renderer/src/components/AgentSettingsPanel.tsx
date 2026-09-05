@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import { Select } from './ui/Select'
-import { getAgentSettings, updateAgentSettings, type AgentSettings } from '@/services/agent-settings'
+import { getAgentSettings, normalizeAgentMaxStepsInput, normalizeSafeCompileAutoAllowInput, updateAgentSettings, type AgentSettings } from '@/services/agent-settings'
 import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../../shared/ipc/agent-runtime'
 import styles from './NotificationSettingsPanel.module.css'
 
 type StatusState = 'idle' | 'loading' | 'saving' | 'saved' | 'error'
-const DEFAULT_SETTINGS: AgentSettings = { approvalMode: 'per-action' }
+const DEFAULT_SETTINGS: AgentSettings = { approvalMode: 'per-action', agentMaxSteps: 40, safeCompileAutoAllow: true }
 
 export function AgentSettingsPanel() {
   const { t } = useI18n('settings')
@@ -19,7 +19,11 @@ export function AgentSettingsPanel() {
     let cancelled = false
     getAgentSettings().then((next) => {
       if (cancelled) return
-      const normalized = { approvalMode: normalizeAgentApprovalMode(next.approvalMode) }
+      const normalized: AgentSettings = {
+        approvalMode: normalizeAgentApprovalMode(next.approvalMode),
+        agentMaxSteps: normalizeAgentMaxStepsInput(next.agentMaxSteps),
+        safeCompileAutoAllow: normalizeSafeCompileAutoAllowInput(next.safeCompileAutoAllow),
+      }
       setSettings(normalized); setDraft(normalized); setStatus('idle')
     }).catch((err) => {
       if (cancelled) return
@@ -29,15 +33,34 @@ export function AgentSettingsPanel() {
   }, [t])
 
   const updateDraft = (approvalMode: AgentApprovalMode) => {
-    setDraft({ approvalMode })
+    setDraft((current) => ({ ...current, approvalMode }))
+    if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
+  }
+
+  const handleMaxStepsChange = (value: string) => {
+    setDraft((current) => ({ ...current, agentMaxSteps: Number(value) }))
+    if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
+  }
+
+  const handleSafeCompileChange = (checked: boolean) => {
+    setDraft((current) => ({ ...current, safeCompileAutoAllow: checked }))
     if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
   }
 
   const handleSave = async () => {
     setStatus('saving'); setError('')
     try {
-      const next = await updateAgentSettings(draft)
-      setSettings(next); setDraft(next); setStatus('saved')
+      const next = await updateAgentSettings({
+        approvalMode: draft.approvalMode,
+        agentMaxSteps: normalizeAgentMaxStepsInput(draft.agentMaxSteps),
+        safeCompileAutoAllow: draft.safeCompileAutoAllow,
+      })
+      const normalized: AgentSettings = {
+        approvalMode: normalizeAgentApprovalMode(next.approvalMode),
+        agentMaxSteps: normalizeAgentMaxStepsInput(next.agentMaxSteps),
+        safeCompileAutoAllow: normalizeSafeCompileAutoAllowInput(next.safeCompileAutoAllow),
+      }
+      setSettings(normalized); setDraft(normalized); setStatus('saved')
     } catch (err) {
       setError(err instanceof Error ? err.message : t('settings:agent.error.save')); setStatus('error')
     }
@@ -66,6 +89,35 @@ export function AgentSettingsPanel() {
         />
       </div>
       <p className={styles.hint}>{t('settings:agent.safety')}</p>
+      <SettingSwitch
+        label={t('settings:agent.safeCompile.label')}
+        hint={t('settings:agent.safeCompile.hint')}
+        checked={draft.safeCompileAutoAllow}
+        disabled={isBusy}
+        onChange={handleSafeCompileChange}
+      />
+    </section>
+    <section className={styles.section}>
+      <h3 className={styles.sectionTitle}>{t('settings:agent.section.limits')}</h3>
+      <div className={styles.row}>
+        <div className={styles.label}>
+          <span className={styles.labelText}>{t('settings:agent.maxSteps.label')}</span>
+          <span className={styles.hint}>{t('settings:agent.maxSteps.hint')}</span>
+        </div>
+        <div className={styles.numberControl}>
+          <input
+            className={styles.input}
+            type="number"
+            min={1}
+            max={100}
+            step={1}
+            value={draft.agentMaxSteps}
+            disabled={isBusy}
+            onChange={(event) => handleMaxStepsChange(event.target.value)}
+          />
+          <span className={styles.unit}>{t('settings:agent.maxSteps.unit')}</span>
+        </div>
+      </div>
     </section>
     <div className={styles.footer}>
       <div className={statusClass}>{status === 'loading' && t('settings:footer.loading')}{status === 'saving' && t('settings:footer.saving')}{status === 'saved' && t('settings:footer.saved')}{status === 'error' && error}</div>
@@ -75,4 +127,36 @@ export function AgentSettingsPanel() {
       </div>
     </div>
   </div>
+}
+
+function SettingSwitch({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string
+  hint: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <div className={styles.row}>
+      <div className={styles.label}>
+        <span className={styles.labelText}>{label}</span>
+        <span className={styles.hint}>{hint}</span>
+      </div>
+      <label className={styles.switch}>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span className={styles.switchTrack} />
+      </label>
+    </div>
+  )
 }

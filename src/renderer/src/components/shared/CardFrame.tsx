@@ -103,6 +103,101 @@ export function cardIndexStyle(index: number): { '--card-index': number } {
   return { '--card-index': index } as { '--card-index': number }
 }
 
+/**
+ * Side-panel exit duration in ms. Enter is transition-driven (rAF-flipped
+ * `visible`); exit keeps the panel mounted for this long so the slide/fade
+ * and grid-track collapse can play before unmount. CSS timings must match:
+ * exit slide ≤ this value, `visibility` delay ≈ this value.
+ */
+export const SIDE_PANEL_EXIT_MS = 220
+
+export interface AnimatedOpenState {
+  /** Panel stays mounted while true (covers the exit transition). */
+  rendered: boolean
+  /** Drives `data-visible`; false plays the slide/fade-out. */
+  visible: boolean
+}
+
+export type AnimatedOpenAction =
+  | { type: 'open' }
+  | { type: 'opened' }
+  | { type: 'close' }
+  | { type: 'exit-finished' }
+
+/**
+ * Pure state machine behind `useAnimatedOpen` (unit-tested): open mounts
+ * hidden and waits for `opened` (rAF) to transition in; close only hides and
+ * waits for `exit-finished` (timer) to unmount; reopening mid-exit snaps back
+ * to visible without unmounting.
+ */
+export function animatedOpenReducer(
+  state: AnimatedOpenState,
+  action: AnimatedOpenAction,
+): AnimatedOpenState {
+  switch (action.type) {
+    case 'open':
+      return state.rendered ? { rendered: true, visible: true } : { rendered: true, visible: false }
+    case 'opened':
+      return state.rendered ? { rendered: true, visible: true } : state
+    case 'close':
+      return state.rendered ? { rendered: true, visible: false } : state
+    case 'exit-finished':
+      return state.visible ? state : { rendered: false, visible: false }
+  }
+}
+
+/**
+ * Keeps a toggling side panel mounted across its exit transition.
+ * Returns `rendered` (conditional-render gate) and `visible` (`data-visible`
+ * gate for the CSS slide/fade). Reduced-motion collapses the exit to 0ms;
+ * CSS must separately disable the transitions.
+ *
+ * The open path mounts during render (render-phase update, same commit as
+ * the grid-track change) so the opening track never paints empty —
+ * otherwise the dark track expands one or two frames before the card mounts
+ * (black-first flash). Visibility still flips on rAF so the enter transition
+ * plays. The close path stays effect-driven.
+ */
+export function useAnimatedOpen(open: boolean, durationMs = SIDE_PANEL_EXIT_MS): AnimatedOpenState {
+  const reducedMotion = useReducedMotion()
+  const duration = reducedMotion ? 0 : durationMs
+  const [state, dispatch] = useReducer(
+    animatedOpenReducer,
+    open,
+    (initialOpen) => (initialOpen ? { rendered: true, visible: false } : { rendered: false, visible: false }),
+  )
+
+  if (open && !state.rendered) {
+    dispatch({ type: 'open' })
+  }
+
+  useEffect(() => {
+    if (!open) dispatch({ type: 'close' })
+  }, [open ])
+
+  useEffect(() => {
+    if (!state.rendered || state.visible || !open) return
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      dispatch({ type: 'opened' })
+      return
+    }
+    const frame = window.requestAnimationFrame(() => dispatch({ type: 'opened' }))
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, state.rendered, state.visible])
+
+  useEffect(() => {
+    if (!state.rendered || state.visible || open) return
+    if (typeof window === 'undefined' || duration <= 0) {
+      dispatch({ type: 'exit-finished' })
+      return
+    }
+    const timer = window.setTimeout(() => dispatch({ type: 'exit-finished' }), duration)
+    return () => window.clearTimeout(timer)
+  }, [open, state.rendered, state.visible, duration])
+
+  return state
+}
+
 /** Prefers-reduced-motion probe (SSR-safe; Electron renderer always has matchMedia). */
 export function useReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false

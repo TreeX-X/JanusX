@@ -211,19 +211,44 @@
   },
   "knowledge": {
     "section": {
-      "capture": "Knowledge capture"
+      "capture": "Knowledge capture",
+      "externalMcp": "External terminal MCP access"
     },
     "toggle": {
       "enable": {
         "label": "Enable knowledge recording",
         "hint": "When enabled, JanusX writes hook-driven Agent conversations and task events into the current workspace knowledge base."
+      },
+      "autoAccept": {
+        "label": "Auto-accept high-confidence deterministic facts",
+        "hint": "Off by default. When on, tool/checkpoint facts with confidence ≥ 0.9 skip the Inbox and apply directly (audited as auto-policy)."
       }
     },
     "row": {
       "boundary": {
         "label": "Capture boundary",
         "hint": "AI terminal records rely only on hook lifecycle events, never raw terminal input. Disabling notifications does not disable background hook processing."
+      },
+      "mode": {
+        "label": "Processing mode",
+        "hint": "Deterministic settling always runs. llm-preferred additionally prioritizes LLM candidates in merge and Inbox ordering.",
+        "auto": "Auto (deterministic first, LLM boost)",
+        "deterministicOnly": "Deterministic only",
+        "llmPreferred": "LLM preferred"
       }
+    },
+    "mcp": {
+      "entry": {
+        "label": "Server entry"
+      },
+      "notBuilt": "Not built yet: run npm run build to generate the MCP entry.",
+      "unavailable": "Unavailable in this environment (browser preview).",
+      "copy": "Copy launch command",
+      "copied": "Copied to clipboard.",
+      "register": "Connect",
+      "registered": "Connected",
+      "saved": "Written to {{path}}. Restart the terminal to take effect.",
+      "failed": "Failed: {{error}}"
     },
     "error": {
       "load": "Failed to load knowledge settings",
@@ -231,11 +256,20 @@
     }
   },
   "agent": {
-    "section": { "permissions": "Permission defaults" },
+    "section": { "permissions": "Permission defaults", "limits": "Loop steps" },
     "default": {
       "label": "Default approval mode",
       "hint": "New Agent sessions inherit this mode. You can switch the active Janus Chat session directly.",
       "mode": { "perAction": "Approve every action", "autoRun": "Auto-run all actions" }
+    },
+    "maxSteps": {
+      "label": "Max loop steps",
+      "hint": "Allowed range is 1 to 100, default 40. Prefer background commands for long builds.",
+      "unit": "steps"
+    },
+    "safeCompile": {
+      "label": "Auto-allow safe compile commands",
+      "hint": "When off, package-manager build/check commands also require per-action approval. Risky commands always require approval."
     },
     "safety": "Auto-run still enforces workspace boundaries, sensitive-path denial, input validation, checkpoints and audit records.",
     "error": { "load": "Failed to load Agent permission settings", "save": "Failed to save Agent permission settings" }

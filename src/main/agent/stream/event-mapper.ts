@@ -25,6 +25,8 @@ export function toAgentStreamEvent(requestId: string, event: JanusAgentEvent): A
       return { type: 'finish', requestId, reason: event.reason, usage: event.usage }
     case 'model_error':
       return { type: 'error', requestId, error: event.error }
+    case 'steering_consumed':
+      return { type: 'steering_consumed', requestId, keys: event.keys }
     case 'tool_execution_start':
       return { type: 'tool_execution_start', requestId, call: event.call }
     case 'tool_execution_update':

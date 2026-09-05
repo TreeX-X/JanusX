@@ -243,7 +243,16 @@
 }
 
 .janus-chat--workspace .janus-chat-input-wrapper::before {
-  content: none;
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  border-radius: 4px 0 0 4px;
+  background: #ff7830;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .janus-chat--workspace .janus-chat-input-wrapper:focus-within {
@@ -259,18 +268,7 @@
   align-items: center;
 }
 
-.janus-chat--workspace .janus-chat-composer-row::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 2px;
-  border-radius: 0;
-  background: #ff7830;
-  box-shadow: none;
-  pointer-events: none;
-}
+/* 光晕已上移至 input-wrapper::before（贴边），行内不再绘制，避免双条 */
 
 .janus-chat--workspace .janus-chat-input {
   min-height: 58px;

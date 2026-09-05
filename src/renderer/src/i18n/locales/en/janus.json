@@ -63,6 +63,14 @@
     },
     "newMessage": "New message",
     "inputPlaceholder": "Message Janus or execute command...",
+    "queue": {
+      "badge": "Steered, applying to this turn",
+      "inputPlaceholder": "Keep typing, steers immediately...",
+      "sendTitle": "Steer now (interrupts this turn)",
+      "sendAria": "Send steering message",
+      "cancelTitle": "Withdraw this steering message",
+      "cancelAria": "Withdraw steering message"
+    },
     "stop": {
       "title": "Stop generating",
       "aria": "Stop generating"

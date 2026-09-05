@@ -22,6 +22,9 @@ import type {
   KnowledgeProcessNowInput,
   KnowledgeProcessNowResult,
   KnowledgeProcessingStats,
+  ExternalMcpClientId,
+  ExternalMcpRegisterResult,
+  ExternalMcpStatus,
   ReviewCandidateInput,
   ReviewCandidateType,
   RevokeTruthInput,
@@ -194,6 +197,20 @@ export async function getKnowledgeProcessingStats(): Promise<KnowledgeProcessing
   } catch {
     return null
   }
+}
+
+/** External MCP registration: status is null when the bridge is unavailable. */
+export async function getExternalMcpStatus(): Promise<ExternalMcpStatus | null> {
+  try {
+    return await window.electron.knowledge.externalMcpStatus()
+  } catch {
+    return null
+  }
+}
+
+/** External MCP registration: writes the janusx-knowledge entry into a client config. */
+export async function registerExternalMcp(client: ExternalMcpClientId): Promise<ExternalMcpRegisterResult> {
+  return window.electron.knowledge.registerExternalMcp(client)
 }
 
 /** Phase 4 status bar (§6): manual `knowledge:processNow` trigger. */

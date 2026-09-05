@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { workbenchPhaseReducer } from '../../../src/renderer/src/components/shared/CardFrame'
+import { animatedOpenReducer, workbenchPhaseReducer } from '../../../src/renderer/src/components/shared/CardFrame'
 
 describe('workbenchPhaseReducer (shared card-frame lifecycle)', () => {
   it('opens from hidden and closes on request or parent close', () => {
@@ -31,5 +31,41 @@ describe('workbenchPhaseReducer (shared card-frame lifecycle)', () => {
 
   it('request-close on hidden stays hidden', () => {
     expect(workbenchPhaseReducer('hidden', { type: 'request-close' })).toBe('hidden')
+  })
+})
+
+describe('animatedOpenReducer (side-panel enter/exit without unmount pop)', () => {
+  it('mounts hidden on open and shows on rAF', () => {
+    const mounted = animatedOpenReducer({ rendered: false, visible: false }, { type: 'open' })
+    expect(mounted).toEqual({ rendered: true, visible: false })
+    expect(animatedOpenReducer(mounted, { type: 'opened' })).toEqual({ rendered: true, visible: true })
+  })
+
+  it('close only hides; unmount waits for exit-finished', () => {
+    const hiding = animatedOpenReducer({ rendered: true, visible: true }, { type: 'close' })
+    expect(hiding).toEqual({ rendered: true, visible: false })
+    expect(animatedOpenReducer(hiding, { type: 'exit-finished' })).toEqual({ rendered: false, visible: false })
+  })
+
+  it('reopening mid-exit snaps back to visible without unmounting', () => {
+    expect(animatedOpenReducer({ rendered: true, visible: false }, { type: 'open' })).toEqual({
+      rendered: true,
+      visible: true,
+    })
+  })
+
+  it('exit-finished while visible and actions while hidden are no-ops', () => {
+    expect(animatedOpenReducer({ rendered: true, visible: true }, { type: 'exit-finished' })).toEqual({
+      rendered: true,
+      visible: true,
+    })
+    expect(animatedOpenReducer({ rendered: false, visible: false }, { type: 'close' })).toEqual({
+      rendered: false,
+      visible: false,
+    })
+    expect(animatedOpenReducer({ rendered: false, visible: false }, { type: 'opened' })).toEqual({
+      rendered: false,
+      visible: false,
+    })
   })
 })

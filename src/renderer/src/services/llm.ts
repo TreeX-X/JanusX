@@ -277,3 +277,16 @@ export function chatStream(
     }
   }
 }
+
+/**
+ * R6-full：向进行中的流投递 steering（主侧排队 + 抢占），附幂等 entryId。
+ * 主侧 accept 即已入 durable 语义的队列（渲染历史同时乐观追加，随会话落盘）。
+ */
+export async function steerChat(input: { conversationId?: string; entryId: string; text: string }): Promise<{ accepted: boolean; error?: string }> {
+  return window.electron.llm.steerChat(input)
+}
+
+/** R6-full：撤销尚未被主侧消耗的 steering 条目（已消耗返回 cancelled:false）。 */
+export async function cancelSteerChat(input: { conversationId?: string; entryId: string }): Promise<{ cancelled: boolean }> {
+  return window.electron.llm.cancelSteerChat(input)
+}

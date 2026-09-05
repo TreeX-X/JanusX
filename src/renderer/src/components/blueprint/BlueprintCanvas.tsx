@@ -46,6 +46,7 @@ import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { useBlueprintDetailPortal } from './blueprintDetailPortal'
+import { useAnimatedOpen } from '@/components/shared/CardFrame'
 import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
 import { launchTerminalPreset } from '@/lib/terminal-launch'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
@@ -297,7 +298,14 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     () => Object.fromEntries(workspaces.map((w) => [w.id, w.name])),
     [workspaces]
   )
-  const detailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
+  const activeDetailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
+  // Detail exit keeps the last node rendered while the slide-out plays; the
+  // slot track / open signal follow the display value so the layout collapses
+  // right after the content is gone (sequential, no pop).
+  const detailAnim = useAnimatedOpen(Boolean(activeDetailNode))
+  const leavingNodeRef = useRef<typeof activeDetailNode>(null)
+  if (activeDetailNode) leavingNodeRef.current = activeDetailNode
+  const detailNode = activeDetailNode ?? (detailAnim.rendered ? leavingNodeRef.current : null)
   const detailInCanvas = Boolean(detailNode && !detailPortal)
   const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
   const initialCollapsedNodeIds = useMemo(
@@ -463,7 +471,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   }, [canvasLoadPlan, fitViewWhenReady, rfNodes.length])
 
   useEffect(() => {
-    const isDetailOpen = Boolean(detailNode)
+    const isDetailOpen = Boolean(activeDetailNode)
     if (detailOpenRef.current === null) {
       detailOpenRef.current = isDetailOpen
       return
@@ -472,11 +480,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     detailOpenRef.current = isDetailOpen
     const timer = window.setTimeout(() => fitViewWhenReady(180), 220)
     return () => window.clearTimeout(timer)
-  }, [detailNode, fitViewWhenReady])
+  }, [activeDetailNode, fitViewWhenReady])
 
   useEffect(() => {
     onDetailOpenChange?.(Boolean(detailNode))
   }, [detailNode, onDetailOpenChange])
+
+  useEffect(() => {
+    if (!detailAnim.rendered) leavingNodeRef.current = null
+  }, [detailAnim.rendered])
 
   useEffect(() => () => onDetailOpenChange?.(false), [onDetailOpenChange])
 
@@ -1110,7 +1122,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
 
       {detailNode ? (
         <BlueprintDetailMount target={detailPortal}>
-        <aside className="bp-node-detail" key={detailNode.id}>
+        <aside
+          className="bp-node-detail"
+          key={detailNode.id}
+          data-visible={detailAnim.visible ? 'true' : 'false'}
+          aria-hidden={detailAnim.visible ? undefined : 'true'}
+        >
           <div className="bp-node-detail__header">
             <div>
               <div className="bp-node-detail__eyebrow">{t('blueprint:detailPanel.eyebrow')}</div>

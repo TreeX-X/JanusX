@@ -54,6 +54,8 @@ export const KNOWLEDGE_CHANNELS = {
   diagnostics: 'knowledge:diagnostics',
   processNow: 'knowledge:process-now',
   processingStats: 'knowledge:processing-stats',
+  externalMcpStatus: 'knowledge:external-mcp:status',
+  registerExternalMcp: 'knowledge:external-mcp:register',
   getSettings: 'settings:knowledge:get',
   updateSettings: 'settings:knowledge:update',
 } as const
@@ -199,8 +201,7 @@ export interface KnowledgeProcessingLastRun {
 }
 
 /** Phase 1-1: queue metrics for the Workbench status bar. */
-export interface KnowledgeProcessingStats {
-  generatedAt: string
+export interface KnowledgeProcessingStats {  generatedAt: string
   pendingTotal: number
   workspaces: KnowledgeProcessingWorkspaceStats[]
   failures: number
@@ -219,6 +220,30 @@ export interface KnowledgeProcessingStats {
   indexUpdatedAt: string | null
   /** Phase 5 (§6): retention 维护最近一次成功时间；从未成功为 null。 */
   lastMaintenanceAt: string | null
+}
+
+export type ExternalMcpClientId = 'cursor' | 'vscode' | 'claude-code'
+
+export interface ExternalMcpClientStatus {
+  id: ExternalMcpClientId
+  label: string
+  configPath: string
+  registered: boolean
+}
+
+export interface ExternalMcpStatus {
+  entry: string
+  entryExists: boolean
+  isPackaged: boolean
+  clients: ExternalMcpClientStatus[]
+}
+
+export interface ExternalMcpRegisterResult {
+  ok: boolean
+  client: ExternalMcpClientId
+  configPath: string
+  backedUpPath?: string
+  error?: string
 }
 
 export interface KnowledgeAPI {
@@ -247,6 +272,8 @@ export interface KnowledgeAPI {
   diagnostics: (query?: KnowledgeDiagnosticsQuery) => Promise<KnowledgeDiagnostics>
   processNow: (input?: KnowledgeProcessNowInput) => Promise<KnowledgeProcessNowResult>
   processingStats: () => Promise<KnowledgeProcessingStats>
+  externalMcpStatus: () => Promise<ExternalMcpStatus>
+  registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }

@@ -53,5 +53,7 @@ export function toChatAgentEvent(event: AgentStreamEvent): ChatAgentEvent {
       return { type: 'model_finish', requestId: event.requestId, reason: event.reason }
     case 'error':
       return { type: 'model_error', requestId: event.requestId, code: event.error.code, retryable: event.error.retryable }
+    case 'steering_consumed':
+      return { type: 'steering_consumed', requestId: event.requestId, keys: event.keys }
   }
 }

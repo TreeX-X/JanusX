@@ -136,4 +136,102 @@ describe('Vercel stream adapter', () => {
     expect(execute).toHaveBeenCalledTimes(1)
     expect(result.content).toBe('{"value":1}')
   })
+
+  it('retries retryable stream start failures then succeeds', async () => {
+    let calls = 0
+    const streamTextFn = vi.fn(async () => {
+      calls += 1
+      if (calls < 3) throw { status: 429, message: 'rate limited' }
+      return { textStream: (async function* () { yield 'ok' })() }
+    })
+    const stream = createVercelStream({ model: {}, streamTextFn })
+    const result = await stream([{ role: 'user', content: 'hi' }], new AbortController().signal, () => undefined)
+    expect(result.message.content).toBe('ok')
+    expect(streamTextFn).toHaveBeenCalledTimes(3)
+  }, 15_000)
+
+  it('does not retry non-retryable stream start failures', async () => {
+    const streamTextFn = vi.fn(async () => { throw new Error('bad request') })
+    const stream = createVercelStream({ model: {}, streamTextFn })
+    await expect(stream([{ role: 'user', content: 'hi' }], new AbortController().signal, () => undefined))
+      .rejects.toThrow('bad request')
+    expect(streamTextFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('R5: retries a retryable error part before any visible progress then succeeds', async () => {
+    let calls = 0
+    const streamTextFn = vi.fn(async () => {
+      calls += 1
+      if (calls === 1) {
+        return {
+          textStream: (async function* () {})(),
+          fullStream: (async function* () { yield { type: 'error', error: Object.assign(new Error('overloaded'), { status: 429 }) } })(),
+        }
+      }
+      return {
+        textStream: (async function* () {})(),
+        fullStream: (async function* () {
+          yield { type: 'text-delta', textDelta: 'recovered' }
+          yield { type: 'finish', finishReason: 'stop' }
+        })(),
+      }
+    })
+    const stream = createVercelStream({ model: {}, streamTextFn })
+    const events: string[] = []
+    const result = await stream([{ role: 'user', content: 'hi' }], new AbortController().signal, (event) => events.push(event.type))
+    expect(result.message.content).toBe('recovered')
+    expect(streamTextFn).toHaveBeenCalledTimes(2)
+    // 中间可重试失败静默（无 model_error），终态只吐一遍成功进度。
+    expect(events).not.toContain('model_error')
+    expect(events.filter((type) => type === 'message_update')).toEqual(['message_update'])
+  })
+
+  it('R5: does not retry a retryable error part after visible progress', async () => {
+    const streamTextFn = vi.fn(async () => ({
+      textStream: (async function* () {})(),
+      fullStream: (async function* () {
+        yield { type: 'text-delta', textDelta: 'partial' }
+        yield { type: 'error', error: Object.assign(new Error('overloaded'), { status: 429 }) }
+      })(),
+    }))
+    const stream = createVercelStream({ model: {}, streamTextFn })
+    const events: string[] = []
+    await expect(stream([{ role: 'user', content: 'hi' }], new AbortController().signal, (event) => events.push(event.type)))
+      .rejects.toThrow('overloaded')
+    expect(streamTextFn).toHaveBeenCalledTimes(1)
+    // 有进度轮次走原终态通道：先吐过的 delta 保留，model_error 只发一次。
+    expect(events).toEqual(['message_start', 'message_update', 'model_error'])
+  })
+
+  it('R5: does not retry INVALID_TOOL_CALL', async () => {
+    const streamTextFn = vi.fn(async () => ({
+      textStream: (async function* () {})(),
+      fullStream: (async function* () {
+        yield { type: 'tool-call', toolCallId: 'call-1', toolName: 'missing-tool', args: {} }
+      })(),
+    }))
+    const stream = createVercelStream({
+      model: {},
+      tools: { read: { parameters: {}, execute: async () => ({ ok: true }) } },
+      streamTextFn,
+    })
+    const events: string[] = []
+    await expect(stream([{ role: 'user', content: 'hi' }], new AbortController().signal, (event) => events.push(event.type)))
+      .rejects.toThrow()
+    expect(streamTextFn).toHaveBeenCalledTimes(1)
+    expect(events).toContain('model_error')
+  })
+
+  it('R5: surfaces model_error once after exhausting consumption retries', async () => {
+    const streamTextFn = vi.fn(async () => ({
+      textStream: (async function* () {})(),
+      fullStream: (async function* () { yield { type: 'error', error: Object.assign(new Error('overloaded'), { status: 503 }) } })(),
+    }))
+    const stream = createVercelStream({ model: {}, streamTextFn })
+    const events: string[] = []
+    await expect(stream([{ role: 'user', content: 'hi' }], new AbortController().signal, (event) => events.push(event.type)))
+      .rejects.toThrow('overloaded')
+    expect(streamTextFn).toHaveBeenCalledTimes(3)
+    expect(events.filter((type) => type === 'model_error')).toHaveLength(1)
+  })
 })

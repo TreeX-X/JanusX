@@ -165,6 +165,8 @@ const knowledgeAPI: KnowledgeAPI = {
   diagnostics: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.diagnostics, query),
   processNow: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.processNow, input),
   processingStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.processingStats),
+  externalMcpStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.externalMcpStatus),
+  registerExternalMcp: (client) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.registerExternalMcp, client),
   getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }
@@ -261,6 +263,8 @@ const llmAPI: LlmAPI = {
   chat: (request) => ipcRenderer.invoke(LLM_CHANNELS.chat, request),
   startChatStream: (request) => ipcRenderer.send(LLM_CHANNELS.chatStream, request),
   abortChat: (requestId) => ipcRenderer.invoke(LLM_CHANNELS.abort, requestId),
+  steerChat: (input) => ipcRenderer.invoke(LLM_CHANNELS.steer, input),
+  cancelSteerChat: (input) => ipcRenderer.invoke(LLM_CHANNELS.steerCancel, input),
   onDelta: (callback) => subscribeIpcEvent(LLM_CHANNELS.delta, callback),
   onDone: (callback) => subscribeIpcEvent(LLM_CHANNELS.done, callback),
   onError: (callback) => subscribeIpcEvent(LLM_CHANNELS.error, callback),

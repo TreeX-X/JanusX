@@ -287,6 +287,9 @@ const SEARCH_MAX_LINE_CHARS = 300
 const SEARCH_MAX_DEPTH = 8
 const SEARCH_SKIPPED_DIRECTORIES = new Set([
   'node_modules', 'dist', 'out', 'build', 'coverage', 'target', 'vendor', '__pycache__', '.venv', 'venv',
+  // P4: command.run logs live under .janusX/logs (read them via the logPath
+  // from the tool result, not via search) — keep build output out of code search.
+  '.janusX',
 ])
 
 type WorkspaceSearchMatch = {

@@ -11,10 +11,12 @@ import { knowledgeTruthService } from '../knowledge/truth-service'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { knowledgeOperationsService } from '../knowledge/operations-service'
 import { knowledgeDiagnosticsService } from '../knowledge/diagnostics-service'
+import { getExternalMcpStatus, registerExternalMcpClient } from '../knowledge/external-mcp'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import {
   KNOWLEDGE_CHANNELS,
   type AuditQuery,
+  type ExternalMcpClientId,
   type KnowledgeDiagnosticsQuery,
   type ReviewCandidateInput,
   type RevokeTruthInput,
@@ -165,5 +167,13 @@ export function registerKnowledgeHandlers(): void {
     // shaping dropped llmConfigured/llmSucceeded/llmFailed/llmSkipped and
     // lastRun, hiding LLM degradation from the status bar.
     return knowledgeProcessingQueue.processingStats()
+  })
+
+  ipcMain.handle(KNOWLEDGE_CHANNELS.externalMcpStatus, async () => {
+    return getExternalMcpStatus()
+  })
+
+  ipcMain.handle(KNOWLEDGE_CHANNELS.registerExternalMcp, async (_event, client: ExternalMcpClientId) => {
+    return registerExternalMcpClient(client)
   })
 }

@@ -325,3 +325,46 @@ KnowledgeWorkbench / KnowledgeAssist / Janus context consumers
 ```
 
 Workbench reads preserve independent fallbacks so one unavailable source does not erase successful parallel results. Direct search, context, review, truth, conflict, feedback, and settings calls propagate failures. Auto-prune is an explicit typed maintenance API; archive and compact remain main-internal capabilities. `agent-turn-recorder.ts` captures agent interaction context. `retention-classifier.ts` scores observation relevance.
+
+### Wiki sourceFactIds chain (extract → review → read)
+
+```text
+extract wikiPatches (+ optional model-proposed sourceFactIds, filtered to known truth)
+-> review applyWikiPatch unions candidate ids into pages-index sourceFactIds
+-> truth list exposes pages with markdown + sourceFactIds
+-> recall wikiDocument carries factIds into context provenance
+-> MCP wiki_get returns the page plus resolved linkedFacts
+```
+
+### Knowledge MCP two-stage read
+
+```text
+wiki_list (slug index: slug/title/tags/version/factCount, optional workspaceId)
+-> wiki_get (full markdown with maxChars budget + truncated flag, sourceFactIds, linkedFacts)
+-> fact_get (settled fact with full provenance by id + referencingPages)
+```
+
+`knowledge_search` / `knowledge_context` remain for mixed BM25 recall; the wiki tools are the fast path when the agent already knows the topic area. All five tools are read-only and idempotent.
+
+### Recall ranking and wiki excerpts
+
+BM25 (`search/bm25.ts`) ranks over title + content + tags + fileRefs + observation ids; `lexicalExplanation` adds `exactTitle` (3), `titlePhrase` (1.5), `titleTerm` (query-term overlap in title, up to 1.2), `slugMatch` (wiki slug exact 2 / contains 1 — slugs are ids, never indexed text), `bodyPhrase` (0.5), plus confidence/freshness boosts. Wiki pages inherit file/observation provenance and workspace path from their linked settled facts, so path- and file-scoped queries match them. `context-service` serves long wiki pages as query-centered excerpts (`excerptAroundQuery`, 1500 chars); full text stays one `wiki_get` away, so a single page can no longer eat the shared `maxChars` budget.
+
+### Knowledge Graph Canvas
+
+```text
+buildKnowledgeGraphView(snapshot) — truth-only adapter (facts, wiki pages,
+stored edges, shared-concept/file entities; review proposals stay in the Inbox)
+-> layoutKnowledgeGraph — deterministic force-spread per connected component
+-> mergeStoredLayout — renderer-side drag positions overlay (versioned
+   localStorage key; stale pre-spread coordinates are ignored)
+-> KnowledgeGraphCanvas (React Flow) — dot nodes, hover/click/double-click,
+   kind + relation filters, one-hop evidence expansion
+-> Inspector — settled-node records (fact/wiki revocable); legacy proposal ids
+   still resolve for backward compatibility
+```
+
+- Scope: the graph maps settled truth only. Proposed candidates never become nodes, so `conflicts_with` no longer appears; edges are stored relations plus synthetic `mentions` (shared concept/file), `supersedes`, and on-demand `derived_from` evidence links. With nodes but no edges the canvas shows a floating no-edges pill explaining when links appear.
+- Rendering: Obsidian-style dots (dark core + kind-colored ring, diameter 10–22px by connection degree) with a short floating caption; full label on hover. Node/edge styling, dark controls, and minimap colors follow the workbench panel language; the canvas background reuses the stage dot texture (no accent gradient).
+- Interaction: hovering a dot highlights its one-hop neighborhood and dims the rest (connected edges thicken); single click focuses the neighborhood (distant nodes hide) and opens the inspector, clicking the focused node again releases focus; double-click zooms to the neighborhood; dragging persists per-workspace layout, and the toolbar reset restores the computed spread. Kind/relation filters, locate search, and the focus chip narrow the visible set without touching stored data.
+- Inbox cards in the same workbench are fixed-height (216px) with title 3-line / summary 2-line ellipsis; full content lives in the inspector. The inspector close control matches Blueprint `.bp-panel-close` (28px ghost button + Lucide X).

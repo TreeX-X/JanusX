@@ -309,6 +309,7 @@
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper {
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -323,11 +324,27 @@
   -webkit-backdrop-filter: none;
 }
 
+/* 输入框左侧贴边条：压住左边框，实心无虚化（与 chat 同语言） */
+.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  border-radius: 4px 0 0 4px;
+  background: #ff7830;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+/* 圆桌对话框：与 chat 一致的橙色焦点语言 —— 四周橙色边框 + 左侧橙色光晕 */
 .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input-wrapper:focus-within {
-  border-color: rgba(255,255,255,.16);
+  border-color: rgba(255,120,48,0.64);
   box-shadow: none;
 }
 
+/* 光晕已上移至 input-wrapper::before（贴边），行内不再绘制，避免双条 */
 /* 圆桌发送区：跟随软件整体的扁平不透明语言（纯色、无渐变、无辉光、无毛玻璃），
    4px 直角；橙色只出现在可发送态的图标与描边上。
    圆桌未被 05 的 chat/monitor 方形按钮覆盖，会 fallback 到 04 的 56x44 大色块，
@@ -345,12 +362,16 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-input:focus {
   border: 0;
   background: transparent;
   box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-send,

@@ -9,6 +9,7 @@
  */
 
 import { llmService } from './LlmService'
+import { configService, DEFAULT_AGENT_MAX_STEPS } from '../config/service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeContextService } from '../knowledge/context-service'
@@ -19,7 +20,7 @@ import type { ToolResult } from '../../shared/ipc/agent-runtime'
 import { workspaceAgentRuntime } from '../agent/runtime/runtime'
 import { createToolManifests } from '../agent/runtime/tool-manifest'
 import { createToolPreview, createWorkspaceChatTools } from './workspace-chat-tools'
-import { createJanusRuntimeToolsForResources, createVercelModelTools, createVercelStream, runJanusAgentLoop, type JanusAgentMessage } from '../agent/loop'
+import { createJanusRuntimeToolsForResources, createVercelModelTools, createVercelStream, runJanusAgentLoop, AgentSteeringPort, type JanusAgentMessage } from '../agent/loop'
 import { toAgentStreamEvent } from '../agent/stream'
 import { toChatAgentEvent } from './chat-agent-events'
 import { ChatSessionRuntime } from './chat-session-runtime'
@@ -79,7 +80,8 @@ const KNOWLEDGE_CONTEXT_CLOSE = '</janus-knowledge-context>'
 
 const TOOL_TRACE_MAX_ENTRIES = 24
 const TOOL_TRACE_SUMMARY_MAX_CHARS = 300
-const CHAT_MAX_STEPS = 20
+/** P6：默认 40（P6 前硬编码 20），经 agentMaxSteps 配置可调，仅 janus-chat 通道。 */
+const CHAT_MAX_STEPS = DEFAULT_AGENT_MAX_STEPS
 const WORKSPACE_MUTATION_TOOLS = new Set([
   'workspace.edit',
   'workspace.create',
@@ -150,6 +152,21 @@ export function toolTraceEntryFromResult(result: ToolResult, turnId?: string): C
     if (Array.isArray(output.matches)) { parts.push(`${output.matches.length} matches`); resultDigest = `${output.matches.length} matches` }
     if (Array.isArray(output.entries)) { parts.push(`${output.entries.length} entries`); resultDigest = `${output.entries.length} entries` }
     if (typeof output.checkpointId === 'string') parts.push(`checkpoint=${output.checkpointId}`)
+    // P6：长命令只记预览引用（全文走日志文件），300 字预算内可回看定位。
+    if (result.toolName === 'command.run') {
+      if (typeof output.exitCode === 'number') parts.push(`exit=${output.exitCode}`)
+      // R3：同步/后台超时一眼可见（后台超时的 exit 多为 null，看 timedOut）。
+      if (output.timedOut === true) parts.push('timedOut')
+      if (typeof output.totalBytes === 'number') parts.push(`${output.totalBytes}b`)
+      if (output.background === true && typeof output.projectId === 'string') parts.push(`job=${output.projectId}`)
+      if (typeof output.logPath === 'string') { parts.push(`log=${output.logPath}`); resultDigest = String(output.logPath) }
+    }
+    if (result.toolName === 'project.process-output') {
+      if (typeof output.totalLines === 'number') parts.push(`${output.totalLines} lines`)
+      if (output.exited === true) parts.push(`exited=${String(output.exitCode)}`)
+      if (output.timedOut === true) parts.push('timedOut')
+      if (typeof output.logPath === 'string') { parts.push(`log=${output.logPath}`); resultDigest = String(output.logPath) }
+    }
   }
   if (result.status !== 'completed') {
     parts.push(result.reasonCode === 'APPROVAL_DENIED' ? 'user denied' : result.error || result.status)
@@ -346,6 +363,40 @@ export function abortChatStream(requestId: string): void {
   abortControllers.get(requestId)?.abort()
 }
 
+/**
+ * R6-full：进行中流的 steering 目标注册（key = conversationId ?? requestId）。
+ * 队列只活在请求生命周期内：renderer 历史已乐观追加用户原文并随会话落盘，
+ * 主侧无需另行落盘；请求结束（成功/失败/取消）即丢弃未消费条目——下次发送
+ * 会从渲染端历史自然带上这些文本，不丢不重。
+ */
+const activeSteerTargets = new Map<string, { requestId: string; port: AgentSteeringPort }>()
+const MAX_STEER_ENTRIES_PER_REQUEST = 10
+
+export function steerChatStream(input: { conversationId?: string; entryId: string; text: string }): { accepted: boolean; error?: string } {
+  const content = typeof input.text === 'string' ? input.text.trim() : ''
+  if (!content) return { accepted: false, error: 'Empty steering text' }
+  if (typeof input.entryId !== 'string' || !input.entryId) return { accepted: false, error: 'Invalid steering entry id' }
+  const key = input.conversationId || ''
+  const target = key ? activeSteerTargets.get(key) : undefined
+  if (!target || !abortControllers.has(target.requestId)) {
+    if (key) activeSteerTargets.delete(key)
+    return { accepted: false, error: 'No active stream for this conversation' }
+  }
+  if (target.port.size >= MAX_STEER_ENTRIES_PER_REQUEST) {
+    return { accepted: false, error: 'Steering queue is full for this stream' }
+  }
+  // 入队即抢占：port 内部打断在途流式尝试；工具执行中则到间隙应用。
+  target.port.push(input.entryId, { role: 'user', content })
+  return { accepted: true }
+}
+
+export function cancelChatSteer(input: { conversationId?: string; entryId: string }): { cancelled: boolean } {
+  const key = input.conversationId || ''
+  const target = key ? activeSteerTargets.get(key) : undefined
+  if (!target) return { cancelled: false }
+  return { cancelled: target.port.remove(input.entryId) }
+}
+
 /** 单向 send/on 模式的 chatStream 事件端点（渲染端按 requestId 过滤） */
 interface ChatStreamReplyTarget {
   reply: (channel: string, payload: unknown) => void
@@ -371,6 +422,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
   let reasoningChars = 0
   const executedToolTraces: ChatToolTraceEntry[] = []
   abortControllers.set(requestId, controller)
+  // R6-full：本请求的 steering 端口（重复 conversationId 时新请求直接覆盖旧目标）。
+  const steerKey = conversationId || requestId
+  const steeringPort = new AgentSteeringPort()
+  activeSteerTargets.set(steerKey, { requestId, port: steeringPort })
 
   // 窗口销毁后 event.reply 会抛异常并造成 unhandled rejection，统一守卫
   const sendEvent = (
@@ -477,6 +532,8 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       throw new Error(`Model "${actualModelId}" does not support Function Calling required by attached workspaces`)
     }
     const chatSession = getChatSession(conversationId ?? requestId)
+    // P6：步数可配（读失败回默认 40，不阻塞对话）。
+    const maxSteps = await configService.getAgentMaxSteps().catch(() => CHAT_MAX_STEPS)
 
     const userRequestedMutation = hasExplicitWorkspaceMutationIntent(latestUserQuery(formattedMessages))
     let recoveryIssued = false
@@ -496,7 +553,8 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       tools: loopTools,
       stream: createVercelStream({ model, tools: modelTools }),
       transformContext: async (context) => chatSession.buildContext(context, { model: modelInfo }),
-      maxTurns: CHAT_MAX_STEPS,
+      maxTurns: maxSteps,
+      steeringPort,
       afterToolCall: async ({ result }) => {
         const runtimeResult = result.details as ToolResult | undefined
         if (runtimeResult?.toolName) {
@@ -632,6 +690,11 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     if (deltaTimer) {
       clearTimeout(deltaTimer)
       deltaTimer = null
+    }
+    // R6-full：请求结束即丢弃 steering 目标（未消费条目以渲染端历史为准，不补发）。
+    const steerTarget = activeSteerTargets.get(steerKey)
+    if (steerTarget?.requestId === requestId) {
+      activeSteerTargets.delete(steerKey)
     }
     // 重复 requestId 时新流已换新 controller，只清理仍属于本次的条目
     if (abortControllers.get(requestId) === controller) {

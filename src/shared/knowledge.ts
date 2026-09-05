@@ -384,6 +384,8 @@ export interface CandidateWikiPatch {
   /** Phase 1: required derivation + evidence chain (no default-when-missing reads). */
   derivation: Derivation
   evidence: CandidateEvidence
+  /** Settled truth fact ids this patch summarizes; validated against known truth at extract. */
+  sourceFactIds: string[]
   /** Phase 1: conflicting truth/candidate ids (candidate-stage conflict check). */
   conflicts?: string[]
   /** Phase 2: source candidate ids when derivation === 'merged'. */
@@ -479,6 +481,18 @@ export interface KnowledgeSearchQuery {
   until?: string
 }
 
+/** BM25 score parts (§8 stage one): why a document matched, in rank order. */
+export interface KnowledgeScoreExplanation {
+  bm25: number
+  exactTitle: number
+  titlePhrase: number
+  titleTerm: number
+  slugMatch: number
+  bodyPhrase: number
+  confidenceBoost: number
+  freshnessBoost: number
+}
+
 export interface KnowledgeSearchHit {
   id: string
   type: KnowledgeSearchDocumentType
@@ -486,14 +500,7 @@ export interface KnowledgeSearchHit {
   content: string
   score: number
   bm25Score: number
-  scoreExplanation?: {
-    bm25: number
-    exactTitle: number
-    titlePhrase: number
-    bodyPhrase: number
-    confidenceBoost: number
-    freshnessBoost: number
-  }
+  scoreExplanation?: KnowledgeScoreExplanation
   workspaceId: string
   workspaceName: string
   workspacePath: string
@@ -545,4 +552,6 @@ export interface KnowledgeCard {
   status?: CandidateStatus | 'active' | 'archived'
   /** Original search document type before kind mapping. */
   rawType?: KnowledgeSearchDocumentType
+  /** Why the document matched (search-result cards only). */
+  scoreExplanation?: KnowledgeScoreExplanation
 }

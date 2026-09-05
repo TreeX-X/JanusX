@@ -164,13 +164,14 @@ export function createWorkspaceChatTools(options: WorkspaceChatToolOptions) {
       execute: (input: { workspaceId: string }) => execute('project.list-processes', input),
     },
     project_process_output: {
-      description: 'Read recent bounded output from one JanusX-managed project process.',
+      description: 'Read recent bounded output from one JanusX-managed project process (supports offsetLines pagination for background command.run jobs).',
       parameters: z.object({
         workspaceId,
         projectId: z.string().min(1),
-        maxLines: z.number().int().min(1).max(500).default(100),
+        maxLines: z.number().int().min(1).max(1000).default(100),
+        offsetLines: z.number().int().min(0).max(1000).default(0),
       }),
-      execute: (input: { workspaceId: string; projectId: string; maxLines: number }) => execute('project.process-output', input),
+      execute: (input: { workspaceId: string; projectId: string; maxLines: number; offsetLines: number }) => execute('project.process-output', input),
     },
     project_start_process: {
       description: 'Start a saved JanusX launch configuration after user approval.',
@@ -252,15 +253,17 @@ export function createWorkspaceChatTools(options: WorkspaceChatToolOptions) {
       execute: (input: { workspaceId: string; path: string }) => execute('git.push', input),
     },
     command_run: {
-      description: 'Run one program, package script, or workspace script with structured arguments in an attached workspace. Requires user approval and returns bounded stdout, stderr, exit code, timeout and truncation state.',
+      description: 'Run one program, package script, or workspace script with structured arguments in an attached workspace. Requires user approval and returns bounded stdout, stderr, exit code, timeout and truncation state. Sync default timeout 120s, max 600s; background jobs have no deadline unless timeoutMs is passed (max 600s) and report timedOut via project_process_output; pass background:true for long builds and poll with project_process_output(offsetLines). Optional env allowlist (NODE_ENV/CI/TERM/FORCE_COLOR/NO_COLOR/CLICOLOR/LANG/LC_*/LANGUAGE/TZ, max 32 entries; PATH/LD_PRELOAD and friends are rejected). Sync stdout/stderr are 8KB tail previews; page the full log at logPath with workspace_read.',
       parameters: z.object({
         workspaceId,
         cwd: z.string().default(''),
         program: z.string().min(1),
         args: z.array(z.string()).max(100).default([]),
-        timeoutMs: z.number().int().min(1_000).max(90_000).default(30_000),
+        timeoutMs: z.number().int().min(1_000).max(600_000).default(120_000),
+        background: z.boolean().default(false),
+        env: z.record(z.string()).default({}),
       }),
-      execute: (input: { workspaceId: string; cwd: string; program: string; args: string[]; timeoutMs: number }) => execute('command.run', input),
+      execute: (input: { workspaceId: string; cwd: string; program: string; args: string[]; timeoutMs: number; background: boolean; env: Record<string, string> }) => execute('command.run', input),
     },
   }
   return withManifestDescriptions(tools, options.toolManifests)
@@ -350,9 +353,10 @@ function createCommandPreview(input: Record<string, unknown>) {
   const program = String(input.program ?? '')
   const args = Array.isArray(input.args) ? input.args.map(String) : []
   const cwd = String(input.cwd ?? '')
-  const detail = JSON.stringify(redactPolicyValue({ program, args, cwd, timeoutMs: input.timeoutMs }), null, 2)
+  // R4：env 进审批预览（经 redactPolicyValue，凭证形值显示脱敏），审批人可见覆盖了哪些变量。
+  const detail = JSON.stringify(redactPolicyValue({ program, args, cwd, timeoutMs: input.timeoutMs, background: input.background ?? false, env: input.env ?? {} }), null, 2)
   return {
-    summary: `Run ${program || 'workspace command'}`,
+    summary: `Run ${program || 'workspace command'}${input.background === true ? ' in background' : ''}`,
     paths: [cwd],
     detail: detail.slice(0, 4_000),
     truncated: detail.length > 4_000,

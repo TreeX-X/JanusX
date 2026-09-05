@@ -9,7 +9,7 @@ import { BlueprintDetailPortalContext } from './blueprintDetailPortal'
 import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
-import { useWorkbenchPhase } from '@/components/shared/CardFrame'
+import { useAnimatedOpen, useWorkbenchPhase } from '@/components/shared/CardFrame'
 import './blueprint.css'
 
 interface BlueprintWorkbenchProps {
@@ -116,6 +116,11 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
         ? 'running'
         : 'default'
 
+  // Janus side panel stays mounted across its exit slide (same pattern as
+  // the knowledge detail card); the grid track collapses in parallel.
+  const planJanusOpen = isClosing ? closingPlan.janusOpen : maintenanceOpen
+  const janusAnim = useAnimatedOpen(planJanusOpen)
+
   if (phase === 'hidden') return null
   const cardPlan = isClosing ? closingPlan : { detailOpen, janusOpen: maintenanceOpen }
   const cardCount = 2 + Number(cardPlan.janusOpen) + Number(cardPlan.detailOpen)
@@ -221,10 +226,19 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
           <div className="blueprint-workbench-card blueprint-workbench-card--canvas" style={cardStyle(canvasCardIndex)}>
             <BlueprintView density="workbench" onDetailOpenChange={setDetailOpen} />
           </div>
-          {cardPlan.janusOpen ? (
-            <aside className="blueprint-workbench-card blueprint-workbench-card--janus" style={cardStyle(janusCardIndex)}>
-              <BlueprintMaintenancePanel onClose={() => setMaintenanceOpen(false)} />
-            </aside>
+          {janusAnim.rendered ? (
+            <div
+              className="blueprint-workbench-janus-slot"
+              data-visible={janusAnim.visible ? 'true' : 'false'}
+              aria-hidden={janusAnim.visible ? undefined : 'true'}
+            >
+              <aside
+                className="blueprint-workbench-card blueprint-workbench-card--janus"
+                style={cardStyle(janusCardIndex)}
+              >
+                <BlueprintMaintenancePanel onClose={() => setMaintenanceOpen(false)} />
+              </aside>
+            </div>
           ) : null}
         </div>
       </section>

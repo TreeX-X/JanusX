@@ -12,7 +12,7 @@
 }
 
 .backdrop[data-closing="true"] {
-  animation: workbench-backdrop-out 0.32s ease-in forwards;
+  animation: workbench-backdrop-out var(--workbench-exit-duration, 320ms) ease-in forwards;
   pointer-events: none;
 }
 
@@ -22,31 +22,42 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 52px auto minmax(0, 1fr);
-  overflow: hidden;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  overflow: visible;
   color: #e7e7e8;
-  background-color: #08080a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.85),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  animation: knowledge-workbench-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+  perspective: 1200px;
+  perspective-origin: center;
 }
 
 .shell[data-closing="true"] {
-  animation: knowledge-workbench-out 0.32s cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: none;
   pointer-events: none;
 }
 
+/* Hold cards invisible for one frame so the entrance always starts from the keyframe. */
+.shell:not([data-reveal-ready="true"]) .header,
+.shell:not([data-reveal-ready="true"]) .statusCard,
+.shell:not([data-reveal-ready="true"]) .leftPane,
+.shell:not([data-reveal-ready="true"]) .stage,
+.shell:not([data-reveal-ready="true"]) .rightPane {
+  opacity: 0;
+  animation: none;
+}
+
 @keyframes knowledge-workbench-in {
-  from { opacity: 0; transform: scale(0.97) translateY(16px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes knowledge-workbench-out {
-  from { opacity: 1; transform: scale(1) translateY(0); }
-  to { opacity: 0; transform: scale(0.97) translateY(16px); }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(12px) scale(0.98); }
 }
 
 @keyframes workbench-backdrop-in {
@@ -59,44 +70,65 @@
   to { opacity: 0; }
 }
 
+/* §9.1: blueprint-style pure-text topbar — an independent card, no logo/badge. */
 .header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-  padding: 0 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(11, 11, 13, 0.95);
-}
-
-.headerLeft {
+  min-height: 44px;
   display: flex;
   align-items: center;
-  justify-self: start;
+  justify-content: space-between;
   gap: 12px;
-  min-width: 0;
+  padding: 0 12px 0 14px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 10, 13, 0.76);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: knowledge-workbench-in var(--card-enter-duration, 260ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * var(--card-enter-stagger, 180ms));
+  transform-origin: center;
+  will-change: transform, opacity;
 }
 
-.iconBadge {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #6ba6ff;
+.shell[data-closing="true"] .header,
+.shell[data-closing="true"] .statusCard,
+.shell[data-closing="true"] .leftPane,
+.shell[data-closing="true"] .stage,
+.shell[data-closing="true"] .rightPane {
+  animation-name: knowledge-workbench-out;
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+  animation-fill-mode: both;
+  animation-delay: calc((var(--card-count, 1) - var(--card-index, 0) - 1) * var(--card-exit-stagger, 60ms));
 }
 
 .breadcrumb {
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 6px;
-  font-size: 11px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bcParent { color: #71717a; }
 .bcSep { color: #4b4b52; }
 .bcCurrent { color: #fff; font-weight: 600; }
+
+/* Blueprint parity: action group hugs the right edge, controls share one center. */
+.headerActions {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
 
 .badge {
   margin-left: 4px;
@@ -111,46 +143,27 @@
   letter-spacing: 0.08em;
 }
 
-.tabs {
+/* Phase 4 top status strip (§6) as an independent card; the inner row stays plain. */
+.statusCard {
+  min-height: 30px;
   display: flex;
   align-items: center;
-  justify-self: center;
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.025);
+  padding: 0 14px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 10, 13, 0.76);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: knowledge-workbench-in var(--card-enter-duration, 260ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * var(--card-enter-stagger, 180ms));
+  transform-origin: center;
+  will-change: transform, opacity;
 }
 
-.tabButton {
-  min-width: 76px;
-  height: 28px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #85858c;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  transition: color 160ms ease, background 160ms ease;
-}
-
-.tabButton:hover {
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.045);
-}
-
-.tabActive {
-  color: #6ba6ff;
-  background: rgba(59, 130, 246, 0.12);
-}
-
-.headerActions {
-  display: flex;
-  justify-content: flex-end;
-  justify-self: end;
-  align-items: center;
-  gap: 8px;
+.statusCard .statusBar {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -160,9 +173,6 @@
   align-items: center;
   gap: 12px;
   min-height: 30px;
-  padding: 0 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(9, 9, 11, 0.9);
   font-size: 11px;
   color: #a1a1aa;
   white-space: nowrap;
@@ -282,6 +292,25 @@
   font-size: 11px;
 }
 
+/* 画布内浮层提示：不再占用整行把图谱挤成上下两张卡片。 */
+.graphNoticeFloat {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  max-width: calc(100% - 20px);
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 10, 13, 0.88);
+  color: #a1a1aa;
+  font-size: 11px;
+  line-height: 1.4;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 .graphCanvas {
   min-height: 320px;
   height: 100%;
@@ -293,30 +322,88 @@
 
 .graphHint { color: #63636b; font-size: 10px; }
 
-.graphCanvas :global(.kg-node) {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-left-width: 4px;
-  border-radius: 6px;
-  background: #141417;
-  color: #e7e7e8;
-  font-size: 11px;
-  padding: 8px 10px;
-  max-width: 240px;
+.graphLegend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #63636b;
+  font-size: 10px;
 }
 
-.graphCanvas :global(.kg-node--fact) { border-left-color: #6ba6ff; }
-.graphCanvas :global(.kg-node--proposal) { border-left-color: #ff995f; }
-.graphCanvas :global(.kg-node--wiki) { border-left-color: #4ade80; }
-.graphCanvas :global(.kg-node--entity) { border-left-color: #c084fc; }
-.graphCanvas :global(.kg-node--observation) { border-left-color: #71717a; }
+.graphLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
-.graphCanvas :global(.kg-node.selected) {
-  border-color: #6ba6ff;
-  box-shadow: 0 0 0 2px rgba(107, 166, 255, 0.35);
+.graphLegend i {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+}
+
+/* Settled-knowledge dot nodes: dark core matching the workbench panels with
+   a kind-colored ring; sized inline by connection degree. The caption is an
+   overlay so edges anchor to the dot rather than the text box. */
+.dotNode {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dot {
+  position: relative;
+  border: 2px solid;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #1d1d22, #0e0e11 75%);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.dot:hover {
+  transform: scale(1.25);
+}
+
+.dot:hover .dotCaption {
+  color: #e7e7e8;
+}
+
+.dotKindFact { border-color: #6ba6ff; box-shadow: 0 0 10px rgba(107, 166, 255, 0.35); }
+.dotKindProposal { border-color: #ff995f; box-shadow: 0 0 10px rgba(255, 153, 95, 0.35); }
+.dotKindWiki { border-color: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, 0.3); }
+.dotKindEntity { border-color: #c084fc; box-shadow: 0 0 10px rgba(192, 132, 252, 0.3); }
+.dotKindObservation { border-color: #71717a; box-shadow: 0 0 8px rgba(113, 113, 122, 0.3); }
+
+.dotKindFact:hover { box-shadow: 0 0 16px rgba(107, 166, 255, 0.6); }
+.dotKindProposal:hover { box-shadow: 0 0 16px rgba(255, 153, 95, 0.6); }
+.dotKindWiki:hover { box-shadow: 0 0 16px rgba(74, 222, 128, 0.55); }
+.dotKindEntity:hover { box-shadow: 0 0 16px rgba(192, 132, 252, 0.55); }
+.dotKindObservation:hover { box-shadow: 0 0 14px rgba(113, 113, 122, 0.55); }
+
+.dotSelected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(107, 166, 255, 0.85), 0 0 18px rgba(107, 166, 255, 0.5);
+}
+
+.dotCaption {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  max-width: 140px;
+  overflow: hidden;
+  transform: translateX(-50%);
+  color: #c7c7cc;
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .graphCanvas[data-reduced-motion="true"] :global(.react-flow__node),
-.graphCanvas[data-reduced-motion="true"] :global(.react-flow__edge) {
+.graphCanvas[data-reduced-motion="true"] :global(.react-flow__edge),
+.graphCanvas[data-reduced-motion="true"] .dot {
   transition: none;
   animation: none;
 }
@@ -400,11 +487,23 @@
   transform: scale(0.9);
 }
 
+/* §9.1: demo skeleton — three independent cards (210px 1fr 340px + gap 16px).
+   The detail track stays in the grid at 0px when closed so its collapse and
+   the panel slide animate together instead of popping the layout. */
 .grid {
+  min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 300px;
-  background-color: var(--workbench-canvas, #080809);
+  grid-template-columns: 210px minmax(0, 1fr) minmax(0, 0px);
+  column-gap: 0;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  transition: grid-template-columns 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.grid[data-detail-open="true"] {
+  grid-template-columns: 210px minmax(0, 1fr) 340px;
 }
 
 .leftPane,
@@ -412,30 +511,151 @@
 .stage {
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 10, 13, 0.76);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .leftPane,
+.stage {
+  animation: knowledge-workbench-in var(--card-enter-duration, 260ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * var(--card-enter-stagger, 180ms));
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+/* Detail side panel: slides in from the right and back out; the exit keeps
+   the panel mounted (see useAnimatedOpen) so both directions transition. */
 .rightPane {
-  overflow: hidden;
-  background: var(--workbench-canvas, #080809);
+  padding: 0;
+  margin-left: 0;
+  opacity: 0;
+  transform: translateX(24px);
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.rightPane[data-visible="true"] {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  margin-left: 16px;
+  transition:
+    opacity 240ms ease,
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin-left 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+.rightPane[data-visible="false"] {
+  opacity: 0;
+  transform: translateX(24px);
+  visibility: hidden;
+  margin-left: 0;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 200ms cubic-bezier(0.5, 0, 0.75, 0),
+    margin-left 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 220ms;
 }
 
 .leftPane {
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  margin-right: 16px;
+  padding: 14px 10px;
 }
 
-.rightPane {
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 16px;
-}
+/* Scrolling lives on .inspector so the collapsing track clips cleanly. */
 
 .stage {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  padding: 18px;
-  background-color: var(--workbench-canvas, #080809);
+  padding: 16px;
   background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 0);
   background-size: 14px 14px;
+}
+
+/* Left-rail navigation (§9.1 demo grouping). */
+.navLabel {
+  color: #7c7c84;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 10px 6px;
+}
+
+.navLabel:not(:first-child) {
+  margin-top: 12px;
+}
+
+.navButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #c7c7cc;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.navButton:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+}
+
+.navActive {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.1);
+  color: #fff;
+}
+
+/* Detail header: single provenance row with an explicit close entry. */
+.detailBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 详情关闭与蓝图 .bp-panel-close 统一：28px 幽灵按钮 + Lucide X 图标。 */
+.detailClose {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.detailClose:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ddd;
 }
 
 .paneTitle {
@@ -452,6 +672,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 12px;
 }
 
 .paneCount {
@@ -467,7 +688,6 @@
   text-align: center;
 }
 
-.recordList,
 .viewStack,
 .timeline,
 .searchResults {
@@ -476,14 +696,6 @@
   gap: 10px;
 }
 
-.recordList {
-  margin-top: 14px;
-  max-height: calc(100% - 28px);
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.recordButton,
 .wikiPageButton,
 .resultRow,
 .auditEvent {
@@ -497,14 +709,6 @@
   transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
-.recordButton {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-}
-
-.recordButton:hover,
 .wikiPageButton:hover,
 .resultRow:hover,
 .auditEvent:hover {
@@ -512,22 +716,6 @@
   color: #fff;
 }
 
-.recordActive {
-  border-color: rgba(59, 130, 246, 0.3);
-  background: rgba(59, 130, 246, 0.1);
-  color: #fff;
-}
-
-.recordTitle {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 1.35;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.recordMeta,
 .cardFoot,
 .wikiPageButton small,
 .resultRow small,
@@ -570,19 +758,35 @@
 
 .cardGrid {
   min-height: 0;
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 全量文本卡片高度由换行决定：显式 max-content 行高，避免 auto 行轨对
+     flex 纵向卡片（含 gap）的行高低估导致上下行卡片视觉重叠（窄窗下可达 200px+）。 */
+  grid-auto-rows: max-content;
   gap: 10px;
   overflow-y: auto;
   padding-right: 4px;
+  align-content: start;
+  align-items: start;
+}
+
+.stage > .wikiSections,
+.stage > .searchLab,
+.stage > .timeline,
+.stage > .graphWrap {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .reviewCard {
-  min-height: 160px;
+  min-width: 0;
+  height: 216px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.028);
@@ -603,24 +807,56 @@
   background: rgba(59, 130, 246, 0.09);
 }
 
+/* 固定高度候选卡片：标题 3 行、摘要 2 行自动省略，完整内容走右侧详情面板。 */
 .reviewCard strong {
   display: -webkit-box;
+  margin: 0;
+  min-width: 0;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: #f4f4f5;
   font-size: 13px;
   line-height: 1.45;
+  text-overflow: ellipsis;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
 .reviewCard p {
   display: -webkit-box;
+  margin: 0;
+  min-width: 0;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: #9a9aa1;
   font-size: 12px;
   line-height: 1.5;
+  text-overflow: ellipsis;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+/* 固定高度下标签只占一行，超出部分裁掉（详情面板展示全部标签）。 */
+.reviewCard .tags {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.reviewCard .tags span {
+  flex: 0 0 auto;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 底部信息行贴底，保证短内容卡片与高内容卡片视觉对齐。 */
+.reviewCard .cardFoot {
+  margin-top: auto;
 }
 
 .cardTopline {
@@ -712,12 +948,42 @@
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.065);
   border-radius: 8px;
+  /* 与 stage 一致的暗色圆点纹理（无蓝色渐变）。 */
   background:
-    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.12), transparent 42%),
+    radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0),
     rgba(255, 255, 255, 0.018);
-  background-size: 42px 42px, 42px 42px, auto, auto;
+  background-size: 14px 14px, auto;
+}
+
+/* React Flow 控件深色化，与工作台面板统一。 */
+.graphCanvas :global(.react-flow__controls) {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.graphCanvas :global(.react-flow__controls-button) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(10, 10, 13, 0.9);
+}
+
+.graphCanvas :global(.react-flow__controls-button:last-child) {
+  border-bottom: 0;
+}
+
+.graphCanvas :global(.react-flow__controls-button svg) {
+  fill: #a1a1aa;
+}
+
+.graphCanvas :global(.react-flow__controls-button:hover) {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.graphCanvas :global(.react-flow__minimap) {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .graphLines {
@@ -856,6 +1122,9 @@
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  box-sizing: border-box;
+  min-width: 280px;
+  padding: 14px;
 }
 
 .inspectorTitle {
@@ -924,8 +1193,8 @@
   background: rgba(59, 130, 246, 0.18);
 }
 
-.tabButton:focus-visible,
-.recordButton:focus-visible,
+.navButton:focus-visible,
+.detailClose:focus-visible,
 .reviewCard:focus-visible,
 .auditEvent:focus-visible,
 .graphNode:focus-visible,
@@ -975,6 +1244,27 @@
   min-height: 90px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .backdrop[data-closing="true"],
+  .header,
+  .statusCard,
+  .grid,
+  .leftPane,
+  .stage,
+  .rightPane,
+  .shell[data-closing="true"] .header,
+  .shell[data-closing="true"] .statusCard,
+  .shell[data-closing="true"] .leftPane,
+  .shell[data-closing="true"] .stage,
+  .shell[data-closing="true"] .rightPane {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* §9.1: narrow windows drawerize the detail instead of dropping it —
+   stage cards stay mounted as the explicit reopen entry. */
 @media (max-width: 1100px) {
   .backdrop { padding: 16px; }
 
@@ -984,19 +1274,61 @@
     height: calc(100vh - 32px);
   }
 
-  .grid {
+  .grid,
+  .grid[data-detail-open="false"],
+  .grid[data-detail-open="true"] {
     grid-template-columns: 210px minmax(0, 1fr);
   }
 
-  .rightPane {
-    display: none;
+  .grid .rightPane {
+    position: fixed;
+    top: 76px;
+    right: 24px;
+    bottom: 24px;
+    z-index: 12001;
+    width: min(360px, calc(100vw - 48px));
+    box-shadow:
+      0 30px 70px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .header {
     gap: 10px;
   }
+}
 
-  .headerActions {
+@media (max-width: 760px) {
+  .grid,
+  .grid[data-detail-open="false"],
+  .grid[data-detail-open="true"] {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+    row-gap: 16px;
+  }
+
+  .leftPane {
+    margin-right: 0;
+  }
+
+  .leftPane {
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 10px;
+  }
+
+  .navLabel {
     display: none;
+  }
+
+  .navButton {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .stage {
+    min-height: 60vh;
   }
 }

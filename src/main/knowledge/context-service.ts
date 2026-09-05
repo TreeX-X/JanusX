@@ -4,6 +4,7 @@ import type {
   KnowledgeContextResult,
 } from '../../shared/knowledge'
 import { knowledgeRecallService, KnowledgeRecallService } from './recall-service'
+import { excerptAroundQuery } from './recall-service'
 import { knowledgeTruthService } from './truth-service'
 
 const DEFAULT_MAX_ITEMS = 8
@@ -78,7 +79,12 @@ export class KnowledgeContextService {
     for (const document of recalled.documents) {
       if (items.length >= maxItems) break
       if (!document.contextItem) continue
-      const item = { ...document.contextItem, score: document.score }
+      // Long wiki pages ride as query-centered excerpts so one page cannot
+      // eat the whole shared budget; full text stays one wiki_get away.
+      const content = document.contextItem.kind === 'wiki'
+        ? excerptAroundQuery(document.contextItem.content, request.query)
+        : document.contextItem.content
+      const item = { ...document.contextItem, content, score: document.score }
       const section = formatItem(item)
       if ([...sections, section].join('\n\n').length > maxChars) break
       items.push(item)

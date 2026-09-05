@@ -11,8 +11,10 @@
 
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
-import { extname, isAbsolute, resolve } from 'path'
-import type { ProcessHandle } from '../types'
+import { randomUUID } from 'node:crypto'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { extname, isAbsolute, join, resolve } from 'path'
+import { ProjectType, type LaunchConfiguration, type ProcessHandle } from '../types'
 import ProjectConfig from '../config/project-config'
 import CommandBuilder from './command-builder'
 import PortExtractor from '../utils/port-extractor'
@@ -27,6 +29,29 @@ interface RunningProject extends ProcessHandle {
   outputBuffer: string // 用于缓存未完整的输出行
   eventEmitter: EventEmitter
   terminated: boolean
+  /** P4尾巴：仅 adhoc 后台命令有值，退出时落盘，process-output 可读已退出任务。 */
+  persistLogPath?: string
+  /** R3：adhoc 可配超时（毫秒，未设置即无截止，保持 P3 历史行为）；触发后按 stop 语义 SIGTERM→SIGKILL。 */
+  timeoutMs?: number
+  timeoutTimer?: NodeJS.Timeout
+  /** R3：true 表示本次退出由超时触发（手动 stop 不置位），随快照落盘供 process-output 回看。 */
+  timedOut?: boolean
+}
+
+/**
+ * P4尾巴：已退出 adhoc 任务的保留快照（内存 + 磁盘日志），有界保留。
+ */
+export interface ExitedAdhocProject {
+  pid: number
+  config: LaunchConfiguration
+  startTime: Date
+  endTime: Date
+  exitCode: number | null
+  signal: string | null
+  /** R3：true 表示被超时 kill（而非自然退出/手动 stop）。 */
+  timedOut: boolean
+  output: string[]
+  logPath?: string
 }
 
 const WINDOWS_SHELL_COMMANDS = new Set(['npm', 'yarn', 'pnpm', 'bun'])
@@ -53,6 +78,7 @@ export function requiresCommandShell(command: string, platform: NodeJS.Platform 
  */
 export class ProjectRunner extends EventEmitter {
   private runningProjects: Map<string, RunningProject> = new Map()
+  private readonly exitedAdhoc = new Map<string, ExitedAdhocProject>()
   private maxConcurrent: number = 5
   private activeCount: number = 0
 
@@ -151,6 +177,90 @@ export class ProjectRunner extends EventEmitter {
   }
 
   /**
+   * 启动一次性后台命令（供 command.run background 复用）。
+   * 不要求工作区存在已保存的 LaunchConfig；输出/生命周期与普通项目进程一致，
+   * 可用 getRunning/getAllRunning/project.process-output 读取，用 stop 停止。
+   * P4尾巴：退出后日志落 `<cwd>/.janusX/logs/bg-*.log`，快照进 exitedAdhoc
+   * （有界保留），project.process-output 可读已退出任务。
+   * R3：`timeoutMs` 可选（整数 1000~600000，与 command.run 同步路径同界，
+   * 缺席即无截止）；到期按 stop 语义 SIGTERM→SIGKILL，`timedOut` 随快照落盘。
+   * R4：`env` 可选（调用方已 allowlist 校验，见 command-tools.ts filterCommandEnv），与进程 env 合并。
+   */
+  async runAdhoc(input: { cwd: string; program: string; args?: string[]; label?: string; timeoutMs?: number; env?: Record<string, string> }): Promise<{ projectId: string; handle: ProcessHandle; logPath?: string }> {
+    if (this.activeCount >= this.maxConcurrent) {
+      throw new Error(
+        `Maximum concurrent projects (${this.maxConcurrent}) reached. Stop another project first.`,
+      )
+    }
+    if (input.timeoutMs !== undefined && (!Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1_000 || input.timeoutMs > 600_000)) {
+      throw new Error('adhoc timeoutMs must be an integer between 1000 and 600000')
+    }
+    const args = input.args ?? []
+    const label = (input.label ?? `${input.program} ${args.join(' ')}`.trim()).slice(0, 120) || 'adhoc'
+    const config: LaunchConfiguration = {
+      name: label,
+      type: ProjectType.Custom,
+      request: 'launch',
+      program: input.program,
+      args,
+      cwd: input.cwd,
+    }
+    const projectId = `${input.cwd}::adhoc:${Date.now()}-${randomUUID().slice(0, 8)}`
+    // 日志目录建失败不阻断启动：仅失去落盘，内存输出照常可用。
+    let logPath: string | undefined
+    try {
+      await mkdir(join(input.cwd, '.janusX', 'logs'), { recursive: true })
+      logPath = join(input.cwd, '.janusX', 'logs', `bg-${Date.now()}-${randomUUID().slice(0, 8)}.log`)
+    } catch {
+      logPath = undefined
+    }
+    const childProc = this.spawnProcess(input.program, args, {
+      cwd: input.cwd,
+      env: { ...process.env, ...(input.env ?? {}) },
+      windowsHide: true,
+    })
+    const runningProject: RunningProject = {
+      pid: childProc.pid!,
+      config,
+      startTime: new Date(),
+      port: undefined,
+      output: [],
+      outputBuffer: '',
+      process: childProc,
+      eventEmitter: new EventEmitter(),
+      terminated: false,
+      ...(logPath ? { persistLogPath: logPath } : {}),
+    }
+    this.setupProcessListeners(projectId, runningProject)
+    this.runningProjects.set(projectId, runningProject)
+    this.activeCount++
+    // R3：超时计时与 stop/退出互斥清理（见 stop()/handleExit）；unref 避免长计时单独拖住主进程退出。
+    if (input.timeoutMs !== undefined) {
+      runningProject.timeoutMs = input.timeoutMs
+      runningProject.timedOut = false
+      runningProject.timeoutTimer = setTimeout(() => {
+        const current = this.runningProjects.get(projectId)
+        if (!current || current.terminated) return
+        current.timedOut = true
+        void this.stop(projectId, 5000).catch(() => undefined)
+      }, input.timeoutMs)
+      runningProject.timeoutTimer.unref?.()
+    }
+    this.emit('project:started', { projectId, type: config.type, command: label })
+    return {
+      projectId,
+      ...(logPath ? { logPath } : {}),
+      handle: {
+        pid: runningProject.pid,
+        config: runningProject.config,
+        startTime: runningProject.startTime,
+        port: runningProject.port,
+        output: runningProject.output,
+      },
+    }
+  }
+
+  /**
    * 停止项目
    *
    * 流程：
@@ -160,7 +270,9 @@ export class ProjectRunner extends EventEmitter {
    */
   async stop(projectId: string, timeout: number = 5000): Promise<void> {
     const running = this.runningProjects.get(projectId)
+    // P4尾巴：停已退出的 adhoc 任务视为成功（日志仍可读），未知 id 照旧抛错。
     if (!running) {
+      if (this.exitedAdhoc.has(projectId)) return
       throw new Error(`Project ${projectId} is not running`)
     }
 
@@ -169,6 +281,11 @@ export class ProjectRunner extends EventEmitter {
     }
 
     running.terminated = true
+    // R3：手动 stop 清掉超时计时（快照 timedOut 保持 false，区别于超时 kill）。
+    if (running.timeoutTimer) {
+      clearTimeout(running.timeoutTimer)
+      running.timeoutTimer = undefined
+    }
 
     // 先发送 SIGTERM
     running.process.kill('SIGTERM')
@@ -222,6 +339,13 @@ export class ProjectRunner extends EventEmitter {
           output: running.output,
         }
       : null
+  }
+
+  /**
+   * 获取已退出的 adhoc 任务快照（P4尾巴：后台构建结束后仍可读日志）。
+   */
+  getExited(projectId: string): ExitedAdhocProject | null {
+    return this.exitedAdhoc.get(projectId) ?? null
   }
 
   /**
@@ -364,6 +488,9 @@ export class ProjectRunner extends EventEmitter {
     }
   }
 
+  /** P4尾巴：已退出 adhoc 快照最多保留 20 个，淘汰时连磁盘日志一起清。 */
+  private static readonly MAX_EXITED_ADHOC = 20
+
   /**
    * 处理进程退出
    * exit 与 error 都可能触发（各一次或先后触发），按条目在场与否去重
@@ -377,11 +504,45 @@ export class ProjectRunner extends EventEmitter {
     if (!this.runningProjects.has(projectId)) return
     this.activeCount--
     this.runningProjects.delete(projectId)
+    // R3：退出即停超时计时（自然退出/手动 stop/超时 kill 三路互斥）。
+    if (running.timeoutTimer) {
+      clearTimeout(running.timeoutTimer)
+      running.timeoutTimer = undefined
+    }
+
+    // P4尾巴：adhoc 后台任务保留快照 + 落盘；普通 dev 进程保持原行为。
+    if (running.persistLogPath) {
+      const lines = [...running.output]
+      const tail = running.outputBuffer.trim()
+      if (tail) lines.push(tail.length > MAX_STORED_OUTPUT_LINE_CHARS ? tail.slice(-MAX_STORED_OUTPUT_LINE_CHARS) : tail)
+      this.exitedAdhoc.set(projectId, {
+        pid: running.pid,
+        config: running.config,
+        startTime: running.startTime,
+        endTime: new Date(),
+        exitCode: code,
+        signal,
+        timedOut: running.timedOut === true,
+        output: lines.slice(-1000),
+        logPath: running.persistLogPath,
+      })
+      while (this.exitedAdhoc.size > ProjectRunner.MAX_EXITED_ADHOC) {
+        const oldest = this.exitedAdhoc.keys().next().value
+        if (!oldest) break
+        const evicted = this.exitedAdhoc.get(oldest)
+        this.exitedAdhoc.delete(oldest)
+        if (evicted?.logPath) rm(evicted.logPath, { force: true }).catch(() => undefined)
+      }
+      const logPath = running.persistLogPath
+      const header = `# adhoc ${running.config.name}\nexitCode: ${String(code)} signal: ${String(signal)} timedOut: ${String(running.timedOut === true)}\n--- output (${lines.length} lines, tail 1000 kept) ---\n`
+      writeFile(logPath, `${header}${lines.slice(-1000).join('\n')}\n`, 'utf-8').catch(() => undefined)
+    }
 
     this.emit('project:exit', {
       projectId,
       exitCode: code,
       signal,
+      timedOut: running.timedOut === true,
       uptime: Date.now() - running.startTime.getTime(),
     })
   }

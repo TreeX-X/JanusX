@@ -17,8 +17,10 @@ import { getDevelopmentLlmSyncStatus } from '../llm/development-config-sync'
 import { generateText } from '../llm/ai-runtime'
 import {
   abortChatStream,
+  cancelChatSteer,
   handleChatStream,
   prepareJanusChatRecall,
+  steerChatStream,
   type ChatMessage,
   type ChatStreamRequest,
 } from '../llm/chat-orchestrator'
@@ -268,6 +270,14 @@ export function registerLlmHandlers(): void {
   ipcMain.handle(LLM_CHANNELS.abort, async (_, requestId: string) => {
     abortChatStream(requestId)
     return { success: true }
+  })
+
+  // R6-full：流式中 steering 投递与撤销（目标不存在/流已结束即拒绝，由渲染端回退）。
+  ipcMain.handle(LLM_CHANNELS.steer, async (_, input: { conversationId?: string; entryId: string; text: string }) => {
+    return steerChatStream(input ?? { entryId: '', text: '' })
+  })
+  ipcMain.handle(LLM_CHANNELS.steerCancel, async (_, input: { conversationId?: string; entryId: string }) => {
+    return cancelChatSteer(input ?? { entryId: '' })
   })
 
 }

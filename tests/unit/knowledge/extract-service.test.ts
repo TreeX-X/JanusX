@@ -196,8 +196,56 @@ describe('KnowledgeExtractService', () => {
     expect(result.auditEventId).toBeTruthy()
   })
 
-  it('does not write instruments to accepted-only collections', async () => {
+  it('keeps only known truth ids on wiki patch sourceFactIds', async () => {
     setupLlm({
+      facts: [],
+      wikiPatches: [
+        {
+          pageSlug: 'persistence-design',
+          title: 'Persistence Design',
+          patchMarkdown: '## Postgres chosen',
+          rationale: 'Summarizes the settled persistence decision.',
+          confidence: 0.8,
+          sourceFactIds: ['truth-1', ' ghost ', 'truth-1'],
+        },
+      ],
+      graphEdges: [],
+    })
+    const { knowledgeExtractService } = await loadService()
+
+    const result = await knowledgeExtractService.extract(
+      { observations: [makeObservation()] },
+      {
+        listWorkspaceFacts: async () => [{
+          id: 'truth-1',
+          content: 'Project persistence layer uses Postgres.',
+          concepts: [],
+          files: [],
+          tags: [],
+          confidence: 0.9,
+          version: 1,
+          status: 'active',
+          kind: 'fact',
+          provenance: {
+            workspaceId: 'ws-id',
+            workspaceName: 'ws-name',
+            workspacePath: 'C:/work',
+            source: 'manual',
+            sourceObservationIds: [],
+            fileRefs: [],
+            actor: 'tester',
+            createdAt: '2026-07-07T00:00:00.000Z',
+          },
+        }],
+      },
+    )
+
+    expect(result.wikiPatches).toHaveLength(1)
+    const patch = result.wikiPatches[0] as CandidateWikiPatch
+    expect(patch.sourceFactIds).toEqual(['truth-1'])
+  })
+
+  it('does not write instruments to accepted-only collections', async () => {    setupLlm({
       facts: [
         {
           content: 'fact',

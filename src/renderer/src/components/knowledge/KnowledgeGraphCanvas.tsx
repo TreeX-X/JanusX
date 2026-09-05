@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Background,
   Controls,
   MiniMap,
   ReactFlow,
@@ -8,6 +7,8 @@ import {
   useNodesState,
   type Edge,
   type Node,
+  type NodeProps,
+  type NodeTypes,
   type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -17,6 +18,8 @@ import { useReducedMotion } from '../shared/CardFrame'
 import {
   buildKnowledgeGraphView,
   graphLayoutStorageKey,
+  graphNodeCaption,
+  graphNodeDotSize,
   layoutKnowledgeGraph,
   layoutWorkspaceFor,
   loadStoredLayout,
@@ -33,8 +36,8 @@ interface Props {
   snapshot: KnowledgeWorkbenchSnapshot
   selectedId: string
   /**
-   * Parent-first record resolution (e.g. proposal nodes map back to reviewable
-   * candidates); falls back to the adapter record when it returns null.
+   * Parent-first record resolution (settled nodes usually resolve here);
+   * falls back to the adapter record when it returns null.
    */
   resolveRecord?: (node: KnowledgeGraphNode) => InspectorRecord | null
   onSelect: (id: string, record: InspectorRecord | null) => void
@@ -42,10 +45,51 @@ interface Props {
 
 const KIND_FILTERS = ['fact', 'proposal', 'wiki', 'entity', 'observation'] as const
 
+/** Obsidian dot palette (shared with the MiniMap). */
+const KIND_DOT_COLORS: Record<KnowledgeGraphNode['kind'], string> = {
+  fact: '#6ba6ff',
+  proposal: '#ff995f',
+  wiki: '#4ade80',
+  entity: '#c084fc',
+  observation: '#71717a',
+}
+
+interface KgDotData extends Record<string, unknown> {
+  caption: string
+  fullLabel: string
+  kind: KnowledgeGraphNode['kind']
+  size: number
+}
+
+const DOT_KIND_STYLES: Record<KnowledgeGraphNode['kind'], string> = {
+  fact: styles.dotKindFact,
+  proposal: styles.dotKindProposal,
+  wiki: styles.dotKindWiki,
+  entity: styles.dotKindEntity,
+  observation: styles.dotKindObservation,
+}
+
+/**
+ * Obsidian-style dot node: a small connection-sized circle with a short
+ * caption floating underneath (overlay, so edges anchor to the dot itself).
+ * Full label rides on `title` for hover; details live in the right pane.
+ */
+function KgDotNode({ data, selected }: NodeProps<Node<KgDotData, 'kgDot'>>) {
+  return (
+    <div
+      className={`${styles.dot} ${DOT_KIND_STYLES[data.kind]}${selected ? ` ${styles.dotSelected}` : ''}`}
+      style={{ width: data.size, height: data.size }}
+      title={data.fullLabel}
+    >
+      <span className={styles.dotCaption}>{data.caption}</span>
+    </div>
+  )
+}
+
 function edgeStyle(edge: KnowledgeGraphEdge): Edge['style'] {
-  if (edge.type === 'conflicts_with') return { stroke: '#ff6b6b', strokeWidth: 2, strokeDasharray: '6 4' }
-  if (edge.synthetic) return { stroke: '#71717a', strokeWidth: 1.2, strokeDasharray: '4 4' }
-  return { stroke: '#8b8b93', strokeWidth: 1.4 }
+  if (edge.type === 'conflicts_with') return { stroke: '#ff6b6b', strokeWidth: 1.6, strokeDasharray: '6 4' }
+  if (edge.synthetic) return { stroke: '#71717a', strokeWidth: 1, strokeDasharray: '4 4' }
+  return { stroke: '#8b8b93', strokeWidth: 1.1 }
 }
 
 /**
@@ -59,10 +103,14 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
   const instanceRef = useRef<ReactFlowInstance | null>(null)
   const [expandedIds, setExpandedIds] = useState<string[]>([])
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [hoverId, setHoverId] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<string>('all')
   const [edgeFilter, setEdgeFilter] = useState<string>('all')
   const [locate, setLocate] = useState('')
   const [persisted, setPersisted] = useState(false)
+  // Bumped by "reset layout": skips stored coordinates once and falls back
+  // to the freshly computed spread.
+  const [layoutEpoch, setLayoutEpoch] = useState(0)
 
   const view = useMemo(
     () => buildKnowledgeGraphView(snapshot, { expandedEvidence: expandedIds }),
@@ -72,16 +120,32 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
 
   // Layout: deterministic computed positions overlaid with the stored
   // per-workspace layout (renderer-side localStorage; truth untouched).
+  // layoutEpoch only busts the memo so "reset layout" recomputes in place.
   const workspaceId = useMemo(() => layoutWorkspaceFor(view.nodes), [view]);
   const positions = useMemo(() => {
+    // Referenced so "reset layout" busts this memo and recomputes in place.
+    void layoutEpoch
     const computed = layoutKnowledgeGraph(view.nodes, view.edges)
     if (typeof localStorage === 'undefined') return computed
     return mergeStoredLayout(computed, loadStoredLayout(workspaceId))
-  }, [view, workspaceId])
+  }, [view, workspaceId, layoutEpoch])
+
+  /** Clears every stored layout generation (v1 layered + v2 spread) and
+   * reverts to the freshly computed arrangement. */
+  const resetLayout = useCallback(() => {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(graphLayoutStorageKey(workspaceId))
+        localStorage.removeItem(`janusx:knowledge-graph-layout:${workspaceId || 'global'}`)
+      } catch {
+        // Best-effort.
+      }
+    }
+    setLayoutEpoch((epoch) => epoch + 1)
+  }, [workspaceId])
 
   const locateTerm = locate.trim().toLowerCase()
-  const visibleNodeIds = useMemo(() => {
-    let ids = new Set(view.nodes.map((node) => node.id))
+  const visibleNodeIds = useMemo(() => {    let ids = new Set(view.nodes.map((node) => node.id))
     if (kindFilter !== 'all') ids = new Set(view.nodes.filter((node) => node.kind === kindFilter).map((node) => node.id))
     if (focusId) {
       const neighbors = new Set<string>([focusId])
@@ -94,34 +158,81 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
     return ids
   }, [view, kindFilter, focusId])
 
+  const nodeTypes = useMemo<NodeTypes>(() => ({ kgDot: KgDotNode }), [])
+
+  // Undirected connection degree drives the Obsidian-style dot size.
+  const degrees = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const edge of view.edges) {
+      map.set(edge.from, (map.get(edge.from) ?? 0) + 1)
+      map.set(edge.to, (map.get(edge.to) ?? 0) + 1)
+    }
+    return map
+  }, [view])
+
+  const nodeColor = useCallback(
+    (node: Node) => KIND_DOT_COLORS[(node.data as Partial<KgDotData>)?.kind ?? 'observation'] ?? '#71717a',
+    [],
+  )
+
+  // Obsidian-style hover: the hovered dot plus its one-hop neighborhood
+  // stays lit, everything else dims (nodes and edges alike).
+  const hoverSet = useMemo(() => {
+    if (!hoverId) return null
+    const neighbors = new Set<string>([hoverId])
+    for (const edge of view.edges) {
+      if (edge.from === hoverId) neighbors.add(edge.to)
+      if (edge.to === hoverId) neighbors.add(edge.from)
+    }
+    return neighbors
+  }, [view, hoverId])
+
   const baseNodes: Node[] = useMemo(() => view.nodes.map((node) => {
     const position = positions.get(node.id) ?? { x: 0, y: 0 }
     const matchesLocate = !locateTerm
       || node.label.toLowerCase().includes(locateTerm)
       || node.id.toLowerCase().includes(locateTerm)
+    const size = graphNodeDotSize(degrees.get(node.id) ?? 0)
+    const dimmed = !matchesLocate || (hoverSet !== null && !hoverSet.has(node.id))
     return {
       id: node.id,
+      type: 'kgDot',
       position,
-      data: { label: node.label },
-      className: `kg-node kg-node--${node.kind}`,
+      data: {
+        caption: graphNodeCaption(node.label),
+        fullLabel: node.label,
+        kind: node.kind,
+        size,
+      } satisfies KgDotData,
+      className: styles.dotNode,
       selected: node.id === selectedId,
       hidden: !visibleNodeIds.has(node.id),
-      style: { opacity: matchesLocate ? 1 : 0.3 },
+      style: { width: size, height: size, opacity: dimmed ? 0.15 : 1 },
     }
-  }), [view, positions, selectedId, visibleNodeIds, locateTerm])
+  }), [view, positions, selectedId, visibleNodeIds, locateTerm, degrees, hoverSet])
 
   const baseEdges: Edge[] = useMemo(() => view.edges
     .filter((edge) => (edgeFilter === 'all' || edge.type === edgeFilter)
       && visibleNodeIds.has(edge.from)
       && visibleNodeIds.has(edge.to))
-    .map((edge) => ({
-      id: edge.id,
-      source: edge.from,
-      target: edge.to,
-      label: edge.type === 'conflicts_with' ? edge.type : undefined,
-      style: edgeStyle(edge),
-      selected: edge.id === selectedId,
-    })), [view, edgeFilter, visibleNodeIds, selectedId])
+    .map((edge) => {
+      const touched = hoverSet !== null
+        && (edge.from === hoverId || edge.to === hoverId)
+      const base = edgeStyle(edge) ?? {}
+      const baseWidth = typeof base.strokeWidth === 'number' ? base.strokeWidth : 1
+      return {
+        id: edge.id,
+        source: edge.from,
+        target: edge.to,
+        label: edge.type === 'conflicts_with' ? edge.type : undefined,
+        style: {
+          ...base,
+          opacity: hoverSet !== null && !touched ? 0.12 : 1,
+          strokeWidth: touched ? baseWidth + 0.8 : baseWidth,
+        },
+        selected: edge.id === selectedId,
+      }
+    }), [view, edgeFilter, visibleNodeIds, selectedId, hoverSet, hoverId])
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(baseNodes)
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(baseEdges)
@@ -183,6 +294,9 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
     const graphNode = view.nodes.find((entry) => entry.id === node.id)
     if (!graphNode) return
     persistSelection(node.id)
+    // Single click focuses the one-hop neighborhood (distant nodes hide);
+    // clicking the focused node again releases the focus.
+    setFocusId((current) => (current === node.id ? null : node.id))
     onSelect(node.id, resolveRecord?.(graphNode) ?? recordForGraphNode(graphNode))
   }, [view, resolveRecord, onSelect, persistSelection])
 
@@ -218,6 +332,7 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
   }, [view, reducedMotion])
 
   const selectedNode = view.nodes.find((node) => node.id === selectedId) ?? null
+  const focusNode = focusId ? view.nodes.find((node) => node.id === focusId) ?? null : null
   const canExpand = selectedNode !== null
     && selectedNode.kind !== 'observation'
     && selectedNode.evidenceIds.length > 0
@@ -273,9 +388,12 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
             {t('knowledge:graph.canvas.collapseEvidence')}
           </button>
         )}
-        {focusId && (
-          <button type="button" className={styles.graphButton} onClick={() => setFocusId(null)}>
-            {focusId}
+        <button type="button" className={styles.graphButton} onClick={resetLayout}>
+          {t('knowledge:graph.canvas.resetLayout')}
+        </button>
+        {focusNode && (
+          <button type="button" className={styles.graphButton} onClick={() => setFocusId(null)} title={focusNode.id}>
+            ✕ {graphNodeCaption(focusNode.label)}
           </button>
         )}
         <span className={styles.graphCount}>
@@ -284,13 +402,17 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
             : `${matchCount}`}
         </span>
       </div>
-      {visibleNodeIds.size === 0 && (
-        <div className={styles.graphNotice}><span>{t('knowledge:graph.canvas.noMatch')}</span></div>
-      )}
       <div className={styles.graphCanvas} data-reduced-motion={reducedMotion ? 'true' : undefined}>
+        {visibleNodeIds.size === 0 && (
+          <div className={styles.graphNoticeFloat}><span>{t('knowledge:graph.canvas.noMatch')}</span></div>
+        )}
+        {visibleNodeIds.size > 0 && view.edges.length === 0 && (
+          <div className={styles.graphNoticeFloat}><span>{t('knowledge:graph.canvas.noEdges')}</span></div>
+        )}
         <ReactFlow
           nodes={rfNodes}
           edges={rfEdges}
+          nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onInit={(instance) => { instanceRef.current = instance }}
@@ -298,18 +420,30 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
           onEdgeClick={handleEdgeClick}
           onPaneClick={handlePaneClick}
           onNodeDoubleClick={handleNodeDoubleClick}
+          onNodeMouseEnter={(_event, node) => setHoverId(node.id)}
+          onNodeMouseLeave={() => setHoverId(null)}
           onNodeDragStop={(_event, _node, nodes) => persistLayout(nodes)}
           fitView
-          fitViewOptions={{ duration: reducedMotion ? 0 : 220, maxZoom: 1 }}
-          minZoom={0.2}
+          fitViewOptions={{ duration: reducedMotion ? 0 : 220, maxZoom: 1, padding: 0.3 }}
+          minZoom={0.1}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={24} />
           <Controls showInteractive={false} />
-          <MiniMap pannable zoomable />
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={nodeColor}
+            maskColor="rgba(5, 5, 7, 0.72)"
+            bgColor="rgba(10, 10, 13, 0.92)"
+          />
         </ReactFlow>
       </div>
       <div className={styles.graphHint}>{t('knowledge:graph.canvas.hint')}</div>
+      <div className={styles.graphLegend} aria-hidden="true">
+        <span><i style={{ borderTop: '2px solid #8b8b93' }} />{t('knowledge:graph.canvas.legend.stored')}</span>
+        <span><i style={{ borderTop: '2px dashed #71717a' }} />{t('knowledge:graph.canvas.legend.derived')}</span>
+        <span><i style={{ borderTop: '2px dashed #ff6b6b' }} />{t('knowledge:graph.canvas.legend.conflict')}</span>
+      </div>
     </div>
   )
 }

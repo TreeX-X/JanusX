@@ -181,6 +181,7 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'evidence',
       'conflicts',
       'mergedFrom',
+      'sourceFactIds',
     ],
   },
   rules: [

@@ -63,6 +63,14 @@
     },
     "newMessage": "新消息",
     "inputPlaceholder": "向 Janus 发送消息或执行命令…",
+    "queue": {
+      "badge": "已投递，等待本轮应用",
+      "inputPlaceholder": "继续输入，立即投递抢占…",
+      "sendTitle": "立即投递并打断本轮生成",
+      "sendAria": "投递 steering 消息",
+      "cancelTitle": "撤销这条 steering 消息",
+      "cancelAria": "撤销 steering 消息"
+    },
     "stop": {
       "title": "停止生成",
       "aria": "停止生成"

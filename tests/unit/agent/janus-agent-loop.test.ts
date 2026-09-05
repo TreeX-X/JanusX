@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runJanusAgentLoop, type JanusAgentMessage, type JanusAgentTool } from '../../../src/main/agent/loop/janus-agent-loop'
+import { AgentSteeringPort, runJanusAgentLoop, type JanusAgentEvent, type JanusAgentMessage, type JanusAgentTool } from '../../../src/main/agent/loop/janus-agent-loop'
 
 const userMessage: JanusAgentMessage = { role: 'user', content: 'start' }
 
@@ -103,5 +103,94 @@ describe('JanusAgentLoop', () => {
     })
     expect(order).toHaveLength(2)
     expect(messages.some((message) => message.content === 'continue')).toBe(true)
+  })
+
+  it('R6-full: preempts an in-flight stream, keeps partial text, and strips partial tool calls', async () => {
+    const port = new AgentSteeringPort()
+    const executed: string[] = []
+    const events: JanusAgentEvent[] = []
+    let calls = 0
+    const messages = await runJanusAgentLoop([userMessage], {
+      tools: [{ name: 'a', execute: async () => { executed.push('a'); return { content: 'a' } } }],
+      maxTurns: 3,
+      steeringPort: port,
+      stream: async (_context, signal) => {
+        calls += 1
+        if (calls === 1) {
+          // 生产者驱动打断：push 即 abort 本轮 attempt，mock 感知 signal 后返回半截结果。
+          port.push('s1', { role: 'user', content: 'steer now' })
+          await new Promise<void>((resolve) => {
+            if (signal.aborted) resolve()
+            else signal.addEventListener('abort', () => resolve(), { once: true })
+          })
+          expect(signal.aborted).toBe(true)
+          return { message: { role: 'assistant', content: 'partial' }, toolCalls: [{ id: 'c1', name: 'a', arguments: {} }] }
+        }
+        return { message: { role: 'assistant', content: 'done' } }
+      },
+      onEvent: (event) => events.push(event),
+    })
+    expect(calls).toBe(2)
+    // 半截正文保留但剥离 toolCalls（配对约束），steering 注入，工具永不执行。
+    const partial = messages.find((message) => message.content === 'partial')
+    expect(partial?.role).toBe('assistant')
+    expect('toolCalls' in (partial ?? {})).toBe(false)
+    expect(messages.some((message) => message.content === 'steer now')).toBe(true)
+    expect(executed).toHaveLength(0)
+    expect(messages.at(-1)).toEqual({ role: 'assistant', content: 'done' })
+    const consumed = events.filter((event) => event.type === 'steering_consumed')
+    expect(consumed).toEqual([{ type: 'steering_consumed', keys: ['s1'] }])
+  })
+
+  it('R6-full: applies steering between sequential tools and skips unexecuted calls', async () => {
+    const port = new AgentSteeringPort()
+    const executed: string[] = []
+    const events: JanusAgentEvent[] = []
+    let turn = 0
+    const messages = await runJanusAgentLoop([userMessage], {
+      tools: ['a', 'b'].map((name): JanusAgentTool => ({
+        name,
+        execute: async () => { executed.push(name); return { content: `${name}-result` } },
+      })),
+      maxTurns: 3,
+      steeringPort: port,
+      afterToolCall: async ({ call }) => {
+        if (call.name === 'a') port.push('s1', { role: 'user', content: 'steer after a' })
+        return undefined
+      },
+      stream: async () => {
+        turn += 1
+        return turn === 1
+          ? {
+              message: { role: 'assistant', content: '' },
+              toolCalls: [{ id: 'a', name: 'a', arguments: {} }, { id: 'b', name: 'b', arguments: {} }],
+            }
+          : { message: { role: 'assistant', content: 'done' } }
+      },
+      onEvent: (event) => events.push(event),
+    })
+    // a 已完成结果保留，b 永不执行，steering 紧跟 a 结果之后。
+    expect(executed).toEqual(['a'])
+    const contents = messages.map((message) => message.content)
+    expect(contents).toContain('a-result')
+    expect(contents).toContain('steer after a')
+    expect(contents.indexOf('steer after a')).toBeGreaterThan(contents.indexOf('a-result'))
+    expect(events.some((event) => event.type === 'steering_consumed')).toBe(true)
+    expect(messages.at(-1)).toEqual({ role: 'assistant', content: 'done' })
+  })
+
+  it('R6-full: steering port supports cancel-before-consume with exactly-once take', () => {
+    const port = new AgentSteeringPort()
+    expect(port.size).toBe(0)
+    port.push('k1', { role: 'user', content: 'one' })
+    port.push('k2', { role: 'user', content: 'two' })
+    expect(port.size).toBe(2)
+    expect(port.remove('missing')).toBe(false)
+    expect(port.remove('k1')).toBe(true)
+    expect(port.size).toBe(1)
+    const taken = port.take()
+    expect(taken.map((entry) => entry.key)).toEqual(['k2'])
+    expect(port.size).toBe(0)
+    expect(port.take()).toEqual([])
   })
 })

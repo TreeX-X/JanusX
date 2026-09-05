@@ -47,6 +47,7 @@ export function toKnowledgeCard(hit: KnowledgeSearchHit): KnowledgeCard {
     createdAt: hit.createdAt || undefined,
     status,
     rawType: hit.type,
+    scoreExplanation: hit.scoreExplanation,
   }
 }
 

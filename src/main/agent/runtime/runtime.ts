@@ -4,7 +4,7 @@ import { statSync } from 'node:fs'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentRuntimeEvent, type AgentSession, type ApprovalPreview, type ApprovalResult, type CreateAgentSessionInput, type ExecuteToolInput, type PolicyAuditQuery, type PolicyDecision, type PolicyDecisionRecord, type ToolResult } from '../../../shared/ipc/agent-runtime'
 import { ToolRegistry, type RegisteredTool } from './registry'
 import type { ResolveWorkspaceRoot } from '../../office/office-workspace-guard'
-import { createPolicyDecisionRecord, evaluateWorkspaceActionPolicy, redactPolicyValue, redactWorkingValue, sanitizePolicyText, settleApprovalDecision } from './policy-gate'
+import { createPolicyDecisionRecord, evaluateWorkspaceActionPolicy, isSafeCompileCommand, redactPolicyValue, redactWorkingValue, sanitizePolicyText, settleApprovalDecision } from './policy-gate'
 import { FilePolicyAuditStore, MemoryPolicyAuditStore, type PolicyAuditStore } from './policy-audit-store'
 
 type Listener = (event: AgentRuntimeEvent) => void
@@ -51,7 +51,7 @@ export class WorkspaceAgentRuntime {
     if ((await realpath(input.workspaceRoot)) !== root) throw new Error('workspaceRoot does not match registered workspace')
     if (!statSync(root).isDirectory()) throw new Error('workspaceRoot must be a directory')
     const now = new Date().toISOString()
-    const session: ActiveSession = { id: randomUUID(), workspace: { workspaceId: input.workspaceId, workspaceRoot: root }, status: 'running', createdAt: now, updatedAt: now, timeoutMs: input.timeoutMs ?? 120_000, approvalMode: normalizeAgentApprovalMode(input.approvalMode), controller: new AbortController(), pending: new Map(), activeCalls: new Set(), ended: false, ownerId }
+    const session: ActiveSession = { id: randomUUID(), workspace: { workspaceId: input.workspaceId, workspaceRoot: root }, status: 'running', createdAt: now, updatedAt: now, timeoutMs: input.timeoutMs ?? 120_000, approvalMode: normalizeAgentApprovalMode(input.approvalMode), safeCompileAutoAllow: input.safeCompileAutoAllow !== false, controller: new AbortController(), pending: new Map(), activeCalls: new Set(), ended: false, ownerId }
     this.sessions.set(session.id, session)
     this.emit({ type: 'session-created', session: this.publicSession(session) })
     return this.publicSession(session)
@@ -84,6 +84,18 @@ export class WorkspaceAgentRuntime {
       relativePath,
       approvalMode: session.approvalMode,
     })
+    // P5：安全编译命令在 per-action 下免逐次审批（仍记审计 AUTO_RUN_ALLOWED；
+    // 危险模式/敏感路径走原 deny/审批链；执行层校验照常 fail-closed）。
+    // R2：会话 safeCompileAutoAllow=false 时关闭该放行，一律走逐次审批。
+    if (policyDecision.outcome === 'approval-required' && session.safeCompileAutoAllow !== false && isSafeCompileCommand(tool.name, executionInput)) {
+      policyDecision = {
+        ...policyDecision,
+        outcome: 'allow',
+        approvalPolicy: 'auto-run',
+        approvalDecision: 'not-required',
+        reasonCode: 'AUTO_RUN_ALLOWED',
+      }
+    }
     let policyRecord = await this.recordPolicyDecision(session, correlationId, tool.name, executionInput, policyDecision)
     if (policyDecision.outcome === 'deny') {
       const result = this.result(session, tool.name, correlationId, 'failed', undefined, 'Tool denied by workspace policy', undefined, undefined, policyDecision.reasonCode, policyRecord)
@@ -198,7 +210,7 @@ export class WorkspaceAgentRuntime {
       truncated: preview.truncated,
     }
   }
-  private publicSession(session: ActiveSession): AgentSession { return { id: session.id, workspace: { ...session.workspace }, status: session.status, createdAt: session.createdAt, updatedAt: session.updatedAt, timeoutMs: session.timeoutMs, approvalMode: session.approvalMode } }
+  private publicSession(session: ActiveSession): AgentSession { return { id: session.id, workspace: { ...session.workspace }, status: session.status, createdAt: session.createdAt, updatedAt: session.updatedAt, timeoutMs: session.timeoutMs, approvalMode: session.approvalMode, safeCompileAutoAllow: session.safeCompileAutoAllow !== false } }
   private endSession(session: ActiveSession): void { if (session.ended) return; session.ended = true; this.emit({ type: 'session-ended', session: this.publicSession(session) }) }
   private endSessionWhenIdle(session: ActiveSession): void { if (session.status !== 'running' && session.activeCalls.size === 0) this.endSession(session) }
   private settleApprovals(session: ActiveSession, outcome: ApprovalOutcome): void { session.pending.forEach(({ resolve }) => resolve(outcome)); session.pending.clear() }

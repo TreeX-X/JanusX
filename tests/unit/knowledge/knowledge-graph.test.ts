@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildKnowledgeGraphView,
   graphLayoutStorageKey,
+  graphNodeCaption,
+  graphNodeDotSize,
   layoutKnowledgeGraph,
   layoutWorkspaceFor,
   loadStoredLayout,
@@ -133,17 +135,15 @@ describe('buildKnowledgeGraphView (§10.1 adapter)', () => {
     ])
   })
 
-  it('marks proposed candidates and composes conflicts_with against truth', () => {
+  it('keeps review-stage proposals out of the settled graph', () => {
     const view = buildKnowledgeGraphView(snapshot({
       truthFacts: [fact('t1')],
       factCandidates: [candidate('c1', { conflicts: ['t1', 'ghost'] })],
     }))
 
-    const proposal = view.nodes.find((node) => node.id === 'proposal:c1')
-    expect(proposal).toEqual(expect.objectContaining({ kind: 'proposal', derivation: 'deterministic' }))
-    expect(view.edges).toEqual([
-      expect.objectContaining({ from: 'proposal:c1', to: 'fact:t1', type: 'conflicts_with', synthetic: true }),
-    ])
+    expect(view.nodes.some((node) => node.kind === 'proposal')).toBe(false)
+    expect(view.nodes.map((node) => node.id)).toEqual(['fact:t1'])
+    expect(view.edges).toEqual([])
   })
 
   it('aggregates entities cited by two or more facts and links mentions', () => {
@@ -205,30 +205,32 @@ describe('buildKnowledgeGraphView (§10.1 adapter)', () => {
     expect(view.edges).toEqual([])
   })
 
-  it('derives inspector records for nodes and conflict edges', () => {
+  it('derives inspector records for settled nodes and stored edges', () => {
+    const edge = (id: string, from: string, to: string): GraphEdge => ({
+      id, from, to, type: 'depends_on', confidence: 0.7, sourceFactIds: [], workspaceId: 'ws-1', createdAt: '2026-07-12T00:00:00.000Z',
+    })
     const view = buildKnowledgeGraphView(snapshot({
-      truthFacts: [fact('t1')],
-      factCandidates: [candidate('c1', { conflicts: ['t1'] })],
+      truthFacts: [fact('t1'), fact('t2')],
+      truthEdges: [edge('e1', 't1', 't2')],
     }))
-    const proposal = view.nodes.find((node) => node.id === 'proposal:c1')!
-    const record = recordForGraphNode(proposal)
+    const node = view.nodes.find((entry) => entry.id === 'fact:t1')!
+    const record = recordForGraphNode(node)
     expect(record).toEqual(expect.objectContaining({
-      id: 'proposal:c1',
-      derivation: 'deterministic',
+      id: 'fact:t1',
       factKind: 'fact',
       sourceIds: ['obs-1'],
     }))
 
-    const conflict = view.edges.find((edge) => edge.type === 'conflicts_with')!
-    const edgeRecord = recordForGraphEdge(conflict, view.nodes)
-    expect(edgeRecord.title).toContain('conflicts_with')
+    const stored = view.edges.find((entry) => entry.type === 'depends_on')!
+    const edgeRecord = recordForGraphEdge(stored, view.nodes)
+    expect(edgeRecord.title).toContain('depends_on')
     expect(edgeRecord.title).toContain('Fact t1 content')
-    expect(edgeRecord.tags).toEqual(['conflicts_with'])
+    expect(edgeRecord.tags).toEqual(['depends_on'])
   })
 })
 
 describe('knowledge graph layout + persistence', () => {
-  it('lays out deterministically by BFS depth with stable coordinates', () => {
+  it('lays out deterministically with finite coordinates', () => {
     const view = buildKnowledgeGraphView(snapshot({
       truthFacts: [fact('a'), fact('b')],
       truthEdges: [{
@@ -239,16 +241,48 @@ describe('knowledge graph layout + persistence', () => {
     const first = layoutKnowledgeGraph(view.nodes, view.edges)
     const second = layoutKnowledgeGraph(view.nodes, view.edges)
 
+    expect(first.size).toBe(view.nodes.length)
     expect([...first.entries()]).toEqual([...second.entries()])
-    expect(first.get('fact:a')).toEqual({ x: 0, y: 0 })
-    expect(first.get('fact:b')).toEqual({ x: 280, y: 0 })
+    for (const position of first.values()) {
+      expect(Number.isFinite(position.x)).toBe(true)
+      expect(Number.isFinite(position.y)).toBe(true)
+    }
+  })
+
+  it('keeps linked nodes closer than nodes from other components', () => {
+    const view = buildKnowledgeGraphView(snapshot({
+      truthFacts: [fact('a'), fact('b'), fact('lone')],
+      truthEdges: [{
+        id: 'e1', from: 'a', to: 'b', type: 'depends_on', confidence: 0.7,
+        sourceFactIds: [], workspaceId: 'ws-1', createdAt: '2026-07-12T00:00:00.000Z',
+      }],
+    }))
+    const layout = layoutKnowledgeGraph(view.nodes, view.edges)
+    const distance = (x: string, y: string) => {
+      const a = layout.get(x)!
+      const b = layout.get(y)!
+      return Math.hypot(a.x - b.x, a.y - b.y)
+    }
+
+    expect(distance('fact:a', 'fact:b')).toBeLessThan(distance('fact:a', 'fact:lone'))
+  })
+
+  it('derives short dot captions and degree-sized dots', () => {
+    expect(graphNodeCaption('short label')).toBe('short label')
+    expect(graphNodeCaption(`\n  spaced title  \nsecond line`)).toBe('spaced title')
+    expect(graphNodeCaption('x'.repeat(40))).toBe(`${'x'.repeat(23)}…`)
+    expect(graphNodeCaption('')).toBe('')
+
+    expect(graphNodeDotSize(0)).toBe(10)
+    expect(graphNodeDotSize(3)).toBe(16)
+    expect(graphNodeDotSize(100)).toBe(22)
   })
 
   it('resolves a single layout workspace and stable storage keys', () => {
     const view = buildKnowledgeGraphView(snapshot({ truthFacts: [fact('a')] }))
     expect(layoutWorkspaceFor(view.nodes)).toBe('ws-1')
     expect(layoutWorkspaceFor([...view.nodes, { ...view.nodes[0]!, id: 'fact:x', workspaceId: 'ws-2' }])).toBe('global')
-    expect(graphLayoutStorageKey('ws-1')).toBe('janusx:knowledge-graph-layout:ws-1')
+    expect(graphLayoutStorageKey('ws-1')).toBe('janusx:knowledge-graph-layout:v2:ws-1')
   })
 
   it('merges stored positions only for known nodes with finite coordinates', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatScoreExplanation,
   resolveRecordForTab,
   selectionIdForTab,
 } from '../../../src/renderer/src/components/knowledge/KnowledgeWorkbench'
@@ -140,5 +141,13 @@ describe('Inbox ordering (§5 llm-preferred)', () => {
     ] as KnowledgeWorkbenchSnapshot['factCandidates']
 
     expect(selectionIdForTab(data, 'inbox', '')).toBe('merged')
+  })
+})
+
+describe('formatScoreExplanation (demo parity)', () => {
+  it('keeps bm25 and drops zero parts', () => {
+    expect(formatScoreExplanation({
+      bm25: 1.2, exactTitle: 0.5, titlePhrase: 0, bodyPhrase: 0, confidenceBoost: 0.4, freshnessBoost: 0,
+    })).toBe('bm25 1.20 · exactTitle 0.50 · confidenceBoost 0.40')
   })
 })

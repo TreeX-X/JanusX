@@ -97,6 +97,8 @@ const extractSchema = z.object({
         patchMarkdown: z.string(),
         rationale: z.string(),
         confidence: z.number().min(0).max(1),
+        // 模型给出的相关已有知识 id；映射阶段按 knownTruthIds 过滤，未知 id 丢弃。
+        sourceFactIds: z.array(z.string()).catch([]),
       }),
     )
     .default([]),
@@ -150,6 +152,7 @@ function buildSystemPrompt(): string {
     '- wikiPatches 的 pageSlug 须为小写短横线标识；patchMarkdown 是增量补充段落而非完整页面。',
     '- 每个 fact 必须判定 kind：fact（客观事实）/ preference（偏好习惯）/ decision（已做出的决策）/ procedure（可重复的步骤、命令或排障过程）。',
     '- 仅当新事实明确替代【已有知识】中的某一条时，才在该 fact 的 supersedes 中填入那条的方括号 id；不确定时省略。内容不同但各说各话的并存知识不要填 supersedes（冲突由系统自动标记）。',
+    '- wiki 补丁若总结或引用了【已有知识】中的条目，在 sourceFactIds 中填入那些条目的方括号 id（只填给出的 id）；无关时留空数组。',
   ].join('\n')
 }
 
@@ -249,7 +252,12 @@ function mapFactCandidate(
 function mapWikiPatchCandidate(
   raw: ExtractResult['wikiPatches'][number],
   provenance: KnowledgeProvenance,
+  knownTruthIds: ReadonlySet<string>,
 ): CandidateWikiPatch {
+  // 模型幻觉出的 sourceFactIds（指向不存在的 truth）直接丢弃，不进索引。
+  const sourceFactIds = [...new Set(
+    raw.sourceFactIds.map((id) => id.trim()).filter((id) => id.length > 0 && knownTruthIds.has(id)),
+  )]
   return {
     id: randomUUID(),
     type: 'wiki-patch',
@@ -262,6 +270,7 @@ function mapWikiPatchCandidate(
     provenance,
     derivation: 'llm',
     evidence: { observationIds: provenance.sourceObservationIds },
+    sourceFactIds,
   }
 }
 
@@ -600,7 +609,7 @@ export class KnowledgeExtractService {
     const llmFacts = result.facts.map((raw) =>
       mapFactCandidate(raw, provenance, knownTruthIds, truthTargets),
     )
-    const wikiPatchCandidates = result.wikiPatches.map((raw) => mapWikiPatchCandidate(raw, provenance))
+    const wikiPatchCandidates = result.wikiPatches.map((raw) => mapWikiPatchCandidate(raw, provenance, knownTruthIds))
     const graphEdgeCandidates = result.graphEdges.map((raw) => mapGraphEdgeCandidate(raw, provenance))
 
     const batchIds = new Set(budgeted.observations.map((observation) => observation.id))

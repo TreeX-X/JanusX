@@ -59,7 +59,7 @@ After the Phase 1-5 optimization, the project advanced from v0.5.0 to v0.8.0 wit
 | Canvas Navigation | `src/renderer/src/features/blueprint/canvas-navigation.ts` | Complete — pan/zoom/focus |
 | Relation Invariants | `src/shared/janus/relations.ts` | Complete — acyclic enforcement, cycle detection, sanitize |
 | Maintenance Types | `src/shared/janus/maintenance-types.ts` | Complete — all operation variants, change-sets, audit, tasks |
-| Knowledge MCP | `src/main/knowledge/knowledge-mcp.ts`, `knowledge-mcp-tools.ts` | Complete — MCP server for knowledge |
+| Knowledge MCP | `src/main/knowledge/knowledge-mcp.ts`, `knowledge-mcp-tools.ts` | Complete — MCP server for knowledge (search/context plus wiki_list/get and fact_get two-stage read) |
 | Knowledge Search | `src/main/knowledge/search/bm25.ts`, `tokenizer.ts` | Complete — BM25 search with tokenizer |
 | Agent Turn Recorder | `src/main/knowledge/agent-turn-recorder.ts` | Complete — captures agent interaction context |
 | Retention Classifier | `src/main/knowledge/retention-classifier.ts` | Complete — observation relevance scoring |

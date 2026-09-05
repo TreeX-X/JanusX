@@ -19,6 +19,23 @@ import {
 } from '../../shared/knowledge-settings'
 import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 
+/** P6：janus-chat 循环步数默认 40（P6 前为硬编码 20），钳制 1~100。 */
+export const DEFAULT_AGENT_MAX_STEPS = 40
+export const MAX_AGENT_MAX_STEPS = 100
+
+export function normalizeAgentMaxSteps(value: unknown): number {
+  const parsed = typeof value === 'string' ? Number(value) : value
+  if (typeof parsed !== 'number' || !Number.isFinite(parsed)) return DEFAULT_AGENT_MAX_STEPS
+  return Math.min(MAX_AGENT_MAX_STEPS, Math.max(1, Math.floor(parsed)))
+}
+
+/** R2：安全编译自动放行总开关；缺席/非法一律默认 true（保持 P5 已落地行为）。 */
+export const DEFAULT_SAFE_COMPILE_AUTO_ALLOW = true
+
+export function normalizeSafeCompileAutoAllow(value: unknown): boolean {
+  return value === undefined ? DEFAULT_SAFE_COMPILE_AUTO_ALLOW : value === true
+}
+
 const DEFAULT_CONFIG: GlobalConfig = {
   theme: 'dark',
   defaultTerminalPreset: 'shell',
@@ -64,6 +81,8 @@ export class ConfigService {
         notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
         knowledgeSettings: normalizeKnowledgeSettings(parsed.knowledgeSettings),
         agentApprovalMode: normalizeAgentApprovalMode(parsed.agentApprovalMode),
+        agentMaxSteps: normalizeAgentMaxSteps(parsed.agentMaxSteps),
+        safeCompileAutoAllow: normalizeSafeCompileAutoAllow(parsed.safeCompileAutoAllow),
       }
     } catch (error) {
       // 解析失败（文件存在但损坏）时先备份，避免默认配置覆盖后用户数据无法恢复
@@ -200,6 +219,26 @@ export class ConfigService {
   async updateAgentApprovalMode(mode: unknown): Promise<AgentApprovalMode> {
     const normalized = normalizeAgentApprovalMode(mode)
     await this.update({ agentApprovalMode: normalized })
+    return normalized
+  }
+
+  async getAgentMaxSteps(): Promise<number> {
+    return normalizeAgentMaxSteps((await this.get()).agentMaxSteps)
+  }
+
+  async updateAgentMaxSteps(value: unknown): Promise<number> {
+    const normalized = normalizeAgentMaxSteps(value)
+    await this.update({ agentMaxSteps: normalized })
+    return normalized
+  }
+
+  async getSafeCompileAutoAllow(): Promise<boolean> {
+    return normalizeSafeCompileAutoAllow((await this.get()).safeCompileAutoAllow)
+  }
+
+  async updateSafeCompileAutoAllow(value: unknown): Promise<boolean> {
+    const normalized = normalizeSafeCompileAutoAllow(value)
+    await this.update({ safeCompileAutoAllow: normalized })
     return normalized
   }
 

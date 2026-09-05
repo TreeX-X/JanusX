@@ -36,3 +36,4 @@ export type AgentStreamEvent =
   | { type: 'tool_execution_end'; requestId: string; call: AgentStreamToolCall; result: AgentStreamToolResult; isError: boolean }
   | { type: 'finish'; requestId: string; reason: 'stop' | 'tool_calls' | 'length' | 'unknown'; usage?: AgentUsage }
   | { type: 'error'; requestId: string; error: NormalizedProviderError }
+  | { type: 'steering_consumed'; requestId: string; keys: string[] }

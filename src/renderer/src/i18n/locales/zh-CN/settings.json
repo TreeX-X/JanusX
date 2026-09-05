@@ -211,19 +211,44 @@
   },
   "knowledge": {
     "section": {
-      "capture": "知识采集"
+      "capture": "知识采集",
+      "externalMcp": "外部终端 MCP 接入"
     },
     "toggle": {
       "enable": {
         "label": "启用知识库记录",
         "hint": "开启后，JanusX 会把 hook 驱动的 Agent 对话与任务事件写入当前工作区知识库。"
+      },
+      "autoAccept": {
+        "label": "自动接受高置信确定性事实",
+        "hint": "默认关闭。开启后，置信度 ≥ 0.9 的工具/checkpoint 事实跳过 Inbox 直接接受（审计记为 auto-policy）。"
       }
     },
     "row": {
       "boundary": {
         "label": "采集边界",
         "hint": "AI 终端记录只依赖 hook 生命周期事件，不解析原始终端输入。关闭通知提醒不会关闭后台 hook 处理。"
+      },
+      "mode": {
+        "label": "处理模式",
+        "hint": "确定性沉淀永远运行。llm-preferred 会在合并与 Inbox 排序中优先 LLM 候选。",
+        "auto": "自动（确定性优先，LLM 增强）",
+        "deterministicOnly": "仅确定性",
+        "llmPreferred": "LLM 优先"
       }
+    },
+    "mcp": {
+      "entry": {
+        "label": "服务端入口"
+      },
+      "notBuilt": "尚未构建：先运行 npm run build 生成 MCP 入口。",
+      "unavailable": "当前环境不可用（浏览器预览）。",
+      "copy": "复制启动命令",
+      "copied": "已复制到剪贴板。",
+      "register": "一键接入",
+      "registered": "已接入",
+      "saved": "已写入 {{path}}，重启对应终端生效。",
+      "failed": "失败：{{error}}"
     },
     "error": {
       "load": "知识库设置加载失败",
@@ -231,11 +256,20 @@
     }
   },
   "agent": {
-    "section": { "permissions": "权限默认设置" },
+    "section": { "permissions": "权限默认设置", "limits": "循环步数" },
     "default": {
       "label": "默认审批模式",
       "hint": "新建 Agent 会话会继承此模式；当前会话可直接切换。",
       "mode": { "perAction": "每次操作都需审批", "autoRun": "自动运行全部操作" }
+    },
+    "maxSteps": {
+      "label": "最大循环步数",
+      "hint": "允许范围 1 到 100，默认 40；长编译建议走后台命令。",
+      "unit": "步"
+    },
+    "safeCompile": {
+      "label": "安全编译自动放行",
+      "hint": "关闭后包管理器构建/检查命令也需逐次审批；危险命令始终审批。"
     },
     "safety": "自动运行仍会强制执行工作区范围限制、敏感路径拒绝、输入校验、版本快照和审计记录。",
     "error": { "load": "加载 Agent 权限设置失败", "save": "保存 Agent 权限设置失败" }

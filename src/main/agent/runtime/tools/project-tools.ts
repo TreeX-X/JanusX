@@ -363,7 +363,7 @@ export const projectStartProcessTool: RegisteredTool = {
 
 export const projectProcessOutputTool: RegisteredTool = {
   name: 'project.process-output',
-  description: 'Read recent bounded output from one JanusX-managed project process in the active workspace',
+  description: 'Read recent bounded output from one JanusX-managed project process in the active workspace (supports offsetLines pagination for background command.run jobs, including recently exited jobs with exitCode)',
   actionRisk: 'inspect',
   inputSchema: {
     type: 'object',
@@ -371,6 +371,7 @@ export const projectProcessOutputTool: RegisteredTool = {
       workspaceId: { type: 'string' },
       projectId: { type: 'string' },
       maxLines: { type: 'number' },
+      offsetLines: { type: 'number' },
     },
     required: ['workspaceId', 'projectId'],
     additionalProperties: false,
@@ -379,23 +380,46 @@ export const projectProcessOutputTool: RegisteredTool = {
     const workspaceId = assertWorkspaceId(input, context, 'project.process-output')
     const projectId = input.projectId
     const maxLines = input.maxLines ?? 100
+    const offsetLines = input.offsetLines ?? 0
     if (typeof projectId !== 'string' || !isProjectIdInWorkspace(projectId, context.workspaceRoot)) {
       throw new Error('project.process-output projectId is outside the active workspace')
     }
-    if (!Number.isSafeInteger(maxLines) || Number(maxLines) < 1 || Number(maxLines) > 500) {
-      throw new Error('project.process-output maxLines must be an integer between 1 and 500')
+    if (!Number.isSafeInteger(maxLines) || Number(maxLines) < 1 || Number(maxLines) > 1000) {
+      throw new Error('project.process-output maxLines must be an integer between 1 and 1000')
     }
-    const process = getProjectRunner().getRunning(projectId)
+    if (!Number.isSafeInteger(offsetLines) || Number(offsetLines) < 0 || Number(offsetLines) > 1000) {
+      throw new Error('project.process-output offsetLines must be an integer between 0 and 1000')
+    }
+    const runner = getProjectRunner()
+    // P4尾巴：后台任务退出后读保留快照（内存 1000 行 + 磁盘日志），而不是直接抛错。
+    const running = runner.getRunning(projectId)
+    const exited = running ? null : runner.getExited(projectId)
+    const process = running ?? exited
     if (!process) throw new Error(`Project ${projectId} is not running`)
-    const lines = process.output.slice(-Number(maxLines))
+    const end = Math.max(0, process.output.length - Number(offsetLines))
+    const start = Math.max(0, end - Number(maxLines))
+    const lines = process.output.slice(start, end)
     const fullOutput = lines.join('\n')
     const maxChars = 128 * 1024
     const output = fullOutput.length > maxChars ? fullOutput.slice(-maxChars) : fullOutput
+    const rawLogPath = exited?.logPath
+    let logPath: string | undefined
+    if (rawLogPath) {
+      const relation = relative(resolve(context.workspaceRoot), resolve(rawLogPath))
+      if (relation && relation !== '..' && !relation.startsWith(`..${sep}`) && !isAbsolute(relation)) {
+        logPath = relation.split(sep).join('/')
+      }
+    }
     return {
       workspaceId,
       projectId,
       output,
-      truncated: process.output.length > lines.length || output.length < fullOutput.length,
+      totalLines: process.output.length,
+      offsetLines: Number(offsetLines),
+      truncated: start > 0 || output.length < fullOutput.length,
+      exited: exited !== null,
+      ...(exited ? { exitCode: exited.exitCode, signal: exited.signal, timedOut: exited.timedOut } : {}),
+      ...(logPath ? { logPath } : {}),
     }
   },
 }

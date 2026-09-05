@@ -1891,8 +1891,18 @@
   overflow: visible;
 }
 
+/* 输入框左侧贴边条：压住左边框，实心无虚化（虚化辉光在深色底上会出现马赛克式 banding） */
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper::before {
-  content: none;
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  border-radius: 4px 0 0 4px;
+  background: #ff7830;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input-wrapper:focus-within {
@@ -1906,18 +1916,7 @@
   align-items: center;
 }
 
-.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-composer-row::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 2px;
-  border-radius: 0;
-  background: #ff7830;
-  box-shadow: none;
-  pointer-events: none;
-}
+/* 光晕已上移至 input-wrapper::before（贴边），行内不再绘制，避免双条 */
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input {
   min-height: 58px;
@@ -1935,6 +1934,15 @@
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input::placeholder {
   color: rgba(255,255,255,0.42);
+}
+
+/* 输入框去虚化：焦点光晕只保留 wrapper 边框 + 左侧贴边条，
+   textarea 自带的 backdrop 模糊与外发光会和贴边条叠成一层糊边，这里关掉 */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input,
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-input:focus {
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat-stop {

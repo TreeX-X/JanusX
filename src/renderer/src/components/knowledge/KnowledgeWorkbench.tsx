@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
+import { X } from 'lucide-react'
 import {
   applyKnowledgeCandidate,
   getKnowledgeProcessingStats,
@@ -22,11 +23,11 @@ import type {
   CandidateStatus,
   CandidateWikiPatch,
   KnowledgeCard,
+  KnowledgeScoreExplanation,
 } from '../../../../shared/knowledge'
 import { RefreshIconButton } from '../ui/RefreshIconButton'
 import { QuantumTopologyPreview } from '../ui/QuantumTopologyPreview'
-import { WorkbenchIcon } from '../ui/WorkbenchIcon'
-import { CardSkeleton, useWorkbenchPhase } from '../shared/CardFrame'
+import { CardSkeleton, useAnimatedOpen, useWorkbenchPhase } from '../shared/CardFrame'
 import { useI18n } from '@/i18n/useI18n'
 import '../shared/CardFrame.css'
 import styles from './KnowledgeWorkbench.module.css'
@@ -34,10 +35,29 @@ import styles from './KnowledgeWorkbench.module.css'
 export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit'
 type Candidate = CandidateFact | CandidateWikiPatch | CandidateGraphEdge
 
+/** §9.1: left-rail grouping mirrors the demo skeleton (workbench vs special views). */
+const MAIN_TABS: KnowledgeWorkbenchTab[] = ['inbox', 'library', 'search']
+const SPECIAL_TABS: KnowledgeWorkbenchTab[] = ['wiki', 'graph', 'audit']
+
 interface Props {
   isOpen: boolean
   onClose: () => void
 }
+
+// §9.1: blueprint-aligned per-card stagger (enter 180/260, exit 60/260).
+const WORKBENCH_CARD_ENTER_STAGGER_MS = 180
+const WORKBENCH_CARD_ENTER_DURATION_MS = 260
+const WORKBENCH_CARD_EXIT_STAGGER_MS = 60
+const WORKBENCH_CARD_EXIT_DURATION_MS = 260
+const WORKBENCH_EXIT_BUFFER_MS = 60
+
+interface WorkbenchCardPlan {
+  detailOpen: boolean
+}
+
+const cardStyle = (index: number): CSSProperties => ({
+  '--card-index': index,
+} as CSSProperties)
 
 export interface InspectorRecord {
   id: string
@@ -56,6 +76,8 @@ export interface InspectorRecord {
   derivation?: Candidate['derivation']
   /** Phase 4 Detail: what a fact states (fact candidates / cards). */
   factKind?: string
+  /** Demo parity: why a search hit matched (search-result cards only). */
+  scoreExplanation?: KnowledgeScoreExplanation
 }
 
 export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
@@ -82,8 +104,32 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const [procStats, setProcStats] = useState<KnowledgeProcessingStats | null>(null)
   const [procBusy, setProcBusy] = useState(false)
 
-  // Shared card-frame lifecycle (§9): delayed unmount during exit animation.
-  const { rendered, isClosing } = useWorkbenchPhase(isOpen, { onClose })
+  // Shared card-frame lifecycle (§9) + blueprint stagger (§9.1):
+  // per-card rise/descend via --card-index, revealReady rAF gate,
+  // frozen closingPlan so exit keeps the detail track mounted.
+  const {
+    phase,
+    isClosing,
+    requestClose: phaseRequestClose,
+    handleExitFinished,
+  } = useWorkbenchPhase(isOpen, { awaitAnimation: true, exitMs: 600, onClose })
+  const [revealReady, setRevealReady] = useState(false)
+  const [closingPlan, setClosingPlan] = useState<WorkbenchCardPlan>({ detailOpen: false })
+  const activeCardPlanRef = useRef<WorkbenchCardPlan>({ detailOpen: false })
+  const requestClose = useCallback(() => {
+    setClosingPlan(activeCardPlanRef.current)
+    phaseRequestClose()
+  }, [phaseRequestClose])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setClosingPlan(activeCardPlanRef.current)
+      return
+    }
+    setRevealReady(false)
+    const frame = requestAnimationFrame(() => setRevealReady(true))
+    return () => cancelAnimationFrame(frame)
+  }, [isOpen])
 
   const refresh = async () => {
     setSelectedSearch(null)
@@ -124,10 +170,12 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
 
   useEffect(() => {
     if (!isOpen) return
-    const onKeyDown = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') requestClose()
+    }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, requestClose])
 
   useEffect(() => {
     if (!isOpen || tab !== 'search') return
@@ -164,6 +212,15 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     [selectedId, selectedSearch, snapshot, tab],
   )
 
+  // Detail side panel stays mounted across its exit slide: the grid track
+  // collapses in parallel while the last record fades/slides out.
+  const detailOpen = selected != null
+  const planDetailOpen = isClosing ? closingPlan.detailOpen : detailOpen
+  const detailAnim = useAnimatedOpen(planDetailOpen)
+  const prevRecordRef = useRef<InspectorRecord | null>(null)
+  if (selected) prevRecordRef.current = selected
+  const shownSelected = selected ?? (detailAnim.rendered ? prevRecordRef.current : null)
+
   const activateTab = (nextTab: KnowledgeWorkbenchTab) => {
     setTab(nextTab)
     setSelectedSearch(null)
@@ -182,8 +239,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     setSelectedId(id)
   }
 
-  // Phase 4 Graph: canvas selections resolve through the shared record
-  // mapping so approve/reject keep working for proposal nodes.
+  // Graph selections resolve through the shared record mapping so the
+  // inspector keeps working for settled nodes (and legacy proposal ids).
   const resolveCanvasRecord = (node: KnowledgeGraphNode): InspectorRecord | null =>
     snapshot ? resolveGraphRecord(snapshot, node.id) : null
 
@@ -215,33 +272,66 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     } finally { setReviewBusy(false) }
   }
 
-  if (!rendered) return null
+  if (phase === 'hidden') return null
 
-  const sidebarCards = snapshot ? cardsForTab(snapshot, tab) : []
   const paneTitle = tab === 'inbox' ? t('knowledge:paneTitle.inbox') : tab === 'library' ? t('knowledge:paneTitle.library') : TAB_LABELS[tab]
-  const paneCount = {
-    inbox: sidebarCards.length,
-    library: sidebarCards.length,
+  // Demo parity: every nav tab carries its own count badge.
+  const tabCounts: Record<KnowledgeWorkbenchTab, number> = {
+    inbox: snapshot ? candidatesForTab(snapshot, 'inbox').length : 0,
+    library: snapshot?.libraryCards.length ?? 0,
     wiki: (snapshot?.wikiPatches.length ?? 0) + (snapshot ? publishedWikiCards(snapshot).length : 0),
     graph: snapshot?.graphCandidates.length ?? 0,
     search: searchCards.length,
     audit: snapshot?.auditEvents.length ?? 0,
-  }[tab]
+  }
+  const paneCount = tabCounts[tab]
+
+  // §9.1: the detail card shows iff a record is selected; the grid track
+  // reallocates with a track transition while the panel slides. The closing
+  // plan freezes the layout so workbench exit animates intact.
+  // Closing the detail clears the selection — stage cards are the reopen entry.
+  activeCardPlanRef.current = { detailOpen }
+  const cardPlan = isClosing ? closingPlan : { detailOpen }
+  const cardCount = 4 + Number(cardPlan.detailOpen)
+  const exitDuration = WORKBENCH_CARD_EXIT_DURATION_MS
+    + Math.max(0, cardCount - 1) * WORKBENCH_CARD_EXIT_STAGGER_MS
+    + WORKBENCH_EXIT_BUFFER_MS
+
+  const clearDetail = () => {
+    setSelectedSearch(null)
+    setSelectedId('')
+  }
 
   return createPortal(
-    <div className={styles.backdrop} data-closing={isClosing ? "true" : undefined}>
-      <section className={styles.shell} data-closing={isClosing ? "true" : undefined} aria-label={t('knowledge:aria.engine')}>
-        <header className={styles.header}>
-          <div className={styles.headerLeft}>
-            <span className={styles.iconBadge} aria-hidden="true">
-              <WorkbenchIcon id="knowledge" />
-            </span>
-            <nav className={styles.breadcrumb} aria-label="Breadcrumb"><span className={styles.bcCurrent}>{t('knowledge:breadcrumb.engine')}</span></nav>
-            {snapshot?.usingDemoData && <span className={styles.badge}>{t('knowledge:badge.demoData')}</span>}
-          </div>
-          <nav className={styles.tabs}>
-            {(Object.keys(TAB_LABELS) as KnowledgeWorkbenchTab[]).map((item) => <button key={item} type="button" className={`${styles.tabButton} ${tab === item ? styles.tabActive : ''}`} onClick={() => activateTab(item)}>{TAB_LABELS[item]}</button>)}
+    <div
+      className={styles.backdrop}
+      data-closing={isClosing ? "true" : undefined}
+      onAnimationEnd={(event) => {
+        if (!isClosing || event.target !== event.currentTarget) return
+        handleExitFinished()
+      }}
+      style={{ '--workbench-exit-duration': `${exitDuration}ms` } as CSSProperties}
+    >
+      <section
+        className={styles.shell}
+        data-closing={isClosing ? "true" : undefined}
+        data-reveal-ready={revealReady ? "true" : undefined}
+        data-card-count={cardCount}
+        style={{
+          '--card-count': cardCount,
+          '--card-enter-stagger': `${WORKBENCH_CARD_ENTER_STAGGER_MS}ms`,
+          '--card-enter-duration': `${WORKBENCH_CARD_ENTER_DURATION_MS}ms`,
+          '--card-exit-stagger': `${WORKBENCH_CARD_EXIT_STAGGER_MS}ms`,
+        } as CSSProperties}
+        aria-label={t('knowledge:aria.engine')}
+      >
+        <header className={styles.header} style={cardStyle(0)}>
+          <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+            <span className={styles.bcCurrent}>{t('knowledge:breadcrumb.engine')}</span>
+            <span className={styles.bcSep} aria-hidden="true">/</span>
+            <span>{TAB_LABELS[tab]}</span>
           </nav>
+          {snapshot?.usingDemoData && <span className={styles.badge}>{t('knowledge:badge.demoData')}</span>}
           <div className={styles.headerActions}>
             <RefreshIconButton
               accent="blue"
@@ -249,19 +339,46 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               loading={loadState === 'loading'}
               onClick={() => void refresh()}
             />
-            <button type="button" className={styles.closeButton} onClick={onClose} title={t('knowledge:action.close')} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
+            <button type="button" className={styles.closeButton} onClick={requestClose} title={t('knowledge:action.close')} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
           </div>
         </header>
-        <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
-        <main className={styles.grid}>
-          <aside className={styles.leftPane}>
+        <div className={styles.statusCard} style={cardStyle(1)}>
+          <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
+        </div>
+        <main className={styles.grid} data-detail-open={cardPlan.detailOpen ? 'true' : 'false'}>
+          <nav className={styles.leftPane} style={cardStyle(2)} aria-label={t('knowledge:aria.engine')}>
+            <div className={styles.navLabel}>{t('knowledge:nav.main')}</div>
+            {MAIN_TABS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`${styles.navButton} ${tab === item ? styles.navActive : ''}`}
+                aria-current={tab === item ? 'page' : undefined}
+                onClick={() => activateTab(item)}
+              >
+                <span>{TAB_LABELS[item]}</span>
+                <span className={styles.paneCount}>{tabCounts[item]}</span>
+              </button>
+            ))}
+            <div className={styles.navLabel}>{t('knowledge:nav.special')}</div>
+            {SPECIAL_TABS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`${styles.navButton} ${tab === item ? styles.navActive : ''}`}
+                aria-current={tab === item ? 'page' : undefined}
+                onClick={() => activateTab(item)}
+              >
+                <span>{TAB_LABELS[item]}</span>
+                <span className={styles.paneCount}>{tabCounts[item]}</span>
+              </button>
+            ))}
+          </nav>
+          <section className={styles.stage} style={cardStyle(3)}>
             <div className={styles.paneHeader}>
               <div className={styles.paneTitle}>{paneTitle}</div>
               <span className={styles.paneCount} aria-label={t('knowledge:aria.paneCount', { title: paneTitle })}>{paneCount}</span>
             </div>
-            {(tab === 'inbox' || tab === 'library') ? <CardList cards={sidebarCards} selectedId={selectedId} onSelect={selectCandidate} /> : <StateBlock title={t('knowledge:state2.useActiveView')} compact />}
-          </aside>
-          <section className={styles.stage}>
             {loadState === 'loading' && <CardSkeleton lines={4} label={t('knowledge:state2.loadingRecords')} />}
             {loadState === 'error' && <StateBlock title={t('knowledge:state2.workbenchUnavailable')} detail={loadError} />}
             {loadState === 'idle' && snapshot && <>
@@ -276,7 +393,16 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               {tab === 'audit' && <AuditList events={snapshot.auditEvents} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} />}
             </>}
           </section>
-          <aside className={styles.rightPane}><Inspector record={selected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={() => void review('apply')} onReject={() => void review('reject')} onRevoke={() => void revoke()} /></aside>
+          {detailAnim.rendered ? (
+            <aside
+              className={styles.rightPane}
+              style={cardStyle(4)}
+              data-visible={detailAnim.visible ? 'true' : 'false'}
+              aria-hidden={detailAnim.visible ? undefined : 'true'}
+            >
+              <Inspector record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={() => void review('apply')} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />
+            </aside>
+          ) : null}
         </main>
       </section>
     </div>,
@@ -296,16 +422,10 @@ export function publishedWikiCards(snapshot: KnowledgeWorkbenchSnapshot): Knowle
   return snapshot.libraryCards.filter((card) => card.kind === 'wiki')
 }
 
-function cardsForTab(snapshot: KnowledgeWorkbenchSnapshot, tab: KnowledgeWorkbenchTab): KnowledgeCard[] {
-  return tab === 'library'
-    ? snapshot.libraryCards
-    : candidatesForTab(snapshot, tab).map(cardFromCandidate)
-}
-
 /**
- * Phase 4 Graph: canvas node ids (`proposal:<candidateId>`, `fact:<factId>`)
- * resolve back to inspector records; bare candidate ids keep working so
- * switching from Inbox preserves the selection.
+ * Graph record resolution: canvas node ids (`fact:<factId>`) resolve back to
+ * inspector records. The `proposal:<candidateId>` branch stays for backward
+ * compatibility with persisted selections; the graph itself is truth-only.
  */
 export function resolveGraphRecord(
   snapshot: KnowledgeWorkbenchSnapshot,
@@ -359,18 +479,11 @@ export function selectionIdForTab(
     return snapshot.wikiPatches[0]?.id ?? publishedWikiCards(snapshot)[0]?.id ?? ''
   }
   if (tab === 'graph') {
-    const proposed = candidatesForTab(snapshot, 'inbox')[0]
-    if (proposed) return `proposal:${proposed.id}`
+    // The graph maps settled truth; default to the first truth fact.
     const firstFact = snapshot.truthFacts?.[0]
     return firstFact ? `fact:${firstFact.id}` : ''
   }
   return ''
-}
-
-function CardList({ cards, selectedId, onSelect }: { cards: KnowledgeCard[]; selectedId: string; onSelect: (id: string) => void }) {
-  const { t } = useI18n('knowledge')
-  if (!cards.length) return <StateBlock title={t('knowledge:list.empty')} compact />
-  return <div className={styles.recordList}>{cards.map((card) => <button key={card.id} type="button" className={`${styles.recordButton} ${selectedId === card.id ? styles.recordActive : ''}`} onClick={() => onSelect(card.id)}><span className={styles.recordTitle}>{card.title}</span><span className={styles.recordMeta}>{card.kind} - {card.status ?? t('knowledge:card.statusAccepted')}</span></button>)}</div>
 }
 
 function CardCollection({ title, detail, cards, selectedId, onSelect }: { title: string; detail: string; cards: KnowledgeCard[]; selectedId: string; onSelect: (id: string) => void }) {
@@ -400,21 +513,21 @@ function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; ac
         </div>
         <span>{formatConfidence(card.score)}</span>
       </div>
-      <strong>{card.title}</strong>
-      {card.summary && <p>{card.summary}</p>}
+      <strong title={card.title}>{card.title}</strong>
+      {card.summary && <p title={card.summary}>{card.summary}</p>}
       <TagRow tags={card.tags} />
       <div className={styles.cardFoot}>{card.status ?? t('knowledge:card.statusActive')} - {t('knowledge:card.sourceRefs', { count: card.sourceRefs.observationIds.length })}</div>
     </button>
   )
 }
 
-function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevoke }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: () => void; onReject: () => void; onRevoke: () => void }) {
+function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevoke, onCloseDetail }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: () => void; onReject: () => void; onRevoke: () => void; onCloseDetail: () => void }) {
   const { t } = useI18n('knowledge')
   if (!record) return <StateBlock title={t('knowledge:inspector.empty')} compact />
   const canReview = Boolean(record.reviewType) && record.status === 'proposed' && !snapshot?.usingDemoData && !busy
   const conflicts = snapshot?.conflicts.filter((item) => item.candidateId === record.id || item.targetId === record.id) ?? []
   const canRevoke = record.status === 'active' && record.kind !== 'observation' && Boolean(record.workspaceId) && !busy
-  return <div className={styles.inspector}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{record.confidence !== undefined && <Metric label={t('knowledge:inspector.confidence')} value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label={t('knowledge:inspector.status')} value={record.status} />}{record.derivation && <KeyValue label={t('knowledge:inspector.derivation')} value={record.derivation} />}{record.factKind && <KeyValue label={t('knowledge:inspector.factKind')} value={record.factKind} />}<TagRow tags={record.tags} /><KeyValue label={t('knowledge:inspector.created')} value={formatDate(record.createdAt, t('knowledge:time.unknown'))} /><KeyValue label={t('knowledge:inspector.sourceRefs')} value={record.sourceIds.join(', ') || t('knowledge:inspector.none')} /><KeyValue label={t('knowledge:inspector.files')} value={record.fileRefs.join(', ') || t('knowledge:inspector.none')} />{conflicts.length > 0 && <div className={styles.demoNotice}>{t('knowledge:inspector.conflict', { detail: conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ') })}</div>}<div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={onApprove}>{busy ? t('knowledge:action.working') : t('knowledge:action.approve')}</button><button type="button" disabled={!canReview} onClick={onReject}>{t('knowledge:action.reject')}</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>{t('knowledge:action.archive')}</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>{t('knowledge:inspector.demoNotice')}</div>}</div>
+  return <div className={styles.inspector}><div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{record.confidence !== undefined && <Metric label={t('knowledge:inspector.confidence')} value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label={t('knowledge:inspector.status')} value={record.status} />}{record.derivation && <KeyValue label={t('knowledge:inspector.derivation')} value={record.derivation} />}{record.factKind && <KeyValue label={t('knowledge:inspector.factKind')} value={record.factKind} />}{record.scoreExplanation && <KeyValue label={t('knowledge:inspector.scoreExplanation')} value={formatScoreExplanation(record.scoreExplanation)} />}<TagRow tags={record.tags} /><KeyValue label={t('knowledge:inspector.created')} value={formatDate(record.createdAt, t('knowledge:time.unknown'))} /><KeyValue label={t('knowledge:inspector.sourceRefs')} value={record.sourceIds.join(', ') || t('knowledge:inspector.none')} /><KeyValue label={t('knowledge:inspector.files')} value={record.fileRefs.join(', ') || t('knowledge:inspector.none')} />{conflicts.length > 0 && <div className={styles.demoNotice}>{t('knowledge:inspector.conflict', { detail: conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ') })}</div>}<div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={onApprove}>{busy ? t('knowledge:action.working') : t('knowledge:action.approve')}</button><button type="button" disabled={!canReview} onClick={onReject}>{t('knowledge:action.reject')}</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>{t('knowledge:action.archive')}</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>{t('knowledge:inspector.demoNotice')}</div>}</div>
 }
 
 function cardFromCandidate(candidate: Candidate): KnowledgeCard {
@@ -437,7 +550,15 @@ function recordFromCandidate(candidate: Candidate | null): InspectorRecord | nul
 }
 
 function recordFromCard(card: KnowledgeCard, reviewType?: KnowledgeReviewCandidateType): InspectorRecord {
-  return { id: card.id, title: card.title, body: card.summary, confidence: card.score, tags: card.tags, sourceIds: card.sourceRefs.observationIds, fileRefs: card.sourceRefs.fileRefs, createdAt: card.createdAt, status: card.status, reviewType, kind: card.kind, workspaceId: card.workspaceId }
+  return { id: card.id, title: card.title, body: card.summary, confidence: card.score, tags: card.tags, sourceIds: card.sourceRefs.observationIds, fileRefs: card.sourceRefs.fileRefs, createdAt: card.createdAt, status: card.status, reviewType, kind: card.kind, workspaceId: card.workspaceId, scoreExplanation: card.scoreExplanation }
+}
+
+/** Demo parity: one-line BM25 part list; always keeps bm25, drops zero parts. */
+export function formatScoreExplanation(explanation: KnowledgeScoreExplanation): string {
+  return (Object.entries(explanation) as Array<[keyof KnowledgeScoreExplanation, number]>)
+    .filter(([part, value]) => part === 'bm25' || value !== 0)
+    .map(([part, value]) => `${part} ${value.toFixed(2)}`)
+    .join(' · ')
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) { return <div className={styles.metric}><strong>{value}</strong><span>{label}</span></div> }

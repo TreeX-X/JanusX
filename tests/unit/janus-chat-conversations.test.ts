@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { JanusChatMessage, PersistedJanusConversation } from '../../src/shared/ipc/janus-chat'
 import { normalizeJanusChatSnapshot } from '../../src/shared/ipc/janus-chat'
 import {
+  COMPACT_SUMMARY_MAX_CHARS,
   capChatMessages,
+  compactJanusConversation,
   getRetryTurn,
+  parseCompactCommand,
   titleFromMessages,
 } from '../../src/renderer/src/components/janus/janusChatConversations'
 
@@ -114,5 +117,57 @@ describe('Janus Chat conversation domain', () => {
       startedAt: 10,
       completedAt: 20,
     })
+  })
+})
+
+describe('R7 manual /compact', () => {
+  it('parses /compact with default, explicit, and clamped keep counts', () => {
+    expect(parseCompactCommand('/compact')).toEqual({ keepLast: 10 })
+    expect(parseCompactCommand('  /compact 4  ')).toEqual({ keepLast: 4 })
+    expect(parseCompactCommand('/compact 999')).toEqual({ keepLast: 50 })
+    expect(parseCompactCommand('/compact 0')).toEqual({ keepLast: 2 })
+    expect(parseCompactCommand('/compact foo')).toBeNull()
+    expect(parseCompactCommand('/compacts')).toBeNull()
+    expect(parseCompactCommand('please /compact')).toBeNull()
+  })
+
+  it('leaves short histories untouched', () => {
+    const messages = [message('u1', 'user'), message('a1', 'assistant')]
+    const result = compactJanusConversation(messages, [], 10)
+    expect(result.compactedCount).toBe(0)
+    expect(result.messages).toHaveLength(2)
+    expect(result.summaryChars).toBe(0)
+  })
+
+  it('folds old turns into a verbatim summary and keeps recent order', () => {
+    const messages = Array.from({ length: 15 }, (_, index) =>
+      message(`m${index}`, index % 2 === 0 ? 'user' : 'assistant', `content-${index} sha256=abc123 path=src/file${index}.ts`))
+    const result = compactJanusConversation(messages, [], 10)
+    expect(result.compactedCount).toBe(5)
+    expect(result.keptCount).toBe(10)
+    expect(result.messages).toHaveLength(11)
+    const [summary, ...kept] = result.messages
+    expect(summary.role).toBe('assistant')
+    expect(summary.content).toContain('[Compacted conversation summary')
+    // 旧部 hash/path 原文保留（P1 原则：永不改写）。
+    expect(summary.content).toContain('sha256=abc123')
+    expect(summary.content).toContain('src/file0.ts')
+    expect(kept.map((item) => item.id)).toEqual(messages.slice(-10).map((item) => item.id))
+  })
+
+  it('bounds the summary and prunes tool traces with digests kept', () => {
+    const messages = Array.from({ length: 30 }, (_, index) =>
+      message(`m${index}`, 'user', `long request ${'x'.repeat(500)} ${index}`))
+    const toolTraces = Array.from({ length: 30 }, (_, index) => ({
+      toolName: 'workspace.read',
+      workspaceId: 'workspace',
+      status: 'completed',
+      summary: `read src/big${index}.ts`,
+    }))
+    const result = compactJanusConversation(messages, toolTraces, 10)
+    expect(result.messages[0].content.length).toBeLessThanOrEqual(COMPACT_SUMMARY_MAX_CHARS + 200)
+    expect(result.toolTraces).toHaveLength(24)
+    expect(result.droppedToolTraces).toBe(6)
+    expect(result.messages[0].content).toContain('workspace.read')
   })
 })

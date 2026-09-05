@@ -14,9 +14,21 @@ import {
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS } from '../../shared/ipc/settings'
 
 export function registerSettingsHandlers(): void {
-  ipcMain.handle(AGENT_SETTINGS_CHANNELS.get, async () => ({ approvalMode: await configService.getAgentApprovalMode() }))
-  ipcMain.handle(AGENT_SETTINGS_CHANNELS.update, async (_event, settings: { approvalMode?: unknown }) => ({
-    approvalMode: await configService.updateAgentApprovalMode(settings?.approvalMode),
+  ipcMain.handle(AGENT_SETTINGS_CHANNELS.get, async () => ({
+    approvalMode: await configService.getAgentApprovalMode(),
+    agentMaxSteps: await configService.getAgentMaxSteps(),
+    safeCompileAutoAllow: await configService.getSafeCompileAutoAllow(),
+  }))
+  ipcMain.handle(AGENT_SETTINGS_CHANNELS.update, async (_event, settings: { approvalMode?: unknown; agentMaxSteps?: unknown; safeCompileAutoAllow?: unknown }) => ({
+    approvalMode: settings?.approvalMode === undefined
+      ? await configService.getAgentApprovalMode()
+      : await configService.updateAgentApprovalMode(settings.approvalMode),
+    agentMaxSteps: settings?.agentMaxSteps === undefined
+      ? await configService.getAgentMaxSteps()
+      : await configService.updateAgentMaxSteps(settings.agentMaxSteps),
+    safeCompileAutoAllow: settings?.safeCompileAutoAllow === undefined
+      ? await configService.getSafeCompileAutoAllow()
+      : await configService.updateSafeCompileAutoAllow(settings.safeCompileAutoAllow),
   }))
 
   ipcMain.handle(NOTIFICATION_SETTINGS_CHANNELS.get, async () => {

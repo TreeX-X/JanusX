@@ -207,8 +207,7 @@ describe('KnowledgeRecallService', () => {
     )
   })
 
-  it('ranks an exact title phrase ahead of incidental body repetition', async () => {
-    const recall = new KnowledgeRecallService(sources({
+  it('ranks an exact title phrase ahead of incidental body repetition', async () => {    const recall = new KnowledgeRecallService(sources({
       facts: [fact('body-heavy', 'release protocol release protocol release protocol incidental detail')],
       wikiPages: [{
         slug: 'release-protocol', title: 'Release Protocol', markdown: 'short operational guide',
@@ -223,5 +222,82 @@ describe('KnowledgeRecallService', () => {
     expect(result.documents[0]?.hit.id).toBe('release-protocol')
     expect(result.documents[0]?.scoreExplanation.exactTitle).toBe(3)
     expect(result.documents[0]?.scoreExplanation.bodyPhrase).toBe(0)
+  })
+
+  it('ranks a wiki slug match ahead of repeated body mentions', async () => {
+    const recall = new KnowledgeRecallService(sources({
+      facts: [fact('heavy', 'crane crane crane overview')],
+      wikiPages: [{
+        slug: 'harbor-crane', title: 'Dock Manual', markdown: 'crane safety rules apply',
+        tags: [], status: 'published', sourceFactIds: [], updatedAt: '2026-07-12T00:00:00.000Z',
+        version: 1, workspaceId: 'workspace-a',
+      }],
+      graphEdges: [],
+    }))
+
+    const result = await recall.recall({ query: 'harbor crane', layer: 'truth', workspaceId: 'workspace-a' })
+
+    expect(result.documents[0]?.hit.id).toBe('harbor-crane')
+    expect(result.documents[0]?.scoreExplanation.slugMatch).toBe(2)
+  })
+
+  it('rewards partial query-term overlap in wiki titles', async () => {
+    const recall = new KnowledgeRecallService(sources({
+      facts: [fact('heavy', 'harbor harbor harbor dock')],
+      wikiPages: [{
+        slug: 'dock-manual', title: 'Dock Manual', markdown: 'harbor crane safety rules',
+        tags: [], status: 'published', sourceFactIds: [], updatedAt: '2026-07-12T00:00:00.000Z',
+        version: 1, workspaceId: 'workspace-a',
+      }],
+      graphEdges: [],
+    }))
+
+    const result = await recall.recall({ query: 'harbor manual', layer: 'truth', workspaceId: 'workspace-a' })
+
+    expect(result.documents[0]?.hit.id).toBe('dock-manual')
+    expect(result.documents[0]?.scoreExplanation.titleTerm).toBeCloseTo(0.6)
+    expect(result.documents[0]?.scoreExplanation.slugMatch).toBe(0)
+  })
+
+  it('inherits wiki file and observation provenance from linked facts', async () => {
+    const recall = new KnowledgeRecallService(sources({
+      facts: [fact('fact-a', 'unified recall truth')],
+      wikiPages: [{
+        slug: 'wiki-a',
+        title: 'Unified Recall Wiki',
+        markdown: 'unified recall truth',
+        tags: [],
+        status: 'published',
+        sourceFactIds: ['fact-a'],
+        updatedAt: '2026-07-12T00:00:00.000Z',
+        version: 1,
+        workspaceId: 'workspace-a',
+      }],
+      graphEdges: [],
+    }))
+
+    const result = await recall.recall({ query: 'unified recall', layer: 'truth', workspaceId: 'workspace-a' })
+    const wiki = result.documents.find((document) => document.hit.id === 'wiki-a')!
+
+    expect(wiki.hit.fileRefs).toEqual(['src/fact-a.ts'])
+    expect(wiki.hit.workspacePath).toBe('C:/workspace-a')
+    expect(wiki.hit.sourceObservationIds).toEqual(['obs-fact-a'])
+    expect(wiki.contextItem?.provenance.fileRefs).toEqual(['src/fact-a.ts'])
+    expect(wiki.contextItem?.provenance.observationIds).toEqual(['obs-fact-a'])
+  })
+
+  it('excerptAroundQuery keeps the match in view for long pages', async () => {
+    const { excerptAroundQuery } = await import('../../../src/main/knowledge/recall-service')
+
+    expect(excerptAroundQuery('short page', 'query')).toBe('short page')
+    const long = `${'filler '.repeat(600)}needle${' filler'.repeat(600)}`
+    const excerpt = excerptAroundQuery(long, 'needle')
+    expect(excerpt.length).toBeLessThanOrEqual(1500)
+    expect(excerpt).toContain('needle')
+    expect(excerpt.startsWith('…')).toBe(true)
+    expect(excerpt.endsWith('…')).toBe(true)
+    const headless = excerptAroundQuery(long, 'absent-term-xyz')
+    expect(headless.endsWith('…')).toBe(true)
+    expect(headless.startsWith('…')).toBe(false)
   })
 })

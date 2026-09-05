@@ -78,6 +78,12 @@ describe('toKnowledgeCard', () => {
     ])
     expect(cards.map((c) => c.kind)).toEqual(['wiki', 'graph'])
   })
+
+  it('carries the BM25 score explanation through to the card', () => {
+    const explanation = { bm25: 1.2, exactTitle: 0.5, titlePhrase: 0, bodyPhrase: 0.25, confidenceBoost: 0.4, freshnessBoost: 0.1 }
+    expect(toKnowledgeCard(makeHit({ scoreExplanation: explanation })).scoreExplanation).toEqual(explanation)
+    expect(toKnowledgeCard(makeHit()).scoreExplanation).toBeUndefined()
+  })
 })
 
 describe('sortKnowledgeCards', () => {

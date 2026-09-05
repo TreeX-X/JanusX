@@ -129,8 +129,33 @@ describe('KnowledgeContextService', () => {
     expect(result.compactContext).toContain('observation:obs-workspace-a')
   })
 
-  it('enforces item and character budgets with truthful truncation', async () => {
+  it('serves long wiki pages as query-centered excerpts', async () => {
+    const markdown = `${'background '.repeat(400)}postgres chosen${' trailing'.repeat(400)}`
     const context = service({
+      facts: [],
+      wikiPages: [{
+        slug: 'long-page',
+        title: 'Long Page',
+        markdown,
+        tags: [],
+        status: 'published',
+        sourceFactIds: [],
+        updatedAt: '2026-07-12T00:00:00.000Z',
+        version: 1,
+        workspaceId: 'workspace-a',
+      }],
+      graphEdges: [],
+    })
+
+    const result = await context.search({ query: 'postgres', workspaceId: 'workspace-a', maxChars: 4000 })
+    const wiki = result.items.find((item) => item.id === 'long-page')!
+
+    expect(wiki.content.length).toBeLessThanOrEqual(1500)
+    expect(wiki.content).toContain('postgres')
+    expect(result.compactContext.length).toBeLessThanOrEqual(4000)
+  })
+
+  it('enforces item and character budgets with truthful truncation', async () => {    const context = service({
       facts: [
         fact('fact-a', 'workspace-a', 'bounded context alpha'),
         fact('fact-b', 'workspace-a', 'bounded context beta'),

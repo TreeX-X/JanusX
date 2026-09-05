@@ -18,7 +18,9 @@ import { mkdir, readFile, appendFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import type {
   CandidateFact,
+  CandidateGraphEdge,
   FactKind,
+  GraphEdge,
   KnowledgeProvenance,
   KnowledgeSource,
   MemoryFact,
@@ -37,6 +39,7 @@ import { configService } from '../config/service'
 import { redactHighConfidenceSecrets } from '../agent/runtime/policy-gate'
 
 const FACT_CANDIDATES_FILE = join('facts', 'candidates.jsonl')
+const GRAPH_CANDIDATES_FILE = join('graph', 'candidates.jsonl')
 const DERIVED_DIR = join('processing', 'derived')
 
 const NORMALIZE_MAX_CHARS = 4000
@@ -82,6 +85,8 @@ export interface DeterministicStageResult {
 export interface DeterministicStageDeps {
   resolveContent: (observation: Observation) => Promise<string>
   listTruthFacts: () => Promise<MemoryFact[]>
+  /** Accepted graph edges, used to skip already-linked truth pairs. */
+  listTruthEdges: () => Promise<GraphEdge[]>
   nowIso: () => string
   /** Phase 1 convergence (§4.6): reads the auto-accept switch; test-injectable. */
   getAutoAccept: () => Promise<boolean>
@@ -93,6 +98,7 @@ function defaultDeps(): DeterministicStageDeps {
   return {
     resolveContent: (observation) => knowledgeObservationService.resolveContent(observation),
     listTruthFacts: async () => (await knowledgeTruthService.list()).facts,
+    listTruthEdges: async () => (await knowledgeTruthService.list()).graphEdges,
     nowIso: () => new Date().toISOString(),
     getAutoAccept: async () => (await configService.getKnowledgeSettings()).autoAcceptDeterministicFacts,
     applyCandidate: (input) => knowledgeReviewService.applyCandidate(input),
@@ -185,6 +191,27 @@ export function extractFileRefs(text: string): string[] {
 
 export function extractTimeTags(text: string): string[] {
   return Array.from(new Set(text.match(TIME_TAG_RE) ?? [])).slice(0, 10)
+}
+
+/**
+ * Deterministic concepts: file stems (`src/db.ts` → `db`). Predictable and
+ * high-signal — shared stems become graph entity nodes and feed the §4.5
+ * conflict overlap that empty concept lists could never trigger.
+ */
+export const MAX_DETERMINISTIC_CONCEPTS = 8
+
+export function extractFileConcepts(files: string[]): string[] {
+  const seen = new Set<string>()
+  const results: string[] = []
+  for (const file of files) {
+    const base = file.split(/[/\\]/).pop() ?? ''
+    const stem = base.replace(/\.[a-zA-Z0-9]{1,8}$/, '').toLowerCase()
+    if (stem.length < 2 || /^\d+$/.test(stem) || seen.has(stem)) continue
+    seen.add(stem)
+    results.push(stem)
+    if (results.length >= MAX_DETERMINISTIC_CONCEPTS) break
+  }
+  return results
 }
 
 function unionLists(...lists: string[][]): string[] {
@@ -302,6 +329,69 @@ async function appendCandidateFacts(candidates: CandidateFact[]): Promise<void> 
   const file = join(knowledgeRootPath(), FACT_CANDIDATES_FILE)
   await mkdir(dirname(file), { recursive: true })
   await appendFile(file, candidates.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
+}
+
+async function appendCandidateGraphEdges(candidates: CandidateGraphEdge[]): Promise<void> {
+  if (candidates.length === 0) return
+  const file = join(knowledgeRootPath(), GRAPH_CANDIDATES_FILE)
+  await mkdir(dirname(file), { recursive: true })
+  await appendFile(file, candidates.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
+}
+
+/**
+ * Truth–truth `mentions` proposals: settled facts in one workspace sharing a
+ * file ref with no stored edge between them (either direction, any type).
+ * Human-gated through the normal candidate flow; keeps the stored graph from
+ * depending solely on the LLM ever emitting edges.
+ */
+export const MAX_DETERMINISTIC_MENTIONS = 20
+
+export function synthesizeMentionEdges(
+  truthFacts: MemoryFact[],
+  existingEdges: Pick<GraphEdge, 'from' | 'to'>[],
+  workspaceId: string,
+  nowIso: string,
+): CandidateGraphEdge[] {
+  const linked = new Set<string>()
+  const pairKey = (a: string, b: string): string => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
+  for (const edge of existingEdges) {
+    linked.add(pairKey(edge.from, edge.to))
+  }
+  const scoped = truthFacts.filter((fact) => fact.provenance.workspaceId === workspaceId)
+  const results: CandidateGraphEdge[] = []
+  for (let i = 0; i < scoped.length && results.length < MAX_DETERMINISTIC_MENTIONS; i++) {
+    const left = scoped[i]!
+    const leftFiles = new Set(left.files)
+    if (leftFiles.size === 0) continue
+    for (let j = i + 1; j < scoped.length && results.length < MAX_DETERMINISTIC_MENTIONS; j++) {
+      const right = scoped[j]!
+      if (right.provenance.workspaceId !== workspaceId) continue
+      const shared = right.files.some((file) => leftFiles.has(file))
+      if (!shared) continue
+      const key = pairKey(left.id, right.id)
+      if (linked.has(key)) continue
+      linked.add(key)
+      const [from, to] = left.id < right.id ? [left.id, right.id] : [right.id, left.id]
+      results.push({
+        id: randomUUID(),
+        type: 'graph-edge',
+        status: 'proposed',
+        edge: {
+          id: randomUUID(),
+          from,
+          to,
+          type: 'mentions',
+          confidence: 0.6,
+          sourceFactIds: [from, to],
+          workspaceId,
+          createdAt: nowIso,
+        },
+        derivation: 'deterministic',
+        evidence: { observationIds: [] },
+      })
+    }
+  }
+  return results
 }
 
 interface PreparedObservation {
@@ -464,7 +554,7 @@ export async function runDeterministicStage(
     const fact: MemoryFact = {
       id: randomUUID(),
       content,
-      concepts: [],
+      concepts: extractFileConcepts(files),
       files,
       tags: unionLists(primary.observation.tags, extractTimeTags(primary.text)),
       confidence: match.confidence,
@@ -492,7 +582,16 @@ export async function runDeterministicStage(
   }
 
   await appendCandidateFacts(candidates)
-  if (candidates.length > 0) {
+  // Truth–truth mentions discovered from shared file refs. Human-gated
+  // through the normal graph-candidate flow; an empty truth set yields none.
+  const mentionEdges = synthesizeMentionEdges(
+    truthFacts,
+    await deps.listTruthEdges().catch(() => []),
+    batch.workspaceId,
+    nowIso,
+  )
+  await appendCandidateGraphEdges(mentionEdges)
+  if (candidates.length > 0 || mentionEdges.length > 0) {
     await knowledgeAuditService.record({
       action: 'candidate_proposed',
       targetType: 'fact',
@@ -500,6 +599,7 @@ export async function runDeterministicStage(
       before: null,
       after: {
         factCandidateIds: candidates.map((candidate) => candidate.id),
+        graphCandidateIds: mentionEdges.map((candidate) => candidate.id),
         sourceObservationIds: prepared.map((item) => item.observation.id),
         derivation: 'deterministic',
       },
@@ -516,7 +616,7 @@ export async function runDeterministicStage(
     })
   }
 
-  return { derived: unique.length, proposals: candidates.length, autoAccepted: await autoAcceptEligible(candidates, deps) }
+  return { derived: unique.length, proposals: candidates.length + mentionEdges.length, autoAccepted: await autoAcceptEligible(candidates, deps) }
 }
 
 /**

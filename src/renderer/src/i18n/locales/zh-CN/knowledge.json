@@ -84,6 +84,10 @@
     "search": "搜索实验室",
     "audit": "审计"
   },
+  "nav": {
+    "main": "工作台",
+    "special": "专项视图"
+  },
   "breadcrumb": {
     "engine": "知识引擎"
   },
@@ -125,8 +129,8 @@
   },
   "graph": {
     "empty": {
-      "title": "无图谱候选",
-      "detail": "抽取尚未提出任何图谱关系。"
+      "title": "无沉淀知识",
+      "detail": "批准候选后，沉淀的事实与关系会出现在这里。"
     },
     "canvas": {
       "searchPlaceholder": "搜索节点定位…",
@@ -135,9 +139,16 @@
       "all": "全部",
       "expandEvidence": "展开证据",
       "collapseEvidence": "收起证据",
+      "resetLayout": "重置排布",
       "capped": "仅显示 {{shown}} / {{total}} 个节点",
       "noMatch": "无节点匹配当前筛选",
-      "hint": "单击节点查看详情，双击聚焦一跳邻居"
+      "noEdges": "暂无线条 — 当事实共享概念 / 文件，或存在存储关系与冲突时会自动连线",
+      "hint": "单击节点聚焦一跳关联（再次单击取消），悬停高亮邻居，双击缩放",
+      "legend": {
+        "stored": "存储关系",
+        "derived": "派生 / 取代",
+        "conflict": "冲突"
+      }
     }
   },
   "statusbar": {
@@ -146,6 +157,8 @@
     "proposals": "候选 {{count}}",
     "indexUpdated": "索引 {{time}}",
     "failures": "失败 {{count}}",
+    "llmUnconfigured": "LLM 未配 · 仅确定性",
+    "llmDegraded": "LLM 降级 ×{{count}}",
     "handlerMissing": "流水线未就绪",
     "lastRun": "上次 {{time}}",
     "neverRun": "尚未运行",
@@ -183,11 +196,13 @@
   },
   "inspector": {
     "empty": "选择一条知识记录",
+    "closeDetail": "关闭详情",
     "provenance": "溯源",
     "confidence": "置信度",
     "status": "状态",
     "derivation": "派生方式",
     "factKind": "事实类型",
+    "scoreExplanation": "命中解释",
     "created": "创建时间",
     "sourceRefs": "来源引用",
     "files": "文件",

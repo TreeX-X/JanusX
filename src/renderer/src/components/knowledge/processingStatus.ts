@@ -10,6 +10,7 @@ export function processingTone(stats: KnowledgeProcessingStats | null): Processi
   if (!stats) return 'offline'
   if (!stats.handlerConfigured) return 'attention'
   if (stats.failures > 0) return 'attention'
+  if (stats.llmConfigured && stats.llmFailed > 0) return 'attention'
   if (stats.pendingTotal > 0) return 'working'
   return 'idle'
 }

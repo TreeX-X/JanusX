@@ -49,7 +49,39 @@ export function isSensitivePath(relativePath: string): boolean {
 }
 
 const READ_ONLY_ACTIONS = new Set<ActionRisk>(['inspect', 'list', 'stat', 'read'])
-const EVIDENCE_CONFIDENCE_VALUES = new Set<EvidenceConfidence>(['unknown', 'low', 'medium', 'high'])
+
+/**
+ * P5 安全编译模式放行：可信工作区内的只读型构建命令在 per-action 下免逐次审批。
+ * 名单集中在此（代码级常量，fail-closed；R2 起总开关经 settings 接线
+ * `safeCompileAutoAllow`，会话级透传，见 runtime.ts）。
+ * `npx tsc --noEmit`、`node scripts/check-*.mjs`。含 shell 元字符、`..`、绝对
+ * 路径、超长参数一律不放行；执行层的 program/args 校验仍会再生效（fail-closed）。
+ */
+export const SAFE_COMPILE_MANAGERS = new Set(['npm', 'yarn', 'pnpm', 'bun'])
+export const SAFE_COMPILE_SCRIPTS = new Set(['build', 'typecheck', 'lint', 'test'])
+export const SAFE_COMPILE_CHECK_SCRIPT = /^scripts\/check-[^/]+\.mjs$/
+const SAFE_COMMAND_ARG_META = /[&|<>^\r\n\0]/
+
+export function isSafeCompileCommand(toolName: string, input: Record<string, unknown>): boolean {
+  if (toolName !== 'command.run') return false
+  const program = typeof input.program === 'string' ? input.program.trim().toLowerCase() : ''
+  const args = Array.isArray(input.args) ? input.args : undefined
+  if (!program || !args || args.length > 100 || !args.every((arg) => typeof arg === 'string')) return false
+  if (args.some((arg) => arg.length > 4096 || SAFE_COMMAND_ARG_META.test(arg))) return false
+  // 仅裸命令名：工作区相对可执行路径（program 含 / 或 \) 永不放行。
+  if (!program || /[/\\]/.test(program)) return false
+  if (SAFE_COMPILE_MANAGERS.has(program)) {
+    return (args.length === 2 && args[0] === 'run' && SAFE_COMPILE_SCRIPTS.has(args[1]))
+      || (args.length === 1 && args[0] === 'test')
+  }
+  if (program === 'npx') {
+    return args[0] === 'tsc' && args.includes('--noEmit')
+  }
+  if (program === 'node') {
+    return args.length >= 1 && SAFE_COMPILE_CHECK_SCRIPT.test(args[0])
+  }
+  return false
+}const EVIDENCE_CONFIDENCE_VALUES = new Set<EvidenceConfidence>(['unknown', 'low', 'medium', 'high'])
 const SECRET_FIELD_PARTS = ['apikey', 'authorization', 'cookie', 'credential', 'password', 'privatekey', 'secret', 'token']
 const SECRET_TEXT_PATTERNS = [
   /\bBearer\s+[^\s,;]+/gi,

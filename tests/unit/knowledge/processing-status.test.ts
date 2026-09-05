@@ -41,4 +41,10 @@ describe('processingTone (§6 status bar)', () => {
     expect(processingTone(stats({ handlerConfigured: false }))).toBe('attention')
     expect(processingTone(stats({ pendingTotal: 5, failures: 1 }))).toBe('attention')
   })
+
+  it('is attention on LLM degradation, idle when the LLM stage is clean or off', () => {
+    expect(processingTone(stats({ llmConfigured: true, llmFailed: 2 }))).toBe('attention')
+    expect(processingTone(stats({ llmConfigured: true, llmSucceeded: 3 }))).toBe('idle')
+    expect(processingTone(stats({ llmConfigured: false }))).toBe('idle')
+  })
 })

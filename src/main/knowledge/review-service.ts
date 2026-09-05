@@ -513,7 +513,11 @@ export class KnowledgeReviewService {
       relativePath: relativePath.replace(/\\/g, '/'),
       tags: existingEntry?.tags ?? [],
       status: 'published',
-      sourceFactIds: existingEntry?.sourceFactIds ?? [],
+      // 沉淀 Wiki 与其总结的事实挂钩：新补丁带来的 sourceFactIds 并入已有集合。
+      sourceFactIds: [...new Set([
+        ...(existingEntry?.sourceFactIds ?? []),
+        ...(candidate.sourceFactIds ?? []),
+      ])],
       updatedAt: now,
       version,
       workspaceId: candidate.provenance.workspaceId,

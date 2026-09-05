@@ -12,7 +12,7 @@ const { handle, on, search, capture, streamText, getSession, executeFunctionCall
   scheduleImmediate: vi.fn(),
 }))
 
-vi.mock('electron', () => ({ ipcMain: { handle, on } }))
+vi.mock('electron', () => ({ ipcMain: { handle, on }, app: { getPath: () => '/tmp/janusx-test' } }))
 vi.mock('../../../src/main/knowledge/context-service', () => ({
   knowledgeContextService: { search },
 }))
@@ -57,7 +57,7 @@ vi.mock('../../../src/main/agent/runtime/runtime', () => ({
 }))
 
 import { registerLlmHandlers } from '../../../src/main/ipc/llm-handlers'
-import { hasExplicitWorkspaceMutationIntent, prepareJanusChatRecall } from '../../../src/main/llm/chat-orchestrator'
+import { hasExplicitWorkspaceMutationIntent, prepareJanusChatRecall, toolTraceEntryFromResult } from '../../../src/main/llm/chat-orchestrator'
 
 const emptyResult: KnowledgeContextResult = {
   items: [],
@@ -441,5 +441,50 @@ describe('Janus Chat knowledge recall', () => {
       requestId: 'stream-edit-recovery',
       delta: '修改完成。',
     }))
+  })
+})
+
+describe('toolTraceEntryFromResult P6 long-command digests', () => {
+  const base = {
+    sessionId: 'session-1',
+    correlationId: 'call-1',
+    startedAt: '2026-09-06T00:00:00.000Z',
+    completedAt: '2026-09-06T00:00:00.001Z',
+    durationMs: 1,
+    summary: 'command.run completed',
+  } as const
+
+  it('keeps command.run exit/log refs inside the trace budget', () => {
+    const entry = toolTraceEntryFromResult({
+      ...base,
+      workspaceId: 'workspace-1',
+      toolName: 'command.run',
+      status: 'completed',
+      output: { exitCode: 1, totalBytes: 70000, logPath: '.janusX/logs/cmd-1.log' },
+    })
+    expect(entry.summary).toContain('exit=1')
+    expect(entry.summary).toContain('log=.janusX/logs/cmd-1.log')
+    expect(entry.summary.length).toBeLessThanOrEqual(300)
+    expect(entry.resultDigest).toBe('.janusX/logs/cmd-1.log')
+  })
+
+  it('keeps background job and exited output refs', () => {
+    const bg = toolTraceEntryFromResult({
+      ...base,
+      workspaceId: 'workspace-1',
+      toolName: 'command.run',
+      status: 'completed',
+      output: { background: true, projectId: 'pid-1', logPath: '.janusX/logs/bg-1.log' },
+    })
+    expect(bg.summary).toContain('job=pid-1')
+    const exited = toolTraceEntryFromResult({
+      ...base,
+      workspaceId: 'workspace-1',
+      toolName: 'project.process-output',
+      status: 'completed',
+      output: { totalLines: 900, exited: true, exitCode: 0, logPath: '.janusX/logs/bg-1.log' },
+    })
+    expect(exited.summary).toContain('900 lines')
+    expect(exited.summary).toContain('exited=0')
   })
 })

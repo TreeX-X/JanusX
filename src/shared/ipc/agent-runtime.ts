@@ -137,6 +137,8 @@ export interface AgentSession {
   updatedAt: string
   timeoutMs: number
   approvalMode: AgentApprovalMode
+  /** R2：安全编译自动放行开关（缺席即允许，保持 P5 已落地行为）。 */
+  safeCompileAutoAllow?: boolean
 }
 
 export interface ApprovalRequest {
@@ -177,7 +179,7 @@ export type AgentRuntimeEvent =
   | { type: 'tool-cancelled'; result: ToolResult }
   | { type: 'session-ended'; session: AgentSession }
 
-export interface CreateAgentSessionInput { workspaceId: string; workspaceRoot: string; timeoutMs?: number; approvalMode?: AgentApprovalMode }
+export interface CreateAgentSessionInput { workspaceId: string; workspaceRoot: string; timeoutMs?: number; approvalMode?: AgentApprovalMode; safeCompileAutoAllow?: boolean }
 export interface ExecuteToolInput { sessionId: string; call: ToolCall }
 
 export function normalizeAgentApprovalMode(value: unknown): AgentApprovalMode {

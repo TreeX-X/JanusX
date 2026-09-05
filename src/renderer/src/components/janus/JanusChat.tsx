@@ -252,6 +252,10 @@ export function JanusChat({
   const activeApprovalMode = approvalMode ?? conversations?.approvalMode ?? 'per-action'
   const activePendingReasoning = pendingReasoningProp ?? conversations?.pendingReasoning ?? EMPTY_REASONING_SNAPSHOT
   const activeReasoningByTurn = reasoningByTurnProp ?? conversations?.reasoningByTurn ?? EMPTY_REASONING_BY_TURN
+  // R6-full：在途 steering 以消息内徽标呈现（文本已乐观进历史）；无 controller
+  // 的展示路径（圆桌中央等）没有在途集合，不渲染徽标。
+  const pendingSteerIds = conversations?.pendingSteerIds ?? []
+  const cancelSteeredMessage = conversations?.cancelSteeredMessage
 
   const copyMessage = useCallback((content: string) => {
     if (!navigator.clipboard) return
@@ -333,7 +337,7 @@ export function JanusChat({
   // 重建数组，旧写法会在每次渲染都触发滚动/提示，造成底部持续被拽走或
   // 误弹“新信息”。卡片必须纳入签名，否则圆桌结果到达时既不跟随也不提示。
   const lastMessage = messages[messages.length - 1]
-  const contentSignature = `${messages.length}|${lastMessage?.id ?? ''}|${lastMessage?.timestamp ?? 0}|${pendingContent?.length ?? 0}|${activePendingReasoning.text.length}`
+  const contentSignature = `${messages.length}|${lastMessage?.id ?? ''}|${lastMessage?.timestamp ?? 0}|${pendingContent?.length ?? 0}|${activePendingReasoning.text.length}|s${pendingSteerIds.join(',')}`
   const cardsSignature = roundtableCards.map((card) => `${card.id}@${card.updatedAt || card.createdAt}`).join('|')
   useLayoutEffect(() => {
     if (isAtBottomRef.current) {
@@ -410,7 +414,8 @@ export function JanusChat({
   const handleSend = useCallback(
     (textOverride?: string) => {
       const text = (textOverride ?? input).trim()
-      if (!text || isStreaming) return
+      // R6-lite：流式中发送由 hook 路由进排队（自然结束边界自动发出），此处不再拦截。
+      if (!text) return
 
       setInput('')
       setHistoryIndex(null)
@@ -426,7 +431,7 @@ export function JanusChat({
       }
       onSend(text)
     },
-    [input, isStreaming, onSend, scrollToBottom, discussionOnly]
+    [input, onSend, scrollToBottom, discussionOnly]
   )
 
   // 输入变化；高度由上面的 auto-grow effect 按 scrollHeight 调整，
@@ -1113,6 +1118,20 @@ export function JanusChat({
                 >
                   <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
                 </button>
+              {msg.role === 'user' && pendingSteerIds.includes(msg.id) ? (
+                <>
+                  <span className="janus-chat-queued-badge">{t('janus:chat.queue.badge')}</span>
+                  <button
+                    className="janus-chat-message-edit"
+                    type="button"
+                    title={t('janus:chat.queue.cancelTitle')}
+                    aria-label={t('janus:chat.queue.cancelAria')}
+                    onClick={() => cancelSteeredMessage?.(msg.id)}
+                  >
+                    <X size={13} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                </>
+              ) : null}
               {msg.role === 'user' && editingMessageId === msg.id ? (
                 <>
                   <button
@@ -1250,24 +1269,35 @@ export function JanusChat({
             className="janus-chat-input"
             rows={1}
             wrap="soft"
-            placeholder={t('janus:chat.inputPlaceholder')}
+            placeholder={isStreaming ? t('janus:chat.queue.inputPlaceholder') : t('janus:chat.inputPlaceholder')}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            disabled={isStreaming}
             style={{ '--accent-color': modeColor } as React.CSSProperties}
           />
           {isStreaming ? (
-            <button
-              className="janus-chat-stop"
-              onClick={handleStop}
-              style={{ '--accent-color': modeColor } as React.CSSProperties}
-              title={t('janus:chat.stop.title')}
-              aria-label={t('janus:chat.stop.aria')}
-              type="button"
-            >
-              <StopIcon />
-            </button>
+            <>
+              <button
+                className="janus-chat-stop"
+                onClick={handleStop}
+                style={{ '--accent-color': modeColor } as React.CSSProperties}
+                title={t('janus:chat.stop.title')}
+                aria-label={t('janus:chat.stop.aria')}
+                type="button"
+              >
+                <StopIcon />
+              </button>
+              <button
+                className="janus-chat-send"
+                onClick={() => handleSend()}
+                disabled={!input.trim()}
+                title={t('janus:chat.queue.sendTitle')}
+                aria-label={t('janus:chat.queue.sendAria')}
+                type="button"
+              >
+                <Send size={14} strokeWidth={2} aria-hidden="true" />
+              </button>
+            </>
           ) : (
             <button
               className="janus-chat-send"

@@ -4,6 +4,8 @@ import {
   getDefaultProvider,
   getProviders,
   listModels,
+  cancelSteerChat,
+  steerChat,
   type ChatMessage,
 } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -21,9 +23,11 @@ import {
   MAX_TOOL_TRACES,
   NEW_CONVERSATION_TITLE,
   capChatMessages,
+  compactJanusConversation,
   createJanusConversation,
   getRetryTurn,
   createInitialSnapshot,
+  parseCompactCommand,
   titleFromMessages,
 } from './janusChatConversations'
 import {
@@ -36,6 +40,7 @@ import {
   emptyReasoning,
   type ReasoningSnapshot,
 } from './janusReasoning'
+import { consumeSteeredIds, removeMessageById } from './janusSteering'
 import {
   EMPTY_JANUS_RUNTIME_STATE,
   reduceChatAgentEvent,
@@ -102,6 +107,12 @@ export interface UseJanusChatReturn {
   stop: () => void
   retry: () => void
   clear: () => void
+  /**
+   * R6-full：在途 steering 条目 id（= 乐观追加的用户消息 id）。
+   * 主侧 steering_consumed 到达或请求结束即清除；文本永远留在历史里。
+   */
+  pendingSteerIds: string[]
+  cancelSteeredMessage: (queueId: string) => void
   selectModel: (providerId: string, modelId: string) => void
   refreshModels: () => Promise<ChatModelOption[]>
   createConversation: () => string
@@ -121,6 +132,8 @@ interface ConversationRuntime {
   pendingContent: string
   pendingReasoning: ReasoningSnapshot
   reasoningByTurn: Record<string, ReasoningSnapshot>
+  /** R6-full：在途 steering 条目 id；badge 用，请求结束即清（文本留历史）。 */
+  pendingSteerIds: string[]
   isStreaming: boolean
   error: string | null
   modelNotice: string | null
@@ -148,6 +161,7 @@ function emptyRuntime(approvalMode: AgentApprovalMode = 'per-action'): Conversat
     pendingContent: '',
     pendingReasoning: emptyReasoning(),
     reasoningByTurn: {},
+    pendingSteerIds: [],
     isStreaming: false,
     error: null,
     modelNotice: null,
@@ -568,7 +582,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           handles.abort = null
           const final = flushPending(id)
           handles.pendingBuffer = ''
-          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
+          // R6-full：在途 steering badge 清除；文本早已在历史中保留。
+          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, pendingSteerIds: [] }))
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
           snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
           handles.assistantMessageId = null
@@ -584,6 +599,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             pendingContent: '',
             isStreaming: false,
             error,
+            pendingSteerIds: [],
           }))
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
           snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
@@ -618,6 +634,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
               if (agentEvent.type === 'reasoning_delta') {
                 appendReasoning(id, agentEvent.delta)
               }
+              if (agentEvent.type === 'steering_consumed') {
+                // R6-full：主侧已注入本轮，badge 清除（文本本就在历史中）。
+                setRuntime(id, (current) => {
+                  const next = consumeSteeredIds(current.pendingSteerIds, agentEvent.keys)
+                  return next === current.pendingSteerIds ? current : { ...current, pendingSteerIds: next }
+                })
+              }
               setRuntime(id, (current) => ({
                 ...current,
                 agent: reduceChatAgentEvent(current.agent, agentEvent),
@@ -635,6 +658,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         ...current,
         isStreaming: false,
         error: reason instanceof Error ? reason.message : 'Workspace session failed',
+        pendingSteerIds: [],
       }))
     })
   }, [appendPending, appendReasoning, clearFlushTimer, commitAssistant, ensureAgentSessions, flushPending, getHandles, setRuntime, snapshotReasoning, updateConversation])
@@ -650,7 +674,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.abort = null
     const final = flushPending(id)
     handles.pendingBuffer = ''
-    setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
+    // R6-full：stop 保留 steering 文本在历史（badge 清除），不断言自动重发。
+    setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, pendingSteerIds: [] }))
     commitAssistant(id, final, handles.assistantMessageId ?? undefined)
     snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
     handles.assistantMessageId = null
@@ -659,14 +684,106 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   const send = useCallback((id: string, text: string) => {
     const trimmed = text.trim()
     const conversation = conversationsRef.current.find((item) => item.id === id)
-    if (!trimmed || !conversation || runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) return
+    if (!trimmed || !conversation) return
+    // R7：手动 /compact —— 本地确定性折叠旧消息，不发模型。
+    const compact = parseCompactCommand(trimmed)
+    if (compact) {
+      const flashNotice = (modelNotice: string) => {
+        setRuntime(id, (current) => ({ ...current, modelNotice }))
+        const handles = getHandles(id)
+        if (handles.noticeTimer !== null) window.clearTimeout(handles.noticeTimer)
+        handles.noticeTimer = window.setTimeout(() => {
+          handles.noticeTimer = null
+          setRuntime(id, (current) => (current.modelNotice === modelNotice ? { ...current, modelNotice: null } : current))
+        }, 1800)
+      }
+      if (runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) {
+        flashNotice('Cannot compact while a response is streaming')
+        return
+      }
+      const result = compactJanusConversation(conversation.messages, conversation.toolTraces, compact.keepLast)
+      if (result.compactedCount === 0) {
+        flashNotice('Conversation is already compact — nothing to collapse')
+        return
+      }
+      updateConversation(id, (current) => ({
+        ...current,
+        messages: capChatMessages(result.messages),
+        toolTraces: result.toolTraces,
+        updatedAt: Date.now(),
+      }))
+      flashNotice(`Compacted ${result.compactedCount} messages into a summary; kept last ${result.keptCount}`)
+      return
+    }
+    if (runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) {
+      // R6-full：流式中发送走 steering——乐观追加用户消息（随会话落盘即 durable），
+      // 再向主侧投递抢占。主侧 accept 即入队；拒绝（流已结束/队满）按下述回退。
+      const entry: Message = { id: crypto.randomUUID(), role: 'user', content: trimmed, timestamp: Date.now() }
+      updateConversation(id, (current) => ({ ...current, messages: [...current.messages, entry], updatedAt: Date.now() }))
+      setRuntime(id, (current) => current.pendingSteerIds.includes(entry.id)
+        ? current
+        : { ...current, pendingSteerIds: [...current.pendingSteerIds, entry.id] })
+      const settleSteer = (result: { accepted: boolean; error?: string }) => {
+        if (result.accepted) return
+        if (result.error === 'Steering queue is full for this stream') {
+          // 队满：文本留历史（下次发送自然带上），badge 消 + 短暂提示。
+          setRuntime(id, (current) => ({
+            ...current,
+            pendingSteerIds: current.pendingSteerIds.filter((item) => item !== entry.id),
+            modelNotice: 'Steering queue is full; message kept for next turn',
+          }))
+          const handles = getHandles(id)
+          if (handles.noticeTimer !== null) window.clearTimeout(handles.noticeTimer)
+          handles.noticeTimer = window.setTimeout(() => {
+            handles.noticeTimer = null
+            setRuntime(id, (current) => ({ ...current, modelNotice: null }))
+          }, 1800)
+          return
+        }
+        // 流已结束等竞态：撤回乐观消息，macrotask 后按最新状态重走发送。
+        updateConversation(id, (current) => {
+          const next = removeMessageById(current.messages, entry.id)
+          return next === current.messages ? current : { ...current, messages: next, updatedAt: Date.now() }
+        })
+        setRuntime(id, (current) => ({ ...current, pendingSteerIds: current.pendingSteerIds.filter((item) => item !== entry.id) }))
+        window.setTimeout(() => {
+          const handles = getHandles(id)
+          const latest = conversationsRef.current.find((item) => item.id === id)
+          if (!latest) return
+          if (runtimesRef.current[id]?.isStreaming || handles.active) {
+            // 流又忙了：文本挂回历史尾，等下次发送自然带上。
+            updateConversation(id, (current) => ({ ...current, messages: [...current.messages, entry], updatedAt: Date.now() }))
+            return
+          }
+          startRequest(id, latest.messages, entry)
+        }, 0)
+      }
+      void steerChat({ conversationId: id, entryId: entry.id, text: trimmed }).then(
+        settleSteer,
+        () => settleSteer({ accepted: false }),
+      )
+      return
+    }
     startRequest(id, conversation.messages, {
       id: crypto.randomUUID(),
       role: 'user',
       content: trimmed,
       timestamp: Date.now(),
     })
-  }, [startRequest])
+  }, [getHandles, setRuntime, startRequest, updateConversation])
+
+  const cancelSteeredMessage = useCallback((id: string, queueId: string) => {
+    // 已消费则撤销失败（消息保留）；未消费则从主侧队列与本地历史同时撤回。
+    void cancelSteerChat({ conversationId: id, entryId: queueId }).then((result) => {
+      setRuntime(id, (current) => ({ ...current, pendingSteerIds: current.pendingSteerIds.filter((item) => item !== queueId) }))
+      if (result.cancelled) {
+        updateConversation(id, (current) => {
+          const next = removeMessageById(current.messages, queueId)
+          return next === current.messages ? current : { ...current, messages: next, updatedAt: Date.now() }
+        })
+      }
+    }).catch(() => undefined)
+  }, [setRuntime, updateConversation])
 
   const rewrite = useCallback((id: string, messageId: string, text: string) => {
     const trimmed = text.trim()
@@ -875,6 +992,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       stop: () => stop(id),
       retry: () => retry(id),
       clear: () => clear(id),
+      pendingSteerIds: runtime.pendingSteerIds,
+      cancelSteeredMessage: (queueId) => cancelSteeredMessage(id, queueId),
       selectModel: (providerId, modelId) => selectModel(id, providerId, modelId),
       refreshModels: loadConfiguredModels,
       createConversation,
@@ -887,6 +1006,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [
     attachWorkspace,
     availableWorkspaces,
+    cancelSteeredMessage,
     clear,
     conversations,
     createConversation,

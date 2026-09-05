@@ -20,7 +20,7 @@ export function registerAgentRuntimeHandlers(windowGetter: () => BrowserWindow |
   registerGitTools(workspaceAgentRuntime.registry)
   registerCommandTools(workspaceAgentRuntime.registry)
   registered = true
-  ipcMain.handle(AGENT_RUNTIME_CHANNELS.createSession, async (event, input: CreateAgentSessionInput) => workspaceAgentRuntime.createSession({ ...input, approvalMode: input.approvalMode ?? await configService.getAgentApprovalMode() }, `renderer:${event.sender.id}`))
+  ipcMain.handle(AGENT_RUNTIME_CHANNELS.createSession, async (event, input: CreateAgentSessionInput) => workspaceAgentRuntime.createSession({ ...input, approvalMode: input.approvalMode ?? await configService.getAgentApprovalMode(), safeCompileAutoAllow: input.safeCompileAutoAllow ?? await configService.getSafeCompileAutoAllow() }, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.executeTool, (event, input: ExecuteToolInput) => workspaceAgentRuntime.executeTool(input, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.cancelSession, (_event, sessionId: string) => workspaceAgentRuntime.cancelSession(sessionId))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.resolveApproval, (event, input: ApprovalResult) => workspaceAgentRuntime.resolveApproval(input, `renderer:${event.sender.id}`))

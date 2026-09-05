@@ -428,4 +428,95 @@ describe('WorkspaceAgentRuntime', () => {
     expect((await pending).status).toBe('timed-out'); expect(runtime.getSession(session.id)?.status).toBe('timed-out')
     vi.useRealTimers()
   })
+
+  it('auto-allows safe compile commands in per-action mode without an approval dialog', async () => {
+    const execute = vi.fn(async (input: unknown) => ({ ok: true, input }))
+    const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
+    runtime.registry.register({
+      name: 'command.run', description: 'Run', actionRisk: 'external-command',
+      inputSchema: { type: 'object', properties: { program: { type: 'string' }, args: { type: 'array' } }, required: ['program'], additionalProperties: false },
+      execute,
+    })
+    const events: string[] = []; runtime.onEvent((event) => events.push(event.type))
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd() })
+    expect(session.approvalMode).toBe('per-action')
+    const call = (program: string, args: string[]) => ({ toolName: 'command.run', input: { program, args } })
+
+    const build = await runtime.executeTool({ sessionId: session.id, call: call('npm', ['run', 'build']) })
+    expect(build).toMatchObject({ status: 'completed', reasonCode: 'AUTO_RUN_ALLOWED' })
+    const typecheck = await runtime.executeTool({ sessionId: session.id, call: call('npx', ['tsc', '--noEmit']) })
+    expect(typecheck).toMatchObject({ status: 'completed', reasonCode: 'AUTO_RUN_ALLOWED' })
+    const check = await runtime.executeTool({ sessionId: session.id, call: call('node', ['scripts/check-contracts.mjs']) })
+    expect(check).toMatchObject({ status: 'completed', reasonCode: 'AUTO_RUN_ALLOWED' })
+    expect(execute).toHaveBeenCalledTimes(3)
+    expect(events).not.toContain('approval-requested')
+  })
+
+  it('R2: exposes safeCompileAutoAllow on sessions defaulting to true', async () => {
+    const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
+    const implicit = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd() })
+    expect(implicit.safeCompileAutoAllow).toBe(true)
+    const disabled = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd(), safeCompileAutoAllow: false })
+    expect(disabled.safeCompileAutoAllow).toBe(false)
+  })
+
+  it('R2: requires approval for safe compile commands when safeCompileAutoAllow is false', async () => {
+    const execute = vi.fn(async () => ({ ok: true }))
+    const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
+    runtime.registry.register({
+      name: 'command.run', description: 'Run', actionRisk: 'external-command',
+      inputSchema: { type: 'object', properties: { program: { type: 'string' }, args: { type: 'array' } }, required: ['program'], additionalProperties: false },
+      execute,
+    })
+    let approvalRequest: ApprovalRequest | undefined
+    const events: string[] = []
+    runtime.onEvent((event) => {
+      events.push(event.type)
+      if (event.type === 'approval-requested') approvalRequest = event.request
+    })
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd(), safeCompileAutoAllow: false })
+    const preview = { summary: 'Run', paths: [''], truncated: false }
+    const pending = runtime.executeTool({ sessionId: session.id, call: { toolName: 'command.run', input: { program: 'npm', args: ['run', 'build'] }, preview } })
+    await vi.waitFor(() => expect(approvalRequest).toBeDefined())
+    expect(resolve(runtime, approvalRequest!, true)).toBe(true)
+    const result = await pending
+    expect(result.status).toBe('completed')
+    expect(result.reasonCode).not.toBe('AUTO_RUN_ALLOWED')
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(events).toContain('approval-requested')
+  })
+
+  it('keeps dangerous commands behind approval in per-action mode', async () => {
+    const execute = vi.fn(async () => ({ ok: true }))
+    const runtime = new WorkspaceAgentRuntime(async () => process.cwd())
+    runtime.registry.register({
+      name: 'command.run', description: 'Run', actionRisk: 'external-command',
+      inputSchema: { type: 'object', properties: { program: { type: 'string' }, args: { type: 'array' } }, required: ['program'], additionalProperties: false },
+      execute,
+    })
+    let approvalRequest: ApprovalRequest | undefined
+    runtime.onEvent((event) => { if (event.type === 'approval-requested') approvalRequest = event.request })
+    const session = await runtime.createSession({ workspaceId: 'workspace-1', workspaceRoot: process.cwd() })
+    const preview = { summary: 'Run', paths: [''], truncated: false }
+
+    const pending = runtime.executeTool({ sessionId: session.id, call: { toolName: 'command.run', input: { program: 'npm', args: ['publish'] }, preview } })
+    await vi.waitFor(() => expect(approvalRequest).toBeDefined())
+    expect(resolve(runtime, approvalRequest!, true)).toBe(true)
+    expect((await pending).status).toBe('completed')
+
+    // shell 元字符 / 非 tsc 的 npx / 路径 program 一律不放行。
+    for (const input of [
+      { program: 'npm', args: ['run', 'build', 'a&b'] },
+      { program: 'npx', args: ['tsc'] },
+      { program: 'node', args: ['scripts/other.mjs'] },
+      { program: './scripts/build.sh', args: [] },
+    ]) {
+      approvalRequest = undefined
+      const gated = runtime.executeTool({ sessionId: session.id, call: { toolName: 'command.run', input, preview } })
+      await vi.waitFor(() => expect(approvalRequest).toBeDefined())
+      expect(resolve(runtime, approvalRequest!, false)).toBe(true)
+      expect((await gated).status).toBe('cancelled')
+    }
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
 })

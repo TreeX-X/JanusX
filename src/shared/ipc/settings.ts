@@ -13,8 +13,8 @@ export const AGENT_SETTINGS_CHANNELS = {
 } as const
 
 export interface AgentSettingsAPI {
-  get(): Promise<{ approvalMode: AgentApprovalMode }>
-  update(settings: { approvalMode: AgentApprovalMode }): Promise<{ approvalMode: AgentApprovalMode }>
+  get(): Promise<{ approvalMode: AgentApprovalMode; agentMaxSteps: number; safeCompileAutoAllow: boolean }>
+  update(settings: { approvalMode?: AgentApprovalMode; agentMaxSteps?: unknown; safeCompileAutoAllow?: unknown }): Promise<{ approvalMode: AgentApprovalMode; agentMaxSteps: number; safeCompileAutoAllow: boolean }>
 }
 
 export const NOTIFICATION_SETTINGS_CHANNELS = {

@@ -136,6 +136,65 @@ function normalizedPhrase(value: string): string {
   return value.toLowerCase().trim().replace(/\s+/g, ' ')
 }
 
+/** Query terms for term-level boosts: split on whitespace/punctuation runs. */
+export function recallQueryTerms(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[\s,，、。；;：:·\-_/\\|()（）【】[\]{}"'“”‘’]+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0)
+}
+
+/** Fraction of substantive query terms appearing in the title (0..1 scaled). */
+function titleTermBoost(hit: KnowledgeSearchHit, query: string): number {
+  const terms = recallQueryTerms(query).filter((term) => term.length > 1)
+  if (terms.length === 0) return 0
+  const title = normalizedPhrase(hit.title)
+  const matched = terms.filter((term) => title.includes(term)).length
+  return (matched / terms.length) * 1.2
+}
+
+/** Wiki slug boost: ids ARE slugs for wiki-page docs, but slugs are never
+ * part of the indexed text, so slug hits need an explicit part. */
+function slugBoost(hit: KnowledgeSearchHit, query: string): number {
+  if (hit.type !== 'wiki-page') return 0
+  const slug = hit.id.toLowerCase().replace(/[-_]+/g, ' ').trim()
+  const phrase = normalizedPhrase(query).replace(/[-_]+/g, ' ').trim()
+  if (!slug || !phrase) return 0
+  if (slug === phrase) return 2
+  if (slug.includes(phrase) || phrase.includes(slug)) return 1
+  return 0
+}
+
+/** Query-centered excerpt for long wiki pages: keeps the match in view so
+ * one long page no longer eats the whole context budget. */
+export const WIKI_EXCERPT_MAX_CHARS = 1500
+
+export function excerptAroundQuery(content: string, query: string, maxChars: number = WIKI_EXCERPT_MAX_CHARS): string {
+  const budget = Math.max(0, Math.floor(maxChars))
+  if (content.length <= budget) return content
+  if (budget <= 4) return budget <= 1 ? content.slice(0, budget) : `${content.slice(0, budget - 1)}…`
+  const lowered = content.toLowerCase()
+  const terms = recallQueryTerms(query).sort((a, b) => b.length - a.length)
+  let at = -1
+  for (const term of terms) {
+    at = lowered.indexOf(term)
+    if (at >= 0) break
+  }
+  if (at < 0) return `${content.slice(0, maxChars - 1)}…`
+  // Reserve both cut markers, then reclaim whichever side is uncut.
+  const span = maxChars - 2
+  const half = Math.floor(span / 2)
+  let start = Math.max(0, at - half)
+  let end = Math.min(content.length, start + span)
+  if (end - start < span) start = Math.max(0, end - span)
+  if (start === 0) end = Math.min(content.length, end + 1)
+  if (end === content.length) start = Math.max(0, start - 1)
+  const head = start > 0 ? '…' : ''
+  const tail = end < content.length ? '…' : ''
+  return `${head}${content.slice(start, end)}${tail}`
+}
+
 function lexicalExplanation(hit: KnowledgeSearchHit, query: string, bm25: number, nowMs: number) {
   const phrase = normalizedPhrase(query)
   const title = normalizedPhrase(hit.title)
@@ -144,6 +203,8 @@ function lexicalExplanation(hit: KnowledgeSearchHit, query: string, bm25: number
     bm25,
     exactTitle: title === phrase ? 3 : 0,
     titlePhrase: title !== phrase && title.includes(phrase) ? 1.5 : 0,
+    titleTerm: titleTermBoost(hit, query),
+    slugMatch: slugBoost(hit, query),
     bodyPhrase: body.includes(phrase) ? 0.5 : 0,
     confidenceBoost: confidenceBoostFor(hit.confidence),
     freshnessBoost: freshnessBoostFor(hit.createdAt, nowMs),
@@ -347,7 +408,15 @@ function factDocument(fact: MemoryFact): KnowledgeRecallDocument {
   }
 }
 
-function wikiDocument(page: WikiPage): KnowledgeRecallDocument {
+function wikiDocument(page: WikiPage, facts: MemoryFact[]): KnowledgeRecallDocument {
+  // Pages carry no file/observation provenance of their own; inherit it from
+  // the settled facts they summarize so filters and context stay truthful.
+  // Bonus: a real workspacePath makes path-scoped queries match wiki hits.
+  const linked = facts.filter((fact) => page.sourceFactIds.includes(fact.id))
+  const fileRefs = [...new Set(linked.flatMap((fact) => [...fact.files, ...fact.provenance.fileRefs]))]
+  const sourceObservationIds = [...new Set(linked.flatMap((fact) => fact.provenance.sourceObservationIds))]
+  const workspacePath = linked.find((fact) => fact.provenance.workspaceId === page.workspaceId)
+    ?.provenance.workspacePath ?? ''
   const hit: KnowledgeSearchHit = {
     id: page.slug,
     type: 'wiki-page',
@@ -357,11 +426,11 @@ function wikiDocument(page: WikiPage): KnowledgeRecallDocument {
     bm25Score: 0,
     workspaceId: page.workspaceId,
     workspaceName: page.workspaceId,
-    workspacePath: '',
+    workspacePath,
     source: 'system',
     tags: page.tags,
-    fileRefs: [],
-    sourceObservationIds: [],
+    fileRefs,
+    sourceObservationIds,
     createdAt: page.updatedAt,
     status: 'active',
   }
@@ -375,9 +444,9 @@ function wikiDocument(page: WikiPage): KnowledgeRecallDocument {
       content: page.markdown,
       workspaceId: page.workspaceId,
       provenance: {
-        observationIds: [],
+        observationIds: sourceObservationIds,
         factIds: page.sourceFactIds,
-        fileRefs: [],
+        fileRefs,
         createdAt: page.updatedAt,
       },
     },
@@ -449,7 +518,7 @@ export function capObservationsPerWorkspace(
 function truthDocuments(snapshot: KnowledgeTruthSnapshot): KnowledgeRecallDocument[] {
   const documents = [
     ...snapshot.facts.map(factDocument),
-    ...snapshot.wikiPages.map(wikiDocument),
+    ...snapshot.wikiPages.map((page) => wikiDocument(page, snapshot.facts)),
     ...snapshot.graphEdges.filter((edge) => (edge.status ?? 'active') === 'active').map(graphDocument),
   ].sort((left, right) => {
     const keyOrder = compareText(left.key, right.key)

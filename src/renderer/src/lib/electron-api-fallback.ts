@@ -114,6 +114,8 @@ export function installElectronApiFallback(): void {
       diagnostics: () => unavailableKnowledge(),
       processNow: () => unavailableKnowledge(),
       processingStats: () => unavailableKnowledge(),
+      externalMcpStatus: () => unavailableKnowledge(),
+      registerExternalMcp: () => unavailableKnowledge(),
       getSettings: () => unavailableKnowledge(),
       updateSettings: () => unavailableKnowledge(),
     },
@@ -166,6 +168,8 @@ export function installElectronApiFallback(): void {
       removeProvider: unavailable, setDefaultProvider: unavailable, listModels: unavailable,
       getModelCatalog: unavailable, refreshModelCatalog: unavailable, getAdapters: unavailable,
       getDefaultProvider: unavailable, chat: unavailable, startChatStream: () => {}, abortChat: unavailable,
+      steerChat: () => Promise.resolve({ accepted: false, error: 'Electron LLM API is unavailable' }),
+      cancelSteerChat: () => Promise.resolve({ cancelled: false }),
       onDelta: () => () => {}, onDone: () => () => {}, onError: () => () => {}, onRecallTrace: () => () => {},
       onToolTrace: () => () => {}, onAgentEvent: () => () => {},
     },
@@ -197,8 +201,16 @@ export function installElectronApiFallback(): void {
       getFeishuControlStatus: unavailable,
     },
     agentSettings: {
-      get: () => Promise.resolve({ approvalMode: 'per-action' as const }),
-      update: () => Promise.resolve({ approvalMode: 'per-action' as const }),
+      get: () => Promise.resolve({ approvalMode: 'per-action' as const, agentMaxSteps: 40, safeCompileAutoAllow: true }),
+      update: (settings: { approvalMode?: unknown; agentMaxSteps?: unknown; safeCompileAutoAllow?: unknown }) => {
+        const approvalMode = settings?.approvalMode === 'auto-run' ? ('auto-run' as const) : ('per-action' as const)
+        const parsed = typeof settings?.agentMaxSteps === 'string' ? Number(settings.agentMaxSteps) : settings?.agentMaxSteps
+        const agentMaxSteps = typeof parsed !== 'number' || !Number.isFinite(parsed)
+          ? 40
+          : Math.min(100, Math.max(1, Math.floor(parsed)))
+        const safeCompileAutoAllow = settings?.safeCompileAutoAllow === undefined ? true : settings.safeCompileAutoAllow === true
+        return Promise.resolve({ approvalMode, agentMaxSteps, safeCompileAutoAllow })
+      },
     },
     subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
     roundtable: { start: unavailable, advance: unavailable, end: unavailable, getState: unavailable, restore: unavailable, export: unavailable, onEvent: () => () => {} },

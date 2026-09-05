@@ -195,7 +195,7 @@ Use this as a lookup table before opening source.
 | `src/main/knowledge/audit-service.ts` | audit service |
 | `src/main/knowledge/agent-turn-recorder.ts` | agent interaction context capture |
 | `src/main/knowledge/knowledge-mcp.ts` | Knowledge MCP server |
-| `src/main/knowledge/knowledge-mcp-tools.ts` | Knowledge MCP tools |
+| `src/main/knowledge/knowledge-mcp-tools.ts` | Knowledge MCP tools: knowledge_search/context plus two-stage read (wiki_list, wiki_get, fact_get) |
 | `src/main/knowledge/index.ts` | public re-exports |
 | `src/main/knowledge/constants.ts` | knowledge constants |
 | `src/renderer/src/services/knowledge.ts` | sole typed renderer Knowledge client with isolated workbench fallbacks |

@@ -35,6 +35,13 @@ export function KnowledgeStatusBar({ stats, busy, onProcessNow }: Props) {
           {!stats.handlerConfigured && (
             <span className={styles.statusWarn}>{t('knowledge:statusbar.handlerMissing')}</span>
           )}
+          {!stats.llmConfigured ? (
+            <span className={styles.statusDim}>{t('knowledge:statusbar.llmUnconfigured')}</span>
+          ) : stats.llmFailed > 0 ? (
+            <span className={styles.statusWarn}>
+              {t('knowledge:statusbar.llmDegraded', { count: stats.llmFailed })}
+            </span>
+          ) : null}
           <span className={styles.statusDim}>
             {stats.lastRunAt
               ? t('knowledge:statusbar.lastRun', { time: formatTime(stats.lastRunAt, t('knowledge:time.unknown')) })

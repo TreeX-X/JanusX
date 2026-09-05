@@ -61,6 +61,7 @@ function makeWikiCandidate(overrides: Partial<CandidateWikiPatch> = {}): Candida
     rationale: 'records design decision',
     confidence: 0.85,
     provenance: provenance(),
+    sourceFactIds: [],
     ...overrides,
   }
 }
@@ -253,6 +254,35 @@ describe('KnowledgeReviewService', () => {
     expect(index.pages[0]?.version).toBe(1)
   })
 
+  it('unions candidate sourceFactIds into the published wiki index entry', async () => {
+    const candidate = makeWikiCandidate({ sourceFactIds: ['fact-new', 'fact-new'] })
+    await seedJsonl('wiki/patches.jsonl', [candidate])
+    await mkdir(join(knowledgeRoot, 'wiki', 'pages'), { recursive: true })
+    await writeFile(
+      join(knowledgeRoot, 'wiki', 'pages-index.json'),
+      JSON.stringify({
+        version: 1,
+        pages: [{
+          slug: candidate.pageSlug,
+          title: candidate.title,
+          relativePath: 'wiki/pages/persistence-design.md',
+          tags: [],
+          status: 'published',
+          sourceFactIds: ['fact-old'],
+          updatedAt: '2026-07-12T00:00:00.000Z',
+          version: 1,
+          workspaceId: 'ws-id',
+        }],
+      }),
+      'utf8',
+    )
+    const { knowledgeReviewService } = await loadService()
+
+    const result = await knowledgeReviewService.applyCandidate({ type: 'wiki-patch', id: candidate.id })
+
+    expect(result.applied?.page?.sourceFactIds).toEqual(['fact-old', 'fact-new'])
+  })
+
   it('refuses non-proposed candidates and missing ids', async () => {
     const proposed = makeFactCandidate({ id: 'cand-a' })
     const already = makeFactCandidate({
@@ -300,8 +330,7 @@ describe('KnowledgeReviewService', () => {
     expect(results.map((result) => result.auditEvents.length).sort()).toEqual([0, 2])
   })
 
-  it('does not duplicate an already materialized wiki patch on retry', async () => {
-    const candidate = makeWikiCandidate()
+  it('does not duplicate an already materialized wiki patch on retry', async () => {    const candidate = makeWikiCandidate()
     await seedJsonl('wiki/patches.jsonl', [candidate])
     const pagePath = join(knowledgeRoot, 'wiki', 'pages', `${candidate.pageSlug}.md`)
     await mkdir(join(pagePath, '..'), { recursive: true })

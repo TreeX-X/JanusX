@@ -84,6 +84,10 @@
     "search": "Search Lab",
     "audit": "Audit"
   },
+  "nav": {
+    "main": "Workbench",
+    "special": "Special views"
+  },
   "breadcrumb": {
     "engine": "Knowledge Engine"
   },
@@ -125,8 +129,8 @@
   },
   "graph": {
     "empty": {
-      "title": "No graph candidates",
-      "detail": "Extraction has not proposed any graph relationships."
+      "title": "No settled knowledge",
+      "detail": "Approved candidates will appear here as settled facts and relations."
     },
     "canvas": {
       "searchPlaceholder": "Search nodes to locate…",
@@ -135,9 +139,16 @@
       "all": "All",
       "expandEvidence": "Expand evidence",
       "collapseEvidence": "Collapse evidence",
+      "resetLayout": "Reset layout",
       "capped": "Showing {{shown}} of {{total}} nodes",
       "noMatch": "No nodes match the current filters",
-      "hint": "Click a node for details, double-click to focus one-hop neighbors"
+      "noEdges": "No edges yet — links appear when facts share concepts/files or stored relations exist",
+      "hint": "Click a node to focus its one-hop neighborhood (click again to release), hover to highlight, double-click to zoom",
+      "legend": {
+        "stored": "Stored relation",
+        "derived": "Derived / supersedes",
+        "conflict": "Conflict"
+      }
     }
   },
   "statusbar": {
@@ -146,6 +157,8 @@
     "proposals": "{{count}} proposals",
     "indexUpdated": "Index {{time}}",
     "failures": "{{count}} failed",
+    "llmUnconfigured": "LLM off · deterministic only",
+    "llmDegraded": "LLM degraded ×{{count}}",
     "handlerMissing": "Pipeline not ready",
     "lastRun": "Last run {{time}}",
     "neverRun": "Never run",
@@ -183,11 +196,13 @@
   },
   "inspector": {
     "empty": "Select a knowledge record",
+    "closeDetail": "Close detail",
     "provenance": "Provenance",
     "confidence": "Confidence",
     "status": "Status",
     "derivation": "Derivation",
     "factKind": "Fact kind",
+    "scoreExplanation": "Why matched",
     "created": "Created",
     "sourceRefs": "Source Refs",
     "files": "Files",

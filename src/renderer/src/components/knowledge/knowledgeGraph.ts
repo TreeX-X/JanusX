@@ -1,7 +1,4 @@
 import type {
-  CandidateFact,
-  CandidateGraphEdge,
-  CandidateWikiPatch,
   Derivation,
   FactKind,
   GraphRelationType,
@@ -57,6 +54,23 @@ export interface KnowledgeGraphView {
 export const KNOWLEDGE_GRAPH_NODE_LIMIT = 500
 const LABEL_MAX_LENGTH = 80
 
+/** Obsidian-style dot caption: short first-line label shown under the dot. */
+export const GRAPH_NODE_CAPTION_LENGTH = 24
+
+export function graphNodeCaption(label: string, max: number = GRAPH_NODE_CAPTION_LENGTH): string {
+  const line = label.split('\n').map((entry) => entry.trim()).find((entry) => entry.length > 0) ?? ''
+  return line.length <= max ? line : `${line.slice(0, Math.max(0, max - 1))}…`
+}
+
+/** Obsidian-style dot diameter (px): grows with connection degree, capped. */
+export const GRAPH_DOT_BASE_SIZE = 10
+export const GRAPH_DOT_SIZE_PER_DEGREE = 2
+export const GRAPH_DOT_MAX_SIZE = 22
+
+export function graphNodeDotSize(degree: number): number {
+  return Math.min(GRAPH_DOT_MAX_SIZE, GRAPH_DOT_BASE_SIZE + Math.max(0, Math.floor(degree)) * GRAPH_DOT_SIZE_PER_DEGREE)
+}
+
 export interface GraphBuildOptions {
   /** Observation node ids to expand one hop (evidence demand-loading). */
   expandedEvidence?: string[]
@@ -68,21 +82,11 @@ function truncateLabel(value: string): string {
   return line.length <= LABEL_MAX_LENGTH ? line : `${line.slice(0, LABEL_MAX_LENGTH - 1)}…`
 }
 
-function candidateProvenance(candidate: CandidateFact | CandidateWikiPatch | CandidateGraphEdge) {
-  if (candidate.type === 'fact') return candidate.fact.provenance
-  if (candidate.type === 'wiki-patch') return candidate.provenance
-  return null
-}
-
-function candidateEvidenceIds(candidate: CandidateFact | CandidateWikiPatch | CandidateGraphEdge): string[] {
-  if (candidate.evidence?.observationIds?.length) return [...candidate.evidence.observationIds]
-  const provenance = candidateProvenance(candidate)
-  return provenance ? [...provenance.sourceObservationIds] : []
-}
-
 /**
- * Builds the default graph: active truth facts, proposed candidates, wiki
- * pages, stored edges, and entity nodes for concepts/files cited by ≥ 2 facts.
+ * Builds the settled-knowledge graph: active truth facts, wiki pages, stored
+ * edges, and entity nodes for concepts/files cited by ≥ 2 facts.
+ * Review-stage proposals intentionally stay out — the graph is the settled
+ * map, the Inbox is the gate.
  */
 export function buildKnowledgeGraphView(
   snapshot: KnowledgeWorkbenchSnapshot,
@@ -125,65 +129,6 @@ export function buildKnowledgeGraphView(
     }
   }
 
-  const proposed = [
-    ...snapshot.factCandidates.filter((candidate) => candidate.status === 'proposed'),
-    ...snapshot.wikiPatches.filter((candidate) => candidate.status === 'proposed'),
-    ...snapshot.graphCandidates.filter((candidate) => candidate.status === 'proposed'),
-  ]
-  for (const candidate of proposed) {
-    const id = `proposal:${candidate.id}`
-    if (candidate.type === 'fact') {
-      addNode({
-        id,
-        kind: 'proposal',
-        label: truncateLabel(candidate.fact.content),
-        sublabel: candidate.fact.kind,
-        workspaceId: candidate.fact.provenance.workspaceId,
-        status: candidate.status,
-        factKind: candidate.fact.kind,
-        derivation: candidate.derivation,
-        confidence: candidate.fact.confidence,
-        evidenceIds: candidateEvidenceIds(candidate),
-        fileRefs: [...candidate.fact.files, ...candidate.fact.provenance.fileRefs],
-        createdAt: candidate.fact.provenance.createdAt,
-      })
-    } else if (candidate.type === 'wiki-patch') {
-      addNode({
-        id,
-        kind: 'proposal',
-        label: truncateLabel(candidate.title),
-        sublabel: candidate.pageSlug,
-        workspaceId: candidate.provenance.workspaceId,
-        status: candidate.status,
-        derivation: candidate.derivation,
-        confidence: candidate.confidence,
-        evidenceIds: candidateEvidenceIds(candidate),
-        fileRefs: [...candidate.provenance.fileRefs],
-        createdAt: candidate.provenance.createdAt,
-      })
-    } else {
-      addNode({
-        id,
-        kind: 'proposal',
-        label: `${candidate.edge.from} → ${candidate.edge.to}`,
-        sublabel: candidate.edge.type,
-        workspaceId: candidate.edge.workspaceId,
-        status: candidate.status,
-        derivation: candidate.derivation,
-        confidence: candidate.edge.confidence,
-        evidenceIds: candidateEvidenceIds(candidate),
-        fileRefs: [],
-        createdAt: candidate.edge.createdAt,
-      })
-    }
-    // Synthetic conflicts_with: candidate-stage conflict marks (§4.5).
-    for (const targetId of candidate.conflicts ?? []) {
-      const target = `fact:${targetId}`
-      if (!nodeIds.has(target)) continue
-      addEdge({ id: `conflicts:${candidate.id}:${targetId}`, from: id, to: target, type: 'conflicts_with', synthetic: true })
-    }
-  }
-
   // Wiki pages ride along in libraryCards (rawType 'wiki-page').
   for (const card of snapshot.libraryCards) {
     if (card.kind !== 'wiki' || card.rawType !== 'wiki-page') continue
@@ -207,7 +152,7 @@ export function buildKnowledgeGraphView(
     addEdge({ id: `stored:${edge.id}`, from, to, type: edge.type, synthetic: false, confidence: edge.confidence })
   }
 
-  // Entity nodes: concepts/files cited by ≥ 2 facts (truth + proposed).
+  // Entity nodes: concepts/files cited by ≥ 2 settled facts.
   const entityOwners = new Map<string, { facts: string[]; files: string[] }>()
   const cite = (nodeId: string, name: string, isFile: boolean) => {
     const key = name.trim()
@@ -218,16 +163,12 @@ export function buildKnowledgeGraphView(
     entityOwners.set(key, entry)
   }
   for (const node of nodes) {
-    if (node.kind !== 'fact' && node.kind !== 'proposal') continue
+    if (node.kind !== 'fact') continue
     for (const ref of node.fileRefs) cite(node.id, ref, true)
   }
-  // Concepts live on facts/candidates; re-read them from the snapshot.
+  // Concepts live on settled facts; re-read them from the snapshot.
   for (const fact of facts) {
     for (const concept of fact.concepts) cite(`fact:${fact.id}`, concept, false)
-  }
-  for (const candidate of snapshot.factCandidates) {
-    if (candidate.status !== 'proposed') continue
-    for (const concept of candidate.fact.concepts) cite(`proposal:${candidate.id}`, concept, false)
   }
   for (const [name, owners] of [...entityOwners.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
     if (owners.facts.length < 2 || !nodeIds.has(owners.facts[0]!)) continue
@@ -292,67 +233,120 @@ const NODE_KIND_PRIORITY: Record<KnowledgeGraphNode['kind'], number> = {
   observation: 4,
 }
 
-/** Over-limit: keep facts/proposals first, drop entities, keep edge endpoints. */
+/** Over-limit: keep settled facts first, then wiki/entities, observations last. */
 function prioritizeNodes(nodes: KnowledgeGraphNode[], limit: number): KnowledgeGraphNode[] {
   return [...nodes]
     .sort((a, b) => NODE_KIND_PRIORITY[a.kind] - NODE_KIND_PRIORITY[b.kind] || (a.id < b.id ? -1 : 1))
     .slice(0, Math.max(0, limit))
 }
 
-/** Deterministic layered layout: BFS depth from indegree-0 roots, id-sorted. */
+/** Obsidian-style spread layout: deterministic force relaxation per connected
+ * component (circular seed, fixed-iteration repulsion + springs + gravity).
+ * No randomness anywhere, so the same snapshot always yields the same map;
+ * renderer-side stored positions still overlay on top (user drags win). */
 export interface GraphPosition {
   x: number
   y: number
 }
 
-export const GRAPH_LAYOUT_DX = 280
-export const GRAPH_LAYOUT_DY = 130
+export const GRAPH_SPREAD_ITERATIONS = 60
+export const GRAPH_SPREAD_TARGET_EDGE = 130
+export const GRAPH_SPREAD_REPULSION = 9000
+export const GRAPH_SPREAD_MAX_PUSH = 40
+export const GRAPH_SPREAD_GRAVITY = 0.02
+export const GRAPH_SPREAD_COMPONENT_GAP = 260
 
 export function layoutKnowledgeGraph(
   nodes: KnowledgeGraphNode[],
   edges: KnowledgeGraphEdge[],
 ): Map<string, GraphPosition> {
   const ids = nodes.map((node) => node.id).sort()
-  const incoming = new Map<string, number>(ids.map((id) => [id, 0]))
-  const outgoing = new Map<string, string[]>()
+  const neighbors = new Map<string, string[]>(ids.map((id) => [id, []]))
   for (const edge of edges) {
-    if (!incoming.has(edge.from) || !incoming.has(edge.to)) continue
-    incoming.set(edge.to, (incoming.get(edge.to) ?? 0) + 1)
-    const list = outgoing.get(edge.from) ?? []
-    list.push(edge.to)
-    outgoing.set(edge.from, list)
+    if (edge.from === edge.to || !neighbors.has(edge.from) || !neighbors.has(edge.to)) continue
+    neighbors.get(edge.from)!.push(edge.to)
+    neighbors.get(edge.to)!.push(edge.from)
   }
-  const depth = new Map<string, number>()
-  const queue: string[] = ids.filter((id) => (incoming.get(id) ?? 0) === 0)
-  for (const id of queue) depth.set(id, 0)
-  // Cycles / unreachable: seed remaining ids in sorted order at depth 0.
+  for (const list of neighbors.values()) list.sort()
+
+  // Connected components in deterministic seed order.
+  const componentOf = new Map<string, number>()
+  const components: string[][] = []
   for (const id of ids) {
-    if (depth.has(id)) continue
-    depth.set(id, 0)
-    queue.push(id)
-  }
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    const next = (depth.get(current) ?? 0) + 1
-    for (const child of [...(outgoing.get(current) ?? [])].sort()) {
-      if ((depth.get(child) ?? -1) < next) {
-        depth.set(child, next)
-        queue.push(child)
+    if (componentOf.has(id)) continue
+    const members: string[] = []
+    const stack = [id]
+    componentOf.set(id, components.length)
+    while (stack.length > 0) {
+      const current = stack.pop()!
+      members.push(current)
+      for (const next of neighbors.get(current)!) {
+        if (!componentOf.has(next)) {
+          componentOf.set(next, components.length)
+          stack.push(next)
+        }
       }
     }
+    members.sort()
+    components.push(members)
   }
-  const layers = new Map<number, string[]>()
-  for (const id of ids) {
-    const layer = depth.get(id) ?? 0
-    const list = layers.get(layer) ?? []
-    list.push(id)
-    layers.set(layer, list)
-  }
+  // Largest cluster first so the eye lands on the dense region.
+  components.sort((a, b) => b.length - a.length || (a[0]! < b[0]! ? -1 : 1))
+
   const positions = new Map<string, GraphPosition>()
-  for (const [layer, members] of [...layers.entries()].sort(([a], [b]) => a - b)) {
-    members.sort().forEach((id, index) => {
-      positions.set(id, { x: layer * GRAPH_LAYOUT_DX, y: index * GRAPH_LAYOUT_DY })
-    })
+  let cursorX = 0
+  for (const members of components) {
+    const count = members.length
+    const radius = count === 1 ? 0 : Math.max(90, count * 26)
+    for (let index = 0; index < count; index++) {
+      const angle = (2 * Math.PI * index) / count
+      positions.set(members[index]!, {
+        x: cursorX + radius + Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+      })
+    }
+    const centerX = cursorX + radius
+    for (let iter = 0; iter < GRAPH_SPREAD_ITERATIONS; iter++) {
+      for (let i = 0; i < count; i++) {
+        const id = members[i]!
+        const point = positions.get(id)!
+        let fx = 0
+        let fy = 0
+        for (let j = 0; j < count; j++) {
+          if (i === j) continue
+          const other = positions.get(members[j]!)!
+          let dx = point.x - other.x
+          let dy = point.y - other.y
+          if (dx === 0 && dy === 0) {
+            // Deterministic nudge so stacked seeds separate.
+            dx = (i < j ? -1 : 1) * 0.5
+            dy = 0.5
+          }
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          const push = Math.min(GRAPH_SPREAD_REPULSION / (dist * dist), GRAPH_SPREAD_MAX_PUSH)
+          fx += (dx / dist) * push
+          fy += (dy / dist) * push
+        }
+        for (const next of neighbors.get(id)!) {
+          const other = positions.get(next)!
+          if (!other) continue
+          const dx = other.x - point.x
+          const dy = other.y - point.y
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1
+          const pull = (dist - GRAPH_SPREAD_TARGET_EDGE) * 0.05
+          fx += (dx / dist) * pull
+          fy += (dy / dist) * pull
+        }
+        fx += (centerX - point.x) * GRAPH_SPREAD_GRAVITY
+        fy -= point.y * GRAPH_SPREAD_GRAVITY
+        point.x += fx
+        point.y += fy
+      }
+    }
+    cursorX += radius * 2 + GRAPH_SPREAD_COMPONENT_GAP
+  }
+  for (const [id, point] of positions) {
+    positions.set(id, { x: Math.round(point.x), y: Math.round(point.y) })
   }
   return positions
 }
@@ -369,9 +363,8 @@ export function recordForGraphNode(node: KnowledgeGraphNode): InspectorRecord {
     fileRefs: node.fileRefs,
     createdAt: node.createdAt,
     status: (node.status as InspectorRecord['status']) ?? 'active',
-    // Only truth-backed nodes (fact/wiki) carry a revocable kind: proposal
-    // nodes resolve to reviewable candidates in the parent, and firing revoke
-    // with a `proposal:<id>` would address a non-existent truth record.
+    // Only truth-backed nodes (fact/wiki) carry a revocable kind; other
+    // settled kinds (entity/observation) are read-only in the inspector.
     kind: node.kind === 'fact' || node.kind === 'wiki' ? node.kind : undefined,
     workspaceId: node.workspaceId || undefined,
     derivation: node.derivation,
@@ -408,7 +401,9 @@ export function layoutWorkspaceFor(nodes: KnowledgeGraphNode[]): string {
 }
 
 export function graphLayoutStorageKey(workspaceId: string): string {
-  return `janusx:knowledge-graph-layout:${workspaceId || 'global'}`
+  // v2: force-spread era. v1 stored BFS-layered coordinates (vertical stacks
+  // for edgeless graphs) and must not override the new computed layout.
+  return `janusx:knowledge-graph-layout:v2:${workspaceId || 'global'}`
 }
 
 export type StoredGraphLayout = Record<string, GraphPosition>

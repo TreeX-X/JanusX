@@ -12,6 +12,7 @@ export const LLM_CHANNELS = {
   removeProvider: 'llm:remove-provider', setDefaultProvider: 'llm:set-default-provider', listModels: 'llm:list-models',
   getCatalog: 'llm:model-catalog:get', refreshCatalog: 'llm:model-catalog:refresh', getAdapters: 'llm:get-adapters',
   getDefaultProvider: 'llm:get-default-provider', chat: 'llm:chat', chatStream: 'llm:chat-stream', abort: 'llm:chat:abort',
+  steer: 'llm:chat:steer', steerCancel: 'llm:chat:steer-cancel',
   delta: 'llm:chat:delta', done: 'llm:chat:done', error: 'llm:chat:error', recallTrace: 'llm:chat:recall-trace',
   toolTrace: 'llm:chat:tool-trace', agentEvent: 'llm:chat:agent-event',
 } as const
@@ -50,8 +51,24 @@ export type ChatAgentEvent =
   | { type: 'tool_execution_end'; requestId: string; callId: string; toolName: string; status: ChatToolTraceStatus }
   | { type: 'model_finish'; requestId: string; reason: 'stop' | 'tool_calls' | 'length' | 'unknown' }
   | { type: 'model_error'; requestId: string; code: string; retryable: boolean }
+  | { type: 'steering_consumed'; requestId: string; keys: string[] }
   | { type: 'stream_end'; requestId: string; cancelled: boolean }
   | { type: 'stream_error'; requestId: string; error: string }
+
+/** R6-full：流式中 steering 投递（主侧排队 + 抢占）与撤销。 */
+export interface ChatSteerInput {
+  conversationId?: string
+  entryId: string
+  text: string
+}
+export interface ChatSteerResult {
+  accepted: boolean
+  error?: string
+}
+export interface ChatSteerCancelInput {
+  conversationId?: string
+  entryId: string
+}
 
 /** One executed workspace tool call, replayed into the next turn's history so the model keeps its working context. */
 export interface ChatToolTraceEntry {
@@ -104,6 +121,8 @@ export interface LlmAPI {
   chat(request: ChatRequest): Promise<string>
   startChatStream(request: ChatStreamRequest): void
   abortChat(requestId: string): Promise<void>
+  steerChat(input: ChatSteerInput): Promise<ChatSteerResult>
+  cancelSteerChat(input: ChatSteerCancelInput): Promise<{ cancelled: boolean }>
   onDelta(callback: (payload: ChatStreamEvent) => void): () => void
   onDone(callback: (payload: ChatStreamEvent) => void): () => void
   onError(callback: (payload: ChatStreamEvent) => void): () => void

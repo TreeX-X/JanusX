@@ -923,6 +923,8 @@
 }
 
 /* —— 节点详情面板 —— */
+/* Node detail card: slides in from the left and back out. Enter/exit run on
+   data-visible (see useAnimatedOpen) in both workbench and embedded modes. */
 .bp-node-detail {
   position: relative;
   grid-column: 1;
@@ -938,7 +940,31 @@
   border-radius: 8px;
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   padding: 0;
-  animation: blueprint-detail-card-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0;
+  transform: translateX(-18px);
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.bp-node-detail[data-visible='true'] {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+.bp-node-detail[data-visible='false'] {
+  opacity: 0;
+  transform: translateX(-14px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 200ms cubic-bezier(0.5, 0, 0.75, 0),
+    visibility 0s linear 220ms;
 }
 
 .bp-node-detail__header {
@@ -1894,11 +1920,15 @@
   transform: scale(0.9);
 }
 
+/* Side tracks stay in the grid at 0px when closed so the track collapse and
+   the panel slide animate together instead of popping the layout. Spacing is
+   owned by per-side margins (not gap): a uniform gap would leave a dead dark
+   strip beside every collapsed 0px track. */
 .blueprint-workbench-body {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(340px, 390px);
+  column-gap: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1906,14 +1936,15 @@
   background: transparent;
   perspective: 1200px;
   perspective-origin: center;
+  transition: grid-template-columns 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .blueprint-workbench-body[data-janus-open='false'] {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(0, 0px);
 }
 
 .blueprint-workbench-body[data-detail-open='true'][data-janus-open='false'] {
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(0, 0px);
 }
 
 .blueprint-workbench-body[data-detail-open='true'][data-janus-open='true'] {
@@ -1921,24 +1952,24 @@
 }
 
 .blueprint-workbench-detail-slot {
-  display: none;
+  display: flex;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  margin-right: 0;
+  transition: margin-right 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .blueprint-workbench-detail-slot[data-open='true'] {
-  display: flex;
-  animation: blueprint-workbench-card-rise var(--card-enter-duration, 380ms) cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--card-index, 1) * var(--card-enter-stagger, 180ms));
-  transform-origin: center;
-  will-change: transform, opacity;
+  margin-right: 16px;
 }
 
 .blueprint-workbench-detail-slot .bp-node-detail {
-  flex: 1;
+  flex: 1 0 auto;
+  width: 100%;
+  min-width: 240px;
   min-height: 0;
   max-height: none;
-  animation: none;
 }
 
 .blueprint-workbench-card {
@@ -1976,12 +2007,58 @@
   box-shadow: none;
 }
 
-@keyframes blueprint-detail-card-in {
-  from { opacity: 0; transform: translateX(-14px); }
-  to { opacity: 1; transform: translateX(0); }
+/* Janus slot is a transparent clipping track cell; the card inside keeps a
+   fixed width so the opening track reveals it (drawer) instead of squashing
+   it. Enter runs in the same 280ms beat as the grid track so the middle
+   canvas yields while the panel slides in — no black placeholder first.
+   The workbench-level descend animation below still owns the full-shell
+   close. */
+.blueprint-workbench-janus-slot {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  margin-left: 0;
+  transition: margin-left 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.blueprint-workbench-card--janus { display: flex; }
+.blueprint-workbench-janus-slot[data-visible='true'] {
+  margin-left: 16px;
+}
+
+.blueprint-workbench-card--janus {
+  display: flex;
+  flex: 1 0 auto;
+  width: 100%;
+  min-width: 320px;
+  overflow: hidden;
+  animation: none;
+  opacity: 0;
+  transform: translateX(28px);
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.blueprint-workbench-janus-slot[data-visible='true'] .blueprint-workbench-card--janus {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition:
+    opacity 120ms ease-out,
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+.blueprint-workbench-janus-slot[data-visible='false'] .blueprint-workbench-card--janus {
+  opacity: 0;
+  transform: translateX(48px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 200ms cubic-bezier(0.5, 0, 0.75, 0),
+    visibility 0s linear 220ms;
+}
 
 @keyframes blueprint-workbench-card-rise {
   from {
@@ -2006,32 +2083,52 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .blueprint-workbench-body,
+  .blueprint-workbench-janus-slot,
+  .blueprint-workbench-detail-slot,
   .blueprint-workbench-card--janus,
   .bp-node-detail,
   .blueprint-workbench-topbar,
-  .blueprint-workbench-detail-slot[data-open='true'],
   .blueprint-workbench-card { transition: none; animation: none; }
 }
 
 @media (max-width: 1180px) {
   .blueprint-workbench-body {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 32%);
-    gap: 12px;
+    grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(280px, 32%);
+  }
+
+  .blueprint-workbench-body[data-janus-open='false'] {
+    grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(0, 0px);
   }
 
   .blueprint-workbench-body[data-detail-open='true'][data-janus-open='false'] {
-    grid-template-columns: minmax(240px, 270px) minmax(0, 1fr);
+    grid-template-columns: minmax(240px, 270px) minmax(0, 1fr) minmax(0, 0px);
   }
 
   .blueprint-workbench-body[data-detail-open='true'][data-janus-open='true'] {
     grid-template-columns: minmax(240px, 270px) minmax(0, 1fr) minmax(280px, 31%);
+  }
+
+  .blueprint-workbench-detail-slot[data-open='true'] {
+    margin-right: 12px;
+  }
+
+  .blueprint-workbench-janus-slot[data-visible='true'] {
+    margin-left: 12px;
   }
 }
 
 @media (max-width: 1020px) {
   .blueprint-workbench-body[data-detail-open='true'][data-janus-open='true'] {
     grid-template-columns: minmax(220px, 26%) minmax(0, 1fr) minmax(250px, 30%);
-    gap: 10px;
+  }
+
+  .blueprint-workbench-detail-slot[data-open='true'] {
+    margin-right: 10px;
+  }
+
+  .blueprint-workbench-janus-slot[data-visible='true'] {
+    margin-left: 10px;
   }
 }
 

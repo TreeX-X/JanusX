@@ -83,7 +83,8 @@ describe('Knowledge IPC contract', () => {
   it('defines and registers exactly the public channel set without maintenance exposure', () => {
     const channels = Object.values(KNOWLEDGE_CHANNELS)
     // Phase 5: `knowledge:extract` direct IPC removed (queue-owned LLM stage).
-    expect(channels).toHaveLength(27)
+    // Post-Phase 5: +2 external-MCP registration channels (status/register).
+    expect(channels).toHaveLength(29)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -134,6 +135,8 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.diagnostics({ workspaceId: 'workspace-1', recentLimit: 5 })
     await knowledgeApi.processNow({ workspaceId: 'workspace-1' })
     await knowledgeApi.processingStats()
+    await knowledgeApi.externalMcpStatus()
+    await knowledgeApi.registerExternalMcp('cursor')
     await knowledgeApi.getSettings()
     await knowledgeApi.updateSettings({ enabled: false })
 
@@ -163,6 +166,8 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.diagnostics, { workspaceId: 'workspace-1', recentLimit: 5 }],
       [KNOWLEDGE_CHANNELS.processNow, { workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.processingStats],
+      [KNOWLEDGE_CHANNELS.externalMcpStatus],
+      [KNOWLEDGE_CHANNELS.registerExternalMcp, 'cursor'],
       [KNOWLEDGE_CHANNELS.getSettings],
       [KNOWLEDGE_CHANNELS.updateSettings, { enabled: false }],
     ])
@@ -296,12 +301,14 @@ describe('Knowledge IPC contract', () => {
       () => api.diagnostics(),
       () => api.processNow({ workspaceId: 'workspace' }),
       () => api.processingStats(),
+      () => api.externalMcpStatus(),
+      () => api.registerExternalMcp('cursor'),
       () => api.getSettings(),
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(27)
-    expect(calls).toHaveLength(27)
+    expect(Object.keys(api)).toHaveLength(29)
+    expect(calls).toHaveLength(29)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

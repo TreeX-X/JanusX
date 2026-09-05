@@ -1,5 +1,20 @@
 ﻿# Wiki Log
 
+## 2026-09-05
+
+- P0 recall quality: wiki title-term overlap (`titleTerm`) and slug (`slugMatch`) score parts in `lexicalExplanation`; long wiki pages served as query-centered excerpts (`excerptAroundQuery`, 1500 chars) in `context-service` so one page can't eat the shared budget; wiki docs inherit file/observation provenance + workspace path from linked facts (also fixes path-scoped wiki discovery); `fact_get` gains reverse `referencingPages`.
+- Documented ranking parts and excerpts in `03-runtime-flows.md`.
+
+- Settings auto-registers the knowledge MCP server into external terminals: new `external-mcp` service (Cursor / VS Code / Claude Code JSON merge, corrupt-file backup, build-status gate), two IPC channels + preload/fallback, and an "外部终端 MCP 接入" section in the Knowledge settings tab (entry path, copy launch command, per-client connect buttons).
+- `docs/idea/janus-todo-write-plan.md` fused with the janus-agent knowledge-MCP bridge design (§9: in-process `knowledge-tools.ts`, workspace-scoped read-only tools) and renamed to `janus-agent-capability-plan.md`.
+- Knowledge MCP two-stage read: wired the Wiki → settled-fact bridge (`CandidateWikiPatch.sourceFactIds`, model-proposed and filtered to known truth like `supersedes`, unioned into `pages-index` on approval); MCP grows from two to five read-only tools — `wiki_list` (slug index), `wiki_get` (page + `maxChars` budget + resolved `linkedFacts`), `fact_get` (full provenance by id); fixed `failure()` swallowing string errors; documented the chain in `03-runtime-flows.md`.
+
+- Knowledge workbench refinements: Inbox cards are fixed-height (216px) with title 3-line / summary 2-line ellipsis and single-line tags; full content stays in the inspector with hover tooltips.
+- Inspector close control unified with Blueprint `.bp-panel-close` (28px ghost button + Lucide X); the workbench header keeps the single red traffic light.
+- Knowledge graph reworked to an Obsidian-style settled-knowledge map: truth-only adapter (facts, wiki pages, stored edges, shared concept/file entities; review proposals stay in the Inbox), dark-core ring dots sized 10–22px by connection degree with floating captions, deterministic force-spread layout with persisted drags, hover neighborhood highlight, click-to-focus (toggle) with distant nodes hidden, double-click zoom, dark controls/minimap, stage-consistent canvas background, and explicit no-edges guidance.
+- Documented the graph canvas contract in `03-runtime-flows.md` (scope, rendering, interaction, inspector integration).
+- i18n additions: `graph.canvas.noEdges`, refreshed canvas hint, settled-knowledge empty state (both languages, types in sync).
+
 ## 2026-08-17
 
 - Full wiki rewrite to reflect v0.8.0 project state (was v0.5.0 baseline).

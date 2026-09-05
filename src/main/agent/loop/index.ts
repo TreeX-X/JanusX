@@ -1,4 +1,4 @@
-export { runJanusAgentLoop } from './janus-agent-loop'
+export { AgentSteeringPort, runJanusAgentLoop } from './janus-agent-loop'
 export {
   createJanusRuntimeCodingTools,
   createJanusRuntimeReadOnlyTools,

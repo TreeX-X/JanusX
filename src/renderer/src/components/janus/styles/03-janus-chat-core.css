@@ -175,6 +175,17 @@
   color: #e0e0e0;
 }
 
+/* R6-full：在途 steering 只用徽标标记（文本已是正常用户气泡），不另起层级。 */
+.janus-chat-queued-badge {
+  color: var(--shell-dim);
+  font-size: 10px;
+  line-height: 1.4;
+  border: 1px solid var(--so-field-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
 .janus-chat-message.assistant .janus-chat-message-content {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.08);
