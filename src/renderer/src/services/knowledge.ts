@@ -3,6 +3,7 @@ import type {
   CandidateFact,
   CandidateGraphEdge,
   CandidateWikiPatch,
+  Derivation,
   GraphEdge,
   KnowledgeCard,
   KnowledgeContextRequest,
@@ -16,6 +17,7 @@ import type {
   Observation,
   RetentionStats,
 } from '../../../shared/knowledge'
+import type { KnowledgeProcessingMode } from '../../../shared/knowledge-settings'
 import type {
   KnowledgeProcessNowInput,
   KnowledgeProcessNowResult,
@@ -42,6 +44,8 @@ export interface KnowledgeWorkbenchSnapshot {
   /** Phase 4 Graph (§10.1): active truth facts + stored edges for the canvas. */
   truthFacts?: MemoryFact[]
   truthEdges?: GraphEdge[]
+  /** §5 llm-preferred: Inbox ordering mode; absent means 'auto' (append order). */
+  mode?: KnowledgeProcessingMode
   loadedAt: string
   usingDemoData: boolean
   errors: string[]
@@ -65,6 +69,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     auditEvents,
     retentionStats,
     truth,
+    settings,
   ] = await Promise.all([
     invokeOrEmpty(() => window.electron.knowledge.listObservations({ scope: 'global', limit: 40 }), []),
     invokeOrEmpty(() => window.electron.knowledge.listCandidates(), []),
@@ -77,6 +82,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
       wikiPages: [],
       graphEdges: [],
     }),
+    invokeOrEmpty(() => window.electron.knowledge.getSettings(), null),
   ])
 
   const libraryCards = truthSnapshotToKnowledgeCards(truth)
@@ -106,6 +112,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     conflicts,
     truthFacts: truth.facts,
     truthEdges: truth.graphEdges,
+    mode: settings?.mode ?? 'auto',
     loadedAt: new Date().toISOString(),
     usingDemoData: false,
     errors,
@@ -124,6 +131,35 @@ export async function searchKnowledgeCards(
 ): Promise<KnowledgeCard[]> {
   const result = await searchKnowledge(query)
   return sortKnowledgeCards(toKnowledgeCards(result.hits))
+}
+
+export type InboxCandidate = CandidateFact | CandidateWikiPatch | CandidateGraphEdge
+
+/** §5 llm-preferred: Inbox-only ranking — merged first, then llm, then deterministic. */
+const INBOX_DERIVATION_RANK: Record<Derivation, number> = { merged: 0, llm: 1, deterministic: 2 }
+
+function inboxCandidateConfidence(candidate: InboxCandidate): number {
+  if (candidate.type === 'fact') return candidate.fact.confidence
+  if (candidate.type === 'wiki-patch') return candidate.confidence
+  return candidate.edge.confidence
+}
+
+/**
+ * §5 Inbox ordering. Non-llm-preferred modes keep append order (no copy);
+ * llm-preferred stably ranks by derivation, breaking ties by confidence.
+ * Records missing derivation sort last (schema violations are audited at read).
+ */
+export function sortInboxCandidates<T extends InboxCandidate>(
+  candidates: T[],
+  mode?: KnowledgeProcessingMode,
+): T[] {
+  if (mode !== 'llm-preferred') return candidates
+  return [...candidates].sort((a, b) => {
+    const rankA = INBOX_DERIVATION_RANK[a.derivation] ?? 3
+    const rankB = INBOX_DERIVATION_RANK[b.derivation] ?? 3
+    if (rankA !== rankB) return rankA - rankB
+    return inboxCandidateConfidence(b) - inboxCandidateConfidence(a)
+  })
 }
 
 export async function getKnowledgeContext(

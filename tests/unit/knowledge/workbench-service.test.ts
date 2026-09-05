@@ -54,6 +54,8 @@ describe('loadKnowledgeWorkbenchSnapshot', () => {
     expect(snapshot.observations).toEqual([])
     expect(snapshot.factCandidates).toEqual([])
     expect(snapshot.libraryCards).toEqual([])
+    // §5: bridge without getSettings falls back to append-order 'auto'.
+    expect(snapshot.mode).toBe('auto')
   })
 
   it('maps accepted truth records into Library cards', async () => {

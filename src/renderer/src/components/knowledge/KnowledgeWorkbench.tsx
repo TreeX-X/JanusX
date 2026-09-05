@@ -8,6 +8,7 @@ import {
   rejectKnowledgeCandidate,
   revokeKnowledgeTruth,
   searchKnowledgeCards,
+  sortInboxCandidates,
   type KnowledgeReviewCandidateType,
   type KnowledgeWorkbenchSnapshot,
 } from '../../services/knowledge'
@@ -285,7 +286,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
 
 function candidatesForTab(snapshot: KnowledgeWorkbenchSnapshot, tab: KnowledgeWorkbenchTab): Candidate[] {
   const candidates: Candidate[] = [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates]
-  return tab === 'inbox' ? candidates.filter((candidate) => candidate.status === 'proposed') : []
+  if (tab !== 'inbox') return []
+  // §5: llm-preferred reorders only the Inbox view, never the stored lists.
+  return sortInboxCandidates(candidates.filter((candidate) => candidate.status === 'proposed'), snapshot.mode)
 }
 
 /** Phase 4 Wiki: published pages already ride along in libraryCards. */
