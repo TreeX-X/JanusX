@@ -15,7 +15,6 @@ import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import {
   KNOWLEDGE_CHANNELS,
   type AuditQuery,
-  type ExtractInput,
   type KnowledgeDiagnosticsQuery,
   type ReviewCandidateInput,
   type RevokeTruthInput,
@@ -93,10 +92,8 @@ export function registerKnowledgeHandlers(): void {
     },
   )
 
-  // Phase 6: candidate extraction via LLM structured output (no-default-LLM degrades safely).
-  ipcMain.handle(KNOWLEDGE_CHANNELS.extract, async (_event, input?: ExtractInput) => {
-    return knowledgeExtractService.extract(input ?? {})
-  })
+  // Phase 5: `knowledge:extract` direct IPC removed — LLM enhancement runs only
+  // via the processing queue (`runLlmStage` → `knowledgeExtractService.extract`).
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.listCandidates, async () => {
     return knowledgeExtractService.listFactCandidates()
@@ -164,14 +161,9 @@ export function registerKnowledgeHandlers(): void {
   })
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.processingStats, async () => {
-    const stats = await knowledgeProcessingQueue.processingStats()
-    return {
-      generatedAt: stats.generatedAt,
-      pendingTotal: stats.pendingTotal,
-      workspaces: stats.workspaces,
-      failures: stats.failures,
-      lastRunAt: stats.lastRunAt,
-      handlerConfigured: stats.handlerConfigured,
-    }
+    // Phase 5: return the full queue snapshot (§6 metrics). Previous
+    // shaping dropped llmConfigured/llmSucceeded/llmFailed/llmSkipped and
+    // lastRun, hiding LLM degradation from the status bar.
+    return knowledgeProcessingQueue.processingStats()
   })
 }

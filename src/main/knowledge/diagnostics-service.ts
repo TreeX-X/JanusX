@@ -11,7 +11,7 @@ import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeExtractService } from './extract-service'
 import { knowledgeTruthService } from './truth-service'
-import { knowledgeProcessingQueue } from './processing-queue'
+import { countProposalsByDerivation, knowledgeProcessingQueue } from './processing-queue'
 import { knowledgeCaptureFailureCount } from './workspace-identity'
 import type {
   KnowledgeDiagnostics,
@@ -91,6 +91,16 @@ export class KnowledgeDiagnosticsService {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, recentLimit)
 
+    // Phase 5 (§6): recall 索引新鲜度 best-effort。动态 import 避免在诊断
+    // 模块图里静态拉入 recall 重依赖（部分单测只 mock 了 electron.ipcMain）。
+    let indexUpdatedAt: string | null = null
+    try {
+      const { knowledgeRecallService } = await import('./recall-service')
+      indexUpdatedAt = knowledgeRecallService.getLastIndexBuildAt()
+    } catch (error) {
+      console.error(`[knowledge] diagnostics index-updated-at snapshot failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
     return {
       generatedAt: new Date().toISOString(),
       knowledgeRoot: knowledgeRootPath(),
@@ -100,12 +110,15 @@ export class KnowledgeDiagnosticsService {
         facts: factCandidates.length,
         wikiPatches: wikiPatches.length,
         graphEdges: graphCandidates.length,
+        // Phase 5 (§6): 与 processingStats 同口径，仅计 proposed。
+        byDerivation: countProposalsByDerivation(factCandidates, wikiPatches, graphCandidates),
       },
       truth: {
         facts: truth.facts.length,
         wikiPages: truth.wikiPages.length,
         graphEdges: truth.graphEdges.length,
       },
+      indexUpdatedAt,
       captureFailures: knowledgeCaptureFailureCount(),
     }
   }

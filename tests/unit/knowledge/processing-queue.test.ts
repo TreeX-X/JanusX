@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -7,6 +7,8 @@ vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
 import {
   KnowledgeProcessingQueue,
+  countProposalsByDerivation,
+  EMPTY_PROPOSALS_BY_DERIVATION,
   failureBackoffMs,
   type DeterministicBatch,
   type LlmStageBatch,
@@ -277,5 +279,102 @@ describe('knowledge processing queue (Phase 1-1 skeleton)', () => {
     const stats = await queue.processingStats()
     expect(stats.llmConfigured).toBe(false)
     expect(stats.llmSucceeded).toBe(0)
+  })
+
+  it('scheduleImmediate bypasses debounce and threshold (Phase 5 §6)', async () => {
+    queue.configure({ threshold: 100, debounceMs: 60_000 })
+    const seen: string[] = []
+    queue.configureDeterministicHandler(async (batch) => {
+      seen.push(batch.workspaceId)
+    })
+    observations = [observation({ id: 'o1' })]
+
+    queue.scheduleImmediate('ws-1')
+    await vi.waitFor(() => expect(seen).toEqual(['ws-1']))
+    const stats = await queue.processingStats()
+    expect(stats.pendingTotal).toBe(0)
+    expect(stats.lastRunAt).not.toBeNull()
+  })
+
+  it('runs daily maintenance once per interval and audits failures (Phase 5 §6)', async () => {
+    let runs = 0
+    queue.configureMaintenanceHandler(async () => {
+      runs += 1
+    })
+
+    const first = await queue.maybeRunMaintenanceIfDue(24 * 60 * 60 * 1000)
+    expect(first.ran).toBe(true)
+    expect(runs).toBe(1)
+
+    const second = await queue.maybeRunMaintenanceIfDue(24 * 60 * 60 * 1000)
+    expect(second).toMatchObject({ ran: false, skippedReason: 'not-due' })
+    expect(runs).toBe(1)
+
+    const forced = await queue.runMaintenanceNow()
+    expect(forced.ran).toBe(true)
+    expect(runs).toBe(2)
+  })
+
+  it('skips maintenance without a handler and records handler-missing', async () => {
+    const result = await queue.maybeRunMaintenanceIfDue(0)
+    expect(result).toMatchObject({ ran: false, skippedReason: 'handler-missing' })
+  })
+
+  it('countProposalsByDerivation counts proposed only and ignores unknown derivations', () => {
+    expect(countProposalsByDerivation([], [])).toEqual(EMPTY_PROPOSALS_BY_DERIVATION)
+    expect(countProposalsByDerivation(
+      [
+        { status: 'proposed', derivation: 'deterministic' },
+        { status: 'applied', derivation: 'deterministic' },
+        { status: 'rejected', derivation: 'llm' },
+        { status: 'proposed', derivation: 'llm' },
+        { status: 'proposed', derivation: 'merged' },
+        { status: 'proposed', derivation: 'mystery' },
+        { status: 'proposed' },
+      ],
+      [{ status: 'proposed', derivation: 'deterministic' }],
+    )).toEqual({ deterministic: 2, llm: 1, merged: 1 })
+  })
+
+  it('reports proposals by derivation with freshness stamps in stats (Phase 5 §6)', async () => {
+    const factsDir = join(root, 'knowledge', 'facts')
+    await mkdir(factsDir, { recursive: true })
+    await writeFile(join(factsDir, 'candidates.jsonl'), [
+      JSON.stringify({ id: 'c1', status: 'proposed', derivation: 'deterministic' }),
+      JSON.stringify({ id: 'c2', status: 'applied', derivation: 'deterministic' }),
+      JSON.stringify({ id: 'c3', status: 'proposed', derivation: 'llm' }),
+      JSON.stringify({ id: 'c4', status: 'proposed', derivation: 'merged' }),
+      JSON.stringify({ id: 'c5', status: 'rejected', derivation: 'llm' }),
+    ].join('\n') + '\n', 'utf8')
+
+    const before = await queue.processingStats()
+    expect(before.proposalsByDerivation).toEqual({ deterministic: 1, llm: 1, merged: 1 })
+    expect(before.proposalsTotal).toBe(3)
+    // No recall ran in this file and no maintenance succeeded yet.
+    expect(before.indexUpdatedAt).toBeNull()
+    expect(before.lastMaintenanceAt).toBeNull()
+
+    queue.configureMaintenanceHandler(async () => {})
+    const run = await queue.runMaintenanceNow()
+    const after = await queue.processingStats()
+    expect(after.lastMaintenanceAt).toBe(run.at)
+  })
+
+  it('maintenance failure audits processing_failed without advancing the stamp', async () => {
+    queue.configureMaintenanceHandler(async () => {
+      throw new Error('prune exploded')
+    })
+    await expect(queue.runMaintenanceNow()).rejects.toThrow('prune exploded')
+    expect(audits).toHaveLength(1)
+    expect(audits[0]).toMatchObject({
+      action: 'processing_failed',
+      targetId: 'maintenance',
+      after: expect.objectContaining({ stage: 'maintenance' }),
+    })
+
+    // Stamp untouched: the next due-check retries instead of waiting a day.
+    queue.configureMaintenanceHandler(async () => {})
+    const retry = await queue.maybeRunMaintenanceIfDue(24 * 60 * 60 * 1000)
+    expect(retry.ran).toBe(true)
   })
 })

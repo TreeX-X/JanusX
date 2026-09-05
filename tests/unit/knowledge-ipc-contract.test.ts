@@ -82,7 +82,8 @@ describe('Knowledge IPC contract', () => {
 
   it('defines and registers exactly the public channel set without maintenance exposure', () => {
     const channels = Object.values(KNOWLEDGE_CHANNELS)
-    expect(channels).toHaveLength(28)
+    // Phase 5: `knowledge:extract` direct IPC removed (queue-owned LLM stage).
+    expect(channels).toHaveLength(27)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -118,7 +119,6 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.retentionStats()
     await knowledgeApi.listAudit({ limit: 5 })
     await knowledgeApi.auditStats()
-    await knowledgeApi.extract({ workspacePath: 'C:\\work' })
     await knowledgeApi.listCandidates()
     await knowledgeApi.listGraphCandidates()
     await knowledgeApi.listWikiPatchCandidates()
@@ -148,7 +148,6 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.retentionStats],
       [KNOWLEDGE_CHANNELS.listAudit, { limit: 5 }],
       [KNOWLEDGE_CHANNELS.auditStats],
-      [KNOWLEDGE_CHANNELS.extract, { workspacePath: 'C:\\work' }],
       [KNOWLEDGE_CHANNELS.listCandidates],
       [KNOWLEDGE_CHANNELS.listGraphCandidates],
       [KNOWLEDGE_CHANNELS.listWikiPatchCandidates],
@@ -282,7 +281,6 @@ describe('Knowledge IPC contract', () => {
       () => api.retentionStats(),
       () => api.listAudit({ limit: 1 }),
       () => api.auditStats(),
-      () => api.extract({ workspacePath: 'C:\\work' }),
       () => api.listCandidates(),
       () => api.listGraphCandidates(),
       () => api.listWikiPatchCandidates(),
@@ -302,8 +300,8 @@ describe('Knowledge IPC contract', () => {
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(28)
-    expect(calls).toHaveLength(28)
+    expect(Object.keys(api)).toHaveLength(27)
+    expect(calls).toHaveLength(27)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

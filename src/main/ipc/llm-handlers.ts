@@ -9,6 +9,7 @@ import { ipcMain } from 'electron'
 import { llmService } from '../llm/LlmService'
 import type { ProviderSettings } from '@janusx/llm-core'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { getModelCatalogService } from '../llm/ModelCatalogService'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
 import type { ChatWorkspaceResource, LlmRuntimeStatus } from '../../shared/ipc/llm'
@@ -231,7 +232,7 @@ export function registerLlmHandlers(): void {
             sessionId,
           })
         }
-        await knowledgeObservationService.capture({
+        const assistantObservation = await knowledgeObservationService.capture({
           workspaceId: soleResource.workspaceId,
           workspacePath: soleResource.workspacePath,
           source: 'janus-chat',
@@ -246,6 +247,10 @@ export function registerLlmHandlers(): void {
             modelId: actualModelId,
           },
         })
+        // Phase 5 (§6 gap close): non-stream chat also ends a session turn.
+        knowledgeProcessingQueue.scheduleImmediate(
+          assistantObservation?.workspaceId ?? soleResource.workspaceId,
+        )
       }
 
       return result.text || ''

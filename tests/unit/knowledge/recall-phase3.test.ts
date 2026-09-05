@@ -291,6 +291,21 @@ describe('Phase3 retrieval', () => {
     expect(result.documents.map((d) => d.hit.id)).toContain('quiet-target')
   })
 
+  it('tracks the last index build time for §6 freshness metrics', async () => {
+    const recall = new KnowledgeRecallService(
+      sources({ facts: [], wikiPages: [], graphEdges: [] }),
+      () => FIXED_NOW,
+    )
+    expect(recall.getLastIndexBuildAt()).toBeNull()
+
+    await recall.recall({ query: 'phase3', layer: 'truth', workspaceId: 'workspace-a' })
+    expect(recall.getLastIndexBuildAt()).toBe(new Date(FIXED_NOW).toISOString())
+
+    // Cache hit rebuilds nothing: the stamp must not move.
+    await recall.recall({ query: 'phase3 again', layer: 'truth', workspaceId: 'workspace-a' })
+    expect(recall.getLastIndexBuildAt()).toBe(new Date(FIXED_NOW).toISOString())
+  })
+
   it('builds stable filter keys and stays on the BM25 ranker without embeddings', async () => {
     const base = { query: 'q', layer: 'governance' as const, workspaceId: 'workspace-a' }
     expect(recallFilterKey(base)).toBe(recallFilterKey({ ...base }))

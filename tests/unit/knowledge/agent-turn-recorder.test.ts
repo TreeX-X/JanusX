@@ -4,11 +4,18 @@ import type { AgentHookPayload } from '../../../src/main/notifications/agent-hoo
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   getKnowledgeSettings: vi.fn(),
+  scheduleImmediate: vi.fn(),
 }))
 
 vi.mock('../../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: {
     capture: mocks.capture,
+  },
+}))
+
+vi.mock('../../../src/main/knowledge/processing-queue', () => ({
+  knowledgeProcessingQueue: {
+    scheduleImmediate: mocks.scheduleImmediate,
   },
 }))
 
@@ -26,9 +33,10 @@ async function loadRecorder() {
 describe('AgentTurnRecorder', () => {
   beforeEach(() => {
     mocks.capture.mockReset()
-    mocks.capture.mockResolvedValue({})
+    mocks.capture.mockResolvedValue({ workspaceId: 'workspace-1' })
     mocks.getKnowledgeSettings.mockReset()
     mocks.getKnowledgeSettings.mockResolvedValue({ enabled: true })
+    mocks.scheduleImmediate.mockReset()
   })
 
   it('records hook-driven terminal turn start and completion with duration metadata', async () => {
@@ -87,6 +95,34 @@ describe('AgentTurnRecorder', () => {
         }),
       }),
     )
+  })
+
+  it('schedules immediate processing when a turn completes (Phase 5 §6)', async () => {
+    const { agentTurnRecorder } = await loadRecorder()
+    agentTurnRecorder.registerTerminal({
+      terminalId: 'terminal-1',
+      engine: 'codex',
+      workspaceId: 'workspace-1',
+      cwd: 'C:/work/project',
+    })
+
+    agentTurnRecorder.handleHookPayload({
+      source: 'codex',
+      event: 'UserPromptSubmit',
+      terminalId: 'terminal-1',
+      workspaceId: 'workspace-1',
+      message: 'hello',
+    })
+    agentTurnRecorder.handleHookPayload({
+      source: 'codex',
+      event: 'Stop',
+      terminalId: 'terminal-1',
+      workspaceId: 'workspace-1',
+    })
+
+    await vi.waitFor(() => expect(mocks.capture).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(mocks.scheduleImmediate).toHaveBeenCalledTimes(1))
+    expect(mocks.scheduleImmediate).toHaveBeenCalledWith('workspace-1')
   })
 
   it('does not write observations when knowledge capture is disabled', async () => {

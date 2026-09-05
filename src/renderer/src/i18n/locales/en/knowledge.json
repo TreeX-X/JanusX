@@ -143,6 +143,8 @@
   "statusbar": {
     "label": "Knowledge pipeline status",
     "pending": "{{count}} pending",
+    "proposals": "{{count}} proposals",
+    "indexUpdated": "Index {{time}}",
     "failures": "{{count}} failed",
     "handlerMissing": "Pipeline not ready",
     "lastRun": "Last run {{time}}",

@@ -99,7 +99,6 @@ export function installElectronApiFallback(): void {
       retentionStats: () => unavailableKnowledge(),
       listAudit: () => unavailableKnowledge(),
       auditStats: () => unavailableKnowledge(),
-      extract: () => unavailableKnowledge(),
       listCandidates: () => unavailableKnowledge(),
       listGraphCandidates: () => unavailableKnowledge(),
       listWikiPatchCandidates: () => unavailableKnowledge(),

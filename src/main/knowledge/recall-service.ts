@@ -498,11 +498,21 @@ export class KnowledgeRecallService {
    */
   private documentsCache = new Map<KnowledgeRecallLayer, { fingerprint: string; documents: KnowledgeRecallDocument[] }>()
   private indexCache = new Map<string, { fingerprint: string; index: Bm25Index }>()
+  /**
+   * Phase 5 (§6 索引更新时间)：最近一次成功重建索引的时间。缓存命中不算
+   * 重建——指纹不变即数据不变，该时间仍是准确的新鲜度标记。
+   */
+  private lastBuiltAt: string | null = null
 
   constructor(
     private readonly sources: RecallSources = defaultSources,
     private readonly nowMs: () => number = Date.now,
   ) {}
+
+  /** Phase 5 (§6): processingStats / diagnostics 的索引新鲜度来源。 */
+  getLastIndexBuildAt(): string | null {
+    return this.lastBuiltAt
+  }
 
   private async computeFingerprint(): Promise<string> {
     const root = knowledgeRootPath()
@@ -544,6 +554,7 @@ export class KnowledgeRecallService {
     const documents = await this.buildDocuments(layer)
     const entry = { fingerprint, documents }
     this.documentsCache.set(layer, entry)
+    this.lastBuiltAt = new Date(this.nowMs()).toISOString()
     return entry
   }
 

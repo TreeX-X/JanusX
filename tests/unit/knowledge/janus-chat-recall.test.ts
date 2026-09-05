@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnowledgeContextResult } from '../../../src/shared/knowledge'
 
-const { handle, on, search, capture, streamText, getSession, executeFunctionCall } = vi.hoisted(() => ({
+const { handle, on, search, capture, streamText, getSession, executeFunctionCall, scheduleImmediate } = vi.hoisted(() => ({
   handle: vi.fn(),
   on: vi.fn(),
   search: vi.fn(),
@@ -9,6 +9,7 @@ const { handle, on, search, capture, streamText, getSession, executeFunctionCall
   streamText: vi.fn(),
   getSession: vi.fn(),
   executeFunctionCall: vi.fn(),
+  scheduleImmediate: vi.fn(),
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle, on } }))
@@ -17,6 +18,9 @@ vi.mock('../../../src/main/knowledge/context-service', () => ({
 }))
 vi.mock('../../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: { capture },
+}))
+vi.mock('../../../src/main/knowledge/processing-queue', () => ({
+  knowledgeProcessingQueue: { scheduleImmediate },
 }))
 vi.mock('../../../src/main/llm/ModelCatalogService', () => ({
   getModelCatalogService: () => ({ getCatalog: vi.fn(), refresh: vi.fn() }),

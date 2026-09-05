@@ -115,7 +115,7 @@ describe('workspace identity (Phase 0)', () => {
       diagnostics.workspaces.map((w) => [w.workspaceId, [w.observations, w.fallbackWorkspaceIds]]),
     )
     expect(byId).toEqual({ stray: [1, 1], 'ws-real-id': [1, 0] })
-    expect(diagnostics.candidates).toEqual({ facts: 0, wikiPatches: 0, graphEdges: 0 })
+    expect(diagnostics.candidates).toEqual({ facts: 0, wikiPatches: 0, graphEdges: 0, byDerivation: { deterministic: 0, llm: 0, merged: 0 } })
     expect(diagnostics.truth).toEqual({ facts: 0, wikiPages: 0, graphEdges: 0 })
 
     const scoped = await knowledgeDiagnosticsService.snapshot({ workspaceId: 'ws-real-id' })

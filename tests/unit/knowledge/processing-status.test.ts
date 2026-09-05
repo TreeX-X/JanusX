@@ -9,7 +9,16 @@ function stats(overrides: Partial<KnowledgeProcessingStats> = {}): KnowledgeProc
     workspaces: [],
     failures: 0,
     lastRunAt: null,
+    lastRun: null,
     handlerConfigured: true,
+    llmConfigured: false,
+    llmSucceeded: 0,
+    llmFailed: 0,
+    llmSkipped: 0,
+    proposalsByDerivation: { deterministic: 0, llm: 0, merged: 0 },
+    proposalsTotal: 0,
+    indexUpdatedAt: null,
+    lastMaintenanceAt: null,
     ...overrides,
   }
 }

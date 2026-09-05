@@ -28,10 +28,13 @@ import { knowledgeAuditService, type AuditEventInput } from './audit-service'
 
 const CURSOR_FILE = join('processing', 'cursor.json')
 const FAILURES_FILE = join('processing', 'failures.jsonl')
+const MAINTENANCE_FILE = join('processing', 'maintenance.json')
 
 const DEFAULT_THRESHOLD = 20
 const DEFAULT_DEBOUNCE_MS = 5 * 60 * 1000
 const MAX_BACKOFF_MS = 60 * 60 * 1000
+/** Phase 5 (§6): retention maintenance cadence — autoPrune/archive/compact at most once per day. */
+export const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export type ProcessingStage = 'deterministic' | 'llm'
 
@@ -74,6 +77,38 @@ export interface ProcessNowResult {
   handlerMissing: boolean
 }
 
+/** Phase 5 (§6): Inbox 压力 = `status === 'proposed'` 的候选按 derivation 计数。 */
+export interface ProposalsByDerivation {
+  deterministic: number
+  llm: number
+  merged: number
+}
+
+export const EMPTY_PROPOSALS_BY_DERIVATION: ProposalsByDerivation = {
+  deterministic: 0,
+  llm: 0,
+  merged: 0,
+}
+
+/**
+ * Phase 5 (§6): best-effort 计数，永不抛错。缺 derivation / 非 proposed
+ * 一律忽略（缺字段的 schema 错误由读写两侧的 `schema_violation` audit 负责）。
+ */
+export function countProposalsByDerivation(
+  ...lists: Array<Array<{ status?: string; derivation?: string }>>
+): ProposalsByDerivation {
+  const counts: ProposalsByDerivation = { ...EMPTY_PROPOSALS_BY_DERIVATION }
+  for (const list of lists) {
+    for (const candidate of list) {
+      if (candidate.status !== 'proposed') continue
+      if (candidate.derivation === 'deterministic') counts.deterministic += 1
+      else if (candidate.derivation === 'llm') counts.llm += 1
+      else if (candidate.derivation === 'merged') counts.merged += 1
+    }
+  }
+  return counts
+}
+
 export interface ProcessingStats {
   generatedAt: string
   pendingTotal: number
@@ -87,6 +122,13 @@ export interface ProcessingStats {
   llmSucceeded: number
   llmFailed: number
   llmSkipped: number
+  /** Phase 5 (§6): proposed 候选按 derivation 计数 + 总数。 */
+  proposalsByDerivation: ProposalsByDerivation
+  proposalsTotal: number
+  /** Phase 5 (§6): recall 索引最近一次重建时间；从未构建为 null。 */
+  indexUpdatedAt: string | null
+  /** Phase 5 (§6): retention 维护最近一次成功时间；从未成功为 null。 */
+  lastMaintenanceAt: string | null
 }
 
 export interface DeterministicBatch {
@@ -111,6 +153,20 @@ export interface LlmStageStatus {
 }
 
 export type LlmBatchHandler = (batch: LlmStageBatch) => Promise<LlmStageStatus>
+
+/** Phase 5 (§6): daily retention maintenance (autoPrune/archive/compact). Wired in register.ts. */
+export type MaintenanceHandler = () => Promise<void>
+
+export interface MaintenanceRunResult {
+  at: string
+  ran: boolean
+  skippedReason?: 'handler-missing' | 'not-due'
+}
+
+interface MaintenanceFileShape {
+  version: 1
+  lastMaintenanceAt: string | null
+}
 
 export interface ProcessingQueueDeps {
   listAllObservations: () => Promise<Observation[]>
@@ -150,10 +206,12 @@ export class KnowledgeProcessingQueue {
   private readonly queue = new SerialQueue()
   private handler: DeterministicBatchHandler | null = null
   private llmHandler: LlmBatchHandler | null = null
+  private maintenanceHandler: MaintenanceHandler | null = null
   private threshold: number
   private debounceMs: number
   private readonly pendingCounts = new Map<string, number>()
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
+  private maintenanceTimer: ReturnType<typeof setInterval> | null = null
   private lastRun: QueueRunSummary | null = null
   private llmSucceeded = 0
   private llmFailed = 0
@@ -188,11 +246,21 @@ export class KnowledgeProcessingQueue {
     return this.llmHandler !== null
   }
 
-  /** Clears pending debounce timers (test hygiene; timers are unref'd). */
+  /** Phase 5 plugs the daily retention maintenance here; null detaches it. */
+  configureMaintenanceHandler(handler: MaintenanceHandler | null): void {
+    this.maintenanceHandler = handler
+  }
+
+  isMaintenanceConfigured(): boolean {
+    return this.maintenanceHandler !== null
+  }
+
+  /** Clears pending debounce + maintenance timers (test hygiene; timers are unref'd). */
   dispose(): void {
     for (const timer of this.timers.values()) clearTimeout(timer)
     this.timers.clear()
     this.pendingCounts.clear()
+    this.stopMaintenanceLoop()
   }
 
   /**
@@ -225,9 +293,101 @@ export class KnowledgeProcessingQueue {
     this.timers.set(id, timer)
   }
 
+  /**
+   * Phase 5 (§6 gap close): turn-completion / chat session-end entry.
+   * Bypasses the capture debounce and threshold: the turn is over, so the
+   * workspace runs as soon as the SerialQueue drains. Fire-and-forget.
+   */
+  scheduleImmediate(workspaceId: string): void {
+    const id = workspaceId.trim()
+    if (!id) return
+    this.pendingCounts.set(id, 0)
+    this.clearTimer(id)
+    void this.queue.run(() => this.runWorkspaceLocked(id)).catch((error: unknown) => {
+      console.error(`[knowledge] immediate processing run failed for ${id}: ${error instanceof Error ? error.message : String(error)}`)
+    })
+  }
+
   /** Manual trigger (§6 `knowledge:processNow`): run now, bypassing debounce. */
   async processNow(workspaceId?: string): Promise<ProcessNowResult> {
     return this.queue.run(() => this.processLocked(workspaceId?.trim() || undefined))
+  }
+
+  /**
+   * Phase 5 (§6): run retention maintenance now (autoPrune/archive/compact
+   * via the wired handler). Updates the maintenance stamp only on success;
+   * failures audit `processing_failed` and leave the stamp so the next
+   * due-check retries.
+   */
+  async runMaintenanceNow(): Promise<MaintenanceRunResult> {
+    const at = new Date(this.deps.nowMs()).toISOString()
+    if (!this.maintenanceHandler) {
+      return { at, ran: false, skippedReason: 'handler-missing' }
+    }
+    try {
+      await this.maintenanceHandler()
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      try {
+        await this.deps.recordAudit({
+          action: 'processing_failed',
+          targetType: 'observation',
+          targetId: 'maintenance',
+          before: null,
+          after: { stage: 'maintenance', reason },
+          provenance: {
+            workspaceId: 'maintenance',
+            workspaceName: 'maintenance',
+            workspacePath: '',
+            source: 'system',
+            sourceObservationIds: [],
+            fileRefs: [],
+            actor: 'knowledge-queue',
+            createdAt: at,
+          },
+        })
+      } catch (auditError) {
+        console.error(`[knowledge] maintenance audit failed: ${auditError instanceof Error ? auditError.message : String(auditError)}`)
+      }
+      throw error
+    }
+    await this.writeMaintenance({ version: 1, lastMaintenanceAt: at })
+    return { at, ran: true }
+  }
+
+  /** Phase 5 (§6): run maintenance only when the daily interval elapsed. */
+  async maybeRunMaintenanceIfDue(intervalMs: number = MAINTENANCE_INTERVAL_MS): Promise<MaintenanceRunResult> {
+    const at = new Date(this.deps.nowMs()).toISOString()
+    if (!this.maintenanceHandler) {
+      return { at, ran: false, skippedReason: 'handler-missing' }
+    }
+    const last = await this.readMaintenance()
+    if (last?.lastMaintenanceAt) {
+      const elapsed = this.deps.nowMs() - Date.parse(last.lastMaintenanceAt)
+      if (Number.isFinite(elapsed) && elapsed < intervalMs) {
+        return { at, ran: false, skippedReason: 'not-due' }
+      }
+    }
+    return this.runMaintenanceNow()
+  }
+
+  /** Phase 5 (§6): daily low-peak maintenance loop (unref'd; dispose stops it). */
+  startMaintenanceLoop(intervalMs: number = MAINTENANCE_INTERVAL_MS): void {
+    this.stopMaintenanceLoop()
+    const timer = setInterval(() => {
+      void this.maybeRunMaintenanceIfDue(intervalMs).catch((error: unknown) => {
+        console.error(`[knowledge] maintenance run failed: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }, intervalMs)
+    if (typeof timer.unref === 'function') timer.unref()
+    this.maintenanceTimer = timer
+  }
+
+  stopMaintenanceLoop(): void {
+    if (this.maintenanceTimer) {
+      clearInterval(this.maintenanceTimer)
+      this.maintenanceTimer = null
+    }
   }
 
   /** Startup recovery (§6): report unprocessed ranges without processing. */
@@ -387,6 +547,37 @@ export class KnowledgeProcessingQueue {
     }
   }
 
+  /**
+   * Phase 5 (§6): proposed 候选按 derivation 计数。best-effort：读盘失败
+   * 即回零值，绝不让指标快照失败。动态 import 避免在队列模块图里静态
+   * 拉入 extract/recall 重依赖（observation-service 侧已有静态边）。
+   */
+  private async readProposalsByDerivation(): Promise<ProposalsByDerivation> {
+    try {
+      const { knowledgeExtractService } = await import('./extract-service')
+      const [facts, wikiPatches, graphEdges] = await Promise.all([
+        knowledgeExtractService.listFactCandidates(),
+        knowledgeExtractService.listWikiPatchCandidates(),
+        knowledgeExtractService.listGraphCandidates(),
+      ])
+      return countProposalsByDerivation(facts, wikiPatches, graphEdges)
+    } catch (error) {
+      console.error(`[knowledge] proposals-by-derivation snapshot failed: ${error instanceof Error ? error.message : String(error)}`)
+      return { ...EMPTY_PROPOSALS_BY_DERIVATION }
+    }
+  }
+
+  /** Phase 5 (§6): recall 索引新鲜度，best-effort，失败即 null。 */
+  private async readIndexUpdatedAt(): Promise<string | null> {
+    try {
+      const { knowledgeRecallService } = await import('./recall-service')
+      return knowledgeRecallService.getLastIndexBuildAt()
+    } catch (error) {
+      console.error(`[knowledge] index-updated-at snapshot failed: ${error instanceof Error ? error.message : String(error)}`)
+      return null
+    }
+  }
+
   private async buildStats(): Promise<ProcessingStats> {
     const all = (await this.deps.listAllObservations()).filter(isEvidence)
     const cursors = await this.readCursors()
@@ -405,6 +596,11 @@ export class KnowledgeProcessingQueue {
     const workspaces: WorkspacePending[] = [...byWorkspace.entries()]
       .map(([workspaceId, entry]) => ({ workspaceId, ...entry }))
       .sort((left, right) => (right.lastObservationAt ?? '').localeCompare(left.lastObservationAt ?? ''))
+    const [proposalsByDerivation, indexUpdatedAt, maintenance] = await Promise.all([
+      this.readProposalsByDerivation(),
+      this.readIndexUpdatedAt(),
+      this.readMaintenance(),
+    ])
     return {
       generatedAt: new Date(this.deps.nowMs()).toISOString(),
       pendingTotal: workspaces.reduce((total, entry) => total + entry.pending, 0),
@@ -417,6 +613,11 @@ export class KnowledgeProcessingQueue {
       llmSucceeded: this.llmSucceeded,
       llmFailed: this.llmFailed,
       llmSkipped: this.llmSkipped,
+      proposalsByDerivation,
+      proposalsTotal:
+        proposalsByDerivation.deterministic + proposalsByDerivation.llm + proposalsByDerivation.merged,
+      indexUpdatedAt,
+      lastMaintenanceAt: maintenance?.lastMaintenanceAt ?? null,
     }
   }
 
@@ -426,6 +627,25 @@ export class KnowledgeProcessingQueue {
 
   private failuresPath(): string {
     return join(knowledgeRootPath(), FAILURES_FILE)
+  }
+
+  private maintenancePath(): string {
+    return join(knowledgeRootPath(), MAINTENANCE_FILE)
+  }
+
+  private async readMaintenance(): Promise<MaintenanceFileShape | null> {
+    try {
+      const raw = JSON.parse(await readFile(this.maintenancePath(), 'utf8')) as MaintenanceFileShape
+      if (!raw || raw.version !== 1) return null
+      if (raw.lastMaintenanceAt !== null && typeof raw.lastMaintenanceAt !== 'string') return null
+      return raw
+    } catch {
+      return null
+    }
+  }
+
+  private async writeMaintenance(shape: MaintenanceFileShape): Promise<void> {
+    await writeFileAtomic(this.maintenancePath(), `${JSON.stringify(shape, null, 2)}\n`)
   }
 
   private async readCursors(): Promise<Map<string, WorkspaceCursor>> {

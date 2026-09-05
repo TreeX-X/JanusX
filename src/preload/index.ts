@@ -150,7 +150,6 @@ const knowledgeAPI: KnowledgeAPI = {
   retentionStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.retentionStats),
   listAudit: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listAudit, query),
   auditStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.auditStats),
-  extract: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.extract, input),
   listCandidates: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listCandidates),
   listGraphCandidates: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listGraphCandidates),
   listWikiPatchCandidates: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listWikiPatchCandidates),

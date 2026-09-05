@@ -6,6 +6,7 @@ import {
   type RegisteredHookTerminal,
 } from '../notifications/agent-hook-types'
 import { knowledgeObservationService } from './observation-service'
+import { knowledgeProcessingQueue } from './processing-queue'
 
 interface ActiveTurn {
   id: string
@@ -357,6 +358,11 @@ class AgentTurnRecorder {
         prompt: activeTurn?.prompt,
       },
     })
+    // Phase 5 (§6 gap close): the turn ended — bypass the capture debounce so
+    // deterministic sedimentation runs promptly for this workspace.
+    knowledgeProcessingQueue.scheduleImmediate(
+      observation?.workspaceId ?? terminal.workspaceId ?? '',
+    )
     this.emitCaptured(payload, terminal, observation.id)
   }
 

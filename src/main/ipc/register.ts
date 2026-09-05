@@ -28,6 +28,7 @@ import { registerSettingsHandlers } from './settings-handlers'
 import { registerSubAgentRunHandlers } from './subagent-run-handlers'
 import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './terminal-handlers'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
+import { knowledgeObservationService } from '../knowledge/observation-service'
 import { runDeterministicStage } from '../knowledge/deterministic-extractor'
 import { runLlmStage } from '../knowledge/llm-stage'
 import { terminalManager } from '../terminal/manager'
@@ -120,6 +121,14 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     runDeterministicStage(batch).then(() => undefined),
   )
   knowledgeProcessingQueue.configureLlmHandler((batch) => runLlmStage(batch))
+  // Phase 5 (§6): retention maintenance joins the queue — daily low-peak
+  // autoPrune + archive + compact with confirm:true. Best-effort: failures
+  // audit processing_failed and retry on the next due-check.
+  knowledgeProcessingQueue.configureMaintenanceHandler(async () => {
+    await knowledgeObservationService.autoPrune()
+    await knowledgeObservationService.archiveOldShards({ confirm: true })
+    await knowledgeObservationService.compactEvidence({ confirm: true })
+  })
   void knowledgeProcessingQueue.startupRestore()
     .then(({ pendingTotal }) => {
       if (pendingTotal > 0) console.log(`[knowledge] processing queue restored with ${pendingTotal} pending observations`)
@@ -127,6 +136,11 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     .catch((error: unknown) => {
       console.error(`[knowledge] queue startup restore failed: ${error instanceof Error ? error.message : String(error)}`)
     })
+  void knowledgeProcessingQueue.maybeRunMaintenanceIfDue()
+    .catch((error: unknown) => {
+      console.error(`[knowledge] maintenance startup run failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
+  knowledgeProcessingQueue.startMaintenanceLoop()
   registerOfficeHandlers({
     getAllowedWindows: options.getAllowedWindows,
     resolveWorkspaceRoot: options.resolveWorkspaceRoot,

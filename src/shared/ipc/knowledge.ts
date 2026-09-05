@@ -37,7 +37,8 @@ export const KNOWLEDGE_CHANNELS = {
   retentionStats: 'knowledge:retention:stats',
   listAudit: 'knowledge:audit:list',
   auditStats: 'knowledge:audit:stats',
-  extract: 'knowledge:extract',
+  // Phase 5: `knowledge:extract` direct IPC removed — LLM enhancement runs only
+  // via the processing queue (`runLlmStage` → `knowledgeExtractService.extract`).
   listCandidates: 'knowledge:candidates:list',
   listGraphCandidates: 'knowledge:candidates:list-graph',
   listWikiPatchCandidates: 'knowledge:candidates:list-wiki-patches',
@@ -77,6 +78,10 @@ export interface AuditStats {
   byAction: Record<string, number>
 }
 
+/**
+ * Phase 5: service-level input for `knowledgeExtractService.extract`.
+ * No longer an IPC payload — the queue-owned `runLlmStage` is the only caller.
+ */
 export interface ExtractInput {
   observations?: Observation[]
   query?: ObservationQuery
@@ -147,13 +152,22 @@ export interface KnowledgeWorkspaceDiagnostics {
   lastObservationAt?: string
 }
 
+/** Phase 5 (§6): proposed 候选按 derivation 计数（与 ProcessingStats 同口径）。 */
+export interface KnowledgeProposalsByDerivation {
+  deterministic: number
+  llm: number
+  merged: number
+}
+
 export interface KnowledgeDiagnostics {
   generatedAt: string
   knowledgeRoot: string
   recentObservations: Observation[]
   workspaces: KnowledgeWorkspaceDiagnostics[]
-  candidates: { facts: number; wikiPatches: number; graphEdges: number }
+  candidates: { facts: number; wikiPatches: number; graphEdges: number; byDerivation: KnowledgeProposalsByDerivation }
   truth: { facts: number; wikiPages: number; graphEdges: number }
+  /** Phase 5 (§6): recall 索引最近一次重建时间；从未构建为 null。 */
+  indexUpdatedAt: string | null
   captureFailures: number
 }
 
@@ -177,6 +191,13 @@ export interface KnowledgeProcessingWorkspaceStats {
   lastObservationAt?: string
 }
 
+/** Phase 5: last queue run summary (mirrors the queue's QueueRunSummary). */
+export interface KnowledgeProcessingLastRun {
+  at: string
+  processed: number
+  failed: number
+}
+
 /** Phase 1-1: queue metrics for the Workbench status bar. */
 export interface KnowledgeProcessingStats {
   generatedAt: string
@@ -184,7 +205,20 @@ export interface KnowledgeProcessingStats {
   workspaces: KnowledgeProcessingWorkspaceStats[]
   failures: number
   lastRunAt: string | null
+  lastRun: KnowledgeProcessingLastRun | null
   handlerConfigured: boolean
+  /** Phase 2/5: LLM stage wiring + process-lifetime outcome counters. */
+  llmConfigured: boolean
+  llmSucceeded: number
+  llmFailed: number
+  llmSkipped: number
+  /** Phase 5 (§6): proposed 候选按 derivation 计数 + 总数。 */
+  proposalsByDerivation: KnowledgeProposalsByDerivation
+  proposalsTotal: number
+  /** Phase 5 (§6): recall 索引最近一次重建时间；从未构建为 null。 */
+  indexUpdatedAt: string | null
+  /** Phase 5 (§6): retention 维护最近一次成功时间；从未成功为 null。 */
+  lastMaintenanceAt: string | null
 }
 
 export interface KnowledgeAPI {
@@ -198,7 +232,6 @@ export interface KnowledgeAPI {
   retentionStats: () => Promise<RetentionStats>
   listAudit: (query?: AuditQuery) => Promise<AuditEvent[]>
   auditStats: () => Promise<AuditStats>
-  extract: (input?: ExtractInput) => Promise<ExtractOutput>
   listCandidates: () => Promise<CandidateFact[]>
   listGraphCandidates: () => Promise<CandidateGraphEdge[]>
   listWikiPatchCandidates: () => Promise<CandidateWikiPatch[]>

@@ -143,6 +143,8 @@
   "statusbar": {
     "label": "知识流水线状态",
     "pending": "待处理 {{count}}",
+    "proposals": "候选 {{count}}",
+    "indexUpdated": "索引 {{time}}",
     "failures": "失败 {{count}}",
     "handlerMissing": "流水线未就绪",
     "lastRun": "上次 {{time}}",

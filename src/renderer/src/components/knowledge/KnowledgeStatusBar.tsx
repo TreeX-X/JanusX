@@ -24,6 +24,9 @@ export function KnowledgeStatusBar({ stats, busy, onProcessNow }: Props) {
       {stats ? (
         <>
           <span>{t('knowledge:statusbar.pending', { count: stats.pendingTotal })}</span>
+          {stats.proposalsTotal > 0 && (
+            <span>{t('knowledge:statusbar.proposals', { count: stats.proposalsTotal })}</span>
+          )}
           {stats.failures > 0 && (
             <span className={styles.statusWarn}>
               {t('knowledge:statusbar.failures', { count: stats.failures })}
@@ -37,6 +40,11 @@ export function KnowledgeStatusBar({ stats, busy, onProcessNow }: Props) {
               ? t('knowledge:statusbar.lastRun', { time: formatTime(stats.lastRunAt, t('knowledge:time.unknown')) })
               : t('knowledge:statusbar.neverRun')}
           </span>
+          {stats.indexUpdatedAt && (
+            <span className={styles.statusDim}>
+              {t('knowledge:statusbar.indexUpdated', { time: formatTime(stats.indexUpdatedAt, t('knowledge:time.unknown')) })}
+            </span>
+          )}
         </>
       ) : (
         <span className={styles.statusDim}>{t('knowledge:statusbar.unavailable')}</span>
