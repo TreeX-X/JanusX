@@ -14,6 +14,8 @@ export interface ToolCallCardProps {
   entry: ChatToolTraceEntry
   /** 已附加工作区名表，用于把 workspaceId 解析为可读名。 */
   workspaceNames: Map<string, string>
+  /** 卡片初始是否展开（流式中默认展开看细节，历史默认收起）。 */
+  defaultExpanded?: boolean
 }
 
 function statusIcon(entry: ChatToolTraceEntry, statusLabels: { requested: string; approval: string; running: string; completed: string; failed: string; cancelled: string }) {
@@ -41,9 +43,9 @@ function formatDuration(entry: ChatToolTraceEntry): number | null {
   return ms < 100 ? null : ms
 }
 
-export function ToolCallCard({ entry, workspaceNames }: ToolCallCardProps) {
+export function ToolCallCard({ entry, workspaceNames, defaultExpanded = false }: ToolCallCardProps) {
   const { t } = useI18n('janus')
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [copied, setCopied] = useState(false)
   const statusLabels = {
     requested: t('janus:chat.tool.status.requested'),
@@ -129,18 +131,85 @@ export function ToolCallCard({ entry, workspaceNames }: ToolCallCardProps) {
   )
 }
 
+export type ToolCallGroupStatus = 'completed' | 'failed' | 'running' | 'approval'
+
+export interface ToolCallGroupSummary {
+  total: number
+  failed: number
+  pending: number
+  overall: ToolCallGroupStatus
+}
+
+/** 整组聚合摘要（纯函数）：失败优先，其次未完成，最后全完成。 */
+export function summarizeToolCallGroup(entries: ChatToolTraceEntry[]): ToolCallGroupSummary {
+  let failed = 0
+  let pending = 0
+  let approval = false
+  for (const entry of entries) {
+    if (entry.status === 'failed' || entry.status === 'cancelled') failed += 1
+    else if (entry.status === 'completed') continue
+    else {
+      pending += 1
+      if (entry.status === 'approval') approval = true
+    }
+  }
+  return {
+    total: entries.length,
+    failed,
+    pending,
+    overall: failed > 0 ? 'failed' : pending > 0 ? (approval ? 'approval' : 'running') : 'completed',
+  }
+}
+
 export interface ToolCallGroupProps {
   entries: ChatToolTraceEntry[]
   workspaceNames: Map<string, string>
+  /** 流式中整组默认展开看细节（默认 false）。 */
+  defaultExpanded?: boolean
+  /**
+   * 历史回看时整组收起为一行摘要，可展开（默认 false 即平铺）。
+   * 收起后展开的是卡片列表，每张卡仍可单独展开看细节。
+   */
+  collapsible?: boolean
 }
 
-export function ToolCallGroup({ entries, workspaceNames }: ToolCallGroupProps) {
+export function ToolCallGroup({ entries, workspaceNames, defaultExpanded = false, collapsible = false }: ToolCallGroupProps) {
   const { t } = useI18n('janus')
+  const [groupExpanded, setGroupExpanded] = useState(defaultExpanded)
   if (entries.length === 0) return null
+  const summary = summarizeToolCallGroup(entries)
+  const showCards = !collapsible || groupExpanded
+  const Icon = groupExpanded ? ChevronDown : ChevronRight
   return (
     <div className="janus-tool-call-group" role="group" aria-label={t('janus:chat.tool.groupAria')}>
-      {entries.map((entry, index) => (
-        <ToolCallCard key={`${entry.toolName}-${index}`} entry={entry} workspaceNames={workspaceNames} />
+      {collapsible && (
+        <button
+          type="button"
+          className={`janus-tool-call-group-toggle janus-tool-call-group-toggle--${summary.overall}`}
+          aria-expanded={groupExpanded}
+          title={groupExpanded ? t('janus:chat.tool.collapseTitle') : t('janus:chat.tool.expandTitle')}
+          onClick={() => setGroupExpanded((open) => !open)}
+        >
+          <Icon size={11} aria-hidden="true" />
+          <span>{t('janus:chat.tool.groupSummary', { n: summary.total })}</span>
+          <span className={`janus-tool-card-status janus-tool-card-status--${summary.overall}`}>
+            {summary.overall === 'completed'
+              ? t('janus:chat.tool.status.completed')
+              : summary.overall === 'failed'
+                ? t('janus:chat.tool.status.failed')
+                : summary.overall === 'approval'
+                  ? t('janus:chat.tool.status.approval')
+                  : t('janus:chat.tool.status.running')}
+          </span>
+        </button>
+      )}
+      {showCards && entries.map((entry, index) => (
+        <ToolCallCard
+          key={`${entry.toolName}-${entry.turnId ?? ''}-${index}`}
+          entry={entry}
+          workspaceNames={workspaceNames}
+          defaultExpanded={defaultExpanded}
+        />
       ))}
     </div>
   )

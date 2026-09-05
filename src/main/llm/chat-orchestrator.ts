@@ -10,6 +10,7 @@
 
 import { llmService } from './LlmService'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeContextService } from '../knowledge/context-service'
 import type { KnowledgeContextResult, KnowledgeRecallTrace } from '../../shared/knowledge'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
@@ -94,6 +95,8 @@ const WORKSPACE_MUTATION_TOOLS = new Set([
 ])
 /*-- delta 合批窗口：高速流下把每 token 一次 IPC 压到每 40ms 一次 --*/
 const DELTA_FLUSH_MS = 40
+/*-- 推理增量仅 UI 展示：超限后不再转发，省 IPC（渲染端另有 4k 截断） --*/
+const REASONING_FORWARD_CAP_CHARS = 8_000
 
 type ContextSearch = typeof knowledgeContextService.search
 
@@ -365,6 +368,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
   const controller = new AbortController()
   let streamedText = ''
+  let reasoningChars = 0
   const executedToolTraces: ChatToolTraceEntry[] = []
   abortControllers.set(requestId, controller)
 
@@ -513,8 +517,25 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
           content: workspaceRecoveryPrompt(userRequestedMutation && !mutationAttempted),
         }]
       },
+      // pi parity (shouldStopAfterTurn) with a pi-gap fix: preview the next
+      // turn with real token estimates INCLUDING just-appended tool results,
+      // not a stale usage snapshot (pi #5512). A graceful stop here lets the
+      // empty-response fallback answer instead of a context-budget throw.
+      shouldStopAfterTurn: async ({ messages }) => {
+        if (!workspaceTools) return false
+        try {
+          chatSession.buildContext(messages, { model: modelInfo })
+          return false
+        } catch {
+          return true
+        }
+      },
       onEvent: (loopEvent) => {
         if (controller.signal.aborted) return
+        if (loopEvent.type === 'reasoning_update') {
+          if (reasoningChars >= REASONING_FORWARD_CAP_CHARS) return
+          reasoningChars += loopEvent.delta.length
+        }
         const streamEvent = toAgentStreamEvent(requestId, loopEvent)
         if (streamEvent) sendAgentEvent(toChatAgentEvent(streamEvent))
         if (loopEvent.type === 'message_update') {
@@ -527,6 +548,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     if (!controller.signal.aborted && !streamedText.trim()) {
       const feedback = emptyResponseFeedback(executedToolTraces, userRequestedMutation)
       queueDelta(feedback)
+      // Agent-event mode ignores the legacy delta channel (see services/llm.ts
+      // useAgentEvents guard), so mirror the fallback as text_delta or the
+      // renderer commits an empty reply and shows nothing.
+      sendAgentEvent({ type: 'text_delta', requestId, delta: feedback })
       streamedText = feedback
     }
     flushDelta()
@@ -565,7 +590,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
             sessionId,
           })
         }
-        await knowledgeObservationService.capture({
+        const assistantObservation = await knowledgeObservationService.capture({
           workspaceId: target.workspaceId,
           workspacePath: target.workspacePath,
           source: 'janus-chat',
@@ -578,6 +603,11 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
           sessionId,
           metadata: { providerId, modelId: actualModelId },
         })
+        // Phase 5 (§6 gap close): chat session produced new evidence — bypass
+        // the capture debounce so the workspace settles promptly.
+        knowledgeProcessingQueue.scheduleImmediate(
+          assistantObservation?.workspaceId ?? target.workspaceId,
+        )
       }
     }
 

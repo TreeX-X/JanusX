@@ -32,6 +32,11 @@ import {
   type WorkspaceResource,
 } from './janusResources'
 import {
+  appendReasoningDelta,
+  emptyReasoning,
+  type ReasoningSnapshot,
+} from './janusReasoning'
+import {
   EMPTY_JANUS_RUNTIME_STATE,
   reduceChatAgentEvent,
   reduceJanusRuntimeState,
@@ -61,6 +66,7 @@ export interface ChatModelOption {
 }
 
 export type { WorkspaceResource } from './janusResources'
+export type { ReasoningSnapshot } from './janusReasoning'
 
 export interface JanusResourceController {
   resources: WorkspaceResource[]
@@ -78,6 +84,10 @@ export interface UseJanusChatReturn {
   conversations: ConversationSummary[]
   messages: Message[]
   pendingContent: string
+  /** 本轮流式推理快照（仅 UI 展示，永不计入正文与回复判定）。 */
+  pendingReasoning: ReasoningSnapshot
+  /** 已提交 assistant 消息的思维链快照（key 为消息 id，默认收起回看）。 */
+  reasoningByTurn: Record<string, ReasoningSnapshot>
   isStreaming: boolean
   error: string | null
   modelOptions: ChatModelOption[]
@@ -109,6 +119,8 @@ export interface UseJanusChatRegistryReturn {
 
 interface ConversationRuntime {
   pendingContent: string
+  pendingReasoning: ReasoningSnapshot
+  reasoningByTurn: Record<string, ReasoningSnapshot>
   isStreaming: boolean
   error: string | null
   modelNotice: string | null
@@ -123,6 +135,7 @@ interface RuntimeHandles {
   abort: (() => void) | null
   assistantMessageId: string | null
   pendingBuffer: string
+  reasoning: ReasoningSnapshot
   flushTimer: number | null
   noticeTimer: number | null
   sessions: Map<string, AgentSession>
@@ -133,6 +146,8 @@ const HISTORY_MESSAGE_LIMIT = 24
 function emptyRuntime(approvalMode: AgentApprovalMode = 'per-action'): ConversationRuntime {
   return {
     pendingContent: '',
+    pendingReasoning: emptyReasoning(),
+    reasoningByTurn: {},
     isStreaming: false,
     error: null,
     modelNotice: null,
@@ -149,6 +164,7 @@ function createRuntimeHandles(): RuntimeHandles {
     abort: null,
     assistantMessageId: null,
     pendingBuffer: '',
+    reasoning: emptyReasoning(),
     flushTimer: null,
     noticeTimer: null,
     sessions: new Map(),
@@ -246,15 +262,50 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     return content
   }, [clearFlushTimer, getHandles, setRuntime])
 
+  const scheduleFlush = useCallback((id: string) => {
+    const handles = getHandles(id)
+    if (handles.flushTimer !== null) return
+    handles.flushTimer = window.setTimeout(() => {
+      handles.flushTimer = null
+      setRuntime(id, (current) => {
+        const pendingContent = handles.pendingBuffer
+        const pendingReasoning = handles.reasoning
+        return current.pendingContent === pendingContent && current.pendingReasoning.text === pendingReasoning.text
+          ? current
+          : { ...current, pendingContent, pendingReasoning }
+      })
+    }, 16)
+  }, [getHandles, setRuntime])
+
   const appendPending = useCallback((id: string, delta: string) => {
     if (!delta) return
     const handles = getHandles(id)
     handles.pendingBuffer += delta
-    if (handles.flushTimer !== null) return
-    handles.flushTimer = window.setTimeout(() => {
-      handles.flushTimer = null
-      setRuntime(id, (current) => ({ ...current, pendingContent: handles.pendingBuffer }))
-    }, 16)
+    scheduleFlush(id)
+  }, [getHandles, scheduleFlush])
+
+  const appendReasoning = useCallback((id: string, delta: string) => {
+    if (!delta) return
+    const handles = getHandles(id)
+    handles.reasoning = appendReasoningDelta(handles.reasoning, delta)
+    scheduleFlush(id)
+  }, [getHandles, scheduleFlush])
+
+  /**
+   * 收敛本轮思维链：清显示态；正文成功落库时把快照挂到该 assistant 消息下供收起回看。
+   * 推理永不进入 messages/toolTraces/模型上下文，仅 UI 展示。
+   */
+  const snapshotReasoning = useCallback((id: string, messageId: string | undefined, store: boolean) => {
+    const handles = getHandles(id)
+    const snapshot = handles.reasoning
+    handles.reasoning = emptyReasoning()
+    setRuntime(id, (current) => ({
+      ...current,
+      pendingReasoning: emptyReasoning(),
+      ...(store && messageId && snapshot.chars > 0
+        ? { reasoningByTurn: { ...current.reasoningByTurn, [messageId]: snapshot } }
+        : {}),
+    }))
   }, [getHandles, setRuntime])
 
   const cancelSessions = useCallback((handles: RuntimeHandles) => {
@@ -275,6 +326,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     if (handles.noticeTimer !== null) window.clearTimeout(handles.noticeTimer)
     handles.noticeTimer = null
     handles.pendingBuffer = ''
+    handles.reasoning = emptyReasoning()
     if (cancelAgentSessions) cancelSessions(handles)
   }, [cancelSessions, clearFlushTimer, getHandles])
 
@@ -466,6 +518,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.assistantMessageId = crypto.randomUUID()
     clearFlushTimer(handles)
     handles.pendingBuffer = ''
+    handles.reasoning = emptyReasoning()
 
     const nextMessages = capChatMessages([...history, userMessage])
     updateConversation(id, (current) => ({
@@ -477,6 +530,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     setRuntime(id, (current) => ({
       ...current,
       pendingContent: '',
+      pendingReasoning: emptyReasoning(),
       isStreaming: true,
       error: null,
       latestRecallTrace: null,
@@ -516,6 +570,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           handles.pendingBuffer = ''
           setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
+          snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
           handles.assistantMessageId = null
         },
         (error) => {
@@ -531,6 +586,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             error,
           }))
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
+          snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
           handles.assistantMessageId = null
         },
         {
@@ -559,6 +615,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           },
           onAgentEvent: (agentEvent) => {
             if (handles.generation === generation) {
+              if (agentEvent.type === 'reasoning_delta') {
+                appendReasoning(id, agentEvent.delta)
+              }
               setRuntime(id, (current) => ({
                 ...current,
                 agent: reduceChatAgentEvent(current.agent, agentEvent),
@@ -578,7 +637,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         error: reason instanceof Error ? reason.message : 'Workspace session failed',
       }))
     })
-  }, [appendPending, clearFlushTimer, commitAssistant, ensureAgentSessions, flushPending, getHandles, setRuntime, updateConversation])
+  }, [appendPending, appendReasoning, clearFlushTimer, commitAssistant, ensureAgentSessions, flushPending, getHandles, setRuntime, snapshotReasoning, updateConversation])
 
   const stop = useCallback((id: string) => {
     const runtime = runtimesRef.current[id]
@@ -593,8 +652,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false }))
     commitAssistant(id, final, handles.assistantMessageId ?? undefined)
+    snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
     handles.assistantMessageId = null
-  }, [commitAssistant, flushPending, setRuntime])
+  }, [commitAssistant, flushPending, setRuntime, snapshotReasoning])
 
   const send = useCallback((id: string, text: string) => {
     const trimmed = text.trim()
@@ -792,6 +852,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       conversations: summaries,
       messages: conversation?.messages ?? [],
       pendingContent: runtime.pendingContent,
+      pendingReasoning: runtime.pendingReasoning,
+      reasoningByTurn: runtime.reasoningByTurn,
       isStreaming: runtime.isStreaming,
       error: runtime.error,
       modelOptions,

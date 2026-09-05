@@ -15,6 +15,8 @@ import { MarkdownContent, StreamingText } from '../chat/ChatContent'
 import { useI18n } from '@/i18n/useI18n'
 import { PromptDialog } from '../blueprint/PromptDialog'
 import { ToolCallGroup } from './ToolCallCard'
+import { ThinkingRegion } from './ThinkingRegion'
+import type { ReasoningSnapshot } from './janusReasoning'
 import { Select } from '../ui/Select'
 
 type SelectionMenu = 'provider' | 'model' | 'permission'
@@ -73,6 +75,10 @@ interface JanusChatProps {
   onOpenAgentResult?: (card: AgentResultCard) => void
   /** 当前正在流式接收的内�?*/
   pendingContent: string
+  /** 本轮流式推理快照（仅展示；默认取 conversationController，同 approvalMode 模式） */
+  pendingReasoning?: ReasoningSnapshot | null
+  /** 已提交消息的思维链快照（key 为消息 id；默认取 conversationController） */
+  reasoningByTurn?: Record<string, ReasoningSnapshot> | null
   /** 是否正在流式输出 */
   isStreaming: boolean
   /** 错误信息 */
@@ -170,6 +176,9 @@ function JanusXTerminalBanner() {
    JanusChat 组件
    ════════════════════════════════════════════════════════════ */
 
+const EMPTY_REASONING_SNAPSHOT: ReasoningSnapshot = { text: '', chars: 0, truncated: false }
+const EMPTY_REASONING_BY_TURN: Record<string, ReasoningSnapshot> = {}
+
 export function JanusChat({
   visible,
   docked = false,
@@ -179,6 +188,8 @@ export function JanusChat({
   modeColor,
   messages,
   pendingContent,
+  pendingReasoning: pendingReasoningProp = null,
+  reasoningByTurn: reasoningByTurnProp = null,
   isStreaming,
   error,
   modelOptions = [],
@@ -239,6 +250,8 @@ export function JanusChat({
   const contextConversations = useOptionalJanusChatController()
   const conversations = controllerOverride ?? contextConversations
   const activeApprovalMode = approvalMode ?? conversations?.approvalMode ?? 'per-action'
+  const activePendingReasoning = pendingReasoningProp ?? conversations?.pendingReasoning ?? EMPTY_REASONING_SNAPSHOT
+  const activeReasoningByTurn = reasoningByTurnProp ?? conversations?.reasoningByTurn ?? EMPTY_REASONING_BY_TURN
 
   const copyMessage = useCallback((content: string) => {
     if (!navigator.clipboard) return
@@ -320,7 +333,7 @@ export function JanusChat({
   // 重建数组，旧写法会在每次渲染都触发滚动/提示，造成底部持续被拽走或
   // 误弹“新信息”。卡片必须纳入签名，否则圆桌结果到达时既不跟随也不提示。
   const lastMessage = messages[messages.length - 1]
-  const contentSignature = `${messages.length}|${lastMessage?.id ?? ''}|${lastMessage?.timestamp ?? 0}|${pendingContent?.length ?? 0}`
+  const contentSignature = `${messages.length}|${lastMessage?.id ?? ''}|${lastMessage?.timestamp ?? 0}|${pendingContent?.length ?? 0}|${activePendingReasoning.text.length}`
   const cardsSignature = roundtableCards.map((card) => `${card.id}@${card.updatedAt || card.createdAt}`).join('|')
   useLayoutEffect(() => {
     if (isAtBottomRef.current) {
@@ -335,9 +348,9 @@ export function JanusChat({
       setShowNewMessageBadge(true)
     }
     previousMessageCountRef.current = messages.length
-    // messages.length / pendingContent are encoded in contentSignature; they
-    // are listed explicitly to satisfy exhaustive-deps (no extra runs).
-  }, [contentSignature, cardsSignature, messages.length, pendingContent, scrollToBottom])
+    // messages.length / pendingContent / reasoning length are encoded in
+    // contentSignature; they are listed explicitly to satisfy exhaustive-deps (no extra runs).
+  }, [contentSignature, cardsSignature, messages.length, pendingContent, activePendingReasoning.text.length, scrollToBottom])
 
   // Roundtable-only: after sending, land on the user's own message. Working
   // cards carry fresh timestamps and would otherwise pin the viewport below
@@ -1167,11 +1180,15 @@ export function JanusChat({
               />
             ) : (
               <div className="janus-chat-message-content">
+                {msg.role === 'assistant' && activeReasoningByTurn[msg.id] && (
+                  <ThinkingRegion snapshot={activeReasoningByTurn[msg.id]} streaming={false} />
+                )}
                 <MarkdownContent content={msg.content} />
                 {msg.role === 'assistant' && (
                   <ToolCallGroup
                     entries={toolTraces.filter((entry) => entry.turnId === msg.id)}
                     workspaceNames={workspaceNames}
+                    collapsible
                   />
                 )}
               </div>
@@ -1183,6 +1200,7 @@ export function JanusChat({
           <div className="janus-chat-message assistant streaming">
             <div className="janus-chat-message-author">{t('janus:chat.author.assistant')}</div>
             <div className="janus-chat-message-content">
+              <ThinkingRegion snapshot={activePendingReasoning} streaming />
               {pendingContent ? (
                 <StreamingText content={pendingContent} />
               ) : (
@@ -1192,7 +1210,7 @@ export function JanusChat({
                   <span className="janus-chat-dot" />
                   </div>
               )}
-              <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} />
+              <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} defaultExpanded />
             </div>
           </div>
         )}

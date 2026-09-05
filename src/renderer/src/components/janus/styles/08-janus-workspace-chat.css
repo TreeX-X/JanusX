@@ -568,6 +568,27 @@
   margin-top: 9px;
 }
 
+/* 整组收起头：历史回看时一行摘要，可展开 */
+.janus-tool-call-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 27px;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: rgba(10, 12, 16, 0.72);
+  color: rgba(255, 255, 255, 0.72);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.janus-tool-call-group-toggle:hover { background: rgba(255, 255, 255, 0.06); }
+.janus-tool-call-group-toggle--failed { border-color: rgba(255, 96, 96, 0.38); }
+.janus-tool-call-group-toggle--running,
+.janus-tool-call-group-toggle--approval { border-color: rgba(255, 178, 125, 0.35); }
+
 .janus-tool-card {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);

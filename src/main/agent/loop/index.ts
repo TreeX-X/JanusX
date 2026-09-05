@@ -22,6 +22,7 @@ export type {
   JanusAfterToolCallContext,
   JanusBeforeToolCallContext,
   JanusBeforeToolCallResult,
+  JanusShouldStopAfterTurnContext,
   JanusToolCall,
 } from './janus-agent-loop'
 export type {

@@ -140,6 +140,66 @@ function compactToolMessage(message: JanusAgentMessage): JanusAgentMessage {
   return { ...message, content: bounded(message.content, MAX_TOOL_MESSAGE_CHARS).value }
 }
 
+function toolDigest(message: JanusAgentMessage): string | undefined {
+  if (message.role !== 'tool') return undefined
+  const label = message.toolName ?? 'tool'
+  let parsed: Record<string, unknown> | undefined
+  try {
+    const value = JSON.parse(message.content) as unknown
+    if (value && typeof value === 'object' && !Array.isArray(value)) parsed = value as Record<string, unknown>
+  } catch {
+    parsed = undefined
+  }
+  const workspaceId = typeof parsed?.workspaceId === 'string' ? String(parsed.workspaceId) : ''
+  const scope = workspaceId ? `${workspaceId} ` : ''
+  if (parsed) {
+    if (Array.isArray(parsed.entries)) {
+      const path = typeof parsed.path === 'string' && parsed.path ? parsed.path : '.'
+      return `- ${label} ${scope}${path}: ${String(parsed.entries.length)} entries${parsed.truncated === true ? ' (truncated)' : ''}`
+    }
+    if (Array.isArray(parsed.matches)) {
+      const query = typeof parsed.query === 'string' ? `"${String(parsed.query).slice(0, 80)}"` : ''
+      const head = (parsed.matches as Array<{ path?: unknown; line?: unknown }>)
+        .slice(0, 5)
+        .map((match) => typeof match.path === 'string' ? `${match.path}${typeof match.line === 'number' ? `#L${match.line}` : ''}` : undefined)
+        .filter((item): item is string => !!item)
+        .join(', ')
+      return `- ${label} ${scope}${query}: ${String(parsed.matches.length)} matches${head ? ` (${head})` : ''}${parsed.truncated === true ? ' (truncated)' : ''}`
+    }
+    if (typeof parsed.content === 'string' && typeof parsed.path === 'string') {
+      const sha = typeof parsed.sha256 === 'string' ? ` sha256=${String(parsed.sha256).slice(0, 12)}…` : ''
+      return `- ${label} ${scope}${String(parsed.path)}${sha} (content retained in loaded evidence when available)`
+    }
+    if (typeof parsed.error === 'string') {
+      return `- ${label} ${scope}${parsed.status ?? 'failed'}: ${String(parsed.error).slice(0, 160)}`
+    }
+    if (typeof parsed.status === 'string' && parsed.status !== 'completed') {
+      return `- ${label} ${scope}${String(parsed.status)}`
+    }
+  }
+  const fallback = message.content.length > 160 ? `${message.content.slice(0, 160)}…` : message.content
+  return `- ${label} ${scope}${fallback}`
+}
+
+/**
+ * pi-inspired deterministic handoff (no extra LLM call): when old turn units
+ * are pruned to fit the budget, keep exact digests (paths/hashes/queries)
+ * instead of dropping them silently. Unlike pi's LLM summary this never
+ * paraphrases hashes, so workspace.edit expectedHash stays valid.
+ */
+export function droppedTurnsHandoffMessage(dropped: JanusAgentMessage[][]): JanusAgentMessage | undefined {
+  const lines = dropped.flatMap((unit) => unit.map(toolDigest).filter((line): line is string => !!line))
+  if (lines.length === 0) return undefined
+  const boundedLines = lines.slice(-24)
+  return {
+    role: 'system',
+    content: [
+      `Older workspace evidence (${lines.length} tool results) was pruned to fit the context budget.`,
+      'Continue from these digests instead of re-listing blindly. Re-read a file before editing it.',
+      ...boundedLines,
+    ].join('\n'),
+  }
+}
 function agentTurnUnits(messages: JanusAgentMessage[]): JanusAgentMessage[][] {
   const units: JanusAgentMessage[][] = []
   for (let index = messages.length - 1; index >= 0;) {
@@ -187,15 +247,42 @@ export class ChatSessionRuntime {
       usedTokens += estimateTokens(evidence.content)
     }
 
-    for (const unit of agentTurnUnits(messages.filter((message) => message.role !== 'system'))) {
+    const insertAt = systems.length + (evidence ? 1 : 0)
+    const units = agentTurnUnits(messages.filter((message) => message.role !== 'system'))
+    const dropped: JanusAgentMessage[][] = []
+    let keptCount = 0
+    for (const unit of units) {
       const compacted = unit.map(compactToolMessage)
       const unitTokens = compacted.reduce((total, message) => total + estimateTokens(message.content), 0)
       if (usedTokens + unitTokens > budget) {
-        if (context.length === systems.length + (evidence ? 1 : 0)) throw new Error('CURRENT_TURN_EXCEEDS_CONTEXT_BUDGET')
-        break
+        if (keptCount === 0) throw new Error('CURRENT_TURN_EXCEEDS_CONTEXT_BUDGET')
+        dropped.push(unit)
+        continue
       }
-      context.splice(systems.length + (evidence ? 1 : 0), 0, ...compacted)
+      // Units arrive newest-first; always splicing at the same index restores
+      // chronological order: [systems, evidence, oldest..newest].
+      context.splice(insertAt, 0, ...compacted)
       usedTokens += unitTokens
+      keptCount += 1
+    }
+    // Summarize everything pruned so exploration is not silently lost.
+    // pi uses an LLM summary here; we use exact digests to keep sha256 usable.
+    if (dropped.length > 0) {
+      const handoff = droppedTurnsHandoffMessage(dropped)
+      if (handoff) {
+        const handoffTokens = estimateTokens(handoff.content)
+        if (usedTokens + handoffTokens <= budget) {
+          context.splice(insertAt, 0, handoff)
+          usedTokens += handoffTokens
+        } else {
+          // Budget too tight for the full digest: keep a truncated head note
+          // rather than dropping exploration entirely.
+          const head = bounded(handoff.content, Math.max(256, (budget - usedTokens) * 4 - 64))
+          if (usedTokens + estimateTokens(head.value) <= budget) {
+            context.splice(insertAt, 0, { role: 'system', content: head.value })
+          }
+        }
+      }
     }
     return context
   }

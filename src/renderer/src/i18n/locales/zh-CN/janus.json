@@ -127,7 +127,16 @@
       },
       "copySummaryTitle": "复制工具摘要",
       "copySummaryAria": "复制工具摘要",
-      "copied": "已复制"
+      "copied": "已复制",
+      "groupSummary": "工具调用（{{n}}）"
+    },
+    "thinking": {
+      "label": "思考过程",
+      "streaming": "思考中… {{n}}字",
+      "done": "已思考 {{n}} 字",
+      "truncated": "…已截断",
+      "expandTitle": "展开思考过程",
+      "collapseTitle": "收起思考过程"
     },
     "kind": {
       "provider": "provider",

@@ -41,6 +41,44 @@ describe('JanusAgentLoop', () => {
     expect(messages.at(-1)).toMatchObject({ role: 'tool', content: 'approval required' })
   })
 
+  it('continues on mixed terminate batches and stops only when every result terminates', async () => {
+    const tools: JanusAgentTool[] = [
+      { name: 'a', execute: async () => ({ content: 'a', terminate: true }) },
+      { name: 'b', execute: async () => ({ content: 'b' }) },
+    ]
+    let turn = 0
+    const messages = await runJanusAgentLoop([userMessage], {
+      tools,
+      maxTurns: 3,
+      stream: async () => {
+        turn += 1
+        return turn === 1
+          ? { message: { role: 'assistant', content: '' }, toolCalls: tools.map((tool) => ({ id: tool.name, name: tool.name, arguments: {} })) }
+          : { message: { role: 'assistant', content: 'done' } }
+      },
+    })
+    // Mixed batch (a terminates, b does not) must continue to turn 2.
+    expect(turn).toBe(2)
+    expect(messages.at(-1)).toEqual({ role: 'assistant', content: 'done' })
+  })
+
+  it('stops gracefully via shouldStopAfterTurn before the next LLM call', async () => {
+    let calls = 0
+    const messages = await runJanusAgentLoop([userMessage], {
+      tools: [{ name: 'a', execute: async () => ({ content: 'a' }) }],
+      maxTurns: 5,
+      stream: async () => {
+        calls += 1
+        return calls === 1
+          ? { message: { role: 'assistant', content: '' }, toolCalls: [{ id: '1', name: 'a', arguments: {} }] }
+          : { message: { role: 'assistant', content: 'done' } }
+      },
+      shouldStopAfterTurn: async () => true,
+    })
+    expect(calls).toBe(1)
+    expect(messages.some((message) => message.content === 'done')).toBe(false)
+  })
+
   it('executes parallel tools together and preserves steering messages', async () => {
     const order: string[] = []
     const tools = ['a', 'b'].map((name): JanusAgentTool => ({

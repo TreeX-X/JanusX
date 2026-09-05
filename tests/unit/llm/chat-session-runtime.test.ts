@@ -119,6 +119,27 @@ describe('ChatSessionRuntime', () => {
     ], { model: { contextWindow: 4_000, maxOutputTokens: 100 } })
       .some((message) => message.content.includes('Loaded workspace evidence: workspace-1/a.ts'))).toBe(false)
   })
+
+  it('keeps a deterministic handoff with exact digests when old tool turns are pruned', () => {
+    const runtime = new ChatSessionRuntime()
+    const matches = Array.from({ length: 30 }, (_, index) => ({ path: `src/file${index}.tsx`, line: index + 1, text: 'flip effect '.repeat(6) }))
+    const searchResult = JSON.stringify({
+      workspaceId: 'workspace-1', query: 'flip', path: '',
+      matches, truncated: true,
+    })
+    const context = runtime.buildContext([
+      { role: 'system', content: 'policy' },
+      { role: 'user', content: 'old exploration' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'call-old', name: 'workspace_search', arguments: { query: 'flip' } }] },
+      { role: 'tool', toolCallId: 'call-old', toolName: 'workspace_search', content: searchResult },
+      { role: 'user', content: 'current request '.repeat(40) },
+    ], { model: { contextWindow: 1000, maxOutputTokens: 100 } })
+
+    const handoff = context.find((message) => message.role === 'system' && message.content.includes('was pruned'))
+    expect(handoff?.content).toContain('"flip"')
+    expect(handoff?.content).toContain('src/file0.tsx#L1')
+    expect(context.at(-1)?.content).toContain('current request')
+  })
 })
 
 describe('SystemPromptBuilder', () => {

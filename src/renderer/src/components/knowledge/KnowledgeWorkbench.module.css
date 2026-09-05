@@ -392,21 +392,8 @@
   transition: filter 0.2s ease, transform 0.2s ease;
 }
 
-.closeButton::before {
-  content: "×";
-  font-size: 10px;
-  font-weight: 700;
-  color: #5c0000;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
 .closeButton:hover {
   filter: brightness(1.1);
-}
-
-.closeButton:hover::before {
-  opacity: 1;
 }
 
 .closeButton:active {

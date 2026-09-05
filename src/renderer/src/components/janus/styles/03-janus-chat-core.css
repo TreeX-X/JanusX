@@ -474,6 +474,51 @@
   padding: 4px 0;
 }
 
+/* 思维链收纳区：只活在对话加载效果区内，默认收起为单行进度 */
+.janus-chat-thinking {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px;
+  border-left: 2px solid rgba(255, 255, 255, 0.14);
+  padding-left: 8px;
+}
+
+.janus-chat-thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.janus-chat-thinking-toggle:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.janus-chat-thinking-body {
+  max-height: 120px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.janus-chat-thinking-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
 /* 杈撳叆妗?textarea 鑷€傚簲 */
 .janus-chat-input {
   resize: none;

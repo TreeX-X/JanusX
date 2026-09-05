@@ -1886,21 +1886,8 @@
   50% { box-shadow: 0 0 0 4px rgba(255, 138, 72, 0.12); }
 }
 
-.blueprint-workbench-close::before {
-  content: "×";
-  font-size: 10px;
-  font-weight: 700;
-  color: #5c0000;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
 .blueprint-workbench-close:hover {
   filter: brightness(1.1);
-}
-
-.blueprint-workbench-close:hover::before {
-  opacity: 1;
 }
 
 .blueprint-workbench-close:active {

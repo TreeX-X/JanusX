@@ -73,6 +73,13 @@ export interface JanusAfterToolCallContext extends JanusBeforeToolCallContext {
   result: JanusAgentToolResult
 }
 
+export interface JanusShouldStopAfterTurnContext {
+  turn: number
+  message: JanusAgentMessage
+  toolResults: JanusAgentMessage[]
+  messages: JanusAgentMessage[]
+}
+
 export interface JanusAgentLoopConfig {
   tools: JanusAgentTool[]
   stream: (messages: JanusAgentMessage[], signal: AbortSignal, emit: (event: JanusAgentEvent) => void) => Promise<JanusAgentStreamResult>
@@ -81,6 +88,8 @@ export interface JanusAgentLoopConfig {
   afterToolCall?: (context: JanusAfterToolCallContext, signal: AbortSignal) => Promise<JanusAgentToolResult | undefined>
   getSteeringMessages?: (context: { turn: number; messages: JanusAgentMessage[] }) => Promise<JanusAgentMessage[]>
   getFollowUpMessages?: (context: { turn: number; messages: JanusAgentMessage[] }) => Promise<JanusAgentMessage[]>
+  /** pi parity: graceful stop after a completed turn, before steering/follow-up queues. */
+  shouldStopAfterTurn?: (context: JanusShouldStopAfterTurnContext, signal: AbortSignal) => Promise<boolean>
   maxTurns?: number
   onEvent?: (event: JanusAgentEvent) => void
 }
@@ -121,6 +130,8 @@ export async function runJanusAgentLoop(
       const toolCalls = streamed.toolCalls ?? []
       if (toolCalls.length === 0) {
         emit({ type: 'turn_end', turn, message: streamed.message, toolResults: [] })
+        if (config.shouldStopAfterTurn
+          && await config.shouldStopAfterTurn({ turn, message: streamed.message, toolResults: [], messages: [...messages] }, signal)) break
         const followUp = config.getFollowUpMessages ? await config.getFollowUpMessages({ turn, messages: [...messages] }) : []
         if (followUp.length === 0) break
         messages.push(...followUp)
@@ -128,20 +139,23 @@ export async function runJanusAgentLoop(
       }
 
       const toolResults: JanusAgentMessage[] = []
-      let terminate = false
+      // pi parity: stop only when EVERY finalized result in the batch sets
+      // terminate:true; mixed batches continue normally.
+      const terminateFlags: boolean[] = []
       const execute = async (call: JanusToolCall): Promise<JanusAgentMessage> => {
         emit({ type: 'tool_execution_start', call })
         const tool = tools.get(call.name)
         if (!tool) {
           const result = errorResult(`Unknown tool: ${call.name}`)
           emit({ type: 'tool_execution_end', call, result, isError: true })
+          terminateFlags.push(false)
           return toolMessage(call, result)
         }
         const before = config.beforeToolCall ? await config.beforeToolCall({ call, tool, turn }, signal) : undefined
         if (before?.block) {
           const result = { content: before.reason ?? 'Tool call blocked', isError: true, terminate: before.terminate }
           emit({ type: 'tool_execution_end', call, result, isError: true })
-          if (before.terminate) terminate = true
+          terminateFlags.push(before.terminate === true)
           return toolMessage(call, result)
         }
 
@@ -156,7 +170,7 @@ export async function runJanusAgentLoop(
           : undefined
         result = overridden ?? result
         emit({ type: 'tool_execution_end', call, result, isError: result.isError === true })
-        if (result.terminate) terminate = true
+        terminateFlags.push(result.terminate === true)
         return toolMessage(call, result)
       }
 
@@ -166,7 +180,9 @@ export async function runJanusAgentLoop(
       for (const call of sequentialCalls) toolResults.push(await execute(call))
       messages.push(...toolResults)
       emit({ type: 'turn_end', turn, message: streamed.message, toolResults })
-      if (terminate) break
+      if (terminateFlags.length > 0 && terminateFlags.every(Boolean)) break
+      if (config.shouldStopAfterTurn
+        && await config.shouldStopAfterTurn({ turn, message: streamed.message, toolResults, messages: [...messages] }, signal)) break
 
       const steering = config.getSteeringMessages ? await config.getSteeringMessages({ turn, messages: [...messages] }) : []
       if (steering.length > 0) messages.push(...steering)

@@ -127,7 +127,16 @@
       },
       "copySummaryTitle": "Copy tool summary",
       "copySummaryAria": "Copy tool summary",
-      "copied": "Copied"
+      "copied": "Copied",
+      "groupSummary": "{{n}} tool calls"
+    },
+    "thinking": {
+      "label": "Thinking",
+      "streaming": "Thinking… {{n}} chars",
+      "done": "Thought for {{n}} chars",
+      "truncated": "…truncated",
+      "expandTitle": "Show thinking",
+      "collapseTitle": "Hide thinking"
     },
     "kind": {
       "provider": "provider",
