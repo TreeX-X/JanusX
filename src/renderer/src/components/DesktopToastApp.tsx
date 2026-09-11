@@ -54,17 +54,23 @@ export function DesktopToastApp() {
 
   useEffect(() => {
     document.body.classList.add('desktop-toast-body')
-    const unsubscribe = window.electron.desktopToast.onShow((payload) => {
+    const unsubscribeShow = window.electron.desktopToast.onShow((payload) => {
       const nextToast = normalizePayload(payload)
       if (!nextToast) return
       setClosing(false)
       setToast(nextToast)
     })
+    // 主进程超时隐藏时清空旧帧：下次 show 从空透明态起笔，不闪旧内容
+    const unsubscribeHide = window.electron.desktopToast.onHide(() => {
+      setClosing(false)
+      setToast(null)
+    })
     window.electron.desktopToast.ready()
 
     return () => {
       document.body.classList.remove('desktop-toast-body')
-      unsubscribe()
+      unsubscribeShow()
+      unsubscribeHide()
     }
   }, [])
 

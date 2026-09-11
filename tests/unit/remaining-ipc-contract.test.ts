@@ -91,4 +91,15 @@ describe('remaining typed IPC contracts', () => {
     unsubscribe()
     expect(removeListener).toHaveBeenCalledWith(SYSTEM_CHANNELS.toastShow, handler)
   })
+
+  it('clears stale toast frames through the hide channel', () => {
+    const hideListener = vi.fn()
+    const unsubscribe = api.desktopToast.onHide(hideListener)
+    const handler = on.mock.calls.at(-1)?.[1]
+
+    handler({}, undefined)
+    expect(hideListener).toHaveBeenCalledWith(undefined)
+    unsubscribe()
+    expect(removeListener).toHaveBeenCalledWith(SYSTEM_CHANNELS.toastHide, handler)
+  })
 })

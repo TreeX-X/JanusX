@@ -1,4 +1,5 @@
 // Note: local reminders leave system notifications — see .agents/notes/implemented/feature/2026-07-05-desktop-toast.md
+// Note: transparent toast needs pre-paint transparent page, solid card, shadowless window — see .agents/notes/implemented/feature/2026-07-05-desktop-toast.md
 import { BrowserWindow, app, ipcMain, screen, type IpcMainEvent } from 'electron'
 import { join } from 'path'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
@@ -89,6 +90,9 @@ class DesktopToastWindow {
       skipTaskbar: true,
       show: false,
       focusable: false,
+      // 无原生阴影与粗边框：两者在 Windows 透明窗口上渲染成灰边/灰色阴影矩形
+      hasShadow: false,
+      thickFrame: false,
       backgroundColor: '#00000000',
       webPreferences: {
         // This module is emitted under out/main/chunks in production and
@@ -99,6 +103,7 @@ class DesktopToastWindow {
     })
 
     win.setAlwaysOnTop(true, 'screen-saver')
+    win.setBackgroundColor('#00000000')
     win.on('closed', () => {
       if (this.toastWindow === win) {
         this.toastWindow = null
@@ -173,7 +178,10 @@ class DesktopToastWindow {
     }
 
     const win = this.toastWindow
-    if (win && !win.isDestroyed()) win.hide()
+    if (win && !win.isDestroyed()) {
+      if (!win.webContents.isDestroyed()) win.webContents.send(SYSTEM_CHANNELS.toastHide)
+      win.hide()
+    }
     this.currentPayload = null
     this.currentOptions = null
   }

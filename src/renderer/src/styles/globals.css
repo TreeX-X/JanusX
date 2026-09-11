@@ -83,6 +83,13 @@ body {
   height: 100vh;
 }
 
+/* 透明 Toast 窗口不受主壳底色污染：首漆由 index.html 内联类保证，此处保证 CSS 加载后仍透明 */
+html.toast-prepaint,
+html.toast-prepaint body,
+body.desktop-toast-body {
+  background: transparent;
+}
+
 /* 文本选中颜色 */
 ::selection {
   background: rgba(38, 79, 120, 0.35);

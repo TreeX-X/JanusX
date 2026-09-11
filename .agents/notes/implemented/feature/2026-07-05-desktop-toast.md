@@ -20,3 +20,5 @@ Local reminders leave the system notification path for a dedicated toast window.
 
 - **Gains**: Toast delivery stands independent of shortcut and permission state; styling and behavior stay consistent across installs.
 - **Costs and limits**: A second window joins the lifecycle with its own readiness handshake; stacking and history stay explicitly out.
+- **Transparency over blur**: The toast page carries transparent `html`/`body` from pre-paint (an inline `toast-prepaint` hook in the renderer entry plus a synchronous class attach before React mounts), the card paints as a solid surface without `backdrop-filter`, and the window opts out of native shadow and thick frame. Transparency holds on Windows, where backdrop blur degrades transparent compositing into a gray halo. The cost is the loss of background blur behind the card, which the near-opaque surface keeps visually negligible.
+- **Hide clears the frame**: Every main-side hide broadcasts `desktop-toast:hide` so the renderer drops toast state while hidden; a superseding reminder paints over an empty transparent frame instead of flashing the previous one.

@@ -433,6 +433,7 @@ const desktopToastAPI: DesktopToastAPI = {
   ready: () => ipcRenderer.send(SYSTEM_CHANNELS.toastReady),
   action: (action) => ipcRenderer.send(SYSTEM_CHANNELS.toastAction, { action }),
   onShow: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.toastShow, callback),
+  onHide: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.toastHide, callback),
 }
 
 contextBridge.exposeInMainWorld('electron', {

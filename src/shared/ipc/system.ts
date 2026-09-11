@@ -6,7 +6,7 @@ export const SYSTEM_CHANNELS = {
   minimize: 'window:minimize', maximize: 'window:maximize', close: 'window:close',
   openEditor: 'editor-window:open', refreshEditor: 'editor-window:refresh', editorReady: 'editor-window:ready', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
   setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get',
-  toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show',
+  toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show', toastHide: 'desktop-toast:hide',
   getLanguage: 'app:getLanguage', setLanguage: 'app:setLanguage',
   openVSCode: 'system:openVSCode',
   prepareQuit: 'app:prepareQuit',
@@ -66,4 +66,5 @@ export interface SystemAPI {
 export interface DesktopToastAPI {
   ready(): void; action(action: 'activate' | 'dismiss'): void
   onShow(callback: (payload: DesktopToastPayload) => void): () => void
+  onHide(callback: () => void): () => void
 }

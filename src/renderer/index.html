@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JanusX</title>
+    <style>
+      /* Toast 预漆透明：透明窗口首漆前 html/body 即透明，避免 380x112 灰矩闪现 */
+      html.toast-prepaint,
+      html.toast-prepaint body {
+        background: transparent;
+      }
+    </style>
+    <script>
+      try {
+        if (new URLSearchParams(location.search).get('desktopToast') === '1') {
+          document.documentElement.classList.add('toast-prepaint')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -32,6 +32,12 @@ const isEditorWindow = searchParams.get('editorWindow') === '1'
 const isDesktopToast = searchParams.get('desktopToast') === '1'
 const isBrowserWindow = searchParams.get('browserWindow') === '1'
 
+/* Toast 窗口：解析出类型即同步挂透明类，不等 React effect，消灭首漆灰底 */
+if (isDesktopToast) {
+  document.documentElement.classList.add('toast-prepaint')
+  document.body.classList.add('desktop-toast-body')
+}
+
 function EditorWindowLoading() {
   return (
     <div

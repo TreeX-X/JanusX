@@ -33,12 +33,11 @@
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
-  background: rgba(16, 16, 18, 0.95);
+  /* 实色卡片：透明窗口内 backdrop-filter 在 Windows 下回退成灰晕，0.95 透明度的 blur 视觉收益为零 */
+  background: #141416;
   box-shadow:
     0 16px 48px rgba(0, 0, 0, 0.65),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   animation: toast-in 180ms ease-out;
   transition:
     transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
