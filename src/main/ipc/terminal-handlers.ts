@@ -68,13 +68,33 @@ interface TerminalCpState {
   flowTimer: ReturnType<typeof setTimeout> | null
   lastDataAt: number
   // Hook lifecycle is authoritative once observed; ignore prompt echoes.
-  hookStatus?: 'running' | 'wait' | 'error'
+  hookStatus?: 'running' | 'wait' | 'needs-input' | 'needs-approval' | 'degraded' | 'error'
   // Set when JanusX itself initiated the kill (kill IPC / same-id replace) so
   // pty exit with an open turn reads as a silent user interrupt, not a crash.
   userKillRequested?: boolean
 }
 
 const terminalStates = new Map<string, TerminalCpState>()
+
+function getHookRawMatcher(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  const matcher = record.matcher ?? record.notification_type ?? record.type
+  return typeof matcher === 'string' ? matcher : undefined
+}
+
+function isHookApprovalRequest(payload: AgentHookPayload, lowerEvent: string): boolean {
+  if (payload.source === 'opencode') return lowerEvent === 'permission.asked'
+  if (lowerEvent === 'permissionrequest') return true
+  if (lowerEvent !== 'notification') return false
+  return getHookRawMatcher(payload.raw) === 'permission_prompt'
+}
+
+function isHookInputRequest(payload: AgentHookPayload, lowerEvent: string): boolean {
+  if (payload.source === 'opencode') return false
+  if (lowerEvent !== 'notification') return false
+  return getHookRawMatcher(payload.raw) !== 'permission_prompt'
+}
 
 let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null
 
@@ -377,18 +397,23 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       const failsTurn = syntheticFails || (payload.source === 'opencode'
         ? event === 'session.error'
         : event === 'stopfailure' || event === 'posttoolusefailure')
-      const needsAttention = payload.source === 'opencode'
-        ? event === 'permission.asked'
-        : event === 'permissionrequest' || event === 'notification'
-      if (state && (startsTurn || completesTurn || failsTurn || needsAttention)) {
+      const needsApproval = isHookApprovalRequest(payload, event)
+      const needsInput = !needsApproval && isHookInputRequest(payload, event)
+      if (state && (startsTurn || completesTurn || failsTurn || needsApproval || needsInput)) {
         if (startsTurn) serviceErrorDetectors.get(terminal.terminalId)?.reset()
         // Turn 级失败（429 限流 / 5xx 过载 / StopFailure / session.error）时 CLI
-        // 进程仍活着、回到 prompt 等待下一次输入：上报 'wait' 保持终端可用，
-        // 失败通知仍由 hookCoordinator.deliverCompletion 独立下发，不受影响。
+        // 进程仍活着：上报 'degraded' 保持终端可用且可见，失败通知仍由
+        // hookCoordinator.deliverCompletion 独立下发，不受影响。
         // 只有 'orphaned'（turn 未结束时 pty 已死，后续 onExit 会确认）才上报
         // 'error'，与 TerminalStatus“pty 非零退出”的语义对齐，避免误弹遮罩锁死输入。
+        // 等待授权 / 等待选项输入各有独立状态，不再坍缩进 'wait'。
         const ptyDead = event === JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned
-        state.hookStatus = startsTurn ? 'running' : ptyDead ? 'error' : 'wait'
+        if (startsTurn) state.hookStatus = 'running'
+        else if (ptyDead) state.hookStatus = 'error'
+        else if (needsApproval) state.hookStatus = 'needs-approval'
+        else if (needsInput) state.hookStatus = 'needs-input'
+        else if (failsTurn) state.hookStatus = 'degraded'
+        else state.hookStatus = 'wait'
         sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.status, {
           id: terminal.terminalId,
           status: state.hookStatus,

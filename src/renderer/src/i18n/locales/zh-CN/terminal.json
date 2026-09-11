@@ -1,7 +1,10 @@
 {
   "status": {
     "running": "运行中",
-    "wait": "等待",
+    "wait": "空闲",
+    "needs-input": "待输入",
+    "needs-approval": "待授权",
+    "degraded": "受限",
     "error": "异常"
   },
   "model": {

@@ -556,6 +556,20 @@ body {
   .term-status-orbit { animation: none; opacity: 0.5; }
 }
 
+/* 终端待处理态：图标/圆点呼吸脉冲（待授权/待输入），动效降级时保持静态 */
+.term-status-pulse {
+  animation: term-status-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes term-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-status-pulse { animation: none; }
+}
+
 /*-- 长按工作区视觉反馈：径向渐变波纹从中心扩散 --*/
 .ws.long-pressing {
   color: #fff !important;

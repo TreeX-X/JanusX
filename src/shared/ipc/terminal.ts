@@ -24,11 +24,15 @@ export const TERMINAL_EVENT_CHANNELS = {
 
 export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus'
 
+// Note: six-state sidebar contract keeps hook-derived attention visible — see .agents/notes/implemented/feature/2026-09-11-terminal-sidebar-states.md
 // Sidebar display status of a terminal entry.
 // - wait: idle / no active output stream (AI CLI back at prompt, or shell always)
-// - running: AI CLI is emitting output (spinner / streaming tokens)
+// - running: AI CLI turn open (UserPromptSubmit / session busy until Stop / session idle)
+// - needs-input: CLI waits for an option/question answer (Claude idle_prompt notification)
+// - needs-approval: CLI waits for a permission grant (PermissionRequest / permission.asked / permission_prompt)
+// - degraded: turn failed but pty alive (429/5xx, session.error, StopFailure); retry without recreating
 // - error: pty exited non-zero; entry retained in the list
-export type TerminalStatus = 'wait' | 'running' | 'error'
+export type TerminalStatus = 'wait' | 'running' | 'needs-input' | 'needs-approval' | 'degraded' | 'error'
 
 export interface TerminalWarmupRequest {
   engines?: Array<TerminalAgentEngine | 'janus' | 'pi'>

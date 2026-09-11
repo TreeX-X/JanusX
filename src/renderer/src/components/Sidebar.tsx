@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { Activity, ChevronRight, CirclePause, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
+import { Activity, Bell, ChevronRight, CirclePause, CloudOff, Keyboard, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
@@ -12,7 +12,7 @@ import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 import { chooseAndCreateWorkspace, getActiveWorkspacePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
-import { getTerminalStatusVisual, summarizeTerminalActivity } from '@/lib/terminal-sidebar-visual'
+import { TERMINAL_ATTENTION_ORDER, getTerminalStatusVisual, summarizeTerminalActivity } from '@/lib/terminal-sidebar-visual'
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
 import codexIcon from '@/assets/icons/codex.svg'
@@ -185,8 +185,15 @@ const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
   const { t } = useI18n('terminal')
   const visual = getTerminalStatusVisual(status)
-  const Icon = status === 'running' ? Activity : status === 'error' ? TriangleAlert : CirclePause
+  const Icon =
+    status === 'running' ? Activity
+    : status === 'needs-approval' ? Bell
+    : status === 'needs-input' ? Keyboard
+    : status === 'degraded' ? CloudOff
+    : status === 'error' ? TriangleAlert
+    : CirclePause
   const label = t(visual.labelKey)
+  const needsPulse = status === 'needs-approval' || status === 'needs-input'
 
   return (
     <span
@@ -196,7 +203,7 @@ function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
     >
       {status === 'running' && <span className="term-status-orbit" aria-hidden="true" />}
       <span className="relative flex h-2.5 w-2.5 items-center justify-center">
-        <Icon size={10} strokeWidth={2} className="relative" aria-hidden="true" />
+        <Icon size={10} strokeWidth={2} className={needsPulse ? 'term-status-pulse relative' : 'relative'} aria-hidden="true" />
       </span>
       {label}
     </span>
@@ -858,23 +865,51 @@ export function Sidebar() {
                         <span
                           className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] tabular-nums"
                           style={{
-                            color: terminalActivity.errors > 0 ? '#ff8585' : terminalActivity.running > 0 ? '#87d9aa' : '#77777d',
+                            color: terminalActivity.errors > 0
+                              ? '#ff8585'
+                              : terminalActivity.needsAction > 0
+                                ? '#f0a35e'
+                                : terminalActivity.running > 0
+                                  ? '#87d9aa'
+                                  : '#77777d',
                             background: terminalActivity.errors > 0
                               ? 'rgba(255,88,88,0.08)'
-                              : terminalActivity.running > 0
-                                ? 'rgba(70,190,125,0.08)'
-                                : 'rgba(255,255,255,0.035)',
+                              : terminalActivity.needsAction > 0
+                                ? 'rgba(240,163,94,0.1)'
+                                : terminalActivity.running > 0
+                                  ? 'rgba(70,190,125,0.08)'
+                                  : 'rgba(255,255,255,0.035)',
                           }}
-                          title={t('common:workspace.terminalCountTitle', { total: terminalActivity.total, running: terminalActivity.running, errors: terminalActivity.errors ? t('common:workspace.terminalCountErrorsSuffix', { count: terminalActivity.errors }) : '' })}
+                          title={t('common:workspace.terminalCountTitle', {
+                            total: terminalActivity.total,
+                            running: terminalActivity.running,
+                            attention: terminalActivity.needsAction > 0
+                              ? t('common:workspace.terminalCountAttentionSuffix', { count: terminalActivity.needsAction })
+                              : '',
+                            errors: terminalActivity.errors
+                              ? t('common:workspace.terminalCountErrorsSuffix', { count: terminalActivity.errors })
+                              : '',
+                          })}
                         >
                           <img src={terminalIcon} alt="" className="h-3 w-3 opacity-70" />
                           <span>{terminalActivity.total}</span>
-                          <span
-                            className="h-1.5 w-1.5 rounded-full transition-colors"
-                            style={{
-                              background: terminalActivity.errors > 0 ? '#ff6666' : terminalActivity.running > 0 ? '#58c98d' : '#55555b',
-                            }}
-                          />
+                          <span className="inline-flex items-center gap-1">
+                            {terminalActivity.running > 0 && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#58c98d]" />
+                            )}
+                            {terminalActivity.needsAction > 0 && (
+                              <span className="term-status-pulse h-1.5 w-1.5 rounded-full bg-[#f0a35e]" />
+                            )}
+                            {terminalActivity.degraded > 0 && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#c9a0ff]" />
+                            )}
+                            {terminalActivity.errors > 0 && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#ff6666]" />
+                            )}
+                            {terminalActivity.running === 0 && terminalActivity.needsAction === 0 && terminalActivity.errors === 0 && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#55555b]" />
+                            )}
+                          </span>
                         </span>
                       )}
                       <button
@@ -905,7 +940,9 @@ export function Sidebar() {
                         {workspaceTerminals.length === 0 ? (
                           <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
                         ) : (
-                          workspaceTerminals.map((terminal) => {
+                          [...workspaceTerminals]
+                            .sort((a, b) => (TERMINAL_ATTENTION_ORDER[a.status] ?? 99) - (TERMINAL_ATTENTION_ORDER[b.status] ?? 99))
+                            .map((terminal) => {
                             const isFocusedTerminal = isActive && terminal.id === activeTerminalId
                             const presetLabel = terminalPresetLabel(terminal.preset, t)
                             const displayName = terminal.name || presetLabel
@@ -1002,6 +1039,15 @@ export function Sidebar() {
             const isDropAfter = dropIntent?.targetId === ws.id && dropIntent.mode === 'after'
             const isGroupPending = dropIntent?.targetId === ws.id && dropIntent.mode === 'group-pending'
             const isGroupTarget = dropIntent?.targetId === ws.id && dropIntent.mode === 'group'
+            const collapsedTerminals = (isActive ? terminals : terminalSnapshots[ws.id]?.terminals ?? []).filter(
+              (terminal) => terminal.workspaceId === ws.id,
+            )
+            const collapsedActivity = summarizeTerminalActivity(collapsedTerminals)
+            const collapsedDotColor =
+              collapsedActivity.errors > 0 ? '#ff6666'
+              : collapsedActivity.needsAction > 0 ? '#f0a35e'
+              : collapsedActivity.running > 0 ? '#58c98d'
+              : null
 
             return (
               <div
@@ -1052,6 +1098,12 @@ export function Sidebar() {
                 >
                   {workspaceInitial(ws.name)}
                 </span>
+                {collapsedDotColor && (
+                  <span
+                    className={collapsedActivity.needsAction > 0 ? 'term-status-pulse absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full' : 'absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full'}
+                    style={{ background: collapsedDotColor }}
+                  />
+                )}
               </div>
             )
           })}
