@@ -1,3 +1,4 @@
+// Note: full definition chain behind one key — see .agents/notes/implemented/feature/2026-08-14-f12-navigation.md
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
