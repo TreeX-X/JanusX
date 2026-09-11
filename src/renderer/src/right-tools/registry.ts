@@ -1,3 +1,4 @@
+// Note: rail plus singleton tools with shared icon taxonomy — see .agents/notes/implemented/architecture/2026-07-19-right-dock.md
 import type { RightToolDefinition, RightToolId } from './types'
 
 export const RIGHT_TOOL_REGISTRY = [
