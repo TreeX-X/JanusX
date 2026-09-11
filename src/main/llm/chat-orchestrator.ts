@@ -14,6 +14,7 @@
  * 同 requestId，渲染端行为不变，仅徽标出现时机后移）。
  */
 
+// Note: policy-neutral loop core with shell-side duties only — see .agents/notes/implemented/architecture/2026-08-08-agent-loop-refactor.md
 import { llmService } from './LlmService'
 import { configService, DEFAULT_AGENT_MAX_STEPS } from '../config/service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
