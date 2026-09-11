@@ -1,3 +1,4 @@
+// Note: proposal and execution stay separate — see .agents/notes/implemented/architecture/2026-08-04-blueprint-maintenance.md
 import { randomUUID } from 'crypto'
 import { promises as fs } from 'fs'
 import { join, resolve } from 'path'
