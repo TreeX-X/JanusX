@@ -1,3 +1,4 @@
+// Note: native notifications with in-app fallback — see .agents/notes/implemented/feature/2026-06-28-agent-notifications.md
 import { BrowserWindow } from 'electron'
 import * as electron from 'electron'
 import type { AgentEvent, AgentSpawnOptions } from '../janus-runner/types'
