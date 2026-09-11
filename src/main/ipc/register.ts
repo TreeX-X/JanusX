@@ -26,6 +26,8 @@ import { registerProjectHandlers } from './project-handlers'
 import { registerRuntimeTelemetryHandlers } from './runtime-telemetry-handlers'
 import { registerSettingsHandlers } from './settings-handlers'
 import { registerSubAgentRunHandlers } from './subagent-run-handlers'
+import { registerTeamHandlers } from './team-handlers'
+import { registerPeerHandlers, registerRemoteHandlers } from './remote-handlers'
 import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './terminal-handlers'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeObservationService } from '../knowledge/observation-service'
@@ -114,6 +116,9 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   })
   registerSubAgentRunHandlers()
   registerKnowledgeHandlers()
+  registerTeamHandlers()
+  registerRemoteHandlers()
+  registerPeerHandlers()
   // Phase 1-2: plug the deterministic stage into the processing queue and
   // report unprocessed ranges from the persisted cursor on startup.
   // Phase 2: the LLM stage runs after each deterministic batch (mode/model gated).

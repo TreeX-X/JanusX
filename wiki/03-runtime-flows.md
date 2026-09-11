@@ -1,6 +1,6 @@
 ﻿# Runtime Flows
 
-Last analyzed: 2026-08-17
+Last analyzed: 2026-09-06
 
 ## App Boot
 
@@ -41,7 +41,7 @@ When adding IPC:
 4. Use the typed domain API from renderer components/stores/services.
 5. Add contract tests for registration, argument order, absence of generic bridges, and event unsubscribe behavior.
 
-All 20+ renderer-accessible domains follow this design. No generic renderer bridge or preload channel allowlist remains.
+All 24 renderer-accessible domains follow this design. No generic renderer bridge or preload channel allowlist remains.
 
 ## Terminal Creation And Checkpointing
 
@@ -207,22 +207,32 @@ Relations are governed by `src/shared/janus/relations.ts` which enforces acyclic
 ## Blueprint Maintenance
 
 ```text
-BlueprintMaintenancePanel
--> stores/blueprint-maintenance.ts
--> window.electron.janus maintenance commands
+BlueprintMaintenancePanel (group cards + digest + dismiss + steer + reasoning)
+-> stores/blueprint-maintenance.ts (tasks + reasoning/toolTraces ephemeral)
+-> window.electron.janus maintenance commands (start/message/propose/apply/dismiss/steer/cancel/complete/undo)
 -> BlueprintMaintenanceService (src/main/janus/maintenance/service.ts)
--> LLM-driven proposal generation (blueprint-tools.ts)
+   - per-task ChatSessionRuntime (budget via buildContext + dropped-handoff)
+   - per-task AgentSteeringPort (stream preempt, cap 10)
+   - afterToolCall recordToolResult + tool traces (cap 24)
+   - shouldStopAfterTurn budget preview + getFollowUpMessages recovery
+   - onEvent redacted agent events (reasoning 8k cap) via maintenance event
+   - knowledge recall (5 items/3k) + capture (blueprint-maintenance) + queue immediate
+   - maxSteps from configService (default 40)
+-> LLM-driven proposal generation (blueprint-tools.ts) with budget-pruned context
 -> ChangeSet operations (changeset.ts):
    create/update/move/archive/delete nodes
    add/update/remove relations
    update workspace bindings
+-> groupMaintenanceOperations + resolveOperationRisk + buildGroupDigest (node-aggregated approval)
+-> expandGroupSelection (groupIds + dependency closure) for apply
+-> dismissProposal: proposal-ready -> active, version kept, discussion resumes
 -> scopeNodeIds determines affected nodes
 -> applyOperations mutates Blueprint
--> buildReverseOperations for undo
+-> buildReverseOperations for undo (with groups/digest)
 -> audit records persisted
 ```
 
-Maintenance types from `src/shared/janus/maintenance-types.ts` define all operation variants, change-set status, task lifecycle, evidence manifests, and audit records. `BlueprintMaintenanceService` is a singleton that manages window references for event delivery.
+Maintenance types from `src/shared/janus/maintenance-types.ts` define all operation variants, change-set status, task lifecycle, evidence manifests, audit records, intent groups (`node/relations/bindings/deletes`), proposal digests, and redacted agent events. `BlueprintMaintenanceService` is a singleton that manages window references for event delivery.
 
 ## Browser Surface
 
@@ -266,6 +276,34 @@ Agent event / checkpoint / completion
 ```
 
 Inbound Feishu uses `@larksuiteoapi/node-sdk` with SDK channel abstraction (`feishu-inbound/sdk-channel.ts`).
+
+## Roundtable Deliberation
+
+```text
+JanusRoundtablePane start(prompt, workspaceResources?)
+-> window.electron.roundtable.start
+-> RoundtableService.start: resolveRegisteredWorkspace per resource
+-> RoundtableRuntime.start (defaultRoundtableWorkflow participants)
+-> per-agent run({ userInput, priorCards, priorFacts, workspaceResources, workspaceContext, workspaceTools })
+   - workspaceTools: read-only workspace.list/read/readRange; failures are loud (no silent fallback)
+-> roundtable:event stream to renderer (stage/badge/advance)
+-> advance(sessionId, input) / end(sessionId) / restore(sessionId) / export(sessionId) -> human-readable parchment markdown
+```
+
+Restore consistency is covered by `roundtable workspace restore` test; export shape lives in `src/shared/roundtable/export.ts` + `parchment.ts`.
+
+## Language Service Installer
+
+```text
+Settings / editor definition request
+-> window.electron.languageService.installer.status/install/remove
+-> language-service-installer-handlers (window-authorized sender check)
+-> language-service/registry resolves descriptor per LanguageServiceId
+-> ManagedBinaryInstaller runs with progress events
+-> clangdManager owns the running clangd lifecycle; isPathWithinWorkspace guards files
+```
+
+OfficeCLI probing is adjacent: `officecli-manager.ts` pins `SUPPORTED_VERSION` 1.0.135 and requires `watch/create/batch` capabilities; auto-install stays disabled with manual guidance.
 
 ## Language Service (clangd)
 
@@ -324,7 +362,33 @@ KnowledgeWorkbench / KnowledgeAssist / Janus context consumers
 -> contract, observation, search (BM25), context, recall, review, truth, operations, or config service
 ```
 
-Workbench reads preserve independent fallbacks so one unavailable source does not erase successful parallel results. Direct search, context, review, truth, conflict, feedback, and settings calls propagate failures. Auto-prune is an explicit typed maintenance API; archive and compact remain main-internal capabilities. `agent-turn-recorder.ts` captures agent interaction context. `retention-classifier.ts` scores observation relevance.
+Workbench reads preserve independent fallbacks so one unavailable source does not erase successful parallel results. Direct search, context, review, truth, conflict, feedback, and settings calls propagate failures. `agent-turn-recorder.ts` captures agent interaction context. `retention-classifier.ts` scores observation relevance. `sortInboxCandidates` drives llm-preferred Inbox ordering with snapshot mode.
+
+### Queue-owned pipeline (Phase 5)
+
+```text
+observe -> processing-queue (per-workspace cursor, SerialQueue lock, failure ledger, cursor.json/failures.jsonl)
+-> deterministic stage (deterministic-extractor.ts) advances deterministic cursor
+-> LLM stage (llm-stage.ts, batch <= 50) only if mode != deterministic-only and a default model exists
+   - degraded extract rethrown to llm failure ledger + processing_failed audit; deterministic products untouched
+   - clean skips advance llmCursor without work
+-> processNow / processingStats / diagnostics IPC; knowledge-pipeline desktop E2E guards the chain
+```
+
+`knowledge:extract` direct IPC was intentionally removed; `runLlmStage` via `knowledgeExtractService.extract` is the only LLM entry.
+
+### External MCP registration
+
+```text
+Knowledge settings "外部终端 MCP 接入"
+-> window.electron.knowledge.externalMcpStatus / registerExternalMcp(cursor|vscode|claude-code)
+-> external-mcp.ts merges only the janusx-knowledge stdio key (entry path + copyable launch command)
+-> corrupt client JSON backed up beside the original before rewrite; build-status gate blocks registration on broken builds
+```
+
+### Janus reasoning region
+
+Reasoning (`janusReasoning.ts`, `MAX_REASONING_CHARS` 4000) is UI-only: appended via `appendReasoningDelta` (truncate-head/keep-tail, `truncated` flag, total `chars` for "已思考 N 字"), rendered by `ThinkingRegion.tsx`, never counted into `streamedText`. Close-button token cleanup and context-budget handoff keep island/roundtable input bounded.
 
 ### Wiki sourceFactIds chain (extract → review → read)
 

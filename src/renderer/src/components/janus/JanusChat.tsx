@@ -303,6 +303,8 @@ export function JanusChat({
       status: activity.status,
       summary: activity.summary ?? activity.toolName,
       argsDigest: activity.argsDigest,
+      resultDigest: activity.resultDigest,
+      errorDetail: activity.errorDetail,
       turnId: 'live',
     }))
 
@@ -431,6 +433,44 @@ export function JanusChat({
     if (!visible) return
     autoGrowComposer()
   }, [autoGrowComposer, input, visible])
+
+  // The Island shell animates width 52px -> ~880px and height 26px -> ~560px
+  // for ~0.38s after expand, and the composer mounts on the same commit when
+  // reopening directly into the chat view. Measuring scrollHeight mid-transition
+  // over-estimates soft-wrapped lines (or the zero-height flex artifact for an
+  // empty box) and then ratchets: scrollHeight >= clientHeight keeps returning
+  // the clamped 150px on later reads. Re-measure once the transition settles
+  // and whenever the composer width changes, so no tab switch is needed.
+  useLayoutEffect(() => {
+    if (!visible) return
+    const el = inputRef.current
+    if (!el) return
+    let disposed = false
+    const regrow = () => {
+      if (!disposed) autoGrowComposer()
+    }
+    const frame = window.requestAnimationFrame(regrow)
+    // Longest island transition is 0.38s height + 0.16s visibility delay.
+    const timer = window.setTimeout(regrow, 450)
+    let lastWidth = el.clientWidth
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        const width = el.clientWidth
+        if (Math.abs(width - lastWidth) >= 1) {
+          lastWidth = width
+          regrow()
+        }
+      })
+      observer.observe(el)
+    }
+    return () => {
+      disposed = true
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+      observer?.disconnect()
+    }
+  }, [autoGrowComposer, visible])
 
   const handleSend = useCallback(
     (textOverride?: string) => {

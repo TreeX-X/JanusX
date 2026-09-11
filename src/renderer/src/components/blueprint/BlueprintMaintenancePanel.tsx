@@ -8,6 +8,8 @@ import type { TFunction } from 'i18next'
 import type {
   BlueprintChangeSet,
   BlueprintMaintenanceAuditRecord,
+  BlueprintMaintenanceIntentGroup,
+  BlueprintMaintenanceToolTraceEntry,
   BlueprintOperation,
 } from '@/services/blueprint'
 import {
@@ -20,6 +22,7 @@ import {
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
 const EMPTY_AUDITS: BlueprintMaintenanceAuditRecord[] = []
+const EMPTY_TOOL_TRACES: BlueprintMaintenanceToolTraceEntry[] = []
 const MESSAGE_SUMMARY_LIMIT = 220
 
 export function splitMaintenanceReply(content: string): { summary: string; details: string | null } {
@@ -197,6 +200,95 @@ function useOperationSelection(changeSet: BlueprintChangeSet | null) {
   return { selected, confirmedDeletes, toggleNormal, toggleDelete, selectionIds }
 }
 
+function groupRiskLabel(risk: BlueprintMaintenanceIntentGroup['risk'], t: TFunction): string {
+  return riskLabel(risk, t)
+}
+
+/** Node-aggregated approval selection: groups are the unit, deletes still need explicit confirm. */
+function useGroupSelection(changeSet: BlueprintChangeSet | null) {
+  // Keyed on changeSet.id like useOperationSelection: task events clone the
+  // operations array on every status update and must not reset selection.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const groups = useMemo(() => changeSet?.groups ?? [], [changeSet?.id])
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
+  const [confirmedDeletes, setConfirmedDeletes] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    // Low/medium groups default-selected; high-risk (deletes) never join bulk.
+    setSelectedGroups(new Set(groups.filter((group) => group.risk !== 'high').map((group) => group.id)))
+    setConfirmedDeletes(new Set())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changeSet?.id])
+  const toggleGroup = (group: BlueprintMaintenanceIntentGroup) => {
+    if (group.kind === 'deletes') {
+      setConfirmedDeletes((current) => {
+        const next = new Set(current)
+        const key = group.operationIds[0] ?? group.id
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      })
+      return
+    }
+    setSelectedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(group.id)) next.delete(group.id)
+      else next.add(group.id)
+      return next
+    })
+  }
+  const operationIds = useMemo(() => groups
+    .filter((group) => group.kind !== 'deletes' && selectedGroups.has(group.id))
+    .flatMap((group) => group.operationIds), [groups, selectedGroups])
+  const confirmedDeleteOperationIds = useMemo(() => {
+    const ids: string[] = []
+    groups.filter((group) => group.kind === 'deletes').forEach((group) => {
+      const key = group.operationIds[0] ?? group.id
+      if (confirmedDeletes.has(key)) ids.push(...group.operationIds)
+    })
+    return ids
+  }, [groups, confirmedDeletes])
+  const groupIds = useMemo(() => groups
+    .filter((group) => group.kind !== 'deletes' && selectedGroups.has(group.id))
+    .map((group) => group.id), [groups, selectedGroups])
+  return { groups, selectedGroups, confirmedDeletes, toggleGroup, operationIds, confirmedDeleteOperationIds, groupIds }
+}
+
+function GroupList({ groups, selectedGroups, confirmedDeletes, onToggle, t }: {
+  groups: BlueprintMaintenanceIntentGroup[]
+  selectedGroups: Set<string>
+  confirmedDeletes: Set<string>
+  onToggle: (group: BlueprintMaintenanceIntentGroup) => void
+  t: TFunction
+}) {
+  return (
+    <>
+      {groups.map((group) => {
+        const isDelete = group.kind === 'deletes'
+        const checked = isDelete
+          ? confirmedDeletes.has(group.operationIds[0] ?? group.id)
+          : selectedGroups.has(group.id)
+        return (
+          <label key={group.id} className={`bp-maintenance-operation${isDelete ? ' bp-maintenance-operation--delete' : ''}`}>
+            <input type="checkbox" checked={checked} onChange={() => onToggle(group)} />
+            <div>
+              <strong>{group.title}</strong>
+              <p>{group.summary}</p>
+              <span>
+                {groupRiskLabel(group.risk, t)}
+                {' · '}
+                {t('blueprint:maintenance.groupOperations', { count: group.operationIds.length })}
+                {' · '}
+                {t('blueprint:maintenance.evidenceCount', { count: group.evidenceRefs.length })}
+              </span>
+              {isDelete ? <span>{t('blueprint:maintenance.deleteConfirm')}</span> : null}
+            </div>
+          </label>
+        )
+      })}
+    </>
+  )
+}
+
 function OperationList({ operations, checkedIds, onToggle, t }: {
   operations: BlueprintOperation[]
   checkedIds: Set<string>
@@ -276,6 +368,8 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const apply = useBlueprintMaintenanceStore((state) => state.apply)
   const cancel = useBlueprintMaintenanceStore((state) => state.cancel)
   const complete = useBlueprintMaintenanceStore((state) => state.complete)
+  const dismiss = useBlueprintMaintenanceStore((state) => state.dismiss)
+  const steer = useBlueprintMaintenanceStore((state) => state.steer)
   const pendingUndo = useBlueprintMaintenanceStore((state) => state.pendingUndo)
   const prepareUndo = useBlueprintMaintenanceStore((state) => state.prepareUndo)
   const clearPendingUndo = useBlueprintMaintenanceStore((state) => state.clearPendingUndo)
@@ -292,7 +386,12 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
 
   const proposalSelection = useOperationSelection(task?.changeSet ?? null)
+  const proposalGroups = useGroupSelection(task?.changeSet ?? null)
+  const hasProposalGroups = (task?.changeSet?.groups?.length ?? 0) > 0
   const undoSelection = useOperationSelection(pendingUndo?.changeSet ?? null)
+  const taskId = task?.id
+  const taskReasoning = useBlueprintMaintenanceStore((state) => (taskId ? state.reasoning[taskId] : undefined))
+  const taskToolTraces = useBlueprintMaintenanceStore((state) => (taskId ? state.toolTraces[taskId] ?? EMPTY_TOOL_TRACES : EMPTY_TOOL_TRACES))
 
   useEffect(() => { void initialize() }, [initialize])
   useEffect(() => {
@@ -339,7 +438,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
 
   const selectedWorkspaces = workspaces.filter((item) => workspaceIds.includes(item.id))
   const nodeOptions = blueprint?.nodeIds.map((id) => ({ value: id, label: blueprint.nodes[id]?.title ?? id })) ?? []
-  const proposalGroups = useMemo(() => groupOperations(task?.changeSet?.operations ?? []), [task?.changeSet])
+  const proposalLegacyGroups = useMemo(() => groupOperations(task?.changeSet?.operations ?? []), [task?.changeSet])
   const undoGroups = useMemo(() => groupOperations(pendingUndo?.changeSet.operations ?? []), [pendingUndo?.changeSet])
   const appliedAudits = audits.filter((record) => record.status === 'applied')
   const taskWorking = task?.status === 'analyzing' || task?.status === 'applying'
@@ -364,6 +463,17 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   }
   const handleApply = async () => {
     if (!task?.changeSet || !blueprint) return
+    if (hasProposalGroups) {
+      const ok = await apply({
+        taskId: task.id,
+        changeSetId: task.changeSet.id,
+        operationIds: [...proposalGroups.operationIds, ...proposalGroups.confirmedDeleteOperationIds],
+        groupIds: proposalGroups.groupIds,
+        confirmedDeleteOperationIds: proposalGroups.confirmedDeleteOperationIds,
+      })
+      if (ok) await reloadBlueprint(blueprint.id)
+      return
+    }
     const ok = await apply({
       taskId: task.id,
       changeSetId: task.changeSet.id,
@@ -371,6 +481,16 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
       confirmedDeleteOperationIds: [...proposalSelection.confirmedDeletes],
     })
     if (ok) await reloadBlueprint(blueprint.id)
+  }
+  const handleDismiss = async () => {
+    if (!task) return
+    await dismiss({ taskId: task.id })
+  }
+  const handleSteer = async () => {
+    if (!task || !draft.trim()) return
+    const entryId = `steer-${Date.now()}`
+    const accepted = await steer({ taskId: task.id, entryId, text: draft })
+    if (accepted) setDraft('')
   }
   const handlePrepareUndo = async (auditId: string) => {
     if (!blueprint) return
@@ -563,23 +683,70 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
               <div className="bp-maintenance-thinking" role="status" aria-live="polite">
                 <span>{t('blueprint:maintenance.roleJanus')}</span>
                 <div><i /><i /><i /><em>{task.phase}</em></div>
+                {taskReasoning && taskReasoning.text ? (
+                  <details className="bp-maintenance-message-details">
+                    <summary>{t('blueprint:maintenance.thinkingDetails', { count: taskReasoning.chars })}</summary>
+                    <div>{taskReasoning.text}{taskReasoning.truncated ? t('blueprint:maintenance.thinkingTruncated') : null}</div>
+                  </details>
+                ) : null}
+                {taskToolTraces.length ? (
+                  <div className="bp-maintenance-tool-traces">
+                    <span>{t('blueprint:maintenance.toolTraceTitle', { count: taskToolTraces.length })}</span>
+                    <ul>{taskToolTraces.slice(-5).map((entry, index) => <li key={`${entry.toolName}-${index}`}>{entry.toolName} · {entry.summary}</li>)}</ul>
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {task.error ? <div className="bp-maintenance-error">{task.error}</div> : null}
           </div>
           {task.changeSet ? (
             <section className="bp-maintenance-proposal">
-              <header><strong>{t('blueprint:maintenance.pendingProposal', { version: task.changeSet.version })}</strong><span>{t('blueprint:maintenance.proposalSelection', { selected: proposalSelection.selectionIds.length, total: task.changeSet.operations.length })}</span></header>
-              {renderGroups(proposalGroups, proposalSelection)}
-              <button className="blueprint-btn blueprint-btn--primary" type="button" onClick={() => void handleApply()} disabled={!proposalSelection.selectionIds.length}>{t('blueprint:maintenance.approveSelected')}</button>
+              <header><strong>{t('blueprint:maintenance.pendingProposal', { version: task.changeSet.version })}</strong><span>{hasProposalGroups
+                ? t('blueprint:maintenance.proposalGroupSelection', { selected: proposalGroups.groupIds.length + (proposalGroups.confirmedDeleteOperationIds.length ? 1 : 0), total: proposalGroups.groups.length })
+                : t('blueprint:maintenance.proposalSelection', { selected: proposalSelection.selectionIds.length, total: task.changeSet.operations.length })}</span></header>
+              {task.changeSet.digest ? (
+                <details className="bp-maintenance-message-details" open>
+                  <summary>{t('blueprint:maintenance.digestTitle')}</summary>
+                  <div>{task.changeSet.digest}</div>
+                </details>
+              ) : null}
+              {hasProposalGroups ? (
+                <div className="bp-maintenance-group">
+                  <span className="bp-maintenance-group__title">{t('blueprint:maintenance.groupByNode')}</span>
+                  <GroupList groups={proposalGroups.groups} selectedGroups={proposalGroups.selectedGroups} confirmedDeletes={proposalGroups.confirmedDeletes} onToggle={proposalGroups.toggleGroup} t={t} />
+                </div>
+              ) : (
+                <>{renderGroups(proposalLegacyGroups, proposalSelection)}</>
+              )}
+              <div className="bp-maintenance-compose__actions">
+                <button
+                  className="blueprint-btn blueprint-btn--primary"
+                  type="button"
+                  onClick={() => void handleApply()}
+                  disabled={hasProposalGroups
+                    ? !proposalGroups.groupIds.length && !proposalGroups.confirmedDeleteOperationIds.length
+                    : !proposalSelection.selectionIds.length}
+                >
+                  {t('blueprint:maintenance.approveSelected')}
+                </button>
+                <button className="blueprint-btn" type="button" onClick={() => void handleDismiss()}>{t('blueprint:maintenance.dismissProposal')}</button>
+              </div>
             </section>
           ) : null}
-          {(task.status === 'active' || task.status === 'proposal-ready' || task.status === 'failed') ? (
+          {(task.status === 'active' || task.status === 'proposal-ready' || task.status === 'failed') && !taskWorking ? (
             <div className="bp-maintenance-compose">
               <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('blueprint:maintenance.composePlaceholder')} />
               <div className="bp-maintenance-compose__actions">
                 <button type="button" disabled={!draft.trim()} onClick={() => { if (draft.trim()) { void message({ taskId: task.id, content: draft }); setDraft('') } }}>{t('blueprint:maintenance.sendMessage')}</button>
                 <button type="button" className="bp-maintenance-compose__proposal" onClick={() => void propose({ taskId: task.id })}>{task.changeSet ? t('blueprint:maintenance.reviseProposal') : t('blueprint:maintenance.composeProposal')}</button>
+              </div>
+            </div>
+          ) : null}
+          {taskWorking ? (
+            <div className="bp-maintenance-compose">
+              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('blueprint:maintenance.steerPlaceholder')} />
+              <div className="bp-maintenance-compose__actions">
+                <button type="button" disabled={!draft.trim()} onClick={() => void handleSteer()}>{t('blueprint:maintenance.steerAction')}</button>
               </div>
             </div>
           ) : null}

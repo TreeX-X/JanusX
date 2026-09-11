@@ -1,4 +1,6 @@
 export { JanusIsland } from './JanusIsland'
+export { JanusRunOrbs } from './JanusRunOrbs'
+export { useGlobalRunning } from './useGlobalRunning'
 export { JanusExpanded } from './JanusExpanded'
 export { JanusEye } from './JanusEye'
 export { JanusIdentityCore } from './JanusIdentityCore'

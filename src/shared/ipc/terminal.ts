@@ -31,7 +31,7 @@ export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus'
 export type TerminalStatus = 'wait' | 'running' | 'error'
 
 export interface TerminalWarmupRequest {
-  engines?: TerminalAgentEngine[]
+  engines?: Array<TerminalAgentEngine | 'janus' | 'pi'>
 }
 
 export interface TerminalCreateRequest {
@@ -85,7 +85,7 @@ export interface TerminalCreatedEvent {
   id: string
   workspaceId: string
   cwd: string
-  preset: TerminalAgentEngine
+  preset: TerminalAgentEngine | 'janus' | 'pi'
   shell: string
   pid: number
 }

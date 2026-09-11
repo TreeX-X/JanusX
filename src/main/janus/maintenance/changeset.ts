@@ -597,6 +597,188 @@ export function buildReverseOperations(
   return { operations, conflicts }
 }
 
+/**
+ * Server-side risk resolution. Never trusts the model-supplied `risk` field:
+ * delete/restore is always high, structural edits are medium, and plain
+ * content updates stay low so they can be one-click approved.
+ */
+export function resolveOperationRisk(operation: BlueprintOperation): 'low' | 'medium' | 'high' {
+  switch (operation.type) {
+    case 'delete-node':
+    case 'restore-node':
+      return 'high'
+    case 'create-node':
+    case 'move-node':
+    case 'archive-node':
+    case 'add-relation':
+    case 'update-relation':
+    case 'remove-relation':
+    case 'update-workspace-binding':
+      return 'medium'
+    case 'update-node': {
+      const keys = Object.keys(operation.after)
+      const significant = keys.some((key) =>
+        key === 'title' || key === 'type' || key === 'positioning' || key === 'techSolution')
+      return significant ? 'medium' : 'low'
+    }
+  }
+}
+
+function groupTargetNodeId(operation: BlueprintOperation): string | undefined {
+  switch (operation.type) {
+    case 'create-node': return operation.tempNodeId
+    case 'update-node':
+    case 'move-node':
+    case 'archive-node':
+    case 'delete-node':
+    case 'restore-node':
+    case 'update-workspace-binding': return operation.nodeId
+    default: return undefined
+  }
+}
+
+function groupTargetTitle(operation: BlueprintOperation, blueprint?: Blueprint): string {
+  const nodeId = groupTargetNodeId(operation)
+  if (operation.type === 'create-node') return operation.after.title
+  if (operation.type === 'restore-node') return operation.node.title
+  if (operation.type === 'delete-node') return operation.impact.title
+  if (nodeId && blueprint?.nodes[nodeId]?.title) return blueprint.nodes[nodeId].title
+  return nodeId ?? operation.operationId
+}
+
+/**
+ * Aggregates fine-grained operations into node-level approval groups.
+ * The operations array stays the source of truth for apply; groups are a
+ * UI-facing projection with server-resolved risk.
+ */
+export function groupMaintenanceOperations(
+  operations: BlueprintOperation[],
+  blueprint?: Blueprint,
+): import('../../../shared/janus/maintenance-types').BlueprintMaintenanceIntentGroup[] {
+  const groups: import('../../../shared/janus/maintenance-types').BlueprintMaintenanceIntentGroup[] = []
+  const byNode = new Map<string, BlueprintOperation[]>()
+  const relationOps: BlueprintOperation[] = []
+  const pushNodeGroup = (nodeId: string, kind: 'node' | 'bindings' | 'deletes', ops: BlueprintOperation[]) => {
+    const riskRank = { low: 0, medium: 1, high: 2 } as const
+    const risk = ops.map(resolveOperationRisk).sort((a, b) => riskRank[b] - riskRank[a])[0] ?? 'low'
+    const evidenceRefs = [...new Set(ops.flatMap((op) => op.evidenceRefs))].slice(0, 12)
+    const title = kind === 'deletes'
+      ? `删除：${groupTargetTitle(ops[0], blueprint)}`
+      : kind === 'bindings'
+        ? `工作区归属：${groupTargetTitle(ops[0], blueprint)}`
+        : `节点：${groupTargetTitle(ops[0], blueprint)}`
+    groups.push({
+      id: `group-${kind}-${nodeId}`,
+      kind,
+      nodeId: kind === 'node' || kind === 'bindings' || kind === 'deletes' ? nodeId : undefined,
+      title,
+      summary: ops.map(operationSummary).join('；'),
+      risk,
+      operationIds: ops.map((op) => op.operationId),
+      evidenceRefs,
+    })
+  }
+  for (const operation of operations) {
+    if (operation.type === 'add-relation' || operation.type === 'update-relation' || operation.type === 'remove-relation') {
+      relationOps.push(operation)
+      continue
+    }
+    if (operation.type === 'delete-node' || operation.type === 'restore-node') {
+      const nodeId = groupTargetNodeId(operation) ?? operation.operationId
+      const list = byNode.get(`deletes:${nodeId}`) ?? []
+      list.push(operation)
+      byNode.set(`deletes:${nodeId}`, list)
+      continue
+    }
+    if (operation.type === 'update-workspace-binding') {
+      const nodeId = operation.nodeId
+      const list = byNode.get(`bindings:${nodeId}`) ?? []
+      list.push(operation)
+      byNode.set(`bindings:${nodeId}`, list)
+      continue
+    }
+    const nodeId = groupTargetNodeId(operation) ?? operation.operationId
+    const list = byNode.get(`node:${nodeId}`) ?? []
+    list.push(operation)
+    byNode.set(`node:${nodeId}`, list)
+  }
+  for (const [key, ops] of byNode) {
+    const separator = key.indexOf(':')
+    const kind = key.slice(0, separator) as 'node' | 'bindings' | 'deletes'
+    const nodeId = key.slice(separator + 1)
+    pushNodeGroup(nodeId, kind, ops)
+  }
+  if (relationOps.length) {
+    const riskRank = { low: 0, medium: 1, high: 2 } as const
+    const risk = relationOps.map(resolveOperationRisk).sort((a, b) => riskRank[b] - riskRank[a])[0] ?? 'medium'
+    groups.push({
+      id: 'group-relations',
+      kind: 'relations',
+      title: `关系：${relationOps.length} 项`,
+      summary: relationOps.map(operationSummary).join('；'),
+      risk,
+      operationIds: relationOps.map((op) => op.operationId),
+      evidenceRefs: [...new Set(relationOps.flatMap((op) => op.evidenceRefs))].slice(0, 12),
+    })
+  }
+  const kindOrder = { node: 0, bindings: 1, relations: 2, deletes: 3 } as const
+  return groups.sort((a, b) => kindOrder[a.kind] - kindOrder[b.kind] || a.title.localeCompare(b.title))
+}
+
+/** Builds the human-readable整理稿 markdown bound to a proposal version. */
+export function buildGroupDigest(
+  groups: import('../../../shared/janus/maintenance-types').BlueprintMaintenanceIntentGroup[],
+  version: number,
+): string {
+  if (!groups.length) return `## 整理稿 v${version}\n\n未发现需要变更的内容。`
+  const lines = [`## 整理稿 v${version}（共 ${groups.length} 组）`, '']
+  groups.forEach((group, index) => {
+    lines.push(`### ${index + 1}. ${group.title}（${group.risk === 'high' ? '高风险' : group.risk === 'medium' ? '中风险' : '低风险'}）`)
+    lines.push(group.summary)
+    if (group.evidenceRefs.length) lines.push(`证据：${group.evidenceRefs.slice(0, 3).join('、')}${group.evidenceRefs.length > 3 ? ` 等 ${group.evidenceRefs.length} 项` : ''}`)
+    lines.push('')
+  })
+  lines.push('不满意可点“回到对话”继续说，例如“第 2 组去掉”后重新整理。')
+  return lines.join('\n')
+}
+
+/**
+ * Expands node-group selection to operations with dependency closure.
+ * Accepts legacy direct operation ids, new group ids, or both.
+ */
+export function expandGroupSelection(
+  changeSet: BlueprintChangeSet,
+  selection: { operationIds?: string[]; groupIds?: string[] },
+): BlueprintOperation[] {
+  const direct = new Set(selection.operationIds ?? [])
+  const groupIds = new Set(selection.groupIds ?? [])
+  if (changeSet.groups?.length && groupIds.size) {
+    const byGroup = new Map(changeSet.groups.map((group) => [group.id, group]))
+    for (const groupId of groupIds) {
+      const group = byGroup.get(groupId)
+      if (!group) throw new BlueprintChangeSetError(`未知的审批分组：${groupId}`)
+      group.operationIds.forEach((id) => direct.add(id))
+    }
+  }
+  if (!direct.size) throw new BlueprintChangeSetError('至少选择一项变更')
+  // Dependency closure: selecting a group auto-includes its prerequisites,
+  // mirroring the renderer's includeDependencies behavior server-side.
+  const byId = new Map(changeSet.operations.map((op) => [op.operationId, op]))
+  const closed = new Set(direct)
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const id of [...closed]) {
+      const op = byId.get(id)
+      if (!op) continue
+      for (const dep of op.dependsOn) {
+        if (!closed.has(dep)) { closed.add(dep); grew = true }
+      }
+    }
+  }
+  return selectOperations(changeSet, [...closed])
+}
+
 export function operationSummary(operation: BlueprintOperation): string {
   switch (operation.type) {
     case 'create-node': return `新建节点“${operation.after.title}”`

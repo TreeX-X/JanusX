@@ -10,6 +10,8 @@ export interface JanusToolActivity {
   summary?: string
   argsDigest?: string
   argumentChars?: number
+  resultDigest?: string
+  errorDetail?: string
 }
 
 export interface JanusRuntimeState {
@@ -33,6 +35,21 @@ function activity(state: JanusRuntimeState, correlationId: string): JanusToolAct
 
 /** Reduces safe Chat Agent IPC events into the same cards used by Runtime tool events. */
 export function reduceChatAgentEvent(state: JanusRuntimeState, event: ChatAgentEvent): JanusRuntimeState {
+  if (event.type === 'tool_display') {
+    const current = activity(state, event.callId)
+    return {
+      ...state,
+      activities: replaceActivity(state, {
+        correlationId: event.callId,
+        toolName: event.toolName,
+        status: event.status ?? current?.status ?? 'requested',
+        ...(event.argsDigest !== undefined ? { argsDigest: event.argsDigest } : {}),
+        ...(event.resultDigest !== undefined ? { resultDigest: event.resultDigest } : {}),
+        ...(event.errorDetail !== undefined ? { errorDetail: event.errorDetail } : {}),
+        ...(event.summary !== undefined ? { summary: event.summary } : {}),
+      }),
+    }
+  }
   if (event.type === 'tool_call_start') {
     return {
       ...state,

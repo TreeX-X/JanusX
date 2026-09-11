@@ -151,6 +151,9 @@ export function installElectronApiFallback(): void {
       applyMaintenanceChangeSet: () => unavailableJanus(),
       cancelMaintenanceTask: () => unavailableJanus(),
       completeMaintenanceTask: () => unavailableJanus(),
+      dismissMaintenanceProposal: () => unavailableJanus(),
+      steerMaintenanceTask: () => Promise.resolve({ accepted: false, error: 'Electron Janus API is unavailable' }),
+      cancelMaintenanceSteer: () => Promise.resolve({ cancelled: false }),
       prepareMaintenanceUndo: () => unavailableJanus(),
       applyMaintenanceUndo: () => unavailableJanus(),
       onAnalysisResult: () => () => {},
@@ -213,6 +216,23 @@ export function installElectronApiFallback(): void {
       },
     },
     subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
+    team: {
+      register: unavailable, login: unavailable, logout: unavailable, refresh: unavailable,
+      me: unavailable, listTenants: unavailable, createTenant: unavailable, switchTenant: unavailable,
+      inviteMember: unavailable, acceptInvite: unavailable, listMembers: unavailable,
+      listProjects: unavailable, setRole: unavailable, setMemberStatus: unavailable,
+    },
+    remote: {
+      issueCode: unavailable, redeemCode: unavailable, listTerminals: unavailable,
+      tail: unavailable, execute: unavailable, issueActionToken: unavailable,
+      listTrusted: unavailable, revokeDevice: unavailable,
+    },
+    peer: {
+      hostStatus: unavailable, startHost: unavailable, stopHost: unavailable,
+      discover: unavailable, pair: unavailable, peers: unavailable,
+      listTerminals: unavailable, tail: unavailable, execute: unavailable,
+      disconnect: unavailable, forget: unavailable,
+    },
     roundtable: { start: unavailable, advance: unavailable, end: unavailable, getState: unavailable, restore: unavailable, export: unavailable, onEvent: () => () => {} },
     dialog: { openDirectory: unavailable, saveFile: unavailable, showMessageBox: unavailable },
     window: {

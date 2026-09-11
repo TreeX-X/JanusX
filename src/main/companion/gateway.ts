@@ -89,7 +89,10 @@ export class CompanionGateway {
   }
 
   issueActionToken(
-    context: Pick<CompanionRequestContext, 'provider' | 'operatorOpenId' | 'chatId' | 'threadId'>,
+    context: Pick<
+      CompanionRequestContext,
+      'provider' | 'operatorOpenId' | 'chatId' | 'threadId' | 'userId' | 'tenantId' | 'deviceId'
+    >,
     terminalId: string,
     action: CompanionCommand['type'],
     expiresAt: number,
@@ -98,7 +101,10 @@ export class CompanionGateway {
   }
 
   issueWorkspaceActionToken(
-    context: Pick<CompanionRequestContext, 'provider' | 'operatorOpenId' | 'chatId' | 'threadId'>,
+    context: Pick<
+      CompanionRequestContext,
+      'provider' | 'operatorOpenId' | 'chatId' | 'threadId' | 'userId' | 'tenantId' | 'deviceId'
+    >,
     workspaceId: string,
     engine: 'claude' | 'codex' | 'opencode',
     expiresAt: number,
@@ -110,7 +116,7 @@ export class CompanionGateway {
     const policy = this.options.policy()
     if (!policy.enabled || policy.mode !== 'app') return denied('disabled', 'Inbound control is disabled')
     if (
-      context.provider !== 'feishu'
+      (context.provider !== 'feishu' && context.provider !== 'lan' && context.provider !== 'team')
       || !isIdentity(context.eventId)
       || !isIdentity(context.operatorOpenId)
       || !isIdentity(context.chatId)
@@ -118,6 +124,15 @@ export class CompanionGateway {
       || !Number.isFinite(context.timestamp)
       || Math.abs(this.now() - context.timestamp) > (policy.requestMaxAgeMs ?? DEFAULT_REQUEST_MAX_AGE_MS)
     ) return denied('invalid-request', 'Invalid request identity or timestamp')
+    // LAN pins operator identity to the paired team device UUID so the host
+    // can serve the paired-device set straight through the policy allowlist.
+    // M3 'team' 沿用同一规则，并要求带 userId/tenantId（由 RemoteHost 填入）。
+    if ((context.provider === 'lan' || context.provider === 'team') && context.deviceId !== context.operatorOpenId) {
+      return denied('invalid-request', 'LAN requests must carry their device identity')
+    }
+    if (context.provider === 'team' && (!context.userId || !context.tenantId)) {
+      return denied('invalid-request', 'Team requests must carry user and tenant identity')
+    }
     if (!policy.allowedOpenIds.includes(context.operatorOpenId)) {
       return denied('unauthorized', 'Operator is not authorized')
     }
@@ -204,6 +219,12 @@ export class CompanionGateway {
       createdBy: context.operatorOpenId,
       createdAt: this.now(),
       expiresAt: this.now() + this.bindingTtlMs,
+      // M3：绑定带上团队维度，使 scopeKey(bind) 与 scopeKey(context) 一致；
+      // 无团队字段时退化为旧行为，飞书旧链路不受影响。
+      ...(context.userId ? { userId: context.userId } : {}),
+      ...(context.tenantId ? { tenantId: context.tenantId } : {}),
+      ...(context.projectId ? { projectId: context.projectId } : {}),
+      ...(context.deviceId ? { deviceId: context.deviceId } : {}),
     }
     await this.options.bindings.bind(binding)
     return allowed('Terminal bound', terminal.terminalId, { expiresAt: binding.expiresAt })
@@ -234,6 +255,9 @@ export class CompanionGateway {
       threadId: request.context.threadId,
       terminalId,
       action: request.command.type,
+      ...(request.context.userId ? { userId: request.context.userId } : {}),
+      ...(request.context.tenantId ? { tenantId: request.context.tenantId } : {}),
+      ...(request.context.deviceId ? { deviceId: request.context.deviceId } : {}),
     })
     if (!verification.ok) return denied(verification.reason, 'Action token is invalid for this request', terminalId)
     if (!await this.options.dedupe.consumeAction(verification.claims.jti, verification.claims.exp)) {
@@ -248,6 +272,9 @@ export class CompanionGateway {
       provider: request.context.provider, operatorOpenId: request.context.operatorOpenId,
       chatId: request.context.chatId, threadId: request.context.threadId,
       workspaceId, engine, action: 'create-terminal',
+      ...(request.context.userId ? { userId: request.context.userId } : {}),
+      ...(request.context.tenantId ? { tenantId: request.context.tenantId } : {}),
+      ...(request.context.deviceId ? { deviceId: request.context.deviceId } : {}),
     })
     if (!verification.ok) return denied(verification.reason, 'Action token is invalid for this request')
     if (!await this.options.dedupe.consumeAction(verification.claims.jti, verification.claims.exp)) {

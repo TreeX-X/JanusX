@@ -368,6 +368,31 @@ body {
   }
 }
 
+/* 终端 + 菜单浮层进出：只用 opacity + translate，刻意不用 scale——
+ * 面板挂载/退出时 JS 要量宽高做视口钳制，scale 会让量到的尺寸偏小、
+ * 钳制放行后再恢复真实尺寸导致溢出（translate 不影响宽高，可安全使用）。 */
+@keyframes terminal-menu-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes terminal-menu-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
 /* 浮动面板弹入 */
 @keyframes file-panel-in {
   from {

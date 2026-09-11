@@ -15,6 +15,8 @@ import type { JanusChatAPI } from '../../../shared/ipc/janus-chat'
 import type { RoundtableAPI } from '../../../shared/ipc/roundtable'
 import type { AgentSettingsAPI, NotificationSettingsAPI } from '../../../shared/ipc/settings'
 import type { DesktopToastAPI, DialogAPI, SystemAPI, WindowAPI } from '../../../shared/ipc/system'
+import type { TeamAPI } from '../../../shared/ipc/team'
+import type { PeerAPI, RemoteAPI } from '../../../shared/ipc/remote'
 
 interface ElectronAPI {
   /*-- 同步平台信息，构造 xterm windowsPty 用 --*/
@@ -40,6 +42,9 @@ interface ElectronAPI {
   notificationSettings: NotificationSettingsAPI
   agentSettings: AgentSettingsAPI
   subAgentRun: SubAgentRunAPI
+  team: TeamAPI
+  remote: RemoteAPI
+  peer: PeerAPI
   dialog: DialogAPI
   window: WindowAPI
   system: SystemAPI

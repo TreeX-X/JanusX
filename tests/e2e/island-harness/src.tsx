@@ -4,6 +4,8 @@ import { AuthType } from '../../../packages/llm-core/src/core/types'
 import type { ApprovalRequest } from '../../../src/shared/ipc/agent-runtime'
 import type { ChatStreamEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
+import { JanusRunOrbs } from '../../../src/renderer/src/components/janus/JanusRunOrbs'
+import { useGlobalRunning } from '../../../src/renderer/src/components/janus/useGlobalRunning'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import { JanusChatProvider, useJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
@@ -13,6 +15,7 @@ import {
 } from '../../../src/renderer/src/components/janus/islandController'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { createTerminalPaneContent, getLeafPanes } from '../../../src/renderer/src/lib/workspace-pane'
+import { ProjectType, type RunningProjectSummary } from '../../../src/shared/ipc/project'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
@@ -120,6 +123,73 @@ const workspaceTwoPane = {
   activeTabId: 'terminal:terminal-2',
 }
 
+/*-- Run-Orb fixture (?runOrbs=1)：双工作区运行 + 可变 stop mock，供运行球 E2E --*/
+interface RunOrbFixtureState {
+  stopCalls: string[]
+  running: RunningProjectSummary[]
+}
+
+const runOrbFixture: RunOrbFixtureState = {
+  stopCalls: [],
+  running: [
+    {
+      id: 'C:\\workspace-one::dev::1',
+      pid: 111,
+      type: ProjectType.Vite,
+      name: 'dev',
+      port: 5173,
+      startTime: new Date(Date.now() - 65000).toISOString(),
+      uptime: 65000,
+    },
+    {
+      id: 'C:\\workspace-two::dev::2',
+      pid: 222,
+      type: ProjectType.Vite,
+      name: 'dev',
+      startTime: new Date(Date.now() - 5000).toISOString(),
+      uptime: 5000,
+    },
+  ],
+}
+
+;(window as unknown as { __runOrbFixture?: RunOrbFixtureState }).__runOrbFixture = runOrbFixture
+
+if (new URLSearchParams(window.location.search).get('runOrbs') === '1') {
+  Object.assign(window.electron.project, {
+    list: async () => ({ success: true, data: [...runOrbRunningSnapshot()] }),
+    get: async (projectId: string) => {
+      const found = runOrbRunningSnapshot().find((project) => project.id === projectId)
+      if (!found) return { success: false, error: `Project ${projectId} is not running` }
+      return {
+        success: true,
+        data: {
+          pid: found.pid,
+          config: { name: 'dev', configurations: [] as never[] },
+          startTime: found.startTime,
+          port: found.port,
+          output: [`${found.name} ready in 300 ms`, `Local: http://localhost/${found.port ?? ''}`],
+        },
+      }
+    },
+    stop: async (projectId: string) => {
+      runOrbFixture.stopCalls.push(projectId)
+      runOrbFixture.running = runOrbFixture.running.filter((project) => project.id !== projectId)
+      return { success: true }
+    },
+    readConfig: async () => ({ success: true, data: null }),
+  })
+}
+
+function runOrbRunningSnapshot() {
+  return runOrbFixture.running
+}
+
+/** 运行球挂载位：快速轮询（200ms）+ 球簇，仅 ?runOrbs=1 渲染 */
+function RunOrbHarnessMount() {
+  useGlobalRunning(200)
+  return <JanusRunOrbs />
+}
+
 useWorkspaceStore.setState({
   workspaces: [workspaceOne, workspaceTwo, workspaceThree],
   activeWorkspaceId: 'workspace-1',
@@ -190,6 +260,7 @@ const approvalFixture: ApprovalRequest = {
 
 function Harness() {
   const providerStreamMode = new URLSearchParams(window.location.search).get('providerStream') === '1'
+  const runOrbsMode = new URLSearchParams(window.location.search).get('runOrbs') === '1'
   const activeConversation = useJanusChatController()
   const streamingConversation = useJanusChatController('thread-streaming')
   const errorConversation = useJanusChatController('thread-other')
@@ -339,6 +410,7 @@ function Harness() {
         knowledgePeekActive={island.knowledge.presentation !== 'hidden'}
         knowledgePeekEmpty={island.knowledge.presentation === 'empty'}
       />
+      {runOrbsMode && <RunOrbHarnessMount />}
       {chatPane && (
         <section data-testid="workspace-chat">
           <button

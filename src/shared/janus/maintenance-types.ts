@@ -181,6 +181,20 @@ export type BlueprintChangeSetStatus =
   | 'rejected'
   | 'stale'
 
+export type BlueprintMaintenanceGroupKind = 'node' | 'relations' | 'bindings' | 'deletes'
+
+export interface BlueprintMaintenanceIntentGroup {
+  id: string
+  kind: BlueprintMaintenanceGroupKind
+  /** Primary blueprint node this group edits, if any. */
+  nodeId?: string
+  title: string
+  summary: string
+  risk: 'low' | 'medium' | 'high'
+  operationIds: string[]
+  evidenceRefs: string[]
+}
+
 export interface BlueprintChangeSet {
   id: string
   taskId: string
@@ -191,6 +205,10 @@ export interface BlueprintChangeSet {
   reason: string
   evidence?: BlueprintEvidenceManifest[]
   operations: BlueprintOperation[]
+  /** Node-aggregated approval groups derived from operations. Absent on legacy records. */
+  groups?: BlueprintMaintenanceIntentGroup[]
+  /** Human-readable整理稿 markdown, bound to the same version as operations. */
+  digest?: string
   createdAt: string
   /** Marks reverse ChangeSets generated from an audit record. */
   undoOfAuditId?: string
@@ -253,6 +271,12 @@ export interface BlueprintMaintenanceApplyInput {
   taskId: string
   changeSetId: string
   operationIds: string[]
+  /**
+   * Node-aggregated approval: callers may pass group ids instead of (or
+   * together with) operation ids. The main process expands them to operations
+   * with dependency closure before validation.
+   */
+  groupIds?: string[]
   /**
    * Every selected delete-node operation must appear here. The main process
    * rejects the apply otherwise — bulk approval never covers deletions.
@@ -319,6 +343,55 @@ export interface BlueprintMaintenanceUndoApplyResult {
   auditId: string
 }
 
+export interface BlueprintMaintenanceDismissInput {
+  taskId: string
+}
+
+export interface BlueprintMaintenanceSteerInput {
+  taskId: string
+  entryId: string
+  text: string
+}
+
+export interface BlueprintMaintenanceSteerResult {
+  accepted: boolean
+  error?: string
+}
+
+export interface BlueprintMaintenanceSteerCancelInput {
+  taskId: string
+  entryId: string
+}
+
+/**
+ * Redacted, task-scoped agent lifecycle events for the maintenance renderer.
+ * Tool arguments and raw tool output never leave the main process here.
+ */
+export type BlueprintMaintenanceAgentEvent =
+  | { type: 'agent_start'; taskId: string }
+  | { type: 'text_delta'; taskId: string; delta: string }
+  | { type: 'reasoning_delta'; taskId: string; delta: string }
+  | { type: 'tool_call_start'; taskId: string; callId: string; toolName?: string }
+  | { type: 'tool_call_ready'; taskId: string; callId: string; toolName: string; argumentKeys: string[] }
+  | { type: 'tool_execution_start'; taskId: string; callId: string; toolName: string }
+  | { type: 'tool_execution_end'; taskId: string; callId: string; toolName: string; status: 'completed' | 'failed' }
+  | { type: 'model_finish'; taskId: string; reason: 'stop' | 'tool_calls' | 'length' | 'unknown' }
+  | { type: 'model_error'; taskId: string; code: string; retryable: boolean }
+  | { type: 'steering_consumed'; taskId: string; keys: string[] }
+  | { type: 'recall_trace'; taskId: string; status: string; recalledCount: number }
+  | { type: 'stream_end'; taskId: string; cancelled: boolean }
+
+export interface BlueprintMaintenanceToolTraceEntry {
+  toolName: string
+  workspaceId: string
+  status: string
+  summary: string
+  argsDigest?: string
+  resultDigest?: string
+}
+
 export interface BlueprintMaintenanceEvent {
   task: BlueprintMaintenanceTask
+  agentEvent?: BlueprintMaintenanceAgentEvent
+  toolTrace?: { taskId: string; entries: BlueprintMaintenanceToolTraceEntry[] }
 }

@@ -48,6 +48,8 @@ import type {
 import { BLUEPRINT_SCHEMA_VERSION, migrateBlueprint } from './blueprint-migration'
 import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
 import { applyOperations } from './maintenance/changeset'
+import type { OwnerScope } from '../../shared/team/types'
+import { checkBaseVersion } from '../../shared/team/repository'
 
 interface WorkspaceIndex {
   blueprints: string[]
@@ -320,7 +322,7 @@ export class BlueprintStore {
 
   async createBlueprint(
     workspace: string,
-    input: { name: string; description?: string; rootTitle?: string; rootType?: BlueprintNodeType }
+    input: { name: string; description?: string; rootTitle?: string; rootType?: BlueprintNodeType; ownership?: { ownerScope?: OwnerScope; tenantId?: string | null; projectId?: string | null; ownerUserId?: string | null; updatedBy?: string | null } }
   ): Promise<Blueprint> {
     return this.locked(async () => {
       const id = randomUUID()
@@ -335,6 +337,11 @@ export class BlueprintStore {
         id,
         name: input.name,
         description: input.description ?? '',
+        ownerScope: input.ownership?.ownerScope ?? 'private',
+        tenantId: input.ownership?.tenantId ?? null,
+        projectId: input.ownership?.projectId ?? null,
+        ownerUserId: input.ownership?.ownerUserId ?? null,
+        updatedBy: input.ownership?.updatedBy ?? null,
         rootNodeId: root.id,
         nodeIds: [root.id],
         nodes: { [root.id]: root },
@@ -358,11 +365,13 @@ export class BlueprintStore {
   async updateBlueprint(
     workspace: string,
     id: string,
-    patch: Partial<Pick<Blueprint, 'name' | 'description' | 'canvasLayout' | 'collapsedNodeIds'>>
+    patch: Partial<Pick<Blueprint, 'name' | 'description' | 'canvasLayout' | 'collapsedNodeIds' | 'ownerScope' | 'tenantId' | 'projectId' | 'ownerUserId' | 'updatedBy'>> & { baseVersion?: number }
   ): Promise<Blueprint | null> {
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, id)
       if (!bp) return null
+      // ToB M1 乐观并发：baseVersion 缺省沿用单机行为；传入则必须与 contentRevision 一致。
+      checkBaseVersion(bp.contentRevision, patch.baseVersion)
       if (patch.name !== undefined) bp.name = patch.name
       if (patch.description !== undefined) bp.description = patch.description
       if (patch.canvasLayout !== undefined) bp.canvasLayout = patch.canvasLayout
@@ -372,7 +381,14 @@ export class BlueprintStore {
           : [...new Set(patch.collapsedNodeIds.filter((id) => typeof id === 'string' && bp.nodes[id]))]
       }
       bp.updatedAt = nowIso()
-      await this.persistBlueprint(id, bp, patch.name !== undefined || patch.description !== undefined)
+      const ownershipChanged = patch.ownerScope !== undefined || patch.tenantId !== undefined
+        || patch.projectId !== undefined || patch.ownerUserId !== undefined || patch.updatedBy !== undefined
+      if (patch.ownerScope !== undefined) bp.ownerScope = patch.ownerScope
+      if (patch.tenantId !== undefined) bp.tenantId = patch.tenantId
+      if (patch.projectId !== undefined) bp.projectId = patch.projectId
+      if (patch.ownerUserId !== undefined) bp.ownerUserId = patch.ownerUserId
+      if (patch.updatedBy !== undefined) bp.updatedBy = patch.updatedBy
+      await this.persistBlueprint(id, bp, patch.name !== undefined || patch.description !== undefined || ownershipChanged)
       return bp
     })
   }

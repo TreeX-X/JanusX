@@ -1,6 +1,6 @@
 ﻿# Wiki Maintenance
 
-Last analyzed: 2026-08-17
+Last analyzed: 2026-09-06
 
 ## Purpose
 
@@ -19,6 +19,9 @@ Update this wiki when any of these change:
 - project commands or package workspace layout changes,
 - a new shared contract file is added under `src/shared/`,
 - a new tool set is added to the agent runtime,
+- a roundtable workflow/participant, parchment shape, or `roundtable:*` channel changes,
+- the knowledge queue/LLM-stage/external-MCP surface changes (`processing-queue.ts`, `llm-stage.ts`, `external-mcp.ts`, `knowledge:external-mcp:*`),
+- a language-service descriptor or installer channel changes,
 - a new remote notification provider is added,
 - i18n locale bundles or the i18n pipeline changes.
 
@@ -42,8 +45,10 @@ rg --files
 rg -n "register.*Handlers|ipcMain\.handle|ipcMain\.on" src/main
 rg -n "window\.electron\.(invoke|send|on)|ALLOWED_.*CHANNELS" src tests # regression check; expected result is empty
 rg -n "export function|export class|export interface|export type" src/main src/renderer/src packages/llm-core/src
-rg -n "describe\\(" tests packages/llm-core/tests
-rg --files src/shared/ipc # verify all IPC contract files are documented
+rg -n "describe\(" tests packages/llm-core/tests
+rg --files src/shared/ipc # verify all IPC contract files are documented (now 16 incl. roundtable.ts)
+rg --files src/shared/roundtable # verify roundtable shared models are documented
+rg --files src/main/roundtable # verify roundtable service/runtime/store are documented
 rg -n "registerTool\|RegisteredTool" src/main/agent/runtime/tools # verify tool sets
 ```
 

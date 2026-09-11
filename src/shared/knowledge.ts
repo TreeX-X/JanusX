@@ -1,5 +1,8 @@
+import type { OwnerScope } from './team/types'
+
 export type KnowledgeSource =
   | 'agent-stream'
+  | 'blueprint-maintenance'
   | 'checkpoint'
   | 'git-analyzer'
   | 'janus-chat'
@@ -97,6 +100,9 @@ export interface KnowledgeProvenance {
   createdAt: string
   promptHash?: string
   model?: string
+  /** ToB M1/P3 预留：执行人用户 ID 与所属组织，全可选。 */
+  actorId?: string | null
+  tenantId?: string | null
 }
 
 export interface Observation {
@@ -212,6 +218,12 @@ export interface MemoryFact {
   provenance: KnowledgeProvenance
   /** Phase 1: deterministic/LLM classification of what the fact states. */
   kind: FactKind
+  /** ToB M1 归属字段（全可选；version 即本体的 version，不另设）。 */
+  ownerScope?: OwnerScope
+  tenantId?: string | null
+  projectId?: string | null
+  ownerUserId?: string | null
+  updatedBy?: string | null
 }
 
 export interface WikiPage {
@@ -224,6 +236,12 @@ export interface WikiPage {
   updatedAt: string
   version: number
   workspaceId: string
+  /** ToB M1 归属字段（全可选；version 即本体的 version，不另设）。 */
+  ownerScope?: OwnerScope
+  tenantId?: string | null
+  projectId?: string | null
+  ownerUserId?: string | null
+  updatedBy?: string | null
 }
 
 export interface GraphEdge {
@@ -236,6 +254,12 @@ export interface GraphEdge {
   workspaceId: string
   createdAt: string
   status?: 'active' | 'archived'
+  /** ToB M1 归属字段（全可选）。 */
+  ownerScope?: OwnerScope
+  tenantId?: string | null
+  projectId?: string | null
+  ownerUserId?: string | null
+  updatedBy?: string | null
 }
 
 export type KnowledgeFeedbackAction = 'open' | 'copy' | 'apply' | 'reject' | 'dismiss'

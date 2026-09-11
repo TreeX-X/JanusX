@@ -236,6 +236,28 @@
       "seconds": "{{n}}秒",
       "minutes": "{{n}}分",
       "hours": "{{n}}时"
+    },
+    "runOrb": {
+      "clusterAria": "运行中的工作区（{{count}}）",
+      "orbAria": "{{name}} 运行中，{{count}} 个进程",
+      "tooltip": "{{name}} · {{config}} · {{count}} 个进程 · 已运行 {{uptime}}",
+      "alreadyRunning": "已在运行，点击右侧绿球管理",
+      "noConfig": "无可运行配置，去项目设置",
+      "stopAll": "按住停止全部",
+      "stopAllHoldHint": "按住 1 秒停止该工作区全部进程",
+      "switchTo": "切换到该工作区",
+      "outputEmpty": "暂无输出",
+      "exitFailed": "异常退出（{{code}}）",
+      "overflowAria": "还有 {{count}} 个运行中的工作区",
+      "overflowRowMeta": "{{count}} 个进程",
+      "panelClose": "关闭面板",
+      "stoppedEmpty": "已停止",
+      "restartDev": "重新启动",
+      "stopOneConfirm": "确认停止该进程？",
+      "stopOne": "停止",
+      "cancel": "取消",
+      "dismissFailed": "确认并关闭",
+      "stopping": "正在停止…"
     }
   },
   "expanded": {
@@ -323,6 +345,8 @@
       "claude": "Claude",
       "codex": "Codex",
       "opencode": "OpenCode",
+      "janus": "Janus",
+      "pi": "Pi",
       "shell": "Shell"
     },
     "status": {

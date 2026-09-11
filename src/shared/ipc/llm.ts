@@ -37,9 +37,10 @@ export type ChatToolTraceStatus = 'requested' | 'approval' | 'running' | 'comple
 
 /**
  * Safe, request-scoped Agent lifecycle events for the Chat renderer.
- * Tool argument values and raw tool output never leave the Main Process here.
+ * Raw tool events stay in Main; display previews are redacted and bounded there.
  */
 export type ChatAgentEvent =
+  | { type: 'tool_display'; requestId: string; callId: string; toolName: string; argsDigest?: string; resultDigest?: string; errorDetail?: string; summary?: string; status?: ChatToolTraceStatus }
   | { type: 'agent_start'; requestId: string }
   | { type: 'text_delta'; requestId: string; delta: string }
   | { type: 'reasoning_delta'; requestId: string; delta: string }

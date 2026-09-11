@@ -9,7 +9,7 @@ export interface OfficeAgentSession {
 }
 
 export function buildOfficeAgentSession(
-  engine: AgentEngine | 'janus' | 'shell',
+  engine: AgentEngine | 'shell' | 'janus' | 'pi',
   workspaceRoot: string,
   binaryPath: string | undefined,
   mcpEntry: string,

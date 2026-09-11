@@ -1,4 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 512 512" fill="none">
-  <path d="M128 128L384 384" stroke="white" stroke-width="64" stroke-linecap="square"/>
-  <path d="M384 128L128 384" stroke="#8a8a8a" stroke-width="64" stroke-linecap="square"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 200 200" fill="none">
+  <!-- Janus-agent CLI logo (A + I)，线宽与 JanusX 方形 logo 一致：viewBox 200 / stroke-width 18 / round -->
+  <path d="M 42 152 L 78 48" stroke="#8b92a0" stroke-width="18" stroke-linecap="round" fill="none"/>
+  <path d="M 100 98 L 118 152" stroke="#8b92a0" stroke-width="18" stroke-linecap="round" fill="none"/>
+  <path d="M 78 48 L 100 98 L 60 114" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M 152 48 L 152 152" stroke="#ff6b00" stroke-width="18" stroke-linecap="round" fill="none"/>
 </svg>

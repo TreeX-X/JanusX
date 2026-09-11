@@ -16,7 +16,7 @@ export const SYSTEM_CHANNELS = {
 export interface RuntimeTelemetryRequest {
   /** JanusX terminal identity. Main process resolves its exact external-session binding. */
   terminalId?: string
-  preset?: 'shell' | 'claude' | 'codex' | 'opencode' | 'janus'
+  preset?: 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
   cwd?: string
   startedAt?: number
   sessionId?: string

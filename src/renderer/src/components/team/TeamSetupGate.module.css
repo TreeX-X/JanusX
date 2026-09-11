@@ -1,0 +1,275 @@
+/**
+ * TeamSetupGate.module.css
+ *
+ * 团队登录挡板：黑橙扁平语言，与 island composer 同源。
+ * 规则：控件黑底（#08080a）白字，悬浮/聚焦橙边；
+ * 中性提示灰字，操作反馈黑底橙字，错误暗红底 + 左红条；
+ * 唯一 primary（登录/注册/创建组织）保持橙底黑字。
+ */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 8, 10, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.panel {
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: #111113;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+}
+
+.header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.42);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.body {
+  padding: 16px 20px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.tab {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: #08080a;
+  color: rgba(255, 255, 255, 0.5);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.tab:hover {
+  border-color: rgba(255, 120, 48, 0.4);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tab:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.64);
+  outline-offset: 1px;
+}
+
+.tabActive {
+  border-color: rgba(255, 120, 48, 0.4);
+  background: rgba(255, 120, 48, 0.08);
+  color: #ff8a2e;
+}
+
+.field {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 10px;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  background: #08080a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  outline: none;
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.26);
+}
+
+.input:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.input:focus {
+  border-color: rgba(255, 120, 48, 0.64);
+}
+
+.inputUpper {
+  text-transform: uppercase;
+}
+
+.passwordWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.passwordInput {
+  padding-right: 32px;
+}
+
+.eyeButton {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.eyeButton:hover {
+  color: #fff;
+}
+
+.hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.38);
+  margin-top: 4px;
+}
+
+.error {
+  margin-top: 10px;
+  padding: 8px 10px 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 154, 154, 0.9);
+  background: rgba(80, 22, 18, 0.22);
+  border: 1px solid rgba(255, 120, 90, 0.18);
+  border-left: 2px solid rgba(255, 120, 90, 0.76);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.primary {
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px 0;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 4px;
+  background: #17171b;
+  color: #8a8f98;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.primary:not(:disabled) {
+  border-color: rgba(255, 122, 26, 0.4);
+  color: #ff8a2e;
+}
+
+.primary:hover:not(:disabled) {
+  background: #202027;
+  border-color: rgba(255, 122, 26, 0.6);
+  color: #ffa25e;
+}
+
+.primary:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.8);
+  outline-offset: 2px;
+}
+
+.primary:disabled {
+  background: #101013;
+  border-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.2);
+  cursor: not-allowed;
+}
+
+.skip {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.skip:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+}
+
+.orgRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.orgRow .input {
+  margin-top: 0;
+  flex: 1;
+}
+
+.orgButton {
+  flex: 0 0 auto;
+  margin-top: 0;
+  width: auto;
+  padding: 0 12px;
+  font-size: 12px;
+}

@@ -17,6 +17,7 @@ export const NAMESPACE_LIST = [
   'notification',
   'llm',
   'model',
+  'team',
 ] as const
 
 export type Namespace = (typeof NAMESPACE_LIST)[number]

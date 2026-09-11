@@ -7,10 +7,11 @@ import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
 import { ModelCatalogPanel } from './ModelCatalogPanel'
 import { AgentSettingsPanel } from './AgentSettingsPanel'
+import { TeamSettingsPanel } from './team/TeamSettingsPanel'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models'
+export type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models' | 'team'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -18,10 +19,11 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models']
+const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team']
 
 export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications' }: AppSettingsModalProps) {
   const { t } = useI18n('settings')
+  const { t: tTeam } = useI18n('team')
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
 
   useEffect(() => {
@@ -30,10 +32,15 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
 
   if (!isOpen) return null
 
-  const meta = {
-    title: t(`settings:tab.${activeTab}.title`),
-    subtitle: t(`settings:tab.${activeTab}.subtitle`),
-  }
+  // team 页文案走 team 命名空间（settings.json 存在历史编码损坏，不再追加 key）。
+  const tabNav = (tab: SettingsTab) => (tab === 'team' ? tTeam('team:settingsTab.nav') : t(`settings:tab.${tab}.nav`))
+  const tabNavMeta = (tab: SettingsTab) => (tab === 'team' ? tTeam('team:settingsTab.navMeta') : t(`settings:tab.${tab}.navMeta`))
+  const meta = activeTab === 'team'
+    ? { title: tTeam('team:settingsTab.title'), subtitle: tTeam('team:settingsTab.subtitle') }
+    : {
+      title: t(`settings:tab.${activeTab}.title`),
+      subtitle: t(`settings:tab.${activeTab}.subtitle`),
+    }
 
   return createPortal(
     <div className={styles.backdrop}>
@@ -50,8 +57,8 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
               className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''}`}
               onClick={() => setActiveTab(tab)}
             >
-              <span className={styles.tabLabel}>{t(`settings:tab.${tab}.nav`)}</span>
-              <span className={styles.tabMeta}>{t(`settings:tab.${tab}.navMeta`)}</span>
+              <span className={styles.tabLabel}>{tabNav(tab)}</span>
+              <span className={styles.tabMeta}>{tabNavMeta(tab)}</span>
             </button>
           ))}
         </aside>
@@ -72,6 +79,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications'
             {activeTab === 'agent' && <AgentSettingsPanel />}
             {activeTab === 'llm' && <LlmConfigModal embedded />}
             {activeTab === 'models' && <ModelCatalogPanel />}
+            {activeTab === 'team' && <TeamSettingsPanel />}
           </main>
         </section>
       </div>

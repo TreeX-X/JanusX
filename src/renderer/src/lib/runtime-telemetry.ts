@@ -110,8 +110,9 @@ export function getEstimatedContextWindow(preset: TerminalPreset, model?: string
     case 'opencode':
       return 128_000
     case 'janus':
-      // janus serves user-configured models; prefer registry/model-name inference.
-      return undefined
+      return 128_000
+    case 'pi':
+      return 128_000
     case 'shell':
       return undefined
   }

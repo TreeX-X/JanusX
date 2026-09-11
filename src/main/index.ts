@@ -207,6 +207,10 @@ async function bootstrapApp(): Promise<void> {
     registerWindowIpc(editorWindows, () => mainWindow)
     feishuInboundRuntime.configure(mainWindow)
     void feishuInboundRuntime.reconfigure()
+    // 本地验证网关：JANUSX_WEB_TEST=1 时起 127.0.0.1 回环服务，默认关闭。
+    void import('./web-test-gateway/starter').then(({ startWebTestGateway }) => startWebTestGateway()).catch((err) => {
+      console.error('[web-test] gateway failed:', err)
+    })
   }
 
   const hasSingleInstanceLock = app.requestSingleInstanceLock()

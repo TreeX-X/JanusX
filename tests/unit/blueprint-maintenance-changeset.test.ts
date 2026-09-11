@@ -7,8 +7,12 @@ import type {
 } from '../../src/shared/janus/maintenance-types'
 import {
   applyOperations,
+  buildGroupDigest,
   buildReverseOperations,
+  expandGroupSelection,
+  groupMaintenanceOperations,
   normalizeProposedOperations,
+  resolveOperationRisk,
   selectOperations,
 } from '../../src/main/janus/maintenance/changeset'
 
@@ -255,5 +259,31 @@ describe('Blueprint maintenance ChangeSet', () => {
     edited.nodes.child.title = 'Even newer'
     const conflicted = buildReverseOperations(audit, edited)
     expect(conflicted.conflicts.some((item) => item.includes('又被修改过'))).toBe(true)
+  })
+
+  it('resolves server-side risk without trusting model input', () => {
+    expect(resolveOperationRisk({ ...baseOp('d'), type: 'delete-node', nodeId: 'child', beforeStatus: 'not-started', impact: { title: 'c', parentId: 'root', childIds: [], incomingRelationIds: [], outgoingRelationIds: [] } })).toBe('high')
+    expect(resolveOperationRisk({ ...baseOp('u'), type: 'update-node', nodeId: 'child', before: {}, after: { progress: 50 } })).toBe('low')
+    expect(resolveOperationRisk({ ...baseOp('t'), type: 'update-node', nodeId: 'child', before: {}, after: { title: 'New' } })).toBe('medium')
+  })
+
+  it('groups operations by node and expands group selection with dependencies', () => {
+    const operations: BlueprintOperation[] = [
+      { ...baseOp('u1'), type: 'update-node', nodeId: 'child', before: {}, after: { progress: 50 }, evidenceRefs: ['src/a.ts'] },
+      { ...baseOp('u2'), type: 'update-node', nodeId: 'child', before: {}, after: { notes: 'n' }, dependsOn: ['u1'] },
+      { ...baseOp('r1'), type: 'add-relation', tempRelationId: 'rel-1', after: { sourceNodeId: 'root', targetNodeId: 'child', relationType: 'depends-on' } },
+    ]
+    const groups = groupMaintenanceOperations(operations)
+    expect(groups.map((group) => group.kind)).toEqual(['node', 'relations'])
+    expect(groups[0].operationIds).toEqual(['u1', 'u2'])
+    expect(buildGroupDigest(groups, 1)).toContain('整理稿 v1')
+    const changeSet = {
+      id: 'cs', taskId: 't', blueprintId: 'bp', baseRevision: 1, version: 1, status: 'ready', reason: 'r',
+      operations, groups, createdAt: '',
+    } as BlueprintChangeSet
+    // Selecting only u2 auto-includes its prerequisite u1.
+    const expanded = expandGroupSelection(changeSet, { groupIds: [groups[0].id] })
+    expect(expanded.map((op) => op.operationId).sort()).toEqual(['u1', 'u2'])
+    expect(() => expandGroupSelection(changeSet, { groupIds: ['group-missing'] })).toThrow('未知的审批分组')
   })
 })

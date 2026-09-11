@@ -236,6 +236,28 @@
       "seconds": "{{n}}s",
       "minutes": "{{n}}m",
       "hours": "{{n}}h"
+    },
+    "runOrb": {
+      "clusterAria": "{{count}} running workspaces",
+      "orbAria": "{{name}} running, {{count}} processes",
+      "tooltip": "{{name}} · {{config}} · {{count}} processes · running {{uptime}}",
+      "alreadyRunning": "Already running — manage it from the green orb on the right",
+      "noConfig": "No runnable configuration — open project settings",
+      "stopAll": "Hold to stop all",
+      "stopAllHoldHint": "Hold 1s to stop all processes in this workspace",
+      "switchTo": "Switch to this workspace",
+      "outputEmpty": "No output yet",
+      "exitFailed": "Exited abnormally ({{code}})",
+      "overflowAria": "{{count}} more running workspaces",
+      "overflowRowMeta": "{{count}} processes",
+      "panelClose": "Close panel",
+      "stoppedEmpty": "Stopped",
+      "restartDev": "Restart",
+      "stopOneConfirm": "Stop this process?",
+      "stopOne": "Stop",
+      "cancel": "Cancel",
+      "dismissFailed": "Acknowledge and close",
+      "stopping": "Stopping…"
     }
   },
   "expanded": {
@@ -323,6 +345,8 @@
       "claude": "Claude",
       "codex": "Codex",
       "opencode": "OpenCode",
+      "janus": "Janus",
+      "pi": "Pi",
       "shell": "Shell"
     },
     "status": {

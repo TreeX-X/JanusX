@@ -34,6 +34,8 @@ import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
+import { TEAM_CHANNELS, type TeamAPI } from '../shared/ipc/team'
+import { PEER_CHANNELS, REMOTE_CHANNELS, type PeerAPI, type RemoteAPI } from '../shared/ipc/remote'
 
 const workspaceAPI: WorkspaceAPI = {
   initialize: () => ipcRenderer.invoke(WORKSPACE_CHANNELS.initialize),
@@ -215,6 +217,9 @@ const janusAPI: JanusAPI = {
   applyMaintenanceChangeSet: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceApply, input),
   cancelMaintenanceTask: (taskId) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceCancel, taskId),
   completeMaintenanceTask: (taskId) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceComplete, taskId),
+  dismissMaintenanceProposal: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceDismiss, input),
+  steerMaintenanceTask: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceSteer, input),
+  cancelMaintenanceSteer: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceSteerCancel, input),
   prepareMaintenanceUndo: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceUndoPrepare, input),
   applyMaintenanceUndo: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceUndoApply, input),
   onAnalysisResult: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.analysis, callback),
@@ -345,6 +350,53 @@ const subAgentRunAPI: SubAgentRunAPI = {
   onRemoved: (callback) => subscribeIpcEvent(SUBAGENT_RUN_CHANNELS.removed, callback),
 }
 
+const teamAPI: TeamAPI = {
+  register: (input) => ipcRenderer.invoke(TEAM_CHANNELS.register, input),
+  login: (input) => ipcRenderer.invoke(TEAM_CHANNELS.login, input),
+  logout: (token) => ipcRenderer.invoke(TEAM_CHANNELS.logout, token),
+  refresh: (refreshToken) => ipcRenderer.invoke(TEAM_CHANNELS.refresh, refreshToken),
+  me: (token) => ipcRenderer.invoke(TEAM_CHANNELS.me, token),
+  listTenants: (token) => ipcRenderer.invoke(TEAM_CHANNELS.listTenants, token),
+  createTenant: (token, name) => ipcRenderer.invoke(TEAM_CHANNELS.createTenant, token, name),
+  switchTenant: (token, tenantId) => ipcRenderer.invoke(TEAM_CHANNELS.switchTenant, token, tenantId),
+  inviteMember: (token, tenantId, role) => ipcRenderer.invoke(TEAM_CHANNELS.inviteMember, token, tenantId, role),
+  acceptInvite: (token, code) => ipcRenderer.invoke(TEAM_CHANNELS.acceptInvite, token, code),
+  listMembers: (token, tenantId) => ipcRenderer.invoke(TEAM_CHANNELS.listMembers, token, tenantId),
+  listProjects: (token, tenantId) => ipcRenderer.invoke(TEAM_CHANNELS.listProjects, token, tenantId),
+  setRole: (token, tenantId, userId, role) => ipcRenderer.invoke(TEAM_CHANNELS.setRole, token, tenantId, userId, role),
+  setMemberStatus: (token, tenantId, userId, status) =>
+    ipcRenderer.invoke(TEAM_CHANNELS.setMemberStatus, token, tenantId, userId, status),
+}
+
+const remoteAPI: RemoteAPI = {
+  issueCode: (token) => ipcRenderer.invoke(REMOTE_CHANNELS.issueCode, token),
+  redeemCode: (token, code, device) => ipcRenderer.invoke(REMOTE_CHANNELS.redeemCode, token, code, device),
+  listTerminals: (token, deviceId) => ipcRenderer.invoke(REMOTE_CHANNELS.listTerminals, token, deviceId),
+  tail: (token, deviceId, terminalId) => ipcRenderer.invoke(REMOTE_CHANNELS.tail, token, deviceId, terminalId),
+  execute: (token, deviceId, command, opts) =>
+    ipcRenderer.invoke(REMOTE_CHANNELS.execute, token, deviceId, command, opts),
+  issueActionToken: (token, deviceId, terminalId, action) =>
+    ipcRenderer.invoke(REMOTE_CHANNELS.issueActionToken, token, deviceId, terminalId, action),
+  listTrusted: (token) => ipcRenderer.invoke(REMOTE_CHANNELS.listTrusted, token),
+  revokeDevice: (token, deviceId) => ipcRenderer.invoke(REMOTE_CHANNELS.revokeDevice, token, deviceId),
+}
+
+const peerAPI: PeerAPI = {
+  hostStatus: () => ipcRenderer.invoke(PEER_CHANNELS.hostStatus),
+  startHost: (token, deviceName) => ipcRenderer.invoke(PEER_CHANNELS.startHost, token, deviceName),
+  stopHost: () => ipcRenderer.invoke(PEER_CHANNELS.stopHost),
+  discover: (timeoutMs) => ipcRenderer.invoke(PEER_CHANNELS.discover, timeoutMs),
+  pair: (token, deviceName, baseUrl, fingerprint, code, expectedDeviceId) =>
+    ipcRenderer.invoke(PEER_CHANNELS.pair, token, deviceName, baseUrl, fingerprint, code, expectedDeviceId),
+  peers: () => ipcRenderer.invoke(PEER_CHANNELS.peers),
+  listTerminals: (token, hostDeviceId) => ipcRenderer.invoke(PEER_CHANNELS.terminals, token, hostDeviceId),
+  tail: (token, hostDeviceId, terminalId) => ipcRenderer.invoke(PEER_CHANNELS.tail, token, hostDeviceId, terminalId),
+  execute: (token, hostDeviceId, command, opts) =>
+    ipcRenderer.invoke(PEER_CHANNELS.execute, token, hostDeviceId, command, opts),
+  disconnect: (hostDeviceId) => ipcRenderer.invoke(PEER_CHANNELS.disconnect, hostDeviceId),
+  forget: (hostDeviceId) => ipcRenderer.invoke(PEER_CHANNELS.forget, hostDeviceId),
+}
+
 const dialogAPI: DialogAPI = {
   openDirectory: () => ipcRenderer.invoke(SYSTEM_CHANNELS.openDirectory),
   saveFile: (options) => ipcRenderer.invoke(SYSTEM_CHANNELS.saveFile, options),
@@ -412,6 +464,9 @@ contextBridge.exposeInMainWorld('electron', {
   notificationSettings: notificationSettingsAPI,
   agentSettings: agentSettingsAPI,
   subAgentRun: subAgentRunAPI,
+  team: teamAPI,
+  remote: remoteAPI,
+  peer: peerAPI,
   dialog: dialogAPI,
   window: windowAPI,
   system: systemAPI,

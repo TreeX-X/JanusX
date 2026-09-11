@@ -58,6 +58,7 @@ import claudeIcon from '@/assets/icons/claude.svg'
 import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
+import piIcon from '@/assets/icons/pi.svg'
 
 function JanusChatTabTitle({ conversationId }: { conversationId: string }) {
   const { t } = useI18n('terminal')
@@ -71,6 +72,7 @@ const PRESET_ICONS: Record<TerminalPreset, string> = {
   codex: codexIcon,
   opencode: opencodeIcon,
   janus: janusIcon,
+  'pi': piIcon,
 }
 
 type TerminalPresetOption = { type: TerminalPreset; name: string; icon: string }
@@ -81,17 +83,23 @@ function createPreset(type: TerminalPreset): TerminalPresetOption {
 
 const PRESETS: TerminalPresetOption[] = [
   createPreset('shell'),
+  createPreset('janus'),
   createPreset('claude'),
   createPreset('codex'),
   createPreset('opencode'),
-  createPreset('janus'),
+  createPreset('pi'),
 ]
 
 // 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
 const TERMINAL_MENU_COLLAPSED_SIZE = 24
-// 展开宽度与内容精确匹配: pl-2(8) + 5×28 图标 + 4×4 gap + pr-1(4) + 28 加号 + 2 边框
-const TERMINAL_MENU_EXPANDED_WIDTH = 198
-const TERMINAL_MENU_EXPANDED_HEIGHT = 28
+// 展开态为 portal 浮层（2 列 x 3 行，与空态 TerminalSelector 同取 6 的约数），
+// 不占 tab 条宽度；窄 pane / 窄窗口下靠 getContextPopoverPosition 钳制在视口内。
+// 不再用“展开宽度写死 = f(类型数量)”的内联胶囊——类型从 4 加到 6 时旧 166px
+// 会把后两个图标裁掉，加第 7 个又得重算。
+const TERMINAL_MENU_PANEL_WIDTH = 240
+const TERMINAL_MENU_PANEL_ESTIMATED_HEIGHT = 212
+// 收回动画时长：关闭时先播 terminal-menu-out 再卸载，与弹入 140ms 对称
+const TERMINAL_MENU_EXIT_MS = 120
 
 function providerLabel(preset: TerminalPreset, t: (key: string) => string): string {
   switch (preset) {
@@ -103,6 +111,8 @@ function providerLabel(preset: TerminalPreset, t: (key: string) => string): stri
       return t('terminal:provider.opencode')
     case 'janus':
       return t('terminal:provider.janus')
+    case 'pi':
+      return t('terminal:provider.pi')
     case 'shell':
       return t('terminal:provider.shell')
   }
@@ -533,6 +543,7 @@ interface PaneTreeViewProps {
   onResize: (splitId: string, ratio: number) => void
   terminalMenuPaneId: string | null
   onToggleTerminalMenu: (paneId: string) => void
+  onCloseTerminalMenu: () => void
   onCreateTerminal: (preset: TerminalPresetOption) => void
 }
 
@@ -615,87 +626,134 @@ function TerminalPresetCapsule({
   open,
   onToggle,
   onSelect,
+  onClose,
 }: {
   open: boolean
   onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
   onSelect: (preset: TerminalPresetOption) => void
+  onClose: () => void
 }) {
+  const toggleRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const exitTimerRef = useRef<number | null>(null)
+  const wasOpenRef = useRef(open)
+  const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
+  const [panelSize, setPanelSize] = useState<PopoverSize>({
+    width: TERMINAL_MENU_PANEL_WIDTH,
+    height: TERMINAL_MENU_PANEL_ESTIMATED_HEIGHT,
+  })
+  // renderPanel 滞后于 open：关闭时先播收回动画再卸载；exiting 期间仍按旧锚点定位
+  const [renderPanel, setRenderPanel] = useState(false)
+  const [exiting, setExiting] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      wasOpenRef.current = true
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current)
+        exitTimerRef.current = null
+      }
+      setExiting(false)
+      setRenderPanel(true)
+      // 打开时记录触发按钮位置；浮层 portal 到 body 后按它定位，不受 tab 条 overflow 裁剪
+      const rect = toggleRef.current?.getBoundingClientRect()
+      if (rect) {
+        const next = { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width }
+        setAnchorRect((current) =>
+          current &&
+          current.top === next.top &&
+          current.bottom === next.bottom &&
+          current.left === next.left &&
+          current.width === next.width
+            ? current
+            : next,
+        )
+      }
+      return
+    }
+    // 从未打开过则无需收回动画
+    if (!wasOpenRef.current) return
+    wasOpenRef.current = false
+    setExiting(true)
+    exitTimerRef.current = window.setTimeout(() => {
+      exitTimerRef.current = null
+      setRenderPanel(false)
+      setExiting(false)
+    }, TERMINAL_MENU_EXIT_MS)
+    return () => {
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current)
+        exitTimerRef.current = null
+      }
+    }
+  }, [open])
+
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current)
+        exitTimerRef.current = null
+      }
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!renderPanel || !panelRef.current) return
+    const rect = panelRef.current.getBoundingClientRect()
+    if (rect.width !== panelSize.width || rect.height !== panelSize.height) {
+      setPanelSize({ width: rect.width, height: rect.height })
+    }
+  }, [renderPanel, panelSize.height, panelSize.width])
+
+  // 瞬态菜单：窗口缩放/滚动直接关闭（下次打开重新定位），Escape 关闭
+  useEffect(() => {
+    if (!open) return
+    const handleViewportChange = () => onClose()
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('resize', handleViewportChange)
+    window.addEventListener('scroll', handleViewportChange, true)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('resize', handleViewportChange)
+      window.removeEventListener('scroll', handleViewportChange, true)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose, open])
+
+  const position =
+    renderPanel && anchorRect
+      ? getContextPopoverPosition(anchorRect, panelSize, {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        })
+      : null
+
   return (
     <div
+      ref={toggleRef}
       data-terminal-menu-root="true"
-      className="flex shrink-0 items-center overflow-hidden border font-mono"
+      className="flex shrink-0 items-center font-mono"
       onMouseDown={(event) => event.stopPropagation()}
-      style={{
-        width: open ? TERMINAL_MENU_EXPANDED_WIDTH : TERMINAL_MENU_COLLAPSED_SIZE,
-        height: open ? TERMINAL_MENU_EXPANDED_HEIGHT : TERMINAL_MENU_COLLAPSED_SIZE,
-        borderRadius: open ? 999 : 4,
-        borderColor: open ? 'rgba(255,120,48,0.28)' : 'var(--shell-border)',
-        background: open ? 'var(--shell-active)' : 'var(--shell-chrome-raised)',
-        boxShadow: open
-          ? '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)'
-          : 'inset 0 1px 0 rgba(255,255,255,0.04)',
-        transition:
-          'width 220ms cubic-bezier(0.2, 0.8, 0.2, 1), height 220ms cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 220ms cubic-bezier(0.2, 0.8, 0.2, 1), background 180ms ease, border-color 180ms ease, box-shadow 180ms ease',
-      }}
     >
-      <div
-        className="flex min-w-0 flex-1 items-center justify-end gap-1"
-        style={{
-          // padding 受控:收起时归零,否则 12px 固定 padding 不参与 flex 收缩,会把加号挤出内腔
-          paddingLeft: open ? 8 : 0,
-          paddingRight: open ? 4 : 0,
-          opacity: open ? 1 : 0,
-          transform: open ? 'translateX(0)' : 'translateX(10px)',
-          pointerEvents: open ? 'auto' : 'none',
-          // 收回时淡出与宽度收缩同曲线,略先于收缩完成,避免图标被 overflow 硬裁切
-          transition: open
-            ? 'opacity 120ms ease 80ms, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1) 40ms, padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1)'
-            : 'opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-        }}
-      >
-        {PRESETS.map((preset) => (
-          <button
-            key={preset.type}
-            type="button"
-            title={preset.name}
-            aria-label={`New ${preset.name} terminal`}
-            tabIndex={open ? 0 : -1}
-            className="flex h-6 w-7 shrink-0 items-center justify-center rounded-full border transition-[background,border-color,transform] hover:scale-[1.04] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.35)]"
-            style={{
-              borderColor: 'rgba(255,255,255,0.1)',
-              background: 'var(--shell-hover)',
-            }}
-            onClick={(event) => {
-              event.stopPropagation()
-              onSelect(preset)
-            }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.borderColor = 'rgba(255,120,48,0.46)'
-              event.currentTarget.style.background = 'rgb(36, 27, 21)'
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
-              event.currentTarget.style.background = 'var(--shell-hover)'
-            }}
-          >
-            <img src={preset.icon} alt="" aria-hidden="true" className="h-3.5 w-3.5" />
-          </button>
-        ))}
-      </div>
       <button
         type="button"
         title={open ? 'Close terminal menu' : 'New Terminal'}
         aria-label={open ? 'Close terminal menu' : 'New Terminal'}
-        className="flex h-full shrink-0 items-center justify-center border-0 bg-transparent hover:bg-[rgba(255,255,255,0.055)] focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[rgba(255,120,48,0.35)]"
-        style={{
-          // 收起态填满 24px 胶囊(扣除边框),展开态恢复 28px,与容器同曲线过渡
-          width: open ? 28 : TERMINAL_MENU_COLLAPSED_SIZE - 2,
-          color: open ? '#ffb27d' : '#999',
-          // hover 背景跟随胶囊圆角
-          borderRadius: 'inherit',
-          transition: 'width 220ms cubic-bezier(0.2, 0.8, 0.2, 1), color 180ms ease, background-color 150ms ease',
-        }}
+        aria-expanded={open}
+        aria-haspopup="menu"
         onClick={onToggle}
+        className="flex shrink-0 items-center justify-center rounded border focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.35)] hover:bg-[rgba(255,255,255,0.055)]"
+        style={{
+          width: TERMINAL_MENU_COLLAPSED_SIZE,
+          height: TERMINAL_MENU_COLLAPSED_SIZE,
+          borderColor: open ? 'rgba(255,120,48,0.46)' : 'var(--shell-border)',
+          background: open ? 'rgb(36, 27, 21)' : 'var(--shell-chrome-raised)',
+          color: open ? '#ffb27d' : '#999',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+          transition: 'color 180ms ease, background-color 150ms ease, border-color 180ms ease',
+        }}
       >
         {/* 用两条细条绘制 +,文本字形在行框内偏上,旋转 45° 后偏差会沿对角放大 */}
         <span
@@ -707,6 +765,76 @@ function TerminalPresetCapsule({
           <span className="absolute left-[4px] top-0 h-full w-px bg-current" />
         </span>
       </button>
+      {/* 外壳浮层都在菜单默认层级之上（toast 栈 10000 / Titlebar 9999 /
+          TeamSetupGate 2000 / 侧栏弹窗 1200），菜单落点又在右上角，正好会被盖住；
+          提到所有外壳浮层之上。 */}
+      {renderPanel &&
+        position &&
+        createPortal(
+          <div
+            ref={panelRef}
+            data-terminal-menu-root="true"
+            role="menu"
+            aria-label="New terminal"
+            className="fixed z-[11000] rounded-[10px] border font-mono"
+            onMouseDown={(event) => event.stopPropagation()}
+            style={{
+              top: position.top,
+              left: position.left,
+              width: TERMINAL_MENU_PANEL_WIDTH,
+              maxWidth: 'calc(100vw - 16px)',
+              borderColor: 'rgba(255,120,48,0.28)',
+              background: 'var(--shell-chrome-raised)',
+              boxShadow:
+                '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)',
+              transformOrigin: position.placement === 'above' ? 'bottom right' : 'top right',
+              animation: exiting
+                ? `terminal-menu-out ${TERMINAL_MENU_EXIT_MS}ms ease-in forwards`
+                : 'terminal-menu-in 140ms ease-out',
+            }}
+          >
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: 4,
+                padding: 6,
+              }}
+            >
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.type}
+                  type="button"
+                  role="menuitem"
+                  title={preset.name}
+                  aria-label={`New ${preset.name} terminal`}
+                  className="flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.35)]"
+                  style={{
+                    borderColor: 'transparent',
+                    background: 'transparent',
+                    color: '#d4d4d4',
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onSelect(preset)
+                  }}
+                  onMouseEnter={(event) => {
+                    event.currentTarget.style.borderColor = 'rgba(255,120,48,0.46)'
+                    event.currentTarget.style.background = 'rgb(36, 27, 21)'
+                  }}
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.borderColor = 'transparent'
+                    event.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <img src={preset.icon} alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{preset.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
@@ -736,6 +864,7 @@ function LeafPane({
   activeDragTerminalRef,
   terminalMenuPaneId,
   onToggleTerminalMenu,
+  onCloseTerminalMenu,
   onCreateTerminal,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
   const { t } = useI18n('terminal')
@@ -1008,7 +1137,7 @@ function LeafPane({
           >
             <Globe size={11} />
           </button>
-          <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} />
+          <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} onClose={onCloseTerminalMenu} />
           <HoldToConfirm
             label={t('terminal:tab.killCurrentTerminal')}
             disabled={!activeTerminal}
@@ -1526,6 +1655,7 @@ export function TerminalArea() {
                 onResize={resizePane}
                 terminalMenuPaneId={terminalMenuPaneId}
                 onToggleTerminalMenu={toggleTerminalMenu}
+                onCloseTerminalMenu={closeTerminalMenu}
                 onCreateTerminal={handlePresetSelect}
               />
             </div>

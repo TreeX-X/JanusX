@@ -1,6 +1,6 @@
 ﻿# JanusX Agent Wiki
 
-Last index update: 2026-08-17. Individual subsystem pages retain their own verification dates.
+Last index update: 2026-09-06. Individual subsystem pages retain their own verification dates.
 
 This wiki is written for coding agents that need to understand JanusX quickly after a fresh session. Read this index first, then open only the subsystem pages relevant to the task.
 
@@ -16,23 +16,26 @@ This wiki is written for coding agents that need to understand JanusX quickly af
 
 ## Architecture Evolution Status
 
-The Phase 1-5 modular-monolith optimization is complete at commit `c6bc283`. Since the v0.5.0 baseline, the project has advanced to **v0.8.0** with significant new subsystems:
+The Phase 1-5 modular-monolith optimization is complete at commit `c6bc283`. Since the v0.5.0 baseline, the project has advanced to **v0.8.2** with significant new subsystems:
 
 | Area | Current State |
 |---|---|
 | Repository and package hygiene | Dead tracked paths removed; Electron packaging uses fail-closed runtime allowlist. |
-| IPC boundary | All renderer-accessible domains use shared contracts and fixed typed preload APIs; 20+ typed domains including new Browser, Agent Runtime, Janus Chat, Language Service surfaces. |
+| IPC boundary | All renderer-accessible domains use shared contracts and fixed typed preload APIs; 24 typed domains including Browser, Agent Runtime, Janus Chat, Roundtable, Language Service + installer surfaces. |
 | Main process | `src/main/index.ts` is a lifecycle coordinator delegating session setup, services, windows, and ordered IPC registration. |
+| Roundtable | New `src/main/roundtable/` (service/runtime/store/agent-registry/workspace-tools) + `src/shared/roundtable/` (events/state/export/parchment/workflow-template/host-synthesis) with `roundtable:*` IPC and Janus island `RoundtableStage` / parchment / export UI. |
 | Agent runtime | New `src/main/agent/runtime/` with `WorkspaceAgentRuntime`, policy gate, path guard, file transactions, tool registry, and workspace/git/project/command tool sets. |
 | Janus agent loop | New `src/main/agent/loop/` with Vercel AI SDK stream adapter, runtime tool adapter, and structured agent events. |
 | Companion gateway | New `src/main/companion/` for Feishu remote control: binding store, action tokens, audit, dedupe, terminal control, session state, workspace registry. |
 | Remote notifications | New `src/main/remote-notifications/` with Feishu provider, inbound router, dispatcher, delivery store. |
 | Browser surface | New `src/main/browser/` managing embedded browser panes/windows with `BrowserSurfaceManager`. |
-| Language service | New `src/main/language-service/` with clangd LSP client/manager for go-to-definition. |
+| Language service | `src/main/language-service/` with clangd LSP client/manager, service registry + managed binary installer (`language-service-installer-handlers.ts`), and go-to-definition IPC. |
+| Knowledge pipeline | `src/main/knowledge/` now has queue-owned processing (`processing-queue.ts`, `llm-stage.ts`, `deterministic-extractor.ts`, `diagnostics-service.ts`, `workspace-identity.ts`, `embedding-provider.ts`), weighted recall + per-workspace index, external MCP registration (`external-mcp.ts`, `knowledge:external-mcp:*`), and `knowledge-pipeline` desktop E2E. |
 | Blueprint maintenance | New `src/main/janus/maintenance/` with change-set operations, reverse operations, blueprint tools, and `BlueprintMaintenanceService`. |
 | Chat orchestration | New `src/main/llm/chat-orchestrator.ts`, `workspace-chat-tools.ts`, `ModelCatalogService.ts`, `development-config-sync.ts`, `ai-runtime.ts`. |
 | i18n | New `src/renderer/src/i18n/` with i18next, en/zh-CN locale bundles, type generation, and check. |
-| Renderer features | Blueprint graph controller, adaptive edge geometry, canvas navigation, right-tools dock, Quick Note, Workbench switcher, FileExplorer tool, editor tabs/find. |
+| Janus island | Reasoning region (`janusReasoning.ts`, `ThinkingRegion.tsx`, 4000-char bounded buffer), context-budget handoff, close-button token cleanup, permission-menu shortcuts, `PromptDialog` replacing `window.confirm`. |
+| Renderer features | Blueprint graph controller, adaptive edge geometry, canvas navigation, right-tools dock, Quick Note, Workbench switcher, FileExplorer tool, editor tabs/find, Knowledge graph canvas, Roundtable stage/parchment. |
 | Release gate | `npm run verify` covers both type checks and test suites, strict-unused, production build, package-boundary validation, i18n check, lint, and built-Electron desktop smoke. |
 
 ## Research Notes
@@ -42,7 +45,7 @@ The Phase 1-5 modular-monolith optimization is complete at commit `c6bc283`. Sin
 
 ## Current Project Shape
 
-JanusX is an Electron desktop application for managing AI coding workspaces, terminals, project launch configs, checkpoints, LLM providers, knowledge bases, remote companion control, browser surfaces, and Janus Blueprint planning/analysis/maintenance.
+JanusX is an Electron desktop application for managing AI coding workspaces, terminals, project launch configs, checkpoints, LLM providers, knowledge bases, remote companion control, browser surfaces, Janus roundtable deliberation, and Janus Blueprint planning/analysis/maintenance.
 
 Core stack:
 
@@ -82,7 +85,9 @@ Core stack:
 | Janus agent loop | `src/main/agent/loop/`, `src/main/llm/chat-orchestrator.ts` |
 | Companion gateway (Feishu) | `src/main/companion/`, `src/main/remote-notifications/` |
 | Browser surface | `src/main/browser/surface-manager.ts`, `src/main/ipc/browser-handlers.ts` |
-| Language service (clangd) | `src/main/language-service/`, `src/main/ipc/language-service-handlers.ts` |
+| Language service (clangd) | `src/main/language-service/`, `src/main/ipc/language-service-handlers.ts`, `src/main/ipc/language-service-installer-handlers.ts` |
+| Roundtable deliberation | `src/main/roundtable/`, `src/main/ipc/roundtable-handlers.ts`, `src/shared/roundtable/`, `src/renderer/src/components/janus/RoundtableStage.tsx` |
+| Knowledge pipeline/queue | `src/main/knowledge/processing-queue.ts`, `llm-stage.ts`, `external-mcp.ts`, `tests/e2e/knowledge-pipeline.spec.ts` |
 | Checkpoints | `src/main/agent/checkpoint/`, `src/main/ipc/checkpoint-handlers.ts` |
 | LLM config/chat | `src/main/llm/`, `src/main/ipc/llm-handlers.ts`, `packages/llm-core` |
 | Knowledge workbench | `src/main/knowledge/`, `src/main/ipc/knowledge-handlers.ts` |

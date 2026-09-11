@@ -31,6 +31,9 @@ const mocks = vi.hoisted(() => ({
   maintenanceApply: vi.fn(),
   maintenanceCancel: vi.fn(),
   maintenanceComplete: vi.fn(),
+  maintenanceDismiss: vi.fn(),
+  maintenanceSteer: vi.fn(),
+  maintenanceSteerCancel: vi.fn(),
 }))
 
 let janusApi: JanusAPI
@@ -84,6 +87,9 @@ vi.mock('../../src/main/janus/maintenance/service', () => ({
     apply: mocks.maintenanceApply,
     cancel: mocks.maintenanceCancel,
     complete: mocks.maintenanceComplete,
+    dismissProposal: mocks.maintenanceDismiss,
+    steerTask: mocks.maintenanceSteer,
+    cancelSteerTask: mocks.maintenanceSteerCancel,
   },
 }))
 vi.mock('../../src/main/knowledge/observation-service', () => ({
@@ -135,9 +141,9 @@ describe('Janus IPC contract', () => {
     const commands = Object.values(JANUS_COMMAND_CHANNELS)
     const events = Object.values(JANUS_EVENT_CHANNELS)
 
-    expect(commands).toHaveLength(32)
+    expect(commands).toHaveLength(36)
     expect(events).toHaveLength(3)
-    expect(new Set([...commands, ...events]).size).toBe(35)
+    expect(new Set([...commands, ...events]).size).toBe(39)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining(commands)
     )
@@ -207,6 +213,9 @@ describe('Janus IPC contract', () => {
     await janusApi.applyMaintenanceChangeSet(maintenanceApply)
     await janusApi.cancelMaintenanceTask('task-1')
     await janusApi.completeMaintenanceTask('task-1')
+    await janusApi.dismissMaintenanceProposal({ taskId: 'task-1' })
+    await janusApi.steerMaintenanceTask({ taskId: 'task-1', entryId: 'e-1', text: '第 2 组去掉' })
+    await janusApi.cancelMaintenanceSteer({ taskId: 'task-1', entryId: 'e-1' })
 
     expect(mocks.invoke.mock.calls).toEqual([
       [JANUS_COMMAND_CHANNELS.listBlueprints, 'C:\\repo'],
@@ -239,6 +248,9 @@ describe('Janus IPC contract', () => {
       [JANUS_COMMAND_CHANNELS.maintenanceApply, maintenanceApply],
       [JANUS_COMMAND_CHANNELS.maintenanceCancel, 'task-1'],
       [JANUS_COMMAND_CHANNELS.maintenanceComplete, 'task-1'],
+      [JANUS_COMMAND_CHANNELS.maintenanceDismiss, { taskId: 'task-1' }],
+      [JANUS_COMMAND_CHANNELS.maintenanceSteer, { taskId: 'task-1', entryId: 'e-1', text: '第 2 组去掉' }],
+      [JANUS_COMMAND_CHANNELS.maintenanceSteerCancel, { taskId: 'task-1', entryId: 'e-1' }],
     ])
   })
 

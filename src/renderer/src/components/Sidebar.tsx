@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
 import { ModalCloseButton } from './ModalCloseButton'
+import { TeamFooter, TeamFooterCollapsed } from './team/TeamFooter'
 import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 import { chooseAndCreateWorkspace, getActiveWorkspacePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
@@ -17,6 +18,7 @@ import claudeIcon from '@/assets/icons/claude.svg'
 import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
+import piIcon from '@/assets/icons/pi.svg'
 import {
   clearWorkspaceSidebarGroup,
   groupWorkspaceInSidebar,
@@ -164,6 +166,8 @@ function terminalPresetLabel(preset: Terminal['preset'], t: (key: string) => str
       return t('terminal:provider.opencode')
     case 'janus':
       return t('terminal:provider.janus')
+    case 'pi':
+      return t('terminal:provider.pi')
     default:
       return t('terminal:provider.shell')
   }
@@ -175,6 +179,7 @@ const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
   codex: codexIcon,
   opencode: opencodeIcon,
   janus: janusIcon,
+  'pi': piIcon,
 }
 
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
@@ -968,6 +973,8 @@ export function Sidebar() {
               </>
             )}
           </div>
+          {/* 左下角只留团队卡（ToB M2 pinned footer）；远控已搬到 StatusBar 胶囊 + 独立弹窗 */}
+          <TeamFooter />
       </div>
 
       {/* 收起态 */}
@@ -1048,6 +1055,8 @@ export function Sidebar() {
               </div>
             )
           })}
+          {/* ToB M2 收起态：组织首字母 + 本人头像 */}
+          <TeamFooterCollapsed />
       </div>
       {contextMenu && (
         <WorkspaceContextMenu

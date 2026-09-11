@@ -615,3 +615,60 @@ test('peek and expanded geometry stay inside desktop and compact viewports', asy
     await expect(page.locator('.janus-island')).toBeVisible()
   }
 })
+
+test.describe('run-orb budding', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?runOrbs=1')
+    await expect(page.locator('.janus-island')).toBeVisible()
+    await expect(page.locator('.janus-run-orb[data-workspace-id="workspace-1"]')).toBeVisible({ timeout: 5000 })
+  })
+
+  async function stopCalls(page: Page): Promise<string[]> {
+    return page.evaluate(() => (window as unknown as { __runOrbFixture: { stopCalls: string[] } }).__runOrbFixture.stopCalls)
+  }
+
+  test('multiple running workspaces render one orb each without flipping island mode', async ({ page }) => {
+    await expect(page.locator('.janus-run-orb[data-workspace-id="workspace-2"]')).toBeVisible()
+    // The island body no longer flips to running; run state lives on the orbs.
+    await expect(page.locator('.janus-island')).toHaveAttribute('data-mode', 'order')
+    await expect(page.locator('.janus-run-orbs')).toHaveAttribute('aria-label', '2 running workspaces')
+  })
+
+  test('clicking a background orb switches workspace and opens its panel', async ({ page }) => {
+    await page.locator('.janus-run-orb[data-workspace-id="workspace-2"]').click()
+    await expect(harness(page)).toHaveAttribute('data-active-workspace', 'workspace-2')
+    const dialog = page.getByRole('dialog', { name: 'Workspace Two' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Switch to this workspace' })).toBeVisible()
+  })
+
+  test('long-press on a running workspace never stops it', async ({ page }) => {
+    const island = page.locator('.janus-island')
+    await pointer(island, 'pointerdown', { x: 100, y: 20 })
+    await page.waitForTimeout(850)
+    await pointer(island, 'pointerup', { x: 100, y: 20 })
+
+    expect(await stopCalls(page)).toEqual([])
+    await expect(page.locator('.pull-hint')).toContainText('Already running')
+    await expect(page.locator('.janus-run-orb[data-workspace-id="workspace-1"]')).toBeVisible()
+    await expect(page.locator('.janus-run-orb[data-workspace-id="workspace-2"]')).toBeVisible()
+    await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
+  })
+
+  test('hold-to-confirm stop removes only that orb', async ({ page }) => {
+    await page.locator('.janus-run-orb[data-workspace-id="workspace-2"]').click()
+    const dialog = page.getByRole('dialog', { name: 'Workspace Two' })
+    await expect(dialog).toBeVisible()
+
+    // 真实鼠标按住：确认后按钮置灰，dispatchEvent 过不了 actionability 检查
+    const stopAll = dialog.locator('button.janus-run-orb-btn--danger')
+    await stopAll.hover()
+    await page.mouse.down()
+    await page.waitForTimeout(1300)
+    await page.mouse.up()
+
+    expect(await stopCalls(page)).toEqual(['C:\\workspace-two::dev::2'])
+    await expect(page.locator('.janus-run-orb[data-workspace-id="workspace-2"]')).toHaveCount(0)
+    await expect(page.locator('.janus-run-orb[data-workspace-id="workspace-1"]')).toBeVisible()
+  })
+})

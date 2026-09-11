@@ -1,0 +1,185 @@
+/**
+ * TerminalSelector.module.css
+ *
+ * 空终端（无 pane / 无终端）下的 6 张类型卡片。
+ * 规则：底色吃 --shell-card，与侧栏/TeamFooter 同阶梯；
+ * 悬浮只做“暖色微抬 + 橙边 + 轻浮起”，不用纯灰 --shell-active（#333336 太跳）。
+ * 注意：边框/背景必须写在这里，内联 style 会盖掉 :hover（见 TeamFooter.module.css）。
+ *
+ * 布局：全部显示、不折叠，但列数只取 6 的约数（6 / 3 / 2），避免
+ * auto-fit 在 880px 下算出 5 列、留下 5+1 孤儿卡片。
+ * 外层 .root 是容器查询锚点，随中心工作区宽度（含窗口缩放、侧栏/Office/编辑器
+ * 开合）自动切换列数；窗口大小变化无需 JS 参与。
+ */
+
+.root {
+  width: 100%;
+  container-type: inline-size;
+  container-name: terminal-selector;
+}
+
+/* 默认（480px ~ 799px）：3 列 x 2 行，最常见的居中宽度，上下均衡 */
+.grid {
+  display: grid;
+  width: 100%;
+  max-width: 640px;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* 窄（<480px）：2 列 x 3 行，避免单列过长滚动 */
+@container terminal-selector (max-width: 479px) {
+  .grid {
+    max-width: 400px;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 宽（>=800px）：6 列单行，一行放下不留孤儿卡 */
+@container terminal-selector (min-width: 800px) {
+  .grid {
+    max-width: 840px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.card {
+  width: 100%;
+  min-width: 0;
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 12px;
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  background: var(--shell-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--shell-accent-border);
+  background:
+    linear-gradient(180deg, rgba(255, 120, 48, 0.07), rgba(255, 120, 48, 0.02)),
+    #1e1e22;
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 120, 48, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.card:active {
+  transform: translateY(-1px);
+}
+
+.card:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.64);
+  outline-offset: 2px;
+}
+
+.cardBusy {
+  cursor: wait;
+  opacity: 0.72;
+  border-color: rgba(255, 120, 48, 0.35);
+}
+
+.cardBusy:hover,
+.cardBusy:focus-visible {
+  transform: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  background: var(--shell-card);
+}
+
+.iconWrap {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card:hover .iconWrap,
+.card:focus-visible .iconWrap {
+  background: transparent;
+  transform: scale(1.05);
+}
+
+.icon {
+  width: 32px;
+  height: 32px;
+}
+
+.label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #d4d4d4;
+  transition: color 180ms ease;
+}
+
+/* 宽屏 6 列时卡片变窄：同步压紧内边距与图标，避免文字被挤换行 */
+@container terminal-selector (min-width: 800px) {
+  .card {
+    min-height: 96px;
+    padding: 14px 8px;
+  }
+
+  .iconWrap {
+    width: 40px;
+    height: 40px;
+  }
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .label {
+    font-size: 12px;
+  }
+}
+
+/* 窄屏 2 列时略降高度，避免 3 行过长 */
+@container terminal-selector (max-width: 479px) {
+  .card {
+    min-height: 100px;
+  }
+}
+
+.card:hover .label,
+.card:focus-visible .label {
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .iconWrap {
+    transition: none;
+  }
+
+  .card:hover,
+  .card:focus-visible {
+    transform: none;
+  }
+}

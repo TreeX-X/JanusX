@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '@/stores/app'
+import { useRunningStore } from '@/stores/running'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { JanusMode } from './JanusEye'
 import type { Workspace } from '@/types'
@@ -7,6 +8,8 @@ import type { Workspace } from '@/types'
 /* ════════════════════════════════════════════════════════════
    useJanusState — mode 推导 + 工作区切换动画
    单一数据源：所有 Janus 视觉状态从此导出
+   Run-Orb 后：mode 回归 sleep/order/analytics 三态，运行表达外移到卫星球；
+   后台运行仅通过 hasRunning/runningCount 暴露，不再覆盖本体。
    ════════════════════════════════════════════════════════════ */
 
 const WS_SWITCH_DURATION = 600  // 延长到 600ms，更自然
@@ -15,6 +18,9 @@ interface JanusState {
   mode: JanusMode
   isSwitching: boolean
   activeWorkspace: Workspace | undefined
+  /** 是否有任意工作区在运行（驱动 body.has-running） */
+  hasRunning: boolean
+  runningCount: number
   /** 眼睛容器 ref — 挂载后可执行切换渐隐动画 */
   eyeContainerRef: React.MutableRefObject<HTMLDivElement | null>
 }
@@ -27,19 +33,17 @@ export function useJanusState(): JanusState {
   const seenFirstRef = useRef(false)
 
   const blueprintMode = useAppStore((s) => s.blueprintMode)
-  const janusRunning = useAppStore((s) => s.janusRunning)
+  const runningCount = useRunningStore((s) => Object.keys(s.runningByWorkspace).length)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
 
-  /*-- mode 推导 —优先级：运转 > 解析 > 秩序 > 休眠 --*/
+  /*-- mode 推导 — 运转外移到运行球，本体仅：休眠 > 解析 > 秩序 --*/
   const mode: JanusMode = !activeWorkspace
     ? 'sleep'
-    : janusRunning
-      ? 'running'
-      : blueprintMode
-        ? 'analytics'
-        : 'order'
+    : blueprintMode
+      ? 'analytics'
+      : 'order'
 
   /*-- 工作区切换：眼睛渐隐再现 --*/
   useEffect(() => {
@@ -85,5 +89,5 @@ export function useJanusState(): JanusState {
     }
   }, [])
 
-  return { mode, isSwitching, activeWorkspace, eyeContainerRef }
+  return { mode, isSwitching, activeWorkspace, eyeContainerRef, hasRunning: runningCount > 0, runningCount }
 }

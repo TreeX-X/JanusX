@@ -1,0 +1,79 @@
+/**
+ * TeamFooter.module.css
+ *
+ * 左下角团队卡片：底色吃 --shell-card（与侧栏 chrome 同阶梯），
+ * 悬浮只提亮边框 + 底色微抬，保持扁平、无辉光。
+ * 注意：边框色必须写在这里，内联 style 会盖掉 :hover。
+ */
+
+.card {
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: var(--shell-card);
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.card:hover {
+  border-color: rgba(255, 120, 48, 0.28);
+  background: #1e1e22;
+}
+
+.card:focus-within {
+  border-color: rgba(255, 120, 48, 0.28);
+}
+
+.card:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.64);
+  outline-offset: 1px;
+}
+
+.loginButton {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: var(--shell-card);
+  color: var(--shell-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.loginButton:hover {
+  border-color: rgba(255, 120, 48, 0.4);
+  background: #1e1e22;
+  color: #fff;
+}
+
+.loginButton:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.64);
+  outline-offset: 1px;
+}
+
+/* 左下角组织名：默认吃侧栏上方的灰字（--shell-muted），悬浮才变橙。 */
+.orgButton {
+  color: var(--shell-muted);
+}
+
+.orgName {
+  color: var(--shell-muted);
+  font-weight: 500;
+  transition: color 0.16s ease;
+}
+
+.orgChevron {
+  color: var(--shell-dim);
+  transition: color 0.16s ease;
+}
+
+.orgButton:hover .orgName {
+  color: var(--shell-accent-strong);
+}
+
+.orgButton:hover .orgChevron {
+  color: var(--shell-accent-strong);
+}

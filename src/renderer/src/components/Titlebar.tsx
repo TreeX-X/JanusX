@@ -3,16 +3,19 @@ import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
-import { AppSettingsModal } from '@/components/AppSettingsModal'
+import { AppSettingsModal, type SettingsTab } from '@/components/AppSettingsModal'
 import { KnowledgeWorkbench } from '@/components/knowledge'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
 import { useJanusChatController } from '@/components/janus/JanusChatProvider'
+import { useGlobalRunning } from '@/components/janus/useGlobalRunning'
+import { JanusRunOrbs } from '@/components/janus/JanusRunOrbs'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
 import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentOfficeNotice } from '@/components/janus/islandController'
 import { officeService } from '@/services/office'
 import { startOfficeDiscovery } from '@/components/office/officeDiscovery'
 import { useOfficeStore } from '@/stores/office'
+import { useTeamStore } from '@/stores/team'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
 
@@ -29,11 +32,22 @@ const BlueprintWorkbench = lazy(() =>
 
 export function Titlebar() {
   const { t } = useI18n('common')
+  useGlobalRunning()
   const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const { stage: islandStage, knowledge: knowledgePeek } = island
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'notifications' | 'llm'>('notifications')
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('notifications')
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
+  // 侧栏团队区请求打开设置 team 页（计数器变化即打开）。
+  const teamSettingsRequest = useTeamStore((s) => s.settingsRequest)
+  const lastTeamSettingsRequest = useRef(teamSettingsRequest)
+  useEffect(() => {
+    if (teamSettingsRequest !== lastTeamSettingsRequest.current) {
+      lastTeamSettingsRequest.current = teamSettingsRequest
+      setSettingsInitialTab('team')
+      setSettingsModalOpen(true)
+    }
+  }, [teamSettingsRequest])
 
   const conversationController = useJanusChatController()
   const {
@@ -283,9 +297,9 @@ export function Titlebar() {
         onClose={() => setActiveWorkbench(null)}
       />
 
-      {/* 灵动�?*/}
+      {/* 灵动岛 + 运行球簇 */}
       <div
-        className="absolute top-0 titlebar-no-drag"
+        className="titlebar-no-drag janus-island-cluster"
         style={{ zIndex: 2000 }}
       >
         <JanusIsland
@@ -317,6 +331,7 @@ export function Titlebar() {
           officeArtifacts={officeArtifacts}
           onOpenOfficeArtifact={openOfficeArtifact}
         />
+        <JanusRunOrbs />
       </div>
 
     </div>

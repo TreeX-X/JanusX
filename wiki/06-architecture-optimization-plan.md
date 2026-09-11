@@ -1,8 +1,8 @@
 ﻿# Architecture Optimization and Cleanup Plan
 
-Status: Implemented — Phases 1-5 are complete. Post-v0.5 evolution through v0.8.0 added significant new subsystems while preserving the modular-monolith boundary.
+Status: Implemented — Phases 1-5 are complete. Post-v0.5 evolution through v0.8.2 added significant new subsystems while preserving the modular-monolith boundary.
 
-Evidence verified: 2026-08-17
+Evidence verified: 2026-09-06
 
 ## Overview
 
@@ -31,9 +31,9 @@ Evidence verified: 2026-08-17
 | Phase 4 — composition and controllers | Complete | `src/main/index.ts` is a lifecycle coordinator; session, services, IPC registration, windows, Workspace actions/bootstrap, Terminal lifecycle, Blueprint layout/analysis have explicit modules |
 | Phase 5 — complete contracts and gate | Complete | All renderer-accessible domains use shared contracts and fixed preload APIs; generic bridge removed |
 
-## Post-v0.5 Evolution (v0.8.0)
+## Post-v0.5 Evolution (v0.8.2)
 
-After the Phase 1-5 optimization, the project advanced from v0.5.0 to v0.8.0 with the following new subsystems added while preserving the modular-monolith boundary:
+After the Phase 1-5 optimization, the project advanced from v0.5.0 to v0.8.2 with the following new subsystems added while preserving the modular-monolith boundary:
 
 | New Subsystem | Key Paths | Status |
 |---|---|---|
@@ -65,6 +65,12 @@ After the Phase 1-5 optimization, the project advanced from v0.5.0 to v0.8.0 wit
 | Retention Classifier | `src/main/knowledge/retention-classifier.ts` | Complete — observation relevance scoring |
 | Office Skills/Rules | `src/main/office/office-skills.ts`, `office-project-rules.ts` | Complete — Office skills and project rules |
 | Office Agent Policy | `src/main/office/office-agent-policy.ts` | Complete — Office agent action policy |
+| OfficeCLI Manager | `src/main/office/officecli-manager.ts` | Complete — pinned 1.0.135 probe, capability check, manual guidance |
+| Roundtable | `src/main/roundtable/`, `src/shared/roundtable/`, `src/shared/ipc/roundtable.ts` | Complete — service/runtime/store/agent-registry/workspace-tools, staged workflow, parchment export, restore consistency |
+| Janus Reasoning | `src/renderer/src/components/janus/janusReasoning.ts`, `ThinkingRegion.tsx` | Complete — UI-only 4000-char bounded buffer, never in streamed text |
+| Knowledge Pipeline | `src/main/knowledge/processing-queue.ts`, `llm-stage.ts`, `deterministic-extractor.ts`, `diagnostics-service.ts`, `workspace-identity.ts`, `search/embedding-provider.ts` | Complete — queue-owned deterministic + batch-50 LLM stages, per-workspace cursors, failure ledger, `knowledge-pipeline` E2E |
+| External MCP | `src/main/knowledge/external-mcp.ts`, `knowledge:external-mcp:*` | Complete — Cursor/VS Code/Claude Code registration, key-scoped merge + backup |
+| Language Installer | `src/main/language-service/registry.ts`, `src/main/ipc/language-service-installer-handlers.ts` | Complete — descriptor registry + window-authorized managed install |
 | Terminal Diagnostics | `src/main/terminal/diagnostics.ts` | Complete — terminal health diagnostics |
 | Project Task Runner | `src/main/project/runner/task-runner.ts` | Complete — individual task lifecycle |
 | Port Extractor | `src/main/project/utils/port-extractor.ts` | Complete — dev server port extraction |
@@ -96,16 +102,16 @@ Never mix deletion, user-visible redesign, broad formatting, and behavior change
 
 ## Metrics and Completion Criteria
 
-| Metric | Baseline (v0.5) | Current (v0.8) | Target |
+| Metric | Baseline (v0.5) | Current (v0.8.2) | Target |
 |---|---|---|---|
 | Top-level non-build files in out | 31 PNG files / 3.69 MB | 0 | 0 |
 | Generic preload invoke channels | 122 | 0 | 0 |
 | Main/preload contract drift | 4+ inconsistencies | 0 | 0 |
 | Strict unused-symbol diagnostics | 35 | 0 | 0, with CI enforcement |
 | Renderer direct bridge files | 29 files / ~150 calls | 0 | 0 |
-| IPC domains | 10 at Phase 5 completion | 20+ typed domains | Maintain typed contracts for all domains |
-| Unit test files | 67 | 120+ | Maintain green domain and contract coverage |
-| E2E specs | 1 focused spec | 5+ specs (desktop smoke, island, editor, blueprint capsule) | Maintain release smoke; add only high-value workflow coverage |
+| IPC domains | 10 at Phase 5 completion | 24 typed domains (incl. `roundtable`, installer) | Maintain typed contracts for all domains |
+| Unit test files | 67 | 205 specs | Maintain green domain and contract coverage |
+| E2E specs | 1 focused spec | 7 specs (desktop smoke, island, editor x3, blueprint capsule, knowledge pipeline) | Maintain release smoke; add only high-value workflow coverage |
 | Agent runtime tool sets | 0 | 4 (workspace/git/project/command) | Add only when new workspace-scoped capability is needed |
 
 ## Pending Confirmation
@@ -120,6 +126,6 @@ Never mix deletion, user-visible redesign, broad formatting, and behavior change
 
 ## Conclusion and Next Steps
 
-- Conclusion: The planned modular-monolith boundary repair is implemented without a framework rewrite. Post-v0.5 evolution added 30+ new subsystems while preserving the established boundary discipline.
+- Conclusion: The planned modular-monolith boundary repair is implemented without a framework rewrite. Post-v0.5 evolution added 35+ new subsystems while preserving the established boundary discipline.
 - Recommended Priority Actions: Keep the release gate blocking, add only high-value controller extractions when responsibilities actually diverge, and prevent new generic IPC or mixed build artifacts through the existing tests.
-- Definition of Success: The repository has no known invalid/dead tracked assets, out is clean build output, IPC is domain-typed across 20+ domains, major renderer files have explicit controller/view boundaries, and a unified verification command blocks regressions.
+- Definition of Success: The repository has no known invalid/dead tracked assets, out is clean build output, IPC is domain-typed across 24 domains, major renderer files have explicit controller/view boundaries, and a unified verification command blocks regressions.

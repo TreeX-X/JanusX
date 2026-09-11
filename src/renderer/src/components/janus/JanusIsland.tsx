@@ -30,6 +30,7 @@ const ROUNDTABLE_CARD_STATUS_KEYS: Record<AgentWorkState, string> = {
   cancelled: 'janus:roundtable.cardDetail.status.cancelled',
 }
 import { faceClass } from './janusIslandRuntime'
+import { nudgeRunOrb } from '@/stores/running'
 import type { JanusExpandedView, JanusIslandProps } from './janusIslandTypes'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
 import type { RoundtableToolCall } from './agentWorkProjection'
@@ -74,8 +75,8 @@ export function JanusIsland({
   onOpenOfficeArtifact,
 }: JanusIslandProps) {
   const { t } = useI18n('janus')
-  const { mode, isSwitching, activeWorkspace, eyeContainerRef } = useJanusState()
-  const { janusRunning, toggleRunning } = useProjectRunning(activeWorkspace)
+  const { mode, isSwitching, activeWorkspace, eyeContainerRef, hasRunning } = useJanusState()
+  const { janusRunning, startActiveOnce } = useProjectRunning(activeWorkspace)
   const shellRef = useRef<HTMLDivElement | null>(null)
   const conversationStartedRef = useRef(false)
   const [view, setView] = useState<JanusExpandedView>('monitor')
@@ -140,9 +141,29 @@ export function JanusIsland({
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
 
+  /** 长按仅启动（幂等）：已运行只脉冲对应运行球，永不停止 */
+  const flashHint = useCallback((text: string) => {
+    const hint = shellRef.current?.querySelector('.pull-hint') as HTMLElement | null
+    if (!hint) return
+    hint.textContent = text
+    hint.style.opacity = '1'
+    hint.style.transform = 'translateX(-50%)'
+    window.setTimeout(() => {
+      hint.style.opacity = '0'
+    }, 1600)
+  }, [])
+
   const handleLongPress = useCallback(async () => {
-    await toggleRunning()
-  }, [toggleRunning])
+    const outcome = await startActiveOnce()
+    const workspaceId = activeWorkspace?.id
+    if (!workspaceId) return
+    if (outcome === 'already-running') {
+      nudgeRunOrb(workspaceId)
+      flashHint(t('janus:island.runOrb.alreadyRunning'))
+    } else if (outcome === 'no-config' || outcome === 'no-workspace') {
+      flashHint(t('janus:island.runOrb.noConfig'))
+    }
+  }, [startActiveOnce, activeWorkspace?.id, flashHint, t])
 
   const handleDoubleTap = useCallback(() => {
     onDoubleActivate()
@@ -377,8 +398,12 @@ export function JanusIsland({
 
   useEffect(() => {
     document.body.classList.toggle('is-running', janusRunning)
-    return () => { document.body.classList.remove('is-running') }
-  }, [janusRunning])
+    document.body.classList.toggle('has-running', hasRunning)
+    return () => {
+      document.body.classList.remove('is-running')
+      document.body.classList.remove('has-running')
+    }
+  }, [janusRunning, hasRunning])
 
   return (
     <div

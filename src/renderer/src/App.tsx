@@ -38,6 +38,8 @@ import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
 import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
+import { useTeamStore } from '@/stores/team'
+import { TeamSetupGate } from '@/components/team/TeamSetupGate'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
 
@@ -83,6 +85,8 @@ interface EditorResizeSession {
 
 export default function App() {
   useWorkspaceBootstrap()
+  // ToB M2：启动即恢复团队会话（refresh 静默续期），失败即 guest 由挡板接管。
+  useEffect(() => { void useTeamStore.getState().bootstrap() }, [])
   // P5: 细粒度 selector——App 是整树根组件，任意 store 字段变化都不应带动整树
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
@@ -574,6 +578,8 @@ export default function App() {
       </div>
       {!isEditorEmbedded && <FileEditor />}
       <AgentNotificationHost />
+      {/* ToB M2：未登录/无组织时全屏挡板 */}
+      <TeamSetupGate />
     </div>
     </JanusChatProvider>
   )

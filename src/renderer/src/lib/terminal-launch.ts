@@ -85,6 +85,8 @@ export function terminalBootLabel(preset: TerminalPreset): string {
       return 'Starting OpenCode…'
     case 'janus':
       return 'Starting Janus…'
+    case 'pi':
+      return 'Starting Pi…'
     case 'shell':
       return 'Starting shell…'
   }

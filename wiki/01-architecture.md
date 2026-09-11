@@ -1,6 +1,6 @@
 ﻿# Architecture
 
-Last analyzed: 2026-08-17
+Last analyzed: 2026-09-06
 
 ## Layer Model
 
@@ -40,6 +40,8 @@ Renderer alias `@` maps to `src/renderer/src`.
 | `registerLlmHandlers` | provider config, model catalog, test connection, chat, streaming chat |
 | `registerJanusHandlers` | Blueprint CRUD, Janus focus/bind/analyze/apply/candidates |
 | `registerJanusChatHandlers` | Janus chat conversation load/save persistence |
+| `registerRoundtableHandlers` | roundtable deliberation sessions: start/advance/end/state/restore/export + event stream |
+| `registerLanguageServiceInstallerHandlers` | managed language-service binary install/remove/status (window-authorized) |
 | `registerRuntimeTelemetryHandlers` | runtime context/model telemetry history |
 | `registerSettingsHandlers` | notification settings, Feishu control status |
 | `registerLanguageHandlers` | language get/set (i18n) |
@@ -63,6 +65,7 @@ On app quit, `AppShutdown` coordinates chat-stream abort, Janus analysis cancell
 - `knowledge` - Knowledge workbench (`src/shared/ipc/knowledge.ts`)
 - `janus` - Blueprint/Janus (`src/shared/ipc/janus.ts`)
 - `janusChat` - Janus chat persistence (`src/shared/ipc/janus-chat.ts`)
+- `roundtable` - Roundtable deliberation (`src/shared/ipc/roundtable.ts`, `src/shared/roundtable/`)
 - `agent` - Agent CLI streaming (`src/shared/ipc/agent.ts`)
 - `agentRuntime` - Workspace agent runtime (`src/shared/ipc/agent-runtime.ts`)
 - `checkpoint` - Checkpoints (`src/shared/ipc/checkpoint.ts`)
@@ -73,7 +76,8 @@ On app quit, `AppShutdown` coordinates chat-stream abort, Janus analysis cancell
 - `subAgentRun` - Subagent runs (`src/shared/ipc/agent.ts`)
 - `dialog`, `window`, `system` - System/Window/Dialog (`src/shared/ipc/system.ts`)
 - `desktopToast` - Desktop toast (`src/shared/ipc/system.ts`)
-- `languageService` - clangd go-to-definition (`src/shared/ipc/language-service.ts`)
+- `languageService` - clangd go-to-definition (`src/shared/ipc/language-service.ts`) plus managed installer (install/remove/status/progress events)
+- `agentSettings` - Agent settings (`src/shared/ipc/settings.ts`)
 
 The generic `invoke/send/on` surface and allowlists have been removed. Every renderer-accessible domain has shared channel constants/types and a fixed API. Typed event adapters hide Electron event objects and remove the exact registered listener on unsubscribe.
 
@@ -95,16 +99,17 @@ Component -> Zustand store or service wrapper -> typed window.electron domain AP
 | Browser surface | `stores/browser.ts`, `services/browser.ts` | `ipc/browser-handlers.ts`, `browser/surface-manager.ts` |
 | Checkpoints | `stores/checkpoint.ts` | `ipc/checkpoint-handlers.ts`, `agent/checkpoint/*` |
 | Blueprint + maintenance | `stores/blueprint.ts`, `stores/blueprint-maintenance.ts`, `services/blueprint.ts` | `ipc/janus-handlers.ts`, `janus/*`, `janus/maintenance/*` |
-| Janus chat | `components/janus/JanusChatProvider.tsx`, `janusChatConversations.ts` | `ipc/janus-chat-handlers.ts`, `janus/chat-store.ts` |
+| Janus chat | `components/janus/JanusChatProvider.tsx`, `janusChatConversations.ts`, `janusReasoning.ts` (UI-only bounded buffer), `ThinkingRegion.tsx` | `ipc/janus-chat-handlers.ts`, `janus/chat-store.ts` |
+| Roundtable | `components/janus/JanusRoundtablePane.tsx`, `RoundtableStage.tsx`, `JanusRoundtableParchment.tsx`, `roundtableExport.ts` | `ipc/roundtable-handlers.ts`, `roundtable/service.ts`, `roundtable/runtime.ts`, `roundtable/store.ts` |
 | Project launcher | `services/project.ts` | `ipc/project-handlers.ts`, `project/*` |
 | LLM config/chat | `services/llm.ts` | `ipc/llm-handlers.ts`, `llm/*`, `packages/llm-core` |
 | Agent runtime | `stores/subagent-run.ts` | `ipc/agent-runtime-handlers.ts`, `agent/runtime/*` |
 | Agent CLI streaming | `stores/app.ts` (agent events) | `ipc/agent-handlers.ts`, `agent/stream-manager.ts` |
-| Knowledge | `services/knowledge.ts`, `services/knowledge-settings.ts` | `ipc/knowledge-handlers.ts`, `knowledge/*` |
+| Knowledge | `services/knowledge.ts`, `services/knowledge-settings.ts`, `components/knowledge/KnowledgeGraphCanvas.tsx`, `knowledgeGraph.ts` | `ipc/knowledge-handlers.ts`, `knowledge/*` (queue/LLM-stage/external-mcp) |
 | Office | `stores/office.ts`, `services/office.ts` | `ipc/office-handlers.ts`, `office/*` |
 | Notes | `stores/note.ts` | (renderer-internal) |
 | Right tools dock | `stores/right-tools.ts`, `right-tools/registry.ts` | (renderer-internal) |
-| Editor | `stores/editor.ts` | `ipc/file-handlers.ts`, `language-service/*` |
+| Editor | `stores/editor.ts` | `ipc/file-handlers.ts`, `language-service/*` (client/manager/registry/installer), `ipc/language-service-installer-handlers.ts` |
 | Git | `stores/git.ts` | `ipc/git-handlers.ts`, `git/service.ts` |
 
 ## Data Persistence
@@ -117,6 +122,8 @@ Component -> Zustand store or service wrapper -> typed window.electron domain AP
 | Blueprint JSON | `{userData}/janusx/blueprints/{id}.json` and `index.json` | `src/main/janus/blueprint-store.ts` |
 | Legacy Blueprint JSON | `{workspace}/.janusX/blueprints` | migrated/read by `blueprint-store.ts` |
 | Janus chat conversations | `{userData}/janusx/janus-chat/` | `src/main/janus/chat-store.ts` |
+| Roundtable sessions | in-memory `RoundtableService` sessions + `roundtableStore` persistence | `src/main/roundtable/service.ts`, `src/main/roundtable/store.ts` |
+| Knowledge processing cursors/failures | `{knowledgeRoot}/processing/cursor.json`, `failures.jsonl` | `src/main/knowledge/processing-queue.ts` |
 | Project launch config | `{workspace}/.janusX/janusX.launch.json` | `src/main/project/config/project-config.ts` |
 | Checkpoints | `{workspace}/.janusX/checkpoints` | `src/main/agent/checkpoint/checkpoint-manager.ts` |
 | Policy audit records | `{userData}/janusx/policy-audit/` | `src/main/agent/runtime/policy-audit-store.ts` (FilePolicyAuditStore) |
@@ -188,3 +195,45 @@ Remote notifications (`src/main/remote-notifications/`) handle outbound delivery
 - `feishu-inbound/` - inbound router, runtime, SDK channel, message normalization
 - `delivery-store.ts` - `RemoteDeliveryStore` - delivery record persistence
 - `secret-redaction.ts` - error text redaction
+
+## Roundtable Architecture
+
+Multi-agent deliberation (`src/main/roundtable/` + `src/shared/roundtable/`) runs staged workflows with shared workspace evidence:
+
+| Component | File | Responsibility |
+|---|---|---|
+| Service | `src/main/roundtable/service.ts` | `RoundtableService` - session map, workspace resource resolution, fail-loud agent invocation |
+| Runtime | `src/main/roundtable/runtime.ts` | staged execution, badge/advance/exit lifecycle |
+| Store | `src/main/roundtable/store.ts` | session persistence + restore-consistency verification |
+| Agent registry | `src/main/roundtable/agent-registry.ts` | participant specs from `workflow-template.ts` |
+| Workspace tools | `src/main/roundtable/workspace-tools.ts` | read-only `workspace.list/read/readRange` for agents |
+| Shared state | `src/shared/roundtable/state.ts` | `RoundtableState`, migration, `markInterrupted` |
+| Shared export | `src/shared/roundtable/export.ts`, `parchment.ts` | human-readable markdown parchment |
+| IPC contract | `src/shared/ipc/roundtable.ts` | `roundtable:start/advance/end/state/restore/export/event` |
+
+Renderer: `JanusRoundtablePane.tsx` (composer + controls), `RoundtableStage.tsx` (camera/hover), `JanusRoundtableParchment.tsx` (readable export), `roundtableExport.ts`.
+
+## Knowledge Pipeline Architecture
+
+Queue-owned pipeline (Phase 5): deterministic products are always on disk before any LLM enhancement.
+
+| Component | File | Responsibility |
+|---|---|---|
+| Queue | `src/main/knowledge/processing-queue.ts` | per-workspace cursors, failure ledger, `SerialQueue` locking, `processNow` |
+| LLM stage | `src/main/knowledge/llm-stage.ts` | batch limit 50, mode-gated (`deterministic-only` skips), degraded results rethrown to ledger |
+| Deterministic extract | `src/main/knowledge/deterministic-extractor.ts` | rule-based observation → candidate extraction |
+| Diagnostics | `src/main/knowledge/diagnostics-service.ts` | pipeline health counters |
+| Workspace identity | `src/main/knowledge/workspace-identity.ts` | per-workspace index roots |
+| Embeddings | `src/main/knowledge/search/embedding-provider.ts` | vector provider beside BM25/tokenizer |
+| External MCP | `src/main/knowledge/external-mcp.ts` | merge `janusx-knowledge` stdio entry into Cursor/VS Code/Claude Code configs (`knowledge:external-mcp:status/register`) |
+
+`knowledge:extract` direct IPC is removed on purpose; LLM work runs only via `runLlmStage`.
+
+## Language Service Installer
+
+| Component | File | Responsibility |
+|---|---|---|
+| Registry | `src/main/language-service/registry.ts` | `getDescriptor` / `getAllDescriptors` per `LanguageServiceId` |
+| Installer IPC | `src/main/ipc/language-service-installer-handlers.ts` | window-authorized install/remove/status + progress events |
+| Clients | `clangd-client.ts`, `clangd-manager.ts` | LSP framing, `isPathWithinWorkspace` guard |
+| OfficeCLI probe | `src/main/office/officecli-manager.ts` | pinned `SUPPORTED_VERSION` (1.0.135), capability probe (`watch/create/batch`), manual-install guidance |

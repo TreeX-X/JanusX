@@ -68,9 +68,11 @@ const TERMINAL_PRESETS: {
   name: string
 }[] = [
   createTerminalPreset('shell'),
+  createTerminalPreset('janus'),
   createTerminalPreset('claude'),
   createTerminalPreset('codex'),
-  createTerminalPreset('opencode')
+  createTerminalPreset('opencode'),
+  createTerminalPreset('pi')
 ]
 
 function createTerminalPreset(type: TerminalPreset): { type: TerminalPreset; label: string; name: string } {
@@ -189,7 +191,11 @@ function makeRequirementItem(input: {
 }
 
 function getTerminalPreset(preset: TerminalPreset) {
-  return TERMINAL_PRESETS.find((item) => item.type === preset) ?? TERMINAL_PRESETS[2]
+  return (
+    TERMINAL_PRESETS.find((item) => item.type === preset) ??
+    TERMINAL_PRESETS.find((item) => item.type === DEFAULT_NODE_TERMINAL_PRESET) ??
+    TERMINAL_PRESETS[0]
+  )
 }
 
 function collectDescendantIds(nodes: Record<string, BlueprintNode>, nodeId: string): Set<string> {

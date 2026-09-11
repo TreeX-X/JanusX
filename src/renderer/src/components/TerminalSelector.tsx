@@ -14,6 +14,8 @@ import claudeIcon from '@/assets/icons/claude.svg'
 import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
+import piIcon from '@/assets/icons/pi.svg'
+import styles from './TerminalSelector.module.css'
 
 const ICONS: Record<TerminalPreset, string> = {
   shell: terminalIcon,
@@ -21,6 +23,7 @@ const ICONS: Record<TerminalPreset, string> = {
   codex: codexIcon,
   opencode: opencodeIcon,
   janus: janusIcon,
+  'pi': piIcon,
 }
 
 interface TerminalOptionProps {
@@ -34,38 +37,21 @@ interface TerminalOptionProps {
 function TerminalOption({ preset, name, busy, onClick, onHover }: TerminalOptionProps) {
   const { t } = useI18n('terminal')
   return (
-    <div
+    <button
+      type="button"
+      disabled={busy}
       onClick={busy ? undefined : onClick}
-      className="w-full rounded-lg transition-all flex flex-col items-center justify-center gap-3 px-4 py-5 min-h-[132px]"
-      style={{
-        background: 'var(--shell-pane-chrome)',
-        border: busy ? '1px solid rgba(255, 120, 48, 0.35)' : '1px solid var(--shell-border)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
-        cursor: busy ? 'wait' : 'pointer',
-        opacity: busy ? 0.72 : 1,
-      }}
-      onMouseEnter={(e) => {
-        if (busy) return
-        onHover?.()
-        e.currentTarget.style.background = 'var(--shell-active)'
-        e.currentTarget.style.borderColor = 'rgba(255, 120, 48, 0.3)'
-        e.currentTarget.style.transform = 'translateY(-2px)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'var(--shell-pane-chrome)'
-        e.currentTarget.style.borderColor = busy
-          ? 'rgba(255, 120, 48, 0.35)'
-          : 'var(--shell-border)'
-        e.currentTarget.style.transform = 'translateY(0)'
-      }}
+      onMouseEnter={busy ? undefined : onHover}
+      onFocus={busy ? undefined : onHover}
+      className={`${styles.card}${busy ? ` ${styles.cardBusy}` : ''}`}
     >
-      <div className="w-12 h-12 flex items-center justify-center">
-        <img src={ICONS[preset]} alt={name} className="w-9 h-9" />
-      </div>
-      <div className="text-[13px] font-medium text-[#d4d4d4] leading-none text-center">
+      <span className={styles.iconWrap}>
+        <img src={ICONS[preset]} alt="" aria-hidden="true" className={styles.icon} />
+      </span>
+      <span className={styles.label}>
         {busy ? t('terminal:selector.starting') : name}
-      </div>
-    </div>
+      </span>
+    </button>
   )
 }
 
@@ -110,7 +96,7 @@ export function TerminalSelector() {
 
   return (
     <div
-      className="flex flex-col items-center justify-center h-full gap-6 px-4 py-8 sm:px-6 md:px-10"
+      className={`${styles.root} flex flex-col items-center justify-center h-full gap-6 px-4 py-8 sm:px-6 md:px-10`}
       style={{
         background: 'var(--bg-deep)',
       }}
@@ -121,13 +107,8 @@ export function TerminalSelector() {
           {t('terminal:selector.hint')}
         </div>
       </div>
-      <div
-        className="grid w-full max-w-[880px] gap-3 sm:gap-4"
-        style={{
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 148px), 1fr))',
-        }}
-      >
-        {(['shell', 'claude', 'codex', 'opencode', 'janus'] as TerminalPreset[]).map((preset) => (
+      <div className={styles.grid}>
+        {(['shell', 'janus', 'claude', 'codex', 'opencode', 'pi'] as TerminalPreset[]).map((preset) => (
           <TerminalOption
             key={preset}
             preset={preset}

@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import type { CompanionCommand, CompanionProvider } from './contracts'
+import type { TeamRole } from '../../shared/team/types'
 
 type TokenAction = CompanionCommand['type']
 
@@ -15,6 +16,11 @@ export interface CompanionActionClaims {
   engine?: 'claude' | 'codex' | 'opencode'
   action: TokenAction
   exp: number
+  /** M3 团队化增量：有则必须逐项匹配，无则忽略（兼容飞书旧 token）。 */
+  userId?: string
+  tenantId?: string
+  role?: TeamRole
+  deviceId?: string
 }
 
 export type TokenVerification =
@@ -60,6 +66,7 @@ export class CompanionActionTokens {
         && (claims.workspaceId ?? '') === (expected.workspaceId ?? '')
         && (claims.engine ?? '') === (expected.engine ?? '')
         && claims.action === expected.action
+        && teamClaimsMatch(claims, expected)
       return matches ? { ok: true, claims } : { ok: false, reason: 'token-scope-mismatch' }
     } catch {
       return { ok: false, reason: 'invalid-token' }
@@ -75,4 +82,19 @@ export class CompanionActionTokens {
     const expected = Buffer.from(this.sign(payload))
     return actual.length === expected.length && timingSafeEqual(actual, expected)
   }
+}
+
+/**
+ * 团队 claims 匹配：调用方给出期望值时必须相等；
+ * 旧 token 无团队字段而调用方也无期望时通过（兼容飞书）。
+ */
+function teamClaimsMatch(
+  claims: CompanionActionClaims,
+  expected: Omit<CompanionActionClaims, 'v' | 'jti' | 'exp'>,
+): boolean {
+  if ((expected.userId ?? '') !== '' && claims.userId !== expected.userId) return false
+  if ((expected.tenantId ?? '') !== '' && claims.tenantId !== expected.tenantId) return false
+  if ((expected.role ?? '') !== '' && claims.role !== expected.role) return false
+  if ((expected.deviceId ?? '') !== '' && claims.deviceId !== expected.deviceId) return false
+  return true
 }

@@ -113,7 +113,7 @@ export function ToolCallCard({ entry, workspaceNames, defaultExpanded = false }:
               <code className="janus-tool-card-code">{entry.argsDigest}</code>
             </div>
           )}
-          {entry.resultDigest && entry.status === 'completed' && (
+          {entry.resultDigest && (
             <div className="janus-tool-card-section">
               <strong className="janus-tool-card-section-label">{t('janus:chat.tool.resultLabel')}</strong>
               <code className="janus-tool-card-code">{entry.resultDigest}</code>

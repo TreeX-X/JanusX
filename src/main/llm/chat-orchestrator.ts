@@ -23,6 +23,7 @@ import { LLM_CHANNELS } from '../../shared/ipc/llm'
 import type { ChatAgentEvent, ChatWorkspaceResource } from '../../shared/ipc/llm'
 import { workspaceAgentRuntime } from '../agent/runtime/shell-runtime'
 import { streamText } from './ai-runtime'
+import { toChatStreamDisplay } from './chat-stream-display'
 import {
   runChatTurn,
   type ChatTurnPorts,
@@ -290,6 +291,11 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       },
       ports,
       {
+        onStreamEvent: (streamEvent) => {
+          if (controller.signal.aborted) return
+          const display = toChatStreamDisplay(streamEvent)
+          if (display) sendAgentEvent(display)
+        },
         onEvent: (agentEvent) => {
           if (controller.signal.aborted) return
           if (agentEvent.type === 'reasoning_delta') {

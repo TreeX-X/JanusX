@@ -1,4 +1,5 @@
 import type { StructuredCloneValue } from '../knowledge'
+import type { OwnerScope } from '../team/types'
 
 export type BlueprintNodeType = 'epic' | 'feature' | 'task' | 'issue'
 
@@ -199,6 +200,15 @@ export interface Blueprint {
   id: string
   name: string
   description: string
+  /**
+   * ToB M1 归属字段（全可选，历史数据缺省即单机私人数据）：
+   * ownerScope 缺省 'private'；version 复用 contentRevision，不另设字段。
+   */
+  ownerScope?: OwnerScope
+  tenantId?: string | null
+  projectId?: string | null
+  ownerUserId?: string | null
+  updatedBy?: string | null
   rootNodeId: string
   nodeIds: string[]
   nodes: Record<string, BlueprintNode>

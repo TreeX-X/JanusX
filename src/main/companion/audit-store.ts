@@ -16,6 +16,11 @@ export interface CompanionAuditRecord {
   timestamp: number
   outcome: 'pending' | CompanionResult['code']
   prompt?: { preview: string; hash: string; length: number }
+  /** M3 团队化增量：有则记，无则不记（飞书旧链路不受影响）。 */
+  actorId?: string
+  tenantId?: string
+  transport?: string
+  sessionId?: string
 }
 
 export class CompanionAuditStore {
@@ -41,6 +46,7 @@ export class CompanionAuditStore {
       timestamp: this.now(),
       outcome: 'pending',
       ...(command.type === 'follow-up' ? { prompt: summarizePrompt(command.text) } : {}),
+      ...teamAuditFields(context),
     })
     return auditId
   }
@@ -64,6 +70,7 @@ export class CompanionAuditStore {
       timestamp: this.now(),
       outcome: result.code,
       ...(command.type === 'follow-up' ? { prompt: summarizePrompt(command.text) } : {}),
+      ...teamAuditFields(context),
     })
   }
 
@@ -110,4 +117,15 @@ function summarizePrompt(text: string): CompanionAuditRecord['prompt'] {
     hash: createHash('sha256').update(text).digest('hex'),
     length: text.length,
   }
+}
+
+function teamAuditFields(context: CompanionRequestContext): Pick<
+  CompanionAuditRecord, 'actorId' | 'tenantId' | 'transport' | 'sessionId'
+> {
+  const fields: Pick<CompanionAuditRecord, 'actorId' | 'tenantId' | 'transport' | 'sessionId'> = {}
+  if (context.userId) fields.actorId = context.userId
+  if (context.tenantId) fields.tenantId = context.tenantId
+  if (context.transport) fields.transport = context.transport
+  if (context.sessionId) fields.sessionId = context.sessionId
+  return fields
 }
