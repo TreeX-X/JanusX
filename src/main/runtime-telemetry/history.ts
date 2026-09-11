@@ -1,5 +1,5 @@
 import { readdir, open, readFile, stat } from 'fs/promises'
-import { join } from 'path'
+import { isAbsolute, join } from 'path'
 import os from 'os'
 import { DatabaseSync } from 'node:sqlite'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
@@ -45,6 +45,18 @@ export async function getRuntimeTelemetrySnapshot(
     return sessionId
       ? readOpenCodeSessionTelemetry(cwd, sessionId)
       : readOpenCodeBootstrapTelemetry(cwd)
+  }
+  // Note: janus/pi have no hook pipeline, so history + declared config are the
+  // only terminal-safe context sources — see .agents/notes/implemented/feature/2026-09-11-janus-pi-context-recognition.md
+  if (preset === 'janus') {
+    return sessionId
+      ? scanJanusHistory(cwd, startedAt, sessionId)
+      : readJanusBootstrapTelemetry()
+  }
+  if (preset === 'pi') {
+    return sessionId
+      ? scanPiHistory(cwd, startedAt, sessionId)
+      : readPiBootstrapTelemetry(cwd)
   }
   return null
 }
@@ -526,6 +538,237 @@ function createBootstrapSnapshot(model: string, contextWindowTokens?: number): R
   }
 }
 
+/**
+ * Janus CLI persists one JSON document per conversation in
+ * `~/.janus/history/<conversationId>.jsonl` (messages + tool traces, no token
+ * usage). The declared model lives in `~/.janus/config.json`; secrets stay in
+ * flags/env/auth files that are never read here.
+ */
+async function readJanusBootstrapTelemetry(): Promise<RuntimeTelemetrySnapshot | null> {
+  const model = readJanusCatalogModel(await readJsonConfig(join(os.homedir(), '.janus', 'config.json')))
+  if (!model) return null
+  return createBootstrapSnapshot(model, inferDeclaredContextWindow(model, 'janus'))
+}
+
+async function scanJanusHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
+  void cwd
+  if (!sessionId) return readJanusBootstrapTelemetry()
+  const filePath = join(os.homedir(), '.janus', 'history', `${sessionId}.jsonl`)
+  let raw: string
+  try {
+    raw = await readFile(filePath, 'utf8')
+  } catch {
+    return null
+  }
+  const record = parseJsonObject(raw.trim().split(/\r?\n/, 1)[0] ?? '')
+  if (!record || readString(record.id) !== sessionId) return null
+  const updatedAt = readTimestampMs(record.updatedAt)
+  if (startedAt !== undefined && updatedAt !== undefined && updatedAt < startedAt - STARTED_AT_TOLERANCE_MS) return null
+  const model = readJanusCatalogModel(await readJsonConfig(join(os.homedir(), '.janus', 'config.json')))
+  if (!model) return null
+  return {
+    detectedModel: model,
+    filePath,
+    sessionId,
+    observedAt: updatedAt ?? Date.now(),
+    source: 'history',
+    confidence: 'derived',
+  }
+}
+
+function readJanusCatalogModel(config: JsonRecord | undefined): string | undefined {
+  if (!config) return undefined
+  const providers = Array.isArray(config.providers) ? config.providers : []
+  const enabled = providers
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is JsonRecord => !!entry && !!readString(entry.id) && entry.enabled !== false)
+  if (enabled.length === 0) return undefined
+  const defaultProvider = readString(config.defaultProvider)
+  const active = (defaultProvider ? enabled.find((entry) => entry.id === defaultProvider) : undefined)
+    ?? enabled[0]
+  if (!active) return undefined
+  const defaultModel = readString(config.defaultModel)
+  if (defaultModel && (!defaultProvider || active.id === defaultProvider)) return defaultModel
+  const models = Array.isArray(active.models)
+    ? active.models.filter((model): model is string => typeof model === 'string' && !!model.trim())
+    : []
+  return readString(active.modelId) ?? models[0] ?? readString(active.defaultModelId)
+}
+
+/**
+ * Pi CLI stores JSONL sessions under `~/.pi/agent/sessions/` (or a configured
+ * `sessionDir`), one `message` entry per turn with per-turn `usage`
+ * `{input, output, cacheRead, cacheWrite, totalTokens}`. Entries form a tree
+ * via `id`/`parentId`; only the active leaf path counts toward context, so
+ * abandoned branches never inflate the numbers.
+ */
+async function readPiBootstrapTelemetry(cwd: string): Promise<RuntimeTelemetrySnapshot | null> {
+  const model = await readPiDeclaredModel(cwd)
+  if (!model) return null
+  return createBootstrapSnapshot(model, inferDeclaredContextWindow(model, 'pi'))
+}
+
+async function readPiDeclaredModel(cwd: string): Promise<string | undefined> {
+  const global = await readJsonConfig(join(os.homedir(), '.pi', 'agent', 'settings.json'))
+  const project = await readJsonConfig(join(cwd, '.pi', 'settings.json'))
+  const provider = readString(project?.defaultProvider) ?? readString(global?.defaultProvider)
+  const model = readString(project?.defaultModel) ?? readString(global?.defaultModel)
+  if (!model) return undefined
+  if (provider && !model.includes('/')) return `${provider}/${model}`
+  return model
+}
+
+function resolvePiSessionRoots(cwd: string, globalSettings: JsonRecord | undefined, projectSettings: JsonRecord | undefined): string[] {
+  const configured = readString(projectSettings?.sessionDir) ?? readString(globalSettings?.sessionDir)
+  if (configured) {
+    const expanded = configured.startsWith('~/') || configured === '~'
+      ? join(os.homedir(), configured.slice(configured === '~' ? 1 : 2))
+      : configured
+    return [isAbsolute(expanded) || /^[A-Za-z]:[\\/]/.test(expanded) ? expanded : join(cwd, expanded)]
+  }
+  return [join(os.homedir(), '.pi', 'agent', 'sessions')]
+}
+
+async function scanPiHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
+  if (!sessionId) return readPiBootstrapTelemetry(cwd)
+  const globalSettings = await readJsonConfig(join(os.homedir(), '.pi', 'agent', 'settings.json'))
+  const projectSettings = await readJsonConfig(join(cwd, '.pi', 'settings.json'))
+  const roots = resolvePiSessionRoots(cwd, globalSettings, projectSettings)
+  const candidates: SessionFileRef[] = []
+  for (const root of roots) {
+    candidates.push(...(await listJsonlFilesRecursive(root, (name) => name.endsWith('.jsonl'))))
+  }
+  const matching = candidates
+    .filter((file) => file.path.toLowerCase().includes(sessionId.toLowerCase()))
+    .filter((file) => isFileAfterStartedAt(file, startedAt))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+  for (const file of matching) {
+    const snapshot = await parsePiSession(file, cwd, startedAt, sessionId)
+    if (snapshot) return snapshot
+  }
+  return null
+}
+
+async function parsePiSession(
+  file: SessionFileRef,
+  cwd: string,
+  startedAt?: number,
+  sessionId?: string,
+): Promise<RuntimeTelemetrySnapshot | null> {
+  const lines = await readJsonlLines(file.path, true)
+  if (lines.length === 0) return null
+  const header = parseJsonObject(lines[0])
+  if (!header || readString(header.type) !== 'session') return null
+  const headerId = readString(header.id)
+  const headerCwd = readString(header.cwd)
+  if (sessionId && headerId !== sessionId) return null
+  if (headerCwd && !pathsEqual(headerCwd, cwd)) return null
+  if (!isLineAfterStartedAt(header, startedAt)) return null
+
+  const entries: Array<{ id: string | undefined; parentId: string | null; timestamp: number | undefined; record: JsonRecord }> = []
+  const byId = new Map<string, { id: string | undefined; parentId: string | null; timestamp: number | undefined; record: JsonRecord }>()
+  for (const line of lines.slice(1)) {
+    const record = parseJsonObject(line)
+    if (!record) continue
+    if (!isLineAfterStartedAt(record, startedAt)) continue
+    const id = readString(record.id)
+    const rawParentId: unknown = record.parentId
+    const entry = { id, parentId: typeof rawParentId === 'string' ? rawParentId : null, timestamp: readRecordTimestampMs(record), record }
+    entries.push(entry)
+    if (id && !byId.has(id)) byId.set(id, entry)
+  }
+  // Active leaf = last appended entry; walk parent links to the root so only
+  // the live branch contributes usage, model, and compaction counts.
+  const leaf = entries[entries.length - 1]
+  if (!leaf) {
+    return headerId ? { sessionId: headerId, filePath: file.path, observedAt: file.updatedAt, source: 'history', confidence: 'authoritative' } : null
+  }
+  const activePath: Array<{ id: string | undefined; parentId: string | null; timestamp: number | undefined; record: JsonRecord }> = []
+  const seen = new Set<string>()
+  let current: { id: string | undefined; parentId: string | null; timestamp: number | undefined; record: JsonRecord } | undefined = leaf
+  while (current && current.id && !seen.has(current.id)) {
+    seen.add(current.id)
+    activePath.unshift(current)
+    const parentKey: string | null = current.parentId
+    current = parentKey ? byId.get(parentKey) : undefined
+  }
+  if (activePath.length === 0) activePath.push(leaf)
+
+  let detectedModel: string | undefined
+  let modelChangedAt: number | undefined
+  let compactionCount = 0
+  let inputTokens = 0
+  let outputTokens = 0
+  let cacheReadTokens = 0
+  let cacheWriteTokens = 0
+  let totalTokens = 0
+  let hasUsage = false
+  for (const entry of activePath) {
+    const { record } = entry
+    const type = readString(record.type)
+    if (type === 'model_change') {
+      const provider = readString(record.provider)
+      const modelId = readString(record.modelId)
+      const combined = modelId && provider && !modelId.includes('/') ? `${provider}/${modelId}` : modelId
+      if (combined) {
+        detectedModel = combined
+        modelChangedAt = entry.timestamp ?? modelChangedAt
+      }
+      continue
+    }
+    if (type === 'compaction') {
+      compactionCount += 1
+      continue
+    }
+    if (type !== 'message') continue
+    const message = asRecord(record.message)
+    if (!message) continue
+    if (message.role !== 'assistant') continue
+    const model = readString(message.model) ?? readString(message.responseModel)
+    if (model) {
+      if (model !== detectedModel) modelChangedAt = entry.timestamp ?? modelChangedAt
+      detectedModel = model
+    }
+    const usage = asRecord(message.usage)
+    if (!usage) continue
+    const input = readNonNegativeNumber(usage.input)
+    const output = readNonNegativeNumber(usage.output)
+    const cacheRead = readNonNegativeNumber(usage.cacheRead) ?? 0
+    const cacheWrite = readNonNegativeNumber(usage.cacheWrite) ?? 0
+    const total = readNonNegativeNumber(usage.totalTokens)
+    if (input === undefined && output === undefined && total === undefined) continue
+    hasUsage = true
+    inputTokens += input ?? 0
+    outputTokens += output ?? 0
+    cacheReadTokens += cacheRead
+    cacheWriteTokens += cacheWrite
+    totalTokens += total ?? (input ?? 0) + (output ?? 0) + cacheRead + cacheWrite
+  }
+
+  const snapshot: RuntimeTelemetrySnapshot = {
+    filePath: file.path,
+    observedAt: file.updatedAt,
+    source: 'history',
+    confidence: 'authoritative',
+  }
+  if (headerId) snapshot.sessionId = headerId
+  if (detectedModel) snapshot.detectedModel = detectedModel
+  if (modelChangedAt !== undefined) snapshot.modelChangedAt = modelChangedAt
+  if (compactionCount > 0) {
+    snapshot.compactionCount = compactionCount
+    snapshot.compactionCountConfidence = 'exact'
+  }
+  if (hasUsage) {
+    snapshot.inputTokens = inputTokens
+    snapshot.outputTokens = outputTokens
+    snapshot.cacheReadTokens = cacheReadTokens
+    snapshot.cacheWriteTokens = cacheWriteTokens
+    snapshot.totalTokens = totalTokens
+    snapshot.contextTokens = inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+  }
+  return hasTelemetry(snapshot) ? snapshot : null
+}
+
 async function readJsonConfig(filePath: string): Promise<JsonRecord | undefined> {
   try {
     const raw = await readFile(filePath, 'utf8')
@@ -551,7 +794,7 @@ function readOnlyConfiguredOpenCodeModel(config: JsonRecord): string | undefined
   return models.length === 1 ? models[0] : undefined
 }
 
-function inferDeclaredContextWindow(model: string, preset: 'claude' | 'opencode'): number | undefined {
+function inferDeclaredContextWindow(model: string, preset: 'claude' | 'opencode' | 'janus' | 'pi'): number | undefined {
   const normalized = model.toLowerCase()
   if (/\[1m\]|\b1m\b/.test(normalized)) return 1_000_000
   if (preset === 'claude') return 200_000

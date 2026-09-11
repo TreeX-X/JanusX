@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   createRuntimeTelemetryStreamParser,
+  detectModelFromText,
+  extractRuntimeTelemetry,
   getEstimatedContextWindow,
   getRegistryContextWindow,
   mergeRuntimeTelemetrySnapshot,
@@ -187,6 +189,41 @@ describe('runtime telemetry model context lookup', () => {
     )).toMatchObject({
       detectedModel: 'GPT-5.6-sol',
       contextWindowTokens: undefined,
+    })
+  })
+
+  it('detects the model from the janus TUI banner without matching prose', () => {
+    expect(detectModelFromText('janus · workspace C:/repo · model deepseek-chat · effort medium · /help')).toBe('DeepSeek-chat')
+    expect(detectModelFromText('janus model the behavior of this panel')).toBeUndefined()
+    expect(detectModelFromText('model the behavior of this panel')).toBeUndefined()
+  })
+
+  it('reads janus footer session totals as cumulative input/output', () => {
+    const snapshot = extractRuntimeTelemetry('/help · ctrl+p · 12.3k in / 1.2M out')
+
+    expect(snapshot).toMatchObject({
+      inputTokens: 12_300,
+      outputTokens: 1_200_000,
+      totalTokens: 1_212_300,
+      source: 'terminal-text',
+      confidence: 'estimated',
+    })
+    expect(snapshot.contextTokens).toBeUndefined()
+  })
+
+  it('parses pi short-key usage JSON as a structured runtime event', () => {
+    const parser = createRuntimeTelemetryStreamParser(() => 2_000)
+    const [snapshot] = parser.push('{"type":"message_update","usage":{"input":1200,"output":300,"cacheRead":400,"cacheWrite":50,"totalTokens":1950},"assistantMessageEvent":{"type":"text_delta","delta":"hi"}}\n')
+
+    expect(snapshot).toMatchObject({
+      inputTokens: 1_200,
+      outputTokens: 300,
+      cacheReadTokens: 400,
+      cacheWriteTokens: 50,
+      totalTokens: 1_950,
+      contextTokens: 1_650,
+      source: 'provider-event',
+      confidence: 'authoritative',
     })
   })
 })

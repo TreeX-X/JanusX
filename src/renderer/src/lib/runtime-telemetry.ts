@@ -63,6 +63,11 @@ const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
 const MODEL_FIELD_PATTERN =
   /(?:^|[\s{,])(?:model|model_id|modelId|model_name|modelName|selected model|using model)\s*[:=]\s*["'`]?([a-z0-9][a-z0-9_.:/+-]{1,80})/i
 const MODEL_FLAG_PATTERN = /(?:^|\s)(?:--model|-m|\/model)\s+["'`]?([a-z0-9][a-z0-9_.:/+-]{1,80})/i
+/** Janus TUI banner: `janus · workspace <root> · model <id> · effort …`. The
+ * `janus` anchor keeps the loose space-separated form from matching prose. */
+const JANUS_STATUS_MODEL_PATTERN = /\bjanus\b[^\r\n]{0,160}\bmodel\s+([a-z0-9][a-z0-9_.:/+-]{1,80})/i
+/** Janus TUI footer totals: `12 in / 8 out` (compact `12.3k`/`1.2M` above 1k). */
+const JANUS_FOOTER_USAGE_PATTERN = /(\d+(?:\.\d+)?\s*[kKmM]?)\s*in\s*\/\s*(\d+(?:\.\d+)?\s*[kKmM]?)\s*out/i
 const STREAM_BUFFER_LIMIT = 64 * 1024
 
 const MODEL_PATTERNS: RegExp[] = [
@@ -79,6 +84,10 @@ export function detectModelFromText(text: string): string | undefined {
   const normalized = stripAnsi(text)
   const explicit = normalized.match(MODEL_FIELD_PATTERN) ?? normalized.match(MODEL_FLAG_PATTERN)
   if (explicit?.[1]) return normalizeModelName(explicit[1])
+  // Note: janus/pi emit no hook events, so PTY text is the live model source —
+  // see .agents/notes/implemented/feature/2026-09-11-janus-pi-context-recognition.md
+  const janusStatus = normalized.match(JANUS_STATUS_MODEL_PATTERN)
+  if (janusStatus?.[1] && isPlausibleModelId(janusStatus[1])) return normalizeModelName(janusStatus[1])
 
   for (const pattern of MODEL_PATTERNS) {
     const match = normalized.match(pattern)
@@ -265,17 +274,18 @@ export function extractRuntimeTelemetry(text: string, observedAt = Date.now()): 
   const fromJson = extractStructuredTelemetry(normalized)
   const detectedModel = fromJson.detectedModel ?? detectModelFromText(normalized)
   const explicitContext = extractExplicitContext(normalized)
+  const janusFooter = extractJanusFooterUsage(normalized)
   const hasStructuredRuntimeEvent = hasUsage(fromJson) || fromJson.modelChangedAt !== undefined
   const hasExplicitContext = explicitContext.contextTokens !== undefined || explicitContext.contextWindowTokens !== undefined
   const isAuthoritativeTokenCount = /["']type["']\s*:\s*["']token_count["']/i.test(normalized)
 
   return {
     detectedModel,
-    inputTokens: fromJson.inputTokens,
-    outputTokens: fromJson.outputTokens,
+    inputTokens: fromJson.inputTokens ?? janusFooter.inputTokens,
+    outputTokens: fromJson.outputTokens ?? janusFooter.outputTokens,
     cacheReadTokens: fromJson.cacheReadTokens,
     cacheWriteTokens: fromJson.cacheWriteTokens,
-    totalTokens: fromJson.totalTokens,
+    totalTokens: fromJson.totalTokens ?? janusFooter.totalTokens,
     contextTokens: fromJson.contextTokens ?? explicitContext.contextTokens,
     contextWindowTokens: fromJson.contextWindowTokens ?? explicitContext.contextWindowTokens,
     modelChangedAt: fromJson.modelChangedAt,
@@ -363,13 +373,17 @@ function extractTelemetryFromJson(value: Record<string, unknown>): RuntimeTeleme
   }
 
   if (usage) {
-    const inputTokens = readPositiveNumber(usage.input_tokens ?? usage.inputTokens ?? usage.prompt_tokens ?? usage.promptTokens)
+    // Pi JSON mode reports cumulative usage under short keys
+    // (`{input, output, cacheRead, cacheWrite, totalTokens}`); the Claude /
+    // Codex / OpenCode long keys below stay first so a mixed payload keeps
+    // the explicit provider spelling.
+    const inputTokens = readPositiveNumber(usage.input_tokens ?? usage.inputTokens ?? usage.prompt_tokens ?? usage.promptTokens ?? usage.input)
     const cacheReadTokens =
-      readPositiveNumber(usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cacheReadTokens) ?? 0
+      readPositiveNumber(usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cacheReadTokens ?? usage.cacheRead) ?? 0
     const cacheCreationTokens =
-      readPositiveNumber(usage.cache_creation_input_tokens ?? usage.cache_creation_tokens ?? usage.cacheCreationTokens) ?? 0
+      readPositiveNumber(usage.cache_creation_input_tokens ?? usage.cache_creation_tokens ?? usage.cacheCreationTokens ?? usage.cacheWrite) ?? 0
     const outputTokens =
-      readPositiveNumber(usage.output_tokens ?? usage.outputTokens ?? usage.completion_tokens ?? usage.completionTokens)
+      readPositiveNumber(usage.output_tokens ?? usage.outputTokens ?? usage.completion_tokens ?? usage.completionTokens ?? usage.output)
     const contextTokens = (inputTokens ?? 0) + cacheReadTokens + cacheCreationTokens
 
     if (inputTokens !== undefined) patch.inputTokens = inputTokens
@@ -377,11 +391,30 @@ function extractTelemetryFromJson(value: Record<string, unknown>): RuntimeTeleme
     if (cacheReadTokens > 0) patch.cacheReadTokens = cacheReadTokens
     if (cacheCreationTokens > 0) patch.cacheWriteTokens = cacheCreationTokens
     if (contextTokens > 0) patch.contextTokens = contextTokens
-    const totalTokens = contextTokens + (outputTokens ?? 0)
+    const totalTokens = readPositiveNumber(usage.total_tokens ?? usage.totalTokens) ?? (contextTokens + (outputTokens ?? 0))
     if (totalTokens > 0) patch.totalTokens = totalTokens
   }
 
   return patch
+}
+
+function extractJanusFooterUsage(text: string): Pick<RuntimeTelemetryPatch, 'inputTokens' | 'outputTokens' | 'totalTokens'> {
+  const match = text.replace(/,/g, '').match(JANUS_FOOTER_USAGE_PATTERN)
+  if (!match?.[1] || !match[2]) return {}
+  const inputTokens = parseTokenAmount(match[1])
+  const outputTokens = parseTokenAmount(match[2])
+  if (inputTokens === undefined || outputTokens === undefined) return {}
+  return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens }
+}
+
+function isPlausibleModelId(value: string): boolean {
+  const candidate = value.trim()
+  if (candidate.length < 2 || candidate.length > 80) return false
+  // Prose after `model` ("model the behavior") carries spaces or sentence
+  // case; real ids are single lowercase tokens with a version/separator hint.
+  if (/\s/.test(candidate)) return false
+  if (!/[0-9./:_-]/.test(candidate)) return false
+  return /^[a-z0-9][a-z0-9_.:/+-]*$/i.test(candidate)
 }
 
 function extractExplicitContext(text: string): Pick<RuntimeTelemetryPatch, 'contextTokens' | 'contextWindowTokens'> {

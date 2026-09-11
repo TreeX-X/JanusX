@@ -251,4 +251,120 @@ describe('runtime telemetry history', () => {
       confidence: 'authoritative',
     })
   })
+
+  it('reads the declared janus model without claiming an unrelated active session', async () => {
+    const janusDir = join(testContext.homeDir, '.janus')
+    await mkdir(janusDir, { recursive: true })
+    await writeFile(join(janusDir, 'config.json'), JSON.stringify({
+      version: 1,
+      providers: [{ id: 'deepseek', models: ['deepseek-chat'] }],
+      defaultProvider: 'deepseek',
+      defaultModel: 'deepseek-chat',
+    }))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'janus', cwd: 'C:/repo' })
+
+    expect(snapshot).toMatchObject({
+      detectedModel: 'deepseek-chat',
+      contextTokens: 0,
+      source: 'configuration',
+      confidence: 'declared',
+    })
+    expect(snapshot?.sessionId).toBeUndefined()
+  })
+
+  it('binds a janus conversation file only on an exact id match', async () => {
+    const janusDir = join(testContext.homeDir, '.janus', 'history')
+    await mkdir(janusDir, { recursive: true })
+    await writeFile(join(testContext.homeDir, '.janus', 'config.json'), JSON.stringify({
+      version: 1,
+      providers: [{ id: 'deepseek', models: ['deepseek-chat'] }],
+      defaultModel: 'deepseek-chat',
+    }))
+    await writeFile(join(janusDir, 'conv-1.jsonl'), JSON.stringify({
+      id: 'conv-1', title: 'demo', createdAt: 1_000, updatedAt: 2_000,
+      messages: [{ role: 'user', content: 'hi' }], toolTraces: [], todos: [],
+    }))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'janus', cwd: 'C:/repo', sessionId: 'conv-1' })
+    expect(snapshot).toMatchObject({ sessionId: 'conv-1', detectedModel: 'deepseek-chat', source: 'history' })
+
+    const mismatch = await getRuntimeTelemetrySnapshot({ preset: 'janus', cwd: 'C:/repo', sessionId: 'conv-9' })
+    expect(mismatch).toBeNull()
+  })
+
+  it('merges pi project settings over global settings for the declared model', async () => {
+    await mkdir(join(testContext.homeDir, '.pi', 'agent'), { recursive: true })
+    await writeFile(join(testContext.homeDir, '.pi', 'agent', 'settings.json'), JSON.stringify({
+      defaultProvider: 'anthropic', defaultModel: 'claude-sonnet-4-5',
+    }))
+
+    const globalOnly = await getRuntimeTelemetrySnapshot({ preset: 'pi', cwd: 'C:/repo' })
+    expect(globalOnly).toMatchObject({
+      detectedModel: 'anthropic/claude-sonnet-4-5',
+      source: 'configuration',
+      confidence: 'declared',
+    })
+
+    const projectDir = join(testContext.homeDir, 'proj')
+    await mkdir(join(projectDir, '.pi'), { recursive: true })
+    await writeFile(join(projectDir, '.pi', 'settings.json'), JSON.stringify({ defaultModel: 'gpt-4o' }))
+
+    const overridden = await getRuntimeTelemetrySnapshot({ preset: 'pi', cwd: projectDir })
+    expect(overridden).toMatchObject({ detectedModel: 'anthropic/gpt-4o' })
+  })
+
+  it('sums pi usage along the active leaf path and ignores abandoned branches', async () => {
+    const sessionRoot = join(testContext.homeDir, '.pi', 'agent', 'sessions', '---C--repo--')
+    await mkdir(sessionRoot, { recursive: true })
+    const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const assistant = (usage: object, model = 'claude-sonnet-4-5') => ({
+      role: 'assistant', content: [{ type: 'text', text: 'hi' }],
+      api: 'anthropic-messages', provider: 'anthropic', model,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, ...usage },
+      stopReason: 'stop', timestamp: 1_000,
+    })
+    await writeFile(join(sessionRoot, `2026-01-01_${sessionId}.jsonl`), [
+      JSON.stringify({ type: 'session', version: 3, id: sessionId, timestamp: '2026-01-01T00:00:00.000Z', cwd: 'C:/repo' }),
+      JSON.stringify({ type: 'message', id: 'u1', parentId: null, timestamp: '2026-01-01T00:00:01.000Z', message: { role: 'user', content: 'a', timestamp: 1_000 } }),
+      JSON.stringify({ type: 'message', id: 'a1', parentId: 'u1', timestamp: '2026-01-01T00:00:02.000Z', message: assistant({ input: 1_000, output: 200, totalTokens: 1_200 }) }),
+      // Abandoned branch: must not count (leaf path goes through u2 instead).
+      JSON.stringify({ type: 'message', id: 'u9', parentId: 'a1', timestamp: '2026-01-01T00:00:03.000Z', message: { role: 'user', content: 'abandoned', timestamp: 1_000 } }),
+      JSON.stringify({ type: 'message', id: 'a9', parentId: 'u9', timestamp: '2026-01-01T00:00:04.000Z', message: assistant({ input: 99_000, output: 99_000, totalTokens: 198_000 }) }),
+      JSON.stringify({ type: 'model_change', id: 'm1', parentId: 'a1', timestamp: '2026-01-01T00:00:05.000Z', provider: 'openai', modelId: 'gpt-4o' }),
+      JSON.stringify({ type: 'compaction', id: 'c1', parentId: 'm1', timestamp: '2026-01-01T00:00:06.000Z', summary: 'old work', firstKeptEntryId: 'u2', tokensBefore: 50_000 }),
+      JSON.stringify({ type: 'message', id: 'u2', parentId: 'c1', timestamp: '2026-01-01T00:00:07.000Z', message: { role: 'user', content: 'b', timestamp: 1_000 } }),
+      JSON.stringify({ type: 'message', id: 'a2', parentId: 'u2', timestamp: '2026-01-01T00:00:08.000Z', message: assistant({ input: 500, output: 100, cacheRead: 60, cacheWrite: 7, totalTokens: 667 }, 'gpt-4o') }),
+    ].join('\n'))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'pi', cwd: 'C:/repo', sessionId })
+
+    expect(snapshot).toMatchObject({
+      sessionId,
+      detectedModel: 'gpt-4o',
+      inputTokens: 1_500,
+      outputTokens: 300,
+      cacheReadTokens: 60,
+      cacheWriteTokens: 7,
+      totalTokens: 1_867,
+      contextTokens: 1_867,
+      compactionCount: 1,
+      compactionCountConfidence: 'exact',
+      source: 'history',
+      confidence: 'authoritative',
+    })
+  })
+
+  it('rejects a pi session whose header belongs to another workspace', async () => {
+    const sessionRoot = join(testContext.homeDir, '.pi', 'agent', 'sessions', '---C--other--')
+    await mkdir(sessionRoot, { recursive: true })
+    const sessionId = 'ffffffff-1111-2222-3333-444444444444'
+    await writeFile(join(sessionRoot, `2026-01-01_${sessionId}.jsonl`), [
+      JSON.stringify({ type: 'session', version: 3, id: sessionId, timestamp: '2026-01-01T00:00:00.000Z', cwd: 'C:/other' }),
+      JSON.stringify({ type: 'message', id: 'a1', parentId: null, timestamp: '2026-01-01T00:00:01.000Z', message: { role: 'assistant', content: [], api: 'x', provider: 'x', model: 'm', usage: { input: 10, output: 5, totalTokens: 15 }, stopReason: 'stop', timestamp: 1_000 } }),
+    ].join('\n'))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'pi', cwd: 'C:/repo', sessionId })
+    expect(snapshot).toBeNull()
+  })
 })
