@@ -1,3 +1,4 @@
+// Note: per-terminal model detection with confidence merges — see .agents/notes/implemented/architecture/2026-06-28-terminal-model-lifecycle.md
 import type { TerminalPreset } from '@/types'
 import { matchAiModel } from '@janusx/llm-core/model-registry'
 import type {
