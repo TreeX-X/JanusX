@@ -1,3 +1,4 @@
+// Note: local reminders leave system notifications — see .agents/notes/implemented/feature/2026-07-05-desktop-toast.md
 import { BrowserWindow, app, ipcMain, screen, type IpcMainEvent } from 'electron'
 import { join } from 'path'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
