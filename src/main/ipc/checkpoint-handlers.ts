@@ -1,3 +1,4 @@
+// Note: snapshots observe and never mutate — see .agents/notes/implemented/architecture/2026-06-27-checkpoint-safety.md
 import { ipcMain } from 'electron'
 import { access } from 'fs/promises'
 import { checkpointManager } from '@janus-agent/agent-core'
