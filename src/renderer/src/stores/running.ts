@@ -1,3 +1,4 @@
+// Note: one orb per workspace, long-press starts only — see .agents/notes/implemented/feature/2026-09-09-run-orb-budding.md
 import { create } from 'zustand'
 import type { RunningProjectSummary } from '../../../shared/ipc/project'
 
