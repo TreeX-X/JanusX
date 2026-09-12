@@ -13,7 +13,7 @@ import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
 import { useCheckpointStore } from '@/stores/checkpoint'
-import { useOfficeStore } from '@/stores/office'
+import { useProductWorkspaceStore } from '@/stores/productWorkspace'
 import { useRightToolStore } from '@/stores/right-tools'
 import { useEditorStore } from '@/stores/editor'
 import { Titlebar } from '@/components/Titlebar'
@@ -24,12 +24,12 @@ import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel, RightDockLayoutProvider } from '@/components/Panel'
 import { getRightDockLayout, CENTER_WORKSPACE_MIN_WIDTH } from '@/components/right-tools/layout'
 import {
-  clampOfficePreviewWidth,
-  getOfficePreviewMaxWidth,
-  OFFICE_PREVIEW_MAX_WIDTH,
-  OFFICE_PREVIEW_MIN_WIDTH,
-  reconcileOfficePreviewWidth,
-} from '@/components/office/officeResize'
+  clampProductWorkspaceWidth,
+  getProductWorkspaceMaxWidth,
+  PRODUCT_WORKSPACE_MAX_WIDTH,
+  PRODUCT_WORKSPACE_MIN_WIDTH,
+  reconcileProductWorkspaceWidth,
+} from '@/components/product-workspace/productResize'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
@@ -43,13 +43,13 @@ import { TeamSetupGate } from '@/components/team/TeamSetupGate'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
 
-/*-- P4: 重量级面板按需分包。蓝图画布（@xyflow）与 Office 预览不进首屏 bundle，
-     Suspense fallback 为 null（蓝图在翻转卡背面、Office 有显隐门控，无感加载）。 --*/
+/*-- P4: 重量级面板按需分包。蓝图画布（@xyflow）与产物工作区不进首屏 bundle，
+     Suspense fallback 为 null（蓝图在翻转卡背面、产物工作区有显隐门控，无感加载）。 --*/
 const BlueprintFocusView = lazy(() =>
   import('@/components/blueprint/BlueprintFocusView').then((m) => ({ default: m.BlueprintFocusView }))
 )
-const OfficePreviewPanel = lazy(() =>
-  import('@/components/office/OfficePreviewPanel').then((m) => ({ default: m.OfficePreviewPanel }))
+const ProductWorkspacePanel = lazy(() =>
+  import('@/components/product-workspace/ProductWorkspacePanel').then((m) => ({ default: m.ProductWorkspacePanel }))
 )
 
 type IdleWindow = Window & {
@@ -60,19 +60,19 @@ type IdleWindow = Window & {
 const SIDE_PANEL_WIDTH = 'clamp(252px, 15vw, 288px)'
 const SIDE_PANEL_COLLAPSED_WIDTH = '52px'
 const SIDE_PANEL_TRANSITION_MS = 240
-const OFFICE_PREVIEW_WIDTH = 'clamp(300px, 30vw, 480px)'
-const OFFICE_CLOSE_DURATION_MS = 200
-const OFFICE_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
+const PRODUCT_WORKSPACE_WIDTH = 'clamp(320px, 32vw, 640px)'
+const PRODUCT_CLOSE_DURATION_MS = 200
+const PRODUCT_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
 const EMBEDDED_EDITOR_MIN_WIDTH = 360
 
 function clampEmbeddedEditorWidth(width: number, maxWidth: number): number {
   return Math.max(EMBEDDED_EDITOR_MIN_WIDTH, Math.min(maxWidth, width))
 }
 
-interface OfficeResizeSession {
+interface ProductResizeSession {
   pointerId: number
   target: HTMLDivElement
-  officeRightEdge: number
+  stageRightEdge: number
   resizableWorkspaceWidth: number
 }
 
@@ -96,53 +96,55 @@ export default function App() {
   const dragFlipProgress = useAppStore((s) => s.dragFlipProgress)
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
   const workspacePaneTree = useWorkspaceStore((s) => s.paneTree)
   const hasRetainedWorkspacePane = useWorkspaceStore((s) =>
     Object.values(s.terminalSnapshots).some((snapshot) => snapshot.paneTree !== null)
   )
   const showWorkspacePane = shouldRenderWorkspacePane(workspacePaneTree !== null)
   const mountWorkspacePane = showWorkspacePane || hasRetainedWorkspacePane
-  const visibleOfficeWorkspaceId = useOfficeStore((s) => s.visibleWorkspaceId)
+  const visibleProductWorkspaceId = useProductWorkspaceStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
   const rightToolActiveId = useRightToolStore((s) => s.activeToolId)
   const isEditorEmbedded = useEditorStore((s) => s.isEmbedded && s.isVisible)
   const embeddedEditorWidth = useEditorStore((s) => s.embeddedWidth)
-  const officeVisible = visibleOfficeWorkspaceId !== null && visibleOfficeWorkspaceId === activeWorkspaceId
-  const [officeClosing, setOfficeClosing] = useState(false)
-  const [officeWidth, setOfficeWidth] = useState<number | null>(null)
-  const [officeMeasuredWidth, setOfficeMeasuredWidth] = useState(OFFICE_PREVIEW_MIN_WIDTH)
-  const [officeMaxWidth, setOfficeMaxWidth] = useState(OFFICE_PREVIEW_MAX_WIDTH)
-  const [officeResizing, setOfficeResizing] = useState(false)
+  const productVisible = visibleProductWorkspaceId !== null && visibleProductWorkspaceId === activeWorkspaceId
+  const [productClosing, setProductClosing] = useState(false)
+  const [productWidth, setProductWidth] = useState<number | null>(null)
+  const [productMeasuredWidth, setProductMeasuredWidth] = useState(PRODUCT_WORKSPACE_MIN_WIDTH)
+  const [productMaxWidth, setProductMaxWidth] = useState(PRODUCT_WORKSPACE_MAX_WIDTH)
+  const [productResizing, setProductResizing] = useState(false)
   const [rightDockResizing, setRightDockResizing] = useState(false)
   const [editorResizing, setEditorResizing] = useState(false)
-  const officeCloseTimerRef = useRef<number | null>(null)
+  const productCloseTimerRef = useRef<number | null>(null)
   const appGridRef = useRef<HTMLDivElement | null>(null)
   const centerWorkspaceRef = useRef<HTMLElement | null>(null)
-  const officeWorkspaceRef = useRef<HTMLElement | null>(null)
+  const productWorkspaceRef = useRef<HTMLElement | null>(null)
   const editorWorkspaceRef = useRef<HTMLElement | null>(null)
-  const officeResizeSessionRef = useRef<OfficeResizeSession | null>(null)
+  const productResizeSessionRef = useRef<ProductResizeSession | null>(null)
   const editorResizeSessionRef = useRef<EditorResizeSession | null>(null)
   const bodyInteractionStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const editorBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
-  const officeRendered = officeVisible || officeClosing
+  const productRendered = productVisible || productClosing
+  const productWorkspacePath = workspaces.find(({ id }) => id === activeWorkspaceId)?.path ?? null
   const [appGridWidth, setAppGridWidth] = useState(() => window.innerWidth)
   const sidebarWidth = sidebarCollapsed
     ? 52
     : Math.min(288, Math.max(252, appGridWidth * 0.15))
-  const officeColumnWidth = officeRendered && !officeClosing
-    ? officeWidth ?? officeMeasuredWidth
+  const productColumnWidth = productRendered && !productClosing
+    ? productWidth ?? productMeasuredWidth
     : 0
   const rightDockLayout = getRightDockLayout({
-    availableWidth: appGridWidth - sidebarWidth - officeColumnWidth
+    availableWidth: appGridWidth - sidebarWidth - productColumnWidth
       - (isEditorEmbedded ? EMBEDDED_EDITOR_MIN_WIDTH : 0),
     panelCollapsed,
-    officeRendered,
+    stageRendered: productRendered,
     panelWidth: rightToolPanelWidth,
     hasActiveTool: rightToolActiveId !== null,
   })
   const editorMaxWidth = Math.max(
     EMBEDDED_EDITOR_MIN_WIDTH,
-    appGridWidth - sidebarWidth - officeColumnWidth
+    appGridWidth - sidebarWidth - productColumnWidth
       - rightDockLayout.dockWidth - CENTER_WORKSPACE_MIN_WIDTH,
   )
   const editorColumnWidth = isEditorEmbedded
@@ -159,50 +161,50 @@ export default function App() {
     return () => observer.disconnect()
   }, [])
 
-  const reconcileOfficeLayout = useCallback(() => {
-    if (!officeVisible || officeClosing || !centerWorkspaceRef.current || !officeWorkspaceRef.current) return
-    const officeRect = officeWorkspaceRef.current.getBoundingClientRect()
+  const reconcileProductLayout = useCallback(() => {
+    if (!productVisible || productClosing || !centerWorkspaceRef.current || !productWorkspaceRef.current) return
+    const stageRect = productWorkspaceRef.current.getBoundingClientRect()
     const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
-    const resizableWorkspaceWidth = officeRect.width + centerRect.width
-    const maxWidth = getOfficePreviewMaxWidth(resizableWorkspaceWidth)
+    const resizableWorkspaceWidth = stageRect.width + centerRect.width
+    const maxWidth = getProductWorkspaceMaxWidth(resizableWorkspaceWidth)
 
-    setOfficeMeasuredWidth((current) => Math.abs(current - officeRect.width) < 0.5 ? current : officeRect.width)
-    setOfficeMaxWidth((current) => Math.abs(current - maxWidth) < 0.5 ? current : maxWidth)
-    setOfficeWidth((current) => {
-      const { width } = reconcileOfficePreviewWidth(current, officeRect.width, resizableWorkspaceWidth)
+    setProductMeasuredWidth((current) => Math.abs(current - stageRect.width) < 0.5 ? current : stageRect.width)
+    setProductMaxWidth((current) => Math.abs(current - maxWidth) < 0.5 ? current : maxWidth)
+    setProductWidth((current) => {
+      const { width } = reconcileProductWorkspaceWidth(current, stageRect.width, resizableWorkspaceWidth)
       return current !== null && Math.abs(current - width) < 0.5 ? current : width
     })
-  }, [officeClosing, officeVisible])
+  }, [productClosing, productVisible])
 
   useLayoutEffect(() => {
-    if (!officeVisible || officeClosing || !centerWorkspaceRef.current || !officeWorkspaceRef.current) return
+    if (!productVisible || productClosing || !centerWorkspaceRef.current || !productWorkspaceRef.current) return
     const centerWorkspace = centerWorkspaceRef.current
-    const officeWorkspace = officeWorkspaceRef.current
+    const stageWorkspace = productWorkspaceRef.current
     let frameId: number | null = null
     const observer = new ResizeObserver(() => {
       if (frameId !== null) return
       frameId = window.requestAnimationFrame(() => {
         frameId = null
-        reconcileOfficeLayout()
+        reconcileProductLayout()
       })
     })
 
-    reconcileOfficeLayout()
+    reconcileProductLayout()
     observer.observe(centerWorkspace)
-    observer.observe(officeWorkspace)
+    observer.observe(stageWorkspace)
     return () => {
       observer.disconnect()
       if (frameId !== null) window.cancelAnimationFrame(frameId)
     }
-  }, [officeClosing, officeVisible, reconcileOfficeLayout])
+  }, [productClosing, productVisible, reconcileProductLayout])
 
-  const finishOfficeResize = useCallback((updateState = true) => {
-    const session = officeResizeSessionRef.current
+  const finishProductResize = useCallback((updateState = true) => {
+    const session = productResizeSessionRef.current
     if (session?.target.hasPointerCapture(session.pointerId)) {
       session.target.releasePointerCapture(session.pointerId)
     }
-    officeResizeSessionRef.current = null
-    if (updateState) setOfficeResizing(false)
+    productResizeSessionRef.current = null
+    if (updateState) setProductResizing(false)
     if (bodyInteractionStyleRef.current) {
       document.body.style.cursor = bodyInteractionStyleRef.current.cursor
       document.body.style.userSelect = bodyInteractionStyleRef.current.userSelect
@@ -210,19 +212,19 @@ export default function App() {
     }
   }, [])
 
-  const handleOfficeResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (officeClosing || event.button !== 0 || !centerWorkspaceRef.current || !officeWorkspaceRef.current) return
+  const handleProductResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (productClosing || event.button !== 0 || !centerWorkspaceRef.current || !productWorkspaceRef.current) return
 
-    finishOfficeResize()
-    const officeRect = officeWorkspaceRef.current.getBoundingClientRect()
+    finishProductResize()
+    const stageRect = productWorkspaceRef.current.getBoundingClientRect()
     const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
-    officeResizeSessionRef.current = {
+    productResizeSessionRef.current = {
       pointerId: event.pointerId,
       target: event.currentTarget,
-      officeRightEdge: officeRect.right,
-      resizableWorkspaceWidth: officeRect.width + centerRect.width,
+      stageRightEdge: stageRect.right,
+      resizableWorkspaceWidth: stageRect.width + centerRect.width,
     }
-    setOfficeMaxWidth(getOfficePreviewMaxWidth(officeRect.width + centerRect.width))
+    setProductMaxWidth(getProductWorkspaceMaxWidth(stageRect.width + centerRect.width))
     bodyInteractionStyleRef.current = {
       cursor: document.body.style.cursor,
       userSelect: document.body.style.userSelect,
@@ -230,41 +232,41 @@ export default function App() {
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
     event.currentTarget.setPointerCapture(event.pointerId)
-    setOfficeWidth(officeRect.width)
-    setOfficeResizing(true)
+    setProductWidth(stageRect.width)
+    setProductResizing(true)
     event.preventDefault()
-  }, [finishOfficeResize, officeClosing])
+  }, [finishProductResize, productClosing])
 
-  const handleOfficeResizeMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const session = officeResizeSessionRef.current
+  const handleProductResizeMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const session = productResizeSessionRef.current
     if (!session || session.pointerId !== event.pointerId) return
-    setOfficeWidth(clampOfficePreviewWidth(
+    setProductWidth(clampProductWorkspaceWidth(
       event.clientX,
-      session.officeRightEdge,
+      session.stageRightEdge,
       session.resizableWorkspaceWidth,
     ))
   }, [])
 
-  const handleOfficeResizeEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (officeResizeSessionRef.current?.pointerId !== event.pointerId) return
-    finishOfficeResize()
-  }, [finishOfficeResize])
+  const handleProductResizeEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (productResizeSessionRef.current?.pointerId !== event.pointerId) return
+    finishProductResize()
+  }, [finishProductResize])
 
-  const handleOfficeResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (!centerWorkspaceRef.current || !officeWorkspaceRef.current) return
-    const officeRect = officeWorkspaceRef.current.getBoundingClientRect()
+  const handleProductResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!centerWorkspaceRef.current || !productWorkspaceRef.current) return
+    const stageRect = productWorkspaceRef.current.getBoundingClientRect()
     const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
-    const maxWidth = getOfficePreviewMaxWidth(officeRect.width + centerRect.width)
+    const maxWidth = getProductWorkspaceMaxWidth(stageRect.width + centerRect.width)
     const widthByKey: Partial<Record<string, number>> = {
-      ArrowLeft: Math.min(maxWidth, officeRect.width + 16),
-      ArrowRight: Math.max(OFFICE_PREVIEW_MIN_WIDTH, officeRect.width - 16),
-      Home: OFFICE_PREVIEW_MIN_WIDTH,
+      ArrowLeft: Math.min(maxWidth, stageRect.width + 16),
+      ArrowRight: Math.max(PRODUCT_WORKSPACE_MIN_WIDTH, stageRect.width - 16),
+      Home: PRODUCT_WORKSPACE_MIN_WIDTH,
       End: maxWidth,
     }
     const nextWidth = widthByKey[event.key]
     if (nextWidth === undefined) return
-    setOfficeMaxWidth(maxWidth)
-    setOfficeWidth(nextWidth)
+    setProductMaxWidth(maxWidth)
+    setProductWidth(nextWidth)
     event.preventDefault()
   }, [])
 
@@ -334,30 +336,30 @@ export default function App() {
     event.preventDefault()
   }, [editorColumnWidth, editorMaxWidth])
 
-  const handleCloseOffice = useCallback(() => {
-    if (officeCloseTimerRef.current !== null || visibleOfficeWorkspaceId === null) return
+  const handleCloseProduct = useCallback(() => {
+    if (productCloseTimerRef.current !== null || visibleProductWorkspaceId === null) return
 
-    finishOfficeResize()
-    const closingWorkspaceId = visibleOfficeWorkspaceId
-    setOfficeClosing(true)
-    officeCloseTimerRef.current = window.setTimeout(() => {
-      officeCloseTimerRef.current = null
-      if (useOfficeStore.getState().visibleWorkspaceId === closingWorkspaceId) {
-        useOfficeStore.getState().closeOfficeSpace()
+    finishProductResize()
+    const closingWorkspaceId = visibleProductWorkspaceId
+    setProductClosing(true)
+    productCloseTimerRef.current = window.setTimeout(() => {
+      productCloseTimerRef.current = null
+      if (useProductWorkspaceStore.getState().visibleWorkspaceId === closingWorkspaceId) {
+        useProductWorkspaceStore.getState().closeProductWorkspace()
       }
-      setOfficeClosing(false)
-    }, OFFICE_CLOSE_DURATION_MS)
-  }, [finishOfficeResize, visibleOfficeWorkspaceId])
+      setProductClosing(false)
+    }, PRODUCT_CLOSE_DURATION_MS)
+  }, [finishProductResize, visibleProductWorkspaceId])
 
   useEffect(() => {
     return () => {
-      if (officeCloseTimerRef.current !== null) {
-        window.clearTimeout(officeCloseTimerRef.current)
+      if (productCloseTimerRef.current !== null) {
+        window.clearTimeout(productCloseTimerRef.current)
       }
-      finishOfficeResize(false)
+      finishProductResize(false)
       finishEditorResize(false)
     }
-  }, [finishEditorResize, finishOfficeResize])
+  }, [finishEditorResize, finishProductResize])
 
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
   const flipperElRef = useRef<HTMLDivElement | null>(null)
@@ -408,9 +410,9 @@ export default function App() {
         className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden"
         style={{
           gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${
-            officeRendered ? `${officeClosing ? '0px' : officeWidth === null ? OFFICE_PREVIEW_WIDTH : `${officeWidth}px`} ` : ''
+            productRendered ? `${productClosing ? '0px' : productWidth === null ? PRODUCT_WORKSPACE_WIDTH : `${productWidth}px`} ` : ''
           }${isEditorEmbedded ? `${editorColumnWidth}px ` : ''}${rightDockLayout.dockWidth}px`,
-          transition: officeResizing || rightDockResizing || editorResizing
+          transition: productResizing || rightDockResizing || editorResizing
             ? 'none'
             : `grid-template-columns ${SIDE_PANEL_TRANSITION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
         }}
@@ -498,41 +500,42 @@ export default function App() {
           </div>
         </main>
 
-        {officeRendered && (
+        {productRendered && (
           <section
-            ref={officeWorkspaceRef}
+            ref={productWorkspaceRef}
             className="relative min-w-0 overflow-hidden border-l border-white/[0.07]"
-            aria-label="Office preview workspace"
-            {...(officeClosing ? { inert: '' } : {})}
+            aria-label="Product workspace"
+            {...(productClosing ? { inert: '' } : {})}
             style={{
-              opacity: officeClosing ? 0 : 1,
-              pointerEvents: officeClosing ? 'none' : 'auto',
-              transition: `opacity ${OFFICE_CLOSE_DURATION_MS}ms ${OFFICE_CLOSE_EASING}`,
+              opacity: productClosing ? 0 : 1,
+              pointerEvents: productClosing ? 'none' : 'auto',
+              transition: `opacity ${PRODUCT_CLOSE_DURATION_MS}ms ${PRODUCT_CLOSE_EASING}`,
             }}
           >
-            {!officeClosing && (
+            {!productClosing && (
               <div
                 role="separator"
-                aria-label="Resize Office preview"
+                aria-label="Resize product workspace"
                 aria-orientation="vertical"
-                aria-valuemin={OFFICE_PREVIEW_MIN_WIDTH}
-                aria-valuemax={Math.round(officeMaxWidth)}
-                aria-valuenow={Math.round(officeMeasuredWidth)}
+                aria-valuemin={PRODUCT_WORKSPACE_MIN_WIDTH}
+                aria-valuemax={Math.round(productMaxWidth)}
+                aria-valuenow={Math.round(productMeasuredWidth)}
                 tabIndex={0}
                 className={dockStyles.resizeHandle}
-                data-resizing={officeResizing}
-                onPointerDown={handleOfficeResizeStart}
-                onPointerMove={handleOfficeResizeMove}
-                onPointerUp={handleOfficeResizeEnd}
-                onPointerCancel={handleOfficeResizeEnd}
-                onLostPointerCapture={handleOfficeResizeEnd}
-                onKeyDown={handleOfficeResizeKeyDown}
+                data-resizing={productResizing}
+                onPointerDown={handleProductResizeStart}
+                onPointerMove={handleProductResizeMove}
+                onPointerUp={handleProductResizeEnd}
+                onPointerCancel={handleProductResizeEnd}
+                onLostPointerCapture={handleProductResizeEnd}
+                onKeyDown={handleProductResizeKeyDown}
               />
             )}
             <Suspense fallback={null}>
-              <OfficePreviewPanel
-                workspaceId={visibleOfficeWorkspaceId}
-                onClose={handleCloseOffice}
+              <ProductWorkspacePanel
+                workspaceId={visibleProductWorkspaceId}
+                workspacePath={productWorkspacePath}
+                onClose={handleCloseProduct}
               />
             </Suspense>
           </section>
@@ -567,7 +570,7 @@ export default function App() {
         <RightDockLayoutProvider
           effectiveCollapsed={rightDockLayout.effectiveCollapsed}
           effectiveMaxWidth={rightDockLayout.effectiveMaxWidth}
-          forcedCollapsed={officeRendered || rightDockLayout.responsiveAutoCollapsed}
+          forcedCollapsed={productRendered || rightDockLayout.responsiveAutoCollapsed}
           onResizingChange={setRightDockResizing}
         >
           <Panel />

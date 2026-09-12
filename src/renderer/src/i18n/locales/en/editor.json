@@ -219,5 +219,19 @@
     "promptCopy": "Copy",
     "promptCancel": "Cancel",
     "promptInsert": "Insert (don't submit)"
+  },
+  "product": {
+    "panelTitle": "PRODUCT WORKSPACE",
+    "closeAria": "Close product workspace",
+    "refreshHint": "Generated docx, md and html files appear here automatically.",
+    "closeTabAria": "Close {{relPath}}",
+    "reloadFromDisk": "Reload from disk",
+    "selectFromList": "Select a generated file from the list above",
+    "selectWorkspace": "Please select a workspace",
+    "fileListUnavailable": "File list unavailable ({{errorCode}})",
+    "noProducts": "No generated files in this workspace",
+    "startingPreview": "Loading preview…",
+    "iframeTitle": "Generated document preview",
+    "unsupportedKind": "This file kind cannot be previewed here"
   }
 }

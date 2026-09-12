@@ -1,16 +1,16 @@
 import type { OfficeFileEntry } from '../../../../shared/office'
 import type { OfficeService } from '@/services/office'
 
-interface OfficeDiscoveryHandlers {
+interface ProductDiscoveryHandlers {
   initialize: (entries: OfficeFileEntry[]) => void
   reconcile: (entries: OfficeFileEntry[]) => void
   isCurrent: () => boolean
 }
 
-export function startOfficeDiscovery(
+export function startProductDiscovery(
   workspaceId: string,
   service: OfficeService,
-  handlers: OfficeDiscoveryHandlers,
+  handlers: ProductDiscoveryHandlers,
 ): () => void {
   let disposed = false
   let unsubscribe: (() => void) | undefined

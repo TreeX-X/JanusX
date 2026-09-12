@@ -2,11 +2,11 @@ import { extname, isAbsolute, join } from 'path'
 import { lstat, readdir } from 'fs/promises'
 import {
   OFFICE_EXTENSIONS,
-  type OfficeExtension,
   type OfficeFileEntry,
   type OfficeFilesChangedEvent,
   type OfficeWatchErrorCode,
 } from '../../shared/office'
+import { isProductLocalExtension } from '../../shared/product'
 import {
   resolveTrustedOfficeWorkspace,
   type ResolveWorkspaceRoot,
@@ -73,8 +73,8 @@ const defaultDependencies: ArtifactIndexDependencies = {
   ...OFFICE_ARTIFACT_SCAN_LIMITS,
 }
 
-function isOfficeExtension(value: string): value is OfficeExtension {
-  return (OFFICE_EXTENSIONS as readonly string[]).includes(value)
+function isTrackedExtension(value: string): boolean {
+  return (OFFICE_EXTENSIONS as readonly string[]).includes(value) || isProductLocalExtension(value)
 }
 
 function normalizedRelativePath(value: string): string | undefined {
@@ -131,7 +131,7 @@ export class OfficeArtifactIndex {
   async reconcile(workspaceId: string, changedRelPath?: string): Promise<OfficeFileEntry[]> {
     const state = await this.ensure(workspaceId)
     const normalized = changedRelPath ? normalizedRelativePath(changedRelPath) : undefined
-    if (normalized && isOfficeExtension(extname(normalized).toLowerCase()) && !isIgnoredRelativePath(normalized)) {
+    if (normalized && isTrackedExtension(extname(normalized).toLowerCase()) && !isIgnoredRelativePath(normalized)) {
       await this.reconcileTarget(state, normalized)
     } else {
       const scan = await this.scanWorkspace(state.workspace.rootPath)
@@ -267,7 +267,7 @@ export class OfficeArtifactIndex {
     }
 
     const extension = extname(relPath).toLowerCase()
-    if (isOfficeExtension(extension)) {
+    if (isTrackedExtension(extension)) {
       state.targetedPaths.add(relPath)
       return true
     }
@@ -337,7 +337,7 @@ export class OfficeArtifactIndex {
           continue
         }
         const extension = extname(child.name).toLowerCase()
-        if (!child.isFile() || !isOfficeExtension(extension)) continue
+        if (!child.isFile() || !isTrackedExtension(extension)) continue
         try {
           const fileStat = await lstat(join(directory.path, child.name))
           if (!fileStat.isFile() || fileStat.isSymbolicLink()) continue
@@ -364,7 +364,7 @@ export class OfficeArtifactIndex {
         if (index === parts.length - 1) {
           if (!fileStat.isFile()) throw new Error('not-file')
           const extension = extname(relPath).toLowerCase()
-          if (!isOfficeExtension(extension)) throw new Error('not-office')
+          if (!isTrackedExtension(extension)) throw new Error('not-tracked')
           state.entries.set(relPath, {
             relPath,
             mtimeMs: fileStat.mtimeMs,

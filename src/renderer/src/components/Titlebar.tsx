@@ -11,10 +11,10 @@ import { useJanusChatController } from '@/components/janus/JanusChatProvider'
 import { useGlobalRunning } from '@/components/janus/useGlobalRunning'
 import { JanusRunOrbs } from '@/components/janus/JanusRunOrbs'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
-import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentOfficeNotice } from '@/components/janus/islandController'
+import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentProductNotice } from '@/components/janus/islandController'
 import { officeService } from '@/services/office'
-import { startOfficeDiscovery } from '@/components/office/officeDiscovery'
-import { useOfficeStore } from '@/stores/office'
+import { startProductDiscovery } from '@/components/product-workspace/productDiscovery'
+import { useProductWorkspaceStore } from '@/stores/productWorkspace'
 import { useTeamStore } from '@/stores/team'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
@@ -51,7 +51,6 @@ export function Titlebar() {
 
   const conversationController = useJanusChatController()
   const {
-    conversationId,
     messages,
     pendingContent,
     isStreaming,
@@ -75,10 +74,10 @@ export function Titlebar() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const previousActiveWorkspaceId = useRef(activeWorkspaceId)
-  const officeDiscoveryGeneration = useRef(0)
-  const artifactNotice = useOfficeStore((state) => state.artifactNotice)
-  const artifactsByWorkspace = useOfficeStore((state) => state.artifactsByWorkspace)
-  const officeArtifacts = activeWorkspaceId ? artifactsByWorkspace[activeWorkspaceId] ?? [] : []
+  const productDiscoveryGeneration = useRef(0)
+  const productNotice = useProductWorkspaceStore((state) => state.productNotice)
+  const productsByWorkspace = useProductWorkspaceStore((state) => state.productsByWorkspace)
+  const workspaceProducts = activeWorkspaceId ? productsByWorkspace[activeWorkspaceId] ?? [] : []
   const initializeBlueprintMaintenance = useBlueprintMaintenanceStore((state) => state.initialize)
 
   useEffect(() => { void initializeBlueprintMaintenance() }, [initializeBlueprintMaintenance])
@@ -93,25 +92,25 @@ export function Titlebar() {
     previousActiveWorkspaceId.current = activeWorkspaceId
     dispatchIsland({ type: 'invalidate' })
     if (previousWorkspaceId) {
-      useOfficeStore.getState().clearWorkspaceUi(previousWorkspaceId)
-      void useOfficeStore.getState().releaseWorkspace(previousWorkspaceId)
+      useProductWorkspaceStore.getState().clearWorkspaceUi(previousWorkspaceId)
+      void useProductWorkspaceStore.getState().releaseWorkspace(previousWorkspaceId)
     }
   }, [activeWorkspaceId])
 
   useEffect(() => {
-    const generation = ++officeDiscoveryGeneration.current
+    const generation = ++productDiscoveryGeneration.current
     if (!activeWorkspaceId) return
-    return startOfficeDiscovery(activeWorkspaceId, officeService, {
-      initialize: (entries) => useOfficeStore.getState().initializeArtifacts(activeWorkspaceId, entries),
-      reconcile: (entries) => useOfficeStore.getState().reconcileArtifacts(activeWorkspaceId, entries),
-      isCurrent: () => generation === officeDiscoveryGeneration.current
+    return startProductDiscovery(activeWorkspaceId, officeService, {
+      initialize: (entries) => useProductWorkspaceStore.getState().initializeProducts(activeWorkspaceId, entries),
+      reconcile: (entries) => useProductWorkspaceStore.getState().reconcileProducts(activeWorkspaceId, entries),
+      isCurrent: () => generation === productDiscoveryGeneration.current
         && useWorkspaceStore.getState().activeWorkspaceId === activeWorkspaceId,
     })
   }, [activeWorkspaceId])
 
   useEffect(() => {
-    if (shouldPresentOfficeNotice(islandStage, artifactNotice?.workspaceId ?? null, activeWorkspaceId)) dispatchIsland({ type: 'office-notice' })
-  }, [activeWorkspaceId, artifactNotice, islandStage])
+    if (shouldPresentProductNotice(islandStage, productNotice?.workspaceId ?? null, activeWorkspaceId)) dispatchIsland({ type: 'product-notice' })
+  }, [activeWorkspaceId, productNotice, islandStage])
 
   useEffect(() => {
     if (islandStage !== 'peek' || knowledgePeek.presentation === 'hidden') return
@@ -123,36 +122,36 @@ export function Titlebar() {
   }, [islandStage, knowledgePeek.presentation, knowledgePeek.version])
 
   useEffect(() => {
-    if (islandStage !== 'peek' || artifactNotice?.workspaceId !== activeWorkspaceId) return
+    if (islandStage !== 'peek' || productNotice?.workspaceId !== activeWorkspaceId) return
     const timer = window.setTimeout(() => {
-      useOfficeStore.getState().consumeArtifactNotice()
-      dispatchIsland({ type: 'office-consume' })
+      useProductWorkspaceStore.getState().consumeProductNotice()
+      dispatchIsland({ type: 'product-consume' })
     }, KNOWLEDGE_PEEK_TIMEOUT_MS)
     return () => window.clearTimeout(timer)
-  }, [activeWorkspaceId, artifactNotice, islandStage])
+  }, [activeWorkspaceId, productNotice, islandStage])
 
-  const openOfficeArtifact = useCallback((relPath: string) => {
+  const openProductFile = useCallback((relPath: string) => {
     if (!activeWorkspaceId) return
-    const office = useOfficeStore.getState()
-    office.consumeArtifactNotice()
-    office.showOfficeSpace(activeWorkspaceId)
-    void office.openPreview(activeWorkspaceId, relPath)
+    const product = useProductWorkspaceStore.getState()
+    product.consumeProductNotice()
+    product.showProductWorkspace(activeWorkspaceId)
+    void product.openPreview(activeWorkspaceId, relPath)
     dispatchIsland({ type: 'dismiss' })
   }, [activeWorkspaceId])
 
   const handleIslandSingleActivate = useCallback(() => {
-    if (islandStage === 'peek' && artifactNotice?.workspaceId === activeWorkspaceId) {
-      openOfficeArtifact(artifactNotice.entry.relPath)
+    if (islandStage === 'peek' && productNotice?.workspaceId === activeWorkspaceId) {
+      openProductFile(productNotice.entry.relPath)
       return
     }
     dispatchIsland({ type: 'single-activate' })
-  }, [activeWorkspaceId, artifactNotice, islandStage, openOfficeArtifact])
+  }, [activeWorkspaceId, productNotice, islandStage, openProductFile])
   const handleIslandDoubleActivate = useCallback(() => {
-    useOfficeStore.getState().consumeArtifactNotice()
+    useProductWorkspaceStore.getState().consumeProductNotice()
     dispatchIsland({ type: 'double-activate' })
   }, [])
   const handleIslandDismiss = useCallback(() => {
-    useOfficeStore.getState().consumeArtifactNotice()
+    useProductWorkspaceStore.getState().consumeProductNotice()
     dispatchIsland({ type: 'dismiss' })
   }, [])
 
@@ -187,13 +186,6 @@ export function Titlebar() {
   const handleCloseCancel = useCallback(() => {
     setCloseConfirmOpen(false)
   }, [])
-
-  const handleAddChatToWorkspace = useCallback(() => {
-    const workspaceStore = useWorkspaceStore.getState()
-    if (!workspaceStore.activeWorkspaceId) return
-    workspaceStore.openJanusChatInWorkspace(conversationId)
-    dispatchIsland({ type: 'dismiss' })
-  }, [conversationId])
 
   return (
     <div
@@ -321,15 +313,14 @@ export function Titlebar() {
           onChatRetry={handleChatRetry}
           onChatClear={handleChatClearAndInvalidatePeek}
           conversationController={conversationController}
-          onAddChatToWorkspace={activeWorkspaceId ? handleAddChatToWorkspace : undefined}
           resourceController={resourceController}
           toolTraces={toolTraces}
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
           knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}
-          officeNotice={artifactNotice?.workspaceId === activeWorkspaceId ? artifactNotice.entry : null}
-          officeArtifacts={officeArtifacts}
-          onOpenOfficeArtifact={openOfficeArtifact}
+          productNotice={productNotice?.workspaceId === activeWorkspaceId ? productNotice.entry : null}
+          productFiles={workspaceProducts}
+          onOpenProductFile={openProductFile}
         />
         <JanusRunOrbs />
       </div>

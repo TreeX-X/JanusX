@@ -116,6 +116,19 @@
     "activity": {
       "aria": "工作区工具活动"
     },
+    "todo": {
+      "aria": "待办事项",
+      "summary": "待办 {{done}}/{{total}}",
+      "current": "当前：{{content}}"
+    },
+    "question": {
+      "regionAria": "模型中途提问",
+      "heading": "需要你确认",
+      "customPlaceholder": "自定义回答…",
+      "customAria": "{{header}} 的自定义回答",
+      "submit": "回答",
+      "cancel": "取消"
+    },
     "tool": {
       "groupAria": "工具调用",
       "expandTitle": "展开详情",
@@ -155,13 +168,13 @@
     "aria": {
       "openIsland": "打开 Janus Island",
       "closeKnowledgePeek": "关闭知识预览",
-      "openOfficePreview": "打开 {{path}} 的 Office 预览"
+      "openProductPreview": "打开 {{path}} 的产物预览"
     },
     "peek": {
       "title": {
         "proposalReady": "蓝图提案已就绪",
         "needsAttention": "蓝图需要关注",
-        "officeReady": "Office 文件已就绪",
+        "productReady": "产物文件已就绪",
         "knowledge": "知识",
         "knowledgeRecalled": "已召回知识",
         "maintenance": "蓝图维护"
@@ -174,7 +187,7 @@
     "status": {
       "blueprintApproval": "BLUEPRINT // 需要审批",
       "blueprintAttention": "BLUEPRINT // 关注",
-      "officeOpenPreview": "OFFICE // 打开预览",
+      "productOpenPreview": "PRODUCT // 打开预览",
       "knowledgeNoMatch": "KNOWLEDGE // 无匹配",
       "knowledgeTruncated": "KNOWLEDGE // 已截断",
       "knowledgeReady": "KNOWLEDGE // 就绪",
@@ -207,8 +220,8 @@
       "statusLabel": "状态",
       "engineLabel": "引擎",
       "mainIdentity": "MAIN",
-      "officeArtifacts": "Office 产物",
-      "officeAvailable": "{{count}} 个可用",
+      "productFiles": "产物工作区",
+      "productAvailable": "{{count}} 个可用",
       "subagentRuntimes": "子代理运行时",
       "focusedTerminal": "聚焦终端",
       "noTerminalFocus": "无终端聚焦",

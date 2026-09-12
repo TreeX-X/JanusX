@@ -116,6 +116,19 @@
     "activity": {
       "aria": "Workspace tool activity"
     },
+    "todo": {
+      "aria": "Todo items",
+      "summary": "Todos {{done}}/{{total}}",
+      "current": "Now: {{content}}"
+    },
+    "question": {
+      "regionAria": "Mid-turn model question",
+      "heading": "Your input needed",
+      "customPlaceholder": "Custom answer…",
+      "customAria": "Custom answer for {{header}}",
+      "submit": "Answer",
+      "cancel": "Cancel"
+    },
     "tool": {
       "groupAria": "Tool calls",
       "expandTitle": "Expand details",
@@ -155,13 +168,13 @@
     "aria": {
       "openIsland": "Open Janus Island",
       "closeKnowledgePeek": "Close knowledge peek",
-      "openOfficePreview": "Open Office preview for {{path}}"
+      "openProductPreview": "Open product preview for {{path}}"
     },
     "peek": {
       "title": {
         "proposalReady": "Blueprint proposal ready",
         "needsAttention": "Blueprint needs attention",
-        "officeReady": "Office file ready",
+        "productReady": "Product file ready",
         "knowledge": "Knowledge",
         "knowledgeRecalled": "Knowledge recalled",
         "maintenance": "Blueprint maintenance"
@@ -174,7 +187,7 @@
     "status": {
       "blueprintApproval": "BLUEPRINT // APPROVAL REQUIRED",
       "blueprintAttention": "BLUEPRINT // ATTENTION",
-      "officeOpenPreview": "OFFICE // OPEN PREVIEW",
+      "productOpenPreview": "PRODUCT // OPEN PREVIEW",
       "knowledgeNoMatch": "KNOWLEDGE // NO MATCH",
       "knowledgeTruncated": "KNOWLEDGE // TRUNCATED",
       "knowledgeReady": "KNOWLEDGE // READY",
@@ -207,8 +220,8 @@
       "statusLabel": "STATUS",
       "engineLabel": "ENGINE",
       "mainIdentity": "MAIN",
-      "officeArtifacts": "Office artifacts",
-      "officeAvailable": "{{count}} available",
+      "productFiles": "Product workspace",
+      "productAvailable": "{{count}} available",
       "subagentRuntimes": "Subagent runtimes",
       "focusedTerminal": "focused terminal",
       "noTerminalFocus": "no terminal focus",

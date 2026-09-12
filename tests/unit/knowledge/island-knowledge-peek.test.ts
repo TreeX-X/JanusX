@@ -17,7 +17,7 @@ import {
 import {
   INITIAL_ISLAND_CONTROLLER_STATE,
   reduceIslandController,
-  shouldPresentOfficeNotice,
+  shouldPresentProductNotice,
 } from '../../../src/renderer/src/components/janus/islandController'
 
 function recalledTrace(requestId: string, score = 0.8): KnowledgeRecallTrace {
@@ -173,29 +173,29 @@ describe('Island knowledge peek state', () => {
     expect(reduceIslandController(invalidated, { type: 'terminal-changed' }).stage).toBe('collapsed')
   })
 
-  it('presents and consumes Office notices without stealing an expanded Island', () => {
-    const peek = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'office-notice' })
+  it('presents and consumes product notices without stealing an expanded Island', () => {
+    const peek = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'product-notice' })
     expect(peek.stage).toBe('peek')
-    expect(reduceIslandController(peek, { type: 'office-consume' }).stage).toBe('collapsed')
+    expect(reduceIslandController(peek, { type: 'product-consume' }).stage).toBe('collapsed')
 
     const expanded = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'double-activate' })
-    expect(reduceIslandController(expanded, { type: 'office-notice' })).toBe(expanded)
+    expect(reduceIslandController(expanded, { type: 'product-notice' })).toBe(expanded)
   })
 
-  it('re-presents a pending Office notice after expanded state collapses', () => {
+  it('re-presents a pending product notice after expanded state collapses', () => {
     const expanded = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'double-activate' })
-    const pending = reduceIslandController(expanded, { type: 'office-notice' })
+    const pending = reduceIslandController(expanded, { type: 'product-notice' })
     const collapsed = reduceIslandController(pending, { type: 'terminal-changed' })
     expect(collapsed.stage).toBe('collapsed')
-    expect(reduceIslandController(collapsed, { type: 'office-notice' }).stage).toBe('peek')
+    expect(reduceIslandController(collapsed, { type: 'product-notice' }).stage).toBe('peek')
 
     const consumed = reduceIslandController(
-      reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'office-notice' }),
-      { type: 'office-consume' },
+      reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'product-notice' }),
+      { type: 'product-consume' },
     )
     expect(consumed.stage).toBe('collapsed')
-    expect(shouldPresentOfficeNotice('collapsed', 'workspace', 'workspace')).toBe(true)
-    expect(shouldPresentOfficeNotice('expanded', 'workspace', 'workspace')).toBe(false)
-    expect(shouldPresentOfficeNotice('collapsed', null, 'workspace')).toBe(false)
+    expect(shouldPresentProductNotice('collapsed', 'workspace', 'workspace')).toBe(true)
+    expect(shouldPresentProductNotice('expanded', 'workspace', 'workspace')).toBe(false)
+    expect(shouldPresentProductNotice('collapsed', null, 'workspace')).toBe(false)
   })
 })

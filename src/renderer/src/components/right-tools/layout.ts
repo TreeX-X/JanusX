@@ -9,7 +9,7 @@ export const CENTER_WORKSPACE_MIN_WIDTH = 320
 interface RightDockLayoutInput {
   availableWidth: number
   panelCollapsed: boolean
-  officeRendered: boolean
+  stageRendered: boolean
   panelWidth: number
   hasActiveTool: boolean
 }
@@ -25,7 +25,7 @@ export interface RightDockLayout {
 export function getRightDockLayout({
   availableWidth,
   panelCollapsed,
-  officeRendered,
+  stageRendered,
   panelWidth,
   hasActiveTool,
 }: RightDockLayoutInput): RightDockLayout {
@@ -34,7 +34,7 @@ export function getRightDockLayout({
     availableWidth - CENTER_WORKSPACE_MIN_WIDTH - RIGHT_TOOL_RAIL_WIDTH,
   )
   const responsiveAutoCollapsed = effectiveMaxWidth < RIGHT_TOOL_PANEL_MIN_WIDTH
-  const effectiveCollapsed = panelCollapsed || officeRendered || responsiveAutoCollapsed
+  const effectiveCollapsed = panelCollapsed || stageRendered || responsiveAutoCollapsed
   const constrainedPanelWidth = clampRightToolPanelWidth(panelWidth, effectiveMaxWidth)
 
   return {

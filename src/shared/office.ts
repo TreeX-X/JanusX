@@ -62,7 +62,10 @@ export interface OfficeFileEntry {
   relPath: string
   mtimeMs: number
   size: number
-  ext: OfficeExtension
+  // Note: widened for 产物工作区 so the artifact index can also track previewable
+  // local files (md/html); preview leases remain Office-only via the workspace guard.
+  // See .agents/notes/implemented/feature/2026-09-13-product-workspace.md
+  ext: string
 }
 
 export interface OfficecliManualInstallGuidance {

@@ -1,6 +1,6 @@
 import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
-import type { OfficeFileEntry } from '../../../../shared/office'
+import type { ProductFileEntry } from '../../../../shared/product'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 
 export type JanusIslandStage = 'collapsed' | 'peek' | 'expanded'
@@ -25,15 +25,14 @@ export interface JanusIslandProps {
   onChatRetry: () => void
   onChatClear: () => void
   conversationController?: UseJanusChatReturn | null
-  onAddChatToWorkspace?: () => void
   resourceController: JanusResourceController
   toolTraces?: ChatToolTraceEntry[]
   knowledgeTrace?: KnowledgeRecallTrace | null
   knowledgePeekActive?: boolean
   knowledgePeekEmpty?: boolean
-  officeNotice?: OfficeFileEntry | null
-  officeArtifacts?: OfficeFileEntry[]
-  onOpenOfficeArtifact?: (relPath: string) => void
+  productNotice?: ProductFileEntry | null
+  productFiles?: ProductFileEntry[]
+  onOpenProductFile?: (relPath: string) => void
 }
 
 export type JanusParticle = { id: number; left: number; size: number; duration: number }

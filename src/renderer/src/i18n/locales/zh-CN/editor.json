@@ -219,5 +219,19 @@
     "promptCopy": "复制",
     "promptCancel": "取消",
     "promptInsert": "插入（不提交）"
+  },
+  "product": {
+    "panelTitle": "产物工作区",
+    "closeAria": "关闭产物工作区",
+    "refreshHint": "生成的 docx、md、html 文件会自动显示在这里。",
+    "closeTabAria": "关闭 {{relPath}}",
+    "reloadFromDisk": "从磁盘重新加载",
+    "selectFromList": "从上方列表选择生成的文件",
+    "selectWorkspace": "请选择工作区",
+    "fileListUnavailable": "文件列表不可用（{{errorCode}}）",
+    "noProducts": "当前工作区没有生成的文件",
+    "startingPreview": "正在加载预览…",
+    "iframeTitle": "生成文档预览",
+    "unsupportedKind": "此类文件暂不支持在此预览"
   }
 }

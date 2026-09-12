@@ -64,15 +64,14 @@ export function JanusIsland({
   onChatRetry,
   onChatClear,
   conversationController = null,
-  onAddChatToWorkspace,
   resourceController,
   toolTraces = [],
   knowledgeTrace = null,
   knowledgePeekActive = false,
   knowledgePeekEmpty = false,
-  officeNotice = null,
-  officeArtifacts = [],
-  onOpenOfficeArtifact,
+  productNotice = null,
+  productFiles = [],
+  onOpenProductFile,
 }: JanusIslandProps) {
   const { t } = useI18n('janus')
   const { mode, isSwitching, activeWorkspace, eyeContainerRef, hasRunning } = useJanusState()
@@ -269,16 +268,16 @@ export function JanusIsland({
   const maintenanceNeedsAttention = maintenanceTask?.status === 'failed' || maintenanceTask?.status === 'stale' || maintenanceTask?.status === 'proposal-ready'
   const peekTitle = useMemo(() => {
     if (maintenanceNeedsAttention) return maintenanceTask?.status === 'proposal-ready' ? t('janus:island.peek.title.proposalReady') : t('janus:island.peek.title.needsAttention')
-    if (officeNotice) return t('janus:island.peek.title.officeReady')
+    if (productNotice) return t('janus:island.peek.title.productReady')
     if (knowledgePeekEmpty) return t('janus:island.peek.title.knowledge')
     if (knowledgePeekActive && knowledgeTrace) return t('janus:island.peek.title.knowledgeRecalled')
     if (maintenanceTask) return t('janus:island.peek.title.maintenance')
     return ''
-  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, officeNotice, t])
+  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
 
   const peekSubtitle = useMemo(() => {
     if (maintenanceNeedsAttention && maintenanceTask) return `${maintenanceTask.blueprintName} | ${maintenanceTask.phase}`
-    if (officeNotice) return `${officeNotice.relPath} | ${officeNotice.ext.slice(1)}`
+    if (productNotice) return `${productNotice.relPath} | ${productNotice.kind}`
     if (knowledgePeekEmpty) return t('janus:island.peek.subtitle.noKnowledgeMatch')
     if (knowledgePeekActive && knowledgeTrace?.topHit) {
       const count = t('janus:island.peek.subtitle.knowledgeCount', {
@@ -291,13 +290,13 @@ export function JanusIsland({
     }
     if (maintenanceTask) return `${maintenanceTask.blueprintName} | ${maintenanceTask.progress}% | ${maintenanceTask.phase}`
     return ''
-  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, officeNotice, t])
+  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
 
   const modeLabel = activeNode ? t('janus:island.modeLabel.blueprint') : mode === 'analytics' ? t('janus:island.modeLabel.analytics') : mode === 'running' ? t('janus:island.modeLabel.running') : t('janus:island.modeLabel.order')
   const statusText = maintenanceNeedsAttention && maintenanceTask
     ? maintenanceTask.status === 'proposal-ready' ? t('janus:island.status.blueprintApproval') : t('janus:island.status.blueprintAttention')
-    : officeNotice
-    ? t('janus:island.status.officeOpenPreview')
+    : productNotice
+    ? t('janus:island.status.productOpenPreview')
     : knowledgePeekEmpty
     ? t('janus:island.status.knowledgeNoMatch')
     : knowledgePeekActive && knowledgeTrace
@@ -414,7 +413,7 @@ export function JanusIsland({
       data-mode={mode}
       data-auxiliary-open={auxiliaryDescriptor ? 'true' : 'false'}
       data-auxiliary-module={auxiliaryDescriptor?.type ?? 'none'}
-      data-peek-kind={officeNotice ? 'office' : 'knowledge'}
+      data-peek-kind={productNotice ? 'product' : 'knowledge'}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
@@ -428,7 +427,7 @@ export function JanusIsland({
         className={`janus-island${isSwitching ? ' switching' : ''}`}
         role={stage !== 'expanded' ? 'button' : undefined}
         tabIndex={stage !== 'expanded' ? 0 : undefined}
-        aria-label={stage === 'peek' ? officeNotice ? t('janus:island.aria.openOfficePreview', { path: officeNotice.relPath }) : t('janus:island.aria.closeKnowledgePeek') : stage === 'collapsed' ? t('janus:island.aria.openIsland') : undefined}
+        aria-label={stage === 'peek' ? productNotice ? t('janus:island.aria.openProductPreview', { path: productNotice.relPath }) : t('janus:island.aria.closeKnowledgePeek') : stage === 'collapsed' ? t('janus:island.aria.openIsland') : undefined}
         onKeyDown={stage !== 'expanded' ? handleIslandKeyDown : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -505,8 +504,8 @@ export function JanusIsland({
           onOpenMaintenance={handleOpenMaintenance}
           onCancelMaintenance={(taskId) => void cancelMaintenance(taskId)}
           onOpenBlueprintWorkbench={handleOpenBlueprintWorkbench}
-          officeArtifacts={officeArtifacts}
-          onOpenOfficeArtifact={onOpenOfficeArtifact}
+          productFiles={productFiles}
+          onOpenProductFile={onOpenProductFile}
           messages={messages}
           pendingContent={pendingContent}
           isStreaming={isStreaming}
@@ -521,7 +520,6 @@ export function JanusIsland({
           onChatRetry={onChatRetry}
           onChatClear={onChatClear}
           conversationController={conversationController}
-          onAddChatToWorkspace={onAddChatToWorkspace}
           resourceController={resourceController}
           toolTraces={toolTraces}
         />

@@ -20,7 +20,7 @@ export const INITIAL_ISLAND_CONTROLLER_STATE: IslandControllerState = {
   knowledge: EMPTY_ISLAND_KNOWLEDGE_PEEK,
 }
 
-export function shouldPresentOfficeNotice(
+export function shouldPresentProductNotice(
   stage: IslandStage,
   noticeWorkspaceId: string | null,
   activeWorkspaceId: string | null,
@@ -34,8 +34,8 @@ export type IslandControllerAction =
   | { type: 'double-activate' }
   | { type: 'dismiss' }
   | { type: 'timeout'; version: number }
-  | { type: 'office-notice' }
-  | { type: 'office-consume' }
+  | { type: 'product-notice' }
+  | { type: 'product-consume' }
   | { type: 'invalidate' }
   | { type: 'terminal-changed' }
 
@@ -72,11 +72,11 @@ export function reduceIslandController(
       const knowledge = dismissKnowledgePeek(state.knowledge, action.version, state.stage)
       return knowledge === state.knowledge ? state : { stage: 'collapsed', knowledge }
     }
-    case 'office-notice':
+    case 'product-notice':
       return state.stage === 'collapsed'
         ? { stage: 'peek', knowledge: hideKnowledgePeek(state.knowledge) }
         : state
-    case 'office-consume':
+    case 'product-consume':
       return state.stage === 'peek'
         ? { stage: 'collapsed', knowledge: hideKnowledgePeek(state.knowledge) }
         : state

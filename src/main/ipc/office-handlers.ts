@@ -28,6 +28,7 @@ import {
   type TrustedOfficeWorkspace,
 } from '../office/office-workspace-guard'
 import { officecliManager } from '../office/officecli-manager'
+import { isProductLocalExtension } from '../../shared/product'
 
 export interface OfficeHandlerOperations {
   detect(workspace: TrustedOfficeWorkspace): Promise<OfficecliInfo>
@@ -102,9 +103,11 @@ function isSafeRelPath(value: string): boolean {
 }
 
 function publicFileEntry(entry: OfficeFileEntry): OfficeFileEntry {
+  const extAllowed = (OFFICE_EXTENSIONS as readonly string[]).includes(entry.ext) ||
+    isProductLocalExtension(entry.ext)
   if (
     !isSafeRelPath(entry.relPath) ||
-    !(OFFICE_EXTENSIONS as readonly string[]).includes(entry.ext) ||
+    !extAllowed ||
     extname(entry.relPath).toLowerCase() !== entry.ext ||
     !Number.isFinite(entry.mtimeMs) ||
     !Number.isFinite(entry.size) ||

@@ -24,7 +24,7 @@ describe('right dock layout', () => {
     expect(getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: false,
-      officeRendered: false,
+      stageRendered: false,
       panelWidth: 280,
       hasActiveTool: true,
     })).toMatchObject({
@@ -39,7 +39,7 @@ describe('right dock layout', () => {
     expect(getRightDockLayout({
       availableWidth: 700,
       panelCollapsed: false,
-      officeRendered: false,
+      stageRendered: false,
       panelWidth: 420,
       hasActiveTool: true,
     })).toMatchObject({ panelWidth: 332, dockWidth: 380 })
@@ -47,7 +47,7 @@ describe('right dock layout', () => {
     expect(getRightDockLayout({
       availableWidth: 600,
       panelCollapsed: false,
-      officeRendered: false,
+      stageRendered: false,
       panelWidth: 420,
       hasActiveTool: true,
     })).toMatchObject({
@@ -57,31 +57,31 @@ describe('right dock layout', () => {
     })
   })
 
-  it('renders rail-only for manual collapse and Office without changing panel preference input', () => {
+  it('renders rail-only for manual collapse and product stage without changing panel preference input', () => {
     const manual = getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: true,
-      officeRendered: false,
+      stageRendered: false,
       panelWidth: 360,
       hasActiveTool: true,
     })
-    const office = getRightDockLayout({
+    const staged = getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: false,
-      officeRendered: true,
+      stageRendered: true,
       panelWidth: 360,
       hasActiveTool: true,
     })
 
     expect(manual).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
-    expect(office).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
+    expect(staged).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
   })
 
   it('renders rail-only when no tool is active even if the panel is not collapsed', () => {
     expect(getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: false,
-      officeRendered: false,
+      stageRendered: false,
       panelWidth: 360,
       hasActiveTool: false,
     })).toMatchObject({ effectiveCollapsed: false, dockWidth: 48, panelWidth: 360 })

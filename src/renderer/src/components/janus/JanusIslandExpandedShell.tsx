@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
 import type { SubAgentRun } from '../../../../shared/subAgentRun'
-import type { OfficeFileEntry } from '../../../../shared/office'
+import type { ProductFileEntry } from '../../../../shared/product'
 import type { AgentResultCard } from '../../../../shared/roundtable/events'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -28,7 +28,7 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   | 'messages' | 'pendingContent' | 'isStreaming' | 'error'
   | 'modelOptions' | 'activeModel' | 'modelNotice' | 'onChatSelectModel'
   | 'onChatSend' | 'onChatRewrite' | 'onChatStop' | 'onChatRetry' | 'onChatClear'
-  | 'conversationController' | 'onAddChatToWorkspace' | 'resourceController' | 'toolTraces'
+  | 'conversationController' | 'resourceController' | 'toolTraces'
 > {
   stage: JanusIslandStage
   view: JanusExpandedView
@@ -53,8 +53,8 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   onOpenMaintenance: () => void
   onCancelMaintenance: (taskId: string) => void
   onOpenBlueprintWorkbench: () => void
-  officeArtifacts: OfficeFileEntry[]
-  onOpenOfficeArtifact?: (relPath: string) => void
+  productFiles: ProductFileEntry[]
+  onOpenProductFile?: (relPath: string) => void
 }
 
 export function JanusIslandExpandedShell({
@@ -66,10 +66,10 @@ export function JanusIslandExpandedShell({
   onOpenQuestionsDetail,
   onRoundtableStateChange,
   onRequestAuxiliaryClose,
-  officeArtifacts, onOpenOfficeArtifact, messages, pendingContent,
+  productFiles, onOpenProductFile, messages, pendingContent,
   isStreaming, error, modelOptions, activeModel, modelNotice,
   onChatSelectModel, onChatSend, onChatRewrite, onChatStop, onChatRetry,
-  onChatClear, conversationController, onAddChatToWorkspace,
+  onChatClear, conversationController,
   resourceController, toolTraces = [],
 }: JanusIslandExpandedShellProps) {
   const { t } = useI18n('janus')
@@ -80,7 +80,6 @@ export function JanusIslandExpandedShell({
   const fetchSubAgentRuns = useSubAgentRunStore((state) => state.fetchRuns)
   const subscribeToSubAgentRuns = useSubAgentRunStore((state) => state.subscribeToEvents)
   const activeTerminalId = useWorkspaceStore((state) => state.activeTerminalId)
-  const focusedTabId = useWorkspaceStore((state) => state.focusedTabId)
   const terminals = useWorkspaceStore((state) => state.terminals)
 
   const activeTerminal = useMemo(
@@ -280,14 +279,14 @@ export function JanusIslandExpandedShell({
                     <div className="janus-monitor-right">
                       <div className="janus-monitor-panel janus-office-artifacts">
                         <div className="janus-monitor-section-title">
-                          <span>{t('janus:island.expanded.officeArtifacts')}</span>
-                          <em>{t('janus:island.expanded.officeAvailable', { count: officeArtifacts.length })}</em>
+                          <span>{t('janus:island.expanded.productFiles')}</span>
+                          <em>{t('janus:island.expanded.productAvailable', { count: productFiles.length })}</em>
                         </div>
                         <div className="janus-office-artifact-list">
-                          {officeArtifacts.map((entry) => (
-                            <button key={entry.relPath} type="button" onClick={() => onOpenOfficeArtifact?.(entry.relPath)}>
+                          {productFiles.map((entry) => (
+                            <button key={entry.relPath} type="button" onClick={() => onOpenProductFile?.(entry.relPath)}>
                               <span>{entry.relPath}</span>
-                              <em>{entry.ext.slice(1)}</em>
+                              <em>{entry.kind}</em>
                             </button>
                           ))}
                         </div>
@@ -375,7 +374,7 @@ export function JanusIslandExpandedShell({
                     center={(onRoundtableSend, roundtableMessages, workingRole, cards, hostQuestions, inputPlaceholder) => <>
                       <JanusChat
                         visible={stage === 'expanded' && view === 'roundtable'}
-                        docked discussionOnly focused={!focusedTabId?.startsWith('janus-chat')}
+                        docked discussionOnly
                         modeColor={modeColor} messages={roundtableMessages} pendingContent="" isStreaming={false} error={null}
                         modelOptions={modelOptions} activeModel={activeModel} modelNotice={null}
                         roundtableCards={cards}
@@ -395,9 +394,6 @@ export function JanusIslandExpandedShell({
                   // it intercept Tab/Ctrl+P and open a menu outside the viewport.
                   visible={stage === 'expanded' && view === 'chat'}
                   docked
-                  // A focused workspace Chat pane outranks the Island instance, so
-                  // both never claim the same global shortcut press.
-                  focused={!focusedTabId?.startsWith('janus-chat')}
                   modeColor={modeColor}
                   messages={messages}
                   pendingContent={pendingContent}
@@ -415,7 +411,6 @@ export function JanusIslandExpandedShell({
                   conversationController={conversationController}
                   resourceController={resourceController}
                   toolTraces={toolTraces}
-                  onAddToWorkspace={onAddChatToWorkspace}
                 /></div>
               </div>
     
