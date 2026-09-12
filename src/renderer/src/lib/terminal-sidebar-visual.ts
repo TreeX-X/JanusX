@@ -7,12 +7,13 @@ export interface TerminalStatusVisual {
   background: string
 }
 
-// Note: six-state sidebar contract keeps hook-derived attention visible — see .agents/notes/implemented/feature/2026-09-11-terminal-sidebar-states.md
+// Note: internal status keeps six values for hook routing and sort order, but
+// approval and input share one attention visual — see .agents/notes/implemented/feature/2026-09-12-terminal-status-display.md
 const STATUS_VISUALS: Record<Terminal['status'], TerminalStatusVisual> = {
   running: { label: '运行中', labelKey: 'terminal:status.running', color: '#6bd89b', background: 'rgba(70, 190, 125, 0.1)' },
   wait: { label: '空闲', labelKey: 'terminal:status.wait', color: '#8a8a93', background: 'rgba(255,255,255,0.05)' },
-  'needs-input': { label: '待输入', labelKey: 'terminal:status.needs-input', color: '#7db8ff', background: 'rgba(93, 165, 255, 0.1)' },
-  'needs-approval': { label: '待授权', labelKey: 'terminal:status.needs-approval', color: '#f0a35e', background: 'rgba(240, 163, 94, 0.12)' },
+  'needs-input': { label: '待处理', labelKey: 'terminal:status.needs-action', color: '#f0a35e', background: 'rgba(240, 163, 94, 0.12)' },
+  'needs-approval': { label: '待处理', labelKey: 'terminal:status.needs-action', color: '#f0a35e', background: 'rgba(240, 163, 94, 0.12)' },
   degraded: { label: '受限', labelKey: 'terminal:status.degraded', color: '#c9a0ff', background: 'rgba(160, 110, 255, 0.1)' },
   error: { label: '异常', labelKey: 'terminal:status.error', color: '#ff7474', background: 'rgba(255, 88, 88, 0.1)' },
 }

@@ -2,8 +2,9 @@
   "status": {
     "running": "Running",
     "wait": "Idle",
-    "needs-input": "Input needed",
-    "needs-approval": "Approval needed",
+    "needs-action": "Action needed",
+    "needs-input": "Action needed",
+    "needs-approval": "Action needed",
     "degraded": "Degraded",
     "error": "Error"
   },

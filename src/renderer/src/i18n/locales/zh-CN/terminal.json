@@ -2,8 +2,9 @@
   "status": {
     "running": "运行中",
     "wait": "空闲",
-    "needs-input": "待输入",
-    "needs-approval": "待授权",
+    "needs-action": "待处理",
+    "needs-input": "待处理",
+    "needs-approval": "待处理",
     "degraded": "受限",
     "error": "异常"
   },

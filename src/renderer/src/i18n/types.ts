@@ -1622,6 +1622,7 @@ export type TypedI18nKey =
   | 'terminal:sessions.countSuffix'
   | 'terminal:status.degraded'
   | 'terminal:status.error'
+  | 'terminal:status.needs-action'
   | 'terminal:status.needs-approval'
   | 'terminal:status.needs-input'
   | 'terminal:status.running'

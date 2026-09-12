@@ -38,6 +38,7 @@ import {
 } from '@/lib/workspace-pane'
 import { getPaneDropHint, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
 import { resolveContextWindows } from '@/lib/runtime-telemetry'
+import { getTerminalStatusVisual } from '@/lib/terminal-sidebar-visual'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
 import {
   launchTerminalPreset,
@@ -116,12 +117,6 @@ function providerLabel(preset: TerminalPreset, t: (key: string) => string): stri
     case 'shell':
       return t('terminal:provider.shell')
   }
-}
-
-function accentColor(status: Terminal['status']): string {
-  if (status === 'running') return '#ff7830'
-  if (status === 'error') return '#ff5858'
-  return '#58a6ff'
 }
 
 function formatAge(updatedAt?: number): string {
@@ -1008,6 +1003,9 @@ function LeafPane({
         {leaf.tabs.map((tab) => {
           const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
           const isActive = tab.id === activeTabId
+          const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
+          const tabStatusLabel = tabVisual ? t(tabVisual.labelKey) : undefined
+          const tabAttentionPulse = !!terminal && !isActive && terminal.status !== 'running' && terminal.status !== 'wait'
           return (
             <div
               key={tab.id}
@@ -1044,13 +1042,21 @@ function LeafPane({
                 background: isActive ? 'var(--shell-canvas)' : undefined,
                 boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.045)' : 'none',
               }}
-              title={terminal ? `${providerLabel(terminal.preset, t)} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
+              title={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
               {tab.type === 'janus-chat' && (
                 <span className="janus-chat-tab-eyes" role="img" aria-label="JanusX">
                   <span aria-hidden="true" />
                   <span aria-hidden="true" />
                 </span>
+              )}
+              {tabVisual && (
+                <span
+                  aria-hidden="true"
+                  title={tabStatusLabel}
+                  className={tabAttentionPulse ? 'term-status-pulse h-1.5 w-1.5 shrink-0 rounded-full' : 'h-1.5 w-1.5 shrink-0 rounded-full'}
+                  style={{ background: tabVisual.color }}
+                />
               )}
               {terminal?.preset === 'shell' && (
                 <SquareTerminal
@@ -1757,7 +1763,7 @@ export function TerminalArea() {
                 >
                   <span
                     className="h-[5px] w-[5px] shrink-0 rounded-full"
-                    style={{ background: accentColor(terminal.status) }}
+                    style={{ background: getTerminalStatusVisual(terminal.status).color }}
                   />
                   <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                 </span>
@@ -1824,8 +1830,8 @@ export function TerminalArea() {
                         <span
                           className="h-[6px] w-[6px] shrink-0 rounded-full"
                           style={{
-                            background: accentColor(terminal.status),
-                            boxShadow: `0 0 8px ${accentColor(terminal.status)}66`,
+                            background: getTerminalStatusVisual(terminal.status).color,
+                            boxShadow: `0 0 8px ${getTerminalStatusVisual(terminal.status).color}66`,
                           }}
                         />
                         <span className="truncate">{providerLabel(terminal.preset, t)}</span>

@@ -24,7 +24,7 @@ export const TERMINAL_EVENT_CHANNELS = {
 
 export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus'
 
-// Note: six-state sidebar contract keeps hook-derived attention visible — see .agents/notes/implemented/feature/2026-09-11-terminal-sidebar-states.md
+// Note: six internal states route hooks and sort order; approval and input share one attention visual — see .agents/notes/implemented/feature/2026-09-12-terminal-status-display.md
 // Sidebar display status of a terminal entry.
 // - wait: idle / no active output stream (AI CLI back at prompt, or shell always)
 // - running: AI CLI turn open (UserPromptSubmit / session busy until Stop / session idle)

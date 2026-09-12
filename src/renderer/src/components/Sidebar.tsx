@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { Activity, Bell, ChevronRight, CirclePause, CloudOff, Keyboard, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
+import { Activity, Bell, ChevronRight, CirclePause, CloudOff, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
@@ -187,8 +187,7 @@ function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
   const visual = getTerminalStatusVisual(status)
   const Icon =
     status === 'running' ? Activity
-    : status === 'needs-approval' ? Bell
-    : status === 'needs-input' ? Keyboard
+    : status === 'needs-approval' || status === 'needs-input' ? Bell
     : status === 'degraded' ? CloudOff
     : status === 'error' ? TriangleAlert
     : CirclePause

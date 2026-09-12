@@ -34,15 +34,16 @@ describe('terminal sidebar visuals', () => {
     })
   })
 
-  it('uses localized labels and distinct colors for every terminal state', () => {
+  it('uses localized labels with a unified attention visual', () => {
     expect(getTerminalStatusVisual('running').label).toBe('运行中')
     expect(getTerminalStatusVisual('wait').label).toBe('空闲')
-    expect(getTerminalStatusVisual('needs-input').label).toBe('待输入')
-    expect(getTerminalStatusVisual('needs-approval').label).toBe('待授权')
+    expect(getTerminalStatusVisual('needs-input').label).toBe('待处理')
+    expect(getTerminalStatusVisual('needs-approval').label).toBe('待处理')
     expect(getTerminalStatusVisual('degraded').label).toBe('受限')
     expect(getTerminalStatusVisual('error').label).toBe('异常')
+    expect(getTerminalStatusVisual('needs-input').color).toBe(getTerminalStatusVisual('needs-approval').color)
     expect(new Set(['running', 'wait', 'needs-input', 'needs-approval', 'degraded', 'error'].map((status) =>
       getTerminalStatusVisual(status as Terminal['status']).color
-    )).size).toBe(6)
+    )).size).toBe(5)
   })
 })
