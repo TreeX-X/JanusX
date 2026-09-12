@@ -72,7 +72,7 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
       <div className="min-w-0">
         <span className="text-[10px] font-semibold tracking-[0.14em] text-[#ff7830]">{t('editor:product.panelTitle')}</span>
       </div>
-      <button type="button" className="ml-auto mr-1 text-[9px] text-[#777] hover:text-white" onClick={() => setSetupOpen(true)}>{t('editor:office.officecliButton')}</button>
+      {activeTab?.kind === 'office' && <button type="button" className="ml-auto mr-1 text-[9px] text-[#777] hover:text-white" onClick={() => setSetupOpen(true)}>{t('editor:product.engineButton')}</button>}
       <button
         type="button"
         aria-label={t('editor:product.closeAria')}

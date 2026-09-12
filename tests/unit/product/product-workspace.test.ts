@@ -32,7 +32,7 @@ describe('product workspace kind mapping', () => {
     expect(productKindForPath('notes.md')).toBe('markdown')
     expect(productKindForPath('page.html')).toBe('html')
     expect(productKindForPath('notes.txt')).toBe('unsupported')
-    expect(toProductFileEntry({ relPath: 'a/b.md', mtimeMs: 3, size: 9 })).toEqual({ relPath: 'a/b.md', mtimeMs: 3, size: 9, kind: 'markdown' })
+    expect(toProductFileEntry({ relPath: 'a/b.md', mtimeMs: 3, size: 9 })).toEqual({ relPath: 'a/b.md', mtimeMs: 3, size: 9, kind: 'markdown', ext: '.md' })
   })
 })
 
@@ -87,7 +87,7 @@ describe('product workspace lifecycle', () => {
     listener?.({ workspaceId: 'workspace', entries: [added, existing], reason: 'watch' })
     catchup.resolve({ ok: true, value: [added, existing] })
     await vi.waitFor(() => {
-      expect(store.getState().productNotice).toEqual({ workspaceId: 'workspace', entry: { relPath: 'notes.md', size: 2, mtimeMs: 2, kind: 'markdown' } })
+      expect(store.getState().productNotice).toEqual({ workspaceId: 'workspace', entry: { relPath: 'notes.md', size: 2, mtimeMs: 2, kind: 'markdown', ext: '.md' } })
     })
     expect(noticeCount).toBe(1)
     unsubscribeStore()
@@ -256,7 +256,7 @@ describe('product workspace lifecycle', () => {
 
     const added = { relPath: 'page.html', ext: '.html', size: 2, mtimeMs: 3 }
     store.getState().reconcileProducts('workspace', [added, { ...existing, mtimeMs: 2 }])
-    expect(store.getState().productNotice).toEqual({ workspaceId: 'workspace', entry: { relPath: 'page.html', size: 2, mtimeMs: 3, kind: 'html' } })
+    expect(store.getState().productNotice).toEqual({ workspaceId: 'workspace', entry: { relPath: 'page.html', size: 2, mtimeMs: 3, kind: 'html', ext: '.html' } })
 
     store.getState().reconcileProducts('workspace', [{ ...existing, mtimeMs: 2 }])
     expect(store.getState().productNotice).toBeNull()

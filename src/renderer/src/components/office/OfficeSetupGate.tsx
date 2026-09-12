@@ -40,7 +40,7 @@ export function OfficeSetupGate({ workspaceId, onClose, onReady }: {
 
   return <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 p-4">
     <div className="w-full max-w-md rounded-lg border border-white/10 bg-[#171717] p-4 text-xs text-[#bbb] shadow-2xl">
-      <div className="mb-3 flex items-center justify-between"><strong className="text-[#ff7830]">Managed OfficeCLI</strong><button onClick={onClose} aria-label="Close OfficeCLI setup">×</button></div>
+      <div className="mb-3 flex items-center justify-between"><strong className="text-[#ff7830]">Office 渲染引擎</strong><button onClick={onClose} aria-label="Close OfficeCLI setup">×</button></div>
       <div className="space-y-1 break-all">
         <div>Version: {status?.version ?? '1.0.135'}</div>
         <div>Source: {status?.source ?? 'Official pinned GitHub release'}</div>

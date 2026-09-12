@@ -222,6 +222,7 @@
   },
   "product": {
     "panelTitle": "PRODUCT WORKSPACE",
+    "engineButton": "RENDER ENGINE",
     "closeAria": "Close product workspace",
     "refreshHint": "Generated docx, md and html files appear here automatically.",
     "closeTabAria": "Close {{relPath}}",

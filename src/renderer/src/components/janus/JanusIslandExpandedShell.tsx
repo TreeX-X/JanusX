@@ -286,7 +286,7 @@ export function JanusIslandExpandedShell({
                           {productFiles.map((entry) => (
                             <button key={entry.relPath} type="button" onClick={() => onOpenProductFile?.(entry.relPath)}>
                               <span>{entry.relPath}</span>
-                              <em>{entry.kind}</em>
+                              <em>{entry.ext.startsWith('.') ? entry.ext.slice(1) : entry.kind}</em>
                             </button>
                           ))}
                         </div>

@@ -277,7 +277,7 @@ export function JanusIsland({
 
   const peekSubtitle = useMemo(() => {
     if (maintenanceNeedsAttention && maintenanceTask) return `${maintenanceTask.blueprintName} | ${maintenanceTask.phase}`
-    if (productNotice) return `${productNotice.relPath} | ${productNotice.kind}`
+    if (productNotice) return `${productNotice.relPath} | ${productNotice.ext.startsWith('.') ? productNotice.ext.slice(1).toUpperCase() : productNotice.kind}`
     if (knowledgePeekEmpty) return t('janus:island.peek.subtitle.noKnowledgeMatch')
     if (knowledgePeekActive && knowledgeTrace?.topHit) {
       const count = t('janus:island.peek.subtitle.knowledgeCount', {

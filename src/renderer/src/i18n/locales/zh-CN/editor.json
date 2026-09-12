@@ -222,6 +222,7 @@
   },
   "product": {
     "panelTitle": "产物工作区",
+    "engineButton": "预览引擎",
     "closeAria": "关闭产物工作区",
     "refreshHint": "生成的 docx、md、html 文件会自动显示在这里。",
     "closeTabAria": "关闭 {{relPath}}",

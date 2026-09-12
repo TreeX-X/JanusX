@@ -13,15 +13,20 @@ export interface ProductFileEntry {
   mtimeMs: number
   size: number
   kind: ProductKind
+  ext: string
 }
 
 export function isProductLocalExtension(value: string): value is ProductLocalExtension {
   return (PRODUCT_LOCAL_EXTENSIONS as readonly string[]).includes(value)
 }
 
-export function productKindForPath(relPath: string): ProductKind {
+export function productExtForPath(relPath: string): string {
   const dot = relPath.lastIndexOf('.')
-  const ext = dot >= 0 ? relPath.slice(dot).toLowerCase() : ''
+  return dot >= 0 ? relPath.slice(dot).toLowerCase() : ''
+}
+
+export function productKindForPath(relPath: string): ProductKind {
+  const ext = productExtForPath(relPath)
   if ((OFFICE_EXTENSIONS as readonly string[]).includes(ext)) return 'office'
   if (ext === '.md' || ext === '.markdown') return 'markdown'
   if (ext === '.html' || ext === '.htm') return 'html'
@@ -29,5 +34,5 @@ export function productKindForPath(relPath: string): ProductKind {
 }
 
 export function toProductFileEntry(entry: { relPath: string; mtimeMs: number; size: number }): ProductFileEntry {
-  return { relPath: entry.relPath, mtimeMs: entry.mtimeMs, size: entry.size, kind: productKindForPath(entry.relPath) }
+  return { relPath: entry.relPath, mtimeMs: entry.mtimeMs, size: entry.size, kind: productKindForPath(entry.relPath), ext: productExtForPath(entry.relPath) }
 }

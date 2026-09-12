@@ -602,6 +602,7 @@ export type TypedI18nKey =
   | 'editor:office.startingPreview'
   | 'editor:product.closeAria'
   | 'editor:product.closeTabAria'
+  | 'editor:product.engineButton'
   | 'editor:product.fileListUnavailable'
   | 'editor:product.iframeTitle'
   | 'editor:product.noProducts'
