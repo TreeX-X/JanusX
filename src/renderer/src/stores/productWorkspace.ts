@@ -65,6 +65,9 @@ interface ProductWorkspaceState {
   activeTabIds: Record<string, string | undefined>
   requestEpochs: Record<string, number>
   productsByWorkspace: Record<string, ProductFileEntry[]>
+  /** Session baseline: relPath -> mtimeMs captured at discovery time; only
+   * files created/modified after it belong to the current terminal run. */
+  baselinesByWorkspace: Record<string, Record<string, number>>
   productNotice: ProductNotice | null
   visibleWorkspaceId: string | null
   initializeProducts: (workspaceId: string, entries: OfficeFileEntry[]) => void
@@ -105,21 +108,35 @@ export function createProductWorkspaceStore(
     activeTabIds: {},
     requestEpochs: {},
     productsByWorkspace: {},
+    baselinesByWorkspace: {},
     productNotice: null,
     visibleWorkspaceId: null,
 
     initializeProducts: (workspaceId, entries) => {
-      const products = entries.map(toProductFileEntry)
+      const baseline: Record<string, number> = {}
+      for (const entry of entries) baseline[entry.relPath] = entry.mtimeMs
       set((state) => ({
-        productsByWorkspace: { ...state.productsByWorkspace, [workspaceId]: products },
+        baselinesByWorkspace: { ...state.baselinesByWorkspace, [workspaceId]: baseline },
+        productsByWorkspace: { ...state.productsByWorkspace, [workspaceId]: [] },
         productNotice: state.productNotice?.workspaceId === workspaceId ? null : state.productNotice,
       }))
     },
 
     reconcileProducts: (workspaceId, entries) => {
-      const products = entries.map(toProductFileEntry)
+      const baseline = get().baselinesByWorkspace[workspaceId]
+      // Session scope: a file is only surfaceable once it is created or
+      // modified after the discovery baseline; pre-existing workspace files
+      // stay invisible even when the watcher re-emits them.
+      const products = (baseline
+        ? entries.filter((entry) => baseline[entry.relPath] === undefined || entry.mtimeMs > baseline[entry.relPath])
+        : entries
+      ).map(toProductFileEntry)
       set((state) => {
-        const previousPaths = new Set((state.productsByWorkspace[workspaceId] ?? []).map((entry) => entry.relPath))
+        const baselinePaths = Object.keys(baseline ?? {})
+        const previousPaths = new Set([
+          ...baselinePaths,
+          ...(state.productsByWorkspace[workspaceId] ?? []).map((entry) => entry.relPath),
+        ])
         const added = products.find((entry) => !previousPaths.has(entry.relPath))
         const currentNotice = state.productNotice?.workspaceId === workspaceId
           && !products.some((entry) => entry.relPath === state.productNotice?.entry.relPath)
@@ -145,12 +162,22 @@ export function createProductWorkspaceStore(
 
     consumeProductNotice: () => set({ productNotice: null }),
     showProductWorkspace: (workspaceId) => set({ visibleWorkspaceId: workspaceId }),
-    closeProductWorkspace: () => set({ visibleWorkspaceId: null }),
+    closeProductWorkspace: () => {
+      // Closing the workspace ends its preview session: tabs and leases are
+      // released here (explicit close), NOT on panel unmount — a dev-mode
+      // StrictMode remount would otherwise wipe tabs freshly created by an
+      // openPreview that raced the mount cycle.
+      const workspaceId = get().visibleWorkspaceId
+      set({ visibleWorkspaceId: null })
+      if (workspaceId) void get().releaseWorkspace(workspaceId)
+    },
     clearWorkspaceUi: (workspaceId) => {
       set((state) => {
         const { [workspaceId]: _, ...productsByWorkspace } = state.productsByWorkspace
+        const { [workspaceId]: __, ...baselinesByWorkspace } = state.baselinesByWorkspace
         return {
           productsByWorkspace,
+          baselinesByWorkspace,
           productNotice: state.productNotice?.workspaceId === workspaceId ? null : state.productNotice,
           visibleWorkspaceId: state.visibleWorkspaceId === workspaceId ? null : state.visibleWorkspaceId,
         }

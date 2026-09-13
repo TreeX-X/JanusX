@@ -126,6 +126,18 @@ export default function App() {
   const bodyInteractionStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const editorBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const productRendered = productVisible || productClosing
+
+  // Reopening during the close animation cancels the pending close: without
+  // this, the close timer fires after showProductWorkspace and shuts the
+  // workspace the user just opened (e.g. a monitor file click mid-close).
+  useEffect(() => {
+    if (!productVisible) return
+    if (productCloseTimerRef.current !== null) {
+      window.clearTimeout(productCloseTimerRef.current)
+      productCloseTimerRef.current = null
+    }
+    setProductClosing(false)
+  }, [productVisible])
   const productWorkspacePath = workspaces.find(({ id }) => id === activeWorkspaceId)?.path ?? null
   const [appGridWidth, setAppGridWidth] = useState(() => window.innerWidth)
   const sidebarWidth = sidebarCollapsed

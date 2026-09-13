@@ -234,6 +234,17 @@ describe('product workspace lifecycle', () => {
     expect(store.getState().tabs).toHaveLength(0)
     expect(report).toHaveBeenCalledWith('[product] Failed to stop preview lease', expect.any(Error))
   })
+  it('closeProductWorkspace releases tabs and leases for the visible workspace', async () => {
+    const service = mockService({ startPreview: vi.fn(async () => ({ ok: true, value: { previewLeaseId: 'lease', port: 4000, relPath: 'doc.docx' } })) })
+    const store = createProductWorkspaceStore(service)
+    await store.getState().openPreview('workspace', 'doc.docx')
+    store.getState().showProductWorkspace('workspace')
+    store.getState().closeProductWorkspace()
+    expect(store.getState().visibleWorkspaceId).toBeNull()
+    expect(store.getState().tabs).toHaveLength(0)
+    expect(service.stopPreview).toHaveBeenCalledWith({ workspaceId: 'workspace', relPath: 'doc.docx', previewLeaseId: 'lease' })
+  })
+
   it('removes only the lease targeted by a crash eviction', async () => {
     const service = mockService({ startPreview: vi.fn()
       .mockResolvedValueOnce({ ok: true, value: { previewLeaseId: 'one', port: 4000, relPath: 'one.docx' } })
