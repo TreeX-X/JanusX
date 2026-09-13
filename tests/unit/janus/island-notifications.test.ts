@@ -113,6 +113,7 @@ describe('island notification capsule model', () => {
     const normal = maintenanceNotification(maintenanceTask(), false)
     expect(normal!.severity).toBe('info')
     expect(normal!.copy.subtitleText).toContain('40%')
+    expect(normal!.progress).toBe(40)
     expect(maintenanceNotification(null, true)).toBeNull()
   })
 

@@ -37,6 +37,8 @@ export interface IslandNotification {
   copy: IslandNotificationCopy
   actions: IslandNotificationAction[]
   createdAt: number
+  /** 0-100 task progress — in-flight maintenance rows render a micro progress bar. */
+  progress?: number
 }
 
 /** Higher ranks interrupt more; ties break by newest. */
@@ -177,6 +179,7 @@ export function maintenanceNotification(
         metaValues: { status: task.status.toUpperCase() },
       },
       actions: [{ id: 'open-maintenance', primary: true }],
+      progress: task.progress,
       createdAt: now,
     }
   }
@@ -191,6 +194,7 @@ export function maintenanceNotification(
       metaValues: { status: task.status.toUpperCase() },
     },
     actions: [{ id: 'open-maintenance' }],
+    progress: task.progress,
     createdAt: now,
   }
 }

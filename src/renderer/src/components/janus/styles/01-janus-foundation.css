@@ -428,6 +428,13 @@ body.is-running {
   animation: island-hover-breathe 1.6s ease-in-out infinite;
 }
 
+/* hifi: running-state hover - centripetal lift + brighter border */
+.janus-island[data-mode="running"][data-stage="collapsed"]:hover:not(.pressing):not(.is-charging):not(.is-dragging):not(.switching):not(.trigger-snap) {
+  animation: none;
+  transform: translateY(-1px) scale(1.03);
+  border-color: rgba(255,255,255,0.2);
+}
+
 .janus-island[data-stage="collapsed"]:focus-visible {
   outline: 1px solid rgba(255,255,255,0.28);
   outline-offset: 3px;
@@ -453,9 +460,49 @@ body.is-running {
 }
 
 /* 钃勫姏鏃舵殏鍋?CSS 寰呮満鍔ㄧ敾 */
+/* hifi S1: emerald conic-gradient glow ring, collapsed pill only */
+.janus-island::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from 0deg, transparent, transparent, transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.janus-island[data-mode="running"][data-stage="collapsed"] {
+  border-color: rgba(0,255,136,0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 0 12px rgba(0,255,136,0.15),
+    0 4px 16px rgba(0,0,0,0.5);
+}
+
+.janus-island[data-mode="running"][data-stage="collapsed"]::before {
+  opacity: 1;
+  background: conic-gradient(from 0deg, transparent, #00ff88, transparent 40%, transparent);
+  animation: janus-run-glow 2.8s linear infinite;
+}
+
+@keyframes janus-run-glow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .janus-island.is-charging .janus-eye-mini {
   animation: none;
   transition: none;
+}
+
+.janus-island.is-charging::before {
+  opacity: 0;
 }
 
 /* 鎸夊帇鎬?*/
@@ -592,18 +639,18 @@ body.is-running {
 
 /* 杩愯浆锛欵Q 寮硅烦 */
 .janus-island[data-mode="running"] .janus-eye-mini {
-  width: 6px;
-  border-radius: 3px;
-  background: #fff;
-  box-shadow: 0 0 10px #fff, 0 0 20px var(--janus-running);
+  width: 4.5px;
+  border-radius: 2px;
+  background: #00ff88;
+  box-shadow: 0 0 4px rgba(0,255,136,0.9), 0 0 8px rgba(0,255,136,0.35);
 }
 
 .janus-island[data-mode="running"] .left-eye-mini {
-  animation: eq-bounce 0.25s ease-in-out infinite alternate;
+  animation: janus-eq-a 0.35s ease-in-out infinite alternate;
 }
 
 .janus-island[data-mode="running"] .right-eye-mini {
-  animation: eq-bounce 0.35s ease-in-out infinite alternate-reverse;
+  animation: janus-eq-b 0.28s ease-in-out infinite alternate-reverse;
 }
 
 /* 鈹€鈹€ 鐪肩潧鍏抽敭甯?鈹€鈹€ */
@@ -635,6 +682,17 @@ body.is-running {
 @keyframes eq-bounce {
   0%   { height: 4px; }
   100% { height: 14px; }
+}
+
+/* hifi S1: asymmetric physical EQ - left 4-13px @0.35s, right 3-14px @0.28s */
+@keyframes janus-eq-a {
+  from { height: 4px; }
+  to   { height: 13px; }
+}
+
+@keyframes janus-eq-b {
+  from { height: 3px; }
+  to   { height: 14px; }
 }
 
 /* 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲

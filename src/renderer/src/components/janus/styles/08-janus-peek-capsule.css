@@ -10,15 +10,15 @@
 
 .janus-island-shell[data-stage="peek"] {
   width: min(380px, calc(100vw - 48px));
-  height: 74px;
+  height: 76px;
 }
 
 .janus-island-shell[data-stage="peek"][data-capsule-tier="single"] { height: 48px; }
-.janus-island-shell[data-stage="peek"][data-capsule-tier="double"] { height: 74px; }
+.janus-island-shell[data-stage="peek"][data-capsule-tier="double"] { height: 76px; }
 
 /* 容器几何换用弹性回弹曲线（§7.1 overshoot），壳先到、内容跟至。
- * 背景不覆盖 —— 一级展开直接继承 .janus-island 的近黑皮肤渐变
- * （#161619 → #08080a），与二级展开同底。 */
+ * 胶囊本体重塑为高保真毛玻璃（hifi S2）：20px 级高斯模糊 +
+ * rgba(22,22,27,.82) 半透底，白字在渐变工作区上方保持可读性。 */
 .janus-island-shell[data-stage="peek"] {
   transition:
     width 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.08s,
@@ -26,12 +26,24 @@
     top 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.janus-island-shell[data-stage="peek"] .janus-island {
+  border-radius: 24px;
+  background: rgba(22, 22, 27, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.08),
+    0 12px 36px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 /* ── 胶囊内容结构 ──────────────────────────────────────────── */
 
 .janus-capsule {
   width: 100%;
   min-width: 0;
-  padding: 0 16px;
+  padding: 0 18px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -42,15 +54,16 @@
   animation: capsule-content-in 0.24s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.07s both;
 }
 
+/* 非对称物理形变：X 先展开、Y 跟至（hifi peekIn） */
 @keyframes capsule-content-in {
-  from { opacity: 0; transform: scale(0.85); }
+  from { opacity: 0; transform: scaleX(0.85) scaleY(0.8); }
   to   { opacity: 1; transform: scale(1); }
 }
 
 .janus-capsule-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   width: 100%;
 }
@@ -65,20 +78,20 @@
 
 /* kicker：橙（accent-strong），黑橙灰调色中的"橙"层 */
 .janus-capsule-kicker {
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
   color: #ff9159;
-  line-height: 1.15;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .janus-capsule-title {
-  font-size: 13px;
-  font-weight: 650;
-  color: #f4f4f5;
-  line-height: 1.2;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f8f9fa;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -87,8 +100,8 @@
 /* subtitle / meta：灰层（§2.1.1 --shell-muted / --shell-dim） */
 .janus-capsule-subtitle {
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 10px;
-  color: #a1a1a1;
+  font-size: 10.5px;
+  color: #9fa0a6;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -98,36 +111,49 @@
 .janus-capsule-meta {
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 9px;
-  letter-spacing: 0.8px;
-  color: #737373;
+  letter-spacing: 0.5px;
+  color: #6b6d73;
   white-space: nowrap;
   flex: 0 0 auto;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .janus-capsule-meta { display: none; }
   .janus-capsule { padding: 0 12px; }
 }
 
-/* ── LED 状态点（§2.5 离散语义色，映射到黑橙灰谱系） ──────────
- * info=灰 · success=橙（done=#ff7830）· attention=橙呼吸 · failed=红呼吸 */
+/* ── LED 状态点（hifi S2：光纤发光 + 微光晕 ::after） ──────────
+ * info=亮灰 · success=翡翠绿 · attention=亮橙呼吸 · failed=红呼吸 */
 
 .janus-capsule-led {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   flex: 0 0 auto;
+  position: relative;
   background: rgba(255, 255, 255, 0.35);
 }
 
-.janus-capsule-led.sev-info { background: #737373; }
-.janus-capsule-led.sev-success { background: #ff7830; box-shadow: 0 0 8px rgba(255, 120, 48, 0.4); }
-.janus-capsule-led.sev-attention { background: #ff7830; box-shadow: 0 0 8px rgba(255, 120, 48, 0.5); animation: capsule-led-breathe 1.6s ease-in-out infinite; }
-.janus-capsule-led.sev-failed { background: #ff4a4a; box-shadow: 0 0 8px rgba(255, 74, 74, 0.55); animation: capsule-led-breathe 1.2s ease-in-out infinite; }
+.janus-capsule-led::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: inherit;
+  opacity: 0.4;
+  filter: blur(3px);
+  pointer-events: none;
+}
 
+.janus-capsule-led.sev-info { background: #a1a1a6; }
+.janus-capsule-led.sev-success { background: #00ff88; box-shadow: 0 0 6px rgba(0, 255, 136, 0.55); }
+.janus-capsule-led.sev-attention { background: #ff9159; box-shadow: 0 0 8px rgba(255, 145, 89, 0.55); animation: capsule-led-breathe 1.5s ease-in-out infinite; }
+.janus-capsule-led.sev-failed { background: #ff4a4a; box-shadow: 0 0 8px rgba(255, 74, 74, 0.55); animation: capsule-led-breathe 1s ease-in-out infinite; }
+
+/* 双相位差呼吸：缩放 + 透明度 + 光晕同步脉动 */
 @keyframes capsule-led-breathe {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.6; }
 }
 
 /* ── 二级展开：顶栏通知徽标 + 下拉托盘（黑橙灰同调） ────────── */
@@ -140,41 +166,44 @@
 }
 
 .janus-notify-badge {
-  height: 22px;
-  padding: 0 8px;
+  height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 120, 48, 0.24);
-  background: rgba(255, 120, 48, 0.06);
+  border: 1px solid rgba(255, 120, 48, 0.3);
+  background: rgba(255, 120, 48, 0.1);
   color: #ffb27d;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 700;
   cursor: pointer;
   transition:
     color 150ms ease,
     border-color 150ms ease,
     background 150ms ease,
     transform 150ms ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .janus-notify-badge:hover,
 .janus-notify-badge[data-active="true"] {
   color: #fff1e7;
-  border-color: rgba(255, 120, 48, 0.46);
-  background: rgba(255, 120, 48, 0.12);
+  border-color: rgba(255, 120, 48, 0.5);
+  background: rgba(255, 120, 48, 0.18);
+  transform: scale(1.04);
 }
 
 .janus-notify-badge:active { transform: scale(0.96); }
 
 .janus-notify-badge[data-pulse="true"] {
-  animation: capsule-badge-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) 2;
+  animation: capsule-badge-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes capsule-badge-pop {
   0% { transform: scale(1); }
-  50% { transform: scale(1.14); }
+  50% { transform: scale(1.22); box-shadow: 0 0 12px rgba(255, 120, 48, 0.4); }
   100% { transform: scale(1); }
 }
 
@@ -182,80 +211,111 @@
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: 340px;
-  max-height: 300px;
+  width: 350px;
+  max-height: 360px;
   overflow-y: auto;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
-    rgba(8, 8, 10, 0.96);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.008)),
+    rgba(10, 10, 13, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 20px 60px rgba(0, 0, 0, 0.7);
-  padding: 8px;
+    0 24px 60px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  animation: capsule-content-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  gap: 5px;
+  animation: capsule-tray-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes capsule-tray-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
 }
 
 .janus-notify-tray-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 6px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .janus-notify-tray-title {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1.2px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
   color: #ff9159;
 }
 
 .janus-notify-tray-clear {
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: transparent;
-  color: #737373;
-  font-size: 9px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: #9fa0a6;
+  font-size: 9.5px;
+  font-weight: 600;
   cursor: pointer;
-  transition: color 150ms ease, border-color 150ms ease;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
 }
 
 .janus-notify-tray-clear:hover {
-  color: #ffb27d;
-  border-color: rgba(255, 120, 48, 0.42);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
 }
 
+/* 托盘通知行：卡片级优先度细线（左缘 3px severity 指示）+ 中性悬停 */
 .janus-notify-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 6px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
   border: 1px solid transparent;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.01);
   text-align: left;
   cursor: default;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   animation: message-in 0.3s ease-out both;
 }
 
-.janus-notify-row:hover {
-  background: rgba(255, 120, 48, 0.05);
+.janus-notify-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: #6b6d73;
+  opacity: 0.3;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
+
+.janus-notify-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.janus-notify-row:hover::before { opacity: 1; }
+.janus-notify-row[data-severity="failed"]::before { background: #ff4a4a; opacity: 0.8; }
+.janus-notify-row[data-severity="attention"]::before { background: #ff9159; opacity: 0.8; }
+.janus-notify-row[data-severity="success"]::before { background: #00ff88; opacity: 0.8; }
 
 .janus-notify-row-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 2.5px;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -265,8 +325,8 @@
   align-items: center;
   gap: 6px;
   font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #ff9159;
 }
@@ -274,16 +334,16 @@
 .janus-notify-row-time {
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 8px;
-  color: #55555c;
+  color: #6b6d73;
   letter-spacing: 0;
   text-transform: none;
   font-weight: 500;
 }
 
 .janus-notify-row-title {
-  font-size: 12px;
-  font-weight: 650;
-  color: #e0e0e0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #f8f9fa;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -292,11 +352,34 @@
 
 .janus-notify-row-subtitle {
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 9px;
-  color: #737373;
+  font-size: 9.5px;
+  color: #9fa0a6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 任务型细进度条：进行中任务卡下方无感融入（hifi S3） */
+.janus-notify-row-progress {
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.janus-notify-row-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff7830, #ff9159);
+  animation: capsule-progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes capsule-progress-pulse {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
 }
 
 .janus-notify-tray-empty {
@@ -333,8 +416,9 @@
 .janus-notify-row .janus-capsule-action:hover,
 .janus-notify-banner .janus-capsule-action:hover {
   color: #fff1e7;
-  border-color: rgba(255, 120, 48, 0.46);
-  background: rgba(255, 120, 48, 0.14);
+  border-color: rgba(255, 120, 48, 0.4);
+  background: rgba(255, 120, 48, 0.18);
+  transform: translateY(-1px);
 }
 
 .janus-notify-row .janus-capsule-action:active,
@@ -344,26 +428,29 @@
 
 /* ── 二级展开：钉条 banner（peek 胶囊的横向延续，黑橙灰同调） ─ */
 
+/* ── 二级展开：钉条 banner（暗金微光玻璃条，hifi S3） ─ */
+
 .janus-notify-banner {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 120, 48, 0.15);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008)),
-    rgba(8, 8, 10, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+    linear-gradient(180deg, rgba(255, 120, 48, 0.06), rgba(0, 0, 0, 0)),
+    rgba(10, 10, 13, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   min-width: 0;
-  animation: capsule-banner-in 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  animation: capsule-banner-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
 }
 
 @keyframes capsule-banner-in {
-  from { opacity: 0; transform: translateY(-6px) scaleY(0.7); }
+  from { opacity: 0; transform: translateY(-8px) scaleY(0.9); }
   to   { opacity: 1; transform: translateY(0) scaleY(1); }
 }
 
@@ -376,9 +463,9 @@
 }
 
 .janus-notify-banner-title {
-  font-size: 12px;
-  font-weight: 650;
-  color: #f4f4f5;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #f8f9fa;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -386,8 +473,8 @@
 
 .janus-notify-banner-subtitle {
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
-  font-size: 9px;
-  color: #a1a1a1;
+  font-size: 9.5px;
+  color: #9fa0a6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -432,6 +519,10 @@
 
   .janus-capsule-led.sev-attention,
   .janus-capsule-led.sev-failed {
+    animation: none;
+  }
+
+  .janus-notify-row-progress-fill {
     animation: none;
   }
 }

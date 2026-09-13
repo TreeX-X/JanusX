@@ -247,7 +247,7 @@ export function JanusIslandExpandedShell({
                       {notifications.length === 0 ? (
                         <div className="janus-notify-tray-empty">{t('janus:island.capsule.tray.empty')}</div>
                       ) : notifications.map((notification) => (
-                        <div key={notification.id} className="janus-notify-row">
+                        <div key={notification.id} className="janus-notify-row" data-severity={notification.severity}>
                           <span className={`janus-capsule-led sev-${notification.severity}`} aria-hidden="true" />
                           <div className="janus-notify-row-copy">
                             <span className="janus-notify-row-kicker">
@@ -259,6 +259,11 @@ export function JanusIslandExpandedShell({
                               <span className="janus-notify-row-subtitle">{t(notification.copy.subtitleKey, notification.copy.subtitleValues)}</span>
                             ) : notification.copy.subtitleText ? (
                               <span className="janus-notify-row-subtitle">{notification.copy.subtitleText}</span>
+                            ) : null}
+                            {notification.progress != null ? (
+                              <div className="janus-notify-row-progress" aria-hidden="true">
+                                <div className="janus-notify-row-progress-fill" style={{ width: `${Math.max(0, Math.min(100, notification.progress))}%` }} />
+                              </div>
                             ) : null}
                           </div>
                           {notification.actions[0] ? (
@@ -281,7 +286,7 @@ export function JanusIslandExpandedShell({
               </div>
 
               {bannerNotification ? (
-                <div className="janus-notify-banner" key={bannerNotification.id}>
+                <div className="janus-notify-banner" key={bannerNotification.id} data-severity={bannerNotification.severity}>
                   <span className={`janus-capsule-led sev-${bannerNotification.severity}`} aria-hidden="true" />
                   <span className="janus-notify-row-kicker">{t(notificationKickerKey(bannerNotification.kind))}</span>
                   <div className="janus-notify-banner-copy">
