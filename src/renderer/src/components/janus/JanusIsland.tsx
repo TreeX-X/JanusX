@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { BookOpen, Download, Network, Package } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { useAppStore } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
@@ -17,7 +17,6 @@ import {
   knowledgeNotification,
   maintenanceNotification,
   mayAutoBanner,
-  notificationActionLabelKey,
   notificationKickerKey,
   productNotification,
   topNotification,
@@ -520,17 +519,6 @@ export function JanusIsland({
                     <span className="janus-capsule-subtitle">{t('janus:island.capsule.empty.subtitle')}</span>
                   </div>
                 </div>
-                <div className="janus-capsule-actions">
-                  <button type="button" className="janus-capsule-action" onClick={(event) => { event.stopPropagation(); runNotificationAction(EMPTY_CAPSULE_NOTIFICATION_ID, 'open-knowledge') }}>
-                    <BookOpen size={12} strokeWidth={1.7} aria-hidden="true" />{t('janus:island.capsule.action.openKnowledge')}
-                  </button>
-                  <button type="button" className="janus-capsule-action" onClick={(event) => { event.stopPropagation(); runNotificationAction(EMPTY_CAPSULE_NOTIFICATION_ID, 'open-product') }}>
-                    <Package size={12} strokeWidth={1.7} aria-hidden="true" />{t('janus:island.capsule.action.openProduct')}
-                  </button>
-                  <button type="button" className="janus-capsule-action" onClick={(event) => { event.stopPropagation(); runNotificationAction(EMPTY_CAPSULE_NOTIFICATION_ID, 'open-blueprint') }}>
-                    <Network size={12} strokeWidth={1.7} aria-hidden="true" />{t('janus:island.capsule.action.openBlueprint')}
-                  </button>
-                </div>
               </div>
             ) : topNotificationItem ? (
               <div className="janus-capsule" key={topNotificationItem.id}>
@@ -547,15 +535,6 @@ export function JanusIsland({
                   </div>
                   {topNotificationItem.copy.metaKey ? (
                     <span className="janus-capsule-meta">{t(topNotificationItem.copy.metaKey, topNotificationItem.copy.metaValues)}</span>
-                  ) : null}
-                  {topNotificationItem.actions[0] ? (
-                    <button
-                      type="button"
-                      className="janus-capsule-action janus-capsule-action--primary"
-                      onClick={(event) => { event.stopPropagation(); runNotificationAction(topNotificationItem.id, topNotificationItem.actions[0]!.id) }}
-                    >
-                      {t(notificationActionLabelKey(topNotificationItem.actions[0].id))}
-                    </button>
                   ) : null}
                 </div>
               </div>

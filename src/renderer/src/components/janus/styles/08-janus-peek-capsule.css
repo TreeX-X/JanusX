@@ -1,7 +1,8 @@
 /* ════════════════════════════════════════════════════════════
    08 · Janus Notification Capsule
-   一级展开（peek）玻璃通知胶囊 + 二级展开（expanded）通知面
+   一级展开（peek）通知胶囊 + 二级展开（expanded）通知面
    （顶栏徽标 / 下拉托盘 / 钉条 banner）
+   调色：黑（岛皮肤渐变）· 橙（accent）· 灰（文字），与二级展开一致
    Note: .agents/notes/implemented/feature/2026-09-13-island-notification-capsule.md
    ════════════════════════════════════════════════════════════ */
 
@@ -14,9 +15,10 @@
 
 .janus-island-shell[data-stage="peek"][data-capsule-tier="single"] { height: 48px; }
 .janus-island-shell[data-stage="peek"][data-capsule-tier="double"] { height: 74px; }
-.janus-island-shell[data-stage="peek"][data-capsule-tier="action"] { height: 96px; }
 
-/* 容器几何换用弹性回弹曲线（§7.1 overshoot），壳先到、内容跟至 */
+/* 容器几何换用弹性回弹曲线（§7.1 overshoot），壳先到、内容跟至。
+ * 背景不覆盖 —— 一级展开直接继承 .janus-island 的近黑皮肤渐变
+ * （#161619 → #08080a），与二级展开同底。 */
 .janus-island-shell[data-stage="peek"] {
   transition:
     width 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.08s,
@@ -24,22 +26,12 @@
     top 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ── 胶囊材质：玻璃磨砂（§6，取区间上限保可读） ─────────────── */
-
-.janus-island-shell[data-stage="peek"] .janus-island {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
-    rgba(18, 18, 20, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
 /* ── 胶囊内容结构 ──────────────────────────────────────────── */
 
 .janus-capsule {
   width: 100%;
   min-width: 0;
-  padding: 0 14px;
+  padding: 0 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -71,12 +63,13 @@
   flex: 1 1 auto;
 }
 
+/* kicker：橙（accent-strong），黑橙灰调色中的"橙"层 */
 .janus-capsule-kicker {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+  color: #ff9159;
   line-height: 1.15;
   white-space: nowrap;
 }
@@ -91,6 +84,7 @@
   text-overflow: ellipsis;
 }
 
+/* subtitle / meta：灰层（§2.1.1 --shell-muted / --shell-dim） */
 .janus-capsule-subtitle {
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 10px;
@@ -105,17 +99,18 @@
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 9px;
   letter-spacing: 0.8px;
-  color: rgba(255, 255, 255, 0.54);
+  color: #737373;
   white-space: nowrap;
   flex: 0 0 auto;
 }
 
 @media (max-width: 900px) {
   .janus-capsule-meta { display: none; }
-  .janus-capsule { padding: 0 10px; }
+  .janus-capsule { padding: 0 12px; }
 }
 
-/* ── LED 状态点（§2.5 离散语义色；attention/failed 才呼吸） ── */
+/* ── LED 状态点（§2.5 离散语义色，映射到黑橙灰谱系） ──────────
+ * info=灰 · success=橙（done=#ff7830）· attention=橙呼吸 · failed=红呼吸 */
 
 .janus-capsule-led {
   width: 8px;
@@ -125,8 +120,8 @@
   background: rgba(255, 255, 255, 0.35);
 }
 
-.janus-capsule-led.sev-info { background: #a1a1a1; }
-.janus-capsule-led.sev-success { background: #4ec9b0; box-shadow: 0 0 8px rgba(78, 201, 176, 0.45); }
+.janus-capsule-led.sev-info { background: #737373; }
+.janus-capsule-led.sev-success { background: #ff7830; box-shadow: 0 0 8px rgba(255, 120, 48, 0.4); }
 .janus-capsule-led.sev-attention { background: #ff7830; box-shadow: 0 0 8px rgba(255, 120, 48, 0.5); animation: capsule-led-breathe 1.6s ease-in-out infinite; }
 .janus-capsule-led.sev-failed { background: #ff4a4a; box-shadow: 0 0 8px rgba(255, 74, 74, 0.55); animation: capsule-led-breathe 1.2s ease-in-out infinite; }
 
@@ -135,80 +130,7 @@
   50% { opacity: 0.45; }
 }
 
-/* ── 行动区：空态舱常驻行动行 / 通知 hover 显现主行动 ───────── */
-
-.janus-capsule-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 18px;
-}
-
-.janus-capsule-action {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.045);
-  color: rgba(255, 255, 255, 0.68);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    color 150ms ease,
-    border-color 150ms ease,
-    background 150ms ease,
-    transform 150ms ease;
-}
-
-.janus-capsule-action:hover {
-  color: #fff1e7;
-  border-color: rgba(255, 120, 48, 0.42);
-  background: rgba(255, 120, 48, 0.1);
-}
-
-.janus-capsule-action:active { transform: scale(0.96); }
-
-.janus-capsule-action:focus-visible {
-  outline: 1px solid rgba(255, 120, 48, 0.42);
-  outline-offset: 2px;
-}
-
-.janus-capsule-action--primary {
-  border-color: rgba(255, 120, 48, 0.24);
-  background: rgba(255, 120, 48, 0.08);
-  color: #ffb27d;
-}
-
-.janus-capsule-action--primary:hover {
-  color: #fff1e7;
-  border-color: rgba(255, 120, 48, 0.46);
-  background: rgba(255, 120, 48, 0.14);
-}
-
-/* 通知态（非空态舱）主行动按钮 hover 才显现，保持胶囊静息克制 */
-.janus-island-shell[data-capsule-tier="double"] .janus-capsule-action,
-.janus-island-shell[data-capsule-tier="single"] .janus-capsule-action {
-  opacity: 0;
-  transition:
-    opacity 150ms ease,
-    color 150ms ease,
-    border-color 150ms ease,
-    background 150ms ease,
-    transform 150ms ease;
-}
-
-.janus-island-shell[data-capsule-tier="double"] .janus-capsule:hover .janus-capsule-action,
-.janus-island-shell[data-capsule-tier="single"] .janus-capsule:hover .janus-capsule-action,
-.janus-island-shell[data-capsule-tier="double"] .janus-capsule:focus-within .janus-capsule-action,
-.janus-island-shell[data-capsule-tier="single"] .janus-capsule:focus-within .janus-capsule-action {
-  opacity: 1;
-}
-
-/* ── 二级展开：顶栏通知徽标 + 下拉托盘 ─────────────────────── */
+/* ── 二级展开：顶栏通知徽标 + 下拉托盘（黑橙灰同调） ────────── */
 
 .janus-notify-anchor {
   position: relative;
@@ -221,9 +143,9 @@
   height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 120, 48, 0.24);
+  background: rgba(255, 120, 48, 0.06);
+  color: #ffb27d;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -239,9 +161,9 @@
 
 .janus-notify-badge:hover,
 .janus-notify-badge[data-active="true"] {
-  color: #f4f4f5;
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  color: #fff1e7;
+  border-color: rgba(255, 120, 48, 0.46);
+  background: rgba(255, 120, 48, 0.12);
 }
 
 .janus-notify-badge:active { transform: scale(0.96); }
@@ -266,8 +188,8 @@
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
-    rgba(18, 18, 20, 0.95);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    rgba(8, 8, 10, 0.96);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow:
@@ -293,7 +215,7 @@
   font-weight: 800;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+  color: #ff9159;
 }
 
 .janus-notify-tray-clear {
@@ -302,15 +224,15 @@
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: #737373;
   font-size: 9px;
   cursor: pointer;
   transition: color 150ms ease, border-color 150ms ease;
 }
 
 .janus-notify-tray-clear:hover {
-  color: #f4f4f5;
-  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffb27d;
+  border-color: rgba(255, 120, 48, 0.42);
 }
 
 .janus-notify-row {
@@ -324,6 +246,10 @@
   text-align: left;
   cursor: default;
   animation: message-in 0.3s ease-out both;
+}
+
+.janus-notify-row:hover {
+  background: rgba(255, 120, 48, 0.05);
 }
 
 .janus-notify-row-copy {
@@ -342,13 +268,13 @@
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+  color: #ff9159;
 }
 
 .janus-notify-row-time {
   font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 8px;
-  color: #4b4b52;
+  color: #55555c;
   letter-spacing: 0;
   text-transform: none;
   font-weight: 500;
@@ -380,7 +306,43 @@
   color: #555;
 }
 
-/* ── 二级展开：钉条 banner（peek 胶囊的横向延续） ──────────── */
+/* 托盘/banner 行动按钮：与 .janus-expanded-action-button 同调（黑橙灰） */
+.janus-notify-row .janus-capsule-action,
+.janus-notify-banner .janus-capsule-action {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 120, 48, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 120, 48, 0.08);
+  color: #ffb27d;
+  cursor: pointer;
+  font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.janus-notify-row .janus-capsule-action:hover,
+.janus-notify-banner .janus-capsule-action:hover {
+  color: #fff1e7;
+  border-color: rgba(255, 120, 48, 0.46);
+  background: rgba(255, 120, 48, 0.14);
+}
+
+.janus-notify-row .janus-capsule-action:active,
+.janus-notify-banner .janus-capsule-action:active {
+  transform: scale(0.96);
+}
+
+/* ── 二级展开：钉条 banner（peek 胶囊的横向延续，黑橙灰同调） ─ */
 
 .janus-notify-banner {
   flex: 0 0 auto;
@@ -392,8 +354,8 @@
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
-    rgba(18, 18, 20, 0.8);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008)),
+    rgba(8, 8, 10, 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   min-width: 0;
@@ -431,7 +393,7 @@
   text-overflow: ellipsis;
 }
 
-.janus-notify-banner .janus-notify-row-kicker { color: rgba(255, 255, 255, 0.45); }
+.janus-notify-banner .janus-notify-row-kicker { color: #ff9159; }
 
 .janus-notify-banner-close {
   width: 20px;
@@ -439,7 +401,7 @@
   border-radius: 999px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.4);
+  color: #737373;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -449,8 +411,8 @@
 }
 
 .janus-notify-banner-close:hover {
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.08);
+  color: #ffb27d;
+  background: rgba(255, 120, 48, 0.08);
 }
 
 /* ── 可访问性：动画降级 ────────────────────────────────────── */

@@ -6,7 +6,7 @@ import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintena
 
 export type IslandNotificationKind = 'knowledge' | 'product' | 'maintenance' | 'agent'
 export type IslandNotificationSeverity = 'info' | 'success' | 'attention' | 'failed'
-export type IslandCapsuleTier = 'single' | 'double' | 'action'
+export type IslandCapsuleTier = 'single' | 'double'
 export type IslandNotificationActionId =
   | 'open-knowledge'
   | 'open-product'
@@ -75,12 +75,13 @@ export function topNotification(list: IslandNotification[]): IslandNotification 
   return list[0] ?? null
 }
 
-/** Capsule height tier: empty launcher grows an action row; notifications size by copy. */
+/** Capsule height tier: single-row kicker+title, double adds the subtitle row.
+ * The peek capsule carries no jump actions — only the expanded tray/banner do. */
 export function capsuleTier(
   notification: IslandNotification | null,
   isEmptyCapsule: boolean,
 ): IslandCapsuleTier {
-  if (isEmptyCapsule) return 'action'
+  if (isEmptyCapsule) return 'double'
   if (!notification) return 'single'
   return notification.copy.subtitleKey || notification.copy.subtitleText ? 'double' : 'single'
 }

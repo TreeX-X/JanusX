@@ -116,8 +116,8 @@ describe('island notification capsule model', () => {
     expect(maintenanceNotification(null, true)).toBeNull()
   })
 
-  it('sizes capsule tiers: empty launcher grows the action row, copy sizes the rest', () => {
-    expect(capsuleTier(null, true)).toBe('action')
+  it('sizes capsule tiers: copy decides single vs double; empty stays double', () => {
+    expect(capsuleTier(null, true)).toBe('double')
     const knowledge = knowledgeNotification({ active: true, empty: false, trace: recalledTrace('a') })!
     expect(capsuleTier(knowledge, false)).toBe('double')
     expect(capsuleTier({ ...knowledge, copy: { ...knowledge.copy, subtitleKey: undefined } }, false)).toBe('single')
