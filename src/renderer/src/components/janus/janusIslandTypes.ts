@@ -30,7 +30,7 @@ export interface JanusIslandProps {
   knowledgeTrace?: KnowledgeRecallTrace | null
   knowledgePeekActive?: boolean
   knowledgePeekEmpty?: boolean
-  productNotice?: ProductFileEntry | null
+  productNotice?: (ProductFileEntry & { noticeKind?: 'added' | 'modified' }) | null
   productFiles?: ProductFileEntry[]
   onOpenProductFile?: (relPath: string) => void
 }

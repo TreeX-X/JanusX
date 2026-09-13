@@ -141,16 +141,20 @@ export function knowledgeNotification(input: {
 }
 
 export function productNotification(
-  entry: ProductFileEntry | null,
+  entry: (ProductFileEntry & { noticeKind?: 'added' | 'modified' }) | null,
   now = Date.now(),
 ): IslandNotification | null {
   if (!entry) return null
+  // Notice matrix (Note: 2026-09-13-product-notice-matrix.md): added = new
+  // file (island pops); modified = baseline file changed for the first time
+  // (tray row only, same success tier).
+  const updated = entry.noticeKind === 'modified'
   return {
     id: `product:${entry.relPath}`,
     kind: 'product',
     severity: 'success',
     copy: {
-      titleKey: 'janus:island.peek.title.productReady',
+      titleKey: updated ? 'janus:island.peek.title.productUpdated' : 'janus:island.peek.title.productReady',
       subtitleText: entry.relPath,
       metaKey: 'janus:island.status.productOpenPreview',
     },

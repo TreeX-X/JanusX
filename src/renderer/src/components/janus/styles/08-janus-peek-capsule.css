@@ -14,6 +14,72 @@
 }
 
 .janus-island-shell[data-stage="peek"][data-capsule-tier="single"] { height: 48px; }
+
+/* 裂位双态（hifi DI split compact）：2+ 通知并存时胶囊按列分裂，
+   每列一个可点击通知单元（LED + kicker + 标题），中缝 1px 分隔线 */
+.janus-island-shell[data-stage="peek"][data-peek-layout="split"] { height: 52px; }
+
+.janus-capsule-split {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 0 10px;
+}
+
+.janus-capsule-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 150ms ease;
+}
+
+.janus-capsule-cell + .janus-capsule-cell::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.janus-capsule-cell:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.janus-capsule-cell:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.janus-capsule-cell-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.janus-capsule-cell .janus-capsule-kicker {
+  font-size: 8.5px;
+  letter-spacing: 1.2px;
+}
+
+.janus-capsule-cell-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: #f4f4f5;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .janus-island-shell[data-stage="peek"][data-capsule-tier="double"] { height: 76px; }
 
 /* 容器几何换用弹性回弹曲线（§7.1 overshoot），壳先到、内容跟至。
@@ -55,7 +121,8 @@
   min-width: 0;
 }
 
-.janus-island-shell[data-stage="peek"] .janus-capsule {
+.janus-island-shell[data-stage="peek"] .janus-capsule,
+.janus-island-shell[data-stage="peek"] .janus-capsule-split {
   animation: capsule-content-in 0.24s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.07s both;
 }
 

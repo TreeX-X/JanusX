@@ -55,9 +55,14 @@ export interface ProductWorkspaceTab {
   revision?: number
 }
 
+export type ProductNoticeKind = 'added' | 'modified'
+
 export interface ProductNotice {
   workspaceId: string
   entry: ProductFileEntry
+  /** added = first surface of a new file (island pops); modified = a
+   * previously-unknown baseline file changed for the first time (tray only). */
+  kind: ProductNoticeKind
 }
 
 interface ProductWorkspaceState {
@@ -132,17 +137,28 @@ export function createProductWorkspaceStore(
         : entries
       ).map(toProductFileEntry)
       set((state) => {
-        const baselinePaths = Object.keys(baseline ?? {})
-        const previousPaths = new Set([
-          ...baselinePaths,
-          ...(state.productsByWorkspace[workspaceId] ?? []).map((entry) => entry.relPath),
-        ])
-        const added = products.find((entry) => !previousPaths.has(entry.relPath))
+        const previousProducts = state.productsByWorkspace[workspaceId] ?? []
+        const previousByPath = new Map(previousProducts.map((entry) => [entry.relPath, entry]))
+        // Notification matrix (Note: 2026-09-13-product-notice-matrix.md):
+        // added = path never known before (island pops); modified-first = a
+        // known-but-never-surfaced baseline file changed (tray row only);
+        // already-surfaced files stay silent (revision refresh handles them).
+        let added: ProductNotice | null = null
+        let modified: ProductNotice | null = null
+        for (const entry of products) {
+          const lastKnown = previousByPath.get(entry.relPath)?.mtimeMs ?? baseline?.[entry.relPath]
+          if (lastKnown === undefined) {
+            added = { workspaceId, kind: 'added', entry }
+            break
+          }
+          if (entry.mtimeMs > lastKnown && !previousByPath.has(entry.relPath) && !modified) {
+            modified = { workspaceId, kind: 'modified', entry }
+          }
+        }
         const currentNotice = state.productNotice?.workspaceId === workspaceId
           && !products.some((entry) => entry.relPath === state.productNotice?.entry.relPath)
           ? null
           : state.productNotice
-        const previousByPath = new Map((state.productsByWorkspace[workspaceId] ?? []).map((entry) => [entry.relPath, entry]))
         const tabs = state.tabs.map((tab) => {
           if (tab.workspaceId !== workspaceId || tab.kind === 'office') return tab
           const latest = products.find((entry) => entry.relPath === tab.relPath)
@@ -154,7 +170,11 @@ export function createProductWorkspaceStore(
         })
         return {
           productsByWorkspace: { ...state.productsByWorkspace, [workspaceId]: products },
-          productNotice: added ? { workspaceId, entry: added } : currentNotice,
+          productNotice: added
+            ? added
+            : modified
+              ? currentNotice?.kind === 'added' ? currentNotice : modified
+              : currentNotice,
           tabs,
         }
       })

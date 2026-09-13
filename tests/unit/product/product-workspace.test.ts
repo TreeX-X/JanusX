@@ -87,7 +87,7 @@ describe('product workspace lifecycle', () => {
     listener?.({ workspaceId: 'workspace', entries: [added, existing], reason: 'watch' })
     catchup.resolve({ ok: true, value: [added, existing] })
     await vi.waitFor(() => {
-      expect(store.getState().productNotice).toEqual({ workspaceId: 'workspace', entry: { relPath: 'notes.md', size: 2, mtimeMs: 2, kind: 'markdown', ext: '.md' } })
+      expect(store.getState().productNotice).toMatchObject({ workspaceId: 'workspace', entry: { relPath: 'notes.md', size: 2, mtimeMs: 2 } })
     })
     expect(noticeCount).toBe(1)
     unsubscribeStore()
@@ -263,15 +263,47 @@ describe('product workspace lifecycle', () => {
     expect(store.getState().productNotice).toBeNull()
 
     store.getState().reconcileProducts('workspace', [{ ...existing, mtimeMs: 2 }])
-    expect(store.getState().productNotice).toBeNull()
+    expect(store.getState().productNotice).toMatchObject({ kind: 'modified', entry: { relPath: 'existing.docx', mtimeMs: 2 } })
 
     const added = { relPath: 'page.html', ext: '.html', size: 2, mtimeMs: 3 }
     store.getState().reconcileProducts('workspace', [added, { ...existing, mtimeMs: 2 }])
-    expect(store.getState().productNotice).toEqual({ workspaceId: 'workspace', entry: { relPath: 'page.html', size: 2, mtimeMs: 3, kind: 'html', ext: '.html' } })
+    expect(store.getState().productNotice).toMatchObject({ kind: 'added', entry: { relPath: 'page.html', size: 2, mtimeMs: 3 } })
 
     store.getState().reconcileProducts('workspace', [{ ...existing, mtimeMs: 2 }])
     expect(store.getState().productNotice).toBeNull()
   })
+  it('keeps a same-session product overwrite silent (no re-notice)', () => {
+    const store = createProductWorkspaceStore(mockService())
+    store.getState().initializeProducts('workspace', [])
+    store.getState().reconcileProducts('workspace', [{ relPath: 'page.html', ext: '.html', size: 1, mtimeMs: 2 }])
+    expect(store.getState().productNotice).toMatchObject({ kind: 'added', entry: { mtimeMs: 2 } })
+    store.getState().reconcileProducts('workspace', [{ relPath: 'page.html', ext: '.html', size: 2, mtimeMs: 8 }])
+    expect(store.getState().productNotice).toMatchObject({ kind: 'added', entry: { mtimeMs: 2 } })
+  })
+
+  it('an alive added notice is not displaced by a baseline modification', () => {
+    const store = createProductWorkspaceStore(mockService())
+    const prior = { relPath: 'old.md', ext: '.md', size: 1, mtimeMs: 1 }
+    store.getState().initializeProducts('workspace', [prior])
+    store.getState().reconcileProducts('workspace', [{ relPath: 'new.md', ext: '.md', size: 1, mtimeMs: 2 }])
+    expect(store.getState().productNotice).toMatchObject({ kind: 'added', entry: { relPath: 'new.md' } })
+    store.getState().reconcileProducts('workspace', [
+      { relPath: 'new.md', ext: '.md', size: 1, mtimeMs: 2 },
+      { ...prior, mtimeMs: 6 },
+    ])
+    expect(store.getState().productNotice).toMatchObject({ kind: 'added', entry: { relPath: 'new.md' } })
+  })
+
+  it('a baseline file notifies once per session, then stays silent', () => {
+    const store = createProductWorkspaceStore(mockService())
+    const prior = { relPath: 'old.md', ext: '.md', size: 1, mtimeMs: 1 }
+    store.getState().initializeProducts('workspace', [prior])
+    store.getState().reconcileProducts('workspace', [{ ...prior, mtimeMs: 5 }])
+    expect(store.getState().productNotice).toMatchObject({ kind: 'modified', entry: { mtimeMs: 5 } })
+    store.getState().reconcileProducts('workspace', [{ ...prior, mtimeMs: 9 }])
+    expect(store.getState().productNotice).toMatchObject({ kind: 'modified', entry: { mtimeMs: 5 } })
+  })
+
   it('clears notice, products, and the visible stage for a switched workspace', () => {
     const store = createProductWorkspaceStore(mockService())
     const entry = { relPath: 'deck.pptx', ext: '.pptx', size: 2, mtimeMs: 3 }

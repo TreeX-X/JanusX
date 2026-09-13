@@ -94,6 +94,13 @@ describe('island notification capsule model', () => {
     expect(knowledgeNotification({ active: true, empty: false, trace: null })).toBeNull()
   })
 
+  it('forks the product title by notice kind (added vs modified)', () => {
+    const entry = { relPath: 'out/report.md', ext: '.md', size: 1, mtimeMs: 1 }
+    expect(productNotification({ ...entry, noticeKind: 'added' })!.copy.titleKey).toBe('janus:island.peek.title.productReady')
+    expect(productNotification({ ...entry, noticeKind: 'modified' })!.copy.titleKey).toBe('janus:island.peek.title.productUpdated')
+    expect(productNotification(entry)!.copy.titleKey).toBe('janus:island.peek.title.productReady')
+  })
+
   it('projects the product notification with a path subtitle', () => {
     const notification = productNotification(productEntry('out/demo.md'), 5)
     expect(notification!.id).toBe('product:out/demo.md')

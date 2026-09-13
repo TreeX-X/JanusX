@@ -120,6 +120,9 @@ export function Titlebar() {
       presentedProductNoticeIdRef.current = null
       return
     }
+    // Notice matrix: only 'added' pops the island capsule; 'modified'
+    // (baseline file first change) surfaces in the tray/badge exclusively.
+    if (productNotice.kind !== 'added') return
     const noticeId = productNotice.entry.relPath
     if (presentedProductNoticeIdRef.current === noticeId) return
     if (!shouldPresentProductNotice(islandStage, productNotice.workspaceId, activeWorkspaceId)) return
@@ -344,7 +347,7 @@ export function Titlebar() {
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
           knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}
-          productNotice={productNotice?.workspaceId === activeWorkspaceId ? productNotice.entry : null}
+          productNotice={productNotice?.workspaceId === activeWorkspaceId ? { ...productNotice.entry, noticeKind: productNotice.kind } : null}
           productFiles={workspaceProducts}
           onOpenProductFile={openProductFile}
         />

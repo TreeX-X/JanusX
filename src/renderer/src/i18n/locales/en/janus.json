@@ -177,7 +177,8 @@
         "productReady": "Product file ready",
         "knowledge": "Knowledge",
         "knowledgeRecalled": "Knowledge recalled",
-        "maintenance": "Blueprint maintenance"
+        "maintenance": "Blueprint maintenance",
+        "productUpdated": "Product file updated"
       },
       "subtitle": {
         "noKnowledgeMatch": "No knowledge match",

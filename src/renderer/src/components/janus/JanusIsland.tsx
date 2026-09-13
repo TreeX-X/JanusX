@@ -330,6 +330,11 @@ export function JanusIsland({
   const capsuleTopNotification = topNotification(capsuleNotifications)
   const emptyCapsule = isEmptyCapsuleRequested(knowledgePeekEmpty, capsuleNotifications)
   const capsuleTierValue = capsuleTier(capsuleTopNotification, emptyCapsule)
+  // Split compact (hifi DI pattern): when the knowledge surface is NOT
+  // presenting and 2+ notifications are alive, the capsule splits into one
+  // clickable cell per notification; the knowledge surface keeps capsule
+  // ownership when it presents (product yields, tray keeps everything).
+  const splitCapsule = !knowledgePeekActive && capsuleNotifications.length >= 2
 
   const modeStatusFallback = activeNode
     ? t('janus:island.status.blueprintFocused')
@@ -485,7 +490,8 @@ export function JanusIsland({
       data-mode={mode}
       data-auxiliary-open={auxiliaryDescriptor ? 'true' : 'false'}
       data-auxiliary-module={auxiliaryDescriptor?.type ?? 'none'}
-      data-peek-kind={capsuleTopNotification?.kind ?? 'empty'}
+      data-peek-kind={splitCapsule ? 'split' : capsuleTopNotification?.kind ?? 'empty'}
+      data-peek-layout={splitCapsule ? 'split' : 'single'}
       data-capsule-tier={capsuleTierValue}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
@@ -498,9 +504,9 @@ export function JanusIsland({
         data-mode={mode}
         data-stage={stage}
         className={`janus-island${isSwitching ? ' switching' : ''}`}
-        role={stage !== 'expanded' ? 'button' : undefined}
-        tabIndex={stage !== 'expanded' ? 0 : undefined}
-        aria-label={stage !== 'expanded'
+        role={stage !== 'expanded' && !splitCapsule ? 'button' : undefined}
+        tabIndex={stage !== 'expanded' && !splitCapsule ? 0 : undefined}
+        aria-label={stage !== 'expanded' && !splitCapsule
           ? capsuleTopNotification?.kind === 'product' && productNotice
             ? t('janus:island.aria.openProductPreview', { path: productNotice.relPath })
             : stage === 'peek' ? t('janus:island.aria.closeKnowledgePeek') : t('janus:island.aria.openIsland')
@@ -529,6 +535,27 @@ export function JanusIsland({
                     <span className="janus-capsule-subtitle">{t('janus:island.capsule.empty.subtitle')}</span>
                   </div>
                 </div>
+              </div>
+            ) : splitCapsule ? (
+              <div className="janus-capsule janus-capsule-split" key={`split:${capsuleNotifications.map((notification) => notification.id).join('|')}`}>
+                {capsuleNotifications.map((notification) => (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    className="janus-capsule-cell"
+                    title={t(notification.copy.titleKey)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (notification.actions[0]) runNotificationAction(notification.id, notification.actions[0].id)
+                    }}
+                  >
+                    <span className={`janus-capsule-led sev-${notification.severity}`} aria-hidden="true" />
+                    <span className="janus-capsule-cell-copy">
+                      <span className="janus-capsule-kicker">{t(notificationKickerKey(notification.kind))}</span>
+                      <span className="janus-capsule-cell-title">{t(notification.copy.titleKey)}</span>
+                    </span>
+                  </button>
+                ))}
               </div>
             ) : capsuleTopNotification ? (
               <div className="janus-capsule" key={capsuleTopNotification.id}>

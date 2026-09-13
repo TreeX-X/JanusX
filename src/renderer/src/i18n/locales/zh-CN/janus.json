@@ -177,7 +177,8 @@
         "productReady": "产物文件已就绪",
         "knowledge": "知识",
         "knowledgeRecalled": "已召回知识",
-        "maintenance": "蓝图维护"
+        "maintenance": "蓝图维护",
+        "productUpdated": "产物文件已更新"
       },
       "subtitle": {
         "noKnowledgeMatch": "无知识匹配",
