@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { Download } from 'lucide-react'
+import { BookOpen, Download, Network, Package } from 'lucide-react'
 import { useAppStore } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
@@ -9,6 +9,20 @@ import { useIslandGesture } from './useIslandGesture'
 import { useJanusState } from './useJanusState'
 import { STATUS_VISUALS } from '../blueprint/blueprintStatus'
 import { formatKnowledgeMatch } from './islandKnowledgePeek'
+import {
+  assembleNotifications,
+  capsuleTier,
+  EMPTY_CAPSULE_NOTIFICATION_ID,
+  isEmptyCapsuleRequested,
+  knowledgeNotification,
+  maintenanceNotification,
+  mayAutoBanner,
+  notificationActionLabelKey,
+  notificationKickerKey,
+  productNotification,
+  topNotification,
+  type IslandNotificationActionId,
+} from './islandNotifications'
 import { JanusIslandExpandedShell } from './JanusIslandExpandedShell'
 import {
   JanusAuxiliaryIsland,
@@ -233,6 +247,25 @@ export function JanusIsland({
     setActiveWorkbench('blueprint')
   }, [loadBlueprint, maintenanceTask, requestMaintenanceOpen, setActiveWorkbench])
 
+  /** Executes a notification action then gets the island out of the way; the
+   * product path owns its own dismiss/consume flow in Titlebar. */
+  const runNotificationAction = useCallback((notificationId: string, actionId: IslandNotificationActionId) => {
+    if (actionId === 'open-knowledge') {
+      setActiveWorkbench('knowledge')
+      onDismiss()
+    } else if (actionId === 'open-blueprint') {
+      handleOpenBlueprintWorkbench()
+      onDismiss()
+    } else if (actionId === 'open-maintenance') {
+      handleOpenMaintenance()
+      onDismiss()
+    } else if (actionId === 'open-product' && productNotice) {
+      onOpenProductFile?.(productNotice.relPath)
+    }
+    setClearedIds((ids) => (ids.includes(notificationId) ? ids : [...ids, notificationId]))
+    setBannerId(null)
+  }, [handleOpenBlueprintWorkbench, handleOpenMaintenance, onDismiss, onOpenProductFile, productNotice, setActiveWorkbench])
+
   // Minimal stage-B tool trace for the agent-result detail: the pane owns the
   // full work projection, the Island only mirrors tool calls so the detail can
   // show reads/failures next to evidence without re-plumbing props.
@@ -266,50 +299,76 @@ export function JanusIsland({
   }) ?? (() => undefined), [])
 
   const maintenanceNeedsAttention = maintenanceTask?.status === 'failed' || maintenanceTask?.status === 'stale' || maintenanceTask?.status === 'proposal-ready'
-  const peekTitle = useMemo(() => {
-    if (maintenanceNeedsAttention) return maintenanceTask?.status === 'proposal-ready' ? t('janus:island.peek.title.proposalReady') : t('janus:island.peek.title.needsAttention')
-    if (productNotice) return t('janus:island.peek.title.productReady')
-    if (knowledgePeekEmpty) return t('janus:island.peek.title.knowledge')
-    if (knowledgePeekActive && knowledgeTrace) return t('janus:island.peek.title.knowledgeRecalled')
-    if (maintenanceTask) return t('janus:island.peek.title.maintenance')
-    return ''
-  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
 
-  const peekSubtitle = useMemo(() => {
-    if (maintenanceNeedsAttention && maintenanceTask) return `${maintenanceTask.blueprintName} | ${maintenanceTask.phase}`
-    if (productNotice) return `${productNotice.relPath} | ${productNotice.ext.startsWith('.') ? productNotice.ext.slice(1).toUpperCase() : productNotice.kind}`
-    if (knowledgePeekEmpty) return t('janus:island.peek.subtitle.noKnowledgeMatch')
-    if (knowledgePeekActive && knowledgeTrace?.topHit) {
-      const count = t('janus:island.peek.subtitle.knowledgeCount', {
-        count: knowledgeTrace.recalledCount,
-        match: formatKnowledgeMatch(knowledgeTrace.topHit.score, t),
-        kind: knowledgeTrace.topHit.kind,
-        title: knowledgeTrace.topHit.title,
-      })
-      return count
-    }
-    if (maintenanceTask) return `${maintenanceTask.blueprintName} | ${maintenanceTask.progress}% | ${maintenanceTask.phase}`
-    return ''
-  }, [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
+  // Notification projection (Note: 2026-09-13-island-notification-capsule.md):
+  // peek/expanded surfaces render from IslandNotification only; the former
+  // per-kind title/subtitle/status chains live in islandNotifications.ts.
+  const notifications = useMemo(() => assembleNotifications([
+    productNotification(productNotice),
+    knowledgeNotification({
+      active: knowledgePeekActive,
+      empty: knowledgePeekEmpty,
+      trace: knowledgeTrace,
+      matchLabel: knowledgeTrace?.topHit ? formatKnowledgeMatch(knowledgeTrace.topHit.score, t) : undefined,
+    }),
+    maintenanceNotification(maintenanceTask, maintenanceNeedsAttention),
+  ]), [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
+  const [clearedIds, setClearedIds] = useState<string[]>([])
+  const visibleNotifications = useMemo(
+    () => notifications.filter((notification) => !clearedIds.includes(notification.id)),
+    [notifications, clearedIds],
+  )
+  const topNotificationItem = topNotification(visibleNotifications)
+  const emptyCapsule = isEmptyCapsuleRequested(knowledgePeekEmpty, visibleNotifications)
+  const capsuleTierValue = capsuleTier(topNotificationItem, emptyCapsule)
 
-  const modeLabel = activeNode ? t('janus:island.modeLabel.blueprint') : mode === 'analytics' ? t('janus:island.modeLabel.analytics') : mode === 'running' ? t('janus:island.modeLabel.running') : t('janus:island.modeLabel.order')
-  const statusText = maintenanceNeedsAttention && maintenanceTask
-    ? maintenanceTask.status === 'proposal-ready' ? t('janus:island.status.blueprintApproval') : t('janus:island.status.blueprintAttention')
-    : productNotice
-    ? t('janus:island.status.productOpenPreview')
-    : knowledgePeekEmpty
-    ? t('janus:island.status.knowledgeNoMatch')
-    : knowledgePeekActive && knowledgeTrace
-    ? t('janus:island.status.knowledge' + (knowledgeTrace.truncated ? 'Truncated' : 'Ready'))
-    : maintenanceTask
-    ? t('janus:island.status.blueprintStatus', { status: maintenanceTask.status.toUpperCase() })
-    : activeNode
+  const modeStatusFallback = activeNode
     ? t('janus:island.status.blueprintFocused')
     : janusRunning
     ? t('janus:island.status.runningActive')
     : mode === 'analytics'
       ? t('janus:island.status.analyticsProcessing')
       : t('janus:island.status.orderIdle')
+  const statusText = topNotificationItem?.copy.metaKey
+    ? t(topNotificationItem.copy.metaKey, topNotificationItem.copy.metaValues)
+    : modeStatusFallback
+
+  // Expanded-stage notification surface state (tray / banner / badge pulse).
+  const [trayOpen, setTrayOpen] = useState(false)
+  const [bannerId, setBannerId] = useState<string | null>(null)
+  const [notifyPulse, setNotifyPulse] = useState(false)
+  const prevStageRef = useRef(stage)
+  const prevNotifyCountRef = useRef(0)
+
+  // T1 carry-over: expanding from peek pins the visible notification as banner.
+  useEffect(() => {
+    if (stage === 'expanded' && prevStageRef.current === 'peek' && topNotificationItem) setBannerId(topNotificationItem.id)
+    prevStageRef.current = stage
+  }, [stage, topNotificationItem])
+
+  // T2 arrival: attention/failed raise the banner; info only pulses the badge.
+  useEffect(() => {
+    if (stage !== 'expanded' || !topNotificationItem) return
+    if (mayAutoBanner(topNotificationItem.severity)) setBannerId(topNotificationItem.id)
+  }, [stage, topNotificationItem])
+
+  useEffect(() => {
+    if (stage !== 'expanded') {
+      setTrayOpen(false)
+      prevNotifyCountRef.current = visibleNotifications.length
+      return
+    }
+    if (visibleNotifications.length > prevNotifyCountRef.current) {
+      setNotifyPulse(true)
+      prevNotifyCountRef.current = visibleNotifications.length
+      const timer = window.setTimeout(() => setNotifyPulse(false), 900)
+      return () => window.clearTimeout(timer)
+    }
+    prevNotifyCountRef.current = visibleNotifications.length
+  }, [stage, visibleNotifications])
+
+  const bannerNotification = bannerId && topNotificationItem?.id === bannerId ? topNotificationItem : null
+  const modeLabel = activeNode ? t('janus:island.modeLabel.blueprint') : mode === 'analytics' ? t('janus:island.modeLabel.analytics') : mode === 'running' ? t('janus:island.modeLabel.running') : t('janus:island.modeLabel.order')
   const modeColor = activeVisual?.color ?? (mode === 'running' ? '#00ff88' : '#ff7830')
   const activeNodeTitle = activeNode?.title || t('janus:island.activeNodeFallback')
   const workspaceLabel = activeSession?.workspaceName ?? activeWorkspace?.name ?? t('janus:island.workspaceFallback')
@@ -366,6 +425,10 @@ export function JanusIsland({
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
+      if (stage === 'expanded' && trayOpen) {
+        setTrayOpen(false)
+        return
+      }
       onDismiss()
     }
     document.addEventListener('pointerdown', handlePointerDown, true)
@@ -374,7 +437,7 @@ export function JanusIsland({
       document.removeEventListener('pointerdown', handlePointerDown, true)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onDismiss, stage])
+  }, [onDismiss, stage, trayOpen])
 
   const auxiliaryDescriptor: JanusAuxiliaryModuleDescriptor | null = auxiliaryModule === 'roundtable-parchment'
     ? {
@@ -413,7 +476,8 @@ export function JanusIsland({
       data-mode={mode}
       data-auxiliary-open={auxiliaryDescriptor ? 'true' : 'false'}
       data-auxiliary-module={auxiliaryDescriptor?.type ?? 'none'}
-      data-peek-kind={productNotice ? 'product' : 'knowledge'}
+      data-peek-kind={topNotificationItem?.kind ?? 'empty'}
+      data-capsule-tier={capsuleTierValue}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
@@ -427,7 +491,11 @@ export function JanusIsland({
         className={`janus-island${isSwitching ? ' switching' : ''}`}
         role={stage !== 'expanded' ? 'button' : undefined}
         tabIndex={stage !== 'expanded' ? 0 : undefined}
-        aria-label={stage === 'peek' ? productNotice ? t('janus:island.aria.openProductPreview', { path: productNotice.relPath }) : t('janus:island.aria.closeKnowledgePeek') : stage === 'collapsed' ? t('janus:island.aria.openIsland') : undefined}
+        aria-label={stage === 'peek'
+          ? topNotificationItem?.kind === 'product' && productNotice
+            ? t('janus:island.aria.openProductPreview', { path: productNotice.relPath })
+            : t('janus:island.aria.closeKnowledgePeek')
+          : stage === 'collapsed' ? t('janus:island.aria.openIsland') : undefined}
         onKeyDown={stage !== 'expanded' ? handleIslandKeyDown : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -441,30 +509,57 @@ export function JanusIsland({
         </div>
 
         <div className="janus-peek-shell">
-          <div className="janus-peek-orbit" aria-hidden="true" />
           <div className="janus-peek-core">
-            <div className="janus-peek-leading">
-              <div className={`janus-peek-sigil ${faceClass(mode)}`}>
-                <div className="janus-peek-halo halo-outer" aria-hidden="true" />
-                <div className="janus-peek-halo halo-inner" aria-hidden="true" />
-                <div className="janus-peek-eyes" aria-hidden="true">
-                  <div className="janus-peek-eye left" />
-                  <div className="janus-peek-eye right" />
+            {emptyCapsule ? (
+              <div className="janus-capsule" key={EMPTY_CAPSULE_NOTIFICATION_ID}>
+                <div className="janus-capsule-row">
+                  <span className="janus-capsule-led sev-info" aria-hidden="true" />
+                  <div className="janus-capsule-copy">
+                    <span className="janus-capsule-kicker">{t('janus:island.capsule.kicker.janus')}</span>
+                    <span className="janus-capsule-title">{t('janus:island.capsule.empty.title')}</span>
+                    <span className="janus-capsule-subtitle">{t('janus:island.capsule.empty.subtitle')}</span>
+                  </div>
+                </div>
+                <div className="janus-capsule-actions">
+                  <button type="button" className="janus-capsule-action" onClick={(event) => { event.stopPropagation(); runNotificationAction(EMPTY_CAPSULE_NOTIFICATION_ID, 'open-knowledge') }}>
+                    <BookOpen size={12} strokeWidth={1.7} aria-hidden="true" />{t('janus:island.capsule.action.openKnowledge')}
+                  </button>
+                  <button type="button" className="janus-capsule-action" onClick={(event) => { event.stopPropagation(); runNotificationAction(EMPTY_CAPSULE_NOTIFICATION_ID, 'open-product') }}>
+                    <Package size={12} strokeWidth={1.7} aria-hidden="true" />{t('janus:island.capsule.action.openProduct')}
+                  </button>
+                  <button type="button" className="janus-capsule-action" onClick={(event) => { event.stopPropagation(); runNotificationAction(EMPTY_CAPSULE_NOTIFICATION_ID, 'open-blueprint') }}>
+                    <Network size={12} strokeWidth={1.7} aria-hidden="true" />{t('janus:island.capsule.action.openBlueprint')}
+                  </button>
                 </div>
               </div>
-              <div className="janus-peek-copy">
-                <div className="janus-peek-title">{peekTitle}</div>
-                <div className="janus-peek-subtitle">{peekSubtitle}</div>
+            ) : topNotificationItem ? (
+              <div className="janus-capsule" key={topNotificationItem.id}>
+                <div className="janus-capsule-row">
+                  <span className={`janus-capsule-led sev-${topNotificationItem.severity}`} aria-hidden="true" />
+                  <div className="janus-capsule-copy">
+                    <span className="janus-capsule-kicker">{t(notificationKickerKey(topNotificationItem.kind))}</span>
+                    <span className="janus-capsule-title">{t(topNotificationItem.copy.titleKey)}</span>
+                    {topNotificationItem.copy.subtitleKey ? (
+                      <span className="janus-capsule-subtitle">{t(topNotificationItem.copy.subtitleKey, topNotificationItem.copy.subtitleValues)}</span>
+                    ) : topNotificationItem.copy.subtitleText ? (
+                      <span className="janus-capsule-subtitle">{topNotificationItem.copy.subtitleText}</span>
+                    ) : null}
+                  </div>
+                  {topNotificationItem.copy.metaKey ? (
+                    <span className="janus-capsule-meta">{t(topNotificationItem.copy.metaKey, topNotificationItem.copy.metaValues)}</span>
+                  ) : null}
+                  {topNotificationItem.actions[0] ? (
+                    <button
+                      type="button"
+                      className="janus-capsule-action janus-capsule-action--primary"
+                      onClick={(event) => { event.stopPropagation(); runNotificationAction(topNotificationItem.id, topNotificationItem.actions[0]!.id) }}
+                    >
+                      {t(notificationActionLabelKey(topNotificationItem.actions[0].id))}
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            </div>
-            <div className="janus-peek-trailing">
-              <div className="janus-peek-statusline">{statusText}</div>
-              <div className="janus-peek-pulse" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
 
@@ -504,6 +599,14 @@ export function JanusIsland({
           onOpenMaintenance={handleOpenMaintenance}
           onCancelMaintenance={(taskId) => void cancelMaintenance(taskId)}
           onOpenBlueprintWorkbench={handleOpenBlueprintWorkbench}
+          notifications={visibleNotifications}
+          bannerNotification={bannerNotification}
+          trayOpen={trayOpen}
+          notifyPulse={notifyPulse}
+          onToggleTray={() => setTrayOpen((open) => !open)}
+          onNotificationAction={runNotificationAction}
+          onBannerDismiss={() => setBannerId(null)}
+          onTrayClear={() => { setClearedIds((ids) => [...ids, ...visibleNotifications.filter((n) => !ids.includes(n.id)).map((n) => n.id)]); setBannerId(null) }}
           productFiles={productFiles}
           onOpenProductFile={onOpenProductFile}
           messages={messages}

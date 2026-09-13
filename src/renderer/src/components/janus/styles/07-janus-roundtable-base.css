@@ -603,24 +603,4 @@
   filter: none;
 }
 
-/* Knowledge recall presentation within the existing level-one peek. */
-.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] {
-  width: min(420px, calc(100vw - 24px));
-}
-
-.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-copy {
-  max-width: 250px;
-}
-
-.janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-subtitle {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 520px) {
-  .janus-island-shell[data-stage="peek"][data-peek-kind="knowledge"] .janus-peek-statusline {
-    display: none;
-  }
-}
+/* Knowledge peek styling moved to 08-janus-peek-capsule.css (notification capsule). */

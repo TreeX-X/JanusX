@@ -184,6 +184,32 @@
         "knowledgeCount": "{{count}} items | {{match}} | {{kind}}: {{title}}"
       }
     },
+    "capsule": {
+      "kicker": {
+        "janus": "JANUS",
+        "knowledge": "KNOWLEDGE",
+        "product": "PRODUCT",
+        "maintenance": "BLUEPRINT",
+        "agent": "AGENT"
+      },
+      "empty": {
+        "title": "All clear",
+        "subtitle": "No pending notifications · pick a workbench"
+      },
+      "action": {
+        "openKnowledge": "Open knowledge",
+        "openProduct": "Open products",
+        "openBlueprint": "Open blueprint",
+        "openMaintenance": "Open maintenance"
+      },
+      "tray": {
+        "title": "NOTIFICATIONS",
+        "clearAll": "Clear all",
+        "empty": "No notifications",
+        "badgeAria": "{{count}} pending notifications",
+        "dismiss": "Dismiss notification"
+      }
+    },
     "status": {
       "blueprintApproval": "BLUEPRINT // APPROVAL REQUIRED",
       "blueprintAttention": "BLUEPRINT // ATTENTION",

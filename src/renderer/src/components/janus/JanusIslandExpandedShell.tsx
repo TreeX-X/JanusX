@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
 import type { SubAgentRun } from '../../../../shared/subAgentRun'
 import type { ProductFileEntry } from '../../../../shared/product'
@@ -23,6 +24,12 @@ import {
   terminalProviderLabel,
   terminalStatusLabel,
 } from './janusIslandRuntime'
+import {
+  notificationActionLabelKey,
+  notificationKickerKey,
+  type IslandNotification,
+  type IslandNotificationActionId,
+} from './islandNotifications'
 
 interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   | 'messages' | 'pendingContent' | 'isStreaming' | 'error'
@@ -53,6 +60,15 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   onOpenMaintenance: () => void
   onCancelMaintenance: (taskId: string) => void
   onOpenBlueprintWorkbench: () => void
+  /** Expanded-stage notification surface (Note: 2026-09-13-island-notification-capsule.md). */
+  notifications: IslandNotification[]
+  bannerNotification: IslandNotification | null
+  trayOpen: boolean
+  notifyPulse: boolean
+  onToggleTray: () => void
+  onNotificationAction: (notificationId: string, actionId: IslandNotificationActionId) => void
+  onBannerDismiss: () => void
+  onTrayClear: () => void
   productFiles: ProductFileEntry[]
   onOpenProductFile?: (relPath: string) => void
 }
@@ -66,6 +82,8 @@ export function JanusIslandExpandedShell({
   onOpenQuestionsDetail,
   onRoundtableStateChange,
   onRequestAuxiliaryClose,
+  notifications, bannerNotification, trayOpen, notifyPulse,
+  onToggleTray, onNotificationAction, onBannerDismiss, onTrayClear,
   productFiles, onOpenProductFile, messages, pendingContent,
   isStreaming, error, modelOptions, activeModel, modelNotice,
   onChatSelectModel, onChatSend, onChatRewrite, onChatStop, onChatRetry,
@@ -204,11 +222,96 @@ export function JanusIslandExpandedShell({
                     </button>
                   ))}
                 </div>
+                <div className="janus-notify-anchor">
+                  {notifications.length > 0 ? (
+                    <button
+                      type="button"
+                      className="janus-notify-badge"
+                      data-pulse={notifyPulse}
+                      data-active={trayOpen}
+                      onClick={onToggleTray}
+                      aria-label={t('janus:island.capsule.tray.badgeAria', { count: notifications.length })}
+                    >
+                      <span className={`janus-capsule-led sev-${notifications[0]!.severity}`} aria-hidden="true" />
+                      <span>{notifications.length}</span>
+                    </button>
+                  ) : null}
+                  {trayOpen ? (
+                    <div className="janus-notify-tray" role="region" aria-label={t('janus:island.capsule.tray.title')}>
+                      <div className="janus-notify-tray-header">
+                        <span className="janus-notify-tray-title">{t('janus:island.capsule.tray.title')}</span>
+                        <button type="button" className="janus-notify-tray-clear" onClick={onTrayClear}>
+                          {t('janus:island.capsule.tray.clearAll')}
+                        </button>
+                      </div>
+                      {notifications.length === 0 ? (
+                        <div className="janus-notify-tray-empty">{t('janus:island.capsule.tray.empty')}</div>
+                      ) : notifications.map((notification) => (
+                        <div key={notification.id} className="janus-notify-row">
+                          <span className={`janus-capsule-led sev-${notification.severity}`} aria-hidden="true" />
+                          <div className="janus-notify-row-copy">
+                            <span className="janus-notify-row-kicker">
+                              {t(notificationKickerKey(notification.kind))}
+                              <span className="janus-notify-row-time">{formatRunAge(new Date(notification.createdAt).toISOString(), t)}</span>
+                            </span>
+                            <span className="janus-notify-row-title">{t(notification.copy.titleKey)}</span>
+                            {notification.copy.subtitleKey ? (
+                              <span className="janus-notify-row-subtitle">{t(notification.copy.subtitleKey, notification.copy.subtitleValues)}</span>
+                            ) : notification.copy.subtitleText ? (
+                              <span className="janus-notify-row-subtitle">{notification.copy.subtitleText}</span>
+                            ) : null}
+                          </div>
+                          {notification.actions[0] ? (
+                            <button
+                              type="button"
+                              className="janus-capsule-action janus-capsule-action--primary"
+                              onClick={(event) => { event.stopPropagation(); onNotificationAction(notification.id, notification.actions[0]!.id) }}
+                            >
+                              {t(notificationActionLabelKey(notification.actions[0].id))}
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="janus-expanded-meta">
                   <span className="janus-expanded-meta-text">{t('janus:island.expanded.dismissHint')}</span>
                 </div>
               </div>
-    
+
+              {bannerNotification ? (
+                <div className="janus-notify-banner" key={bannerNotification.id}>
+                  <span className={`janus-capsule-led sev-${bannerNotification.severity}`} aria-hidden="true" />
+                  <span className="janus-notify-row-kicker">{t(notificationKickerKey(bannerNotification.kind))}</span>
+                  <div className="janus-notify-banner-copy">
+                    <span className="janus-notify-banner-title">{t(bannerNotification.copy.titleKey)}</span>
+                    {bannerNotification.copy.subtitleKey ? (
+                      <span className="janus-notify-banner-subtitle">{t(bannerNotification.copy.subtitleKey, bannerNotification.copy.subtitleValues)}</span>
+                    ) : bannerNotification.copy.subtitleText ? (
+                      <span className="janus-notify-banner-subtitle">{bannerNotification.copy.subtitleText}</span>
+                    ) : null}
+                  </div>
+                  {bannerNotification.actions[0] ? (
+                    <button
+                      type="button"
+                      className="janus-capsule-action janus-capsule-action--primary"
+                      onClick={(event) => { event.stopPropagation(); onNotificationAction(bannerNotification.id, bannerNotification.actions[0]!.id) }}
+                    >
+                      {t(notificationActionLabelKey(bannerNotification.actions[0].id))}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="janus-notify-banner-close"
+                    onClick={onBannerDismiss}
+                    aria-label={t('janus:island.capsule.tray.dismiss')}
+                  >
+                    <X size={12} strokeWidth={1.7} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
+ 
               <div className="janus-expanded-body">
                 <div className="janus-feedback-panel">
                   <div className="janus-monitor-grid">

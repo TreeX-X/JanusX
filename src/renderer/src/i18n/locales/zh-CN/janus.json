@@ -181,7 +181,33 @@
       },
       "subtitle": {
         "noKnowledgeMatch": "无知识匹配",
-        "knowledgeCount": "{{count}} 项 | {{match}} | {{kind}}: {{title}}"
+        "knowledgeCount": "{{count}} 条召回 | {{match}} | {{kind}}: {{title}}"
+      }
+    },
+    "capsule": {
+      "kicker": {
+        "janus": "JANUS",
+        "knowledge": "KNOWLEDGE",
+        "product": "PRODUCT",
+        "maintenance": "BLUEPRINT",
+        "agent": "AGENT"
+      },
+      "empty": {
+        "title": "一切就绪",
+        "subtitle": "无待处理通知 · 选择一个工作台"
+      },
+      "action": {
+        "openKnowledge": "打开知识库",
+        "openProduct": "打开产物工作区",
+        "openBlueprint": "打开蓝图",
+        "openMaintenance": "打开维护"
+      },
+      "tray": {
+        "title": "NOTIFICATIONS // 通知",
+        "clearAll": "全部清除",
+        "empty": "暂无通知",
+        "badgeAria": "{{count}} 条未处理通知",
+        "dismiss": "关闭通知"
       }
     },
     "status": {

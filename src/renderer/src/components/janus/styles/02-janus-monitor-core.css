@@ -648,71 +648,6 @@
 }
 
 /* Layout polish overrides */
-.janus-island-shell[data-stage="peek"] .janus-peek-core {
-  width: 100%;
-  min-width: 0;
-  padding: 0 14px;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-leading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-sigil {
-  width: 60px;
-  height: 24px;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-halo.halo-outer {
-  width: 72px;
-  height: 30px;
-  opacity: 0.5;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-halo.halo-inner {
-  width: 44px;
-  height: 14px;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-copy {
-  min-width: 0;
-  max-width: 170px;
-  align-items: flex-start;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-title,
-.janus-island-shell[data-stage="peek"] .janus-peek-subtitle {
-  text-align: left;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-trailing {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-statusline {
-  font-size: 9px;
-  font-family: 'SF Mono', monospace;
-  color: rgba(255,255,255,0.54);
-  letter-spacing: 0.8px;
-  white-space: nowrap;
-}
-
-.janus-island-shell[data-stage="peek"] .janus-peek-pulse {
-  margin-top: 0;
-  opacity: 0.72;
-}
-
 .janus-island-shell[data-stage="expanded"] .janus-expanded-shell {
   gap: 12px;
   padding: 2px;
@@ -841,17 +776,6 @@
   margin: 0;
   border: 1px solid rgba(255,255,255,0.06);
   box-shadow: inset 0 0 40px rgba(0,0,0,1), 0 0 0 1px rgba(255,255,255,0.02);
-}
-
-@media (max-width: 900px) {
-  .janus-island-shell[data-stage="peek"] .janus-peek-core {
-    padding: 0 10px;
-    gap: 10px;
-  }
-
-  .janus-island-shell[data-stage="peek"] .janus-peek-statusline {
-    display: none;
-  }
 }
 
 @keyframes eq-bounce-lg {
