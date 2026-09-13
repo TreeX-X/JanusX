@@ -15,5 +15,9 @@ export function createParser(engine: AgentEngine): StreamParser {
       return new CodexParser()
     case 'opencode':
       return new OpenCodeParser()
+    default:
+      // Headless subprocess runner stays claude/codex/opencode-only: janus/pi
+      // run as interactive terminals with hook extensions, never here.
+      throw new Error(`Unsupported headless engine: ${engine}`)
   }
 }

@@ -451,7 +451,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   /** Per-session gate so second+ Claude/Codex/OpenCode creates skip hook file IO. */
   const hooksInstalledThisSession = new Set<Exclude<CheckpointEngine, 'shell' | 'manual'>>()
 
-  async function ensureHooksInstalled(engine: Exclude<CheckpointEngine, 'shell' | 'manual' | 'janus' | 'pi'>): Promise<void> {
+  async function ensureHooksInstalled(engine: Exclude<CheckpointEngine, 'shell' | 'manual'>): Promise<void> {
     if (hooksInstalledThisSession.has(engine) && await hookConfigManager.isInstalled(engine)) return
     await hookConfigManager.ensureInstalled(engine)
     hooksInstalledThisSession.add(engine)
@@ -528,8 +528,6 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       officecliManager.resolveBinary().catch(() => undefined),
       ...requested.map((engine) => resolveCLIPath(engine).catch(() => null)),
       ...requested.map(async (engine) => {
-        // janus / pi emit no hook events: skip hook file IO (no-op short-circuit).
-        if (engine === 'janus' || engine === 'pi') return
         try {
           await ensureHooksInstalled(engine)
         } catch {
@@ -631,8 +629,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     })()
 
     const hookEnvPromise = (async (): Promise<Record<string, string> | undefined> => {
-      // shell spawns no agent; janus / pi emit no hook events: none needs hook env.
-      if (engine === 'shell' || engine === 'janus' || engine === 'pi') return undefined
+      // shell spawns no agent and needs no hook env.
+      if (engine === 'shell') return undefined
       try {
         await hookBridge.start()
         await ensureHooksInstalled(engine)
@@ -681,6 +679,21 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       officePromise,
     ])
 
+    // pi loads the JanusX-owned notify extension via CLI flag, never via the
+    // user's pi settings. Missing file (setup failed) launches bare pi: status
+    // stays wait, exactly the pre-hook behavior.
+    const piExtensionArgs: string[] = []
+    if (engine === 'pi') {
+      try {
+        if (await hookConfigManager.isInstalled('pi')) {
+          piExtensionArgs.push('--extension', hookConfigManager.getPiExtensionPath())
+        }
+      } catch {
+        // Best effort: launch bare pi below.
+      }
+    }
+    const programArgs = [...(resolvedProgram?.args ?? []), ...piExtensionArgs]
+
     logTerminalDiagnostic('terminal create requested', {
       id,
       workspaceId,
@@ -689,7 +702,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       preset,
       engine,
       program: resolvedProgram?.command,
-      programArgs: resolvedProgram?.args,
+      programArgs,
     })
 
     let instance
@@ -706,7 +719,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         cwd,
         shell,
         program: resolvedProgram?.command,
-        programArgs: resolvedProgram?.args,
+        programArgs,
         cols: typeof cols === 'number' ? cols : undefined,
         rows: typeof rows === 'number' ? rows : undefined,
         env: hookEnv,
@@ -736,9 +749,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     }
 
     try {
-    // Hook/turn/runner registries are for the claude/codex/opencode family:
-    // janus / pi emit no hook events and never enter the subprocess runner.
-    if (engine !== 'shell' && engine !== 'janus' && engine !== 'pi') {
+    // Hook/turn/runner registries cover every agent CLI: janus emits from its
+    // own binary, pi via the JanusX-owned --extension flag (see below).
+    if (engine !== 'shell') {
       hookCoordinator.registerTerminal({
         terminalId: id,
         engine,

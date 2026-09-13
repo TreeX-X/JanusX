@@ -82,16 +82,19 @@ function getOpencodeStatus(raw: unknown): string | undefined {
   return candidates.find((value): value is string => typeof value === 'string')
 }
 
-function isClaudeAttentionNotification(payload: AgentHookPayload): boolean {
-  if (payload.source !== 'claude' || payload.event !== 'Notification') return false
+function isHookAttentionNotification(payload: AgentHookPayload): boolean {
+  // Claude Notification hooks carry permission_prompt/idle_prompt matchers;
+  // janus/pi extensions repost the same matcher contract, so any source with
+  // a matcher-shaped raw payload qualifies — see agent-hook-config pi extension.
+  if (payload.event !== 'Notification') return false
   const raw = payload.raw
-  if (!raw || typeof raw !== 'object') return true
+  if (!raw || typeof raw !== 'object') return payload.source === 'claude'
   const matcher =
     (raw as Record<string, unknown>).matcher ??
     (raw as Record<string, unknown>).notification_type ??
     (raw as Record<string, unknown>).type
 
-  if (typeof matcher !== 'string') return true
+  if (typeof matcher !== 'string') return payload.source === 'claude'
   return matcher === 'permission_prompt' || matcher === 'idle_prompt'
 }
 
@@ -151,7 +154,7 @@ function getRawString(raw: unknown, keys: string[]): string | undefined {
 
 function isAttentionEvent(payload: AgentHookPayload): boolean {
   if (payload.source === 'opencode') return payload.event === 'permission.asked'
-  return APPROVAL_EVENTS.has(payload.event) || isClaudeAttentionNotification(payload)
+  return APPROVAL_EVENTS.has(payload.event) || isHookAttentionNotification(payload)
 }
 
 function isApprovalEvent(payload: AgentHookPayload): boolean {

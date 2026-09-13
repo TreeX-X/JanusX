@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { homedir } from 'os'
 import { dirname, isAbsolute, join } from 'path'
-import { access, mkdir, readFile, writeFile } from 'fs/promises'
+import { access, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import type { AgentEngine } from '../janus-runner/types'
 import type { AgentHookBridgeEnv } from './agent-hook-bridge'
 
@@ -333,6 +333,112 @@ export const JanusXNotifyPlugin = async ({ directory }) => ({
 `
 }
 
+// Note: janus/pi hook coverage — see .agents/notes/implemented/feature/2026-09-13-janus-pi-hook-management.md
+export function buildPiExtension(): string {
+  return `function env(name) {
+  const value = process.env[name];
+  return value && value.trim() ? value : undefined;
+}
+
+async function postToJanusX(eventType, fields) {
+  const port = env("JANUSX_HOOK_PORT");
+  const token = env("JANUSX_HOOK_TOKEN");
+  if (!port || !token || !eventType) return;
+
+  await fetch("http://127.0.0.1:" + port + "/api/agent-hook", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      source: "pi",
+      event: eventType,
+      terminalId: env("JANUSX_HOOK_TERMINAL_ID"),
+      workspaceId: env("JANUSX_HOOK_WORKSPACE_ID"),
+      sessionId: undefined,
+      cwd: fields.cwd,
+      message: fields.message,
+      timestamp: new Date().toISOString(),
+      raw: fields.raw,
+    }),
+  }).catch(() => {});
+}
+
+function safeCwd(ctx) {
+  try {
+    const cwd = ctx && ctx.cwd;
+    return typeof cwd === "string" && cwd.trim() ? cwd : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeTitle(event) {
+  try {
+    const title = event && event.title;
+    return typeof title === "string" && title.trim() ? title : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export default function janusxNotify(pi) {
+  pi.on("agent_start", async (_event, ctx) => {
+    try {
+      await postToJanusX("UserPromptSubmit", { cwd: safeCwd(ctx), raw: { hook: "agent_start" } });
+    } catch {
+    }
+  });
+
+  // agent_end still allows auto-retry/compaction/queued follow-ups: only
+  // agent_settled means pi will not continue automatically.
+  pi.on("agent_settled", async (_event, ctx) => {
+    try {
+      await postToJanusX("Stop", { cwd: safeCwd(ctx), raw: { hook: "agent_settled" } });
+    } catch {
+    }
+  });
+
+  // ui_prompt_* exist so hosts can report "waiting for user" instead of
+  // "running": confirm maps to approval, every other kind to input.
+  pi.on("ui_prompt_start", async (event, ctx) => {
+    try {
+      const kind = event && typeof event.kind === "string" ? event.kind : "confirm";
+      if (kind === "confirm") {
+        await postToJanusX("PermissionRequest", {
+          cwd: safeCwd(ctx),
+          message: safeTitle(event),
+          raw: { hook: "ui_prompt_start", matcher: "permission_prompt", kind },
+        });
+      } else {
+        await postToJanusX("Notification", {
+          cwd: safeCwd(ctx),
+          message: safeTitle(event),
+          raw: { hook: "ui_prompt_start", matcher: "idle_prompt", kind },
+        });
+      }
+    } catch {
+    }
+  });
+
+  pi.on("after_provider_response", async (event, ctx) => {
+    try {
+      const status = event && typeof event.status === "number" ? event.status : undefined;
+      if (status === 429 || (status !== undefined && status >= 500 && status <= 599)) {
+        await postToJanusX("janusx.turn.api-error", {
+          cwd: safeCwd(ctx),
+          message: "pi provider responded " + status,
+          raw: { hook: "after_provider_response", status },
+        });
+      }
+    } catch {
+    }
+  });
+}
+`
+}
+
 function buildWindowsHookScript(): string {
   return `param(
   [Parameter(Mandatory = $true)][string]$Source,
@@ -449,6 +555,16 @@ export class AgentHookConfigManager {
   }
 
   async ensureInstalled(engine: HookableEngine): Promise<HookInstallResult> {
+    // janus emits hook events from its own CLI (env-gated, no files to install).
+    if (engine === 'janus') {
+      return { engine, installed: true, path: this.getHooksRootDir() }
+    }
+
+    if (engine === 'pi') {
+      await this.ensurePiExtension()
+      return { engine, installed: true, path: this.getPiExtensionPath() }
+    }
+
     if (engine === 'claude') {
       const windowsHookScriptPath = await this.ensureHookClientScript()
       return installJsonHooks(
@@ -481,6 +597,20 @@ export class AgentHookConfigManager {
   }
 
   async uninstall(engine: HookableEngine): Promise<HookInstallResult> {
+    if (engine === 'janus') {
+      return { engine, installed: false, path: this.getHooksRootDir() }
+    }
+
+    if (engine === 'pi') {
+      const extensionPath = this.getPiExtensionPath()
+      try {
+        await rm(extensionPath, { force: true })
+      } catch {
+        // Best effort: a missing file is already uninstalled.
+      }
+      return { engine, installed: false, path: extensionPath }
+    }
+
     if (engine === 'claude') {
       return uninstallJsonHooks(this.getClaudeSettingsPath(), engine)
     }
@@ -493,6 +623,17 @@ export class AgentHookConfigManager {
   }
 
   async isInstalled(engine: HookableEngine): Promise<boolean> {
+    if (engine === 'janus') return true
+
+    if (engine === 'pi') {
+      try {
+        await access(this.getPiExtensionPath())
+        return true
+      } catch {
+        return false
+      }
+    }
+
     if (engine === 'opencode') {
       return Promise.all([
         access(join(this.getOpencodeConfigDir(), 'opencode.json')),
@@ -569,6 +710,14 @@ export class AgentHookConfigManager {
     return join(this.userDataDir, 'hooks', 'opencode')
   }
 
+  getHooksRootDir(): string {
+    return join(this.userDataDir, 'hooks')
+  }
+
+  getPiExtensionPath(): string {
+    return join(this.userDataDir, 'hooks', 'pi', 'janusx-notify.js')
+  }
+
   getWindowsHookScriptPath(): string {
     return this.configuredWindowsHookScriptPath ?? join(this.homeDir, '.janusx', 'hooks', 'janusx-agent-hook.ps1')
   }
@@ -580,6 +729,14 @@ export class AgentHookConfigManager {
     await mkdir(dirname(scriptPath), { recursive: true })
     await writeFile(scriptPath, buildWindowsHookScript(), 'utf8')
     return scriptPath
+  }
+
+  private async ensurePiExtension(): Promise<void> {
+    // Flag-injected (--extension), never merged into the user's pi settings:
+    // the file is JanusX-owned and rewritten idempotently on every install.
+    const extensionPath = this.getPiExtensionPath()
+    await mkdir(dirname(extensionPath), { recursive: true })
+    await writeFile(extensionPath, buildPiExtension(), 'utf8')
   }
 
   private async ensureOpencodePlugin(): Promise<void> {

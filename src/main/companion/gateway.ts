@@ -149,10 +149,16 @@ export class CompanionGateway {
     }
     if (request.command.type === 'create-terminal') {
       if (!this.options.createTerminal) return denied('execution-failed', 'Terminal creation is unavailable')
-      const tokenError = await this.verifyWorkspaceActionToken(request, request.command.workspaceId, request.command.engine)
+      // Remote creation stays claude/codex/opencode-only: janus/pi hook
+      // coverage is local-terminal status only, never remote control.
+      const engine = request.command.engine
+      if (engine !== 'claude' && engine !== 'codex' && engine !== 'opencode') {
+        return denied('invalid-request', `Remote terminal creation does not support engine: ${engine}`)
+      }
+      const tokenError = await this.verifyWorkspaceActionToken(request, request.command.workspaceId, engine)
       if (tokenError) return tokenError
       try {
-        const terminalId = await this.options.createTerminal(request.command.workspaceId, request.command.engine)
+        const terminalId = await this.options.createTerminal(request.command.workspaceId, engine)
         return allowed('Terminal created', terminalId)
       } catch {
         return denied('execution-failed', 'Terminal creation failed')

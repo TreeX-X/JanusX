@@ -227,8 +227,7 @@ describe('AgentHookConfigManager', () => {
     expect(await manager.isInstalled('claude')).toBe(false)
   })
 
-  it('creates an opencode plugin directory and injects OPENCODE_CONFIG_DIR', async () => {
-    const homeDir = await createTempDir()
+  it('creates an opencode plugin directory and injects OPENCODE_CONFIG_DIR', async () => {    const homeDir = await createTempDir()
     const userDataDir = join(homeDir, 'userData')
     const manager = makeManager(homeDir, { userDataDir })
 
@@ -252,5 +251,48 @@ describe('AgentHookConfigManager', () => {
     expect(plugin).toContain('session.updated')
     expect(plugin).toContain('extractSessionId')
     expect(plugin).toContain('sessionID')
+  })
+
+  it('installs a JanusX-owned pi extension without touching user pi settings', async () => {
+    const homeDir = await createTempDir()
+    const userDataDir = join(homeDir, 'userData')
+    const manager = makeManager(homeDir, { userDataDir })
+
+    const result = await manager.ensureInstalled('pi')
+
+    expect(result.installed).toBe(true)
+    expect(result.path).toBe(manager.getPiExtensionPath())
+    expect(await manager.isInstalled('pi')).toBe(true)
+    const extension = await readFile(manager.getPiExtensionPath(), 'utf8')
+    expect(extension).toContain('agent_settled')
+    expect(extension).toContain('agent_start')
+    expect(extension).toContain('ui_prompt_start')
+    expect(extension).toContain('PermissionRequest')
+    expect(extension).toContain('after_provider_response')
+    expect(extension).toContain('JANUSX_HOOK_PORT')
+    // Flag-injected file: no settings.json merge, no user hook removal.
+    expect(extension).not.toContain('settings.json')
+  })
+
+  it('uninstalls the managed pi extension file', async () => {
+    const homeDir = await createTempDir()
+    const userDataDir = join(homeDir, 'userData')
+    const manager = makeManager(homeDir, { userDataDir })
+
+    await manager.ensureInstalled('pi')
+    expect(await manager.isInstalled('pi')).toBe(true)
+    await manager.uninstall('pi')
+    expect(await manager.isInstalled('pi')).toBe(false)
+  })
+
+  it('treats janus as env-gated with nothing to install', async () => {
+    const homeDir = await createTempDir()
+    const manager = makeManager(homeDir)
+
+    const installed = await manager.ensureInstalled('janus')
+    expect(installed).toEqual({ engine: 'janus', installed: true, path: manager.getHooksRootDir() })
+    expect(await manager.isInstalled('janus')).toBe(true)
+    const uninstalled = await manager.uninstall('janus')
+    expect(uninstalled.installed).toBe(false)
   })
 })

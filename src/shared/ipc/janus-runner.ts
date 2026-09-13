@@ -17,7 +17,7 @@ export const SUBAGENT_RUN_CHANNELS = {
   removed: 'subagent-run:removed',
 } as const
 
-export type AgentEngine = 'claude' | 'codex' | 'opencode'
+export type AgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
 
 export type AgentEvent =
   | { type: 'text-delta'; delta: string; fullText: string }

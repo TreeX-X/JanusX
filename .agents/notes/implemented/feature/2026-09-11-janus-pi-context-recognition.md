@@ -17,7 +17,7 @@ JanusX 可以启动 `janus` 与 `pi` 终端，但上下文识别只覆盖 `claud
 ## Alternatives considered
 
 - 维持现状：`janus`/`pi` 继续使用 preset 估算窗口。该选项零成本，但模型行与用量行永久失真，用户无法判断真实上下文压力，否决。
-- 为 `janus`/`pi` 建设 hook 事件管线。该选项信号最权威，但两个 CLI 都没有 hook 注入面，`janus tui` 与 `pi` 交互态也不输出机器事件；强行做需要改 CLI 本体或长期驻留文本嗅探，成本远超历史加 PTY 的组合精度，否决。
+- 为 `janus`/`pi` 建设 hook 事件管线。该选项在当时无注入面（`janus tui` 与 `pi` 交互态不输出机器事件），成本远超历史加 PTY 的组合精度，否决。注入面此后补齐，状态显示走 hook 管线，见 [2026-09-13-janus-pi-hook-management](./2026-09-13-janus-pi-hook-management.md)，上下文识别仍走本 Note 的历史加 PTY 管线。
 - 启动时传入稳定的 `--conversation`/`--session` 使会话 id 与终端 id 对齐。该选项能让 `janus` 也获得精确绑定，但改变启动命令会影响 CLI 自身的会话恢复语义，需要单独验证，延期到后续任务，不在本次范围。
 
 ## Consequences

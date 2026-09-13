@@ -151,8 +151,7 @@ describe('AgentHookCoordinator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'approval', delivered: true })
   })
 
-  it('maps opencode session status and idle events to start and completion', async () => {
-    let now = 10_000
+  it('maps opencode session status and idle events to start and completion', async () => {    let now = 10_000
     const { coordinator, completions, events } = createCoordinator(() => now)
 
     coordinator.registerTerminal({
@@ -182,6 +181,58 @@ describe('AgentHookCoordinator', () => {
       failed: false,
     })
     expect(lifecycleTypes(events)).toEqual(['started', 'completed'])
+  })
+
+  it('tracks pi agent_start/agent_settled as a turn', async () => {
+    let now = 20_000
+    const { coordinator, completions, events } = createCoordinator(() => now)
+
+    coordinator.registerTerminal({
+      terminalId: 'term-pi',
+      engine: 'pi',
+      workspaceId: 'workspace-1',
+      cwd: 'C:/repo',
+    })
+    coordinator.handleHookPayload({ source: 'pi', event: 'UserPromptSubmit', terminalId: 'term-pi' })
+    now = 25_000
+    coordinator.handleHookPayload({ source: 'pi', event: 'Stop', terminalId: 'term-pi' })
+    await Promise.resolve()
+
+    expect(completions[0]).toMatchObject({
+      turnId: 'term-pi:20000',
+      engine: 'pi',
+      hookEvent: 'Stop',
+      failed: false,
+    })
+    expect(lifecycleTypes(events)).toEqual(['started', 'completed'])
+  })
+
+  it('routes janus/pi Notification matchers to attention and approval', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal({
+      terminalId: 'term-janus',
+      engine: 'janus',
+      workspaceId: 'workspace-1',
+      cwd: 'C:/repo',
+    })
+    coordinator.handleHookPayload({
+      source: 'janus',
+      event: 'Notification',
+      terminalId: 'term-janus',
+      raw: { hook: 'ask-user', matcher: 'idle_prompt' },
+    })
+    coordinator.handleHookPayload({
+      source: 'janus',
+      event: 'PermissionRequest',
+      terminalId: 'term-janus',
+      message: 'Allow rm?',
+    })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(2)
+    expect(events.filter((event) => event.type === 'attention')).toHaveLength(1)
+    expect(events.filter((event) => event.type === 'approval')).toHaveLength(1)
   })
 
   it('reports ambiguous events that cannot be mapped to one terminal', () => {

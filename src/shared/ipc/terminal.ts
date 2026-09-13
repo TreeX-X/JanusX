@@ -22,7 +22,7 @@ export const TERMINAL_EVENT_CHANNELS = {
   telemetry: 'terminal:telemetry',
 } as const
 
-export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus'
+export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
 
 // Note: six internal states route hooks and sort order; approval and input share one attention visual — see .agents/notes/implemented/feature/2026-09-12-terminal-status-display.md
 // Sidebar display status of a terminal entry.
