@@ -12,6 +12,7 @@ import { useGlobalRunning } from '@/components/janus/useGlobalRunning'
 import { JanusRunOrbs } from '@/components/janus/JanusRunOrbs'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
 import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentProductNotice } from '@/components/janus/islandController'
+import { getSingleActivationIntent } from '@/components/janus/islandInteraction'
 import { officeService } from '@/services/office'
 import { startProductDiscovery } from '@/components/product-workspace/productDiscovery'
 import { useProductWorkspaceStore } from '@/stores/productWorkspace'
@@ -108,8 +109,22 @@ export function Titlebar() {
     })
   }, [activeWorkspaceId])
 
+  // Product presentation dedupe (Note: 2026-09-13-island-notification-capsule.md):
+  // a sticky notice re-presents only once per id. After the capsule expires the
+  // notice stays alive — the next island click opens the product directly
+  // instead of an automatic re-peek.
+  const presentedProductNoticeIdRef = useRef<string | null>(null)
+
   useEffect(() => {
-    if (shouldPresentProductNotice(islandStage, productNotice?.workspaceId ?? null, activeWorkspaceId)) dispatchIsland({ type: 'product-notice' })
+    if (!productNotice || productNotice.workspaceId !== activeWorkspaceId) {
+      presentedProductNoticeIdRef.current = null
+      return
+    }
+    const noticeId = productNotice.entry.relPath
+    if (presentedProductNoticeIdRef.current === noticeId) return
+    if (!shouldPresentProductNotice(islandStage, productNotice.workspaceId, activeWorkspaceId)) return
+    presentedProductNoticeIdRef.current = noticeId
+    dispatchIsland({ type: 'product-notice' })
   }, [activeWorkspaceId, productNotice, islandStage])
 
   useEffect(() => {
@@ -124,8 +139,9 @@ export function Titlebar() {
   useEffect(() => {
     if (islandStage !== 'peek' || productNotice?.workspaceId !== activeWorkspaceId) return
     const timer = window.setTimeout(() => {
-      useProductWorkspaceStore.getState().consumeProductNotice()
-      dispatchIsland({ type: 'product-consume' })
+      // Capsule-only expiry: the notice itself stays sticky so that clicking
+      // the island afterwards still opens the product on the right side.
+      dispatchIsland({ type: 'product-expire' })
     }, KNOWLEDGE_PEEK_TIMEOUT_MS)
     return () => window.clearTimeout(timer)
   }, [activeWorkspaceId, productNotice, islandStage])
@@ -134,18 +150,28 @@ export function Titlebar() {
     if (!activeWorkspaceId) return
     const product = useProductWorkspaceStore.getState()
     product.consumeProductNotice()
+    dispatchIsland({ type: 'dismiss' })
+    const { sidebarCollapsed, toggleSidebar } = useAppStore.getState()
+    if (!sidebarCollapsed) toggleSidebar()
+    // Direct preview: the tab and file read start immediately, the stage
+    // mounts in the same commit — no deferred open (Note: product-workspace).
     product.showProductWorkspace(activeWorkspaceId)
     void product.openPreview(activeWorkspaceId, relPath)
-    dispatchIsland({ type: 'dismiss' })
   }, [activeWorkspaceId])
 
   const handleIslandSingleActivate = useCallback(() => {
-    if (islandStage === 'peek' && productNotice?.workspaceId === activeWorkspaceId) {
+    const productNoticeAlive = productNotice?.workspaceId === activeWorkspaceId
+    const intent = getSingleActivationIntent({
+      stage: islandStage,
+      productNoticeAlive,
+      knowledgePresenting: knowledgePeek.presentation !== 'hidden',
+    })
+    if (intent === 'open-product' && productNoticeAlive && productNotice) {
       openProductFile(productNotice.entry.relPath)
       return
     }
     dispatchIsland({ type: 'single-activate' })
-  }, [activeWorkspaceId, productNotice, islandStage, openProductFile])
+  }, [activeWorkspaceId, productNotice, islandStage, knowledgePeek.presentation, openProductFile])
   const handleIslandDoubleActivate = useCallback(() => {
     useProductWorkspaceStore.getState().consumeProductNotice()
     dispatchIsland({ type: 'double-activate' })

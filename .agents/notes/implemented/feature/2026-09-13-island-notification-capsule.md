@@ -32,7 +32,9 @@ Status: implemented
 - **收起双向连续性**：expanded 收起后未消费通知仍由活跃 props 派生，下次单击 peek 重现（TTL 由 Titlebar 既有 timeout 机制接管）。
 - **桌面 Toast 分工**：岛在场（peek/expanded）→ 岛内各形态；岛不在场 → 桌面 Toast 兜底（既有 Toast 链路未动，分工语义由岛内呈现的排他性保证）。
 
-**E. 交互规则**：peek 态胶囊单击维持收起（`single-activate`），胶囊内无任何可点元素；产物/知识等跳转入口只存在于二级托盘与 banner 的 action 按钮，执行后按 kind 分流（产物走 Titlebar `openProductFile` 自带消费+收拢，其余 `setActiveWorkbench` + `onDismiss` 让位）；TTL 维持 4.2s（Titlebar 既有 timeout 接管）。
+**E. 交互规则**：peek 态胶囊单击维持收起（`single-activate`），胶囊内无任何可点元素；产物/知识等跳转入口只存在于二级托盘与 banner 的 action 按钮，执行后按 kind 分流（产物走 Titlebar `openProductFile` 自带消费+收拢，其余 `setActiveWorkbench` + `onDismiss` 让位）；TTL 维持 4.2s（Titlebar 既有 timeout 接管）。产物到达可打断知识 peek：`product-notice` 自 `collapsed` 与 `peek` 两态均可上台（`shouldPresentProductNotice` 同步含 peek），胶囊内容切到产物、知识隐藏、TTL 重新计时；`expanded` 态维持仅徽标脉冲不变。
+
+**E+. 产物通知粘滞化（同日修订，用户驱动）**：产物通知从「TTL 即焚」改为「点击消费」——4.2s TTL 只收起胶囊（控制器动作由 `product-consume` 更名 `product-expire`，语义仅为 peek→collapsed），`productNotice` 在 store 中保持 alive 直到被点击打开（`openProductFile` 内 `consumeProductNotice`）、被更新产物覆盖、或工作区清理。配套三件事：① 单击意图收敛为纯函数 `getSingleActivationIntent`（`islandInteraction.ts`）：产物 alive 且知识面未在场时，collapsed 与 peek 两态单击岛都直接在右侧打开产物工作区（collapsed 单击不再只是 replay 知识），expanded 不劫持；知识面（召回结果/空态舱）在场时单击维持收起语义——胶囊顶层同步让位（JanusIsland 拆分 `capsuleNotifications`，知识面在场时产物通知退出胶囊排序但保留在托盘/banner），保证「显示什么点开什么」。② Titlebar 以 `presentedProductNoticeIdRef` 按 id（relPath 内容寻址）去重上台，避免粘滞通知在每次岛收起后被 effect 重新顶起造成 peek 永动；通知被消费（id 变 null）时重置，允许后续新产物重新上台。③ collapsed 态 aria-label 同步：胶囊顶层为产物时播报 `openProductPreview`，与单击直达一致。双击进 expanded 与 ESC 仍消费通知（进监控即有产物分区入口，通知使命完成）。
 
 状态机（`islandController.ts`）与 Titlebar 派发协议未动——通知模型是 Island 渲染层的投影，控制器状态机保持原测覆盖。
 
@@ -48,4 +50,4 @@ Status: implemented
 
 新增 `islandNotifications.ts` 模型层 + `08-janus-peek-capsule.css` + `tests/unit/janus/island-notifications.test.ts`（10 测试）；`JanusIsland.tsx` 退役三条文案链改为订阅投影栈顶并新增托盘/banner/pulse 状态；`JanusIslandExpandedShell.tsx` 新增徽标/托盘/banner 三块渲染与对应 props；01/02/07 的旧 peek 样式随之删除；i18n 双语新增 `janus:island.capsule.*` 键组并重生成 `types.ts`。获得：新增通知源只需在 `islandNotifications.ts` 加一个投影函数并入列 `assembleNotifications`，Island 组件零改动；一级/二级共用同一套令牌，读作同一系统的两级。
 
-代价与边界：一级展开移除全部跳转 action 后，`IslandNotification.actions` 仅由二级托盘/banner 消费，模型字段保留以保证两层共用同一数据形状；若未来一级需要恢复轻量直达，恢复 hover 显现按钮即可（行动钮基类样式已在托盘侧验证）。知识"无相关召回"特化空态暂以通用空态舱替代——`receiveKnowledgeTrace` 本就只上台 eligible 命中，零命中 trace 不留存，特化空态需先让空 trace 上台（重访信号：产品需要区分"没查"与"查了没有"时）。通知列表由活跃 props 派生而非累积 store，跨会话历史不存在（托盘"全部清除"只作用于当次会话 id）；`clearedIds` 只在组件生命周期内持久，岛卸载后清空。桌面 Toast 链路本次未加 `isIslandPresenting` 守卫——当前桌面 Toast 与岛通知的事件源无重叠（Toast 走 agent 完成事件，岛走知识/产物/维护），双发风险未兑现；两链路事件源出现交集时须先落守卫（明确的重访信号）。`main/office` 命名与 `product:` 通道拆分沿用产物工作区 Note 的既定重访信号，本次未触碰。
+代价与边界：一级展开移除全部跳转 action 后，`IslandNotification.actions` 仅由二级托盘/banner 消费，模型字段保留以保证两层共用同一数据形状；若未来一级需要恢复轻量直达，恢复 hover 显现按钮即可（行动钮基类样式已在托盘侧验证）。知识"无相关召回"特化空态暂以通用空态舱替代——`receiveKnowledgeTrace` 本就只上台 eligible 命中，零命中 trace 不留存，特化空态需先让空 trace 上台（重访信号：产品需要区分"没查"与"查了没有"时）。通知列表由活跃 props 派生而非累积 store，跨会话历史不存在（托盘"全部清除"只作用于当次会话 id）；`clearedIds` 只在组件生命周期内持久，岛卸载后清空。桌面 Toast 链路本次未加 `isIslandPresenting` 守卫——当前桌面 Toast 与岛通知的事件源无重叠（Toast 走 agent 完成事件，岛走知识/产物/维护），双发风险未兑现；两链路事件源出现交集时须先落守卫（明确的重访信号）。E+ 修订的代价：粘滞通知存活期间，expanded 顶栏 statusText 持续显示 `PRODUCT // OPEN PREVIEW`（提示可点击直达，可接受）；同文件重复落盘不重复提醒（id 内容寻址），产物重开需经监控分区或新产物上台。`main/office` 命名与 `product:` 通道拆分沿用产物工作区 Note 的既定重访信号，本次未触碰。

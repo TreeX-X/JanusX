@@ -318,8 +318,18 @@ export function JanusIsland({
     [notifications, clearedIds],
   )
   const topNotificationItem = topNotification(visibleNotifications)
-  const emptyCapsule = isEmptyCapsuleRequested(knowledgePeekEmpty, visibleNotifications)
-  const capsuleTierValue = capsuleTier(topNotificationItem, emptyCapsule)
+  // The knowledge surface (recall result or empty capsule) owns the peek
+  // capsule while it presents; a sticky product notice yields to it and stays
+  // reachable through the click intent instead (islandInteraction).
+  const capsuleNotifications = useMemo(
+    () => knowledgePeekActive
+      ? visibleNotifications.filter((notification) => notification.kind !== 'product')
+      : visibleNotifications,
+    [knowledgePeekActive, visibleNotifications],
+  )
+  const capsuleTopNotification = topNotification(capsuleNotifications)
+  const emptyCapsule = isEmptyCapsuleRequested(knowledgePeekEmpty, capsuleNotifications)
+  const capsuleTierValue = capsuleTier(capsuleTopNotification, emptyCapsule)
 
   const modeStatusFallback = activeNode
     ? t('janus:island.status.blueprintFocused')
@@ -475,7 +485,7 @@ export function JanusIsland({
       data-mode={mode}
       data-auxiliary-open={auxiliaryDescriptor ? 'true' : 'false'}
       data-auxiliary-module={auxiliaryDescriptor?.type ?? 'none'}
-      data-peek-kind={topNotificationItem?.kind ?? 'empty'}
+      data-peek-kind={capsuleTopNotification?.kind ?? 'empty'}
       data-capsule-tier={capsuleTierValue}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
@@ -490,11 +500,11 @@ export function JanusIsland({
         className={`janus-island${isSwitching ? ' switching' : ''}`}
         role={stage !== 'expanded' ? 'button' : undefined}
         tabIndex={stage !== 'expanded' ? 0 : undefined}
-        aria-label={stage === 'peek'
-          ? topNotificationItem?.kind === 'product' && productNotice
+        aria-label={stage !== 'expanded'
+          ? capsuleTopNotification?.kind === 'product' && productNotice
             ? t('janus:island.aria.openProductPreview', { path: productNotice.relPath })
-            : t('janus:island.aria.closeKnowledgePeek')
-          : stage === 'collapsed' ? t('janus:island.aria.openIsland') : undefined}
+            : stage === 'peek' ? t('janus:island.aria.closeKnowledgePeek') : t('janus:island.aria.openIsland')
+          : undefined}
         onKeyDown={stage !== 'expanded' ? handleIslandKeyDown : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -520,21 +530,21 @@ export function JanusIsland({
                   </div>
                 </div>
               </div>
-            ) : topNotificationItem ? (
-              <div className="janus-capsule" key={topNotificationItem.id}>
+            ) : capsuleTopNotification ? (
+              <div className="janus-capsule" key={capsuleTopNotification.id}>
                 <div className="janus-capsule-row">
-                  <span className={`janus-capsule-led sev-${topNotificationItem.severity}`} aria-hidden="true" />
+                  <span className={`janus-capsule-led sev-${capsuleTopNotification.severity}`} aria-hidden="true" />
                   <div className="janus-capsule-copy">
-                    <span className="janus-capsule-kicker">{t(notificationKickerKey(topNotificationItem.kind))}</span>
-                    <span className="janus-capsule-title">{t(topNotificationItem.copy.titleKey)}</span>
-                    {topNotificationItem.copy.subtitleKey ? (
-                      <span className="janus-capsule-subtitle">{t(topNotificationItem.copy.subtitleKey, topNotificationItem.copy.subtitleValues)}</span>
-                    ) : topNotificationItem.copy.subtitleText ? (
-                      <span className="janus-capsule-subtitle">{topNotificationItem.copy.subtitleText}</span>
+                    <span className="janus-capsule-kicker">{t(notificationKickerKey(capsuleTopNotification.kind))}</span>
+                    <span className="janus-capsule-title">{t(capsuleTopNotification.copy.titleKey)}</span>
+                    {capsuleTopNotification.copy.subtitleKey ? (
+                      <span className="janus-capsule-subtitle">{t(capsuleTopNotification.copy.subtitleKey, capsuleTopNotification.copy.subtitleValues)}</span>
+                    ) : capsuleTopNotification.copy.subtitleText ? (
+                      <span className="janus-capsule-subtitle">{capsuleTopNotification.copy.subtitleText}</span>
                     ) : null}
                   </div>
-                  {topNotificationItem.copy.metaKey ? (
-                    <span className="janus-capsule-meta">{t(topNotificationItem.copy.metaKey, topNotificationItem.copy.metaValues)}</span>
+                  {capsuleTopNotification.copy.metaKey ? (
+                    <span className="janus-capsule-meta">{t(capsuleTopNotification.copy.metaKey, capsuleTopNotification.copy.metaValues)}</span>
                   ) : null}
                 </div>
               </div>

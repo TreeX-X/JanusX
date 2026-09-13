@@ -11,6 +11,7 @@ import {
 import {
   getDoubleActivationAction,
   getSingleActivationAction,
+  getSingleActivationIntent,
   isDoubleTap,
   isDoubleTapWithinTolerance,
 } from '../../../src/renderer/src/components/janus/islandInteraction'
@@ -125,6 +126,17 @@ describe('Island knowledge peek state', () => {
   })
 
   it.each([
+    ['collapsed with alive product opens it', 'collapsed', true, false, 'open-product'],
+    ['peek with alive product opens it', 'peek', true, false, 'open-product'],
+    ['peek with alive product yields to knowledge', 'peek', true, true, 'default'],
+    ['collapsed with alive product yields to knowledge', 'collapsed', true, true, 'default'],
+    ['expanded never hijacks the click', 'expanded', true, false, 'default'],
+    ['no product keeps the default routing', 'peek', false, false, 'default'],
+  ] as const)('single activation intent: %s', (_label, stage, productAlive, knowledgePresenting, expected) => {
+    expect(getSingleActivationIntent({ stage, productNoticeAlive: productAlive, knowledgePresenting })).toBe(expected)
+  })
+
+  it.each([
     [0, 1000, 260, false],
     [1000, 1200, 260, true],
     [1000, 1260, 260, false],
@@ -173,13 +185,30 @@ describe('Island knowledge peek state', () => {
     expect(reduceIslandController(invalidated, { type: 'terminal-changed' }).stage).toBe('collapsed')
   })
 
-  it('presents and consumes product notices without stealing an expanded Island', () => {
+  it('presents and expires product notices without stealing an expanded Island', () => {
     const peek = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'product-notice' })
     expect(peek.stage).toBe('peek')
-    expect(reduceIslandController(peek, { type: 'product-consume' }).stage).toBe('collapsed')
+    // product-expire only collapses the capsule; the sticky notice stays
+    // alive in the store so a later island click still opens the product.
+    expect(reduceIslandController(peek, { type: 'product-expire' }).stage).toBe('collapsed')
 
     const expanded = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'double-activate' })
     expect(reduceIslandController(expanded, { type: 'product-notice' })).toBe(expanded)
+  })
+
+  it('product notice takes over the capsule from an active knowledge peek', () => {
+    const traced = reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, {
+      type: 'trace',
+      trace: recalledTrace('steal'),
+    })
+    expect(traced.stage).toBe('peek')
+    expect(traced.knowledge.presentation).toBe('knowledge')
+
+    const stolen = reduceIslandController(traced, { type: 'product-notice' })
+    expect(stolen.stage).toBe('peek')
+    expect(stolen.knowledge.presentation).toBe('hidden')
+
+    expect(shouldPresentProductNotice('peek', 'workspace', 'workspace')).toBe(true)
   })
 
   it('re-presents a pending product notice after expanded state collapses', () => {
@@ -189,11 +218,11 @@ describe('Island knowledge peek state', () => {
     expect(collapsed.stage).toBe('collapsed')
     expect(reduceIslandController(collapsed, { type: 'product-notice' }).stage).toBe('peek')
 
-    const consumed = reduceIslandController(
+    const expired = reduceIslandController(
       reduceIslandController(INITIAL_ISLAND_CONTROLLER_STATE, { type: 'product-notice' }),
-      { type: 'product-consume' },
+      { type: 'product-expire' },
     )
-    expect(consumed.stage).toBe('collapsed')
+    expect(expired.stage).toBe('collapsed')
     expect(shouldPresentProductNotice('collapsed', 'workspace', 'workspace')).toBe(true)
     expect(shouldPresentProductNotice('expanded', 'workspace', 'workspace')).toBe(false)
     expect(shouldPresentProductNotice('collapsed', null, 'workspace')).toBe(false)

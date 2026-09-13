@@ -37,6 +37,26 @@ export function getDoubleActivationAction(stage: IslandStage): IslandInteraction
   return stage === 'expanded' ? 'collapse' : 'expand'
 }
 
+export type SingleActivationIntent = 'open-product' | 'default'
+
+/**
+ * A live product notice claims the single activation: clicking the island in
+ * collapsed or peek stage opens the product workspace directly instead of
+ * replaying/collapsing the capsule. The knowledge surface (recall result or
+ * empty capsule) keeps its collapse semantics while it presents — the product
+ * capsule yields to it visually, so the click must follow what is displayed.
+ */
+export function getSingleActivationIntent(input: {
+  stage: IslandStage
+  productNoticeAlive: boolean
+  knowledgePresenting: boolean
+}): SingleActivationIntent {
+  if (input.stage !== 'expanded' && input.productNoticeAlive && !input.knowledgePresenting) {
+    return 'open-product'
+  }
+  return 'default'
+}
+
 export function isDoubleTap(previousTapTime: number, now: number, delay: number): boolean {
   return previousTapTime > 0 && now - previousTapTime < delay
 }

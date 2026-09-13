@@ -25,7 +25,11 @@ export function shouldPresentProductNotice(
   noticeWorkspaceId: string | null,
   activeWorkspaceId: string | null,
 ): boolean {
-  return stage === 'collapsed' && noticeWorkspaceId !== null && noticeWorkspaceId === activeWorkspaceId
+  // peek 包含在内：产物落盘必须能从知识 peek 手里接管一级胶囊，
+  // 否则知识召回进行中到达的产物通知会被静默吞掉。
+  return (stage === 'collapsed' || stage === 'peek')
+    && noticeWorkspaceId !== null
+    && noticeWorkspaceId === activeWorkspaceId
 }
 
 export type IslandControllerAction =
@@ -35,7 +39,7 @@ export type IslandControllerAction =
   | { type: 'dismiss' }
   | { type: 'timeout'; version: number }
   | { type: 'product-notice' }
-  | { type: 'product-consume' }
+  | { type: 'product-expire' }
   | { type: 'invalidate' }
   | { type: 'terminal-changed' }
 
@@ -73,10 +77,12 @@ export function reduceIslandController(
       return knowledge === state.knowledge ? state : { stage: 'collapsed', knowledge }
     }
     case 'product-notice':
-      return state.stage === 'collapsed'
+      return state.stage === 'collapsed' || state.stage === 'peek'
         ? { stage: 'peek', knowledge: hideKnowledgePeek(state.knowledge) }
         : state
-    case 'product-consume':
+    case 'product-expire':
+      // Capsule-only expiry: the sticky notice stays alive so a later island
+      // click still opens the product (Titlebar owns the store consumption).
       return state.stage === 'peek'
         ? { stage: 'collapsed', knowledge: hideKnowledgePeek(state.knowledge) }
         : state
