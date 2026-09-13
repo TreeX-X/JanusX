@@ -18,6 +18,8 @@ Status: implemented
 
 reduced-motion：新增光环/进度条/托盘入场动画全部纳入 0.01ms 降级。
 
+**修订（同日，用户驱动）**：二级通知面去橙收敛——① 徽标（提醒交互控件）弃橙描边/橙底/橙字，改灰系（边 `rgba(255,255,255,.12)`、底 `.04`、字 `#9fa0a6`，hover/active 同步灰化，pop 光晕改中性白）；② 徽标、托盘行、钉条内的 LED 光球一律去光晕（`::after` display:none），光晕保留给一级胶囊 LED 独享；③ 托盘行左缘 severity 灯条 3px → 2px。托盘行动按钮与清除按钮维持 hifi 既有配色未动。
+
 ## Alternatives considered
 
 - 运行态光环同时挂 peek/expanded——否决：expanded 面板是主控台容器，旋转环喧宾夺主，设计稿的 ring 只演示在折叠胶囊上。
