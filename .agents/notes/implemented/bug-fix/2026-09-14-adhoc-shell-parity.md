@@ -19,6 +19,6 @@ Status: implemented
 ## Consequences
 
 - **Gains**: 后台与同步的启动语义一致；不可解析程序的快照与日志携带原因加指引；win32 停止即时生效且无子树残留，`stop` 回归实测 0.4s 内返回；60s 阈值写入工具描述。
-- **Costs and limits**: 同步 `executeCommand` 超时路径仍为单句柄杀，与 janus-agentX 的已知限制一致；`workspace.*` 自愈依赖 janus-agentX 侧的构建产物，联调前需先在其仓执行构建；shim 名单为静态集合，两仓语义相同但各存一份，增补时需两边同步。
+- **Costs and limits**: 同步 `executeCommand` 超时/打断路径复用同一 `tryTreeKill` 预清加句柄杀兜底；`workspace.*` 自愈依赖 janus-agentX 侧的构建产物，联调前需先在其仓执行构建；shim 名单为静态集合，两仓语义相同但各存一份，增补时需两边同步。
 - **Incidental**: 顺手修复 `runAdhoc` 对象字面量收尾的 `})` 笔误（工作区既有未提交改动所致），否则本文件无法通过编译。
 - **Verification**: `npx vitest run tests/unit/project-runner-adhoc-recovery.test.ts tests/unit/project-runner-stop-all.test.ts` 6 通过；`npm run typecheck` 通过。

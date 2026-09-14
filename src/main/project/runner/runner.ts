@@ -79,7 +79,7 @@ function spawnHint(program: string): string {
 }
 
 /** win32 树杀预清：控制台进程无视优雅终结，taskkill 成败都不影响后续句柄杀流程。 */
-function tryTreeKill(pid: unknown): void {
+export function tryTreeKill(pid: unknown): void {
   if (process.platform !== 'win32' || !Number.isSafeInteger(pid)) return
   try {
     const systemRoot = process.env.SystemRoot ?? process.env.windir ?? 'C:\\Windows'

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { requiresCommandShell } from '../../../project/runner/runner'
+import { requiresCommandShell, tryTreeKill } from '../../../project/runner/runner'
 import { getProjectRunner } from '../../../project/runner/service'
 import { resolveWorkspaceTarget } from '@janus-agent/agent-core'
 import type { RegisteredTool, ToolRegistry } from '@janus-agent/agent-core'
@@ -161,7 +161,8 @@ function executeCommand(
 
     child.stdout.on('data', (chunk: Buffer) => captureChunk(stdout, chunk))
     child.stderr.on('data', (chunk: Buffer) => captureChunk(stderr, chunk))
-    const stop = () => child.kill()
+    // 超时与用户打断先整树预清，构建子树不残留；失败时句柄杀兜底。
+    const stop = () => { tryTreeKill(child.pid); try { child.kill() } catch { /* already gone */ } }
     const abort = () => { aborted = true; stop() }
     signal.addEventListener('abort', abort, { once: true })
     const timer = setTimeout(() => { timedOut = true; stop() }, timeoutMs)
