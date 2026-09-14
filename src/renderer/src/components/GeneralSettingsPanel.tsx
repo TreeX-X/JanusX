@@ -3,6 +3,7 @@ import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from '@/i18n/config'
 import { Select } from './ui/Select'
 import { LanguageServiceManager } from './LanguageServiceManager'
 import { OfficeCliManager } from './OfficeCliManager'
+import { UpdaterSettings } from './UpdaterSettings'
 import styles from './AppSettingsModal.module.css'
 
 export function GeneralSettingsPanel() {
@@ -38,6 +39,16 @@ export function GeneralSettingsPanel() {
         </div>
         <div className={styles.generalControlCol}>
           <LanguageServiceManager />
+        </div>
+      </div>
+
+      <div className={styles.generalRow}>
+        <div className={styles.generalLabelCol}>
+          <div className={styles.generalLabel}>{t('settings:updater.title')}</div>
+          <div className={styles.generalHelp}>{t('settings:updater.subtitle')}</div>
+        </div>
+        <div className={styles.generalControlCol}>
+          <UpdaterSettings />
         </div>
       </div>
 

@@ -16,6 +16,7 @@ import type { RoundtableAPI } from '../../../shared/ipc/roundtable'
 import type { AgentSettingsAPI, NotificationSettingsAPI } from '../../../shared/ipc/settings'
 import type { DesktopToastAPI, DialogAPI, SystemAPI, WindowAPI } from '../../../shared/ipc/system'
 import type { TeamAPI } from '../../../shared/ipc/team'
+import type { UpdaterAPI } from '../../../shared/ipc/updater'
 import type { PeerAPI, RemoteAPI } from '../../../shared/ipc/remote'
 
 interface ElectronAPI {
@@ -41,6 +42,7 @@ interface ElectronAPI {
   git: GitAPI
   notificationSettings: NotificationSettingsAPI
   agentSettings: AgentSettingsAPI
+  updater: UpdaterAPI
   subAgentRun: SubAgentRunAPI
   team: TeamAPI
   remote: RemoteAPI

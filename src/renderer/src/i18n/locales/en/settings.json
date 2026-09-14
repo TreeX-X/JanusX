@@ -46,6 +46,22 @@
       "followSystem": "Follow system"
     }
   },
+  "updater": {
+    "title": "App updates",
+    "subtitle": "Windows installer checks GitHub Releases in the background",
+    "currentVersion": "Current version {{version}}",
+    "check": "Check for updates",
+    "checking": "Checking...",
+    "upToDate": "Already on the latest version",
+    "available": "New version {{version}} found, downloading in the background...",
+    "downloading": "Downloading {{percent}}%",
+    "downloaded": "Version {{version}} is ready, restart to install",
+    "restart": "Restart and install",
+    "error": "Update failed: {{message}}",
+    "unsupportedWin": "Auto-update currently supports the Windows installer only",
+    "unsupportedDev": "Unavailable in dev mode; takes effect in packaged builds",
+    "unsupportedPortable": "The portable edition does not auto-update; download new releases manually"
+  },
   "footer": {
     "loading": "Loading...",
     "saving": "Saving...",

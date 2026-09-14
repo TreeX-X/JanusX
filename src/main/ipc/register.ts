@@ -27,6 +27,7 @@ import { registerRuntimeTelemetryHandlers } from './runtime-telemetry-handlers'
 import { registerSettingsHandlers } from './settings-handlers'
 import { registerSubAgentRunHandlers } from './subagent-run-handlers'
 import { registerTeamHandlers } from './team-handlers'
+import { registerUpdaterHandlers } from './updater-handlers'
 import { registerPeerHandlers, registerRemoteHandlers } from './remote-handlers'
 import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './terminal-handlers'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
@@ -117,6 +118,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerSubAgentRunHandlers()
   registerKnowledgeHandlers()
   registerTeamHandlers()
+  registerUpdaterHandlers()
   registerRemoteHandlers()
   registerPeerHandlers()
   // Phase 1-2: plug the deterministic stage into the processing queue and

@@ -1,0 +1,53 @@
+# Win P0 发版：tag 推送即打 nsis 安装包并发布到本仓库 GitHub Releases，
+# electron-builder 同步生成 latest.yml，桌面端 updater 拉该 feed。
+# 前提：package.json 用 file: 引用 ../janus-agentX，先把它检出到同级目录
+#（仓库名取自 file:../janus-agentX 路径，owner 跟随当前仓库）。
+name: release-win
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout JanusX
+        uses: actions/checkout@v4
+        with:
+          path: JanusX
+
+      - name: Checkout sibling janus-agentX
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/janus-agentX
+          path: janus-agentX
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: JanusX/package-lock.json
+
+      - name: Install
+        working-directory: JanusX
+        run: npm run prepackage
+
+      - name: Build
+        working-directory: JanusX
+        run: npm run build
+
+      - name: Boundary check
+        working-directory: JanusX
+        run: npm run check:package-boundary
+
+      - name: Publish to GitHub Releases
+        working-directory: JanusX
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

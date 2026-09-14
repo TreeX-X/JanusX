@@ -206,6 +206,14 @@ async function bootstrapApp(): Promise<void> {
     })
     registerWindowIpc(editorWindows, () => mainWindow)
     feishuInboundRuntime.configure(mainWindow)
+    // Win P0 自动更新：nsis 安装版延迟首检 + 6h 轮询；其余形态内部降级。
+    void import('./updater/service').then(({ updateService }) => {
+      updateService.setMainWindow(mainWindow)
+      updateService.startAutoCheck()
+    }).catch((err) => {
+      console.error('[updater] service init failed:', err)
+    })
+    feishuInboundRuntime.configure(mainWindow)
     void feishuInboundRuntime.reconfigure()
     // 本地验证网关：JANUSX_WEB_TEST=1 时起 127.0.0.1 回环服务，默认关闭。
     void import('./web-test-gateway/starter').then(({ startWebTestGateway }) => startWebTestGateway()).catch((err) => {

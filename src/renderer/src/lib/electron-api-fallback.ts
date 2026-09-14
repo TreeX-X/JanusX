@@ -204,8 +204,7 @@ export function installElectronApiFallback(): void {
       testFeishu: unavailable,
       getFeishuControlStatus: unavailable,
     },
-    agentSettings: {
-      get: () => Promise.resolve({ approvalMode: 'per-action' as const, agentMaxSteps: 40, safeCompileAutoAllow: true }),
+    agentSettings: {      get: () => Promise.resolve({ approvalMode: 'per-action' as const, agentMaxSteps: 40, safeCompileAutoAllow: true }),
       update: (settings: { approvalMode?: unknown; agentMaxSteps?: unknown; safeCompileAutoAllow?: unknown }) => {
         const approvalMode = settings?.approvalMode === 'auto-run' ? ('auto-run' as const) : ('per-action' as const)
         const parsed = typeof settings?.agentMaxSteps === 'string' ? Number(settings.agentMaxSteps) : settings?.agentMaxSteps
@@ -217,6 +216,28 @@ export function installElectronApiFallback(): void {
       },
     },
     subAgentRun: { list: unavailable, onUpdated: () => () => {}, onRemoved: () => () => {} },
+    updater: {
+      getState: () => Promise.resolve({
+        phase: 'unsupported' as const,
+        supported: false,
+        unsupportedReason: 'dev-mode' as const,
+        currentVersion: '',
+        availableVersion: null,
+        downloadPercent: null,
+        error: null,
+      }),
+      check: () => Promise.resolve({
+        phase: 'unsupported' as const,
+        supported: false,
+        unsupportedReason: 'dev-mode' as const,
+        currentVersion: '',
+        availableVersion: null,
+        downloadPercent: null,
+        error: null,
+      }),
+      install: () => Promise.resolve({ ok: false, error: 'unsupported' }),
+      onEvent: () => () => {},
+    },
     team: {
       register: unavailable, login: unavailable, logout: unavailable, refresh: unavailable,
       me: unavailable, listTenants: unavailable, createTenant: unavailable, switchTenant: unavailable,

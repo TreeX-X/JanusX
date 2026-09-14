@@ -35,6 +35,7 @@ import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtabl
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 import { TEAM_CHANNELS, type TeamAPI } from '../shared/ipc/team'
+import { UPDATER_CHANNELS, UPDATER_EVENT_CHANNELS, type UpdaterAPI } from '../shared/ipc/updater'
 import { PEER_CHANNELS, REMOTE_CHANNELS, type PeerAPI, type RemoteAPI } from '../shared/ipc/remote'
 
 const workspaceAPI: WorkspaceAPI = {
@@ -345,6 +346,13 @@ const agentSettingsAPI: AgentSettingsAPI = {
   update: (settings) => ipcRenderer.invoke(AGENT_SETTINGS_CHANNELS.update, settings),
 }
 
+const updaterAPI: UpdaterAPI = {
+  getState: () => ipcRenderer.invoke(UPDATER_CHANNELS.getState),
+  check: () => ipcRenderer.invoke(UPDATER_CHANNELS.check),
+  install: () => ipcRenderer.invoke(UPDATER_CHANNELS.install),
+  onEvent: (callback) => subscribeIpcEvent(UPDATER_EVENT_CHANNELS.event, callback),
+}
+
 const subAgentRunAPI: SubAgentRunAPI = {
   list: () => ipcRenderer.invoke(SUBAGENT_RUN_CHANNELS.list),
   onUpdated: (callback) => subscribeIpcEvent(SUBAGENT_RUN_CHANNELS.updated, callback),
@@ -465,6 +473,7 @@ contextBridge.exposeInMainWorld('electron', {
   git: gitAPI,
   notificationSettings: notificationSettingsAPI,
   agentSettings: agentSettingsAPI,
+  updater: updaterAPI,
   subAgentRun: subAgentRunAPI,
   team: teamAPI,
   remote: remoteAPI,
