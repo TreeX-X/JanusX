@@ -91,8 +91,12 @@ class DesktopToastWindow {
       show: false,
       focusable: false,
       // 无原生阴影与粗边框：两者在 Windows 透明窗口上渲染成灰边/灰色阴影矩形
+      // Win11 DWM 默认 backgroundMaterial:auto 会在圆角卡片外再铺一层 Mica 灰玻璃，
+      // 必须显式 none；系统圆角交给 CSS 卡片，窗口自身不再倒角
       hasShadow: false,
       thickFrame: false,
+      backgroundMaterial: 'none',
+      roundedCorners: false,
       backgroundColor: '#00000000',
       webPreferences: {
         // This module is emitted under out/main/chunks in production and
@@ -104,6 +108,8 @@ class DesktopToastWindow {
 
     win.setAlwaysOnTop(true, 'screen-saver')
     win.setBackgroundColor('#00000000')
+    win.setBackgroundMaterial('none')
+    win.setHasShadow(false)
     win.on('closed', () => {
       if (this.toastWindow === win) {
         this.toastWindow = null
