@@ -21,7 +21,8 @@
   justify-content: stretch;
   overflow: hidden;
   background: transparent;
-  padding: 8px;
+  /* 外圈透明带在 DWM 回退时会显形为灰壳：卡片铺满窗口，不留透明环 */
+  padding: 0;
 }
 
 .toast {

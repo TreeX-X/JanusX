@@ -168,7 +168,15 @@ class DesktopToastWindow {
 
     win.webContents.send(SYSTEM_CHANNELS.toastShow, this.currentPayload)
     this.positionWindow(win)
+    // DWM 可能在 show 时重铺系统材质：show 前后重申无材质/全透明/无阴影，
+    // 否则外圈透明带回退成灰色玻璃壳
+    win.setBackgroundColor('#00000000')
+    win.setBackgroundMaterial('none')
+    win.setHasShadow(false)
     win.showInactive()
+    win.setBackgroundColor('#00000000')
+    win.setBackgroundMaterial('none')
+    win.setHasShadow(false)
     this.currentOptions?.onShown?.()
 
     const timeoutMs = this.currentOptions?.timeoutMs ?? DEFAULT_TIMEOUT_MS
