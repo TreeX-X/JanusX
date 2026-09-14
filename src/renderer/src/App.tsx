@@ -40,6 +40,7 @@ import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
 import { useTeamStore } from '@/stores/team'
 import { TeamSetupGate } from '@/components/team/TeamSetupGate'
+import { FolderOpen } from 'lucide-react'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
 
@@ -619,38 +620,22 @@ function EmptyWorkspace() {
   }
 
   return (
-    <div
-      className="flex flex-col items-center justify-center h-full gap-5"
-      style={{ background: 'var(--bg-deep)' }}
-    >
-      <div className="relative w-20 h-20 opacity-30">
-        <div
-          className="absolute w-[60px] h-[3px] rounded-sm top-1/2 left-1/2"
-          style={{
-            background: '#ffffff',
-            transform: 'translate(-50%, -50%) rotate(45deg)',
-          }}
-        />
-        <div
-          className="absolute w-[60px] h-[3px] rounded-sm top-1/2 left-1/2"
-          style={{
-            background: '#ff7830',
-            transform: 'translate(-50%, -50%) rotate(-45deg)',
-          }}
-        />
+    <div className="flex flex-col items-center justify-center h-full" style={{ background: 'var(--bg-deep)' }}>
+      {/* 细线条图标：代替大色块，保留视觉锚点 */}
+      <div className="mb-4 text-[#555]">
+        <FolderOpen size={28} strokeWidth={1.1} aria-hidden="true" />
       </div>
-      <div className="text-sm text-[#666]">{t('common:emptyWorkspace.title')}</div>
+      <div className="text-[13px] font-medium tracking-wide text-[#aaa]">{t('common:emptyWorkspace.title')}</div>
       <button
         onClick={handleAdd}
-        className="px-5 py-2.5 rounded-md text-[13px] cursor-pointer transition-colors"
-        style={{
-          background: 'rgba(255, 120, 48, 0.12)',
-          border: '1px solid rgba(255, 120, 48, 0.25)',
-          color: '#ff7830',
-        }}
+        className="mt-3 flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[12px] cursor-pointer
+          text-[#8a8a8a] border border-[#2e2e2e] bg-transparent
+          transition-colors hover:text-[#ddd] hover:border-[#444] hover:bg-white/[0.03]"
       >
+        <FolderOpen size={12} strokeWidth={1.5} aria-hidden="true" />
         {t('common:emptyWorkspace.chooseFolder')}
       </button>
+      <div className="mt-5 text-[11px] text-[#4a4a4a]">{t('common:emptyWorkspace.hint')}</div>
     </div>
   )
 }

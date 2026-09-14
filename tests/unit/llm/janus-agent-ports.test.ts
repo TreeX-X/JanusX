@@ -132,8 +132,7 @@ describe('sessions port', () => {
   })
 })
 
-describe('tools port', () => {
-  it('threads callerId through and passes registry listings along', async () => {
+describe('tools port', () => {  it('threads callerId through and passes registry listings along', async () => {
     const execute = vi.fn(async () => ({ ok: true }))
     const tools = [{ name: 'workspace.read' }]
     const ports = buildJanusChatTurnPorts(baseDeps({
@@ -213,8 +212,7 @@ describe('knowledge ports', () => {
     expect(settled).toEqual(['ws1'])
   })
 
-  it('falls back to the correlation id without a session and skips missing user text', async () => {
-    const captured: unknown[] = []
+  it('falls back to the correlation id without a session and skips missing user text', async () => {    const captured: unknown[] = []
     const ports = buildJanusChatTurnPorts(baseDeps({
       captureObservation: async (input) => {
         captured.push(input)
@@ -230,5 +228,23 @@ describe('knowledge ports', () => {
     })
     expect(captured).toHaveLength(1)
     expect(captured[0]).toMatchObject({ actor: 'assistant', sessionId: 'r9' })
+  })
+})
+
+describe('question port', () => {
+  it('passes the shell question bridge through untouched', async () => {
+    const askUser = vi.fn(async () => ({ status: 'cancelled' as const }))
+    const ports = buildJanusChatTurnPorts(baseDeps({ question: { askUser } }))
+    expect(ports.question).toBeDefined()
+    await ports.question?.askUser(
+      { questions: [], allowCustom: false, callId: 'call-1' },
+      new AbortController().signal,
+    )
+    expect(askUser).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the port absent when the shell supplies no bridge (non-interactive deny)', () => {
+    const ports = buildJanusChatTurnPorts(baseDeps())
+    expect(ports.question).toBeUndefined()
   })
 })

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .highlight {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-left: 4px solid #2196f3;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>测试页面</h1>
+        
+        <div class="highlight">
+            <strong>这是一个测试HTML页面</strong>
+            <p>用于验证基本的HTML结构和样式。</p>
+        </div>
+        
+        <h2>功能测试</h2>
+        <ul>
+            <li>HTML5 文档结构</li>
+            <li>CSS 样式应用</li>
+            <li>中文字符显示</li>
+            <li>响应式设计基础</li>
+        </ul>
+        
+        <h2>当前时间</h2>
+        <p id="current-time"></p>
+        
+        <div class="footer">
+            <p>创建时间: <span id="created-time"></span></p>
+            <p>页面状态: 测试中</p>
+        </div>
+    </div>
+
+    <script>
+        // 更新当前时间
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('zh-CN');
+        }
+        
+        // 设置创建时间
+        document.getElementById('created-time').textContent = new Date().toLocaleString('zh-CN');
+        
+        // 初始更新
+        updateTime();
+        // 每秒更新
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>

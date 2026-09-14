@@ -6,7 +6,6 @@ import type { ChatStreamEvent, ChatStreamRequest } from '../../../src/shared/ipc
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusRunOrbs } from '../../../src/renderer/src/components/janus/JanusRunOrbs'
 import { useGlobalRunning } from '../../../src/renderer/src/components/janus/useGlobalRunning'
-import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import { JanusChatProvider, useJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import {
@@ -281,9 +280,7 @@ function Harness() {
   )
   const [approvalDecision, setApprovalDecision] = useState('pending')
   const paneTree = useWorkspaceStore((state) => state.paneTree)
-  const focusedPaneId = useWorkspaceStore((state) => state.focusedPaneId)
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
-  const chatPane = getLeafPanes(paneTree).find((leaf) => leaf.tabs.some((tab) => tab.type === 'janus-chat')) ?? null
   const terminalTabCount = getLeafPanes(paneTree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'terminal').length
 
   const manualController = {
@@ -400,28 +397,12 @@ function Harness() {
         onChatRetry={providerStreamMode ? providerChatProps.onChatRetry : chatProps.onRetry}
         onChatClear={providerStreamMode ? providerChatProps.onChatClear : chatProps.onClear}
         onOpenLlmConfig={() => undefined}
-        onAddChatToWorkspace={() => {
-          const workspaceStore = useWorkspaceStore.getState()
-          workspaceStore.openJanusChatInWorkspace()
-          dispatch({ type: 'dismiss' })
-        }}
         resourceController={resourceController}
         knowledgeTrace={null}
         knowledgePeekActive={island.knowledge.presentation !== 'hidden'}
         knowledgePeekEmpty={island.knowledge.presentation === 'empty'}
       />
       {runOrbsMode && <RunOrbHarnessMount />}
-      {chatPane && (
-        <section data-testid="workspace-chat">
-          <button
-            data-testid="close-workspace-chat"
-            onClick={() => useWorkspaceStore.getState().closePaneTab(chatPane.id, 'janus-chat')}
-          >
-            Close workspace Chat
-          </button>
-          <JanusChat visible workspace focused={focusedPaneId === chatPane.id} {...chatProps} resourceController={resourceController} />
-        </section>
-      )}
     </main>
   )
 }

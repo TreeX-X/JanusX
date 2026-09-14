@@ -45,11 +45,14 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
     </div>
   }
   if (content === null) {
-    return <div className="flex h-full items-center justify-center text-xs text-[#777]">{t('editor:product.startingPreview')}</div>
+    return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[#777]">
+      <span className="product-spinner" aria-hidden="true" />
+      <span>{t('editor:product.startingPreview')}</span>
+    </div>
   }
   if (kind === 'markdown') {
     return <PreviewScrollArea>
-      <div className="flex-1" style={{ padding: 16, background: '#0a0a0a', color: '#d4d4d4', height: '100%' }}>
+      <div className="flex-1" style={{ padding: 16, background: '#0a0a0a', color: '#d4d4d4', minHeight: '100%' }}>
         <div className="markdown-preview">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
         </div>
@@ -59,7 +62,9 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
   return <iframe
     title={t('editor:product.iframeTitle')}
     srcDoc={content}
-    sandbox="allow-scripts allow-same-origin"
+    // allow-forms/modals/popups：生成的 HTML 页面内可点击、可交互；
+    // 仍不授 allow-top-navigation，预览不能劫持主窗口。
+    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
     referrerPolicy="no-referrer"
     className="h-full w-full border-0 bg-white"
   />

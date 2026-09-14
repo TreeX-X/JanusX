@@ -5,7 +5,6 @@ import {
   closePaneTab,
   collapsePaneTree,
   createBrowserPaneContent,
-  createJanusChatPaneContent,
   createTerminalPaneContent,
   findFirstBrowserPaneContent,
   findPaneContent,
@@ -169,21 +168,21 @@ describe('workspace pane tree', () => {
     ])
   })
 
-  it('adds one Janus Chat view to a split and focuses the existing view on repeat', () => {
+  it('adds one browser view to a split and focuses the existing view on repeat', () => {
     const { tree } = seedPane()
     const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-chat', 'after', 0.62)
-    const first = addPaneContentToTree(split.tree, 'pane-chat', createJanusChatPaneContent(), 'pane-fallback')
-    const repeated = addPaneContentToTree(first.tree, 'pane-1', createJanusChatPaneContent(), 'pane-fallback')
+    const first = addPaneContentToTree(split.tree, 'pane-chat', createBrowserPaneContent('surface-1'), 'pane-fallback')
+    const repeated = addPaneContentToTree(first.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
 
-    expect(getLeafPanes(repeated.tree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'janus-chat')).toHaveLength(1)
-    expect(repeated.focus).toEqual({ paneId: 'pane-chat', tabId: 'janus-chat', terminalId: null })
+    expect(getLeafPanes(repeated.tree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'browser')).toHaveLength(1)
+    expect(repeated.focus).toEqual({ paneId: 'pane-chat', tabId: 'browser:surface-1', terminalId: null })
     expect((repeated.tree as Extract<WorkspacePaneNode, { type: 'split' }>).ratio).toBe(0.62)
   })
 
-  it('closes only the Janus Chat presentation and keeps the terminal tab', () => {
+  it('closes only the browser presentation and keeps the terminal tab', () => {
     const { tree } = seedPane()
-    const withChat = addPaneContentToTree(tree, 'pane-1', createJanusChatPaneContent(), 'pane-fallback')
-    const closed = closePaneTab(withChat.tree, 'pane-1', 'janus-chat')
+    const withBrowser = addPaneContentToTree(tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+    const closed = closePaneTab(withBrowser.tree, 'pane-1', 'browser:surface-1')
 
     expect(getLeafPanes(closed)).toEqual([
       {
@@ -193,6 +192,20 @@ describe('workspace pane tree', () => {
         activeTabId: 'terminal:terminal-1',
       },
     ])
+  })
+
+  it('strips legacy janus-chat tabs from persisted snapshots on retain', () => {
+    const { tree } = seedPane()
+    const legacy = {
+      ...tree,
+      tabs: [
+        ...(tree.type === 'leaf' ? tree.tabs : []),
+        { type: 'janus-chat', id: 'janus-chat', conversationId: 'default' },
+      ],
+    } as WorkspacePaneNode
+    const retained = retainWorkspacePaneContent(legacy, 'workspace-1', new Set(['terminal-1']))
+
+    expect(getLeafPanes(retained).flatMap((leaf) => leaf.tabs).map((tab) => tab.id)).toEqual(['terminal:terminal-1'])
   })
 
   it('creates browser pane content with a stable surface-derived id', () => {

@@ -12,11 +12,12 @@ import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { getModelCatalogService } from '../llm/ModelCatalogService'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
-import type { ChatWorkspaceResource, LlmRuntimeStatus } from '../../shared/ipc/llm'
+import type { ChatAnswerQuestionPayload, ChatWorkspaceResource, LlmRuntimeStatus } from '../../shared/ipc/llm'
 import { getDevelopmentLlmSyncStatus } from '../llm/development-config-sync'
 import { generateText } from '../llm/ai-runtime'
 import {
   abortChatStream,
+  answerChatQuestion,
   cancelChatSteer,
   handleChatStream,
   prepareJanusChatRecall,
@@ -278,6 +279,11 @@ export function registerLlmHandlers(): void {
   })
   ipcMain.handle(LLM_CHANNELS.steerCancel, async (_, input: { conversationId?: string; entryId: string }) => {
     return cancelChatSteer(input ?? { entryId: '' })
+  })
+
+  // 中途提问答复：唤醒被 QuestionPort 挂起的 ask_user 工具调用。
+  ipcMain.handle(LLM_CHANNELS.answerQuestion, async (_, payload: ChatAnswerQuestionPayload) => {
+    return answerChatQuestion(payload)
   })
 
 }

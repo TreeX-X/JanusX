@@ -292,14 +292,6 @@
   min-height: 0;
 }
 
-.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-resource-scope {
-  display: flex;
-  flex: 0 0 auto;
-  min-height: 36px;
-  margin: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-
 .janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-roundtable-center .janus-chat-messages {
   display: flex;
   flex: 1;
@@ -2466,8 +2458,6 @@
 }
 .janus-chat-agent-card-message { align-self: flex-start; max-width: min(88%, 420px); }
 .janus-chat-agent-card-message .janus-agent-result-card { margin-top: 4px; }
-.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-resource-scope { min-height: 34px; }
-.janus-island-shell[data-stage="expanded"][data-view="roundtable"] .janus-resource-list:empty::before { content: '未添加工作区'; color: rgba(255,255,255,.3); font: 10px ui-monospace, monospace; }
 .janus-roundtable-view, .janus-chat-view { display: contents; }
 .janus-roundtable-view--hidden, .janus-chat-view--hidden { display: none !important; }
 .janus-roundtable-tool-trace { display: grid; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(216,195,158,.18); }

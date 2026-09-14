@@ -52,6 +52,7 @@ describe('remaining typed IPC contracts', () => {
     await api.git.status('C:\\repo')
     await api.git.fileBaseline('C:\\repo', 'README.md')
     await api.llm.getProviders()
+    await api.llm.answerQuestion({ requestId: 'r1', callId: 'c1', answer: { status: 'cancelled' } })
     await api.notificationSettings.get()
     await api.notificationSettings.getFeishuControlStatus()
     await api.subAgentRun.list()
@@ -65,6 +66,7 @@ describe('remaining typed IPC contracts', () => {
       [GIT_CHANNELS.status, 'C:\\repo'],
       [GIT_CHANNELS.fileBaseline, 'C:\\repo', 'README.md'],
       [LLM_CHANNELS.getProviders],
+      [LLM_CHANNELS.answerQuestion, { requestId: 'r1', callId: 'c1', answer: { status: 'cancelled' } }],
       [NOTIFICATION_SETTINGS_CHANNELS.get],
       [NOTIFICATION_SETTINGS_CHANNELS.feishuControlStatus],
       [SUBAGENT_RUN_CHANNELS.list],

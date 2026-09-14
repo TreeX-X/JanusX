@@ -11,8 +11,6 @@ import { QuickNote } from './note/QuickNote'
 import { applyTerminalNoteLifecycle, DRAWER_VIEWS, DrawerViewTabs, getDrawerHeight, getDrawerPanelAttributes, type DrawerView } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
 import { HoldToConfirm } from './ui/HoldToConfirm'
-import { JanusChatPane } from './janus/JanusChatPane'
-import { useOptionalJanusChatController } from './janus/JanusChatProvider'
 import { useI18n } from '@/i18n/useI18n'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
@@ -60,12 +58,6 @@ import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
 import piIcon from '@/assets/icons/pi.svg'
-
-function JanusChatTabTitle({ conversationId }: { conversationId: string }) {
-  const { t } = useI18n('terminal')
-  const chat = useOptionalJanusChatController()
-  return chat?.conversations.find((conversation) => conversation.id === conversationId)?.title ?? t('terminal:tab.janusChatFallback')
-}
 
 const PRESET_ICONS: Record<TerminalPreset, string> = {
   shell: terminalIcon,
@@ -521,7 +513,6 @@ interface PaneTreeViewProps {
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
   onKillTerminalFromTab: (terminalId: string, e?: React.MouseEvent) => void
-  onClosePaneTab: (paneId: string, tabId: string) => void
   onOpenBrowser: (paneId: string) => void
   onCloseBrowserTab: (paneId: string, tabId: string, surfaceId: string) => void
   onBrowserPopOut: (paneId: string, tabId: string, surfaceId: string) => void
@@ -843,7 +834,6 @@ function LeafPane({
   onPaneFocus,
   onTabSelect,
   onKillTerminalFromTab,
-  onClosePaneTab,
   onOpenBrowser,
   onCloseBrowserTab,
   onBrowserPopOut,
@@ -1033,7 +1023,7 @@ function LeafPane({
                 event.preventDefault()
                 onTabSelect(leaf.id, tab.id)
               }}
-              className="group/tab relative flex h-8 min-w-0 basis-[128px] shrink grow-0 cursor-pointer select-none items-center gap-1.5 border-0 border-r border-white/[0.06] px-2.5 text-left font-mono text-[11px] leading-none transition-colors hover:bg-white/[0.035]"
+              className="group/tab relative flex h-8 min-w-0 basis-[144px] shrink grow-0 cursor-pointer select-none items-center gap-1.5 border-0 border-r border-white/[0.06] px-2.5 text-left font-mono text-[11px] leading-none transition-colors hover:bg-white/[0.035]"
               style={{
                 color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
                 /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
@@ -1044,12 +1034,8 @@ function LeafPane({
               }}
               title={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
-              {tab.type === 'janus-chat' && (
-                <span className="janus-chat-tab-eyes" role="img" aria-label="JanusX">
-                  <span aria-hidden="true" />
-                  <span aria-hidden="true" />
-                </span>
-              )}
+              {/*-- tab 左侧状态点（独立占位）：128px 时 opencode（8 字符 ≈53px）会被截断，
+                   固定宽度放到 144px，多出的 16px 正好覆盖圆点 6px + 1 个 gap + 呼吸余量。 --*/}
               {tabVisual && (
                 <span
                   aria-hidden="true"
@@ -1079,20 +1065,17 @@ function LeafPane({
                 <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
               ) : (
                 <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
-                  {tab.type === 'janus-chat'
-                    ? <JanusChatTabTitle conversationId={tab.conversationId} />
-                    : terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
+                  {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
                 </span>
               )}
-              {tab.type === 'terminal' || tab.type === 'janus-chat' ? (
+              {tab.type === 'terminal' ? (
                 <HoldToConfirm
                   as="span"
-                  label={tab.type === 'terminal' ? t('terminal:tab.closeTerminal') : t('terminal:tab.closeChat')}
+                  label={t('terminal:tab.closeTerminal')}
                   className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
-                  style={{ color: tab.type === 'terminal' ? '#b86b6b' : '#999' }}
+                  style={{ color: '#b86b6b' }}
                   onConfirm={() => {
-                    if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId)
-                    else onClosePaneTab(leaf.id, tab.id)
+                    onKillTerminalFromTab(tab.terminalId)
                   }}
                 >
                   <X size={12} strokeWidth={1.8} />
@@ -1163,27 +1146,6 @@ function LeafPane({
         }}
       >
         {leaf.tabs.map((tab) => {
-          if (tab.type === 'janus-chat') {
-            const isActive = tab.id === activeTabId
-            return (
-              <div
-                key={tab.id}
-                className="absolute inset-0"
-                style={{
-                  visibility: isActive ? 'visible' : 'hidden',
-                  pointerEvents: isActive ? 'auto' : 'none',
-                  zIndex: isActive ? 1 : 0,
-                }}
-                aria-hidden={!isActive}
-              >
-                <JanusChatPane
-                  focused={workspaceVisible && isFocused && isActive}
-                  conversationId={tab.conversationId}
-                />
-              </div>
-            )
-          }
-
           if (tab.type === 'browser') {
             const isActive = tab.id === activeTabId
             return (
@@ -1628,7 +1590,6 @@ export function TerminalArea() {
                 onPaneFocus={setFocusedPane}
                 onTabSelect={setPaneTab}
                 onKillTerminalFromTab={handleKillTerminal}
-                onClosePaneTab={closePaneTab}
                 onOpenBrowser={handleOpenBrowser}
                 onCloseBrowserTab={handleCloseBrowserTab}
                 onBrowserPopOut={handleBrowserPopOut}

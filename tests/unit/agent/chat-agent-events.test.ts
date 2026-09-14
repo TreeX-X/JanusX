@@ -48,4 +48,38 @@ describe('Chat Agent events', () => {
       argumentChars: 12,
     }])
   })
+
+  it('mirrors todo snapshots wholesale and clears them on the next turn', () => {
+    let state = reduceChatAgentEvent(EMPTY_JANUS_RUNTIME_STATE, {
+      type: 'todo_update',
+      requestId: 'request-1',
+      todos: [
+        { content: 'Write code', status: 'in_progress' },
+        { content: 'Write tests', status: 'pending' },
+      ],
+    })
+    expect(state.todos).toEqual([
+      { content: 'Write code', status: 'in_progress' },
+      { content: 'Write tests', status: 'pending' },
+    ])
+    state = reduceChatAgentEvent(state, { type: 'agent_start', requestId: 'request-2' })
+    expect(state.todos).toEqual([])
+  })
+
+  it('tracks open mid-turn questions until they resolve', () => {
+    const requested = {
+      type: 'question_requested',
+      requestId: 'request-1',
+      callId: 'call-9',
+      questions: [{ question: 'Proceed?', header: 'Confirm', options: [{ label: 'Yes' }, { label: 'No' }], multiple: false }],
+      allowCustom: true,
+    } as const
+    let state = reduceChatAgentEvent(EMPTY_JANUS_RUNTIME_STATE, requested)
+    expect(state.pendingQuestions).toHaveLength(1)
+    expect(state.pendingQuestions[0]?.callId).toBe('call-9')
+    state = reduceChatAgentEvent(state, {
+      type: 'question_resolved', requestId: 'request-1', callId: 'call-9', status: 'answered',
+    })
+    expect(state.pendingQuestions).toEqual([])
+  })
 })

@@ -50,7 +50,10 @@ export function OfficePreviewFrame({ port, status, errorCode, manualInstall, onR
   const { t } = useI18n('editor')
   const src = buildOfficePreviewUrl(port)
   if (status === 'error' || !src) {
-    if (status !== 'error') return <div className="flex h-full items-center justify-center text-xs text-[#777]">{t('editor:office.startingPreview')}</div>
+    if (status !== 'error') return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[#777]">
+      <span className="product-spinner" aria-hidden="true" />
+      <span>{t('editor:office.startingPreview')}</span>
+    </div>
     return <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-xs text-[#aaa]">
       <div>{getOfficeErrorCopy(errorCode ?? 'UNAVAILABLE', manualInstall, t)}</div>
       <div className="flex gap-2">

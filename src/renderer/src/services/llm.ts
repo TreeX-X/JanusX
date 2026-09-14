@@ -10,7 +10,7 @@ import type {
   ModelCatalogSnapshot,
 } from '@janusx/llm-core'
 import type { KnowledgeRecallTrace } from '../../../shared/knowledge'
-import type { ChatAgentEvent, ChatToolTraceEntry, ChatToolTraceEvent, ChatWorkspaceResource, LlmRuntimeStatus } from '../../../shared/ipc/llm'
+import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatToolTraceEntry, ChatToolTraceEvent, ChatWorkspaceResource, LlmRuntimeStatus } from '../../../shared/ipc/llm'
 
 export type { ChatToolTraceEntry } from '../../../shared/ipc/llm'
 
@@ -289,4 +289,9 @@ export async function steerChat(input: { conversationId?: string; entryId: strin
 /** R6-full：撤销尚未被主侧消耗的 steering 条目（已消耗返回 cancelled:false）。 */
 export async function cancelSteerChat(input: { conversationId?: string; entryId: string }): Promise<{ cancelled: boolean }> {
   return window.electron.llm.cancelSteerChat(input)
+}
+
+/** 答复进行中的中途提问，唤醒主侧被 QuestionPort 挂起的 ask_user 工具调用。 */
+export async function answerChatQuestion(payload: ChatAnswerQuestionPayload): Promise<{ accepted: boolean; error?: string }> {
+  return window.electron.llm.answerQuestion(payload)
 }

@@ -49,6 +49,10 @@ function conversationController(overrides: Partial<UseJanusChatReturn> = {}): Us
     activeModel: null,
     modelNotice: null,
     latestRecallTrace: null,
+    toolTraces: [],
+    todos: [],
+    pendingQuestions: [],
+    answerQuestion: vi.fn(),
     resourceController: controller(),
     send: vi.fn(),
     rewrite: vi.fn(),
@@ -84,14 +88,15 @@ describe('Janus resource scope UI', () => {
     expect(markup.match(/class="janus-chat-message-time"/g)).toHaveLength(2)
   })
 
-  it('shows one compact workspace attachment menu without scope or analyze chrome', () => {
+  it('shows the workspace scope with attach menu and removable chips', () => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,
       resourceController: controller({
+        resources: [{ workspaceId: 'workspace-one', workspaceName: 'Workspace One', workspacePath: 'C:\\workspace-one' }],
         availableWorkspaces: [{
-          id: 'workspace-one',
-          name: 'Workspace One',
-          path: 'C:\\workspace-one',
+          id: 'workspace-two',
+          name: 'Workspace Two',
+          path: 'C:\\workspace-two',
           clis: [],
           layout: { mode: 'tabs', positions: [] },
           createdAt: '2026-07-23T00:00:00.000Z',
@@ -105,11 +110,32 @@ describe('Janus resource scope UI', () => {
     expect(markup).toContain('aria-haspopup="listbox"')
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).toContain('janus:chat.resource.attachPlaceholder')
-    expect(markup).toMatch(/aria-label="janus:chat.resource.attachAria"[^>]*>\s*<span[^>]*><svg/)
+    expect(markup).toContain('janus-resource-chip')
+    expect(markup).toContain('Workspace One')
+    expect(markup).toContain('aria-label="janus:chat.resource.removeAria"')
     expect(markup).not.toContain('<select')
-    expect(markup).not.toContain('>Scope<')
-    expect(markup).not.toContain('>Global<')
-    expect(markup).not.toContain('Analyze workspace')
+  })
+
+  it('hides the workspace scope in discussion-only embeds', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      discussionOnly: true,
+      resourceController: controller({
+        availableWorkspaces: [{
+          id: 'workspace-one',
+          name: 'Workspace One',
+          path: 'C:\\workspace-one',
+          clis: [],
+          layout: { mode: 'tabs', positions: [] },
+          createdAt: '2026-07-23T00:00:00.000Z',
+          updatedAt: '2026-07-23T00:00:00.000Z',
+        }],
+      }),
+    }))
+
+    expect(markup).not.toContain('janus:chat.resource.scopeAria')
+    expect(markup).not.toContain('janus:chat.resource.attachAria')
+    expect(markup).not.toContain('janus-resource-chip')
   })
 
   it('keeps the Island conversation selector enabled while streaming', () => {
@@ -122,35 +148,41 @@ describe('Janus resource scope UI', () => {
     expect(markup).toMatch(/aria-label="janus:chat.thread.selectAria"[^>]*aria-expanded="false"(?![^>]*disabled)/)
   })
 
-  it.each([
-    [{ workspaceId: 'one', workspaceName: 'One', workspacePath: 'C:\\one' }, { workspaceId: 'two', workspaceName: 'Two', workspacePath: 'C:\\two' }],
-    [],
-  ])('offers embedding independently of attached resources %#', (...resources) => {
+  it('renders the agent todo strip above the composer', () => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,
-      onAddToWorkspace: vi.fn(),
-      resourceController: controller({ resources }),
-    }))
-
-    expect(markup).toContain('aria-label="janus:chat.resource.embedAria"')
-    expect(markup).not.toContain('data-active=')
-  })
-
-  it('renders all attached resources as passive removable labels', () => {
-    const markup = renderToStaticMarkup(createElement(JanusChat, {
-      ...commonProps,
-      resourceController: controller({
-        resources: [
-          { workspaceId: 'one', workspaceName: 'One', workspacePath: 'C:\\one' },
-          { workspaceId: 'two', workspaceName: 'Two', workspacePath: 'C:\\two' },
+      conversationController: conversationController({
+        todos: [
+          { content: 'Write code', status: 'in_progress' },
+          { content: 'Write tests', status: 'pending' },
         ],
       }),
     }))
 
-    expect(markup).toContain('class="janus-resource-label"')
-    expect(markup).not.toContain('janus-resource-select')
-    expect(markup).not.toContain('data-active=')
-    expect(markup).toContain('aria-label="janus:chat.resource.removeAria"')
+    expect(markup).toContain('aria-label="janus:chat.todo.aria"')
+    expect(markup).toContain('Write code')
+    expect(markup).toContain('Write tests')
+  })
+
+  it('renders an answerable gate for pending mid-turn questions', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      conversationController: conversationController({
+        pendingQuestions: [{
+          requestId: 'request-1',
+          callId: 'call-9',
+          questions: [{ question: 'Proceed?', header: 'Confirm', options: [{ label: 'Yes' }, { label: 'No' }], multiple: false }],
+          allowCustom: true,
+        }],
+      }),
+    }))
+
+    expect(markup).toContain('aria-label="janus:chat.question.regionAria"')
+    expect(markup).toContain('Proceed?')
+    expect(markup).toContain('>Yes<')
+    expect(markup).toContain('>No<')
+    expect(markup).toContain('>janus:chat.question.submit<')
+    expect(markup).toContain('>janus:chat.question.cancel<')
   })
 
   it('renders compact Runtime tool activity below the workspace scope', () => {

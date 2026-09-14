@@ -1,5 +1,5 @@
 import type { AgentRuntimeEvent, ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
-import type { ChatAgentEvent } from '../../../../shared/ipc/llm'
+import type { ChatAgentEvent, ChatAskQuestion, ChatTodoItem } from '../../../../shared/ipc/llm'
 
 export type JanusToolActivityStatus = 'requested' | 'approval' | 'running' | 'completed' | 'failed' | 'cancelled'
 
@@ -14,12 +14,23 @@ export interface JanusToolActivity {
   errorDetail?: string
 }
 
+export interface JanusPendingQuestion {
+  requestId: string
+  callId: string
+  questions: ChatAskQuestion[]
+  allowCustom: boolean
+}
+
 export interface JanusRuntimeState {
   activities: JanusToolActivity[]
   pendingApprovals: ApprovalRequest[]
+  /** Latest todo snapshot from the agent loop (mirrored wholesale per event). */
+  todos: ChatTodoItem[]
+  /** Open mid-turn questions awaiting a renderer answer. */
+  pendingQuestions: JanusPendingQuestion[]
 }
 
-export const EMPTY_JANUS_RUNTIME_STATE: JanusRuntimeState = { activities: [], pendingApprovals: [] }
+export const EMPTY_JANUS_RUNTIME_STATE: JanusRuntimeState = { activities: [], pendingApprovals: [], todos: [], pendingQuestions: [] }
 
 function replaceActivity(state: JanusRuntimeState, activity: JanusToolActivity): JanusToolActivity[] {
   const previous = state.activities.find((item) => item.correlationId === activity.correlationId)
@@ -35,20 +46,28 @@ function activity(state: JanusRuntimeState, correlationId: string): JanusToolAct
 
 /** Reduces safe Chat Agent IPC events into the same cards used by Runtime tool events. */
 export function reduceChatAgentEvent(state: JanusRuntimeState, event: ChatAgentEvent): JanusRuntimeState {
-  if (event.type === 'tool_display') {
-    const current = activity(state, event.callId)
+  if (event.type === 'agent_start') {
+    return { ...state, todos: [], pendingQuestions: [] }
+  }
+  if (event.type === 'todo_update') {
+    return { ...state, todos: event.todos }
+  }
+  if (event.type === 'question_requested') {
+    const question: JanusPendingQuestion = {
+      requestId: event.requestId,
+      callId: event.callId,
+      questions: event.questions,
+      allowCustom: event.allowCustom,
+    }
     return {
       ...state,
-      activities: replaceActivity(state, {
-        correlationId: event.callId,
-        toolName: event.toolName,
-        status: event.status ?? current?.status ?? 'requested',
-        ...(event.argsDigest !== undefined ? { argsDigest: event.argsDigest } : {}),
-        ...(event.resultDigest !== undefined ? { resultDigest: event.resultDigest } : {}),
-        ...(event.errorDetail !== undefined ? { errorDetail: event.errorDetail } : {}),
-        ...(event.summary !== undefined ? { summary: event.summary } : {}),
-      }),
+      pendingQuestions: [...state.pendingQuestions.filter((item) => item.callId !== event.callId), question],
     }
+  }
+  if (event.type === 'question_resolved') {
+    const pendingQuestions = state.pendingQuestions.filter((item) => item.callId !== event.callId)
+    if (pendingQuestions.length === state.pendingQuestions.length) return state
+    return { ...state, pendingQuestions }
   }
   if (event.type === 'tool_call_start') {
     return {
@@ -130,6 +149,7 @@ export function reduceJanusRuntimeState(state: JanusRuntimeState, event: AgentRu
 
   if (event.type === 'approval-requested') {
     return {
+      ...state,
       activities: replaceActivity(state, {
         correlationId: event.request.correlationId,
         toolName: event.request.toolName,
@@ -146,6 +166,7 @@ export function reduceJanusRuntimeState(state: JanusRuntimeState, event: AgentRu
   if (event.type === 'tool-requested' || event.type === 'tool-started') {
     const correlationId = event.correlationId
     return {
+      ...state,
       activities: replaceActivity(state, {
         correlationId,
         toolName: event.toolName,
@@ -161,6 +182,7 @@ export function reduceJanusRuntimeState(state: JanusRuntimeState, event: AgentRu
       ? 'cancelled'
       : 'failed'
   return {
+    ...state,
     activities: replaceActivity(state, {
       correlationId: event.result.correlationId,
       toolName: event.result.toolName,

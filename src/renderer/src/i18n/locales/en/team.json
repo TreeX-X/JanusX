@@ -37,6 +37,7 @@
     "copyCode": "Copy invite code",
     "copied": "Copied",
     "teamSettings": "Team settings",
+    "switchOrgLabel": "Switch organization ({{count}} total)",
     "login": "Sign in to team",
     "logout": "Sign out",
     "createOrg": "New organization",

@@ -378,6 +378,7 @@ export type TypedI18nKey =
   | 'common:browser.title'
   | 'common:chat.copy'
   | 'common:emptyWorkspace.chooseFolder'
+  | 'common:emptyWorkspace.hint'
   | 'common:emptyWorkspace.title'
   | 'common:errorBoundary.remount'
   | 'common:errorBoundary.workbenchFailed'

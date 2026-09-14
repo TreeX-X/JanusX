@@ -282,25 +282,6 @@
   box-shadow: 0 0 8px rgba(255,120,48,0.28);
 }
 
-.janus-chat-tab-eyes {
-  display: inline-flex;
-  width: 15px;
-  height: 14px;
-  flex: 0 0 15px;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-}
-
-.janus-chat-tab-eyes > span {
-  display: block;
-  width: 4px;
-  height: 7px;
-  border-radius: 1px;
-  background: rgba(255,255,255,0.88);
-  box-shadow: 0 0 5px rgba(255,120,48,0.48);
-}
-
 .janus-runtime-meta {
   display: flex;
   flex-direction: column;

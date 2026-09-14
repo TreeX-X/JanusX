@@ -79,6 +79,23 @@ describe('OfficeArtifactIndex', () => {
     expect(harness.events).toEqual([{ workspaceId: 'workspace', entries, reason: 'initial' }])
   })
 
+  it('includes regular file entries at the inclusive sinceMs boundary', async () => {
+    const root = await temporaryDirectory()
+    await writeFile(join(root, 'old.docx'), 'old')
+    await writeFile(join(root, 'boundary.xlsx'), 'boundary')
+    await writeFile(join(root, 'new.pptx'), 'new')
+    await utimes(join(root, 'old.docx'), new Date(1_000), new Date(1_000))
+    await utimes(join(root, 'boundary.xlsx'), new Date(2_000), new Date(2_000))
+    await utimes(join(root, 'new.pptx'), new Date(3_000), new Date(3_000))
+    const harness = createHarness(new Map([['workspace', root]]))
+
+    await expect(harness.index.list('workspace', 2_000)).resolves.map((entry) => entry.relPath).toEqual([
+      'new.pptx',
+      'boundary.xlsx',
+    ])
+    await expect(harness.index.list('workspace', 1_001)).resolves.map((entry) => entry.relPath).toEqual(['new.pptx'])
+  })
+
   it('distinguishes empty, unreadable, traversal-limit, and result-limit outcomes', async () => {
     const empty = await temporaryDirectory()
     const missing = join(empty, 'missing')

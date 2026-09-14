@@ -29,22 +29,6 @@ function islandExpandedRoundtableButton(page: Page) {
   return page.locator('.janus-island .janus-expanded-view-button[data-view="roundtable"]')
 }
 
-async function expectContainedAttachLayout(trigger: Locator) {
-  const triggerBox = await trigger.boundingBox()
-  const prefixBox = await trigger.locator(':scope > span').nth(0).boundingBox()
-  const labelBox = await trigger.locator(':scope > span').nth(1).boundingBox()
-  expect(triggerBox).not.toBeNull()
-  expect(prefixBox).not.toBeNull()
-  expect(labelBox).not.toBeNull()
-  for (const box of [prefixBox!, labelBox!]) {
-    expect(box.x).toBeGreaterThanOrEqual(triggerBox!.x)
-    expect(box.x + box.width).toBeLessThanOrEqual(triggerBox!.x + triggerBox!.width)
-    expect(box.y).toBeGreaterThanOrEqual(triggerBox!.y)
-    expect(box.y + box.height).toBeLessThanOrEqual(triggerBox!.y + triggerBox!.height)
-  }
-  expect(prefixBox!.x + prefixBox!.width).toBeLessThanOrEqual(labelBox!.x)
-}
-
 test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('.janus-island')).toBeVisible()
@@ -165,7 +149,7 @@ test('expanded Chat remains clickable while Island background double activation 
   await expect(harness(page)).toHaveAttribute('data-double-count', '2')
 })
 
-test('Roundtable keeps parchment above a discussion-only Chat with workspace attachment', async ({ page }) => {
+test('Roundtable keeps parchment above a discussion-only Chat', async ({ page }) => {
   const island = page.locator('.janus-island')
   await tap(island)
   await page.waitForTimeout(50)
@@ -184,7 +168,7 @@ test('Roundtable keeps parchment above a discussion-only Chat with workspace att
   await expect(stage.getByRole('button', { name: '动态' })).toBeVisible()
   await stage.getByRole('button', { name: /JanusX，主持人/ }).click({ force: true })
   await expect(discussion).toBeVisible()
-  await expect(discussion.getByRole('button', { name: 'Attach workspace' })).toBeVisible()
+  await expect(discussion.getByRole('button', { name: 'Attach workspace' })).toHaveCount(0)
   await expect(discussion.locator('textarea')).toBeVisible()
   await expect(discussion.locator('.janus-chat-sidebar, .janus-chat-toolbar, .janus-chat-status-bar')).toHaveCount(0)
 
@@ -240,7 +224,7 @@ test('Roundtable parchment opens a modular auxiliary Island and returns to stack
   await expect(shell).toHaveAttribute('data-auxiliary-open', 'false')
 })
 
-test('Island Chat action docks the shared presentation and closes only its workspace view', async ({ page }) => {
+test('Island Chat action docks the shared presentation', async ({ page }) => {
   const island = page.locator('.janus-island')
   await tap(island, { x: 100, y: 20 })
   await page.waitForTimeout(50)
@@ -252,68 +236,25 @@ test('Island Chat action docks the shared presentation and closes only its works
   const islandChat = page.locator('.janus-island .janus-chat')
   await expect(islandChat.getByText('Shared controller message')).toBeVisible()
   await expect(islandChat.getByText('Shared pending stream')).toBeVisible()
-  const attachWorkspace = islandChat.getByRole('button', { name: 'Attach workspace' })
-  await expectContainedAttachLayout(attachWorkspace)
-  const defaultViewport = page.viewportSize()!
-  await page.setViewportSize({ width: 720, height: 720 })
-  await page.waitForTimeout(350)
-  await expectContainedAttachLayout(attachWorkspace)
-  await page.setViewportSize(defaultViewport)
-  await page.waitForTimeout(350)
-  await attachWorkspace.click()
-  await expect(page.getByRole('listbox')).toBeVisible()
-  await expect(page.getByRole('option', { name: 'Workspace Three' })).toBeVisible()
-  await page.screenshot({ path: test.info().outputPath('island-chat-workspaces.png') })
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('listbox')).toHaveCount(0)
-  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
-  await islandChat.getByRole('button', { name: 'Attach workspace' }).click()
-  await page.getByRole('option', { name: 'Workspace Three' }).click()
-  await expect(page.getByRole('listbox')).toHaveCount(0)
-  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
-  await islandChat.getByRole('button', { name: 'Embed Chat in current workspace' }).click()
+  await expect(islandChat.getByRole('button', { name: 'Attach workspace' })).toHaveCount(0)
+  await expect(islandChat.getByRole('button', { name: /Embed Chat in / })).toHaveCount(0)
+  await expect(page.locator('.janus-chat')).toHaveCount(1)
 
-  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
-  await expect(harness(page)).toHaveAttribute('data-active-workspace', 'workspace-1')
-  await expect(harness(page)).toHaveAttribute('data-pane-ratio', '0.5')
-  const workspaceChat = page.getByTestId('workspace-chat')
-  await expect(workspaceChat).toBeVisible()
-  await expectContainedAttachLayout(workspaceChat.getByRole('button', { name: 'Attach workspace' }))
-  await expect(workspaceChat.getByText('Shared controller message')).toBeVisible()
-  await expect(workspaceChat.getByText('Shared pending stream')).toBeVisible()
   await page.getByTestId('toggle-streaming').click()
-  await workspaceChat.locator('textarea').click()
-  await expect(workspaceChat.locator('textarea')).toBeFocused()
+  await islandChat.locator('textarea').click()
+  await expect(islandChat.locator('textarea')).toBeFocused()
 
   await page.keyboard.press('Control+P')
-  await expect(workspaceChat.locator('[role="listbox"][data-selection-menu="model"]')).toBeVisible()
+  await expect(islandChat.locator('[role="listbox"][data-selection-menu="model"]')).toBeVisible()
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Enter')
   await expect(harness(page)).toHaveAttribute('data-active-model', 'model-a2')
 
-  await page.getByTestId('reopen-island').click()
-  await islandExpandedChatButton(page).click()
-  await expect(page.locator('.janus-chat')).toHaveCount(2)
-  await expect(page.locator('.janus-island .janus-chat').getByText('Shared controller message')).toBeVisible()
-  await workspaceChat.locator('textarea').focus()
-  await expect(page.locator('.janus-island .janus-chat textarea')).not.toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(workspaceChat.locator('[role="listbox"][data-selection-menu="provider"]')).toBeVisible()
+  await expect(islandChat.locator('[role="listbox"][data-selection-menu="provider"]')).toBeVisible()
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('Enter')
   await expect(harness(page)).toHaveAttribute('data-active-provider', 'provider-b')
-
-  await islandChat.getByRole('button', { name: /^Embed Chat in / }).click()
-  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
-  await page.getByTestId('toggle-streaming').click()
-  await page.getByTestId('close-workspace-chat').click()
-  await expect(workspaceChat).toHaveCount(0)
-  await expect(harness(page)).toHaveAttribute('data-clear-count', '0')
-  await expect(harness(page)).toHaveAttribute('data-stop-count', '0')
-  await expect(harness(page)).toHaveAttribute('data-terminal-tab-count', '1')
-  await page.getByTestId('reopen-island').click()
-  await islandExpandedChatButton(page).click()
-  await expect(page.locator('.janus-island .janus-chat').getByText('Shared controller message')).toBeVisible()
 })
 
 test('Chat input recalls sent prompts and restores the current draft', async ({ page }) => {
@@ -324,9 +265,8 @@ test('Chat input recalls sent prompts and restores the current draft', async ({ 
   await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
   await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
   await islandExpandedChatButton(page).click()
-  await page.locator('.janus-island .janus-chat').getByRole('button', { name: 'Embed Chat in current workspace' }).click()
 
-  const input = page.getByTestId('workspace-chat').locator('textarea')
+  const input = page.locator('.janus-island .janus-chat').locator('textarea')
   await input.fill('Unsent draft')
   await page.keyboard.press('ArrowUp')
   await expect(input).toHaveValue('Latest recalled prompt')
@@ -501,26 +441,6 @@ test('typing while the Chat root is focused does not outline the whole Chat', as
 
   await expect(input).toHaveValue('')
   await expect(chat).toHaveCSS('outline-style', 'none')
-})
-
-test('Island Chat embeds as the only pane in a workspace with no terminal', async ({ page }) => {
-  await page.getByTestId('switch-empty-workspace').click()
-  await expect(harness(page)).toHaveAttribute('data-active-workspace', 'workspace-3')
-  await expect(harness(page)).toHaveAttribute('data-terminal-tab-count', '0')
-  await expect(harness(page)).toHaveAttribute('data-pane-tabs', '')
-
-  await page.getByTestId('reopen-island').click()
-  await islandExpandedChatButton(page).click()
-  const islandChat = page.locator('.janus-island .janus-chat')
-  await islandChat.getByRole('button', { name: 'Embed Chat in current workspace' }).click()
-
-  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
-  await expect(harness(page)).toHaveAttribute('data-active-workspace', 'workspace-3')
-  await expect(harness(page)).toHaveAttribute('data-terminal-tab-count', '0')
-  await expect(harness(page)).toHaveAttribute('data-pane-ratio', 'single')
-  await expect(harness(page)).toHaveAttribute('data-pane-tabs', 'janus-chat')
-  await expect(page.getByTestId('workspace-chat')).toBeVisible()
-  await expect(page.getByTestId('workspace-chat').getByText('Shared controller message')).toBeVisible()
 })
 
 test('cancelled and non-primary pointers do not activate Island', async ({ page }) => {

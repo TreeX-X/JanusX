@@ -4,9 +4,9 @@
  */
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
-import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelRightOpen, Pencil, Plus, RotateCcw, Send, ShieldX, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, Pencil, Plus, RotateCcw, Send, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
-import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
+import type { ChatQuestionAnswer, ChatTodoItem, ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import type { AgentApprovalMode } from '../../../../shared/ipc/agent-runtime'
 import type { AgentResultCard } from '../../../../shared/roundtable/events'
 import { AgentResultCard as AgentResultCardView } from './AgentResultCard'
@@ -17,6 +17,7 @@ import { PromptDialog } from '../blueprint/PromptDialog'
 import { ToolCallGroup } from './ToolCallCard'
 import { ThinkingRegion } from './ThinkingRegion'
 import type { ReasoningSnapshot } from './janusReasoning'
+import type { JanusPendingQuestion } from './janusRuntimeState'
 import { Select } from '../ui/Select'
 
 type SelectionMenu = 'provider' | 'model' | 'permission'
@@ -68,9 +69,7 @@ interface JanusChatProps {
   visible: boolean
   /** 停靠态：作为右侧 flex 列，而非绝对浮层 */
   docked?: boolean
-  /** Fill a central workspace pane instead of using Island geometry. */
-  workspace?: boolean
-  /** Embed only the discussion, composer, and workspace attachment controls. */
+  /** Embed only the discussion and composer (workspace scope stays in the main chat view). */
   discussionOnly?: boolean
   /** Only the focused presentation owns input focus and global shortcuts. */
   focused?: boolean
@@ -107,7 +106,7 @@ interface JanusChatProps {
   toolTraces?: ChatToolTraceEntry[]
   conversationController?: UseJanusChatReturn | null
   onSelectModel?: (providerId: string, modelId: string) => void
-  /** 发送一条用户消�?*/
+  /** 发送一条用户消息 */
   onSend: (text: string) => void
   /** 重写历史用户消息并从该轮重新生成 */
   onRewrite: (messageId: string, text: string) => void
@@ -117,9 +116,14 @@ interface JanusChatProps {
   onRetry: () => void
   /** 清空对话 */
   onClear: () => void
-  onAddToWorkspace?: () => void
   approvalMode?: AgentApprovalMode
   onApprovalModeChange?: (mode: AgentApprovalMode) => void
+  /** Latest agent todo snapshot (defaults to conversationController). */
+  todos?: ChatTodoItem[] | null
+  /** Open mid-turn questions (defaults to conversationController). */
+  pendingQuestions?: JanusPendingQuestion[] | null
+  /** Answer one pending mid-turn question (defaults to conversationController). */
+  onAnswerQuestion?: ((callId: string, answer: ChatQuestionAnswer) => void) | null
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -190,6 +194,124 @@ function JanusXTerminalBanner() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   Agent todo strip + mid-turn question gate (janus-agent parity)
+   ════════════════════════════════════════════════════════════ */
+
+function TodoStrip({ todos }: { todos: ChatTodoItem[] }) {
+  const { t } = useI18n('janus')
+  if (todos.length === 0) return null
+  const done = todos.filter((todo) => todo.status === 'completed').length
+  const current = todos.find((todo) => todo.status === 'in_progress')
+  return (
+    <div className="janus-todo-strip" role="status" aria-label={t('janus:chat.todo.aria')}>
+      <span className="janus-todo-summary">{t('janus:chat.todo.summary', { done, total: todos.length })}</span>
+      {current && <span className="janus-todo-current">{t('janus:chat.todo.current', { content: current.content })}</span>}
+      <ul className="janus-todo-list">
+        {todos.slice(-8).map((todo, index) => (
+          <li key={`${todo.content}-${index}`} data-status={todo.status}>
+            <span aria-hidden="true">
+              {todo.status === 'completed' ? '●' : todo.status === 'in_progress' ? '◐' : todo.status === 'cancelled' ? '✕' : '○'}
+            </span>
+            <span>{todo.content}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function QuestionGate({ gate, onAnswer }: { gate: JanusPendingQuestion; onAnswer: (answer: ChatQuestionAnswer) => void }) {
+  const { t } = useI18n('janus')
+  const [selected, setSelected] = useState<Record<number, string[]>>({})
+  const [custom, setCustom] = useState<Record<number, string>>({})
+
+  const toggleOption = (questionIndex: number, label: string, multiple: boolean) => {
+    setSelected((current) => {
+      const previous = current[questionIndex] ?? []
+      const next = previous.includes(label)
+        ? previous.filter((item) => item !== label)
+        : multiple ? [...previous, label] : [label]
+      return { ...current, [questionIndex]: next }
+    })
+  }
+
+  const submittable = gate.questions.every((_question, index) => {
+    if ((selected[index] ?? []).length > 0) return true
+    return gate.allowCustom && (custom[index] ?? '').trim().length > 0
+  })
+
+  const submit = () => {
+    if (!submittable) return
+    onAnswer({
+      status: 'answered',
+      answers: gate.questions.map((question, index) => {
+        const customText = (custom[index] ?? '').trim()
+        return {
+          header: question.header,
+          selected: selected[index] ?? [],
+          ...(customText ? { custom: customText } : {}),
+        }
+      }),
+    })
+  }
+
+  return (
+    <div className="janus-question-gate" role="region" aria-label={t('janus:chat.question.regionAria')}>
+      <div className="janus-question-gate-heading">
+        <strong>{t('janus:chat.question.heading')}</strong>
+      </div>
+      {gate.questions.map((question, questionIndex) => (
+        <fieldset key={`${question.header}-${questionIndex}`} className="janus-question-item">
+          <legend>
+            <strong>{question.header}</strong>
+            <span>{question.question}</span>
+          </legend>
+          {question.options.map((option) => {
+            const picked = (selected[questionIndex] ?? []).includes(option.label)
+            return (
+              <label key={option.label} className="janus-question-option" data-picked={picked}>
+                <input
+                  type={question.multiple ? 'checkbox' : 'radio'}
+                  name={`janus-question-${gate.callId}-${questionIndex}`}
+                  checked={picked}
+                  onChange={() => toggleOption(questionIndex, option.label, question.multiple)}
+                />
+                <span className="janus-question-option-label">{option.label}</span>
+                {option.description && <span className="janus-question-option-desc">{option.description}</span>}
+              </label>
+            )
+          })}
+          {gate.allowCustom && (
+            <input
+              type="text"
+              className="janus-question-custom"
+              value={custom[questionIndex] ?? ''}
+              placeholder={t('janus:chat.question.customPlaceholder')}
+              aria-label={t('janus:chat.question.customAria', { header: question.header })}
+              onChange={(event) => setCustom((current) => ({ ...current, [questionIndex]: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  submit()
+                }
+              }}
+            />
+          )}
+        </fieldset>
+      ))}
+      <div className="janus-question-gate-actions">
+        <button type="button" className="janus-question-cancel" onClick={() => onAnswer({ status: 'cancelled' })}>
+          {t('janus:chat.question.cancel')}
+        </button>
+        <button type="button" className="janus-question-submit" disabled={!submittable} onClick={submit}>
+          {t('janus:chat.question.submit')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════
    JanusChat 组件
    ════════════════════════════════════════════════════════════ */
 
@@ -199,7 +321,6 @@ const EMPTY_REASONING_BY_TURN: Record<string, ReasoningSnapshot> = {}
 export function JanusChat({
   visible,
   docked = false,
-  workspace = false,
   discussionOnly = false,
   focused = true,
   modeColor,
@@ -226,9 +347,11 @@ export function JanusChat({
   onStop,
   onRetry,
   onClear,
-  onAddToWorkspace,
   approvalMode,
   onApprovalModeChange,
+  todos: todosProp = null,
+  pendingQuestions: pendingQuestionsProp = null,
+  onAnswerQuestion: onAnswerQuestionProp = null,
 }: JanusChatProps) {
   const { t } = useI18n('janus')
   const [input, setInput] = useState('')
@@ -276,6 +399,9 @@ export function JanusChat({
   // 的展示路径（圆桌中央等）没有在途集合，不渲染徽标。
   const pendingSteerIds = conversations?.pendingSteerIds ?? []
   const cancelSteeredMessage = conversations?.cancelSteeredMessage
+  const activeTodos = todosProp ?? conversations?.todos ?? []
+  const activePendingQuestions = pendingQuestionsProp ?? conversations?.pendingQuestions ?? []
+  const answerQuestion = onAnswerQuestionProp ?? conversations?.answerQuestion
 
   const copyMessage = useCallback((content: string) => {
     if (!navigator.clipboard) return
@@ -295,6 +421,24 @@ export function JanusChat({
   ], [t])
   const menuOptions = selectionMenu === 'provider' ? providerOptions : activeProviderModels
   const workspaceNames = new Map((resourceController?.resources ?? []).map((resource) => [resource.workspaceId, resource.workspaceName]))
+  const attachedWorkspaceIds = new Set(resourceController?.resources.map((resource) => resource.workspaceId) ?? [])
+  const attachableWorkspaces = resourceController?.availableWorkspaces.filter((workspace) =>
+    !attachedWorkspaceIds.has(workspace.id)) ?? []
+  const attachableWorkspaceOptions = [
+    ...attachableWorkspaces.filter((workspace) => !workspace.sidebarGroup).map((workspace) => ({
+      value: workspace.id,
+      label: workspace.name,
+    })),
+    ...Array.from(new Map(attachableWorkspaces.filter((workspace) => workspace.sidebarGroup).map((workspace) => [workspace.sidebarGroup!.id, workspace.sidebarGroup!])).values())
+      .flatMap((group) => [
+        { value: `group:${group.id}`, label: group.name, depth: 0, disabled: true },
+        ...attachableWorkspaces.filter((workspace) => workspace.sidebarGroup?.id === group.id).map((workspace) => ({
+          value: workspace.id,
+          label: workspace.name,
+          depth: 1,
+        })),
+      ]),
+  ]
   const lastAssistantMessageId = [...messages].reverse().find((message) => message.role === 'assistant')?.id
   const liveToolTraces: ChatToolTraceEntry[] = (resourceController?.activities ?? [])
     .map((activity) => ({
@@ -794,35 +938,17 @@ export function JanusChat({
   const canClear = messages.length > 0 || !!pendingContent || !!error
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
   const activeModelLabel = activeModel?.modelId ?? t('janus:chat.model.noneConfigured')
-  const attachedWorkspaceIds = new Set(resourceController?.resources.map((resource) => resource.workspaceId) ?? [])
-  const attachableWorkspaces = resourceController?.availableWorkspaces.filter((workspace) =>
-    !attachedWorkspaceIds.has(workspace.id)) ?? []
-  const attachableWorkspaceOptions = [
-    ...attachableWorkspaces.filter((workspace) => !workspace.sidebarGroup).map((workspace) => ({
-      value: workspace.id,
-      label: workspace.name,
-    })),
-    ...Array.from(new Map(attachableWorkspaces.filter((workspace) => workspace.sidebarGroup).map((workspace) => [workspace.sidebarGroup!.id, workspace.sidebarGroup!])).values())
-      .flatMap((group) => [
-        { value: `group:${group.id}`, label: group.name, depth: 0, disabled: true },
-        ...attachableWorkspaces.filter((workspace) => workspace.sidebarGroup?.id === group.id).map((workspace) => ({
-          value: workspace.id,
-          label: workspace.name,
-          depth: 1,
-        })),
-      ]),
-  ]
 
   return (
     <div
       ref={chatRootRef}
       tabIndex={-1}
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${workspace ? ' janus-chat--workspace' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !workspace && !discussionOnly ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !discussionOnly ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
       onKeyDownCapture={handleChatKeyDownCapture}
       onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {docked && conversations && !workspace && !discussionOnly && (
+      {docked && conversations && !discussionOnly && (
         <aside className="janus-chat-sidebar" aria-label={t('janus:chat.thread.menuHeader')}>
           <div className="janus-chat-sidebar-header">
             <div>
@@ -914,15 +1040,15 @@ export function JanusChat({
             aria-label={t('janus:chat.thread.selectAria')}
             aria-expanded={threadMenuOpen}
             onClick={() => setThreadMenuOpen((open) => !open)}
-            disabled={workspace || !conversations}
+            disabled={!conversations}
           >
             <span>
               <span className="janus-chat-toolbar-kicker">{t('janus:chat.thread.kicker')}</span>
               <strong>{conversations?.conversationTitle ?? t('janus:chat.thread.fallbackTitle')}</strong>
             </span>
-            {!workspace && conversations && <ChevronDown size={13} aria-hidden="true" />}
+            {conversations && <ChevronDown size={13} aria-hidden="true" />}
           </button>
-          {threadMenuOpen && !workspace && conversations && (
+          {threadMenuOpen && conversations && (
             <div className="janus-chat-thread-menu" role="menu" aria-label={t('janus:chat.thread.menuHeader')}>
               <div className="janus-chat-thread-menu-header">
                 <span>{t('janus:chat.thread.menuHeader')}</span>
@@ -1013,8 +1139,7 @@ export function JanusChat({
         </div>
       </div>}
 
-      {resourceController && (
-        <>
+      {resourceController && !discussionOnly && (
         <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
           <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
@@ -1053,19 +1178,10 @@ export function JanusChat({
               />
             </div>
           )}
-          {onAddToWorkspace && (
-            <button
-              type="button"
-              className="janus-chat-workspace-action"
-              onClick={onAddToWorkspace}
-              aria-label={t('janus:chat.resource.embedAria')}
-              title={t('janus:chat.resource.embedTitle')}
-            >
-              <PanelRightOpen size={13} strokeWidth={1.75} aria-hidden="true" />
-            </button>
-          )}
         </div>
-        {!discussionOnly && (resourceController.pendingApprovals[0] ? (() => {
+      )}
+
+      {resourceController && !discussionOnly && (resourceController.pendingApprovals[0] ? (() => {
           const approval = resourceController.pendingApprovals[0]
           return (
             <div
@@ -1133,8 +1249,6 @@ export function JanusChat({
             })()}
           </div>
         ))}
-        </>
-      )}
 
       {/* 消息区域 */}
       <div
@@ -1333,6 +1447,12 @@ export function JanusChat({
           </button>
         )}
       </div>
+
+      {/* Agent todo 条 + 中途提问门（janus-agent parity，位于 composer 上方） */}
+      <TodoStrip todos={activeTodos} />
+      {answerQuestion && activePendingQuestions.map((gate) => (
+        <QuestionGate key={gate.callId} gate={gate} onAnswer={(answer) => answerQuestion(gate.callId, answer)} />
+      ))}
 
       {/* 输入区域 �?opencode 风格方框 composer：单�?prompt + textarea + 按钮 */}
       <div className="janus-chat-input-wrapper" data-has-input={input.length > 0}>

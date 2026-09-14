@@ -106,8 +106,9 @@ export class OfficeArtifactIndex {
     this.deps = { ...defaultDependencies, ...dependencies }
   }
 
-  async list(workspaceId: string): Promise<OfficeFileEntry[]> {
-    return snapshot((await this.ensure(workspaceId)).entries)
+  async list(workspaceId: string, sinceMs?: number): Promise<OfficeFileEntry[]> {
+    const entries = snapshot((await this.ensure(workspaceId)).entries)
+    return sinceMs === undefined ? entries : entries.filter((entry) => entry.mtimeMs >= sinceMs)
   }
 
   async ensure(workspaceId: string): Promise<WorkspaceIndexState> {

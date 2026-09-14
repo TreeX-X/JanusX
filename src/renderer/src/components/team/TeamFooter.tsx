@@ -1,4 +1,5 @@
-import { Settings2 } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Settings2 } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { useTeamStore } from '@/stores/team'
 import styles from './TeamFooter.module.css'
@@ -10,64 +11,150 @@ function initials(name: string): string {
   return trimmed.slice(0, 1).toUpperCase()
 }
 
+/** 显示名：昵称优先，无昵称时用邮箱前缀，保证一定能认出“我是谁”。 */
+function displayNameOf(user: { name?: string; email?: string } | null): string {
+  const name = user?.name?.trim()
+  if (name) return name
+  const email = user?.email?.trim() ?? ''
+  if (email) return email.split('@')[0] || email
+  return '?'
+}
+
 /**
- * 侧栏底部团队区（ToB M2）：精简卡片，只留组织身份 + 设置入口。
- * 组织切换/新建、成员管理、邀请、退出登录都在设置 team 页。
+ * 侧栏底部团队行（ToB M2）：用户优先的双行 + hover 快切组织。
+ * 第 1 行用户名（我是谁），第 2 行当前组织 · 成员数；
+ * 多组织时右上角挂 `×N` 角标，hover 整块向上弹出组织列表直接 switchTenant，
+ * 不用再绕进设置页。组织管理、邀请、退出登录仍在设置 team 页。
  */
 export function TeamFooter() {
   const { t } = useI18n('team')
   const status = useTeamStore((s) => s.status)
+  const user = useTeamStore((s) => s.user)
   const tenants = useTeamStore((s) => s.tenants)
   const activeTenantId = useTeamStore((s) => s.activeTenantId)
   const members = useTeamStore((s) => s.members)
+  const busy = useTeamStore((s) => s.busy)
   const openTeamSettings = useTeamStore((s) => s.openTeamSettings)
+  const switchTenant = useTeamStore((s) => s.switchTenant)
   const requestLogin = useTeamStore((s) => s.requestLogin)
+  const [open, setOpen] = useState(false)
 
   if (status === 'guest') return null
-  // 本地模式：只留一个登录入口，不打扰本地使用。
+  // 本地模式：同一行语言的悄悄入口，不打扰本地使用。
   if (status === 'local') {
     return (
-      <div className="p-2">
+      <div className={styles.footer}>
         <button
           type="button"
           onClick={() => requestLogin()}
+          title={t('team:footer.login')}
           className={styles.loginButton}
         >
-          {t('team:footer.login')}
+          <span aria-hidden="true" className={styles.avatar}>
+            ?
+          </span>
+          <span className={styles.name}>{t('team:footer.login')}</span>
         </button>
       </div>
     )
   }
   const active = tenants.find((tenant) => tenant.id === activeTenantId) ?? null
+  const name = displayNameOf(user)
+  const sub = active
+    ? `${active.name} · ${t('team:panel.members')} ${members.length}`
+    : t('team:footer.noOrg')
 
   return (
-    <div className="p-2">
+    <div
+      className={styles.footer}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setOpen(false)
+      }}
+    >
+      {open && tenants.length > 0 && (
+        <div className={styles.popover} role="menu" aria-label={t('team:footer.switchOrg')}>
+          <div className={styles.popLabel}>
+            {t('team:footer.switchOrgLabel', { count: tenants.length })}
+          </div>
+          <div className={styles.popList}>
+            {tenants.map((item) => {
+              const isActive = item.id === activeTenantId
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={isActive}
+                  disabled={busy}
+                  data-active={isActive}
+                  onClick={() => {
+                    if (!isActive) void switchTenant(item.id)
+                    setOpen(false)
+                  }}
+                  className={styles.popItem}
+                  title={item.name}
+                >
+                  <span aria-hidden="true" className={styles.popAvatar}>
+                    {item.name.trim().slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className={styles.popName}>{item.name}</span>
+                  <span className={styles.popRole}>{t(`team:panel.${item.myRole}`)}</span>
+                  {isActive && (
+                    <span className={styles.popCheck} aria-hidden="true">
+                      <Check size={12} strokeWidth={2.2} />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <div className={styles.popDivider} aria-hidden="true" />
+          <button
+            type="button"
+            className={styles.popSettings}
+            onClick={() => {
+              setOpen(false)
+              openTeamSettings()
+            }}
+          >
+            <Settings2 size={12} strokeWidth={1.8} aria-hidden="true" />
+            {t('team:footer.teamSettings')}
+          </button>
+        </div>
+      )}
       <button
         type="button"
         onClick={() => openTeamSettings()}
-        title={t('team:footer.teamSettings')}
-        className={`${styles.card} flex w-full items-center gap-2 px-2 py-2 text-left`}
+        title={`${name} · ${active?.name ?? t('team:footer.noOrg')}`}
+        className={styles.row}
       >
-        <span
-          aria-hidden="true"
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 text-[10px] font-semibold"
-          style={{ color: '#ff8a2e' }}
-        >
-          {(active?.name ?? '?').trim().slice(0, 1).toUpperCase()}
+        <span aria-hidden="true" className={styles.avatar}>
+          {initials(name)}
         </span>
-        <span className="min-w-0 flex-1 truncate text-left text-[12px] font-semibold" style={{ color: 'var(--shell-text, #ddd)' }}>
-          {active?.name ?? t('team:footer.noOrg')}
+        <span className={styles.textCol}>
+          <span className={styles.name}>{name}</span>
+          <span className={styles.sub}>{sub}</span>
         </span>
-        <span className="shrink-0 text-[10px] text-[#666]">
-          {t('team:panel.members')} {members.length}
+        {tenants.length > 1 && (
+          <span
+            className={styles.orgBadge}
+            title={t('team:footer.switchOrgLabel', { count: tenants.length })}
+            aria-hidden="true"
+          >
+            ×{tenants.length}
+          </span>
+        )}
+        <span className={styles.icon} aria-hidden="true">
+          <Settings2 size={13} strokeWidth={1.7} />
         </span>
-        <Settings2 size={13} className="ml-auto shrink-0" style={{ color: 'var(--shell-dim)' }} aria-hidden="true" />
       </button>
     </div>
   )
 }
 
-/** 收起态：组织首字母 + 本人头像；本地模式显示登录入口。 */
+/** 收起态：用户优先——本人首字母为主，组织首字母叠角标；键盘/鼠标都靠设置页切换。 */
 export function TeamFooterCollapsed() {
   const { t } = useI18n('team')
   const status = useTeamStore((s) => s.status)
@@ -80,13 +167,12 @@ export function TeamFooterCollapsed() {
   if (status === 'guest') return null
   if (status === 'local') {
     return (
-      <div className="flex flex-col items-center gap-1 py-1">
+      <div className={styles.collapsedWrap}>
         <button
           type="button"
           onClick={() => requestLogin()}
           title={t('team:footer.login')}
-          className="flex h-9 w-9 items-center justify-center rounded-[4px] text-[13px] font-semibold transition-colors hover:bg-white/[0.06]"
-          style={{ color: 'var(--shell-muted)' }}
+          className={styles.collapsedButton}
         >
           ?
         </button>
@@ -94,25 +180,21 @@ export function TeamFooterCollapsed() {
     )
   }
   const active = tenants.find((tenant) => tenant.id === activeTenantId) ?? null
+  const name = displayNameOf(user)
 
   return (
-    <div className="flex flex-col items-center gap-1 py-1">
+    <div className={styles.collapsedWrap}>
       <button
         type="button"
         onClick={() => openTeamSettings()}
-        title={active?.name ?? '?'}
-        className="flex h-9 w-9 items-center justify-center rounded-[4px] font-mono text-[13px] font-semibold transition-colors hover:bg-white/[0.06]"
-        style={{ color: 'var(--shell-accent-strong)' }}
+        title={`${name} · ${active?.name ?? t('team:footer.noOrg')}`}
+        className={styles.collapsedButton}
       >
-        {(active?.name ?? '?').trim().slice(0, 1).toUpperCase()}
+        {initials(name)}
+        <span title={active?.name ?? ''} aria-hidden="true" className={styles.collapsedBadge}>
+          {(active?.name ?? '?').trim().slice(0, 1).toUpperCase()}
+        </span>
       </button>
-      <span
-        title={user?.email ?? ''}
-        className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-[10px] font-semibold"
-        style={{ color: '#ff8a2e' }}
-      >
-        {initials(user?.name ?? '?')}
-      </span>
     </div>
   )
 }

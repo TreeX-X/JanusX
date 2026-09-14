@@ -173,6 +173,7 @@ export function installElectronApiFallback(): void {
       getDefaultProvider: unavailable, chat: unavailable, startChatStream: () => {}, abortChat: unavailable,
       steerChat: () => Promise.resolve({ accepted: false, error: 'Electron LLM API is unavailable' }),
       cancelSteerChat: () => Promise.resolve({ cancelled: false }),
+      answerQuestion: () => Promise.resolve({ accepted: false, error: 'Electron LLM API is unavailable' }),
       onDelta: () => () => {}, onDone: () => () => {}, onError: () => () => {}, onRecallTrace: () => () => {},
       onToolTrace: () => () => {}, onAgentEvent: () => () => {},
     },

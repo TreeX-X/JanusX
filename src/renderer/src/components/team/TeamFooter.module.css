@@ -1,79 +1,343 @@
 /**
  * TeamFooter.module.css
  *
- * 左下角团队卡片：底色吃 --shell-card（与侧栏 chrome 同阶梯），
- * 悬浮只提亮边框 + 底色微抬，保持扁平、无辉光。
- * 注意：边框色必须写在这里，内联 style 会盖掉 :hover。
+ * 左下角团队行：去卡片化，用户优先的双行——
+ * 第 1 行用户名，第 2 行当前组织 · 成员数；透明底 hover 才抬底色。
+ * 顶部虚线与列表分隔，不再用盒中盒抢视觉。
+ * 多组织：`×N` 角标常显数量，hover 整块时向上弹出快切菜单。
  */
 
-.card {
-  border: 1px solid var(--shell-border);
-  border-radius: 6px;
-  background: var(--shell-card);
-  transition: border-color 0.16s ease, background 0.16s ease;
+.footer {
+  position: relative;
+  border-top: 1px dashed var(--shell-border);
+  padding: 6px;
 }
 
-.card:hover {
-  border-color: rgba(255, 120, 48, 0.28);
-  background: #1e1e22;
-}
-
-.card:focus-within {
-  border-color: rgba(255, 120, 48, 0.28);
-}
-
-.card:focus-visible {
-  outline: 1px solid rgba(255, 120, 48, 0.64);
-  outline-offset: 1px;
-}
-
-.loginButton {
+.row {
+  display: flex;
   width: 100%;
-  padding: 8px;
-  border: 1px solid var(--shell-border);
-  border-radius: 6px;
-  background: var(--shell-card);
+  height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--shell-muted);
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-align: center;
+  text-align: left;
   cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--shell-text);
+}
+
+.row:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.38);
+  outline-offset: -1px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--shell-text);
+}
+
+.avatar {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--shell-accent-soft);
+  color: var(--shell-accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.textCol {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--shell-dim);
+}
+
+/* 多组织角标：常显数量，一眼看出“我有 N 个组织”。 */
+.orgBadge {
+  flex-shrink: 0;
+  border: 1px solid var(--shell-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--shell-dim);
+}
+
+.icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--shell-dim);
+  opacity: 0.5;
+  transition: opacity 150ms ease, color 150ms ease;
+}
+
+.row:hover .icon,
+.row:focus-visible .icon {
+  opacity: 1;
+  color: var(--shell-muted);
+}
+
+/* 组织快切浮层：从 footer 向上弹出，盖在工作区列表之上。 */
+.popover {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: calc(100% + 6px);
+  z-index: 50;
+  padding: 4px;
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  background: var(--shell-chrome-raised, #252527);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  animation: team-pop-in 120ms ease-out;
+}
+
+.popLabel {
+  padding: 6px 8px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--shell-dim);
+}
+
+.popList {
+  display: flex;
+  max-height: 208px;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+}
+
+.popItem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.popItem:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--shell-text);
+}
+
+.popItem:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.popItem[data-active='true'] {
+  color: var(--shell-text);
+}
+
+.popAvatar {
+  display: flex;
+  height: 20px;
+  width: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--shell-accent-soft);
+  color: var(--shell-accent-strong);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.popName {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.popRole {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--shell-dim);
+}
+
+.popCheck {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--shell-accent-strong);
+}
+
+.popDivider {
+  height: 1px;
+  margin: 4px 4px;
+  background: var(--shell-border);
+}
+
+.popSettings {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.popSettings:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--shell-text);
+}
+
+@keyframes team-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 本地模式：同一行语言，只是一个悄悄的文字入口，不再用大按钮打扰。 */
+.loginButton {
+  display: flex;
+  width: 100%;
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
 }
 
 .loginButton:hover {
-  border-color: rgba(255, 120, 48, 0.4);
-  background: #1e1e22;
-  color: #fff;
+  color: var(--shell-text);
 }
 
-.loginButton:focus-visible {
-  outline: 1px solid rgba(255, 120, 48, 0.64);
-  outline-offset: 1px;
+/* 收起态：与 workspace 收起图标同尺寸语言，底部贴边。 */
+.collapsedWrap {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: auto;
+  padding: 8px 0 2px;
+  border-top: 1px dashed var(--shell-border);
 }
 
-/* 左下角组织名：默认吃侧栏上方的灰字（--shell-muted），悬浮才变橙。 */
-.orgButton {
-  color: var(--shell-muted);
-}
-
-.orgName {
-  color: var(--shell-muted);
-  font-weight: 500;
-  transition: color 0.16s ease;
-}
-
-.orgChevron {
+.collapsedButton {
+  position: relative;
+  display: flex;
+  height: 36px;
+  width: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--shell-dim);
-  transition: color 0.16s ease;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
 }
 
-.orgButton:hover .orgName {
+.collapsedButton:hover,
+.collapsedButton:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
   color: var(--shell-accent-strong);
+  outline: none;
 }
 
-.orgButton:hover .orgChevron {
+.collapsedButton:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(255, 120, 48, 0.38);
+}
+
+/* 组织角标：叠在本人头像右下，收起态也能一眼看出当前组织。 */
+.collapsedBadge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: flex;
+  height: 14px;
+  width: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--shell-chrome);
+  border: 1px solid var(--shell-border);
   color: var(--shell-accent-strong);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .icon,
+  .collapsedButton,
+  .popItem,
+  .popSettings,
+  .popover {
+    transition: none;
+    animation: none;
+  }
 }

@@ -10,14 +10,6 @@ export type TerminalPaneContent = {
   workspaceId: string
 }
 
-export type JanusChatPaneContent = {
-  type: 'janus-chat'
-  id: 'janus-chat' | `janus-chat:${string}`
-  conversationId: string
-  terminalId?: never
-  workspaceId?: never
-}
-
 /*-- 浏览器 pane 内容：id 形如 browser:{surfaceId}，一个 surface 对应主进程一个浏览器实例 --*/
 export type BrowserPaneContent = {
   type: 'browser'
@@ -27,7 +19,7 @@ export type BrowserPaneContent = {
   workspaceId?: never
 }
 
-export type PaneContent = TerminalPaneContent | JanusChatPaneContent | BrowserPaneContent
+export type PaneContent = TerminalPaneContent | BrowserPaneContent
 
 export type WorkspacePaneLeaf = {
   type: 'leaf'
@@ -59,14 +51,6 @@ export function createTerminalPaneContent(terminalId: string, workspaceId: strin
     id: `terminal:${terminalId}`,
     terminalId,
     workspaceId,
-  }
-}
-
-export function createJanusChatPaneContent(conversationId = 'default'): JanusChatPaneContent {
-  return {
-    type: 'janus-chat',
-    id: conversationId === 'default' ? 'janus-chat' : `janus-chat:${conversationId}`,
-    conversationId,
   }
 }
 
@@ -383,9 +367,13 @@ export function retainWorkspacePaneContent(
 
   const retain = (current: WorkspacePaneNode): WorkspacePaneNode => {
     if (current.type === 'leaf') {
+      // Legacy tab kinds (e.g. removed janus-chat tabs in persisted snapshots)
+      // match neither branch and fall out of the tree here.
       const tabs = current.tabs.filter((item) =>
-        item.type !== 'terminal'
-        || (item.workspaceId === workspaceId && (!terminalIds || terminalIds.has(item.terminalId)))
+        item.type === 'browser'
+        || (item.type === 'terminal'
+          && item.workspaceId === workspaceId
+          && (!terminalIds || terminalIds.has(item.terminalId)))
       )
       return {
         ...current,

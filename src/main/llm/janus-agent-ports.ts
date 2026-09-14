@@ -59,6 +59,8 @@ export interface JanusChatTurnPortsDeps {
   captureObservation: (input: JanusCaptureInput) => Promise<{ workspaceId?: string } | null | undefined>
   scheduleSettled: (workspaceId: string) => void
   streamTextFn: ChatTurnPorts['streamTextFn']
+  /** Mid-turn question UI bridge (shell owns lifecycle; this file only passes it through). */
+  question?: ChatTurnPorts['question']
 }
 
 /**
@@ -116,6 +118,7 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
       },
     },
     streamTextFn: deps.streamTextFn,
+    ...(deps.question ? { question: deps.question } : {}),
     knowledgeSearch: deps.knowledgeSearch,
     knowledgeCapture: {
       captureTurn: async (capture) => {

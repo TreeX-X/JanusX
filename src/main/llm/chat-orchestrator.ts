@@ -21,10 +21,9 @@ import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
-import type { ChatAgentEvent, ChatWorkspaceResource } from '../../shared/ipc/llm'
+import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatQuestionAnswer, ChatWorkspaceResource } from '../../shared/ipc/llm'
 import { workspaceAgentRuntime } from '../agent/runtime/shell-runtime'
 import { streamText } from './ai-runtime'
-import { toChatStreamDisplay } from './chat-stream-display'
 import {
   runChatTurn,
   type ChatTurnPorts,
@@ -167,8 +166,66 @@ interface ChatStreamReplyTarget {
   sender?: { id?: number; isDestroyed?: () => boolean }
 }
 
+/** Pending mid-turn ask_user answers, keyed by tool call id. */
+const pendingQuestionResolvers = new Map<string, { requestId: string; resolve: (answer: ChatQuestionAnswer) => void }>()
+
+function settlePendingQuestion(callId: string, answer: ChatQuestionAnswer): boolean {
+  const pending = pendingQuestionResolvers.get(callId)
+  if (!pending) return false
+  pendingQuestionResolvers.delete(callId)
+  pending.resolve(answer)
+  return true
+}
+
+function isQuestionAnswer(value: unknown): value is ChatQuestionAnswer {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  if (record.status === 'cancelled') return true
+  if (record.status !== 'answered' || !Array.isArray(record.answers)) return false
+  return (record.answers as unknown[]).every((entry) => {
+    if (!entry || typeof entry !== 'object') return false
+    const item = entry as Record<string, unknown>
+    return typeof item.header === 'string'
+      && Array.isArray(item.selected)
+      && (item.selected as unknown[]).every((choice) => typeof choice === 'string')
+      && (item.custom === undefined || typeof item.custom === 'string')
+  })
+}
+
+/** Renderer answers a pending mid-turn question (see LLM_CHANNELS.answerQuestion). */
+export function answerChatQuestion(payload: ChatAnswerQuestionPayload): { accepted: boolean; error?: string } {
+  if (!payload || typeof payload.callId !== 'string' || !payload.callId) {
+    return { accepted: false, error: 'Invalid call id' }
+  }
+  if (!isQuestionAnswer(payload.answer)) return { accepted: false, error: 'Invalid answer' }
+  if (!settlePendingQuestion(payload.callId, payload.answer)) {
+    return { accepted: false, error: 'No pending question for this call' }
+  }
+  return { accepted: true }
+}
+
+/** Shell QuestionPort: blocks the loop on the renderer question UI; abort settles cancelled. */
+function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['question']> {
+  return {
+    askUser: (request, signal) => new Promise((resolve) => {
+      const finish = (answer: ChatQuestionAnswer) => {
+        pendingQuestionResolvers.delete(request.callId)
+        signal.removeEventListener('abort', onAbort)
+        resolve(answer)
+      }
+      const onAbort = () => finish({ status: 'cancelled' })
+      if (signal.aborted) {
+        resolve({ status: 'cancelled' })
+        return
+      }
+      pendingQuestionResolvers.set(request.callId, { requestId, resolve: finish })
+      signal.addEventListener('abort', onAbort, { once: true })
+    }),
+  }
+}
+
 /** 壳默认 ports：生产单例装配（可注入版本见 janus-agent-ports）。 */
-function defaultChatTurnPorts(callerId: string): ChatTurnPorts {
+function defaultChatTurnPorts(callerId: string, requestId: string): ChatTurnPorts {
   return buildJanusChatTurnPorts({
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings(providerId),
@@ -208,6 +265,7 @@ function defaultChatTurnPorts(callerId: string): ChatTurnPorts {
       knowledgeProcessingQueue.scheduleImmediate(workspaceId)
     },
     streamTextFn: streamText as unknown as ChatTurnPorts['streamTextFn'],
+    question: createShellQuestionPort(requestId),
   })
 }
 
@@ -271,7 +329,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
   try {
     const callerId = `renderer:${event.sender?.id ?? 'unknown'}`
-    const ports = defaultChatTurnPorts(callerId)
+    const ports = defaultChatTurnPorts(callerId, requestId)
     const chatSession = getChatSession(conversationId ?? requestId)
 
     const result = await runChatTurn(
@@ -292,11 +350,6 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       },
       ports,
       {
-        onStreamEvent: (streamEvent) => {
-          if (controller.signal.aborted) return
-          const display = toChatStreamDisplay(streamEvent)
-          if (display) sendAgentEvent(display)
-        },
         onEvent: (agentEvent) => {
           if (controller.signal.aborted) return
           if (agentEvent.type === 'reasoning_delta') {
@@ -341,6 +394,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     if (deltaTimer) {
       clearTimeout(deltaTimer)
       deltaTimer = null
+    }
+    // 未答复的中途提问随请求结束而取消，避免循环永久等待已销毁的渲染端。
+    for (const [callId, pending] of pendingQuestionResolvers) {
+      if (pending.requestId === requestId) settlePendingQuestion(callId, { status: 'cancelled' })
     }
     // R6-full：请求结束即丢弃 steering 目标（未消费条目以渲染端历史为准，不补发）。
     const steerTarget = activeSteerTargets.get(steerKey)

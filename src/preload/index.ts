@@ -270,6 +270,7 @@ const llmAPI: LlmAPI = {
   abortChat: (requestId) => ipcRenderer.invoke(LLM_CHANNELS.abort, requestId),
   steerChat: (input) => ipcRenderer.invoke(LLM_CHANNELS.steer, input),
   cancelSteerChat: (input) => ipcRenderer.invoke(LLM_CHANNELS.steerCancel, input),
+  answerQuestion: (payload) => ipcRenderer.invoke(LLM_CHANNELS.answerQuestion, payload),
   onDelta: (callback) => subscribeIpcEvent(LLM_CHANNELS.delta, callback),
   onDone: (callback) => subscribeIpcEvent(LLM_CHANNELS.done, callback),
   onError: (callback) => subscribeIpcEvent(LLM_CHANNELS.error, callback),

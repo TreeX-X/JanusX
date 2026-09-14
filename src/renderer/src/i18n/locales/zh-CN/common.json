@@ -139,7 +139,8 @@
   },
   "emptyWorkspace": {
     "title": "开始使用 JanusX",
-    "chooseFolder": "选择工作区文件夹"
+    "chooseFolder": "选择工作区文件夹",
+    "hint": "从本地选择一个文件夹作为工作区，随时可切换"
   },
   "workbench": {
     "blueprint": "蓝图",

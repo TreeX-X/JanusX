@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  answerChatQuestion,
   chatStream,
   getDefaultProvider,
   getProviders,
@@ -14,6 +15,8 @@ import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
 import { getAgentSettings } from '@/services/agent-settings'
 import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../../shared/ipc/llm'
+import type { ChatQuestionAnswer, ChatTodoItem } from '../../../../shared/ipc/llm'
+import type { JanusPendingQuestion } from './janusRuntimeState'
 import type {
   JanusChatMessage,
   JanusChatStorageSnapshot,
@@ -101,6 +104,12 @@ export interface UseJanusChatReturn {
   latestRecallTrace: KnowledgeRecallTrace | null
   /** Tool-call trace entries recorded for this conversation, used to inline tool cards under messages. */
   toolTraces: ChatToolTraceEntry[]
+  /** Latest agent todo snapshot for the sticky bar above the composer. */
+  todos: ChatTodoItem[]
+  /** Open mid-turn questions awaiting a renderer answer. */
+  pendingQuestions: JanusPendingQuestion[]
+  /** Answer (or cancel) one pending mid-turn question. */
+  answerQuestion: (callId: string, answer: ChatQuestionAnswer) => void
   resourceController: JanusResourceController
   send: (text: string) => void
   rewrite: (messageId: string, text: string) => void
@@ -922,6 +931,12 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     }))
   }, [updateConversation])
 
+  const answerQuestion = useCallback((id: string, callId: string, answer: ChatQuestionAnswer) => {
+    const pending = runtimesRef.current[id]?.agent.pendingQuestions.find((item) => item.callId === callId)
+    if (!pending) return
+    void answerChatQuestion({ requestId: pending.requestId, callId, answer }).catch(() => {})
+  }, [])
+
   const deleteConversation = useCallback((id: string) => {
     const exists = conversationsRef.current.some((conversation) => conversation.id === id)
     if (!exists) return
@@ -932,7 +947,6 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       runtimesRef.current = next
       return next
     })
-    useWorkspaceStore.getState().removeJanusConversationViews(id)
     const remaining = conversationsRef.current.filter((conversation) => conversation.id !== id)
     const fallback = remaining[0] ?? createJanusConversation()
     const next = remaining.length > 0 ? remaining : [fallback]
@@ -978,6 +992,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       modelNotice: runtime.modelNotice,
       latestRecallTrace: runtime.latestRecallTrace,
       toolTraces: conversation?.toolTraces ?? [],
+      todos: runtime.agent.todos,
+      pendingQuestions: runtime.agent.pendingQuestions,
+      answerQuestion: (callId, answer) => answerQuestion(id, callId, answer),
       resourceController: {
         resources,
         availableWorkspaces,
@@ -1004,6 +1021,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       setApprovalMode: (mode) => setApprovalMode(id, mode),
     }
   }, [
+    answerQuestion,
     attachWorkspace,
     availableWorkspaces,
     cancelSteeredMessage,

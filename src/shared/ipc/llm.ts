@@ -15,6 +15,9 @@ export const LLM_CHANNELS = {
   steer: 'llm:chat:steer', steerCancel: 'llm:chat:steer-cancel',
   delta: 'llm:chat:delta', done: 'llm:chat:done', error: 'llm:chat:error', recallTrace: 'llm:chat:recall-trace',
   toolTrace: 'llm:chat:tool-trace', agentEvent: 'llm:chat:agent-event',
+  // Shell-owned extension (no upstream equivalent): renderer answers a mid-turn
+  // ask_user question; main resolves the pending QuestionPort promise.
+  answerQuestion: 'llm:chat:answer-question',
 } as const
 
 export interface ChatMessage { role: 'user' | 'assistant' | 'system'; content: string }
@@ -35,12 +38,49 @@ export interface ChatStreamEvent { requestId: string; delta?: string; done?: boo
 /** Tool-call status surfaced to the chat UI. Kept as a literal union so cards can branch on it. */
 export type ChatToolTraceStatus = 'requested' | 'approval' | 'running' | 'completed' | 'failed' | 'cancelled'
 
+/** Todo item status. Mirrors chat-core (opencode `todowrite` parity, no priority in v1). */
+export type ChatTodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
+
+export interface ChatTodoItem {
+  content: string
+  status: ChatTodoStatus
+}
+
+/** One mid-turn confirmation option. Mirrors chat-core (opencode `question` parity). */
+export interface ChatAskOption {
+  label: string
+  description?: string
+}
+
+/** One mid-turn confirmation question. Mirrors chat-core. */
+export interface ChatAskQuestion {
+  question: string
+  header: string
+  options: ChatAskOption[]
+  multiple: boolean
+}
+
+/**
+ * Renderer answer to a pending mid-turn question. Mirrors AskUserPortAnswer
+ * structurally so shared/ stays free of janus-agent imports.
+ */
+export type ChatQuestionAnswer =
+  | { status: 'answered'; answers: Array<{ header: string; selected: string[]; custom?: string }> }
+  | { status: 'cancelled' }
+
+export interface ChatAnswerQuestionPayload {
+  requestId: string
+  callId: string
+  answer: ChatQuestionAnswer
+}
+
 /**
  * Safe, request-scoped Agent lifecycle events for the Chat renderer.
- * Raw tool events stay in Main; display previews are redacted and bounded there.
+ * Raw tool events stay in Main; the event set tracks chat-core's ChatAgentEvent
+ * one-to-one (tool display follows the upstream raw tool call and execution events).
+ * Note: alignment trade-offs live with the contract — see .agents/notes/implemented/feature/2026-09-12-janus-agent-chat-alignment.md
  */
 export type ChatAgentEvent =
-  | { type: 'tool_display'; requestId: string; callId: string; toolName: string; argsDigest?: string; resultDigest?: string; errorDetail?: string; summary?: string; status?: ChatToolTraceStatus }
   | { type: 'agent_start'; requestId: string }
   | { type: 'text_delta'; requestId: string; delta: string }
   | { type: 'reasoning_delta'; requestId: string; delta: string }
@@ -53,6 +93,9 @@ export type ChatAgentEvent =
   | { type: 'model_finish'; requestId: string; reason: 'stop' | 'tool_calls' | 'length' | 'unknown' }
   | { type: 'model_error'; requestId: string; code: string; retryable: boolean }
   | { type: 'steering_consumed'; requestId: string; keys: string[] }
+  | { type: 'todo_update'; requestId: string; todos: ChatTodoItem[] }
+  | { type: 'question_requested'; requestId: string; callId: string; questions: ChatAskQuestion[]; allowCustom: boolean }
+  | { type: 'question_resolved'; requestId: string; callId: string; status: 'answered' | 'cancelled' }
   | { type: 'stream_end'; requestId: string; cancelled: boolean }
   | { type: 'stream_error'; requestId: string; error: string }
 
@@ -124,6 +167,7 @@ export interface LlmAPI {
   abortChat(requestId: string): Promise<void>
   steerChat(input: ChatSteerInput): Promise<ChatSteerResult>
   cancelSteerChat(input: ChatSteerCancelInput): Promise<{ cancelled: boolean }>
+  answerQuestion(payload: ChatAnswerQuestionPayload): Promise<{ accepted: boolean; error?: string }>
   onDelta(callback: (payload: ChatStreamEvent) => void): () => void
   onDone(callback: (payload: ChatStreamEvent) => void): () => void
   onError(callback: (payload: ChatStreamEvent) => void): () => void

@@ -139,7 +139,8 @@
   },
   "emptyWorkspace": {
     "title": "Get started with JanusX",
-    "chooseFolder": "Choose a workspace folder"
+    "chooseFolder": "Choose a workspace folder",
+    "hint": "Pick a local folder as your workspace, switch anytime"
   },
   "workbench": {
     "blueprint": "Blueprint",
