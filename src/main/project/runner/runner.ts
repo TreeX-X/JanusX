@@ -73,7 +73,8 @@ export function requiresCommandShell(command: string, platform: NodeJS.Platform 
     || ['.bat', '.cmd'].includes(extname(command).toLowerCase())
 }
 
-function spawnHint(program: string): string {
+/** Shared with the sync command-tools path so both start failures carry the same hint. */
+export function spawnHint(program: string): string {
   return `hint: the program '${program}' failed to start (ENOENT reads as a negative exit such as -4058 on Windows).`
     + ` Launch the host from a shell with Node on PATH; package-manager shims resolve through cmd.exe on win32.`
 }

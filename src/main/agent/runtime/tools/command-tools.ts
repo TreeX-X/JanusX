@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { requiresCommandShell, tryTreeKill } from '../../../project/runner/runner'
+import { requiresCommandShell, spawnHint, tryTreeKill } from '../../../project/runner/runner'
 import { getProjectRunner } from '../../../project/runner/service'
 import { resolveWorkspaceTarget } from '@janus-agent/agent-core'
 import type { RegisteredTool, ToolRegistry } from '@janus-agent/agent-core'
@@ -53,7 +53,11 @@ export function filterCommandEnv(value: unknown): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, item] of entries) {
     if (!ENV_NAME_PATTERN.test(key) || !SAFE_COMMAND_ENV_KEYS.has(key.toUpperCase())) {
-      throw new Error(`command.run env key is not allowlisted: ${key}`)
+      throw new Error(
+        `command.run env key is not allowlisted: ${key}.`
+        + ` Allowlisted keys (case-insensitive, max ${MAX_COMMAND_ENV_ENTRIES} entries): ${[...SAFE_COMMAND_ENV_KEYS].join(', ')}.`
+        + ` Env injection is not supported; if the program supports it, pass the setting as an argument instead (e.g. git -c http.proxy=... clone ...).`,
+      )
     }
     if (typeof item !== 'string' || item.length > MAX_COMMAND_ENV_VALUE_CHARS || item.includes('\0')) {
       throw new Error(`command.run env value for ${key} must be a bounded string`)
@@ -172,7 +176,9 @@ function executeCommand(
       settled = true
       clearTimeout(timer)
       signal.removeEventListener('abort', abort)
-      reject(error)
+      // Sync path mirrors the background runner: surface the start failure with
+      // the same fix hint instead of a bare ENOENT.
+      reject(new Error(`${error instanceof Error ? error.message : String(error)}\n${spawnHint(program)}`))
     })
     child.once('close', (exitCode) => {
       if (settled) return
@@ -202,7 +208,7 @@ function executeCommand(
 
 export const commandRunTool: RegisteredTool = {
   name: 'command.run',
-  description: 'Run one approved program with structured arguments in a directory inside the active workspace (sync default timeout 120s, max 600s; commands expected to exceed 60s must pass background:true and poll with project.process-output; background jobs have no deadline unless timeoutMs is passed, max 600s, and report timedOut via project.process-output; optional env allowlist NODE_ENV/CI/TERM/FORCE_COLOR/NO_COLOR/CLICOLOR/LANG/LC_*/LANGUAGE/TZ, max 32 entries; sync stdout/stderr are 8KB tail previews, page the full log at logPath with workspace.read)',
+  description: 'Run one approved program with structured arguments in a directory inside the active workspace (sync default timeout 120s, max 600s; commands expected to exceed 60s must pass background:true and poll with project_process_output(offsetLines); background jobs have no deadline unless timeoutMs is passed, max 600s, and report timedOut via project_process_output; optional env allowlist NODE_ENV/CI/TERM/FORCE_COLOR/NO_COLOR/CLICOLOR/LANG/LC_*/LANGUAGE/TZ, max 32 entries; sync stdout/stderr are 8KB tail previews, page the full log at logPath with workspace.read)',
   actionRisk: 'external-command',
   inputSchema: {
     type: 'object',

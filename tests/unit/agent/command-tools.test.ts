@@ -285,6 +285,22 @@ describe('command Agent Runtime tool', () => {
     expect((result.output as { stdout: string }).stdout).toContain('env-janusx-r4-test')
   })
 
+  it('surfaces a start-failure hint when the program cannot spawn', async () => {
+    const { runtime, session } = await createRuntime()
+    approve(runtime)
+    const result = await runtime.executeTool({
+      sessionId: session.id,
+      call: {
+        toolName: 'command.run',
+        input: { workspaceId: 'workspace-1', program: 'definitely-not-a-real-cmd-xyz', timeoutMs: 10_000 },
+        preview: { summary: 'Run missing program', paths: [''], truncated: false },
+      },
+    })
+    expect(result.status).toBe('failed')
+    expect(result.error).toContain('hint:')
+    expect(result.error).toContain('definitely-not-a-real-cmd-xyz')
+  })
+
   it('R4: rejects non-allowlisted env keys and malformed env shapes', async () => {
     const { runtime, session } = await createRuntime()
     approve(runtime)
@@ -302,6 +318,8 @@ describe('command Agent Runtime tool', () => {
     await expect(run([{ NODE_ENV: 'x' }])).resolves.toMatchObject({ status: 'failed', error: expect.stringContaining('Invalid input for tool') })
     await expect(run({ NODE_ENV: 42 })).resolves.toMatchObject({ status: 'failed', error: expect.stringContaining('must be a bounded string') })
     await expect(run({ 'BAD-NAME': 'x' })).resolves.toMatchObject({ status: 'failed', error: expect.stringContaining('not allowlisted') })
+    // 报错须可直接自愈：枚举白名单并给出参数式替代（git -c），避免裸错烧往返。
+    await expect(run({ HTTP_PROXY: 'http://127.0.0.1:7897' })).resolves.toMatchObject({ status: 'failed', error: expect.stringContaining('git -c http.proxy=') })
     await expect(run(Object.fromEntries(Array.from({ length: 33 }, (_, i) => [`NODE_ENV_${i}`, 'x']))))
       .resolves.toMatchObject({ status: 'failed', error: expect.stringContaining('at most 32') })
   })
