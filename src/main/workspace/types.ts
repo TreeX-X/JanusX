@@ -1,5 +1,6 @@
 import type { AgentNotificationSettings } from '../../shared/notifications'
 import type { KnowledgeSettings } from '../../shared/knowledge-settings'
+import type { UpdaterSettings } from '../../shared/ipc/updater'
 import type { AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 
 export interface Workspace {
@@ -56,6 +57,8 @@ export interface GlobalConfig {
   recentWorkspaces: string[]
   notificationSettings: AgentNotificationSettings
   knowledgeSettings: KnowledgeSettings
+  /** 自动更新偏好；缺席即默认（自动检查开启），兼容旧配置。 */
+  updaterSettings?: UpdaterSettings
   agentApprovalMode: AgentApprovalMode
   /** P6：janus-chat 循环步数（默认 40，上限 100；缺席即默认，兼容旧配置）。 */
   agentMaxSteps?: number

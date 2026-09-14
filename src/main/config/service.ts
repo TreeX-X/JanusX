@@ -17,6 +17,10 @@ import {
   normalizeKnowledgeSettings,
   type KnowledgeSettings,
 } from '../../shared/knowledge-settings'
+import {
+  normalizeUpdaterSettings,
+  type UpdaterSettings,
+} from '../../shared/ipc/updater'
 import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 
 /** P6：janus-chat 循环步数默认 40（P6 前为硬编码 20），钳制 1~100。 */
@@ -80,6 +84,7 @@ export class ConfigService {
         ...parsed,
         notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
         knowledgeSettings: normalizeKnowledgeSettings(parsed.knowledgeSettings),
+        updaterSettings: normalizeUpdaterSettings(parsed.updaterSettings),
         agentApprovalMode: normalizeAgentApprovalMode(parsed.agentApprovalMode),
         agentMaxSteps: normalizeAgentMaxSteps(parsed.agentMaxSteps),
         safeCompileAutoAllow: normalizeSafeCompileAutoAllow(parsed.safeCompileAutoAllow),
@@ -210,6 +215,21 @@ export class ConfigService {
     })
     await this.update({ knowledgeSettings })
     return knowledgeSettings
+  }
+
+  async getUpdaterSettings(): Promise<UpdaterSettings> {
+    const config = await this.get()
+    return normalizeUpdaterSettings(config.updaterSettings)
+  }
+
+  async updateUpdaterSettings(partial: Partial<UpdaterSettings>): Promise<UpdaterSettings> {
+    const current = await this.getUpdaterSettings()
+    const updaterSettings = normalizeUpdaterSettings({
+      ...current,
+      ...partial,
+    })
+    await this.update({ updaterSettings })
+    return updaterSettings
   }
 
   async getAgentApprovalMode(): Promise<AgentApprovalMode> {

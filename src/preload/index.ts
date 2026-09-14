@@ -351,6 +351,8 @@ const updaterAPI: UpdaterAPI = {
   check: () => ipcRenderer.invoke(UPDATER_CHANNELS.check),
   install: () => ipcRenderer.invoke(UPDATER_CHANNELS.install),
   onEvent: (callback) => subscribeIpcEvent(UPDATER_EVENT_CHANNELS.event, callback),
+  getSettings: () => ipcRenderer.invoke(UPDATER_CHANNELS.getSettings),
+  updateSettings: (settings) => ipcRenderer.invoke(UPDATER_CHANNELS.updateSettings, settings),
 }
 
 const subAgentRunAPI: SubAgentRunAPI = {

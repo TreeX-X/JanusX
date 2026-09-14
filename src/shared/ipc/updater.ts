@@ -3,6 +3,8 @@ export const UPDATER_CHANNELS = {
   getState: 'updater:get-state',
   check: 'updater:check',
   install: 'updater:install',
+  getSettings: 'updater:get-settings',
+  updateSettings: 'updater:update-settings',
 } as const
 
 export const UPDATER_EVENT_CHANNELS = {
@@ -44,4 +46,21 @@ export interface UpdaterAPI {
   check(): Promise<UpdaterState>
   install(): Promise<{ ok: boolean; error?: string }>
   onEvent(callback: (event: UpdaterEvent) => void): () => void
+  getSettings(): Promise<UpdaterSettings>
+  updateSettings(settings: Partial<UpdaterSettings>): Promise<UpdaterSettings>
+}
+
+export interface UpdaterSettings {
+  /** 启动延迟首检 + 6h 轮询；关闭后仅保留手动检查。默认 true。 */
+  autoCheck: boolean
+}
+
+export const DEFAULT_UPDATER_SETTINGS: UpdaterSettings = {
+  autoCheck: true,
+}
+
+export function normalizeUpdaterSettings(value: unknown): UpdaterSettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_UPDATER_SETTINGS }
+  const autoCheck = (value as { autoCheck?: unknown }).autoCheck
+  return { autoCheck: autoCheck === undefined ? DEFAULT_UPDATER_SETTINGS.autoCheck : autoCheck === true }
 }

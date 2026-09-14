@@ -57,7 +57,15 @@
     "downloading": "正在下载 {{percent}}%",
     "downloaded": "新版本 {{version}} 已就绪，重启后安装",
     "restart": "重启并安装",
-    "error": "更新失败：{{message}}",
+    "error": {
+      "update": "更新失败：{{message}}",
+      "load": "更新设置加载失败",
+      "save": "更新设置保存失败"
+    },
+    "autoCheck": {
+      "label": "自动检查更新",
+      "hint": "启动后不久检查一次，之后每 6 小时检查一次。手动检查不受影响。"
+    },
     "unsupportedWin": "自动更新目前仅支持 Windows 安装版",
     "unsupportedDev": "开发模式不可用，打包版生效",
     "unsupportedPortable": "便携版不支持自动更新，请手动下载新版本"

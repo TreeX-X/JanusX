@@ -237,6 +237,10 @@ export function installElectronApiFallback(): void {
       }),
       install: () => Promise.resolve({ ok: false, error: 'unsupported' }),
       onEvent: () => () => {},
+      getSettings: () => Promise.resolve({ autoCheck: true }),
+      updateSettings: (settings: { autoCheck?: unknown }) => Promise.resolve({
+        autoCheck: settings?.autoCheck === undefined ? true : settings.autoCheck === true,
+      }),
     },
     team: {
       register: unavailable, login: unavailable, logout: unavailable, refresh: unavailable,

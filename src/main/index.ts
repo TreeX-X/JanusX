@@ -206,11 +206,19 @@ async function bootstrapApp(): Promise<void> {
     })
     registerWindowIpc(editorWindows, () => mainWindow)
     feishuInboundRuntime.configure(mainWindow)
-    // Win P0 自动更新：nsis 安装版延迟首检 + 6h 轮询；其余形态内部降级。
-    void import('./updater/service').then(({ updateService }) => {
-      updateService.setMainWindow(mainWindow)
-      updateService.startAutoCheck()
-    }).catch((err) => {
+    // Win P0 自动更新：读持久化开关，延迟首检 + 6h 轮询；其余形态内部降级。
+    void Promise.all([import('./updater/service'), import('./config/service')]).then(
+      ([{ updateService }, { configService }]) => {
+        updateService.setMainWindow(mainWindow)
+        void configService.getUpdaterSettings().then(
+          (settings) => {
+            updateService.setAutoCheck(settings.autoCheck)
+            updateService.startAutoCheck()
+          },
+          () => updateService.startAutoCheck(),
+        )
+      },
+    ).catch((err) => {
       console.error('[updater] service init failed:', err)
     })
     feishuInboundRuntime.configure(mainWindow)

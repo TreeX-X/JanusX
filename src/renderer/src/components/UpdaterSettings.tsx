@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
-import type { UpdaterEvent, UpdaterState } from '../../../shared/ipc/updater'
+import { getUpdaterSettings, updateUpdaterSettings } from '@/services/updater-settings'
+import { DEFAULT_UPDATER_SETTINGS, type UpdaterEvent, type UpdaterState } from '../../../shared/ipc/updater'
+import styles from './NotificationSettingsPanel.module.css'
 
 const UNSUPPORTED_KEY: Record<string, string> = {
   'non-windows-p0': 'settings:updater.unsupportedWin',
@@ -10,20 +12,31 @@ const UNSUPPORTED_KEY: Record<string, string> = {
 
 /**
  * 设置中心通用页的应用更新区（Win P0）。
- * 状态机归主进程，UI 只做展示与触发：检查更新 / 重启安装。
+ * 状态机归主进程，UI 只做展示与触发：自动检查开关（即时保存）/ 手动检查 / 重启安装。
  */
 export function UpdaterSettings() {
   const { t } = useI18n('settings')
   const [state, setState] = useState<UpdaterState | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [autoCheck, setAutoCheck] = useState(DEFAULT_UPDATER_SETTINGS.autoCheck)
+  const [busy, setBusy] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const api = window.electron?.updater
     if (!api) return
     let disposed = false
-    void api.getState().then((initial) => {
-      if (!disposed) setState(initial)
-    }).catch(() => {})
+    setBusy(true)
+    Promise.all([getUpdaterSettings(), api.getState()]).then(([settings, initial]) => {
+      if (disposed) return
+      setAutoCheck(settings.autoCheck)
+      setState(initial)
+      setBusy(false)
+    }).catch(() => {
+      if (disposed) return
+      setError(t('settings:updater.error.load'))
+      setBusy(false)
+    })
     const off = api.onEvent((event: UpdaterEvent) => {
       setState((prev) => {
         const base: UpdaterState = prev ?? {
@@ -55,17 +68,32 @@ export function UpdaterSettings() {
       disposed = true
       off()
     }
-  }, [])
+  }, [t])
+
+  const toggleAutoCheck = async (checked: boolean) => {
+    if (!window.electron?.updater || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const next = await updateUpdaterSettings({ autoCheck: checked })
+      setAutoCheck(next.autoCheck)
+    } catch {
+      setError(t('settings:updater.error.save'))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const check = async () => {
     const api = window.electron?.updater
     if (!api || busy) return
     setBusy(true)
+    setError('')
     try {
       const next = await api.check()
       setState(next)
     } catch {
-      /* 主进程错误经事件通道回传 error 状态 */
+      setError(t('settings:updater.error.save'))
     } finally {
       setBusy(false)
     }
@@ -95,6 +123,13 @@ export function UpdaterSettings() {
       <div style={{ color: '#8a8a8a' }}>
         {t('settings:updater.currentVersion', { version: state?.currentVersion ?? '…' })}
       </div>
+      <SettingSwitch
+        label={t('settings:updater.autoCheck.label')}
+        hint={t('settings:updater.autoCheck.hint')}
+        checked={autoCheck}
+        disabled={busy || saving}
+        onChange={(checked) => void toggleAutoCheck(checked)}
+      />
       {unsupportedKey
         ? <div style={{ color: '#8a8a8a' }}>{t(unsupportedKey)}</div>
         : (
@@ -116,6 +151,7 @@ export function UpdaterSettings() {
             </div>
           </>
         )}
+      {error && <div style={{ color: '#c96a5e' }}>{error}</div>}
     </div>
   )
 }
@@ -133,8 +169,39 @@ function StatusLine({ state }: { state: UpdaterState | null }) {
     case 'downloaded':
       return <div style={{ color: '#7fb069' }}>{t('settings:updater.downloaded', { version: state.availableVersion ?? '' })}</div>
     case 'error':
-      return <div style={{ color: '#c96a5e' }}>{t('settings:updater.error', { message: state.error ?? '' })}</div>
+      return <div style={{ color: '#c96a5e' }}>{t('settings:updater.error.update', { message: state.error ?? '' })}</div>
     default:
       return null
   }
+}
+
+function SettingSwitch({ label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string
+  hint: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <div className={styles.row}>
+      <div className={styles.label}>
+        <span className={styles.labelText}>{label}</span>
+        <span className={styles.hint}>{hint}</span>
+      </div>
+      <label className={styles.switch}>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span className={styles.switchTrack} />
+      </label>
+    </div>
+  )
 }

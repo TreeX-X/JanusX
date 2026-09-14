@@ -9,10 +9,11 @@ const POLL_INTERVAL_MS = 6 * 60 * 60 * 1_000
 
 type AutoUpdaterInstance = typeof AutoUpdater
 
-class UpdateService {
+export class UpdateService {
   private updater: AutoUpdaterInstance | null = null
   private wired = false
-  private started = false
+  private armed = false
+  private autoCheck = true
   private timer: ReturnType<typeof setTimeout> | null = null
   private mainWindow: BrowserWindow | null = null
   private state: UpdaterState = {
@@ -37,8 +38,27 @@ class UpdateService {
   /** 主窗口重建与定时轮询共用同一入口；重复调用不产生第二个计时器。 */
   startAutoCheck(): void {
     this.refreshSupport()
-    if (this.started || !this.state.supported) return
-    this.started = true
+    if (this.armed || !this.state.supported) return
+    this.armed = true
+    if (this.autoCheck) this.schedule()
+  }
+
+  /**
+   * 设置页开关的运行时侧：关闭即停计时器（手动检查不受影响），
+   * 打开后若服务已就绪则立即排期，不等下次启动。
+   */
+  setAutoCheck(enabled: boolean): void {
+    this.autoCheck = enabled
+    if (!enabled) {
+      this.clearTimer()
+      return
+    }
+    this.refreshSupport()
+    if (this.armed && this.state.supported && !this.timer) this.schedule()
+  }
+
+  private schedule(): void {
+    this.clearTimer()
     this.timer = setTimeout(() => {
       this.timer = null
       void this.checkForUpdates()
@@ -48,6 +68,14 @@ class UpdateService {
       this.timer.unref?.()
     }, STARTUP_DELAY_MS)
     this.timer.unref?.()
+  }
+
+  private clearTimer(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      clearInterval(this.timer)
+      this.timer = null
+    }
   }
 
   async checkForUpdates(): Promise<UpdaterState> {

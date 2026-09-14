@@ -57,7 +57,15 @@
     "downloading": "Downloading {{percent}}%",
     "downloaded": "Version {{version}} is ready, restart to install",
     "restart": "Restart and install",
-    "error": "Update failed: {{message}}",
+    "error": {
+      "update": "Update failed: {{message}}",
+      "load": "Failed to load update settings",
+      "save": "Failed to save update settings"
+    },
+    "autoCheck": {
+      "label": "Check for updates automatically",
+      "hint": "Checks shortly after launch and every 6 hours. Manual checks always work."
+    },
     "unsupportedWin": "Auto-update currently supports the Windows installer only",
     "unsupportedDev": "Unavailable in dev mode; takes effect in packaged builds",
     "unsupportedPortable": "The portable edition does not auto-update; download new releases manually"
