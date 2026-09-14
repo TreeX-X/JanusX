@@ -201,7 +201,7 @@ function executeCommand(
 
 export const commandRunTool: RegisteredTool = {
   name: 'command.run',
-  description: 'Run one approved program with structured arguments in a directory inside the active workspace (sync default timeout 120s, max 600s; background jobs have no deadline unless timeoutMs is passed, max 600s, and report timedOut via project.process-output; pass background:true for long builds and poll with project.process-output; optional env allowlist NODE_ENV/CI/TERM/FORCE_COLOR/NO_COLOR/CLICOLOR/LANG/LC_*/LANGUAGE/TZ, max 32 entries; sync stdout/stderr are 8KB tail previews, page the full log at logPath with workspace.read)',
+  description: 'Run one approved program with structured arguments in a directory inside the active workspace (sync default timeout 120s, max 600s; commands expected to exceed 60s must pass background:true and poll with project.process-output; background jobs have no deadline unless timeoutMs is passed, max 600s, and report timedOut via project.process-output; optional env allowlist NODE_ENV/CI/TERM/FORCE_COLOR/NO_COLOR/CLICOLOR/LANG/LC_*/LANGUAGE/TZ, max 32 entries; sync stdout/stderr are 8KB tail previews, page the full log at logPath with workspace.read)',
   actionRisk: 'external-command',
   inputSchema: {
     type: 'object',

@@ -9,7 +9,7 @@
  * 4. 流式输出日志，提取关键信息（端口号等）
  */
 
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { randomUUID } from 'node:crypto'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
@@ -36,6 +36,10 @@ interface RunningProject extends ProcessHandle {
   timeoutTimer?: NodeJS.Timeout
   /** R3：true 表示本次退出由超时触发（手动 stop 不置位），随快照落盘供 process-output 回看。 */
   timedOut?: boolean
+  /** 启动失败文本（spawn ENOENT 等只发 error 不发 exit）：随快照与落盘日志透出，避免空日志盲查。 */
+  spawnError?: string
+  /** 启动时的解析模式，随落盘日志头供诊断（与同步 command.run 同口径）。 */
+  executionMode?: 'direct' | 'windows-shell-shim'
 }
 
 /**
@@ -55,6 +59,9 @@ export interface ExitedAdhocProject {
 }
 
 const WINDOWS_SHELL_COMMANDS = new Set(['npm', 'yarn', 'pnpm', 'bun'])
+const WINDOWS_SHELL_META = /[&|<>^\r\n]/
+
+// Note: 后台 adhoc 与同步 command.run 共享 shell 判定，启动失败落盘、win32 整树强杀 — see .agents/notes/implemented/bug-fix/2026-09-14-adhoc-shell-parity.md
 
 /*-- 不完整行缓冲上限：长期无换行的输出（单行 JSON 流等）保尾截断，防止无界增长（audit M3） --*/
 const MAX_OUTPUT_LINE_BUFFER_CHARS = 256 * 1024
@@ -64,6 +71,24 @@ export function requiresCommandShell(command: string, platform: NodeJS.Platform 
   if (platform !== 'win32') return false
   return WINDOWS_SHELL_COMMANDS.has(command.toLowerCase())
     || ['.bat', '.cmd'].includes(extname(command).toLowerCase())
+}
+
+function spawnHint(program: string): string {
+  return `hint: the program '${program}' failed to start (ENOENT reads as a negative exit such as -4058 on Windows).`
+    + ` Launch the host from a shell with Node on PATH; package-manager shims resolve through cmd.exe on win32.`
+}
+
+/** win32 树杀预清：控制台进程无视优雅终结，taskkill 成败都不影响后续句柄杀流程。 */
+function tryTreeKill(pid: unknown): void {
+  if (process.platform !== 'win32' || !Number.isSafeInteger(pid)) return
+  try {
+    const systemRoot = process.env.SystemRoot ?? process.env.windir ?? 'C:\\Windows'
+    spawnSync(`${systemRoot}\\System32\\taskkill.exe`,
+      ['/PID', String(pid), '/T', '/F'],
+      { windowsHide: true, timeout: 10_000 })
+  } catch {
+    // Best effort: the handle-kill flow below covers the miss.
+  }
 }
 
 /**
@@ -197,6 +222,11 @@ export class ProjectRunner extends EventEmitter {
     }
     const args = input.args ?? []
     const label = (input.label ?? `${input.program} ${args.join(' ')}`.trim()).slice(0, 120) || 'adhoc'
+    // 与同步 command.run 同口径：shell 承载的 shim 参数含元字符直接拒绝（fail-closed）。
+    const executionMode = requiresCommandShell(input.program) ? 'windows-shell-shim' as const : 'direct' as const
+    if (executionMode === 'windows-shell-shim' && args.some((arg) => WINDOWS_SHELL_META.test(arg))) {
+      throw new Error('command.run shell-backed arguments contain unsupported metacharacters')
+    }
     const config: LaunchConfiguration = {
       name: label,
       type: ProjectType.Custom,
@@ -229,6 +259,7 @@ export class ProjectRunner extends EventEmitter {
       process: childProc,
       eventEmitter: new EventEmitter(),
       terminated: false,
+      executionMode,
       ...(logPath ? { persistLogPath: logPath } : {}),
     }
     this.setupProcessListeners(projectId, runningProject)
@@ -287,6 +318,8 @@ export class ProjectRunner extends EventEmitter {
       running.timeoutTimer = undefined
     }
 
+    // win32 先整树强杀（子树不残留），再走句柄杀流程；taskkill 失败时句柄杀兜底。
+    tryTreeKill(running.pid)
     // 先发送 SIGTERM
     running.process.kill('SIGTERM')
 
@@ -424,6 +457,8 @@ export class ProjectRunner extends EventEmitter {
         projectId,
         error: error.message,
       })
+      // 启动失败文本随快照与落盘日志透出（含修复指引），轮询侧不再面对空日志。
+      running.spawnError = error.message
       if (this.runningProjects.has(projectId)) {
         this.handleExit(projectId, running, null, null)
       }
@@ -515,6 +550,11 @@ export class ProjectRunner extends EventEmitter {
       const lines = [...running.output]
       const tail = running.outputBuffer.trim()
       if (tail) lines.push(tail.length > MAX_STORED_OUTPUT_LINE_CHARS ? tail.slice(-MAX_STORED_OUTPUT_LINE_CHARS) : tail)
+      // 启动失败（或 win32 负退出码）随快照透出原因与修复指引，而非空输出。
+      const program = running.config.program ?? ''
+      const spawnReport = running.spawnError
+        ? [`spawn error: ${running.spawnError}`, spawnHint(program)]
+        : (typeof code === 'number' && code < 0 ? [spawnHint(program)] : [])
       this.exitedAdhoc.set(projectId, {
         pid: running.pid,
         config: running.config,
@@ -523,7 +563,7 @@ export class ProjectRunner extends EventEmitter {
         exitCode: code,
         signal,
         timedOut: running.timedOut === true,
-        output: lines.slice(-1000),
+        output: [...spawnReport, ...lines.slice(-1000)],
         logPath: running.persistLogPath,
       })
       while (this.exitedAdhoc.size > ProjectRunner.MAX_EXITED_ADHOC) {
@@ -534,7 +574,7 @@ export class ProjectRunner extends EventEmitter {
         if (evicted?.logPath) rm(evicted.logPath, { force: true }).catch(() => undefined)
       }
       const logPath = running.persistLogPath
-      const header = `# adhoc ${running.config.name}\nexitCode: ${String(code)} signal: ${String(signal)} timedOut: ${String(running.timedOut === true)}\n--- output (${lines.length} lines, tail 1000 kept) ---\n`
+      const header = `# adhoc ${running.config.name}\nexitCode: ${String(code)} signal: ${String(signal)} timedOut: ${String(running.timedOut === true)}${running.executionMode ? ` executionMode: ${running.executionMode}` : ''}\n${spawnReport.length > 0 ? `${spawnReport.join('\n')}\n` : ''}--- output (${lines.length} lines, tail 1000 kept) ---\n`
       writeFile(logPath, `${header}${lines.slice(-1000).join('\n')}\n`, 'utf-8').catch(() => undefined)
     }
 
