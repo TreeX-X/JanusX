@@ -82,6 +82,21 @@ function getOpencodeStatus(raw: unknown): string | undefined {
   return candidates.find((value): value is string => typeof value === 'string')
 }
 
+function getHookMatcher(payload: AgentHookPayload): string | undefined {
+  if (payload.matcher?.trim()) return payload.matcher.trim()
+  const raw = payload.raw
+  if (!raw || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  const matcher = record.matcher ?? record.notification_type ?? record.type
+  return typeof matcher === 'string' && matcher.trim() ? matcher : undefined
+}
+
+// Note: Claude idle_prompt is a 60s-idle nudge, not a question — see .agents/notes/implemented/bug-fix/2026-09-14-claude-idle-prompt-tab-status.md
+function isIdlePromptNotification(payload: AgentHookPayload): boolean {
+  if (payload.source === 'opencode' || payload.event !== 'Notification') return false
+  return getHookMatcher(payload) === 'idle_prompt'
+}
+
 function isHookAttentionNotification(payload: AgentHookPayload): boolean {
   // Claude Notification hooks carry permission_prompt/idle_prompt matchers;
   // janus/pi extensions repost the same matcher contract, so any source with
@@ -275,6 +290,28 @@ export class AgentHookCoordinator {
         source: normalizedPayload.source,
         hookEvent: normalizedPayload.event,
         reason: 'turn-already-ended',
+        delivered: false,
+      })
+      return
+    }
+    // Post-completion idle nudges carry no question: Claude fires idle_prompt
+    // ~60s after a finished response, after Stop has already closed the turn
+    // and settled the tab to wait. Dropping them before onResolvedPayload keeps
+    // the tab grey; a mid-turn idle (real AskUserQuestion wait) still has its
+    // turn open and flows to attention below. permission_prompt stays ungated
+    // so a true approval never depends on turn tracking.
+    if (
+      normalizedPayload.source === 'claude' &&
+      isIdlePromptNotification(normalizedPayload) &&
+      !this.activeTurns.has(terminal.terminalId)
+    ) {
+      this.emit({
+        type: 'ignored',
+        terminalId: terminal.terminalId,
+        engine: terminal.engine,
+        source: normalizedPayload.source,
+        hookEvent: normalizedPayload.event,
+        reason: 'idle-without-active-turn',
         delivered: false,
       })
       return

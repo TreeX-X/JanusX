@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join } from 'path'
 import { access, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import type { AgentEngine } from '../janus-runner/types'
 import type { AgentHookBridgeEnv } from './agent-hook-bridge'
+import { JANUSX_HOOK_MATCHER_FLAG } from './agent-hook-types'
 
 export const JANUSX_HOOK_COMMAND_MARKER = 'janusx-agent-hook-v2'
 const JANUSX_LEGACY_HOOK_COMMAND_MARKERS = [
@@ -46,7 +47,12 @@ export interface HookInstallResult {
 const CLAUDE_HOOKS: HookCommandSpec[] = [
   { event: 'SessionStart' },
   { event: 'UserPromptSubmit' },
-  { event: 'Notification', matcher: 'permission_prompt|idle_prompt' },
+  // Split matchers into two entries so the fired matcher travels in the hook
+  // command argv (--matcher/-Matcher): permission_prompt is a true approval
+  // wait, while idle_prompt is a 60s-idle nudge that must never stain the tab
+  // once the turn has closed — see the coordinator idle gate.
+  { event: 'Notification', matcher: 'permission_prompt' },
+  { event: 'Notification', matcher: 'idle_prompt' },
   { event: 'Stop' },
   { event: 'StopFailure' },
   // Fires on CLI exit/clear/logout: closes a still-open turn before the pty dies.
@@ -168,6 +174,7 @@ function buildHookCommand(
   source: HookableEngine,
   event: string,
   windowsHookScriptPath?: string,
+  matcher?: string,
 ): string {
   if (platform === 'win32' && windowsHookScriptPath) {
     const command = [
@@ -179,6 +186,7 @@ function buildHookCommand(
       quotePowerShell(event),
       '-Marker',
       quotePowerShell(JANUSX_HOOK_COMMAND_MARKER),
+      ...(matcher ? ['-Matcher', quotePowerShell(matcher)] : []),
     ].join(' ')
 
     // The hook script sets its own UTF-8 encoding internally, so the guard only
@@ -209,6 +217,7 @@ function buildHookCommand(
     event,
     '--janusx-hook-marker',
     JANUSX_HOOK_COMMAND_MARKER,
+    ...(matcher ? [JANUSX_HOOK_MATCHER_FLAG, matcher] : []),
   ]
 
   if (platform === 'win32') {
@@ -253,7 +262,7 @@ async function installJsonHooks(
     addHookCommand(
       settings,
       spec,
-      buildHookCommand(platform, executablePath, appEntryArg, source, spec.event, windowsHookScriptPath),
+      buildHookCommand(platform, executablePath, appEntryArg, source, spec.event, windowsHookScriptPath, spec.matcher),
     )
   }
 
@@ -443,7 +452,8 @@ function buildWindowsHookScript(): string {
   return `param(
   [Parameter(Mandatory = $true)][string]$Source,
   [Alias("Event")][Parameter(Mandatory = $true)][string]$EventName,
-  [string]$Marker = "${JANUSX_HOOK_COMMAND_MARKER}"
+  [string]$Marker = "${JANUSX_HOOK_COMMAND_MARKER}",
+  [string]$Matcher = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -521,6 +531,7 @@ try {
     cwd = (Get-Location).Path
     message = $message
     timestamp = (Get-Date).ToUniversalTime().ToString("o")
+    matcher = $Matcher
     raw = $rawValue
   }
 
@@ -664,6 +675,7 @@ export class AgentHookConfigManager {
           engine,
           spec.event,
           this.platform === 'win32' ? this.getWindowsHookScriptPath() : undefined,
+          spec.matcher,
         ))
       })
     } catch {

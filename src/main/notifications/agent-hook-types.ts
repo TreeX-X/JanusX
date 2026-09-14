@@ -30,6 +30,14 @@ export const JANUSX_SYNTHETIC_HOOK_EVENTS = {
   orphaned: 'janusx.turn.orphaned',
 } as const
 
+/**
+ * Hook-command argv flag carrying the settings-side matcher that fired the
+ * hook (e.g. Claude `Notification` entries bake `--matcher permission_prompt`
+ * vs `--matcher idle_prompt`). The hook event name alone cannot tell them
+ * apart, so installer and client share this flag instead of duplicating it.
+ */
+export const JANUSX_HOOK_MATCHER_FLAG = '--matcher' as const
+
 export type AgentHookCompletionKind = 'done' | 'failed' | 'interrupted'
 
 export interface AgentHookTurnStart {
@@ -56,6 +64,8 @@ export interface AgentHookPayload {
   cwd?: string
   message?: string
   timestamp?: string
+  /** Settings-side matcher that fired this hook, when the installer baked one in. */
+  matcher?: string
   raw?: unknown
 }
 

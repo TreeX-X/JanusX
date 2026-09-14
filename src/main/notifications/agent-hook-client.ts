@@ -1,6 +1,6 @@
 import http from 'http'
 import { stdin } from 'process'
-import type { AgentHookPayload, AgentHookSource } from './agent-hook-types'
+import { JANUSX_HOOK_MATCHER_FLAG, type AgentHookPayload, type AgentHookSource } from './agent-hook-types'
 
 const MAX_STDIN_BYTES = 1024 * 1024
 
@@ -49,7 +49,7 @@ async function readHookStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf8')
 }
 
-function normalizePayload(source: AgentHookSource, event: string, raw: unknown): AgentHookPayload {
+function normalizePayload(source: AgentHookSource, event: string, raw: unknown, matcher?: string): AgentHookPayload {
   const toolInput =
     raw && typeof raw === 'object'
       ? (raw as Record<string, unknown>).tool_input
@@ -68,6 +68,7 @@ function normalizePayload(source: AgentHookSource, event: string, raw: unknown):
     cwd: process.cwd(),
     message,
     timestamp: new Date().toISOString(),
+    matcher: matcher?.trim() ? matcher : undefined,
     raw,
   }
 }
@@ -117,6 +118,7 @@ export async function runAgentHookClient(argv = process.argv): Promise<void> {
   if (!source || !event || !port || !token) return
 
   const raw = parseJson(await readHookStdin())
-  const payload = normalizePayload(source, event, raw)
+  const matcher = getArgValue(argv, JANUSX_HOOK_MATCHER_FLAG)
+  const payload = normalizePayload(source, event, raw, matcher)
   await postHookEvent(port, token, payload)
 }

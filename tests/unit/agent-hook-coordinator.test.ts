@@ -395,6 +395,98 @@ describe('AgentHookCoordinator synthetic turn ends', () => {
     expect(completions.map((completion) => completion.kind)).toEqual(['failed', 'done'])
   })
 
+  it('drops a post-completion Claude idle nudge without touching status or toasts', async () => {
+    let now = 1_000
+    const { coordinator, completions, attentionPayloads, events, resolvedPayloads } = createCoordinator(() => now)
+
+    startClaudeTurn(coordinator)
+    now = 35_000
+    coordinator.handleHookPayload({ source: 'claude', event: 'Stop', terminalId: 'term-claude' })
+    const resolvedAfterStop = resolvedPayloads.length
+    now = 95_000
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'Notification',
+      terminalId: 'term-claude',
+      matcher: 'idle_prompt',
+    })
+    await Promise.resolve()
+
+    expect(completions.map((completion) => completion.kind)).toEqual(['done'])
+    expect(attentionPayloads).toHaveLength(0)
+    expect(resolvedPayloads).toHaveLength(resolvedAfterStop)
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'ignored',
+      hookEvent: 'Notification',
+      reason: 'idle-without-active-turn',
+      delivered: false,
+    }))
+  })
+
+  it('treats a mid-turn Claude idle prompt as attention', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    startClaudeTurn(coordinator)
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'Notification',
+      terminalId: 'term-claude',
+      matcher: 'idle_prompt',
+    })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+  })
+
+  it('still raises a Claude permission prompt without a tracked turn', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal(claudeTerminal)
+    coordinator.handleHookPayload({
+      source: 'claude',
+      event: 'Notification',
+      terminalId: 'term-claude',
+      matcher: 'permission_prompt',
+    })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+  })
+
+  it('keeps legacy matcher-less Claude notifications as attention', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal(claudeTerminal)
+    coordinator.handleHookPayload({ source: 'claude', event: 'Notification', terminalId: 'term-claude' })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+  })
+
+  it('keeps janus ask-user idle visible without a tracked turn', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal({
+      terminalId: 'term-janus',
+      engine: 'janus',
+      workspaceId: 'workspace-1',
+      cwd: 'C:/repo',
+    })
+    coordinator.handleHookPayload({
+      source: 'janus',
+      event: 'Notification',
+      terminalId: 'term-janus',
+      raw: { hook: 'ask-user', matcher: 'idle_prompt' },
+    })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+  })
+
   it('notifies turn lifecycle callbacks with transcript binding info', () => {
     const started: unknown[] = []
     const ended: string[] = []

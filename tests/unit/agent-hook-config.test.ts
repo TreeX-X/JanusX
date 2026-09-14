@@ -67,13 +67,37 @@ describe('AgentHookConfigManager', () => {
     expect(parsed.hooks.Stop).toHaveLength(2)
     expect(parsed.hooks.Stop[0].hooks[0].command).toBe('echo user-hook')
     expect(JSON.stringify(parsed)).toContain(JANUSX_HOOK_COMMAND_MARKER)
-    expect(parsed.hooks.Notification[0].matcher).toBe('permission_prompt|idle_prompt')
+    expect(parsed.hooks.Notification.map((entry) => entry.matcher)).toEqual([
+      'permission_prompt',
+      'idle_prompt',
+    ])
+    expect(parsed.hooks.Notification[0].hooks[0].command).toContain("-Matcher 'permission_prompt'")
+    expect(parsed.hooks.Notification[1].hooks[0].command).toContain("-Matcher 'idle_prompt'")
     expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('-EventName')
     expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('janusx-agent-hook.ps1')
       expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('-Command')
       expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).not.toContain('-File')
       expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('Test-Path -LiteralPath')
       expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).not.toContain('$utf8')
+  })
+
+  it('bakes the fired matcher into posix Claude Notification commands', async () => {
+    const homeDir = await createTempDir()
+    const manager = makeManager(homeDir, { platform: 'linux' })
+
+    await manager.ensureInstalled('claude')
+    const parsed = JSON.parse(await readFile(manager.getClaudeSettingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string }> }>>
+    }
+
+    expect(parsed.hooks.Notification.map((entry) => entry.matcher)).toEqual([
+      'permission_prompt',
+      'idle_prompt',
+    ])
+    expect(parsed.hooks.Notification[0].hooks[0].command).toContain("'--matcher' 'permission_prompt'")
+    expect(parsed.hooks.Notification[1].hooks[0].command).toContain("'--matcher' 'idle_prompt'")
+    expect(parsed.hooks.Notification[0].hooks[0].command).toContain(JANUSX_HOOK_COMMAND_MARKER)
+    expect(await manager.isInstalled('claude')).toBe(true)
   })
 
   it('removes legacy JanusX hook commands during install', async () => {

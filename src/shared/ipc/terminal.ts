@@ -28,7 +28,7 @@ export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'p
 // Sidebar display status of a terminal entry.
 // - wait: idle / no active output stream (AI CLI back at prompt, or shell always)
 // - running: AI CLI turn open (UserPromptSubmit / session busy until Stop / session idle)
-// - needs-input: CLI waits for an option/question answer (Claude idle_prompt notification)
+// - needs-input: CLI waits for an option/question answer (mid-turn idle_prompt notification; a Claude post-completion idle nudge with no open turn never leaves wait)
 // - needs-approval: CLI waits for a permission grant (PermissionRequest / permission.asked / permission_prompt)
 // - degraded: turn failed but pty alive (429/5xx, session.error, StopFailure); retry without recreating
 // - error: pty exited non-zero; entry retained in the list
