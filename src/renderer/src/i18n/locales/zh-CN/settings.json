@@ -71,6 +71,10 @@
       "downloading": "正在下载更新 {{percent}}%，点击查看",
       "downloaded": "新版本 {{version}} 已就绪，点击重启安装"
     },
+    "releaseNotes": {
+      "label": "更新内容"
+    },
+    "openReleases": "前往下载页",
     "unsupportedWin": "自动更新目前仅支持 Windows 安装版",
     "unsupportedDev": "开发模式不可用，打包版生效",
     "unsupportedPortable": "便携版不支持自动更新，请手动下载新版本"

@@ -1,3 +1,5 @@
+import { UPDATER_RELEASES_URL } from '../../../shared/ipc/updater'
+
 export function installElectronApiFallback(): void {
   if (window.electron) return
 
@@ -224,6 +226,7 @@ export function installElectronApiFallback(): void {
         currentVersion: '',
         availableVersion: null,
         downloadPercent: null,
+        releaseNotes: null,
         error: null,
       }),
       check: () => Promise.resolve({
@@ -233,6 +236,7 @@ export function installElectronApiFallback(): void {
         currentVersion: '',
         availableVersion: null,
         downloadPercent: null,
+        releaseNotes: null,
         error: null,
       }),
       install: () => Promise.resolve({ ok: false, error: 'unsupported' }),
@@ -241,6 +245,10 @@ export function installElectronApiFallback(): void {
       updateSettings: (settings: { autoCheck?: unknown }) => Promise.resolve({
         autoCheck: settings?.autoCheck === undefined ? true : settings.autoCheck === true,
       }),
+      openReleases: () => {
+        window.open(UPDATER_RELEASES_URL, '_blank', 'noopener')
+        return Promise.resolve()
+      },
     },
     team: {
       register: unavailable, login: unavailable, logout: unavailable, refresh: unavailable,

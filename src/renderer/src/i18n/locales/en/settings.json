@@ -71,6 +71,10 @@
       "downloading": "Downloading update {{percent}}%, click to view",
       "downloaded": "Version {{version}} is ready, click to restart and install"
     },
+    "releaseNotes": {
+      "label": "What's new"
+    },
+    "openReleases": "Open download page",
     "unsupportedWin": "Auto-update currently supports the Windows installer only",
     "unsupportedDev": "Unavailable in dev mode; takes effect in packaged builds",
     "unsupportedPortable": "The portable edition does not auto-update; download new releases manually"

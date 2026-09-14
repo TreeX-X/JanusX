@@ -1494,6 +1494,8 @@ export type TypedI18nKey =
   | 'settings:updater.error.load'
   | 'settings:updater.error.save'
   | 'settings:updater.error.update'
+  | 'settings:updater.openReleases'
+  | 'settings:updater.releaseNotes.label'
   | 'settings:updater.restart'
   | 'settings:updater.subtitle'
   | 'settings:updater.title'

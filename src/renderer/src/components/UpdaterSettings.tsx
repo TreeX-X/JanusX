@@ -87,6 +87,14 @@ export function UpdaterSettings() {
     }
   }
 
+  const openReleases = async () => {
+    try {
+      await window.electron?.updater.openReleases()
+    } catch {
+      /* 浏览器预览无主进程时由 fallback 的 window.open 兜底 */
+    }
+  }
+
   if (!window.electron?.updater) {
     return <div style={{ fontSize: 12, color: '#8a8a8a' }}>{t('settings:updater.unsupportedDev')}</div>
   }
@@ -104,11 +112,20 @@ export function UpdaterSettings() {
         label={t('settings:updater.autoCheck.label')}
         hint={t('settings:updater.autoCheck.hint')}
         checked={autoCheck}
-        disabled={busy || saving}
+        disabled={busy || saving || (state !== null && !state.supported)}
         onChange={(checked) => void toggleAutoCheck(checked)}
       />
       {unsupportedKey
-        ? <div style={{ color: '#8a8a8a' }}>{t(unsupportedKey)}</div>
+        ? (
+          <>
+            <div style={{ color: '#8a8a8a' }}>{t(unsupportedKey)}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={() => void openReleases()}>
+                {t('settings:updater.openReleases')}
+              </button>
+            </div>
+          </>
+        )
         : (
           <>
             <StatusLine state={state} />
@@ -140,16 +157,37 @@ function StatusLine({ state }: { state: UpdaterState | null }) {
     case 'up-to-date':
       return <div style={{ color: '#7fb069' }}>{t('settings:updater.upToDate')}</div>
     case 'available':
-      return <div>{t('settings:updater.available', { version: state.availableVersion ?? '' })}</div>
+      return (
+        <>
+          <div>{t('settings:updater.available', { version: state.availableVersion ?? '' })}</div>
+          <ReleaseNotes notes={state.releaseNotes} />
+        </>
+      )
     case 'downloading':
       return <div>{t('settings:updater.downloading', { percent: state.downloadPercent ?? 0 })}</div>
     case 'downloaded':
-      return <div style={{ color: '#7fb069' }}>{t('settings:updater.downloaded', { version: state.availableVersion ?? '' })}</div>
+      return (
+        <>
+          <div style={{ color: '#7fb069' }}>{t('settings:updater.downloaded', { version: state.availableVersion ?? '' })}</div>
+          <ReleaseNotes notes={state.releaseNotes} />
+        </>
+      )
     case 'error':
       return <div style={{ color: '#c96a5e' }}>{t('settings:updater.error.update', { message: state.error ?? '' })}</div>
     default:
       return null
   }
+}
+
+function ReleaseNotes({ notes }: { notes: string | null }) {
+  const { t } = useI18n('settings')
+  if (!notes) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ color: '#8a8a8a' }}>{t('settings:updater.releaseNotes.label')}</div>
+      <div style={{ maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap', color: '#c4c4c4' }}>{notes}</div>
+    </div>
+  )
 }
 
 function SettingSwitch({ label,

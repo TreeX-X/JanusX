@@ -14,6 +14,8 @@ An `autoCheck` preference (`updaterSettings` in the global config, default true)
 
 The title bar shows an update badge right of the JanusX wordmark only while an update carries action value (available, downloading, downloaded). The badge shares its event-to-state mapping with the settings panel through `src/renderer/src/lib/updater-badge.ts`. Clicking a downloaded badge restarts into the installer at once; clicking earlier states opens the settings general tab where progress and the install entry live.
 
+The release workflow guards the first-publish footguns: the tag must equal `v` plus the `package.json` version because the publisher derives the release tag and the feed version from the package, and the sibling `janus-agentX` checkout resolves to the public same-owner repository. Available and downloaded states carry the release body as tag-stripped plain text (`formatReleaseNotes` in the updater contract), so installs never happen blind. The updater library and the service failures log through `electron-log` to `userData/logs` with a console mirror. Unsupported runtimes get a fixed download-page entry (`updater:openReleases`, URL allowlist of one) instead of a dead button, and the auto-check switch disables where no schedule exists.
+
 ## Alternatives considered
 
 - Self-hosted generic feed (`generic` provider on internal HTTPS): strongest case serves private deployments without touching github.com. The driver that defers it is operational cost before any customer demands it; the publish shape (yml plus artifacts) stays identical, so the switch costs a config change, not a rewrite.
@@ -25,3 +27,4 @@ The title bar shows an update badge right of the JanusX wordmark only while an u
 - Win nsis gains background check (30s after launch, every 6h), manual check, and restart-to-install; every other runtime gains an honest unsupported message instead of a broken button.
 - macOS signing plus notarization and the Linux AppImage/deb matrix stay open work under the owning scope note; the guards give those stages explicit extension points.
 - Release discipline tightens: only `v*` tags publish, and the feed check script must verify yml-to-artifact alignment before wider rollout.
+- Retracting a bad release has no staged rollout or kill switch yet: deleting the Release stops further detection (the feed entry disappears), and already-downloaded copies still install on restart, so the recovery is a patched version published the same way. All clients update at once until channels land.

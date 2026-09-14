@@ -1,7 +1,8 @@
 // Note: Win nsis auto-update via GitHub Releases — see .agents/notes/implemented/feature/2026-07-14-app-auto-update-win.md
 import { app, type BrowserWindow } from 'electron'
+import log from 'electron-log'
 import type { autoUpdater as AutoUpdater } from 'electron-updater'
-import { UPDATER_EVENT_CHANNELS, type UpdaterEvent, type UpdaterState } from '../../shared/ipc/updater'
+import { UPDATER_EVENT_CHANNELS, formatReleaseNotes, type UpdaterEvent, type UpdaterState } from '../../shared/ipc/updater'
 import { isAutoUpdateSupported, resolveUnsupportedReason } from './guards'
 
 const STARTUP_DELAY_MS = 30_000
@@ -23,6 +24,7 @@ export class UpdateService {
     currentVersion: app.getVersion(),
     availableVersion: null,
     downloadPercent: null,
+    releaseNotes: null,
     error: null,
   }
 
@@ -132,11 +134,13 @@ export class UpdateService {
       const { autoUpdater } = await import('electron-updater')
       autoUpdater.autoDownload = true
       autoUpdater.autoInstallOnAppQuit = true
+      // 现场排障唯一依据：file transport 落 userData/logs，console 同步一份。
+      autoUpdater.logger = log
       this.wireEvents(autoUpdater)
       this.updater = autoUpdater
       return autoUpdater
     } catch (error) {
-      console.error('[updater] load electron-updater failed:', error)
+      log.error('[updater] load electron-updater failed:', error)
       this.fail(error)
       return null
     }
@@ -150,11 +154,15 @@ export class UpdateService {
       this.emit({ type: 'checking' })
     })
     updater.on('update-available', (info) => {
-      this.patch({ phase: 'available', availableVersion: info?.version ?? null })
+      this.patch({
+        phase: 'available',
+        availableVersion: info?.version ?? null,
+        releaseNotes: formatReleaseNotes(info?.releaseNotes),
+      })
       this.emit({ type: 'available', version: info?.version ?? '' })
     })
     updater.on('update-not-available', (info) => {
-      this.patch({ phase: 'up-to-date', availableVersion: null, downloadPercent: null })
+      this.patch({ phase: 'up-to-date', availableVersion: null, downloadPercent: null, releaseNotes: null })
       this.emit({ type: 'not-available', version: info?.version ?? this.state.currentVersion })
     })
     updater.on('download-progress', (progress) => {
@@ -163,7 +171,12 @@ export class UpdateService {
       if (percent !== null) this.emit({ type: 'progress', percent })
     })
     updater.on('update-downloaded', (info) => {
-      this.patch({ phase: 'downloaded', availableVersion: info?.version ?? this.state.availableVersion, downloadPercent: 100 })
+      this.patch({
+        phase: 'downloaded',
+        availableVersion: info?.version ?? this.state.availableVersion,
+        downloadPercent: 100,
+        releaseNotes: formatReleaseNotes(info?.releaseNotes) ?? this.state.releaseNotes,
+      })
       this.emit({ type: 'downloaded', version: info?.version ?? '' })
     })
     updater.on('error', (error) => {
@@ -177,7 +190,7 @@ export class UpdateService {
 
   private fail(error: unknown): void {
     const message = error instanceof Error ? error.message : '未知错误'
-    console.error('[updater] update failed:', message)
+    log.error('[updater] update failed:', message)
     this.patch({ phase: 'error', error: message })
     this.emit({ type: 'error', message })
   }

@@ -7,6 +7,7 @@ const IDLE_BASE: UpdaterState = {
   currentVersion: '',
   availableVersion: null,
   downloadPercent: null,
+  releaseNotes: null,
   error: null,
 }
 

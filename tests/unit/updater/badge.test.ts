@@ -9,6 +9,7 @@ const BASE: UpdaterState = {
   currentVersion: '0.8.6',
   availableVersion: null,
   downloadPercent: null,
+  releaseNotes: null,
   error: null,
 }
 

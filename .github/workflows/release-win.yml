@@ -34,6 +34,18 @@ jobs:
           cache: npm
           cache-dependency-path: JanusX/package-lock.json
 
+      # publisher 用 package.json 的 version 生成 tag 名与 latest.yml；
+      # tag 与包版本错位会产出名字错乱的 Release 或静默无更新，先拦。
+      - name: Version guard
+        working-directory: JanusX
+        shell: pwsh
+        run: |
+          $pkg = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("${{ github.ref_name }}" -ne "v$pkg") {
+            Write-Error "tag ${{ github.ref_name }} != package.json v$pkg"
+            exit 1
+          }
+
       - name: Install
         working-directory: JanusX
         run: npm run prepackage

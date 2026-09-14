@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
-import { UPDATER_CHANNELS, type UpdaterSettings } from '../../shared/ipc/updater'
+import { ipcMain, shell } from 'electron'
+import { UPDATER_CHANNELS, UPDATER_RELEASES_URL, type UpdaterSettings } from '../../shared/ipc/updater'
 import { configService } from '../config/service'
 import { updateService } from '../updater/service'
 
@@ -13,6 +13,8 @@ export function registerUpdaterHandlers(): void {
   ipcMain.handle(UPDATER_CHANNELS.check, () => updateService.checkForUpdates())
   ipcMain.handle(UPDATER_CHANNELS.install, () => updateService.quitAndInstall())
   ipcMain.handle(UPDATER_CHANNELS.getSettings, () => configService.getUpdaterSettings())
+  // 固定下载页，不接受渲染端传入的 URL，开新窗口不经过 updater 状态机。
+  ipcMain.handle(UPDATER_CHANNELS.openReleases, () => shell.openExternal(UPDATER_RELEASES_URL))
   ipcMain.handle(
     UPDATER_CHANNELS.updateSettings,
     async (_event, settings: Partial<UpdaterSettings>) => {
