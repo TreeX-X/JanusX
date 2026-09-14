@@ -20,6 +20,9 @@ publish:
   repo: JanusX
   channel: latest
   publishAutoUpdate: true
+  # 默认为 draft（见 electron-publish 文档），草稿不进 Atom feed，
+  # 客户端拉不到 latest.yml。Win P0 要正式 Release。
+  releaseType: release
 
 win:
   target:
