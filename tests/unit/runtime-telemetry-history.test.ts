@@ -194,6 +194,29 @@ describe('runtime telemetry history', () => {
     expect(JSON.stringify(snapshot)).not.toContain('must-not-be-returned')
   })
 
+  it('reads a proxy-managed ANTHROPIC_DEFAULT_SONNET_MODEL for the Claude bootstrap', async () => {
+    const claudeDir = join(testContext.homeDir, '.claude')
+    await mkdir(claudeDir, { recursive: true })
+    await writeFile(join(claudeDir, 'settings.json'), JSON.stringify({
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'must-not-be-returned',
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:15721',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
+      },
+    }))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'claude', cwd: 'C:/repo' })
+
+    expect(snapshot).toEqual(expect.objectContaining({
+      detectedModel: 'claude-sonnet-5',
+      contextTokens: 0,
+      contextWindowTokens: 200_000,
+      source: 'configuration',
+      confidence: 'declared',
+    }))
+    expect(JSON.stringify(snapshot)).not.toContain('must-not-be-returned')
+  })
+
   it('reads a uniquely configured OpenCode model before the first conversation', async () => {
     const configDir = join(testContext.homeDir, '.config', 'opencode')
     await mkdir(configDir, { recursive: true })
@@ -247,6 +270,42 @@ describe('runtime telemetry history', () => {
       cacheReadTokens: 400,
       cacheWriteTokens: 50,
       totalTokens: 1_950,
+      source: 'history',
+      confidence: 'authoritative',
+    })
+  })
+
+  it('matches an OpenCode session when the provider spells the directory with forward slashes', async () => {
+    const dataDir = join(testContext.homeDir, '.local', 'share', 'opencode')
+    await mkdir(dataDir, { recursive: true })
+    const database = new DatabaseSync(join(dataDir, 'opencode.db'))
+    database.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY, directory TEXT, model TEXT, tokens_input INTEGER, tokens_output INTEGER,
+        tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_updated INTEGER
+      );
+      CREATE TABLE message (session_id TEXT, time_updated INTEGER, data TEXT);
+    `)
+    database.prepare('INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+      'session-win', 'C:/repo/sub', JSON.stringify({ id: 'glm-5.2', providerID: 'custom' }),
+      100, 20, 30, 5, 2_000,
+    )
+    database.prepare('INSERT INTO message VALUES (?, ?, ?)').run(
+      'session-win', 2_000, JSON.stringify({
+        role: 'assistant', modelID: 'glm-5.2',
+        tokens: { input: 60, output: 10, cache: { read: 20, write: 5 } },
+      }),
+    )
+    database.close()
+
+    const snapshot = await getRuntimeTelemetrySnapshot({
+      preset: 'opencode', cwd: 'C:\\repo\\sub\\', sessionId: 'session-win',
+    })
+
+    expect(snapshot).toMatchObject({
+      sessionId: 'session-win',
+      detectedModel: 'glm-5.2',
+      contextTokens: 85,
       source: 'history',
       confidence: 'authoritative',
     })

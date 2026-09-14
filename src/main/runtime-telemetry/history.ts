@@ -412,8 +412,10 @@ function pathsEqual(a: string, b: string): boolean {
   return normalizePath(a).toLowerCase() === normalizePath(b).toLowerCase()
 }
 
+// Note: Windows backslash vs provider forward-slash directory spellings must compare equal — see .agents/notes/implemented/bug-fix/2026-09-14-claude-opencode-context-telemetry.md
 function normalizePath(value?: string): string {
-  return value ? value.replace(/[\\/]+$/g, '') : ''
+  if (!value) return ''
+  return value.replace(/\\/g, '/').replace(/\/+$/g, '')
 }
 
 function hasTelemetry(snapshot: RuntimeTelemetrySnapshot): boolean {
@@ -455,7 +457,13 @@ async function readClaudeBootstrapTelemetry(): Promise<RuntimeTelemetrySnapshot 
   const settings = await readJsonConfig(join(os.homedir(), '.claude', 'settings.json'))
   if (!settings) return null
   const env = asRecord(settings.env)
-  const model = readString(settings.model) ?? readString(env?.ANTHROPIC_MODEL)
+  // Proxy-managed installs carry no top-level model; the ANTHROPIC_DEFAULT_*
+  // trio names the same Sonnet/Opus/Haiku capacity the preset fallback assumes.
+  const model = readString(settings.model)
+    ?? readString(env?.ANTHROPIC_MODEL)
+    ?? readString(env?.ANTHROPIC_DEFAULT_SONNET_MODEL)
+    ?? readString(env?.ANTHROPIC_DEFAULT_OPUS_MODEL)
+    ?? readString(env?.ANTHROPIC_DEFAULT_HAIKU_MODEL)
   if (!model) return null
   return createBootstrapSnapshot(model, inferDeclaredContextWindow(model, 'claude'))
 }
