@@ -12,6 +12,8 @@ The Windows nsis installer build checks the owning repository's GitHub Releases 
 
 An `autoCheck` preference (`updaterSettings` in the global config, default true) governs the background schedule only. Turning it off stops the launch-delayed first check and the 6h poll without touching manual check or restart-to-install; turning it back on reschedules immediately when the service is armed. The persisted value applies at startup before the first schedule, and the settings IPC applies it to the running scheduler only after a successful disk write.
 
+The title bar shows an update badge right of the JanusX wordmark only while an update carries action value (available, downloading, downloaded). The badge shares its event-to-state mapping with the settings panel through `src/renderer/src/lib/updater-badge.ts`. Clicking a downloaded badge restarts into the installer at once; clicking earlier states opens the settings general tab where progress and the install entry live.
+
 ## Alternatives considered
 
 - Self-hosted generic feed (`generic` provider on internal HTTPS): strongest case serves private deployments without touching github.com. The driver that defers it is operational cost before any customer demands it; the publish shape (yml plus artifacts) stays identical, so the switch costs a config change, not a rewrite.

@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
 import { AppSettingsModal, type SettingsTab } from '@/components/AppSettingsModal'
 import { KnowledgeWorkbench } from '@/components/knowledge'
+import { UpdaterBadge } from '@/components/UpdaterBadge'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
 import { useJanusChatController } from '@/components/janus/JanusChatProvider'
@@ -203,6 +204,11 @@ export function Titlebar() {
     setSettingsModalOpen(true)
   }, [])
 
+  const handleUpdaterBadgeClick = useCallback(() => {
+    setSettingsInitialTab('general')
+    setSettingsModalOpen(true)
+  }, [])
+
   const handleCloseClick = useCallback(() => {
     setCloseConfirmOpen(true)
   }, [])
@@ -270,6 +276,9 @@ export function Titlebar() {
         <span className="text-[13px] font-medium tracking-[0.5px] transition-all duration-[400ms] group-hover:text-white group-hover:drop-shadow-[0_0_10px_rgba(255,120,48,0.4)]" style={{ color: 'var(--shell-muted)' }}>
           JanusX
         </span>
+
+        {/* 新版徽标：仅发现新版/下载中/已就绪时出现，已就绪点击直接重启安装 */}
+        <UpdaterBadge onOpenSettings={handleUpdaterBadgeClick} />
 
         {/* 隐藏的后缀代码（悬浮时滑出�?*/}
         <span

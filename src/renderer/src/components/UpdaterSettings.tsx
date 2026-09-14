@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import { getUpdaterSettings, updateUpdaterSettings } from '@/services/updater-settings'
-import { DEFAULT_UPDATER_SETTINGS, type UpdaterEvent, type UpdaterState } from '../../../shared/ipc/updater'
+import { DEFAULT_UPDATER_SETTINGS, type UpdaterState } from '../../../shared/ipc/updater'
+import { applyUpdaterEvent } from '@/lib/updater-badge'
 import styles from './NotificationSettingsPanel.module.css'
 
 const UNSUPPORTED_KEY: Record<string, string> = {
@@ -37,32 +38,8 @@ export function UpdaterSettings() {
       setError(t('settings:updater.error.load'))
       setBusy(false)
     })
-    const off = api.onEvent((event: UpdaterEvent) => {
-      setState((prev) => {
-        const base: UpdaterState = prev ?? {
-          phase: 'idle',
-          supported: true,
-          unsupportedReason: null,
-          currentVersion: '',
-          availableVersion: null,
-          downloadPercent: null,
-          error: null,
-        }
-        switch (event.type) {
-          case 'checking':
-            return { ...base, phase: 'checking', error: null }
-          case 'available':
-            return { ...base, phase: 'available', availableVersion: event.version, error: null }
-          case 'not-available':
-            return { ...base, phase: 'up-to-date', availableVersion: null, downloadPercent: null }
-          case 'progress':
-            return { ...base, phase: 'downloading', downloadPercent: event.percent }
-          case 'downloaded':
-            return { ...base, phase: 'downloaded', availableVersion: event.version, downloadPercent: 100 }
-          case 'error':
-            return { ...base, phase: 'error', error: event.message }
-        }
-      })
+    const off = api.onEvent((event) => {
+      if (!disposed) setState((prev) => applyUpdaterEvent(prev, event))
     })
     return () => {
       disposed = true

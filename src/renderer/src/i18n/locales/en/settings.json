@@ -66,6 +66,11 @@
       "label": "Check for updates automatically",
       "hint": "Checks shortly after launch and every 6 hours. Manual checks always work."
     },
+    "badge": {
+      "available": "New version {{version}} found, click to view",
+      "downloading": "Downloading update {{percent}}%, click to view",
+      "downloaded": "Version {{version}} is ready, click to restart and install"
+    },
     "unsupportedWin": "Auto-update currently supports the Windows installer only",
     "unsupportedDev": "Unavailable in dev mode; takes effect in packaged builds",
     "unsupportedPortable": "The portable edition does not auto-update; download new releases manually"
