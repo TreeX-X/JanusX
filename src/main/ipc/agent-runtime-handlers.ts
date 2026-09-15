@@ -6,6 +6,7 @@ import { registerWorkspaceTools } from '@janus-agent/agent-core'
 import { registerProjectTools } from '../agent/runtime/tools/project-tools'
 import { registerGitTools } from '../agent/runtime/tools/git-tools'
 import { registerCommandTools } from '../agent/runtime/tools/command-tools'
+import { registerUserMemoryTools } from '../agent/runtime/tools/user-memory-tools'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 
 let registered = false
@@ -21,6 +22,7 @@ export function registerAgentRuntimeHandlers(windowGetter: () => BrowserWindow |
   registerProjectTools(workspaceAgentRuntime.registry)
   registerGitTools(workspaceAgentRuntime.registry)
   registerCommandTools(workspaceAgentRuntime.registry)
+  registerUserMemoryTools(workspaceAgentRuntime.registry)
   registered = true
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.createSession, async (event, input: CreateAgentSessionInput) => workspaceAgentRuntime.createSession({ ...input, approvalMode: input.approvalMode ?? await configService.getAgentApprovalMode(), safeCompileAutoAllow: input.safeCompileAutoAllow ?? await configService.getSafeCompileAutoAllow() }, `renderer:${event.sender.id}`))
   ipcMain.handle(AGENT_RUNTIME_CHANNELS.executeTool, (event, input: ExecuteToolInput) => workspaceAgentRuntime.executeTool(input, `renderer:${event.sender.id}`))

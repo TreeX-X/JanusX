@@ -13,6 +13,7 @@ import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeAuditService } from './audit-service'
 import { knowledgeContractService } from './contract-service'
+import { matchesForgettingQuery } from './search/tokenizer'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
 const EPISODES_DIR = join('episodes')
@@ -172,6 +173,77 @@ export class UserEpisodeService {
         }
       }
       return { expired, kept, dryRun: !confirm }
+    })
+  }
+
+  /**
+   * User memory M3: expire active episodes sharing forgetting-weight tokens
+   * with the query, so forget leaves no recall residue. Audits per record as
+   * `user_episode_harvested` with the forget actor.
+   */
+  async expireMatching(query: string, nowMs: number = Date.now()): Promise<{ expiredIds: string[]; kept: number }> {
+    if (!query.trim()) return { expiredIds: [], kept: 0 }
+    await knowledgeContractService.bootstrapWorkspace(undefined)
+    return this.writeQueue.run(async () => {
+      const expiredIds: string[] = []
+      let kept = 0
+      for (const relativePath of await this.listShardFiles()) {
+        const absolutePath = join(knowledgeRootPath(), relativePath)
+        let content = ''
+        try {
+          content = await readFile(absolutePath, 'utf8')
+        } catch {
+          continue
+        }
+        const lines = content.split('\n').filter((line) => line.trim())
+        const nextLines: string[] = []
+        let touched = false
+        for (const line of lines) {
+          let parsed: unknown
+          try {
+            parsed = JSON.parse(line) as unknown
+          } catch {
+            nextLines.push(line)
+            kept += 1
+            continue
+          }
+          if (!isEpisode(parsed) || parsed.status !== 'active') {
+            nextLines.push(line)
+            kept += 1
+            continue
+          }
+          const matched = matchesForgettingQuery(query, `${parsed.content}\n${parsed.tags.join(' ')}`)
+          if (!matched) {
+            nextLines.push(line)
+            kept += 1
+            continue
+          }
+          touched = true
+          expiredIds.push(parsed.id)
+          nextLines.push(JSON.stringify({ ...parsed, status: 'expired' }))
+          await knowledgeAuditService.record({
+            action: 'user_episode_harvested',
+            targetType: 'observation',
+            targetId: parsed.id,
+            before: { status: 'active', expiresAt: parsed.expiresAt },
+            after: { status: 'expired', reason: 'forget' },
+            provenance: {
+              workspaceId: 'user',
+              workspaceName: 'user',
+              workspacePath: '',
+              source: 'system',
+              sourceObservationIds: [parsed.id],
+              fileRefs: [],
+              actor: 'user-memory-forget',
+              createdAt: new Date(nowMs).toISOString(),
+            },
+          })
+        }
+        if (touched) {
+          await writeFileAtomic(absolutePath, nextLines.length > 0 ? `${nextLines.join('\n')}\n` : '')
+        }
+      }
+      return { expiredIds, kept }
     })
   }
 
