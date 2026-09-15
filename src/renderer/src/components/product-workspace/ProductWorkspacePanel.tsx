@@ -84,11 +84,16 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
         </span>
       </button>
     </div>
-    {workspaceTabs.length > 0 && <div className="flex overflow-x-auto border-b border-white/[0.06]">
-      {workspaceTabs.map((tab) => <button key={tab.tabId} type="button" className="flex min-w-0 items-center gap-1 border-r border-white/[0.06] px-2 py-1.5 text-[10px]" style={{ color: tab.tabId === activeTab?.tabId ? '#eee' : '#777' }} onClick={() => activateTab(workspaceId, tab.tabId)}>
-        <span className="max-w-32 truncate">{tab.relPath}</span>
-        <span role="button" aria-label={t('editor:product.closeTabAria', { relPath: tab.relPath })} className="px-1 text-[#666] hover:text-white" onClick={(event) => { event.stopPropagation(); void closeTab(tab.tabId) }}>×</span>
-      </button>)}
+    {workspaceTabs.length > 0 && <div className="flex items-center gap-1 overflow-x-auto border-b border-white/[0.06] p-1.5">
+      {workspaceTabs.map((tab) => {
+        const isActive = tab.tabId === activeTab?.tabId
+        return (
+          <button key={tab.tabId} type="button" className={`flex min-w-0 shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] ${isActive ? 'border-[rgba(255,120,48,0.35)] bg-[rgba(255,120,48,0.08)]' : 'border-transparent hover:bg-white/[0.05]'}`} style={{ color: isActive ? '#eee' : '#777' }} onClick={() => activateTab(workspaceId, tab.tabId)}>
+            <span className="max-w-32 truncate">{tab.relPath}</span>
+            <span role="button" aria-label={t('editor:product.closeTabAria', { relPath: tab.relPath })} className="rounded px-1 text-[#666] hover:text-white" onClick={(event) => { event.stopPropagation(); void closeTab(tab.tabId) }}>×</span>
+          </button>
+        )
+      })}
     </div>}
     {activeTab ? <>
       <div className="flex items-center justify-end gap-2 border-b border-white/[0.06] px-2 py-1">
