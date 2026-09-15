@@ -3,6 +3,7 @@ import { CheckpointPanel } from '@/components/CheckpointPanel'
 import { FileExplorerTool } from '@/components/FileExplorerTool'
 import { GitPanel } from '@/components/GitPanel'
 import { KnowledgeAssist } from '@/components/knowledge'
+import { UserPersonaTool } from '@/components/knowledge'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './RightDock.module.css'
@@ -68,6 +69,7 @@ function ToolContent({
   if (toolId === 'files') return <FileExplorerTool active={active} />
   if (toolId === 'git') return <GitPanel active={active} />
   if (toolId === 'checkpoints') return <CheckpointPanel />
+  if (toolId === 'persona') return <UserPersonaTool />
   return <KnowledgeAssist workspaceId={workspaceId} workspacePath={workspacePath} />
 }
 

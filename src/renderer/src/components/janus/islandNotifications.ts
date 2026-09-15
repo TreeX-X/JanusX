@@ -4,11 +4,12 @@ import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import type { ProductFileEntry } from '../../../../shared/product'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
 
-export type IslandNotificationKind = 'knowledge' | 'product' | 'maintenance' | 'agent'
+export type IslandNotificationKind = 'knowledge' | 'memory' | 'product' | 'maintenance' | 'agent'
 export type IslandNotificationSeverity = 'info' | 'success' | 'attention' | 'failed'
 export type IslandCapsuleTier = 'single' | 'double'
 export type IslandNotificationActionId =
   | 'open-knowledge'
+  | 'open-memory'
   | 'open-product'
   | 'open-blueprint'
   | 'open-maintenance'
@@ -99,6 +100,7 @@ export function notificationKickerKey(kind: IslandNotificationKind): string {
 
 const ACTION_LABEL_KEYS: Record<IslandNotificationActionId, string> = {
   'open-knowledge': 'janus:island.capsule.action.openKnowledge',
+  'open-memory': 'janus:island.capsule.action.openMemory',
   'open-product': 'janus:island.capsule.action.openProduct',
   'open-blueprint': 'janus:island.capsule.action.openBlueprint',
   'open-maintenance': 'janus:island.capsule.action.openMaintenance',
@@ -136,6 +138,31 @@ export function knowledgeNotification(input: {
         : 'janus:island.status.knowledgeReady',
     },
     actions: [{ id: 'open-knowledge', primary: true }],
+    createdAt: now,
+  }
+}
+
+/**
+ * User memory M4: quiet badge for habit candidates awaiting Inbox review.
+ * Info severity only pulses the badge, never auto-raises the banner. The id
+ * carries the pending count so new candidates re-notify.
+ */
+export function memoryNotification(input: {
+  pendingHabitCount: number
+  now?: number
+}): IslandNotification | null {
+  const { pendingHabitCount, now = Date.now() } = input
+  if (!Number.isFinite(pendingHabitCount) || pendingHabitCount <= 0) return null
+  return {
+    id: `memory:pending:${Math.trunc(pendingHabitCount)}`,
+    kind: 'memory',
+    severity: 'info',
+    copy: {
+      titleKey: 'janus:island.peek.title.memoryHabits',
+      subtitleKey: 'janus:island.peek.subtitle.memoryPending',
+      subtitleValues: { count: Math.trunc(pendingHabitCount) },
+    },
+    actions: [{ id: 'open-memory', primary: true }],
     createdAt: now,
   }
 }

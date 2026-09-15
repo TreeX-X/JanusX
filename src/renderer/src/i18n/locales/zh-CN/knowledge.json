@@ -55,6 +55,31 @@
     "copyFailed": "复制失败",
     "bounded": "结果已截断"
   },
+  "persona": {
+    "toolAria": "个人画像",
+    "profile": {
+      "title": "画像",
+      "empty": "暂无画像偏好，在对话中告诉 Janus 你的习惯。"
+    },
+    "habits": {
+      "title": "习惯",
+      "empty": "暂无已接受的习惯，重复出现的偏好将在审核后晋升。"
+    },
+    "recent": {
+      "title": "近况",
+      "empty": "暂无近况事件。"
+    },
+    "pending": {
+      "label": "{{count}} 条待审核"
+    },
+    "strength": "强度 {{value}}",
+    "expires": "过期 {{date}}",
+    "openInbox": "打开 Inbox 审核",
+    "unavailable": {
+      "title": "画像不可用",
+      "detail": "用户记忆服务暂不可达。"
+    }
+  },
   "result": {
     "meta": {
       "count": "{{count}} / {{eligible}}",

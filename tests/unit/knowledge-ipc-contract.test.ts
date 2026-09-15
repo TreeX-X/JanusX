@@ -84,7 +84,8 @@ describe('Knowledge IPC contract', () => {
     const channels = Object.values(KNOWLEDGE_CHANNELS)
     // Phase 5: `knowledge:extract` direct IPC removed (queue-owned LLM stage).
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
-    expect(channels).toHaveLength(29)
+    // User memory M4: +1 workspace-free glance channel (user-memory:overview).
+    expect(channels).toHaveLength(30)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -137,6 +138,7 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.processingStats()
     await knowledgeApi.externalMcpStatus()
     await knowledgeApi.registerExternalMcp('cursor')
+    await knowledgeApi.userMemoryOverview()
     await knowledgeApi.getSettings()
     await knowledgeApi.updateSettings({ enabled: false })
 
@@ -168,6 +170,7 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.processingStats],
       [KNOWLEDGE_CHANNELS.externalMcpStatus],
       [KNOWLEDGE_CHANNELS.registerExternalMcp, 'cursor'],
+      [KNOWLEDGE_CHANNELS.userMemoryOverview],
       [KNOWLEDGE_CHANNELS.getSettings],
       [KNOWLEDGE_CHANNELS.updateSettings, { enabled: false }],
     ])
@@ -303,12 +306,13 @@ describe('Knowledge IPC contract', () => {
       () => api.processingStats(),
       () => api.externalMcpStatus(),
       () => api.registerExternalMcp('cursor'),
+      () => api.userMemoryOverview(),
       () => api.getSettings(),
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(29)
-    expect(calls).toHaveLength(29)
+    expect(Object.keys(api)).toHaveLength(30)
+    expect(calls).toHaveLength(30)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

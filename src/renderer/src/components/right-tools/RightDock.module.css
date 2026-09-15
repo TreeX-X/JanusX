@@ -301,3 +301,22 @@
   border-radius: 2px;
   opacity: 1;
 }
+
+.railBadge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--shell-accent-strong);
+  color: #fff;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.railBadge::after { content: attr(data-count); }

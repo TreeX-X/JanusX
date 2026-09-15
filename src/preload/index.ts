@@ -170,6 +170,7 @@ const knowledgeAPI: KnowledgeAPI = {
   processingStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.processingStats),
   externalMcpStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.externalMcpStatus),
   registerExternalMcp: (client) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.registerExternalMcp, client),
+  userMemoryOverview: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.userMemoryOverview),
   getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }

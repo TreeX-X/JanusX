@@ -10,6 +10,7 @@ import { knowledgeSearchService } from '../knowledge/search-service'
 import { knowledgeTruthService } from '../knowledge/truth-service'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { knowledgeOperationsService } from '../knowledge/operations-service'
+import { getUserMemoryOverview } from '../knowledge/user-overview-service'
 import { knowledgeDiagnosticsService } from '../knowledge/diagnostics-service'
 import { getExternalMcpStatus, registerExternalMcpClient } from '../knowledge/external-mcp'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
@@ -150,6 +151,11 @@ export function registerKnowledgeHandlers(): void {
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.context, async (_event, request: KnowledgeContextRequest) => {
     return knowledgeContextService.search(request)
+  })
+
+  // User memory M4: workspace-free glance payload for persona cards plus badge.
+  ipcMain.handle(KNOWLEDGE_CHANNELS.userMemoryOverview, async () => {
+    return getUserMemoryOverview()
   })
 
   // Phase 0: read-only pipeline diagnostics for the Workbench status bar.

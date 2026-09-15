@@ -177,11 +177,13 @@
         "productReady": "产物文件已就绪",
         "knowledge": "知识",
         "knowledgeRecalled": "已召回知识",
+        "memoryHabits": "习惯待审核",
         "maintenance": "蓝图维护",
         "productUpdated": "产物文件已更新"
       },
       "subtitle": {
         "noKnowledgeMatch": "无知识匹配",
+        "memoryPending": "{{count}} 条习惯候选待审核",
         "knowledgeCount": "{{count}} 条召回 | {{match}} | {{kind}}: {{title}}"
       }
     },
@@ -189,6 +191,7 @@
       "kicker": {
         "janus": "JANUS",
         "knowledge": "KNOWLEDGE",
+        "memory": "MEMORY",
         "product": "PRODUCT",
         "maintenance": "BLUEPRINT",
         "agent": "AGENT"
@@ -199,6 +202,7 @@
       },
       "action": {
         "openKnowledge": "打开知识库",
+        "openMemory": "打开画像",
         "openProduct": "打开产物工作区",
         "openBlueprint": "打开蓝图",
         "openMaintenance": "打开维护"

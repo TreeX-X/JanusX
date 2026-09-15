@@ -1,7 +1,9 @@
-import { Files, GitBranch, History, PanelRightClose, PanelRightOpen, Sparkles, type LucideIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Files, GitBranch, History, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
+import { getUserMemoryOverview } from '@/services/knowledge'
 import styles from './RightDock.module.css'
 
 interface RightToolRailProps {
@@ -66,6 +68,7 @@ export function RightToolRail({
               onClick={() => onToggleTool(tool.id)}
             >
               <ToolIcon toolId={tool.id} />
+              {tool.id === 'persona' && <PersonaPendingDot />}
               <span className={styles.railState} aria-hidden="true" />
             </button>
           )
@@ -80,9 +83,26 @@ const TOOL_ICONS: Record<RightToolId, LucideIcon> = {
   git: GitBranch,
   checkpoints: History,
   assist: Sparkles,
+  persona: UserRound,
 }
 
 function ToolIcon({ toolId }: { toolId: RightToolId }) {
   const Icon = TOOL_ICONS[toolId]
   return <Icon className={styles.railIcon} size={16} strokeWidth={1.6} aria-hidden="true" />
+}
+
+/** Quiet badge: pending habit candidates awaiting Inbox review. Shows state only. */
+function PersonaPendingDot() {
+  const [pending, setPending] = useState(0)
+  useEffect(() => {
+    let alive = true
+    void getUserMemoryOverview().then((overview) => {
+      if (alive && overview && overview.pendingHabitCount > 0) setPending(overview.pendingHabitCount)
+    }).catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [])
+  if (pending === 0) return null
+  return <span className={styles.railBadge} data-count={pending > 9 ? '9+' : String(pending)} aria-hidden="true" />
 }

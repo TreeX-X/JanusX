@@ -177,11 +177,13 @@
         "productReady": "Product file ready",
         "knowledge": "Knowledge",
         "knowledgeRecalled": "Knowledge recalled",
+        "memoryHabits": "Habits awaiting review",
         "maintenance": "Blueprint maintenance",
         "productUpdated": "Product file updated"
       },
       "subtitle": {
         "noKnowledgeMatch": "No knowledge match",
+        "memoryPending": "{{count}} habit candidates awaiting review",
         "knowledgeCount": "{{count}} items | {{match}} | {{kind}}: {{title}}"
       }
     },
@@ -189,6 +191,7 @@
       "kicker": {
         "janus": "JANUS",
         "knowledge": "KNOWLEDGE",
+        "memory": "MEMORY",
         "product": "PRODUCT",
         "maintenance": "BLUEPRINT",
         "agent": "AGENT"
@@ -199,6 +202,7 @@
       },
       "action": {
         "openKnowledge": "Open knowledge",
+        "openMemory": "Open persona",
         "openProduct": "Open products",
         "openBlueprint": "Open blueprint",
         "openMaintenance": "Open maintenance"

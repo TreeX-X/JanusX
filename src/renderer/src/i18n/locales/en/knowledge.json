@@ -55,6 +55,31 @@
     "copyFailed": "Copy failed",
     "bounded": "Bounded result"
   },
+  "persona": {
+    "toolAria": "Persona",
+    "profile": {
+      "title": "Profile",
+      "empty": "No profile preferences yet; tell Janus your habits in chat."
+    },
+    "habits": {
+      "title": "Habits",
+      "empty": "No accepted habits yet; repeated preferences promote after review."
+    },
+    "recent": {
+      "title": "Recent",
+      "empty": "No recent events."
+    },
+    "pending": {
+      "label": "{{count}} awaiting review"
+    },
+    "strength": "strength {{value}}",
+    "expires": "expires {{date}}",
+    "openInbox": "Open Inbox",
+    "unavailable": {
+      "title": "Persona unavailable",
+      "detail": "The user memory service is unreachable."
+    }
+  },
   "result": {
     "meta": {
       "count": "{{count}} of {{eligible}}",

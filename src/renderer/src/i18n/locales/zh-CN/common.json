@@ -118,7 +118,8 @@
       "files": { "title": "文件", "shortTitle": "文件", "ariaLabel": "打开文件工具" },
       "git": { "title": "Git", "shortTitle": "Git", "ariaLabel": "打开 Git 工具" },
       "checkpoints": { "title": "还原点", "shortTitle": "还原点", "ariaLabel": "打开还原点工具" },
-      "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "打开 Assist 工具" }
+      "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "打开 Assist 工具" },
+      "persona": { "title": "画像", "shortTitle": "画像", "ariaLabel": "打开个人画像工具" }
     }
   },
   "quantumTopology": {

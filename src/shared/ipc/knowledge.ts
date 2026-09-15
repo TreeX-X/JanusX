@@ -22,6 +22,7 @@ import type {
   ObservationPruneResult,
   ObservationQuery,
   RetentionStats,
+  UserMemoryOverview,
   WikiPage,
 } from '../knowledge'
 import type { KnowledgeSettings } from '../knowledge-settings'
@@ -56,6 +57,7 @@ export const KNOWLEDGE_CHANNELS = {
   processingStats: 'knowledge:processing-stats',
   externalMcpStatus: 'knowledge:external-mcp:status',
   registerExternalMcp: 'knowledge:external-mcp:register',
+  userMemoryOverview: 'knowledge:user-memory:overview',
   getSettings: 'settings:knowledge:get',
   updateSettings: 'settings:knowledge:update',
 } as const
@@ -274,6 +276,7 @@ export interface KnowledgeAPI {
   processingStats: () => Promise<KnowledgeProcessingStats>
   externalMcpStatus: () => Promise<ExternalMcpStatus>
   registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
+  userMemoryOverview: () => Promise<UserMemoryOverview>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }

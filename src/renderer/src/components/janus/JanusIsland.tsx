@@ -17,6 +17,7 @@ import {
   knowledgeNotification,
   maintenanceNotification,
   mayAutoBanner,
+  memoryNotification,
   notificationKickerKey,
   productNotification,
   topNotification,
@@ -44,6 +45,8 @@ const ROUNDTABLE_CARD_STATUS_KEYS: Record<AgentWorkState, string> = {
 }
 import { faceClass } from './janusIslandRuntime'
 import { nudgeRunOrb } from '@/stores/running'
+import { useRightToolStore } from '@/stores/right-tools'
+import { getUserMemoryOverview } from '@/services/knowledge'
 import type { JanusExpandedView, JanusIslandProps } from './janusIslandTypes'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
 import type { RoundtableToolCall } from './agentWorkProjection'
@@ -153,6 +156,20 @@ export function JanusIsland({
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
 
+  // User memory M4: quiet badge for habit candidates awaiting review. Mount
+  // plus recall-turn refresh; failures stay silent (no badge, no banner).
+  const knowledgeTraceRequestId = knowledgeTrace?.requestId
+  const [memoryPending, setMemoryPending] = useState(0)
+  useEffect(() => {
+    let alive = true
+    void getUserMemoryOverview().then((overview) => {
+      if (alive) setMemoryPending(overview?.pendingHabitCount ?? 0)
+    }).catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [knowledgeTraceRequestId])
+
   /** 长按仅启动（幂等）：已运行只脉冲对应运行球，永不停止 */
   const flashHint = useCallback((text: string) => {
     const hint = shellRef.current?.querySelector('.pull-hint') as HTMLElement | null
@@ -252,6 +269,9 @@ export function JanusIsland({
     if (actionId === 'open-knowledge') {
       setActiveWorkbench('knowledge')
       onDismiss()
+    } else if (actionId === 'open-memory') {
+      useRightToolStore.getState().openTool('persona')
+      onDismiss()
     } else if (actionId === 'open-blueprint') {
       handleOpenBlueprintWorkbench()
       onDismiss()
@@ -310,8 +330,9 @@ export function JanusIsland({
       trace: knowledgeTrace,
       matchLabel: knowledgeTrace?.topHit ? formatKnowledgeMatch(knowledgeTrace.topHit.score, t) : undefined,
     }),
+    memoryNotification({ pendingHabitCount: memoryPending }),
     maintenanceNotification(maintenanceTask, maintenanceNeedsAttention),
-  ]), [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
+  ]), [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, memoryPending, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
   const [clearedIds, setClearedIds] = useState<string[]>([])
   const visibleNotifications = useMemo(
     () => notifications.filter((notification) => !clearedIds.includes(notification.id)),

@@ -16,6 +16,7 @@ import type {
   MemoryFact,
   Observation,
   RetentionStats,
+  UserMemoryOverview,
 } from '../../../shared/knowledge'
 import type { KnowledgeProcessingMode } from '../../../shared/knowledge-settings'
 import type {
@@ -169,6 +170,15 @@ export async function getKnowledgeContext(
   request: KnowledgeContextRequest,
 ): Promise<KnowledgeContextResult> {
   return window.electron.knowledge.context(request)
+}
+
+/** User memory M4: workspace-free glance payload; null when the bridge is unavailable. */
+export async function getUserMemoryOverview(): Promise<UserMemoryOverview | null> {
+  try {
+    return await window.electron.knowledge.userMemoryOverview()
+  } catch {
+    return null
+  }
 }
 
 export type KnowledgeReviewCandidateType = ReviewCandidateType

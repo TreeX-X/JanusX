@@ -121,6 +121,33 @@ export interface UserEpisode {
   status: 'active' | 'expired'
 }
 
+/** User memory M4: one glance payload for the persona cards plus badge. */
+export interface UserMemoryOverviewHabit {
+  id: string
+  content: string
+  habitStrength?: number
+  lastSeenAt?: string
+  succession?: string
+  observationIds: string[]
+}
+
+export interface UserMemoryOverviewEpisode {
+  id: string
+  content: string
+  createdAt: string
+  expiresAt: string
+  tags: string[]
+}
+
+export interface UserMemoryOverview {
+  profile: UserProfile
+  habits: UserMemoryOverviewHabit[]
+  recent: UserMemoryOverviewEpisode[]
+  /** Proposed scope-user fact candidates awaiting Inbox review. */
+  pendingHabitCount: number
+  generatedAt: string
+}
+
 export interface KnowledgeProvenance {
   workspaceId: string
   workspaceName: string

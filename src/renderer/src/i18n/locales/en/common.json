@@ -118,7 +118,8 @@
       "files": { "title": "Files", "shortTitle": "Files", "ariaLabel": "Open Files tool" },
       "git": { "title": "Git", "shortTitle": "Git", "ariaLabel": "Open Git tool" },
       "checkpoints": { "title": "Checkpoints", "shortTitle": "Checkpoints", "ariaLabel": "Open Checkpoints tool" },
-      "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "Open Assist tool" }
+      "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "Open Assist tool" },
+      "persona": { "title": "Persona", "shortTitle": "Persona", "ariaLabel": "Open persona tool" }
     }
   },
   "quantumTopology": {

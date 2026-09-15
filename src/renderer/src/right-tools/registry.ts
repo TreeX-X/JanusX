@@ -42,6 +42,16 @@ export const RIGHT_TOOL_REGISTRY = [
     instancePolicy: 'single',
     mountPolicy: 'while-open',
   },
+  {
+    id: 'persona',
+    titleKey: 'common:rightTool.tool.persona.title',
+    shortTitleKey: 'common:rightTool.tool.persona.shortTitle',
+    ariaLabelKey: 'common:rightTool.tool.persona.ariaLabel',
+    icon: 'persona',
+    order: 4,
+    instancePolicy: 'single',
+    mountPolicy: 'while-open',
+  },
 ] as const satisfies readonly RightToolDefinition[]
 
 export const RIGHT_TOOL_IDS: readonly RightToolId[] = RIGHT_TOOL_REGISTRY.map(({ id }) => id)

@@ -9,6 +9,9 @@ import {
   knowledgeNotification,
   maintenanceNotification,
   mayAutoBanner,
+  memoryNotification,
+  notificationActionLabelKey,
+  notificationKickerKey,
   notifySeverityRank,
   productNotification,
   topNotification,
@@ -146,5 +149,22 @@ describe('island notification capsule model', () => {
     expect(topNotification([])).toBeNull()
     expect(topNotification([knowledge])).toBe(knowledge)
     expect(EMPTY_CAPSULE_NOTIFICATION_ID).toBe('capsule-empty')
+  })
+
+  it('projects the memory badge only while habits await review', () => {
+    expect(memoryNotification({ pendingHabitCount: 0 })).toBeNull()
+    expect(memoryNotification({ pendingHabitCount: -1 })).toBeNull()
+    const notification = memoryNotification({ pendingHabitCount: 2, now: 7 })!
+    expect(notification.id).toBe('memory:pending:2')
+    expect(notification.kind).toBe('memory')
+    expect(notification.severity).toBe('info')
+    expect(notification.copy.titleKey).toBe('janus:island.peek.title.memoryHabits')
+    expect(notification.copy.subtitleValues).toMatchObject({ count: 2 })
+    expect(notification.actions).toEqual([{ id: 'open-memory', primary: true }])
+    expect(mayAutoBanner(notification.severity)).toBe(false)
+    expect(notificationKickerKey('memory')).toBe('janus:island.capsule.kicker.memory')
+    expect(notificationActionLabelKey('open-memory')).toBe('janus:island.capsule.action.openMemory')
+    const assembled = assembleNotifications([notification, knowledgeNotification({ active: true, empty: false, trace: recalledTrace('a'), now: 10 })])
+    expect(assembled.map((n) => n.kind)).toEqual(['knowledge', 'memory'])
   })
 })
