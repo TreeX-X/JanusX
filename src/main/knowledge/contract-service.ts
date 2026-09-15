@@ -24,6 +24,8 @@ function buildReadme(): string {
     '- `facts/`, `wiki/`, and `graph/` store derived knowledge layers.',
     '- `audit/` records every accepted or rejected mutation.',
     '- `indexes/` stores rebuildable retrieval metadata.',
+    '- `profile/` holds the durable user snapshot (identity, format/tool prefs, habit versions); private by default.',
+    '- `episodes/` holds auto-written dated user events (`YYYY-MM.jsonl`) with 30–90 day TTL harvest.',
     '- Workspace provenance is stored inside each record, not in the physical storage path.',
     '',
     'Do not hand-edit generated contract JSON files unless you are intentionally evolving the schema.',
@@ -79,6 +81,10 @@ function buildFileSpecs(snapshot: KnowledgeContractsSnapshot): ContractFileSpec[
     {
       relativePath: 'indexes/graph-snapshot.json',
       content: `${JSON.stringify({ version: 1, nodes: [], edges: [] }, null, 2)}\n`,
+    },
+    {
+      relativePath: 'profile/profile.json',
+      content: `${JSON.stringify({ version: 1, updatedAt: new Date(0).toISOString() }, null, 2)}\n`,
     },
   ]
 }

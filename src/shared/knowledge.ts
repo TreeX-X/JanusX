@@ -88,6 +88,38 @@ export type AuditAction =
   | 'observation_auto_pruned'
   | 'observation_archived'
   | 'observation_compacted'
+  // User memory M1: profile/episode/habit lifecycle (private by default).
+  | 'user_profile_updated'
+  | 'user_episode_captured'
+  | 'user_episode_harvested'
+  | 'habit_candidate_proposed'
+
+/** Independent knowledge MVP: project memory stays workspace-scoped, user memory is person-scoped. */
+export type UserMemoryScope = 'project' | 'user'
+
+/** Durable user snapshot rendered after JANUS_PERSONA with its own recall budget. */
+export interface UserProfile {
+  version: number
+  identity?: string
+  formatPrefs?: string[]
+  toolPrefs?: string[]
+  /** Habit fact ids with version bumps; predecessor archive lives in facts via supersedes. */
+  habitVersions?: Array<{ habitId: string; version: number; archived?: boolean }>
+  updatedAt: string
+}
+
+/** Auto-written dated event in episodes/ with TTL harvest and rolling working set. */
+export interface UserEpisode {
+  id: string
+  content: string
+  createdAt: string
+  /** ISO expiry; defaults to createdAt + ttlDays. */
+  expiresAt: string
+  ttlDays: number
+  tags: string[]
+  sourceObservationIds: string[]
+  status: 'active' | 'expired'
+}
 
 export interface KnowledgeProvenance {
   workspaceId: string
@@ -218,6 +250,14 @@ export interface MemoryFact {
   provenance: KnowledgeProvenance
   /** Phase 1: deterministic/LLM classification of what the fact states. */
   kind: FactKind
+  /** User memory M1: person scope beside project memory; missing means project. */
+  scope?: UserMemoryScope
+  /** User memory M1: Ebbinghaus strength with retrieval reheat, habit facts only. */
+  habitStrength?: number
+  /** User memory M1: last retrieval or confirmation instant (ISO). */
+  lastSeenAt?: string
+  /** User memory M1: ISO expiry for episodes-derived habits; missing means durable. */
+  ttl?: string
   /** ToB M1 归属字段（全可选；version 即本体的 version，不另设）。 */
   ownerScope?: OwnerScope
   tenantId?: string | null

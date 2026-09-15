@@ -20,6 +20,8 @@ export const KNOWLEDGE_STORAGE_LAYOUT: KnowledgeStorageLayout = {
     { key: 'graph', relativePath: 'graph', purpose: 'Entity relations and graph candidates.' },
     { key: 'audit', relativePath: 'audit', purpose: 'Append-only audit trail for every mutation.' },
     { key: 'indexes', relativePath: 'indexes', purpose: 'BM25 and graph side indexes, rebuildable from source layers.' },
+    { key: 'profile', relativePath: 'profile', purpose: 'Durable user scope: identity, format/tool prefs, habit versions.' },
+    { key: 'episodes', relativePath: 'episodes', purpose: 'Auto-written dated user events with TTL harvest; rolling working set.' },
   ],
   files: [
     { key: 'schema', relativePath: 'meta/schema.json', format: 'json', purpose: 'Knowledge data contract snapshot.' },
@@ -34,6 +36,7 @@ export const KNOWLEDGE_STORAGE_LAYOUT: KnowledgeStorageLayout = {
     { key: 'audit', relativePath: 'audit/audit.jsonl', format: 'jsonl', purpose: 'Append-only audit events for all changes.' },
     { key: 'bm25-index', relativePath: 'indexes/bm25.json', format: 'json', purpose: 'Rebuildable BM25 metadata and term dictionary.' },
     { key: 'graph-snapshot', relativePath: 'indexes/graph-snapshot.json', format: 'json', purpose: 'Graph side-index snapshot for fast loading.' },
+    { key: 'user-profile', relativePath: 'profile/profile.json', format: 'json', purpose: 'Durable UserProfile snapshot; private by default.' },
   ],
 }
 
@@ -135,6 +138,10 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'status',
       'provenance',
       'kind',
+      'scope',
+      'habitStrength',
+      'lastSeenAt',
+      'ttl',
     ],
     wikiPage: [
       'slug',

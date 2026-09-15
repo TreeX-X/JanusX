@@ -135,6 +135,8 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     await knowledgeObservationService.autoPrune()
     await knowledgeObservationService.archiveOldShards({ confirm: true })
     await knowledgeObservationService.compactEvidence({ confirm: true })
+    const { userEpisodeService } = await import('../knowledge/user-episode-service')
+    await userEpisodeService.harvest(Date.now(), true)
   })
   void knowledgeProcessingQueue.startupRestore()
     .then(({ pendingTotal }) => {
