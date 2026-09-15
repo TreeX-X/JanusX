@@ -12,6 +12,7 @@ import type {
   KnowledgeTruthSnapshot,
   MemoryFact,
   Observation,
+  UserMemoryScope,
   WikiPage,
 } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
@@ -44,6 +45,8 @@ export interface KnowledgeRecallRequest extends Omit<KnowledgeSearchQuery, 'limi
   layer: KnowledgeRecallLayer
   allowGlobal?: boolean
   requireWorkspace?: boolean
+  /** User memory M2: generic scope filter; project recall never sets it. */
+  scope?: UserMemoryScope
 }
 
 export interface KnowledgeRecallDocument {
@@ -222,11 +225,14 @@ export function recallFilterKey(request: KnowledgeRecallRequest): string {
   const tags = normalizeList(request.tags).map(normalizeTag).sort()
   const files = normalizeList(request.files).map(normalizePath).sort()
   const types = [...(request.types ?? [])].sort()
-  return JSON.stringify([request.layer, request.allowGlobal === true, request.workspaceId?.trim() ?? '', request.workspaceName?.trim() ?? '', request.workspacePath?.trim().toLowerCase() ?? '', request.source ?? '', types, tags, files, request.agentId?.trim() ?? '', request.sessionId?.trim() ?? '', request.since?.trim() ?? '', request.until?.trim() ?? ''])
+  return JSON.stringify([request.layer, request.scope ?? '', request.allowGlobal === true, request.workspaceId?.trim() ?? '', request.workspaceName?.trim() ?? '', request.workspacePath?.trim().toLowerCase() ?? '', request.source ?? '', types, tags, files, request.agentId?.trim() ?? '', request.sessionId?.trim() ?? '', request.since?.trim() ?? '', request.until?.trim() ?? ''])
 }
 
 function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRecallRequest): boolean {
   const { hit } = document
+  // User memory M2: person-scoped documents stay private by default; only an
+  // explicit user-scope request observes them, on any shared-surface path.
+  if (request.scope !== 'user' && (hit.scope === 'user' || hit.workspaceId === 'user')) return false
   if (!request.allowGlobal) {
     if (request.workspaceId && hit.workspaceId !== request.workspaceId) return false
     if (request.workspaceName && hit.workspaceName !== request.workspaceName) return false
@@ -314,6 +320,7 @@ function factCandidateDocument(candidate: CandidateFact): KnowledgeRecallDocumen
     confidence: fact.confidence,
     status: candidate.status,
     derivation: candidate.derivation,
+    ...(fact.scope ? { scope: fact.scope } : {}),
   }
   return { key: documentKey(hit), hit }
 }
@@ -385,6 +392,7 @@ function factDocument(fact: MemoryFact): KnowledgeRecallDocument {
     createdAt: provenance.createdAt,
     confidence: fact.confidence,
     status: fact.status,
+    ...(fact.scope ? { scope: fact.scope } : {}),
   }
   return {
     key: documentKey(hit),

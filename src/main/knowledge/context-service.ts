@@ -6,6 +6,13 @@ import type {
 import { knowledgeRecallService, KnowledgeRecallService } from './recall-service'
 import { excerptAroundQuery } from './recall-service'
 import { knowledgeTruthService } from './truth-service'
+import {
+  fuseKnowledgeResults,
+  searchUserMemory,
+  searchUserMemoryDefault,
+  type UserRecallDeps,
+  type UserRecallResult,
+} from './user-recall-service'
 
 const DEFAULT_MAX_ITEMS = 8
 const DEFAULT_MAX_CHARS = 4_000
@@ -42,10 +49,12 @@ function emptyResult(
 
 export class KnowledgeContextService {
   private readonly recallService: Pick<KnowledgeRecallService, 'recall'>
+  private readonly searchUser: (query: string) => Promise<UserRecallResult>
 
   constructor(
     truthService: Pick<typeof knowledgeTruthService, 'list'> = knowledgeTruthService,
     recallService?: Pick<KnowledgeRecallService, 'recall'>,
+    userDeps?: UserRecallDeps,
   ) {
     this.recallService = recallService ?? (truthService === knowledgeTruthService
       ? knowledgeRecallService
@@ -55,8 +64,15 @@ export class KnowledgeContextService {
           resolveObservationContent: async (observation) => observation.content,
           readCandidates: async () => [],
         }))
+    this.searchUser = userDeps
+      ? (query: string) => searchUserMemory(query, userDeps)
+      : searchUserMemoryDefault
   }
 
+  /**
+   * Project-only recall. Workspace gating stays untouched so shared surfaces
+   * (MCP, maintenance) never observe user memory through this path.
+   */
   async search(request: KnowledgeContextRequest): Promise<KnowledgeContextResult> {
     const maxItems = boundedInteger(request.maxItems, DEFAULT_MAX_ITEMS)
     const maxChars = boundedInteger(request.maxChars, DEFAULT_MAX_CHARS)
@@ -98,6 +114,42 @@ export class KnowledgeContextService {
       maxItems,
       maxChars,
     }
+  }
+
+  /** User-only recall under its independent budget; needs no workspace. */
+  async searchUserOnly(query: string): Promise<UserRecallResult> {
+    return this.searchUser(query)
+  }
+
+  /**
+   * Fused chat recall. Project recall keeps its filter and budget; the user
+   * section appends under its own budget. `scope=user` returns the user side
+   * alone so no-workspace sessions still answer personal questions.
+   */
+  async searchWithUser(request: KnowledgeContextRequest): Promise<KnowledgeContextResult> {
+    if (request.scope === 'user') {
+      const user = await this.searchUser(request.query)
+      if (!user.compactContext) {
+        return {
+          items: [],
+          compactContext: '',
+          truncated: user.truncated,
+          eligibleCount: user.eligibleCount,
+          maxItems: user.maxItems,
+          maxChars: user.maxChars,
+        }
+      }
+      return fuseKnowledgeResults(
+        { items: [], compactContext: '', truncated: false, eligibleCount: 0, maxItems: 0, maxChars: 0 },
+        user,
+      )
+    }
+    const [project, user] = await Promise.all([
+      this.search(request),
+      request.includeUser === false ? null : this.searchUser(request.query).catch(() => null),
+    ])
+    if (!user || !user.compactContext) return project
+    return fuseKnowledgeResults(project, user)
   }
 }
 

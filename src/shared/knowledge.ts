@@ -341,6 +341,10 @@ export interface KnowledgeContextRequest {
   workspacePath?: string
   /** Explicitly allow recall across every workspace. */
   allowGlobal?: boolean
+  /** User memory M2: person scope beside project memory; user-only recall needs no workspace. */
+  scope?: UserMemoryScope
+  /** User memory M2: fused chat recall opts in; project-only callers (MCP, maintenance) leave it unset. */
+  includeUser?: boolean
   maxItems?: number
   maxChars?: number
   /** Phase 3: filter evidence by producing agent (observations only; truth is shared). */
@@ -578,6 +582,8 @@ export interface KnowledgeSearchHit {
   derivation?: Derivation
   agentId?: string
   sessionId?: string
+  /** User memory M2: person-scoped facts stay out of project recall. */
+  scope?: UserMemoryScope
 }
 
 export interface KnowledgeSearchIndexStats {

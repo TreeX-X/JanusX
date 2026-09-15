@@ -40,6 +40,7 @@ import {
   buildJanusChatTurnPorts,
   type JanusCaptureInput,
 } from './janus-agent-ports'
+import { injectUserMemoryContext, type UserRecallResult } from '../knowledge/user-recall-service'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -65,10 +66,25 @@ export interface ChatStreamRequest {
 export { hasExplicitWorkspaceMutationIntent, toolTraceEntryFromResult, toolTraceHistoryMessage }
 
 type ContextSearch = typeof knowledgeContextService.search
+type UserSearch = (query: string) => Promise<UserRecallResult>
+
+/**
+ * User recall behind the shell seam. Older hermetic mocks of
+ * `knowledgeContextService` carry only `search`; production always carries
+ * `searchUserOnly`, so the guard keeps those tests hermetic without behavior
+ * change while production fuses the user section.
+ */
+function defaultUserSearch(): UserSearch | undefined {
+  const service = knowledgeContextService as Partial<Pick<typeof knowledgeContextService, 'searchUserOnly'>>
+  if (typeof service.searchUserOnly !== 'function') return undefined
+  return (query: string) => knowledgeContextService.searchUserOnly(query)
+}
 
 /**
  * Positional wrapper over chat-core's object-form recall (llm-handlers 的
  * 非流式路径沿用旧签名；默认后端仍是 knowledgeContextService）。
+ * User memory appends as its own section under an independent budget,
+ * independently of workspaceId, so no-workspace sessions keep personal recall.
  */
 export async function prepareJanusChatRecall(
   requestId: string,
@@ -76,8 +92,22 @@ export async function prepareJanusChatRecall(
   workspaceId?: string,
   workspacePath?: string,
   search: ContextSearch = knowledgeContextService.search.bind(knowledgeContextService),
+  searchUser?: UserSearch,
 ): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace }> {
-  return prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search })
+  const project = await prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search })
+  const resolveUser = searchUser ?? defaultUserSearch()
+  if (!resolveUser) return project
+  const query = [...messages].reverse().find((message) => message.role === 'user' && message.content.trim())
+    ?.content.trim() ?? ''
+  if (!query) return project
+  let user: UserRecallResult | null = null
+  try {
+    user = await resolveUser(query)
+  } catch {
+    return project
+  }
+  if (!user || !user.compactContext) return project
+  return { messages: injectUserMemoryContext(project.messages, user.compactContext), trace: project.trace }
 }
 
 /*-- delta 合批窗口：高速流下把每 token 一次 IPC 压到每 40ms 一次 --*/
@@ -241,13 +271,28 @@ function defaultChatTurnPorts(callerId: string, requestId: string): ChatTurnPort
     executeFunctionCall: (input, caller) => workspaceAgentRuntime.executeFunctionCall(input, caller),
     listRegistryTools: () => workspaceAgentRuntime.registry.list(),
     listRegistryManifests: () => workspaceAgentRuntime.registry.listManifests?.(),
-    knowledgeSearch: (input) => knowledgeContextService.search({
-      query: input.query,
-      workspaceId: input.workspaceId,
-      workspacePath: input.workspacePath,
-      maxItems: input.maxItems,
-      maxChars: input.maxChars,
-    }),
+    knowledgeSearch: async (input) => {
+      const base = {
+        query: input.query,
+        workspaceId: input.workspaceId,
+        workspacePath: input.workspacePath,
+        maxItems: input.maxItems,
+        maxChars: input.maxChars,
+      }
+      // Fused chat recall stays transparent to the loop: the port input keeps
+      // its generic shape (no persona types cross into janus-agentX) while the
+      // shell appends the user section under its own budget. The guard keeps
+      // older hermetic mocks (search-only) on the legacy path.
+      const service = knowledgeContextService as Partial<Pick<typeof knowledgeContextService, 'searchWithUser'>>
+      if (typeof service.searchWithUser !== 'function') {
+        return knowledgeContextService.search(base)
+      }
+      try {
+        return await knowledgeContextService.searchWithUser(base)
+      } catch {
+        return knowledgeContextService.search(base)
+      }
+    },
     captureObservation: (input: JanusCaptureInput) => knowledgeObservationService.capture({
       workspaceId: input.workspaceId,
       workspacePath: input.workspacePath,
