@@ -8,6 +8,7 @@ import { EMPTY_AGENT_WORK_PROJECTION, reconcilePendingUserMessages, reduceAgentW
 import { AgentResultCard as AgentResultCardView } from './AgentResultCard'
 import type { RoundtableHostQuestionBlock } from './JanusChat'
 import { buildRoundtableFilename, fetchRoundtableMarkdown, saveMarkdownViaDialog } from './roundtableExport'
+import { RoundtableArtifactCard } from './RoundtableArtifactCard'
 
 const ROUNDTABLE_SESSION_KEY = 'janusx.roundtable.sessionId'
 
@@ -402,6 +403,14 @@ export function JanusRoundtablePane({
                 </div>
                 {exportNotice ? <span className="janus-roundtable-ended-banner__notice">{exportNotice}</span> : null}
               </div>
+            ) : null}
+            {roundtableState?.sessionId && (roundtableState.facts?.length ?? 0) > 0 ? (
+              <RoundtableArtifactCard
+                sessionId={roundtableState.sessionId}
+                facts={roundtableState.facts}
+                roundNumber={roundtableState.roundNumber}
+                cwd={resourceController.resources[0]?.workspacePath ?? null}
+              />
             ) : null}
             {Object.keys(work.errors).length > 0 ? (
               <div className="janus-roundtable-error-banner" role="alert" aria-label="Agent 失败">

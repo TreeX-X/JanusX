@@ -1,0 +1,138 @@
+/* Roundtable native artifact card (S5): proposal build, preview, apply. */
+.janus-roundtable-artifact {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 120, 48, 0.35);
+  border-radius: 10px;
+  background: rgba(20, 14, 10, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.janus-roundtable-artifact__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.janus-roundtable-artifact__title {
+  font: 600 11px Georgia, serif;
+  letter-spacing: 0.06em;
+  color: #f0b46a;
+}
+
+.janus-roundtable-artifact__target {
+  margin-left: auto;
+  font-size: 11px;
+  color: #b8a88f;
+}
+
+.janus-roundtable-artifact__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #d8c9ae;
+}
+
+.janus-roundtable-artifact__row select {
+  flex: 1;
+  min-width: 0;
+  background: #241a12;
+  color: #eadfc8;
+  border: 1px solid rgba(255, 120, 48, 0.3);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.janus-roundtable-artifact__toggles {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.janus-roundtable-artifact__toggles button,
+.janus-roundtable-artifact__actions button {
+  background: rgba(255, 120, 48, 0.14);
+  border: 1px solid rgba(255, 120, 48, 0.4);
+  color: #f0c98f;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.janus-roundtable-artifact__toggles button:disabled,
+.janus-roundtable-artifact__actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.janus-roundtable-artifact__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.janus-roundtable-artifact__facts,
+.janus-roundtable-artifact__preview ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.janus-roundtable-artifact__facts label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #d8c9ae;
+  cursor: pointer;
+}
+
+.janus-roundtable-artifact__kind {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  border: 1px solid rgba(255, 120, 48, 0.4);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: #f0c98f;
+}
+
+.janus-roundtable-artifact__kind[data-kind="requirement"] { border-color: rgba(103, 216, 255, 0.5); color: #9adcff; }
+.janus-roundtable-artifact__kind[data-kind="decision"] { border-color: rgba(183, 156, 255, 0.5); color: #c9b8ff; }
+.janus-roundtable-artifact__kind[data-kind="task"] { border-color: rgba(140, 230, 160, 0.5); color: #a5e8b5; }
+
+.janus-roundtable-artifact__preview {
+  border-top: 1px dashed rgba(255, 120, 48, 0.3);
+  padding-top: 8px;
+  font-size: 12px;
+  color: #d8c9ae;
+}
+
+.janus-roundtable-artifact__preview li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.janus-roundtable-artifact__diag { color: #ff9d8a; }
+
+.janus-roundtable-artifact__excluded { opacity: 0.65; }
+
+.janus-roundtable-artifact__notice {
+  font-size: 12px;
+  color: #ff9d8a;
+  margin: 0;
+}
+
+.janus-roundtable-artifact__done {
+  font-size: 12px;
+  color: #a5e8b5;
+  margin: 0;
+}

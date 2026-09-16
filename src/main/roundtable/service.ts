@@ -170,19 +170,35 @@ export class RoundtableService {
    */
   async buildBundle(
     sessionId: string,
-    input: { factIds?: string[]; repoId: string; bundleId?: string; revision?: number },
+    input: {
+      factIds?: string[]
+      repoId: string
+      bundleId?: string
+      revision?: number
+      parentUri?: string
+      excluded?: Array<{ factId: string; reason: string }>
+    },
   ): Promise<{ bundle: ArtifactBundle; diagnostics: Array<{ code: string; message: string; path?: string }>; snapshotHash: string }> {
     const state = this.require(sessionId).getState()
     const missing = (input.factIds ?? []).filter((id) => !state.facts.some((fact) => fact.id === id))
     const diagnostics = missing.map((id) => ({ code: 'NOT_FOUND', message: `unknown fact ${id}`, path: 'factIds' }))
+    const missingExcluded = (input.excluded ?? []).filter((e) => !state.facts.some((fact) => fact.id === e.factId))
+    for (const e of missingExcluded) {
+      diagnostics.push({ code: 'NOT_FOUND', message: `unknown fact ${e.factId}`, path: 'excluded' })
+    }
     const facts = input.factIds ? state.facts.filter((fact) => input.factIds!.includes(fact.id)) : state.facts
+    const excludedById = new Map((input.excluded ?? []).map((e) => [e.factId, e.reason]))
     const built = buildArtifactBundle({
       sessionId,
       roundNumber: state.roundNumber,
       repoId: input.repoId,
       bundleId: input.bundleId,
       revision: input.revision,
-      items: facts.map((fact) => ({ fact })),
+      items: facts.map((fact) => {
+        const reason = excludedById.get(fact.id)
+        if (reason !== undefined) return { fact, exclude: { reason } }
+        return { fact, parentUri: input.parentUri }
+      }),
     })
     const all = [...diagnostics, ...built.diagnostics]
     if (all.length === 0) await roundtableStore.saveBundle(built.bundle)

@@ -446,6 +446,37 @@
       "lockedTitle": "Round in progress — export unlocks when it completes",
       "saved": "Saved"
     },
+    "artifact": {
+      "applied": "Applied {{count}} notes; blueprint refreshed.",
+      "apply": "Apply to blueprint",
+      "applyFailed": "Apply failed: {{message}}",
+      "applying": "Applying…",
+      "blockedDiagnostics": "Proposal has {{count}} diagnostics; resolve before applying.",
+      "build": "Build proposal",
+      "buildFailed": "Build failed: {{message}}",
+      "building": "Building…",
+      "clearAll": "Clear",
+      "excludedMark": "excluded",
+      "factsLabel": "Selected conclusions",
+      "kind": {
+        "decision": "Decision",
+        "idea": "Idea",
+        "initiative": "Initiative",
+        "requirement": "Requirement",
+        "task": "Task"
+      },
+      "noRepoId": "This directory has no harness identity (.agents/harness.json); cannot produce notes.",
+      "noWorkspace": "No workspace directory attached; cannot locate the blueprint.",
+      "parentLabel": "Attach under node",
+      "parentNone": "Top level (no parent)",
+      "reasonDeselected": "deselected in review",
+      "rebuild": "Rebuild",
+      "resolveFailed": "Failed to resolve the project directory.",
+      "selectAll": "Select all",
+      "selectedCount": "{{selected}} / {{total}} selected",
+      "targetLabel": "Target blueprint",
+      "title": "Native artifact proposal"
+    },
     "parchment": {
       "empty": {
         "actions": "No actions yet.",

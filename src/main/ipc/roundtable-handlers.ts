@@ -39,7 +39,20 @@ export function registerRoundtableHandlers(getMainWindow: () => BrowserWindow | 
     if (value.revision !== undefined && (!Number.isInteger(value.revision) || (value.revision as number) < 1)) {
       throw new Error('Invalid bundle revision')
     }
-    return roundtableService.buildBundle(sessionId, value as { factIds?: string[]; repoId: string; bundleId?: string; revision?: number })
+    if (value.parentUri !== undefined && typeof value.parentUri !== 'string') throw new Error('Invalid bundle parentUri')
+    if (value.excluded !== undefined && (!Array.isArray(value.excluded) || value.excluded.some((e) => {
+      if (!e || typeof e !== 'object') return true
+      const entry = e as Record<string, unknown>
+      return typeof entry.factId !== 'string' || typeof entry.reason !== 'string'
+    }))) throw new Error('Invalid bundle exclusions')
+    return roundtableService.buildBundle(sessionId, value as {
+      factIds?: string[]
+      repoId: string
+      bundleId?: string
+      revision?: number
+      parentUri?: string
+      excluded?: Array<{ factId: string; reason: string }>
+    })
   })
   ipcMain.handle(ROUNDTABLE_CHANNELS.bundleApply, (_event, root: string, bundle: unknown, reason: string) => {
     if (typeof root !== 'string' || !root) throw new Error('Invalid bundle apply root')

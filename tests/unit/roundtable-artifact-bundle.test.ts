@@ -158,6 +158,62 @@ describe('roundtable artifact bundle (S5)', () => {
     })
   })
 
+  it('hangs creates under a parent URI so the graph derives hierarchy', async () => {
+    const root = await makeRoot()
+    roots.push(root)
+    const svc = new HarnessNoteService()
+    const parent = buildArtifactBundle({ ...BASE, items: [{ fact: fact({ id: 'p', kind: 'decision' }) }] })
+    expect(parent.diagnostics).toEqual([])
+    await svc.applyBundleChangeSet(root, parent.bundle.changeSet, 'roundtable s r3')
+    const [parentId] = Object.keys((await svc.projectView(root)).blueprint.nodes)
+    const parentUri = `note://${REPO}/${parentId}`
+
+    const child = buildArtifactBundle({
+      ...BASE,
+      revision: 2,
+      items: [{ fact: fact({ id: 'c', kind: 'requirement' }), parentUri }],
+    })
+    expect(child.diagnostics).toEqual([])
+    const op = child.bundle.changeSet.operations[0]
+    expect(parseNote(op.afterMarkdown!).meta.parent).toBe(parentUri)
+    await svc.applyBundleChangeSet(root, child.bundle.changeSet, 'roundtable s r4')
+    const nodes = (await svc.projectView(root)).blueprint.nodes
+    const [childId] = Object.keys(nodes).filter((id) => id !== parentId)
+    expect(nodes[childId].parentId).toBe(parentId)
+    expect(nodes[parentId].children).toContain(childId)
+  })
+
+  it('refuses bad parent URIs and parent-plus-update combos', () => {
+    const bad = buildArtifactBundle({
+      ...BASE,
+      items: [{ fact: fact({ id: 'f1' }), parentUri: 'not-a-uri' }],
+    })
+    expect(bad.diagnostics.some((d) => d.path === 'items[0].parentUri')).toBe(true)
+    expect(bad.bundle.changeSet.operations).toHaveLength(0)
+
+    const base = [
+      '---', 'schema: harness-note/1', 'id: 11111111-1111-4111-8111-111111111111',
+      'kind: requirement', 'lifecycle: proposed', 'created: 2026-09-16', '---', '',
+      '# Base', '', '## Problem', '', 'P.', '', '## Expected behavior', '', 'E.', '',
+      '## Scope', '', 'S.', '', '## Acceptance criteria', '', '- [ ] AC-1: One.', '',
+    ].join('\n')
+    const clash = buildArtifactBundle({
+      ...BASE,
+      items: [{
+        fact: fact({ id: 'f1' }),
+        parentUri: `note://${REPO}/22222222-2222-4222-8222-222222222222`,
+        update: {
+          uri: `note://${REPO}/11111111-1111-4111-8111-111111111111`,
+          expectedHash: 'a'.repeat(64),
+          baseMarkdown: base,
+          section: 'Scope',
+          text: 'New scope.',
+        },
+      }],
+    })
+    expect(clash.diagnostics.some((d) => d.path === 'items[0].parentUri')).toBe(true)
+  })
+
   it('persists bundle snapshots beside the journal for retry comparison', async () => {
     const dir = await fs.mkdtemp(join(tmpdir(), 'janusx-roundtable-s5-'))
     roots.push(dir)

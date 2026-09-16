@@ -32,6 +32,9 @@ export interface BundleBuildItem {
   exclude?: { reason: string }
   /** Update mode patches one H2 of an existing note instead of creating. */
   update?: { uri: string; expectedHash: string; baseMarkdown: string; section: string; text: string }
+  /** Create mode only: hang the new note under this note URI. The graph
+   *  projection derives hierarchy from it, so no second write is needed. */
+  parentUri?: string
 }
 
 export interface BuildBundleInput {
@@ -154,6 +157,7 @@ function createMarkdown(opts: {
   lifecycle: 'draft' | 'proposed'
   title: string
   repoId: string
+  parentUri: string | null
   sessionId: string
   roundNumber: number
   factId: string
@@ -169,6 +173,7 @@ function createMarkdown(opts: {
     'tags: [roundtable]',
     'repositories:',
     `  primary: ${opts.repoId}`,
+    ...(opts.parentUri ? [`parent: ${opts.parentUri}`] : []),
     'extensions:',
     '  workflowx:',
     '    provenance:',
@@ -230,6 +235,10 @@ export function buildArtifactBundle(input: BuildBundleInput): { bundle: Artifact
 
     if (item.update) {
       const up = item.update
+      if (item.parentUri !== undefined) {
+        diagnostics.push({ code: 'SCHEMA_INVALID', message: 'parentUri applies to creates only', path: `${at}.parentUri` })
+        return
+      }
       if (!NOTE_URI_RE.test(up.uri)) {
         diagnostics.push({ code: 'SCHEMA_INVALID', message: `bad uri ${up.uri}`, path: `${at}.update.uri` })
         return
@@ -277,12 +286,17 @@ export function buildArtifactBundle(input: BuildBundleInput): { bundle: Artifact
 
     const noteId = randomUUID()
     const target = factTarget(fact)
+    if (item.parentUri !== undefined && !NOTE_URI_RE.test(item.parentUri)) {
+      diagnostics.push({ code: 'SCHEMA_INVALID', message: `bad parentUri ${item.parentUri}`, path: `${at}.parentUri` })
+      return
+    }
     const after = createMarkdown({
       noteId,
       kind: target.kind,
       lifecycle: target.lifecycle,
       title: cleanTitle(fact),
       repoId: input.repoId,
+      parentUri: item.parentUri ?? null,
       sessionId: input.sessionId,
       roundNumber: input.roundNumber,
       factId: fact.id,

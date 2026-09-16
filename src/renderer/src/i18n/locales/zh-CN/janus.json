@@ -446,6 +446,37 @@
       "lockedTitle": "本轮讨论中，完成后可导出",
       "saved": "已保存"
     },
+    "artifact": {
+      "applied": "已落盘 {{count}} 篇，蓝图已刷新。",
+      "apply": "应用到蓝图",
+      "applyFailed": "应用失败：{{message}}",
+      "applying": "应用中…",
+      "blockedDiagnostics": "提案含 {{count}} 项诊断，处理前不可应用。",
+      "build": "生成提案",
+      "buildFailed": "生成失败：{{message}}",
+      "building": "生成中…",
+      "clearAll": "清空",
+      "excludedMark": "已排除",
+      "factsLabel": "选用结论",
+      "kind": {
+        "decision": "决策",
+        "idea": "想法",
+        "initiative": "方向",
+        "requirement": "需求",
+        "task": "任务"
+      },
+      "noRepoId": "该目录尚未初始化 harness 身份（.agents/harness.json），无法生成 Note。",
+      "noWorkspace": "未关联工作区目录，无法定位蓝图。",
+      "parentLabel": "挂载到节点",
+      "parentNone": "顶层（无父节点）",
+      "reasonDeselected": "复核时取消选择",
+      "rebuild": "重新生成",
+      "resolveFailed": "项目目录解析失败。",
+      "selectAll": "全选",
+      "selectedCount": "已选 {{selected}} / {{total}}",
+      "targetLabel": "目标蓝图",
+      "title": "原生资产提案"
+    },
     "parchment": {
       "empty": {
         "actions": "暂无行动项。",
