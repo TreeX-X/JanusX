@@ -3,12 +3,17 @@ import { Check, Copy } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { useTeamStore } from '@/stores/team'
 import type { TeamRole } from '../../../../shared/team/types'
+import styles from '../NotificationSettingsPanel.module.css'
 
 const ROLE_ORDER: TeamRole[] = ['viewer', 'contributor', 'maintainer', 'owner']
 
 /**
  * 设置中心 team 页（ToB M2）：成员列表/角色/禁用 + 邀请码 + 飞书占位。
  * 权限判断在主进程，UI 只做展示与触发。
+ *
+ * 视觉与通知/知识库/Agent 页同构：panel > section 灰卡 > row（左 label+hint，右控件），
+ * 按钮统一透明底 + 发丝边框（ghost / primary），不做橙色填充色块；
+ * 邀请码展示复用 controlStatus 发丝线样式，不用橙色底 pill。
  */
 export function TeamSettingsPanel() {
   const { t } = useI18n('team')
@@ -57,225 +62,250 @@ export function TeamSettingsPanel() {
   }
 
   return (
-    <div className="space-y-5 text-[12px]" style={{ color: '#c4c4c4' }}>
-      {status !== 'authed' && (
-        <button
-          type="button"
-          onClick={() => requestLogin()}
-          className="w-full rounded px-3 py-2 text-[12px] transition-colors"
-          style={{ background: 'rgba(255,120,48,0.14)', border: '1px solid rgba(255,120,48,0.4)', color: '#ff7830' }}
-        >
-          {t('team:footer.login')}
-        </button>
-      )}
-      <section>
-        <h3 className="mb-2 text-[13px] font-semibold text-white">
-          {t('team:footer.switchOrg')}
-        </h3>
-        <div className="space-y-1">
-          {tenants.map((tenant) => (
+    <div className={styles.panel}>
+      <section className={styles.section}>
+        <h3 className={styles.sectionTitle}>{t('team:gate.title')}</h3>
+        {status !== 'authed' ? (
+          <div className={styles.row}>
+            <div className={styles.label}>
+              <span className={styles.labelText}>{t('team:footer.login')}</span>
+              <span className={styles.hint}>{t('team:gate.subtitle')}</span>
+            </div>
             <button
-              key={tenant.id}
               type="button"
-              disabled={busy || tenant.id === activeTenantId}
-              onClick={() => void switchTenant(tenant.id)}
-              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/[0.06] disabled:opacity-60"
-              style={{ color: tenant.id === activeTenantId ? '#ff7830' : '#c4c4c4' }}
+              onClick={() => requestLogin()}
+              className={`${styles.button} ${styles.primaryButton}`}
             >
-              <span className="truncate">{tenant.name}</span>
-              <span className="shrink-0 text-[10px] text-[#777]">{tenant.myRole}</span>
+              {t('team:footer.login')}
             </button>
-          ))}
-        </div>
-        <div className="mt-2 flex gap-2">
-          <input
-            value={newOrgName}
-            onChange={(e) => setNewOrgName(e.target.value)}
-            placeholder={t('team:footer.createOrgPlaceholder')}
-            className="min-w-0 flex-1 rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-[12px] text-[#eee] outline-none placeholder:text-[#666]"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newOrgName.trim()) {
+          </div>
+        ) : (
+          user && (
+            <div className={styles.row}>
+              <div className={styles.label}>
+                <span className={styles.labelText}>{user.name}</span>
+                <span className={styles.hint}>{user.email}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className={`${styles.button} ${styles.ghostButton}`}
+              >
+                {t('team:footer.logout')}
+              </button>
+            </div>
+          )
+        )}
+      </section>
+
+      <section className={styles.section}>
+        <h3 className={styles.sectionTitle}>{t('team:footer.switchOrg')}</h3>
+        {tenants.map((tenant) => {
+          const isActive = tenant.id === activeTenantId
+          return (
+            <div className={styles.row} key={tenant.id}>
+              <div className={styles.label}>
+                <span className={styles.labelText}>{tenant.name}</span>
+                <span className={styles.hint}>{t(`team:panel.${tenant.myRole}`)}</span>
+              </div>
+              {isActive ? (
+                <span className={styles.status}>{t('team:panel.current')}</span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void switchTenant(tenant.id)}
+                  className={`${styles.button} ${styles.ghostButton}`}
+                >
+                  {t('team:panel.switch')}
+                </button>
+              )}
+            </div>
+          )
+        })}
+        <div className={styles.row}>
+          <div className={styles.label}>
+            <span className={styles.labelText}>{t('team:footer.createOrg')}</span>
+            <span className={styles.hint}>{t('team:gate.createOrgDesc')}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              value={newOrgName}
+              onChange={(e) => setNewOrgName(e.target.value)}
+              placeholder={t('team:footer.createOrgPlaceholder')}
+              className={`${styles.input} ${styles.textInput}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newOrgName.trim()) {
+                  void createTenant(newOrgName.trim())
+                  setNewOrgName('')
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={busy || !newOrgName.trim()}
+              onClick={() => {
                 void createTenant(newOrgName.trim())
                 setNewOrgName('')
-              }
-            }}
-          />
-          <button
-            type="button"
-            disabled={busy || !newOrgName.trim()}
-            onClick={() => {
-              void createTenant(newOrgName.trim())
-              setNewOrgName('')
-            }}
-            className="shrink-0 rounded px-3 py-1 text-[12px] transition-colors disabled:opacity-40"
-            style={{ background: 'rgba(255,120,48,0.14)', border: '1px solid rgba(255,120,48,0.4)', color: '#ff7830' }}
-          >
-            {t('team:footer.createOrg')}
-          </button>
+              }}
+              className={`${styles.button} ${styles.primaryButton}`}
+            >
+              {t('team:footer.createOrg')}
+            </button>
+          </div>
         </div>
-        <div className="mt-2 flex gap-2">
-          <input
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value)}
-            placeholder={t('team:gate.inviteCodePlaceholder')}
-            className="min-w-0 flex-1 rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-[12px] uppercase text-[#eee] outline-none placeholder:normal-case placeholder:text-[#666]"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && joinCode.trim()) {
+        <div className={styles.row}>
+          <div className={styles.label}>
+            <span className={styles.labelText}>{t('team:gate.joinOrgAction')}</span>
+            <span className={styles.hint}>{t('team:gate.inviteHint')}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              placeholder={t('team:gate.inviteCodePlaceholder')}
+              className={`${styles.input} ${styles.textInput}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && joinCode.trim()) {
+                  void acceptInvite(joinCode)
+                  setJoinCode('')
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={busy || !joinCode.trim()}
+              onClick={() => {
                 void acceptInvite(joinCode)
                 setJoinCode('')
-              }
-            }}
-          />
-          <button
-            type="button"
-            disabled={busy || !joinCode.trim()}
-            onClick={() => {
-              void acceptInvite(joinCode)
-              setJoinCode('')
-            }}
-            className="shrink-0 rounded px-3 py-1 text-[12px] text-[#c4c4c4] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
-          >
-            {t('team:gate.joinOrgAction')}
-          </button>
+              }}
+              className={`${styles.button} ${styles.ghostButton}`}
+            >
+              {t('team:gate.joinOrgAction')}
+            </button>
+          </div>
         </div>
       </section>
 
-      <section>
-        <h3 className="mb-2 text-[13px] font-semibold text-white">
+      <section className={styles.section}>
+        <h3 className={styles.sectionTitle}>
           {t('team:panel.members')} · {active?.name ?? '—'}
         </h3>
-        {members.length === 0 && <div className="text-[#666]">{t('team:panel.empty')}</div>}
-        <div className="space-y-1">
-          {members.map((m) => {
-            const isMe = m.user.id === user?.id
-            const disabled = m.membership.status !== 'active'
-            return (
-              <div
-                key={m.user.id}
-                className="flex items-center justify-between gap-2 rounded px-2 py-1.5"
-                style={{ background: 'rgba(255,255,255,0.03)', opacity: disabled ? 0.55 : 1 }}
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-[12px] text-[#eee]">
-                    {m.user.name}
-                    {isMe && <span className="ml-1 text-[10px] text-[#ff7830]">({t('team:panel.you')})</span>}
-                  </div>
-                  <div className="truncate text-[10px] text-[#777]">{m.user.email}</div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <span className="text-[10px] text-[#777]">
-                    {disabled ? t('team:panel.disabled') : t(`team:panel.${m.membership.role}`)}
-                  </span>
-                  {canManage && !isMe && !disabled && (
-                    <>
-                      <select
-                        value={m.membership.role}
-                        disabled={busy}
-                        onChange={(e) => void setRole(m.user.id, e.target.value as TeamRole)}
-                        className="rounded border border-white/10 bg-[#222] px-1 py-0.5 text-[11px] text-[#ccc] outline-none disabled:opacity-40"
-                        aria-label={t('team:panel.role')}
-                      >
-                        {ROLE_ORDER.map((role) => (
-                          <option key={role} value={role}>{t(`team:panel.${role}`)}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void setMemberStatus(m.user.id, 'disabled')}
-                        className="rounded border border-red-500/30 px-2 py-0.5 text-[11px] text-red-300 transition-colors hover:bg-red-500/10 disabled:opacity-40"
-                      >
-                        {t('team:panel.disable')}
-                      </button>
-                    </>
-                  )}
-                  {canManage && !isMe && disabled && (
+        {members.length === 0 && <div className={styles.status}>{t('team:panel.empty')}</div>}
+        {members.map((m) => {
+          const isMe = m.user.id === user?.id
+          const disabled = m.membership.status !== 'active'
+          return (
+            <div className={styles.row} key={m.user.id} style={disabled ? { opacity: 0.55 } : undefined}>
+              <div className={styles.label}>
+                <span className={styles.labelText}>
+                  {m.user.name}
+                  {isMe && <span className={styles.hint}> · {t('team:panel.you')}</span>}
+                </span>
+                <span className={styles.hint}>
+                  {m.user.email} · {disabled ? t('team:panel.disabled') : t(`team:panel.${m.membership.role}`)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {canManage && !isMe && !disabled && (
+                  <>
+                    <select
+                      value={m.membership.role}
+                      disabled={busy}
+                      onChange={(e) => void setRole(m.user.id, e.target.value as TeamRole)}
+                      className={styles.select}
+                      aria-label={t('team:panel.role')}
+                    >
+                      {ROLE_ORDER.map((role) => (
+                        <option key={role} value={role}>{t(`team:panel.${role}`)}</option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void setMemberStatus(m.user.id, 'active')}
-                      className="rounded border border-white/10 px-2 py-0.5 text-[11px] text-[#ccc] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
+                      onClick={() => void setMemberStatus(m.user.id, 'disabled')}
+                      className={`${styles.button} ${styles.ghostButton}`}
                     >
-                      {t('team:panel.enable')}
+                      {t('team:panel.disable')}
                     </button>
-                  )}
-                </div>
+                  </>
+                )}
+                {canManage && !isMe && disabled && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void setMemberStatus(m.user.id, 'active')}
+                    className={`${styles.button} ${styles.ghostButton}`}
+                  >
+                    {t('team:panel.enable')}
+                  </button>
+                )}
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )
+        })}
       </section>
 
       {canManage && (
-        <section>
-          <h3 className="mb-2 text-[13px] font-semibold text-white">{t('team:panel.inviteSection')}</h3>
-          <div className="flex items-center gap-2">
-            <span className="text-[#888]">{t('team:panel.inviteRole')}</span>
-            <select
-              value={inviteRole}
-              disabled={busy}
-              onChange={(e) => setInviteRole(e.target.value as TeamRole)}
-              className="rounded border border-white/10 bg-[#222] px-2 py-1 text-[12px] text-[#ccc] outline-none disabled:opacity-40"
-            >
-              {(['viewer', 'contributor', 'maintainer'] as const).map((role) => (
-                <option key={role} value={role}>{t(`team:panel.${role}`)}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void doInvite()}
-              className="rounded px-3 py-1 text-[12px] transition-colors disabled:opacity-40"
-              style={{ background: 'rgba(255,120,48,0.14)', border: '1px solid rgba(255,120,48,0.4)', color: '#ff7830' }}
-            >
-              {busy ? t('team:panel.inviting') : t('team:panel.inviteAction')}
-            </button>
-          </div>
-          {inviteCode && (
-            <div className="mt-2 flex items-center gap-2 rounded px-2 py-1.5" style={{ background: 'rgba(255,120,48,0.08)' }}>
-              <span className="text-[11px] text-[#999]">{t('team:panel.codeLabel')}</span>
-              <span className="font-mono text-[14px] font-semibold tracking-widest" style={{ color: '#ff7830' }}>{inviteCode}</span>
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>{t('team:panel.inviteSection')}</h3>
+          <div className={styles.row}>
+            <div className={styles.label}>
+              <span className={styles.labelText}>{t('team:panel.inviteRole')}</span>
+              <span className={styles.hint}>{t('team:panel.codeLabel')}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <select
+                value={inviteRole}
+                disabled={busy}
+                onChange={(e) => setInviteRole(e.target.value as TeamRole)}
+                className={styles.select}
+                aria-label={t('team:panel.inviteRole')}
+              >
+                {(['viewer', 'contributor', 'maintainer'] as const).map((role) => (
+                  <option key={role} value={role}>{t(`team:panel.${role}`)}</option>
+                ))}
+              </select>
               <button
                 type="button"
-                onClick={() => void copyCode()}
-                className="flex items-center gap-1 text-[11px] text-[#999] transition-colors hover:text-white"
+                disabled={busy}
+                onClick={() => void doInvite()}
+                className={`${styles.button} ${styles.primaryButton}`}
               >
-                {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
-                {copied ? t('team:panel.copied') : t('team:panel.copyCode')}
+                {busy ? t('team:panel.inviting') : t('team:panel.inviteAction')}
               </button>
+            </div>
+          </div>
+          {inviteCode && (
+            <div className={styles.controlStatus}>
+              <div className={styles.label}>
+                <span className={styles.labelText}>{t('team:panel.codeLabel')}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span
+                  className="font-mono"
+                  style={{ fontSize: 13, fontWeight: 650, letterSpacing: '0.12em' }}
+                >
+                  {inviteCode}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void copyCode()}
+                  className={`${styles.button} ${styles.ghostButton}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
+                  {copied ? t('team:panel.copied') : t('team:panel.copyCode')}
+                </button>
+              </div>
             </div>
           )}
         </section>
       )}
 
-      {error && <div className="text-[12px] text-[#ff5858]">{error}</div>}
+      {error && <div className={`${styles.status} ${styles.statusError}`}>{error}</div>}
 
-      {status === 'authed' && user && (
-        <section style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
-          <div className="mb-2 min-w-0">
-            <div className="truncate text-[12px] text-[#eee]">{user.name}</div>
-            <div className="truncate text-[10px] text-[#777]">{user.email}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="rounded border border-white/10 px-3 py-1.5 text-[12px] text-[#c4c4c4] transition-colors hover:bg-white/[0.06]"
-          >
-            {t('team:footer.logout')}
-          </button>
-        </section>
-      )}
-
-      <section style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
-        <button
-          type="button"
-          disabled
-          title="upcoming"
-          className="rounded border border-white/10 px-3 py-1.5 text-[12px] text-[#666] opacity-50"
-        >
-          {t('team:panel.feishuSoon')}
-        </button>
-      </section>
+      <p className={styles.controlNotice}>{t('team:panel.feishuSoon')}</p>
     </div>
   )
 }

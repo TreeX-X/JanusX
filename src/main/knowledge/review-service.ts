@@ -151,6 +151,20 @@ export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<
   return withMutationLock(FACT_CANDIDATES_FILE, operation)
 }
 
+/**
+ * User memory closeout: the single reader for proposed person-scope fact
+ * candidates. The glance overview reads through here instead of parsing the
+ * candidate file itself, so a future queue-shape change lands in one place.
+ */
+export async function listProposedUserFactCandidates(): Promise<CandidateFact[]> {
+  const records = await readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
+  return records.filter((candidate) =>
+    candidate?.type === 'fact'
+    && candidate.status === 'proposed'
+    && (candidate.fact.scope === 'user' || candidate.fact.provenance.workspaceId === 'user'),
+  )
+}
+
 async function restoreJsonl(relativePath: string, records: unknown[]): Promise<void> {
   await writeJsonlAtomic(relativePath, records)
 }

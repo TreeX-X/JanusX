@@ -1529,6 +1529,7 @@ export type TypedI18nKey =
   | 'team:footer.createOrgPlaceholder'
   | 'team:footer.invite'
   | 'team:footer.inviteRole'
+  | 'team:footer.localHint'
   | 'team:footer.login'
   | 'team:footer.logout'
   | 'team:footer.me'

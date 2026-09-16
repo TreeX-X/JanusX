@@ -61,7 +61,7 @@ type IdleWindow = Window & {
 const SIDE_PANEL_WIDTH = 'clamp(252px, 15vw, 288px)'
 const SIDE_PANEL_COLLAPSED_WIDTH = '52px'
 const SIDE_PANEL_TRANSITION_MS = 240
-const PRODUCT_WORKSPACE_WIDTH = 'clamp(320px, 32vw, 640px)'
+const PRODUCT_WORKSPACE_WIDTH = 'clamp(320px, 32vw, 1200px)'
 const PRODUCT_CLOSE_DURATION_MS = 200
 const PRODUCT_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
 const EMBEDDED_EDITOR_MIN_WIDTH = 360
@@ -139,6 +139,11 @@ export default function App() {
     }
     setProductClosing(false)
   }, [productVisible])
+  // 产物打开默认收起右侧（仅在打开瞬间写一次 manual 偏好），之后用户点 rail
+  // 可手动展开：effectiveCollapsed 已不再含 stageRendered。
+  useEffect(() => {
+    if (productVisible) useAppStore.getState().setPanelCollapsed(true)
+  }, [productVisible])
   const productWorkspacePath = workspaces.find(({ id }) => id === activeWorkspaceId)?.path ?? null
   const [appGridWidth, setAppGridWidth] = useState(() => window.innerWidth)
   const sidebarWidth = sidebarCollapsed
@@ -151,7 +156,6 @@ export default function App() {
     availableWidth: appGridWidth - sidebarWidth - productColumnWidth
       - (isEditorEmbedded ? EMBEDDED_EDITOR_MIN_WIDTH : 0),
     panelCollapsed,
-    stageRendered: productRendered,
     panelWidth: rightToolPanelWidth,
     hasActiveTool: rightToolActiveId !== null,
   })
@@ -583,7 +587,7 @@ export default function App() {
         <RightDockLayoutProvider
           effectiveCollapsed={rightDockLayout.effectiveCollapsed}
           effectiveMaxWidth={rightDockLayout.effectiveMaxWidth}
-          forcedCollapsed={productRendered || rightDockLayout.responsiveAutoCollapsed}
+          forcedCollapsed={rightDockLayout.responsiveAutoCollapsed}
           onResizingChange={setRightDockResizing}
         >
           <Panel />

@@ -1,40 +1,26 @@
 import { memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useI18n } from '@/i18n/useI18n'
+import { MARKDOWN_COMPONENTS } from '@/components/viewers/markdown-components'
 
 /**
  * memo：流式期间父组件每次 delta 都会重渲染整个消息列表，
  * 历史消息 content 不变时跳过 react-markdown 的整段重解析（audit P1）。
+ * 表格/代码块/引用等样式复用共享 MARKDOWN_COMPONENTS，与预览区保持全量统一。
  */
 export const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
-  const { t } = useI18n('common')
+  // 注意：外层 JanusChat 已包了一层 .janus-chat-message-content（展开态自带左边 2px 橙线），
+  // 这里只挂 markdown-preview，复用表格斑马纹等样式即可；若再挂 janus-chat-message-content
+  // 会画出第二条竖线。
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code: ({ className, children }) => {
-          const isInline = !className
-          const codeText = String(children).replace(/\n$/, '')
-          if (isInline) return <code className="janus-chat-inline-code">{children}</code>
-          return (
-            <div className="janus-chat-code-block">
-              <button
-                className="janus-chat-copy-code"
-                onClick={() => navigator.clipboard.writeText(codeText).catch(() => {})}
-                title={t('common:chat.copy')}
-              >
-                {t('common:chat.copy')}
-              </button>
-              <code>{children}</code>
-            </div>
-          )
-        },
-        pre: ({ children }) => <pre className="janus-chat-pre">{children}</pre>,
-      }}
-    >
-      {content}
-    </ReactMarkdown>
+    <div className="markdown-preview">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={MARKDOWN_COMPONENTS}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   )
 })
 

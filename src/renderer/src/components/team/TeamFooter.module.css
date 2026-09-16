@@ -4,6 +4,7 @@
  * 左下角团队行：去卡片化，用户优先的双行——
  * 第 1 行用户名，第 2 行当前组织 · 成员数；透明底 hover 才抬底色。
  * 顶部虚线与列表分隔，不再用盒中盒抢视觉。
+ * 未登录用幽灵图标（透明底 + 1px 边框 + dim 图标），不用 accent 填充大色块。
  * 多组织：`×N` 角标常显数量，hover 整块时向上弹出快切菜单。
  */
 
@@ -54,6 +55,34 @@
   color: var(--shell-accent-strong);
   font-size: 12px;
   font-weight: 600;
+}
+
+/* 未登录前导：幽灵图标——与 .avatar 同盒对齐，但透明底 + 1px 边框 + dim 图标，
+   不用 accent 填充大色块；hover/focus 时只随行抬底色，不抢视觉。 */
+.avatarGhost {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--shell-border);
+  color: var(--shell-dim);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.row:hover .avatarGhost {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--shell-muted);
+}
+
+.row:focus-visible .avatarGhost {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--shell-muted);
 }
 
 .textCol {
@@ -307,6 +336,12 @@
   outline: none;
 }
 
+/* 收起态未登录：同尺寸幽灵图标，hover 只到 muted，不染 accent。 */
+.collapsedButton[data-ghost='true']:hover,
+.collapsedButton[data-ghost='true']:focus-visible {
+  color: var(--shell-muted);
+}
+
 .collapsedButton:focus-visible {
   box-shadow: inset 0 0 0 1px rgba(255, 120, 48, 0.38);
 }
@@ -333,6 +368,7 @@
 @media (prefers-reduced-motion: reduce) {
   .row,
   .icon,
+  .avatarGhost,
   .collapsedButton,
   .popItem,
   .popSettings,

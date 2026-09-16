@@ -134,9 +134,9 @@ export function RightDock({
 
   const handleRailTool = (toolId: RightToolId) => {
     const manualCollapsed = useAppStore.getState().panelCollapsed
-    // A responsive/Office forced collapse has no meaningful toggle action for
-    // the already active tool. Keep the manual preference untouched instead
-    // of toggling it and immediately restoring it in the same event.
+    // 响应式强制收起（空间不足）下，已激活工具没有有意义的 toggle 动作。
+    // 保持 manual 偏好不动，避免同一次事件里 toggle 又恢复。
+    // 产物打开不再走 forcedCollapsed，允许用户手动展开。
     if (forcedCollapsed && activeToolId === toolId) return
     toggleFromRail(toolId)
     if (forcedCollapsed) useAppStore.getState().setPanelCollapsed(manualCollapsed)

@@ -24,7 +24,6 @@ describe('right dock layout', () => {
     expect(getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: false,
-      stageRendered: false,
       panelWidth: 280,
       hasActiveTool: true,
     })).toMatchObject({
@@ -39,7 +38,6 @@ describe('right dock layout', () => {
     expect(getRightDockLayout({
       availableWidth: 700,
       panelCollapsed: false,
-      stageRendered: false,
       panelWidth: 420,
       hasActiveTool: true,
     })).toMatchObject({ panelWidth: 332, dockWidth: 380 })
@@ -47,7 +45,6 @@ describe('right dock layout', () => {
     expect(getRightDockLayout({
       availableWidth: 600,
       panelCollapsed: false,
-      stageRendered: false,
       panelWidth: 420,
       hasActiveTool: true,
     })).toMatchObject({
@@ -57,31 +54,30 @@ describe('right dock layout', () => {
     })
   })
 
-  it('renders rail-only for manual collapse and product stage without changing panel preference input', () => {
+  it('keeps manual preference for product stage: default-hide is done by App, layout stays expandable', () => {
     const manual = getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: true,
-      stageRendered: false,
       panelWidth: 360,
       hasActiveTool: true,
     })
-    const staged = getRightDockLayout({
+    // 产物打开瞬间 App 会 setPanelCollapsed(true)（默认隐藏），但布局本身
+    // 不再强制收起：用户随后把 manual 置 false 即可展开（空间足够时）。
+    const expandedAfterProductOpen = getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: false,
-      stageRendered: true,
       panelWidth: 360,
       hasActiveTool: true,
     })
 
     expect(manual).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
-    expect(staged).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
+    expect(expandedAfterProductOpen).toMatchObject({ effectiveCollapsed: false, dockWidth: 408, panelWidth: 360 })
   })
 
   it('renders rail-only when no tool is active even if the panel is not collapsed', () => {
     expect(getRightDockLayout({
       availableWidth: 1000,
       panelCollapsed: false,
-      stageRendered: false,
       panelWidth: 360,
       hasActiveTool: false,
     })).toMatchObject({ effectiveCollapsed: false, dockWidth: 48, panelWidth: 360 })

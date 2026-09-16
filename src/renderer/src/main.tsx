@@ -4,6 +4,7 @@ import { installElectronApiFallback } from './lib/electron-api-fallback'
 import { initBrowserEventSubscriptions } from './stores/browser'
 import { initI18n } from './i18n'
 import './styles/globals.css'
+import './components/viewers/markdown-preview.css'
 import './components/janus/janus-island.css'
 
 /*-- P4: 按窗口类型分包。四种窗口共用一个 HTML 入口，

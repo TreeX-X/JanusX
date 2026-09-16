@@ -41,18 +41,18 @@ describe('product workspace lifecycle', () => {
     const availableWidth = PRODUCT_WORKSPACE_MAX_WIDTH + CENTER_WORKSPACE_MIN_WIDTH
     expect(clampProductWorkspaceWidth(650, 1000, availableWidth)).toBe(350)
     expect(clampProductWorkspaceWidth(900, 1000, availableWidth)).toBe(PRODUCT_WORKSPACE_MIN_WIDTH)
-    expect(clampProductWorkspaceWidth(0, 1000, availableWidth)).toBe(PRODUCT_WORKSPACE_MAX_WIDTH)
+    expect(clampProductWorkspaceWidth(0, 1500, availableWidth)).toBe(PRODUCT_WORKSPACE_MAX_WIDTH)
     expect(clampProductWorkspaceWidth(0, 1000, PRODUCT_WORKSPACE_MIN_WIDTH + CENTER_WORKSPACE_MIN_WIDTH + 40)).toBe(PRODUCT_WORKSPACE_MIN_WIDTH + 40)
     expect(getProductWorkspaceMaxWidth(PRODUCT_WORKSPACE_MIN_WIDTH + CENTER_WORKSPACE_MIN_WIDTH + 40)).toBe(PRODUCT_WORKSPACE_MIN_WIDTH + 40)
     expect(reconcileProductWorkspaceWidth(PRODUCT_WORKSPACE_MAX_WIDTH, 480, 700)).toEqual({
       width: 380,
       maxWidth: 380,
     })
-    expect(reconcileProductWorkspaceWidth(null, 375, 1200)).toEqual({
+    expect(reconcileProductWorkspaceWidth(null, 375, 2000)).toEqual({
       width: 375,
       maxWidth: PRODUCT_WORKSPACE_MAX_WIDTH,
     })
-    expect(reconcileProductWorkspaceWidth(360, 360, 1200)).toEqual({
+    expect(reconcileProductWorkspaceWidth(360, 360, 2000)).toEqual({
       width: 360,
       maxWidth: PRODUCT_WORKSPACE_MAX_WIDTH,
     })

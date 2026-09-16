@@ -84,7 +84,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
               </div>
             </div>
             {showPreview ? (
-              <div className={styles.preview}><ReactMarkdown remarkPlugins={[remarkGfm]} components={previewComponents}>{active.content}</ReactMarkdown></div>
+              <div className={`${styles.preview} markdown-preview`}><ReactMarkdown remarkPlugins={[remarkGfm]} components={previewComponents}>{active.content}</ReactMarkdown></div>
             ) : (
               <textarea ref={editorRef} aria-label="Note content" spellCheck={false} value={active.content} onChange={(event) => updateCard(terminalId, active.id, { content: event.target.value })} />
             )}

@@ -9,7 +9,6 @@ export const CENTER_WORKSPACE_MIN_WIDTH = 320
 interface RightDockLayoutInput {
   availableWidth: number
   panelCollapsed: boolean
-  stageRendered: boolean
   panelWidth: number
   hasActiveTool: boolean
 }
@@ -25,7 +24,6 @@ export interface RightDockLayout {
 export function getRightDockLayout({
   availableWidth,
   panelCollapsed,
-  stageRendered,
   panelWidth,
   hasActiveTool,
 }: RightDockLayoutInput): RightDockLayout {
@@ -34,7 +32,10 @@ export function getRightDockLayout({
     availableWidth - CENTER_WORKSPACE_MIN_WIDTH - RIGHT_TOOL_RAIL_WIDTH,
   )
   const responsiveAutoCollapsed = effectiveMaxWidth < RIGHT_TOOL_PANEL_MIN_WIDTH
-  const effectiveCollapsed = panelCollapsed || stageRendered || responsiveAutoCollapsed
+  // 产物工作区打开只做“默认收起”（由 App 在打开瞬间 setPanelCollapsed(true)），
+  // 不再强制 effectiveCollapsed：空间足够时用户点击 rail 仍可手动展开。
+  // forcedCollapsed 因此只保留响应式（空间不足）分支。
+  const effectiveCollapsed = panelCollapsed || responsiveAutoCollapsed
   const constrainedPanelWidth = clampRightToolPanelWidth(panelWidth, effectiveMaxWidth)
 
   return {

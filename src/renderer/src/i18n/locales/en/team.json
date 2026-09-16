@@ -38,6 +38,7 @@
     "copied": "Copied",
     "teamSettings": "Team settings",
     "switchOrgLabel": "Switch organization ({{count}} total)",
+    "localHint": "Local mode · click to sign in",
     "login": "Sign in to team",
     "logout": "Sign out",
     "createOrg": "New organization",
@@ -65,6 +66,8 @@
     "contributor": "Contributor",
     "viewer": "Viewer",
     "you": "Me",
+    "current": "Current",
+    "switch": "Switch",
     "feishuSoon": "Feishu QR sign-in (upcoming)",
     "empty": "No members"
   },

@@ -67,7 +67,7 @@ export const TEST_PAGE = `<!doctype html>
   .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #555; }
   .dot.run { background: #4ec9b0; } .dot.exit { background: #e06c75; }
   .orgcard { display: flex; align-items: center; gap: 8px; }
-  .avatar { width: 26px; height: 26px; border-radius: 6px; background: rgb(244 125 67 / 0.15); color: var(--shell-accent-strong); display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+  .avatar { width: 26px; height: 26px; border-radius: 6px; background: transparent; border: 1px solid var(--shell-border); color: var(--shell-dim); display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
   .card { max-width: 440px; margin: 9vh auto; background: var(--shell-canvas); border: 1px solid var(--shell-border); border-radius: 10px; padding: 22px; }
   .card h3 { margin: 0 0 4px; color: var(--shell-text); font-size: 15px; }
   .card p { color: var(--shell-dim); font-size: 12px; }

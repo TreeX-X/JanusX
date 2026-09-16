@@ -1,0 +1,46 @@
+/* 共享 Markdown 预览增强样式：表格斑马纹/悬停、链接悬停、任务列表、图片、代码块头。
+   基础布局仍由 markdown-components.tsx 内联样式承载，这里只放伪类（:hover/:nth-child）做不到的部分。
+   选择器同时覆盖 .markdown-preview（预览/产物/便签）与 .janus-chat-message-content（聊天区），保证全量统一。 */
+
+.markdown-preview .md-tr:nth-child(even) td,
+.janus-chat-message-content .md-tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.markdown-preview tbody tr:hover td,
+.markdown-preview .md-tr:hover td,
+.janus-chat-message-content tbody tr:hover td,
+.janus-chat-message-content .md-tr:hover td {
+  background: rgba(255, 120, 48, 0.07);
+}
+
+.markdown-preview a:hover,
+.janus-chat-message-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-preview .md-table-wrap::-webkit-scrollbar,
+.janus-chat-message-content .md-table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+
+.markdown-preview .md-table-wrap::-webkit-scrollbar-thumb,
+.janus-chat-message-content .md-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+
+.markdown-preview input[type='checkbox'],
+.janus-chat-message-content input[type='checkbox'] {
+  cursor: default;
+}
+
+.markdown-preview img,
+.janus-chat-message-content img {
+  max-width: 100%;
+}
+
+.md-codeblock-copy:focus-visible {
+  outline: 1px solid #ff7830;
+  outline-offset: 1px;
+}

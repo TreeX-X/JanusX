@@ -13,6 +13,7 @@ import type {
 } from '@janus-agent/agent-core'
 import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import type { KnowledgeSource, ObservationType, StructuredCloneValue } from '../../shared/knowledge'
+import { USER_MEMORY_WORKSPACE_ID, USER_MEMORY_WORKSPACE_PATH } from '../knowledge/constants'
 
 export interface JanusAgentSessionShape {
   id: string
@@ -122,7 +123,18 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
     knowledgeSearch: deps.knowledgeSearch,
     knowledgeCapture: {
       captureTurn: async (capture) => {
-        for (const target of capture.targets) {
+        // Note: workspace-free turns compound into person scope — see .agents/notes/implemented/feature/2026-09-15-user-memory-mvp-closeout.md
+        // Empty targets mean a workspace-free turn; fall back to the person
+        // sentinel so the observation still compounds. The seam stays generic:
+        // only plain workspace-id strings cross into janus-agentX.
+        const targets = capture.targets.length > 0
+          ? capture.targets
+          : [{
+            workspaceId: USER_MEMORY_WORKSPACE_ID,
+            workspacePath: USER_MEMORY_WORKSPACE_PATH,
+            sessionId: capture.correlationId,
+          }]
+        for (const target of targets) {
           const sessionId = target.sessionId || capture.correlationId
           if (capture.userText) {
             await deps.captureObservation({

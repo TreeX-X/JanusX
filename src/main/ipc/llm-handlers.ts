@@ -10,6 +10,7 @@ import { llmService } from '../llm/LlmService'
 import type { ProviderSettings } from '@janusx/llm-core'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
+import { capturePersonChatTurn, capturePersonEpisodeFromTurn } from '../knowledge/user-turn-capture'
 import { getModelCatalogService } from '../llm/ModelCatalogService'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
 import type { ChatAnswerQuestionPayload, ChatWorkspaceResource, LlmRuntimeStatus } from '../../shared/ipc/llm'
@@ -26,12 +27,7 @@ import {
   type ChatStreamRequest,
 } from '../llm/chat-orchestrator'
 
-export {
-  abortAllChatStreams,
-  prepareJanusChatRecall,
-  toolTraceEntryFromResult,
-  toolTraceHistoryMessage,
-} from '../llm/chat-orchestrator'
+export { abortAllChatStreams } from '../llm/chat-orchestrator'
 
 /** 对话请求参数 */
 interface ChatRequest {
@@ -217,8 +213,23 @@ export function registerLlmHandlers(): void {
         })),
       })
 
-      if (sourceTag === 'janus-chat' && soleResource) {
+      if (sourceTag === 'janus-chat') {
         const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')
+        // User memory closeout: the person timeline grows on every janus-chat
+        // turn. Workspace-attached turns keep the project observations below
+        // and add one episode; workspace-free turns capture observations plus
+        // the episode into person scope. Helpers fail open, never the chat.
+        if (!soleResource) {
+          const sessionId = request.conversationId
+          await capturePersonChatTurn({
+            userText: userMessage?.content,
+            assistantText: result.text || '',
+            sessionId,
+            providerId,
+            modelId: actualModelId,
+          })
+          return result.text || ''
+        }
         // Non-stream chat has no requestId; the owning session is the attached
         // agent session, falling back to the chat conversation.
         const sessionId = soleResource.agentSessionId || request.conversationId
@@ -254,6 +265,7 @@ export function registerLlmHandlers(): void {
         knowledgeProcessingQueue.scheduleImmediate(
           assistantObservation?.workspaceId ?? soleResource.workspaceId,
         )
+        await capturePersonEpisodeFromTurn({ userText: userMessage?.content })
       }
 
       return result.text || ''

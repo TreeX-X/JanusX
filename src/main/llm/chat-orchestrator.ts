@@ -31,16 +31,14 @@ import {
 import { AgentSteeringPort } from '@janus-agent/agent-core'
 import {
   ChatSessionRuntime,
-  hasExplicitWorkspaceMutationIntent,
   prepareJanusChatRecall as prepareCoreRecall,
-  toolTraceEntryFromResult,
-  toolTraceHistoryMessage,
 } from '@janus-agent/chat-core'
 import {
   buildJanusChatTurnPorts,
   type JanusCaptureInput,
 } from './janus-agent-ports'
 import { injectUserMemoryContext, type UserRecallResult } from '../knowledge/user-recall-service'
+import { capturePersonChatTurn, capturePersonEpisodeFromTurn } from '../knowledge/user-turn-capture'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -62,8 +60,12 @@ export interface ChatStreamRequest {
   toolTraces?: import('../../shared/ipc/llm').ChatToolTraceEntry[]
 }
 
-/*-- 纯 helper 继续沿用 chat-core（llm-handlers 与单测经此 re-export，链路不断） --*/
-export { hasExplicitWorkspaceMutationIntent, toolTraceEntryFromResult, toolTraceHistoryMessage }
+/*-- 纯 helper 继续沿用 chat-core（单测经此 re-export，链路不断） --*/
+export {
+  hasExplicitWorkspaceMutationIntent,
+  toolTraceEntryFromResult,
+  toolTraceHistoryMessage,
+} from '@janus-agent/chat-core'
 
 type ContextSearch = typeof knowledgeContextService.search
 type UserSearch = (query: string) => Promise<UserRecallResult>
@@ -421,6 +423,27 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     }
     if (result.toolTraces.length > 0) {
       sendEvent(LLM_CHANNELS.toolTrace, { requestId, entries: result.toolTraces })
+    }
+    // User memory closeout: every janus-chat turn grows the person timeline.
+    // Workspace-attached turns already captured project observations inside
+    // the loop, so only the episode lands here; workspace-free turns capture
+    // observations plus the episode into person scope. Both helpers fail open.
+    if (sourceTag === 'janus-chat') {
+      const lastUserText = [...messages].reverse().find((message) => message.role === 'user' && message.content.trim())
+        ?.content.trim() ?? ''
+      const hadWorkspace = Boolean(workspaceId || workspacePath || (workspaceResources?.length ?? 0) > 0)
+      if (hadWorkspace) {
+        await capturePersonEpisodeFromTurn({ userText: lastUserText })
+      } else {
+        await capturePersonChatTurn({
+          userText: lastUserText,
+          assistantText: result.text,
+          sessionId: conversationId ?? requestId,
+          correlationId: requestId,
+          providerId,
+          modelId,
+        })
+      }
     }
     sendEvent(LLM_CHANNELS.delta, { requestId, delta: '', done: true })
     sendEvent(LLM_CHANNELS.done, { requestId })

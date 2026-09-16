@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnowledgeContextResult } from '../../../src/shared/knowledge'
 
-const { handle, on, search, capture, streamText, getSession, executeFunctionCall, scheduleImmediate } = vi.hoisted(() => ({
+const { handle, on, search, capture, streamText, getSession, executeFunctionCall, scheduleImmediate, capturePersonTurn, capturePersonEpisode } = vi.hoisted(() => ({
   handle: vi.fn(),
   on: vi.fn(),
   search: vi.fn(),
@@ -10,6 +10,8 @@ const { handle, on, search, capture, streamText, getSession, executeFunctionCall
   getSession: vi.fn(),
   executeFunctionCall: vi.fn(),
   scheduleImmediate: vi.fn(),
+  capturePersonTurn: vi.fn(),
+  capturePersonEpisode: vi.fn(),
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle, on }, app: { getPath: () => '/tmp/janusx-test' } }))
@@ -21,6 +23,10 @@ vi.mock('../../../src/main/knowledge/observation-service', () => ({
 }))
 vi.mock('../../../src/main/knowledge/processing-queue', () => ({
   knowledgeProcessingQueue: { scheduleImmediate },
+}))
+vi.mock('../../../src/main/knowledge/user-turn-capture', () => ({
+  capturePersonChatTurn: capturePersonTurn,
+  capturePersonEpisodeFromTurn: capturePersonEpisode,
 }))
 vi.mock('../../../src/main/llm/ModelCatalogService', () => ({
   getModelCatalogService: () => ({ getCatalog: vi.fn(), refresh: vi.fn() }),
@@ -98,6 +104,8 @@ describe('Janus Chat knowledge recall', () => {
     streamText.mockReset()
     getSession.mockReset()
     executeFunctionCall.mockReset()
+    capturePersonTurn.mockReset().mockResolvedValue(undefined)
+    capturePersonEpisode.mockReset().mockResolvedValue(undefined)
   })
 
   it('uses the latest user message, bounded workspace scope, and injects after the persona', async () => {
@@ -206,9 +214,12 @@ describe('Janus Chat knowledge recall', () => {
       status: 'empty',
     }))
     expect(capture).toHaveBeenCalledTimes(2)
+    expect(capturePersonEpisode).toHaveBeenCalledTimes(1)
+    expect(capturePersonEpisode).toHaveBeenCalledWith({ userText: 'latest workspace question' })
+    expect(capturePersonTurn).not.toHaveBeenCalled()
   })
 
-  it('keeps an unbound Janus conversation global and skips workspace observations', async () => {
+  it('captures an unbound Janus conversation into person scope instead of workspace observations', async () => {
     search.mockResolvedValue(emptyResult)
     fakeStream('global answer')
     const registration = registerAndFindHandler('llm:chat-stream')
@@ -228,7 +239,17 @@ describe('Janus Chat knowledge recall', () => {
       maxItems: 5,
       maxChars: 3_000,
     })
+    // The upstream loop skips workspace observations without targets; the
+    // shell compounds the turn into person scope instead.
     expect(capture).not.toHaveBeenCalled()
+    expect(capturePersonTurn).toHaveBeenCalledTimes(1)
+    expect(capturePersonTurn).toHaveBeenCalledWith(expect.objectContaining({
+      userText: 'latest workspace question',
+      assistantText: 'global answer',
+      sessionId: 'stream-global',
+      correlationId: 'stream-global',
+    }))
+    expect(capturePersonEpisode).not.toHaveBeenCalled()
     expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-global' })
   })
 
@@ -273,6 +294,8 @@ describe('Janus Chat knowledge recall', () => {
     }))
     expect((streamText.mock.calls[0][0] as any).tools.workspace_read.execute).toBeUndefined()
     expect(capture).toHaveBeenCalledTimes(4)
+    expect(capturePersonEpisode).toHaveBeenCalledTimes(1)
+    expect(capturePersonTurn).not.toHaveBeenCalled()
   })
 
   it('keeps streaming when recall throws and reports degradation only through the trace', async () => {

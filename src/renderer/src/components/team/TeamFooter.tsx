@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Settings2 } from 'lucide-react'
+import { Check, LogIn, Settings2, UserRound } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { useTeamStore } from '@/stores/team'
 import styles from './TeamFooter.module.css'
@@ -40,7 +40,8 @@ export function TeamFooter() {
   const [open, setOpen] = useState(false)
 
   if (status === 'guest') return null
-  // 本地模式：同一行语言的悄悄入口，不打扰本地使用。
+  // 本地模式：与已登录同行高/同双行节奏，但前导用幽灵图标——
+  // 透明底 + 1px 边框 + dim 文字，不用 accent 填充大色块抢视觉（见 globals.css：accent 只做 1px 边框与文字）。
   if (status === 'local') {
     return (
       <div className={styles.footer}>
@@ -48,12 +49,18 @@ export function TeamFooter() {
           type="button"
           onClick={() => requestLogin()}
           title={t('team:footer.login')}
-          className={styles.loginButton}
+          className={styles.row}
         >
-          <span aria-hidden="true" className={styles.avatar}>
-            ?
+          <span aria-hidden="true" className={styles.avatarGhost}>
+            <UserRound size={14} strokeWidth={1.7} />
           </span>
-          <span className={styles.name}>{t('team:footer.login')}</span>
+          <span className={styles.textCol}>
+            <span className={styles.name}>{t('team:footer.login')}</span>
+            <span className={styles.sub}>{t('team:footer.localHint')}</span>
+          </span>
+          <span className={styles.icon} aria-hidden="true">
+            <LogIn size={13} strokeWidth={1.7} />
+          </span>
         </button>
       </div>
     )
@@ -165,6 +172,7 @@ export function TeamFooterCollapsed() {
   const requestLogin = useTeamStore((s) => s.requestLogin)
 
   if (status === 'guest') return null
+  // 收起态本地模式：与工作区收起首字母同语言——透明底无边框 dim 图标，hover 只抬底色不染 accent。
   if (status === 'local') {
     return (
       <div className={styles.collapsedWrap}>
@@ -173,8 +181,9 @@ export function TeamFooterCollapsed() {
           onClick={() => requestLogin()}
           title={t('team:footer.login')}
           className={styles.collapsedButton}
+          data-ghost="true"
         >
-          ?
+          <UserRound size={15} strokeWidth={1.6} aria-hidden="true" />
         </button>
       </div>
     )

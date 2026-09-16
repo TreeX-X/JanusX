@@ -38,6 +38,7 @@
     "copied": "已复制",
     "teamSettings": "团队设置",
     "switchOrgLabel": "切换组织（共{{count}}个）",
+    "localHint": "本地模式 · 点击登录",
     "login": "登录团队",
     "logout": "退出登录",
     "createOrg": "新建组织",
@@ -65,6 +66,8 @@
     "contributor": "Contributor",
     "viewer": "Viewer",
     "you": "我",
+    "current": "当前",
+    "switch": "切换",
     "feishuSoon": "飞书扫码登录（后续版本）",
     "empty": "暂无成员"
   },

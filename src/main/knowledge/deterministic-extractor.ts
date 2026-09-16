@@ -33,6 +33,7 @@ import { writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeObservationService, observationDedupeKey } from './observation-service'
 export { observationDedupeKey } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
+import { deriveHabitPromotions, habitPromotionToCandidate } from './habit-aggregator'
 import { knowledgeTruthService } from './truth-service'
 import { knowledgeReviewService } from './review-service'
 import { configService } from '../config/service'
@@ -582,6 +583,21 @@ export async function runDeterministicStage(
   }
 
   await appendCandidateFacts(candidates)
+  // Note: frequency aggregation rides the existing queue — see .agents/notes/implemented/feature/2026-09-15-user-memory-mvp-closeout.md
+  // User memory closeout: repeated preference/habit observations promote to
+  // scope=user candidates on the same queue with no new cursors. The frequency
+  // threshold plus Inbox review keeps the promotion noise out of truth.
+  const habitPromotions = await deriveHabitPromotions(
+    prepared.map((item) => ({
+      id: item.observation.id,
+      content: item.text,
+      createdAt: item.observation.createdAt,
+      type: item.observation.type,
+    })),
+    nowIso,
+  )
+  const habitCandidates = habitPromotions.map((promotion) => habitPromotionToCandidate(promotion, nowIso))
+  await appendCandidateFacts(habitCandidates)
   // Truth–truth mentions discovered from shared file refs. Human-gated
   // through the normal graph-candidate flow; an empty truth set yields none.
   const mentionEdges = synthesizeMentionEdges(
@@ -591,14 +607,14 @@ export async function runDeterministicStage(
     nowIso,
   )
   await appendCandidateGraphEdges(mentionEdges)
-  if (candidates.length > 0 || mentionEdges.length > 0) {
+  if (candidates.length > 0 || habitCandidates.length > 0 || mentionEdges.length > 0) {
     await knowledgeAuditService.record({
       action: 'candidate_proposed',
       targetType: 'fact',
       targetId: batch.workspaceId,
       before: null,
       after: {
-        factCandidateIds: candidates.map((candidate) => candidate.id),
+        factCandidateIds: [...candidates, ...habitCandidates].map((candidate) => candidate.id),
         graphCandidateIds: mentionEdges.map((candidate) => candidate.id),
         sourceObservationIds: prepared.map((item) => item.observation.id),
         derivation: 'deterministic',
@@ -616,7 +632,7 @@ export async function runDeterministicStage(
     })
   }
 
-  return { derived: unique.length, proposals: candidates.length + mentionEdges.length, autoAccepted: await autoAcceptEligible(candidates, deps) }
+  return { derived: unique.length, proposals: candidates.length + habitCandidates.length + mentionEdges.length, autoAccepted: await autoAcceptEligible(candidates, deps) }
 }
 
 /**

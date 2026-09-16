@@ -186,4 +186,24 @@ describe('deterministic extractor (Phase 1-2)', () => {
     const git = candidates.find((c) => c.evidence.observationIds.includes('g'))!
     expect(applied[0]?.id).toBe(git.id)
   })
+
+  it('promotes repeated preference observations to scope=user habit candidates', async () => {
+    const observations = [
+      obs({ id: 'h1', type: 'user-note', content: '我习惯用 pnpm 而不用 npm' }),
+      obs({ id: 'h2', type: 'user-note', content: '我习惯用 pnpm 而不用 npm' }),
+      obs({ id: 'h3', type: 'user-note', content: '我习惯用 pnpm 而不用 npm' }),
+    ]
+    const result = await runDeterministicStage(
+      { workspaceId: 'ws-1', observations },
+      { getAutoAccept: async () => false },
+    )
+    // One workspace preference candidate plus one person habit candidate.
+    expect(result.proposals).toBe(2)
+    const candidates = await knowledgeExtractService.listFactCandidates()
+    expect(candidates).toHaveLength(2)
+    const habit = candidates.find((candidate) => candidate.fact.scope === 'user')
+    expect(habit).toBeDefined()
+    expect(habit!.derivation).toBe('deterministic')
+    expect(habit!.evidence.observationIds.sort()).toEqual(['h1', 'h2', 'h3'])
+  })
 })

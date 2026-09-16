@@ -229,6 +229,33 @@ describe('knowledge ports', () => {
     expect(captured).toHaveLength(1)
     expect(captured[0]).toMatchObject({ actor: 'assistant', sessionId: 'r9' })
   })
+
+  it('falls back to person scope when capture targets are empty (workspace-free turn)', async () => {
+    const captured: unknown[] = []
+    const ports = buildJanusChatTurnPorts(baseDeps({
+      captureObservation: async (input) => {
+        captured.push(input)
+        return { workspaceId: input.workspaceId }
+      },
+    }))
+    await ports.knowledgeCapture?.captureTurn({
+      targets: [],
+      userText: 'remember this',
+      assistantText: 'noted',
+      providerId: 'p1',
+      modelId: 'm1',
+      correlationId: 'r-person',
+    })
+    expect(captured).toHaveLength(2)
+    expect(captured[0]).toMatchObject({
+      workspaceId: 'user',
+      workspacePath: 'user',
+      source: 'janus-chat',
+      actor: 'user',
+      sessionId: 'r-person',
+    })
+    expect(captured[1]).toMatchObject({ workspaceId: 'user', actor: 'assistant' })
+  })
 })
 
 describe('question port', () => {
