@@ -27,6 +27,26 @@ export function registerRoundtableHandlers(getMainWindow: () => BrowserWindow | 
   ipcMain.handle(ROUNDTABLE_CHANNELS.state, (_event, sessionId: string) => roundtableService.getState(sessionId))
   ipcMain.handle(ROUNDTABLE_CHANNELS.restore, (_event, sessionId: string) => roundtableService.restore(sessionId))
   ipcMain.handle(ROUNDTABLE_CHANNELS.export, (_event, sessionId: string) => roundtableService.exportMarkdown(sessionId))
+  ipcMain.handle(ROUNDTABLE_CHANNELS.bundleBuild, (_event, sessionId: string, input: unknown) => {
+    if (typeof sessionId !== 'string' || !sessionId) throw new Error('Invalid roundtable session id')
+    if (!input || typeof input !== 'object') throw new Error('Invalid bundle build input')
+    const value = input as Record<string, unknown>
+    if (typeof value.repoId !== 'string' || !value.repoId) throw new Error('Bundle build needs a repoId')
+    if (value.factIds !== undefined && (!Array.isArray(value.factIds) || value.factIds.some((id) => typeof id !== 'string'))) {
+      throw new Error('Invalid bundle fact ids')
+    }
+    if (value.bundleId !== undefined && typeof value.bundleId !== 'string') throw new Error('Invalid bundle id')
+    if (value.revision !== undefined && (!Number.isInteger(value.revision) || (value.revision as number) < 1)) {
+      throw new Error('Invalid bundle revision')
+    }
+    return roundtableService.buildBundle(sessionId, value as { factIds?: string[]; repoId: string; bundleId?: string; revision?: number })
+  })
+  ipcMain.handle(ROUNDTABLE_CHANNELS.bundleApply, (_event, root: string, bundle: unknown, reason: string) => {
+    if (typeof root !== 'string' || !root) throw new Error('Invalid bundle apply root')
+    if (!bundle || typeof bundle !== 'object') throw new Error('Invalid bundle')
+    if (typeof reason !== 'string' || !reason) throw new Error('Bundle apply needs a reason')
+    return roundtableService.applyBundle(root, bundle as Parameters<typeof roundtableService.applyBundle>[1], reason)
+  })
   if (!subscribed) {
     subscribed = true
     roundtableService.onEvent((event) => {

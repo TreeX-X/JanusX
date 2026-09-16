@@ -249,6 +249,69 @@ export class HarnessNoteService {
       operations: operations.map((o) => ({ ...o, dependsOn: [] as string[], reason, evidenceRefs: [] as string[], noteDiagnostics: [] as Diagnostic[] })),
     }
     const digest = sha256HexBytes(Buffer.from(JSON.stringify(cs.operations), 'utf8'))
+    return this.runChangeSet(root, cs, digest)
+  }
+
+  /**
+   * Applies a caller-owned changeset (roundtable bundles, S5) without
+   * re-minting its identity, so retries of the same bundle hit the same
+   * idempotency key instead of duplicating notes.
+   */
+  async applyBundleChangeSet(
+    root: string,
+    changeSet: {
+      id: string
+      revision: number
+      source: { type: 'roundtable' | 'chat' | 'harness' | 'manual'; id: string; revision: number }
+      operations: Array<{
+        operationId: string
+        type: 'create' | 'replace' | 'delete'
+        uri: string
+        expectedHash: string | null
+        relativePath?: string
+        afterMarkdown?: string
+        dependsOn?: string[]
+        evidenceRefs?: string[]
+      }>
+    },
+    reason: string,
+    opts?: { requestDigest?: string },
+  ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
+    const cs = {
+      ...changeSet,
+      operations: changeSet.operations.map((o) => ({
+        ...o,
+        dependsOn: o.dependsOn ?? ([] as string[]),
+        reason,
+        evidenceRefs: o.evidenceRefs ?? ([] as string[]),
+        noteDiagnostics: [] as Diagnostic[],
+      })),
+    }
+    const digest = opts?.requestDigest ?? sha256HexBytes(Buffer.from(JSON.stringify(cs.operations), 'utf8'))
+    return this.runChangeSet(root, cs, digest)
+  }
+
+  private async runChangeSet(
+    root: string,
+    cs: {
+      id: string
+      revision: number
+      source: { type: 'roundtable' | 'chat' | 'harness' | 'manual'; id: string; revision: number }
+      operations: Array<{
+        operationId: string
+        type: 'create' | 'replace' | 'delete'
+        uri: string
+        expectedHash: string | null
+        relativePath?: string
+        afterMarkdown?: string
+        dependsOn: string[]
+        reason: string
+        evidenceRefs: string[]
+        noteDiagnostics: Diagnostic[]
+      }>
+    },
+    digest: string,
+  ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
     const report = await applyChangeSet(root, cs, { requestDigest: digest })
     if (!report.ok) {
       const conflict = report.errors.find((e) => e.code === 'CONFLICT')

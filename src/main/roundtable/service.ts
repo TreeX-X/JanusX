@@ -2,6 +2,9 @@ import type { RoundtableEventEnvelope, RoundtableState, RoundtableWorkspaceResou
 import { exportRoundtableMarkdown } from '../../shared/roundtable/export'
 import { markInterrupted, migrateRoundtableState } from '../../shared/roundtable/state'
 import { defaultRoundtableWorkflow } from '../../shared/roundtable/workflow-template'
+import { buildArtifactBundle, snapshotSourceFacts, type ArtifactBundle } from './artifact-bundle'
+import { harnessNoteService } from '../harness/service'
+import { validateBundle, validateChangeSet } from '@janus-agent/harness-core'
 import { RoundtableRuntime } from './runtime'
 import { llmService } from '../llm/LlmService'
 import { generateText } from '../llm/ai-runtime'
@@ -158,6 +161,51 @@ export class RoundtableService {
   getState(sessionId: string): RoundtableState | null { return this.sessions.get(sessionId)?.getState() ?? null }
   exportMarkdown(sessionId: string): string {
     return exportRoundtableMarkdown(this.require(sessionId).getState())
+  }
+  /**
+   * Builds a native `harness-bundle/1` proposal from session facts without
+   * touching `.agents/notes`. Only diagnostic-free bundles are persisted;
+   * callers must refuse to apply anything else. `exportMarkdown` stays the
+   * explicit meeting-log export and never becomes a note asset.
+   */
+  async buildBundle(
+    sessionId: string,
+    input: { factIds?: string[]; repoId: string; bundleId?: string; revision?: number },
+  ): Promise<{ bundle: ArtifactBundle; diagnostics: Array<{ code: string; message: string; path?: string }>; snapshotHash: string }> {
+    const state = this.require(sessionId).getState()
+    const missing = (input.factIds ?? []).filter((id) => !state.facts.some((fact) => fact.id === id))
+    const diagnostics = missing.map((id) => ({ code: 'NOT_FOUND', message: `unknown fact ${id}`, path: 'factIds' }))
+    const facts = input.factIds ? state.facts.filter((fact) => input.factIds!.includes(fact.id)) : state.facts
+    const built = buildArtifactBundle({
+      sessionId,
+      roundNumber: state.roundNumber,
+      repoId: input.repoId,
+      bundleId: input.bundleId,
+      revision: input.revision,
+      items: facts.map((fact) => ({ fact })),
+    })
+    const all = [...diagnostics, ...built.diagnostics]
+    if (all.length === 0) await roundtableStore.saveBundle(built.bundle)
+    return { bundle: built.bundle, diagnostics: all, snapshotHash: snapshotSourceFacts(facts, sessionId, state.roundNumber) }
+  }
+  /**
+   * Applies a previously built bundle to a checkout root. The bundle keeps
+   * its own changeset identity, so retrying the same bundle never duplicates
+   * notes; partial success reports per-operation results for targeted retry.
+   */
+  async applyBundle(
+    root: string,
+    bundle: ArtifactBundle,
+    reason: string,
+  ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
+    const problems = [
+      ...validateBundle({ schema: bundle.schema, revision: bundle.revision, artifacts: bundle.artifacts }),
+      ...validateChangeSet(bundle.changeSet),
+    ]
+    if (problems.length > 0) {
+      throw { code: problems[0].code, message: problems[0].message, path: problems[0].path }
+    }
+    return harnessNoteService.applyBundleChangeSet(root, bundle.changeSet, reason)
   }
   async restore(sessionId: string): Promise<RoundtableState | null> {
     const saved = await roundtableStore.load(sessionId)

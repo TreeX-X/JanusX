@@ -3,6 +3,7 @@ export interface RoundtableStartInput { prompt: string; workspaceResources?: Rou
 
 export const ROUNDTABLE_CHANNELS = {
   start: 'roundtable:start', advance: 'roundtable:advance', end: 'roundtable:end', state: 'roundtable:state', restore: 'roundtable:restore', export: 'roundtable:export', event: 'roundtable:event',
+  bundleBuild: 'roundtable:bundle-build', bundleApply: 'roundtable:bundle-apply',
 } as const
 
 export interface RoundtableAPI {
@@ -12,5 +13,11 @@ export interface RoundtableAPI {
   getState(sessionId: string): Promise<RoundtableState | null>
   restore(sessionId: string): Promise<RoundtableState | null>
   export(sessionId: string): Promise<string>
+  /** Native artifact proposal (S5); diagnostic-laden results must not be applied. */
+  buildBundle(
+    sessionId: string,
+    input: { factIds?: string[]; repoId: string; bundleId?: string; revision?: number },
+  ): Promise<{ bundle: unknown; diagnostics: Array<{ code: string; message: string; path?: string }>; snapshotHash: string }>
+  applyBundle(root: string, bundle: unknown, reason: string): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }>
   onEvent(callback: (event: RoundtableEventEnvelope) => void): () => void
 }

@@ -250,6 +250,8 @@ const roundtableAPI: RoundtableAPI = {
   getState: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.state, sessionId),
   restore: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.restore, sessionId),
   export: (sessionId) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.export, sessionId),
+  buildBundle: (sessionId, input) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.bundleBuild, sessionId, input),
+  applyBundle: (root, bundle, reason) => ipcRenderer.invoke(ROUNDTABLE_CHANNELS.bundleApply, root, bundle, reason),
   onEvent: (callback) => subscribeIpcEvent(ROUNDTABLE_CHANNELS.event, callback),
 }
 

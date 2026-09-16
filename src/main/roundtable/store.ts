@@ -22,6 +22,14 @@ function hashContext(context: string): string {
   return createHash('sha256').update(context, 'utf8').digest('hex')
 }
 
+const BUNDLE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/
+
+function bundlePathFor(journalPath: string, bundleId: string, revision: number): string | null {
+  if (!BUNDLE_ID_PATTERN.test(bundleId)) return null
+  if (!Number.isInteger(revision) || revision < 1) return null
+  return join(dirname(journalPath), 'roundtable-bundles', `${bundleId}-r${revision}.json`)
+}
+
 export class RoundtableStore {
   private readonly contextHashes = new Map<string, string>()
   constructor(private readonly paths: RoundtableStorePaths = defaultPaths()) {}
@@ -71,6 +79,30 @@ export class RoundtableStore {
       }
     }
     return latest
+  }
+  /**
+   * Persists a bundle proposal before anything lands in `.agents/notes`.
+   * Retries reuse the same file (same id+revision); a new discussion writes
+   * a new revision. Returns the file path, or null for hostile ids.
+   */
+  async saveBundle(bundle: unknown): Promise<string | null> {
+    if (!bundle || typeof bundle !== 'object') return null
+    const value = bundle as Record<string, unknown>
+    if (typeof value['id'] !== 'string' || typeof value['revision'] !== 'number') return null
+    const path = bundlePathFor(this.paths.journalPath, value['id'], value['revision'])
+    if (!path) return null
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, JSON.stringify(bundle, null, 2), 'utf8')
+    return path
+  }
+  async loadBundle(bundleId: string, revision: number): Promise<Record<string, unknown> | null> {
+    const path = bundlePathFor(this.paths.journalPath, bundleId, revision)
+    if (!path) return null
+    try {
+      return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+    } catch {
+      return null
+    }
   }
 }
 export const roundtableStore = new RoundtableStore()

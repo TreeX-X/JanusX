@@ -279,7 +279,7 @@ export function installElectronApiFallback(): void {
       listTerminals: unavailable, tail: unavailable, execute: unavailable,
       disconnect: unavailable, forget: unavailable,
     },
-    roundtable: { start: unavailable, advance: unavailable, end: unavailable, getState: unavailable, restore: unavailable, export: unavailable, onEvent: () => () => {} },
+    roundtable: { start: unavailable, advance: unavailable, end: unavailable, getState: unavailable, restore: unavailable, export: unavailable, buildBundle: unavailable, applyBundle: unavailable, onEvent: () => () => {} },
     dialog: { openDirectory: unavailable, saveFile: unavailable, showMessageBox: unavailable },
     window: {
       minimize: unavailable,
