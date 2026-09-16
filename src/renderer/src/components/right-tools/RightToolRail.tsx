@@ -1,3 +1,4 @@
+// Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/implemented/bug-fix/2026-09-16-right-dock-empty-collapse.md
 import { useEffect, useState } from 'react'
 import { Files, GitBranch, History, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
@@ -27,13 +28,14 @@ export function RightToolRail({
 }: RightToolRailProps) {
   const { t } = useI18n('common')
   const panelToggle = onTogglePanel ?? onExpandPanel
+  const hasOpenTools = openToolIds.length > 0
   const panelToggleLabel = collapsed
     ? t('common:rightDock.expandAria')
     : t('common:rightDock.collapseAria')
   return (
     <div className={styles.rail} role="toolbar" aria-label={t('common:rightTool.railAria')}>
       <div className={styles.railTools}>
-        {panelToggle && (
+        {hasOpenTools && panelToggle && (
           <button
             type="button"
             className={styles.railButton}

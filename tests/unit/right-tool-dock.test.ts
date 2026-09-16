@@ -135,8 +135,8 @@ describe('right tool rail', () => {
   it('provides a dedicated panel expansion control when the rail is collapsed', () => {
     const markup = renderToStaticMarkup(
       createElement(RightToolRail, {
-        openToolIds: [],
-        activeToolId: null,
+        openToolIds: ['files'],
+        activeToolId: 'files',
         onToggleTool: vi.fn(),
         collapsed: true,
         onExpandPanel: vi.fn(),
@@ -146,6 +146,21 @@ describe('right tool rail', () => {
     expect(markup).toContain('aria-controls="right-tool-panel"')
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).toContain('common:rightDock.expandAria')
+  })
+
+  it('hides the panel toggle when no tool is open', () => {
+    const markup = renderToStaticMarkup(
+      createElement(RightToolRail, {
+        openToolIds: [],
+        activeToolId: null,
+        onToggleTool: vi.fn(),
+        collapsed: true,
+        onExpandPanel: vi.fn(),
+      }),
+    )
+
+    expect(markup).not.toContain('aria-controls="right-tool-panel"')
+    expect(markup).not.toContain('common:rightDock.expandAria')
   })
 })
 
