@@ -31,6 +31,7 @@ import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoin
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
+import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
@@ -227,6 +228,19 @@ const janusAPI: JanusAPI = {
   onAnalysisResult: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.analysis, callback),
   onDiscovered: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.discovered, callback),
   onMaintenanceTask: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.maintenance, callback),
+}
+
+const harnessAPI: HarnessAPI = {
+  resolve: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.resolve, cwd),
+  projectGraph: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.projectGraph, cwd),
+  rescan: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.rescan, cwd),
+  apply: (cwd, operations, reason) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.apply, cwd, operations, reason),
+  getBindings: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.bindingsGet, cwd),
+  setBinding: (cwd, binding) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.bindingsSet, cwd, binding),
+  sharePreview: (cwd, selection) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.sharePreview, cwd, selection),
+  shareExport: (cwd, selection, outPath) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareExport, cwd, selection, outPath),
+  onChanged: (callback) => subscribeIpcEvent(HARNESS_EVENT_CHANNELS.changed, callback),
 }
 
 const roundtableAPI: RoundtableAPI = {
@@ -467,6 +481,7 @@ contextBridge.exposeInMainWorld('electron', {
   browser: browserAPI,
   knowledge: knowledgeAPI,
   janus: janusAPI,
+  harness: harnessAPI,
   office: officeAPI,
   llm: llmAPI,
   janusChat: janusChatAPI,

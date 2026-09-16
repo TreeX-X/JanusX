@@ -46,6 +46,13 @@ import type {
   WorkspaceSnapshot
 } from './types'
 import { BLUEPRINT_SCHEMA_VERSION, migrateBlueprint } from './blueprint-migration'
+import { harnessNoteService } from '../harness/service'
+import {
+  applyNodePatch,
+  checkWritablePatch,
+  createNoteOp,
+  nodeTypeToKind,
+} from '../harness/artifact-producer'
 import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
 import { applyOperations } from './maintenance/changeset'
 import type { OwnerScope } from '../../shared/team/types'
@@ -61,6 +68,22 @@ interface WorkspaceRecord {
   id: string
   name: string
   path: string
+}
+
+/**
+ * Project-lane marker (S4). Ids under this prefix are live projections over
+ * `.agents/notes`, served by HarnessNoteService. Every content write on this
+ * lane goes through the service transaction; legacy JSON ids keep the old
+ * lane for old data. No new JSON bypass exists for project flows.
+ */
+export const PROJECT_GRAPH_PREFIX = 'harness:project:'
+
+export function isProjectGraphId(id: string): boolean {
+  return id.startsWith(PROJECT_GRAPH_PREFIX)
+}
+
+function harnessThrow(code: 'HARNESS_CONFLICT' | 'HARNESS_MANAGED' | 'HARNESS_READONLY' | 'NOT_FOUND', message: string, path?: string): never {
+  throw { code, message, path }
 }
 
 function normalizePathKey(path: string): string {
@@ -212,6 +235,8 @@ export class BlueprintStore {
           out.push(bp)
         }
       }
+      const project = await this.loadProjectGraph(workspace)
+      if (project) out.push(project)
       return out
     })
   }
@@ -233,6 +258,18 @@ export class BlueprintStore {
           nodeCount: bp.nodeIds.length,
           createdAt: bp.createdAt,
           updatedAt: bp.updatedAt,
+        })
+      }
+      const project = await this.loadProjectGraph(workspace)
+      if (project) {
+        out.push({
+          id: project.id,
+          name: project.name,
+          description: project.description,
+          contentRevision: project.contentRevision,
+          nodeCount: project.nodeIds.length,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
         })
       }
       return out
@@ -291,6 +328,7 @@ export class BlueprintStore {
     return this.locked(async () => {
       // Keep the workspace-first public contract; persisted blueprint files are keyed globally by id.
       const id = args[1]
+      if (isProjectGraphId(id)) return this.loadProjectGraph(args[0], id)
       const cached = this.cache.get(id)
       if (cached) return cached
       const bp = await this.readBlueprintFile(id)
@@ -299,12 +337,32 @@ export class BlueprintStore {
     })
   }
 
+  /** Fresh projection per call; the service owns revision caching. Never stored in the JSON cache. */
+  private async loadProjectGraph(workspace: string, onlyId?: string): Promise<Blueprint | null> {
+    const resolved = await harnessNoteService.resolveRoot(workspace)
+    if (!resolved.ok || !resolved.root) return null
+    const view = await harnessNoteService.projectView(resolved.root)
+    if (onlyId && view.blueprint.id !== onlyId) return null
+    return view.blueprint
+  }
+
+  private async projectRoot(workspace: string, blueprintId: string): Promise<string> {
+    const resolved = await harnessNoteService.resolveRoot(workspace)
+    if (!resolved.ok || !resolved.root) harnessThrow('NOT_FOUND', `no project notes under ${workspace}`)
+    const view = await harnessNoteService.projectView(resolved.root as string)
+    if (view.blueprint.id !== blueprintId) harnessThrow('NOT_FOUND', `unknown project graph: ${blueprintId}`)
+    return resolved.root as string
+  }
+
   async applyMaintenanceOperations(
     blueprintId: string,
     expectedRevision: number,
     operations: BlueprintOperation[],
     allowedNodeIds: Set<string>
   ): Promise<{ before: Blueprint; after: Blueprint; createdNodeIds: Record<string, string>; createdRelationIds: Record<string, string> }> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'project notes change through the harness transaction, not legacy operations', blueprintId)
+    }
     return this.locked(async () => {
       const current = await this.loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, blueprintId)
       if (!current) throw new Error('目标蓝图不存在')
@@ -368,6 +426,7 @@ export class BlueprintStore {
     patch: Partial<Pick<Blueprint, 'name' | 'description' | 'canvasLayout' | 'collapsedNodeIds' | 'ownerScope' | 'tenantId' | 'projectId' | 'ownerUserId' | 'updatedBy'>> & { baseVersion?: number }
   ): Promise<Blueprint | null> {
     return this.locked(async () => {
+      if (isProjectGraphId(id)) return this.updateProjectGraph(workspace, id, patch)
       const bp = await this.loadBlueprint(workspace, id)
       if (!bp) return null
       // ToB M1 乐观并发：baseVersion 缺省沿用单机行为；传入则必须与 contentRevision 一致。
@@ -393,7 +452,31 @@ export class BlueprintStore {
     })
   }
 
+  /** Project lane: canvas overlay goes local-only; shared metadata stays read-only. */
+  private async updateProjectGraph(
+    workspace: string,
+    id: string,
+    patch: Partial<Pick<Blueprint, 'name' | 'description' | 'canvasLayout' | 'collapsedNodeIds' | 'ownerScope' | 'tenantId' | 'projectId' | 'ownerUserId' | 'updatedBy'>> & { baseVersion?: number }
+  ): Promise<Blueprint | null> {
+    const root = await this.projectRoot(workspace, id)
+    const rest = { ...patch } as Record<string, unknown>
+    delete rest.baseVersion
+    const uiKeys = ['canvasLayout', 'collapsedNodeIds'] as const
+    const sharedKeys = Object.keys(rest).filter((k) => !(uiKeys as readonly string[]).includes(k))
+    if (sharedKeys.length > 0) {
+      harnessThrow('HARNESS_READONLY', `project graph metadata is read-only: ${sharedKeys.join(', ')}`)
+    }
+    if (patch.canvasLayout !== undefined || patch.collapsedNodeIds !== undefined) {
+      await harnessNoteService.saveUiState(root, {
+        canvasLayout: patch.canvasLayout,
+        collapsedNodeIds: patch.collapsedNodeIds ?? undefined,
+      })
+    }
+    return this.loadProjectGraph(workspace, id)
+  }
+
   async deleteBlueprint(workspace: string, id: string): Promise<boolean> {
+    if (isProjectGraphId(id)) return false
     return this.locked(async () => {
       const existed = this.cache.has(id) || (await readJson<Blueprint>(blueprintFile(id))) !== null
       this.cache.delete(id)
@@ -433,6 +516,9 @@ export class BlueprintStore {
     input: Partial<BlueprintNode> & { title: string; type: BlueprintNodeType },
     parentId: string | null = null
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      return this.locked(() => this.createProjectNode(workspace, blueprintId, input, parentId))
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp) return null
@@ -450,12 +536,40 @@ export class BlueprintStore {
     })
   }
 
+  /** Project lane: canvas creates become draft notes through the service transaction. */
+  private async createProjectNode(
+    workspace: string,
+    blueprintId: string,
+    input: Partial<BlueprintNode> & { title: string; type: BlueprintNodeType },
+    parentId: string | null,
+  ): Promise<BlueprintNode | null> {
+    const root = await this.projectRoot(workspace, blueprintId)
+    const view = await harnessNoteService.projectView(root)
+    if (!view.repoId) harnessThrow('NOT_FOUND', 'init .agents/harness.json with a repoId first')
+    if (!input.title.trim()) return null
+    let parentUri: string | null = null
+    if (parentId) {
+      const parent = view.blueprint.nodes[parentId]
+      if (!parent?.sourceUri) return null
+      parentUri = parent.sourceUri
+    }
+    const kind = nodeTypeToKind(input.type)
+    const created = createNoteOp(view.repoId as string, kind, input.title.trim(), parentUri, 'canvas create')
+    await harnessNoteService.applyOperations(root, [{ ...created }], 'canvas create')
+    const fresh = await harnessNoteService.projectView(root)
+    const id = created.uri.split('/').pop() as string
+    return fresh.blueprint.nodes[id] ?? null
+  }
+
   async updateNode(
     workspace: string,
     blueprintId: string,
     nodeId: string,
     patch: Partial<BlueprintNode>
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      return this.locked(() => this.updateProjectNode(workspace, blueprintId, nodeId, patch))
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return null
@@ -519,12 +633,101 @@ export class BlueprintStore {
     })
   }
 
+  /** Project lane: canvas field edits become replace ops with optimistic file hashes. */
+  private async updateProjectNode(
+    workspace: string,
+    blueprintId: string,
+    nodeId: string,
+    patch: Partial<BlueprintNode>,
+  ): Promise<BlueprintNode | null> {
+    const root = await this.projectRoot(workspace, blueprintId)
+    const view = await harnessNoteService.projectView(root)
+    const node = view.blueprint.nodes[nodeId]
+    if (!node?.sourceUri || !node.sourceHash) return null
+    // Optimistic concurrency: the caller's last-seen hash wins over a fresh
+    // read, so stale canvases conflict instead of silently overwriting.
+    const { sourceHash: _seen, sourceUri: _uri, sourceRelPath: _rel, ...fields } = patch
+    const expectedHash = _seen ?? node.sourceHash
+    const managed = checkWritablePatch(fields as Record<string, unknown>)
+    if (managed) harnessThrow('HARNESS_MANAGED', managed.message, nodeId)
+    const current = await harnessNoteService.readNote(root, nodeId)
+    let parentUri: string | null | undefined
+    if (fields.parentId !== undefined) {
+      if (fields.parentId === nodeId) return null
+      if (fields.parentId === null) {
+        parentUri = null
+      } else {
+        const parent = view.blueprint.nodes[fields.parentId]
+        if (!parent?.sourceUri) return null
+        parentUri = parent.sourceUri
+      }
+    }
+    const produced = applyNodePatch(current.note, {
+      ...(fields.title !== undefined ? { title: fields.title } : {}),
+      ...(fields.description !== undefined ? { description: fields.description } : {}),
+      ...(fields.positioning !== undefined ? { positioning: fields.positioning } : {}),
+      ...(fields.techSolution !== undefined ? { techSolution: fields.techSolution } : {}),
+      ...(fields.notes !== undefined ? { notes: fields.notes } : {}),
+      ...(fields.status !== undefined ? { status: fields.status } : {}),
+      ...(fields.tags !== undefined ? { tags: fields.tags } : {}),
+      ...(parentUri !== undefined ? { parentUri } : {}),
+    })
+    if (!('edit' in produced)) {
+      if (produced.code === 'HARNESS_MANAGED') harnessThrow('HARNESS_MANAGED', produced.message, nodeId)
+      harnessThrow('NOT_FOUND', produced.message, nodeId)
+    }
+    const markdown = harnessNoteService.mergeNoteEdit(current.note, current.raw, produced.edit, 'canvas edit')
+    await harnessNoteService.applyOperations(
+      root,
+      [{
+        operationId: `replace-${nodeId.slice(0, 8)}`,
+        type: 'replace',
+        uri: node.sourceUri,
+        expectedHash,
+        afterMarkdown: markdown,
+      }],
+      'canvas edit',
+    )
+    const fresh = await harnessNoteService.projectView(root)
+    return fresh.blueprint.nodes[nodeId] ?? null
+  }
+
+  /** Project lane: canvas deletes archive the note; true removal stays destructive-scope. */
+  private async archiveProjectNode(workspace: string, blueprintId: string, nodeId: string): Promise<boolean> {
+    const root = await this.projectRoot(workspace, blueprintId)
+    const view = await harnessNoteService.projectView(root)
+    const node = view.blueprint.nodes[nodeId]
+    if (!node?.sourceUri || !node.sourceHash) return false
+    const current = await harnessNoteService.readNote(root, nodeId)
+    const markdown = harnessNoteService.mergeNoteEdit(
+      current.note,
+      current.raw,
+      { sections: {}, frontmatter: { lifecycle: 'archived' } },
+      'archived from canvas',
+    )
+    await harnessNoteService.applyOperations(
+      root,
+      [{
+        operationId: `archive-${nodeId.slice(0, 8)}`,
+        type: 'replace',
+        uri: node.sourceUri,
+        expectedHash: node.sourceHash,
+        afterMarkdown: markdown,
+      }],
+      'archived from canvas',
+    )
+    return true
+  }
+
   async patchNodeFeatures(
     workspace: string,
     blueprintId: string,
     nodeId: string,
     features: Array<Partial<BlueprintFeatureItem> & { title: string }>
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'acceptance clauses on project notes are managed by maintenance flows', nodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return null
@@ -543,6 +746,9 @@ export class BlueprintStore {
     nodeId: string,
     feature: Partial<BlueprintFeatureItem> & { title: string }
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'acceptance clauses on project notes are managed by maintenance flows', nodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return null
@@ -562,6 +768,9 @@ export class BlueprintStore {
     featureId: string,
     patch: Partial<BlueprintFeatureItem>
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'acceptance clauses on project notes are managed by maintenance flows', nodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return null
@@ -587,6 +796,9 @@ export class BlueprintStore {
     nodeId: string,
     featureId: string
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'acceptance clauses on project notes are managed by maintenance flows', nodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return null
@@ -600,6 +812,9 @@ export class BlueprintStore {
   }
 
   async deleteNode(workspace: string, blueprintId: string, nodeId: string): Promise<boolean> {
+    if (isProjectGraphId(blueprintId)) {
+      return this.locked(() => this.archiveProjectNode(workspace, blueprintId, nodeId))
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return false

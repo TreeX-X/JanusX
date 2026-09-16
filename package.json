@@ -53,6 +53,8 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@janus-agent/agent-core": "file:../janus-agentX/packages/agent-core",
     "@janus-agent/chat-core": "file:../janus-agentX/packages/chat-core",
+    "@janus-agent/harness-core": "file:../janus-agentX/packages/harness-core",
+    "@janus-agent/harness-node": "file:../janus-agentX/packages/harness-node",
     "@janus-agent/janus-agent": "file:../janus-agentX/packages/janus-agent",
     "@janusx/llm-core": "file:packages/llm-core",
     "@langchain/core": "1.2.9",

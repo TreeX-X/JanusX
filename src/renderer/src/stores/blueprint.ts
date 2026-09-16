@@ -7,6 +7,7 @@
  */
 
 import { create } from 'zustand'
+import { useHarnessStore } from '@/stores/harness'
 import {
   listBlueprintSummaries,
   loadBlueprint,
@@ -272,7 +273,15 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
     }
     set({ loading: true, error: null })
     try {
-      const updated = await updateNodeIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, nodeId, patch)
+      // Project lane: carry the last-seen file hash so a terminal write that
+      // landed after this canvas load surfaces as HARNESS_CONFLICT below.
+      const seen = current.source === 'harness' ? current.nodes[nodeId]?.sourceHash : undefined
+      const updated = await updateNodeIPC(
+        GLOBAL_BLUEPRINT_SCOPE,
+        blueprintId,
+        nodeId,
+        seen ? { ...patch, sourceHash: seen } : patch,
+      )
       if (updated) {
         set((s) => ({
           currentBlueprint: s.currentBlueprint
@@ -291,8 +300,13 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
         set({ loading: false })
       }
     } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('HARNESS_CONFLICT')) {
+        useHarnessStore.getState().noticeConflict(message)
+        void get().loadBlueprint(blueprintId)
+      }
       set({
-        error: err instanceof Error ? err.message : String(err),
+        error: message,
         loading: false
       })
     }

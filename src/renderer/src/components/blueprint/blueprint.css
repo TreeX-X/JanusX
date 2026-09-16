@@ -3155,3 +3155,41 @@
     transform: translateY(0) scale(1);
   }
 }
+
+.harness-scope-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.harness-scope-bar__repo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.harness-scope-bar__action {
+  color: rgba(255, 255, 255, 0.85);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.harness-scope-bar__conflict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffb020;
+}
+.harness-scope-bar__conflict button {
+  color: #ffd88a;
+  background: transparent;
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}

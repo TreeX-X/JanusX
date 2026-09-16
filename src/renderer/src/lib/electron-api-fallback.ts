@@ -163,6 +163,17 @@ export function installElectronApiFallback(): void {
       onDiscovered: () => () => {},
       onMaintenanceTask: () => () => {},
     },
+    harness: {
+      resolve: () => unavailableJanus(),
+      projectGraph: () => unavailableJanus(),
+      rescan: () => unavailableJanus(),
+      apply: () => unavailableJanus(),
+      getBindings: () => unavailableJanus(),
+      setBinding: () => unavailableJanus(),
+      sharePreview: () => unavailableJanus(),
+      shareExport: () => unavailableJanus(),
+      onChanged: () => () => {},
+    },
     office: {
       detect: unavailable, listFiles: unavailable, startPreview: unavailable, stopPreview: unavailable,
       reloadPreview: unavailable, buildPrompt: unavailable, installerStatus: unavailable,

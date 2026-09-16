@@ -399,5 +399,15 @@
     "blocked": "阻塞",
     "collapseSubtree": "折叠子树（{{count}} 项）",
     "expandSubtree": "展开子树（{{count}} 项）"
+  },
+  "harness": {
+    "scopeLabel": "项目笔记",
+    "scopeUnbound": "此处无项目笔记",
+    "bindingLabel": "目录",
+    "sharePreview": "分享预览",
+    "shareExport": "导出分享",
+    "conflictTitle": "保存冲突",
+    "conflictReload": "外部修改已先行保存，请重新加载后继续。",
+    "invalidKept": "{{count}} 个无效文件已保留，不执行"
   }
 }

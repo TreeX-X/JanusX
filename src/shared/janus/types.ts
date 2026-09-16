@@ -177,6 +177,14 @@ export interface BlueprintNode {
   issues: BlueprintIssue[]
   activities: BlueprintActivity[]
   analyses: BlueprintAnalysis[]
+  /**
+   * Harness projection (S4): file-backed identity. Present only on nodes
+   * projected from `.agents/notes`. `sourceHash` is the last-seen file
+   * digest and seeds optimistic-concurrency saves.
+   */
+  sourceUri?: string
+  sourceHash?: string
+  sourceRelPath?: string
   /** @deprecated Mirror of primaryWorkspaceId kept for legacy readers; write both via store APIs. */
   workspaceId: string | null
   primaryWorkspaceId: string | null
@@ -195,6 +203,8 @@ export interface BlueprintNode {
 export interface Blueprint {
   /** Persisted schema version; absent means the legacy v0 shape. */
   schemaVersion?: number
+  /** 'harness' marks a live projection over `.agents/notes`; default lane is 'json'. */
+  source?: 'json' | 'harness'
   /** Monotonic version for semantic changes. Canvas-only changes do not increment it. */
   contentRevision: number
   id: string

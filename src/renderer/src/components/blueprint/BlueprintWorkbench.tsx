@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { JanusIdentityCore } from '@/components/janus/JanusIdentityCore'
 import { BlueprintView } from './BlueprintView'
+import { HarnessScopeBar } from './HarnessScopeBar'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
 import { BlueprintDetailPortalContext } from './blueprintDetailPortal'
 import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
@@ -35,6 +36,7 @@ interface WorkbenchCardPlan {
 export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps) {
   const { t } = useI18n('blueprint')
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const activeSession = useBlueprintStore((s) => s.activeSession)
   const maintenanceTasks = useBlueprintMaintenanceStore((s) => s.tasks)
   const maintenanceInitialized = useBlueprintMaintenanceStore((s) => s.initialized)
   const openRequest = useBlueprintMaintenanceStore((s) => s.openRequest)
@@ -211,6 +213,11 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
             </button>
           </div>
         </header>
+        <HarnessScopeBar
+          cwd={activeSession?.workspacePath ?? null}
+          blueprintId={currentBlueprint?.id ?? null}
+          blueprintSource={currentBlueprint?.source}
+        />
 
         <div
           className="blueprint-workbench-body"

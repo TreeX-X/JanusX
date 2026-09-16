@@ -1,0 +1,387 @@
+/**
+ * @file Harness note service (S4)
+ * @description The single managed gateway between JanusX and project note files.
+ *  All project-note reads, edits, binds, and share exports flow through this
+ *  service; no other main-process module touches `.agents/notes` directly.
+ *  Legacy JSON blueprints keep their own lane (read + write) for old data;
+ *  new project flows never write JSON. Electron-free: roots arrive from
+ *  callers, change events leave through subscribed listeners (tests subscribe).
+ *  See .agents/notes/implemented/architecture/2026-09-16-harness-project-graph-s4.md
+ */
+import { randomUUID } from 'crypto'
+import { mkdir, readFile, stat, writeFile } from 'fs/promises'
+import { dirname, join, resolve } from 'path'
+import {
+  parseNote,
+  serializeNote,
+  splitFrontmatter,
+  validateNote,
+  type Diagnostic,
+  type ParsedNote,
+} from '@janus-agent/harness-core'
+import {
+  applyChangeSet,
+  buildNoteIndex,
+  readWorkspaceMap,
+  sha256HexBytes,
+  watchNotes,
+  type NoteIndex,
+  type WatchEvent,
+} from '@janus-agent/harness-node'
+import { projectGraph, projectGraphId, type ProjectedEntry } from './graph-projection'
+import { setSection, type NoteEdit } from './artifact-producer'
+import type { Blueprint } from '../../shared/janus/types'
+
+export interface ResolveResult {
+  ok: boolean
+  root?: string
+  diagnostics: Diagnostic[]
+}
+
+export interface ProjectView {
+  blueprint: Blueprint
+  rev: number
+  repoId: string | null
+  repoName: string
+  invalid: Array<{ relPath: string; diagnostics: Diagnostic[] }>
+}
+
+export interface ShareSelection {
+  ids?: string[]
+}
+
+export interface ShareSnapshot {
+  schema: 'harness-share/1'
+  repoId: string | null
+  repoName: string
+  exportedAt: string
+  notes: Array<{ id: string; uri: string | null; relPath: string; markdown: string; sha256: string }>
+  repositories: Array<{ repoId: string | null; name: string }>
+  unresolved: Array<{ from: string; target: string }>
+}
+
+export interface BindingRecord {
+  repoId: string
+  checkoutId: string
+  path: string
+  selected: boolean
+}
+
+export type ChangeListener = (event: { type: 'harness:changed'; root: string; rev: number; events: WatchEvent[] }) => void
+
+function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
+  return path === undefined ? { code, message } : { code, message, path }
+}
+
+async function isDir(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+export class HarnessNoteService {
+  private indexes = new Map<string, { rev: number; index: NoteIndex }>()
+  private watchers = new Map<string, { close: () => void }>()
+  private listeners = new Set<ChangeListener>()
+
+  onChange(listener: ChangeListener): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  /** A checkout root is a directory carrying `.agents/`. Nothing else qualifies. */
+  async resolveRoot(cwd: string): Promise<ResolveResult> {
+    const root = resolve(cwd)
+    if (await isDir(join(root, '.agents'))) return { ok: true, root, diagnostics: [] }
+    return { ok: false, diagnostics: [diag('NOT_FOUND', `no .agents here: ${root}`, root)] }
+  }
+
+  async rescan(root: string): Promise<{ rev: number; ms: number }> {
+    const start = Date.now()
+    const index = await buildNoteIndex(root)
+    const prev = this.indexes.get(root)?.rev ?? 0
+    this.indexes.set(root, { rev: prev + 1, index })
+    return { rev: prev + 1, ms: Date.now() - start }
+  }
+
+  private async cachedIndex(root: string): Promise<{ rev: number; index: NoteIndex }> {
+    const hit = this.indexes.get(root)
+    if (hit) return hit
+    await this.rescan(root)
+    return this.indexes.get(root) as { rev: number; index: NoteIndex }
+  }
+
+  async repoName(root: string): Promise<string> {
+    try {
+      const raw = await readFile(join(root, '.agents', 'harness.json'), 'utf8')
+      const name = (JSON.parse(raw) as { name?: unknown }).name
+      if (typeof name === 'string' && name.trim()) return name.trim()
+    } catch {
+      // Unnamed checkout: fall through to the stable default.
+    }
+    return 'Project'
+  }
+
+  async projectView(root: string): Promise<ProjectView> {
+    const { rev, index } = await this.cachedIndex(root)
+    const entries: ProjectedEntry[] = []
+    const invalid: ProjectView['invalid'] = []
+    for (const e of index.entries) {
+      if (e.note && e.diagnostics.length === 0) {
+        entries.push({ note: e.note, relPath: e.relPath, sha256: e.sha256, diagnostics: [] })
+      } else {
+        invalid.push({ relPath: e.relPath, diagnostics: e.diagnostics })
+      }
+    }
+    const repoName = await this.repoName(root)
+    const ui = await this.loadUiState(root)
+    const blueprint = projectGraph(
+      { repoId: index.repoId, repoName, entries, revision: rev },
+      root,
+    )
+    blueprint.canvasLayout = ui.canvasLayout
+    blueprint.collapsedNodeIds = ui.collapsedNodeIds
+    return { blueprint, rev, repoId: index.repoId, repoName, invalid }
+  }
+
+  projectIdForRoot(root: string, repoId: string | null): string {
+    return projectGraphId(repoId, root)
+  }
+
+  /** Raw note plus identity for merge/apply flows. Throws coded NOT_FOUND. */
+  async readNote(
+    root: string,
+    id: string,
+  ): Promise<{ note: ParsedNote; raw: string; relPath: string; sha256: string }> {
+    const { index } = await this.cachedIndex(root)
+    const entry = index.byId.get(id)
+    if (!entry?.note) {
+      throw { code: 'NOT_FOUND', message: `unknown note: ${id}`, path: id }
+    }
+    const raw = await readFile(join(root, entry.relPath), 'utf8')
+    return { note: parseNote(raw), raw, relPath: entry.relPath, sha256: entry.sha256 }
+  }
+
+  /** Canvas-only overlay state. Local, never shared, best effort. */
+  async loadUiState(root: string): Promise<{ canvasLayout: Record<string, { x: number; y: number }>; collapsedNodeIds: string[] | null }> {
+    try {
+      const raw = await readFile(join(root, '.agents', '.local', 'ui', 'project.json'), 'utf8')
+      const data = JSON.parse(raw) as { canvasLayout?: unknown; collapsedNodeIds?: unknown }
+      return {
+        canvasLayout: (data.canvasLayout ?? {}) as Record<string, { x: number; y: number }>,
+        collapsedNodeIds: Array.isArray(data.collapsedNodeIds) ? (data.collapsedNodeIds as string[]) : null,
+      }
+    } catch {
+      return { canvasLayout: {}, collapsedNodeIds: null }
+    }
+  }
+
+  async saveUiState(
+    root: string,
+    patch: { canvasLayout?: Record<string, { x: number; y: number }>; collapsedNodeIds?: string[] | null },
+  ): Promise<void> {
+    const current = await this.loadUiState(root)
+    const next = {
+      canvasLayout: patch.canvasLayout ?? current.canvasLayout,
+      collapsedNodeIds: patch.collapsedNodeIds !== undefined ? patch.collapsedNodeIds : current.collapsedNodeIds,
+    }
+    const file = join(root, '.agents', '.local', 'ui', 'project.json')
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, JSON.stringify(next, null, 2), 'utf8')
+  }
+
+  /** Merge a structured edit onto parsed note bytes (frontmatter via data, prose via slices). */
+  mergeNoteEdit(note: ParsedNote, rawText: string, edit: NoteEdit, reason?: string): string {
+    const meta = { ...(note.meta as unknown as Record<string, unknown>) } as Record<string, unknown> & ParsedNote['meta']
+    if (edit.frontmatter.tags !== undefined) meta.tags = [...edit.frontmatter.tags]
+    if (edit.frontmatter.parent !== undefined) {
+      if (edit.frontmatter.parent === null) delete (meta as Record<string, unknown>)['parent']
+      else meta.parent = edit.frontmatter.parent
+    }
+    if (edit.frontmatter.lifecycle !== undefined) {
+      meta.lifecycle = edit.frontmatter.lifecycle as ParsedNote['meta']['lifecycle']
+      if ((edit.frontmatter.lifecycle === 'archived' || edit.frontmatter.lifecycle === 'rejected') && meta.disposition === undefined) {
+        meta.disposition = { reason: reason ?? 'updated from canvas' }
+      }
+      if (edit.frontmatter.lifecycle !== 'archived' && edit.frontmatter.lifecycle !== 'rejected') {
+        delete (meta as Record<string, unknown>)['disposition']
+      }
+    }
+    let body = splitFrontmatter(rawText).body
+    if (edit.title !== undefined) {
+      body = body.replace(/^#\s+.*$/m, `# ${edit.title}`)
+      if (!/^#\s+/m.test(body)) body = `# ${edit.title}\n\n${body}`
+    }
+    for (const [name, text] of Object.entries(edit.sections)) {
+      body = setSection(body, name, text)
+    }
+    const merged: ParsedNote = { ...note, meta: meta as ParsedNote['meta'], body }
+    const out = serializeNote(merged)
+    // Round-trip guard: the merger must never produce an invalid note.
+    const reparsed = parseNote(out)
+    const problems = validateNote(reparsed)
+    if (problems.length > 0) {
+      throw { code: 'SCHEMA_INVALID', message: problems[0].message, path: problems[0].path }
+    }
+    return out
+  }
+
+  async applyOperations(
+    root: string,
+    operations: Array<{
+      operationId: string
+      type: 'create' | 'replace' | 'delete'
+      uri: string
+      expectedHash: string | null
+      relativePath?: string
+      afterMarkdown?: string
+    }>,
+    reason: string,
+  ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
+    const cs = {
+      id: randomUUID(),
+      revision: 1,
+      source: { type: 'harness' as const, id: 'janusx-desktop', revision: 1 },
+      operations: operations.map((o) => ({ ...o, dependsOn: [] as string[], reason, evidenceRefs: [] as string[], noteDiagnostics: [] as Diagnostic[] })),
+    }
+    const digest = sha256HexBytes(Buffer.from(JSON.stringify(cs.operations), 'utf8'))
+    const report = await applyChangeSet(root, cs, { requestDigest: digest })
+    if (!report.ok) {
+      const conflict = report.errors.find((e) => e.code === 'CONFLICT')
+      if (conflict) {
+        throw { code: 'HARNESS_CONFLICT', message: conflict.message, path: conflict.path }
+      }
+      const first = report.errors[0]
+      throw { code: first?.code ?? 'SCHEMA_INVALID', message: first?.message ?? 'apply failed', path: first?.path }
+    }
+    await this.rescan(root)
+    return { txId: report.txId, applied: report.results.map((r) => ({ operationId: r.operationId, relPath: r.relPath })) }
+  }
+
+  async watch(root: string): Promise<void> {
+    if (this.watchers.has(root)) return
+    const handle = await watchNotes(root, (events) => {
+      void this.rescan(root).then(({ rev }) => {
+        for (const listener of this.listeners) {
+          listener({ type: 'harness:changed', root, rev, events })
+        }
+      })
+    })
+    this.watchers.set(root, handle)
+  }
+
+  unwatchAll(): void {
+    for (const handle of this.watchers.values()) handle.close()
+    this.watchers.clear()
+  }
+
+  // ── bindings (.local convenience data; never shared) ──────────────
+
+  async getBindings(root: string): Promise<BindingRecord[]> {
+    const { map } = await readWorkspaceMap(root)
+    return (map?.bindings ?? []) as BindingRecord[]
+  }
+
+  async setBinding(root: string, binding: BindingRecord): Promise<BindingRecord[]> {
+    if (!(await isDir(binding.path))) {
+      throw { code: 'NOT_FOUND', message: `checkout path missing: ${binding.path}` }
+    }
+    const { map } = await readWorkspaceMap(root)
+    const bindings: BindingRecord[] = [...(map?.bindings ?? [])]
+    const at = bindings.findIndex((b) => b.checkoutId === binding.checkoutId)
+    const row = { ...binding }
+    if (row.selected) {
+      for (const b of bindings) {
+        if (b.repoId === row.repoId) b.selected = false
+      }
+    }
+    if (at >= 0) bindings[at] = row
+    else bindings.push(row)
+    const file = join(root, '.agents', '.local', 'workspace-map.json')
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, JSON.stringify({ version: 1, bindings }, null, 2), 'utf8')
+    return bindings
+  }
+
+  // ── share (whitelist export; .local/machine paths/credentials never leave) ──
+
+  async shareSnapshot(root: string, selection: ShareSelection = {}): Promise<ShareSnapshot> {
+    const { index } = await this.cachedIndex(root)
+    const repoName = await this.repoName(root)
+    const wanted = selection.ids ? new Set(selection.ids) : null
+    const notes: ShareSnapshot['notes'] = []
+    for (const e of index.entries) {
+      if (!e.note || e.diagnostics.length > 0) continue
+      if (wanted && !wanted.has(e.note.meta.id)) continue
+      const raw = await readFile(join(root, e.relPath), 'utf8')
+      notes.push({
+        id: e.note.meta.id,
+        uri: index.repoId ? `note://${index.repoId}/${e.note.meta.id}` : null,
+        relPath: e.relPath,
+        markdown: raw,
+        sha256: e.sha256,
+      })
+    }
+    return {
+      schema: 'harness-share/1',
+      repoId: index.repoId,
+      repoName,
+      exportedAt: new Date().toISOString(),
+      notes,
+      repositories: [{ repoId: index.repoId, name: repoName }],
+      unresolved: [],
+    }
+  }
+
+  /** Export + leak gate in one step: the file lands only when clean. */
+  async exportSnapshot(root: string, selection: ShareSelection, outPath: string): Promise<{ outPath: string; notes: number }> {
+    const snapshot = await this.shareSnapshot(root, selection)
+    const text = JSON.stringify(snapshot, null, 2)
+    const leaks = assertNoLocalLeak(root, text)
+    if (leaks.length > 0) {
+      throw { code: 'PERMISSION_DENIED', message: `share blocked: ${leaks[0].message}`, path: leaks[0].path }
+    }
+    await mkdir(dirname(outPath), { recursive: true })
+    await writeFile(outPath, text, 'utf8')
+    return { outPath, notes: snapshot.notes.length }
+  }
+}
+
+/** Whitelist gate: machine paths, local state, and credentials refuse export. */
+export function assertNoLocalLeak(root: string, text: string): Diagnostic[] {
+  const out: Diagnostic[] = []
+  const needles: Array<[string, string]> = [
+    [root, 'absolute checkout path'],
+    ['.local/', 'local state'],
+    ['.local\\', 'local state'],
+    ['file://', 'file URL'],
+  ]
+  for (const [needle, label] of needles) {
+    if (needle && text.includes(needle)) out.push(diag('PERMISSION_DENIED', `share leaks ${label}`, needle))
+  }
+  const cred = /:\/\/[^/\s]*:[^/\s]*@/.exec(text)
+  if (cred) out.push(diag('PERMISSION_DENIED', 'share leaks credentials', cred[0]))
+  return out
+}
+
+/** Strip userinfo (and local schemes) from shared remote descriptors. */
+export function stripRemoteCreds(url: string): string | null {
+  if (!url || url.startsWith('file:') || url.startsWith('/') || /^[A-Za-z]:/.test(url)) return null
+  try {
+    if (url.includes('@') && !url.startsWith('git@')) {
+      const withoutProto = url.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
+      const at = withoutProto.lastIndexOf('@')
+      const proto = url.slice(0, url.length - withoutProto.length)
+      return `${proto}${withoutProto.slice(at + 1)}`
+    }
+    return url
+  } catch {
+    return null
+  }
+}
+
+export const harnessNoteService = new HarnessNoteService()

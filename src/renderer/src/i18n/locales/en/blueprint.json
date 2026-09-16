@@ -399,5 +399,15 @@
     "blocked": "Blocked",
     "collapseSubtree": "Collapse subtree ({{count}} items)",
     "expandSubtree": "Expand subtree ({{count}} items)"
+  },
+  "harness": {
+    "scopeLabel": "Project notes",
+    "scopeUnbound": "No project notes here",
+    "bindingLabel": "Checkout",
+    "sharePreview": "Share preview",
+    "shareExport": "Export share",
+    "conflictTitle": "Save conflict",
+    "conflictReload": "External change won the save. Reload to continue.",
+    "invalidKept": "{{count}} invalid files kept, not executed"
   }
 }
