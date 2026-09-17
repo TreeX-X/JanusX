@@ -7,6 +7,9 @@ import { z } from 'zod'
 import { generateObject } from '../../llm/ai-runtime'
 import { llmService } from '../../llm/LlmService'
 import { blueprintStore, isProjectGraphId } from '../blueprint-store'
+import { harnessNoteService } from '../../harness/service'
+import { applyMaintenanceSelection, assertHarnessScope, resolveProjectCheckout } from '../../harness/maintenance-apply'
+import type { Blueprint } from '../../../shared/janus/types'
 import { nowIso } from '../blueprint-factory'
 import { writeJson } from '../blueprint-persistence'
 import { buildReverseOperations, buildGroupDigest, expandGroupSelection, groupMaintenanceOperations, scopeNodeIds, selectOperations } from './changeset'
@@ -255,12 +258,26 @@ function isAuditRecord(value: unknown): value is BlueprintMaintenanceAuditRecord
     && validEvidence
 }
 
-// Note: project graphs stay out of the legacy loop — see .agents/notes/implemented/architecture/2026-09-17-maintenance-harness-guard-s6.md
-/** S6-c slice 1: project graphs are harness-managed; the legacy maintenance loop must not write them. */
-export function throwIfHarnessManaged(blueprintId: string): void {
-  if (isProjectGraphId(blueprintId)) {
-    throw new Error('HARNESS_MANAGED: 项目 Note 请走 harness 事务维护，旧维护循环暂不支持项目图')
+// Note: project graphs land through the harness transaction — see .agents/notes/implemented/architecture/2026-09-17-maintenance-harness-apply-s6.md
+/**
+ * S6-c slice 2b: project graphs are harness-managed, and the service now
+ * routes them instead of refusing. Legacy JSON blueprints keep the old lane.
+ * Loads the live projection for project ids (the task workspace wins, the
+ * registered workspace list is the restart-safe fallback); legacy ids load
+ * from the JSON store exactly as before.
+ */
+async function loadMaintenanceBlueprint(blueprintId: string, preferredPath?: string, listWorkspacePaths?: () => Promise<string[]>): Promise<{ blueprint: Blueprint | null; root: string | null; repoId: string | null }> {
+  if (!isProjectGraphId(blueprintId)) {
+    return { blueprint: await blueprintStore.loadBlueprint('__global__', blueprintId), root: null, repoId: null }
   }
+  // Project resolve failures propagate with binding guidance instead of
+  // collapsing into a generic missing-blueprint message.
+  const checkout = await resolveProjectCheckout(harnessNoteService, blueprintId, preferredPath, listWorkspacePaths)
+  return { blueprint: checkout.blueprint, root: checkout.root, repoId: checkout.repoId }
+}
+
+function harnessErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 class BlueprintMaintenanceService {
@@ -269,6 +286,8 @@ class BlueprintMaintenanceService {
   private controllers = new Map<string, AbortController>()
   /** Runtime-only reverse ChangeSets prepared from audit records, keyed by id. */
   private undoChangeSets = new Map<string, BlueprintChangeSet>()
+  /** Harness checkout roots for prepared undos on project graphs, keyed by undo ChangeSet id. */
+  private undoHarnessRoots = new Map<string, string>()
   /** janus-chat 同构：每任务独立会话预算、打断端口与工具追踪，任务结束即清理。 */
   private sessions = new Map<string, ChatSessionRuntime>()
   private steerPorts = new Map<string, AgentSteeringPort>()
@@ -294,10 +313,9 @@ class BlueprintMaintenanceService {
   async start(input: BlueprintMaintenanceStartInput): Promise<BlueprintMaintenanceTask> {
     const existing = [...this.tasks.values()].find((task) => task.blueprintId === input.blueprintId && !CLOSED_STATUSES.has(task.status))
     if (existing || this.startingBlueprints.has(input.blueprintId)) throw new Error('该蓝图已有活动维护任务')
-    throwIfHarnessManaged(input.blueprintId)
     this.startingBlueprints.add(input.blueprintId)
     try {
-      const blueprint = await blueprintStore.loadBlueprint('__global__', input.blueprintId)
+      const { blueprint } = await loadMaintenanceBlueprint(input.blueprintId, input.workspacePath, () => this.listHarnessWorkspacePaths())
       if (!blueprint) throw new Error('目标蓝图不存在')
       const allowed = scopeNodeIds(blueprint, input.nodeScope)
       if (!allowed.size) throw new Error('维护节点范围无效')
@@ -359,7 +377,13 @@ class BlueprintMaintenanceService {
       throw new Error(`删除操作必须逐项高风险确认：${unconfirmedDeletes.map((operation) => operation.operationId).join(', ')}`)
     }
     task.status = 'applying'; task.phase = '校验并应用'; task.progress = 95; this.emit(task)
-    const blueprint = await blueprintStore.loadBlueprint('__global__', task.blueprintId)
+    let blueprint: Blueprint | null
+    try {
+      blueprint = (await loadMaintenanceBlueprint(task.blueprintId, task.workspacePath, () => this.listHarnessWorkspacePaths())).blueprint
+    } catch (error) {
+      task.status = 'stale'; task.phase = '项目目录不可用'; task.error = harnessErrorMessage(error); this.emit(task)
+      throw new Error(task.error)
+    }
     if (!blueprint || blueprint.contentRevision !== task.baseRevision) {
       task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化，请重新创建提案'; this.emit(task)
       throw new Error(task.error)
@@ -388,6 +412,9 @@ class BlueprintMaintenanceService {
       throw new Error(task.error)
     }
     const allowed = scopeNodeIds(blueprint, task.nodeScope)
+    if (isProjectGraphId(task.blueprintId)) {
+      return this.applyHarness(task, changeSet, operations, confirmedDeletes, allowed)
+    }
     try {
       const selectedIds = new Set(operations.map((item) => item.operationId))
       const rejectedOperationIds = changeSet.operations
@@ -504,14 +531,13 @@ class BlueprintMaintenanceService {
    * and goes through the same selection, dependency, and revision gates.
    */
   async prepareUndo(input: BlueprintMaintenanceUndoPrepareInput): Promise<BlueprintMaintenanceUndoPrepareResult> {
-    throwIfHarnessManaged(input.blueprintId)
     const activeTask = [...this.tasks.values()]
       .find((task) => task.blueprintId === input.blueprintId && !CLOSED_STATUSES.has(task.status))
     if (activeTask) throw new Error('该蓝图仍有活动维护任务，请先完成或取消后再撤销')
     const audit = await this.findAudit(input.blueprintId, input.auditId)
     if (!audit) throw new Error('审计记录不存在或已损坏')
     if (audit.status !== 'applied') throw new Error('只有已应用的审计记录可以撤销')
-    const blueprint = await blueprintStore.loadBlueprint('__global__', input.blueprintId)
+    const { blueprint, root } = await loadMaintenanceBlueprint(input.blueprintId, audit.harnessRoot, () => this.listHarnessWorkspacePaths())
     if (!blueprint) throw new Error('目标蓝图不存在')
     const { operations, conflicts } = buildReverseOperations(audit, blueprint)
     if (!operations.length) throw new Error(`没有可撤销的操作${conflicts.length ? `：${conflicts.join('；')}` : ''}`)
@@ -523,11 +549,11 @@ class BlueprintMaintenanceService {
       operations, groups, digest: buildGroupDigest(groups, 1), createdAt: nowIso(), undoOfAuditId: audit.id,
     }
     this.undoChangeSets.set(changeSet.id, changeSet)
+    if (root) this.undoHarnessRoots.set(changeSet.id, root)
     return { changeSet: structuredClone(changeSet), conflicts }
   }
 
   async applyUndo(input: BlueprintMaintenanceUndoApplyInput): Promise<BlueprintMaintenanceUndoApplyResult> {
-    throwIfHarnessManaged(input.blueprintId)
     const changeSet = this.undoChangeSets.get(input.undoChangeSetId)
     if (!changeSet || changeSet.blueprintId !== input.blueprintId) throw new Error('撤销提案不存在或已失效')
     const activeTask = [...this.tasks.values()]
@@ -541,11 +567,15 @@ class BlueprintMaintenanceService {
     if (unconfirmedDeletes.length) {
       throw new Error(`删除操作必须逐项高风险确认：${unconfirmedDeletes.map((operation) => operation.operationId).join(', ')}`)
     }
-    const blueprint = await blueprintStore.loadBlueprint('__global__', input.blueprintId)
+    const { blueprint } = await loadMaintenanceBlueprint(input.blueprintId, this.undoHarnessRoots.get(changeSet.id), () => this.listHarnessWorkspacePaths())
     if (!blueprint) throw new Error('目标蓝图不存在')
     if (blueprint.contentRevision !== changeSet.baseRevision) {
       this.undoChangeSets.delete(changeSet.id)
+      this.undoHarnessRoots.delete(changeSet.id)
       throw new Error('蓝图版本已变化，请重新发起撤销并核对冲突')
+    }
+    if (isProjectGraphId(input.blueprintId)) {
+      return this.applyHarnessUndo(input, changeSet, operations, confirmedDeletes, blueprint)
     }
     const allowed = new Set(blueprint.nodeIds)
     const rejectedOperationIds = changeSet.operations
@@ -564,7 +594,10 @@ class BlueprintMaintenanceService {
       await blueprintStore.applyMaintenanceOperations(input.blueprintId, changeSet.baseRevision, operations, allowed)
     // Any prepared undo for this blueprint is now stale: the revision moved.
     for (const [id, pending] of this.undoChangeSets) {
-      if (pending.blueprintId === input.blueprintId) this.undoChangeSets.delete(id)
+      if (pending.blueprintId === input.blueprintId) {
+        this.undoChangeSets.delete(id)
+        this.undoHarnessRoots.delete(id)
+      }
     }
     try {
       await this.writeAudit({
@@ -593,6 +626,149 @@ class BlueprintMaintenanceService {
     return record
   }
 
+  private async loadTaskBlueprint(task: BlueprintMaintenanceTask): Promise<Blueprint | null> {
+    if (!isProjectGraphId(task.blueprintId)) {
+      const blueprint = await blueprintStore.loadBlueprint('__global__', task.blueprintId)
+      if (!blueprint) { task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化'; this.emit(task) }
+      return blueprint
+    }
+    try {
+      return (await loadMaintenanceBlueprint(task.blueprintId, task.workspacePath, () => this.listHarnessWorkspacePaths())).blueprint
+    } catch (error) {
+      task.status = 'stale'; task.phase = '项目目录不可用'; task.error = harnessErrorMessage(error); this.emit(task)
+      return null
+    }
+  }
+
+  private async listHarnessWorkspacePaths(): Promise<string[]> {
+    const files = await fs.readdir(workspacesDir()).catch((): string[] => [])
+    const out: string[] = []
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue
+      const record = await readJson<{ path: string }>(join(workspacesDir(), file)).catch(() => null)
+      if (record && typeof record.path === 'string' && !out.includes(record.path)) out.push(record.path)
+    }
+    return out
+  }
+
+  /**
+   * Lands a maintenance selection on a project graph through one harness
+   * transaction. Refusals fail the task loudly with zero bytes written;
+   * concurrent external edits surface HARNESS_CONFLICT instead of
+   * overwriting. Audit shape mirrors the legacy lane so undo keeps working.
+   */
+  private async applyHarness(
+    task: BlueprintMaintenanceTask,
+    changeSet: BlueprintChangeSet,
+    operations: BlueprintOperation[],
+    confirmedDeletes: Set<string>,
+    allowed: Set<string>,
+  ): Promise<BlueprintMaintenanceApplyResult> {
+    try {
+      assertHarnessScope(operations, allowed)
+      const checkout = await resolveProjectCheckout(harnessNoteService, task.blueprintId, task.workspacePath, () => this.listHarnessWorkspacePaths())
+      if (checkout.blueprint.contentRevision !== task.baseRevision) {
+        task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化，请重新创建提案'; this.emit(task)
+        throw new Error(task.error)
+      }
+      const rejectedOperationIds = changeSet.operations
+        .filter((item) => !operations.some((selected) => selected.operationId === item.operationId)).map((item) => item.operationId)
+      const audit: BlueprintMaintenanceAuditRecord = {
+        id: randomUUID(), taskId: task.id, changeSetId: changeSet.id, blueprintId: task.blueprintId,
+        beforeRevision: checkout.rev, afterRevision: checkout.rev,
+        selectedOperationIds: operations.map((item) => item.operationId),
+        rejectedOperationIds,
+        confirmedDeleteOperationIds: [...confirmedDeletes],
+        status: 'pending', changeSetSnapshot: structuredClone(changeSet),
+        harnessRoot: checkout.root, beforeSnapshot: checkout.blueprint, createdAt: nowIso(),
+      }
+      await this.writeAudit(audit)
+      const result = await applyMaintenanceSelection(harnessNoteService, {
+        root: checkout.root, repoId: checkout.repoId, operations,
+        taskId: task.id, changeSetVersion: changeSet.version, reason: changeSet.reason,
+      })
+      const fresh = await harnessNoteService.projectView(checkout.root)
+      changeSet.status = rejectedOperationIds.length ? 'partially-approved' : 'applied'
+      task.changeSetHistory.push(structuredClone(changeSet))
+      task.baseRevision = fresh.rev
+      task.status = 'active'; task.progress = 100; task.phase = '已应用，等待下一轮需求'; task.changeSet = null; task.error = undefined
+      task.messages.push({ id: randomUUID(), role: 'assistant', content: `已应用 ${result.appliedMaintenanceIds.length} 项项目 Note 变更。`, createdAt: nowIso() })
+      try {
+        await this.writeAudit({
+          ...audit,
+          afterRevision: fresh.rev,
+          status: 'applied',
+          createdNodeIds: result.createdNodeIds,
+          createdRelationIds: result.createdRelationIds,
+          afterSnapshot: fresh.blueprint,
+          appliedAt: nowIso(),
+        })
+      } catch (error) {
+        console.error('[BlueprintMaintenance] harness audit finalization failed; pending record retained:', error)
+      }
+      this.emit(task)
+      return { task: publicTask(task), blueprintRevision: fresh.rev, appliedOperationIds: result.appliedMaintenanceIds }
+    } catch (error) {
+      task.status = 'failed'; task.phase = '应用失败'; task.error = harnessErrorMessage(error); this.emit(task)
+      throw error instanceof Error ? error : new Error(task.error)
+    }
+  }
+
+  private async applyHarnessUndo(
+    input: BlueprintMaintenanceUndoApplyInput,
+    changeSet: BlueprintChangeSet,
+    operations: BlueprintOperation[],
+    confirmedDeletes: Set<string>,
+    blueprint: Blueprint,
+  ): Promise<BlueprintMaintenanceUndoApplyResult> {
+    const root = this.undoHarnessRoots.get(changeSet.id)
+    if (!root) throw new Error('撤销提案缺少项目目录绑定，请重新发起撤销')
+    const rejectedOperationIds = changeSet.operations
+      .filter((item) => !input.operationIds.includes(item.operationId)).map((item) => item.operationId)
+    const audit: BlueprintMaintenanceAuditRecord = {
+      id: randomUUID(), taskId: changeSet.taskId, changeSetId: changeSet.id, blueprintId: input.blueprintId,
+      beforeRevision: blueprint.contentRevision, afterRevision: blueprint.contentRevision,
+      selectedOperationIds: operations.map((item) => item.operationId),
+      rejectedOperationIds,
+      confirmedDeleteOperationIds: [...confirmedDeletes],
+      undoOfAuditId: changeSet.undoOfAuditId,
+      status: 'pending', changeSetSnapshot: structuredClone(changeSet),
+      harnessRoot: root, beforeSnapshot: blueprint, createdAt: nowIso(),
+    }
+    await this.writeAudit(audit)
+    const checkout = await resolveProjectCheckout(harnessNoteService, input.blueprintId, root, () => this.listHarnessWorkspacePaths())
+    assertHarnessScope(operations, new Set(checkout.blueprint.nodeIds))
+    const result = await applyMaintenanceSelection(harnessNoteService, {
+      root: checkout.root, repoId: checkout.repoId, operations,
+      taskId: `${changeSet.taskId}-undo`, changeSetVersion: changeSet.version, reason: changeSet.reason,
+    })
+    const fresh = await harnessNoteService.projectView(checkout.root)
+    for (const [id, pending] of this.undoChangeSets) {
+      if (pending.blueprintId === input.blueprintId) {
+        this.undoChangeSets.delete(id)
+        this.undoHarnessRoots.delete(id)
+      }
+    }
+    try {
+      await this.writeAudit({
+        ...audit,
+        afterRevision: fresh.rev,
+        status: 'applied',
+        createdNodeIds: result.createdNodeIds,
+        createdRelationIds: result.createdRelationIds,
+        afterSnapshot: fresh.blueprint,
+        appliedAt: nowIso(),
+      })
+    } catch (error) {
+      console.error('[BlueprintMaintenance] harness undo audit finalization failed; pending record retained:', error)
+    }
+    return {
+      blueprintRevision: fresh.rev,
+      appliedOperationIds: result.appliedMaintenanceIds,
+      auditId: audit.id,
+    }
+  }
+
   private async respond(taskId: string, providerId?: string, modelId?: string): Promise<void> {
     const task = this.requireActive(taskId)
     const controller = new AbortController()
@@ -604,8 +780,9 @@ class BlueprintMaintenanceService {
     let reasoningChars = 0
     let streamedText = ''
     try {
-      const blueprint = await blueprintStore.loadBlueprint('__global__', task.blueprintId)
-      if (!blueprint || blueprint.contentRevision !== task.baseRevision) {
+      const blueprint = await this.loadTaskBlueprint(task)
+      if (!blueprint) return
+      if (blueprint.contentRevision !== task.baseRevision) {
         task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化'; this.emit(task); return
       }
       const allowed = scopeNodeIds(blueprint, task.nodeScope)
@@ -768,8 +945,9 @@ class BlueprintMaintenanceService {
     const chatSession = this.getSession(taskId)
     task.status = 'analyzing'; task.progress = 8; task.phase = '读取提案上下文'; task.error = undefined; this.emit(task)
     try {
-      const blueprint = await blueprintStore.loadBlueprint('__global__', task.blueprintId)
-      if (!blueprint || blueprint.contentRevision !== task.baseRevision) {
+      const blueprint = await this.loadTaskBlueprint(task)
+      if (!blueprint) return
+      if (blueprint.contentRevision !== task.baseRevision) {
         task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化'; this.emit(task); return
       }
       const allowed = scopeNodeIds(blueprint, task.nodeScope)

@@ -313,6 +313,12 @@ export interface BlueprintMaintenanceAuditRecord {
   createdRelationIds?: Record<string, string>
   /** Set when this record was produced by applying a reverse ChangeSet. */
   undoOfAuditId?: string
+  /**
+   * Local checkout root for audits on harness project graphs. Restart-safe
+   * undo resolves through it first; the registered workspace list is the
+   * fallback. Local-only: never enters shared exports.
+   */
+  harnessRoot?: string
   beforeSnapshot: unknown
   afterSnapshot?: unknown
   createdAt: string
