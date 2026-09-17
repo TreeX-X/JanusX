@@ -18,12 +18,27 @@ import {
   formatAuditValue,
   selectedAuditOperations,
 } from './maintenanceAuditDetails'
+import { ThinkingRegion } from '../janus/ThinkingRegion'
+import { ToolCallGroup } from '../janus/ToolCallCard'
+import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
 const EMPTY_AUDITS: BlueprintMaintenanceAuditRecord[] = []
 const EMPTY_TOOL_TRACES: BlueprintMaintenanceToolTraceEntry[] = []
 const MESSAGE_SUMMARY_LIMIT = 220
+
+/** Panel trace to shared chat trace: the card summaries ride through, runner-only display assets stay behind. */
+function toChatTraceEntry(entry: BlueprintMaintenanceToolTraceEntry): ChatToolTraceEntry {
+  return {
+    toolName: entry.toolName,
+    workspaceId: entry.workspaceId,
+    status: entry.status,
+    summary: entry.summary,
+    ...(entry.argsDigest ? { argsDigest: entry.argsDigest } : {}),
+    ...(entry.resultDigest ? { resultDigest: entry.resultDigest } : {}),
+  }
+}
 
 export function splitMaintenanceReply(content: string): { summary: string; details: string | null } {
   const normalized = content.trim()
@@ -437,6 +452,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   }, [scrollConversationToBottom, task?.changeSet?.id, task?.messages.length])
 
   const selectedWorkspaces = workspaces.filter((item) => workspaceIds.includes(item.id))
+  const workspaceNameMap = useMemo(() => new Map(workspaces.map((item) => [item.id, item.name])), [workspaces])
   const nodeOptions = blueprint?.nodeIds.map((id) => ({ value: id, label: blueprint.nodes[id]?.title ?? id })) ?? []
   const proposalLegacyGroups = useMemo(() => groupOperations(task?.changeSet?.operations ?? []), [task?.changeSet])
   const undoGroups = useMemo(() => groupOperations(pendingUndo?.changeSet.operations ?? []), [pendingUndo?.changeSet])
@@ -683,16 +699,13 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
               <div className="bp-maintenance-thinking" role="status" aria-live="polite">
                 <span>{t('blueprint:maintenance.roleJanus')}</span>
                 <div><i /><i /><i /><em>{task.phase}</em></div>
-                {taskReasoning && taskReasoning.text ? (
-                  <details className="bp-maintenance-message-details">
-                    <summary>{t('blueprint:maintenance.thinkingDetails', { count: taskReasoning.chars })}</summary>
-                    <div>{taskReasoning.text}{taskReasoning.truncated ? t('blueprint:maintenance.thinkingTruncated') : null}</div>
-                  </details>
+                {taskReasoning && taskReasoning.chars > 0 ? (
+                  <ThinkingRegion snapshot={taskReasoning} streaming />
                 ) : null}
                 {taskToolTraces.length ? (
                   <div className="bp-maintenance-tool-traces">
                     <span>{t('blueprint:maintenance.toolTraceTitle', { count: taskToolTraces.length })}</span>
-                    <ul>{taskToolTraces.slice(-5).map((entry, index) => <li key={`${entry.toolName}-${index}`}>{entry.toolName} · {entry.summary}</li>)}</ul>
+                    <ToolCallGroup entries={taskToolTraces.slice(-5).map(toChatTraceEntry)} workspaceNames={workspaceNameMap} />
                   </div>
                 ) : null}
               </div>
