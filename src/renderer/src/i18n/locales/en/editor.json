@@ -230,6 +230,7 @@
     "selectWorkspace": "Please select a workspace",
     "startingPreview": "Loading preview…",
     "iframeTitle": "Generated document preview",
+    "truncatedPreview": "File is too long, showing the first 512KB only",
     "unsupportedKind": "This file kind cannot be previewed here"
   }
 }

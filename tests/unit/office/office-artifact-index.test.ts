@@ -62,7 +62,7 @@ describe('OfficeArtifactIndex', () => {
     await mkdir(join(root, 'node_modules'))
     await writeFile(join(root, 'reports', 'old.DOCX'), 'old')
     await writeFile(join(root, 'new.XLSX'), 'newer')
-    await writeFile(join(root, 'notes.txt'), 'ignore')
+    await writeFile(join(root, 'notes.bin'), 'ignore')
     await writeFile(join(root, 'node_modules', 'hidden.pptx'), 'ignore')
     await writeFile(join(outside, 'outside.pptx'), 'outside')
     await symlink(outside, join(root, 'linked'), 'junction')

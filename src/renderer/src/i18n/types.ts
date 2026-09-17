@@ -624,6 +624,7 @@ export type TypedI18nKey =
   | 'editor:product.reloadFromDisk'
   | 'editor:product.selectWorkspace'
   | 'editor:product.startingPreview'
+  | 'editor:product.truncatedPreview'
   | 'editor:product.unsupportedKind'
   | 'editor:project.analysisIncomplete'
   | 'editor:project.analyze'

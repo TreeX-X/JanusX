@@ -230,6 +230,7 @@
     "selectWorkspace": "请选择工作区",
     "startingPreview": "正在加载预览…",
     "iframeTitle": "生成文档预览",
+    "truncatedPreview": "文件过长，仅显示前 512KB",
     "unsupportedKind": "此类文件暂不支持在此预览"
   }
 }

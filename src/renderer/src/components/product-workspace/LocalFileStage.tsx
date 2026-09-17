@@ -4,7 +4,10 @@ import remarkGfm from 'remark-gfm'
 import type { ProductKind } from '../../../../shared/product'
 import { MARKDOWN_COMPONENTS } from '../viewers/markdown-components'
 import { PreviewScrollArea } from '../viewers/PreviewScrollArea'
+import { ImageViewer } from '../viewers/ImageViewer'
 import { useI18n } from '@/i18n/useI18n'
+
+export const PRODUCT_TEXT_PREVIEW_LIMIT = 512 * 1024
 
 function joinWorkspacePath(workspacePath: string, relPath: string): string {
   const trimmed = workspacePath.replace(/[/\\]+$/, '')
@@ -20,13 +23,34 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
 }) {
   const { t } = useI18n('editor')
   const [content, setContent] = useState<string | null>(null)
+  const [image, setImage] = useState<{ base64: string; mimeType: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let disposed = false
     setContent(null)
+    setImage(null)
     setError(null)
-    void window.electron.file.read(joinWorkspacePath(workspacePath, relPath)).then((result) => {
+    const absolutePath = joinWorkspacePath(workspacePath, relPath)
+    if (kind === 'image') {
+      void window.electron.file.readBinary(absolutePath).then((result) => {
+        if (disposed) return
+        if (result && typeof result === 'object' && 'error' in result && typeof (result as { error?: unknown }).error === 'string') {
+          setError((result as { error: string }).error)
+          return
+        }
+        const binary = result as { base64?: string; mimeType?: string }
+        if (!binary.base64) {
+          setError('Failed to load file')
+          return
+        }
+        setImage({ base64: binary.base64, mimeType: binary.mimeType ?? 'application/octet-stream' })
+      }).catch((loadError: unknown) => {
+        if (!disposed) setError(loadError instanceof Error ? loadError.message : 'Failed to load file')
+      })
+      return () => { disposed = true }
+    }
+    void window.electron.file.read(absolutePath).then((result) => {
       if (disposed) return
       if (result && typeof result === 'object' && 'error' in result && typeof (result as { error?: unknown }).error === 'string') {
         setError((result as { error: string }).error)
@@ -37,12 +61,21 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
       if (!disposed) setError(loadError instanceof Error ? loadError.message : 'Failed to load file')
     })
     return () => { disposed = true }
-  }, [workspacePath, relPath, revision])
+  }, [workspacePath, relPath, kind, revision])
 
   if (error) {
     return <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-[#aaa]">
       <div>{error}</div>
     </div>
+  }
+  if (kind === 'image') {
+    if (image === null) {
+      return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[#777]">
+        <span className="product-spinner" aria-hidden="true" />
+        <span>{t('editor:product.startingPreview')}</span>
+      </div>
+    }
+    return <ImageViewer base64={image.base64} mimeType={image.mimeType} fileName={relPath.split('/').pop() ?? relPath} />
   }
   if (content === null) {
     return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[#777]">
@@ -56,6 +89,16 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
         <div className="markdown-preview">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
         </div>
+      </div>
+    </PreviewScrollArea>
+  }
+  if (kind === 'text') {
+    const truncated = content.length > PRODUCT_TEXT_PREVIEW_LIMIT
+    const visible = truncated ? content.slice(0, PRODUCT_TEXT_PREVIEW_LIMIT) : content
+    return <PreviewScrollArea>
+      <div className="flex-1" style={{ padding: 16, background: '#0a0a0a', color: '#d4d4d4', minHeight: '100%' }}>
+        {truncated && <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>{t('editor:product.truncatedPreview')}</div>}
+        <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{visible}</pre>
       </div>
     </PreviewScrollArea>
   }
