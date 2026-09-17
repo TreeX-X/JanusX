@@ -16,7 +16,7 @@ export type CcSwitchChannel = (typeof CC_SWITCH_CHANNELS)[keyof typeof CC_SWITCH
 /** 受管外部终端白名单；与 JanusX 终端预设的外部 CLI 对齐（claude/codex/opencode/pi 为第三方，janus 为自有 sibling 源码构建） */
 export type CcSwitchToolId = 'claude' | 'codex' | 'opencode' | 'pi' | 'janus'
 
-export const CC_SWITCH_TOOL_ORDER: readonly CcSwitchToolId[] = ['claude', 'codex', 'opencode', 'pi', 'janus']
+export const CC_SWITCH_TOOL_ORDER: readonly CcSwitchToolId[] = ['janus', 'claude', 'codex', 'opencode', 'pi']
 
 /** 两端共享的展示元数据：首字母徽标＋品牌色，不引入二进制图标资产。 */
 export interface CcSwitchToolMeta {
