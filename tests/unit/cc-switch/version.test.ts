@@ -23,18 +23,19 @@ describe('cli version compare', () => {
 
 describe('fetchLatestVersion', () => {
   it('reads the dist-tags endpoint and tolerates failures as unknown', async () => {
-    const ok = await fetchLatestVersion(CC_SWITCH_TOOLS.claude, (async () => ({
+    const npmPackage = CC_SWITCH_TOOLS.claude.npmPackage ?? ''
+    const ok = await fetchLatestVersion(npmPackage, (async () => ({
       ok: true,
       json: async () => ({ latest: '9.9.9' }),
     })) as never)
     expect(ok).toBe('9.9.9')
 
-    const failed = await fetchLatestVersion(CC_SWITCH_TOOLS.claude, (async () => {
+    const failed = await fetchLatestVersion(npmPackage, (async () => {
       throw new Error('offline')
     }) as never)
     expect(failed).toBeUndefined()
 
-    const dirty = await fetchLatestVersion(CC_SWITCH_TOOLS.claude, (async () => ({
+    const dirty = await fetchLatestVersion(npmPackage, (async () => ({
       ok: true,
       json: async () => ({ latest: 'not-a-version' }),
     })) as never)

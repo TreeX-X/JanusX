@@ -73,6 +73,7 @@ export class DefaultCcSwitchService implements CcSwitchService {
           timeout: options.timeout,
           reject: false,
           windowsHide: true,
+          cwd: options.cwd,
           env: { ...process.env, PATH: mergedPath },
         })
         return { exitCode: result.exitCode ?? 1, stdout: result.stdout, stderr: result.stderr }
@@ -88,7 +89,10 @@ export class DefaultCcSwitchService implements CcSwitchService {
     private readonly applier: ClaudeSettingsApplier = claudeSettingsApplier,
     private readonly syncStore: CcSwitchSyncStateStore = ccSwitchSyncStateStore,
     private readonly resolveLlmCredentials: (providerId: string | null) => Promise<CcSwitchLlmCredentials | null> = defaultResolveLlmCredentials,
-  ) {}
+    installer?: CliInstaller,
+  ) {
+    if (installer) this.installer = installer
+  }
 
   private detectorFor(toolId: CcSwitchToolId): CliDetector {
     const existing = this.detectors[toolId]
@@ -106,7 +110,13 @@ export class DefaultCcSwitchService implements CcSwitchService {
   async latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult> {
     const tool = getCcSwitchTool(toolId)
     if (!tool) return { toolId }
-    return { toolId, latestVersion: await fetchLatestVersion(tool) }
+    // 自有工具的“最新”即 sibling 源码版本号；取不到（打包后）则未知，不阻塞卡片。
+    if (tool.latestStrategy === 'local-source') {
+      const source = await this.installer.locateLocalSource(tool)
+      return { toolId, latestVersion: source?.version }
+    }
+    if (!tool.npmPackage) return { toolId }
+    return { toolId, latestVersion: await fetchLatestVersion(tool.npmPackage) }
   }
 
   async install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult> {

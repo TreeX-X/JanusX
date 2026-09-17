@@ -1,4 +1,6 @@
-import { dirname, resolve } from 'path'
+import { dirname, join, resolve } from 'path'
+import { mkdtemp, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
 import { describe, expect, it, vi } from 'vitest'
 import { CliInstaller } from '../../../src/main/cc-switch/installer'
 import { CC_SWITCH_TOOLS } from '../../../src/main/cc-switch/tool-registry'
@@ -72,6 +74,75 @@ describe('CliInstaller', () => {
     await expect(installer.install(CC_SWITCH_TOOLS.claude)).resolves.toMatchObject({ success: false })
     release()
     await expect(first).resolves.toMatchObject({ success: true })
+  })
+
+  it('builds then links the janus sibling source in its own directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'janusx-janus-src-'))
+    const packageDir = join(root, 'packages', 'cli')
+    const { mkdir } = await import('fs/promises')
+    await mkdir(packageDir, { recursive: true })
+    await writeFile(join(packageDir, 'package.json'), JSON.stringify({ name: '@janus-agent/cli', version: '0.2.0' }), 'utf8')
+    const calls: Array<{ file: string; args: readonly string[]; cwd?: string }> = []
+    const installer = new CliInstaller({
+      platform: 'linux',
+      env: { PATH: '' },
+      homeDir: root,
+      isRegularFile: async () => true,
+      run: async (file, args, options) => {
+        calls.push({ file, args, cwd: options.cwd })
+        return { exitCode: 0, stdout: '', stderr: '' }
+      },
+      resolveSiblingRoot: () => root,
+    })
+
+    const result = await installer.install(CC_SWITCH_TOOLS.janus)
+    expect(result.success).toBe(true)
+    expect(result.command).toContain('npm run build')
+    expect(result.command).toContain('npm link')
+    expect(calls.map(call => call.args)).toEqual([['run', 'build'], ['link']])
+    expect(calls.every(call => call.cwd === packageDir)).toBe(true)
+  })
+
+  it('falls back to manual guidance when the janus source is absent', async () => {
+    const installer = new CliInstaller({
+      platform: 'linux',
+      env: { PATH: '' },
+      homeDir: '/nonexistent',
+      isRegularFile: async () => true,
+      run: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
+      resolveSiblingRoot: () => undefined,
+    })
+
+    const result = await installer.install(CC_SWITCH_TOOLS.janus)
+    expect(result).toMatchObject({ success: false })
+    expect(result.command).toContain('npm link')
+  })
+
+  it('stops before link when the janus build fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'janusx-janus-fail-'))
+    const packageDir = join(root, 'packages', 'cli')
+    const { mkdir } = await import('fs/promises')
+    await mkdir(packageDir, { recursive: true })
+    await writeFile(join(packageDir, 'package.json'), JSON.stringify({ name: '@janus-agent/cli', version: '0.2.0' }), 'utf8')
+    let runs = 0
+    const installer = new CliInstaller({
+      platform: 'linux',
+      env: { PATH: '' },
+      homeDir: root,
+      isRegularFile: async () => true,
+      run: async () => {
+        runs += 1
+        return runs === 1
+          ? { exitCode: 1, stdout: '', stderr: 'tsc error TS0000' }
+          : { exitCode: 0, stdout: '', stderr: '' }
+      },
+      resolveSiblingRoot: () => root,
+    })
+
+    const result = await installer.install(CC_SWITCH_TOOLS.janus)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('tsc error TS0000')
+    expect(runs).toBe(1)
   })
 })
 

@@ -111,4 +111,53 @@ describe('CcSwitchService provider sync', () => {
     await expect(service.applyProvider('codex', null)).resolves.toMatchObject({ success: false })
     expect(resolver).not.toHaveBeenCalled()
   })
+
+  it('reads the janus latest version from the sibling source', async () => {
+    const { mkdir, writeFile } = await import('fs/promises')
+    const { CliInstaller } = await import('../../../src/main/cc-switch/installer')
+    const root = await createTempDir('janusx-cc-janus-latest-')
+    const packageDir = join(root, 'packages', 'cli')
+    await mkdir(packageDir, { recursive: true })
+    await writeFile(join(packageDir, 'package.json'), JSON.stringify({ name: '@janus-agent/cli', version: '0.2.0' }), 'utf8')
+    const homeDir = await createTempDir('janusx-cc-janus-latest-home-')
+    const userDataDir = await createTempDir('janusx-cc-janus-latest-data-')
+    const service = new DefaultCcSwitchService(
+      {},
+      new ClaudeSettingsApplier(homeDir),
+      new CcSwitchSyncStateStore(userDataDir),
+      async () => null,
+      new CliInstaller({
+        platform: 'linux',
+        env: {},
+        homeDir,
+        isRegularFile: async () => false,
+        run: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
+        resolveSiblingRoot: () => root,
+      }),
+    )
+
+    await expect(service.latest('janus')).resolves.toEqual({ toolId: 'janus', latestVersion: '0.2.0' })
+  })
+
+  it('reports unknown janus latest when the sibling source is absent', async () => {
+    const { CliInstaller } = await import('../../../src/main/cc-switch/installer')
+    const homeDir = await createTempDir('janusx-cc-janus-absent-home-')
+    const userDataDir = await createTempDir('janusx-cc-janus-absent-data-')
+    const service = new DefaultCcSwitchService(
+      {},
+      new ClaudeSettingsApplier(homeDir),
+      new CcSwitchSyncStateStore(userDataDir),
+      async () => null,
+      new CliInstaller({
+        platform: 'linux',
+        env: {},
+        homeDir,
+        isRegularFile: async () => false,
+        run: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
+        resolveSiblingRoot: () => undefined,
+      }),
+    )
+
+    await expect(service.latest('janus')).resolves.toEqual({ toolId: 'janus', latestVersion: undefined })
+  })
 })

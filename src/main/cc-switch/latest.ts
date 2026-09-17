@@ -1,5 +1,3 @@
-import type { CcSwitchToolDescriptor } from './tool-registry'
-
 const LATEST_TIMEOUT_MS = 15_000
 
 type FetchImpl = (url: string, init: { signal: AbortSignal }) => Promise<{ ok: boolean; json(): Promise<unknown> }>
@@ -9,11 +7,11 @@ type FetchImpl = (url: string, init: { signal: AbortSignal }) => Promise<{ ok: b
  * 返回 undefined，调用方展示 unknown 且不阻塞卡片——与转发等长耗时链路隔离。
  */
 export async function fetchLatestVersion(
-  tool: CcSwitchToolDescriptor,
+  npmPackage: string,
   fetchImpl: FetchImpl = fetch as unknown as FetchImpl,
   timeoutMs = LATEST_TIMEOUT_MS,
 ): Promise<string | undefined> {
-  const url = `https://registry.npmjs.org/-/package/${tool.npmPackage.replace('/', '%2f')}/dist-tags`
+  const url = `https://registry.npmjs.org/-/package/${npmPackage.replace('/', '%2f')}/dist-tags`
   try {
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) return undefined

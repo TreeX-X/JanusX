@@ -5,13 +5,24 @@ export interface CcSwitchToolDescriptor {
   displayName: string
   /** PATH 与已知位置中查找的可执行文件名（win32 含 .cmd/.exe 变体）。 */
   binaryNames: readonly string[]
-  npmPackage: string
-  /** 手动安装命令（展示与复制用，静默执行侧按平台重算）。 */
+  /** npm 分发包名；自有源码构建的工具为空。 */
+  npmPackage?: string
+  /** 手动安装命令或指引（展示与复制用，静默执行侧按平台重算）。 */
   manualInstallCommand: string
-  latestStrategy: 'npm-dist-tags'
+  latestStrategy: 'npm-dist-tags' | 'local-source'
   /** 各工具原生安装器遗留的额外目录（win32），与 npm 全局目录并列探测。 */
   extraKnownDirs?: {
     win32?: readonly string[]
+  }
+  /**
+   * 自有 sibling 源码的构建＋全局 link 生命周期（janus 专用）。
+   * 有源码时静默执行更新；无源码时只展示 manualInstallCommand。
+   */
+  localLifecycle?: {
+    /** sibling 仓库下包目录名，如 'cli'。 */
+    packageDirName: string
+    /** 校验用包名，如 '@janus-agent/cli'。 */
+    packageName: string
   }
 }
 
@@ -55,9 +66,28 @@ export const CC_SWITCH_TOOLS: Record<CcSwitchToolId, CcSwitchToolDescriptor> = {
     manualInstallCommand: npmInstallCommand('opencode-ai'),
     latestStrategy: 'npm-dist-tags',
   },
+  pi: {
+    id: 'pi',
+    displayName: 'Pi Agent',
+    binaryNames: ['pi'],
+    npmPackage: '@earendil-works/pi-coding-agent',
+    manualInstallCommand: npmInstallCommand('@earendil-works/pi-coding-agent'),
+    latestStrategy: 'npm-dist-tags',
+  },
+  janus: {
+    id: 'janus',
+    displayName: 'Janus',
+    binaryNames: ['janus'],
+    manualInstallCommand: 'cd ../janus-agentX/packages/cli && npm run build && npm link',
+    latestStrategy: 'local-source',
+    localLifecycle: {
+      packageDirName: 'cli',
+      packageName: '@janus-agent/cli',
+    },
+  },
 }
 
 export function getCcSwitchTool(toolId: string): CcSwitchToolDescriptor | undefined {
-  if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'opencode') return undefined
+  if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'opencode' && toolId !== 'pi' && toolId !== 'janus') return undefined
   return CC_SWITCH_TOOLS[toolId]
 }
