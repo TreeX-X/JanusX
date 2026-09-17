@@ -53,7 +53,8 @@ guard](2026-09-17-maintenance-harness-guard-s6.md).
 - Unify the discussion loop onto the shared chat turn in the same change —
   strongest case is one conversation stack sooner, but it rewrites model
   context, approval, and steering behavior across both entries and dwarfs
-  the wiring; the loop keeps its own circuit until that slice arrives.
+  the wiring; done separately in the [unified
+  discussion](2026-09-17-maintenance-discussion-unified-s6.md).
 - Do nothing / reuse — keep canvas and the terminal CLI as the only write
   paths; rejected because proposals can never land from the panel and
   pending audits keep orphaning on the refused paths.
@@ -80,5 +81,6 @@ guard](2026-09-17-maintenance-harness-guard-s6.md).
   again, like the legacy lane, so callers never blindly retry a successful
   apply. Audits store full before and after projections, which grows audit
   files on very large graphs; slim snapshots stay a revisit signal. The
-  discussion loop still runs its own agent circuit instead of the shared
-  chat turn. Revisit when chat unification or slimmer audits land.
+  discussion loop has since moved onto the shared turn (see the [unified
+  discussion](2026-09-17-maintenance-discussion-unified-s6.md)).
+  Revisit when slimmer audits land.

@@ -27,7 +27,8 @@ fail-fast interval.
 - **Gains**: project graph entries fail fast with an actionable code; legacy maintenance behavior is byte-identical. Verification: `tests/unit/blueprint-maintenance-harness-guard.test.ts` (5 checks: start/prepareUndo/applyUndo refuse project ids without store reads, legacy ids reach existing gates, helper exactness), existing `blueprint-maintenance-service` suite (10 checks) passes with a one-line mock fidelity fix, `npm run typecheck` passes, scoped eslint on the service reports 0 errors.
 - **Costs and limits**: slice 2b retires the refusal above: the panel now
   routes project graph maintenance through the harness transaction with
-  audit equivalence, and the guard test file becomes the routing suite
+  audit equivalence, and the guard test file becomes the   routing suite
   (see the [harness apply routing](2026-09-17-maintenance-harness-apply-s6.md)).
-  The loop still runs its own agent circuit instead of shared `runChatTurn`.
+  Discussion unification has since landed on the shared turn (see the
+  [unified discussion](2026-09-17-maintenance-discussion-unified-s6.md)).
   Revisit when chat unification lands.

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   streamText: vi.fn(),
   getDefaultModel: vi.fn(),
   getLanguageModel: vi.fn(),
+  getProviderSettings: vi.fn(),
   loadBlueprint: vi.fn(),
   applyMaintenanceOperations: vi.fn(),
   workspacesDir: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock('../../src/main/llm/LlmService', () => ({
   llmService: {
     getDefaultModel: mocks.getDefaultModel,
     getLanguageModel: mocks.getLanguageModel,
+    getProviderSettings: mocks.getProviderSettings,
   },
 }))
 vi.mock('../../src/main/janus/blueprint-store', () => ({
@@ -93,9 +95,13 @@ describe('Blueprint maintenance free conversation', () => {
     mocks.workspacesDir.mockReturnValue(registry)
     mocks.getDefaultModel.mockResolvedValue({ provider: { id: 'provider' }, modelId: 'model' })
     mocks.getLanguageModel.mockResolvedValue({})
+    mocks.getProviderSettings.mockResolvedValue({ modelId: 'model' })
     mocks.loadBlueprint.mockImplementation(async () => fixture())
     mocks.createSession.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({ id: `agent-session-${workspaceId}` }))
-    mocks.getSession.mockReturnValue({ status: 'running' })
+    mocks.getSession.mockImplementation((id: string) => {
+      const workspaceId = String(id).replace(/^agent-session-/, '')
+      return { id, status: 'running', workspace: { workspaceId, workspaceRoot: workspace } }
+    })
     mocks.cancelSession.mockResolvedValue({ status: 'cancelled' })
   })
 
@@ -221,8 +227,10 @@ describe('Blueprint maintenance free conversation', () => {
 
   it('retries a failed discussion stage once without creating a second task', async () => {
     mocks.streamText.mockClear()
+    // The shared turn runner retries retryable provider errors internally;
+    // a plain failure still fails the stage without a blind second turn.
     mocks.streamText
-      .mockRejectedValueOnce(new Error('temporary model failure'))
+      .mockRejectedValueOnce(Object.assign(new Error('temporary provider overload'), { statusCode: 429 }))
       .mockImplementationOnce(() => ({
         textStream: (async function* () { yield 'Recovered response' })(),
         toolCalls: Promise.resolve([]),
