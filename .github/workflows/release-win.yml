@@ -27,6 +27,12 @@ jobs:
           repository: ${{ github.repository_owner }}/janus-agentX
           path: janus-agentX
 
+      # @janus-agent/* 以 dist/ 发布，CI 里是源码检出，必须先构建同级仓，
+      # 否则 JanusX 侧构建找不到模块入口（verify 曾因此全红）。
+      - name: Build sibling janus-agentX
+        working-directory: janus-agentX
+        run: npm ci && npm run build
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

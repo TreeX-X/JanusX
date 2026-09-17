@@ -38,6 +38,12 @@ jobs:
           cache: npm
           cache-dependency-path: JanusX/package-lock.json
 
+      # @janus-agent/* 以 dist/ 发布，CI 里是源码检出，必须先构建同级仓，
+      # 否则 JanusX 侧 typecheck/bundle 找不到模块声明。
+      - name: Build sibling janus-agentX
+        working-directory: janus-agentX
+        run: npm ci && npm run build
+
       # file: 依赖需要先物化（同 release-win 的 prepackage），否则 install 找不到同级包。
       - name: Prepackage
         working-directory: JanusX
