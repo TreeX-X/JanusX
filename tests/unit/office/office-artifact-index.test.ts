@@ -1,5 +1,5 @@
 import { writeFileSync } from 'fs'
-import { mkdtemp, mkdir, rename, rm, symlink, utimes, writeFile } from 'fs/promises'
+import { mkdtemp, mkdir, realpath, rename, rm, symlink, utimes, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,6 +45,13 @@ function createHarness(
 
 function codeOf(error: unknown): string | undefined {
   return (error as OfficeArtifactIndexError | undefined)?.code
+}
+
+// 产品侧订阅前对 root 做 realpath，跑道/机器不同解析结果不同，查 mock 必须用同一解析。
+async function subscriberFor(harness: ReturnType<typeof createHarness>, root: string) {
+  const subscriber = harness.subscribers.get(await realpath(root))
+  if (!subscriber) throw new Error(`missing subscriber for ${root}`)
+  return subscriber
 }
 
 describe('OfficeArtifactIndex', () => {
@@ -126,7 +133,7 @@ describe('OfficeArtifactIndex', () => {
 
     await writeFile(join(root, 'report.docx'), 'updated-content')
     await writeFile(join(root, 'added.pptx'), 'presentation')
-    const subscriber = harness.subscribers.get(root)!
+    const subscriber = (await subscriberFor(harness, root))
     subscriber('change', 'report.docx')
     subscriber('change', 'added.pptx')
     subscriber('change', 'ordinary.ts')
@@ -170,7 +177,7 @@ describe('OfficeArtifactIndex', () => {
     await harness.index.ensure('workspace')
     harness.events.length = 0
     scanClock.mockClear()
-    const subscriber = harness.subscribers.get(root)!
+    const subscriber = (await subscriberFor(harness, root))
 
     await writeFile(join(root, 'report.docx'), 'created')
     subscriber('rename', 'report.docx')
@@ -203,7 +210,7 @@ describe('OfficeArtifactIndex', () => {
     await harness.index.ensure('workspace')
     harness.events.length = 0
     scanClock.mockClear()
-    const subscriber = harness.subscribers.get(root)!
+    const subscriber = (await subscriberFor(harness, root))
 
     await writeFile(join(root, 'reports.data', 'report.xlsx'), 'report')
     subscriber('rename', 'reports.data')
@@ -239,7 +246,7 @@ describe('OfficeArtifactIndex', () => {
     const harness = createHarness(new Map([['workspace', root]]))
     await harness.index.ensure('workspace')
     harness.events.length = 0
-    const subscriber = harness.subscribers.get(root)!
+    const subscriber = (await subscriberFor(harness, root))
 
     await writeFile(join(root, 'added.XLSX'), 'added')
     subscriber('change', Buffer.from('added.XLSX'))
@@ -267,7 +274,7 @@ describe('OfficeArtifactIndex', () => {
     const harness = createHarness(new Map([['workspace', root]]))
     await harness.index.ensure('workspace')
     harness.events.length = 0
-    const subscriber = harness.subscribers.get(root)!
+    const subscriber = (await subscriberFor(harness, root))
 
     await writeFile(join(root, 'null-signal.docx'), 'created')
     subscriber('rename', null)
@@ -295,16 +302,18 @@ describe('OfficeArtifactIndex', () => {
     await harness.index.ensure('a')
     await harness.index.ensure('b')
     harness.events.length = 0
+    const resolvedA = await realpath(rootA)
+    const resolvedB = await realpath(rootB)
 
-    harness.subscribers.get(rootA)!('change', 'a.docx')
+    ;(await subscriberFor(harness, rootA))('change', 'a.docx')
     harness.index.dispose('a')
     await vi.advanceTimersByTimeAsync(200)
 
     expect(harness.events).toEqual([])
-    expect(harness.unsubscribed).toEqual([rootA])
-    expect(harness.subscribers.has(rootB)).toBe(true)
+    expect(harness.unsubscribed).toEqual([resolvedA])
+    expect(harness.subscribers.has(resolvedB)).toBe(true)
     harness.index.disposeAll()
-    expect(harness.unsubscribed).toEqual([rootA, rootB])
+    expect(harness.unsubscribed).toEqual([resolvedA, resolvedB])
   })
 
   it('invalidates an in-flight ensure without registering a late subscriber', async () => {

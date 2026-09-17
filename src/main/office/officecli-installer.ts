@@ -118,7 +118,9 @@ export class OfficecliInstaller {
     if (!isOwnedBinaryPath(this.root, binary)) return undefined
     try {
       const canonical = await realpath(binary)
-      return isInside(resolve(this.root), canonical) && (await stat(canonical)).isFile() &&
+      // 两侧都取 canonical：root 本身可能是 junction/短文件名，单侧解析必误判越界。
+      const canonicalRoot = await realpath(this.root)
+      return isInside(canonicalRoot, canonical) && (await stat(canonical)).isFile() &&
         await sha256(canonical) === manifest.sha256 ? canonical : undefined
     } catch {
       return undefined
@@ -156,7 +158,7 @@ export class OfficecliInstaller {
     const binary = resolve(this.root, manifest.binary)
     if (!isOwnedBinaryPath(this.root, binary)) throw new Error('Managed OfficeCLI manifest is invalid')
     const canonical = await realpath(binary)
-    if (!isInside(resolve(this.root), canonical)) throw new Error('Managed OfficeCLI manifest escapes its root')
+    if (!isInside(await realpath(this.root), canonical)) throw new Error('Managed OfficeCLI manifest escapes its root')
     await this.deps.remove(dirname(binary), { recursive: true, force: true })
     await this.deps.remove(this.manifestPath, { force: true })
     this.lastFailure = undefined
