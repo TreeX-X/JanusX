@@ -332,6 +332,39 @@
     },
     "notice": {
       "existingTerminal": "Restart open terminals for the new version and PATH to take effect."
+    },
+    "profiles": {
+      "title": "Provider profiles",
+      "desc": "Keep multiple base URLs and credentials; apply one to Claude Code with rollback.",
+      "list": {
+        "empty": "No profiles yet. Create one below.",
+        "active": "Active",
+        "activate": "Switch",
+        "remove": "Remove",
+        "confirmRemove": "Confirm remove?"
+      },
+      "form": {
+        "createTitle": "New profile",
+        "editTitle": "Edit profile",
+        "edit": "Edit",
+        "name": "Name",
+        "baseURL": "Base URL",
+        "authToken": "Auth Token",
+        "model": "Model (optional)",
+        "modelPlaceholder": "Leave empty to keep the current model",
+        "save": "Save",
+        "cancel": "Cancel"
+      },
+      "action": {
+        "rollback": "Roll back last switch"
+      },
+      "notice": {
+        "activated": "Switched and backed up. Restart terminals to take effect.",
+        "rolledBack": "Rolled back to the last backup. No profile is active now."
+      },
+      "error": {
+        "validation": "Check the form: name, http(s) URL, and token are required."
+      }
     }
   },
   "officeCli": {

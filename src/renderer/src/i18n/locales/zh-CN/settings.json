@@ -332,6 +332,39 @@
     },
     "notice": {
       "existingTerminal": "已打开的终端需重启，新版本与 PATH 才会生效。"
+    },
+    "profiles": {
+      "title": "供应商画像",
+      "desc": "保存多组 Base URL 与凭证，一键回写 Claude Code 配置并可回滚。",
+      "list": {
+        "empty": "还没有画像，先在下方新建一组。",
+        "active": "使用中",
+        "activate": "切换",
+        "remove": "删除",
+        "confirmRemove": "确认删除？"
+      },
+      "form": {
+        "createTitle": "新建画像",
+        "editTitle": "编辑画像",
+        "edit": "编辑",
+        "name": "名称",
+        "baseURL": "Base URL",
+        "authToken": "Auth Token",
+        "model": "模型（可选）",
+        "modelPlaceholder": "留空则不改动现有模型",
+        "save": "保存",
+        "cancel": "取消"
+      },
+      "action": {
+        "rollback": "回滚上次切换"
+      },
+      "notice": {
+        "activated": "已切换并备份，重启终端后生效。",
+        "rolledBack": "已回滚到上次备份，当前无激活画像。"
+      },
+      "error": {
+        "validation": "请检查表单：名称、http(s) 地址与 Token 必填。"
+      }
     }
   },
   "officeCli": {

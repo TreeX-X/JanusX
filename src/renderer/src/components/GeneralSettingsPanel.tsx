@@ -3,6 +3,7 @@ import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from '@/i18n/config'
 import { Select } from './ui/Select'
 import { LanguageServiceManager } from './LanguageServiceManager'
 import { CcSwitchManager } from './CcSwitchManager'
+import { CcSwitchProfiles } from './CcSwitchProfiles'
 import { OfficeCliManager } from './OfficeCliManager'
 import { UpdaterSettings } from './UpdaterSettings'
 import styles from './AppSettingsModal.module.css'
@@ -50,6 +51,7 @@ export function GeneralSettingsPanel() {
         </div>
         <div className={styles.generalControlCol}>
           <CcSwitchManager />
+          <CcSwitchProfiles />
         </div>
       </div>
 
