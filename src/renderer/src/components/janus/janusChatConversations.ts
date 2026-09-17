@@ -24,6 +24,8 @@ export function createJanusConversation(id = crypto.randomUUID()): PersistedJanu
     messages: [],
     attachedWorkspaceIds: [],
     toolTraces: [],
+    // S6: new chats start as personal assist; blueprint entries upgrade to project explicitly.
+    engineeringContext: { domain: 'personal', intent: 'assist', noteRefs: [], scope: 'selected', repoIds: [] },
   }
 }
 

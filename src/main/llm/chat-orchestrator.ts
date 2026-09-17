@@ -58,6 +58,13 @@ export interface ChatStreamRequest {
   workspacePath?: string
   workspaceResources?: ChatWorkspaceResource[]
   toolTraces?: import('../../shared/ipc/llm').ChatToolTraceEntry[]
+  /**
+   * S6 engineering domain. Missing = legacy personal behavior.
+   * `project` never falls back to personal memory capture/injection.
+   */
+  domain?: 'personal' | 'project'
+  /** Renderer selection request only; never trusted for paths or grants. */
+  noteRefs?: Array<{ uri: string; expectedHash?: string }>
 }
 
 /*-- 纯 helper 继续沿用 chat-core（单测经此 re-export，链路不断） --*/
@@ -95,8 +102,12 @@ export async function prepareJanusChatRecall(
   workspacePath?: string,
   search: ContextSearch = knowledgeContextService.search.bind(knowledgeContextService),
   searchUser?: UserSearch,
+  domain?: 'personal' | 'project',
 ): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace }> {
   const project = await prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search })
+  // S6 domain isolation: project sessions never auto-inject personal history.
+  // Only an explicit user-provided snippet (not the whole timeline) may cross.
+  if (domain === 'project') return project
   const resolveUser = searchUser ?? defaultUserSearch()
   if (!resolveUser) return project
   const query = [...messages].reverse().find((message) => message.role === 'user' && message.content.trim())
@@ -201,10 +212,10 @@ interface ChatStreamReplyTarget {
 /** Pending mid-turn ask_user answers, keyed by tool call id. */
 const pendingQuestionResolvers = new Map<string, { requestId: string; resolve: (answer: ChatQuestionAnswer) => void }>()
 
-function settlePendingQuestion(callId: string, answer: ChatQuestionAnswer): boolean {
-  const pending = pendingQuestionResolvers.get(callId)
+function settlePendingQuestion(key: string, answer: ChatQuestionAnswer): boolean {
+  const pending = pendingQuestionResolvers.get(key)
   if (!pending) return false
-  pendingQuestionResolvers.delete(callId)
+  pendingQuestionResolvers.delete(key)
   pending.resolve(answer)
   return true
 }
@@ -230,7 +241,12 @@ export function answerChatQuestion(payload: ChatAnswerQuestionPayload): { accept
     return { accepted: false, error: 'Invalid call id' }
   }
   if (!isQuestionAnswer(payload.answer)) return { accepted: false, error: 'Invalid answer' }
-  if (!settlePendingQuestion(payload.callId, payload.answer)) {
+  const key = JSON.stringify([payload.requestId, payload.callId])
+  const pending = pendingQuestionResolvers.get(key)
+  if (!pending || pending.requestId !== payload.requestId || !abortControllers.has(payload.requestId)) {
+    return { accepted: false, error: 'No pending question for this request' }
+  }
+  if (!settlePendingQuestion(key, payload.answer)) {
     return { accepted: false, error: 'No pending question for this call' }
   }
   return { accepted: true }
@@ -240,8 +256,13 @@ export function answerChatQuestion(payload: ChatAnswerQuestionPayload): { accept
 function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['question']> {
   return {
     askUser: (request, signal) => new Promise((resolve) => {
+      const key = JSON.stringify([requestId, request.callId])
+      if (pendingQuestionResolvers.has(key)) {
+        resolve({ status: 'cancelled' })
+        return
+      }
       const finish = (answer: ChatQuestionAnswer) => {
-        pendingQuestionResolvers.delete(request.callId)
+        pendingQuestionResolvers.delete(key)
         signal.removeEventListener('abort', onAbort)
         resolve(answer)
       }
@@ -250,14 +271,14 @@ function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['
         resolve({ status: 'cancelled' })
         return
       }
-      pendingQuestionResolvers.set(request.callId, { requestId, resolve: finish })
+      pendingQuestionResolvers.set(key, { requestId, resolve: finish })
       signal.addEventListener('abort', onAbort, { once: true })
     }),
   }
 }
 
 /** 壳默认 ports：生产单例装配（可注入版本见 janus-agent-ports）。 */
-function defaultChatTurnPorts(callerId: string, requestId: string): ChatTurnPorts {
+function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project'): ChatTurnPorts {
   return buildJanusChatTurnPorts({
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings(providerId),
@@ -281,6 +302,9 @@ function defaultChatTurnPorts(callerId: string, requestId: string): ChatTurnPort
         maxItems: input.maxItems,
         maxChars: input.maxChars,
       }
+      // S6 domain isolation: project turns use project recall only; personal
+      // history never fuses automatically into the engineering context.
+      if (domain === 'project') return knowledgeContextService.search(base)
       // Fused chat recall stays transparent to the loop: the port input keeps
       // its generic shape (no persona types cross into janus-agentX) while the
       // shell appends the user section under its own budget. The guard keeps
@@ -316,24 +340,26 @@ function defaultChatTurnPorts(callerId: string, requestId: string): ChatTurnPort
   })
 }
 
+// Note: single-turn lock and project domain isolation — see .agents/notes/implemented/architecture/2026-09-17-chat-turn-guard-domain-s6.md
 /** 流式对话编排：由 llm-handlers 的 ipcMain.on(chatStream) 委托调用 */
 export async function handleChatStream(event: ChatStreamReplyTarget, request: ChatStreamRequest): Promise<void> {
-  const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces } = request
+  const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces, domain } = request
 
-  // 重复 requestId：先中止旧流，避免旧 controller 被覆盖后失去 cancel 句柄
-  const previous = abortControllers.get(requestId)
-  if (previous) {
-    try {
-      previous.abort()
-    } catch {
-      // ignore
+  // S6: same conversationId shares one active turn across assistant/blueprint entries.
+  const activeTurn = activeSteerTargets.get(conversationId || requestId)
+  if (activeTurn?.requestId === requestId) return
+  if (activeTurn || abortControllers.has(requestId)) {
+    if (!event.sender?.isDestroyed?.()) {
+      event.reply(LLM_CHANNELS.error, { requestId, error: 'BUSY: conversation already has an active turn' })
     }
+    return
   }
 
   const controller = new AbortController()
   let reasoningChars = 0
   abortControllers.set(requestId, controller)
-  // R6-full：本请求的 steering 端口（重复 conversationId 时新请求直接覆盖旧目标）。
+  // S6 single-turn lock: the steering slot doubles as the turn owner, so a
+  // second entry with the same conversationId steers instead of spawning.
   const steerKey = conversationId || requestId
   const steeringPort = new AgentSteeringPort()
   activeSteerTargets.set(steerKey, { requestId, port: steeringPort })
@@ -376,7 +402,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
   try {
     const callerId = `renderer:${event.sender?.id ?? 'unknown'}`
-    const ports = defaultChatTurnPorts(callerId, requestId)
+    const ports = defaultChatTurnPorts(callerId, requestId, domain)
     const chatSession = getChatSession(conversationId ?? requestId)
 
     const result = await runChatTurn(
@@ -424,11 +450,12 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     if (result.toolTraces.length > 0) {
       sendEvent(LLM_CHANNELS.toolTrace, { requestId, entries: result.toolTraces })
     }
-    // User memory closeout: every janus-chat turn grows the person timeline.
+    // User memory closeout: every personal janus-chat turn grows the person timeline.
     // Workspace-attached turns already captured project observations inside
     // the loop, so only the episode lands here; workspace-free turns capture
     // observations plus the episode into person scope. Both helpers fail open.
-    if (sourceTag === 'janus-chat') {
+    // S6: project domain never writes personal memory, even without a workspace.
+    if (sourceTag === 'janus-chat' && domain !== 'project') {
       const lastUserText = [...messages].reverse().find((message) => message.role === 'user' && message.content.trim())
         ?.content.trim() ?? ''
       const hadWorkspace = Boolean(workspaceId || workspacePath || (workspaceResources?.length ?? 0) > 0)

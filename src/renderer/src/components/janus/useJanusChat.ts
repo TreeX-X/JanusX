@@ -620,6 +620,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           conversationId: id,
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
+          // S6: explicit domain; missing = legacy personal. Project never falls back to personal memory.
+          ...(latest.engineeringContext?.domain ? { domain: latest.engineeringContext.domain } : {}),
+          ...(latest.engineeringContext?.noteRefs?.length
+            ? { noteRefs: latest.engineeringContext.noteRefs } : {}),
           onRecallTrace: (trace) => {
             if (handles.generation === generation) {
               setRuntime(id, (current) => ({ ...current, latestRecallTrace: trace }))

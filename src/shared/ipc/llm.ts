@@ -31,6 +31,13 @@ export interface ChatRequest {
   messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat'; conversationId?: string; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
   /** Compact trace of tool calls from earlier turns, replayed into the model's context. */
   toolTraces?: ChatToolTraceEntry[]
+  /**
+   * S6 engineering domain. Missing = legacy personal behavior for backward
+   * compatibility; `project` must never fall back to personal memory capture.
+   */
+  domain?: 'personal' | 'project'
+  /** Renderer selection request only; the host resolves URIs and never trusts paths/grants from here. */
+  noteRefs?: Array<{ uri: string; expectedHash?: string }>
 }
 export interface ChatStreamRequest extends ChatRequest { requestId: string }
 export interface ChatStreamEvent { requestId: string; delta?: string; done?: boolean; error?: string }

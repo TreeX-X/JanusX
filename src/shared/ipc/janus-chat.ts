@@ -12,6 +12,27 @@ export interface JanusChatMessage {
   timestamp: number
 }
 
+export type EngineeringDomain = 'personal' | 'project'
+export type EngineeringIntent = 'assist' | 'discuss' | 'maintain' | 'implement'
+export type EngineeringScope = 'selected' | 'subtree' | 'view'
+
+export interface EngineeringNoteRef {
+  uri: string
+  expectedHash?: string
+}
+
+export interface EngineeringContext {
+  domain: EngineeringDomain
+  intent: EngineeringIntent
+  noteRefs: EngineeringNoteRef[]
+  scope: EngineeringScope
+  viewRef?: { ownerRepoId: string; viewId: string }
+  repoIds: string[]
+  taskRefs?: string[]
+  workflow?: { mode: 'xdo' | 'xdel' | 'xflow'; standardVersion: string }
+  contextRevision?: number
+}
+
 export interface PersistedJanusConversation {
   id: string
   title: string
@@ -22,6 +43,10 @@ export interface PersistedJanusConversation {
   modelId?: string
   attachedWorkspaceIds: string[]
   toolTraces: ChatToolTraceEntry[]
+  engineeringContext?: EngineeringContext
+  artifactRefs?: EngineeringNoteRef[]
+  activeRunRefs?: Array<{ taskUri: string; runId: string }>
+  pendingActions?: Array<{ id: string; kind: string; createdAt: number }>
 }
 
 export interface JanusChatStorageSnapshot {
@@ -42,6 +67,10 @@ const MAX_ID_LENGTH = 128
 const MAX_TITLE_LENGTH = 80
 const MAX_MESSAGE_LENGTH = 100_000
 const MAX_TRACE_FIELD_LENGTH = 2_000
+const MAX_NOTE_REFS = 64
+const MAX_RUN_REFS = 16
+const MAX_PENDING_ACTIONS = 16
+const MAX_URI_LENGTH = 512
 
 function boundedString(value: unknown, maxLength: number): string | null {
   return typeof value === 'string' && value.trim().length > 0
@@ -51,6 +80,72 @@ function boundedString(value: unknown, maxLength: number): string | null {
 
 function finiteTimestamp(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+function normalizeNoteRef(value: unknown): EngineeringNoteRef | null {
+  if (!value || typeof value !== 'object') return null
+  const source = value as Record<string, unknown>
+  const uri = boundedString(source.uri, MAX_URI_LENGTH)
+  if (!uri) return null
+  const expectedHash = boundedString(source.expectedHash, MAX_ID_LENGTH) ?? undefined
+  return { uri, ...(expectedHash ? { expectedHash } : {}) }
+}
+
+function normalizeEngineeringContext(value: unknown): EngineeringContext | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const source = value as Record<string, unknown>
+  if (source.domain !== 'personal' && source.domain !== 'project') return undefined
+  if (source.intent !== 'assist' && source.intent !== 'discuss' && source.intent !== 'maintain' && source.intent !== 'implement') {
+    return undefined
+  }
+  if (source.scope !== 'selected' && source.scope !== 'subtree' && source.scope !== 'view') return undefined
+  const noteRefs = Array.isArray(source.noteRefs)
+    ? source.noteRefs.flatMap((item) => {
+        const ref = normalizeNoteRef(item)
+        return ref ? [ref] : []
+      }).slice(0, MAX_NOTE_REFS)
+    : []
+  const repoIds = Array.isArray(source.repoIds)
+    ? [...new Set(source.repoIds.flatMap((item) => {
+        const repoId = boundedString(item, MAX_ID_LENGTH)
+        return repoId ? [repoId] : []
+      }))].slice(0, 32)
+    : []
+  const taskRefs = Array.isArray(source.taskRefs)
+    ? [...new Set(source.taskRefs.flatMap((item) => {
+        const ref = boundedString(item, MAX_URI_LENGTH)
+        return ref ? [ref] : []
+      }))].slice(0, MAX_NOTE_REFS)
+    : undefined
+  let viewRef: EngineeringContext['viewRef']
+  if (source.viewRef && typeof source.viewRef === 'object') {
+    const view = source.viewRef as Record<string, unknown>
+    const ownerRepoId = boundedString(view.ownerRepoId, MAX_ID_LENGTH)
+    const viewId = boundedString(view.viewId, MAX_ID_LENGTH)
+    if (ownerRepoId && viewId) viewRef = { ownerRepoId, viewId }
+  }
+  let workflow: EngineeringContext['workflow']
+  if (source.workflow && typeof source.workflow === 'object') {
+    const flow = source.workflow as Record<string, unknown>
+    if ((flow.mode === 'xdo' || flow.mode === 'xdel' || flow.mode === 'xflow')
+      && typeof flow.standardVersion === 'string' && flow.standardVersion.trim()) {
+      workflow = { mode: flow.mode, standardVersion: flow.standardVersion.slice(0, MAX_ID_LENGTH) }
+    }
+  }
+  const contextRevision = typeof source.contextRevision === 'number' && Number.isFinite(source.contextRevision)
+    ? Math.floor(source.contextRevision)
+    : undefined
+  return {
+    domain: source.domain,
+    intent: source.intent,
+    noteRefs,
+    scope: source.scope,
+    ...(viewRef ? { viewRef } : {}),
+    repoIds,
+    ...(taskRefs ? { taskRefs } : {}),
+    ...(workflow ? { workflow } : {}),
+    ...(contextRevision !== undefined ? { contextRevision } : {}),
+  }
 }
 
 function normalizeConversation(value: unknown): PersistedJanusConversation | null {
@@ -115,6 +210,35 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
 
   const providerId = boundedString(source.providerId, MAX_ID_LENGTH) ?? undefined
   const modelId = boundedString(source.modelId, 256) ?? undefined
+  const engineeringContext = normalizeEngineeringContext(source.engineeringContext)
+  const rawArtifactRefs = Array.isArray(source.artifactRefs)
+    ? source.artifactRefs.flatMap((item) => {
+        const ref = normalizeNoteRef(item)
+        return ref ? [ref] : []
+      }).slice(0, MAX_NOTE_REFS)
+    : undefined
+  const artifactRefs = rawArtifactRefs?.length ? rawArtifactRefs : undefined
+  const rawRunRefs = Array.isArray(source.activeRunRefs)
+    ? source.activeRunRefs.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const entry = item as Record<string, unknown>
+        const taskUri = boundedString(entry.taskUri, MAX_URI_LENGTH)
+        const runId = boundedString(entry.runId, MAX_ID_LENGTH)
+        return taskUri && runId ? [{ taskUri, runId }] : []
+      }).slice(0, MAX_RUN_REFS)
+    : undefined
+  const activeRunRefs = rawRunRefs?.length ? rawRunRefs : undefined
+  const rawPendingActions = Array.isArray(source.pendingActions)
+    ? source.pendingActions.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const entry = item as Record<string, unknown>
+        const id = boundedString(entry.id, MAX_ID_LENGTH)
+        const kind = boundedString(entry.kind, MAX_ID_LENGTH)
+        const createdAt = finiteTimestamp(entry.createdAt)
+        return id && kind && createdAt !== null ? [{ id, kind, createdAt }] : []
+      }).slice(0, MAX_PENDING_ACTIONS)
+    : undefined
+  const pendingActions = rawPendingActions?.length ? rawPendingActions : undefined
   return {
     id,
     title,
@@ -125,6 +249,10 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
     ...(modelId ? { modelId } : {}),
     attachedWorkspaceIds,
     toolTraces,
+    ...(engineeringContext ? { engineeringContext } : {}),
+    ...(artifactRefs ? { artifactRefs } : {}),
+    ...(activeRunRefs ? { activeRunRefs } : {}),
+    ...(pendingActions ? { pendingActions } : {}),
   }
 }
 
