@@ -1,7 +1,7 @@
 import { homedir } from 'os'
 import { copyFile, mkdir, readdir, readFile, rm } from 'fs/promises'
 import { basename, dirname, join } from 'path'
-import type { CcSwitchProfile } from '../../shared/ipc/cc-switch'
+import type { CcSwitchApplyInput } from '../../shared/ipc/cc-switch'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 
 /** 回写时唯一允许触碰的键；其余字段（含 hooks、permissions 与未知键）必须原样保留。 */
@@ -80,16 +80,19 @@ export class ClaudeSettingsApplier {
     }
   }
 
-  /** 应用画像：备份→只替换自有键→原子写→重读校验。调用方必须串行，此处再加一层队列兜底。 */
-  async apply(profile: CcSwitchProfile): Promise<ClaudeApplyResult> {
+  /** 应用凭证三元组：备份→只替换自有键→原子写→重读校验。调用方必须串行，此处再加一层队列兜底。 */
+  async apply(input: CcSwitchApplyInput): Promise<ClaudeApplyResult> {
+    const baseURL = input.baseURL.trim()
+    const authToken = input.authToken.trim()
+    const model = input.model?.trim() ?? ''
+    if (!baseURL || !authToken) throw new Error('Base URL and auth token are required.')
     return this.queue.run(async () => {
       const live = await this.readLive()
       const backupPath = live.existed ? await this.snapshotLive() : null
       const next: Record<string, unknown> = { ...live.settings }
       const env: Record<string, unknown> = isRecord(next['env']) ? { ...(next['env'] as Record<string, unknown>) } : {}
-      env[CLAUDE_MANAGED_ENV_KEYS.baseURL] = profile.baseURL
-      env[CLAUDE_MANAGED_ENV_KEYS.authToken] = profile.authToken
-      const model = profile.model?.trim() ?? ''
+      env[CLAUDE_MANAGED_ENV_KEYS.baseURL] = baseURL
+      env[CLAUDE_MANAGED_ENV_KEYS.authToken] = authToken
       if (model) {
         env[CLAUDE_MANAGED_ENV_KEYS.model] = model
         next[CLAUDE_MANAGED_TOP_LEVEL_MODEL] = model
@@ -100,11 +103,11 @@ export class ClaudeSettingsApplier {
       // 重读校验：写后即验，写坏（磁盘/并发外部写）立刻报错而不谎称成功。
       const verified = await this.readLive()
       const verifiedEnv = isRecord(verified.settings['env']) ? (verified.settings['env'] as Record<string, unknown>) : {}
-      const ok = verifiedEnv[CLAUDE_MANAGED_ENV_KEYS.baseURL] === profile.baseURL &&
-        verifiedEnv[CLAUDE_MANAGED_ENV_KEYS.authToken] === profile.authToken &&
+      const ok = verifiedEnv[CLAUDE_MANAGED_ENV_KEYS.baseURL] === baseURL &&
+        verifiedEnv[CLAUDE_MANAGED_ENV_KEYS.authToken] === authToken &&
         (!model || (verifiedEnv[CLAUDE_MANAGED_ENV_KEYS.model] === model && verified.settings[CLAUDE_MANAGED_TOP_LEVEL_MODEL] === model))
       if (!ok) throw new Error('Live settings verification failed after apply.')
-      return { backupPath, applied: { baseURL: profile.baseURL, ...(model ? { model } : {}) } }
+      return { backupPath, applied: { baseURL, ...(model ? { model } : {}) } }
     })
   }
 

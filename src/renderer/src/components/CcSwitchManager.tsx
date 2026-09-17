@@ -26,8 +26,14 @@ export function CcSwitchManager() {
   const [latestVersion, setLatestVersion] = useState<string>()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [syncedProvider, setSyncedProvider] = useState('')
+  const [justInstalled, setJustInstalled] = useState(false)
 
+  // refresh 只更新探测数据，从不碰 error/notice：调用方自己决定何时清错，
+  // 否则安装失败信息会被随后一次重探洗掉。
   const refresh = useCallback(async () => {
     const [detectResult, latestResult] = await Promise.all([
       ccSwitchService.detect('claude'),
@@ -35,26 +41,31 @@ export function CcSwitchManager() {
     ])
     setDetect(detectResult)
     setLatestVersion(latestResult.latestVersion)
-    setError('')
     setLoading(false)
   }, [])
 
-  useEffect(() => {
+  const refreshQuiet = useCallback(() => {
     void refresh().catch((refreshError: unknown) => {
       setError(refreshError instanceof Error ? refreshError.message : String(refreshError))
       setLoading(false)
     })
   }, [refresh])
 
+  useEffect(() => {
+    refreshQuiet()
+  }, [refreshQuiet])
+
   const handleInstall = useCallback(async () => {
     setBusy(true)
     setError('')
+    setNotice('')
     try {
       const result = await ccSwitchService.install('claude')
       if (!result.success) {
         setError(result.error ?? '')
-        await refresh()
-        return
+      } else {
+        setJustInstalled(true)
+        setNotice(t('settings:cliTools.notice.installed'))
       }
       await refresh()
     } catch (installError: unknown) {
@@ -62,7 +73,45 @@ export function CcSwitchManager() {
     } finally {
       setBusy(false)
     }
-  }, [refresh])
+  }, [refresh, t])
+
+  const handleApplyLlm = useCallback(async () => {
+    setSyncBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await ccSwitchService.applyLlm('claude')
+      if (!result.success) {
+        setError(result.error === 'NO_LLM_PROVIDER' ? t('settings:cliTools.sync.error.noProvider') : (result.error ?? ''))
+        return
+      }
+      setSyncedProvider(result.providerName ?? '')
+      setNotice(t('settings:cliTools.sync.notice.synced', { name: result.providerName ?? '' }))
+    } catch (applyError: unknown) {
+      setError(applyError instanceof Error ? applyError.message : String(applyError))
+    } finally {
+      setSyncBusy(false)
+    }
+  }, [t])
+
+  const handleRollback = useCallback(async () => {
+    setSyncBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await ccSwitchService.rollbackProfile()
+      if (!result.success) {
+        setError(result.error ?? '')
+        return
+      }
+      setSyncedProvider('')
+      setNotice(t('settings:cliTools.sync.notice.rolledBack'))
+    } catch (rollbackError: unknown) {
+      setError(rollbackError instanceof Error ? rollbackError.message : String(rollbackError))
+    } finally {
+      setSyncBusy(false)
+    }
+  }, [t])
 
   if (loading) {
     return (
@@ -73,7 +122,7 @@ export function CcSwitchManager() {
   }
 
   const state = toCardState(detect, latestVersion)
-  const showHint = (state === 'not-installed' || state === 'broken') && detect?.hint
+  const hint = (state === 'not-installed' || state === 'broken') ? detect?.hint : undefined
 
   return (
     <div className={styles.lsSection}>
@@ -89,7 +138,13 @@ export function CcSwitchManager() {
           </div>
           <span
             className={`${styles.lsStateBadge} ${
-              state === 'ready' ? styles.lsStateReady : state === 'not-installed' ? styles.lsStateIdle : styles.lsStateFailed
+              state === 'ready'
+                ? styles.lsStateReady
+                : state === 'update-available'
+                  ? styles.lsStateUpdate
+                  : state === 'not-installed'
+                    ? styles.lsStateIdle
+                    : styles.lsStateFailed
             }`}
           >
             {t(STATE_LABEL_KEY[state])}
@@ -116,9 +171,14 @@ export function CcSwitchManager() {
           </div>
         )}
 
-        {showHint && <div className={styles.lsCardError}>{detect?.hint}</div>}
+        {hint && <div className={styles.lsCardHint}>{hint}</div>}
+        {notice && (
+          <div className={styles.lsCardMeta}>
+            <span className={styles.lsMetaItem}>{notice}</span>
+          </div>
+        )}
         {error && <div className={styles.lsCardError}>{error}</div>}
-        {detect?.existingTerminalNotice && state === 'ready' && (
+        {justInstalled && state === 'ready' && (
           <div className={styles.lsCardMeta}>
             <span className={styles.lsMetaItem}>{t('settings:cliTools.notice.existingTerminal')}</span>
           </div>
@@ -147,12 +207,44 @@ export function CcSwitchManager() {
             <button
               type="button"
               className={`${styles.lsButton} ${styles.lsButtonGhost}`}
-              onClick={() => void refresh()}
+              onClick={refreshQuiet}
             >
               {t('settings:cliTools.action.refresh')}
             </button>
           )}
           {busy && (
+            <span className={styles.lsBusyText}>
+              {t('settings:cliTools.action.working')}
+            </span>
+          )}
+        </div>
+
+        <div className={styles.lsCardMeta}>
+          <span className={styles.lsMetaItem}>{t('settings:cliTools.sync.desc')}</span>
+          {syncedProvider && (
+            <span className={styles.lsMetaItem}>
+              {t('settings:cliTools.sync.label.source')}: {syncedProvider}
+            </span>
+          )}
+        </div>
+        <div className={styles.lsCardActions}>
+          <button
+            type="button"
+            className={`${styles.lsButton} ${styles.lsButtonPrimary}`}
+            disabled={syncBusy}
+            onClick={() => void handleApplyLlm()}
+          >
+            {t('settings:cliTools.sync.action.apply')}
+          </button>
+          <button
+            type="button"
+            className={`${styles.lsButton} ${styles.lsButtonGhost}`}
+            disabled={syncBusy}
+            onClick={() => void handleRollback()}
+          >
+            {t('settings:cliTools.sync.action.rollback')}
+          </button>
+          {syncBusy && (
             <span className={styles.lsBusyText}>
               {t('settings:cliTools.action.working')}
             </span>

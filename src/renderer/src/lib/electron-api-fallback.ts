@@ -184,10 +184,7 @@ export function installElectronApiFallback(): void {
       detect: () => Promise.resolve({ toolId: 'claude' as const, installed: false, runnable: false, hint: 'Electron API is unavailable' }),
       latest: () => Promise.resolve({ toolId: 'claude' as const }),
       install: () => Promise.resolve({ toolId: 'claude' as const, success: false, error: 'Electron API is unavailable' }),
-      profiles: () => Promise.resolve({ profiles: [], activeProfileId: null }),
-      saveProfile: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
-      removeProfile: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
-      activateProfile: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
+      applyLlm: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
       rollbackProfile: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
     },
     llm: {

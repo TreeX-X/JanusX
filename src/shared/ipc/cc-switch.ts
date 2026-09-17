@@ -6,10 +6,7 @@ export const CC_SWITCH_CHANNELS = {
   detect: 'cc-switch:detect',
   latest: 'cc-switch:latest',
   install: 'cc-switch:install',
-  profiles: 'cc-switch:profiles',
-  saveProfile: 'cc-switch:profile:save',
-  removeProfile: 'cc-switch:profile:remove',
-  activateProfile: 'cc-switch:profile:activate',
+  applyLlm: 'cc-switch:llm:apply',
   rollbackProfile: 'cc-switch:profile:rollback',
 } as const
 
@@ -53,49 +50,22 @@ export interface CcSwitchAPI {
   detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult>
   latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult>
   install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult>
-  profiles(): Promise<CcSwitchProfilesResult>
-  saveProfile(input: CcSwitchProfileInput): Promise<CcSwitchSaveProfileResult>
-  removeProfile(profileId: string): Promise<CcSwitchSaveProfileResult>
-  activateProfile(profileId: string): Promise<CcSwitchActivateResult>
+  applyLlm(toolId: CcSwitchToolId): Promise<CcSwitchApplyResult>
   rollbackProfile(): Promise<CcSwitchRollbackResult>
 }
 
-/** 供应商画像：JanusX 的 SSOT，落盘与回写 Live 的唯一依据。 */
-export interface CcSwitchProfile {
-  id: string
-  name: string
-  baseURL: string
-  authToken: string
-  model?: string
-  createdAt: number
-  updatedAt: number
-}
-
-export interface CcSwitchProfileInput {
-  id?: string
-  name: string
+/** 同步凭证输入：调用方只给三元组，绝不经过画像存储。 */
+export interface CcSwitchApplyInput {
   baseURL: string
   authToken: string
   model?: string
 }
 
-export interface CcSwitchProfilesResult {
-  profiles: CcSwitchProfile[]
-  activeProfileId: string | null
-}
-
-export interface CcSwitchSaveProfileResult {
+export interface CcSwitchApplyResult {
   success: boolean
-  profile?: CcSwitchProfile
-  profiles?: CcSwitchProfile[]
-  activeProfileId?: string | null
-  error?: string
-}
-
-export interface CcSwitchActivateResult {
-  success: boolean
-  activeProfileId?: string
+  providerName?: string
   backupPath?: string | null
+  /** 'NO_LLM_PROVIDER' 由渲染端映射为本地化文案，其余为原文透出。 */
   error?: string
 }
 
@@ -103,25 +73,6 @@ export interface CcSwitchRollbackResult {
   success: boolean
   backupPath?: string
   error?: string
-}
-
-/** 主渲两端共享的输入校验；主进程强制执行，渲染端只做即时提示。 */
-export function validateCcSwitchProfile(input: CcSwitchProfileInput): string | undefined {
-  const name = input.name?.trim() ?? ''
-  if (!name) return 'Name is required.'
-  if (name.length > 64) return 'Name must be within 64 characters.'
-  const baseURL = input.baseURL?.trim() ?? ''
-  if (!baseURL) return 'Base URL is required.'
-  try {
-    const url = new URL(baseURL)
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return 'Base URL must start with http(s)://.'
-  } catch {
-    return 'Base URL is not a valid URL.'
-  }
-  if (!input.authToken?.trim()) return 'Auth token is required.'
-  const model = input.model?.trim() ?? ''
-  if (model.length > 128) return 'Model must be within 128 characters.'
-  return undefined
 }
 
 interface ParsedCliVersion {

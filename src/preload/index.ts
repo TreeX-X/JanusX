@@ -302,10 +302,7 @@ const ccSwitchAPI: CcSwitchAPI = {
   detect: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.detect, toolId),
   latest: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.latest, toolId),
   install: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.install, toolId),
-  profiles: () => ipcRenderer.invoke(CC_SWITCH_CHANNELS.profiles),
-  saveProfile: (input) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.saveProfile, input),
-  removeProfile: (profileId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.removeProfile, profileId),
-  activateProfile: (profileId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.activateProfile, profileId),
+  applyLlm: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.applyLlm, toolId),
   rollbackProfile: () => ipcRenderer.invoke(CC_SWITCH_CHANNELS.rollbackProfile),
 }
 

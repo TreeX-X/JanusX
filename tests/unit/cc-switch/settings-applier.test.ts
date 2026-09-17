@@ -9,13 +9,9 @@ async function createTempDir(): Promise<string> {
 }
 
 const PROFILE = {
-  id: 'p-1',
-  name: 'Relay',
   baseURL: 'https://relay.example.com/v1',
   authToken: 'sk-test',
   model: 'relay-model',
-  createdAt: 1,
-  updatedAt: 1,
 }
 
 async function writeLive(homeDir: string, content: string): Promise<string> {

@@ -331,39 +331,24 @@
       "working": "Working..."
     },
     "notice": {
-      "existingTerminal": "Restart open terminals for the new version and PATH to take effect."
+      "existingTerminal": "Restart open terminals for the new version and PATH to take effect.",
+      "installed": "Install finished. Restart terminals to take effect."
     },
-    "profiles": {
-      "title": "Provider profiles",
-      "desc": "Keep multiple base URLs and credentials; apply one to Claude Code with rollback.",
-      "list": {
-        "empty": "No profiles yet. Create one below.",
-        "active": "Active",
-        "activate": "Switch",
-        "remove": "Remove",
-        "confirmRemove": "Confirm remove?"
-      },
-      "form": {
-        "createTitle": "New profile",
-        "editTitle": "Edit profile",
-        "edit": "Edit",
-        "name": "Name",
-        "baseURL": "Base URL",
-        "authToken": "Auth Token",
-        "model": "Model (optional)",
-        "modelPlaceholder": "Leave empty to keep the current model",
-        "save": "Save",
-        "cancel": "Cancel"
+    "sync": {
+      "desc": "Apply the LLM engine default provider base URL, key, and model to Claude Code, with an automatic backup first.",
+      "label": {
+        "source": "Synced from"
       },
       "action": {
-        "rollback": "Roll back last switch"
+        "apply": "Sync LLM config",
+        "rollback": "Roll back last sync"
       },
       "notice": {
-        "activated": "Switched and backed up. Restart terminals to take effect.",
-        "rolledBack": "Rolled back to the last backup. No profile is active now."
+        "synced": "Synced from “{{name}}” and backed up. Restart terminals to take effect.",
+        "rolledBack": "Rolled back to the last backup."
       },
       "error": {
-        "validation": "Check the form: name, http(s) URL, and token are required."
+        "noProvider": "The LLM engine has no usable default provider: an api-key provider with base URL and API key is required."
       }
     }
   },

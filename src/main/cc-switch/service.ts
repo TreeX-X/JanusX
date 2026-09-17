@@ -3,34 +3,48 @@ import { homedir } from 'os'
 import { delimiter } from 'path'
 import { execa } from 'execa'
 import type {
-  CcSwitchActivateResult,
+  CcSwitchApplyResult,
   CcSwitchDetectResult,
   CcSwitchInstallResult,
   CcSwitchLatestResult,
-  CcSwitchProfileInput,
-  CcSwitchProfilesResult,
-  CcSwitchRollbackResult,
-  CcSwitchSaveProfileResult,
   CcSwitchToolId,
 } from '../../shared/ipc/cc-switch'
+import type { CcSwitchRollbackResult } from '../../shared/ipc/cc-switch'
+import { AuthType } from '@janusx/llm-core'
+import { llmConfigStore } from '../llm/ConfigStore'
 import { getCcSwitchTool } from './tool-registry'
 import { ClaudeDetector, claudeDetector } from './claude-detector'
 import { ClaudeInstaller } from './installer'
 import { fetchLatestVersion } from './latest'
-import { CcSwitchProfileStore, ccSwitchProfileStore } from './profile-store'
 import { ClaudeSettingsApplier, claudeSettingsApplier } from './settings-applier'
 
 // Note: cc-switch 移植的外部 CLI 版本检测与安装编排入口 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-cli-detect-install.md
-// Note: 画像切换（回写 ~/.claude/settings.json）走同一门面，原子备份与重读校验是硬性要求 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-profile-switch.md
+// Note: LLM 同步（取现有 LLM 引擎默认配置回写 ~/.claude/settings.json）走同一门面，原子备份与重读校验是硬性要求 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-llm-sync.md
 export interface CcSwitchService {
   detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult>
   latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult>
   install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult>
-  profiles(): Promise<CcSwitchProfilesResult>
-  saveProfile(input: CcSwitchProfileInput): Promise<CcSwitchSaveProfileResult>
-  removeProfile(profileId: string): Promise<CcSwitchSaveProfileResult>
-  activateProfile(profileId: string): Promise<CcSwitchActivateResult>
+  applyLlm(toolId: CcSwitchToolId): Promise<CcSwitchApplyResult>
   rollbackProfile(): Promise<CcSwitchRollbackResult>
+}
+
+/** 从现有 LLM 引擎解析出的可同步凭证；null 表示没有可用默认配置。 */
+export interface CcSwitchLlmCredentials {
+  providerName: string
+  baseURL: string
+  authToken: string
+  model?: string
+}
+
+async function defaultResolveLlmCredentials(): Promise<CcSwitchLlmCredentials | null> {
+  const provider = await llmConfigStore.getDefaultProvider()
+  if (!provider || provider.enabled === false) return null
+  if (provider.authType !== AuthType.API_KEY) return null
+  const baseURL = provider.baseURL?.trim() ?? ''
+  const authToken = provider.apiKey?.trim() ?? ''
+  if (!baseURL || !authToken) return null
+  const model = provider.modelId?.trim() || provider.defaultModelId?.trim() || undefined
+  return { providerName: provider.name, baseURL, authToken, ...(model ? { model } : {}) }
 }
 
 function notInstalled(toolId: CcSwitchToolId, error: string): CcSwitchDetectResult {
@@ -64,8 +78,8 @@ export class DefaultCcSwitchService implements CcSwitchService {  private readon
 
   constructor(
     private readonly detector: ClaudeDetector = claudeDetector,
-    private readonly store: CcSwitchProfileStore = ccSwitchProfileStore,
     private readonly applier: ClaudeSettingsApplier = claudeSettingsApplier,
+    private readonly resolveLlmCredentials: () => Promise<CcSwitchLlmCredentials | null> = defaultResolveLlmCredentials,
   ) {}
 
   async detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult> {
@@ -94,38 +108,14 @@ export class DefaultCcSwitchService implements CcSwitchService {  private readon
     return { toolId, success: true, command: outcome.command, version: probe.version }
   }
 
-  async profiles(): Promise<CcSwitchProfilesResult> {
-    return this.store.list()
-  }
-
-  async saveProfile(input: CcSwitchProfileInput): Promise<CcSwitchSaveProfileResult> {
+  async applyLlm(toolId: CcSwitchToolId): Promise<CcSwitchApplyResult> {
+    if (toolId !== 'claude') return { success: false, error: 'Unsupported tool.' }
+    // 凭证唯一来源是现有 LLM 引擎的默认配置；本域不存任何密钥。
+    const credentials = await this.resolveLlmCredentials()
+    if (!credentials) return { success: false, error: 'NO_LLM_PROVIDER' }
     try {
-      const profile = await this.store.save(input)
-      const state = await this.store.list()
-      return { success: true, profile, profiles: state.profiles, activeProfileId: state.activeProfileId }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
-  async removeProfile(profileId: string): Promise<CcSwitchSaveProfileResult> {
-    try {
-      await this.store.remove(profileId)
-      const state = await this.store.list()
-      return { success: true, profiles: state.profiles, activeProfileId: state.activeProfileId }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
-  async activateProfile(profileId: string): Promise<CcSwitchActivateResult> {
-    const profile = await this.store.getProfile(profileId)
-    if (!profile) return { success: false, error: 'Profile not found.' }
-    try {
-      // 先落盘验证通过才翻转激活态：激活态恒等于“Live 已验证”的画像。
-      const outcome = await this.applier.apply(profile)
-      await this.store.setActive(profile.id)
-      return { success: true, activeProfileId: profile.id, backupPath: outcome.backupPath }
+      const outcome = await this.applier.apply(credentials)
+      return { success: true, providerName: credentials.providerName, backupPath: outcome.backupPath }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -134,8 +124,6 @@ export class DefaultCcSwitchService implements CcSwitchService {  private readon
   async rollbackProfile(): Promise<CcSwitchRollbackResult> {
     try {
       const outcome = await this.applier.rollback()
-      // 回滚后 Live 已不再是激活画像的内容，诚实地清空激活态。
-      await this.store.setActive(null)
       return { success: true, backupPath: outcome.backupPath }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
