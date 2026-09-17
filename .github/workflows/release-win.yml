@@ -29,9 +29,18 @@ jobs:
 
       # @janus-agent/* 以 dist/ 发布，CI 里是源码检出，必须先构建同级仓，
       # 否则 JanusX 侧构建找不到模块入口（verify 曾因此全红）。
+      # 构建顺序说明见 verify.yml 同名步骤。
       - name: Build sibling janus-agentX
         working-directory: janus-agentX
-        run: npm ci && npm run build
+        shell: pwsh
+        run: |
+          npm ci
+          $built = $false
+          for ($i = 0; $i -lt 3 -and -not $built; $i++) {
+            npm run build --workspaces --if-present
+            if ($?) { $built = $true }
+          }
+          if (-not $built) { exit 1 }
 
       - name: Setup Node
         uses: actions/setup-node@v4
