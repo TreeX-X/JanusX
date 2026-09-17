@@ -1,0 +1,23 @@
+name: 功能建议
+description: 描述场景与提案
+labels: [enhancement]
+body:
+  - type: textarea
+    id: scene
+    attributes:
+      label: 使用场景
+      description: 你在做什么时觉得缺这个功能
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案
+      description: 希望做成什么样
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案
+      description: 不做这个功能时你现在的 workaround

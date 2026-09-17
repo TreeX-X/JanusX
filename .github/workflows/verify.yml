@@ -1,0 +1,47 @@
+# PR 统一门禁：在 Windows runner 上跑仓库的 `verify` 全链。
+# release-win 只管发版，这条管合入质量；分支保护要求 `verify` 变绿。
+name: verify
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout JanusX
+        uses: actions/checkout@v4
+        with:
+          path: JanusX
+
+      - name: Checkout sibling janus-agentX
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/janus-agentX
+          path: janus-agentX
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: JanusX/package-lock.json
+
+      # file: 依赖需要先物化（同 release-win 的 prepackage），否则 install 找不到同级包。
+      - name: Prepackage
+        working-directory: JanusX
+        run: npm run prepackage
+
+      - name: Verify
+        working-directory: JanusX
+        run: npm run verify

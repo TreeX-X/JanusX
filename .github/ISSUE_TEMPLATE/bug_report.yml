@@ -1,0 +1,43 @@
+name: Bug 反馈
+description: 报告可复现的问题
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 设置页或安装包显示的版本号
+      placeholder: v0.8.6
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: 安装来源
+      options:
+        - 安装版 setup.exe
+        - 便携版 portable.exe
+        - 源码运行
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 一步一步写清楚，不可复现的问题很难修
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: userData/logs 下的相关片段
+      render: text

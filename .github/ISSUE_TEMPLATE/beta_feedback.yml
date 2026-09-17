@@ -1,0 +1,34 @@
+name: 内测反馈
+description: 内测版本的问题或体验建议
+labels: [beta-feedback]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 内测版本
+      placeholder: v0.8.7
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 反馈类型
+      options:
+        - 崩溃/无法启动
+        - 功能异常
+        - 体验建议
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: 详细描述
+      description: 复现路径、截图或日志都可以贴在这里
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 系统环境
+      placeholder: Windows 11 23H2
