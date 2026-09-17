@@ -237,8 +237,11 @@ describe('Janus resource scope UI', () => {
       }],
     }))
 
-    expect(markup.match(/data-turn="answer-1"/g)).toHaveLength(1)
-    expect(markup).not.toContain('data-turn="answer-2"')
+    // 历史回看默认收起为分组摘要：分组恰好出现一次，且落在 answer-1 之后、answer-2 之前。
+    expect(markup.match(/janus-tool-call-group"/g)).toHaveLength(1)
+    const groupAt = markup.indexOf('janus-tool-call-group"')
+    expect(markup.indexOf('First answer')).toBeLessThan(groupAt)
+    expect(groupAt).toBeLessThan(markup.indexOf('Second answer'))
   })
 
   it('renders the custom workspace edit preview before approval', () => {

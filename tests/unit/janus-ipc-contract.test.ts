@@ -95,6 +95,15 @@ vi.mock('../../src/main/janus/maintenance/service', () => ({
 vi.mock('../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: { capture: mocks.capture },
 }))
+// captureForCwd 先解析工作区身份（测试环境无 electron app），此处只验证透传的 capture 契约。
+vi.mock('../../src/main/knowledge/workspace-identity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/main/knowledge/workspace-identity')>()
+  return {
+    ...actual,
+    captureForCwd: async (cwd: string, input: Record<string, unknown>) =>
+      mocks.capture({ workspacePath: cwd, ...input }),
+  }
+})
 
 beforeAll(async () => {
   await import('../../src/preload/index')
@@ -435,7 +444,8 @@ describe('Janus IPC contract', () => {
       trigger: 'manual',
       commitLimit: 3,
     })
-    expect(mocks.capture).toHaveBeenCalledWith({
+    // capture 是 fire-and-forget，等待其落地再断言参数。
+    await vi.waitFor(() => expect(mocks.capture).toHaveBeenCalledWith({
       workspacePath: 'C:\\repo',
       source: 'git-analyzer',
       type: 'analysis-result',
@@ -453,7 +463,7 @@ describe('Janus IPC contract', () => {
         progress: 80,
         status: 'testing',
       },
-    })
+    }))
 
     mocks.capture.mockClear()
     await expect(
