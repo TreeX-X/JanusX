@@ -42,9 +42,11 @@ beforeAll(async () => {
   const { registerWorkspaceHandlers } = await import('../../src/main/ipc/handlers')
   const { registerFileHandlers } = await import('../../src/main/ipc/file-handlers')
   const { registerLanguageServiceHandlers } = await import('../../src/main/ipc/language-service-handlers')
+  const { registerLanguageServiceInstallerHandlers } = await import('../../src/main/ipc/language-service-installer-handlers')
   registerWorkspaceHandlers(() => null)
   registerFileHandlers()
   registerLanguageServiceHandlers()
+  registerLanguageServiceInstallerHandlers({ getAllowedWindows: () => [], installers: new Map() })
 })
 
 describe('Workspace/File IPC contract', () => {

@@ -11,7 +11,14 @@ import { OfficecliInstaller } from '../../../src/main/office/officecli-installer
 
 const roots: string[] = []
 async function temp(): Promise<string> { const value = await mkdtemp(join(tmpdir(), 'janusx-office-launcher-')); roots.push(value); return value }
-afterEach(async () => { await Promise.all(roots.splice(0).map((value) => rm(value, { recursive: true, force: true }))) })
+// 该断言要求 ambient 干净：开发机若装过托管 OfficeCLI，进程环境自带该变量，先腾挪、跑完恢复。
+let ambientOfficecliBinary: string | undefined
+afterEach(async () => {
+  if (ambientOfficecliBinary === undefined) delete process.env.JANUSX_OFFICECLI_BINARY
+  else process.env.JANUSX_OFFICECLI_BINARY = ambientOfficecliBinary
+  ambientOfficecliBinary = undefined
+  await Promise.all(roots.splice(0).map((value) => rm(value, { recursive: true, force: true })))
+})
 
 describe('Office external launcher', () => {
   it('parses run arguments only after the separator', () => {
@@ -47,6 +54,8 @@ describe('Office external launcher', () => {
   })
 
   it('launches with preserved argv, managed env, canonical cwd, and child exit code', async () => {
+    ambientOfficecliBinary = process.env.JANUSX_OFFICECLI_BINARY
+    delete process.env.JANUSX_OFFICECLI_BINARY
     const root = await temp()
     const workspace = join(root, 'workspace')
     const install = join(root, 'managed', 'installations', 'one')
