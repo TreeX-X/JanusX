@@ -89,11 +89,13 @@ describe('OfficeArtifactIndex', () => {
     await utimes(join(root, 'new.pptx'), new Date(3_000), new Date(3_000))
     const harness = createHarness(new Map([['workspace', root]]))
 
-    await expect(harness.index.list('workspace', 2_000)).resolves.map((entry) => entry.relPath).toEqual([
+    const boundaryEntries = await harness.index.list('workspace', 2_000)
+    expect(boundaryEntries.map((entry) => entry.relPath)).toEqual([
       'new.pptx',
       'boundary.xlsx',
     ])
-    await expect(harness.index.list('workspace', 1_001)).resolves.map((entry) => entry.relPath).toEqual(['new.pptx'])
+    const afterBoundaryEntries = await harness.index.list('workspace', 2_001)
+    expect(afterBoundaryEntries.map((entry) => entry.relPath)).toEqual(['new.pptx'])
   })
 
   it('distinguishes empty, unreadable, traversal-limit, and result-limit outcomes', async () => {

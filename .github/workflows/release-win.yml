@@ -29,25 +29,25 @@ jobs:
 
       # @janus-agent/* 以 dist/ 发布，CI 里是源码检出，必须先构建同级仓，
       # 否则 JanusX 侧构建找不到模块入口（verify 曾因此全红）。
-      # 构建顺序说明见 verify.yml 同名步骤。
+      # 构建顺序说明见 verify.yml 同名步骤（依赖分层定序，一次通过）。
       - name: Build sibling janus-agentX
         working-directory: janus-agentX
         shell: pwsh
         run: |
           npm ci
-          $built = $false
-          for ($i = 0; $i -lt 3 -and -not $built; $i++) {
-            npm run build --workspaces --if-present
-            if ($?) { $built = $true }
-          }
-          if (-not $built) { exit 1 }
+          npm run build --workspace=@janus-agent/agent-core --workspace=@janus-agent/harness-core --if-present
+          npm run build --workspace=@janus-agent/chat-core --workspace=@janus-agent/node-hosts --workspace=@janus-agent/harness-node --if-present
+          npm run build --workspace=@janus-agent/janus-agent --if-present
+          npm run build --workspace=@janus-agent/cli --workspace=@janus-agent/notes-cli --if-present
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: JanusX/package-lock.json
+          cache-dependency-path: |
+            JanusX/package-lock.json
+            janus-agentX/package-lock.json
 
       # publisher 用 package.json 的 version 生成 tag 名与 latest.yml；
       # tag 与包版本错位会产出名字错乱的 Release 或静默无更新，先拦。
