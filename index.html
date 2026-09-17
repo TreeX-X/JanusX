@@ -6,47 +6,92 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JanusX — AI 结对编程桌面工作区</title>
 <meta name="description" content="JanusX :统一管理工作区、终端、项目运行与多模型助手的 Electron 桌面应用。免费、开源（MIT），支持 Windows。">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="icon.png" type="image/png">
 <style>
-  :root { --bg:#0d1117; --panel:#161b22; --line:#262d36; --txt:#e6edf3; --mut:#8b949e;
-          --acc:#f0883e; --acc-d:#c26a24; --ok:#3fb950; }
+  /* JanusX shell ramp（docs/ui-style-guide.md §2.1.1）：void → canvas → card → chrome，
+     结构线极弱，琥珀只做文字/1px 边框/状态点，不做实底大色块。 */
+  :root {
+    color-scheme: dark;
+    --shell-void:#101012; --shell-canvas:#151517; --shell-card:#1c1c1f;
+    --shell-chrome:#1e1e20; --shell-hover:#2b2b2e; --shell-active:#333336;
+    --shell-border:rgb(255 255 255 / .07); --shell-border-soft:rgb(255 255 255 / .045);
+    --shell-text:#fafafa; --shell-strong:#f4f4f5; --shell-muted:#a1a1a1; --shell-dim:#737373;
+    --shell-accent:#f47d43; --shell-accent-strong:#ff9159;
+    --shell-accent-soft:rgb(244 125 67 / .08); --shell-accent-border:rgb(244 125 67 / .42);
+    --mono:'SF Mono','Cascadia Mono',Consolas,monospace;
+    --ease:cubic-bezier(0.22, 1, 0.36, 1);
+  }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--txt); font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; line-height:1.7; }
-  a { color:var(--acc); }
+  body { background:var(--shell-void); color:var(--shell-text);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         font-size:13px; line-height:1.58; }
+  a { color:var(--shell-accent); text-decoration:none; }
+  a:hover { color:var(--shell-accent-strong); }
+  a:focus-visible, button:focus-visible { outline:1px solid var(--shell-accent-border); outline-offset:2px; }
   .wrap { max-width:960px; margin:0 auto; padding:0 20px; }
-  header { border-bottom:1px solid var(--line); }
-  header .wrap { display:flex; align-items:center; gap:10px; height:60px; }
-  header img { width:28px; height:28px; border-radius:7px; }
-  header b { font-size:18px; }
-  header nav { margin-left:auto; display:flex; gap:18px; font-size:14px; }
-  header nav a { color:var(--mut); text-decoration:none; }
-  header nav a:hover { color:var(--txt); }
-  .hero { text-align:center; padding:72px 20px 56px; }
-  .badge { display:inline-block; font-size:13px; color:var(--acc); border:1px solid var(--acc-d);
-           border-radius:999px; padding:3px 14px; margin-bottom:20px; }
-  h1 { font-size:44px; letter-spacing:1px; margin-bottom:12px; }
-  .sub { color:var(--mut); font-size:18px; max-width:640px; margin:0 auto 32px; }
-  .btns { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
-  .btn { display:inline-block; padding:12px 28px; border-radius:8px; font-size:16px;
-         text-decoration:none; font-weight:600; border:1px solid var(--line); color:var(--txt); }
-  .btn.pri { background:var(--acc); border-color:var(--acc); color:#111; }
-  .btn.pri:hover { background:var(--acc-d); }
-  .btn:hover { border-color:var(--acc); }
+  header { background:rgb(30 30 32 / .9); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+           border-bottom:1px solid var(--shell-border); }
+  header .wrap { display:flex; align-items:center; gap:10px; height:56px; }
+  header img { width:22px; height:22px; border-radius:6px; }
+  header b { font-size:14px; font-weight:650; color:var(--shell-strong); }
+  header .tag { font-family:var(--mono); font-size:9px; letter-spacing:1.4px; color:var(--shell-dim);
+                border:1px solid var(--shell-border-soft); border-radius:999px; padding:2px 8px; }
+  header nav { margin-left:auto; display:flex; gap:18px; font-size:12px; }
+  header nav a { color:var(--shell-muted); }
+  header nav a:hover { color:var(--shell-strong); }
+  .hero { text-align:center; padding:64px 20px 52px; background:var(--shell-canvas);
+          border-bottom:1px solid var(--shell-border-soft); }
+  .badge { display:inline-flex; align-items:center; gap:7px; font-size:11px; color:var(--shell-muted);
+           border:1px solid var(--shell-border); border-radius:999px; padding:4px 14px; margin-bottom:20px;
+           background:rgb(255 255 255 / .02); }
+  .badge .dot { width:6px; height:6px; border-radius:999px; background:var(--shell-accent);
+                box-shadow:0 0 12px rgb(255 120 48 / .25); }
+  h1 { font-size:30px; font-weight:650; letter-spacing:.5px; color:var(--shell-strong); margin-bottom:10px; }
+  .sub { color:var(--shell-muted); font-size:13px; max-width:620px; margin:0 auto 28px; }
+  .btns { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .btn { display:inline-flex; align-items:center; height:34px; padding:0 18px; border-radius:6px;
+         font-size:13px; font-weight:600; border:1px solid rgb(255 255 255 / .09);
+         background:rgb(255 255 255 / .04); color:rgb(255 255 255 / .68);
+         transition:background .18s ease, border-color .18s ease, color .18s ease, transform .12s ease; }
+  .btn:hover { color:var(--shell-strong); border-color:rgb(255 255 255 / .16);
+               background:rgb(255 255 255 / .055); }
+  .btn:active { transform:scale(0.96); }
+  .btn.acc { border-color:var(--shell-accent-border); color:var(--shell-accent-strong); }
+  .btn.acc:hover { background:var(--shell-accent-soft); border-color:var(--shell-accent-border);
+                   color:var(--shell-accent-strong); }
   .btn.dim { opacity:.55; }
-  .meta { margin-top:18px; font-size:13px; color:var(--mut); }
-  section { padding:44px 0; border-top:1px solid var(--line); }
-  h2 { font-size:24px; margin-bottom:20px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; }
-  .card h3 { font-size:16px; margin-bottom:6px; }
-  .card p { font-size:14px; color:var(--mut); }
-  ol.steps { padding-left:22px; color:var(--mut); }
+  .meta { margin-top:18px; font-size:11px; color:var(--shell-dim); }
+  section { padding:40px 0; border-top:1px solid var(--shell-border-soft); }
+  .kick { font-size:10px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase;
+          color:var(--shell-dim); margin-bottom:8px; }
+  .kick .idx { font-family:var(--mono); font-weight:400; color:var(--shell-accent);
+               margin-right:8px; letter-spacing:.4px; }
+  h2 { font-size:16px; font-weight:650; color:var(--shell-strong); margin-bottom:18px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+  .card { background:var(--shell-card); border:1px solid rgb(255 255 255 / .06);
+          border-radius:8px; padding:14px 16px;
+          transition:border-color .18s ease; }
+  .card:hover { border-color:rgb(255 255 255 / .15); }
+  .card .kick { margin-bottom:6px; }
+  .card h3 { font-size:13px; font-weight:650; color:var(--shell-strong); margin-bottom:4px; }
+  .card p { font-size:12px; color:var(--shell-muted); }
+  ol.steps { padding-left:22px; color:var(--shell-muted); font-size:12px; }
   ol.steps li { margin-bottom:8px; }
-  ol.steps code { color:var(--txt); background:var(--panel); padding:1px 6px; border-radius:5px; font-size:13px; }
-  .dl-box { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:28px; text-align:center; }
-  .dl-box p { color:var(--mut); font-size:14px; margin:12px 0 20px; }
-  footer { border-top:1px solid var(--line); padding:24px 0 40px; color:var(--mut); font-size:13px; text-align:center; }
-  @media (max-width:560px){ h1{font-size:32px;} .sub{font-size:16px;} }
+  ol.steps li::marker { font-family:var(--mono); color:var(--shell-dim); }
+  ol.steps code { font-family:var(--mono); color:var(--shell-strong); background:rgb(255 255 255 / .04);
+                  border:1px solid var(--shell-border-soft); padding:1px 6px; border-radius:4px; font-size:12px; }
+  .dl-box { background:linear-gradient(180deg, rgb(255 255 255 / .045), rgb(255 255 255 / .012)), var(--shell-card);
+            border:1px solid var(--shell-border); border-radius:12px; padding:26px; text-align:center;
+            box-shadow:inset 0 1px 0 rgb(255 255 255 / .05), 0 20px 60px rgb(0 0 0 / .7); }
+  .dl-box .kick { margin-bottom:12px; }
+  .dl-box p { color:var(--shell-muted); font-size:12px; margin:14px 0 0; }
+  .dl-box p + p { margin-top:8px; }
+  footer { border-top:1px solid var(--shell-border); padding:22px 0 36px;
+           color:var(--shell-dim); font-size:11px; text-align:center;
+           background:rgb(30 30 32 / .9); }
+  @media (max-width:560px){ h1{font-size:24px;} .hero{padding:48px 20px 40px;} header .tag{display:none;} }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
 </style>
 </head>
 <body>
@@ -54,34 +99,37 @@
   <div class="wrap">
     <img src="icon.png" alt="JanusX logo">
     <b>JanusX</b>
+    <span class="tag">AI PAIR WORKSPACE</span>
     <nav><a href="#feat">功能</a><a href="#dl">下载</a><a href="https://github.com/TreeX-X/JanusX">GitHub</a></nav>
   </div>
 </header>
 
 <div class="hero wrap">
-  <span class="badge" id="ver">正在获取最新版本…</span>
+  <span class="badge" id="ver"><span class="dot" aria-hidden="true"></span><span id="ver-text">正在获取最新版本…</span></span>
   <h1>JanusX</h1>
   <p class="sub">AI 结对编程桌面工作区：统一管理工作区文件、常驻终端、项目运行、检查点与多个大模型助手，一个窗口搞定日常开发。</p>
   <div class="btns">
-    <a class="btn pri dim" id="dl-setup" href="https://github.com/TreeX-X/JanusX/releases/latest">下载 Windows 安装版</a>
+    <a class="btn acc dim" id="dl-setup" href="https://github.com/TreeX-X/JanusX/releases/latest">下载 Windows 安装版</a>
     <a class="btn dim" id="dl-port" href="https://github.com/TreeX-X/JanusX/releases/latest">便携版</a>
   </div>
   <p class="meta">Windows 10+ 64 位 · 免费 · MIT 开源 · <a href="https://github.com/TreeX-X/JanusX/releases/latest">全部历史版本</a></p>
 </div>
 
 <section id="feat"><div class="wrap">
+  <div class="kick"><span class="idx">01</span>Capabilities</div>
   <h2>核心功能</h2>
   <div class="grid">
-    <div class="card"><h3>🗂 工作区与文件管理</h3><p>多项目工作区切换，文件树、搜索与编辑一体化。</p></div>
-    <div class="card"><h3>💻 常驻终端</h3><p>持久化终端会话，分屏渲染，断线重连不丢现场。</p></div>
-    <div class="card"><h3>▶ 项目运行器</h3><p>一键启动、日志聚合，常用命令沉淀为可复用配置。</p></div>
-    <div class="card"><h3>⏪ 检查点</h3><p>关键节点快照，随时回滚到可工作的状态。</p></div>
-    <div class="card"><h3>🤖 多模型接入</h3><p>聚合多种 LLM 提供商，统一聊天编排与上下文管理。</p></div>
-    <div class="card"><h3>📚 知识库与 Office</h3><p>知识工作流沉淀经验，Office 工具链覆盖文档场景。</p></div>
+    <div class="card"><div class="kick"><span class="idx">01</span>Workspace</div><h3>工作区与文件管理</h3><p>多项目工作区切换，文件树、搜索与编辑一体化。</p></div>
+    <div class="card"><div class="kick"><span class="idx">02</span>Terminal</div><h3>常驻终端</h3><p>持久化终端会话，分屏渲染，断线重连不丢现场。</p></div>
+    <div class="card"><div class="kick"><span class="idx">03</span>Runner</div><h3>项目运行器</h3><p>一键启动、日志聚合，常用命令沉淀为可复用配置。</p></div>
+    <div class="card"><div class="kick"><span class="idx">04</span>Checkpoint</div><h3>检查点</h3><p>关键节点快照，随时回滚到可工作的状态。</p></div>
+    <div class="card"><div class="kick"><span class="idx">05</span>Models</div><h3>多模型接入</h3><p>聚合多种 LLM 提供商，统一聊天编排与上下文管理。</p></div>
+    <div class="card"><div class="kick"><span class="idx">06</span>Knowledge</div><h3>知识库与 Office</h3><p>知识工作流沉淀经验，Office 工具链覆盖文档场景。</p></div>
   </div>
 </div></section>
 
 <section><div class="wrap">
+  <div class="kick"><span class="idx">02</span>Quickstart</div>
   <h2>三步上手</h2>
   <ol class="steps">
     <li>从本页下载 <code>JanusX-*-setup.exe</code> 安装包（或免安装的 <code>-portable.exe</code>）。</li>
@@ -91,10 +139,11 @@
 </div></section>
 
 <section id="dl"><div class="wrap">
+  <div class="kick"><span class="idx">03</span>Get the app</div>
   <h2>下载</h2>
   <div class="dl-box">
     <div class="btns">
-      <a class="btn pri dim" id="dl-setup2" href="https://github.com/TreeX-X/JanusX/releases/latest">Windows 安装版 (.exe)</a>
+      <a class="btn acc dim" id="dl-setup2" href="https://github.com/TreeX-X/JanusX/releases/latest">Windows 安装版 (.exe)</a>
       <a class="btn dim" id="dl-port2" href="https://github.com/TreeX-X/JanusX/releases/latest">便携版 (免安装)</a>
     </div>
     <p id="dl-note">正在查询最新正式版… macOS / Linux 包随后续版本加入，敬请期待。</p>
@@ -111,10 +160,16 @@
     var el = document.getElementById(id);
     if (el && url) { el.href = url; el.classList.remove("dim"); }
   }
+  function setVer(text) {
+    var badge = document.getElementById("ver");
+    var label = document.getElementById("ver-text");
+    if (label) { label.textContent = text; return; }
+    if (badge) { badge.textContent = text; }
+  }
   fetch("https://api.github.com/repos/" + repo + "/releases/latest")
     .then(function (r) { if (!r.ok) throw 0; return r.json(); })
     .then(function (d) {
-      document.getElementById("ver").textContent = "最新版本 " + (d.tag_name || d.name || "");
+      setVer("最新版本 " + (d.tag_name || d.name || ""));
       var setup = null, port = null;
       (d.assets || []).forEach(function (a) {
         if (/-setup\.exe$/i.test(a.name)) setup = a.browser_download_url;
@@ -126,7 +181,7 @@
         "当前 " + (d.tag_name || "") + " · 安装包由 GitHub Releases 直连下载，应用内支持自动更新。";
     })
     .catch(function () {
-      document.getElementById("ver").textContent = "首个正式版筹备中";
+      setVer("首个正式版筹备中");
       document.getElementById("dl-note").textContent =
         "安装包随首个正式版自动上架（按钮将直连 .exe），可先 Star 仓库或查看源码。";
     });
