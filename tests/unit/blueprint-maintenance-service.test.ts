@@ -48,6 +48,7 @@ vi.mock('../../src/main/janus/blueprint-store', () => ({
     loadBlueprint: mocks.loadBlueprint,
     applyMaintenanceOperations: mocks.applyMaintenanceOperations,
   },
+  isProjectGraphId: (id: string) => id.startsWith('harness:project:'),
 }))
 vi.mock('../../src/main/janus/blueprint-paths', () => ({ workspacesDir: mocks.workspacesDir }))
 

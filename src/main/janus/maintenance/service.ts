@@ -6,7 +6,7 @@ import { app, type BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { generateObject } from '../../llm/ai-runtime'
 import { llmService } from '../../llm/LlmService'
-import { blueprintStore } from '../blueprint-store'
+import { blueprintStore, isProjectGraphId } from '../blueprint-store'
 import { nowIso } from '../blueprint-factory'
 import { writeJson } from '../blueprint-persistence'
 import { buildReverseOperations, buildGroupDigest, expandGroupSelection, groupMaintenanceOperations, scopeNodeIds, selectOperations } from './changeset'
@@ -255,6 +255,14 @@ function isAuditRecord(value: unknown): value is BlueprintMaintenanceAuditRecord
     && validEvidence
 }
 
+// Note: project graphs stay out of the legacy loop — see .agents/notes/implemented/architecture/2026-09-17-maintenance-harness-guard-s6.md
+/** S6-c slice 1: project graphs are harness-managed; the legacy maintenance loop must not write them. */
+export function throwIfHarnessManaged(blueprintId: string): void {
+  if (isProjectGraphId(blueprintId)) {
+    throw new Error('HARNESS_MANAGED: 项目 Note 请走 harness 事务维护，旧维护循环暂不支持项目图')
+  }
+}
+
 class BlueprintMaintenanceService {
   private tasks = new Map<string, BlueprintMaintenanceTask>()
   private startingBlueprints = new Set<string>()
@@ -286,6 +294,7 @@ class BlueprintMaintenanceService {
   async start(input: BlueprintMaintenanceStartInput): Promise<BlueprintMaintenanceTask> {
     const existing = [...this.tasks.values()].find((task) => task.blueprintId === input.blueprintId && !CLOSED_STATUSES.has(task.status))
     if (existing || this.startingBlueprints.has(input.blueprintId)) throw new Error('该蓝图已有活动维护任务')
+    throwIfHarnessManaged(input.blueprintId)
     this.startingBlueprints.add(input.blueprintId)
     try {
       const blueprint = await blueprintStore.loadBlueprint('__global__', input.blueprintId)
@@ -495,6 +504,7 @@ class BlueprintMaintenanceService {
    * and goes through the same selection, dependency, and revision gates.
    */
   async prepareUndo(input: BlueprintMaintenanceUndoPrepareInput): Promise<BlueprintMaintenanceUndoPrepareResult> {
+    throwIfHarnessManaged(input.blueprintId)
     const activeTask = [...this.tasks.values()]
       .find((task) => task.blueprintId === input.blueprintId && !CLOSED_STATUSES.has(task.status))
     if (activeTask) throw new Error('该蓝图仍有活动维护任务，请先完成或取消后再撤销')
@@ -517,6 +527,7 @@ class BlueprintMaintenanceService {
   }
 
   async applyUndo(input: BlueprintMaintenanceUndoApplyInput): Promise<BlueprintMaintenanceUndoApplyResult> {
+    throwIfHarnessManaged(input.blueprintId)
     const changeSet = this.undoChangeSets.get(input.undoChangeSetId)
     if (!changeSet || changeSet.blueprintId !== input.blueprintId) throw new Error('撤销提案不存在或已失效')
     const activeTask = [...this.tasks.values()]
