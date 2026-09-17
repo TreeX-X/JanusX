@@ -71,6 +71,31 @@
     "removeModel": "删除模型",
     "defaultModelLabel": "默认模型"
   },
+  "cli": {
+    "sectionTitle": "外部终端 CLI",
+    "janus": {
+      "name": "JanusX 内部",
+      "badge": "内部使用",
+      "using": "正在使用默认配置「{{name}}」",
+      "unconfigured": "尚未设置默认配置"
+    },
+    "claude": {
+      "name": "Claude Code",
+      "synced": "已同步「{{name}}」· {{time}}",
+      "notSynced": "尚未同步",
+      "sourceGone": "同步来源已删除",
+      "applyDefault": "同步默认配置",
+      "rollback": "回滚"
+    },
+    "notice": {
+      "synced": "已从「{{name}}」同步并备份，重启终端后生效。",
+      "rolledBack": "已回滚到上次备份。"
+    },
+    "error": {
+      "noProvider": "没有可用的默认配置：需要带 Base URL 与 API Key 的 api-key 类型 Provider。"
+    },
+    "hint": "同步前自动备份 Claude Code 配置，可随时回滚；仅同步默认配置，切换默认后需重新同步。"
+  },
   "test": {
     "testing": "测试连接中...",
     "connected": "已连接 [{{latency}}ms]",

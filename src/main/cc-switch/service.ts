@@ -7,6 +7,7 @@ import type {
   CcSwitchDetectResult,
   CcSwitchInstallResult,
   CcSwitchLatestResult,
+  CcSwitchSyncState,
   CcSwitchToolId,
 } from '../../shared/ipc/cc-switch'
 import type { CcSwitchRollbackResult } from '../../shared/ipc/cc-switch'
@@ -17,34 +18,39 @@ import { ClaudeDetector, claudeDetector } from './claude-detector'
 import { ClaudeInstaller } from './installer'
 import { fetchLatestVersion } from './latest'
 import { ClaudeSettingsApplier, claudeSettingsApplier } from './settings-applier'
+import { CcSwitchSyncStateStore, ccSwitchSyncStateStore } from './sync-state'
 
 // Note: cc-switch 移植的外部 CLI 版本检测与安装编排入口 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-cli-detect-install.md
-// Note: LLM 同步（取现有 LLM 引擎默认配置回写 ~/.claude/settings.json）走同一门面，原子备份与重读校验是硬性要求 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-llm-sync.md
+// Note: LLM 多 CLI 管理（现有 LLM Provider 借给外部 CLI，含同步状态）走同一门面，原子备份与重读校验是硬性要求 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-cli-matrix.md
 export interface CcSwitchService {
   detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult>
   latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult>
   install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult>
-  applyLlm(toolId: CcSwitchToolId): Promise<CcSwitchApplyResult>
+  applyProvider(toolId: CcSwitchToolId, providerId: string | null): Promise<CcSwitchApplyResult>
+  syncState(): Promise<CcSwitchSyncState>
   rollbackProfile(): Promise<CcSwitchRollbackResult>
 }
 
-/** 从现有 LLM 引擎解析出的可同步凭证；null 表示没有可用默认配置。 */
+/** 从现有 LLM 引擎解析出的可同步凭证；null 表示没有可用配置。 */
 export interface CcSwitchLlmCredentials {
+  providerId: string
   providerName: string
   baseURL: string
   authToken: string
   model?: string
 }
 
-async function defaultResolveLlmCredentials(): Promise<CcSwitchLlmCredentials | null> {
-  const provider = await llmConfigStore.getDefaultProvider()
+async function defaultResolveLlmCredentials(providerId: string | null): Promise<CcSwitchLlmCredentials | null> {
+  const provider = providerId === null
+    ? await llmConfigStore.getDefaultProvider()
+    : await llmConfigStore.getProviderSettings(providerId)
   if (!provider || provider.enabled === false) return null
   if (provider.authType !== AuthType.API_KEY) return null
   const baseURL = provider.baseURL?.trim() ?? ''
   const authToken = provider.apiKey?.trim() ?? ''
   if (!baseURL || !authToken) return null
   const model = provider.modelId?.trim() || provider.defaultModelId?.trim() || undefined
-  return { providerName: provider.name, baseURL, authToken, ...(model ? { model } : {}) }
+  return { providerId: provider.id, providerName: provider.name, baseURL, authToken, ...(model ? { model } : {}) }
 }
 
 function notInstalled(toolId: CcSwitchToolId, error: string): CcSwitchDetectResult {
@@ -79,7 +85,8 @@ export class DefaultCcSwitchService implements CcSwitchService {  private readon
   constructor(
     private readonly detector: ClaudeDetector = claudeDetector,
     private readonly applier: ClaudeSettingsApplier = claudeSettingsApplier,
-    private readonly resolveLlmCredentials: () => Promise<CcSwitchLlmCredentials | null> = defaultResolveLlmCredentials,
+    private readonly syncStore: CcSwitchSyncStateStore = ccSwitchSyncStateStore,
+    private readonly resolveLlmCredentials: (providerId: string | null) => Promise<CcSwitchLlmCredentials | null> = defaultResolveLlmCredentials,
   ) {}
 
   async detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult> {
@@ -108,22 +115,36 @@ export class DefaultCcSwitchService implements CcSwitchService {  private readon
     return { toolId, success: true, command: outcome.command, version: probe.version }
   }
 
-  async applyLlm(toolId: CcSwitchToolId): Promise<CcSwitchApplyResult> {
+  async applyProvider(toolId: CcSwitchToolId, providerId: string | null): Promise<CcSwitchApplyResult> {
     if (toolId !== 'claude') return { success: false, error: 'Unsupported tool.' }
-    // 凭证唯一来源是现有 LLM 引擎的默认配置；本域不存任何密钥。
-    const credentials = await this.resolveLlmCredentials()
+    // 凭证唯一来源是现有 LLM 引擎的 Provider；本域不存任何密钥，只记同步来源。
+    const credentials = await this.resolveLlmCredentials(providerId)
     if (!credentials) return { success: false, error: 'NO_LLM_PROVIDER' }
     try {
       const outcome = await this.applier.apply(credentials)
+      await this.syncStore.record({
+        providerId: credentials.providerId,
+        providerName: credentials.providerName,
+        baseURL: outcome.applied.baseURL,
+        ...(outcome.applied.model ? { model: outcome.applied.model } : {}),
+        syncedAt: Date.now(),
+        backupPath: outcome.backupPath,
+      })
       return { success: true, providerName: credentials.providerName, backupPath: outcome.backupPath }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
+  async syncState(): Promise<CcSwitchSyncState> {
+    return this.syncStore.get()
+  }
+
   async rollbackProfile(): Promise<CcSwitchRollbackResult> {
     try {
       const outcome = await this.applier.rollback()
+      // 回滚后 Live 已不再是同步记录的内容，诚实地清空同步态。
+      await this.syncStore.clear()
       return { success: true, backupPath: outcome.backupPath }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }

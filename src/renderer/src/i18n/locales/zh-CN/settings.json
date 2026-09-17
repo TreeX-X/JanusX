@@ -333,23 +333,6 @@
     "notice": {
       "existingTerminal": "已打开的终端需重启，新版本与 PATH 才会生效。",
       "installed": "安装完成，重启终端后生效。"
-    },
-    "sync": {
-      "desc": "把 LLM 引擎当前默认配置的 Base URL、Key 与模型同步给 Claude Code，同步前自动备份。",
-      "label": {
-        "source": "同步来源"
-      },
-      "action": {
-        "apply": "同步 LLM 配置",
-        "rollback": "回滚上次同步"
-      },
-      "notice": {
-        "synced": "已从「{{name}}」同步并备份，重启终端后生效。",
-        "rolledBack": "已回滚到上次备份。"
-      },
-      "error": {
-        "noProvider": "LLM 引擎没有可用的默认配置：需要带 Base URL 与 API Key 的 api-key 类型 Provider。"
-      }
     }
   },
   "officeCli": {

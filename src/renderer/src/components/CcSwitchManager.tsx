@@ -26,10 +26,8 @@ export function CcSwitchManager() {
   const [latestVersion, setLatestVersion] = useState<string>()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [syncBusy, setSyncBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [syncedProvider, setSyncedProvider] = useState('')
   const [justInstalled, setJustInstalled] = useState(false)
 
   // refresh 只更新探测数据，从不碰 error/notice：调用方自己决定何时清错，
@@ -74,44 +72,6 @@ export function CcSwitchManager() {
       setBusy(false)
     }
   }, [refresh, t])
-
-  const handleApplyLlm = useCallback(async () => {
-    setSyncBusy(true)
-    setError('')
-    setNotice('')
-    try {
-      const result = await ccSwitchService.applyLlm('claude')
-      if (!result.success) {
-        setError(result.error === 'NO_LLM_PROVIDER' ? t('settings:cliTools.sync.error.noProvider') : (result.error ?? ''))
-        return
-      }
-      setSyncedProvider(result.providerName ?? '')
-      setNotice(t('settings:cliTools.sync.notice.synced', { name: result.providerName ?? '' }))
-    } catch (applyError: unknown) {
-      setError(applyError instanceof Error ? applyError.message : String(applyError))
-    } finally {
-      setSyncBusy(false)
-    }
-  }, [t])
-
-  const handleRollback = useCallback(async () => {
-    setSyncBusy(true)
-    setError('')
-    setNotice('')
-    try {
-      const result = await ccSwitchService.rollbackProfile()
-      if (!result.success) {
-        setError(result.error ?? '')
-        return
-      }
-      setSyncedProvider('')
-      setNotice(t('settings:cliTools.sync.notice.rolledBack'))
-    } catch (rollbackError: unknown) {
-      setError(rollbackError instanceof Error ? rollbackError.message : String(rollbackError))
-    } finally {
-      setSyncBusy(false)
-    }
-  }, [t])
 
   if (loading) {
     return (
@@ -213,38 +173,6 @@ export function CcSwitchManager() {
             </button>
           )}
           {busy && (
-            <span className={styles.lsBusyText}>
-              {t('settings:cliTools.action.working')}
-            </span>
-          )}
-        </div>
-
-        <div className={styles.lsCardMeta}>
-          <span className={styles.lsMetaItem}>{t('settings:cliTools.sync.desc')}</span>
-          {syncedProvider && (
-            <span className={styles.lsMetaItem}>
-              {t('settings:cliTools.sync.label.source')}: {syncedProvider}
-            </span>
-          )}
-        </div>
-        <div className={styles.lsCardActions}>
-          <button
-            type="button"
-            className={`${styles.lsButton} ${styles.lsButtonPrimary}`}
-            disabled={syncBusy}
-            onClick={() => void handleApplyLlm()}
-          >
-            {t('settings:cliTools.sync.action.apply')}
-          </button>
-          <button
-            type="button"
-            className={`${styles.lsButton} ${styles.lsButtonGhost}`}
-            disabled={syncBusy}
-            onClick={() => void handleRollback()}
-          >
-            {t('settings:cliTools.sync.action.rollback')}
-          </button>
-          {syncBusy && (
             <span className={styles.lsBusyText}>
               {t('settings:cliTools.action.working')}
             </span>

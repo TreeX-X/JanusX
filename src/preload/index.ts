@@ -302,7 +302,8 @@ const ccSwitchAPI: CcSwitchAPI = {
   detect: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.detect, toolId),
   latest: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.latest, toolId),
   install: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.install, toolId),
-  applyLlm: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.applyLlm, toolId),
+  applyProvider: (request) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.applyProvider, request),
+  syncState: () => ipcRenderer.invoke(CC_SWITCH_CHANNELS.syncState),
   rollbackProfile: () => ipcRenderer.invoke(CC_SWITCH_CHANNELS.rollbackProfile),
 }
 

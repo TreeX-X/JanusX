@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Plus, RefreshCw, Trash2 } from 'lucide-react'
 import styles from './LlmConfigModal.module.css'
 import { ModalCloseButton } from './ModalCloseButton'
+import { CliSyncSection } from './CliSyncSection'
 import { Select } from './ui/Select'
 import {
   getProviders,
@@ -378,9 +379,10 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
           </section>
         )}
 
+        <CliSyncSection providers={providers} defaultProviderId={defaultProviderId} />
+
         <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>{editingId ? t('llm:provider.editTitle') : t('llm:provider.addTitle')}</h3>
-          <div className={styles.formGroup}>
+          <h3 className={styles.sectionTitle}>{editingId ? t('llm:provider.editTitle') : t('llm:provider.addTitle')}</h3>          <div className={styles.formGroup}>
             <label>{t('llm:provider.typeLabel')}</label>
             <Select
               className={`${styles.configInput} ${styles.selectInput}`}

@@ -6,7 +6,8 @@ export const CC_SWITCH_CHANNELS = {
   detect: 'cc-switch:detect',
   latest: 'cc-switch:latest',
   install: 'cc-switch:install',
-  applyLlm: 'cc-switch:llm:apply',
+  applyProvider: 'cc-switch:provider:apply',
+  syncState: 'cc-switch:sync-state',
   rollbackProfile: 'cc-switch:profile:rollback',
 } as const
 
@@ -50,7 +51,8 @@ export interface CcSwitchAPI {
   detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult>
   latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult>
   install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult>
-  applyLlm(toolId: CcSwitchToolId): Promise<CcSwitchApplyResult>
+  applyProvider(request: CcSwitchApplyProviderRequest): Promise<CcSwitchApplyResult>
+  syncState(): Promise<CcSwitchSyncState>
   rollbackProfile(): Promise<CcSwitchRollbackResult>
 }
 
@@ -67,6 +69,25 @@ export interface CcSwitchApplyResult {
   backupPath?: string | null
   /** 'NO_LLM_PROVIDER' 由渲染端映射为本地化文案，其余为原文透出。 */
   error?: string
+}
+
+export interface CcSwitchApplyProviderRequest {
+  toolId: CcSwitchToolId
+  /** null 表示沿用 LLM 引擎默认配置。 */
+  providerId: string | null
+}
+
+export interface ClaudeSyncRecordState {
+  providerId: string
+  providerName: string
+  baseURL: string
+  model?: string
+  syncedAt: number
+  backupPath: string | null
+}
+
+export interface CcSwitchSyncState {
+  claude: ClaudeSyncRecordState | null
 }
 
 export interface CcSwitchRollbackResult {

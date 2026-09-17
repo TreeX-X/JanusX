@@ -71,6 +71,31 @@
     "removeModel": "Remove model",
     "defaultModelLabel": "Default model"
   },
+  "cli": {
+    "sectionTitle": "External terminal CLIs",
+    "janus": {
+      "name": "JanusX internal",
+      "badge": "Internal",
+      "using": "Using default provider “{{name}}”",
+      "unconfigured": "No default provider set"
+    },
+    "claude": {
+      "name": "Claude Code",
+      "synced": "Synced “{{name}}” · {{time}}",
+      "notSynced": "Not synced",
+      "sourceGone": "sync source was deleted",
+      "applyDefault": "Sync default provider",
+      "rollback": "Roll back"
+    },
+    "notice": {
+      "synced": "Synced from “{{name}}” and backed up. Restart terminals to take effect.",
+      "rolledBack": "Rolled back to the last backup."
+    },
+    "error": {
+      "noProvider": "No usable default provider: an api-key provider with base URL and API key is required."
+    },
+    "hint": "Claude Code config is backed up before every sync and can be rolled back; only the default provider syncs, re-sync after changing the default."
+  },
   "test": {
     "testing": "Testing connection...",
     "connected": "Connected [{{latency}}ms]",

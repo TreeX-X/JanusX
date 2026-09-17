@@ -333,23 +333,6 @@
     "notice": {
       "existingTerminal": "Restart open terminals for the new version and PATH to take effect.",
       "installed": "Install finished. Restart terminals to take effect."
-    },
-    "sync": {
-      "desc": "Apply the LLM engine default provider base URL, key, and model to Claude Code, with an automatic backup first.",
-      "label": {
-        "source": "Synced from"
-      },
-      "action": {
-        "apply": "Sync LLM config",
-        "rollback": "Roll back last sync"
-      },
-      "notice": {
-        "synced": "Synced from “{{name}}” and backed up. Restart terminals to take effect.",
-        "rolledBack": "Rolled back to the last backup."
-      },
-      "error": {
-        "noProvider": "The LLM engine has no usable default provider: an api-key provider with base URL and API key is required."
-      }
     }
   },
   "officeCli": {
