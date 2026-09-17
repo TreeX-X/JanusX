@@ -1,6 +1,6 @@
 import { delimiter } from 'path'
 import type { CcSwitchToolDescriptor } from './tool-registry'
-import { claudeKnownBinDirs, findExecutableOnPath, quotePowerShellPath, readPathValue } from './claude-detector'
+import { claudeKnownBinDirs, findExecutableOnPath, quotePowerShellPath, readPathValue } from './cli-detector'
 
 const INSTALL_TIMEOUT_MS = 5 * 60_000
 
@@ -10,7 +10,7 @@ interface RunResult {
   stderr: string
 }
 
-interface ClaudeInstallerDependencies {
+interface CliInstallerDependencies {
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   homeDir: string
@@ -26,10 +26,10 @@ function lastLines(text: string, count: number): string {
   return text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(-count).join('\n')
 }
 
-export class ClaudeInstaller {
+export class CliInstaller {
   private running = false
 
-  constructor(private readonly deps: ClaudeInstallerDependencies) {}
+  constructor(private readonly deps: CliInstallerDependencies) {}
 
   isBusy(): boolean {
     return this.running

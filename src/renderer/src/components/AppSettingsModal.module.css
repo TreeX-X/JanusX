@@ -372,6 +372,20 @@
   min-width: 0;
 }
 
+.lsToolIcon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .lsCardName {
   font-size: 13px;
   font-weight: 600;

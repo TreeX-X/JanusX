@@ -2,7 +2,8 @@ import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { delimiter, isAbsolute, join, resolve } from 'path'
 import { execa } from 'execa'
-import type { CcSwitchBinarySource, CcSwitchDetectResult } from '../../shared/ipc/cc-switch'
+import type { CcSwitchBinarySource, CcSwitchDetectResult, CcSwitchToolId } from '../../shared/ipc/cc-switch'
+import type { CcSwitchToolDescriptor } from './tool-registry'
 import { getCcSwitchTool } from './tool-registry'
 
 const PROBE_TIMEOUT_MS = 10_000
@@ -17,7 +18,7 @@ interface CommandResult {
   timedOut?: boolean
 }
 
-interface ClaudeDetectorDependencies {
+interface CliDetectorDependencies {
   env: NodeJS.ProcessEnv
   platform: NodeJS.Platform
   homeDir: string
@@ -25,13 +26,16 @@ interface ClaudeDetectorDependencies {
   run(file: string, args: readonly string[]): Promise<CommandResult>
 }
 
+export type { CliDetectorDependencies }
+
 export interface ResolvedCliBinary {
   path: string
   source: CcSwitchBinarySource
 }
 
-function binaryNames(platform: NodeJS.Platform): readonly string[] {
-  return platform === 'win32' ? ['claude.cmd', 'claude.exe', 'claude'] : ['claude']
+function binaryNames(tool: CcSwitchToolDescriptor, platform: NodeJS.Platform): readonly string[] {
+  if (platform !== 'win32') return tool.binaryNames
+  return tool.binaryNames.flatMap(name => [`${name}.cmd`, `${name}.exe`, name])
 }
 
 /** 大小写不敏感地读取 PATH（win32 下键名可能是 Path）。 */
@@ -39,13 +43,23 @@ export function readPathValue(env: NodeJS.ProcessEnv): string {
   return Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? ''
 }
 
-export function claudeKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, homeDir: string): string[] {
+function expandWindowsVars(raw: string, env: NodeJS.ProcessEnv): string {
+  return raw.replace(/%([^%]+)%/g, (_, name: string) => {
+    const hit = Object.entries(env).find(([key]) => key.toLowerCase() === String(name).toLowerCase())?.[1]
+    return hit ?? ''
+  })
+}
+
+export function cliKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, homeDir: string, tool?: CcSwitchToolDescriptor): string[] {
   if (platform === 'win32') {
     const dirs: string[] = []
     if (env.APPDATA) dirs.push(join(env.APPDATA, 'npm'))
-    if (env.LOCALAPPDATA) dirs.push(join(env.LOCALAPPDATA, 'Programs', 'claude'))
     if (env.ProgramFiles) dirs.push(join(env.ProgramFiles, 'nodejs'))
-    return dirs
+    for (const raw of tool?.extraKnownDirs?.win32 ?? []) {
+      const expanded = expandWindowsVars(raw, env)
+      if (expanded) dirs.push(expanded)
+    }
+    return [...new Set(dirs)]
   }
   const dirs = [
     join(homeDir, '.local', 'bin'),
@@ -54,6 +68,11 @@ export function claudeKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Plat
     ...(platform === 'darwin' ? ['/opt/homebrew/bin'] : []),
   ]
   return [...new Set(dirs)]
+}
+
+/** 兼容旧名：首个工具的已知目录（installer 共用 npm 目录时调用）。 */
+export function claudeKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, homeDir: string): string[] {
+  return cliKnownBinDirs(env, platform, homeDir, getCcSwitchTool('claude'))
 }
 
 export async function findExecutableOnPath(
@@ -119,7 +138,7 @@ function versionProbeCommand(platform: NodeJS.Platform, binaryPath: string): { f
   return { file: binaryPath, args: ['--version'] }
 }
 
-const defaultDependencies: ClaudeDetectorDependencies = {
+const defaultDependencies: CliDetectorDependencies = {
   env: process.env,
   platform: process.platform,
   homeDir: homedir(),
@@ -127,39 +146,48 @@ const defaultDependencies: ClaudeDetectorDependencies = {
   run: defaultRun,
 }
 
-export class ClaudeDetector {
-  constructor(private readonly deps: ClaudeDetectorDependencies = defaultDependencies) {}
+export class CliDetector {
+  constructor(
+    private readonly toolId: CcSwitchToolId,
+    private readonly deps: CliDetectorDependencies = defaultDependencies,
+  ) {}
+
+  private get tool(): CcSwitchToolDescriptor {
+    const tool = getCcSwitchTool(this.toolId)
+    if (!tool) throw new Error(`Unsupported tool: ${this.toolId}`)
+    return tool
+  }
 
   async findCandidate(): Promise<ResolvedCliBinary | undefined> {
-    const names = binaryNames(this.deps.platform)
+    const names = binaryNames(this.tool, this.deps.platform)
     const pathDirs = readPathValue(this.deps.env).split(delimiter).filter(Boolean)
     const onPath = await findExecutableOnPath(names, pathDirs, path => this.isRegularAbsoluteFile(path))
     if (onPath) return { path: onPath, source: 'path' }
-    const knownDirs = claudeKnownBinDirs(this.deps.env, this.deps.platform, this.deps.homeDir)
+    const knownDirs = cliKnownBinDirs(this.deps.env, this.deps.platform, this.deps.homeDir, this.tool)
     const known = await findExecutableOnPath(names, knownDirs, path => this.isRegularAbsoluteFile(path))
     if (known) return { path: known, source: 'known-location' }
     return undefined
   }
 
   async detect(): Promise<CcSwitchDetectResult> {
-    const tool = getCcSwitchTool('claude')
-    const manualHint = tool?.manualInstallCommand ?? 'npm i -g @anthropic-ai/claude-code@latest'
+    const tool = this.tool
+    const manualHint = tool.manualInstallCommand
     const candidate = await this.findCandidate()
     if (!candidate) {
-      return { toolId: 'claude', installed: false, runnable: false, hint: manualHint }
+      return { toolId: this.toolId, installed: false, runnable: false, hint: manualHint }
     }
     const probe = versionProbeCommand(this.deps.platform, candidate.path)
     const result = await this.deps.run(probe.file, probe.args)
     if (result.exitCode !== 0) {
       return {
-        toolId: 'claude',
+        toolId: this.toolId,
         installed: true,
         runnable: false,
         path: candidate.path,
         source: candidate.source,
         hint: result.timedOut
-          ? 'Claude Code timed out on --version. Reinstall it and retry.'
-          : lastLines(`${result.stderr}\n${result.stdout}`, 4) || `Claude Code exited with code ${result.exitCode}.`,
+          ? `${tool.displayName} timed out on --version. Reinstall it and retry.`
+          : lastLines(`${result.stderr}\n${result.stdout}`, 4) || `${tool.displayName} exited with code ${result.exitCode}.`,
       }
     }
     const version = parseVersion(`${result.stdout}\n${result.stderr}`)
@@ -167,16 +195,16 @@ export class ClaudeDetector {
       // PowerShell 解析失败时 exit 0 但 stderr 可读，直接透出诊断而非套话。
       const detail = lastLines(`${result.stderr}\n${result.stdout}`, 4)
       return {
-        toolId: 'claude',
+        toolId: this.toolId,
         installed: true,
         runnable: false,
         path: candidate.path,
         source: candidate.source,
-        hint: detail || 'Claude Code ran but reported no parseable version. Reinstall it and retry.',
+        hint: detail || `${tool.displayName} ran but reported no parseable version. Reinstall it and retry.`,
       }
     }
     return {
-      toolId: 'claude',
+      toolId: this.toolId,
       installed: true,
       runnable: true,
       version,
@@ -196,4 +224,5 @@ export class ClaudeDetector {
   }
 }
 
-export const claudeDetector = new ClaudeDetector()
+/** 首个工具的探测器单例（线上默认 wiring 用）。 */
+export const claudeDetector = new CliDetector('claude')

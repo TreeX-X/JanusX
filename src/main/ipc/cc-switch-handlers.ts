@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { CC_SWITCH_CHANNELS, type CcSwitchApplyProviderRequest, type CcSwitchToolId } from '../../shared/ipc/cc-switch'
+import { getCcSwitchTool } from '../cc-switch/tool-registry'
 import { ccSwitchService, type CcSwitchService } from '../cc-switch/service'
 
 export interface RegisterCcSwitchHandlersOptions {
@@ -17,7 +18,7 @@ function isAuthorizedSender(event: IpcMainInvokeEvent, getAllowedWindows: () => 
 }
 
 function isSupportedToolId(value: unknown): value is CcSwitchToolId {
-  return value === 'claude'
+  return typeof value === 'string' && getCcSwitchTool(value) !== undefined
 }
 
 function isApplyProviderRequest(value: unknown): value is CcSwitchApplyProviderRequest {

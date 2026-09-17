@@ -1,6 +1,6 @@
 import { dirname, resolve } from 'path'
 import { describe, expect, it, vi } from 'vitest'
-import { ClaudeInstaller } from '../../../src/main/cc-switch/installer'
+import { CliInstaller } from '../../../src/main/cc-switch/installer'
 import { CC_SWITCH_TOOLS } from '../../../src/main/cc-switch/tool-registry'
 
 function createHarness(options: {
@@ -10,7 +10,7 @@ function createHarness(options: {
   stderr?: string
 } = {}) {
   const run = vi.fn(async () => ({ exitCode: options.exitCode ?? 0, stdout: '', stderr: options.stderr ?? '' }))
-  const installer = new ClaudeInstaller({
+  const installer = new CliInstaller({
     platform: options.platform ?? 'win32',
     env: { PATH: options.npmPath ? dirname(options.npmPath) : '', APPDATA: 'C:\\Users\\test\\AppData\\Roaming' },
     homeDir: 'C:\\Users\\test',
@@ -20,7 +20,7 @@ function createHarness(options: {
   return { installer, run }
 }
 
-describe('ClaudeInstaller', () => {
+describe('CliInstaller', () => {
   it('refuses to run when npm cannot be located and hands out the manual command', async () => {
     const { installer, run } = createHarness()
 
@@ -60,7 +60,7 @@ describe('ClaudeInstaller', () => {
       await gate
       return { exitCode: 0, stdout: '', stderr: '' }
     })
-    const installer = new ClaudeInstaller({
+    const installer = new CliInstaller({
       platform: 'win32',
       env: { PATH: dirname(npmPath) },
       homeDir: 'C:\\Users\\test',
@@ -74,3 +74,4 @@ describe('ClaudeInstaller', () => {
     await expect(first).resolves.toMatchObject({ success: true })
   })
 })
+

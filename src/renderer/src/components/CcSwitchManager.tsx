@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
-import { isCliUpdateAvailable, type CcSwitchDetectResult } from '../../../shared/ipc/cc-switch'
+import {
+  CC_SWITCH_TOOL_META,
+  isCliUpdateAvailable,
+  type CcSwitchDetectResult,
+  type CcSwitchToolId,
+} from '../../../shared/ipc/cc-switch'
 import { ccSwitchService } from '@/services/cc-switch'
 import styles from './AppSettingsModal.module.css'
 
@@ -20,8 +25,9 @@ function toCardState(detect: CcSwitchDetectResult | undefined, latestVersion: st
   return 'ready'
 }
 
-export function CcSwitchManager() {
+export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
   const { t } = useI18n('settings')
+  const meta = CC_SWITCH_TOOL_META[toolId]
   const [detect, setDetect] = useState<CcSwitchDetectResult>()
   const [latestVersion, setLatestVersion] = useState<string>()
   const [loading, setLoading] = useState(true)
@@ -34,12 +40,12 @@ export function CcSwitchManager() {
   // 否则安装失败信息会被随后一次重探洗掉。
   // 最新版查询独立于本地探测：注册表往返可达 15 秒，卡片先按本地结果首绘。
   const refresh = useCallback(async () => {
-    const detectResult = await ccSwitchService.detect('claude')
+    const detectResult = await ccSwitchService.detect(toolId)
     setDetect(detectResult)
     setLoading(false)
-    const latestResult = await ccSwitchService.latest('claude')
+    const latestResult = await ccSwitchService.latest(toolId)
     setLatestVersion(latestResult.latestVersion)
-  }, [])
+  }, [toolId])
 
   const refreshQuiet = useCallback(() => {
     void refresh().catch((refreshError: unknown) => {
@@ -57,7 +63,7 @@ export function CcSwitchManager() {
     setError('')
     setNotice('')
     try {
-      const result = await ccSwitchService.install('claude')
+      const result = await ccSwitchService.install(toolId)
       if (!result.success) {
         setError(result.error ?? '')
       } else {
@@ -70,7 +76,7 @@ export function CcSwitchManager() {
     } finally {
       setBusy(false)
     }
-  }, [refresh, t])
+  }, [refresh, t, toolId])
 
   if (loading) {
     return (
@@ -87,12 +93,19 @@ export function CcSwitchManager() {
     <div className={styles.lsSection}>
       <div className={styles.lsCard}>
         <div className={styles.lsCardHeader}>
+          <span
+            className={styles.lsToolIcon}
+            style={{ background: `${meta.color}22`, borderColor: `${meta.color}55`, color: meta.color }}
+            aria-hidden="true"
+          >
+            {meta.monogram}
+          </span>
           <div className={styles.lsCardInfo}>
             <span className={styles.lsCardName}>
-              {t('settings:cliTools.name')}
+              {meta.displayName}
             </span>
             <span className={styles.lsCardDesc}>
-              {t('settings:cliTools.desc')}
+              {t(`settings:cliTools.tools.${toolId}.desc`)}
             </span>
           </div>
           <span

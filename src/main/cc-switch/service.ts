@@ -14,8 +14,8 @@ import type { CcSwitchRollbackResult } from '../../shared/ipc/cc-switch'
 import { AuthType } from '@janusx/llm-core'
 import { llmConfigStore } from '../llm/ConfigStore'
 import { getCcSwitchTool } from './tool-registry'
-import { ClaudeDetector, claudeDetector } from './claude-detector'
-import { ClaudeInstaller } from './installer'
+import { CliDetector } from './cli-detector'
+import { CliInstaller } from './installer'
 import { fetchLatestVersion } from './latest'
 import { ClaudeSettingsApplier, claudeSettingsApplier } from './settings-applier'
 import { CcSwitchSyncStateStore, ccSwitchSyncStateStore } from './sync-state'
@@ -57,7 +57,8 @@ function notInstalled(toolId: CcSwitchToolId, error: string): CcSwitchDetectResu
   return { toolId, installed: false, runnable: false, hint: error }
 }
 
-export class DefaultCcSwitchService implements CcSwitchService {  private readonly installer = new ClaudeInstaller({
+export class DefaultCcSwitchService implements CcSwitchService {
+  private readonly installer = new CliInstaller({
     platform: process.platform,
     env: process.env,
     homeDir: homedir(),
@@ -83,15 +84,23 @@ export class DefaultCcSwitchService implements CcSwitchService {  private readon
   })
 
   constructor(
-    private readonly detector: ClaudeDetector = claudeDetector,
+    private readonly detectors: Partial<Record<CcSwitchToolId, CliDetector>> = {},
     private readonly applier: ClaudeSettingsApplier = claudeSettingsApplier,
     private readonly syncStore: CcSwitchSyncStateStore = ccSwitchSyncStateStore,
     private readonly resolveLlmCredentials: (providerId: string | null) => Promise<CcSwitchLlmCredentials | null> = defaultResolveLlmCredentials,
   ) {}
 
+  private detectorFor(toolId: CcSwitchToolId): CliDetector {
+    const existing = this.detectors[toolId]
+    if (existing) return existing
+    const created = new CliDetector(toolId)
+    this.detectors[toolId] = created
+    return created
+  }
+
   async detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult> {
-    if (toolId !== 'claude') return notInstalled(toolId, 'Unsupported tool.')
-    return this.detector.detect()
+    if (!getCcSwitchTool(toolId)) return notInstalled(toolId, 'Unsupported tool.')
+    return this.detectorFor(toolId).detect()
   }
 
   async latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult> {
@@ -108,9 +117,9 @@ export class DefaultCcSwitchService implements CcSwitchService {  private readon
     const outcome = await this.installer.install(tool)
     if (!outcome.success) return { toolId, success: false, command: outcome.command, error: outcome.error }
     // 安装后重探：展示=实际运行，绝不凭 exit 0 断言成功。
-    const probe = await this.detector.detect()
+    const probe = await this.detectorFor(toolId).detect()
     if (!probe.runnable || !probe.version) {
-      return { toolId, success: false, command: outcome.command, error: probe.hint ?? 'Install finished but Claude Code is not runnable.' }
+      return { toolId, success: false, command: outcome.command, error: probe.hint ?? `Install finished but ${tool.displayName} is not runnable.` }
     }
     return { toolId, success: true, command: outcome.command, version: probe.version }
   }

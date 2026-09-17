@@ -8,7 +8,7 @@ vi.mock('electron', () => ({
 }))
 
 const { ClaudeSettingsApplier } = await import('../../../src/main/cc-switch/settings-applier')
-const { ClaudeDetector } = await import('../../../src/main/cc-switch/claude-detector')
+const { CliDetector } = await import('../../../src/main/cc-switch/cli-detector')
 const { CcSwitchSyncStateStore } = await import('../../../src/main/cc-switch/sync-state')
 const { DefaultCcSwitchService } = await import('../../../src/main/cc-switch/service')
 
@@ -19,15 +19,17 @@ async function createTempDir(prefix: string): Promise<string> {
 type Credentials = { providerId: string; providerName: string; baseURL: string; authToken: string; model?: string }
 
 function createService(homeDir: string, userDataDir: string, credentials: Credentials | null) {
-  const detector = new ClaudeDetector({
-    env: {},
-    platform: 'linux',
-    homeDir,
-    isRegularFile: async () => false,
-    run: async () => ({ exitCode: 1, stdout: '', stderr: '' }),
-  })
+  const detectors = {
+    claude: new CliDetector('claude', {
+      env: {},
+      platform: 'linux' as const,
+      homeDir,
+      isRegularFile: async () => false,
+      run: async () => ({ exitCode: 1, stdout: '', stderr: '' }),
+    }),
+  }
   return new DefaultCcSwitchService(
-    detector,
+    detectors,
     new ClaudeSettingsApplier(homeDir),
     new CcSwitchSyncStateStore(userDataDir),
     async () => credentials,
@@ -89,21 +91,24 @@ describe('CcSwitchService provider sync', () => {
     const homeDir = await createTempDir('janusx-cc-llm-tool-')
     const userDataDir = await createTempDir('janusx-cc-llm-tool-data-')
     const resolver = vi.fn(async () => CREDENTIALS)
-    const detector = new ClaudeDetector({
-      env: {},
-      platform: 'linux',
-      homeDir,
-      isRegularFile: async () => false,
-      run: async () => ({ exitCode: 1, stdout: '', stderr: '' }),
-    })
+    const detectors = {
+      claude: new CliDetector('claude', {
+        env: {},
+        platform: 'linux' as const,
+        homeDir,
+        isRegularFile: async () => false,
+        run: async () => ({ exitCode: 1, stdout: '', stderr: '' }),
+      }),
+    }
     const service = new DefaultCcSwitchService(
-      detector,
+      detectors,
       new ClaudeSettingsApplier(homeDir),
       new CcSwitchSyncStateStore(userDataDir),
       resolver,
     )
 
-    await expect(service.applyProvider('codex' as never, null)).resolves.toMatchObject({ success: false })
+    // codex 探测安装已支持，但凭证同步仍仅限 claude，且先于 resolver 短路。
+    await expect(service.applyProvider('codex', null)).resolves.toMatchObject({ success: false })
     expect(resolver).not.toHaveBeenCalled()
   })
 })

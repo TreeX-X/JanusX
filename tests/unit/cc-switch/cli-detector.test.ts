@@ -1,10 +1,12 @@
 import { resolve } from 'path'
 import { describe, expect, it, vi } from 'vitest'
-import { ClaudeDetector, quotePowerShellPath } from '../../../src/main/cc-switch/claude-detector'
+import { CliDetector, quotePowerShellPath } from '../../../src/main/cc-switch/cli-detector'
+import type { CcSwitchToolId } from '../../../src/shared/ipc/cc-switch'
 
 type RunResult = { exitCode: number; stdout: string; stderr: string; timedOut?: boolean }
 
 function createHarness(options: {
+  toolId?: CcSwitchToolId
   files?: string[]
   path?: string
   appData?: string
@@ -18,7 +20,7 @@ function createHarness(options: {
     stdout: args.join(' ').includes('--version') ? '1.2.3 (Claude Code)' : '',
     stderr: '',
   })))
-  const detector = new ClaudeDetector({
+  const detector = new CliDetector(options.toolId ?? 'claude', {
     env: { PATH: options.path ?? '', APPDATA: options.appData, LOCALAPPDATA: options.localAppData },
     platform: options.platform ?? 'win32',
     homeDir: options.platform === 'win32' || !options.platform ? 'C:\\Users\\test' : '/home/test',
@@ -28,7 +30,7 @@ function createHarness(options: {
   return { detector, run }
 }
 
-describe('ClaudeDetector', () => {
+describe('CliDetector', () => {
   it('reports not-installed with a manual hint and probes nothing', async () => {
     const { detector, run } = createHarness()
 
@@ -135,6 +137,38 @@ describe('ClaudeDetector', () => {
       installed: true,
       runnable: false,
       hint: '发生错误：缺少运行时',
+    })
+  })
+
+  it('drives other tools from the registry without Claude specifics', async () => {
+    const codexBinary = resolve('C:\\Users\\test\\AppData\\Roaming\\npm\\codex.cmd')
+    const { detector, run } = createHarness({
+      toolId: 'codex',
+      files: [codexBinary],
+      path: '',
+      appData: 'C:\\Users\\test\\AppData\\Roaming',
+      run: async () => ({ exitCode: 0, stdout: 'codex-cli 0.44.0', stderr: '' }),
+    })
+
+    const result = await detector.detect()
+    expect(result).toMatchObject({
+      toolId: 'codex',
+      installed: true,
+      runnable: true,
+      version: '0.44.0',
+      source: 'known-location',
+    })
+    expect(run.mock.calls[0]?.[1]?.[3]).toContain(`& '${codexBinary}' --version`)
+  })
+
+  it('reports the tool-specific manual command when missing', async () => {
+    const { detector } = createHarness({ toolId: 'gemini' })
+
+    await expect(detector.detect()).resolves.toEqual({
+      toolId: 'gemini',
+      installed: false,
+      runnable: false,
+      hint: 'npm i -g @google/gemini-cli@latest',
     })
   })
 })

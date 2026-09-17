@@ -1,6 +1,6 @@
 /**
- * cc-switch 移植：外部 CLI 工具（首批仅 Claude Code）的版本检测与安装契约。
- * 主进程与渲染进程共享：通道名、结果类型，以及两端对称的 semver 比较。
+ * cc-switch 移植：外部 CLI 工具的版本检测与安装契约。
+ * 主进程与渲染进程共享：通道名、结果类型、工具元数据，以及两端对称的 semver 比较。
  */
 export const CC_SWITCH_CHANNELS = {
   detect: 'cc-switch:detect',
@@ -13,8 +13,25 @@ export const CC_SWITCH_CHANNELS = {
 
 export type CcSwitchChannel = (typeof CC_SWITCH_CHANNELS)[keyof typeof CC_SWITCH_CHANNELS]
 
-/** 首批仅 claude；新增工具必须同步主进程 tool-registry 的白名单。 */
-export type CcSwitchToolId = 'claude'
+/** 受管外部终端白名单；新增工具必须同步主进程 tool-registry 的声明行。 */
+export type CcSwitchToolId = 'claude' | 'codex' | 'gemini' | 'opencode'
+
+export const CC_SWITCH_TOOL_ORDER: readonly CcSwitchToolId[] = ['claude', 'codex', 'gemini', 'opencode']
+
+/** 两端共享的展示元数据：首字母徽标＋品牌色，不引入二进制图标资产。 */
+export interface CcSwitchToolMeta {
+  id: CcSwitchToolId
+  displayName: string
+  monogram: string
+  color: string
+}
+
+export const CC_SWITCH_TOOL_META: Record<CcSwitchToolId, CcSwitchToolMeta> = {
+  claude: { id: 'claude', displayName: 'Claude Code', monogram: 'C', color: '#d97757' },
+  codex: { id: 'codex', displayName: 'Codex', monogram: 'X', color: '#6e6e6e' },
+  gemini: { id: 'gemini', displayName: 'Gemini CLI', monogram: 'G', color: '#4796e3' },
+  opencode: { id: 'opencode', displayName: 'OpenCode', monogram: 'O', color: '#8b8b8b' },
+}
 
 export type CcSwitchBinarySource = 'path' | 'known-location'
 

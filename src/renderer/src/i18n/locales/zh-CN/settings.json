@@ -311,8 +311,12 @@
     "title": "外部终端",
     "subtitle": "检测外部 AI 命令行工具的版本，一键安装与升级",
     "loading": "加载中...",
-    "name": "Claude Code",
-    "desc": "Anthropic 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。",
+    "tools": {
+      "claude": { "desc": "Anthropic 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。" },
+      "codex": { "desc": "OpenAI 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。" },
+      "gemini": { "desc": "Google 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。" },
+      "opencode": { "desc": "开源终端智能体。通过 npm 全局安装与升级，安装后重启终端生效。" }
+    },
     "state": {
       "notInstalled": "未安装",
       "broken": "已安装但不可运行",
