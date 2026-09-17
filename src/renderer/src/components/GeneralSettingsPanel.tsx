@@ -50,9 +50,11 @@ export function GeneralSettingsPanel() {
           <div className={styles.generalHelp}>{t('settings:cliTools.subtitle')}</div>
         </div>
         <div className={styles.generalControlCol}>
-          {CC_SWITCH_TOOL_ORDER.map((toolId) => (
-            <CcSwitchManager key={toolId} toolId={toolId} />
-          ))}
+          <div className={styles.lsCard}>
+            {CC_SWITCH_TOOL_ORDER.map((toolId) => (
+              <CcSwitchManager key={toolId} toolId={toolId} />
+            ))}
+          </div>
         </div>
       </div>
 

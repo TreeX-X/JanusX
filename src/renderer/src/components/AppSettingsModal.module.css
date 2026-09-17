@@ -386,6 +386,55 @@
   line-height: 1;
 }
 
+.lsToolImg {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.lsToolRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lsToolRow + .lsToolRow {
+  border-top: 1px solid var(--shell-border);
+  padding-top: 12px;
+}
+
+.lsToolRowMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lsToolRowInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lsToolRowMeta {
+  font-size: 11px;
+  color: var(--shell-dim);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.lsToolRowActions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .lsCardName {
   font-size: 13px;
   font-weight: 600;

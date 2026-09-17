@@ -13,10 +13,10 @@ export const CC_SWITCH_CHANNELS = {
 
 export type CcSwitchChannel = (typeof CC_SWITCH_CHANNELS)[keyof typeof CC_SWITCH_CHANNELS]
 
-/** 受管外部终端白名单；新增工具必须同步主进程 tool-registry 的声明行。 */
-export type CcSwitchToolId = 'claude' | 'codex' | 'gemini' | 'opencode'
+/** 受管外部终端白名单；与 JanusX 终端预设的外部 CLI 对齐，不含自有 janus/pi */
+export type CcSwitchToolId = 'claude' | 'codex' | 'opencode'
 
-export const CC_SWITCH_TOOL_ORDER: readonly CcSwitchToolId[] = ['claude', 'codex', 'gemini', 'opencode']
+export const CC_SWITCH_TOOL_ORDER: readonly CcSwitchToolId[] = ['claude', 'codex', 'opencode']
 
 /** 两端共享的展示元数据：首字母徽标＋品牌色，不引入二进制图标资产。 */
 export interface CcSwitchToolMeta {
@@ -29,7 +29,6 @@ export interface CcSwitchToolMeta {
 export const CC_SWITCH_TOOL_META: Record<CcSwitchToolId, CcSwitchToolMeta> = {
   claude: { id: 'claude', displayName: 'Claude Code', monogram: 'C', color: '#d97757' },
   codex: { id: 'codex', displayName: 'Codex', monogram: 'X', color: '#6e6e6e' },
-  gemini: { id: 'gemini', displayName: 'Gemini CLI', monogram: 'G', color: '#4796e3' },
   opencode: { id: 'opencode', displayName: 'OpenCode', monogram: 'O', color: '#8b8b8b' },
 }
 

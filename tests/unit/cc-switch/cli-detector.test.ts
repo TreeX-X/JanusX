@@ -162,13 +162,13 @@ describe('CliDetector', () => {
   })
 
   it('reports the tool-specific manual command when missing', async () => {
-    const { detector } = createHarness({ toolId: 'gemini' })
+    const { detector } = createHarness({ toolId: 'opencode' })
 
     await expect(detector.detect()).resolves.toEqual({
-      toolId: 'gemini',
+      toolId: 'opencode',
       installed: false,
       runnable: false,
-      hint: 'npm i -g @google/gemini-cli@latest',
+      hint: 'npm i -g opencode-ai@latest',
     })
   })
 })

@@ -314,7 +314,6 @@
     "tools": {
       "claude": { "desc": "Official Anthropic CLI. Installed and upgraded via npm globally; restart terminals afterwards." },
       "codex": { "desc": "Official OpenAI CLI. Installed and upgraded via npm globally; restart terminals afterwards." },
-      "gemini": { "desc": "Official Google CLI. Installed and upgraded via npm globally; restart terminals afterwards." },
       "opencode": { "desc": "Open-source terminal agent. Installed and upgraded via npm globally; restart terminals afterwards." }
     },
     "state": {

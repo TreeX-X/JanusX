@@ -47,14 +47,6 @@ export const CC_SWITCH_TOOLS: Record<CcSwitchToolId, CcSwitchToolDescriptor> = {
       win32: ['%LOCALAPPDATA%\\Programs\\OpenAI\\Codex\\bin'],
     },
   },
-  gemini: {
-    id: 'gemini',
-    displayName: 'Gemini CLI',
-    binaryNames: ['gemini'],
-    npmPackage: '@google/gemini-cli',
-    manualInstallCommand: npmInstallCommand('@google/gemini-cli'),
-    latestStrategy: 'npm-dist-tags',
-  },
   opencode: {
     id: 'opencode',
     displayName: 'OpenCode',
@@ -66,6 +58,6 @@ export const CC_SWITCH_TOOLS: Record<CcSwitchToolId, CcSwitchToolDescriptor> = {
 }
 
 export function getCcSwitchTool(toolId: string): CcSwitchToolDescriptor | undefined {
-  if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'gemini' && toolId !== 'opencode') return undefined
+  if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'opencode') return undefined
   return CC_SWITCH_TOOLS[toolId]
 }

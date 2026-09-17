@@ -314,7 +314,6 @@
     "tools": {
       "claude": { "desc": "Anthropic 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。" },
       "codex": { "desc": "OpenAI 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。" },
-      "gemini": { "desc": "Google 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。" },
       "opencode": { "desc": "开源终端智能体。通过 npm 全局安装与升级，安装后重启终端生效。" }
     },
     "state": {
