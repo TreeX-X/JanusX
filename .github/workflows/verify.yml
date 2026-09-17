@@ -78,6 +78,11 @@ jobs:
         working-directory: JanusX
         run: npm run test:unit -- --run
 
+      # TEMP-DEBUG:只跑 CI 特异失败的两文件，拿完整错误；定案后删除。
+      - name: Debug office suspects
+        working-directory: JanusX
+        run: npx vitest run tests/unit/office/office-artifact-index.test.ts tests/unit/office/officecli-installer.test.ts --reporter=verbose
+
       - name: Test llm-core
         working-directory: JanusX
         run: npm run test:llm-core
