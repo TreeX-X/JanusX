@@ -13,9 +13,6 @@ import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import {
   parseNote,
-  serializeNote,
-  splitFrontmatter,
-  validateNote,
   type Diagnostic,
   type ParsedNote,
 } from '@janus-agent/harness-core'
@@ -29,7 +26,7 @@ import {
   type WatchEvent,
 } from '@janus-agent/harness-node'
 import { projectGraph, projectGraphId, type ProjectedEntry } from './graph-projection'
-import { setSection, type NoteEdit } from './artifact-producer'
+import { mergeNoteEdit, type NoteEdit } from './artifact-producer'
 import type { Blueprint } from '../../shared/janus/types'
 
 export interface ResolveResult {
@@ -194,40 +191,9 @@ export class HarnessNoteService {
     await writeFile(file, JSON.stringify(next, null, 2), 'utf8')
   }
 
-  /** Merge a structured edit onto parsed note bytes (frontmatter via data, prose via slices). */
+  /** Merge a structured edit onto parsed note bytes (pure; see artifact-producer). */
   mergeNoteEdit(note: ParsedNote, rawText: string, edit: NoteEdit, reason?: string): string {
-    const meta = { ...(note.meta as unknown as Record<string, unknown>) } as Record<string, unknown> & ParsedNote['meta']
-    if (edit.frontmatter.tags !== undefined) meta.tags = [...edit.frontmatter.tags]
-    if (edit.frontmatter.parent !== undefined) {
-      if (edit.frontmatter.parent === null) delete (meta as Record<string, unknown>)['parent']
-      else meta.parent = edit.frontmatter.parent
-    }
-    if (edit.frontmatter.lifecycle !== undefined) {
-      meta.lifecycle = edit.frontmatter.lifecycle as ParsedNote['meta']['lifecycle']
-      if ((edit.frontmatter.lifecycle === 'archived' || edit.frontmatter.lifecycle === 'rejected') && meta.disposition === undefined) {
-        meta.disposition = { reason: reason ?? 'updated from canvas' }
-      }
-      if (edit.frontmatter.lifecycle !== 'archived' && edit.frontmatter.lifecycle !== 'rejected') {
-        delete (meta as Record<string, unknown>)['disposition']
-      }
-    }
-    let body = splitFrontmatter(rawText).body
-    if (edit.title !== undefined) {
-      body = body.replace(/^#\s+.*$/m, `# ${edit.title}`)
-      if (!/^#\s+/m.test(body)) body = `# ${edit.title}\n\n${body}`
-    }
-    for (const [name, text] of Object.entries(edit.sections)) {
-      body = setSection(body, name, text)
-    }
-    const merged: ParsedNote = { ...note, meta: meta as ParsedNote['meta'], body }
-    const out = serializeNote(merged)
-    // Round-trip guard: the merger must never produce an invalid note.
-    const reparsed = parseNote(out)
-    const problems = validateNote(reparsed)
-    if (problems.length > 0) {
-      throw { code: 'SCHEMA_INVALID', message: problems[0].message, path: problems[0].path }
-    }
-    return out
+    return mergeNoteEdit(note, rawText, edit, reason)
   }
 
   async applyOperations(
