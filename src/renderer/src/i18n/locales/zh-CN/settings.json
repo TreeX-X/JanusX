@@ -333,6 +333,7 @@
       "install": "安装",
       "upgrade": "升级",
       "refresh": "重新检测",
+      "refreshing": "检测中...",
       "working": "处理中..."
     },
     "notice": {

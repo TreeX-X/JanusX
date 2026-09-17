@@ -333,6 +333,7 @@
       "install": "Install",
       "upgrade": "Upgrade",
       "refresh": "Re-detect",
+      "refreshing": "Detecting...",
       "working": "Working..."
     },
     "notice": {

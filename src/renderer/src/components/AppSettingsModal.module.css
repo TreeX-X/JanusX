@@ -568,3 +568,23 @@
   font-size: 11px;
   color: var(--shell-muted);
 }
+
+.lsSpinner {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-top-color: var(--shell-text);
+  animation: ls-spin 0.8s linear infinite;
+}
+
+@keyframes ls-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lsLoadingRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

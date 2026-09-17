@@ -33,6 +33,7 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
   const [latestVersion, setLatestVersion] = useState<string>()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [iconFailed, setIconFailed] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -41,13 +42,21 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
   // refresh 只更新探测数据，从不碰 error/notice：调用方自己决定何时清错，
   // 否则安装失败信息会被随后一次重探洗掉。
   // 最新版查询独立于本地探测：注册表往返可达 15 秒，行内先按本地结果首绘。
-  const refresh = useCallback(async () => {
+  const refreshDetect = useCallback(async () => {
     const detectResult = await ccSwitchService.detect(toolId)
     setDetect(detectResult)
     setLoading(false)
+  }, [toolId])
+
+  const refreshLatest = useCallback(async () => {
     const latestResult = await ccSwitchService.latest(toolId)
     setLatestVersion(latestResult.latestVersion)
   }, [toolId])
+
+  const refresh = useCallback(async () => {
+    await refreshDetect()
+    await refreshLatest()
+  }, [refreshDetect, refreshLatest])
 
   const refreshQuiet = useCallback(() => {
     void refresh().catch((refreshError: unknown) => {
@@ -55,6 +64,22 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
       setLoading(false)
     })
   }, [refresh])
+
+  // 手动重测必须有可见反馈：置 refreshing 态禁用按钮并转菊花，
+  // 否则探测太快、值不变时用户会误以为点击无反应。
+  // 菊花只跟本地探测走；latest 后台跟进，到了静默点亮徽标。
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true)
+    setError('')
+    void refreshDetect()
+      .then(() => refreshLatest().catch(() => undefined))
+      .catch((refreshError: unknown) => {
+        setError(refreshError instanceof Error ? refreshError.message : String(refreshError))
+      })
+      .finally(() => {
+        setRefreshing(false)
+      })
+  }, [refreshDetect, refreshLatest])
 
   useEffect(() => {
     refreshQuiet()
@@ -109,7 +134,12 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
         <div className={styles.lsToolRowInfo}>
           <span className={styles.lsCardName}>{meta.displayName}</span>
           {loading
-            ? <span className={styles.lsToolRowMeta}>{t('settings:cliTools.loading')}</span>
+            ? (
+              <span className={styles.lsLoadingRow}>
+                <span className={styles.lsSpinner} aria-hidden="true" />
+                <span className={styles.lsToolRowMeta}>{t('settings:cliTools.loading')}</span>
+              </span>
+            )
             : versionLine
               ? <span className={styles.lsToolRowMeta}>{versionLine}</span>
               : <span className={styles.lsToolRowMeta}>{t(`settings:cliTools.tools.${toolId}.desc`)}</span>}
@@ -148,14 +178,22 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
               {t('settings:cliTools.action.upgrade')}
             </button>
           )}
-          {!loading && (state === 'ready' || state === 'broken') && !busy && (
+          {!loading && (state === 'ready' || state === 'broken') && !busy && !refreshing && (
             <button
               type="button"
               className={`${styles.lsButton} ${styles.lsButtonGhost}`}
-              onClick={refreshQuiet}
+              onClick={handleRefresh}
             >
               {t('settings:cliTools.action.refresh')}
             </button>
+          )}
+          {refreshing && (
+            <span className={styles.lsLoadingRow}>
+              <span className={styles.lsSpinner} aria-hidden="true" />
+              <span className={styles.lsBusyText}>
+                {t('settings:cliTools.action.refreshing')}
+              </span>
+            </span>
           )}
           {busy && (
             <span className={styles.lsBusyText}>
