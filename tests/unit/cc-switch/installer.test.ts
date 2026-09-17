@@ -32,15 +32,15 @@ describe('ClaudeInstaller', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('runs npm through cmd call on Windows and reports success', async () => {
+  it('runs npm through PowerShell on Windows and reports success', async () => {
     const npmPath = 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd'
     const { installer, run } = createHarness({ npmPath })
 
     await expect(installer.install(CC_SWITCH_TOOLS.claude)).resolves.toEqual({
       success: true,
-      command: `call "${npmPath}" i -g @anthropic-ai/claude-code@latest`,
+      command: `& "${npmPath}" i -g @anthropic-ai/claude-code@latest`,
     })
-    expect(run.mock.calls[0][0]).toBe('cmd.exe')
+    expect(run.mock.calls[0][0]).toBe('powershell.exe')
   })
 
   it('surfaces only the tail of a failed install', async () => {

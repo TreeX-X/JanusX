@@ -32,14 +32,13 @@ export function CcSwitchManager() {
 
   // refresh 只更新探测数据，从不碰 error/notice：调用方自己决定何时清错，
   // 否则安装失败信息会被随后一次重探洗掉。
+  // 最新版查询独立于本地探测：注册表往返可达 15 秒，卡片先按本地结果首绘。
   const refresh = useCallback(async () => {
-    const [detectResult, latestResult] = await Promise.all([
-      ccSwitchService.detect('claude'),
-      ccSwitchService.latest('claude'),
-    ])
+    const detectResult = await ccSwitchService.detect('claude')
     setDetect(detectResult)
-    setLatestVersion(latestResult.latestVersion)
     setLoading(false)
+    const latestResult = await ccSwitchService.latest('claude')
+    setLatestVersion(latestResult.latestVersion)
   }, [])
 
   const refreshQuiet = useCallback(() => {

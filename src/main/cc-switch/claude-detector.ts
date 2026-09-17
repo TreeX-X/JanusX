@@ -102,10 +102,19 @@ async function defaultRun(file: string, args: readonly string[]): Promise<Comman
   }
 }
 
-/** win32 下 .cmd/.bat 必须经 cmd /D /S /C call 调用，绝不裸调工具名（防劫持与闪窗）。 */
+/**
+ * win32 下统一经 PowerShell 调用已定位的绝对路径，绝不裸调工具名（防劫持与闪窗）。
+ * 中文 Windows 的 cmd.exe 按 GBK 输出自身报错（execa 按 UTF-8 解码即乱码），且 chcp 同串无效；
+ * 此处显式固定 PowerShell 输出编码为 UTF-8，保证诊断文本可读（实测结论）。
+ */
+export function quotePowerShellPath(path: string): string {
+  return `'${path.replace(/'/g, "''")}'`
+}
+
 function versionProbeCommand(platform: NodeJS.Platform, binaryPath: string): { file: string; args: readonly string[] } {
-  if (platform === 'win32' && /\.(cmd|bat)$/i.test(binaryPath)) {
-    return { file: 'cmd.exe', args: ['/D', '/S', '/C', `call "${binaryPath}" --version`] }
+  if (platform === 'win32') {
+    const script = `$OutputEncoding=[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); & ${quotePowerShellPath(binaryPath)} --version; exit $LASTEXITCODE`
+    return { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', script] }
   }
   return { file: binaryPath, args: ['--version'] }
 }
@@ -155,13 +164,15 @@ export class ClaudeDetector {
     }
     const version = parseVersion(`${result.stdout}\n${result.stderr}`)
     if (!version) {
+      // PowerShell 解析失败时 exit 0 但 stderr 可读，直接透出诊断而非套话。
+      const detail = lastLines(`${result.stderr}\n${result.stdout}`, 4)
       return {
         toolId: 'claude',
         installed: true,
         runnable: false,
         path: candidate.path,
         source: candidate.source,
-        hint: 'Claude Code ran but reported no parseable version. Reinstall it and retry.',
+        hint: detail || 'Claude Code ran but reported no parseable version. Reinstall it and retry.',
       }
     }
     return {

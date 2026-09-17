@@ -1,6 +1,6 @@
 import { delimiter } from 'path'
 import type { CcSwitchToolDescriptor } from './tool-registry'
-import { claudeKnownBinDirs, findExecutableOnPath, readPathValue } from './claude-detector'
+import { claudeKnownBinDirs, findExecutableOnPath, quotePowerShellPath, readPathValue } from './claude-detector'
 
 const INSTALL_TIMEOUT_MS = 5 * 60_000
 
@@ -56,10 +56,12 @@ export class ClaudeInstaller {
   buildCommand(npmPath: string, tool: CcSwitchToolDescriptor): { file: string; args: readonly string[]; display: string } {
     const target = `${tool.npmPackage}@latest`
     if (this.deps.platform === 'win32') {
+      // 与探测同理走 PowerShell：npm 报错与缺 node 的 cmd 报错都是 GBK，固定 UTF-8 才可读。
+      const script = `$OutputEncoding=[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); & ${quotePowerShellPath(npmPath)} i -g ${target}; exit $LASTEXITCODE`
       return {
-        file: 'cmd.exe',
-        args: ['/D', '/S', '/C', `call "${npmPath}" i -g ${target}`],
-        display: `call "${npmPath}" i -g ${target}`,
+        file: 'powershell.exe',
+        args: ['-NoProfile', '-NonInteractive', '-Command', script],
+        display: `& "${npmPath}" i -g ${target}`,
       }
     }
     return { file: npmPath, args: ['i', '-g', target], display: `${npmPath} i -g ${target}` }

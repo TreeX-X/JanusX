@@ -1,6 +1,6 @@
 import { resolve } from 'path'
 import { describe, expect, it, vi } from 'vitest'
-import { ClaudeDetector } from '../../../src/main/cc-switch/claude-detector'
+import { ClaudeDetector, quotePowerShellPath } from '../../../src/main/cc-switch/claude-detector'
 
 type RunResult = { exitCode: number; stdout: string; stderr: string; timedOut?: boolean }
 
@@ -92,12 +92,18 @@ describe('ClaudeDetector', () => {
     expect(run).toHaveBeenCalled()
   })
 
-  it('invokes .cmd probes through cmd call without flashing or bare names', async () => {
+  it('probes Windows binaries through PowerShell with explicit UTF-8 output', async () => {
     const pathBinary = resolve('C:\\tools\\claude.cmd')
     const { detector, run } = createHarness({ files: [pathBinary], path: 'C:\\tools' })
 
     await detector.detect()
-    expect(run).toHaveBeenCalledWith('cmd.exe', ['/D', '/S', '/C', `call "${pathBinary}" --version`])
+    expect(run).toHaveBeenCalledWith('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      expect.stringContaining(`& '${pathBinary}' --version`),
+    ])
+    expect(run.mock.calls[0]?.[1]?.[3]).toContain('[System.Text.UTF8Encoding]')
   })
 
   it('resolves posix binaries directly from PATH and known dirs', async () => {
@@ -111,5 +117,24 @@ describe('ClaudeDetector', () => {
 
     const result = await detector.detect()
     expect(result).toMatchObject({ installed: true, runnable: true, version: '2.0.1', source: 'path' })
+  })
+
+  it('escapes single quotes in PowerShell paths', () => {
+    expect(quotePowerShellPath("C:\\tools\\o'brien\\claude.cmd")).toBe("'C:\\tools\\o''brien\\claude.cmd'")
+  })
+
+  it('surfaces readable stderr when the probe exits zero without a version', async () => {
+    const pathBinary = resolve('C:\\tools\\claude.cmd')
+    const { detector } = createHarness({
+      files: [pathBinary],
+      path: 'C:\\tools',
+      run: async () => ({ exitCode: 0, stdout: '', stderr: '发生错误：缺少运行时' }),
+    })
+
+    await expect(detector.detect()).resolves.toMatchObject({
+      installed: true,
+      runnable: false,
+      hint: '发生错误：缺少运行时',
+    })
   })
 })
