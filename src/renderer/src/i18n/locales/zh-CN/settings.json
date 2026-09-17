@@ -307,6 +307,33 @@
     "safety": "自动运行仍会强制执行工作区范围限制、敏感路径拒绝、输入校验、版本快照和审计记录。",
     "error": { "load": "加载 Agent 权限设置失败", "save": "保存 Agent 权限设置失败" }
   },
+  "cliTools": {
+    "title": "外部终端",
+    "subtitle": "检测外部 AI 命令行工具的版本，一键安装与升级",
+    "loading": "加载中...",
+    "name": "Claude Code",
+    "desc": "Anthropic 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。",
+    "state": {
+      "notInstalled": "未安装",
+      "broken": "已安装但不可运行",
+      "ready": "就绪",
+      "updateAvailable": "有新版"
+    },
+    "label": {
+      "version": "当前版本",
+      "latest": "最新版本",
+      "source": "来源"
+    },
+    "action": {
+      "install": "安装",
+      "upgrade": "升级",
+      "refresh": "重新检测",
+      "working": "处理中..."
+    },
+    "notice": {
+      "existingTerminal": "已打开的终端需重启，新版本与 PATH 才会生效。"
+    }
+  },
   "officeCli": {
     "title": "OfficeCLI",
     "subtitle": "管理 Office CLI 二进制，用于 Office 文档预览与 prompt 生成",

@@ -307,6 +307,33 @@
     "safety": "Auto-run still enforces workspace boundaries, sensitive-path denial, input validation, checkpoints and audit records.",
     "error": { "load": "Failed to load Agent permission settings", "save": "Failed to save Agent permission settings" }
   },
+  "cliTools": {
+    "title": "External Terminals",
+    "subtitle": "Detect versions of external AI CLI tools; install and upgrade in one click",
+    "loading": "Loading...",
+    "name": "Claude Code",
+    "desc": "Official Anthropic CLI. Installed and upgraded via npm globally; restart terminals afterwards.",
+    "state": {
+      "notInstalled": "Not Installed",
+      "broken": "Installed but not runnable",
+      "ready": "Ready",
+      "updateAvailable": "Update available"
+    },
+    "label": {
+      "version": "Current",
+      "latest": "Latest",
+      "source": "Source"
+    },
+    "action": {
+      "install": "Install",
+      "upgrade": "Upgrade",
+      "refresh": "Re-detect",
+      "working": "Working..."
+    },
+    "notice": {
+      "existingTerminal": "Restart open terminals for the new version and PATH to take effect."
+    }
+  },
   "officeCli": {
     "title": "OfficeCLI",
     "subtitle": "Managed Office CLI binary for Office document preview and prompt generation",

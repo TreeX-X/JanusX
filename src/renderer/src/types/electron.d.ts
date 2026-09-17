@@ -12,6 +12,7 @@ import type { AgentRuntimeAPI } from '../../../shared/ipc/agent-runtime'
 import type { CheckpointAPI } from '../../../shared/ipc/checkpoint'
 import type { GitAPI } from '../../../shared/ipc/git'
 import type { LlmAPI } from '../../../shared/ipc/llm'
+import type { CcSwitchAPI } from '../../../shared/ipc/cc-switch'
 import type { JanusChatAPI } from '../../../shared/ipc/janus-chat'
 import type { RoundtableAPI } from '../../../shared/ipc/roundtable'
 import type { AgentSettingsAPI, NotificationSettingsAPI } from '../../../shared/ipc/settings'
@@ -36,6 +37,7 @@ interface ElectronAPI {
   harness: HarnessAPI
   office: OfficeAPI
   llm: LlmAPI
+  ccSwitch: CcSwitchAPI
   janusChat?: JanusChatAPI
   roundtable: RoundtableAPI
   agent: AgentAPI

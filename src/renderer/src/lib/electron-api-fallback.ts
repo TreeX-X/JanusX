@@ -180,6 +180,11 @@ export function installElectronApiFallback(): void {
       installerStart: unavailable, installerCancel: unavailable, installerRemove: unavailable,
       onInstallerProgress: () => () => {}, onFilesChanged: () => () => {}, onWatchEvicted: () => () => {},
     },
+    ccSwitch: {
+      detect: () => Promise.resolve({ toolId: 'claude' as const, installed: false, runnable: false, hint: 'Electron API is unavailable' }),
+      latest: () => Promise.resolve({ toolId: 'claude' as const }),
+      install: () => Promise.resolve({ toolId: 'claude' as const, success: false, error: 'Electron API is unavailable' }),
+    },
     llm: {
       getProviders: unavailable, getRuntimeStatus: unavailable, saveProvider: unavailable, testConnection: unavailable,
       removeProvider: unavailable, setDefaultProvider: unavailable, listModels: unavailable,

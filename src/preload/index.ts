@@ -30,6 +30,7 @@ import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agen
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
+import { CC_SWITCH_CHANNELS, type CcSwitchAPI } from '../shared/ipc/cc-switch'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
 import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
@@ -297,6 +298,12 @@ const llmAPI: LlmAPI = {
   onToolTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.toolTrace, callback),
 }
 
+const ccSwitchAPI: CcSwitchAPI = {
+  detect: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.detect, toolId),
+  latest: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.latest, toolId),
+  install: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.install, toolId),
+}
+
 const agentAPI: AgentAPI = {
   start: (options) => ipcRenderer.invoke(AGENT_CHANNELS.start, options),
   cancel: (sessionId) => ipcRenderer.invoke(AGENT_CHANNELS.cancel, { sessionId }),
@@ -486,6 +493,7 @@ contextBridge.exposeInMainWorld('electron', {
   harness: harnessAPI,
   office: officeAPI,
   llm: llmAPI,
+  ccSwitch: ccSwitchAPI,
   janusChat: janusChatAPI,
   roundtable: roundtableAPI,
   agent: agentAPI,

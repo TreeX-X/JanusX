@@ -41,7 +41,7 @@ import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { subAgentRunRegistry } from '../janus-runner/subagent-run-registry'
 import { ipcMain } from 'electron'
 import { registerAgentRuntimeHandlers } from './agent-runtime-handlers'
-
+import { registerCcSwitchHandlers } from './cc-switch-handlers'
 export interface RegisterApplicationIpcOptions {
   mainWindow: BrowserWindow
   getAllowedWindows: () => BrowserWindow[]
@@ -105,6 +105,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerFileHandlers()
   registerProjectHandlers()
   registerLlmHandlers()
+  registerCcSwitchHandlers({ getAllowedWindows: options.getAllowedWindows })
   registerJanusHandlers()
   registerHarnessHandlers(getCurrentMainWindow)
   registerJanusChatHandlers()
