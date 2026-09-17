@@ -20,4 +20,5 @@ The public site lives on the orphan `gh-pages` branch as three files: `index.htm
 ## Consequences
 
 - **Gains**: a live shareable URL (`https://treex-x.github.io/JanusX/`, verified HTTP 200 with title markers and byte-exact icon) whose download buttons track new releases without page edits.
+- **Visual language**: the page renders in the application shell language — neutral gray ramp surfaces with weak white borders, kicker eyebrows for hierarchy, and ghost buttons throughout — so the amber accent appears only in text, 1px borders, and the version status dot. No emoji icons ship in the markup. The `OfficeSetupGate` dialog follows the same language with identical installer copy and confirmation flow.
 - **Costs and limits**: `gh-pages` evolves outside `main` history, so copy updates need a deliberate checkout of that branch; `main` must never be pushed as a side effect of site work. The page advertises Windows only; macOS/Linux entries and a custom domain are the revisit signals.
