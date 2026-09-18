@@ -36,7 +36,7 @@ const VERTEX_REGIONS = [
   'asia-southeast1',
 ]
 
-type ProviderType = 'openai-compatible' | 'vertex-ai'
+type ProviderType = 'openai-compatible' | 'anthropic' | 'vertex-ai'
 
 function notifyJanusLlmConfigChanged(preferDefault: boolean, updatedProviderId?: string): void {
   window.dispatchEvent(new CustomEvent('janus:llm-config-changed', {
@@ -58,6 +58,11 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
   const [openaiBaseURL, setOpenaiBaseURL] = useState('https://api.openai.com/v1')
   const [openaiApiKey, setOpenaiApiKey] = useState('')
   const [openaiModel, setOpenaiModel] = useState('gpt-4o')
+
+  const [anthropicName, setAnthropicName] = useState('')
+  const [anthropicBaseURL, setAnthropicBaseURL] = useState('https://api.anthropic.com')
+  const [anthropicApiKey, setAnthropicApiKey] = useState('')
+  const [anthropicModel, setAnthropicModel] = useState('claude-sonnet-4-20250514')
 
   const [vertexName, setVertexName] = useState('Vertex AI')
   const [vertexProjectId, setVertexProjectId] = useState('')
@@ -86,6 +91,10 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
     setOpenaiBaseURL('https://api.openai.com/v1')
     setOpenaiApiKey('')
     setOpenaiModel('gpt-4o')
+    setAnthropicName('')
+    setAnthropicBaseURL('https://api.anthropic.com')
+    setAnthropicApiKey('')
+    setAnthropicModel('claude-sonnet-4-20250514')
     setVertexName('Vertex AI')
     setVertexProjectId('')
     setVertexRegion('us-central1')
@@ -161,6 +170,12 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       setVertexModels(models)
       setVertexDefaultModel(provider.defaultModelId || provider.modelId || models.find(Boolean) || '')
       setVertexProxy(provider.vertexAI?.proxy || '')
+    } else if (provider.authType === 'anthropic') {
+      setProviderType('anthropic')
+      setAnthropicName(provider.name)
+      setAnthropicBaseURL(provider.baseURL || 'https://api.anthropic.com')
+      setAnthropicApiKey(provider.apiKey || '')
+      setAnthropicModel(provider.modelId || 'claude-sonnet-4-20250514')
     } else {
       setProviderType('openai-compatible')
       setOpenaiName(provider.name)
@@ -178,6 +193,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
   }
 
   const buildSettings = (): ProviderSettings => {
+    if (providerType === 'anthropic') return buildAnthropicSettings()
     if (providerType === 'vertex-ai') {
       const models = vertexModels.map((model) => model.trim()).filter(Boolean)
       const defaultModelId = models.includes(vertexDefaultModel.trim())
@@ -214,6 +230,16 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
     }
   }
 
+  const buildAnthropicSettings = (): ProviderSettings => ({
+    id: editingId || `anthropic-${Date.now()}`,
+    name: anthropicName || 'Anthropic',
+    authType: 'anthropic' as any,
+    baseURL: anthropicBaseURL,
+    apiKey: anthropicApiKey,
+    modelId: anthropicModel,
+    enabled: true,
+  })
+
   const handleTest = async () => {
     try {
       setTestStatus({ state: 'testing', message: t('llm:test.testing') })
@@ -221,7 +247,9 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
       const testModel =
         providerType === 'vertex-ai'
           ? vertexDefaultModel || vertexModels.find(Boolean) || ''
-          : openaiModel || 'gpt-3.5-turbo'
+          : providerType === 'anthropic'
+            ? anthropicModel || 'claude-sonnet-4-20250514'
+            : openaiModel || 'gpt-3.5-turbo'
 
       const result = await testConnection({ ...settings, testModel })
 
@@ -342,7 +370,11 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                       )}
                     </div>
                     <div className={styles.providerModel}>
-                      {provider.authType === 'vertex-ai' ? t('llm:provider.typeVertex') : t('llm:provider.typeOpenai')}
+                      {provider.authType === 'vertex-ai'
+                        ? t('llm:provider.typeVertex')
+                        : provider.authType === 'anthropic'
+                          ? t('llm:provider.typeAnthropic')
+                          : t('llm:provider.typeOpenai')}
                       {provider.authType === 'vertex-ai'
                         ? ` / ${(provider.models?.length ? provider.models : [provider.modelId]).filter(Boolean).join(', ')}`
                         : provider.modelId ? ` / ${provider.modelId}` : ''}
@@ -382,7 +414,8 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
         <CliSyncSection providers={providers} defaultProviderId={defaultProviderId} />
 
         <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>{editingId ? t('llm:provider.editTitle') : t('llm:provider.addTitle')}</h3>          <div className={styles.formGroup}>
+          <h3 className={styles.sectionTitle}>{editingId ? t('llm:provider.editTitle') : t('llm:provider.addTitle')}</h3>
+          <div className={styles.formGroup}>
             <label>{t('llm:provider.typeLabel')}</label>
             <Select
               className={`${styles.configInput} ${styles.selectInput}`}
@@ -394,6 +427,7 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
               }}
               options={[
                 { value: 'openai-compatible', label: t('llm:provider.typeOptionOpenai') },
+                { value: 'anthropic', label: t('llm:provider.typeOptionAnthropic') },
                 { value: 'vertex-ai', label: t('llm:provider.typeOptionVertex') },
               ]}
             />
@@ -438,6 +472,49 @@ export function LlmConfigModal({ isOpen = false, onClose, embedded = false }: Ll
                 placeholder={t('llm:openai.modelPlaceholder')}
                 value={openaiModel}
                 onChange={(event) => setOpenaiModel(event.target.value)}
+              />
+            </div>
+          </section>
+        )}
+
+        {providerType === 'anthropic' && (
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>{t('llm:anthropic.sectionTitle')}</h3>
+            <div className={styles.formGroup}>
+              <label>{t('llm:anthropic.nameLabel')}</label>
+              <input
+                className={styles.configInput}
+                placeholder={t('llm:anthropic.namePlaceholder')}
+                value={anthropicName}
+                onChange={(event) => setAnthropicName(event.target.value)}
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>{t('llm:anthropic.baseUrlLabel')}</label>
+              <input
+                className={styles.configInput}
+                placeholder={t('llm:anthropic.baseUrlPlaceholder')}
+                value={anthropicBaseURL}
+                onChange={(event) => setAnthropicBaseURL(event.target.value)}
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>{t('llm:anthropic.apiKeyLabel')}</label>
+              <input
+                type="password"
+                className={styles.configInput}
+                placeholder={t('llm:anthropic.apiKeyPlaceholder')}
+                value={anthropicApiKey}
+                onChange={(event) => setAnthropicApiKey(event.target.value)}
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>{t('llm:anthropic.modelLabel')}</label>
+              <input
+                className={styles.configInput}
+                placeholder={t('llm:anthropic.modelPlaceholder')}
+                value={anthropicModel}
+                onChange={(event) => setAnthropicModel(event.target.value)}
               />
             </div>
           </section>

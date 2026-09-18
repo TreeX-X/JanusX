@@ -34,6 +34,7 @@ export { ProviderFactory } from './core/ProviderFactory'
    ════════════════════════════════════════════════════════════ */
 
 export { OpenAICompatibleAdapter } from './adapters'
+export { AnthropicAdapter } from './adapters'
 export { VertexAIAdapter } from './adapters'
 
 /* ════════════════════════════════════════════════════════════
@@ -60,6 +61,7 @@ export {
   validateStringLength,
   validateProviderSettings,
   validateApiKeySettings,
+  validateAnthropicSettings,
   validateVertexAISettings,
   validateSettings
 } from './utils/validation'

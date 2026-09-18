@@ -141,6 +141,27 @@ export function registerLlmHandlers(): void {
     }
   })
 
+  // 获取全部终端绑定
+  ipcMain.handle(LLM_CHANNELS.getTerminalBindings, async () => {
+    try {
+      return await llmService.getTerminalBindings()
+    } catch (error: any) {
+      console.error('[IPC] llm:get-terminal-bindings error:', error)
+      throw error
+    }
+  })
+
+  // 设置单终端绑定
+  ipcMain.handle(LLM_CHANNELS.setTerminalBinding, async (_, consumer: string, binding: { providerId: string | null; modelId?: string }) => {
+    try {
+      await llmService.setTerminalBinding(consumer, binding)
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC] llm:set-terminal-binding error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
   // 获取可用模型列表
   ipcMain.handle(LLM_CHANNELS.listModels, async (_, providerId: string) => {
     try {

@@ -47,6 +47,19 @@ export async function setDefaultProvider(providerId: string): Promise<{ success:
   return window.electron.llm.setDefaultProvider(providerId)
 }
 
+/** 获取全部终端绑定 */
+export async function getTerminalBindings(): Promise<Record<string, { providerId: string | null; modelId?: string }>> {
+  return window.electron.llm.getTerminalBindings()
+}
+
+/** 设置单终端绑定 */
+export async function setTerminalBinding(
+  consumer: string,
+  binding: { providerId: string | null; modelId?: string },
+): Promise<{ success: boolean; error?: string }> {
+  return window.electron.llm.setTerminalBinding(consumer as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi', binding)
+}
+
 /** 获取可用模型列表 */
 export async function listModels(providerId: string): Promise<ModelInfo[]> {
   return window.electron.llm.listModels(providerId)
@@ -70,6 +83,31 @@ export async function getDefaultProvider(): Promise<{ provider: ProviderSettings
   return window.electron.llm.getDefaultProvider()
 }
 
+/**
+ * 解析 Janus 内部实际生效的 Provider：janus 终端绑定优先，跟随默认时回退全局默认。
+ * 调用方不传 providerId 的 janus-chat 走此口径，显式传入时保持原值。
+ */
+export async function getJanusEffectiveProvider(): Promise<{ provider: ProviderSettings; modelId: string } | null> {
+  try {
+    const [bindings, providers, fallback] = await Promise.all([
+      getTerminalBindings().catch(() => null),
+      getProviders().catch(() => [] as ProviderSettings[]),
+      getDefaultProvider().catch(() => null),
+    ])
+    const janusBinding = bindings?.janus
+    if (janusBinding?.providerId) {
+      const bound = providers.find((p) => p.id === janusBinding.providerId)
+      if (bound) {
+        const modelId = janusBinding.modelId?.trim() || bound.defaultModelId || bound.modelId || bound.models?.find(Boolean) || fallback?.modelId || ''
+        return { provider: bound, modelId }
+      }
+    }
+    return fallback
+  } catch {
+    return getDefaultProvider().catch(() => null)
+  }
+}
+
 /* ════════════════════════════════════════════════════════════
    对话 API
    ════════════════════════════════════════════════════════════ */
@@ -86,7 +124,7 @@ export async function chat(
   modelId?: string,
   options?: { sourceTag?: 'janus-chat'; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[] }
 ): Promise<string> {
-  const targetProvider = providerId || (await getDefaultProvider())?.provider.id
+  const targetProvider = providerId || (await getJanusEffectiveProvider())?.provider.id
   if (!targetProvider) throw new Error('未配置 LLM Provider')
 
   return window.electron.llm.chat({
@@ -241,8 +279,8 @@ export function chatStream(
 
   const targetProvider = options?.providerId
     ? Promise.resolve({ providerId: options.providerId, modelId: options.modelId })
-    : getDefaultProvider().then((def) =>
-        def ? { providerId: def.provider.id, modelId: def.modelId } : null
+    : getJanusEffectiveProvider().then((def) =>
+        def ? { providerId: def.provider.id, modelId: options?.modelId || def.modelId } : null
       )
 
   targetProvider

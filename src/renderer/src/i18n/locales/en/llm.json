@@ -21,6 +21,7 @@
     "defaultBadge": "Default",
     "typeVertex": "Vertex AI",
     "typeOpenai": "OpenAI Compatible",
+    "typeAnthropic": "Anthropic Native",
     "setAsDefault": "Set as default",
     "edit": "Edit",
     "delete": "Delete",
@@ -28,6 +29,7 @@
     "addTitle": "Add provider",
     "typeLabel": "Provider Type",
     "typeOptionOpenai": "OpenAI-compatible endpoint (URL + Key)",
+    "typeOptionAnthropic": "Anthropic native endpoint (x-api-key)",
     "typeOptionVertex": "Google Vertex AI (GCP auth)"
   },
   "openai": {
@@ -40,6 +42,29 @@
     "apiKeyPlaceholder": "sk-...",
     "modelLabel": "Default Model",
     "modelPlaceholder": "gpt-4o, deepseek-chat..."
+  },
+  "anthropic": {
+    "sectionTitle": "Anthropic native endpoint",
+    "nameLabel": "Provider Name",
+    "namePlaceholder": "My Anthropic Provider",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "https://api.anthropic.com",
+    "apiKeyLabel": "API Key",
+    "apiKeyPlaceholder": "sk-ant-...",
+    "modelLabel": "Default Model",
+    "modelPlaceholder": "claude-sonnet-4-20250514 ..."
+  },
+  "terminals": {
+    "sectionTitle": "Per-terminal bindings",
+    "providerLabel": "Provider",
+    "followDefault": "Follow default",
+    "modelLabel": "Model override (optional)",
+    "modelPlaceholder": "Empty follows the provider default model",
+    "liveHint": "Claude sync writes back to the local config with backup; other terminals keep bindings for now, live write follows.",
+    "janusBadge": "Internal",
+    "externalBadge": "External",
+    "saved": "Binding saved.",
+    "saveFailed": "Save failed: {{error}}"
   },
   "vertex": {
     "sectionTitle": "Google Vertex AI",
@@ -92,7 +117,7 @@
       "rolledBack": "Rolled back to the last backup."
     },
     "error": {
-      "noProvider": "No usable default provider: an api-key provider with base URL and API key is required."
+      "noProvider": "No usable provider: an OpenAI-compatible or Anthropic provider with base URL and API key is required."
     },
     "hint": "Claude Code config is backed up before every sync and can be rolled back; only the default provider syncs, re-sync after changing the default."
   },

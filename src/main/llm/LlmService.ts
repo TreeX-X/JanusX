@@ -7,6 +7,7 @@ import {
   ProviderFactory,
   ExtensionRegistry,
   OpenAICompatibleAdapter,
+  AnthropicAdapter,
   VertexAIAdapter,
   validateSettings,
   getProxyManager
@@ -18,6 +19,7 @@ import { app, session } from 'electron'
 
 const AUTH_TYPE_TO_ADAPTER: Record<string, string> = {
   [AuthType.API_KEY]: 'openai-compatible',
+  [AuthType.ANTHROPIC]: 'anthropic',
   [AuthType.VERTEX_AI]: 'vertex-ai',
   [AuthType.NONE]: 'openai-compatible',
 }
@@ -40,6 +42,10 @@ class LlmService {
   private registerBuiltInAdapters(): void {
     if (!this.registry.has('openai-compatible')) {
       this.registry.register(new OpenAICompatibleAdapter())
+    }
+
+    if (!this.registry.has('anthropic')) {
+      this.registry.register(new AnthropicAdapter())
     }
 
     if (!this.registry.has('vertex-ai')) {
@@ -231,6 +237,20 @@ class LlmService {
    */
   async setDefaultProvider(providerId: string): Promise<void> {
     await llmConfigStore.setDefaultProvider(providerId)
+  }
+
+  /**
+   * 获取全部终端绑定
+   */
+  async getTerminalBindings(): Promise<Record<string, { providerId: string | null; modelId?: string }>> {
+    return llmConfigStore.getTerminalBindings()
+  }
+
+  /**
+   * 设置单终端绑定
+   */
+  async setTerminalBinding(consumer: string, binding: { providerId: string | null; modelId?: string }): Promise<void> {
+    await llmConfigStore.setTerminalBinding(consumer as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi', binding)
   }
 
   /**

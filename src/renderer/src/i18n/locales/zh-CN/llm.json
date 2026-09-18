@@ -21,6 +21,7 @@
     "defaultBadge": "默认",
     "typeVertex": "Vertex AI",
     "typeOpenai": "OpenAI Compatible",
+    "typeAnthropic": "Anthropic 原生",
     "setAsDefault": "设为默认",
     "edit": "编辑",
     "delete": "删除",
@@ -28,6 +29,7 @@
     "addTitle": "添加服务",
     "typeLabel": "服务类型 Provider Type",
     "typeOptionOpenai": "OpenAI 兼容接口 (URL + Key)",
+    "typeOptionAnthropic": "Anthropic 原生接口 (x-api-key)",
     "typeOptionVertex": "Google Vertex AI (GCP 认证)"
   },
   "openai": {
@@ -40,6 +42,29 @@
     "apiKeyPlaceholder": "sk-...",
     "modelLabel": "默认模型 Default Model",
     "modelPlaceholder": "gpt-4o, deepseek-chat..."
+  },
+  "anthropic": {
+    "sectionTitle": "Anthropic 原生接口",
+    "nameLabel": "服务名称 Provider Name",
+    "namePlaceholder": "My Anthropic Provider",
+    "baseUrlLabel": "接口地址 Base URL",
+    "baseUrlPlaceholder": "https://api.anthropic.com",
+    "apiKeyLabel": "访问密钥 API Key",
+    "apiKeyPlaceholder": "sk-ant-...",
+    "modelLabel": "默认模型 Default Model",
+    "modelPlaceholder": "claude-sonnet-4-20250514 ..."
+  },
+  "terminals": {
+    "sectionTitle": "按终端维护",
+    "providerLabel": "服务",
+    "followDefault": "跟随默认",
+    "modelLabel": "模型覆盖（可选）",
+    "modelPlaceholder": "留空沿用服务默认模型",
+    "liveHint": "Claude 同步会写回本地配置并自动备份；其余终端先维护绑定，写回随后补齐。",
+    "janusBadge": "内部",
+    "externalBadge": "外部",
+    "saved": "已保存绑定。",
+    "saveFailed": "保存失败：{{error}}"
   },
   "vertex": {
     "sectionTitle": "Google Vertex AI",
@@ -92,7 +117,7 @@
       "rolledBack": "已回滚到上次备份。"
     },
     "error": {
-      "noProvider": "没有可用的默认配置：需要带 Base URL 与 API Key 的 api-key 类型 Provider。"
+      "noProvider": "没有可用的配置：需要带 Base URL 与 API Key 的 OpenAI 兼容或 Anthropic 类型 Provider。"
     },
     "hint": "同步前自动备份 Claude Code 配置，可随时回滚；仅同步默认配置，切换默认后需重新同步。"
   },

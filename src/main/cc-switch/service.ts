@@ -45,7 +45,7 @@ async function defaultResolveLlmCredentials(providerId: string | null): Promise<
     ? await llmConfigStore.getDefaultProvider()
     : await llmConfigStore.getProviderSettings(providerId)
   if (!provider || provider.enabled === false) return null
-  if (provider.authType !== AuthType.API_KEY) return null
+  if (provider.authType !== AuthType.API_KEY && provider.authType !== AuthType.ANTHROPIC) return null
   const baseURL = provider.baseURL?.trim() ?? ''
   const authToken = provider.apiKey?.trim() ?? ''
   if (!baseURL || !authToken) return null

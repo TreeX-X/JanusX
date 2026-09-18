@@ -21,7 +21,7 @@ interface AppSettingsModalProps {
 
 const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team']
 
-export function AppSettingsModal({ isOpen, onClose, initialTab = 'notifications' }: AppSettingsModalProps) {
+export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: AppSettingsModalProps) {
   const { t } = useI18n('settings')
   const { t: tTeam } = useI18n('team')
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
