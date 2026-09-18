@@ -6,9 +6,9 @@
 
 JanusX 是面向 AI 辅助开发的开源桌面工作台。在项目之间切换，让多个终端并排运行，在右侧查看文件、Git 和检查点；也可以探索 Agent CLI、多角色圆桌、项目蓝图与知识库。
 
-![终端分屏 GIF：拖动标签到右侧形成分屏，再拖动分隔线调整比例](wiki/assets/terminal-split.gif)
+![终端分屏 GIF：左侧 Janus-agentX、右侧 Claude Code，拖动标签分屏并调整比例](wiki/assets/terminal-split.gif)
 
-拖动终端标签到面板边缘即可分屏，拖动分隔线调整比例。这里一侧查看 JanusX 的真实提交记录，另一侧查看项目命令。[查看静态画面](wiki/assets/terminal-split.png)
+左侧是 Janus-agentX，右侧是 Claude Code。拖动终端标签到面板边缘即可分屏，拖动分隔线调整比例。GIF 展示两个 CLI 的真实启动界面与分屏操作，未运行模型任务。[查看静态画面](wiki/assets/terminal-split.png)
 
 [核心与基础功能](#核心与基础功能) · [创新实验功能](#创新实验功能) · [安装与开始使用](#安装与开始使用) · [从源码开发](#从源码开发)
 
@@ -18,13 +18,13 @@ JanusX 是面向 AI 辅助开发的开源桌面工作台。在项目之间切换
 
 每个项目拥有自己的工作区与终端。左侧可切换项目、拖拽排序与分组；终端支持标签切换和上下、左右分屏。把标签拖到另一面板中央可以合并回标签页，适合一边运行项目，一边执行测试或使用 AI CLI。
 
-终端入口提供 Shell、Janus、Claude、Codex、OpenCode、Pi。外部 CLI 的运行需要对应工具和登录配置，JanusX 负责把这些工作入口放进同一个桌面环境。
+终端入口提供 Shell、Janus、Claude、Codex、OpenCode、Pi。Janus-agentX、Claude Code 等 CLI 需要先安装对应工具；执行模型任务前，还需完成各自的登录或模型配置。JanusX 负责把这些工作入口放进同一个桌面环境。
 
 ### 右侧栏：常用工具随手打开
 
-![右侧栏 GIF：切换文件与 Git 面板，将项目 package.json 嵌入终端旁边阅读](wiki/assets/right-sidebar.gif)
+![右侧栏 GIF：保留 Janus-agentX，切换文件与 Git 面板，将 package.json 嵌入旁边阅读](wiki/assets/right-sidebar.gif)
 
-文件与 Git 工具可以直接切换，面板宽度可调整、可收起。双击文件打开编辑器，再嵌入主窗口，就能在终端旁查看代码。[查看静态画面](wiki/assets/right-sidebar.png)
+Janus-agentX 保留在终端中，右侧可随时切换文件与 Git 工具，面板宽度可调整、可收起。双击文件打开编辑器，再嵌入主窗口，就能在 CLI 旁查看项目代码。[查看静态画面](wiki/assets/right-sidebar.png)
 
 | 工具 | 用途 |
 | --- | --- |

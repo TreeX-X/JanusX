@@ -10,15 +10,32 @@ await mkdir(cache, { recursive: true })
 const recordingRoot = await mkdtemp(join(cache, 'session-'))
 const project = join(recordingRoot, 'JanusX')
 execFileSync('git', ['clone', '--quiet', '--shared', resolve('.'), project])
-const output = resolve('wiki/assets')
-await mkdir(output, { recursive: true })
+const recordingEnv = createDesktopTestEnv(recordingRoot)
+delete recordingEnv.NO_COLOR
+for (const key of Object.keys(recordingEnv)) {
+  if (/^(ANTHROPIC_|CLAUDE_|OPENAI_|JANUS_|GEMINI_|GOOGLE_API_|AZURE_OPENAI_)|API_KEY|AUTH_TOKEN|ACCESS_TOKEN/i.test(key)) delete recordingEnv[key]
+}
+const claudeConfig = join(recordingRoot, 'claude-config')
+await mkdir(claudeConfig)
+await writeFile(join(claudeConfig, '.claude.json'), JSON.stringify({
+  hasCompletedOnboarding: true,
+  theme: 'dark',
+  autoUpdates: false,
+}))
 const app = await electron.launch({
   args: [resolve('out/main/index.js'), `--user-data-dir=${join(recordingRoot, 'profile')}`],
   env: {
-    ...createDesktopTestEnv(recordingRoot),
+    ...recordingEnv,
     JANUSX_KNOWLEDGE_ROOT: join(recordingRoot, 'knowledge-data'),
     APPDATA: join(recordingRoot, 'app-data'),
     LOCALAPPDATA: join(recordingRoot, 'local-app-data'),
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    FORCE_COLOR: '3',
+    CLAUDE_CONFIG_DIR: claudeConfig,
+    CLAUDE_CODE_SIMPLE: '1',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    DISABLE_AUTOUPDATER: '1',
   },
 })
 let page
@@ -42,7 +59,6 @@ async function record(name, actions) {
     running = false
     await capture
   }
-  await page.screenshot({ path: join(output, `${name}.png`) })
   const recordings = JSON.parse(await readFile(join(cache, 'latest.json'), 'utf8').catch(() => '[]'))
   const prior = recordings.findIndex(item => item.name === name)
   if (prior !== -1) recordings.splice(prior, 1)
@@ -71,15 +87,15 @@ try {
   const workspace = await page.evaluate(path => window.electron.workspace.create({ name: 'JanusX', path }), project)
   await page.reload()
   await page.getByRole('button', { name: '稍后再说，先用本地功能' }).click()
-  await page.getByRole('button', { name: 'Shell', exact: true }).click()
-  const first = page.locator('.xterm-helper-textarea').first()
+  const basic = !process.argv.includes('--experiments') && !process.argv.includes('--cli')
+  const cli = process.argv.includes('--cli')
+  await page.getByRole('button', { name: basic || cli ? 'Janus' : 'Shell', exact: true }).click()
+  const first = page.locator('.xterm-helper-textarea:visible').first()
   await first.waitFor({ state: 'attached' })
-  await pause(1200)
-  await prepareShell(first)
-  if (process.argv.includes('--cli')) {
-    const cliPath = resolve('../janus-agentX/packages/cli/dist/cli.js')
-    await command(first, `node "${cliPath}" tui --no-config`)
-    await pause(2000)
+  await pause(3000)
+  if (basic || cli) await expect(page.locator('.xterm-screen').first()).toContainText('janus')
+  if (!basic && !cli) await prepareShell(first)
+  if (cli) {
     await command(first, '/help')
     await first.press('Control+Home')
     await record('janus-cli', async () => {
@@ -94,15 +110,27 @@ try {
       await pause(1400)
     })
   }
-  if (!process.argv.includes('--experiments') && !process.argv.includes('--cli')) {
-  await command(first, 'git log -6 --format="%h %<(30,trunc)%s"')
+  if (basic) {
+  await page.getByRole('button', { name: '收起工作区侧栏', exact: true }).click()
   await page.locator('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'New Shell terminal', exact: true }).click()
-  const second = page.locator('.xterm-helper-textarea').nth(1)
+  await page.getByRole('menuitem', { name: 'New Claude terminal', exact: true }).click()
+  const second = page.locator('.xterm-helper-textarea:visible')
   await second.waitFor({ state: 'attached' })
-  await pause(1000)
-  await prepareShell(second)
-  await command(second, 'npm pkg get name version scripts.dev')
+  await expect(page.locator('.xterm-screen:visible')).toContainText('Yes, I trust this folder', { timeout: 20000 })
+  await second.focus()
+  await second.press('ArrowDown')
+  await pause(300)
+  await second.press('Enter')
+  await expect(page.locator('.xterm-screen:visible')).not.toContainText('Yes, I trust this folder')
+  await pause(2000)
+  if ((await page.locator('.xterm-screen:visible').innerText()).includes('new MCP servers')) {
+    await second.press('Escape')
+  }
+  await expect(page.locator('.xterm-screen:visible')).toContainText('Claude Code', { timeout: 20000 })
+  await second.press('Control+l')
+  await pause(1500)
+  await page.locator('main [role="button"][draggable="true"]').filter({ hasText: 'janus' }).click()
+  await pause(700)
   await record('terminal-split', async () => {
     const tabs = page.locator('main [role="button"][draggable="true"]')
     const tab = await tabs.nth(1).boundingBox()
@@ -119,9 +147,11 @@ try {
     const divider = await page.locator('main [role="separator"]').boundingBox()
     await page.mouse.move(divider.x + 3, divider.y + 220)
     await page.mouse.down()
-    await page.mouse.move(divider.x - 100, divider.y + 220, { steps: 20 })
+    await page.mouse.move(divider.x + 35, divider.y + 220, { steps: 20 })
     await page.mouse.up()
     await pause(900)
+    await expect(page.locator('main section').first().locator('.xterm-screen:visible')).toContainText('janus')
+    await expect(page.locator('main section').last().locator('.xterm-screen:visible')).toContainText('Claude Code')
   })
   const tabs = page.locator('main [role="button"][draggable="true"]')
   const tab = await tabs.nth(1).boundingBox()
@@ -130,6 +160,8 @@ try {
   await page.mouse.down()
   await page.mouse.move(left.x + left.width / 2, left.y + left.height / 2, { steps: 20 })
   await page.mouse.up()
+  await pause(800)
+  await tabs.filter({ hasText: 'janus' }).first().click()
   await pause(800)
   await record('right-sidebar', async () => {
     await tool('文件')
@@ -142,6 +174,9 @@ try {
     const editor = await editorPromise
     await editor.getByRole('button', { name: '嵌入主窗口工作区' }).click()
     await page.getByRole('region', { name: 'Embedded file editor' }).waitFor()
+    await pause(700)
+    await page.getByRole('button', { name: '折叠右侧工具面板', exact: true }).click()
+    await expect(page.locator('.xterm-screen:visible')).toContainText('janus')
     await pause(1500)
   })
   }
