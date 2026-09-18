@@ -6,8 +6,9 @@
  */
 import { randomUUID } from 'crypto'
 import { readFile } from 'fs/promises'
+import { existsSync } from 'node:fs'
 import { join } from 'path'
-import { BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import type { ParsedNote } from '@janus-agent/harness-core'
 import {
   applyNodePatch,
@@ -20,6 +21,7 @@ import { harnessNoteService } from '../harness/service'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
 import { createModelReviewPort } from '../harness/desktop-review'
 import { executeDesktopXdo, runDesktopCommand } from '../harness/desktop-executor'
+import { ensureTaskThread, readDesktopConcurrency, setThreadModel } from '../harness/task-thread'
 import { llmService } from '../llm/LlmService'
 import { generateText } from '../llm/ai-runtime'
 import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
@@ -384,6 +386,25 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     return { state: loaded.run?.state ?? 'unknown' }
   }
 
+  /** First config dir wins; null means the desktop runs unguarded and says so. */
+  function desktopConfigRoot(): string | null {
+    const candidates: string[] = []
+    try {
+      candidates.push(app.getAppPath())
+    } catch {
+      // Packaged shells without app paths fall through to the working copy.
+    }
+    candidates.push(process.cwd())
+    for (const candidate of candidates) {
+      try {
+        if (existsSync(join(candidate, '.codex', 'config.toml'))) return candidate
+      } catch {
+        // Unreadable candidates never block execution.
+      }
+    }
+    return null
+  }
+
   ipcMain.handle(
     HARNESS_COMMAND_CHANNELS.runExecute,
     async (_e, cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> => {
@@ -391,6 +412,11 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const runId = input?.runId
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run execute needs a run id', { path: 'runId' })
       if (inFlight.has(runId)) throwFailure('BUSY', 'this run already has an in-flight execution; abort it first', { path: 'runId' })
+      const configRoot = desktopConfigRoot()
+      const budget = configRoot ? await readDesktopConcurrency(configRoot) : null
+      if (budget && inFlight.size >= budget.maxThreads) {
+        throwFailure('BUSY', `desktop concurrency budget spent (${inFlight.size}/${budget.maxThreads}); wait for or abort a running execution`, { path: 'runId' })
+      }
       const loaded = await getTaskRun(root, runId)
       if (!loaded.run) throwRunFailure(loaded.errors)
       const leaseToken = loaded.run?.lease?.token
@@ -398,6 +424,15 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const token = leaseToken as string
       const taskUri = loaded.run?.taskUri as string
       const attempt = loaded.run?.attempt ?? 0
+      // The thread outlives every turn: recovery reuses the stored model
+      // endpoint, and repairs reattach to the same history.
+      const threadError = (error: unknown): never => throwRunFailure([{ code: 'IO_ERROR', message: error instanceof Error ? error.message : String(error) }])
+      let thread = await ensureTaskThread(root, { runId, taskUri, mode: loaded.run?.mode ?? 'xdo' }).catch(threadError)
+      const providerId = input?.providerId?.trim() || thread.model?.providerId
+      const modelId = input?.modelId?.trim() || thread.model?.modelId
+      if (input?.providerId?.trim() && input?.modelId?.trim()) {
+        thread = await setThreadModel(root, runId, { providerId: input.providerId.trim(), modelId: input.modelId.trim() }).catch(threadError)
+      }
       const timeoutMs = input?.timeoutMs === undefined ? undefined : Math.min(600_000, Math.max(5_000, Math.floor(input.timeoutMs)))
       const manualEvidence = Array.isArray(input?.manualEvidence) ? input.manualEvidence : []
       for (const item of manualEvidence) {
@@ -408,8 +443,6 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const controller = new AbortController()
       inFlight.set(runId, controller)
       try {
-        const providerId = input?.providerId
-        const modelId = input?.modelId
         const executed = await executeDesktopXdo(root, runId, token, {
           command: (step, signal) => runDesktopCommand(root, step, { ...(timeoutMs === undefined ? {} : { timeoutMs }), signal }),
           review: createModelReviewPort(taskUri, attempt, {

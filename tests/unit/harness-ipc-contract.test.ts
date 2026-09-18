@@ -63,9 +63,17 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   listTaskRuns: vi.fn(),
   pauseTaskRun: vi.fn(),
   prepareTaskRun: vi.fn(),
+  readTaskHandoff: vi.fn(),
   rebaselineTaskRun: vi.fn(),
   resumeTaskRun: vi.fn(),
   startTaskRun: vi.fn(),
+  takeoverTaskRun: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/task-thread', () => ({
+  ensureTaskThread: vi.fn(),
+  setThreadModel: vi.fn(),
+  readDesktopConcurrency: vi.fn(),
 }))
 
 vi.mock('../../src/main/harness/desktop-executor', () => ({

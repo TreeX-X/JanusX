@@ -235,8 +235,38 @@ describe('desktop xdo host', () => {
   })
 })
 
-describe('desktop command runner', () => {
-  it('refuses missing programs and escaping cwds without spawning', async () => {
+describe('task-bound thread reattachment', () => {
+  it('reattaches repairs to the same thread with prior history and records the receipt', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root)
+    const refused = await executeDesktopXdo(root, runId, token, {
+      command: (step, signal) => runDesktopCommand(root, step, { signal }),
+      review: async () => { throw new Error('SCHEMA_INVALID: self-review returned no JSON object; refusing approval') },
+    }, { implementor: 'desktop' })
+    expect(refused.ok).toBe(false)
+
+    let seenHistory: Array<{ attempt: number; verdict: string; failedChecks: string[] }> = []
+    const repaired = await executeDesktopXdo(root, runId, token, {
+      command: (step, signal) => runDesktopCommand(root, step, { signal }),
+      review: async (input) => {
+        seenHistory = input.history
+        const criterion = input.criteria[0]
+        return { verdict: 'approved', coverage: [{ uri: criterion.uri, criterionId: criterion.criterionId, criterionHash: criterion.criterionHash, checkIds: ['V-1'] }] }
+      },
+    }, { implementor: 'desktop' })
+    expect(repaired.errors).toEqual([])
+    expect(repaired.data.completed).toBe(true)
+    expect(seenHistory).toHaveLength(1)
+    expect(seenHistory[0]).toMatchObject({ attempt: 1, verdict: 'unreviewed' })
+
+    const { loadTaskThread } = await import('../../src/main/harness/task-thread')
+    const thread = await loadTaskThread(root, runId)
+    expect(thread?.attempts).toHaveLength(1)
+    expect(thread?.attempts[0]).toMatchObject({ attempt: 1, reviewVerdict: 'approved', receiptId: repaired.data.receiptId })
+  })
+})
+
+describe('desktop command runner', () => {  it('refuses missing programs and escaping cwds without spawning', async () => {
     const root = await makeRoot()
     await expect(runDesktopCommand(root, { id: 'V-9', kind: 'command', required: true, repoId: REPO, cwd: '.', args: [] })).resolves.toMatchObject({ ok: false })
     await expect(runDesktopCommand(root, { id: 'V-9', kind: 'command', required: true, repoId: REPO, cwd: '..', program: process.execPath, args: [] })).resolves.toMatchObject({ ok: false })

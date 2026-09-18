@@ -25,6 +25,7 @@ import {
   type VerificationStep,
 } from '@janus-agent/harness-core'
 import { TaskScope, collectLiveSnapshot, collectTaskSnapshot } from '@janus-agent/harness-node'
+import { ensureTaskThread, recordThreadAttempt } from './task-thread'
 import {
   finishTaskRun,
   getTaskRun,
@@ -48,6 +49,7 @@ export interface DesktopReviewPortInput {
   manifestHash: string
   checks: ReceiptCheck[]
   criteria: DesktopReviewCriterion[]
+  history: Array<{ attempt: number; verdict: string; receiptId?: string; failedChecks: string[] }>
 }
 
 export interface DesktopExecutorPorts {
@@ -215,6 +217,33 @@ export async function executeDesktopXdo(
   if (run.state !== 'running' && run.state !== 'verifying') {
     return fail(run, [diag('NOT_READY', `execute runs from running (now ${run.state}); start the queued run first`, 'state')], { receiptId: '', completed: false, checks: [] })
   }
+  // The thread persists across attempts on the same run: repairs reattach to
+  // it instead of re-reading the world. The run record stays the truth.
+  let thread: Awaited<ReturnType<typeof ensureTaskThread>>
+  try {
+    thread = await ensureTaskThread(root, { runId, taskUri: run.taskUri, mode: run.mode })
+  } catch (error) {
+    return fail(run, hostError(error), { receiptId: '', completed: false, checks: [] })
+  }
+  const history = thread.attempts.slice(-3).map((item) => ({
+    attempt: item.attempt,
+    verdict: item.reviewVerdict ?? 'unreviewed',
+    ...(item.receiptId ? { receiptId: item.receiptId } : {}),
+    failedChecks: item.checks.filter((check) => check.status !== 'passed').map((check) => check.id),
+  }))
+  const noteAttempt = async (extra: { reviewVerdict?: 'approved' | 'needs-fix' | 'blocked'; receiptId?: string; checks: ReceiptCheck[] }): Promise<void> => {
+    try {
+      thread = await recordThreadAttempt(root, runId, {
+        attempt: run.attempt,
+        manifestHash,
+        checks: extra.checks.map((check) => ({ id: check.id, kind: check.kind, status: check.status })),
+        ...(extra.reviewVerdict ? { reviewVerdict: extra.reviewVerdict } : {}),
+        ...(extra.receiptId ? { receiptId: extra.receiptId } : {}),
+      })
+    } catch {
+      // Thread history is auxiliary; the receipt dwarfs it. Never fail the run for it.
+    }
+  }
   const implementor = opts?.implementor ?? run.lease?.owner ?? 'desktop'
   let snapshot: Awaited<ReturnType<typeof collectTaskSnapshot>>
   try {
@@ -290,18 +319,23 @@ export async function executeDesktopXdo(
   let claim: { verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[] }
   try {
     opts?.signal?.throwIfAborted()
-    claim = await ports.review({ manifest, manifestHash, checks, criteria }, opts?.signal)
+    claim = await ports.review({ manifest, manifestHash, checks, criteria, history }, opts?.signal)
   } catch (error) {
     if (opts?.signal?.aborted) await pauseTaskRun(root, runId, token)
+    await noteAttempt({ checks })
     return fail(run, hostError(error), { receiptId: '', completed: false, checks })
   }
   if (claim.verdict !== 'approved' && claim.verdict !== 'needs-fix' && claim.verdict !== 'blocked') {
+    await noteAttempt({ checks })
     return fail(run, [diag('SCHEMA_INVALID', 'self-review verdict must be approved, needs-fix, or blocked; refusing completion', 'review.verdict')], { receiptId: '', completed: false, checks })
   }
   const criterionMap = new Map(criteria.map((item) => [`${item.uri}#${item.criterionId}`, item.criterionHash]))
   const passed = new Set(checks.filter((check) => check.status === 'passed').map((check) => check.id))
   const coverageProblems = checkCoverageClaims(claim.coverage, criterionMap, passed)
-  if (coverageProblems.length > 0) return fail(run, coverageProblems, { receiptId: '', completed: false, checks })
+  if (coverageProblems.length > 0) {
+    await noteAttempt({ checks })
+    return fail(run, coverageProblems, { receiptId: '', completed: false, checks })
+  }
   let receipt: Receipt = {
     schema: 'harness-receipt/1', id: randomUUID(), taskUri: run.taskUri, mode: 'xdo', attempt: run.attempt,
     taskContractHash: run.baseline.taskContractHash, inputs: run.baseline.inputs, codeManifest: manifest,
@@ -321,10 +355,12 @@ export async function executeDesktopXdo(
     receipt = { ...receipt, review: { ...receipt.review, verdict: 'blocked' } }
     const stored = await recordTaskReceipt(root, runId, token, receipt)
     if (!stored.ok) return fail(stored.run ?? run, stored.errors, { receiptId: receipt.id, completed: false, checks })
+    await noteAttempt({ reviewVerdict: 'blocked', receiptId: receipt.id, checks })
     return fail(stored.run ?? run, [diag('STALE_BASELINE', 'scoped code changed during verification or review; the blocked receipt is recorded, fix and re-run', 'codeManifest')], { receiptId: receipt.id, completed: false, checks })
   }
   const stored = await recordTaskReceipt(root, runId, token, receipt)
   if (!stored.ok) return fail(stored.run ?? run, stored.errors, { receiptId: receipt.id, completed: false, checks })
+  await noteAttempt({ reviewVerdict: receipt.review.verdict, receiptId: receipt.id, checks })
   let live: Awaited<ReturnType<typeof collectLiveSnapshot>>
   try {
     live = await collectLiveSnapshot(root, run.taskUri, implementor, current.map((row) => [codeKey(row.repoId, row.path), row.deleted === true ? null : (row.sha256 as string)]))

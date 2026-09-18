@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   reviewClaimFromText: vi.fn(),
   buildDesktopReviewPrompt: vi.fn(),
   createModelReviewPort: vi.fn(),
+  ensureTaskThread: vi.fn(),
+  setThreadModel: vi.fn(),
+  readDesktopConcurrency: vi.fn(),
   getLanguageModel: vi.fn(),
   generateText: vi.fn(),
 }))
@@ -66,6 +69,12 @@ vi.mock('../../src/main/harness/desktop-executor', () => ({
 vi.mock('../../src/main/harness/desktop-review', () => ({
   buildDesktopReviewPrompt: mocks.buildDesktopReviewPrompt,
   createModelReviewPort: mocks.createModelReviewPort,
+}))
+
+vi.mock('../../src/main/harness/task-thread', () => ({
+  ensureTaskThread: mocks.ensureTaskThread,
+  setThreadModel: mocks.setThreadModel,
+  readDesktopConcurrency: mocks.readDesktopConcurrency,
 }))
 
 vi.mock('../../src/main/llm/LlmService', () => ({
@@ -172,10 +181,13 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
 
   it('executes through the desktop host without leaking the lease token', async () => {
     const execute = await handler(HARNESS_COMMAND_CHANNELS.runExecute)
+    mocks.readDesktopConcurrency.mockResolvedValueOnce(null)
     mocks.getTaskRun.mockResolvedValueOnce({
       run: { ...RUN, state: 'running', attempt: 1, lease: { token: 'tok', owner: 'desktop', at: 'now' } },
       errors: [],
     })
+    mocks.ensureTaskThread.mockResolvedValueOnce({ runId: 'run-1', model: undefined, attempts: [] })
+    mocks.setThreadModel.mockResolvedValueOnce({ runId: 'run-1', attempts: [] })
     mocks.createModelReviewPort.mockReturnValueOnce(async () => ({ verdict: 'approved', coverage: [] }))
     mocks.executeDesktopXdo.mockImplementationOnce(async (_root: string, runId: string, token: string, ports: unknown) => {
       expect(runId).toBe('run-1')
@@ -187,6 +199,18 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
       receiptId: 'r-1',
       completed: true,
     })
+    expect(mocks.setThreadModel).toHaveBeenCalledWith(ROOT, 'run-1', { providerId: 'p', modelId: 'm' })
+
+    mocks.readDesktopConcurrency.mockResolvedValueOnce(null)
+    mocks.getTaskRun.mockResolvedValueOnce({
+      run: { ...RUN, state: 'running', attempt: 1, lease: { token: 'tok', owner: 'desktop', at: 'now' } },
+      errors: [],
+    })
+    mocks.ensureTaskThread.mockResolvedValueOnce({ runId: 'run-1', model: { providerId: 'tp', modelId: 'tm' }, attempts: [{ attempt: 1 }] })
+    mocks.setThreadModel.mockClear()
+    mocks.executeDesktopXdo.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-2', completed: true, checks: [] } })
+    await expect(execute({}, ROOT, { runId: 'run-1' })).resolves.toMatchObject({ receiptId: 'r-2' })
+    expect(mocks.setThreadModel).not.toHaveBeenCalled()
 
     mocks.getTaskRun.mockResolvedValueOnce({ run: null, errors: [{ code: 'NOT_FOUND', message: 'gone' }] })
     await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
@@ -195,6 +219,27 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'BUSY' })
 
     await expect(execute({}, ROOT, { runId: '' })).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'runId' })
+  })
+
+  it('refuses executions past the desktop concurrency budget', async () => {
+    const execute = await handler(HARNESS_COMMAND_CHANNELS.runExecute)
+    mocks.readDesktopConcurrency.mockResolvedValue({ maxThreads: 1 })
+    mocks.getTaskRun.mockResolvedValue({
+      run: { ...RUN, state: 'running', attempt: 1, lease: { token: 'tok', owner: 'desktop', at: 'now' } },
+      errors: [],
+    })
+    mocks.ensureTaskThread.mockResolvedValue({ runId: 'run-1', model: { providerId: 'p', modelId: 'm' }, attempts: [] })
+    let entered!: () => void
+    const enteredGate = new Promise<void>((resolve) => { entered = resolve })
+    let release!: (value: unknown) => void
+    mocks.executeDesktopXdo.mockImplementationOnce(
+      () => new Promise((resolve) => { entered(); release = resolve as (value: unknown) => void }),
+    )
+    const first = execute({}, ROOT, { runId: 'run-1' })
+    await enteredGate
+    await expect(execute({}, ROOT, { runId: 'run-2' })).rejects.toMatchObject({ code: 'BUSY', message: expect.stringContaining('budget') })
+    release({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-9', completed: true, checks: [] } })
+    await expect(first).resolves.toMatchObject({ receiptId: 'r-9' })
   })
 
   it('pauses, resumes, rebaselines, and refuses stray aborts', async () => {
