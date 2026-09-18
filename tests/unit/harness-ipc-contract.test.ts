@@ -74,6 +74,7 @@ vi.mock('../../src/main/harness/desktop-executor', () => ({
 
 vi.mock('../../src/main/harness/desktop-review', () => ({
   buildDesktopReviewPrompt: vi.fn(),
+  createModelReviewPort: vi.fn(),
   parseDesktopReviewClaim: vi.fn(),
 }))
 

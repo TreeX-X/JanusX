@@ -10,7 +10,6 @@
  *  tests drive refusals without singletons.
  */
 import type { Receipt, ReceiptCheck, ReceiptCoverage } from '@janus-agent/harness-core'
-
 export interface DesktopReviewCriterion {
   uri: string
   criterionId: string
@@ -105,4 +104,40 @@ export function parseDesktopReviewClaim(text: string): { ok: true; claim: Deskto
   }
   const summary = (raw as Record<string, unknown>).summary
   return { ok: true, claim: { verdict, coverage: claims, summary: typeof summary === 'string' ? summary : '' } }
+}
+
+export interface DesktopModelReviewDeps {
+  providerId?: string
+  modelId?: string
+  getModel(providerId: string, modelId: string): Promise<unknown>
+  generateReviewText(model: unknown, prompt: string, signal?: AbortSignal): Promise<string>
+}
+
+export interface DesktopModelReviewPort {
+  (input: Omit<DesktopReviewPromptInput, 'taskUri' | 'attempt'>, signal?: AbortSignal): Promise<{ verdict: DesktopReviewVerdict; coverage: ReceiptCoverage[] }>
+}
+
+/**
+ * Binds one project-scoped model turn as the xdo self-review. The model only
+ * supplies a coverage claim; identity and manifest binding stay with the
+ * caller. Missing models, empty text, and malformed JSON refuse loudly.
+ */
+export function createModelReviewPort(
+  taskUri: string,
+  attempt: number,
+  deps: DesktopModelReviewDeps,
+): DesktopModelReviewPort {
+  return async (input, signal) => {
+    if (!deps.providerId || !deps.modelId) {
+      throw new Error('CAPABILITY_UNAVAILABLE: self-review needs a provider and model; pick the review model and retry')
+    }
+    if (signal?.aborted) throw new Error('BUSY: review aborted; the run is paused')
+    const prompt = buildDesktopReviewPrompt({ taskUri, attempt, ...input })
+    const model = await deps.getModel(deps.providerId, deps.modelId)
+    const text = (await deps.generateReviewText(model, prompt, signal))?.trim() ?? ''
+    if (!text) throw new Error('NOT_READY: self-review returned no text; refusing completion')
+    const claim = parseDesktopReviewClaim(text)
+    if (!claim.ok) throw new Error(`${claim.errors[0]?.code ?? 'SCHEMA_INVALID'}: ${claim.errors[0]?.message ?? 'self-review refused'}`)
+    return { verdict: claim.claim.verdict, coverage: claim.claim.coverage }
+  }
 }

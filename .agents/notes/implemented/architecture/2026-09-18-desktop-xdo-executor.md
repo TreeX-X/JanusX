@@ -26,9 +26,10 @@ and finish lands a blocked receipt as history and never completes.
 
 `src/main/harness/desktop-review.ts` builds the read-only review prompt and
 parses the strict coverage JSON. Malformed model output refuses; it never
-approves. Production review runs one project-scoped model turn through
-`llmService` plus `generateText` with a single step and no tools, wired in
-`src/main/ipc/harness-handlers.ts`. New channels `runExecute`, `runPause`,
+approves. `createModelReviewPort` binds task identity to one model turn while
+keeping model text injectable for tests. Production review runs one
+project-scoped model turn through `llmService` plus `generateText` with a
+single step and no tools, wired in `src/main/ipc/harness-handlers.ts`. New channels `runExecute`, `runPause`,
 `runResume`, `runRebaseline`, and `runAbort` cross IPC as data or coded
 failure. Lease tokens stay in the main process; an in-flight map owns abort,
 and an aborted execution pauses the run. The panel gains execute, abort,
@@ -59,8 +60,14 @@ re-exports and keeps only the neutral kernel entry.
   contracts refuse before running; drift records blocked receipts.
   `tests/unit/harness-desktop-executor.test.ts` pins success, failure
   receipts, review refusal, coverage forgery, manual evidence, mode and
-  baseline gates, and drift. Handler mapping pins token custody and stray
-  aborts. Typecheck, production build, package boundaries, and bilingual key
+  baseline gates, drift, and the review-port factory. Handler mapping pins
+  token custody and stray aborts. `tests/e2e/desktop-xdo-run.spec.ts` drives
+  the panel through adopt, prepare, start, pause, resume, rebaseline,
+  mid-flight abort, and receipt display against the island fixture.
+  `tests/unit/harness-desktop-xdo-live.test.ts` stays skipped without
+  `JANUS_XDO_LIVE_PROVIDER` and `JANUS_XDO_LIVE_MODEL`; with credentials it
+  completes a real task against live review plus a real commit closeout.
+  Typecheck, production build, package boundaries, and bilingual key
   checks pass.
 - **Costs and limits**: the review model is typed per execution; binding the
   chat model picker is follow-up. There is no granular record/finish IPC and

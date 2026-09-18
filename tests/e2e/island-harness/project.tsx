@@ -25,7 +25,13 @@ useWorkspaceStore.setState({ workspaces: [workspace] as never, activeWorkspaceId
 useBlueprintStore.setState({ currentBlueprint: blueprint as never, activeSession: { workspacePath: workspace.path } as never })
 const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
-const fixture = { streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0 }
+const fixture = {
+  streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
+  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0,
+  gateExecute: false, gateResolve: null as null | (() => void),
+  lastExecute: null as null | { runId: string; providerId?: string; modelId?: string; manualEvidence?: Array<{ stepId: string; observer: string; observation: string }> },
+  runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean }>,
+}
 ;(window as any).projectFixture = fixture
 const emit = (event: ChatAgentEvent) => events.forEach((listener) => listener(event))
 const emitRuntime = (event: unknown) => runtimeEvents.forEach((listener) => listener(event))
@@ -59,8 +65,60 @@ Object.assign(window.electron.llm, {
 let draft: HarnessTaskDraft = { uri, hash: 'a'.repeat(64), lifecycle: 'draft', repoId, hasExecution: false, contract: { scope: 'Implement the value.', criteria: [{ id: 'AC-1', text: 'TBD' }], work: { scope: [{ repoId, paths: [] }], acceptanceRefs: [], verification: [] } } }
 Object.assign(window.electron.harness, {
   taskRead: async () => draft,
-  taskAdopt: async (_cwd: string, _uri: string, _hash: string, contract: HarnessTaskDraft['contract']) => { fixture.adoptions++; draft = { ...draft, hash: 'b'.repeat(64), lifecycle: 'accepted', contract }; return draft },
-  runList: async () => [],
+  taskAdopt: async (_cwd: string, _uri: string, _hash: string, contract: HarnessTaskDraft['contract']) => {
+    fixture.adoptions++
+    contract.work.verification.push({ id: 'V-manual', kind: 'manual', required: true, repoId, cwd: '.', description: 'Eyeball the value.' })
+    draft = { ...draft, hash: 'b'.repeat(64), lifecycle: 'accepted', contract }
+    return draft
+  },
+  runList: async () => fixture.runs,
+  runPrepare: async (_cwd: string, input: { taskUri: string; mode: string; closeout: string }) => {
+    fixture.prepares++
+    fixture.runs.push({ runId: 'run-1', taskUri: input.taskUri, mode: input.mode, state: 'queued', attempt: 0, executor: 'internal', closeout: input.closeout, receipts: 0, updatedAt: '', local: true })
+    return { runId: 'run-1', taskUri: input.taskUri, state: 'queued', attempt: 0 }
+  },
+  runStart: async (_cwd: string, runId: string) => {
+    fixture.starts++
+    const run = fixture.runs.find((item) => item.runId === runId)!
+    run.state = 'running'
+    run.attempt += 1
+    return { attempt: run.attempt }
+  },
+  runStatus: async (_cwd: string, runId: string) => fixture.runs.find((item) => item.runId === runId),
+  runCancel: async (_cwd: string, runId: string) => {
+    fixture.runs.find((item) => item.runId === runId)!.state = 'cancelled'
+    return { state: 'cancelled' }
+  },
+  runCloseout: async () => ({ satisfied: true, detail: 'run-1 committed' }),
+  runHandoff: async () => ({ path: 'C:/fixture/handoff.md' }),
+  runExecute: async (_cwd: string, input: NonNullable<typeof fixture.lastExecute>) => {
+    fixture.executes++
+    fixture.lastExecute = input
+    if (fixture.gateExecute) await new Promise<void>((resolve) => { fixture.gateResolve = resolve })
+    const run = fixture.runs.find((item) => item.runId === input.runId)!
+    run.state = 'done'
+    run.receipts = 1
+    return { receiptId: 'receipt-1', completed: true, checks: [{ id: 'V-1', kind: 'command', status: 'passed', summary: 'exit 0' }] }
+  },
+  runPause: async (_cwd: string, runId: string) => {
+    fixture.pauses++
+    fixture.runs.find((item) => item.runId === runId)!.state = 'paused'
+    return { state: 'paused' }
+  },
+  runResume: async (_cwd: string, runId: string) => {
+    fixture.resumes++
+    fixture.runs.find((item) => item.runId === runId)!.state = 'running'
+    return { state: 'running' }
+  },
+  runRebaseline: async (_cwd: string, runId: string) => {
+    fixture.rebaselines++
+    fixture.runs.find((item) => item.runId === runId)!.state = 'queued'
+    return { state: 'queued' }
+  },
+  runAbort: async () => {
+    fixture.runAborts++
+    return { state: 'running' }
+  },
 })
 
 function App() {

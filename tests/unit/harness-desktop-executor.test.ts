@@ -6,7 +6,7 @@ import { codeManifestHash, type ReceiptCoverage } from '@janus-agent/harness-cor
 import { runGit } from '@janus-agent/harness-node'
 import { prepareTaskRun, startTaskRun, getTaskRun } from '../../src/main/harness/execution-adapter'
 import { executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
-import { buildDesktopReviewPrompt, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
+import { buildDesktopReviewPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 const TASK_ID = '33333333-3333-4333-8333-333333333333'
@@ -271,5 +271,31 @@ describe('desktop self-review parsing', () => {
       { repoId: REPO, path: 'a.txt', sha256: 'a' },
     ]
     expect(codeManifestHash(rows)).toBe(codeManifestHash([...rows].reverse()))
+  })
+})
+
+describe('desktop model review port', () => {
+  const reviewInput = { manifestHash: 'm', manifest: [], checks: [], criteria: [] }
+  const deps = (text: string) => ({
+    providerId: 'p',
+    modelId: 'm',
+    getModel: async () => ({ id: 'model' }),
+    generateReviewText: async () => text,
+  })
+  it('passes strict claims through with the bound task identity', async () => {
+    let seen = ''
+    const port = createModelReviewPort(TASK_URI, 1, {
+      ...deps('{"verdict":"approved","coverage":[]}'),
+      generateReviewText: async (_model, prompt) => { seen = prompt; return '{"verdict":"approved","coverage":[]}' },
+    })
+    await expect(port(reviewInput)).resolves.toMatchObject({ verdict: 'approved', coverage: [] })
+    expect(seen).toContain(TASK_URI)
+    expect(seen).toContain('m')
+  })
+
+  it('refuses missing models, empty text, and malformed claims', async () => {
+    await expect(createModelReviewPort(TASK_URI, 1, { ...deps('{}'), providerId: undefined })(reviewInput)).rejects.toThrow('CAPABILITY_UNAVAILABLE')
+    await expect(createModelReviewPort(TASK_URI, 1, deps('  '))(reviewInput)).rejects.toThrow('NOT_READY')
+    await expect(createModelReviewPort(TASK_URI, 1, deps('not json'))(reviewInput)).rejects.toThrow('SCHEMA_INVALID')
   })
 })

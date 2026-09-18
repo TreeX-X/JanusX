@@ -18,8 +18,8 @@ import {
 } from '../harness/artifact-producer'
 import { harnessNoteService } from '../harness/service'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
-import { buildDesktopReviewPrompt } from '../harness/desktop-review'
-import { executeDesktopXdo, runDesktopCommand, reviewClaimFromText } from '../harness/desktop-executor'
+import { createModelReviewPort } from '../harness/desktop-review'
+import { executeDesktopXdo, runDesktopCommand } from '../harness/desktop-executor'
 import { llmService } from '../llm/LlmService'
 import { generateText } from '../llm/ai-runtime'
 import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
@@ -410,27 +410,15 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
         const modelId = input?.modelId
         const executed = await executeDesktopXdo(root, runId, token, {
           command: (step, signal) => runDesktopCommand(root, step, { ...(timeoutMs === undefined ? {} : { timeoutMs }), signal }),
-          review: async (reviewInput, signal) => {
-            if (!providerId || !modelId) {
-              throw new Error('CAPABILITY_UNAVAILABLE: self-review needs a provider and model; pick the review model and retry')
-            }
-            if (signal?.aborted) throw new Error('BUSY: review aborted; the run is paused')
-            const prompt = buildDesktopReviewPrompt({
-              taskUri,
-              attempt,
-              manifestHash: reviewInput.manifestHash,
-              manifest: reviewInput.manifest,
-              checks: reviewInput.checks,
-              criteria: reviewInput.criteria,
-            })
-            const model = await llmService.getLanguageModel('janus', providerId, modelId)
-            const result = await generateText({ model: model as never, maxSteps: 1, messages: [{ role: 'user', content: prompt }] as never })
-            const text = (result as { text?: string }).text?.trim() ?? ''
-            if (!text) throw new Error('NOT_READY: self-review returned no text; refusing completion')
-            const claim = reviewClaimFromText(text)
-            if (!claim.ok) throw new Error(`${claim.errors[0]?.code ?? 'SCHEMA_INVALID'}: ${claim.errors[0]?.message ?? 'self-review refused'}`)
-            return claim.claim
-          },
+          review: createModelReviewPort(taskUri, attempt, {
+            ...(providerId?.trim() ? { providerId: providerId.trim() } : {}),
+            ...(modelId?.trim() ? { modelId: modelId.trim() } : {}),
+            getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
+            generateReviewText: async (model, prompt) => {
+              const result = await generateText({ model: model as never, maxSteps: 1, messages: [{ role: 'user', content: prompt }] as never })
+              return (result as { text?: string }).text ?? ''
+            },
+          }),
         }, { manualEvidence, ...(timeoutMs === undefined ? {} : { timeoutMs }), signal: controller.signal })
         if (!executed.ok) throwRunFailure(executed.errors)
         return {

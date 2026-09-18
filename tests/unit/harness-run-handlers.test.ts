@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   runDesktopCommand: vi.fn(),
   reviewClaimFromText: vi.fn(),
   buildDesktopReviewPrompt: vi.fn(),
+  createModelReviewPort: vi.fn(),
   getLanguageModel: vi.fn(),
   generateText: vi.fn(),
 }))
@@ -60,6 +61,7 @@ vi.mock('../../src/main/harness/desktop-executor', () => ({
 
 vi.mock('../../src/main/harness/desktop-review', () => ({
   buildDesktopReviewPrompt: mocks.buildDesktopReviewPrompt,
+  createModelReviewPort: mocks.createModelReviewPort,
 }))
 
 vi.mock('../../src/main/llm/LlmService', () => ({
@@ -170,6 +172,7 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
       run: { ...RUN, state: 'running', attempt: 1, lease: { token: 'tok', owner: 'desktop', at: 'now' } },
       errors: [],
     })
+    mocks.createModelReviewPort.mockReturnValueOnce(async () => ({ verdict: 'approved', coverage: [] }))
     mocks.executeDesktopXdo.mockImplementationOnce(async (_root: string, runId: string, token: string, ports: unknown) => {
       expect(runId).toBe('run-1')
       expect(token).toBe('tok')
