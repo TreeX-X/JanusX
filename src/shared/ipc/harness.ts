@@ -34,6 +34,8 @@ export const HARNESS_COMMAND_CHANNELS = {
   taskAdopt: 'harness:task:adopt',
   undoPreview: 'harness:undo:preview',
   undoApply: 'harness:undo:apply',
+  migratePreview: 'harness:migrate:preview',
+  migrateApply: 'harness:migrate:apply',
 } as const
 
 export const HARNESS_EVENT_CHANNELS = {
@@ -226,6 +228,34 @@ export interface HarnessUndoResult {
   reverted: string[]
 }
 
+export interface HarnessMigrationNote {
+  nodeId: string
+  title: string
+  kind: string
+  lifecycle: string
+  noteId: string
+  uri: string
+}
+
+export interface HarnessMigrationPreview {
+  blueprintId: string
+  name: string
+  nodeCount: number
+  auditCount: number
+  appliedAuditCount: number
+  notes: HarnessMigrationNote[]
+  relationCount: number
+  warnings: string[]
+  targetRepoId: string
+}
+
+export interface HarnessMigrationResult {
+  txId: string
+  uris: string[]
+  reportUri: string
+  archivedPath: string
+}
+
 export interface HarnessTaskContractInput {
   scope: string
   criteria: Array<{ id: string; text: string }>
@@ -269,6 +299,8 @@ export interface HarnessAPI {
   runRepair(cwd: string, input: HarnessRunRepairInput): Promise<{ attempt: number; state: string }>
   undoPreview(cwd: string, txId?: string): Promise<HarnessUndoPreview>
   undoApply(cwd: string, txId?: string): Promise<HarnessUndoResult>
+  migratePreview(cwd: string, blueprintId: string): Promise<HarnessMigrationPreview>
+  migrateApply(cwd: string, blueprintId: string): Promise<HarnessMigrationResult>
   runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult>
   runPause(cwd: string, runId: string): Promise<{ state: string }>
   runResume(cwd: string, runId: string): Promise<{ state: string }>

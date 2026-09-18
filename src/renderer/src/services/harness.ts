@@ -21,6 +21,8 @@ import type {
   HarnessThreadSummary,
   HarnessUndoPreview,
   HarnessUndoResult,
+  HarnessMigrationPreview,
+  HarnessMigrationResult,
 } from '../../../shared/ipc/harness'
 
 export type {
@@ -45,6 +47,8 @@ export type {
   HarnessThreadSummary,
   HarnessUndoPreview,
   HarnessUndoResult,
+  HarnessMigrationPreview,
+  HarnessMigrationResult,
 }
 
 export function resolveProject(cwd: string): Promise<HarnessResolveResult> {
@@ -154,6 +158,14 @@ export function undoPreview(cwd: string, txId?: string): Promise<HarnessUndoPrev
 
 export function undoApply(cwd: string, txId?: string): Promise<HarnessUndoResult> {
   return window.electron.harness.undoApply(cwd, txId)
+}
+
+export function migratePreview(cwd: string, blueprintId: string): Promise<HarnessMigrationPreview> {
+  return window.electron.harness.migratePreview(cwd, blueprintId)
+}
+
+export function migrateApply(cwd: string, blueprintId: string): Promise<HarnessMigrationResult> {
+  return window.electron.harness.migrateApply(cwd, blueprintId)
 }
 export function runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> {
   return window.electron.harness.runExecute(cwd, input)

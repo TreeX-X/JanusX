@@ -192,6 +192,8 @@ export function installElectronApiFallback(): void {
       runRepair: () => unavailableJanus(),
       undoPreview: () => unavailableJanus(),
       undoApply: () => unavailableJanus(),
+      migratePreview: () => unavailableJanus(),
+      migrateApply: () => unavailableJanus(),
       runExecute: () => unavailableJanus(),
       runPause: () => unavailableJanus(),
       runResume: () => unavailableJanus(),

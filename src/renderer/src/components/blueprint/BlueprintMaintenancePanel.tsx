@@ -24,6 +24,12 @@ import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import { JanusChat } from '../janus/JanusChat'
 import { useJanusChatRegistry } from '../janus/JanusChatProvider'
 import type { UseJanusChatReturn } from '../janus/useJanusChat'
+import {
+  migrateApply,
+  migratePreview,
+  type HarnessMigrationPreview,
+  type HarnessMigrationResult,
+} from '@/services/harness'
 
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
@@ -430,6 +436,10 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
   const [goal, setGoal] = useState(() => t('blueprint:maintenance.goalDefault'))
   const [draft, setDraft] = useState('')
   const [panelView, setPanelView] = useState<'conversation' | 'history'>('conversation')
+  const [migration, setMigration] = useState<HarnessMigrationPreview | null>(null)
+  const [migrated, setMigrated] = useState<HarnessMigrationResult | null>(null)
+  const [migrating, setMigrating] = useState(false)
+  const [migrationError, setMigrationError] = useState<string | null>(null)
   const taskScrollRef = useRef<HTMLDivElement>(null)
   const conversationBottomRef = useRef<HTMLDivElement>(null)
   const followsConversationRef = useRef(true)
@@ -496,6 +506,38 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
   const appliedAudits = audits.filter((record) => record.status === 'applied')
   const taskWorking = task?.status === 'analyzing' || task?.status === 'applying'
   const taskNeedsNotice = taskWorking || task?.status === 'failed' || task?.status === 'stale'
+
+  const migrateCwd = selectedWorkspaces[0]?.path ?? ''
+
+  const handleMigratePreview = async () => {
+    if (migrating || !blueprint || !migrateCwd) return
+    setMigrating(true)
+    setMigrationError(null)
+    setMigration(null)
+    try {
+      setMigration(await migratePreview(migrateCwd, blueprint.id))
+    } catch (err: unknown) {
+      setMigrationError(t('blueprint:maintenance.migrateFailed', { message: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setMigrating(false)
+    }
+  }
+
+  const handleMigrateApply = async () => {
+    if (migrating || !blueprint || !migrateCwd) return
+    setMigrating(true)
+    setMigrationError(null)
+    try {
+      const result = await migrateApply(migrateCwd, blueprint.id)
+      setMigrated(result)
+      setMigration(null)
+      await reloadBlueprint(blueprint.id)
+    } catch (err: unknown) {
+      setMigrationError(t('blueprint:maintenance.migrateApplyFailed', { message: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setMigrating(false)
+    }
+  }
 
   const handleStart = async () => {
     const primaryWorkspace = selectedWorkspaces[0]
@@ -683,6 +725,33 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
           <X size={16} aria-hidden="true" />
         </button>
       </header>
+      {!chat && blueprint && blueprint.source !== 'harness' ? (
+        <section className="bp-maintenance-migrate" aria-label={t('blueprint:maintenance.migrateTitle')}>
+          <strong>{t('blueprint:maintenance.migrateTitle')}</strong>
+          <p>{t('blueprint:maintenance.migrateHint')}</p>
+          {migration ? (
+            <div role="status">
+              <span>{t('blueprint:maintenance.migrateNotes', { count: migration.notes.length })}</span>
+              <span>{t('blueprint:maintenance.migrateRelations', { count: migration.relationCount })}</span>
+              {migration.warnings.length ? (
+                <div>
+                  <strong>{t('blueprint:maintenance.migrateWarnings')}</strong>
+                  <ul>{migration.warnings.map((warning) => <li key={warning.slice(0, 48)}>{warning}</li>)}</ul>
+                </div>
+              ) : null}
+              <button className="blueprint-btn blueprint-btn--primary" type="button" disabled={migrating || !migrateCwd} onClick={() => void handleMigrateApply()}>
+                {migrating ? t('blueprint:maintenance.migrateApplying') : t('blueprint:maintenance.migrateApply')}
+              </button>
+            </div>
+          ) : (
+            <button className="blueprint-btn" type="button" disabled={migrating || !migrateCwd} onClick={() => void handleMigratePreview()}>
+              {migrating ? t('blueprint:maintenance.migratePreviewing') : t('blueprint:maintenance.migratePreview')}
+            </button>
+          )}
+          {migrated ? <p role="status">{t('blueprint:maintenance.migrated', { count: migrated.uris.length, report: migrated.reportUri })}</p> : null}
+          {migrationError ? <p role="alert">{migrationError}</p> : null}
+        </section>
+      ) : null}
       <nav className="bp-maintenance-panel__tabs" aria-label={t('blueprint:maintenance.viewAria')}>
         <button type="button" className={panelView === 'conversation' ? 'is-active' : ''} onClick={() => setPanelView('conversation')} aria-pressed={panelView === 'conversation'}>
           {t('blueprint:maintenance.viewConversation')}

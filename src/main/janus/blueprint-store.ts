@@ -324,8 +324,12 @@ export class BlueprintStore {
     return bp
   }
 
-  async loadBlueprint(...args: [workspace: string, id: string]): Promise<Blueprint | null> {
-    return this.locked(async () => {
+  /** Drops one id from the in-memory cache; file moves go through here after archiving. */
+  evictBlueprint(id: string): void {
+    this.cache.delete(id)
+  }
+
+  async loadBlueprint(...args: [workspace: string, id: string]): Promise<Blueprint | null> {    return this.locked(async () => {
       // Keep the workspace-first public contract; persisted blueprint files are keyed globally by id.
       const id = args[1]
       if (isProjectGraphId(id)) return this.loadProjectGraph(args[0], id)

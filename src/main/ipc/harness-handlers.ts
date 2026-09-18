@@ -20,6 +20,10 @@ import {
 import { harnessNoteService } from '../harness/service'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
 import { applyUndo, previewUndo } from '../harness/undo'
+import { applyMigration, archiveBlueprintSource, previewMigration } from '../janus/blueprint-migrate'
+import { blueprintStore } from '../janus/blueprint-store'
+import { GLOBAL_BLUEPRINT_SCOPE } from '../janus/blueprint-paths'
+import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { buildEvaluatorPrompt, createModelReviewPort } from '../harness/desktop-review'
 import { executeDesktopXdo, runDesktopCommand } from '../harness/desktop-executor'
 import { finishWithLatestReceipt, requestIndependentReview } from '../harness/independent-review'
@@ -65,6 +69,8 @@ import {
   type HarnessRunState,
   type HarnessUndoPreview,
   type HarnessUndoResult,
+  type HarnessMigrationPreview,
+  type HarnessMigrationResult,
   type HarnessShareSelection,
 } from '../../shared/ipc/harness'
 
@@ -700,6 +706,52 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const applied = await applyUndo(root, txId)
       if (applied.errors.length > 0) throwRunFailure(applied.errors)
       return { txId: applied.txId, reverted: applied.reverted }
+    },
+  )
+
+  // ── on-demand legacy migration (S8-JanusX): JSON blueprint becomes Notes ──
+  // Preview never writes. Apply validates every note, writes once through
+  // the managed transaction, then archives (never deletes) the JSON source.
+
+  async function migrationSource(cwd: string, blueprintId: string) {
+    const root = await withRoot(cwd)
+    if (typeof blueprintId !== 'string' || !blueprintId) throwFailure('SCHEMA_INVALID', 'migration needs a blueprint id', { path: 'blueprintId' })
+    const view = await harnessNoteService.projectView(root)
+    if (!view.repoId) throwFailure('NOT_FOUND', 'init .agents/harness.json with a repoId first')
+    const blueprint = await blueprintStore.loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, blueprintId)
+    if (!blueprint) throwFailure('NOT_FOUND', `unknown blueprint ${blueprintId}`, { path: 'blueprintId' })
+    const audits = await blueprintMaintenanceService.listAudits({ blueprintId }).catch(() => [])
+    return { root: root as string, repoId: view.repoId as string, blueprint: blueprint!, audits }
+  }
+
+  function throwMigrationFailure(error: unknown): never {
+    const failure = error as { code?: string; message?: string; path?: string }
+    throwRunFailure([{ code: failure.code ?? 'SCHEMA_INVALID', message: failure.message ?? String(error), ...(failure.path ? { path: failure.path } : {}) }])
+  }
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.migratePreview,
+    async (_e, cwd: string, blueprintId: string): Promise<HarnessMigrationPreview> => {
+      const { repoId, blueprint, audits } = await migrationSource(cwd, blueprintId)
+      try {
+        return previewMigration(blueprint, repoId, audits)
+      } catch (error) {
+        throwMigrationFailure(error)
+      }
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.migrateApply,
+    async (_e, cwd: string, blueprintId: string): Promise<HarnessMigrationResult> => {
+      const { root, repoId, blueprint, audits } = await migrationSource(cwd, blueprintId)
+      try {
+        const result = await applyMigration(root, repoId, blueprint, audits, archiveBlueprintSource)
+        blueprintStore.evictBlueprint(blueprintId)
+        return result
+      } catch (error) {
+        throwMigrationFailure(error)
+      }
     },
   )
 }
