@@ -26,6 +26,7 @@ import {
 } from '@janus-agent/harness-core'
 import { TaskScope, collectLiveSnapshot, collectTaskSnapshot } from '@janus-agent/harness-node'
 import { ensureTaskThread, recordThreadAttempt } from './task-thread'
+import { buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles, type TaskBrief } from './task-brief'
 import {
   finishTaskRun,
   getTaskRun,
@@ -49,7 +50,7 @@ export interface DesktopReviewPortInput {
   manifestHash: string
   checks: ReceiptCheck[]
   criteria: DesktopReviewCriterion[]
-  history: Array<{ attempt: number; verdict: string; receiptId?: string; failedChecks: string[] }>
+  brief: TaskBrief
 }
 
 export interface DesktopExecutorPorts {
@@ -317,9 +318,26 @@ export async function executeDesktopXdo(
     return fail(run, [diag('NOT_FOUND', 'an acceptance reference resolves to no hashed criterion; re-adopt the task contract', 'acceptanceRefs')], { receiptId: '', completed: false, checks })
   }
   let claim: { verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[] }
+  const brief = buildTaskBrief({
+    runId,
+    taskUri: run.taskUri,
+    attempt: run.attempt,
+    goalText: snapshot.notes.find((note) => note.uri === run.taskUri)?.sections.find((section) => section.name === 'Scope')?.text ?? '',
+    constraintText: snapshot.notes.find((note) => note.uri === run.taskUri)?.sections.find((section) => section.name === 'Open questions')?.text ?? '',
+    criteria: criteria.map((item) => ({ uri: item.uri, criterionId: item.criterionId })),
+    manifest,
+    history,
+  })
+  const briefProblems = verifyBriefFiles(brief, manifest)
+  if (briefProblems.length > 0) return fail(run, briefProblems, { receiptId: '', completed: false, checks })
+  try {
+    await saveBriefCopy(root, runId, run.attempt, renderBriefSection(brief))
+  } catch {
+    // Brief copies are audit-only; the live brief above is what the review uses.
+  }
   try {
     opts?.signal?.throwIfAborted()
-    claim = await ports.review({ manifest, manifestHash, checks, criteria, history }, opts?.signal)
+    claim = await ports.review({ manifest, manifestHash, checks, criteria, brief }, opts?.signal)
   } catch (error) {
     if (opts?.signal?.aborted) await pauseTaskRun(root, runId, token)
     await noteAttempt({ checks })

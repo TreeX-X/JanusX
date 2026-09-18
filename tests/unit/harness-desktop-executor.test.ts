@@ -7,6 +7,7 @@ import { runGit } from '@janus-agent/harness-node'
 import { prepareTaskRun, startTaskRun, getTaskRun } from '../../src/main/harness/execution-adapter'
 import { executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
 import { buildDesktopReviewPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
+import { BRIEF_MAX_FILES, buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles } from '../../src/main/harness/task-brief'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 const TASK_ID = '33333333-3333-4333-8333-333333333333'
@@ -235,6 +236,54 @@ describe('desktop xdo host', () => {
   })
 })
 
+describe('task handoff brief', () => {
+  const manifest = [
+    { repoId: REPO, path: 'src/value.txt', sha256: 'a'.repeat(64) },
+    { repoId: REPO, path: 'gone.txt', deleted: true as const },
+  ]
+  const base = {
+    runId: 'run-1', taskUri: TASK_URI, attempt: 1,
+    goalText: 'Probe the desktop host.', constraintText: 'None yet.',
+    criteria: [{ uri: TASK_URI, criterionId: 'AC-1' }],
+    manifest, history: [{ attempt: 0, verdict: 'blocked', failedChecks: ['V-0'] }],
+  }
+  it('builds deterministically with code-joined file refs', () => {
+    const first = buildTaskBrief(base)
+    expect(buildTaskBrief(base)).toEqual(first)
+    expect(first.files).toEqual([
+      { repoId: REPO, path: 'src/value.txt', sha256: 'a'.repeat(64) },
+      { repoId: REPO, path: 'gone.txt', sha256: null },
+    ])
+    expect(first.truncated).toBe(false)
+    const rendered = renderBriefSection(first)
+    expect(rendered).toContain('Probe the desktop host.')
+    expect(rendered).toContain('src/value.txt')
+    expect(rendered).toContain('attempt 0 verdict:blocked')
+  })
+
+  it('caps files and prose with an explicit truncated marker', () => {
+    const many = Array.from({ length: BRIEF_MAX_FILES + 5 }, (_, i) => ({ repoId: REPO, path: `src/f${i}.txt`, sha256: 'b'.repeat(64) }))
+    const brief = buildTaskBrief({ ...base, manifest: many, goalText: 'g'.repeat(5000) })
+    expect(brief.files).toHaveLength(BRIEF_MAX_FILES)
+    expect(brief.truncated).toBe(true)
+    expect(renderBriefSection(brief)).toContain('truncated')
+  })
+
+  it('refuses tampered or vanished file refs before use', () => {
+    const brief = buildTaskBrief(base)
+    expect(verifyBriefFiles(brief, manifest)).toEqual([])
+    expect(verifyBriefFiles(brief, [{ ...manifest[0], sha256: 'c'.repeat(64) }, manifest[1]]).some((error) => error.code === 'STALE_BASELINE')).toBe(true)
+    expect(verifyBriefFiles(brief, [manifest[0]]).some((error) => error.code === 'STALE_BASELINE')).toBe(true)
+  })
+
+  it('stores one audit copy per attempt', async () => {
+    const root = await makeRoot()
+    await saveBriefCopy(root, 'run-1', 2, 'brief body')
+    const { readFile } = await import('node:fs/promises')
+    await expect(readFile(join(root, '.agents', '.local', 'runs', 'run-1', 'briefs', 'attempt-2.md'), 'utf8')).resolves.toBe('brief body')
+  })
+})
+
 describe('task-bound thread reattachment', () => {
   it('reattaches repairs to the same thread with prior history and records the receipt', async () => {
     const root = await makeRoot()
@@ -245,19 +294,22 @@ describe('task-bound thread reattachment', () => {
     }, { implementor: 'desktop' })
     expect(refused.ok).toBe(false)
 
-    let seenHistory: Array<{ attempt: number; verdict: string; failedChecks: string[] }> = []
+    let seenBrief: { taskUri: string; attempt: number; files: unknown[]; criteria: unknown[]; prior: Array<{ attempt: number; verdict: string }> } | null = null
     const repaired = await executeDesktopXdo(root, runId, token, {
       command: (step, signal) => runDesktopCommand(root, step, { signal }),
       review: async (input) => {
-        seenHistory = input.history
+        seenBrief = input.brief
         const criterion = input.criteria[0]
         return { verdict: 'approved', coverage: [{ uri: criterion.uri, criterionId: criterion.criterionId, criterionHash: criterion.criterionHash, checkIds: ['V-1'] }] }
       },
     }, { implementor: 'desktop' })
     expect(repaired.errors).toEqual([])
     expect(repaired.data.completed).toBe(true)
-    expect(seenHistory).toHaveLength(1)
-    expect(seenHistory[0]).toMatchObject({ attempt: 1, verdict: 'unreviewed' })
+    expect(seenBrief).toMatchObject({ taskUri: TASK_URI, attempt: 1 })
+    expect((seenBrief?.files.length ?? 0)).toBeGreaterThan(0)
+    expect(seenBrief?.criteria).toEqual([{ uri: TASK_URI, criterionId: 'AC-1' }])
+    expect(seenBrief?.prior).toHaveLength(1)
+    expect(seenBrief?.prior[0]).toMatchObject({ attempt: 1, verdict: 'unreviewed' })
 
     const { loadTaskThread } = await import('../../src/main/harness/task-thread')
     const thread = await loadTaskThread(root, runId)
@@ -282,6 +334,7 @@ describe('desktop command runner', () => {  it('refuses missing programs and esc
 describe('desktop self-review parsing', () => {
   const input = {
     taskUri: TASK_URI, attempt: 1, manifestHash: 'm', manifest: [], checks: [], criteria: [],
+    brief: { schema: 'harness-brief/1', runId: 'run-1', taskUri: TASK_URI, attempt: 1, goal: 'Prove it.', constraints: '', criteria: [], files: [], prior: [], truncated: false },
   }
   it('builds a read-only prompt that binds the manifest hash', () => {
     expect(buildDesktopReviewPrompt(input)).toContain('m')
@@ -305,7 +358,10 @@ describe('desktop self-review parsing', () => {
 })
 
 describe('desktop model review port', () => {
-  const reviewInput = { manifestHash: 'm', manifest: [], checks: [], criteria: [] }
+  const reviewInput = {
+    manifestHash: 'm', manifest: [], checks: [], criteria: [],
+    brief: { schema: 'harness-brief/1', runId: 'run-1', taskUri: TASK_URI, attempt: 1, goal: 'g', constraints: '', criteria: [], files: [], prior: [], truncated: false },
+  }
   const deps = (text: string) => ({
     providerId: 'p',
     modelId: 'm',

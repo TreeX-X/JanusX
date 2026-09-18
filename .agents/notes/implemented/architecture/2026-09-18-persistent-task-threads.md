@@ -56,9 +56,9 @@ fresh thread while run records, Notes, and receipts stay intact.
   history, endpoint recovery, and the budget guard carry unit and mapping
   coverage. Awaiting runs hold no execution slot while keeping their lease,
   matching the proposal's idle-thread rule.
-- **Costs and limits**: history keeps three attempts in prompts and full
-  entries on disk without compaction; long repair chains will need summary
-  compression as a follow-up. Hidden-thread approval routing does not apply:
+- **Costs and limits**: history condenses into the handoff brief with caps
+  and a truncation marker; deeper archaeology still reads receipts and
+  Notes. Hidden-thread approval routing does not apply:
   desktop turns run no interactive tools, so there are no hidden approvals
   to route. `max_depth` holds trivially because direct turns never nest.
   The overall job time budget stays unenforced until progress events make
