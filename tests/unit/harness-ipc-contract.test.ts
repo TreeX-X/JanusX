@@ -84,6 +84,16 @@ vi.mock('../../src/main/harness/independent-review', () => ({
   finishWithLatestReceipt: vi.fn(),
 }))
 
+vi.mock('../../src/main/harness/undo', () => ({
+  previewUndo: vi.fn(),
+  applyUndo: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/undo', () => ({
+  previewUndo: vi.fn(),
+  applyUndo: vi.fn(),
+}))
+
 vi.mock('../../src/main/harness/desktop-executor', () => ({
   executeDesktopXdo: vi.fn(),
   runDesktopCommand: vi.fn(),
@@ -152,6 +162,8 @@ describe('harness IPC contract', () => {
       'runReview',
       'runFinish',
       'runRepair',
+      'undoPreview',
+      'undoApply',
       'runExecute',
       'runPause',
       'runResume',

@@ -27,7 +27,7 @@ const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
   streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
-  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0, reviews: 0, finishes: 0, repairs: 0,
+  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0, reviews: 0, finishes: 0, repairs: 0, undoPreviews: 0, undoApplies: 0,
   gateExecute: false, gateResolve: null as null | (() => void),
   lastExecute: null as null | { runId: string; providerId?: string; modelId?: string; manualEvidence?: Array<{ stepId: string; observer: string; observation: string }> },
   runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean }>,
@@ -148,6 +148,14 @@ Object.assign(window.electron.harness, {
     run.attempt += 1
     run.repairBudget.usedAuto += 1
     return { attempt: run.attempt, state: run.state }
+  },
+  undoPreview: async () => {
+    fixture.undoPreviews++
+    return { txId: 'tx-1', changeSetId: 'cs-1', revision: 1, files: [{ operationId: 'op-1', relPath: '.agents/notes/a.md', status: 'reversible', beforeHash: 'b', afterHash: 'a' }], reversible: true }
+  },
+  undoApply: async () => {
+    fixture.undoApplies++
+    return { txId: 'tx-2', reverted: ['.agents/notes/a.md'] }
   },
   runThreads: async () => fixture.runs.map((run) => {
     const detail = (fixture as { threadDetails?: Record<string, { model: { providerId: string; modelId: string }; history: Array<{ attempt: number; manifestHash: string; checks: never[]; reviewVerdict: string; receiptId: string; at: string }> }> }).threadDetails?.[run.runId]

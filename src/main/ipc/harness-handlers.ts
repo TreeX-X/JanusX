@@ -19,6 +19,7 @@ import {
 } from '../harness/artifact-producer'
 import { harnessNoteService } from '../harness/service'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
+import { applyUndo, previewUndo } from '../harness/undo'
 import { buildEvaluatorPrompt, createModelReviewPort } from '../harness/desktop-review'
 import { executeDesktopXdo, runDesktopCommand } from '../harness/desktop-executor'
 import { finishWithLatestReceipt, requestIndependentReview } from '../harness/independent-review'
@@ -62,6 +63,8 @@ import {
   type HarnessRunReviewInput,
   type HarnessRunReviewResult,
   type HarnessRunState,
+  type HarnessUndoPreview,
+  type HarnessUndoResult,
   type HarnessShareSelection,
 } from '../../shared/ipc/harness'
 
@@ -673,6 +676,30 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       if (!repaired.ok) throwRunFailure(repaired.errors)
       const after = await getTaskRun(root, runId)
       return { attempt: repaired.data.attempt, state: after.run?.state ?? 'running' }
+    },
+  )
+
+  // ── managed undo (S8-JanusX, legacy-loop equivalence): preview then apply ──
+  // Undo reverses one committed write as a new undoable changeset. Conflicts
+  // refuse the whole package; evidence and receipts never move.
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.undoPreview,
+    async (_e, cwd: string, txId?: string): Promise<HarnessUndoPreview> => {
+      const root = await withRoot(cwd)
+      const previewed = await previewUndo(root, txId)
+      if (!previewed.preview) throwRunFailure(previewed.errors)
+      return previewed.preview
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.undoApply,
+    async (_e, cwd: string, txId?: string): Promise<HarnessUndoResult> => {
+      const root = await withRoot(cwd)
+      const applied = await applyUndo(root, txId)
+      if (applied.errors.length > 0) throwRunFailure(applied.errors)
+      return { txId: applied.txId, reverted: applied.reverted }
     },
   )
 }

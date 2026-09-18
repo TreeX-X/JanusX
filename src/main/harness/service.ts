@@ -237,6 +237,7 @@ export class HarnessNoteService {
       afterMarkdown?: string
     }>,
     reason: string,
+    opts?: { allowDelete?: boolean },
   ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
     const cs = {
       id: randomUUID(),
@@ -245,7 +246,7 @@ export class HarnessNoteService {
       operations: operations.map((o) => ({ ...o, dependsOn: [] as string[], reason, evidenceRefs: [] as string[], noteDiagnostics: [] as Diagnostic[] })),
     }
     const digest = sha256HexBytes(Buffer.from(JSON.stringify(cs.operations), 'utf8'))
-    return this.runChangeSet(root, cs, digest)
+    return this.runChangeSet(root, cs, digest, opts)
   }
 
   /**
@@ -307,8 +308,9 @@ export class HarnessNoteService {
       }>
     },
     digest: string,
+    opts?: { allowDelete?: boolean },
   ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
-    const report = await applyChangeSet(root, cs, { requestDigest: digest })
+    const report = await applyChangeSet(root, cs, { requestDigest: digest, ...(opts?.allowDelete ? { allowDelete: true } : {}) })
     if (!report.ok) {
       const conflict = report.errors.find((e) => e.code === 'CONFLICT')
       if (conflict) {

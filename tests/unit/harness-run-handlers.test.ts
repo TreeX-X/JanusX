@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   requestIndependentReview: vi.fn(),
   finishWithLatestReceipt: vi.fn(),
   repairTaskRun: vi.fn(),
+  previewUndo: vi.fn(),
+  applyUndo: vi.fn(),
   pauseTaskRun: vi.fn(),
   resumeTaskRun: vi.fn(),
   rebaselineTaskRun: vi.fn(),
@@ -80,6 +82,11 @@ vi.mock('../../src/main/harness/desktop-executor', () => ({
 vi.mock('../../src/main/harness/independent-review', () => ({
   requestIndependentReview: mocks.requestIndependentReview,
   finishWithLatestReceipt: mocks.finishWithLatestReceipt,
+}))
+
+vi.mock('../../src/main/harness/undo', () => ({
+  previewUndo: mocks.previewUndo,
+  applyUndo: mocks.applyUndo,
 }))
 
 vi.mock('../../src/main/harness/desktop-review', () => ({
@@ -361,5 +368,19 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     await expect(repair({}, ROOT, { runId: 'run-1', summary: 'Flaky check.' })).resolves.toEqual({ attempt: 2, state: 'running' })
     expect(mocks.repairTaskRun).toHaveBeenCalledWith(ROOT, 'run-1', 'tok', { failureReceiptId: 'r-ind', summary: 'Flaky check.', auto: false, authorization: { by: 'desktop' } })
     await expect(repair({}, ROOT, { runId: 'run-1', summary: '  ' })).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'summary' })
+  })
+
+  it('previews managed writes and applies undo as a new write', async () => {
+    const preview = await handler(HARNESS_COMMAND_CHANNELS.undoPreview)
+    mocks.previewUndo.mockResolvedValueOnce({ preview: { txId: 'tx-1', reversible: true, files: [] }, errors: [] })
+    await expect(preview({}, ROOT)).resolves.toMatchObject({ txId: 'tx-1', reversible: true })
+    mocks.previewUndo.mockResolvedValueOnce({ preview: null, errors: [{ code: 'NOT_FOUND', message: 'empty' }] })
+    await expect(preview({}, ROOT)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    const apply = await handler(HARNESS_COMMAND_CHANNELS.undoApply)
+    mocks.applyUndo.mockResolvedValueOnce({ txId: 'tx-2', reverted: ['a.md'], errors: [] })
+    await expect(apply({}, ROOT)).resolves.toEqual({ txId: 'tx-2', reverted: ['a.md'] })
+    mocks.applyUndo.mockResolvedValueOnce({ txId: '', reverted: [], errors: [{ code: 'CONFLICT', message: 'moved' }] })
+    await expect(apply({}, ROOT, 'tx-1')).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 })

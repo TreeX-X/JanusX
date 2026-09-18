@@ -19,6 +19,8 @@ import type {
   HarnessShareSelection,
   HarnessThreadDetail,
   HarnessThreadSummary,
+  HarnessUndoPreview,
+  HarnessUndoResult,
 } from '../../../shared/ipc/harness'
 
 export type {
@@ -41,6 +43,8 @@ export type {
   HarnessShareSelection,
   HarnessThreadDetail,
   HarnessThreadSummary,
+  HarnessUndoPreview,
+  HarnessUndoResult,
 }
 
 export function resolveProject(cwd: string): Promise<HarnessResolveResult> {
@@ -144,6 +148,13 @@ export function runRepair(cwd: string, input: HarnessRunRepairInput): Promise<{ 
   return window.electron.harness.runRepair(cwd, input)
 }
 
+export function undoPreview(cwd: string, txId?: string): Promise<HarnessUndoPreview> {
+  return window.electron.harness.undoPreview(cwd, txId)
+}
+
+export function undoApply(cwd: string, txId?: string): Promise<HarnessUndoResult> {
+  return window.electron.harness.undoApply(cwd, txId)
+}
 export function runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> {
   return window.electron.harness.runExecute(cwd, input)
 }

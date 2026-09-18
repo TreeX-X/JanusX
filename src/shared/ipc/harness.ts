@@ -32,6 +32,8 @@ export const HARNESS_COMMAND_CHANNELS = {
   runAbort: 'harness:run:abort',
   taskRead: 'harness:task:read',
   taskAdopt: 'harness:task:adopt',
+  undoPreview: 'harness:undo:preview',
+  undoApply: 'harness:undo:apply',
 } as const
 
 export const HARNESS_EVENT_CHANNELS = {
@@ -203,6 +205,27 @@ export interface HarnessRunRepairInput {
   summary: string
 }
 
+export interface HarnessUndoFile {
+  operationId: string
+  relPath: string
+  status: 'reversible' | 'already-reverted' | 'conflict' | 'unsupported'
+  beforeHash: string | null
+  afterHash: string | null
+}
+
+export interface HarnessUndoPreview {
+  txId: string
+  changeSetId: string
+  revision: number
+  files: HarnessUndoFile[]
+  reversible: boolean
+}
+
+export interface HarnessUndoResult {
+  txId: string
+  reverted: string[]
+}
+
 export interface HarnessTaskContractInput {
   scope: string
   criteria: Array<{ id: string; text: string }>
@@ -244,6 +267,8 @@ export interface HarnessAPI {
   runReview(cwd: string, input: HarnessRunReviewInput): Promise<HarnessRunReviewResult>
   runFinish(cwd: string, runId: string): Promise<{ receiptId: string; completed: boolean }>
   runRepair(cwd: string, input: HarnessRunRepairInput): Promise<{ attempt: number; state: string }>
+  undoPreview(cwd: string, txId?: string): Promise<HarnessUndoPreview>
+  undoApply(cwd: string, txId?: string): Promise<HarnessUndoResult>
   runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult>
   runPause(cwd: string, runId: string): Promise<{ state: string }>
   runResume(cwd: string, runId: string): Promise<{ state: string }>

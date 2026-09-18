@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 // Note: external runner backflow surface — see .agents/notes/implemented/architecture/2026-09-18-external-runner-backflow.md
 // Note: thread registry, activation, and close — see .agents/notes/implemented/architecture/2026-09-18-thread-registry-activation.md
 // Note: independent review and limited repair — see .agents/notes/implemented/architecture/2026-09-18-independent-review-repair.md
+// Note: reversible managed writes — see .agents/notes/implemented/architecture/2026-09-18-harness-undo.md
 import { useI18n } from '@/i18n/useI18n'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
 import { TaskContractEditor } from './TaskContractEditor'
@@ -27,6 +28,8 @@ import {
   runThread,
   runThreadClose,
   runThreads,
+  undoApply,
+  undoPreview,
   type HarnessRunCloseout,
   type HarnessRunExecuteResult,
   type HarnessRunMode,
@@ -34,6 +37,7 @@ import {
   type HarnessRunState,
   type HarnessThreadDetail,
   type HarnessThreadSummary,
+  type HarnessUndoPreview,
 } from '@/services/harness'
 
 interface HarnessRunPanelProps {
@@ -98,6 +102,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const [handoffContent, setHandoffContent] = useState<{ path: string; markdown: string } | null>(null)
   const [lastResult, setLastResult] = useState<HarnessRunExecuteResult | null>(null)
   const [reviewResult, setReviewResult] = useState<HarnessRunReviewResult | null>(null)
+  const [undo, setUndo] = useState<HarnessUndoPreview | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -126,6 +131,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
     setHandoffContent(null)
     setLastResult(null)
     setReviewResult(null)
+    setUndo(null)
     setEvidence({})
     void load()
   }, [load])
@@ -464,6 +470,43 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
     }
   }
 
+  const handleUndoPreview = async () => {
+    if (busy) return
+    setBusy('undo')
+    setError(null)
+    setUndo(null)
+    try {
+      setUndo(await undoPreview(cwd))
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.undoPreviewFailed', { message: failureMessage(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleUndoApply = async () => {
+    if (busy || !undo) return
+    setBusy('undo-apply')
+    setError(null)
+    try {
+      const result = await undoApply(cwd, undo.txId)
+      setNotice(t('janus:harness.runs.undone', { tx: shortId(result.txId), files: result.reverted.length }))
+      setUndo(null)
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.undoApplyFailed', { message: failureMessage(err) }))
+      if (undo) {
+        try {
+          setUndo(await undoPreview(cwd, undo.txId))
+        } catch {
+          setUndo(null)
+        }
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <div className="harness-run-panel" aria-label={t('janus:harness.runs.title')}>
       <div className="harness-run-panel__head">
@@ -662,6 +705,30 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           </div>
         </div>
       ) : null}
+      <div className="harness-run-panel__evidence">
+        <span className="harness-run-panel__title">{t('janus:harness.runs.undoTitle')}</span>
+        {undo ? (
+          <div className="harness-run-panel__result" role="status">
+            <span>{t('janus:harness.runs.undoPreviewLabel', { tx: shortId(undo.txId) })}</span>
+            <ul>
+              {undo.files.map((file) => (
+                <li key={file.operationId}>{`${file.relPath} [${file.status}]`}</li>
+              ))}
+            </ul>
+            <div className="harness-run-panel__actions">
+              <button type="button" className="blueprint-btn" disabled={!!busy || !undo.reversible} onClick={() => void handleUndoApply()}>
+                {busy === 'undo-apply' ? t('janus:harness.runs.undoApplying') : t('janus:harness.runs.undoApply')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="harness-run-panel__actions">
+            <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleUndoPreview()}>
+              {busy === 'undo' ? t('janus:harness.runs.undoPreviewing') : t('janus:harness.runs.undoPreview')}
+            </button>
+          </div>
+        )}
+      </div>
       <div className="harness-run-panel__threads">
         <span className="harness-run-panel__title">{t('janus:harness.runs.threadsTitle')}</span>
         {threads.length === 0 ? (
