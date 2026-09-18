@@ -118,4 +118,54 @@ describe('blueprint store project lane', () => {
     const node = await store.createNode('__global__', bp.id, { title: 'L', type: 'task' }, null)
     expect(node?.sourceUri).toBeUndefined()
   })
+
+  it('refuses analyzer and candidate writes on project graphs (S4/S6 lane closeout)', async () => {
+    const store = new BlueprintStore()
+    const root = await makeRoot()
+    const projectId = (await store.listBlueprints(root)).find((b) => isProjectGraphId(b.id))?.id as string
+    const analysis = {
+      id: 'a1',
+      nodeId: NOTE_ID,
+      trigger: 'manual',
+      inputSummary: { blueprint: 'T', actual: 'one commit' },
+      result: null,
+      applied: false,
+      createdAt: '2026-09-18T00:00:00.000Z',
+    } as never
+    await expect(store.appendAnalysis(root, projectId, NOTE_ID, analysis)).rejects.toMatchObject({
+      code: 'HARNESS_MANAGED',
+    })
+    await expect(store.applyAnalysisPatch(root, projectId, NOTE_ID, { progress: 10 })).rejects.toMatchObject({
+      code: 'HARNESS_MANAGED',
+    })
+    await expect(store.upsertRequirementCandidates(root, projectId, NOTE_ID, 'a1', [], [])).rejects.toMatchObject({
+      code: 'HARNESS_MANAGED',
+    })
+    await expect(store.setCursor(root, projectId, NOTE_ID, 'abcdef')).rejects.toMatchObject({
+      code: 'HARNESS_MANAGED',
+    })
+    // No legacy shadow file forks the projection.
+    expect(await fs.readdir(join(root, '.agents', 'notes'))).toHaveLength(1)
+  })
+
+  it('keeps analyzer writes on the legacy lane', async () => {
+    const store = new BlueprintStore()
+    const bp = await store.createBlueprint('__global__', { name: 'Legacy analysis' })
+    const created = await store.createNode('__global__', bp.id, { title: 'N', type: 'task' }, null)
+    const nodeId = created?.id as string
+    const analysis = {
+      id: 'a1',
+      nodeId,
+      trigger: 'manual',
+      inputSummary: { blueprint: 'N', actual: 'one commit' },
+      result: null,
+      applied: false,
+      createdAt: '2026-09-18T00:00:00.000Z',
+    } as never
+    const appended = await store.appendAnalysis('__global__', bp.id, nodeId, analysis)
+    expect(appended?.analyses).toHaveLength(1)
+    const patched = await store.applyAnalysisPatch('__global__', bp.id, nodeId, { progress: 30 })
+    expect(patched?.progress).toBe(30)
+    await expect(store.setCursor('__global__', bp.id, nodeId, 'abcdef')).resolves.toBeUndefined()
+  })
 })

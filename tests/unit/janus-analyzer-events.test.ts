@@ -43,6 +43,7 @@ vi.mock('../../src/main/janus/blueprint-store', () => ({
     setCursor: mocks.setCursor,
     upsertRequirementCandidates: mocks.upsertRequirementCandidates,
   },
+  isProjectGraphId: (id: string) => id.startsWith('harness:project:'),
 }))
 
 let analyzer: typeof import('../../src/main/janus/analyzer').analyzer
@@ -216,5 +217,44 @@ describe('Janus analyzer Island event producers', () => {
     })
     expect(mocks.send).toHaveBeenCalledTimes(1)
     expect(mocks.upsertRequirementCandidates).not.toHaveBeenCalled()
+  })
+
+  it('skips legacy persistence on project graphs but still publishes the analysis', async () => {
+    mocks.findNode.mockResolvedValue({ blueprintId: 'harness:project:deadbeef', node })
+    mocks.generateObject.mockResolvedValue({
+      object: {
+        progress: 75,
+        status: 'testing',
+        summary: 'Typed boundary completed',
+        confidence: 0.9,
+        evidence: ['shared contract'],
+        unresolved: [],
+        discoveredRequirements: [
+          {
+            title: candidate.title,
+            description: candidate.description,
+            suggestedParent: 'Root',
+            confidence: candidate.confidence,
+          },
+        ],
+        featureUpdates: [],
+        newFeatureRequirements: [],
+      },
+    })
+
+    const analysis = await analyzer.analyzeNode('node-1', {
+      workspacePath: 'C:\\repo',
+      trigger: 'manual',
+    })
+
+    expect(analysis).not.toBeNull()
+    expect(mocks.appendAnalysis).not.toHaveBeenCalled()
+    expect(mocks.applyAnalysisPatch).not.toHaveBeenCalled()
+    expect(mocks.upsertRequirementCandidates).not.toHaveBeenCalled()
+    expect(mocks.setCursor).not.toHaveBeenCalled()
+    expect(mocks.send).toHaveBeenCalledWith(JANUS_EVENT_CHANNELS.analysis, expect.objectContaining({
+      blueprintId: 'harness:project:deadbeef',
+      nodeId: 'node-1',
+    }))
   })
 })
