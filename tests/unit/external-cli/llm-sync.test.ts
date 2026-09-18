@@ -7,10 +7,10 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => join(tmpdir(), 'janusx-test-user-data')) },
 }))
 
-const { ClaudeSettingsApplier } = await import('../../../src/main/cc-switch/settings-applier')
-const { CliDetector } = await import('../../../src/main/cc-switch/cli-detector')
-const { CcSwitchSyncStateStore } = await import('../../../src/main/cc-switch/sync-state')
-const { DefaultCcSwitchService } = await import('../../../src/main/cc-switch/service')
+const { ClaudeSettingsApplier } = await import('../../../src/main/external-cli/settings-applier')
+const { CliDetector } = await import('../../../src/main/external-cli/cli-detector')
+const { ExternalCliSyncStateStore } = await import('../../../src/main/external-cli/sync-state')
+const { DefaultExternalCliService } = await import('../../../src/main/external-cli/service')
 
 async function createTempDir(prefix: string): Promise<string> {
   return mkdtemp(join(tmpdir(), prefix))
@@ -28,10 +28,10 @@ function createService(homeDir: string, userDataDir: string, credentials: Creden
       run: async () => ({ exitCode: 1, stdout: '', stderr: '' }),
     }),
   }
-  return new DefaultCcSwitchService(
+  return new DefaultExternalCliService(
     detectors,
     new ClaudeSettingsApplier(homeDir),
-    new CcSwitchSyncStateStore(userDataDir),
+    new ExternalCliSyncStateStore(userDataDir),
     async () => credentials,
   )
 }
@@ -44,7 +44,7 @@ const CREDENTIALS: Credentials = {
   model: 'm',
 }
 
-describe('CcSwitchService provider sync', () => {
+describe('ExternalCliService provider sync', () => {
   it('applies provider credentials and records the sync source', async () => {
     const homeDir = await createTempDir('janusx-cc-llm-home-')
     const userDataDir = await createTempDir('janusx-cc-llm-data-')
@@ -100,10 +100,10 @@ describe('CcSwitchService provider sync', () => {
         run: async () => ({ exitCode: 1, stdout: '', stderr: '' }),
       }),
     }
-    const service = new DefaultCcSwitchService(
+    const service = new DefaultExternalCliService(
       detectors,
       new ClaudeSettingsApplier(homeDir),
-      new CcSwitchSyncStateStore(userDataDir),
+      new ExternalCliSyncStateStore(userDataDir),
       resolver,
     )
 
@@ -114,17 +114,17 @@ describe('CcSwitchService provider sync', () => {
 
   it('reads the janus latest version from the sibling source', async () => {
     const { mkdir, writeFile } = await import('fs/promises')
-    const { CliInstaller } = await import('../../../src/main/cc-switch/installer')
+    const { CliInstaller } = await import('../../../src/main/external-cli/installer')
     const root = await createTempDir('janusx-cc-janus-latest-')
     const packageDir = join(root, 'packages', 'cli')
     await mkdir(packageDir, { recursive: true })
     await writeFile(join(packageDir, 'package.json'), JSON.stringify({ name: '@janus-agent/cli', version: '0.2.0' }), 'utf8')
     const homeDir = await createTempDir('janusx-cc-janus-latest-home-')
     const userDataDir = await createTempDir('janusx-cc-janus-latest-data-')
-    const service = new DefaultCcSwitchService(
+    const service = new DefaultExternalCliService(
       {},
       new ClaudeSettingsApplier(homeDir),
-      new CcSwitchSyncStateStore(userDataDir),
+      new ExternalCliSyncStateStore(userDataDir),
       async () => null,
       new CliInstaller({
         platform: 'linux',
@@ -140,13 +140,13 @@ describe('CcSwitchService provider sync', () => {
   })
 
   it('reports unknown janus latest when the sibling source is absent', async () => {
-    const { CliInstaller } = await import('../../../src/main/cc-switch/installer')
+    const { CliInstaller } = await import('../../../src/main/external-cli/installer')
     const homeDir = await createTempDir('janusx-cc-janus-absent-home-')
     const userDataDir = await createTempDir('janusx-cc-janus-absent-data-')
-    const service = new DefaultCcSwitchService(
+    const service = new DefaultExternalCliService(
       {},
       new ClaudeSettingsApplier(homeDir),
-      new CcSwitchSyncStateStore(userDataDir),
+      new ExternalCliSyncStateStore(userDataDir),
       async () => null,
       new CliInstaller({
         platform: 'linux',

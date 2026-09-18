@@ -1,12 +1,12 @@
 import { resolve } from 'path'
 import { describe, expect, it, vi } from 'vitest'
-import { CliDetector, quotePowerShellPath } from '../../../src/main/cc-switch/cli-detector'
-import type { CcSwitchToolId } from '../../../src/shared/ipc/cc-switch'
+import { CliDetector, quotePowerShellPath } from '../../../src/main/external-cli/cli-detector'
+import type { ExternalCliToolId } from '../../../src/shared/ipc/external-cli'
 
 type RunResult = { exitCode: number; stdout: string; stderr: string; timedOut?: boolean }
 
 function createHarness(options: {
-  toolId?: CcSwitchToolId
+  toolId?: ExternalCliToolId
   files?: string[]
   path?: string
   appData?: string

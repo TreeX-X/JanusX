@@ -1,7 +1,7 @@
 import { homedir } from 'os'
 import { copyFile, mkdir, readdir, readFile, rm } from 'fs/promises'
 import { basename, dirname, join } from 'path'
-import type { CcSwitchApplyInput } from '../../shared/ipc/cc-switch'
+import type { ExternalCliApplyInput } from '../../shared/ipc/external-cli'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 
 /** 回写时唯一允许触碰的键；其余字段（含 hooks、permissions 与未知键）必须原样保留。 */
@@ -81,7 +81,7 @@ export class ClaudeSettingsApplier {
   }
 
   /** 应用凭证三元组：备份→只替换自有键→原子写→重读校验。调用方必须串行，此处再加一层队列兜底。 */
-  async apply(input: CcSwitchApplyInput): Promise<ClaudeApplyResult> {
+  async apply(input: ExternalCliApplyInput): Promise<ClaudeApplyResult> {
     const baseURL = input.baseURL.trim()
     const authToken = input.authToken.trim()
     const model = input.model?.trim() ?? ''

@@ -1,4 +1,5 @@
 import { UPDATER_RELEASES_URL } from '../../../shared/ipc/updater'
+import type { ExternalCliToolId } from '../../../shared/ipc/external-cli'
 
 export function installElectronApiFallback(): void {
   if (window.electron) return
@@ -180,13 +181,16 @@ export function installElectronApiFallback(): void {
       installerStart: unavailable, installerCancel: unavailable, installerRemove: unavailable,
       onInstallerProgress: () => () => {}, onFilesChanged: () => () => {}, onWatchEvicted: () => () => {},
     },
-    ccSwitch: {
+    externalCli: {
       detect: () => Promise.resolve({ toolId: 'claude' as const, installed: false, runnable: false, hint: 'Electron API is unavailable' }),
       latest: () => Promise.resolve({ toolId: 'claude' as const }),
       install: () => Promise.resolve({ toolId: 'claude' as const, success: false, error: 'Electron API is unavailable' }),
       applyProvider: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
       syncState: () => Promise.resolve({ claude: null }),
       rollbackProfile: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
+      readTerminalModel: (toolId: ExternalCliToolId) => Promise.resolve({ toolId, configPath: null, exists: false, error: 'Electron API is unavailable' }),
+      applyTerminalModel: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
+      rollbackTerminal: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
     },
     llm: {
       getProviders: unavailable, getRuntimeStatus: unavailable, saveProvider: unavailable, testConnection: unavailable,

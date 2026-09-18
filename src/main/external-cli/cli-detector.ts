@@ -2,13 +2,13 @@ import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { delimiter, isAbsolute, join, resolve } from 'path'
 import { execa } from 'execa'
-import type { CcSwitchBinarySource, CcSwitchDetectResult, CcSwitchToolId } from '../../shared/ipc/cc-switch'
-import type { CcSwitchToolDescriptor } from './tool-registry'
-import { getCcSwitchTool } from './tool-registry'
+import type { ExternalCliBinarySource, ExternalCliDetectResult, ExternalCliToolId } from '../../shared/ipc/external-cli'
+import type { ExternalCliToolDescriptor } from './tool-registry'
+import { getExternalCliTool } from './tool-registry'
 
 const PROBE_TIMEOUT_MS = 10_000
 
-export const CC_SWITCH_EXISTING_TERMINAL_NOTICE =
+export const EXTERNAL_CLI_EXISTING_TERMINAL_NOTICE =
   'Restart existing terminals for the updated PATH to take effect.'
 
 interface CommandResult {
@@ -30,10 +30,10 @@ export type { CliDetectorDependencies }
 
 export interface ResolvedCliBinary {
   path: string
-  source: CcSwitchBinarySource
+  source: ExternalCliBinarySource
 }
 
-function binaryNames(tool: CcSwitchToolDescriptor, platform: NodeJS.Platform): readonly string[] {
+function binaryNames(tool: ExternalCliToolDescriptor, platform: NodeJS.Platform): readonly string[] {
   if (platform !== 'win32') return tool.binaryNames
   return tool.binaryNames.flatMap(name => [`${name}.cmd`, `${name}.exe`, name])
 }
@@ -50,7 +50,7 @@ function expandWindowsVars(raw: string, env: NodeJS.ProcessEnv): string {
   })
 }
 
-export function cliKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, homeDir: string, tool?: CcSwitchToolDescriptor): string[] {
+export function cliKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, homeDir: string, tool?: ExternalCliToolDescriptor): string[] {
   if (platform === 'win32') {
     const dirs: string[] = []
     if (env.APPDATA) dirs.push(join(env.APPDATA, 'npm'))
@@ -72,7 +72,7 @@ export function cliKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platfor
 
 /** 兼容旧名：首个工具的已知目录（installer 共用 npm 目录时调用）。 */
 export function claudeKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, homeDir: string): string[] {
-  return cliKnownBinDirs(env, platform, homeDir, getCcSwitchTool('claude'))
+  return cliKnownBinDirs(env, platform, homeDir, getExternalCliTool('claude'))
 }
 
 export async function findExecutableOnPath(
@@ -148,12 +148,12 @@ const defaultDependencies: CliDetectorDependencies = {
 
 export class CliDetector {
   constructor(
-    private readonly toolId: CcSwitchToolId,
+    private readonly toolId: ExternalCliToolId,
     private readonly deps: CliDetectorDependencies = defaultDependencies,
   ) {}
 
-  private get tool(): CcSwitchToolDescriptor {
-    const tool = getCcSwitchTool(this.toolId)
+  private get tool(): ExternalCliToolDescriptor {
+    const tool = getExternalCliTool(this.toolId)
     if (!tool) throw new Error(`Unsupported tool: ${this.toolId}`)
     return tool
   }
@@ -169,7 +169,7 @@ export class CliDetector {
     return undefined
   }
 
-  async detect(): Promise<CcSwitchDetectResult> {
+  async detect(): Promise<ExternalCliDetectResult> {
     const tool = this.tool
     const manualHint = tool.manualInstallCommand
     const candidate = await this.findCandidate()
@@ -210,7 +210,7 @@ export class CliDetector {
       version,
       path: candidate.path,
       source: candidate.source,
-      existingTerminalNotice: CC_SWITCH_EXISTING_TERMINAL_NOTICE,
+      existingTerminalNotice: EXTERNAL_CLI_EXISTING_TERMINAL_NOTICE,
     }
   }
 

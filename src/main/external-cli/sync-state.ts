@@ -15,7 +15,7 @@ export interface ClaudeSyncRecord {
   backupPath: string | null
 }
 
-export interface CcSwitchSyncState {
+export interface ExternalCliSyncState {
   claude: ClaudeSyncRecord | null
 }
 
@@ -37,35 +37,45 @@ function isSyncRecord(value: unknown): value is ClaudeSyncRecord {
     typeof record.syncedAt === 'number'
 }
 
-export class CcSwitchSyncStateStore {
+export class ExternalCliSyncStateStore {
   private readonly storePath: string
+  private readonly legacyPath: string
   private document: SyncStateDocument | null = null
   private readonly queue = new SerialQueue()
 
   constructor(userDataDir?: string) {
     const root = userDataDir ?? join(app.getPath('userData'), 'janusx')
-    this.storePath = join(root, 'cc-switch-sync.json')
+    this.storePath = join(root, 'external-cli-sync.json')
+    this.legacyPath = join(root, 'cc-switch-sync.json')
   }
 
   private async load(): Promise<SyncStateDocument> {
-    try {
-      const raw = await readFile(this.storePath, 'utf-8')
-      const parsed = JSON.parse(raw) as Partial<SyncStateDocument>
-      this.document = {
-        version: STORE_VERSION,
-        claude: parsed.claude && isSyncRecord(parsed.claude) ? parsed.claude : null,
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        try {
-          await rename(this.storePath, `${this.storePath}.corrupt-${Date.now()}`)
-        } catch {
-          /* 备份失败不阻塞启动 */
+    for (const candidate of [this.storePath, this.legacyPath]) {
+      try {
+        const raw = await readFile(candidate, 'utf-8')
+        const parsed = JSON.parse(raw) as Partial<SyncStateDocument>
+        this.document = {
+          version: STORE_VERSION,
+          claude: parsed.claude && isSyncRecord(parsed.claude) ? parsed.claude : null,
+        }
+        // 旧名文件仅做一次性承接：读到即落到新名，下次不再碰旧文件。
+        await this.persist()
+        return this.document
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          try {
+            await rename(candidate, `${candidate}.corrupt-${Date.now()}`)
+          } catch {
+            /* 备份失败不阻塞启动 */
+          }
+          this.document = emptyDocument()
+          await this.persist()
+          return this.document
         }
       }
-      this.document = emptyDocument()
-      await this.persist()
     }
+    this.document = emptyDocument()
+    await this.persist()
     return this.document
   }
 
@@ -74,7 +84,7 @@ export class CcSwitchSyncStateStore {
     await writeFileAtomic(this.storePath, `${JSON.stringify(this.document, null, 2)}\n`)
   }
 
-  async get(): Promise<CcSwitchSyncState> {
+  async get(): Promise<ExternalCliSyncState> {
     if (!this.document) this.document = await this.load()
     return { claude: this.document.claude }
   }
@@ -96,4 +106,4 @@ export class CcSwitchSyncStateStore {
   }
 }
 
-export const ccSwitchSyncStateStore = new CcSwitchSyncStateStore()
+export const externalCliSyncStateStore = new ExternalCliSyncStateStore()

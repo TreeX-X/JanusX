@@ -1,32 +1,35 @@
 /**
- * cc-switch 移植：外部 CLI 工具的版本检测与安装契约。
+ * 外部 CLI 工具的版本检测、安装与模型投影契约。
  * 主进程与渲染进程共享：通道名、结果类型、工具元数据，以及两端对称的 semver 比较。
  */
-export const CC_SWITCH_CHANNELS = {
-  detect: 'cc-switch:detect',
-  latest: 'cc-switch:latest',
-  install: 'cc-switch:install',
-  applyProvider: 'cc-switch:provider:apply',
-  syncState: 'cc-switch:sync-state',
-  rollbackProfile: 'cc-switch:profile:rollback',
+export const EXTERNAL_CLI_CHANNELS = {
+  detect: 'external-cli:detect',
+  latest: 'external-cli:latest',
+  install: 'external-cli:install',
+  applyProvider: 'external-cli:provider:apply',
+  syncState: 'external-cli:sync-state',
+  rollbackProfile: 'external-cli:profile:rollback',
+  terminalRead: 'external-cli:terminal:read',
+  terminalApply: 'external-cli:terminal:apply',
+  terminalRollback: 'external-cli:terminal:rollback',
 } as const
 
-export type CcSwitchChannel = (typeof CC_SWITCH_CHANNELS)[keyof typeof CC_SWITCH_CHANNELS]
+export type ExternalCliChannel = (typeof EXTERNAL_CLI_CHANNELS)[keyof typeof EXTERNAL_CLI_CHANNELS]
 
 /** 受管外部终端白名单；与 JanusX 终端预设的外部 CLI 对齐（claude/codex/opencode/pi 为第三方，janus 为自有 sibling 源码构建） */
-export type CcSwitchToolId = 'claude' | 'codex' | 'opencode' | 'pi' | 'janus'
+export type ExternalCliToolId = 'claude' | 'codex' | 'opencode' | 'pi' | 'janus'
 
-export const CC_SWITCH_TOOL_ORDER: readonly CcSwitchToolId[] = ['janus', 'claude', 'codex', 'opencode', 'pi']
+export const EXTERNAL_CLI_TOOL_ORDER: readonly ExternalCliToolId[] = ['janus', 'claude', 'codex', 'opencode', 'pi']
 
 /** 两端共享的展示元数据：首字母徽标＋品牌色，不引入二进制图标资产。 */
-export interface CcSwitchToolMeta {
-  id: CcSwitchToolId
+export interface ExternalCliToolMeta {
+  id: ExternalCliToolId
   displayName: string
   monogram: string
   color: string
 }
 
-export const CC_SWITCH_TOOL_META: Record<CcSwitchToolId, CcSwitchToolMeta> = {
+export const EXTERNAL_CLI_TOOL_META: Record<ExternalCliToolId, ExternalCliToolMeta> = {
   claude: { id: 'claude', displayName: 'Claude Code', monogram: 'C', color: '#d97757' },
   codex: { id: 'codex', displayName: 'Codex', monogram: 'X', color: '#6e6e6e' },
   opencode: { id: 'opencode', displayName: 'OpenCode', monogram: 'O', color: '#8b8b8b' },
@@ -34,29 +37,29 @@ export const CC_SWITCH_TOOL_META: Record<CcSwitchToolId, CcSwitchToolMeta> = {
   janus: { id: 'janus', displayName: 'Janus', monogram: 'J', color: '#9ece6a' },
 }
 
-export type CcSwitchBinarySource = 'path' | 'known-location'
+export type ExternalCliBinarySource = 'path' | 'known-location'
 
-export interface CcSwitchDetectResult {
-  toolId: CcSwitchToolId
-  /** false = 未安装；true 但 runnable=false = 装了但跑不起来（与 cc-switch installed_but_broken 同义）。 */
+export interface ExternalCliDetectResult {
+  toolId: ExternalCliToolId
+  /** false = 未安装；true 但 runnable=false = 装了但跑不起来（与 external-cli installed_but_broken 同义）。 */
   installed: boolean
   runnable: boolean
   version?: string
   path?: string
-  source?: CcSwitchBinarySource
+  source?: ExternalCliBinarySource
   /** 未安装时给出可复制的手动安装命令；跑不起来时给出诊断摘要。 */
   hint?: string
   existingTerminalNotice?: string
 }
 
-export interface CcSwitchLatestResult {
-  toolId: CcSwitchToolId
+export interface ExternalCliLatestResult {
+  toolId: ExternalCliToolId
   /** 查不到（离线/超时/注册表异常）时为 undefined，调用方展示 unknown 且不阻塞卡片。 */
   latestVersion?: string
 }
 
-export interface CcSwitchInstallResult {
-  toolId: CcSwitchToolId
+export interface ExternalCliInstallResult {
+  toolId: ExternalCliToolId
   success: boolean
   /** 成功时为安装后重探到的版本号。 */
   version?: string
@@ -65,23 +68,55 @@ export interface CcSwitchInstallResult {
   error?: string
 }
 
-export interface CcSwitchAPI {
-  detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult>
-  latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult>
-  install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult>
-  applyProvider(request: CcSwitchApplyProviderRequest): Promise<CcSwitchApplyResult>
-  syncState(): Promise<CcSwitchSyncState>
-  rollbackProfile(): Promise<CcSwitchRollbackResult>
+export interface ExternalCliAPI {
+  detect(toolId: ExternalCliToolId): Promise<ExternalCliDetectResult>
+  latest(toolId: ExternalCliToolId): Promise<ExternalCliLatestResult>
+  install(toolId: ExternalCliToolId): Promise<ExternalCliInstallResult>
+  applyProvider(request: ExternalCliApplyProviderRequest): Promise<ExternalCliApplyResult>
+  syncState(): Promise<ExternalCliSyncState>
+  rollbackProfile(): Promise<ExternalCliRollbackResult>
+  readTerminalModel(toolId: ExternalCliToolId): Promise<TerminalModelState>
+  applyTerminalModel(request: TerminalApplyModelRequest): Promise<TerminalApplyModelResult>
+  rollbackTerminal(toolId: ExternalCliToolId): Promise<TerminalRollbackResult>
+}
+
+/** 精简 projector 仅管理各终端拥有的 model 键；janus 为内部绑定，无外部文件。 */
+export type TerminalModelToolId = 'codex' | 'opencode' | 'pi'
+
+export interface TerminalModelState {
+  toolId: ExternalCliToolId
+  /** JanusX 实际读写的文件；opencode 优先沿用已存在的同名文件。 */
+  configPath: string | null
+  exists: boolean
+  model?: string
+  error?: string
+}
+
+export interface TerminalApplyModelRequest {
+  toolId: ExternalCliToolId
+  model: string
+}
+
+export interface TerminalApplyModelResult {
+  success: boolean
+  backupPath?: string | null
+  error?: string
+}
+
+export interface TerminalRollbackResult {
+  success: boolean
+  backupPath?: string
+  error?: string
 }
 
 /** 同步凭证输入：调用方只给三元组，绝不经过画像存储。 */
-export interface CcSwitchApplyInput {
+export interface ExternalCliApplyInput {
   baseURL: string
   authToken: string
   model?: string
 }
 
-export interface CcSwitchApplyResult {
+export interface ExternalCliApplyResult {
   success: boolean
   providerName?: string
   backupPath?: string | null
@@ -89,8 +124,8 @@ export interface CcSwitchApplyResult {
   error?: string
 }
 
-export interface CcSwitchApplyProviderRequest {
-  toolId: CcSwitchToolId
+export interface ExternalCliApplyProviderRequest {
+  toolId: ExternalCliToolId
   /** null 表示沿用 LLM 引擎默认配置。 */
   providerId: string | null
 }
@@ -104,11 +139,11 @@ export interface ClaudeSyncRecordState {
   backupPath: string | null
 }
 
-export interface CcSwitchSyncState {
+export interface ExternalCliSyncState {
   claude: ClaudeSyncRecordState | null
 }
 
-export interface CcSwitchRollbackResult {
+export interface ExternalCliRollbackResult {
   success: boolean
   backupPath?: string
   error?: string

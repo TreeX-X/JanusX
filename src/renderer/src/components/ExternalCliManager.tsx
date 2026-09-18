@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import {
-  CC_SWITCH_TOOL_META,
+  EXTERNAL_CLI_TOOL_META,
   isCliUpdateAvailable,
-  type CcSwitchDetectResult,
-  type CcSwitchToolId,
-} from '../../../shared/ipc/cc-switch'
-import { ccSwitchService } from '@/services/cc-switch'
-import { CC_SWITCH_TOOL_ICONS } from '@/lib/cli-tool-icons'
+  type ExternalCliDetectResult,
+  type ExternalCliToolId,
+} from '../../../shared/ipc/external-cli'
+import { externalCliService } from '@/services/external-cli'
+import { EXTERNAL_CLI_TOOL_ICONS } from '@/lib/cli-tool-icons'
 import styles from './AppSettingsModal.module.css'
 
 type RowState = 'not-installed' | 'broken' | 'ready' | 'update-available'
@@ -19,17 +19,17 @@ const STATE_LABEL_KEY: Record<RowState, string> = {
   'update-available': 'settings:cliTools.state.updateAvailable',
 }
 
-function toRowState(detect: CcSwitchDetectResult | undefined, latestVersion: string | undefined): RowState {
+function toRowState(detect: ExternalCliDetectResult | undefined, latestVersion: string | undefined): RowState {
   if (!detect || !detect.installed) return 'not-installed'
   if (!detect.runnable) return 'broken'
   if (isCliUpdateAvailable(detect.version, latestVersion)) return 'update-available'
   return 'ready'
 }
 
-export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
+export function ExternalCliManager({ toolId }: { toolId: ExternalCliToolId }) {
   const { t } = useI18n('settings')
-  const meta = CC_SWITCH_TOOL_META[toolId]
-  const [detect, setDetect] = useState<CcSwitchDetectResult>()
+  const meta = EXTERNAL_CLI_TOOL_META[toolId]
+  const [detect, setDetect] = useState<ExternalCliDetectResult>()
   const [latestVersion, setLatestVersion] = useState<string>()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -43,13 +43,13 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
   // 否则安装失败信息会被随后一次重探洗掉。
   // 最新版查询独立于本地探测：注册表往返可达 15 秒，行内先按本地结果首绘。
   const refreshDetect = useCallback(async () => {
-    const detectResult = await ccSwitchService.detect(toolId)
+    const detectResult = await externalCliService.detect(toolId)
     setDetect(detectResult)
     setLoading(false)
   }, [toolId])
 
   const refreshLatest = useCallback(async () => {
-    const latestResult = await ccSwitchService.latest(toolId)
+    const latestResult = await externalCliService.latest(toolId)
     setLatestVersion(latestResult.latestVersion)
   }, [toolId])
 
@@ -90,7 +90,7 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
     setError('')
     setNotice('')
     try {
-      const result = await ccSwitchService.install(toolId)
+      const result = await externalCliService.install(toolId)
       if (!result.success) {
         setError(result.error ?? '')
       } else {
@@ -125,7 +125,7 @@ export function CcSwitchManager({ toolId }: { toolId: CcSwitchToolId }) {
         ) : (
           <img
             className={styles.lsToolImg}
-            src={CC_SWITCH_TOOL_ICONS[toolId]}
+            src={EXTERNAL_CLI_TOOL_ICONS[toolId]}
             alt={meta.displayName}
             draggable={false}
             onError={() => setIconFailed(true)}

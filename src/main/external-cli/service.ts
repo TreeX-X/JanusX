@@ -3,36 +3,44 @@ import { homedir } from 'os'
 import { delimiter } from 'path'
 import { execa } from 'execa'
 import type {
-  CcSwitchApplyResult,
-  CcSwitchDetectResult,
-  CcSwitchInstallResult,
-  CcSwitchLatestResult,
-  CcSwitchSyncState,
-  CcSwitchToolId,
-} from '../../shared/ipc/cc-switch'
-import type { CcSwitchRollbackResult } from '../../shared/ipc/cc-switch'
+  ExternalCliApplyResult,
+  ExternalCliDetectResult,
+  ExternalCliInstallResult,
+  ExternalCliLatestResult,
+  ExternalCliSyncState,
+  ExternalCliToolId,
+  TerminalApplyModelRequest,
+  TerminalApplyModelResult,
+  TerminalModelState,
+  TerminalRollbackResult,
+} from '../../shared/ipc/external-cli'
+import type { ExternalCliRollbackResult } from '../../shared/ipc/external-cli'
 import { AuthType } from '@janusx/llm-core'
 import { llmConfigStore } from '../llm/ConfigStore'
-import { getCcSwitchTool } from './tool-registry'
+import { getExternalCliTool } from './tool-registry'
 import { CliDetector } from './cli-detector'
 import { CliInstaller } from './installer'
 import { fetchLatestVersion } from './latest'
 import { ClaudeSettingsApplier, claudeSettingsApplier } from './settings-applier'
-import { CcSwitchSyncStateStore, ccSwitchSyncStateStore } from './sync-state'
+import { isModelTerminal, terminalModelUnsupported, terminalProjectors, type TerminalProjectors } from './terminal-projectors'
+import { ExternalCliSyncStateStore, externalCliSyncStateStore } from './sync-state'
 
-// Note: cc-switch 移植的外部 CLI 版本检测与安装编排入口 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-cli-detect-install.md
+// Note: 外部 CLI 版本检测与安装编排入口 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-cli-detect-install.md
 // Note: LLM 多 CLI 管理（现有 LLM Provider 借给外部 CLI，含同步状态）走同一门面，原子备份与重读校验是硬性要求 —— 见 .agents/notes/implemented/feature/2026-09-17-cc-switch-cli-matrix.md
-export interface CcSwitchService {
-  detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult>
-  latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult>
-  install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult>
-  applyProvider(toolId: CcSwitchToolId, providerId: string | null): Promise<CcSwitchApplyResult>
-  syncState(): Promise<CcSwitchSyncState>
-  rollbackProfile(): Promise<CcSwitchRollbackResult>
+export interface ExternalCliService {
+  detect(toolId: ExternalCliToolId): Promise<ExternalCliDetectResult>
+  latest(toolId: ExternalCliToolId): Promise<ExternalCliLatestResult>
+  install(toolId: ExternalCliToolId): Promise<ExternalCliInstallResult>
+  applyProvider(toolId: ExternalCliToolId, providerId: string | null): Promise<ExternalCliApplyResult>
+  syncState(): Promise<ExternalCliSyncState>
+  rollbackProfile(): Promise<ExternalCliRollbackResult>
+  readTerminalModel(toolId: ExternalCliToolId): Promise<TerminalModelState>
+  applyTerminalModel(request: TerminalApplyModelRequest): Promise<TerminalApplyModelResult>
+  rollbackTerminal(toolId: ExternalCliToolId): Promise<TerminalRollbackResult>
 }
 
 /** 从现有 LLM 引擎解析出的可同步凭证；null 表示没有可用配置。 */
-export interface CcSwitchLlmCredentials {
+export interface ExternalCliLlmCredentials {
   providerId: string
   providerName: string
   baseURL: string
@@ -40,7 +48,7 @@ export interface CcSwitchLlmCredentials {
   model?: string
 }
 
-async function defaultResolveLlmCredentials(providerId: string | null): Promise<CcSwitchLlmCredentials | null> {
+async function defaultResolveLlmCredentials(providerId: string | null): Promise<ExternalCliLlmCredentials | null> {
   const provider = providerId === null
     ? await llmConfigStore.getDefaultProvider()
     : await llmConfigStore.getProviderSettings(providerId)
@@ -53,11 +61,11 @@ async function defaultResolveLlmCredentials(providerId: string | null): Promise<
   return { providerId: provider.id, providerName: provider.name, baseURL, authToken, ...(model ? { model } : {}) }
 }
 
-function notInstalled(toolId: CcSwitchToolId, error: string): CcSwitchDetectResult {
+function notInstalled(toolId: ExternalCliToolId, error: string): ExternalCliDetectResult {
   return { toolId, installed: false, runnable: false, hint: error }
 }
 
-export class DefaultCcSwitchService implements CcSwitchService {
+export class DefaultExternalCliService implements ExternalCliService {
   private readonly installer = new CliInstaller({
     platform: process.platform,
     env: process.env,
@@ -85,16 +93,17 @@ export class DefaultCcSwitchService implements CcSwitchService {
   })
 
   constructor(
-    private readonly detectors: Partial<Record<CcSwitchToolId, CliDetector>> = {},
+    private readonly detectors: Partial<Record<ExternalCliToolId, CliDetector>> = {},
     private readonly applier: ClaudeSettingsApplier = claudeSettingsApplier,
-    private readonly syncStore: CcSwitchSyncStateStore = ccSwitchSyncStateStore,
-    private readonly resolveLlmCredentials: (providerId: string | null) => Promise<CcSwitchLlmCredentials | null> = defaultResolveLlmCredentials,
+    private readonly syncStore: ExternalCliSyncStateStore = externalCliSyncStateStore,
+    private readonly resolveLlmCredentials: (providerId: string | null) => Promise<ExternalCliLlmCredentials | null> = defaultResolveLlmCredentials,
     installer?: CliInstaller,
+    private readonly projectors: TerminalProjectors = terminalProjectors,
   ) {
     if (installer) this.installer = installer
   }
 
-  private detectorFor(toolId: CcSwitchToolId): CliDetector {
+  private detectorFor(toolId: ExternalCliToolId): CliDetector {
     const existing = this.detectors[toolId]
     if (existing) return existing
     const created = new CliDetector(toolId)
@@ -102,13 +111,13 @@ export class DefaultCcSwitchService implements CcSwitchService {
     return created
   }
 
-  async detect(toolId: CcSwitchToolId): Promise<CcSwitchDetectResult> {
-    if (!getCcSwitchTool(toolId)) return notInstalled(toolId, 'Unsupported tool.')
+  async detect(toolId: ExternalCliToolId): Promise<ExternalCliDetectResult> {
+    if (!getExternalCliTool(toolId)) return notInstalled(toolId, 'Unsupported tool.')
     return this.detectorFor(toolId).detect()
   }
 
-  async latest(toolId: CcSwitchToolId): Promise<CcSwitchLatestResult> {
-    const tool = getCcSwitchTool(toolId)
+  async latest(toolId: ExternalCliToolId): Promise<ExternalCliLatestResult> {
+    const tool = getExternalCliTool(toolId)
     if (!tool) return { toolId }
     // 自有工具的“最新”即 sibling 源码版本号；取不到（打包后）则未知，不阻塞卡片。
     if (tool.latestStrategy === 'local-source') {
@@ -119,8 +128,8 @@ export class DefaultCcSwitchService implements CcSwitchService {
     return { toolId, latestVersion: await fetchLatestVersion(tool.npmPackage) }
   }
 
-  async install(toolId: CcSwitchToolId): Promise<CcSwitchInstallResult> {
-    const tool = getCcSwitchTool(toolId)
+  async install(toolId: ExternalCliToolId): Promise<ExternalCliInstallResult> {
+    const tool = getExternalCliTool(toolId)
     if (!tool) return { toolId, success: false, error: 'Unsupported tool.' }
     // 全局忙守卫：npm -g 并发写会互相破坏，串行是硬性要求。
     if (this.installer.isBusy()) return { toolId, success: false, error: 'Another install is already running.' }
@@ -134,13 +143,17 @@ export class DefaultCcSwitchService implements CcSwitchService {
     return { toolId, success: true, command: outcome.command, version: probe.version }
   }
 
-  async applyProvider(toolId: CcSwitchToolId, providerId: string | null): Promise<CcSwitchApplyResult> {
+  async applyProvider(toolId: ExternalCliToolId, providerId: string | null): Promise<ExternalCliApplyResult> {
     if (toolId !== 'claude') return { success: false, error: 'Unsupported tool.' }
     // 凭证唯一来源是现有 LLM 引擎的 Provider；本域不存任何密钥，只记同步来源。
     const credentials = await this.resolveLlmCredentials(providerId)
     if (!credentials) return { success: false, error: 'NO_LLM_PROVIDER' }
+    // Claude 终端绑定的模型覆盖优先于 Provider 自带默认，保持与引擎页一致。
+    const bindings = await llmConfigStore.getTerminalBindings().catch(() => null)
+    const modelOverride = bindings?.claude?.modelId?.trim() || undefined
+    const effective = { ...credentials, ...(modelOverride ? { model: modelOverride } : {}) }
     try {
-      const outcome = await this.applier.apply(credentials)
+      const outcome = await this.applier.apply(effective)
       await this.syncStore.record({
         providerId: credentials.providerId,
         providerName: credentials.providerName,
@@ -155,11 +168,11 @@ export class DefaultCcSwitchService implements CcSwitchService {
     }
   }
 
-  async syncState(): Promise<CcSwitchSyncState> {
+  async syncState(): Promise<ExternalCliSyncState> {
     return this.syncStore.get()
   }
 
-  async rollbackProfile(): Promise<CcSwitchRollbackResult> {
+  async rollbackProfile(): Promise<ExternalCliRollbackResult> {
     try {
       const outcome = await this.applier.rollback()
       // 回滚后 Live 已不再是同步记录的内容，诚实地清空同步态。
@@ -169,6 +182,37 @@ export class DefaultCcSwitchService implements CcSwitchService {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
+
+  async readTerminalModel(toolId: ExternalCliToolId): Promise<TerminalModelState> {
+    if (!isModelTerminal(toolId)) {
+      return { toolId, configPath: null, exists: false, error: terminalModelUnsupported(toolId) }
+    }
+    try {
+      return await this.projectors.read(toolId)
+    } catch (error) {
+      const configPath = await this.projectors.configPathFor(toolId).catch(() => null as string | null)
+      return { toolId, configPath, exists: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async applyTerminalModel(request: TerminalApplyModelRequest): Promise<TerminalApplyModelResult> {
+    if (!isModelTerminal(request.toolId)) return { success: false, error: terminalModelUnsupported(request.toolId) }
+    try {
+      return await this.projectors.apply(request.toolId, request.model)
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async rollbackTerminal(toolId: ExternalCliToolId): Promise<TerminalRollbackResult> {
+    if (!isModelTerminal(toolId)) return { success: false, error: terminalModelUnsupported(toolId) }
+    try {
+      const outcome = await this.projectors.rollback(toolId)
+      return { success: true, backupPath: outcome.backupPath }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
 }
 
-export const ccSwitchService: CcSwitchService = new DefaultCcSwitchService()
+export const externalCliService: ExternalCliService = new DefaultExternalCliService()

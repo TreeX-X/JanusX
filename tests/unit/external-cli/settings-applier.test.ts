@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
-import { ClaudeSettingsApplier } from '../../../src/main/cc-switch/settings-applier'
+import { ClaudeSettingsApplier } from '../../../src/main/external-cli/settings-applier'
 
 async function createTempDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'janusx-cc-apply-test-'))

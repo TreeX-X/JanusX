@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { compareCliVersions, isCliUpdateAvailable } from '../../../src/shared/ipc/cc-switch'
-import { fetchLatestVersion } from '../../../src/main/cc-switch/latest'
-import { CC_SWITCH_TOOLS } from '../../../src/main/cc-switch/tool-registry'
+import { compareCliVersions, isCliUpdateAvailable } from '../../../src/shared/ipc/external-cli'
+import { fetchLatestVersion } from '../../../src/main/external-cli/latest'
+import { EXTERNAL_CLI_TOOLS } from '../../../src/main/external-cli/tool-registry'
 
 describe('cli version compare', () => {
   it('orders numeric cores and treats release above prerelease', () => {
@@ -23,7 +23,7 @@ describe('cli version compare', () => {
 
 describe('fetchLatestVersion', () => {
   it('reads the dist-tags endpoint and tolerates failures as unknown', async () => {
-    const npmPackage = CC_SWITCH_TOOLS.claude.npmPackage ?? ''
+    const npmPackage = EXTERNAL_CLI_TOOLS.claude.npmPackage ?? ''
     const ok = await fetchLatestVersion(npmPackage, (async () => ({
       ok: true,
       json: async () => ({ latest: '9.9.9' }),

@@ -2,8 +2,8 @@ import { dirname, join, resolve } from 'path'
 import { mkdtemp, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { describe, expect, it, vi } from 'vitest'
-import { CliInstaller } from '../../../src/main/cc-switch/installer'
-import { CC_SWITCH_TOOLS } from '../../../src/main/cc-switch/tool-registry'
+import { CliInstaller } from '../../../src/main/external-cli/installer'
+import { EXTERNAL_CLI_TOOLS } from '../../../src/main/external-cli/tool-registry'
 
 function createHarness(options: {
   npmPath?: string
@@ -26,7 +26,7 @@ describe('CliInstaller', () => {
   it('refuses to run when npm cannot be located and hands out the manual command', async () => {
     const { installer, run } = createHarness()
 
-    await expect(installer.install(CC_SWITCH_TOOLS.claude)).resolves.toEqual({
+    await expect(installer.install(EXTERNAL_CLI_TOOLS.claude)).resolves.toEqual({
       success: false,
       command: 'npm i -g @anthropic-ai/claude-code@latest',
       error: expect.stringContaining('npm was not found'),
@@ -38,7 +38,7 @@ describe('CliInstaller', () => {
     const npmPath = 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd'
     const { installer, run } = createHarness({ npmPath })
 
-    await expect(installer.install(CC_SWITCH_TOOLS.claude)).resolves.toEqual({
+    await expect(installer.install(EXTERNAL_CLI_TOOLS.claude)).resolves.toEqual({
       success: true,
       command: `& "${npmPath}" i -g @anthropic-ai/claude-code@latest`,
     })
@@ -49,7 +49,7 @@ describe('CliInstaller', () => {
     const npmPath = 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd'
     const { installer } = createHarness({ npmPath, exitCode: 1, stderr: 'line1\nline2\nnpm ERR! boom' })
 
-    const result = await installer.install(CC_SWITCH_TOOLS.claude)
+    const result = await installer.install(EXTERNAL_CLI_TOOLS.claude)
     expect(result.success).toBe(false)
     expect(result.error).toContain('npm ERR! boom')
   })
@@ -70,8 +70,8 @@ describe('CliInstaller', () => {
       run,
     })
 
-    const first = installer.install(CC_SWITCH_TOOLS.claude)
-    await expect(installer.install(CC_SWITCH_TOOLS.claude)).resolves.toMatchObject({ success: false })
+    const first = installer.install(EXTERNAL_CLI_TOOLS.claude)
+    await expect(installer.install(EXTERNAL_CLI_TOOLS.claude)).resolves.toMatchObject({ success: false })
     release()
     await expect(first).resolves.toMatchObject({ success: true })
   })
@@ -95,7 +95,7 @@ describe('CliInstaller', () => {
       resolveSiblingRoot: () => root,
     })
 
-    const result = await installer.install(CC_SWITCH_TOOLS.janus)
+    const result = await installer.install(EXTERNAL_CLI_TOOLS.janus)
     expect(result.success).toBe(true)
     expect(result.command).toContain('npm run build')
     expect(result.command).toContain('npm link')
@@ -113,7 +113,7 @@ describe('CliInstaller', () => {
       resolveSiblingRoot: () => undefined,
     })
 
-    const result = await installer.install(CC_SWITCH_TOOLS.janus)
+    const result = await installer.install(EXTERNAL_CLI_TOOLS.janus)
     expect(result).toMatchObject({ success: false })
     expect(result.command).toContain('npm link')
   })
@@ -139,7 +139,7 @@ describe('CliInstaller', () => {
       resolveSiblingRoot: () => root,
     })
 
-    const result = await installer.install(CC_SWITCH_TOOLS.janus)
+    const result = await installer.install(EXTERNAL_CLI_TOOLS.janus)
     expect(result.success).toBe(false)
     expect(result.error).toContain('tsc error TS0000')
     expect(runs).toBe(1)

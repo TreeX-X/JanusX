@@ -1,7 +1,7 @@
-import type { CcSwitchToolId } from '../../shared/ipc/cc-switch'
+import type { ExternalCliToolId } from '../../shared/ipc/external-cli'
 
-export interface CcSwitchToolDescriptor {
-  id: CcSwitchToolId
+export interface ExternalCliToolDescriptor {
+  id: ExternalCliToolId
   displayName: string
   /** PATH 与已知位置中查找的可执行文件名（win32 含 .cmd/.exe 变体）。 */
   binaryNames: readonly string[]
@@ -32,9 +32,9 @@ function npmInstallCommand(npmPackage: string): string {
 
 /**
  * 工具声明单表：展示名、包名、安装命令、最新版策略收敛在一处，
- * 前后端不再各维护一份映射（cc-switch 三张小表拼凑的教训）。
+ * 前后端不再各维护一份映射（上游三张小表拼凑的教训）。
  */
-export const CC_SWITCH_TOOLS: Record<CcSwitchToolId, CcSwitchToolDescriptor> = {
+export const EXTERNAL_CLI_TOOLS: Record<ExternalCliToolId, ExternalCliToolDescriptor> = {
   claude: {
     id: 'claude',
     displayName: 'Claude Code',
@@ -43,7 +43,7 @@ export const CC_SWITCH_TOOLS: Record<CcSwitchToolId, CcSwitchToolDescriptor> = {
     manualInstallCommand: npmInstallCommand('@anthropic-ai/claude-code'),
     latestStrategy: 'npm-dist-tags',
     extraKnownDirs: {
-      // 原生安装器位置（cc-switch build_tool_search_paths 同源）。
+      // 原生安装器位置（上游 build_tool_search_paths 同源）。
       win32: ['%LOCALAPPDATA%\\Programs\\claude'],
     },
   },
@@ -87,7 +87,7 @@ export const CC_SWITCH_TOOLS: Record<CcSwitchToolId, CcSwitchToolDescriptor> = {
   },
 }
 
-export function getCcSwitchTool(toolId: string): CcSwitchToolDescriptor | undefined {
+export function getExternalCliTool(toolId: string): ExternalCliToolDescriptor | undefined {
   if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'opencode' && toolId !== 'pi' && toolId !== 'janus') return undefined
-  return CC_SWITCH_TOOLS[toolId]
+  return EXTERNAL_CLI_TOOLS[toolId]
 }

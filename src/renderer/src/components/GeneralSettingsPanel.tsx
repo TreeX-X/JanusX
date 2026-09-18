@@ -2,8 +2,8 @@ import { useI18n } from '@/i18n/useI18n'
 import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from '@/i18n/config'
 import { Select } from './ui/Select'
 import { LanguageServiceManager } from './LanguageServiceManager'
-import { CC_SWITCH_TOOL_ORDER } from '../../../shared/ipc/cc-switch'
-import { CcSwitchManager } from './CcSwitchManager'
+import { EXTERNAL_CLI_TOOL_ORDER } from '../../../shared/ipc/external-cli'
+import { ExternalCliManager } from './ExternalCliManager'
 import { OfficeCliManager } from './OfficeCliManager'
 import { UpdaterSettings } from './UpdaterSettings'
 import styles from './AppSettingsModal.module.css'
@@ -51,8 +51,8 @@ export function GeneralSettingsPanel() {
         </div>
         <div className={styles.generalControlCol}>
           <div className={styles.lsCard}>
-            {CC_SWITCH_TOOL_ORDER.map((toolId) => (
-              <CcSwitchManager key={toolId} toolId={toolId} />
+            {EXTERNAL_CLI_TOOL_ORDER.map((toolId) => (
+              <ExternalCliManager key={toolId} toolId={toolId} />
             ))}
           </div>
         </div>

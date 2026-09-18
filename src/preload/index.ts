@@ -30,7 +30,7 @@ import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agen
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
-import { CC_SWITCH_CHANNELS, type CcSwitchAPI } from '../shared/ipc/cc-switch'
+import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
 import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
@@ -300,13 +300,16 @@ const llmAPI: LlmAPI = {
   onToolTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.toolTrace, callback),
 }
 
-const ccSwitchAPI: CcSwitchAPI = {
-  detect: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.detect, toolId),
-  latest: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.latest, toolId),
-  install: (toolId) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.install, toolId),
-  applyProvider: (request) => ipcRenderer.invoke(CC_SWITCH_CHANNELS.applyProvider, request),
-  syncState: () => ipcRenderer.invoke(CC_SWITCH_CHANNELS.syncState),
-  rollbackProfile: () => ipcRenderer.invoke(CC_SWITCH_CHANNELS.rollbackProfile),
+const externalCliAPI: ExternalCliAPI = {
+  detect: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.detect, toolId),
+  latest: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.latest, toolId),
+  install: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.install, toolId),
+  applyProvider: (request) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.applyProvider, request),
+  syncState: () => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.syncState),
+  rollbackProfile: () => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.rollbackProfile),
+  readTerminalModel: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.terminalRead, toolId),
+  applyTerminalModel: (request) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.terminalApply, request),
+  rollbackTerminal: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.terminalRollback, toolId),
 }
 
 const agentAPI: AgentAPI = {
@@ -498,7 +501,7 @@ contextBridge.exposeInMainWorld('electron', {
   harness: harnessAPI,
   office: officeAPI,
   llm: llmAPI,
-  ccSwitch: ccSwitchAPI,
+  externalCli: externalCliAPI,
   janusChat: janusChatAPI,
   roundtable: roundtableAPI,
   agent: agentAPI,

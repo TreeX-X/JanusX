@@ -9,8 +9,8 @@ import { readFile, rename } from 'fs/promises'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type { ProviderSettings } from '@janusx/llm-core'
 
-// Note: 按终端独立维护的 LLM 绑定（cc-switch 单源+各端异构的 JSON 落法）——见 .agents/notes/implemented/feature/2026-09-18-settings-terminal-llm.md
-/** 与 cc-switch 外部 CLI 对齐的终端消费者；shell 无 LLM，不参与绑定。 */
+// Note: 按终端独立维护的 LLM 绑定（external-cli 单源+各端异构的 JSON 落法）——见 .agents/notes/implemented/feature/2026-09-18-settings-terminal-llm.md
+/** 与 external-cli 外部 CLI 对齐的终端消费者；shell 无 LLM，不参与绑定。 */
 export type LlmTerminalConsumer = 'janus' | 'claude' | 'codex' | 'opencode' | 'pi'
 
 export const LLM_TERMINAL_CONSUMERS: readonly LlmTerminalConsumer[] = ['janus', 'claude', 'codex', 'opencode', 'pi']

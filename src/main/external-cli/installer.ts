@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { readFile } from 'fs/promises'
 import { delimiter, join, resolve } from 'path'
-import type { CcSwitchToolDescriptor } from './tool-registry'
+import type { ExternalCliToolDescriptor } from './tool-registry'
 import { claudeKnownBinDirs, findExecutableOnPath, quotePowerShellPath, readPathValue } from './cli-detector'
 
 const INSTALL_TIMEOUT_MS = 5 * 60_000
@@ -73,7 +73,7 @@ export class CliInstaller {
    * 定位自有 sibling 源码包目录并校验包名；顺带读出源码版本号（最新版比对用）。
    * 打包后或目录缺失时返回 undefined，调用方降级为手动指引。
    */
-  async locateLocalSource(tool: CcSwitchToolDescriptor): Promise<LocalToolSource | undefined> {
+  async locateLocalSource(tool: ExternalCliToolDescriptor): Promise<LocalToolSource | undefined> {
     const lifecycle = tool.localLifecycle
     if (!lifecycle) return undefined
     const root = this.deps.resolveSiblingRoot?.() ?? defaultSiblingRoot()
@@ -89,7 +89,7 @@ export class CliInstaller {
     }
   }
 
-  buildCommand(npmPath: string, tool: CcSwitchToolDescriptor): { file: string; args: readonly string[]; display: string } {
+  buildCommand(npmPath: string, tool: ExternalCliToolDescriptor): { file: string; args: readonly string[]; display: string } {
     if (!tool.npmPackage) throw new Error(`${tool.displayName} is not npm-distributed.`)
     const target = `${tool.npmPackage}@latest`
     if (this.deps.platform === 'win32') {
@@ -140,7 +140,7 @@ export class CliInstaller {
     return { success: true, command: displays.join(' && ') }
   }
 
-  async install(tool: CcSwitchToolDescriptor): Promise<{ success: boolean; command?: string; error?: string }> {
+  async install(tool: ExternalCliToolDescriptor): Promise<{ success: boolean; command?: string; error?: string }> {
     if (this.running) return { success: false, error: 'Another install is already running.' }
     // 同步置位：检查与置位之间不允许 await，否则两次同步进入的调用会同时通过检查。
     this.running = true
