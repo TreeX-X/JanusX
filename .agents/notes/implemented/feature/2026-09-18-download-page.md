@@ -18,6 +18,8 @@ Reusing the existing feature-led page avoids layout maintenance, but leaves the 
 
 ## Consequences
 
-The page prioritizes package selection and omits the feature-card catalogue. CSS and release handling are separate files to keep layout and failure behavior inspectable. Package filenames must retain the builder's explicit x64 naming; additional architectures require explicit choices rather than silently changing the selected binary. GitHub API availability affects live metadata, while release-history links provide the fallback.
+The page prioritizes package selection, followed by installation steps and a product tour with three real application screenshots. The tour uses an isolated Hello Janus example, showing the workspace terminal, embedded Markdown editor, and run configuration. Static PNG images offer readable, motion-free examples; GIF recordings would add transfer cost for these discrete states. Branch-local assets keep the page independent of application-branch asset URLs, at the cost of copying refreshed screenshots from `wiki/assets` when the interface changes. Each screenshot links to its full-size image and uses lazy loading, dimensions, and descriptive alternative text.
+
+CSS and release handling are separate files to keep layout and failure behavior inspectable. Package filenames must retain the builder's explicit x64 naming; additional architectures require explicit choices rather than silently changing the selected binary. GitHub API availability affects live metadata, while release-history links provide the fallback.
 
 Run `node tests/download.test.cjs` with Playwright available through `JANUSX_PLAYWRIGHT` or the normal module lookup. The check covers release success, missing packages, wrong architectures, empty releases, request failures, invalid URLs, no JavaScript, and desktop/mobile layout bounds. Screenshots are written outside the site when `JANUSX_SCREENSHOTS` is set.

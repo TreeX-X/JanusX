@@ -30,6 +30,14 @@ const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', asse
       assert.equal(await page.locator('#download-portable').getAttribute('href'), asset('portable').browser_download_url);
       assert.match(await page.locator('#setup-meta').innerText(), /100.0 MB/);
       assert.match(await page.locator('#release-status').innerText(), /v1.2.3/);
+      assert.equal(await page.locator('.tour-shot img').count(), 3);
+      for (const img of await page.locator('.tour-shot img').all()) {
+        await img.scrollIntoViewIfNeeded();
+        await img.evaluate(node => node.decode());
+        assert.deepEqual(await img.evaluate(node => [node.naturalWidth, node.naturalHeight]), [1440, 900]);
+        assert.ok(await img.getAttribute('alt'));
+        assert.equal(await img.locator('..').getAttribute('href'), await img.getAttribute('src'));
+      }
       for (const [width, height] of [[1440, 1000], [1920, 1080], [768, 1024], [390, 844], [320, 740]]) {
         await page.setViewportSize({ width, height });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `overflow at ${width}`);

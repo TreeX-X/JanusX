@@ -97,3 +97,16 @@ footer { border-top: 1px solid var(--shell-border); }
   .footer-inner > span { order: 3; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.product-tour { border-top: 1px solid var(--shell-border); padding: 40px 0; }
+.tour-intro { max-width: 720px; color: var(--shell-muted); line-height: 1.9; }
+.tour-shot { margin: 36px 0; }
+.tour-shot figcaption { max-width: 720px; margin-bottom: 18px; }
+.tour-shot h3 { margin: 7px 0; }
+.tour-shot p { color: var(--shell-muted); font-size: 13px; }
+.tour-shot a { display: block; border: 1px solid var(--shell-border); background: var(--shell-canvas); }
+.tour-shot img { display: block; width: 100%; height: auto; }
+.product-tour > .text-link { margin-top: 16px; }
+@media (max-width: 640px) {
+  .product-tour { padding: 28px 0; }
+  .tour-shot { margin: 28px 0; }
+}
