@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { parseNote, validateChangeSet, validateNote } from '@janus-agent/harness-core'
 import { HarnessNoteService } from '../../src/main/harness/service'
 import { RoundtableStore } from '../../src/main/roundtable/store'
-import { buildArtifactBundle, snapshotSourceFacts } from '../../src/main/roundtable/artifact-bundle'
+import { buildArtifactBundle, resolveBundleRetry, snapshotSourceFacts, staleSnapshotDiagnostic } from '../../src/main/roundtable/artifact-bundle'
 import type { RoundtableFact } from '../../src/shared/roundtable/events'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
@@ -225,5 +225,41 @@ describe('roundtable artifact bundle (S5)', () => {
     const loaded = await store.loadBundle(bundle.id, bundle.revision)
     expect((loaded?.['snapshotHash'] as string)).toBe(bundle.snapshotHash)
     expect(await store.loadBundle(bundle.id, 999)).toBeNull()
+  })
+
+  it('guards retries by snapshot: same ids reuse, moved sources demand a new revision (F05)', async () => {
+    // Pure verdict table backing RoundtableService.buildBundle (C6).
+    expect(resolveBundleRetry(null, 'abc')).toBe('save')
+    expect(resolveBundleRetry('abc', 'abc')).toBe('reuse-saved')
+    expect(resolveBundleRetry('abc', 'def')).toBe('stale')
+    expect(resolveBundleRetry(undefined, 'abc')).toBe('stale')
+    expect(resolveBundleRetry(42, 'abc')).toBe('stale')
+    const stale = staleSnapshotDiagnostic(2)
+    expect(stale.code).toBe('STALE_BASELINE')
+    expect(stale.path).toBe('revision')
+
+    // End to end through the real journal store: rebuild with identical
+    // facts resolves to the saved bundle (same operation identities, no
+    // duplicate notes on retry); changed facts refuse to overwrite.
+    const dir = await fs.mkdtemp(join(tmpdir(), 'janusx-roundtable-s5-retry-'))
+    roots.push(dir)
+    const store = new RoundtableStore({ journalPath: join(dir, 'events.jsonl') })
+    const bundleId = 'retry-bundle-1'
+    const first = buildArtifactBundle({ ...BASE, bundleId, revision: 1, items: [{ fact: fact({ id: 'f1' }) }] })
+    expect(first.diagnostics).toEqual([])
+    await store.saveBundle(first.bundle)
+
+    const saved = await store.loadBundle(bundleId, 1)
+    const sameFacts = buildArtifactBundle({ ...BASE, bundleId, revision: 1, items: [{ fact: fact({ id: 'f1' }) }] })
+    expect(sameFacts.diagnostics).toEqual([])
+    // Fresh builds mint fresh operation ids; only the saved copy is retry-safe.
+    expect(sameFacts.bundle.changeSet.operations[0].operationId).not.toBe(first.bundle.changeSet.operations[0].operationId)
+    expect(resolveBundleRetry((saved as { snapshotHash?: unknown })?.snapshotHash ?? null, sameFacts.bundle.snapshotHash)).toBe('reuse-saved')
+
+    const movedFacts = buildArtifactBundle({ ...BASE, bundleId, revision: 1, items: [{ fact: fact({ id: 'f1', content: 'Changed.' }) }] })
+    expect(movedFacts.diagnostics).toEqual([])
+    expect(resolveBundleRetry((saved as { snapshotHash?: unknown })?.snapshotHash ?? null, movedFacts.bundle.snapshotHash)).toBe('stale')
+    // The saved history survives the refused overwrite.
+    expect(((await store.loadBundle(bundleId, 1)) as { snapshotHash?: unknown })?.snapshotHash).toBe(first.bundle.snapshotHash)
   })
 })
