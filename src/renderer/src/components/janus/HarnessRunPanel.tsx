@@ -213,24 +213,24 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
         </label>
       </div>
       <div className="harness-run-panel__actions">
-        <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy} onClick={() => void handlePrepare()}>
+        <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy || runs.length > 0} onClick={() => void handlePrepare()}>
           {busy === 'prepare' ? t('janus:harness.runs.preparing') : t('janus:harness.runs.prepare')}
         </button>
         {selected ? (
           <>
-            <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleStart()}>
+            <button type="button" className="blueprint-btn" disabled={!!busy || selected.local === false || selected.state !== 'queued'} onClick={() => void handleStart()}>
               {busy === 'start' ? t('janus:harness.runs.starting') : t('janus:harness.runs.start')}
             </button>
             <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleRefresh()}>
               {t('janus:harness.runs.refresh')}
             </button>
-            <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleCancel()}>
+            <button type="button" className="blueprint-btn" disabled={!!busy || selected.local === false || ['done', 'cancelled'].includes(selected.state)} onClick={() => void handleCancel()}>
               {busy === 'cancel' ? t('janus:harness.runs.cancelling') : t('janus:harness.runs.cancel')}
             </button>
-            <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleCloseout()}>
+            <button type="button" className="blueprint-btn" disabled={!!busy || selected.state !== 'done'} onClick={() => void handleCloseout()}>
               {busy === 'closeout' ? t('janus:harness.runs.closeoutChecking') : t('janus:harness.runs.closeout')}
             </button>
-            <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleHandoff()}>
+            <button type="button" className="blueprint-btn" disabled={!!busy || selected.local === false} onClick={() => void handleHandoff()}>
               {busy === 'handoff' ? t('janus:harness.runs.handoffWriting') : t('janus:harness.runs.handoff')}
             </button>
           </>
@@ -245,6 +245,8 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
               <label>
                 <input type="radio" name="harness-run" checked={run.runId === selectedId} onChange={() => setSelectedId(run.runId)} />
                 <span className="harness-run-panel__state" data-state={run.state}>{run.state}</span>
+                {run.validity ? <span>{run.validity}</span> : null}
+                {run.local === false ? <span>{t('janus:harness.runs.ownerLabel')}: {t('common:status.unknown')}</span> : null}
                 <span>{shortId(run.runId)}</span>
                 <span>{t('janus:harness.runs.attempt', { count: run.attempt })}</span>
                 <span>{t('janus:harness.runs.receipts', { count: run.receipts })}</span>

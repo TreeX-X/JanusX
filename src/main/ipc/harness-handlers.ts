@@ -9,7 +9,6 @@ import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { ParsedNote } from '@janus-agent/harness-core'
-import type { HarnessRun } from '@janus-agent/janus-agent'
 import {
   applyNodePatch,
   archiveNoteOp,
@@ -22,8 +21,9 @@ import {
   cancelTaskRun,
   closeoutTaskRun,
   getTaskRun,
+  getTaskRunState,
   handoffTaskRun,
-  listTaskRuns,
+  listTaskRunStates,
   prepareTaskRun,
   startTaskRun,
 } from '../harness/execution-adapter'
@@ -68,20 +68,6 @@ function throwRunFailure(errors: Array<{ code: string; message: string; path?: s
   const first = errors[0]
   const code = (first && RUN_FAILURE_CODES.has(first.code) ? first.code : 'SCHEMA_INVALID') as HarnessFailure['code']
   throw { code, message: first?.message ?? 'run operation failed', ...(first?.path ? { path: first.path } : {}) } satisfies HarnessFailure
-}
-
-function toRunState(run: HarnessRun): HarnessRunState {
-  return {
-    runId: run.runId,
-    taskUri: run.taskUri,
-    mode: run.mode,
-    state: run.state,
-    attempt: run.attempt,
-    executor: run.executor,
-    closeout: run.closeout,
-    receipts: run.receipts.length,
-    updatedAt: run.updatedAt,
-  }
 }
 
 async function withRoot(cwd: string): Promise<string> {
@@ -322,9 +308,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     async (_e, cwd: string, runId: string): Promise<HarnessRunState> => {
       const root = await withRoot(cwd)
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run status needs a run id', { path: 'runId' })
-      const loaded = await getTaskRun(root, runId)
-      if (!loaded.run) throwRunFailure(loaded.errors)
-      return toRunState(loaded.run)
+      return getTaskRunState(root, runId)
     },
   )
 
@@ -332,9 +316,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     HARNESS_COMMAND_CHANNELS.runList,
     async (_e, cwd: string): Promise<HarnessRunState[]> => {
       const root = await withRoot(cwd)
-      const listed = await listTaskRuns(root)
-      if (listed.errors.length > 0) throwRunFailure(listed.errors)
-      return listed.runs.map(toRunState)
+      return listTaskRunStates(root)
     },
   )
 

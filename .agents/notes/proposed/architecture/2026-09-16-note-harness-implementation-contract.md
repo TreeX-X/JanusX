@@ -125,6 +125,10 @@ queued 检查发现基线失效时也转 blocked；检查失败或预算耗尽�
 
 ### C4 收据、覆盖率与落地
 
+正式执行状态写入 task Note 的 execution，收据写入任务 primary 仓库的 `.agents/evidence/<id>.json`；本地 run、租约和对话不作为可分享结果的真源。受管宿主使用同一仓库锁、文件 expectedHash、本地 run 修订号和恢复日志更新 Note、收据引用及本地记录；任何目标出现外部新内容时停止恢复。详细规范与固定摘要 fixture 见 [执行持久化规范](../../../../../WorkFlowX/standards/harness-note/1/execution-persistence.md)。缺少本地运行记录只能重建结果，不能自动认领其他位置的活动执行。
+
+收据内容摘要使用对象键递归按 Unicode 码点排序的紧凑 UTF-8 JSON，数组顺序和字符串内容保持原样；文件缩进、对象键顺序和 JSON 文件的 LF/CRLF 不影响摘要。依赖 task 的 receiptHash 及 Git 中的收据身份比较均使用此摘要；代码清单仍比较原始字节。任务收据必须由同 mode、attempt 的 done task 正式引用才提供覆盖，不能用孤立收据或本地缓存提前宣告完成。
+
 Receipt 为 `harness-receipt/1`，创建后不可修改，字段为 id、taskUri?、mode、attempt、taskContractHash?、inputs、codeManifest、checks、coverage、review、createdAt、actor。codeManifest 每项含 repoId、path、sha256 或 deleted=true；必须覆盖任务修改的代码/配置/构建输入及实现者声明的关联验证输入，不包含本收据与会变化的 execution 元数据。coverage 每项为 `{uri,criterionId,criterionHash,checkIds}`，checkIds 必须非空且指向同收据内实际通过的检查。sha256 与 deleted=true 互斥，删除项验证目标不存在。taskUri 与 taskContractHash 同时存在或同时省略；仅无 task 的 xdo 允许省略，仍需固定 inputs 与实际检查。
 
 checks 为 `{id,kind,required,status,repoId,command?,exitCode?,summary,performedBy}`，status=passed/failed/not-run；command 复用 program/args/cwd，passed 命令需 exitCode=0，manual 需操作者与实际观察。review 为 `{kind:'self'|'independent'|'manual',verdict:'approved'|'needs-fix'|'blocked',reviewedManifestHash,actor}`。xflow 要 independent 且 actor 与实现者不同；身份只是宿主日志可核验的本地标识，非密码学证明。没有可运行检查时必须记录已接受的具体人工验收，不能自动填 passed。

@@ -28,6 +28,8 @@ Status: proposed
 
 ## Proposal
 
+各执行入口将结果写入同一 task Note 与正式 receipt，遵循[实施契约 C4](2026-09-16-note-harness-implementation-contract.md#c4-收据覆盖率与落地)。圆桌、聊天和运行面板展示共享证据的当前有效性；未携带本地运行记录的资产不能自动接管活动任务。
+
 ### 一个资产体系及其执行证据
 
 Note 是唯一需要人工与 Agent 持续维护的工程资产体系。证据和运行日志是附属记录，不拥有第二份需求、计划或执行状态：

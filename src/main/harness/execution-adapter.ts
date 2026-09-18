@@ -37,13 +37,35 @@ import {
   type OpResult,
   type RepairPacket,
 } from '@janus-agent/janus-agent'
-import { collectTaskBaseline } from '@janus-agent/harness-node'
+import { collectTaskBaseline, listTaskResults, readTaskResult, type TaskResult } from '@janus-agent/harness-node'
 import { type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
+import type { HarnessRunState } from '../../shared/ipc/harness'
 
 // Note: hosts share snapshot and task execution policy - see .agents/notes/implemented/architecture/2026-09-18-harness-execution-adapter-s8.md
 export { collectLiveSnapshot } from '@janus-agent/harness-node'
 export { prepareTaskTurn as prepareTaskExecutionTurn, verifyTaskExecution as executeTaskVerification } from '@janus-agent/janus-agent'
 export type { TaskTurnContext, TaskVerificationPorts } from '@janus-agent/janus-agent'
+
+// Note: desktop and terminal read the same portable proof - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
+function resultState(result: TaskResult, run?: HarnessRun): HarnessRunState {
+  const execution = result.execution!
+  return { runId: run?.runId ?? result.taskUri, taskUri: result.taskUri, mode: execution.mode, state: execution.state,
+    attempt: execution.attempt, executor: run?.executor ?? 'unknown', closeout: execution.closeout,
+    receipts: execution.receipts.length, updatedAt: run?.updatedAt ?? '', local: Boolean(run), validity: result.validity }
+}
+
+export async function listTaskRunStates(root: string): Promise<HarnessRunState[]> {
+  const results = await listTaskResults(root)
+  const runs = await listRuns(root)
+  return results.filter((result) => result.execution).map((result) => resultState(result, runs.find((run) => run.taskUri === result.taskUri)))
+}
+
+export async function getTaskRunState(root: string, ref: string): Promise<HarnessRunState> {
+  const run = ref.startsWith('note://') ? undefined : await loadRun(root, ref)
+  const result = await readTaskResult(root, run?.taskUri ?? ref)
+  if (!result.execution) throw result.errors[0] ?? { code: 'NOT_READY', message: 'task has no execution' }
+  return resultState(result, run)
+}
 
 function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
   return path === undefined ? { code, message } : { code, message, path }
@@ -227,6 +249,11 @@ export async function closeoutTaskRun(
   runId: string,
   check: CloseoutCheck,
 ): Promise<OpResult<{ satisfied: boolean; detail: string }>> {
+  if (runId.startsWith('note://')) {
+    const result = await readTaskResult(check.repoRoot, runId, { closeout: true })
+    if (!result.closeout) return { ok: false, run: null, errors: result.errors.length ? result.errors : [diag('NOT_READY', 'task has no completed result')], data: { satisfied: false, detail: 'unverified task' } }
+    return { ok: true, run: null, errors: [], data: result.closeout }
+  }
   const report = await closeoutRun(root, runId, check)
   if (!report.ok || !report.run) return report as OpResult<{ satisfied: boolean; detail: string }>
   return {

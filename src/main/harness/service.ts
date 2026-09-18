@@ -13,12 +13,17 @@ import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import {
   parseNote,
+  validateReceiptShape,
   type Diagnostic,
   type ParsedNote,
 } from '@janus-agent/harness-core'
 import {
   applyChangeSet,
   buildNoteIndex,
+  listTaskResults,
+  proveRequirementCoverage,
+  assertAssetPath,
+  withAssetLock,
   readWorkspaceMap,
   sha256HexBytes,
   watchNotes,
@@ -55,6 +60,7 @@ export interface ShareSnapshot {
   notes: Array<{ id: string; uri: string | null; relPath: string; markdown: string; sha256: string }>
   repositories: Array<{ repoId: string | null; name: string }>
   unresolved: Array<{ from: string; target: string }>
+  evidence: Array<{ id: string; json: string; sha256: string }>
 }
 
 export interface BindingRecord {
@@ -99,7 +105,7 @@ export class HarnessNoteService {
 
   async rescan(root: string): Promise<{ rev: number; ms: number }> {
     const start = Date.now()
-    const index = await buildNoteIndex(root)
+    const index = await withAssetLock(root, () => buildNoteIndex(root))
     const prev = this.indexes.get(root)?.rev ?? 0
     this.indexes.set(root, { rev: prev + 1, index })
     return { rev: prev + 1, ms: Date.now() - start }
@@ -124,7 +130,9 @@ export class HarnessNoteService {
   }
 
   async projectView(root: string): Promise<ProjectView> {
-    const { rev, index } = await this.cachedIndex(root)
+    const index = await withAssetLock(root, () => buildNoteIndex(root))
+    const rev = this.indexes.get(root)?.rev ?? 0
+    this.indexes.set(root, { rev, index })
     const entries: ProjectedEntry[] = []
     const invalid: ProjectView['invalid'] = []
     for (const e of index.entries) {
@@ -142,6 +150,28 @@ export class HarnessNoteService {
     )
     blueprint.canvasLayout = ui.canvasLayout
     blueprint.collapsedNodeIds = ui.collapsedNodeIds
+    // Note: coverage comes from portable receipts - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
+    if (index.repoId) {
+      const results = await listTaskResults(root)
+      for (const node of Object.values(blueprint.nodes)) {
+        const entry = entries.find((item) => item.note.meta.id === node.id)
+        if (!entry) continue
+        if (entry.note.meta.kind === 'task') {
+          const result = results.find((item) => item.taskUri === node.sourceUri)
+          if (result?.execution?.state === 'done' && result.validity === 'valid') { node.status = 'done'; node.progress = 100 }
+        }
+        if (entry.note.meta.kind === 'requirement') {
+          const proof = await proveRequirementCoverage(root, index.repoId, node.sourceUri!, entry.note)
+          for (const feature of node.features) {
+            const covered = !proof.uncovered.includes(feature.id)
+            feature.progress = covered ? 100 : 0
+            feature.status = covered ? 'done' : 'planned'
+          }
+          node.progress = entry.note.acs.length ? Math.round(100 * (entry.note.acs.length - proof.uncovered.length) / entry.note.acs.length) : 0
+          if (proof.covered) node.status = 'done'
+        }
+      }
+    }
     return { blueprint, rev, repoId: index.repoId, repoName, invalid }
   }
 
@@ -339,31 +369,45 @@ export class HarnessNoteService {
   // ── share (whitelist export; .local/machine paths/credentials never leave) ──
 
   async shareSnapshot(root: string, selection: ShareSelection = {}): Promise<ShareSnapshot> {
-    const { index } = await this.cachedIndex(root)
-    const repoName = await this.repoName(root)
-    const wanted = selection.ids ? new Set(selection.ids) : null
-    const notes: ShareSnapshot['notes'] = []
-    for (const e of index.entries) {
-      if (!e.note || e.diagnostics.length > 0) continue
-      if (wanted && !wanted.has(e.note.meta.id)) continue
-      const raw = await readFile(join(root, e.relPath), 'utf8')
-      notes.push({
-        id: e.note.meta.id,
-        uri: index.repoId ? `note://${index.repoId}/${e.note.meta.id}` : null,
-        relPath: e.relPath,
-        markdown: raw,
-        sha256: e.sha256,
-      })
-    }
-    return {
-      schema: 'harness-share/1',
-      repoId: index.repoId,
-      repoName,
-      exportedAt: new Date().toISOString(),
-      notes,
-      repositories: [{ repoId: index.repoId, name: repoName }],
-      unresolved: [],
-    }
+    return withAssetLock(root, async () => {
+      const index = await buildNoteIndex(root)
+      const repoName = await this.repoName(root)
+      const wanted = selection.ids ? new Set(selection.ids) : null
+      const notes: ShareSnapshot['notes'] = []
+      for (const e of index.entries) {
+        if (!e.note || e.diagnostics.length > 0) continue
+        if (wanted && !wanted.has(e.note.meta.id)) continue
+        const raw = await readFile(join(root, e.relPath), 'utf8')
+        notes.push({
+          id: e.note.meta.id,
+          uri: index.repoId ? `note://${index.repoId}/${e.note.meta.id}` : null,
+          relPath: e.relPath,
+          markdown: raw,
+          sha256: e.sha256,
+        })
+      }
+      const evidence: ShareSnapshot['evidence'] = []
+      const receiptIds = new Set(notes.flatMap((item) => parseNote(item.markdown).meta.execution?.receipts ?? []))
+      for (const id of receiptIds) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw { code: 'SCHEMA_INVALID', message: 'invalid receipt id' }
+        const relPath = `.agents/evidence/${id}.json`
+        await assertAssetPath(root, relPath)
+        const json = await readFile(join(root, relPath), 'utf8')
+        const receipt = JSON.parse(json)
+        if (validateReceiptShape(receipt).length || receipt.id !== id) throw { code: 'SCHEMA_INVALID', message: `invalid formal receipt: ${id}` }
+        evidence.push({ id, json, sha256: sha256HexBytes(Buffer.from(json)) })
+      }
+      return {
+        schema: 'harness-share/1',
+        repoId: index.repoId,
+        repoName,
+        exportedAt: new Date().toISOString(),
+        notes,
+        repositories: [{ repoId: index.repoId, name: repoName }],
+        unresolved: [],
+        evidence,
+      }
+    })
   }
 
   /** Export + leak gate in one step: the file lands only when clean. */

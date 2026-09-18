@@ -106,6 +106,8 @@ export interface HarnessRunState {
   closeout: string
   receipts: number
   updatedAt: string
+  local?: boolean
+  validity?: 'unverified' | 'valid' | 'stale'
 }
 
 export interface HarnessRunCloseoutResult {

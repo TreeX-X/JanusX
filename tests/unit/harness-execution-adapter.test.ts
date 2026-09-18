@@ -7,6 +7,8 @@ import {
   collectLiveSnapshot,
   finishTaskRun,
   getTaskRun,
+  getTaskRunState,
+  listTaskRunStates,
   handoffTaskRun,
   listTaskRuns,
   prepareTaskRun,
@@ -16,6 +18,7 @@ import {
   type PrepareTaskRunInput,
 } from '../../src/main/harness/execution-adapter'
 import { codeManifestHash, type Receipt } from '@janus-agent/harness-core'
+import { HarnessNoteService } from '../../src/main/harness/service'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 const TASK_ID = '11111111-1111-4111-8111-111111111111'
@@ -219,5 +222,21 @@ describe('harness execution adapter (S8-JanusX)', () => {
     expect((await recordTaskReceipt(root, runId, token, complete)).ok).toBe(true)
     expect((await finishTaskRun(root, runId, token, complete.id, snapshot.live)).ok).toBe(true)
     expect((await getTaskRun(root, runId)).run?.state).toBe('done')
+    const local = await getTaskRunState(root, runId)
+    expect(local).toMatchObject({ local: true, state: 'done', validity: 'valid' })
+    await fs.rm(join(root, '.agents', '.local'), { recursive: true, force: true })
+    const portable = await listTaskRunStates(root)
+    expect(portable).toMatchObject([{ runId: TASK_URI, local: false, state: 'done', validity: 'valid' }])
+    const service = new HarnessNoteService()
+    expect((await service.projectView(root)).blueprint.nodes[TASK_ID].status).toBe('done')
+    const share = await service.shareSnapshot(root)
+    expect(share.evidence.map((item) => item.id)).toEqual(['incomplete', 'complete'])
+    expect(JSON.stringify(share)).not.toContain(runId)
+    expect(JSON.stringify(share)).not.toContain('.local')
+    const file = join(root, '.agents', 'notes', '2026-09-18-probe--11111111.md')
+    await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace('AC-1: Prepare opens a queued run.', 'AC-1: Changed acceptance.'))
+    expect((await getTaskRunState(root, TASK_URI)).validity).toBe('stale')
+    await service.rescan(root)
+    expect((await service.projectView(root)).blueprint.nodes[TASK_ID].status).not.toBe('done')
   })
 })

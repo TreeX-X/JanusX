@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   prepareTaskRun: vi.fn(),
   startTaskRun: vi.fn(),
   getTaskRun: vi.fn(),
-  listTaskRuns: vi.fn(),
+  getTaskRunState: vi.fn(),
+  listTaskRunStates: vi.fn(),
   cancelTaskRun: vi.fn(),
   closeoutTaskRun: vi.fn(),
   handoffTaskRun: vi.fn(),
@@ -32,7 +33,8 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   prepareTaskRun: mocks.prepareTaskRun,
   startTaskRun: mocks.startTaskRun,
   getTaskRun: mocks.getTaskRun,
-  listTaskRuns: mocks.listTaskRuns,
+  getTaskRunState: mocks.getTaskRunState,
+  listTaskRunStates: mocks.listTaskRunStates,
   cancelTaskRun: mocks.cancelTaskRun,
   closeoutTaskRun: mocks.closeoutTaskRun,
   handoffTaskRun: mocks.handoffTaskRun,
@@ -107,13 +109,13 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     await expect(start({}, ROOT, 'run-1', 'desktop', { by: 'desktop' })).rejects.toMatchObject({ code: 'STALE_BASELINE' })
 
     const status = await handler(HARNESS_COMMAND_CHANNELS.runStatus)
-    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'running', attempt: 1 }, errors: [] })
+    mocks.getTaskRunState.mockResolvedValueOnce({ ...RUN, state: 'running', attempt: 1, receipts: 0 })
     await expect(status({}, ROOT, 'run-1')).resolves.toMatchObject({ runId: 'run-1', state: 'running', receipts: 0 })
-    mocks.getTaskRun.mockResolvedValueOnce({ run: null, errors: [{ code: 'IO_ERROR', message: 'gone' }] })
+    mocks.getTaskRunState.mockRejectedValueOnce({ code: 'IO_ERROR', message: 'gone' })
     await expect(status({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'IO_ERROR' })
 
     const list = await handler(HARNESS_COMMAND_CHANNELS.runList)
-    mocks.listTaskRuns.mockResolvedValueOnce({ runs: [RUN], errors: [] })
+    mocks.listTaskRunStates.mockResolvedValueOnce([RUN])
     await expect(list({}, ROOT)).resolves.toHaveLength(1)
 
     const cancel = await handler(HARNESS_COMMAND_CHANNELS.runCancel)

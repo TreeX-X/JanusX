@@ -45,6 +45,8 @@ janus-agentX 的 [持久子智能体 harness 提案](../../../../../janus-agentX
 
 ## Proposal
 
+执行结果的正式文件、可恢复写入、收据内容摘要与跨 checkout 重建遵循[实施契约 C4](2026-09-16-note-harness-implementation-contract.md#c4-收据覆盖率与落地)。共享结果不包含本地租约或执行拥有权；代码有效性与 Git 落地分别判定。
+
 ### 统一目标与边界
 
 拟定义 Harness Note Standard 1：一个 Note 文件就是一个蓝图节点，Note 集合及其显式关系构成项目图，蓝图是这个图的浏览与编辑视图。WorkflowX 负责规范，janus-agentX 提供共享实现和内置执行模式，JanusX 提供桌面体验。三者使用同一 schema、关系规则、模板与一致性样例。
