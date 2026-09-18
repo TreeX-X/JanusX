@@ -118,8 +118,7 @@ describe('CliInstaller', () => {
     expect(result.command).toContain('npm link')
   })
 
-  it('stops before link when the janus build fails', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'janusx-janus-fail-'))
+  it('stops before link when the janus build fails', async () => {    const root = await mkdtemp(join(tmpdir(), 'janusx-janus-fail-'))
     const packageDir = join(root, 'packages', 'cli')
     const { mkdir } = await import('fs/promises')
     await mkdir(packageDir, { recursive: true })
@@ -143,6 +142,29 @@ describe('CliInstaller', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('tsc error TS0000')
     expect(runs).toBe(1)
+  })
+
+  it('removes the npm package on uninstall through the same silent shell', async () => {
+    const npmPath = 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd'
+    const { installer, run } = createHarness({ npmPath })
+
+    await expect(installer.uninstall(EXTERNAL_CLI_TOOLS.codex)).resolves.toEqual({
+      success: true,
+      command: `& "${npmPath}" rm -g @openai/codex`,
+    })
+    expect(run.mock.calls[0][0]).toBe('powershell.exe')
+    expect(run.mock.calls[0][1].join(' ')).toContain('rm -g @openai/codex')
+  })
+
+  it('reports uninstall failures with the tail output and refuses non-npm tools', async () => {
+    const npmPath = 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd'
+    const { installer } = createHarness({ npmPath, exitCode: 1, stderr: 'npm ERR! not found' })
+
+    const failed = await installer.uninstall(EXTERNAL_CLI_TOOLS.codex)
+    expect(failed.success).toBe(false)
+    expect(failed.error).toContain('npm ERR! not found')
+
+    await expect(installer.uninstall(EXTERNAL_CLI_TOOLS.janus)).resolves.toMatchObject({ success: false })
   })
 })
 

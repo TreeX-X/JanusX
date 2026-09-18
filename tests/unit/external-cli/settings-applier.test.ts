@@ -96,16 +96,27 @@ describe('ClaudeSettingsApplier', () => {
     expect(JSON.parse(await readFile(livePath, 'utf8'))).toEqual({ env: { V: '1' } })
   })
 
-  it('serializes concurrent applies so the last writer wins atomically', async () => {
+  it('serializes concurrent applies so the second observes the first write', async () => {
     const homeDir = await createTempDir()
     await writeLive(homeDir, JSON.stringify({ env: {} }))
     const applier = new ClaudeSettingsApplier(homeDir)
 
-    await Promise.all([
+    const [first, second] = await Promise.all([
       applier.apply({ ...PROFILE, baseURL: 'https://a.example.com' }),
       applier.apply({ ...PROFILE, baseURL: 'https://b.example.com' }),
     ])
-    const next = JSON.parse(await readFile(join(homeDir, '.claude', 'settings.json'), 'utf8'))
-    expect(['https://a.example.com', 'https://b.example.com']).toContain(next.env.ANTHROPIC_BASE_URL)
+    // Whichever order the queue chose, one backup is the initial file and the
+    // other backup is the first writer's output: no interleave, no lost write.
+    const backupUrls = await Promise.all(
+      [first.backupPath!, second.backupPath!].map(async (backupPath) =>
+        (JSON.parse(await readFile(backupPath, 'utf8')) as { env?: Record<string, unknown> }).env?.ANTHROPIC_BASE_URL as string | undefined,
+      ),
+    )
+    expect(backupUrls.filter((url) => url === undefined)).toHaveLength(1)
+    const firstWrite = backupUrls.find((url) => url !== undefined)
+    expect(['https://a.example.com', 'https://b.example.com']).toContain(firstWrite)
+    const final = JSON.parse(await readFile(join(homeDir, '.claude', 'settings.json'), 'utf8'))
+    expect(['https://a.example.com', 'https://b.example.com']).toContain(final.env.ANTHROPIC_BASE_URL)
+    expect(final.env.ANTHROPIC_BASE_URL).not.toBe(firstWrite)
   })
 })

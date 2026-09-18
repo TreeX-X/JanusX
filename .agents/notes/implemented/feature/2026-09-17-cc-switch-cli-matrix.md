@@ -19,5 +19,5 @@ The LLM engine tab owns a CLI section below the provider list. It renders one ro
 
 ## Consequences
 
-- **Gains**: Providers show their consumers in one matrix; sync source survives restarts and provider deletions render honestly; four sync-state tests pin the record lifecycle and malformed-record tolerance (`tests/unit/cc-switch/sync-state.test.ts` — 26 tests green in the domain).
+- **Gains**: Providers show their consumers in one matrix; sync source survives restarts and provider deletions render honestly; four sync-state tests pin the record lifecycle and malformed-record tolerance (`tests/unit/cc-switch/sync-state.test.ts` — 26 tests green in the domain). The applier concurrency test now proves serialization instead of asserting it: under two concurrent applies one backup is the initial file and the other is the first writer's output, so the second writer observably saw the first.
 - **Costs and limits**: Only the default provider syncs from the UI today; the protocol already accepts explicit ids for later rows. One record per CLI means the matrix grows a row and a record field per tool, which fits the current two consumers but wants a table past a handful. Sync state is local-only with no cross-device story.

@@ -18,6 +18,7 @@ import type { ExternalCliRollbackResult } from '../../shared/ipc/external-cli'
 import { AuthType } from '@janusx/llm-core'
 import { llmConfigStore } from '../llm/ConfigStore'
 import { getExternalCliTool } from './tool-registry'
+import type { ExternalCliToolDescriptor } from './tool-registry'
 import { CliDetector } from './cli-detector'
 import { CliInstaller } from './installer'
 import { fetchLatestVersion } from './latest'
@@ -129,11 +130,27 @@ export class DefaultExternalCliService implements ExternalCliService {
     return { toolId, latestVersion: await fetchLatestVersion(tool.npmPackage) }
   }
 
+  /**
+   * Codex self-heal (`uninstall || install`): Codex ships no official
+   * self-update and a zero exit can mask a missing binary, so a broken
+   * install is removed before the reinstall runs. The removal is best
+   * effort: a failed uninstall still falls through to install, whose
+   * post-install re-probe owns the success verdict. Codex-only by design;
+   * other tools keep their anchor-aware upgrade path when it lands.
+   */
+  private async healBrokenCodex(tool: ExternalCliToolDescriptor): Promise<void> {
+    const probe = await this.detectorFor('codex').detect().catch(() => null)
+    if (probe && probe.installed && !probe.runnable) {
+      await this.installer.uninstall(tool)
+    }
+  }
+
   async install(toolId: ExternalCliToolId): Promise<ExternalCliInstallResult> {
     const tool = getExternalCliTool(toolId)
     if (!tool) return { toolId, success: false, error: 'Unsupported tool.' }
     // 全局忙守卫：npm -g 并发写会互相破坏，串行是硬性要求。
     if (this.installer.isBusy()) return { toolId, success: false, error: 'Another install is already running.' }
+    if (toolId === 'codex') await this.healBrokenCodex(tool)
     const outcome = await this.installer.install(tool)
     if (!outcome.success) return { toolId, success: false, command: outcome.command, error: outcome.error }
     // 安装后重探：展示=实际运行，绝不凭 exit 0 断言成功。

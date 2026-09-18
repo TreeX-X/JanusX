@@ -75,8 +75,7 @@ export function claudeKnownBinDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Plat
   return cliKnownBinDirs(env, platform, homeDir, getExternalCliTool('claude'))
 }
 
-export async function findExecutableOnPath(
-  names: readonly string[],
+export async function findExecutableOnPath(  names: readonly string[],
   searchDirs: readonly string[],
   isRegularFile: (path: string) => Promise<boolean>,
 ): Promise<string | undefined> {
@@ -92,6 +91,35 @@ export async function findExecutableOnPath(
     }
   }
   return undefined
+}
+
+/** Every matching binary in search order; feeds the multi-location confirm dialog. */
+export async function findAllExecutablesOnPath(
+  names: readonly string[],
+  searchDirs: readonly string[],
+  isRegularFile: (path: string) => Promise<boolean>,
+): Promise<string[]> {
+  const found: string[] = []
+  for (const directory of searchDirs) {
+    for (const name of names) {
+      const candidate = resolve(directory, name)
+      if (!isAbsolute(candidate)) continue
+      if (found.includes(candidate)) continue
+      try {
+        if (await isRegularFile(candidate)) found.push(candidate)
+      } catch {
+        continue
+      }
+    }
+  }
+  return found
+}
+
+export interface CliBinaryLocation {
+  path: string
+  source: ExternalCliBinarySource
+  /** The binary `detect()` would run: first PATH hit, else first known hit. */
+  isDefault: boolean
 }
 
 function lastLines(text: string, count: number): string {
@@ -167,6 +195,28 @@ export class CliDetector {
     const known = await findExecutableOnPath(names, knownDirs, path => this.isRegularAbsoluteFile(path))
     if (known) return { path: known, source: 'known-location' }
     return undefined
+  }
+
+  /**
+   * All installed locations, PATH hits first: per-location source, path,
+   * and default marker for the upgrade confirm dialog. Shares the exact
+   * search order with {@link findCandidate} so the marked default is the
+   * binary a bare probe would run.
+   */
+  async listLocations(): Promise<CliBinaryLocation[]> {
+    const names = binaryNames(this.tool, this.deps.platform)
+    const pathDirs = readPathValue(this.deps.env).split(delimiter).filter(Boolean)
+    const knownDirs = cliKnownBinDirs(this.deps.env, this.deps.platform, this.deps.homeDir, this.tool)
+    const seen = new Set<string>()
+    const locations: CliBinaryLocation[] = []
+    for (const [source, dirs] of [['path', pathDirs], ['known-location', knownDirs]] as const) {
+      for (const path of await findAllExecutablesOnPath(names, dirs, candidate => this.isRegularAbsoluteFile(candidate))) {
+        if (seen.has(path)) continue
+        seen.add(path)
+        locations.push({ path, source, isDefault: locations.length === 0 })
+      }
+    }
+    return locations
   }
 
   async detect(): Promise<ExternalCliDetectResult> {

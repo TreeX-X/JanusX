@@ -171,4 +171,38 @@ describe('CliDetector', () => {
       hint: 'npm i -g opencode-ai@latest',
     })
   })
+
+  it('lists every location with the probe default marked first', async () => {
+    const pathBinary = resolve('C:\\tools\\claude.cmd')
+    const knownBinary = resolve('C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd')
+    const { detector } = createHarness({
+      files: [pathBinary, knownBinary],
+      path: 'C:\\tools',
+      appData: 'C:\\Users\\test\\AppData\\Roaming',
+    })
+
+    await expect(detector.listLocations()).resolves.toEqual([
+      { path: pathBinary, source: 'path', isDefault: true },
+      { path: knownBinary, source: 'known-location', isDefault: false },
+    ])
+  })
+
+  it('lists known-only locations and dedupes overlapping search dirs', async () => {
+    const knownBinary = resolve('C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd')
+    const { detector } = createHarness({
+      files: [knownBinary],
+      path: 'C:\\Users\\test\\AppData\\Roaming\\npm',
+      appData: 'C:\\Users\\test\\AppData\\Roaming',
+    })
+
+    // Same directory visible through PATH and known dirs: one entry, PATH wins.
+    await expect(detector.listLocations()).resolves.toEqual([
+      { path: knownBinary, source: 'path', isDefault: true },
+    ])
+  })
+
+  it('lists nothing when the tool is absent', async () => {
+    const { detector } = createHarness({ toolId: 'pi' })
+    await expect(detector.listLocations()).resolves.toEqual([])
+  })
 })

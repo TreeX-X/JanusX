@@ -89,8 +89,7 @@ export class CliInstaller {
     }
   }
 
-  buildCommand(npmPath: string, tool: ExternalCliToolDescriptor): { file: string; args: readonly string[]; display: string } {
-    if (!tool.npmPackage) throw new Error(`${tool.displayName} is not npm-distributed.`)
+  buildCommand(npmPath: string, tool: ExternalCliToolDescriptor): { file: string; args: readonly string[]; display: string } {    if (!tool.npmPackage) throw new Error(`${tool.displayName} is not npm-distributed.`)
     const target = `${tool.npmPackage}@latest`
     if (this.deps.platform === 'win32') {
       // 与探测同理走 PowerShell：npm 报错与缺 node 的 cmd 报错都是 GBK，固定 UTF-8 才可读。
@@ -102,6 +101,20 @@ export class CliInstaller {
       }
     }
     return { file: npmPath, args: ['i', '-g', target], display: `${npmPath} i -g ${target}` }
+  }
+
+  /** Codex self-heal half: `uninstall || install` starts by removing the broken bits. */
+  buildUninstallCommand(npmPath: string, tool: ExternalCliToolDescriptor): { file: string; args: readonly string[]; display: string } {
+    if (!tool.npmPackage) throw new Error(`${tool.displayName} is not npm-distributed.`)
+    if (this.deps.platform === 'win32') {
+      const script = `$OutputEncoding=[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); & ${quotePowerShellPath(npmPath)} rm -g ${tool.npmPackage}; exit $LASTEXITCODE`
+      return {
+        file: 'powershell.exe',
+        args: ['-NoProfile', '-NonInteractive', '-Command', script],
+        display: `& "${npmPath}" rm -g ${tool.npmPackage}`,
+      }
+    }
+    return { file: npmPath, args: ['rm', '-g', tool.npmPackage], display: `${npmPath} rm -g ${tool.npmPackage}` }
   }
 
   /** 自有源码更新：包目录内 build 后全局 link；两步任一步失败即停并透出尾部输出。 */
@@ -160,6 +173,33 @@ export class CliInstaller {
           success: false,
           command: command.display,
           error: lastLines(`${result.stderr}\n${result.stdout}`, 8) || `Install exited with code ${result.exitCode}.`,
+        }
+      }
+      return { success: true, command: command.display }
+    } finally {
+      this.running = false
+    }
+  }
+
+  /**
+   * Best-effort removal for self-heal flows. The caller decides whether a
+   * failed removal blocks the reinstall; a missing npm or non-npm tool is
+   * reported the same honest way as {@link install}.
+   */
+  async uninstall(tool: ExternalCliToolDescriptor): Promise<{ success: boolean; command?: string; error?: string }> {
+    if (this.running) return { success: false, error: 'Another install is already running.' }
+    this.running = true
+    try {
+      const located = await this.locateNpm()
+      if (!located) return { success: false, command: tool.manualInstallCommand, error: 'npm was not found. Run the manual command in a terminal.' }
+      if (!tool.npmPackage) return { success: false, command: tool.manualInstallCommand, error: 'No uninstall strategy for this tool.' }
+      const command = this.buildUninstallCommand(located.path, tool)
+      const result = await this.deps.run(command.file, command.args, { timeout: INSTALL_TIMEOUT_MS, pathDirs: located.pathDirs })
+      if (result.exitCode !== 0) {
+        return {
+          success: false,
+          command: command.display,
+          error: lastLines(`${result.stderr}\n${result.stdout}`, 8) || `Uninstall exited with code ${result.exitCode}.`,
         }
       }
       return { success: true, command: command.display }
