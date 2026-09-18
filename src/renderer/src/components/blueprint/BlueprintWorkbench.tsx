@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { JanusIdentityCore } from '@/components/janus/JanusIdentityCore'
+import { useOptionalJanusChatController } from '@/components/janus/JanusChatProvider'
 import { BlueprintView } from './BlueprintView'
 import { HarnessScopeBar } from './HarnessScopeBar'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
@@ -36,6 +37,9 @@ interface WorkbenchCardPlan {
 export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps) {
   const { t } = useI18n('blueprint')
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const ownerRepoId = currentBlueprint?.nodes[currentBlueprint.rootNodeId]?.sourceUri?.split('/')[2]
+  const chat = useOptionalJanusChatController(ownerRepoId && currentBlueprint ? { ownerRepoId, viewId: currentBlueprint.id } : undefined)
+  const projectChat = chat?.engineeringContext?.viewRef?.viewId === currentBlueprint?.id ? chat : null
   const activeSession = useBlueprintStore((s) => s.activeSession)
   const maintenanceTasks = useBlueprintMaintenanceStore((s) => s.tasks)
   const maintenanceInitialized = useBlueprintMaintenanceStore((s) => s.initialized)
@@ -102,6 +106,8 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
 
   const maintenanceState = useMemo(() => {
     if (!currentBlueprint) return { tone: 'disabled', label: t('blueprint:workbench.stateDisconnected') }
+    if (projectChat?.isStreaming) return { tone: 'working', label: t('blueprint:workbench.stateAnalyzing') }
+    if (projectChat?.error) return { tone: 'error', label: t('blueprint:workbench.stateNeedAttention') }
     if (!maintenanceTask) return { tone: 'idle', label: t('blueprint:workbench.stateStandby') }
     if (maintenanceTask.status === 'analyzing' || maintenanceTask.status === 'applying') {
       return { tone: 'working', label: maintenanceTask.status === 'applying' ? t('blueprint:workbench.stateApplying') : t('blueprint:workbench.stateAnalyzing') }
@@ -109,7 +115,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
     if (maintenanceTask.status === 'proposal-ready') return { tone: 'attention', label: t('blueprint:workbench.statePendingReview') }
     if (maintenanceTask.status === 'failed' || maintenanceTask.status === 'stale') return { tone: 'error', label: t('blueprint:workbench.stateNeedAttention') }
     return { tone: 'active', label: t('blueprint:workbench.stateInConversation') }
-  }, [currentBlueprint, maintenanceTask, t])
+  }, [currentBlueprint, maintenanceTask, projectChat?.isStreaming, projectChat?.error, t])
   const maintenanceIdentityState = maintenanceState.tone === 'working'
     ? 'scanning'
     : maintenanceState.tone === 'error'

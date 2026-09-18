@@ -518,6 +518,21 @@
     }
   },
   "harness": {
+    "contract": {
+      "title": "Task contract",
+      "add": "Add",
+      "scope": "Scope",
+      "paths": "Allowed paths",
+      "criteria": "Acceptance criteria",
+      "references": "Requirement criteria",
+      "verification": "Verification",
+      "program": "Program",
+      "arguments": "Arguments",
+      "directory": "Working directory",
+      "adopt": "Adopt task",
+      "accepted": "Task accepted",
+      "primary": "Primary repository"
+    },
     "runs": {
       "title": "Task runs",
       "empty": "No runs for this task yet. Prepare one to pin the baseline.",

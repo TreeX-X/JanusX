@@ -340,10 +340,14 @@ class BlueprintMaintenanceService {
         createdAt: now, updatedAt: now,
       }
       if (!task.goal) throw new Error('维护目标不能为空')
-      task.messages.push({ id: randomUUID(), role: 'user', content: task.goal, createdAt: now })
+      if (input.conversationId) {
+        if (blueprint.source !== 'harness' || !input.conversationId.trim()) throw new Error('Project conversation requires a Note blueprint')
+        task.conversationId = input.conversationId
+        task.status = 'active'
+      } else task.messages.push({ id: randomUUID(), role: 'user', content: task.goal, createdAt: now })
       this.tasks.set(task.id, task)
       this.emit(task)
-      void this.respond(task.id, input.providerId, input.modelId)
+      if (!task.conversationId) void this.respond(task.id, input.providerId, input.modelId)
       return publicTask(task)
     } finally {
       this.startingBlueprints.delete(input.blueprintId)
@@ -352,6 +356,7 @@ class BlueprintMaintenanceService {
 
   async message(input: BlueprintMaintenanceMessageInput): Promise<BlueprintMaintenanceTask> {
     const task = this.requireActive(input.taskId)
+    if (task.conversationId) throw new Error('Use the linked project conversation')
     const content = input.content.trim()
     if (!content) throw new Error('消息不能为空')
     if (task.status === 'analyzing' || task.status === 'applying') throw new Error('当前任务正在处理')
@@ -363,9 +368,25 @@ class BlueprintMaintenanceService {
 
   async propose(input: BlueprintMaintenanceProposalInput): Promise<BlueprintMaintenanceTask> {
     const task = this.requireActive(input.taskId)
+    if (task.conversationId) throw new Error('Use the linked project conversation')
     if (task.status === 'analyzing' || task.status === 'applying') throw new Error('当前任务正在处理')
     void this.generateProposal(task.id, input.providerId, input.modelId)
     return publicTask(task)
+  }
+
+  // Note: proposals run inside the shared chat turn - see .agents/notes/implemented/architecture/2026-09-18-project-conversation-controller.md
+  async proposeForConversation(input: {
+    taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
+    providerId: string; modelId?: string; signal: AbortSignal; chatSession: ChatSessionRuntime; workspaceIds: string[]
+  }): Promise<string> {
+    const task = this.requireActive(input.taskId)
+    if (task.conversationId !== input.conversationId) throw new Error('PERMISSION_DENIED: proposal belongs to another conversation')
+    if (taskWorkspaces(task).some((workspace) => !input.workspaceIds.includes(workspace.workspaceId))) throw new Error('PERMISSION_DENIED: proposal workspace is detached')
+    if (task.status === 'analyzing' || task.status === 'applying') throw new Error('BUSY: proposal is already active')
+    await this.generateProposal(task.id, input.providerId, input.modelId, input)
+    if (input.signal.aborted) return ''
+    if (task.error) throw new Error(task.error)
+    return task.changeSet ? [task.changeSet.reason, task.changeSet.digest].filter(Boolean).join('\n\n') : task.phase
   }
 
   async apply(input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult> {
@@ -901,12 +922,18 @@ class BlueprintMaintenanceService {
     }
   }
 
-  private async generateProposal(taskId: string, providerId?: string, modelId?: string): Promise<void> {
+  private async generateProposal(taskId: string, providerId?: string, modelId?: string, shared?: {
+    messages: Array<{ role: string; content: string }>; signal: AbortSignal; chatSession: ChatSessionRuntime
+  }): Promise<void> {
     const task = this.requireActive(taskId)
     const previousChangeSet = task.changeSet
     const controller = new AbortController()
     this.controllers.get(taskId)?.abort(); this.controllers.set(taskId, controller)
-    const chatSession = this.getSession(taskId)
+    const chatSession = shared?.chatSession ?? this.getSession(taskId)
+    const conversation = shared?.messages ?? task.messages
+    const abort = () => controller.abort()
+    shared?.signal.addEventListener('abort', abort, { once: true })
+    if (shared?.signal.aborted) controller.abort()
     task.status = 'analyzing'; task.progress = 8; task.phase = '读取提案上下文'; task.error = undefined; this.emit(task)
     try {
       const blueprint = await this.loadTaskBlueprint(task)
@@ -955,7 +982,7 @@ class BlueprintMaintenanceService {
         { role: 'system', content: 'You are JanusX Blueprint Maintenance proposal context.' },
         ...(recall?.messages ?? []),
         ...(traceHistory ? [traceHistory] : []),
-        { role: 'user', content: `Blueprint: ${blueprint.name}\nGoal: ${task.goal}\nConversation:\n${task.messages.map((message) => `${message.role}: ${message.content}`).join('\n')}\nCurrent pending proposal:\n${changeSetContext(task)}\nNodes:\n${blueprintNodes}\nAuthorized workspace evidence:${workspace || '\n(no readable evidence files)'}` },
+        { role: 'user', content: `Blueprint: ${blueprint.name}\nGoal: ${task.goal}\nConversation:\n${conversation.map((message) => `${message.role}: ${message.content}`).join('\n')}\nCurrent pending proposal:\n${changeSetContext(task)}\nNodes:\n${blueprintNodes}\nAuthorized workspace evidence:${workspace || '\n(no readable evidence files)'}` },
       ]
       let budgetedEvidenceNote = ''
       try {
@@ -969,7 +996,7 @@ class BlueprintMaintenanceService {
         // goal+conversation prompt rather than failing the whole proposal.
         proposalDraft[proposalDraft.length - 1] = {
           role: 'user',
-          content: `Blueprint: ${blueprint.name}\nGoal: ${task.goal}\nConversation:\n${task.messages.slice(-10).map((message) => `${message.role}: ${message.content}`).join('\n')}\nNodes:\n${blueprintNodes.slice(0, 12000)}`,
+          content: `Blueprint: ${blueprint.name}\nGoal: ${task.goal}\nConversation:\n${conversation.slice(-10).map((message) => `${message.role}: ${message.content}`).join('\n')}\nNodes:\n${blueprintNodes.slice(0, 12000)}`,
         }
         budgetedEvidenceNote = '\n[注意：证据过长已压缩，本次提案以对话结论为准。]'
       }
@@ -1035,7 +1062,7 @@ class BlueprintMaintenanceService {
         if (previousChangeSet) task.changeSetHistory.push(structuredClone(previousChangeSet))
         task.changeSet = nextChangeSet
       }
-      task.messages.push({ id: randomUUID(), role: 'assistant', content: `${object.summary}\n\n${digest}`, createdAt: now })
+      if (!shared) task.messages.push({ id: randomUUID(), role: 'assistant', content: `${object.summary}\n\n${digest}`, createdAt: now })
       if (nextChangeSet) {
         this.captureKnowledge(task, 'maintenance-proposal', `提案 v${version}：${object.summary}\n${digest.slice(0, 2000)}`, `维护提案 v${version}：${blueprint.name}`)
       }
@@ -1049,6 +1076,12 @@ class BlueprintMaintenanceService {
       task.phase = previousChangeSet ? '提案生成失败，保留当前提案' : '提案生成失败'
       task.error = error instanceof Error ? error.message : String(error); this.emit(task)
     } finally {
+      shared?.signal.removeEventListener('abort', abort)
+      if (shared && controller.signal.aborted && task.status === 'analyzing') {
+        task.status = previousChangeSet ? 'proposal-ready' : 'active'
+        task.phase = '已停止生成提案'
+        this.emit(task)
+      }
       if (this.controllers.get(taskId) === controller) this.controllers.delete(taskId)
     }
   }

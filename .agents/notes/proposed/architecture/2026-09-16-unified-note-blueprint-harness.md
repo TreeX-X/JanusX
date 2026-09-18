@@ -8,7 +8,9 @@ Status: proposed
 
 本文依据 2026-09-16 的本地工作树分析，基准提交分别为 JanusX `017f4fc`、janus-agentX `0af25b5`、WorkFlowX `44bc0ae`。JanusX 有知识与团队相关未提交改动及提案，janus-agentX 有未跟踪的 `.agents/plans/`；这些内容不视作已发布能力。设计工作只维护本文及配套闭环提案，不修改程序、实际工作流规则或无关提案，不实施迁移。文中标为“拟新增”的路径、命令和包均为设计目标。
 
-实施先读 [实施契约与 Agent 交接](2026-09-16-note-harness-implementation-contract.md)：C1–C6 唯一定义具体字段、接口、哈希、状态和错误，C7–C8 定义模块落点及实施依赖。本文负责通用资产、独立使用、分享与导航；[讨论到实施闭环方案](2026-09-16-roundtable-chat-harness-loop.md) 负责圆桌、聊天和实施的产品行为。三篇均为待实施设计；协议变更先修改实施契约，再同步产品描述和示例。
+实施先读 [实施契约与 Agent 交接](2026-09-16-note-harness-implementation-contract.md)：C1–C6 唯一定义具体字段、接口、哈希、状态和错误，C7–C8 定义模块落点及实施依赖。本文负责通用资产、独立使用、分享与导航；[讨论到实施闭环方案](2026-09-16-roundtable-chat-harness-loop.md) 负责圆桌、聊天和实施的产品行为。三篇仍为 proposed 设计，部分阶段已有实现，不能据此视为标准已整体启用；协议变更先修改实施契约，再同步产品描述和示例。
+
+当前实现总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。2026-09-18 的增量补齐新 Note 蓝图与主 Chat 的共享会话，以及圆桌 action 草稿的任务合同编辑与显式采纳。正式证据和新 checkout 结果重建已具备集成测试；桌面真实执行器、完整跨宿主验收、发行矩阵及三仓库规则切换仍未完成。下一批范围见 [闭环提案的当前状态](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步)。
 
 ### 三个仓库的实际职责
 

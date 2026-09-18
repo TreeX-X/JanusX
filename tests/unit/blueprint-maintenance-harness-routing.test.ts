@@ -81,6 +81,7 @@ vi.mock('@janus-agent/agent-core', () => ({
 }))
 
 import { blueprintMaintenanceService } from '../../src/main/janus/maintenance/service'
+import { ChatSessionRuntime } from '@janus-agent/chat-core'
 
 const PROJECT_ID = 'harness:project:8fa19f17'
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
@@ -123,6 +124,7 @@ function projectBlueprint(): Blueprint {
     contentRevision: currentRev,
     id: PROJECT_ID,
     name: 'Project',
+    source: 'harness',
     description: '',
     rootNodeId: REQ,
     nodeIds: [REQ],
@@ -223,6 +225,22 @@ async function removeAudits(): Promise<void> {
 }
 
 describe('maintenance harness routing (S6-c slice 2b)', () => {
+  it('binds proposal-only maintenance to shared conversation history and rejects foreign callers', async () => {
+    const task = await blueprintMaintenanceService.start({ blueprintId: PROJECT_ID, workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir, nodeScope: { type: 'blueprint' }, goal: 'Maintain', conversationId: 'shared' })
+    expect(task).toMatchObject({ status: 'active', conversationId: 'shared', messages: [] })
+    await expect(blueprintMaintenanceService.message({ taskId: task.id, content: 'other loop' })).rejects.toThrow('linked project conversation')
+    await expect(blueprintMaintenanceService.propose({ taskId: task.id })).rejects.toThrow('linked project conversation')
+    const input = { taskId: task.id, conversationId: 'shared', providerId: 'p', modelId: 'm', messages: [{ role: 'user', content: 'Preserve the exact selected scope' }], signal: new AbortController().signal, chatSession: new ChatSessionRuntime(), workspaceIds: ['ws-1'] }
+    await expect(blueprintMaintenanceService.proposeForConversation({ ...input, conversationId: 'foreign' })).rejects.toThrow('another conversation')
+    await expect(blueprintMaintenanceService.proposeForConversation({ ...input, workspaceIds: [] })).rejects.toThrow('detached')
+    mocks.getLanguageModel.mockResolvedValue({})
+    mocks.generateObject.mockResolvedValue({ object: { summary: 'Shared proposal', operations: [updateOp('shared-op', REQ, 'Revised requirement')] } })
+    const text = await blueprintMaintenanceService.proposeForConversation(input)
+    expect(text).toContain('Shared proposal')
+    expect(serviceOf().tasks.get(task.id)?.changeSet?.operations[0]).toMatchObject({ after: { title: 'Revised requirement' } })
+    expect(mocks.generateObject.mock.calls.at(-1)?.[0].messages[0].content).toContain('Preserve the exact selected scope')
+    expect(serviceOf().tasks.get(task.id)?.messages).toEqual([])
+  })
   beforeEach(async () => {
     currentRev = 7
     recordsDir = await fs.mkdtemp(join(tmpdir(), 'maint-routing-records-'))

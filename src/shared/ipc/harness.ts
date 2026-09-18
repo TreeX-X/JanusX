@@ -1,4 +1,5 @@
 import type { Blueprint } from '../janus/types'
+import type { WorkContract } from '@janus-agent/harness-core'
 
 export const HARNESS_COMMAND_CHANNELS = {
   resolve: 'harness:resolve',
@@ -16,6 +17,8 @@ export const HARNESS_COMMAND_CHANNELS = {
   runCancel: 'harness:run:cancel',
   runCloseout: 'harness:run:closeout',
   runHandoff: 'harness:run:handoff',
+  taskRead: 'harness:task:read',
+  taskAdopt: 'harness:task:adopt',
 } as const
 
 export const HARNESS_EVENT_CHANNELS = {
@@ -115,7 +118,24 @@ export interface HarnessRunCloseoutResult {
   detail: string
 }
 
+export interface HarnessTaskContractInput {
+  scope: string
+  criteria: Array<{ id: string; text: string }>
+  work: WorkContract
+}
+
+export interface HarnessTaskDraft {
+  uri: string
+  hash: string
+  lifecycle: string
+  repoId: string
+  hasExecution: boolean
+  contract: HarnessTaskContractInput
+}
+
 export interface HarnessAPI {
+  taskRead(cwd: string, uri: string): Promise<HarnessTaskDraft>
+  taskAdopt(cwd: string, uri: string, expectedHash: string, contract: HarnessTaskContractInput): Promise<HarnessTaskDraft>
   resolve(cwd: string): Promise<HarnessResolveResult>
   projectGraph(cwd: string): Promise<HarnessGraphResult | null>
   rescan(cwd: string): Promise<{ rev: number; ms: number }>

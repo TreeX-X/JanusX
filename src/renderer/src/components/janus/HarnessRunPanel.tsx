@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 // Note: desktop entry to task runs — see .agents/notes/implemented/architecture/2026-09-18-harness-execution-adapter-s8.md
 import { useI18n } from '@/i18n/useI18n'
+import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
+import { TaskContractEditor } from './TaskContractEditor'
 import {
   runCancel,
   runCloseout,
@@ -40,6 +42,7 @@ function shortId(runId: string): string {
 export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const { t } = useI18n('janus')
   const [runs, setRuns] = useState<HarnessRunState[]>([])
+  const [draft, setDraft] = useState<HarnessTaskDraft | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<HarnessRunMode>('xdo')
   const [closeout, setCloseout] = useState<HarnessRunCloseout>('commit-required')
@@ -53,6 +56,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
 
   const load = useCallback(async () => {
     try {
+      setDraft(await window.electron.harness.taskRead(cwd, taskUri))
       const listed = await runList(cwd)
       const own = listed.filter((run) => run.taskUri === taskUri)
       setRuns(own)
@@ -65,6 +69,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
 
   useEffect(() => {
     setRuns([])
+    setDraft(null)
     setSelectedId(null)
     setNotice(null)
     setCloseoutMsg(null)
@@ -185,6 +190,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
       <div className="harness-run-panel__head">
         <span className="harness-run-panel__title">{t('janus:harness.runs.title')}</span>
       </div>
+      {draft ? <TaskContractEditor key={`${draft.uri}:${draft.hash}`} draft={draft} cwd={cwd} onReload={() => void load()} onAdopted={(accepted) => { setDraft(accepted); void load() }} /> : null}
       <div className="harness-run-panel__row">
         <label>
           <span>{t('janus:harness.runs.modeLabel')}</span>
@@ -213,7 +219,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
         </label>
       </div>
       <div className="harness-run-panel__actions">
-        <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy || runs.length > 0} onClick={() => void handlePrepare()}>
+        <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy || runs.length > 0 || draft?.lifecycle !== 'accepted'} onClick={() => void handlePrepare()}>
           {busy === 'prepare' ? t('janus:harness.runs.preparing') : t('janus:harness.runs.prepare')}
         </button>
         {selected ? (

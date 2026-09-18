@@ -6,7 +6,13 @@ Status: proposed
 
 [统一资产标准](2026-09-16-unified-note-blueprint-harness.md) 与 [圆桌聊天闭环](2026-09-16-roundtable-chat-harness-loop.md) 定义了产品目标，但仅凭叙述不足以决定解析器、任务校验、事务恢复、接口和交付边界。实现 Agent 若自行补齐这些语义，三个仓库可能产生不同格式或把 Hybrid Tree 换名重建。本文固定第一版实现契约与执行入口；两篇设计负责动机及产品行为，本文负责具体字段、算法、错误和实施验证。冲突应按字段拥有章节回修，不能静默选择有利于当前实现的一篇。
 
-审阅定位的主要缺口为：执行范围只有 prose、AC 引用与状态门禁缺少机器形状、合同哈希没有确定算法、closeout 提前声明提交成功、同名来源包缺少重试规则、轻量 CLI 依赖闭包不成立，以及缺少按仓库分配的可验证交付步骤。本文解决这些缺口。本文件及全部拟新增模块、命令、fixtures 均为待实施，不表示已实现或已测试。
+审阅定位的主要缺口为：执行范围只有 prose、AC 引用与状态门禁缺少机器形状、合同哈希没有确定算法、closeout 提前声明提交成功、同名来源包缺少重试规则、轻量 CLI 依赖闭包不成立，以及缺少按仓库分配的可验证交付步骤。本文固定这些契约；设计条款本身不表示已实现或已测试。各阶段实际证据见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
+
+2026-09-18 的增量实现覆盖新 Note 蓝图的 [共享 conversation/controller](../../implemented/architecture/2026-09-18-project-conversation-controller.md) 及 [draft task 合同采纳](../../implemented/architecture/2026-09-18-task-contract-adoption.md)。这补齐 S6 的双入口状态与 S5 到 S8 的采纳入口，但不代表旧维护流程移除、桌面真实 executor、Ink、外部 runners 或 S9 发行验收完成。下一步及其验收场景由 [闭环提案](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步) 维护；本契约的状态与收据规则不变。
+
+本批仅修改 JanusX，基线为 `902b7bb`；验证时 janus-agentX HEAD 为 `d93b557`、WorkFlowX HEAD 为 `c36309d`，后两仓本批无修改。标准仍是 `harness-note/1`、`1.0.0-s1.1` candidate；WorkFlowX profile 记录摘要 `62e2ae8b674dd5510c9e7b8a2526e4b81710c1b6ad8d075837673708eb3c4a7a`，本批未重新生成标准 bundle 或验证发行组合。
+
+本批实际检查为 `npm run typecheck`、`npm run build`、`npm run check:package-boundary`、`npm run i18n:types`、`npm run i18n:check` 及修改源码的 ESLint（0 error、5 条既有 warning）。相关回归命令 `npm run test:unit -- --run tests/unit/blueprint-maintenance tests/unit/maintenance-harness-apply.test.ts tests/unit/harness tests/unit/janus-chat tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/task-contract-adoption.test.ts tests/unit/roundtable-artifact-bundle.test.ts` 通过 25 suites / 139 tests；旧维护用例仍输出知识处理和审计写入警告。设置 `JANUS_E2E_PORT=41739` 与 `NO_PROXY=localhost,127.0.0.1,::1` 后，`npx playwright test tests/e2e/project-conversation.spec.ts` 通过 2 项，无页面脚本错误，桌面与 390px 表单截图已检查。未运行完整 `verify`、真实模型 Electron、发行包和跨平台用例，因为本批只验收共享 controller、合同采纳与共享执行内核的集成边界。
 
 ## Proposal
 

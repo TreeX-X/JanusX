@@ -17,6 +17,8 @@ import {
   nodeTypeToKind,
 } from '../harness/artifact-producer'
 import { harnessNoteService } from '../harness/service'
+import { adoptTask, readTaskDraft } from '../harness/task-adoption'
+import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
 import {
   cancelTaskRun,
   closeoutTaskRun,
@@ -90,6 +92,8 @@ async function currentNote(root: string, uri: string): Promise<CurrentNote> {
 }
 
 export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): void {
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.taskRead, async (_e, cwd: string, uri: string) => readTaskDraft(await withRoot(cwd), uri))
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.taskAdopt, async (_e, cwd: string, uri: string, expectedHash: string, contract: HarnessTaskContractInput) => adoptTask(await withRoot(cwd), uri, expectedHash, contract))
   harnessNoteService.onChange((event) => {
     getWindow()?.webContents.send(HARNESS_EVENT_CHANNELS.changed, {
       root: event.root,

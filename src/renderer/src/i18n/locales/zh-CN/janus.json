@@ -518,6 +518,21 @@
     }
   },
   "harness": {
+    "contract": {
+      "title": "任务合同",
+      "add": "添加",
+      "scope": "工作范围",
+      "paths": "允许修改的路径",
+      "criteria": "验收标准",
+      "references": "需求验收项",
+      "verification": "验证",
+      "program": "程序",
+      "arguments": "参数",
+      "directory": "工作目录",
+      "adopt": "采纳任务",
+      "accepted": "任务已采纳",
+      "primary": "主仓库"
+    },
     "runs": {
       "title": "任务运行",
       "empty": "该任务暂无运行。准备一次运行以固定基线。",

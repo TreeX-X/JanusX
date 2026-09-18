@@ -216,6 +216,7 @@ export interface BlueprintChangeSet {
 
 export interface BlueprintMaintenanceTask {
   id: string
+  conversationId?: string
   blueprintId: string
   blueprintName: string
   baseRevision: number
@@ -244,6 +245,7 @@ export interface BlueprintMaintenanceWorkspace {
 
 export interface BlueprintMaintenanceStartInput {
   blueprintId: string
+  conversationId?: string
   workspaceId: string
   workspaceName: string
   workspacePath: string

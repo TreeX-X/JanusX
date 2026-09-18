@@ -6,7 +6,15 @@ Status: proposed
 
 圆桌讨论、蓝图维护和工程实施需要连成同一个可追踪过程：讨论产出可直接维护的 Note，蓝图展示方案和关系，任务 Note 吸收执行与质量门禁的职责，结果回到原有资产。新标准将移除 Hybrid Tree 独立机制。janus-chat 需要继续作为日常助手，同时利用 janus-agentX 的能力理解和操作这一流程。蓝图内的 Janus 应成为同一个 janus-chat 的工程入口，避免维护两个近似但行为不同的助手。
 
-通用身份、文件结构、分享边界、Wiki 导航和 WorkflowX 独立使用规则见 [统一 Note、蓝图与 Harness 标准](2026-09-16-unified-note-blueprint-harness.md)。本提案只定义跨功能闭环，不重复定义上述规则；所有接口、字段和目录扩展均为待实现方案。本次分析使用 2026-09-16 的工作树，包含已有未提交修改，代码读取结果不等同于已发布能力。本轮只编写旧格式 proposed Note，不改变产品行为。
+通用身份、文件结构、分享边界、Wiki 导航和 WorkflowX 独立使用规则见 [统一 Note、蓝图与 Harness 标准](2026-09-16-unified-note-blueprint-harness.md)。本提案只定义跨功能闭环，不重复定义上述规则。初始分析使用 2026-09-16 的工作树，包含已有未提交修改；下表保留当时的接点和断点。当前实现边界见下述实施状态及对应 implemented Note，不能把设计要求直接当成已发布能力。
+
+### 当前实施状态与下一步
+
+2026-09-18 的 [共享项目会话](../../implemented/architecture/2026-09-18-project-conversation-controller.md) 已将新 Note 蓝图入口接入主 Chat controller，共享消息、单 turn、停止、steering、模型、资源、问题及审批。维护任务只保留提案与审计，采用共享历史生成提案。旧 JSON 蓝图和已有未关联任务仍走旧维护路径，故“原维护 loop 全面退出”尚未验收。
+
+[任务合同采纳](../../implemented/architecture/2026-09-18-task-contract-adoption.md) 支持补全圆桌 action 草稿的 scope、AC、引用和验证步骤，显式转为 accepted 后开放执行准备。当前表单限单个 primary repo。集成用例通过共享执行内核运行真实检查命令，以评审 stub 形成正式结果，再从新 clone 重建完成状态及需求覆盖率；浏览器用例使用模拟 IPC/model，不能替代真实 Electron 或模型执行验收。
+
+下一批接入桌面 xdo 真实执行器：从已采纳 task 读取固定合同和基线，绑定已有授权与范围受限的工具，在同一 run 内执行和取消，运行声明的检查与自审，保存正式 receipt，并刷新蓝图覆盖率及 closeout。验收至少覆盖成功、检查失败、取消、重复启动、重启恢复和基线过期，且无正式收据不能显示完成。之后再接 Ink、外部 runners、xdel/xflow 的独立评审与有限修复，完成实际 Electron、发行包及跨平台联动验证后再切换三仓库规则。状态总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
 
 ### 当前代码的接点和断点
 

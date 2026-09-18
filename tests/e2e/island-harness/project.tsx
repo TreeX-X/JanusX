@@ -1,0 +1,97 @@
+import React, { useState } from 'react'
+import ReactDOM from 'react-dom/client'
+import { JanusChatProvider, useJanusChatController, useOptionalJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
+import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
+import { BlueprintMaintenancePanel } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
+import { HarnessRunPanel } from '../../../src/renderer/src/components/janus/HarnessRunPanel'
+import { useBlueprintStore } from '../../../src/renderer/src/stores/blueprint'
+import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
+import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
+import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
+import type { ChatAgentEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
+import type { HarnessTaskDraft } from '../../../src/shared/ipc/harness'
+import '../../../src/renderer/src/styles/globals.css'
+import '../../../src/renderer/src/components/janus/janus-island.css'
+import '../../../src/renderer/src/components/blueprint/blueprint.css'
+
+installElectronApiFallback()
+Object.assign(window.electron.system, { getLanguage: async () => 'en', setLanguage: async () => undefined })
+const repoId = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
+const id = '44444444-4444-4333-8333-444444444444'
+const uri = `note://${repoId}/${id}`
+const workspace = { id: 'ws', path: 'C:/fixture', name: 'Project', clis: [], layout: { mode: 'tabs', positions: [] } }
+const blueprint = { id: `harness:project:${repoId}`, source: 'harness', name: 'Project', rootNodeId: id, nodeIds: [id], nodes: { [id]: { id, title: 'Task', sourceUri: uri, sourceHash: 'a'.repeat(64), children: [] } } }
+useWorkspaceStore.setState({ workspaces: [workspace] as never, activeWorkspaceId: 'ws' })
+useBlueprintStore.setState({ currentBlueprint: blueprint as never, activeSession: { workspacePath: workspace.path } as never })
+const events = new Set<(event: ChatAgentEvent) => void>()
+const runtimeEvents = new Set<(event: any) => void>()
+const fixture = { streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0 }
+;(window as any).projectFixture = fixture
+const emit = (event: ChatAgentEvent) => events.forEach((listener) => listener(event))
+const emitRuntime = (event: unknown) => runtimeEvents.forEach((listener) => listener(event))
+Object.assign(window.electron.workspace, { list: async () => [workspace] })
+Object.assign(window.electron.janus, { listMaintenanceTasks: async () => [], listMaintenanceAudits: async () => [] })
+Object.assign(window.electron, { janusChat: {
+  load: async () => JSON.parse(localStorage.getItem('project-conversations') ?? 'null'),
+  save: async (snapshot: unknown) => localStorage.setItem('project-conversations', JSON.stringify(snapshot)),
+} })
+Object.assign(window.electron.agentRuntime, {
+  createSession: async () => ({ id: 'session', status: 'running', workspace: { workspaceId: 'ws', workspaceRoot: workspace.path } }),
+  cancelSession: async () => true,
+  setApprovalMode: async () => true,
+  onEvent: (listener: (event: unknown) => void) => { runtimeEvents.add(listener); return () => runtimeEvents.delete(listener) },
+  resolveApproval: async () => {
+    fixture.approvals++
+    emitRuntime({ type: 'tool-started', sessionId: 'session', workspaceId: 'ws', toolName: 'workspace.edit', correlationId: 'call', input: {}, timestamp: Date.now() })
+    return true
+  },
+})
+Object.assign(window.electron.llm, {
+  getTerminalProviders: async () => [{ id: 'p', name: 'Fixture' }],
+  getTerminalDefault: async () => ({ provider: { id: 'p', name: 'Fixture' }, modelId: 'model-a' }),
+  listModels: async () => [{ id: 'model-a', name: 'Model A' }, { id: 'model-b', name: 'Model B' }],
+  onAgentEvent: (listener: (event: ChatAgentEvent) => void) => { events.add(listener); return () => events.delete(listener) },
+  startChatStream: (request: ChatStreamRequest) => { fixture.streams.push(request); queueMicrotask(() => emit({ type: 'text_delta', requestId: request.requestId, delta: 'Project reply in progress' })) },
+  abortChat: async () => { fixture.aborts++ },
+  steerChat: async () => { fixture.steers++; return { accepted: true } },
+  answerQuestion: async ({ requestId, callId }: { requestId: string; callId: string }) => { fixture.answers++; emit({ type: 'question_resolved', requestId, callId, status: 'answered' }); return { accepted: true } },
+})
+let draft: HarnessTaskDraft = { uri, hash: 'a'.repeat(64), lifecycle: 'draft', repoId, hasExecution: false, contract: { scope: 'Implement the value.', criteria: [{ id: 'AC-1', text: 'TBD' }], work: { scope: [{ repoId, paths: [] }], acceptanceRefs: [], verification: [] } } }
+Object.assign(window.electron.harness, {
+  taskRead: async () => draft,
+  taskAdopt: async (_cwd: string, _uri: string, _hash: string, contract: HarnessTaskDraft['contract']) => { fixture.adoptions++; draft = { ...draft, hash: 'b'.repeat(64), lifecycle: 'accepted', contract }; return draft },
+  runList: async () => [],
+})
+
+function App() {
+  const chat = useJanusChatController()
+  const projectChat = useOptionalJanusChatController({ ownerRepoId: repoId, viewId: blueprint.id })
+  const [open, setOpen] = useState(true)
+  return <main>
+    <button onClick={() => setOpen((value) => !value)}>Toggle blueprint</button>
+    <button onClick={() => chat.selectModel('p', 'model-b')}>Choose model B</button>
+    <button onClick={() => chat.createConversation()}>New personal chat</button>
+    <button onClick={() => projectChat && chat.selectConversation(projectChat.conversationId)}>Return to project</button>
+    <button onClick={() => {
+      const request = fixture.streams.at(-1)!
+      emit({ type: 'question_requested', requestId: request.requestId, callId: 'q1', allowCustom: true, questions: [{ id: 'choice', header: 'Scope', question: 'Which scope?', options: [{ label: 'Selected', description: 'Current task' }, { label: 'All', description: 'Whole project' }] }] })
+    }}>Ask question</button>
+    <button onClick={() => emitRuntime({ type: 'approval-requested', request: {
+      id: 'approval', sessionId: 'session', workspaceId: 'ws', toolName: 'workspace.edit',
+      input: {}, correlationId: 'call', evidenceConfidence: 'medium', actionRisk: 'write',
+      approvalPolicy: 'per-action', reasonCode: 'ACTION_REQUIRES_APPROVAL', createdAt: new Date().toISOString(),
+    } })}>Ask approval</button>
+    <output data-testid="controller" data-id={chat.conversationId} data-model={chat.activeModel?.modelId} data-streaming={chat.isStreaming} data-questions={chat.pendingQuestions.length} />
+    <output data-testid="project-controller" data-id={projectChat?.conversationId} data-streaming={projectChat?.isStreaming} />
+    <div className="fixture-layout">
+      <section data-testid="main-chat"><JanusChat visible docked compactNavigation focused={!open} modeColor="#318b78" messages={chat.messages} pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error} modelOptions={chat.modelOptions} activeModel={chat.activeModel} resourceController={chat.resourceController} conversationController={chat} onSelectModel={chat.selectModel} onSend={chat.send} onRewrite={chat.rewrite} onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} /></section>
+      {open ? <section data-testid="blueprint-chat"><BlueprintMaintenancePanel onClose={() => setOpen(false)} /></section> : null}
+      <section data-testid="task"><HarnessRunPanel cwd={workspace.path} taskUri={uri} /></section>
+    </div>
+  </main>
+}
+async function boot() {
+  await initI18n(); await changeLanguage('en')
+  ReactDOM.createRoot(document.getElementById('root')!).render(<JanusChatProvider><App /></JanusChatProvider>)
+}
+void boot()

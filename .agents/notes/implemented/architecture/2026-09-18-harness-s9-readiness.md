@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-Schema, storage, graph editing, roundtable artifacts, shared turns, and run-state adapters have implementations across the three repositories. The plain CLI executes scoped internal xdo turns with declared checks and structured self-review receipts. The shared maintenance conversation controller and desktop execution surface remain incomplete. A repository-specific F01–F12 ledger identifies both verified mechanisms and missing integration so that partial segment implementations cannot be mistaken for a completed cutover.
+Schema, storage, graph editing, roundtable artifacts, shared turns, and run-state adapters have implementations across the three repositories. The plain CLI executes scoped internal xdo turns with declared checks and structured self-review receipts. New Note blueprints share the main Chat controller, and action drafts can be explicitly adopted as task contracts. The desktop model-driven execution surface remains incomplete. A repository-specific F01–F12 ledger identifies both verified mechanisms and missing integration so that partial segment implementations cannot be mistaken for a completed cutover.
 
 ## Decision
 
@@ -19,9 +19,9 @@ Recorded F-matrix (J = JanusX test, A = janus-agentX suite, E = existing suite, 
 - F05 bundle retry and coverage: J direct (artifact-bundle suite plus the retry guard).
 - F06 receipt validity: A (evaluateReceipt, canonical review digest, scoped execution and verification); J live-snapshot and adapter coverage with the same shared validator.
 - F07 closeout lattice: A (commit/dirty/no-git branches); J gate-level (receipt-less refusal, unsatisfied passthrough).
-- F08 dual entry and power scope: E (`blueprint-maintenance-discussion-unified`, chat-turn hosting).
+- F08 dual entry and power scope: J/E (shared project controller, turn exclusion, proposal ownership, validated Note context and browser dual-entry interaction with mocked host ports); real-model Electron acceptance remains G.
 - F09 external runners and idempotence: J direct (double start, verifying park, handoff file, idempotent create retry).
-- F10 cross-host equivalence and index rebuild: J partial (rescan stability, shared `validateNote` across roundtable and maintenance producers); chat/CLI/built-in equivalence stays A-side.
+- F10 cross-host equivalence and index rebuild: J partial (rescan stability, shared `validateNote` across producers, roundtable draft adoption through real verification and fresh-clone result/coverage reconstruction); complete chat/CLI/built-in interaction equivalence remains G.
 - F11 degraded-mode honesty: J direct (fallback rejects; the panel carries no install prompt by construction).
 - F12 portable shares and checkout binding: J direct (whitelist export, twin-checkout refusal).
 
@@ -35,4 +35,4 @@ Recorded F-matrix (J = JanusX test, A = janus-agentX suite, E = existing suite, 
 ## Consequences
 
 - **Gains**: six S9 checks pass; every F clause has an owner and a path. Typecheck passes; neighboring suites stay green (re-verified at commit time).
-- **Costs and limits**: old assets retain explicit invalid-schema diagnostics until their handling policy is settled. WorkFlowX uses task-note rules locally; JanusX and janus-agentX retain the older rules, and the sync list includes only WorkFlowX. [Portable task results](2026-09-18-harness-portable-results.md) support formal evidence, fresh-checkout reconstruction and shared current-branch closeout. Shared maintenance conversation control, desktop and Ink execution, delegated review and automatic repair scheduling remain integration work. The [shared execution host](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-18-harness-task-execution.md) records the executable CLI boundary. The release matrix, cross-checkout partial apply, and full cross-host fixture equivalence still need joint verification. The three unified-design documents remain `proposed` until that cutover passes. Publishing follows user authorization.
+- **Costs and limits**: old assets retain explicit invalid-schema diagnostics until their handling policy is settled. WorkFlowX uses task-note rules locally; JanusX and janus-agentX retain the older rules, and the sync list includes only WorkFlowX. [Portable task results](2026-09-18-harness-portable-results.md) support formal evidence, fresh-checkout reconstruction and shared current-branch closeout. [Shared project conversations](2026-09-18-project-conversation-controller.md) and [explicit task adoption](2026-09-18-task-contract-adoption.md) close the new Note entry workflow. Legacy maintenance removal, desktop and Ink execution, external runner evidence integration, delegated review and automatic repair scheduling remain integration work. The [shared execution host](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-18-harness-task-execution.md) records the executable CLI boundary. The release matrix, cross-checkout partial apply, and full cross-host fixture equivalence still need joint verification. The three unified-design documents remain `proposed` until that cutover passes. Publishing follows user authorization.

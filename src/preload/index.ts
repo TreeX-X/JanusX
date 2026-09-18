@@ -232,6 +232,8 @@ const janusAPI: JanusAPI = {
 }
 
 const harnessAPI: HarnessAPI = {
+  taskRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskRead, cwd, uri),
+  taskAdopt: (cwd, uri, expectedHash, contract) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskAdopt, cwd, uri, expectedHash, contract),
   resolve: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.resolve, cwd),
   projectGraph: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.projectGraph, cwd),
   rescan: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.rescan, cwd),

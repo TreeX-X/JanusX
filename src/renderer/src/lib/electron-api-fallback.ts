@@ -165,6 +165,8 @@ export function installElectronApiFallback(): void {
       onMaintenanceTask: () => () => {},
     },
     harness: {
+      taskRead: () => unavailableJanus(),
+      taskAdopt: () => unavailableJanus(),
       resolve: () => unavailableJanus(),
       projectGraph: () => unavailableJanus(),
       rescan: () => unavailableJanus(),
