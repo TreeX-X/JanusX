@@ -103,8 +103,12 @@ footer { border-top: 1px solid var(--shell-border); }
 .tour-shot figcaption { max-width: 720px; margin-bottom: 18px; }
 .tour-shot h3 { margin: 7px 0; }
 .tour-shot p { color: var(--shell-muted); font-size: 13px; }
-.tour-shot a { display: block; border: 1px solid var(--shell-border); background: var(--shell-canvas); }
+.tour-shot > a { display: block; border: 1px solid var(--shell-border); background: var(--shell-canvas); }
 .tour-shot img { display: block; width: 100%; height: auto; }
+.tour-play { margin-top: 12px; padding: 9px 14px; border: 1px solid var(--shell-accent-border); border-radius: 6px; background: transparent; color: var(--shell-accent-strong); font: inherit; font-size: 12px; cursor: pointer; }
+.tour-play:hover { background: var(--shell-accent-soft); }
+.tour-play:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 4px; }
+.experiment-label { color: var(--shell-accent-strong); font-size: 11px; }
 .product-tour > .text-link { margin-top: 16px; }
 @media (max-width: 640px) {
   .product-tour { padding: 28px 0; }

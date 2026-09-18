@@ -30,13 +30,23 @@ const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', asse
       assert.equal(await page.locator('#download-portable').getAttribute('href'), asset('portable').browser_download_url);
       assert.match(await page.locator('#setup-meta').innerText(), /100.0 MB/);
       assert.match(await page.locator('#release-status').innerText(), /v1.2.3/);
-      assert.equal(await page.locator('.tour-shot img').count(), 3);
+      assert.equal(await page.locator('.tour-shot img').count(), 6);
       for (const img of await page.locator('.tour-shot img').all()) {
         await img.scrollIntoViewIfNeeded();
         await img.evaluate(node => node.decode());
-        assert.deepEqual(await img.evaluate(node => [node.naturalWidth, node.naturalHeight]), [1440, 900]);
+        assert.deepEqual(await img.evaluate(node => [node.naturalWidth, node.naturalHeight]), [1280, 864]);
         assert.ok(await img.getAttribute('alt'));
-        assert.equal(await img.locator('..').getAttribute('href'), await img.getAttribute('src'));
+        assert.equal(await img.locator('..').getAttribute('href'), (await img.getAttribute('src')).replace('.png', '.gif'));
+      }
+      for (const button of await page.locator('.tour-play').all()) {
+        assert.equal(await button.getAttribute('aria-pressed'), 'false');
+        await button.click();
+        const img = button.locator('..').locator('img');
+        await img.evaluate(node => node.decode());
+        assert.match(await img.getAttribute('src'), /\.gif$/);
+        assert.equal(await button.getAttribute('aria-pressed'), 'true');
+        await button.click();
+        assert.match(await img.getAttribute('src'), /\.png$/);
       }
       for (const [width, height] of [[1440, 1000], [1920, 1080], [768, 1024], [390, 844], [320, 740]]) {
         await page.setViewportSize({ width, height });
@@ -56,6 +66,23 @@ const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', asse
       assert.equal(await page.locator('#download-portable').getAttribute('href'), history);
       assert.match(await page.locator('#portable-meta').innerText(), /未提供/);
     });
+    await scenario('failed animation restores its poster and can retry', {}, async page => {
+      const button = page.locator('.tour-play').first();
+      const img = button.locator('..').locator('img');
+      await page.route('**/assets/terminal-split.gif', route => route.abort());
+      await button.click();
+      await page.waitForFunction(() => document.querySelector('.tour-play').textContent.includes('点击重试'));
+      assert.equal(await button.getAttribute('aria-pressed'), 'false');
+      assert.match(await img.getAttribute('src'), /\.png$/);
+      await img.evaluate(node => node.decode());
+      await page.unroute('**/assets/terminal-split.gif');
+      await button.click();
+      await img.evaluate(node => node.decode());
+      assert.equal(await button.getAttribute('aria-pressed'), 'true');
+      assert.match(await img.getAttribute('src'), /\.gif$/);
+      await button.click();
+      assert.equal(await button.textContent(), '播放分屏演示');
+    });
     await scenario('404 is empty release', { status: 404 }, async page => assert.match(await page.locator('#release-status').innerText(), /暂无公开/));
     for (const response of [{ status: 403 }, { status: 500 }, 'offline', { body: {} }, { body: { ...release, assets: [{ ...asset('setup'), browser_download_url: 'https://example.com/file.exe' }] } }]) {
       await scenario(`failure fallback ${JSON.stringify(response)}`, response, async page => {
@@ -67,7 +94,13 @@ const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', asse
     await noScript.goto(pageUrl);
     assert.equal(await noScript.locator('#download-setup').getAttribute('href'), history);
     assert.equal(await noScript.locator('noscript').isVisible(), true);
+    assert.equal(await noScript.locator('.tour-play:visible').count(), 0);
+    assert.equal(await noScript.locator('.tour-shot img[src$=".png"]').count(), 6);
     await noScript.close(); checks++;
+    await scenario('reduced motion keeps static posters until play is requested', {}, async page => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      assert.equal(await page.locator('.tour-shot img[src$=".gif"]').count(), 0);
+    });
     console.log(`PASS ${checks} scenarios; 5 viewport sizes; no page errors`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
