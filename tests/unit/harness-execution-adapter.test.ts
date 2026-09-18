@@ -11,6 +11,7 @@ import {
   handoffTaskRun,
   listTaskRuns,
   prepareTaskRun,
+  readTaskHandoff,
   recordTaskReceipt,
   startTaskRun,
   verifyTaskRun,
@@ -185,6 +186,25 @@ describe('harness execution adapter (S8-JanusX)', () => {
     const cancelled = await cancelTaskRun(root, runId, token)
     expect(cancelled.ok).toBe(true)
     expect((await getTaskRun(root, runId)).run?.state).toBe('cancelled')
+  })
+
+  it('reads written handoffs and refuses missing ones without inventing content', async () => {
+    const { root, runId } = await startedRun()
+    const unread = await readTaskHandoff(root, runId)
+    expect(unread.ok).toBe(false)
+    expect(unread.errors.some((error) => error.code === 'NOT_FOUND')).toBe(true)
+
+    const written = await handoffTaskRun(root, runId)
+    expect(written.ok).toBe(true)
+    const read = await readTaskHandoff(root, runId)
+    expect(read.ok).toBe(true)
+    expect(read.data.path).toBe(written.data.path)
+    expect(read.data.markdown).toContain(TASK_URI)
+    expect(read.data.markdown).toContain('Fixed baseline')
+
+    const gone = await readTaskHandoff(root, '01234567-89ab-4def-8123-456789abcdef')
+    expect(gone.ok).toBe(false)
+    expect(gone.errors.length).toBeGreaterThan(0)
   })
 
   it('reports missing runs without throwing', async () => {

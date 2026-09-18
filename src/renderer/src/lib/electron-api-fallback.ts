@@ -182,6 +182,8 @@ export function installElectronApiFallback(): void {
       runCancel: () => unavailableJanus(),
       runCloseout: () => unavailableJanus(),
       runHandoff: () => unavailableJanus(),
+      runHandoffRead: () => unavailableJanus(),
+      runTakeover: () => unavailableJanus(),
       runExecute: () => unavailableJanus(),
       runPause: () => unavailableJanus(),
       runResume: () => unavailableJanus(),

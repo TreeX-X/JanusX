@@ -249,6 +249,9 @@ const harnessAPI: HarnessAPI = {
   runCancel: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCancel, cwd, runId),
   runCloseout: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCloseout, cwd, runId),
   runHandoff: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runHandoff, cwd, runId),
+  runHandoffRead: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runHandoffRead, cwd, runId),
+  runTakeover: (cwd, runId, newOwner, reason) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runTakeover, cwd, runId, newOwner, reason),
   runExecute: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runExecute, cwd, input),
   runPause: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runPause, cwd, runId),
   runResume: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runResume, cwd, runId),

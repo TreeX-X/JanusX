@@ -32,9 +32,11 @@ import {
   listTaskRunStates,
   pauseTaskRun,
   prepareTaskRun,
+  readTaskHandoff,
   rebaselineTaskRun,
   resumeTaskRun,
   startTaskRun,
+  takeoverTaskRun,
 } from '../harness/execution-adapter'
 import {
   HARNESS_COMMAND_CHANNELS,
@@ -479,6 +481,36 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const controller = inFlight.get(runId)
       if (!controller) throwFailure('NOT_READY', 'no in-flight execution owns this run', { path: 'runId' })
       ;(controller as AbortController).abort()
+      return runStateOf(root, runId)
+    },
+  )
+
+  // ── external runner backflow (S8-JanusX): handoff reads plus host takeover ──
+  // The external terminal owns its process; the desktop only hands over the
+  // pinned baseline and validates whatever evidence comes back through the
+  // shared kernel. Takeover tokens stay in the main process.
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runHandoffRead,
+    async (_e, cwd: string, runId: string): Promise<{ path: string; markdown: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run handoff read needs a run id', { path: 'runId' })
+      const handoff = await readTaskHandoff(root, runId)
+      if (!handoff.ok) throwRunFailure(handoff.errors)
+      return handoff.data
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runTakeover,
+    async (_e, cwd: string, runId: string, newOwner: string, reason: string): Promise<{ state: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run takeover needs a run id', { path: 'runId' })
+      if (typeof newOwner !== 'string' || !newOwner.trim()) throwFailure('SCHEMA_INVALID', 'run takeover needs a new owner', { path: 'newOwner' })
+      if (typeof reason !== 'string' || !reason.trim()) throwFailure('SCHEMA_INVALID', 'takeover needs a reason; silent ownership changes strand runs', { path: 'reason' })
+      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      const taken = await takeoverTaskRun(root, runId, newOwner.trim(), reason.trim())
+      if (!taken.ok) throwRunFailure(taken.errors)
       return runStateOf(root, runId)
     },
   )

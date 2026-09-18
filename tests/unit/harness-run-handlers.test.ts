@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   cancelTaskRun: vi.fn(),
   closeoutTaskRun: vi.fn(),
   handoffTaskRun: vi.fn(),
+  readTaskHandoff: vi.fn(),
+  takeoverTaskRun: vi.fn(),
   pauseTaskRun: vi.fn(),
   resumeTaskRun: vi.fn(),
   rebaselineTaskRun: vi.fn(),
@@ -48,6 +50,8 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   cancelTaskRun: mocks.cancelTaskRun,
   closeoutTaskRun: mocks.closeoutTaskRun,
   handoffTaskRun: mocks.handoffTaskRun,
+  readTaskHandoff: mocks.readTaskHandoff,
+  takeoverTaskRun: mocks.takeoverTaskRun,
   pauseTaskRun: mocks.pauseTaskRun,
   resumeTaskRun: mocks.resumeTaskRun,
   rebaselineTaskRun: mocks.rebaselineTaskRun,
@@ -216,5 +220,22 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
 
     const abort = await handler(HARNESS_COMMAND_CHANNELS.runAbort)
     await expect(abort({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'NOT_READY' })
+  })
+
+  it('reads handoffs and takes over runs with an explicit reason', async () => {
+    const read = await handler(HARNESS_COMMAND_CHANNELS.runHandoffRead)
+    mocks.readTaskHandoff.mockResolvedValueOnce({ ok: true, run: RUN, errors: [], data: { path: 'C:\\handoff.md', markdown: '# Harness run handoff' } })
+    await expect(read({}, ROOT, 'run-1')).resolves.toEqual({ path: 'C:\\handoff.md', markdown: '# Harness run handoff' })
+    mocks.readTaskHandoff.mockResolvedValueOnce({ ok: false, run: RUN, errors: [{ code: 'NOT_FOUND', message: 'missing' }], data: { path: '', markdown: '' } })
+    await expect(read({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(read({}, ROOT, '')).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'runId' })
+
+    const takeover = await handler(HARNESS_COMMAND_CHANNELS.runTakeover)
+    mocks.takeoverTaskRun.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'running' }, errors: [], data: { token: 'tok-2' } })
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'running' }, errors: [] })
+    await expect(takeover({}, ROOT, 'run-1', 'terminal', 'CLI takes over')).resolves.toEqual({ state: 'running' })
+    expect(mocks.takeoverTaskRun).toHaveBeenCalledWith(ROOT, 'run-1', 'terminal', 'CLI takes over')
+    await expect(takeover({}, ROOT, 'run-1', 'terminal', '  ')).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'reason' })
+    await expect(takeover({}, ROOT, 'run-1', '  ', 'reason')).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'newOwner' })
   })
 })

@@ -17,6 +17,8 @@ export const HARNESS_COMMAND_CHANNELS = {
   runCancel: 'harness:run:cancel',
   runCloseout: 'harness:run:closeout',
   runHandoff: 'harness:run:handoff',
+  runHandoffRead: 'harness:run:handoff-read',
+  runTakeover: 'harness:run:takeover',
   runExecute: 'harness:run:execute',
   runPause: 'harness:run:pause',
   runResume: 'harness:run:resume',
@@ -143,6 +145,11 @@ export interface HarnessRunExecuteResult {
   checks: Array<{ id: string; kind: string; status: string; summary: string }>
 }
 
+export interface HarnessRunHandoff {
+  path: string
+  markdown: string
+}
+
 export interface HarnessTaskContractInput {
   scope: string
   criteria: Array<{ id: string; text: string }>
@@ -176,6 +183,8 @@ export interface HarnessAPI {
   runCancel(cwd: string, runId: string): Promise<{ state: string }>
   runCloseout(cwd: string, runId: string): Promise<HarnessRunCloseoutResult>
   runHandoff(cwd: string, runId: string): Promise<{ path: string }>
+  runHandoffRead(cwd: string, runId: string): Promise<HarnessRunHandoff>
+  runTakeover(cwd: string, runId: string, newOwner: string, reason: string): Promise<{ state: string }>
   runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult>
   runPause(cwd: string, runId: string): Promise<{ state: string }>
   runResume(cwd: string, runId: string): Promise<{ state: string }>

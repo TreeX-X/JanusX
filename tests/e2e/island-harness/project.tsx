@@ -27,7 +27,7 @@ const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
   streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
-  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0,
+  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0,
   gateExecute: false, gateResolve: null as null | (() => void),
   lastExecute: null as null | { runId: string; providerId?: string; modelId?: string; manualEvidence?: Array<{ stepId: string; observer: string; observation: string }> },
   runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean }>,
@@ -72,9 +72,9 @@ Object.assign(window.electron.harness, {
     return draft
   },
   runList: async () => fixture.runs,
-  runPrepare: async (_cwd: string, input: { taskUri: string; mode: string; closeout: string }) => {
+  runPrepare: async (_cwd: string, input: { taskUri: string; mode: string; closeout: string; executor?: string }) => {
     fixture.prepares++
-    fixture.runs.push({ runId: 'run-1', taskUri: input.taskUri, mode: input.mode, state: 'queued', attempt: 0, executor: 'internal', closeout: input.closeout, receipts: 0, updatedAt: '', local: true })
+    fixture.runs.push({ runId: 'run-1', taskUri: input.taskUri, mode: input.mode, state: 'queued', attempt: 0, executor: input.executor ?? 'internal', closeout: input.closeout, receipts: 0, updatedAt: '', local: true })
     return { runId: 'run-1', taskUri: input.taskUri, state: 'queued', attempt: 0 }
   },
   runStart: async (_cwd: string, runId: string) => {
@@ -118,6 +118,16 @@ Object.assign(window.electron.harness, {
   runAbort: async () => {
     fixture.runAborts++
     return { state: 'running' }
+  },
+  runHandoffRead: async (_cwd: string, runId: string) => {
+    const run = fixture.runs.find((item) => item.runId === runId)!
+    return { path: 'C:/fixture/handoff.md', markdown: `# Harness run handoff\n\ntask: ${run.taskUri}\nmode: ${run.mode}\ncontract: fixed-baseline\n` }
+  },
+  runTakeover: async (_cwd: string, runId: string, newOwner: string) => {
+    fixture.takeovers++
+    const run = fixture.runs.find((item) => item.runId === runId)!
+    run.state = 'running'
+    return { state: run.state, owner: newOwner }
   },
 })
 

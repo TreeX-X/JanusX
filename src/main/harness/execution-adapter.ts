@@ -41,6 +41,8 @@ import {
 import { collectTaskBaseline, listTaskResults, readTaskResult, type TaskResult } from '@janus-agent/harness-node'
 import { type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
 import type { HarnessRunState } from '../../shared/ipc/harness'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
 // Note: desktop and terminal read the same portable proof - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
 function resultState(result: TaskResult, run?: HarnessRun): HarnessRunState {
@@ -263,6 +265,29 @@ export async function closeoutTaskRun(
 /** Writes the external-runner handoff file for one task URI and baseline. */
 export async function handoffTaskRun(root: string, runId: string): Promise<OpResult<{ path: string }>> {
   return handoffRun(root, runId)
+}
+
+/**
+ * Reads a written handoff for display and copy. The path mirrors the
+ * kernel's run-store handoff location; the kernel owns the write, this only
+ * reads. Missing handoffs refuse instead of inventing content.
+ */
+export async function readTaskHandoff(root: string, runId: string): Promise<OpResult<{ path: string; markdown: string }>> {
+  let run: Awaited<ReturnType<typeof mustLoadRun>>
+  try {
+    run = await mustLoadRun(root, runId)
+  } catch (error) {
+    const failure = error as { code?: Diagnostic['code']; message?: string }
+    return { ok: false, run: null, errors: [diag(failure.code ?? 'IO_ERROR', failure.message ?? 'load failed')], data: { path: '', markdown: '' } }
+  }
+  const path = join(root, '.agents', '.local', 'runs', runId, 'handoff.md')
+  try {
+    const markdown = await readFile(path, 'utf8')
+    if (!markdown.trim()) return { ok: false, run, errors: [diag('NOT_READY', `handoff is empty for run ${runId}; rewrite it`)], data: { path, markdown: '' } }
+    return { ok: true, run, errors: [], data: { path, markdown } }
+  } catch {
+    return { ok: false, run, errors: [diag('NOT_FOUND', `no handoff written for run ${runId}; write one first`)], data: { path, markdown: '' } }
+  }
 }
 
 export async function getTaskRun(root: string, runId: string): Promise<{ run: HarnessRun | null; errors: Diagnostic[] }> {

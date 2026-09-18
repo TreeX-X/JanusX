@@ -102,6 +102,14 @@ export function runHandoff(cwd: string, runId: string): Promise<{ path: string }
   return window.electron.harness.runHandoff(cwd, runId)
 }
 
+export function runHandoffRead(cwd: string, runId: string): Promise<{ path: string; markdown: string }> {
+  return window.electron.harness.runHandoffRead(cwd, runId)
+}
+
+export function runTakeover(cwd: string, runId: string, newOwner: string, reason: string): Promise<{ state: string }> {
+  return window.electron.harness.runTakeover(cwd, runId, newOwner, reason)
+}
+
 export function runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> {
   return window.electron.harness.runExecute(cwd, input)
 }
