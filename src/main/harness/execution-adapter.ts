@@ -37,15 +37,16 @@ import {
   type OpResult,
   type RepairPacket,
 } from '@janus-agent/janus-agent'
-import { buildNoteIndex, collectTaskBaseline } from '@janus-agent/harness-node'
-import { criterionHash, taskContractHash, type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
+import { collectTaskBaseline } from '@janus-agent/harness-node'
+import { type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
+
+// Note: hosts share snapshot and task execution policy - see .agents/notes/implemented/architecture/2026-09-18-harness-execution-adapter-s8.md
+export { collectLiveSnapshot } from '@janus-agent/harness-node'
+export { prepareTaskTurn as prepareTaskExecutionTurn, verifyTaskExecution as executeTaskVerification } from '@janus-agent/janus-agent'
+export type { TaskTurnContext, TaskVerificationPorts } from '@janus-agent/janus-agent'
 
 function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
   return path === undefined ? { code, message } : { code, message, path }
-}
-
-function tailId(ref: string): string {
-  return ref.includes('://') ? (ref.split('/').pop() ?? ref) : ref
 }
 
 /** Order-insensitive baseline comparison for start preconditions. */
@@ -149,56 +150,6 @@ export async function recordTaskReceipt(
   receipt: Receipt,
 ): Promise<OpResult<{ receiptId: string }>> {
   return recordReceipt(root, runId, token, receipt)
-}
-
-/**
- * Rebuilds the live validity snapshot from current files: fresh contract
- * and input digests, recomputed per-criterion hashes, caller-supplied code
- * hashes. Drifted contracts, inputs, criteria, or code stay verifying at
- * finish instead of completing.
- */
-export async function collectLiveSnapshot(
-  root: string,
-  taskRef: string,
-  implementor: string,
-  codeHashes: Array<[string, string | null]>,
-): Promise<{ ok: true; live: LiveSnapshot } | { ok: false; errors: Diagnostic[] }> {
-  const base = await collectTaskBaseline(root, taskRef)
-  if (!base.ok) return { ok: false, errors: base.problems }
-  let index: Awaited<ReturnType<typeof buildNoteIndex>>
-  try {
-    index = await buildNoteIndex(root)
-  } catch (error) {
-    return { ok: false, errors: [diag('IO_ERROR', `cannot scan notes under ${root}: ${(error as Error).message}`)] }
-  }
-  const criterionHashes: Array<[string, Array<[string, string]>]> = []
-  const task = index.byId.get(tailId(base.baseline.taskUri))?.note
-  const work = task?.meta.work
-  if (!work) return { ok: false, errors: [diag('NOT_READY', 'task work contract is missing')] }
-  if (!task || taskContractHash(task) !== base.baseline.taskContractHash) return { ok: false, errors: [diag('STALE_BASELINE', 'task moved while collecting evidence')] }
-  for (const uri of new Set([base.baseline.taskUri, ...base.baseline.inputs.map((row) => row.uri), ...work.acceptanceRefs.map((ref) => ref.uri)])) {
-    if (!uri.startsWith(`note://${index.repoId}/`)) return { ok: false, errors: [diag('UNRESOLVED_REFERENCE', `note belongs to another checkout: ${uri}`)] }
-    const entry = index.byId.get(tailId(uri))
-    if (!entry?.note) {
-      return { ok: false, errors: [diag('NOT_FOUND', `note vanished mid-snapshot: ${uri}`, uri)] }
-    }
-    criterionHashes.push([
-      uri,
-      entry.note.acs.map((ac) => [ac.id, criterionHash(`- [ ] ${ac.id}: ${ac.text}`)] as [string, string]),
-    ])
-  }
-  return {
-    ok: true,
-    live: {
-      taskContractHash: base.baseline.taskContractHash,
-      inputHashes: base.baseline.inputs.map((row) => [row.uri, row.contentHash] as [string, string]),
-      criterionHashes,
-      codeHashes,
-      acceptanceRefs: work.acceptanceRefs,
-      verification: work.verification,
-      implementor,
-    },
-  }
 }
 
 /** Completes a verifying run against one stored receipt and a live snapshot. */

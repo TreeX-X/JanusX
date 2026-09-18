@@ -16,6 +16,10 @@ Run surface follow-up: seven `harness:run:*` IPC channels (prepare, start, statu
 
 The live snapshot carries the task's acceptance references and declared verification steps into the shared receipt validator. Missing criteria, omitted or downgraded checks, changed commands, and missing file hashes fail completion. A present null code hash proves a deleted file is absent. Snapshot collection refuses a task changed between scans and never resolves a foreign Note URI by local id. `tests/unit/harness-execution-adapter.test.ts` verifies both incomplete-coverage refusal and completion with one matching receipt; the [shared evidence gates](../../../../../janus-agentX/.agents/notes/implemented/bug-fix/2026-09-18-harness-receipt-gates.md) define the remaining proof rules.
 
+Snapshot collection delegates to `harness-node`, so desktop and CLI resolve the same acceptance references, contract checks and criterion hashes. The adapter exports `prepareTaskExecutionTurn` and `executeTaskVerification` from the shared execution host. Callers supply runtime command and reviewer ports; the desktop panel does not invoke them yet. The [shared task execution Note](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-18-harness-task-execution.md) defines scope policy, capability failures and receipt construction. Review validity compares the canonical manifest digest, including deletions, with the supplied review hash.
+
+The shared snapshot path is verified by `npx vitest run tests/unit/harness-execution-adapter.test.ts tests/unit/harness-s9-acceptance.test.ts tests/unit/harness-run-handlers.test.ts tests/unit/harness-service.test.ts` with 22 passing checks. Typecheck, adapter lint and the package-boundary check pass.
+
 ## Alternatives considered
 
 - Call the dispatcher directly from IPC handlers — strongest case is zero new modules, but every caller would reimplement baseline re-pinning and drift checks, and the first missed check executes a stale contract; the adapter pins once for all callers.

@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-Schema, storage, graph editing, roundtable artifacts, shared turns, and run-state adapters have implementations across the three repositories. The shared conversation controller and the model execution-to-receipt wiring remain incomplete. A repository-specific F01–F12 ledger identifies both verified mechanisms and missing integration so that partial segment implementations cannot be mistaken for a completed cutover.
+Schema, storage, graph editing, roundtable artifacts, shared turns, and run-state adapters have implementations across the three repositories. The plain CLI executes scoped internal xdo turns with declared checks and structured self-review receipts. The shared maintenance conversation controller and desktop execution surface remain incomplete. A repository-specific F01–F12 ledger identifies both verified mechanisms and missing integration so that partial segment implementations cannot be mistaken for a completed cutover.
 
 ## Decision
 
@@ -17,7 +17,7 @@ Recorded F-matrix (J = JanusX test, A = janus-agentX suite, E = existing suite, 
 - F03 single-winner transactions: J direct (new).
 - F04 journal crash recovery: A (injected crash stages); same library JanusX rides on.
 - F05 bundle retry and coverage: J direct (artifact-bundle suite plus the retry guard).
-- F06 receipt validity: A (evaluateReceipt); J shape-level (malformed and unknown receipts refuse).
+- F06 receipt validity: A (evaluateReceipt, canonical review digest, scoped execution and verification); J live-snapshot and adapter coverage with the same shared validator.
 - F07 closeout lattice: A (commit/dirty/no-git branches); J gate-level (receipt-less refusal, unsatisfied passthrough).
 - F08 dual entry and power scope: E (`blueprint-maintenance-discussion-unified`, chat-turn hosting).
 - F09 external runners and idempotence: J direct (double start, verifying park, handoff file, idempotent create retry).
@@ -35,4 +35,4 @@ Recorded F-matrix (J = JanusX test, A = janus-agentX suite, E = existing suite, 
 ## Consequences
 
 - **Gains**: six S9 checks pass; every F clause has an owner and a path. Typecheck passes; neighboring suites stay green (re-verified at commit time).
-- **Costs and limits**: old assets retain explicit invalid-schema diagnostics until their handling policy is settled. WorkFlowX uses task-note rules locally; JanusX and janus-agentX retain the older rules, and the sync list includes only WorkFlowX. Shared maintenance conversation control, scoped model execution, automatic receipts, and the complete desktop evidence flow remain integration work. The release matrix, cross-checkout partial apply, and full cross-host fixture equivalence still need joint verification. The three unified-design documents remain `proposed` until that cutover passes. Publishing follows user authorization.
+- **Costs and limits**: old assets retain explicit invalid-schema diagnostics until their handling policy is settled. WorkFlowX uses task-note rules locally; JanusX and janus-agentX retain the older rules, and the sync list includes only WorkFlowX. Shared maintenance conversation control, desktop and Ink execution, delegated review, automatic repair scheduling and portable task-state projection remain integration work. The [shared execution host](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-18-harness-task-execution.md) records the executable CLI boundary. The release matrix, cross-checkout partial apply, and full cross-host fixture equivalence still need joint verification. The three unified-design documents remain `proposed` until that cutover passes. Publishing follows user authorization.

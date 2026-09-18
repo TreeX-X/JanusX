@@ -15,7 +15,7 @@ import {
   verifyTaskRun,
   type PrepareTaskRunInput,
 } from '../../src/main/harness/execution-adapter'
-import type { Receipt } from '@janus-agent/harness-core'
+import { codeManifestHash, type Receipt } from '@janus-agent/harness-core'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 const TASK_ID = '11111111-1111-4111-8111-111111111111'
@@ -206,7 +206,7 @@ describe('harness execution adapter (S8-JanusX)', () => {
       mode: 'xdo', attempt: 1, taskContractHash: snapshot.live.taskContractHash,
       inputs: [], codeManifest: [],
       checks: [{ id: 'V-1', kind: 'manual', required: true, status: 'passed', repoId: REPO, summary: 'Observed the prepared run.', performedBy: 'tester' }],
-      coverage: [], review: { kind: 'self', verdict: 'approved', reviewedManifestHash: 'a'.repeat(64), actor: 'tester' },
+      coverage: [], review: { kind: 'self', verdict: 'approved', reviewedManifestHash: codeManifestHash([]), actor: 'tester' },
       createdAt: new Date().toISOString(), actor: 'tester',
     }
     expect((await recordTaskReceipt(root, runId, token, receipt)).ok).toBe(true)
