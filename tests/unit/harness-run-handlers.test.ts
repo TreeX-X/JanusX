@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   handoffTaskRun: vi.fn(),
   readTaskHandoff: vi.fn(),
   takeoverTaskRun: vi.fn(),
+  listTaskThreads: vi.fn(),
+  openTaskThread: vi.fn(),
+  closeTaskThread: vi.fn(),
   pauseTaskRun: vi.fn(),
   resumeTaskRun: vi.fn(),
   rebaselineTaskRun: vi.fn(),
@@ -55,6 +58,9 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   handoffTaskRun: mocks.handoffTaskRun,
   readTaskHandoff: mocks.readTaskHandoff,
   takeoverTaskRun: mocks.takeoverTaskRun,
+  listTaskThreads: mocks.listTaskThreads,
+  openTaskThread: mocks.openTaskThread,
+  closeTaskThread: mocks.closeTaskThread,
   pauseTaskRun: mocks.pauseTaskRun,
   resumeTaskRun: mocks.resumeTaskRun,
   rebaselineTaskRun: mocks.rebaselineTaskRun,
@@ -282,5 +288,24 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     expect(mocks.takeoverTaskRun).toHaveBeenCalledWith(ROOT, 'run-1', 'terminal', 'CLI takes over')
     await expect(takeover({}, ROOT, 'run-1', 'terminal', '  ')).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'reason' })
     await expect(takeover({}, ROOT, 'run-1', '  ', 'reason')).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'newOwner' })
+  })
+
+  it('lists threads, opens them for activation, and closes only on decision', async () => {
+    const threads = await handler(HARNESS_COMMAND_CHANNELS.runThreads)
+    mocks.listTaskThreads.mockResolvedValueOnce({ threads: [{ runId: 'run-1' }], errors: [] })
+    await expect(threads({}, ROOT)).resolves.toEqual([{ runId: 'run-1' }])
+
+    const thread = await handler(HARNESS_COMMAND_CHANNELS.runThread)
+    mocks.openTaskThread.mockResolvedValueOnce({ ok: true, run: RUN, errors: [], data: { runId: 'run-1', history: [] } })
+    await expect(thread({}, ROOT, 'run-1')).resolves.toEqual({ runId: 'run-1', history: [] })
+    mocks.openTaskThread.mockResolvedValueOnce({ ok: false, run: null, errors: [{ code: 'NOT_FOUND', message: 'gone' }], data: null })
+    await expect(thread({}, ROOT, 'run-9')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(thread({}, ROOT, '')).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'runId' })
+
+    const close = await handler(HARNESS_COMMAND_CHANNELS.runThreadClose)
+    mocks.closeTaskThread.mockResolvedValueOnce({ ok: true, run: RUN, errors: [], data: { closed: true } })
+    await expect(close({}, ROOT, 'run-1')).resolves.toEqual({ closed: true })
+    mocks.closeTaskThread.mockResolvedValueOnce({ ok: false, run: RUN, errors: [{ code: 'BUSY', message: 'owned' }], data: { closed: false } })
+    await expect(close({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'BUSY' })
   })
 })

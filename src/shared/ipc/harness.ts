@@ -19,6 +19,9 @@ export const HARNESS_COMMAND_CHANNELS = {
   runHandoff: 'harness:run:handoff',
   runHandoffRead: 'harness:run:handoff-read',
   runTakeover: 'harness:run:takeover',
+  runThreads: 'harness:run:threads',
+  runThread: 'harness:run:thread',
+  runThreadClose: 'harness:run:thread-close',
   runExecute: 'harness:run:execute',
   runPause: 'harness:run:pause',
   runResume: 'harness:run:resume',
@@ -150,6 +153,34 @@ export interface HarnessRunHandoff {
   markdown: string
 }
 
+export interface HarnessThreadAttempt {
+  attempt: number
+  manifestHash: string
+  checks: Array<{ id: string; kind: string; status: string }>
+  reviewVerdict?: string
+  receiptId?: string
+  at: string
+}
+
+export interface HarnessThreadSummary {
+  runId: string
+  taskUri: string
+  mode: string
+  state: string
+  attempt: number
+  receipts: number
+  updatedAt: string
+  hasThread: boolean
+  attempts: number
+  lastVerdict?: string
+  hasModel: boolean
+}
+
+export interface HarnessThreadDetail extends HarnessThreadSummary {
+  model?: { providerId: string; modelId: string }
+  history: HarnessThreadAttempt[]
+}
+
 export interface HarnessTaskContractInput {
   scope: string
   criteria: Array<{ id: string; text: string }>
@@ -185,6 +216,9 @@ export interface HarnessAPI {
   runHandoff(cwd: string, runId: string): Promise<{ path: string }>
   runHandoffRead(cwd: string, runId: string): Promise<HarnessRunHandoff>
   runTakeover(cwd: string, runId: string, newOwner: string, reason: string): Promise<{ state: string }>
+  runThreads(cwd: string): Promise<HarnessThreadSummary[]>
+  runThread(cwd: string, runId: string): Promise<HarnessThreadDetail>
+  runThreadClose(cwd: string, runId: string): Promise<{ closed: boolean }>
   runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult>
   runPause(cwd: string, runId: string): Promise<{ state: string }>
   runResume(cwd: string, runId: string): Promise<{ state: string }>

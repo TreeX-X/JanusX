@@ -27,7 +27,7 @@ const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
   streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
-  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0,
+  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0,
   gateExecute: false, gateResolve: null as null | (() => void),
   lastExecute: null as null | { runId: string; providerId?: string; modelId?: string; manualEvidence?: Array<{ stepId: string; observer: string; observation: string }> },
   runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean }>,
@@ -128,6 +128,24 @@ Object.assign(window.electron.harness, {
     const run = fixture.runs.find((item) => item.runId === runId)!
     run.state = 'running'
     return { state: run.state, owner: newOwner }
+  },
+  runThreads: async () => fixture.runs.map((run) => {
+    const detail = (fixture as { threadDetails?: Record<string, { model: { providerId: string; modelId: string }; history: Array<{ attempt: number; manifestHash: string; checks: never[]; reviewVerdict: string; receiptId: string; at: string }> }> }).threadDetails?.[run.runId]
+    return { runId: run.runId, taskUri: run.taskUri, mode: run.mode, state: run.state, attempt: run.attempt, receipts: run.receipts, updatedAt: '', hasThread: Boolean(detail), attempts: detail ? 1 : 0, lastVerdict: detail?.history[0]?.reviewVerdict, hasModel: Boolean(detail?.model) }
+  }),
+  runThread: async (_cwd: string, runId: string) => {
+    const holder = fixture as unknown as { threadDetails: Record<string, { model: { providerId: string; modelId: string }; history: Array<{ attempt: number; manifestHash: string; checks: never[]; reviewVerdict: string; receiptId: string; at: string }> }> }
+    holder.threadDetails ??= {}
+    holder.threadDetails[runId] ??= { model: { providerId: 'p', modelId: 'm' }, history: [{ attempt: 1, manifestHash: 'h', checks: [], reviewVerdict: 'approved', receiptId: 'receipt-1', at: '' }] }
+    const run = fixture.runs.find((item) => item.runId === runId)!
+    const detail = holder.threadDetails[runId]!
+    return { runId, taskUri: run.taskUri, mode: run.mode, state: run.state, attempt: run.attempt, receipts: run.receipts, updatedAt: '', hasThread: true, attempts: 1, lastVerdict: 'approved', hasModel: true, model: detail.model, history: detail.history }
+  },
+  runThreadClose: async (_cwd: string, runId: string) => {
+    fixture.threadCloses++
+    const holder = fixture as unknown as { threadDetails?: Record<string, unknown> }
+    if (holder.threadDetails) delete holder.threadDetails[runId]
+    return { closed: true }
   },
 })
 

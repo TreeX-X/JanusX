@@ -41,8 +41,9 @@ import {
 import { collectTaskBaseline, listTaskResults, readTaskResult, type TaskResult } from '@janus-agent/harness-node'
 import { type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
 import type { HarnessRunState } from '../../shared/ipc/harness'
-import { readFile } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { ensureTaskThread, loadTaskThread } from './task-thread'
 
 // Note: desktop and terminal read the same portable proof - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
 function resultState(result: TaskResult, run?: HarnessRun): HarnessRunState {
@@ -265,6 +266,136 @@ export async function closeoutTaskRun(
 /** Writes the external-runner handoff file for one task URI and baseline. */
 export async function handoffTaskRun(root: string, runId: string): Promise<OpResult<{ path: string }>> {
   return handoffRun(root, runId)
+}
+
+export interface TaskThreadView {
+  runId: string
+  taskUri: string
+  mode: string
+  state: string
+  attempt: number
+  receipts: number
+  updatedAt: string
+  hasThread: boolean
+  attempts: number
+  lastVerdict?: string
+  hasModel: boolean
+}
+
+export interface TaskThreadDetail extends TaskThreadView {
+  model?: { providerId: string; modelId: string }
+  history: Array<{ attempt: number; manifestHash: string; checks: Array<{ id: string; kind: string; status: string }>; reviewVerdict?: string; receiptId?: string; at: string }>
+}
+
+/**
+ * Aggregates the thread registry from local runs plus thread files. Threads
+ * live and die with their run on this checkout: runs without a thread file
+ * appear threadless so foreign or older runs stay activatable, and the
+ * registry never invents history. Portable-only tasks carry no thread.
+ */
+export async function listTaskThreads(root: string): Promise<{ threads: TaskThreadView[]; errors: Diagnostic[] }> {
+  const listed = await listTaskRuns(root)
+  if (listed.errors.length > 0) return { threads: [], errors: listed.errors }
+  const threads: TaskThreadView[] = []
+  for (const run of listed.runs) {
+    let stored: Awaited<ReturnType<typeof loadTaskThread>> = null
+    try {
+      stored = await loadTaskThread(root, run.runId)
+    } catch {
+      stored = null
+    }
+    const attempts = stored?.attempts ?? []
+    threads.push({
+      runId: run.runId,
+      taskUri: run.taskUri,
+      mode: run.mode,
+      state: run.state,
+      attempt: run.attempt,
+      receipts: run.receipts.length,
+      updatedAt: run.updatedAt,
+      hasThread: stored !== null,
+      attempts: attempts.length,
+      ...(attempts.length > 0 && attempts[attempts.length - 1]?.reviewVerdict ? { lastVerdict: attempts[attempts.length - 1]?.reviewVerdict as string } : {}),
+      hasModel: Boolean(stored?.model),
+    })
+  }
+  return { threads, errors: [] }
+}
+
+/**
+ * Opens a thread for activation, creating it on first touch. Activation
+ * reattaches history and the model endpoint; it never re-reads the world.
+ */
+export async function openTaskThread(root: string, runId: string): Promise<OpResult<TaskThreadDetail>> {
+  const loaded = await (async () => {
+    try {
+      return { run: await loadRun(root, runId), errors: [] as Diagnostic[] }
+    } catch (error) {
+      return { run: null, errors: [diag('IO_ERROR', `cannot load run ${runId}: ${(error as Error).message}`)] }
+    }
+  })()
+  if (!loaded.run) return { ok: false, run: null, errors: loaded.errors, data: { runId, taskUri: '', mode: '', state: '', attempt: 0, receipts: 0, updatedAt: '', hasThread: false, attempts: 0, hasModel: false, history: [] } }
+  let stored: Awaited<ReturnType<typeof ensureTaskThread>>
+  try {
+    stored = await ensureTaskThread(root, { runId, taskUri: loaded.run.taskUri, mode: loaded.run.mode })
+  } catch (error) {
+    return { ok: false, run: loaded.run, errors: [diag('IO_ERROR', error instanceof Error ? error.message : String(error))], data: { runId, taskUri: loaded.run.taskUri, mode: loaded.run.mode, state: loaded.run.state, attempt: loaded.run.attempt, receipts: loaded.run.receipts.length, updatedAt: loaded.run.updatedAt, hasThread: false, attempts: 0, hasModel: false, history: [] } }
+  }
+  const history = stored.attempts.map((item) => ({
+    attempt: item.attempt,
+    manifestHash: item.manifestHash,
+    checks: item.checks.map((check) => ({ id: check.id, kind: check.kind, status: check.status })),
+    ...(item.reviewVerdict ? { reviewVerdict: item.reviewVerdict } : {}),
+    ...(item.receiptId ? { receiptId: item.receiptId } : {}),
+    at: item.at,
+  }))
+  return {
+    ok: true,
+    run: loaded.run,
+    errors: [],
+    data: {
+      runId,
+      taskUri: loaded.run.taskUri,
+      mode: loaded.run.mode,
+      state: loaded.run.state,
+      attempt: loaded.run.attempt,
+      receipts: loaded.run.receipts.length,
+      updatedAt: loaded.run.updatedAt,
+      hasThread: true,
+      attempts: history.length,
+      ...(history.length > 0 && history[history.length - 1]?.reviewVerdict ? { lastVerdict: history[history.length - 1]?.reviewVerdict as string } : {}),
+      hasModel: Boolean(stored.model),
+      ...(stored.model ? { model: { ...stored.model } } : {}),
+      history,
+    },
+  }
+}
+
+/**
+ * Destroys a thread file plus its briefs after an explicit user decision.
+ * Notes, receipts, and run records always survive. Active owned runs refuse:
+ * pause, cancel, or finish first so no turn loses its thread mid-flight.
+ */
+export async function closeTaskThread(root: string, runId: string): Promise<OpResult<{ closed: boolean }>> {
+  let run: Awaited<ReturnType<typeof mustLoadRun>>
+  try {
+    run = await mustLoadRun(root, runId)
+  } catch (error) {
+    const failure = error as { code?: Diagnostic['code']; message?: string }
+    return { ok: false, run: null, errors: [diag(failure.code ?? 'IO_ERROR', failure.message ?? 'load failed')], data: { closed: false } }
+  }
+  if (run.lease && (run.state === 'running' || run.state === 'verifying')) {
+    return { ok: false, run, errors: [diag('BUSY', `run ${runId} is actively owned; pause, cancel, or finish it before closing its thread`, 'state')], data: { closed: false } }
+  }
+  const stored = await loadTaskThread(root, runId).catch(() => null)
+  if (!stored) return { ok: false, run, errors: [diag('NOT_FOUND', `no thread to close for run ${runId}`)], data: { closed: false } }
+  try {
+    await rm(join(root, '.agents', '.local', 'runs', runId, 'thread.json'), { force: true })
+    await rm(join(root, '.agents', '.local', 'runs', runId, 'briefs'), { recursive: true, force: true })
+  } catch (error) {
+    return { ok: false, run, errors: [diag('IO_ERROR', `cannot close thread for run ${runId}: ${(error as Error).message}`)], data: { closed: false } }
+  }
+  return { ok: true, run, errors: [], data: { closed: true } }
 }
 
 /**

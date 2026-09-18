@@ -14,6 +14,8 @@ import type {
   HarnessRunPrepareInput,
   HarnessRunState,
   HarnessShareSelection,
+  HarnessThreadDetail,
+  HarnessThreadSummary,
 } from '../../../shared/ipc/harness'
 
 export type {
@@ -31,6 +33,8 @@ export type {
   HarnessRunPrepareInput,
   HarnessRunState,
   HarnessShareSelection,
+  HarnessThreadDetail,
+  HarnessThreadSummary,
 }
 
 export function resolveProject(cwd: string): Promise<HarnessResolveResult> {
@@ -108,6 +112,18 @@ export function runHandoffRead(cwd: string, runId: string): Promise<{ path: stri
 
 export function runTakeover(cwd: string, runId: string, newOwner: string, reason: string): Promise<{ state: string }> {
   return window.electron.harness.runTakeover(cwd, runId, newOwner, reason)
+}
+
+export function runThreads(cwd: string): Promise<HarnessThreadSummary[]> {
+  return window.electron.harness.runThreads(cwd)
+}
+
+export function runThread(cwd: string, runId: string): Promise<HarnessThreadDetail> {
+  return window.electron.harness.runThread(cwd, runId)
+}
+
+export function runThreadClose(cwd: string, runId: string): Promise<{ closed: boolean }> {
+  return window.electron.harness.runThreadClose(cwd, runId)
 }
 
 export function runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 // Note: desktop entry to task runs incl. the xdo host — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
 // Note: external runner backflow surface — see .agents/notes/implemented/architecture/2026-09-18-external-runner-backflow.md
+// Note: thread registry, activation, and close — see .agents/notes/implemented/architecture/2026-09-18-thread-registry-activation.md
 import { useI18n } from '@/i18n/useI18n'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
 import { TaskContractEditor } from './TaskContractEditor'
@@ -19,10 +20,15 @@ import {
   runStart,
   runStatus,
   runTakeover,
+  runThread,
+  runThreadClose,
+  runThreads,
   type HarnessRunCloseout,
   type HarnessRunExecuteResult,
   type HarnessRunMode,
   type HarnessRunState,
+  type HarnessThreadDetail,
+  type HarnessThreadSummary,
 } from '@/services/harness'
 
 interface HarnessRunPanelProps {
@@ -49,13 +55,18 @@ function shortId(runId: string): string {
  * Run panel (S8-JanusX surface): prepares, starts, executes (desktop xdo host
  * with declared checks plus self-review), refreshes, pauses, resumes,
  * rebaselines, cancels, closeout-checks, hands off, and takes over task runs
- * through the harness IPC loop. External terminals enter through the handoff
- * file plus the entry command; their evidence flows back through rescan and
- * the shared kernel. Lease tokens never leave the main process.
+ * through the harness IPC loop. The thread registry below lists background
+ * threads for activation; a thread closes only through the explicit confirm
+ * step, never on completion alone. External terminals enter through the
+ * handoff file plus the entry command; their evidence flows back through
+ * rescan and the shared kernel. Lease tokens never leave the main process.
  */
 export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const { t } = useI18n('janus')
   const [runs, setRuns] = useState<HarnessRunState[]>([])
+  const [threads, setThreads] = useState<HarnessThreadSummary[]>([])
+  const [threadDetail, setThreadDetail] = useState<HarnessThreadDetail | null>(null)
+  const [confirmingClose, setConfirmingClose] = useState<string | null>(null)
   const [draft, setDraft] = useState<HarnessTaskDraft | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<HarnessRunMode>('xdo')
@@ -83,6 +94,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
       const own = listed.filter((run) => run.taskUri === taskUri)
       setRuns(own)
       setSelectedId((current) => (current && own.some((run) => run.runId === current) ? current : (own[0]?.runId ?? null)))
+      setThreads((await runThreads(cwd)).filter((thread) => thread.taskUri === taskUri))
       setError(null)
     } catch (err: unknown) {
       setError(t('janus:harness.runs.listFailed', { message: failureMessage(err) }))
@@ -91,6 +103,9 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
 
   useEffect(() => {
     setRuns([])
+    setThreads([])
+    setThreadDetail(null)
+    setConfirmingClose(null)
     setDraft(null)
     setSelectedId(null)
     setNotice(null)
@@ -261,6 +276,38 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
       await load()
     } catch (err: unknown) {
       setError(t('janus:harness.runs.takeoverFailed', { message: failureMessage(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleActivateThread = async (thread: HarnessThreadSummary) => {
+    if (busy) return
+    setBusy('thread')
+    setError(null)
+    try {
+      setSelectedId(thread.runId)
+      setThreadDetail(await runThread(cwd, thread.runId))
+      setConfirmingClose(null)
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.threadFailed', { message: failureMessage(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleThreadClose = async () => {
+    if (busy || !threadDetail) return
+    setBusy('thread-close')
+    setError(null)
+    try {
+      await runThreadClose(cwd, threadDetail.runId)
+      setNotice(t('janus:harness.runs.threadClosed', { run: shortId(threadDetail.runId) }))
+      setThreadDetail(null)
+      setConfirmingClose(null)
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.threadCloseFailed', { message: failureMessage(err) }))
     } finally {
       setBusy(null)
     }
@@ -499,6 +546,55 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           </div>
         </div>
       ) : null}
+      <div className="harness-run-panel__threads">
+        <span className="harness-run-panel__title">{t('janus:harness.runs.threadsTitle')}</span>
+        {threads.length === 0 ? (
+          <p className="harness-run-panel__notice" role="status">{t('janus:harness.runs.threadsEmpty')}</p>
+        ) : (
+          <ul className="harness-run-panel__runs">
+            {threads.map((thread) => (
+              <li key={thread.runId}>
+                <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleActivateThread(thread)}>
+                  {t('janus:harness.runs.threadActivate')}
+                </button>
+                <span className="harness-run-panel__state" data-state={thread.state}>{thread.state}</span>
+                <span>{shortId(thread.runId)}</span>
+                <span>{t('janus:harness.runs.threadAttempts', { count: thread.attempts })}</span>
+                {thread.lastVerdict ? <span>{thread.lastVerdict}</span> : null}
+                {!thread.hasThread ? <span>{t('janus:harness.runs.threadMissing')}</span> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        {threadDetail ? (
+          <div className="harness-run-panel__result" role="status">
+            <span>{t('janus:harness.runs.threadDetail', { run: shortId(threadDetail.runId) })}</span>
+            {threadDetail.model ? <span>{`${threadDetail.model.providerId}/${threadDetail.model.modelId}`}</span> : null}
+            <ul>
+              {threadDetail.history.map((item) => (
+                <li key={item.attempt}>{`attempt ${item.attempt} ${item.reviewVerdict ?? 'unreviewed'}${item.receiptId ? ` ${shortId(item.receiptId)}` : ''}`}</li>
+              ))}
+            </ul>
+            {confirmingClose === threadDetail.runId ? (
+              <div className="harness-run-panel__actions">
+                <span>{t('janus:harness.runs.threadCloseConfirm', { run: shortId(threadDetail.runId), receipts: threadDetail.receipts })}</span>
+                <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleThreadClose()}>
+                  {busy === 'thread-close' ? t('janus:harness.runs.threadClosing') : t('janus:harness.runs.threadCloseConfirmButton')}
+                </button>
+                <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => setConfirmingClose(null)}>
+                  {t('janus:harness.runs.threadCloseCancel')}
+                </button>
+              </div>
+            ) : (
+              <div className="harness-run-panel__actions">
+                <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => setConfirmingClose(threadDetail.runId)}>
+                  {t('janus:harness.runs.threadClose')}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
       {lastResult ? (
         <div className="harness-run-panel__result" role="status">
           <span>{t('janus:harness.runs.receiptLabel', { receipt: shortId(lastResult.receiptId) })}</span>

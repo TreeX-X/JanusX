@@ -4,12 +4,15 @@ import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   cancelTaskRun,
+  closeTaskThread,
   finishTaskRun,
   getTaskRun,
   getTaskRunState,
   listTaskRunStates,
+  listTaskThreads,
   handoffTaskRun,
   listTaskRuns,
+  openTaskThread,
   prepareTaskRun,
   readTaskHandoff,
   recordTaskReceipt,
@@ -206,7 +209,6 @@ describe('harness execution adapter (S8-JanusX)', () => {
     expect(gone.ok).toBe(false)
     expect(gone.errors.length).toBeGreaterThan(0)
   })
-
   it('reports missing runs without throwing', async () => {
     const root = await makeRoot()
     const missing = await getTaskRun(root, '01234567-89ab-4def-8123-456789abcdef')
@@ -214,6 +216,36 @@ describe('harness execution adapter (S8-JanusX)', () => {
     expect(missing.errors.length).toBeGreaterThan(0)
     const empty = await listTaskRuns(root)
     expect(empty).toMatchObject({ runs: [], errors: [] })
+  })
+
+  it('lists threadless runs, opens threads on activation, and closes only idle ones', async () => {
+    const { root, runId } = await startedRun()
+    const otherId = '44444444-4444-4333-8333-444444444444'
+    await fs.writeFile(join(root, '.agents', 'notes', `2026-09-18-second--${otherId.slice(0, 8)}.md`), taskNote(otherId, 'accepted').replaceAll(TASK_ID, otherId))
+    const second = await prepareTaskRun(root, { ...BASE, taskRef: `note://${REPO}/${otherId}` })
+    expect(second.ok).toBe(true)
+    const runId2 = second.data.runId
+
+    const listed = await listTaskThreads(root)
+    expect(listed.errors).toEqual([])
+    expect(listed.threads).toHaveLength(2)
+    expect(listed.threads.find((item) => item.runId === runId)).toMatchObject({ hasThread: false, attempts: 0 })
+
+    const opened = await openTaskThread(root, runId2)
+    expect(opened.ok).toBe(true)
+    expect(opened.data).toMatchObject({ runId: runId2, hasThread: true, history: [] })
+    expect((await listTaskThreads(root)).threads.find((item) => item.runId === runId2)).toMatchObject({ hasThread: true })
+
+    const busy = await closeTaskThread(root, runId)
+    expect(busy.ok).toBe(false)
+    expect(busy.errors.some((error) => error.code === 'BUSY')).toBe(true)
+
+    const closed = await closeTaskThread(root, runId2)
+    expect(closed).toMatchObject({ ok: true, data: { closed: true } })
+    expect((await listTaskThreads(root)).threads.find((item) => item.runId === runId2)).toMatchObject({ hasThread: false })
+    const gone = await closeTaskThread(root, runId2)
+    expect(gone.ok).toBe(false)
+    expect(gone.errors.some((error) => error.code === 'NOT_FOUND')).toBe(true)
   })
 
   it('finishes only when one receipt covers the task checks and acceptance refs', async () => {

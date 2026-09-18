@@ -28,10 +28,13 @@ import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
 import {
   cancelTaskRun,
   closeoutTaskRun,
+  closeTaskThread,
   getTaskRun,
   getTaskRunState,
   handoffTaskRun,
   listTaskRunStates,
+  listTaskThreads,
+  openTaskThread,
   pauseTaskRun,
   prepareTaskRun,
   readTaskHandoff,
@@ -545,6 +548,42 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const taken = await takeoverTaskRun(root, runId, newOwner.trim(), reason.trim())
       if (!taken.ok) throwRunFailure(taken.errors)
       return runStateOf(root, runId)
+    },
+  )
+
+  // ── thread registry (S8-JanusX): background threads list, activate, close ──
+  // Threads live with their run on this checkout. Closing destroys only the
+  // thread file plus briefs after an explicit user decision; Notes, receipts,
+  // and run records always survive.
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runThreads,
+    async (_e, cwd: string) => {
+      const root = await withRoot(cwd)
+      return (await listTaskThreads(root)).threads
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runThread,
+    async (_e, cwd: string, runId: string) => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run thread needs a run id', { path: 'runId' })
+      const opened = await openTaskThread(root, runId)
+      if (!opened.ok) throwRunFailure(opened.errors)
+      return opened.data
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runThreadClose,
+    async (_e, cwd: string, runId: string): Promise<{ closed: boolean }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run thread close needs a run id', { path: 'runId' })
+      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      const closed = await closeTaskThread(root, runId)
+      if (!closed.ok) throwRunFailure(closed.errors)
+      return closed.data
     },
   )
 }
