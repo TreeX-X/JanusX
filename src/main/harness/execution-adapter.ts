@@ -1,15 +1,16 @@
-// Note: JanusX task execution lands on the shared dispatch kernel here — see .agents/notes/implemented/architecture/2026-09-18-harness-execution-adapter-s8.md
+// Note: JanusX task execution lands on the neutral run kernel here — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
 /**
  * @file Harness execution adapter (S8-JanusX)
- * @description JanusX-side entry to the shared run lifecycle: prepare and start
+ * @description JanusX-side entry to the neutral run kernel: prepare and start
  *  recompute the C3 baseline from note files so desktop runs pin the same
  *  contract the terminal kernel pins; verify/record/finish/repair/pause/
  *  resume/cancel/takeover/rebaseline/mark/closeout/handoff are thin,
- *  root-first wrappers over `@janus-agent/janus-agent` with JanusX-owned
+ *  root-first wrappers over the kernel's run lifecycle with JanusX-owned
  *  checkout resolution left to callers. The adapter never runs models,
- *  shells, or builds: hashing and Git stay with harness-node, execution with
- *  the caller, review verdicts with the reviewer. Every contract violation
- *  returns diagnostics; only run-store IO failures surface as IO_ERROR.
+ *  shells, or builds: hashing and Git stay with harness-node, checks and
+ *  self-review stay with the desktop xdo host (`desktop-executor.ts`).
+ *  The CLI task-execution host is never re-exported or called here; the two
+ *  hosts are peers sharing only the contract and the receipt validator.
  *  No filesystem roots are invented here and no Electron is imported, so unit
  *  tests drive real temp checkouts.
  */
@@ -40,11 +41,6 @@ import {
 import { collectTaskBaseline, listTaskResults, readTaskResult, type TaskResult } from '@janus-agent/harness-node'
 import { type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
 import type { HarnessRunState } from '../../shared/ipc/harness'
-
-// Note: hosts share snapshot and task execution policy - see .agents/notes/implemented/architecture/2026-09-18-harness-execution-adapter-s8.md
-export { collectLiveSnapshot } from '@janus-agent/harness-node'
-export { prepareTaskTurn as prepareTaskExecutionTurn, verifyTaskExecution as executeTaskVerification } from '@janus-agent/janus-agent'
-export type { TaskTurnContext, TaskVerificationPorts } from '@janus-agent/janus-agent'
 
 // Note: desktop and terminal read the same portable proof - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
 function resultState(result: TaskResult, run?: HarnessRun): HarnessRunState {

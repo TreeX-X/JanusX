@@ -322,9 +322,10 @@ Proposal Pool 由 `kind=idea` 的列表视图表达。新标准移除 Hybrid Tre
 | WorkFlowX | 拟新增 `standards/harness-note/1/`，含规范、JSON Schema、模板、有效/无效 fixtures 和流程行为用例 | 唯一规范源；同时定义 Note、关系、验收和 xdo/xdel/xflow 的含义 |
 | WorkFlowX | `.codex` / `.claude` 下 noteX、proseX、orchestrateX、socratesX、specX、engineeringX、auditX、角色和 commands；根 AGENTS/CLAUDE | 更换路径/身份/模板规则、派发来源与收口约束；清理同事实的重复手写定义 |
 | janus-agentX | 拟新增 `packages/harness-core`，包名 `@janus-agent/harness-core` | 无 Electron、无文件系统副作用的 Note 解析、schema、图校验、状态规则和变更集计算 |
-| janus-agentX | 拟新增 `packages/harness-node`，提供 Note 文件仓库、watcher、锁、恢复日志和 CLI 可复用的操作入口 | 提供共享的 Node 存储适配器，禁止桌面与终端各实现一套持久化规则 |
+| janus-agentX | 拟新增 `packages/harness-node`，提供 Note 文件仓库、watcher、锁、恢复日志、运行内核（状态机、租约、收据生命周期，无 agent 依赖）和 CLI 可复用的操作入口 | 提供共享的 Node 存储与运行适配器，禁止桌面与终端各实现一套持久化或状态机规则 |
 | janus-agentX / WorkFlowX | 前者拟独立打包 `wfx-notes` 的轻量入口；后者提供可选安装说明、基础流程和契约用例 | 校验工具不捆绑代理运行时；没有工具的 WorkflowX 仍须通过独立使用验收 |
-| janus-agentX | `packages/janus-agent` 拟增加 harness 编排与端口；`packages/cli` 接入入口和状态显示 | 派发、快照、任务状态推进、证据及恢复；完整持久子线程独立展开 |
+| janus-agentX | `packages/janus-agent` 拟增加 harness 编排与端口；`packages/cli` 接入入口和状态显示 | 只保留 CLI 宿主的任务执行适配与派发快照；完整持久子线程独立展开 |
+| JanusX | `src/main/harness` 的桌面 xdo 宿主：桌面命令运行器、项目会话自审轮次、run IPC 与运行面板 | 调用中立运行内核，不调用 CLI 任务执行宿主；覆盖映射与收据规则与 CLI 一致 |
 | JanusX | `src/main/janus`、`src/main/ipc/janus-handlers.ts`、shared/preload、renderer services/stores/blueprint components | 切换到共享 Note 仓库；重用画布、详情、维护预览、撤销、焦点和终端关联能力 |
 | JanusX | `src/main/team/local-blueprint-repository.ts`、分析与知识引用入口 | 团队入口遵守项目文件权限与同一写服务，知识引用稳定 Note URI |
 
@@ -344,7 +345,7 @@ WorkFlowX 将发布带版本及内容摘要的标准 bundle。janus-agentX 在�
 2. 先在仅安装 WorkflowX 的 Codex/Claude 环境验证基础文件与导航流程；在 janus-agentX 完成 harness-core、Node 文件仓库和独立 `wfx-notes`，再证明可选工具能校验、更新、引用和恢复同一组文件，不捆绑代理运行时。
 3. 在 JanusX 接入共享仓库及文件事件，完成 Markdown/表单编辑、图关系操作、诊断、冲突与证据展示，同时完成跨仓库范围栏、节点仓库绑定、协作者首次打开、checkout 选择和分享预览。所有普通编辑、AI 维护、分析应用和团队写入口均接入同一服务；不能留 JSON 写旁路。
 4. 调整 WorkflowX 的全部相关 skill、模板、角色与 commands，以 idea 视图替代 Proposal Pool，以 task Note 吸收 Hybrid Tree 职责并移除其模板和强制规则；通过同步工具作用于三个仓库的 Codex/Claude 工作流配置。
-5. 接入 janus-agentX 内置 harness，补齐派发快照、状态机、验收收据和恢复。持久子线程的完整生命周期可另立执行任务，但不得重新发明 Note 或任务图。
+5. 接入内置执行：CLI 宿主与桌面 xdo 宿主对等，共用中立运行内核与收据校验，各带自己的命令运行器与评审轮次，补齐派发快照、状态机、验收收据和恢复。持久子线程的完整生命周期可另立执行任务，但不得重新发明 Note 或任务图。
 6. 用相同 fixtures 与跨终端场景验收发行组合，统一启用新格式。旧资产如何保留或删除不属于本方案的兼容设计，也不授权本轮删除任何文件。
 
 第一条可交付闭环为“仅 WorkflowX 的终端创建并维护 Note -> 可选工具检查同一文件 -> 蓝图显示 -> 蓝图改正文和关系 -> 终端继续维护 -> 外部修改触发刷新并能解决冲突”。完成这个闭环后再将内置任务驱动接入，能分别验证独立工作流、文件标准和执行机制，最终仍必须完成三仓库工作流的整体生效。

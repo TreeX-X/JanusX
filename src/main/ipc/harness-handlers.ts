@@ -18,6 +18,10 @@ import {
 } from '../harness/artifact-producer'
 import { harnessNoteService } from '../harness/service'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
+import { buildDesktopReviewPrompt } from '../harness/desktop-review'
+import { executeDesktopXdo, runDesktopCommand, reviewClaimFromText } from '../harness/desktop-executor'
+import { llmService } from '../llm/LlmService'
+import { generateText } from '../llm/ai-runtime'
 import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
 import {
   cancelTaskRun,
@@ -26,7 +30,10 @@ import {
   getTaskRunState,
   handoffTaskRun,
   listTaskRunStates,
+  pauseTaskRun,
   prepareTaskRun,
+  rebaselineTaskRun,
+  resumeTaskRun,
   startTaskRun,
 } from '../harness/execution-adapter'
 import {
@@ -38,6 +45,8 @@ import {
   type HarnessFailure,
   type HarnessResolveResult,
   type HarnessRunCloseoutResult,
+  type HarnessRunExecuteInput,
+  type HarnessRunExecuteResult,
   type HarnessRunPrepared,
   type HarnessRunPrepareInput,
   type HarnessRunState,
@@ -359,6 +368,130 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const handoff = await handoffTaskRun(root, runId)
       if (!handoff.ok) throwRunFailure(handoff.errors)
       return handoff.data
+    },
+  )
+
+  // ── desktop xdo host (S8-JanusX): checks plus self-review in the main process ──
+  // Lease tokens never cross IPC; the renderer passes intent and evidence only.
+
+  const inFlight = new Map<string, AbortController>()
+
+  async function runStateOf(root: string, runId: string): Promise<{ state: string }> {
+    const loaded = await getTaskRun(root, runId)
+    if (!loaded.run) throwRunFailure(loaded.errors)
+    return { state: loaded.run?.state ?? 'unknown' }
+  }
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runExecute,
+    async (_e, cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> => {
+      const root = await withRoot(cwd)
+      const runId = input?.runId
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run execute needs a run id', { path: 'runId' })
+      if (inFlight.has(runId)) throwFailure('BUSY', 'this run already has an in-flight execution; abort it first', { path: 'runId' })
+      const loaded = await getTaskRun(root, runId)
+      if (!loaded.run) throwRunFailure(loaded.errors)
+      const leaseToken = loaded.run?.lease?.token
+      if (!leaseToken) throwFailure('BUSY', 'run has no owner lease; start it before executing', { path: 'runId' })
+      const token = leaseToken as string
+      const taskUri = loaded.run?.taskUri as string
+      const attempt = loaded.run?.attempt ?? 0
+      const timeoutMs = input?.timeoutMs === undefined ? undefined : Math.min(600_000, Math.max(5_000, Math.floor(input.timeoutMs)))
+      const manualEvidence = Array.isArray(input?.manualEvidence) ? input.manualEvidence : []
+      for (const item of manualEvidence) {
+        if (!item || typeof item.stepId !== 'string' || typeof item.observer !== 'string' || typeof item.observation !== 'string') {
+          throwFailure('SCHEMA_INVALID', 'manual evidence needs stepId, observer, and observation', { path: 'manualEvidence' })
+        }
+      }
+      const controller = new AbortController()
+      inFlight.set(runId, controller)
+      try {
+        const providerId = input?.providerId
+        const modelId = input?.modelId
+        const executed = await executeDesktopXdo(root, runId, token, {
+          command: (step, signal) => runDesktopCommand(root, step, { ...(timeoutMs === undefined ? {} : { timeoutMs }), signal }),
+          review: async (reviewInput, signal) => {
+            if (!providerId || !modelId) {
+              throw new Error('CAPABILITY_UNAVAILABLE: self-review needs a provider and model; pick the review model and retry')
+            }
+            if (signal?.aborted) throw new Error('BUSY: review aborted; the run is paused')
+            const prompt = buildDesktopReviewPrompt({
+              taskUri,
+              attempt,
+              manifestHash: reviewInput.manifestHash,
+              manifest: reviewInput.manifest,
+              checks: reviewInput.checks,
+              criteria: reviewInput.criteria,
+            })
+            const model = await llmService.getLanguageModel('janus', providerId, modelId)
+            const result = await generateText({ model: model as never, maxSteps: 1, messages: [{ role: 'user', content: prompt }] as never })
+            const text = (result as { text?: string }).text?.trim() ?? ''
+            if (!text) throw new Error('NOT_READY: self-review returned no text; refusing completion')
+            const claim = reviewClaimFromText(text)
+            if (!claim.ok) throw new Error(`${claim.errors[0]?.code ?? 'SCHEMA_INVALID'}: ${claim.errors[0]?.message ?? 'self-review refused'}`)
+            return claim.claim
+          },
+        }, { manualEvidence, ...(timeoutMs === undefined ? {} : { timeoutMs }), signal: controller.signal })
+        if (!executed.ok) throwRunFailure(executed.errors)
+        return {
+          receiptId: executed.data.receiptId,
+          completed: executed.data.completed,
+          checks: executed.data.checks.map((check) => ({ id: check.id, kind: check.kind, status: check.status, summary: check.summary })),
+        }
+      } finally {
+        inFlight.delete(runId)
+      }
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runPause,
+    async (_e, cwd: string, runId: string): Promise<{ state: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run pause needs a run id', { path: 'runId' })
+      const loaded = await getTaskRun(root, runId)
+      if (!loaded.run) throwRunFailure(loaded.errors)
+      const paused = await pauseTaskRun(root, runId, loaded.run?.lease?.token ?? '')
+      if (!paused.ok) throwRunFailure(paused.errors)
+      return runStateOf(root, runId)
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runResume,
+    async (_e, cwd: string, runId: string): Promise<{ state: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run resume needs a run id', { path: 'runId' })
+      const loaded = await getTaskRun(root, runId)
+      if (!loaded.run) throwRunFailure(loaded.errors)
+      const resumed = await resumeTaskRun(root, runId, loaded.run?.lease?.token ?? '')
+      if (!resumed.ok) throwRunFailure(resumed.errors)
+      return runStateOf(root, runId)
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runRebaseline,
+    async (_e, cwd: string, runId: string, authorization: { by: string; ref?: string } | null): Promise<{ state: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run rebaseline needs a run id', { path: 'runId' })
+      const loaded = await getTaskRun(root, runId)
+      if (!loaded.run || !loaded.run.taskUri) throwRunFailure(loaded.errors.length ? loaded.errors : [{ code: 'NOT_FOUND', message: 'run is missing' }])
+      const rebased = await rebaselineTaskRun(root, runId, loaded.run?.lease?.token ?? '', loaded.run?.taskUri as string, authorization ?? null)
+      if (!rebased.ok) throwRunFailure(rebased.errors)
+      return runStateOf(root, runId)
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runAbort,
+    async (_e, cwd: string, runId: string): Promise<{ state: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run abort needs a run id', { path: 'runId' })
+      const controller = inFlight.get(runId)
+      if (!controller) throwFailure('NOT_READY', 'no in-flight execution owns this run', { path: 'runId' })
+      ;(controller as AbortController).abort()
+      return runStateOf(root, runId)
     },
   )
 }

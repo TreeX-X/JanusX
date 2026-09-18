@@ -59,8 +59,30 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   getTaskRun: vi.fn(),
   handoffTaskRun: vi.fn(),
   listTaskRuns: vi.fn(),
+  pauseTaskRun: vi.fn(),
   prepareTaskRun: vi.fn(),
+  rebaselineTaskRun: vi.fn(),
+  resumeTaskRun: vi.fn(),
   startTaskRun: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/desktop-executor', () => ({
+  executeDesktopXdo: vi.fn(),
+  runDesktopCommand: vi.fn(),
+  reviewClaimFromText: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/desktop-review', () => ({
+  buildDesktopReviewPrompt: vi.fn(),
+  parseDesktopReviewClaim: vi.fn(),
+}))
+
+vi.mock('../../src/main/llm/LlmService', () => ({
+  llmService: { getLanguageModel: vi.fn() },
+}))
+
+vi.mock('../../src/main/llm/ai-runtime', () => ({
+  generateText: vi.fn(),
 }))
 
 async function loadAll(): Promise<void> {
@@ -103,6 +125,11 @@ describe('harness IPC contract', () => {
       'runCancel',
       'runCloseout',
       'runHandoff',
+      'runExecute',
+      'runPause',
+      'runResume',
+      'runRebaseline',
+      'runAbort',
       'onChanged',
     ] as const) {
       expect(typeof harnessApi[method], method).toBe('function')

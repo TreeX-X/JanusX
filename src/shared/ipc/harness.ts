@@ -17,6 +17,11 @@ export const HARNESS_COMMAND_CHANNELS = {
   runCancel: 'harness:run:cancel',
   runCloseout: 'harness:run:closeout',
   runHandoff: 'harness:run:handoff',
+  runExecute: 'harness:run:execute',
+  runPause: 'harness:run:pause',
+  runResume: 'harness:run:resume',
+  runRebaseline: 'harness:run:rebaseline',
+  runAbort: 'harness:run:abort',
   taskRead: 'harness:task:read',
   taskAdopt: 'harness:task:adopt',
 } as const
@@ -118,6 +123,26 @@ export interface HarnessRunCloseoutResult {
   detail: string
 }
 
+export interface HarnessRunManualEvidence {
+  stepId: string
+  observer: string
+  observation: string
+}
+
+export interface HarnessRunExecuteInput {
+  runId: string
+  providerId?: string
+  modelId?: string
+  manualEvidence?: HarnessRunManualEvidence[]
+  timeoutMs?: number
+}
+
+export interface HarnessRunExecuteResult {
+  receiptId: string
+  completed: boolean
+  checks: Array<{ id: string; kind: string; status: string; summary: string }>
+}
+
 export interface HarnessTaskContractInput {
   scope: string
   criteria: Array<{ id: string; text: string }>
@@ -151,5 +176,10 @@ export interface HarnessAPI {
   runCancel(cwd: string, runId: string): Promise<{ state: string }>
   runCloseout(cwd: string, runId: string): Promise<HarnessRunCloseoutResult>
   runHandoff(cwd: string, runId: string): Promise<{ path: string }>
+  runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult>
+  runPause(cwd: string, runId: string): Promise<{ state: string }>
+  runResume(cwd: string, runId: string): Promise<{ state: string }>
+  runRebaseline(cwd: string, runId: string, authorization: { by: string; ref?: string } | null): Promise<{ state: string }>
+  runAbort(cwd: string, runId: string): Promise<{ state: string }>
   onChanged(callback: (event: HarnessChangedEvent) => void): () => void
 }

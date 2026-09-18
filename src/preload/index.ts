@@ -249,6 +249,12 @@ const harnessAPI: HarnessAPI = {
   runCancel: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCancel, cwd, runId),
   runCloseout: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCloseout, cwd, runId),
   runHandoff: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runHandoff, cwd, runId),
+  runExecute: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runExecute, cwd, input),
+  runPause: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runPause, cwd, runId),
+  runResume: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runResume, cwd, runId),
+  runRebaseline: (cwd, runId, authorization) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runRebaseline, cwd, runId, authorization),
+  runAbort: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runAbort, cwd, runId),
   shareExport: (cwd, selection, outPath) =>
     ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareExport, cwd, selection, outPath),
   onChanged: (callback) => subscribeIpcEvent(HARNESS_EVENT_CHANNELS.changed, callback),
@@ -273,11 +279,6 @@ const officeAPI: OfficeAPI = {
   stopPreview: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.stopPreview, request),
   reloadPreview: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.reloadPreview, request),
   buildPrompt: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.buildPrompt, request),
-  installerStatus: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerStatus, request),
-  installerStart: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerStart, request),
-  installerCancel: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerCancel, request),
-  installerRemove: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerRemove, request),
-  onInstallerProgress: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.installerProgress, callback),
   onFilesChanged: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.filesChanged, callback),
   onWatchEvicted: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.watchEvicted, callback),
 }

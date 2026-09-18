@@ -173,7 +173,7 @@ janus-chat 的新增持久字段为 engineeringContext、artifactRefs、activeRu
 
 内置启动返回 `{runId,taskUri,state,executor:'internal'}`；外部终端使用同一 Task URI、固定基线及模式生成 handoff 文件 `.local/runs/<runId>/handoff.md`，通过已有 CLI resolver/runner 与参数数组启动。provider 若不能验证支持 prompt 参数，则打开终端并显示可复制的入口指令，run 标 awaiting-launch，不宣称运行成功。进程退出只是事件，不代表任务 done；检测文件与收据决定结果。handoff 不成为长期任务正文，删除本地 run 后 Note 仍可从新宿主继续。
 
-内置 xdel/xflow 要求可调用的子执行器/评审能力；没有能力时返回 CAPABILITY_UNAVAILABLE（CLI 退出码 6），不由主代理冒充 evaluator。xdo 可直接执行。自动启动多任务仅限授权的任务集合及已允许的并发；默认串行依赖调度。失败不自动改写其他任务的 scope。
+内置 xdel/xflow 要求可调用的子执行器/评审能力；没有能力时返回 CAPABILITY_UNAVAILABLE（CLI 退出码 6），不由主代理冒充 evaluator。xdo 可直接执行。桌面 xdo 宿主驻 JanusX 主进程：以中立运行内核推进状态，以桌面命令运行器执行已声明的 command 校验，以项目会话的只读自审轮次生成覆盖映射；不得调用 `@janus-agent/janus-agent` 的 CLI 任务执行宿主，两个宿主只共享内核与收据校验，不共享对方的运行时。自动启动多任务仅限授权的任务集合及已允许的并发；默认串行依赖调度。失败不自动改写其他任务的 scope。
 
 ### C7 包边界与具体文件落点
 
@@ -185,7 +185,7 @@ janus-chat 的新增持久字段为 engineeringContext、artifactRefs、activeRu
 | `packages/harness-node` | `src/repository.ts`、`resolver.ts`、`transaction.ts`、`journal.ts`、`watcher.ts`、`git-evidence.ts`、`index.ts` | harness-core 与 Node 内置模块，无 agent-core |
 | `packages/notes-cli` | `src/cli.ts`、`commands.ts`，bin=`wfx-notes` | harness-core/harness-node；不导入 janus-agent、cli、node-hosts 的 barrel |
 
-janus-agentX 现有 `packages/janus-agent/src/ports.ts`、`orchestrator/chat-turn.ts` 接入可选工程能力，新增 `src/harness/dispatcher.ts` 与 `runtime.ts` 承担运行调度。`packages/cli/src` 增 notes 命令路由与 harness 命令适配；`janus notes` 必须调用 notes-cli 导出的命令函数，不能复制实现。打包先 core -> node -> notes-cli，再构建运行宿主，发布依赖不得保留兄弟目录 file 路径。
+janus-agentX 现有 `packages/janus-agent/src/ports.ts`、`orchestrator/chat-turn.ts` 接入可选工程能力。运行内核（`dispatcher.ts` 与 `run-store.ts`：状态机、租约、收据生命周期）只依赖 `harness-core`、`harness-node` 与 Node 内置模块，不依赖 `agent-core`、`chat-core`、模型或 Electron；它是中立内核，随 `harness-node` 发行，CLI 宿主与桌面宿主都调用它，宿主之间不互相调用。`packages/janus-agent` 只保留 CLI 宿主的任务执行适配（`prepareTaskTurn`/`verifyTaskExecution`，依赖 `ChatTurn` 与终端命令运行时）；JanusX 执行链禁止复用该 CLI 任务执行宿主，对话编排继续复用 `runChatTurn` 不在此限，那是聊天能力，不是执行内核。`packages/cli/src` 增 notes 命令路由与 harness 命令适配；`janus notes` 必须调用 notes-cli 导出的命令函数，不能复制实现。打包先 core -> node -> notes-cli，再构建运行宿主，发布依赖不得保留兄弟目录 file 路径。
 
 JanusX 新增 `src/main/harness/{service,conversation-context,execution-adapter,artifact-producer}.ts` 和 `src/shared/ipc/harness.ts`，调整 `src/preload/index.ts`。`src/main/janus/blueprint-store.ts` 退出 JSON 内容写入，renderer 读取共享图投影；共享类型保留 UI 视图类型，不在两仓库重复定义 Note schema。`src/main/team/local-blueprint-repository.ts` 接入相同服务，团队服务器不在第一版范围。
 

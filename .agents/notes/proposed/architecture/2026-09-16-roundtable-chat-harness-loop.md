@@ -14,7 +14,7 @@ Status: proposed
 
 [任务合同采纳](../../implemented/architecture/2026-09-18-task-contract-adoption.md) 支持补全圆桌 action 草稿的 scope、AC、引用和验证步骤，显式转为 accepted 后开放执行准备。当前表单限单个 primary repo。集成用例通过共享执行内核运行真实检查命令，以评审 stub 形成正式结果，再从新 clone 重建完成状态及需求覆盖率；浏览器用例使用模拟 IPC/model，不能替代真实 Electron 或模型执行验收。
 
-下一批接入桌面 xdo 真实执行器：从已采纳 task 读取固定合同和基线，绑定已有授权与范围受限的工具，在同一 run 内执行和取消，运行声明的检查与自审，保存正式 receipt，并刷新蓝图覆盖率及 closeout。验收至少覆盖成功、检查失败、取消、重复启动、重启恢复和基线过期，且无正式收据不能显示完成。之后再接 Ink、外部 runners、xdel/xflow 的独立评审与有限修复，完成实际 Electron、发行包及跨平台联动验证后再切换三仓库规则。状态总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
+下一批接入桌面 xdo 真实执行器：从已采纳 task 读取固定合同和基线，绑定已有授权与范围受限的工具，在同一 run 内执行和取消，运行声明的检查与自审，保存正式 receipt，并刷新蓝图覆盖率及 closeout。桌面宿主调用中立运行内核（状态机、租约、收据生命周期，随 `harness-node` 发行），自带桌面命令运行器与项目会话自审轮次；禁止复用 `@janus-agent/janus-agent` 的 CLI 任务执行宿主，两个宿主对等，只共享契约与校验。验收至少覆盖成功、检查失败、取消、重复启动、重启恢复和基线过期，且无正式收据不能显示完成。之后再接 Ink、外部 runners、xdel/xflow 的独立评审与有限修复，完成实际 Electron、发行包及跨平台联动验证后再切换三仓库规则。状态总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
 
 ### 当前代码的接点和断点
 
@@ -200,7 +200,7 @@ conversationId 标识对话，roundtableSessionId 标识会议，Task URI 标识
 | Profile/Context | resolveProfile、resolveContext、readTemplate | 固定标准版本，识别来源域和授权资源；不支持时禁止写入并解释限制 |
 | Artifact | search、read、neighbors、prepareChangeSet、validate、apply | 校验 URI、文件哈希、关系与授权；返回明确 applied/conflict/invalid 等结果 |
 | Task（Artifact 的类型操作） | prepareTasks、read、validate、apply | 对 task Note 与关系使用同一资产服务，固定 AC 与决策基线；不增设独立计划存储，不因创建任务自动执行 |
-| Execution | start、status、pause、resume、cancel、requestReview | 内置引擎或外部终端适配；保护状态机、幂等、权限、执行拥有者与预算 |
+| Execution | start、status、pause、resume、cancel、requestReview | 中立内核保护状态机、幂等、执行拥有者；CLI 宿主与桌面 xdo 宿主各带自己的命令运行器与评审轮次，互不调用 |
 | Discussion | start/continue/status 圆桌及 prepareArtifacts | 圆桌服务继续负责多角色调度，输出共享 ArtifactBundle；其他宿主可声明不可用 |
 
 底层共享定义使用领域类型，不携带 Electron、React 或窗口对象。JanusX 主进程提供文件根、模型、个人/工程召回和桌面交互适配；janus-agentX CLI 提供 Node 文件、终端交互和执行适配；纯 WorkflowX 用文档与宿主代理实现同一产物和验收契约。缺少圆桌并不影响 Note 或基础实施流程，圆桌是可选的讨论生产者。

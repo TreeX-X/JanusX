@@ -11,6 +11,15 @@ const mocks = vi.hoisted(() => ({
   cancelTaskRun: vi.fn(),
   closeoutTaskRun: vi.fn(),
   handoffTaskRun: vi.fn(),
+  pauseTaskRun: vi.fn(),
+  resumeTaskRun: vi.fn(),
+  rebaselineTaskRun: vi.fn(),
+  executeDesktopXdo: vi.fn(),
+  runDesktopCommand: vi.fn(),
+  reviewClaimFromText: vi.fn(),
+  buildDesktopReviewPrompt: vi.fn(),
+  getLanguageModel: vi.fn(),
+  generateText: vi.fn(),
 }))
 
 const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
@@ -38,6 +47,27 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   cancelTaskRun: mocks.cancelTaskRun,
   closeoutTaskRun: mocks.closeoutTaskRun,
   handoffTaskRun: mocks.handoffTaskRun,
+  pauseTaskRun: mocks.pauseTaskRun,
+  resumeTaskRun: mocks.resumeTaskRun,
+  rebaselineTaskRun: mocks.rebaselineTaskRun,
+}))
+
+vi.mock('../../src/main/harness/desktop-executor', () => ({
+  executeDesktopXdo: mocks.executeDesktopXdo,
+  runDesktopCommand: mocks.runDesktopCommand,
+  reviewClaimFromText: mocks.reviewClaimFromText,
+}))
+
+vi.mock('../../src/main/harness/desktop-review', () => ({
+  buildDesktopReviewPrompt: mocks.buildDesktopReviewPrompt,
+}))
+
+vi.mock('../../src/main/llm/LlmService', () => ({
+  llmService: { getLanguageModel: mocks.getLanguageModel },
+}))
+
+vi.mock('../../src/main/llm/ai-runtime', () => ({
+  generateText: mocks.generateText,
 }))
 
 async function handler(channel: string): Promise<(...args: unknown[]) => Promise<unknown>> {
@@ -132,5 +162,56 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     const handoff = await handler(HARNESS_COMMAND_CHANNELS.runHandoff)
     mocks.handoffTaskRun.mockResolvedValueOnce({ ok: true, run: RUN, errors: [], data: { path: 'C:\\handoff.md' } })
     await expect(handoff({}, ROOT, 'run-1')).resolves.toEqual({ path: 'C:\\handoff.md' })
+  })
+
+  it('executes through the desktop host without leaking the lease token', async () => {
+    const execute = await handler(HARNESS_COMMAND_CHANNELS.runExecute)
+    mocks.getTaskRun.mockResolvedValueOnce({
+      run: { ...RUN, state: 'running', attempt: 1, lease: { token: 'tok', owner: 'desktop', at: 'now' } },
+      errors: [],
+    })
+    mocks.executeDesktopXdo.mockImplementationOnce(async (_root: string, runId: string, token: string, ports: unknown) => {
+      expect(runId).toBe('run-1')
+      expect(token).toBe('tok')
+      expect(ports).toMatchObject({ command: expect.any(Function), review: expect.any(Function) })
+      return { ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-1', completed: true, checks: [] } }
+    })
+    await expect(execute({}, ROOT, { runId: 'run-1', providerId: 'p', modelId: 'm' })).resolves.toMatchObject({
+      receiptId: 'r-1',
+      completed: true,
+    })
+
+    mocks.getTaskRun.mockResolvedValueOnce({ run: null, errors: [{ code: 'NOT_FOUND', message: 'gone' }] })
+    await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, lease: null }, errors: [] })
+    await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'BUSY' })
+
+    await expect(execute({}, ROOT, { runId: '' })).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'runId' })
+  })
+
+  it('pauses, resumes, rebaselines, and refuses stray aborts', async () => {
+    const pause = await handler(HARNESS_COMMAND_CHANNELS.runPause)
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, lease: { token: 'tok', owner: 'desktop', at: 'now' } }, errors: [] })
+    mocks.pauseTaskRun.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'paused' }, errors: [], data: undefined })
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'paused' }, errors: [] })
+    await expect(pause({}, ROOT, 'run-1')).resolves.toEqual({ state: 'paused' })
+    expect(mocks.pauseTaskRun).toHaveBeenCalledWith(ROOT, 'run-1', 'tok')
+
+    const resume = await handler(HARNESS_COMMAND_CHANNELS.runResume)
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'paused', lease: { token: 'tok', owner: 'desktop', at: 'now' } }, errors: [] })
+    mocks.resumeTaskRun.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'running' }, errors: [], data: { state: 'running' } })
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'running' }, errors: [] })
+    await expect(resume({}, ROOT, 'run-1')).resolves.toEqual({ state: 'running' })
+
+    const rebaseline = await handler(HARNESS_COMMAND_CHANNELS.runRebaseline)
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'paused', taskUri: TASK_URI, lease: { token: 'tok', owner: 'desktop', at: 'now' } }, errors: [] })
+    mocks.rebaselineTaskRun.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'queued' }, errors: [], data: undefined })
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'queued' }, errors: [] })
+    await expect(rebaseline({}, ROOT, 'run-1', { by: 'desktop' })).resolves.toEqual({ state: 'queued' })
+    expect(mocks.rebaselineTaskRun).toHaveBeenCalledWith(ROOT, 'run-1', 'tok', TASK_URI, { by: 'desktop' })
+
+    const abort = await handler(HARNESS_COMMAND_CHANNELS.runAbort)
+    await expect(abort({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'NOT_READY' })
   })
 })

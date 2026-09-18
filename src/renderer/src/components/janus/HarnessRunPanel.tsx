@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
-// Note: desktop entry to task runs — see .agents/notes/implemented/architecture/2026-09-18-harness-execution-adapter-s8.md
+// Note: desktop entry to task runs incl. the xdo host — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
 import { useI18n } from '@/i18n/useI18n'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
 import { TaskContractEditor } from './TaskContractEditor'
 import {
+  runAbort,
   runCancel,
   runCloseout,
+  runExecute,
   runHandoff,
   runList,
+  runPause,
   runPrepare,
+  runRebaseline,
+  runResume,
   runStart,
   runStatus,
   type HarnessRunCloseout,
+  type HarnessRunExecuteResult,
   type HarnessRunMode,
   type HarnessRunState,
 } from '@/services/harness'
@@ -35,9 +41,10 @@ function shortId(runId: string): string {
 }
 
 /**
- * Run panel (S8-JanusX surface): prepares, starts, refreshes, cancels,
- * closeout-checks, and hands off task runs through the harness IPC loop.
- * Verify/record/finish/repair stay executor-side until evidence UX lands.
+ * Run panel (S8-JanusX surface): prepares, starts, executes (desktop xdo host
+ * with declared checks plus self-review), refreshes, pauses, resumes,
+ * rebaselines, cancels, closeout-checks, and hands off task runs through the
+ * harness IPC loop. Lease tokens never leave the main process.
  */
 export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const { t } = useI18n('janus')
@@ -48,11 +55,16 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const [closeout, setCloseout] = useState<HarnessRunCloseout>('commit-required')
   const [owner, setOwner] = useState('desktop')
   const [authRef, setAuthRef] = useState('')
+  const [providerId, setProviderId] = useState('')
+  const [modelId, setModelId] = useState('')
+  const [evidence, setEvidence] = useState<Record<string, { observer: string; observation: string }>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [executing, setExecuting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [closeoutMsg, setCloseoutMsg] = useState<string | null>(null)
   const [handoffPath, setHandoffPath] = useState<string | null>(null)
+  const [lastResult, setLastResult] = useState<HarnessRunExecuteResult | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -74,10 +86,13 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
     setNotice(null)
     setCloseoutMsg(null)
     setHandoffPath(null)
+    setLastResult(null)
+    setEvidence({})
     void load()
   }, [load])
 
   const selected = runs.find((run) => run.runId === selectedId) ?? null
+  const manualSteps = (draft?.contract?.work?.verification ?? []).filter((step) => step.kind === 'manual')
 
   const handlePrepare = async () => {
     if (busy) return
@@ -116,6 +131,95 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
       await load()
     } catch (err: unknown) {
       setError(t('janus:harness.runs.startFailed', { message: failureMessage(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleExecute = async () => {
+    if (busy || executing || !selected) return
+    setBusy('execute')
+    setExecuting(true)
+    setError(null)
+    setNotice(null)
+    setLastResult(null)
+    try {
+      const result = await runExecute(cwd, {
+        runId: selected.runId,
+        ...(providerId.trim() ? { providerId: providerId.trim() } : {}),
+        ...(modelId.trim() ? { modelId: modelId.trim() } : {}),
+        manualEvidence: Object.entries(evidence)
+          .filter(([, item]) => item.observer.trim() && item.observation.trim())
+          .map(([stepId, item]) => ({ stepId, observer: item.observer.trim(), observation: item.observation.trim() })),
+      })
+      setLastResult(result)
+      setNotice(t('janus:harness.runs.executed', { receipt: shortId(result.receiptId), completed: String(result.completed) }))
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.executeFailed', { message: failureMessage(err) }))
+      await load()
+    } finally {
+      setExecuting(false)
+      setBusy(null)
+    }
+  }
+
+  const handleAbort = async () => {
+    if (!selected) return
+    setError(null)
+    try {
+      const result = await runAbort(cwd, selected.runId)
+      setNotice(t('janus:harness.runs.aborted', { state: result.state }))
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.abortFailed', { message: failureMessage(err) }))
+    }
+  }
+
+  const handlePause = async () => {
+    if (busy || !selected) return
+    setBusy('pause')
+    setError(null)
+    try {
+      const result = await runPause(cwd, selected.runId)
+      setNotice(t('janus:harness.runs.paused', { state: result.state }))
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.pauseFailed', { message: failureMessage(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleResume = async () => {
+    if (busy || !selected) return
+    setBusy('resume')
+    setError(null)
+    try {
+      const result = await runResume(cwd, selected.runId)
+      setNotice(t('janus:harness.runs.resumed', { state: result.state }))
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.resumeFailed', { message: failureMessage(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleRebaseline = async () => {
+    if (busy || !selected) return
+    setBusy('rebaseline')
+    setError(null)
+    try {
+      const name = owner.trim() || 'desktop'
+      const result = await runRebaseline(cwd, selected.runId, {
+        by: name,
+        ...(authRef.trim() ? { ref: authRef.trim() } : {}),
+      })
+      setNotice(t('janus:harness.runs.rebaselined', { state: result.state }))
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.rebaselineFailed', { message: failureMessage(err) }))
     } finally {
       setBusy(null)
     }
@@ -218,6 +322,41 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           <input value={authRef} onChange={(event) => setAuthRef(event.target.value)} aria-label={t('janus:harness.runs.authRefLabel')} />
         </label>
       </div>
+      <div className="harness-run-panel__row">
+        <label>
+          <span>{t('janus:harness.runs.providerLabel')}</span>
+          <input value={providerId} onChange={(event) => setProviderId(event.target.value)} aria-label={t('janus:harness.runs.providerLabel')} placeholder="openai-compatible" />
+        </label>
+        <label>
+          <span>{t('janus:harness.runs.modelLabel')}</span>
+          <input value={modelId} onChange={(event) => setModelId(event.target.value)} aria-label={t('janus:harness.runs.modelLabel')} placeholder="gpt-4o-mini" />
+        </label>
+      </div>
+      {manualSteps.length > 0 ? (
+        <div className="harness-run-panel__evidence">
+          <span className="harness-run-panel__title">{t('janus:harness.runs.manualEvidenceTitle')}</span>
+          {manualSteps.map((step) => (
+            <div key={step.id} className="harness-run-panel__row">
+              <label>
+                <span>{t('janus:harness.runs.observerLabel', { step: step.id })}</span>
+                <input
+                  value={evidence[step.id]?.observer ?? ''}
+                  onChange={(event) => setEvidence((current) => ({ ...current, [step.id]: { observer: event.target.value, observation: current[step.id]?.observation ?? '' } }))}
+                  aria-label={t('janus:harness.runs.observerLabel', { step: step.id })}
+                />
+              </label>
+              <label>
+                <span>{t('janus:harness.runs.observationLabel', { step: step.id })}</span>
+                <input
+                  value={evidence[step.id]?.observation ?? ''}
+                  onChange={(event) => setEvidence((current) => ({ ...current, [step.id]: { observer: current[step.id]?.observer ?? '', observation: event.target.value } }))}
+                  aria-label={t('janus:harness.runs.observationLabel', { step: step.id })}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="harness-run-panel__actions">
         <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy || runs.length > 0 || draft?.lifecycle !== 'accepted'} onClick={() => void handlePrepare()}>
           {busy === 'prepare' ? t('janus:harness.runs.preparing') : t('janus:harness.runs.prepare')}
@@ -227,8 +366,25 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
             <button type="button" className="blueprint-btn" disabled={!!busy || selected.local === false || selected.state !== 'queued'} onClick={() => void handleStart()}>
               {busy === 'start' ? t('janus:harness.runs.starting') : t('janus:harness.runs.start')}
             </button>
-            <button type="button" className="blueprint-btn" disabled={!!busy} onClick={() => void handleRefresh()}>
+            <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy || executing || selected.local === false || !['running', 'verifying'].includes(selected.state) || selected.mode !== 'xdo'} onClick={() => void handleExecute()}>
+              {busy === 'execute' ? t('janus:harness.runs.executing') : t('janus:harness.runs.execute')}
+            </button>
+            {executing ? (
+              <button type="button" className="blueprint-btn" onClick={() => void handleAbort()}>
+                {t('janus:harness.runs.abort')}
+              </button>
+            ) : null}
+            <button type="button" className="blueprint-btn" disabled={!!busy || executing} onClick={() => void handleRefresh()}>
               {t('janus:harness.runs.refresh')}
+            </button>
+            <button type="button" className="blueprint-btn" disabled={!!busy || executing || !['queued', 'running', 'verifying'].includes(selected.state)} onClick={() => void handlePause()}>
+              {busy === 'pause' ? t('janus:harness.runs.pausing') : t('janus:harness.runs.pause')}
+            </button>
+            <button type="button" className="blueprint-btn" disabled={!!busy || executing || selected.state !== 'paused'} onClick={() => void handleResume()}>
+              {busy === 'resume' ? t('janus:harness.runs.resuming') : t('janus:harness.runs.resume')}
+            </button>
+            <button type="button" className="blueprint-btn" disabled={!!busy || executing || !['blocked', 'paused'].includes(selected.state)} onClick={() => void handleRebaseline()}>
+              {busy === 'rebaseline' ? t('janus:harness.runs.rebaselining') : t('janus:harness.runs.rebaseline')}
             </button>
             <button type="button" className="blueprint-btn" disabled={!!busy || selected.local === false || ['done', 'cancelled'].includes(selected.state)} onClick={() => void handleCancel()}>
               {busy === 'cancel' ? t('janus:harness.runs.cancelling') : t('janus:harness.runs.cancel')}
@@ -242,6 +398,17 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           </>
         ) : null}
       </div>
+      {lastResult ? (
+        <div className="harness-run-panel__result" role="status">
+          <span>{t('janus:harness.runs.receiptLabel', { receipt: shortId(lastResult.receiptId) })}</span>
+          <span>{t(lastResult.completed ? 'janus:harness.runs.completedLabel' : 'janus:harness.runs.uncompletedLabel')}</span>
+          <ul>
+            {lastResult.checks.map((check) => (
+              <li key={check.id}>{`${check.id} [${check.kind}/${check.status}] ${check.summary.slice(0, 160)}`}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {runs.length === 0 ? (
         <p className="harness-run-panel__notice" role="status">{t('janus:harness.runs.empty')}</p>
       ) : (

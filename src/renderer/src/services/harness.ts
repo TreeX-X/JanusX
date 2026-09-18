@@ -7,6 +7,8 @@ import type {
   HarnessResolveResult,
   HarnessRunCloseout,
   HarnessRunCloseoutResult,
+  HarnessRunExecuteInput,
+  HarnessRunExecuteResult,
   HarnessRunMode,
   HarnessRunPrepared,
   HarnessRunPrepareInput,
@@ -22,6 +24,8 @@ export type {
   HarnessResolveResult,
   HarnessRunCloseout,
   HarnessRunCloseoutResult,
+  HarnessRunExecuteInput,
+  HarnessRunExecuteResult,
   HarnessRunMode,
   HarnessRunPrepared,
   HarnessRunPrepareInput,
@@ -96,6 +100,30 @@ export function runCloseout(cwd: string, runId: string): Promise<HarnessRunClose
 
 export function runHandoff(cwd: string, runId: string): Promise<{ path: string }> {
   return window.electron.harness.runHandoff(cwd, runId)
+}
+
+export function runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> {
+  return window.electron.harness.runExecute(cwd, input)
+}
+
+export function runPause(cwd: string, runId: string): Promise<{ state: string }> {
+  return window.electron.harness.runPause(cwd, runId)
+}
+
+export function runResume(cwd: string, runId: string): Promise<{ state: string }> {
+  return window.electron.harness.runResume(cwd, runId)
+}
+
+export function runRebaseline(
+  cwd: string,
+  runId: string,
+  authorization: { by: string; ref?: string } | null,
+): Promise<{ state: string }> {
+  return window.electron.harness.runRebaseline(cwd, runId, authorization)
+}
+
+export function runAbort(cwd: string, runId: string): Promise<{ state: string }> {
+  return window.electron.harness.runAbort(cwd, runId)
 }
 
 export function onHarnessChanged(callback: (event: { root: string; rev: number; kinds: string[] }) => void): () => void {
