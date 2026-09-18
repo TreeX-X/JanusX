@@ -827,13 +827,13 @@ class BlueprintMaintenanceService {
       // (own recall above, own observation below).
       const ports = buildJanusChatTurnPorts({
         callerId: `blueprint-maintenance:${task.id}`,
-        getProviderSettings: (provider) => llmService.getProviderSettings(provider),
-        getLanguageModel: (provider, mid) => llmService.getLanguageModel(provider, mid),
+        getProviderSettings: (provider) => llmService.getProviderSettings('janus', provider),
+        getLanguageModel: (provider, mid) => llmService.getLanguageModel('janus', provider, mid),
         listModels: (provider) => {
           const catalog = llmService as typeof llmService & {
-            listModels?: (name: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
+            listModels?: (terminal: string, name: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
           }
-          return typeof catalog.listModels === 'function' ? catalog.listModels(provider) : Promise.resolve([])
+          return typeof catalog.listModels === 'function' ? catalog.listModels('janus', provider) : Promise.resolve([])
         },
         getMaxTurns: () => configService.getAgentMaxSteps().catch(() => DEFAULT_AGENT_MAX_STEPS),
         getAgentSession: (agentSessionId) => workspaceAgentRuntime.getSession(agentSessionId),
@@ -932,12 +932,12 @@ class BlueprintMaintenanceService {
         ? { provider: { id: providerId }, modelId: modelId ?? '' }
         : await llmService.getDefaultModel()
       if (!selected) throw new Error('尚未配置默认 AI 模型')
-      const model = await llmService.getLanguageModel(selected.provider.id, modelId || selected.modelId)
+      const model = await llmService.getLanguageModel('janus', selected.provider.id, modelId || selected.modelId)
       const modelListing = llmService as typeof llmService & {
-        listModels?: (provider: string) => Promise<Array<{ id: string; contextWindow?: number; maxOutputTokens?: number }>>
+        listModels?: (terminal: string, provider: string) => Promise<Array<{ id: string; contextWindow?: number; maxOutputTokens?: number }>>
       }
       const modelInfo = typeof modelListing.listModels === 'function'
-        ? (await modelListing.listModels(selected.provider.id).catch(() => [])).find((candidate) => candidate.id === (modelId || selected.modelId))
+        ? (await modelListing.listModels('janus', selected.provider.id).catch(() => [])).find((candidate) => candidate.id === (modelId || selected.modelId))
         : undefined
       const blueprintTools = createJanusBlueprintTools({ blueprint, allowedNodeIds: allowed })
       const blueprintRead = blueprintTools.find((tool) => tool.name === 'janus.blueprint.read')!

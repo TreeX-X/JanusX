@@ -32,12 +32,11 @@ async function freshHome() {
 }
 
 beforeEach(async () => {
-  const existing = await llmConfigStore.getAllProviders()
-  for (const provider of existing) {
-    await llmConfigStore.removeProvider(provider.id)
-  }
   for (const consumer of ['janus', 'claude', 'codex', 'opencode', 'pi'] as const) {
-    await llmConfigStore.setTerminalBinding(consumer, { providerId: null })
+    const existing = await llmConfigStore.getTerminalProviders(consumer)
+    for (const provider of existing) {
+      await llmConfigStore.removeTerminalProvider(consumer, provider.id)
+    }
   }
 })
 
@@ -198,25 +197,34 @@ describe('ExternalCliService terminal model channels', () => {
     await expect(instance.readTerminalModel('pi')).resolves.toMatchObject({ exists: true, model: 'owner/m' })
   })
 
-  it('honors the claude binding model override in credential sync', async () => {
-    await llmConfigStore.saveProviderSettings({
+  it('syncs credentials from the claude terminal collection only', async () => {
+    await llmConfigStore.saveTerminalProvider('claude', {
       id: 'relay-1',
       name: 'Relay',
       authType: AuthType.API_KEY,
       baseURL: 'https://relay.example.com/v1',
       apiKey: 'sk-test-1234567890',
-      modelId: 'provider-model',
+      modelId: 'claude-model',
       enabled: true,
     })
-    await llmConfigStore.setTerminalBinding('claude', { providerId: 'relay-1', modelId: 'override-model' })
+    // 同 id 在 janus 集合里是另一条配置，不影响 Claude 同步
+    await llmConfigStore.saveTerminalProvider('janus', {
+      id: 'relay-1',
+      name: 'Other',
+      authType: AuthType.API_KEY,
+      baseURL: 'https://other.example.com/v1',
+      apiKey: 'sk-other-1234567890',
+      modelId: 'other-model',
+      enabled: true,
+    })
     const instance = new DefaultExternalCliService(
       {},
       new ClaudeSettingsApplier(homeDir),
       new ExternalCliSyncStateStore(userDataDir),
       async (providerId) => {
         const provider = providerId === null
-          ? await llmConfigStore.getDefaultProvider()
-          : await llmConfigStore.getProviderSettings(providerId)
+          ? await llmConfigStore.getTerminalDefaultSettings('claude')
+          : await llmConfigStore.getTerminalProvider('claude', providerId)
         if (!provider) return null
         return {
           providerId: provider.id,
@@ -232,8 +240,9 @@ describe('ExternalCliService terminal model channels', () => {
     const result = await instance.applyProvider('claude', 'relay-1')
     expect(result.success).toBe(true)
     const live = JSON.parse(await readFile(join(homeDir, '.claude', 'settings.json'), 'utf8'))
-    expect(live.env.ANTHROPIC_MODEL).toBe('override-model')
-    expect(live.model).toBe('override-model')
+    expect(live.env.ANTHROPIC_BASE_URL).toBe('https://relay.example.com/v1')
+    expect(live.env.ANTHROPIC_MODEL).toBe('claude-model')
+    expect(live.model).toBe('claude-model')
   })
 })
 

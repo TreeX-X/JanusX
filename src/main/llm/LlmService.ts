@@ -14,6 +14,7 @@ import {
 } from '@janusx/llm-core'
 import type { ProviderSettings, LanguageModelV1, ModelInfo } from '@janusx/llm-core'
 import { llmConfigStore } from './ConfigStore'
+import type { LlmTerminalConsumer } from './ConfigStore'
 import { AuthType } from '@janusx/llm-core'
 import { app, session } from 'electron'
 
@@ -120,12 +121,12 @@ class LlmService {
   }
 
   /**
-   * 获取语言模型实例
+   * 获取语言模型实例（在指定终端的自有集合内解析）。
    */
-  async getLanguageModel(providerId: string, modelId: string): Promise<LanguageModelV1> {
+  async getLanguageModel(terminal: LlmTerminalConsumer, providerId: string, modelId: string): Promise<LanguageModelV1> {
     await this.initialize()
 
-    const settings = await llmConfigStore.getProviderSettings(providerId)
+    const settings = await llmConfigStore.getTerminalProvider(terminal, providerId)
     if (!settings) {
       throw new Error(`Provider "${providerId}" 未配置`)
     }
@@ -134,12 +135,12 @@ class LlmService {
   }
 
   /**
-   * 获取默认模型
+   * 获取单终端的默认模型
    */
-  async getDefaultModel(): Promise<{ provider: ProviderSettings; modelId: string } | null> {
+  async getTerminalDefaultModel(terminal: LlmTerminalConsumer): Promise<{ provider: ProviderSettings; modelId: string } | null> {
     await this.initialize()
 
-    const provider = await llmConfigStore.getDefaultProvider()
+    const provider = await llmConfigStore.getTerminalDefaultSettings(terminal)
     if (!provider) {
       return null
     }
@@ -151,9 +152,16 @@ class LlmService {
   }
 
   /**
-   * 保存 Provider 配置
+   * 获取默认模型：JanusX 内部（janus 终端）默认，后台特性统一走此口径。
    */
-  async saveProvider(settings: ProviderSettings): Promise<{ success: boolean; error?: string }> {
+  async getDefaultModel(): Promise<{ provider: ProviderSettings; modelId: string } | null> {
+    return this.getTerminalDefaultModel('janus')
+  }
+
+  /**
+   * 保存单终端的 Provider 配置
+   */
+  async saveTerminalProvider(terminal: LlmTerminalConsumer, settings: ProviderSettings): Promise<{ success: boolean; error?: string }> {
     await this.initialize()
 
     // 验证配置
@@ -166,7 +174,7 @@ class LlmService {
     }
 
     // 保存到配置
-    await llmConfigStore.saveProviderSettings(settings)
+    await llmConfigStore.saveTerminalProvider(terminal, settings)
 
     // 清除缓存
     this.factory.clearCache(settings.id)
@@ -211,55 +219,41 @@ class LlmService {
   }
 
   /**
-   * 获取指定 Provider 配置
+   * 获取单终端的指定 Provider 配置
    */
-  async getProviderSettings(providerId: string): Promise<ProviderSettings | null> {
-    return llmConfigStore.getProviderSettings(providerId)
+  async getProviderSettings(terminal: LlmTerminalConsumer, providerId: string): Promise<ProviderSettings | null> {
+    return llmConfigStore.getTerminalProvider(terminal, providerId)
   }
 
   /**
-   * 获取所有 Provider 配置
+   * 获取单终端的 Provider 列表
    */
-  async getAllProviders(): Promise<ProviderSettings[]> {
-    return llmConfigStore.getAllProviders()
+  async getTerminalProviders(terminal: LlmTerminalConsumer): Promise<ProviderSettings[]> {
+    return llmConfigStore.getTerminalProviders(terminal)
   }
 
   /**
-   * 删除 Provider
+   * 删除单终端的 Provider
    */
-  async removeProvider(providerId: string): Promise<void> {
-    await llmConfigStore.removeProvider(providerId)
+  async removeTerminalProvider(terminal: LlmTerminalConsumer, providerId: string): Promise<void> {
+    await llmConfigStore.removeTerminalProvider(terminal, providerId)
     this.factory.clearCache(providerId)
   }
 
   /**
-   * 设置默认 Provider
+   * 设置单终端的默认 Provider
    */
-  async setDefaultProvider(providerId: string): Promise<void> {
-    await llmConfigStore.setDefaultProvider(providerId)
+  async setTerminalDefault(terminal: LlmTerminalConsumer, providerId: string): Promise<void> {
+    await llmConfigStore.setTerminalDefault(terminal, providerId)
   }
 
   /**
-   * 获取全部终端绑定
+   * 获取可用模型列表（在指定终端的自有集合内解析）。
    */
-  async getTerminalBindings(): Promise<Record<string, { providerId: string | null; modelId?: string }>> {
-    return llmConfigStore.getTerminalBindings()
-  }
-
-  /**
-   * 设置单终端绑定
-   */
-  async setTerminalBinding(consumer: string, binding: { providerId: string | null; modelId?: string }): Promise<void> {
-    await llmConfigStore.setTerminalBinding(consumer as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi', binding)
-  }
-
-  /**
-   * 获取可用模型列表
-   */
-  async listModels(providerId: string): Promise<ModelInfo[]> {
+  async listModels(terminal: LlmTerminalConsumer, providerId: string): Promise<ModelInfo[]> {
     await this.initialize()
 
-    const settings = await llmConfigStore.getProviderSettings(providerId)
+    const settings = await llmConfigStore.getTerminalProvider(terminal, providerId)
     if (!settings) {
       throw new Error(`Provider "${providerId}" 未配置`)
     }

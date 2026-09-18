@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   answerChatQuestion,
   chatStream,
-  getDefaultProvider,
-  getProviders,
+  getTerminalDefault,
+  getTerminalProviders,
   listModels,
   cancelSteerChat,
   steerChat,
@@ -392,13 +392,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
 
   const loadConfiguredModels = useCallback(async (): Promise<ChatModelOption[]> => {
     try {
-      const [providers, defaultProvider] = await Promise.all([getProviders(), getDefaultProvider()])
+      const [providers, defaultProvider] = await Promise.all([getTerminalProviders('janus'), getTerminalDefault('janus')])
       const enabledProviders = providers.filter((provider) => provider.enabled !== false)
       const options = (await Promise.all(enabledProviders.map(async (provider) => {
         const configuredModelIds = provider.models?.length
           ? provider.models
           : [provider.modelId || (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')]
-        const models = await listModels(provider.id).catch(() => [])
+        const models = await listModels('janus', provider.id).catch(() => [])
         const modelIds = [...new Set([...models.map((model) => model.id), ...configuredModelIds].filter(Boolean))]
         return modelIds.map((modelId) => ({
           providerId: provider.id,

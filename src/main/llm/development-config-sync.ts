@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { ProviderSettings } from '@janusx/llm-core'
-
-interface StoredLlmConfig {
-  version: string
-  providers: Record<string, ProviderSettings>
-  defaultProvider: string | null
-}
+import {
+  countDistinctProviders,
+  emptyLlmConfig,
+  LLM_TERMINAL_CONSUMERS,
+  normalizeLlmConfigDocument,
+  type LlmConfig,
+} from './config-document'
 
 interface SyncMarker {
   sourceFingerprint: string
@@ -22,21 +22,20 @@ export interface DevelopmentLlmSyncStatus {
   error?: string
 }
 
-const EMPTY_CONFIG: StoredLlmConfig = { version: '1.0.0', providers: {}, defaultProvider: null }
+const EMPTY_CONFIG: LlmConfig = emptyLlmConfig()
 let latestStatus: DevelopmentLlmSyncStatus = { state: 'not-applicable', importedProviderCount: 0 }
 
-function parseConfig(path: string): StoredLlmConfig | null {
+function parseConfig(path: string): LlmConfig | null {
   try {
-    const value = JSON.parse(readFileSync(path, 'utf-8')) as Partial<StoredLlmConfig>
-    if (!value.providers || typeof value.providers !== 'object' || Array.isArray(value.providers)) return null
-    return {
-      version: typeof value.version === 'string' ? value.version : EMPTY_CONFIG.version,
-      providers: value.providers,
-      defaultProvider: typeof value.defaultProvider === 'string' ? value.defaultProvider : null,
-    }
+    const normalized = normalizeLlmConfigDocument(JSON.parse(readFileSync(path, 'utf-8')))
+    return normalized?.config ?? null
   } catch {
     return null
   }
+}
+
+function hasProviders(config: LlmConfig): boolean {
+  return LLM_TERMINAL_CONSUMERS.some((consumer) => Object.keys(config.terminals[consumer].providers).length > 0)
 }
 
 function readMarker(path: string): SyncMarker | null {
@@ -66,7 +65,7 @@ export function synchronizeInstalledLlmConfig(appDataRoot: string): DevelopmentL
   try {
     const source = sourceCandidates.find((candidate) => {
       const config = existsSync(candidate.path) ? parseConfig(candidate.path) : null
-      return config && Object.keys(config.providers).length > 0
+      return config && hasProviders(config)
     })
     if (!source) return latestStatus = { state: 'source-missing', importedProviderCount: 0 }
 
@@ -77,23 +76,28 @@ export function synchronizeInstalledLlmConfig(appDataRoot: string): DevelopmentL
     if (marker?.sourceFingerprint === sourceFingerprint && existsSync(developmentConfigPath)) {
       return latestStatus = {
         state: 'unchanged',
-        importedProviderCount: Object.keys(sourceConfig.providers).length,
+        importedProviderCount: countDistinctProviders(sourceConfig),
         sourceProfile: source.profile,
       }
     }
 
     const developmentConfig = existsSync(developmentConfigPath)
-      ? parseConfig(developmentConfigPath) ?? { ...EMPTY_CONFIG, providers: {} }
-      : { ...EMPTY_CONFIG, providers: {} }
-    const mergedProviders = { ...developmentConfig.providers, ...sourceConfig.providers }
-    const defaultProvider = sourceConfig.defaultProvider && mergedProviders[sourceConfig.defaultProvider]
-      ? sourceConfig.defaultProvider
-      : developmentConfig.defaultProvider
-    const merged: StoredLlmConfig = {
-      version: sourceConfig.version || developmentConfig.version,
-      providers: mergedProviders,
-      defaultProvider: defaultProvider ?? Object.keys(mergedProviders)[0] ?? null,
+      ? parseConfig(developmentConfigPath) ?? emptyLlmConfig()
+      : emptyLlmConfig()
+    const merged: LlmConfig = emptyLlmConfig()
+    for (const consumer of LLM_TERMINAL_CONSUMERS) {
+      const development = developmentConfig.terminals[consumer]
+      const sourceTerminal = sourceConfig.terminals[consumer]
+      const providers = { ...development.providers, ...sourceTerminal.providers }
+      const defaultId = sourceTerminal.defaultId && providers[sourceTerminal.defaultId]
+        ? sourceTerminal.defaultId
+        : development.defaultId
+      merged.terminals[consumer] = {
+        providers,
+        defaultId: defaultId ?? Object.keys(providers)[0] ?? null,
+      }
     }
+    merged.version = sourceConfig.version || developmentConfig.version
 
     mkdirSync(dirname(developmentConfigPath), { recursive: true })
     writeFileSync(developmentConfigPath, JSON.stringify(merged, null, 2), 'utf-8')
@@ -104,7 +108,7 @@ export function synchronizeInstalledLlmConfig(appDataRoot: string): DevelopmentL
     } satisfies SyncMarker, null, 2), 'utf-8')
     return latestStatus = {
       state: 'synchronized',
-      importedProviderCount: Object.keys(sourceConfig.providers).length,
+      importedProviderCount: countDistinctProviders(sourceConfig),
       sourceProfile: source.profile,
     }
   } catch (error) {

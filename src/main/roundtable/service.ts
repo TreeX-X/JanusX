@@ -49,7 +49,7 @@ export class RoundtableService {
         if (!target) throw new Error('圆桌会议需要全局默认模型：请在设置 → LLM 中把可用的 Provider 设为默认后重试。')
         let model
         try {
-          model = await llmService.getLanguageModel(target.provider.id, target.modelId)
+          model = await llmService.getLanguageModel('janus', target.provider.id, target.modelId)
         } catch (error) {
           throw new Error(`圆桌 Agent 模型创建失败 (${target.provider.id}/${target.modelId})：${error instanceof Error ? error.message : String(error)}`)
         }

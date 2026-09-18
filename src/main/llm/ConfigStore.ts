@@ -1,6 +1,6 @@
 /**
  * @file LLM 配置存储服务
- * @description 管理 LLM Provider 配置的持久化
+ * @description 按终端分集合持久化 LLM Provider 配置；各终端拥有独立列表与默认
  */
 
 import { app } from 'electron'
@@ -8,63 +8,29 @@ import { join } from 'path'
 import { readFile, rename } from 'fs/promises'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type { ProviderSettings } from '@janusx/llm-core'
+import {
+  emptyLlmConfig,
+  LLM_TERMINAL_CONSUMERS,
+  normalizeLlmConfigDocument,
+  type LlmConfig,
+  type LlmTerminalConsumer,
+} from './config-document'
 
-// Note: 按终端独立维护的 LLM 绑定（external-cli 单源+各端异构的 JSON 落法）——见 .agents/notes/implemented/feature/2026-09-18-settings-terminal-llm.md
-/** 与 external-cli 外部 CLI 对齐的终端消费者；shell 无 LLM，不参与绑定。 */
-export type LlmTerminalConsumer = 'janus' | 'claude' | 'codex' | 'opencode' | 'pi'
+export type { LlmTerminalConsumer } from './config-document'
+export { LLM_TERMINAL_CONSUMERS } from './config-document'
 
-export const LLM_TERMINAL_CONSUMERS: readonly LlmTerminalConsumer[] = ['janus', 'claude', 'codex', 'opencode', 'pi']
-
-/** 单终端绑定：null 表示跟随全局默认；modelId 为空时沿用 Provider 默认模型。 */
-export interface LlmTerminalBinding {
-  providerId: string | null
-  modelId?: string
-}
-
-interface LlmConfig {
-  version: string
-  providers: Record<string, ProviderSettings>
-  defaultProvider: string | null
-  terminalBindings: Record<LlmTerminalConsumer, LlmTerminalBinding>
-}
-
-function emptyBindings(): Record<LlmTerminalConsumer, LlmTerminalBinding> {
-  return { janus: { providerId: null }, claude: { providerId: null }, codex: { providerId: null }, opencode: { providerId: null }, pi: { providerId: null } }
-}
-
-function normalizeBindings(value: unknown): Record<LlmTerminalConsumer, LlmTerminalBinding> {
-  const base = emptyBindings()
-  if (typeof value !== 'object' || value === null) return base
-  const record = value as Record<string, unknown>
-  for (const consumer of LLM_TERMINAL_CONSUMERS) {
-    const entry = record[consumer] as Partial<LlmTerminalBinding> | undefined
-    if (entry && typeof entry === 'object' && ('providerId' in entry)) {
-      base[consumer] = {
-        providerId: typeof entry.providerId === 'string' ? entry.providerId : null,
-        ...(typeof entry.modelId === 'string' && entry.modelId.trim() ? { modelId: entry.modelId.trim() } : {}),
-      }
-    }
-  }
-  return base
-}
-
-const DEFAULT_CONFIG: LlmConfig = {
-  version: '1.0.0',
-  providers: {},
-  defaultProvider: null,
-  terminalBindings: emptyBindings(),
-}
+// Note: 各终端独立 Provider 集合（同一池拆分为五份，读旧池一次性迁移）——见 .agents/notes/implemented/feature/2026-09-18-terminal-provider-collections.md
 
 /**
  * LLM 配置存储服务
  */
-class LlmConfigStore {
+export class LlmConfigStore {
   private configPath: string
   private config: LlmConfig | null = null
   private writeQueue = new SerialQueue()
 
-  constructor() {
-    this.configPath = join(app.getPath('userData'), 'janusx', 'llm-config.json')
+  constructor(userDataDir?: string) {
+    this.configPath = join(userDataDir ?? app.getPath('userData'), 'janusx', 'llm-config.json')
   }
 
   /**
@@ -73,13 +39,10 @@ class LlmConfigStore {
   async load(): Promise<LlmConfig> {
     try {
       const data = await readFile(this.configPath, 'utf-8')
-      const parsed = JSON.parse(data) as Partial<LlmConfig>
-      this.config = {
-        ...DEFAULT_CONFIG,
-        ...parsed,
-        providers: (parsed.providers && typeof parsed.providers === 'object' ? parsed.providers : {}) as Record<string, ProviderSettings>,
-        terminalBindings: normalizeBindings((parsed as { terminalBindings?: unknown }).terminalBindings),
-      }
+      const normalized = normalizeLlmConfigDocument(JSON.parse(data))
+      if (!normalized) throw new Error('Unrecognized LLM config shape.')
+      this.config = normalized.config
+      if (normalized.migrated) await this.persist()
     } catch (error) {
       // 解析失败（文件存在但损坏）时先备份，避免默认配置覆盖后 Provider 配置无法恢复
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -89,7 +52,7 @@ class LlmConfigStore {
           /* 备份失败不阻塞启动 */
         }
       }
-      this.config = { ...DEFAULT_CONFIG }
+      this.config = emptyLlmConfig()
       await this.persist()
     }
     return this.config!
@@ -117,17 +80,43 @@ class LlmConfigStore {
     return this.config
   }
 
+  private static assertConsumer(consumer: string): asserts consumer is LlmTerminalConsumer {
+    if (!LLM_TERMINAL_CONSUMERS.includes(consumer as LlmTerminalConsumer)) {
+      throw new Error(`Unknown terminal consumer "${consumer}"`)
+    }
+  }
+
   /**
-   * 保存 Provider 配置
+   * 获取单终端的 Provider 列表（自有集合，不含其他终端条目）。
    */
-  async saveProviderSettings(settings: ProviderSettings): Promise<void> {
+  async getTerminalProviders(consumer: LlmTerminalConsumer): Promise<ProviderSettings[]> {
+    LlmConfigStore.assertConsumer(consumer)
+    const config = await this.get()
+    return Object.values(config.terminals[consumer].providers)
+  }
+
+  /**
+   * 获取单终端的指定 Provider。
+   */
+  async getTerminalProvider(consumer: LlmTerminalConsumer, providerId: string): Promise<ProviderSettings | null> {
+    LlmConfigStore.assertConsumer(consumer)
+    const config = await this.get()
+    return config.terminals[consumer].providers[providerId] || null
+  }
+
+  /**
+   * 保存单终端的 Provider 配置
+   */
+  async saveTerminalProvider(consumer: LlmTerminalConsumer, settings: ProviderSettings): Promise<void> {
+    LlmConfigStore.assertConsumer(consumer)
     await this.writeQueue.run(async () => {
       const config = await this.get()
-      config.providers[settings.id] = settings
+      const collection = config.terminals[consumer]
+      collection.providers[settings.id] = settings
 
-      // 如果是第一个 Provider，设为默认
-      if (!config.defaultProvider) {
-        config.defaultProvider = settings.id
+      // 如果是该终端第一个 Provider，设为该终端默认
+      if (!collection.defaultId) {
+        collection.defaultId = settings.id
       }
 
       await this.persist()
@@ -135,40 +124,19 @@ class LlmConfigStore {
   }
 
   /**
-   * 获取指定 Provider 配置
+   * 删除单终端的 Provider 配置
    */
-  async getProviderSettings(providerId: string): Promise<ProviderSettings | null> {
-    const config = await this.get()
-    return config.providers[providerId] || null
-  }
-
-  /**
-   * 获取所有 Provider 配置
-   */
-  async getAllProviders(): Promise<ProviderSettings[]> {
-    const config = await this.get()
-    return Object.values(config.providers)
-  }
-
-  /**
-   * 删除 Provider 配置
-   */
-  async removeProvider(providerId: string): Promise<void> {
+  async removeTerminalProvider(consumer: LlmTerminalConsumer, providerId: string): Promise<void> {
+    LlmConfigStore.assertConsumer(consumer)
     await this.writeQueue.run(async () => {
       const config = await this.get()
-      delete config.providers[providerId]
+      const collection = config.terminals[consumer]
+      delete collection.providers[providerId]
 
-      // 如果删除的是默认 Provider，重置默认
-      if (config.defaultProvider === providerId) {
-        const remaining = Object.keys(config.providers)
-        config.defaultProvider = remaining.length > 0 ? remaining[0]! : null
-      }
-
-      // 跟随清理各终端绑定：指向已删 Provider 的绑定退回跟随默认，不悬空。
-      for (const consumer of LLM_TERMINAL_CONSUMERS) {
-        if (config.terminalBindings[consumer]?.providerId === providerId) {
-          config.terminalBindings[consumer] = { providerId: null }
-        }
+      // 如果删除的是该终端默认，顺延到剩余首个
+      if (collection.defaultId === providerId) {
+        const remaining = Object.keys(collection.providers)
+        collection.defaultId = remaining.length > 0 ? remaining[0]! : null
       }
 
       await this.persist()
@@ -176,67 +144,31 @@ class LlmConfigStore {
   }
 
   /**
-   * 设置默认 Provider
+   * 设置单终端的默认 Provider
    */
-  async setDefaultProvider(providerId: string): Promise<void> {
+  async setTerminalDefault(consumer: LlmTerminalConsumer, providerId: string): Promise<void> {
+    LlmConfigStore.assertConsumer(consumer)
     await this.writeQueue.run(async () => {
       const config = await this.get()
-      if (config.providers[providerId]) {
-        config.defaultProvider = providerId
+      const collection = config.terminals[consumer]
+      if (collection.providers[providerId]) {
+        collection.defaultId = providerId
         await this.persist()
       }
     })
   }
 
   /**
-   * 获取默认 Provider
+   * 获取单终端的默认 Provider
    */
-  async getDefaultProvider(): Promise<ProviderSettings | null> {
+  async getTerminalDefaultSettings(consumer: LlmTerminalConsumer): Promise<ProviderSettings | null> {
+    LlmConfigStore.assertConsumer(consumer)
     const config = await this.get()
-    if (config.defaultProvider && config.providers[config.defaultProvider]) {
-      return config.providers[config.defaultProvider]!
+    const collection = config.terminals[consumer]
+    if (collection.defaultId && collection.providers[collection.defaultId]) {
+      return collection.providers[collection.defaultId]!
     }
     return null
-  }
-
-  /**
-   * 获取全部终端绑定（缺键按跟随默认补齐，调用方只读）。
-   */
-  async getTerminalBindings(): Promise<Record<LlmTerminalConsumer, LlmTerminalBinding>> {
-    const config = await this.get()
-    return { ...config.terminalBindings }
-  }
-
-  /**
-   * 设置单终端绑定：providerId 为 null 表示跟随全局默认。
-   */
-  async setTerminalBinding(consumer: LlmTerminalConsumer, binding: LlmTerminalBinding): Promise<void> {
-    if (!LLM_TERMINAL_CONSUMERS.includes(consumer)) throw new Error(`Unknown terminal consumer "${consumer}"`)
-    await this.writeQueue.run(async () => {
-      const config = await this.get()
-      if (binding.providerId !== null && !config.providers[binding.providerId]) {
-        throw new Error(`Provider "${binding.providerId}" 未配置`)
-      }
-      config.terminalBindings[consumer] = {
-        providerId: binding.providerId,
-        ...(binding.modelId?.trim() ? { modelId: binding.modelId.trim() } : {}),
-      }
-      await this.persist()
-    })
-  }
-
-  /**
-   * 解析单终端实际生效的 Provider：绑定优先，缺省回退全局默认。
-   */
-  async resolveTerminalProvider(consumer: LlmTerminalConsumer): Promise<{ provider: ProviderSettings; modelId: string } | null> {
-    const config = await this.get()
-    const binding = config.terminalBindings[consumer]
-    const bound = binding?.providerId ? config.providers[binding.providerId] : undefined
-    const provider = bound ?? (config.defaultProvider ? config.providers[config.defaultProvider] : undefined) ?? null
-    if (!provider) return null
-    const modelId = binding?.modelId?.trim() || provider.defaultModelId || provider.modelId || provider.models?.find(Boolean) || ''
-    if (!modelId) return { provider, modelId: '' }
-    return { provider, modelId }
   }
 }
 

@@ -30,10 +30,14 @@ let providerAbortCount = 0
 let providerStreamCount = 0
 
 Object.assign(window.electron.llm, {
-  getDefaultProvider: async () => ({
+  getTerminalProviders: async () => [
+    { id: 'fixture-provider', name: 'Fixture Provider', authType: AuthType.NONE },
+  ],
+  getTerminalDefault: async () => ({
     provider: { id: 'fixture-provider', name: 'Fixture Provider', authType: AuthType.NONE },
     modelId: 'fixture-model',
   }),
+  listModels: async () => [],
   startChatStream: (request: ChatStreamRequest) => {
     providerStreamCount += 1
     const prompt = request.messages.at(-1)?.content

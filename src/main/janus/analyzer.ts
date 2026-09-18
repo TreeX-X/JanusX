@@ -424,7 +424,7 @@ async function callLLM(
   if (!def) {
     throw new Error('no-default-llm')
   }
-  const model = await llmService.getLanguageModel(def.provider.id, def.modelId)
+  const model = await llmService.getLanguageModel('janus', def.provider.id, def.modelId)
   const generateStructuredObject = generateObject as unknown as (
     options: unknown,
   ) => Promise<{ object: SegmentResult }>

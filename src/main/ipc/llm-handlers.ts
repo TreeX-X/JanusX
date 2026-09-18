@@ -89,22 +89,22 @@ export function registerLlmHandlers(): void {
     return result
   })
 
-  // 获取所有 Provider 配置
-  ipcMain.handle(LLM_CHANNELS.getProviders, async () => {
+  // 获取单终端的 Provider 列表
+  ipcMain.handle(LLM_CHANNELS.getTerminalProviders, async (_, terminal: string) => {
     try {
-      return await llmService.getAllProviders()
+      return await llmService.getTerminalProviders(terminal as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi')
     } catch (error: any) {
-      console.error('[IPC] llm:get-providers error:', error)
+      console.error('[IPC] llm:get-terminal-providers error:', error)
       throw error
     }
   })
 
-  // 保存 Provider 配置
-  ipcMain.handle(LLM_CHANNELS.saveProvider, async (_, settings: ProviderSettings) => {
+  // 保存单终端的 Provider 配置
+  ipcMain.handle(LLM_CHANNELS.saveTerminalProvider, async (_, terminal: string, settings: ProviderSettings) => {
     try {
-      return await llmService.saveProvider(settings)
+      return await llmService.saveTerminalProvider(terminal as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi', settings)
     } catch (error: any) {
-      console.error('[IPC] llm:save-provider error:', error)
+      console.error('[IPC] llm:save-terminal-provider error:', error)
       return { success: false, error: error.message }
     }
   })
@@ -119,53 +119,42 @@ export function registerLlmHandlers(): void {
     }
   })
 
-  // 删除 Provider
-  ipcMain.handle(LLM_CHANNELS.removeProvider, async (_, providerId: string) => {
+  // 删除单终端的 Provider
+  ipcMain.handle(LLM_CHANNELS.removeTerminalProvider, async (_, terminal: string, providerId: string) => {
     try {
-      await llmService.removeProvider(providerId)
+      await llmService.removeTerminalProvider(terminal as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi', providerId)
       return { success: true }
     } catch (error: any) {
-      console.error('[IPC] llm:remove-provider error:', error)
+      console.error('[IPC] llm:remove-terminal-provider error:', error)
       return { success: false, error: error.message }
     }
   })
 
-  // 设置默认 Provider
-  ipcMain.handle(LLM_CHANNELS.setDefaultProvider, async (_, providerId: string) => {
+  // 设置单终端的默认 Provider
+  ipcMain.handle(LLM_CHANNELS.setTerminalDefault, async (_, terminal: string, providerId: string) => {
     try {
-      await llmService.setDefaultProvider(providerId)
+      await llmService.setTerminalDefault(terminal as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi', providerId)
       return { success: true }
     } catch (error: any) {
-      console.error('[IPC] llm:set-default-provider error:', error)
+      console.error('[IPC] llm:set-terminal-default error:', error)
       return { success: false, error: error.message }
     }
   })
 
-  // 获取全部终端绑定
-  ipcMain.handle(LLM_CHANNELS.getTerminalBindings, async () => {
+  // 获取单终端的默认 Provider
+  ipcMain.handle(LLM_CHANNELS.getTerminalDefault, async (_, terminal: string) => {
     try {
-      return await llmService.getTerminalBindings()
+      return await llmService.getTerminalDefaultModel(terminal as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi')
     } catch (error: any) {
-      console.error('[IPC] llm:get-terminal-bindings error:', error)
-      throw error
-    }
-  })
-
-  // 设置单终端绑定
-  ipcMain.handle(LLM_CHANNELS.setTerminalBinding, async (_, consumer: string, binding: { providerId: string | null; modelId?: string }) => {
-    try {
-      await llmService.setTerminalBinding(consumer, binding)
-      return { success: true }
-    } catch (error: any) {
-      console.error('[IPC] llm:set-terminal-binding error:', error)
-      return { success: false, error: error.message }
+      console.error('[IPC] llm:get-terminal-default error:', error)
+      return null
     }
   })
 
   // 获取可用模型列表
-  ipcMain.handle(LLM_CHANNELS.listModels, async (_, providerId: string) => {
+  ipcMain.handle(LLM_CHANNELS.listModels, async (_, terminal: string, providerId: string) => {
     try {
-      return await llmService.listModels(providerId)
+      return await llmService.listModels(terminal as 'janus' | 'claude' | 'codex' | 'opencode' | 'pi', providerId)
     } catch (error: any) {
       console.error('[IPC] llm:list-models error:', error)
       throw error
@@ -182,23 +171,13 @@ export function registerLlmHandlers(): void {
     }
   })
 
-  // 获取默认 Provider
-  ipcMain.handle(LLM_CHANNELS.getDefaultProvider, async () => {
-    try {
-      return await llmService.getDefaultModel()
-    } catch (error: any) {
-      console.error('[IPC] llm:get-default-provider error:', error)
-      return null
-    }
-  })
-
   // 对话请求（非流式）
   ipcMain.handle(LLM_CHANNELS.chat, async (_, request: ChatRequest) => {
     try {
       const { messages, providerId, modelId, sourceTag, workspaceId, workspacePath, workspaceResources } = request
       const soleResource = workspaceResources?.length === 1 ? workspaceResources[0] : undefined
 
-      const settings = await llmService.getProviderSettings(providerId)
+      const settings = await llmService.getProviderSettings('janus', providerId)
       if (!settings) {
         throw new Error(`Provider "${providerId}" 未配置`)
       }
@@ -224,7 +203,7 @@ export function registerLlmHandlers(): void {
       }
 
       // 使用 AI SDK
-      const model = await llmService.getLanguageModel(providerId, actualModelId)
+      const model = await llmService.getLanguageModel('janus', providerId, actualModelId)
 
       const result = await generateText({
         model: model as any,

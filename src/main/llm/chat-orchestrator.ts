@@ -281,13 +281,13 @@ function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['
 function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project'): ChatTurnPorts {
   return buildJanusChatTurnPorts({
     callerId,
-    getProviderSettings: (providerId) => llmService.getProviderSettings(providerId),
-    getLanguageModel: (providerId, modelId) => llmService.getLanguageModel(providerId, modelId),
+    getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
+    getLanguageModel: (providerId, modelId) => llmService.getLanguageModel('janus', providerId, modelId),
     listModels: (providerId) => {
       const catalog = llmService as typeof llmService & {
-        listModels?: (provider: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
+        listModels?: (terminal: string, provider: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
       }
-      return typeof catalog.listModels === 'function' ? catalog.listModels(providerId) : Promise.resolve([])
+      return typeof catalog.listModels === 'function' ? catalog.listModels('janus', providerId) : Promise.resolve([])
     },
     getMaxTurns: () => configService.getAgentMaxSteps().catch(() => CHAT_MAX_STEPS),
     getAgentSession: (agentSessionId) => workspaceAgentRuntime.getSession(agentSessionId),

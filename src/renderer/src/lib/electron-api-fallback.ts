@@ -193,10 +193,10 @@ export function installElectronApiFallback(): void {
       rollbackTerminal: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
     },
     llm: {
-      getProviders: unavailable, getRuntimeStatus: unavailable, saveProvider: unavailable, testConnection: unavailable,
-      removeProvider: unavailable, setDefaultProvider: unavailable, listModels: unavailable,
+      getTerminalProviders: unavailable, getRuntimeStatus: unavailable, saveTerminalProvider: unavailable,
+      testConnection: unavailable, removeTerminalProvider: unavailable, setTerminalDefault: unavailable,
+      getTerminalDefault: unavailable, listModels: unavailable,
       getModelCatalog: unavailable, refreshModelCatalog: unavailable, getAdapters: unavailable,
-      getDefaultProvider: unavailable, getTerminalBindings: unavailable, setTerminalBinding: unavailable,
       chat: unavailable, startChatStream: () => {}, abortChat: unavailable,
       steerChat: () => Promise.resolve({ accepted: false, error: 'Electron LLM API is unavailable' }),
       cancelSteerChat: () => Promise.resolve({ cancelled: false }),

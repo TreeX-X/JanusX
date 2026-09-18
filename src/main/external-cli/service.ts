@@ -49,9 +49,10 @@ export interface ExternalCliLlmCredentials {
 }
 
 async function defaultResolveLlmCredentials(providerId: string | null): Promise<ExternalCliLlmCredentials | null> {
+  // 凭证唯一来源是 Claude 终端的自有集合；显式 id 与终端默认都只在该集合内解析。
   const provider = providerId === null
-    ? await llmConfigStore.getDefaultProvider()
-    : await llmConfigStore.getProviderSettings(providerId)
+    ? await llmConfigStore.getTerminalDefaultSettings('claude')
+    : await llmConfigStore.getTerminalProvider('claude', providerId)
   if (!provider || provider.enabled === false) return null
   if (provider.authType !== AuthType.API_KEY && provider.authType !== AuthType.ANTHROPIC) return null
   const baseURL = provider.baseURL?.trim() ?? ''
@@ -148,12 +149,8 @@ export class DefaultExternalCliService implements ExternalCliService {
     // 凭证唯一来源是现有 LLM 引擎的 Provider；本域不存任何密钥，只记同步来源。
     const credentials = await this.resolveLlmCredentials(providerId)
     if (!credentials) return { success: false, error: 'NO_LLM_PROVIDER' }
-    // Claude 终端绑定的模型覆盖优先于 Provider 自带默认，保持与引擎页一致。
-    const bindings = await llmConfigStore.getTerminalBindings().catch(() => null)
-    const modelOverride = bindings?.claude?.modelId?.trim() || undefined
-    const effective = { ...credentials, ...(modelOverride ? { model: modelOverride } : {}) }
     try {
-      const outcome = await this.applier.apply(effective)
+      const outcome = await this.applier.apply(credentials)
       await this.syncStore.record({
         providerId: credentials.providerId,
         providerName: credentials.providerName,

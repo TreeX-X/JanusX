@@ -7,12 +7,13 @@ import type {
 import type { KnowledgeRecallTrace } from '../knowledge'
 
 export const LLM_CHANNELS = {
-  getProviders: 'llm:get-providers', saveProvider: 'llm:save-provider', testConnection: 'llm:test-connection',
+  getTerminalProviders: 'llm:get-terminal-providers', saveTerminalProvider: 'llm:save-terminal-provider',
+  testConnection: 'llm:test-connection',
   runtimeStatus: 'llm:runtime-status',
-  removeProvider: 'llm:remove-provider', setDefaultProvider: 'llm:set-default-provider', listModels: 'llm:list-models',
+  removeTerminalProvider: 'llm:remove-terminal-provider', setTerminalDefault: 'llm:set-terminal-default',
+  getTerminalDefault: 'llm:get-terminal-default', listModels: 'llm:list-models',
   getCatalog: 'llm:model-catalog:get', refreshCatalog: 'llm:model-catalog:refresh', getAdapters: 'llm:get-adapters',
-  getDefaultProvider: 'llm:get-default-provider', chat: 'llm:chat', chatStream: 'llm:chat-stream', abort: 'llm:chat:abort',
-  getTerminalBindings: 'llm:get-terminal-bindings', setTerminalBinding: 'llm:set-terminal-binding',
+  chat: 'llm:chat', chatStream: 'llm:chat-stream', abort: 'llm:chat:abort',
   steer: 'llm:chat:steer', steerCancel: 'llm:chat:steer-cancel',
   delta: 'llm:chat:delta', done: 'llm:chat:done', error: 'llm:chat:error', recallTrace: 'llm:chat:recall-trace',
   toolTrace: 'llm:chat:tool-trace', agentEvent: 'llm:chat:agent-event',
@@ -158,28 +159,21 @@ export interface LlmRuntimeStatus {
   }
 }
 
-export interface LlmTerminalBinding {
-  providerId: string | null
-  modelId?: string
-}
-
-/** 与主进程 ConfigStore 对齐的终端消费者；shell 无 LLM，不参与绑定。 */
+/** 各终端拥有独立的 Provider 集合；shell 无 LLM，不参与配置。 */
 export type LlmTerminalConsumer = 'janus' | 'claude' | 'codex' | 'opencode' | 'pi'
 
 export interface LlmAPI {
-  getProviders(): Promise<ProviderSettings[]>
+  getTerminalProviders(terminal: LlmTerminalConsumer): Promise<ProviderSettings[]>
   getRuntimeStatus(): Promise<LlmRuntimeStatus>
-  saveProvider(settings: ProviderSettings): Promise<{ success: boolean; error?: string }>
+  saveTerminalProvider(terminal: LlmTerminalConsumer, settings: ProviderSettings): Promise<{ success: boolean; error?: string }>
   testConnection(settings: ProviderSettings & { testModel?: string }): Promise<{ success: boolean; latency?: number; error?: string }>
-  removeProvider(providerId: string): Promise<{ success: boolean; error?: string }>
-  setDefaultProvider(providerId: string): Promise<{ success: boolean }>
-  getTerminalBindings(): Promise<Record<LlmTerminalConsumer, LlmTerminalBinding>>
-  setTerminalBinding(consumer: LlmTerminalConsumer, binding: LlmTerminalBinding): Promise<{ success: boolean; error?: string }>
-  listModels(providerId: string): Promise<ModelInfo[]>
+  removeTerminalProvider(terminal: LlmTerminalConsumer, providerId: string): Promise<{ success: boolean; error?: string }>
+  setTerminalDefault(terminal: LlmTerminalConsumer, providerId: string): Promise<{ success: boolean }>
+  getTerminalDefault(terminal: LlmTerminalConsumer): Promise<{ provider: ProviderSettings; modelId: string } | null>
+  listModels(terminal: LlmTerminalConsumer, providerId: string): Promise<ModelInfo[]>
   getModelCatalog(): Promise<ModelCatalogSnapshot>
   refreshModelCatalog(): Promise<ModelCatalogRefreshResult>
   getAdapters(): Promise<Array<{ id: string; name: string; authType: string }>>
-  getDefaultProvider(): Promise<{ provider: ProviderSettings; modelId: string } | null>
   chat(request: ChatRequest): Promise<string>
   startChatStream(request: ChatStreamRequest): void
   abortChat(requestId: string): Promise<void>
