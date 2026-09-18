@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   listTaskThreads: vi.fn(),
   openTaskThread: vi.fn(),
   closeTaskThread: vi.fn(),
+  requestIndependentReview: vi.fn(),
+  finishWithLatestReceipt: vi.fn(),
+  repairTaskRun: vi.fn(),
   pauseTaskRun: vi.fn(),
   resumeTaskRun: vi.fn(),
   rebaselineTaskRun: vi.fn(),
@@ -23,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   runDesktopCommand: vi.fn(),
   reviewClaimFromText: vi.fn(),
   buildDesktopReviewPrompt: vi.fn(),
+  buildEvaluatorPrompt: vi.fn(),
   createModelReviewPort: vi.fn(),
   ensureTaskThread: vi.fn(),
   setThreadModel: vi.fn(),
@@ -64,6 +68,7 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   pauseTaskRun: mocks.pauseTaskRun,
   resumeTaskRun: mocks.resumeTaskRun,
   rebaselineTaskRun: mocks.rebaselineTaskRun,
+  repairTaskRun: mocks.repairTaskRun,
 }))
 
 vi.mock('../../src/main/harness/desktop-executor', () => ({
@@ -72,8 +77,14 @@ vi.mock('../../src/main/harness/desktop-executor', () => ({
   reviewClaimFromText: mocks.reviewClaimFromText,
 }))
 
+vi.mock('../../src/main/harness/independent-review', () => ({
+  requestIndependentReview: mocks.requestIndependentReview,
+  finishWithLatestReceipt: mocks.finishWithLatestReceipt,
+}))
+
 vi.mock('../../src/main/harness/desktop-review', () => ({
   buildDesktopReviewPrompt: mocks.buildDesktopReviewPrompt,
+  buildEvaluatorPrompt: mocks.buildEvaluatorPrompt,
   createModelReviewPort: mocks.createModelReviewPort,
 }))
 
@@ -307,5 +318,48 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     await expect(close({}, ROOT, 'run-1')).resolves.toEqual({ closed: true })
     mocks.closeTaskThread.mockResolvedValueOnce({ ok: false, run: RUN, errors: [{ code: 'BUSY', message: 'owned' }], data: { closed: false } })
     await expect(close({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'BUSY' })
+  })
+
+  it('reviews independently, finishes on the latest receipt, and repairs explicitly', async () => {
+    const review = await handler(HARNESS_COMMAND_CHANNELS.runReview)
+    mocks.getTaskRun.mockResolvedValueOnce({
+      run: { ...RUN, state: 'verifying', attempt: 1, lease: { token: 'tok', owner: 'desktop', at: 'now' } },
+      errors: [],
+    })
+    mocks.createModelReviewPort.mockReturnValueOnce(async () => ({ verdict: 'needs-fix', coverage: [] }))
+    mocks.requestIndependentReview.mockImplementationOnce(async (_root: string, runId: string, token: string, ports: unknown, opts: unknown) => {
+      expect(runId).toBe('run-1')
+      expect(token).toBe('tok')
+      expect(opts).toMatchObject({ reviewer: 'evaluator' })
+      expect(ports).toMatchObject({ review: expect.any(Function) })
+      return { ok: true, run: RUN, errors: [], data: { receiptId: 'r-ind', verdict: 'needs-fix' } }
+    })
+    await expect(review({}, ROOT, { runId: 'run-1', reviewer: 'evaluator', providerId: 'p', modelId: 'm' })).resolves.toEqual({
+      receiptId: 'r-ind',
+      verdict: 'needs-fix',
+    })
+    await expect(review({}, ROOT, { runId: 'run-1', reviewer: '  ' })).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'reviewer' })
+    await expect(review({}, ROOT, { runId: '' , reviewer: 'evaluator' })).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'runId' })
+
+    const finish = await handler(HARNESS_COMMAND_CHANNELS.runFinish)
+    mocks.getTaskRun.mockResolvedValueOnce({
+      run: { ...RUN, state: 'verifying', lease: { token: 'tok', owner: 'desktop', at: 'now' } },
+      errors: [],
+    })
+    mocks.finishWithLatestReceipt.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-ind', completed: true } })
+    await expect(finish({}, ROOT, 'run-1')).resolves.toEqual({ receiptId: 'r-ind', completed: true })
+    mocks.finishWithLatestReceipt.mockResolvedValueOnce({ ok: false, run: RUN, errors: [{ code: 'NOT_READY', message: 'empty' }], data: { receiptId: 'r-ind', completed: false } })
+    await expect(finish({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'NOT_READY' })
+
+    const repair = await handler(HARNESS_COMMAND_CHANNELS.runRepair)
+    mocks.getTaskRun.mockResolvedValueOnce({
+      run: { ...RUN, state: 'verifying', receipts: ['r-ind'], lease: { token: 'tok', owner: 'desktop', at: 'now' } },
+      errors: [],
+    })
+    mocks.repairTaskRun.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'running', attempt: 2 }, errors: [], data: { attempt: 2 } })
+    mocks.getTaskRun.mockResolvedValueOnce({ run: { ...RUN, state: 'running', attempt: 2 }, errors: [] })
+    await expect(repair({}, ROOT, { runId: 'run-1', summary: 'Flaky check.' })).resolves.toEqual({ attempt: 2, state: 'running' })
+    expect(mocks.repairTaskRun).toHaveBeenCalledWith(ROOT, 'run-1', 'tok', { failureReceiptId: 'r-ind', summary: 'Flaky check.', auto: false, authorization: { by: 'desktop' } })
+    await expect(repair({}, ROOT, { runId: 'run-1', summary: '  ' })).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'summary' })
   })
 })

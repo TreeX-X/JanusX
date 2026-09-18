@@ -127,12 +127,12 @@ export function verifyBriefFiles(brief: TaskBrief, manifest: Receipt['codeManife
   return []
 }
 
-/** Stores one audit copy per attempt next to the thread; audit-only. */
-export async function saveBriefCopy(root: string, runId: string, attempt: number, markdown: string): Promise<void> {
+/** Stores one audit copy per name next to the thread; audit-only. */
+export async function saveBriefCopy(root: string, runId: string, name: string, markdown: string): Promise<void> {
   const dir = join(root, '.agents', '.local', 'runs', runId, 'briefs')
   await mkdir(dir, { recursive: true })
   try {
-    await writeFile(join(dir, `attempt-${attempt}.md`), markdown, 'utf8')
+    await writeFile(join(dir, `${name}.md`), markdown, 'utf8')
   } catch (error) {
     throw new Error(`IO_ERROR: cannot store brief copy for run ${runId}: ${(error as Error).message}`)
   }

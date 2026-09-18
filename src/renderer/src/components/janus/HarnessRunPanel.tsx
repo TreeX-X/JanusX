@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 // Note: desktop entry to task runs incl. the xdo host — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
 // Note: external runner backflow surface — see .agents/notes/implemented/architecture/2026-09-18-external-runner-backflow.md
 // Note: thread registry, activation, and close — see .agents/notes/implemented/architecture/2026-09-18-thread-registry-activation.md
+// Note: independent review and limited repair — see .agents/notes/implemented/architecture/2026-09-18-independent-review-repair.md
 import { useI18n } from '@/i18n/useI18n'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
 import { TaskContractEditor } from './TaskContractEditor'
@@ -10,13 +11,16 @@ import {
   runCancel,
   runCloseout,
   runExecute,
+  runFinish,
   runHandoff,
   runHandoffRead,
   runList,
   runPause,
   runPrepare,
   runRebaseline,
+  runRepair,
   runResume,
+  runReview,
   runStart,
   runStatus,
   runTakeover,
@@ -26,6 +30,7 @@ import {
   type HarnessRunCloseout,
   type HarnessRunExecuteResult,
   type HarnessRunMode,
+  type HarnessRunReviewResult,
   type HarnessRunState,
   type HarnessThreadDetail,
   type HarnessThreadSummary,
@@ -53,13 +58,15 @@ function shortId(runId: string): string {
 
 /**
  * Run panel (S8-JanusX surface): prepares, starts, executes (desktop xdo host
- * with declared checks plus self-review), refreshes, pauses, resumes,
- * rebaselines, cancels, closeout-checks, hands off, and takes over task runs
- * through the harness IPC loop. The thread registry below lists background
- * threads for activation; a thread closes only through the explicit confirm
- * step, never on completion alone. External terminals enter through the
- * handoff file plus the entry command; their evidence flows back through
- * rescan and the shared kernel. Lease tokens never leave the main process.
+ * with declared checks plus self-review), independently reviews through a
+ * read-only evaluator turn, finishes against the latest receipt, repairs
+ * through explicit packets, refreshes, pauses, resumes, rebaselines,
+ * cancels, closeout-checks, hands off, and takes over task runs through the
+ * harness IPC loop. The thread registry below lists background threads for
+ * activation; a thread closes only through the explicit confirm step, never
+ * on completion alone. External terminals enter through the handoff file
+ * plus the entry command; their evidence flows back through rescan and the
+ * shared kernel. Lease tokens never leave the main process.
  */
 export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const { t } = useI18n('janus')
@@ -76,6 +83,10 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const [authRef, setAuthRef] = useState('')
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
+  const [reviewer, setReviewer] = useState('reviewer')
+  const [reviewerProvider, setReviewerProvider] = useState('')
+  const [reviewerModel, setReviewerModel] = useState('')
+  const [repairSummary, setRepairSummary] = useState('')
   const [takeoverReason, setTakeoverReason] = useState('')
   const [evidence, setEvidence] = useState<Record<string, { observer: string; observation: string }>>({})
   const [busy, setBusy] = useState<string | null>(null)
@@ -86,6 +97,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const [handoffPath, setHandoffPath] = useState<string | null>(null)
   const [handoffContent, setHandoffContent] = useState<{ path: string; markdown: string } | null>(null)
   const [lastResult, setLastResult] = useState<HarnessRunExecuteResult | null>(null)
+  const [reviewResult, setReviewResult] = useState<HarnessRunReviewResult | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -113,6 +125,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
     setHandoffPath(null)
     setHandoffContent(null)
     setLastResult(null)
+    setReviewResult(null)
     setEvidence({})
     void load()
   }, [load])
@@ -199,6 +212,65 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
       await load()
     } finally {
       setExecuting(false)
+      setBusy(null)
+    }
+  }
+
+  const handleReview = async () => {
+    if (busy || executing || !selected) return
+    setBusy('review')
+    setError(null)
+    setNotice(null)
+    setReviewResult(null)
+    try {
+      const result = await runReview(cwd, {
+        runId: selected.runId,
+        reviewer: reviewer.trim() || 'reviewer',
+        ...(reviewerProvider.trim() ? { providerId: reviewerProvider.trim() } : {}),
+        ...(reviewerModel.trim() ? { modelId: reviewerModel.trim() } : {}),
+      })
+      setReviewResult(result)
+      setNotice(t('janus:harness.runs.reviewed', { verdict: result.verdict, receipt: shortId(result.receiptId) }))
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.reviewFailed', { message: failureMessage(err) }))
+      await load()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleFinish = async () => {
+    if (busy || executing || !selected) return
+    setBusy('finish')
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await runFinish(cwd, selected.runId)
+      setNotice(t('janus:harness.runs.finished', { receipt: shortId(result.receiptId), completed: String(result.completed) }))
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.finishFailed', { message: failureMessage(err) }))
+      await load()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleRepair = async () => {
+    if (busy || executing || !selected) return
+    setBusy('repair')
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await runRepair(cwd, { runId: selected.runId, summary: repairSummary.trim() })
+      setNotice(t('janus:harness.runs.repaired', { attempt: result.attempt, state: result.state }))
+      setRepairSummary('')
+      await load()
+    } catch (err: unknown) {
+      setError(t('janus:harness.runs.repairFailed', { message: failureMessage(err) }))
+      await load()
+    } finally {
       setBusy(null)
     }
   }
@@ -514,6 +586,50 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           </>
         ) : null}
       </div>
+      {selected && selected.local !== false ? (
+        <div className="harness-run-panel__evidence">
+          <span className="harness-run-panel__title">{t('janus:harness.runs.reviewTitle')}</span>
+          <div className="harness-run-panel__row">
+            <label>
+              <span>{t('janus:harness.runs.reviewerLabel')}</span>
+              <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} aria-label={t('janus:harness.runs.reviewerLabel')} />
+            </label>
+            <label>
+              <span>{t('janus:harness.runs.reviewerProviderLabel')}</span>
+              <input value={reviewerProvider} onChange={(event) => setReviewerProvider(event.target.value)} aria-label={t('janus:harness.runs.reviewerProviderLabel')} />
+            </label>
+            <label>
+              <span>{t('janus:harness.runs.reviewerModelLabel')}</span>
+              <input value={reviewerModel} onChange={(event) => setReviewerModel(event.target.value)} aria-label={t('janus:harness.runs.reviewerModelLabel')} />
+            </label>
+          </div>
+          {selected.repairBudget ? (
+            <span>{t('janus:harness.runs.repairBudget', { used: selected.repairBudget.usedAuto, max: selected.repairBudget.maxAuto })}</span>
+          ) : null}
+          <div className="harness-run-panel__actions">
+            <button type="button" className="blueprint-btn" disabled={!!busy || executing || selected.state !== 'verifying'} onClick={() => void handleReview()}>
+              {busy === 'review' ? t('janus:harness.runs.reviewing') : t('janus:harness.runs.review')}
+            </button>
+            <button type="button" className="blueprint-btn" disabled={!!busy || executing || selected.state !== 'verifying'} onClick={() => void handleFinish()}>
+              {busy === 'finish' ? t('janus:harness.runs.finishing') : t('janus:harness.runs.finish')}
+            </button>
+          </div>
+          {reviewResult ? (
+            <span>{t('janus:harness.runs.reviewedResult', { verdict: reviewResult.verdict, receipt: shortId(reviewResult.receiptId) })}</span>
+          ) : null}
+          <div className="harness-run-panel__row">
+            <label>
+              <span>{t('janus:harness.runs.repairSummaryLabel')}</span>
+              <input value={repairSummary} onChange={(event) => setRepairSummary(event.target.value)} aria-label={t('janus:harness.runs.repairSummaryLabel')} />
+            </label>
+            <div className="harness-run-panel__actions">
+              <button type="button" className="blueprint-btn" disabled={!!busy || executing || !repairSummary.trim() || !['verifying', 'blocked'].includes(selected.state)} onClick={() => void handleRepair()}>
+                {busy === 'repair' ? t('janus:harness.runs.repairing') : t('janus:harness.runs.repair')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {handoffContent ? (
         <div className="harness-run-panel__result" role="status">
           <span className="harness-run-panel__title">{t('janus:harness.runs.handoffTitle')}</span>
@@ -620,6 +736,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
                 <span>{shortId(run.runId)}</span>
                 <span>{t('janus:harness.runs.attempt', { count: run.attempt })}</span>
                 <span>{t('janus:harness.runs.receipts', { count: run.receipts })}</span>
+                {run.repairBudget ? <span>{t('janus:harness.runs.repairBudget', { used: run.repairBudget.usedAuto, max: run.repairBudget.maxAuto })}</span> : null}
               </label>
             </li>
           ))}

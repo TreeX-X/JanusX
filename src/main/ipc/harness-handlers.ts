@@ -19,8 +19,9 @@ import {
 } from '../harness/artifact-producer'
 import { harnessNoteService } from '../harness/service'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
-import { createModelReviewPort } from '../harness/desktop-review'
+import { buildEvaluatorPrompt, createModelReviewPort } from '../harness/desktop-review'
 import { executeDesktopXdo, runDesktopCommand } from '../harness/desktop-executor'
+import { finishWithLatestReceipt, requestIndependentReview } from '../harness/independent-review'
 import { ensureTaskThread, readDesktopConcurrency, setThreadModel } from '../harness/task-thread'
 import { llmService } from '../llm/LlmService'
 import { generateText } from '../llm/ai-runtime'
@@ -39,6 +40,7 @@ import {
   prepareTaskRun,
   readTaskHandoff,
   rebaselineTaskRun,
+  repairTaskRun,
   resumeTaskRun,
   startTaskRun,
   takeoverTaskRun,
@@ -56,6 +58,9 @@ import {
   type HarnessRunExecuteResult,
   type HarnessRunPrepared,
   type HarnessRunPrepareInput,
+  type HarnessRunRepairInput,
+  type HarnessRunReviewInput,
+  type HarnessRunReviewResult,
   type HarnessRunState,
   type HarnessShareSelection,
 } from '../../shared/ipc/harness'
@@ -584,6 +589,90 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const closed = await closeTaskThread(root, runId)
       if (!closed.ok) throwRunFailure(closed.errors)
       return closed.data
+    },
+  )
+
+  // ── delegated review and limited repair (S8-JanusX): read-only evaluator ──
+  // The evaluator audits pinned evidence on its own thread and never inherits
+  // implementor history. Repairs spend the kernel budget through explicit
+  // packets; finishing re-validates against a live snapshot.
+
+  async function runOwnerToken(root: string, runId: string): Promise<{ token: string; owner: string }> {
+    const loaded = await getTaskRun(root, runId)
+    if (!loaded.run) throwRunFailure(loaded.errors)
+    const token = loaded.run?.lease?.token
+    const owner = loaded.run?.lease?.owner
+    if (!token || !owner) throwFailure('BUSY', 'run has no owner lease; start it before review', { path: 'runId' })
+    return { token: token as string, owner: owner as string }
+  }
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runReview,
+    async (_e, cwd: string, input: HarnessRunReviewInput): Promise<HarnessRunReviewResult> => {
+      const root = await withRoot(cwd)
+      const runId = input?.runId
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run review needs a run id', { path: 'runId' })
+      const reviewer = input?.reviewer?.trim() ?? ''
+      if (!reviewer) throwFailure('SCHEMA_INVALID', 'independent review needs a reviewer identity', { path: 'reviewer' })
+      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      const { token } = await runOwnerToken(root, runId)
+      const loaded = await getTaskRun(root, runId)
+      const taskUri = loaded.run?.taskUri as string
+      const attempt = loaded.run?.attempt ?? 0
+      const providerId = input?.providerId?.trim()
+      const modelId = input?.modelId?.trim()
+      const reviewed = await requestIndependentReview(root, runId, token, {
+        review: createModelReviewPort(taskUri, attempt, {
+          ...(providerId ? { providerId } : {}),
+          ...(modelId ? { modelId } : {}),
+          getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
+          generateReviewText: async (model, prompt) => {
+            const result = await generateText({ model: model as never, maxSteps: 1, messages: [{ role: 'user', content: prompt }] as never })
+            return (result as { text?: string }).text ?? ''
+          },
+        }, buildEvaluatorPrompt),
+      }, { reviewer, ...(input?.receiptId ? { receiptId: input.receiptId } : {}) })
+      if (!reviewed.ok) throwRunFailure(reviewed.errors)
+      return reviewed.data
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runFinish,
+    async (_e, cwd: string, runId: string): Promise<{ receiptId: string; completed: boolean }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run finish needs a run id', { path: 'runId' })
+      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      const { token } = await runOwnerToken(root, runId)
+      const finished = await finishWithLatestReceipt(root, runId, token)
+      if (!finished.ok) throwRunFailure(finished.errors)
+      return finished.data
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runRepair,
+    async (_e, cwd: string, input: HarnessRunRepairInput): Promise<{ attempt: number; state: string }> => {
+      const root = await withRoot(cwd)
+      const runId = input?.runId
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run repair needs a run id', { path: 'runId' })
+      const summary = input?.summary?.trim() ?? ''
+      if (!summary) throwFailure('SCHEMA_INVALID', 'repair needs a short failure summary', { path: 'summary' })
+      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      const loaded = await getTaskRun(root, runId)
+      if (!loaded.run) throwRunFailure(loaded.errors)
+      const failureReceiptId = loaded.run?.receipts[(loaded.run?.receipts.length ?? 1) - 1]
+      if (!failureReceiptId) throwFailure('NOT_READY', 'repair needs a recorded failure receipt; review before repairing', { path: 'receipts' })
+      const lease = loaded.run?.lease
+      const repaired = await repairTaskRun(root, runId, lease?.token ?? '', {
+        failureReceiptId,
+        summary,
+        auto: false,
+        ...(lease ? { authorization: { by: lease.owner } } : {}),
+      })
+      if (!repaired.ok) throwRunFailure(repaired.errors)
+      const after = await getTaskRun(root, runId)
+      return { attempt: repaired.data.attempt, state: after.run?.state ?? 'running' }
     },
   )
 }

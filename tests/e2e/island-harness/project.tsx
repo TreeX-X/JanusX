@@ -27,7 +27,7 @@ const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
   streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
-  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0,
+  prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0, reviews: 0, finishes: 0, repairs: 0,
   gateExecute: false, gateResolve: null as null | (() => void),
   lastExecute: null as null | { runId: string; providerId?: string; modelId?: string; manualEvidence?: Array<{ stepId: string; observer: string; observation: string }> },
   runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean }>,
@@ -74,13 +74,13 @@ Object.assign(window.electron.harness, {
   runList: async () => fixture.runs,
   runPrepare: async (_cwd: string, input: { taskUri: string; mode: string; closeout: string; executor?: string }) => {
     fixture.prepares++
-    fixture.runs.push({ runId: 'run-1', taskUri: input.taskUri, mode: input.mode, state: 'queued', attempt: 0, executor: input.executor ?? 'internal', closeout: input.closeout, receipts: 0, updatedAt: '', local: true })
+    fixture.runs.push({ runId: 'run-1', taskUri: input.taskUri, mode: input.mode, state: 'queued', attempt: 0, executor: input.executor ?? 'internal', closeout: input.closeout, receipts: 0, updatedAt: '', local: true, repairBudget: { maxAuto: 1, usedAuto: 0 } })
     return { runId: 'run-1', taskUri: input.taskUri, state: 'queued', attempt: 0 }
   },
   runStart: async (_cwd: string, runId: string) => {
     fixture.starts++
     const run = fixture.runs.find((item) => item.runId === runId)!
-    run.state = 'running'
+    run.state = 'verifying'
     run.attempt += 1
     return { attempt: run.attempt }
   },
@@ -128,6 +128,26 @@ Object.assign(window.electron.harness, {
     const run = fixture.runs.find((item) => item.runId === runId)!
     run.state = 'running'
     return { state: run.state, owner: newOwner }
+  },
+  runReview: async (_cwd: string, input: { runId: string; reviewer: string }) => {
+    fixture.reviews++
+    const run = fixture.runs.find((item) => item.runId === input.runId)!
+    run.receipts = 1
+    return { receiptId: 'r-ind', verdict: 'needs-fix' }
+  },
+  runFinish: async (_cwd: string, runId: string) => {
+    fixture.finishes++
+    const run = fixture.runs.find((item) => item.runId === runId)!
+    run.state = 'done'
+    return { receiptId: 'r-ind', completed: true }
+  },
+  runRepair: async (_cwd: string, input: { runId: string }) => {
+    fixture.repairs++
+    const run = fixture.runs.find((item) => item.runId === input.runId)!
+    run.state = 'running'
+    run.attempt += 1
+    run.repairBudget.usedAuto += 1
+    return { attempt: run.attempt, state: run.state }
   },
   runThreads: async () => fixture.runs.map((run) => {
     const detail = (fixture as { threadDetails?: Record<string, { model: { providerId: string; modelId: string }; history: Array<{ attempt: number; manifestHash: string; checks: never[]; reviewVerdict: string; receiptId: string; at: string }> }> }).threadDetails?.[run.runId]

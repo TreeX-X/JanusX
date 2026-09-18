@@ -79,6 +79,11 @@ vi.mock('../../src/main/harness/task-thread', () => ({
   readDesktopConcurrency: vi.fn(),
 }))
 
+vi.mock('../../src/main/harness/independent-review', () => ({
+  requestIndependentReview: vi.fn(),
+  finishWithLatestReceipt: vi.fn(),
+}))
+
 vi.mock('../../src/main/harness/desktop-executor', () => ({
   executeDesktopXdo: vi.fn(),
   runDesktopCommand: vi.fn(),
@@ -144,6 +149,9 @@ describe('harness IPC contract', () => {
       'runThreads',
       'runThread',
       'runThreadClose',
+      'runReview',
+      'runFinish',
+      'runRepair',
       'runExecute',
       'runPause',
       'runResume',

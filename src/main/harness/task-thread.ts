@@ -28,6 +28,14 @@ export interface TaskThreadAttempt {
   at: string
 }
 
+export interface TaskThreadEvaluation {
+  attempt: number
+  reviewer: string
+  verdict: 'approved' | 'needs-fix' | 'blocked'
+  receiptId: string
+  at: string
+}
+
 export interface TaskThread {
   schema: 'harness-thread/1'
   runId: string
@@ -35,6 +43,7 @@ export interface TaskThread {
   mode: string
   model?: TaskThreadModel
   attempts: TaskThreadAttempt[]
+  evaluations: TaskThreadEvaluation[]
   createdAt: string
   updatedAt: string
 }
@@ -64,6 +73,7 @@ export async function loadTaskThread(root: string, runId: string): Promise<TaskT
   try {
     const parsed: unknown = JSON.parse(raw)
     if (!isThread(parsed) || parsed.runId !== runId) return null
+    if (!Array.isArray(parsed.evaluations)) parsed.evaluations = []
     return parsed
   } catch {
     return null
@@ -94,6 +104,7 @@ export async function ensureTaskThread(root: string, input: { runId: string; tas
     taskUri: input.taskUri,
     mode: input.mode,
     attempts: [],
+    evaluations: [],
     createdAt: now,
     updatedAt: now,
   }
@@ -116,6 +127,15 @@ export async function recordThreadAttempt(root: string, runId: string, entry: Om
   if (!thread) throw new Error(`IO_ERROR: no task thread for run ${runId}`)
   const kept = thread.attempts.filter((item) => item.attempt !== entry.attempt)
   const next: TaskThread = { ...thread, attempts: [...kept, { ...entry, at: new Date().toISOString() }] }
+  await writeThread(root, next)
+  return next
+}
+
+/** Records one independent evaluation beside implementor attempts, never merged into them. */
+export async function recordThreadEvaluation(root: string, runId: string, entry: Omit<TaskThreadEvaluation, 'at'>): Promise<TaskThread> {
+  const thread = await loadTaskThread(root, runId)
+  if (!thread) throw new Error(`IO_ERROR: no task thread for run ${runId}`)
+  const next: TaskThread = { ...thread, evaluations: [...thread.evaluations, { ...entry, at: new Date().toISOString() }] }
   await writeThread(root, next)
   return next
 }

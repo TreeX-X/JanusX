@@ -164,7 +164,7 @@ export function runDesktopCommand(
   })
 }
 
-function checkCoverageClaims(
+export function checkCoverageClaims(
   claims: ReceiptCoverage[],
   criteria: Map<string, string>,
   passed: Set<string>,
@@ -331,7 +331,7 @@ export async function executeDesktopXdo(
   const briefProblems = verifyBriefFiles(brief, manifest)
   if (briefProblems.length > 0) return fail(run, briefProblems, { receiptId: '', completed: false, checks })
   try {
-    await saveBriefCopy(root, runId, run.attempt, renderBriefSection(brief))
+    await saveBriefCopy(root, runId, `attempt-${run.attempt}`, renderBriefSection(brief))
   } catch {
     // Brief copies are audit-only; the live brief above is what the review uses.
   }

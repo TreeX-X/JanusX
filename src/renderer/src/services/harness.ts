@@ -12,6 +12,9 @@ import type {
   HarnessRunMode,
   HarnessRunPrepared,
   HarnessRunPrepareInput,
+  HarnessRunRepairInput,
+  HarnessRunReviewInput,
+  HarnessRunReviewResult,
   HarnessRunState,
   HarnessShareSelection,
   HarnessThreadDetail,
@@ -31,6 +34,9 @@ export type {
   HarnessRunMode,
   HarnessRunPrepared,
   HarnessRunPrepareInput,
+  HarnessRunRepairInput,
+  HarnessRunReviewInput,
+  HarnessRunReviewResult,
   HarnessRunState,
   HarnessShareSelection,
   HarnessThreadDetail,
@@ -124,6 +130,18 @@ export function runThread(cwd: string, runId: string): Promise<HarnessThreadDeta
 
 export function runThreadClose(cwd: string, runId: string): Promise<{ closed: boolean }> {
   return window.electron.harness.runThreadClose(cwd, runId)
+}
+
+export function runReview(cwd: string, input: HarnessRunReviewInput): Promise<HarnessRunReviewResult> {
+  return window.electron.harness.runReview(cwd, input)
+}
+
+export function runFinish(cwd: string, runId: string): Promise<{ receiptId: string; completed: boolean }> {
+  return window.electron.harness.runFinish(cwd, runId)
+}
+
+export function runRepair(cwd: string, input: HarnessRunRepairInput): Promise<{ attempt: number; state: string }> {
+  return window.electron.harness.runRepair(cwd, input)
 }
 
 export function runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult> {

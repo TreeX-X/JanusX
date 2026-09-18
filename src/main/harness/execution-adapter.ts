@@ -50,7 +50,8 @@ function resultState(result: TaskResult, run?: HarnessRun): HarnessRunState {
   const execution = result.execution!
   return { runId: run?.runId ?? result.taskUri, taskUri: result.taskUri, mode: execution.mode, state: execution.state,
     attempt: execution.attempt, executor: run?.executor ?? 'unknown', closeout: execution.closeout,
-    receipts: execution.receipts.length, updatedAt: run?.updatedAt ?? '', local: Boolean(run), validity: result.validity }
+    receipts: execution.receipts.length, updatedAt: run?.updatedAt ?? '', local: Boolean(run), validity: result.validity,
+    repairBudget: run ? { maxAuto: run.repairBudget.maxAuto, usedAuto: run.repairBudget.usedAuto } : { maxAuto: 1, usedAuto: 0 } }
 }
 
 export async function listTaskRunStates(root: string): Promise<HarnessRunState[]> {

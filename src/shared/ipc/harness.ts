@@ -22,6 +22,9 @@ export const HARNESS_COMMAND_CHANNELS = {
   runThreads: 'harness:run:threads',
   runThread: 'harness:run:thread',
   runThreadClose: 'harness:run:thread-close',
+  runReview: 'harness:run:review',
+  runFinish: 'harness:run:finish',
+  runRepair: 'harness:run:repair',
   runExecute: 'harness:run:execute',
   runPause: 'harness:run:pause',
   runResume: 'harness:run:resume',
@@ -121,6 +124,7 @@ export interface HarnessRunState {
   updatedAt: string
   local?: boolean
   validity?: 'unverified' | 'valid' | 'stale'
+  repairBudget: { maxAuto: number; usedAuto: number }
 }
 
 export interface HarnessRunCloseoutResult {
@@ -181,6 +185,24 @@ export interface HarnessThreadDetail extends HarnessThreadSummary {
   history: HarnessThreadAttempt[]
 }
 
+export interface HarnessRunReviewInput {
+  runId: string
+  reviewer: string
+  providerId?: string
+  modelId?: string
+  receiptId?: string
+}
+
+export interface HarnessRunReviewResult {
+  receiptId: string
+  verdict: 'approved' | 'needs-fix' | 'blocked'
+}
+
+export interface HarnessRunRepairInput {
+  runId: string
+  summary: string
+}
+
 export interface HarnessTaskContractInput {
   scope: string
   criteria: Array<{ id: string; text: string }>
@@ -219,6 +241,9 @@ export interface HarnessAPI {
   runThreads(cwd: string): Promise<HarnessThreadSummary[]>
   runThread(cwd: string, runId: string): Promise<HarnessThreadDetail>
   runThreadClose(cwd: string, runId: string): Promise<{ closed: boolean }>
+  runReview(cwd: string, input: HarnessRunReviewInput): Promise<HarnessRunReviewResult>
+  runFinish(cwd: string, runId: string): Promise<{ receiptId: string; completed: boolean }>
+  runRepair(cwd: string, input: HarnessRunRepairInput): Promise<{ attempt: number; state: string }>
   runExecute(cwd: string, input: HarnessRunExecuteInput): Promise<HarnessRunExecuteResult>
   runPause(cwd: string, runId: string): Promise<{ state: string }>
   runResume(cwd: string, runId: string): Promise<{ state: string }>
