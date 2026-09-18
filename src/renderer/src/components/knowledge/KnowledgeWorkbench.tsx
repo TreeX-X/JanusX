@@ -27,6 +27,7 @@ import type {
 } from '../../../../shared/knowledge'
 import { RefreshIconButton } from '../ui/RefreshIconButton'
 import { QuantumTopologyPreview } from '../ui/QuantumTopologyPreview'
+import { countInboxScopes, filterInboxByScope, type InboxScopeFilter } from './inboxScope'
 import { CardSkeleton, useAnimatedOpen, useWorkbenchPhase } from '../shared/CardFrame'
 import { useI18n } from '@/i18n/useI18n'
 import '../shared/CardFrame.css'
@@ -101,6 +102,10 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewError, setReviewError] = useState('')
+  // Memory separation: one Inbox, two review columns. The filter never
+  // rewrites stored lists; counts share the inboxScope predicate with the
+  // persona pendingHabitCount reader so the columns cannot drift by definition.
+  const [scopeFilter, setScopeFilter] = useState<InboxScopeFilter>('all')
   const [procStats, setProcStats] = useState<KnowledgeProcessingStats | null>(null)
   const [procBusy, setProcBusy] = useState(false)
 
@@ -142,7 +147,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
       ])
       setSnapshot(next)
       setProcStats(stats)
-      setSelectedId((current) => selectionIdForTab(next, tab, current))
+      setSelectedId((current) => selectionIdForTab(next, tab, current, scopeFilter))
       setLoadState('idle')
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : t('knowledge:error.loadFailed'))
@@ -212,6 +217,13 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     [selectedId, selectedSearch, snapshot, tab],
   )
 
+  // Memory separation: column counts share the inboxScope predicate with the
+  // persona pendingHabitCount reader. Hooks stay above the hidden-phase return.
+  const inboxScopes = useMemo(
+    () => (snapshot ? countInboxScopes(candidatesForTab(snapshot, 'inbox')) : { user: 0, engineering: 0 }),
+    [snapshot],
+  )
+
   // Detail side panel stays mounted across its exit slide: the grid track
   // collapses in parallel while the last record fades/slides out.
   const detailOpen = selected != null
@@ -225,7 +237,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     setTab(nextTab)
     setSelectedSearch(null)
     if (snapshot) {
-      setSelectedId((current) => selectionIdForTab(snapshot, nextTab, current))
+      setSelectedId((current) => selectionIdForTab(snapshot, nextTab, current, scopeFilter))
     }
   }
 
@@ -277,7 +289,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const paneTitle = tab === 'inbox' ? t('knowledge:paneTitle.inbox') : tab === 'library' ? t('knowledge:paneTitle.library') : TAB_LABELS[tab]
   // Demo parity: every nav tab carries its own count badge.
   const tabCounts: Record<KnowledgeWorkbenchTab, number> = {
-    inbox: snapshot ? candidatesForTab(snapshot, 'inbox').length : 0,
+    inbox: inboxScopes.user + inboxScopes.engineering,
     library: snapshot?.libraryCards.length ?? 0,
     wiki: (snapshot?.wikiPatches.length ?? 0) + (snapshot ? publishedWikiCards(snapshot).length : 0),
     graph: snapshot?.graphCandidates.length ?? 0,
@@ -379,10 +391,33 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               <div className={styles.paneTitle}>{paneTitle}</div>
               <span className={styles.paneCount} aria-label={t('knowledge:aria.paneCount', { title: paneTitle })}>{paneCount}</span>
             </div>
+            {tab === 'inbox' && snapshot && (
+              <div className={styles.filterRow} role="group" aria-label={t('knowledge:inbox.scope.label')}>
+                {([
+                  { scope: 'all' as const, label: t('knowledge:inbox.scope.all'), count: inboxScopes.user + inboxScopes.engineering },
+                  { scope: 'user' as const, label: t('knowledge:inbox.scope.personal'), count: inboxScopes.user },
+                  { scope: 'engineering' as const, label: t('knowledge:inbox.scope.engineering'), count: inboxScopes.engineering },
+                ]).map((option) => (
+                  <button
+                    key={option.scope}
+                    type="button"
+                    className={`${styles.navButton} ${scopeFilter === option.scope ? styles.navActive : ''}`}
+                    aria-pressed={scopeFilter === option.scope}
+                    onClick={() => {
+                      setScopeFilter(option.scope)
+                      setSelectedId((current) => selectionIdForTab(snapshot, 'inbox', current, option.scope))
+                    }}
+                  >
+                    <span>{option.label}</span>
+                    <span className={styles.paneCount}>{option.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {loadState === 'loading' && <CardSkeleton lines={4} label={t('knowledge:state2.loadingRecords')} />}
             {loadState === 'error' && <StateBlock title={t('knowledge:state2.workbenchUnavailable')} detail={loadError} />}
             {loadState === 'idle' && snapshot && <>
-              {tab === 'inbox' && <CardCollection title={t('knowledge:inbox.empty.title')} detail={t('knowledge:inbox.empty.detail')} cards={candidatesForTab(snapshot, 'inbox').map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
+              {tab === 'inbox' && <CardCollection title={t('knowledge:inbox.empty.title')} detail={t('knowledge:inbox.empty.detail')} cards={candidatesForTab(snapshot, 'inbox', scopeFilter).map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'library' && <CardCollection title={t('knowledge:library.empty.title')} detail={t('knowledge:library.empty.detail')} cards={snapshot.libraryCards} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'search' && <SearchLab query={query} onQueryChange={setQuery} cards={searchCards} state={searchState} selectedId={selectedId} onSelect={(card) => { setSelectedSearch(recordFromCard(card)); setSelectedId(card.id) }} />}
               {tab === 'wiki' && <div className={styles.wikiSections}>
@@ -410,11 +445,14 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   )
 }
 
-function candidatesForTab(snapshot: KnowledgeWorkbenchSnapshot, tab: KnowledgeWorkbenchTab): Candidate[] {
+function candidatesForTab(snapshot: KnowledgeWorkbenchSnapshot, tab: KnowledgeWorkbenchTab, scope: InboxScopeFilter = 'all'): Candidate[] {
   const candidates: Candidate[] = [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates]
   if (tab !== 'inbox') return []
   // §5: llm-preferred reorders only the Inbox view, never the stored lists.
-  return sortInboxCandidates(candidates.filter((candidate) => candidate.status === 'proposed'), snapshot.mode)
+  // Memory separation: the scope filter then splits the same proposed list
+  // into person/engineering review columns.
+  const proposed = sortInboxCandidates(candidates.filter((candidate) => candidate.status === 'proposed'), snapshot.mode)
+  return filterInboxByScope(proposed, scope)
 }
 
 /** Phase 4 Wiki: published pages already ride along in libraryCards. */
@@ -471,10 +509,11 @@ export function selectionIdForTab(
   snapshot: KnowledgeWorkbenchSnapshot,
   tab: KnowledgeWorkbenchTab,
   currentId: string,
+  scope: InboxScopeFilter = 'all',
 ): string {
   if (resolveRecordForTab(snapshot, tab, currentId)) return currentId
   if (tab === 'library') return snapshot.libraryCards[0]?.id ?? ''
-  if (tab === 'inbox') return candidatesForTab(snapshot, tab)[0]?.id ?? ''
+  if (tab === 'inbox') return candidatesForTab(snapshot, tab, scope)[0]?.id ?? ''
   if (tab === 'wiki') {
     return snapshot.wikiPatches[0]?.id ?? publishedWikiCards(snapshot)[0]?.id ?? ''
   }

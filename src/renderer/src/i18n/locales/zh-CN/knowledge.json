@@ -132,6 +132,12 @@
     "empty": {
       "title": "无待审候选",
       "detail": "任务结束后运行抽取以填充审核队列。"
+    },
+    "scope": {
+      "label": "审核范围",
+      "all": "全部",
+      "personal": "个人",
+      "engineering": "工程"
     }
   },
   "library": {

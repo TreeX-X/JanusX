@@ -198,6 +198,9 @@ describe('maintenance discussion on the shared turn', () => {
     ]
     expect(request.sourceTag).toBe('maintenance')
     expect([...(request.toolAllowlist as string[])].sort()).toEqual([...READ_ONLY].sort())
+    // Memory separation: the engineering channel never offers person-scope
+    // tools, so no maintenance turn can mint or read user memories.
+    expect((request.toolAllowlist as string[]).some((name) => name.startsWith('user-memory'))).toBe(false)
     expect(request.systemPromptPrefix as string).toContain('never emit a ChangeSet')
     expect(request.chatSession).toBeDefined()
     expect(request.steeringPort).toBeDefined()
