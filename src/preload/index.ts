@@ -239,6 +239,14 @@ const harnessAPI: HarnessAPI = {
   getBindings: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.bindingsGet, cwd),
   setBinding: (cwd, binding) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.bindingsSet, cwd, binding),
   sharePreview: (cwd, selection) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.sharePreview, cwd, selection),
+  runPrepare: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runPrepare, cwd, input),
+  runStart: (cwd, runId, owner, authorization) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runStart, cwd, runId, owner, authorization),
+  runStatus: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runStatus, cwd, runId),
+  runList: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runList, cwd),
+  runCancel: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCancel, cwd, runId),
+  runCloseout: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCloseout, cwd, runId),
+  runHandoff: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runHandoff, cwd, runId),
   shareExport: (cwd, selection, outPath) =>
     ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareExport, cwd, selection, outPath),
   onChanged: (callback) => subscribeIpcEvent(HARNESS_EVENT_CHANNELS.changed, callback),

@@ -3,6 +3,7 @@ import { useAppStore } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { BlueprintNode } from '@/services/blueprint'
+import { HarnessRunPanel } from '@/components/janus/HarnessRunPanel'
 import { STATUS_VISUALS } from './blueprintStatus'
 import './blueprint.css'
 
@@ -170,6 +171,12 @@ export function BlueprintFocusView() {
               <div className="blueprint-focus-empty-line">No analysis yet.</div>
             )}
           </div>
+
+          {activeNode.type === 'task' && activeNode.sourceUri && activeNode.workspaceSnapshot?.path ? (
+            <div className="blueprint-focus-section">
+              <HarnessRunPanel cwd={activeNode.workspaceSnapshot.path} taskUri={activeNode.sourceUri} />
+            </div>
+          ) : null}
         </aside>
       </div>
     </div>

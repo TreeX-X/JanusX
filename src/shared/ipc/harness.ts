@@ -9,6 +9,13 @@ export const HARNESS_COMMAND_CHANNELS = {
   bindingsSet: 'harness:bindings:set',
   sharePreview: 'harness:share:preview',
   shareExport: 'harness:share:export',
+  runPrepare: 'harness:run:prepare',
+  runStart: 'harness:run:start',
+  runStatus: 'harness:run:status',
+  runList: 'harness:run:list',
+  runCancel: 'harness:run:cancel',
+  runCloseout: 'harness:run:closeout',
+  runHandoff: 'harness:run:handoff',
 } as const
 
 export const HARNESS_EVENT_CHANNELS = {
@@ -17,7 +24,7 @@ export const HARNESS_EVENT_CHANNELS = {
 
 /** Coded failure envelope. IPC transports plain data, never Error instances. */
 export interface HarnessFailure {
-  code: 'HARNESS_CONFLICT' | 'HARNESS_MANAGED' | 'HARNESS_READONLY' | 'NOT_FOUND' | 'SCHEMA_INVALID' | 'CONFLICT' | 'RECOVERY_REQUIRED' | 'APPROVAL_REQUIRED' | 'PERMISSION_DENIED' | 'IO_ERROR'
+  code: 'HARNESS_CONFLICT' | 'HARNESS_MANAGED' | 'HARNESS_READONLY' | 'NOT_FOUND' | 'SCHEMA_INVALID' | 'CONFLICT' | 'RECOVERY_REQUIRED' | 'APPROVAL_REQUIRED' | 'PERMISSION_DENIED' | 'IO_ERROR' | 'NOT_READY' | 'STALE_BASELINE' | 'BUSY' | 'DEPENDENCY_UNSATISFIED' | 'INVALID_RELATION' | 'UNRESOLVED_REFERENCE' | 'CAPABILITY_UNAVAILABLE'
   message: string
   path?: string
   expectedHash?: string
@@ -70,6 +77,42 @@ export interface HarnessChangedEvent {
   kinds: string[]
 }
 
+export type HarnessRunMode = 'xdo' | 'xdel' | 'xflow'
+export type HarnessRunCloseout = 'commit-required' | 'working-tree-authorized'
+
+export interface HarnessRunPrepareInput {
+  taskUri: string
+  mode: HarnessRunMode
+  closeout: HarnessRunCloseout
+  authorizationRef?: string
+  maxAutoRepairs?: number
+  executor?: 'internal' | 'external'
+}
+
+export interface HarnessRunPrepared {
+  runId: string
+  taskUri: string
+  state: string
+  attempt: number
+}
+
+export interface HarnessRunState {
+  runId: string
+  taskUri: string
+  mode: string
+  state: string
+  attempt: number
+  executor: string
+  closeout: string
+  receipts: number
+  updatedAt: string
+}
+
+export interface HarnessRunCloseoutResult {
+  satisfied: boolean
+  detail: string
+}
+
 export interface HarnessAPI {
   resolve(cwd: string): Promise<HarnessResolveResult>
   projectGraph(cwd: string): Promise<HarnessGraphResult | null>
@@ -79,5 +122,12 @@ export interface HarnessAPI {
   setBinding(cwd: string, binding: HarnessBinding): Promise<HarnessBinding[]>
   sharePreview(cwd: string, selection: HarnessShareSelection): Promise<{ notes: number; json: string }>
   shareExport(cwd: string, selection: HarnessShareSelection, outPath: string): Promise<{ outPath: string; notes: number }>
+  runPrepare(cwd: string, input: HarnessRunPrepareInput): Promise<HarnessRunPrepared>
+  runStart(cwd: string, runId: string, owner: string, authorization: { by: string; ref?: string } | null): Promise<{ attempt: number }>
+  runStatus(cwd: string, runId: string): Promise<HarnessRunState>
+  runList(cwd: string): Promise<HarnessRunState[]>
+  runCancel(cwd: string, runId: string): Promise<{ state: string }>
+  runCloseout(cwd: string, runId: string): Promise<HarnessRunCloseoutResult>
+  runHandoff(cwd: string, runId: string): Promise<{ path: string }>
   onChanged(callback: (event: HarnessChangedEvent) => void): () => void
 }

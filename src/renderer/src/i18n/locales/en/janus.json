@@ -516,5 +516,43 @@
       "summaryFallback": "A concise, traceable record of decisions, evidence, risks, and actions from the roundtable.",
       "titleFallback": "Roundtable"
     }
+  },
+  "harness": {
+    "runs": {
+      "title": "Task runs",
+      "empty": "No runs for this task yet. Prepare one to pin the baseline.",
+      "modeLabel": "Mode",
+      "closeoutLabel": "Closeout",
+      "closeoutCommit": "Commit required",
+      "closeoutWorktree": "Working tree authorized",
+      "ownerLabel": "Owner",
+      "authRefLabel": "Authorization ref",
+      "prepare": "Prepare run",
+      "preparing": "Preparing…",
+      "start": "Start",
+      "starting": "Starting…",
+      "refresh": "Refresh",
+      "cancel": "Cancel run",
+      "cancelling": "Cancelling…",
+      "closeout": "Check closeout",
+      "closeoutChecking": "Checking…",
+      "handoff": "Write handoff",
+      "handoffWriting": "Writing…",
+      "prepared": "Run {{runId}} prepared and queued.",
+      "started": "Run started, attempt {{attempt}}.",
+      "cancelled": "Run {{state}}.",
+      "closeoutSatisfied": "Closeout satisfied: {{detail}}",
+      "closeoutPending": "Closeout pending: {{detail}}",
+      "handoffWrote": "Handoff written: {{path}}",
+      "prepareFailed": "Prepare failed: {{message}}",
+      "startFailed": "Start failed: {{message}}",
+      "refreshFailed": "Refresh failed: {{message}}",
+      "cancelFailed": "Cancel failed: {{message}}",
+      "closeoutFailed": "Closeout check failed: {{message}}",
+      "handoffFailed": "Handoff failed: {{message}}",
+      "listFailed": "Listing runs failed: {{message}}",
+      "attempt": "attempt {{count}}",
+      "receipts": "{{count}} receipts"
+    }
   }
 }

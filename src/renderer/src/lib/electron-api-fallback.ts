@@ -173,6 +173,13 @@ export function installElectronApiFallback(): void {
       setBinding: () => unavailableJanus(),
       sharePreview: () => unavailableJanus(),
       shareExport: () => unavailableJanus(),
+      runPrepare: () => unavailableJanus(),
+      runStart: () => unavailableJanus(),
+      runStatus: () => unavailableJanus(),
+      runList: () => unavailableJanus(),
+      runCancel: () => unavailableJanus(),
+      runCloseout: () => unavailableJanus(),
+      runHandoff: () => unavailableJanus(),
       onChanged: () => () => {},
     },
     office: {

@@ -516,5 +516,43 @@
       "summaryFallback": "来自圆桌会议的简明、可追溯的决策、依据、风险与行动记录。",
       "titleFallback": "圆桌会议"
     }
+  },
+  "harness": {
+    "runs": {
+      "title": "任务运行",
+      "empty": "该任务暂无运行。准备一次运行以固定基线。",
+      "modeLabel": "模式",
+      "closeoutLabel": "落盘策略",
+      "closeoutCommit": "必须提交",
+      "closeoutWorktree": "工作树授权",
+      "ownerLabel": "执行者",
+      "authRefLabel": "授权引用",
+      "prepare": "准备运行",
+      "preparing": "准备中…",
+      "start": "启动",
+      "starting": "启动中…",
+      "refresh": "刷新",
+      "cancel": "取消运行",
+      "cancelling": "取消中…",
+      "closeout": "检查落盘",
+      "closeoutChecking": "检查中…",
+      "handoff": "写入交接",
+      "handoffWriting": "写入中…",
+      "prepared": "运行 {{runId}} 已准备并排队。",
+      "started": "运行已启动，attempt {{attempt}}。",
+      "cancelled": "运行{{state}}。",
+      "closeoutSatisfied": "落盘已满足：{{detail}}",
+      "closeoutPending": "落盘待完成：{{detail}}",
+      "handoffWrote": "交接已写入：{{path}}",
+      "prepareFailed": "准备失败：{{message}}",
+      "startFailed": "启动失败：{{message}}",
+      "refreshFailed": "刷新失败：{{message}}",
+      "cancelFailed": "取消失败：{{message}}",
+      "closeoutFailed": "落盘检查失败：{{message}}",
+      "handoffFailed": "交接写入失败：{{message}}",
+      "listFailed": "列出运行失败：{{message}}",
+      "attempt": "attempt {{count}}",
+      "receipts": "{{count}} 条收据"
+    }
   }
 }

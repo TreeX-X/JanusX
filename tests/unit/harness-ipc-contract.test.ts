@@ -53,6 +53,16 @@ vi.mock('../../src/main/harness/service', () => ({
   },
 }))
 
+vi.mock('../../src/main/harness/execution-adapter', () => ({
+  cancelTaskRun: vi.fn(),
+  closeoutTaskRun: vi.fn(),
+  getTaskRun: vi.fn(),
+  handoffTaskRun: vi.fn(),
+  listTaskRuns: vi.fn(),
+  prepareTaskRun: vi.fn(),
+  startTaskRun: vi.fn(),
+}))
+
 async function loadAll(): Promise<void> {
   handlers.clear()
   await import('../../src/main/ipc/harness-handlers')
@@ -86,6 +96,13 @@ describe('harness IPC contract', () => {
       'setBinding',
       'sharePreview',
       'shareExport',
+      'runPrepare',
+      'runStart',
+      'runStatus',
+      'runList',
+      'runCancel',
+      'runCloseout',
+      'runHandoff',
       'onChanged',
     ] as const) {
       expect(typeof harnessApi[method], method).toBe('function')

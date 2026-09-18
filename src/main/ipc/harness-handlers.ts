@@ -9,6 +9,7 @@ import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { ParsedNote } from '@janus-agent/harness-core'
+import type { HarnessRun } from '@janus-agent/janus-agent'
 import {
   applyNodePatch,
   archiveNoteOp,
@@ -18,6 +19,15 @@ import {
 } from '../harness/artifact-producer'
 import { harnessNoteService } from '../harness/service'
 import {
+  cancelTaskRun,
+  closeoutTaskRun,
+  getTaskRun,
+  handoffTaskRun,
+  listTaskRuns,
+  prepareTaskRun,
+  startTaskRun,
+} from '../harness/execution-adapter'
+import {
   HARNESS_COMMAND_CHANNELS,
   HARNESS_EVENT_CHANNELS,
   type HarnessApplyResult,
@@ -25,11 +35,53 @@ import {
   type HarnessEditOp,
   type HarnessFailure,
   type HarnessResolveResult,
+  type HarnessRunCloseoutResult,
+  type HarnessRunPrepared,
+  type HarnessRunPrepareInput,
+  type HarnessRunState,
   type HarnessShareSelection,
 } from '../../shared/ipc/harness'
 
 const throwFailure = (code: HarnessFailure['code'], message: string, extra?: Partial<HarnessFailure>): never => {
   throw { code, message, ...extra } satisfies HarnessFailure
+}
+
+const RUN_FAILURE_CODES: ReadonlySet<string> = new Set([
+  'NOT_FOUND',
+  'SCHEMA_INVALID',
+  'CONFLICT',
+  'NOT_READY',
+  'STALE_BASELINE',
+  'DEPENDENCY_UNSATISFIED',
+  'APPROVAL_REQUIRED',
+  'PERMISSION_DENIED',
+  'BUSY',
+  'RECOVERY_REQUIRED',
+  'INVALID_RELATION',
+  'UNRESOLVED_REFERENCE',
+  'CAPABILITY_UNAVAILABLE',
+  'IO_ERROR',
+])
+
+/** First dispatcher diagnostic becomes the IPC failure; codes stay in the shared envelope. */
+function throwRunFailure(errors: Array<{ code: string; message: string; path?: string }>): never {
+  const first = errors[0]
+  const code = (first && RUN_FAILURE_CODES.has(first.code) ? first.code : 'SCHEMA_INVALID') as HarnessFailure['code']
+  throw { code, message: first?.message ?? 'run operation failed', ...(first?.path ? { path: first.path } : {}) } satisfies HarnessFailure
+}
+
+function toRunState(run: HarnessRun): HarnessRunState {
+  return {
+    runId: run.runId,
+    taskUri: run.taskUri,
+    mode: run.mode,
+    state: run.state,
+    attempt: run.attempt,
+    executor: run.executor,
+    closeout: run.closeout,
+    receipts: run.receipts.length,
+    updatedAt: run.updatedAt,
+  }
 }
 
 async function withRoot(cwd: string): Promise<string> {
@@ -211,6 +263,116 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     async (_e, cwd: string, selection: HarnessShareSelection, outPath: string) => {
       const root = await withRoot(cwd)
       return harnessNoteService.exportSnapshot(root, selection, outPath)
+    },
+  )
+
+  // ── task runs (S8-JanusX): adapter OpResults cross IPC as data or coded failure ──
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runPrepare,
+    async (_e, cwd: string, input: HarnessRunPrepareInput): Promise<HarnessRunPrepared> => {
+      const root = await withRoot(cwd)
+      if (!input || typeof input.taskUri !== 'string' || !input.taskUri) {
+        throwFailure('SCHEMA_INVALID', 'run prepare needs a task URI', { path: 'taskUri' })
+      }
+      if (!['xdo', 'xdel', 'xflow'].includes(input.mode)) {
+        throwFailure('SCHEMA_INVALID', `bad run mode: ${String(input.mode)}`, { path: 'mode' })
+      }
+      if (input.closeout !== 'commit-required' && input.closeout !== 'working-tree-authorized') {
+        throwFailure('SCHEMA_INVALID', `bad closeout: ${String(input.closeout)}`, { path: 'closeout' })
+      }
+      const prepared = await prepareTaskRun(root, {
+        taskRef: input.taskUri,
+        mode: input.mode,
+        closeout: input.closeout,
+        ...(input.authorizationRef ? { authorizationRef: input.authorizationRef } : {}),
+        ...(input.maxAutoRepairs !== undefined ? { maxAutoRepairs: input.maxAutoRepairs } : {}),
+        ...(input.executor ? { executor: input.executor } : {}),
+      })
+      if (!prepared.ok || !prepared.run) throwRunFailure(prepared.errors)
+      return {
+        runId: prepared.data.runId,
+        taskUri: prepared.run.taskUri,
+        state: prepared.run.state,
+        attempt: prepared.run.attempt,
+      }
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runStart,
+    async (
+      _e,
+      cwd: string,
+      runId: string,
+      owner: string,
+      authorization: { by: string; ref?: string } | null,
+    ): Promise<{ attempt: number }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run start needs a run id', { path: 'runId' })
+      if (typeof owner !== 'string' || !owner) throwFailure('SCHEMA_INVALID', 'run start needs an owner', { path: 'owner' })
+      const started = await startTaskRun(root, runId, owner, authorization ?? null)
+      if (!started.ok) throwRunFailure(started.errors)
+      return started.data
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runStatus,
+    async (_e, cwd: string, runId: string): Promise<HarnessRunState> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run status needs a run id', { path: 'runId' })
+      const loaded = await getTaskRun(root, runId)
+      if (!loaded.run) throwRunFailure(loaded.errors)
+      return toRunState(loaded.run)
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runList,
+    async (_e, cwd: string): Promise<HarnessRunState[]> => {
+      const root = await withRoot(cwd)
+      const listed = await listTaskRuns(root)
+      if (listed.errors.length > 0) throwRunFailure(listed.errors)
+      return listed.runs.map(toRunState)
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runCancel,
+    async (_e, cwd: string, runId: string): Promise<{ state: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run cancel needs a run id', { path: 'runId' })
+      // Renderer-driven cancel carries no lease token: the adapter maps a
+      // null token onto an explicit takeover-free cancel path owned here.
+      const lease = await getTaskRun(root, runId)
+      if (!lease.run) throwRunFailure(lease.errors)
+      const cancelled = await cancelTaskRun(root, runId, lease.run?.lease?.token ?? null)
+      if (!cancelled.ok) throwRunFailure(cancelled.errors)
+      const after = await getTaskRun(root, runId)
+      return { state: after.run?.state ?? 'cancelled' }
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runCloseout,
+    async (_e, cwd: string, runId: string): Promise<HarnessRunCloseoutResult> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run closeout needs a run id', { path: 'runId' })
+      const report = await closeoutTaskRun(root, runId, { repoRoot: root })
+      if (!report.ok) throwRunFailure(report.errors)
+      return report.data
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.runHandoff,
+    async (_e, cwd: string, runId: string): Promise<{ path: string }> => {
+      const root = await withRoot(cwd)
+      if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run handoff needs a run id', { path: 'runId' })
+      const handoff = await handoffTaskRun(root, runId)
+      if (!handoff.ok) throwRunFailure(handoff.errors)
+      return handoff.data
     },
   )
 }
