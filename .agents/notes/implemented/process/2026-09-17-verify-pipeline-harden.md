@@ -20,5 +20,5 @@ Status: implemented
 
 ## Consequences
 
-- **Gains**: 同级构建从两次全量（含一次必败）降为一次定序构建，run 注解不再出现构建假 error；`Unit tests` 等具名步骤让失败阶段一眼可辨；七组契约漂移用例在隔离运行下全绿；`feishu` 文档断言显式跳过不再误报；远端失败集合不再随并行调度漂移，本地 `CI=true` 复现即远端行为。
-- **Costs and limits**: CI 与本地的 vitest 调度存在分歧，本地复现 CI 行为需显式置 `CI=true`；CI 单进程顺序跑比原来慢，以时间为代价换确定性；workflow 的分步命令是 `package.json` 链的人工镜像，改链必须同步两处，遗忘即漂移。门禁仍未全绿：`blueprint-maintenance-harness-guard` 四例随 S6 迁移失效，归属 S6 工作流；`processing-queue` 一例只在本机全量时失败，根因未定位；worker 崩溃在顺序执行下依然出现，单进程是否根除待远端 run 验证；`janus-agentX` 仓的排序归属保持原判。跟踪仍在 issue #1，合并继续走管理 bypass 并留书面理由，直到 owning workstream 落地。
+- **Gains**: 同级构建从两次全量（含一次必败）降为一次定序构建，run 注解不再出现构建假 error；`Unit tests` 等具名步骤让失败阶段一眼可辨；七组契约漂移用例在隔离运行下全绿；`feishu` 文档断言显式跳过不再误报；远端失败集合不再随并行调度漂移，本地 `CI=true` 复现即远端行为。续篇钉死 CI 单测 `--maxWorkers=1 --no-file-parallelism --sequence.shuffle=false` 并给堆 4G；vitest 在 CI 下 singleFork 复用单进程、关 shuffle、显式超时、unhandled rejection 直接 fail；resource-ui 断言 null-safe 化，零匹配时报可定位的长度错。
+- **Costs and limits**: CI 与本地的 vitest 调度存在分歧，本地复现 CI 行为需显式置 `CI=true`；CI 单进程顺序跑比原来慢，以时间为代价换确定性；singleFork 下 isolate 仍为 true，worker 状态污染未治，只治调度漂移；workflow 的分步命令是 `package.json` 链的人工镜像，改链必须同步两处，遗忘即漂移。门禁仍未全绿：`blueprint-maintenance-harness-guard` 四例随 S6 迁移失效，归属 S6 工作流；`processing-queue` 一例只在本机全量时失败，根因未定位；worker 崩溃在顺序执行下依然出现，单进程是否根除待远端 run 验证；`janus-agentX` 仓的排序归属保持原判。跟踪仍在 issue #1，合并继续走管理 bypass 并留书面理由，直到 owning workstream 落地。

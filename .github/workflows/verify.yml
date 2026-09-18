@@ -74,9 +74,17 @@ jobs:
         working-directory: JanusX
         run: npm run build:llm-core
 
+      # Windows 上 200+ 文件逐个 fork 易触发 tinypool `Channel closed` /
+      # `ERR_IPC_CHANNEL_CLOSED`（常伴随 libuv `fs-event.c` 断言）杀死整个 run。
+      # vitest.config.ts 在 CI 下已切 singleFork 单进程顺序跑，此处再显式钉死
+      # --maxWorkers=1 --no-file-parallelism 双保险，不依赖 Actions 默认的 CI=true；
+      # NODE_OPTIONS 给足堆，避免 worker 因 OOM 被杀后只剩一句 Channel closed。
       - name: Unit tests
         working-directory: JanusX
-        run: npm run test:unit -- --run
+        env:
+          CI: 'true'
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run test:unit -- --run --maxWorkers=1 --no-file-parallelism --sequence.shuffle=false
 
       - name: Test llm-core
         working-directory: JanusX

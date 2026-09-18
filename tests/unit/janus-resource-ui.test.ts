@@ -83,9 +83,9 @@ describe('Janus resource scope UI', () => {
 
     expect(markup).toContain('aria-label="janus:chat.clear.aria"')
     expect(markup).toContain('aria-label="janus:chat.edit.editAria"')
-    expect(markup.match(/aria-label="janus:chat.message.copyAria"/g)).toHaveLength(2)
+    expect(markup.match(/aria-label="janus:chat.message.copyAria"/g) ?? []).toHaveLength(2)
     expect(markup).toContain('aria-label="janus:chat.message.retryAria"')
-    expect(markup.match(/class="janus-chat-message-time"/g)).toHaveLength(2)
+    expect(markup.match(/class="janus-chat-message-time"/g) ?? []).toHaveLength(2)
   })
 
   it('shows the workspace scope with attach menu and removable chips', () => {
@@ -238,8 +238,11 @@ describe('Janus resource scope UI', () => {
     }))
 
     // 历史回看默认收起为分组摘要：分组恰好出现一次，且落在 answer-1 之后、answer-2 之前。
-    expect(markup.match(/janus-tool-call-group"/g)).toHaveLength(1)
+    // ?? [] 把“零匹配”从 cryptic 的 `Target cannot be null` 转成可定位的 `expected [] to have length 1`。
+    expect(markup).toContain('janus-tool-call-group')
+    expect(markup.match(/janus-tool-call-group"/g) ?? []).toHaveLength(1)
     const groupAt = markup.indexOf('janus-tool-call-group"')
+    expect(groupAt).toBeGreaterThan(-1)
     expect(markup.indexOf('First answer')).toBeLessThan(groupAt)
     expect(groupAt).toBeLessThan(markup.indexOf('Second answer'))
   })
