@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-S1–S8 all landed somewhere, but nobody can say which F01–F12 acceptance clause holds on JanusX, which belongs to janus-agentX, and what blocks the S9 cutover. Without that ledger the cutover is either premature (old assets and skills flip with unverified gates) or stuck forever (waiting for a whole-repo green that no single segment owns).
+Schema, storage, graph editing, roundtable artifacts, shared turns, and run-state adapters have implementations across the three repositories. The shared conversation controller and the model execution-to-receipt wiring remain incomplete. A repository-specific F01–F12 ledger identifies both verified mechanisms and missing integration so that partial segment implementations cannot be mistaken for a completed cutover.
 
 ## Decision
 
@@ -35,4 +35,4 @@ Recorded F-matrix (J = JanusX test, A = janus-agentX suite, E = existing suite, 
 ## Consequences
 
 - **Gains**: six S9 checks pass; every F clause has an owner and a path. Typecheck passes; neighboring suites stay green (re-verified at commit time).
-- **Costs and limits**: cutover blockers outside this commit: (1) old-asset policy needs an explicit user decision (leave-invalid vs convert, no auto-delete either way); (2) the skills switch to new-format rules plus Hybrid removal spans all three repos and is not started; (3) the version matrix plus pushes need publish authorization (JanusX ahead, agentX ahead 15, WorkFlowX ahead 3); (4) the three unified-design docs stay `proposed` until the cutover lands — flipping them is S9 exit criteria, not this commit; (5) cross-repo partial apply and full cross-host fixture equivalence need a joint agentX/JanusX pass. Revisit when the user signs the old-asset policy or authorizes the cross-repo cutover run.
+- **Costs and limits**: old assets retain explicit invalid-schema diagnostics until their handling policy is settled. WorkFlowX uses task-note rules locally; JanusX and janus-agentX retain the older rules, and the sync list includes only WorkFlowX. Shared maintenance conversation control, scoped model execution, automatic receipts, and the complete desktop evidence flow remain integration work. The release matrix, cross-checkout partial apply, and full cross-host fixture equivalence still need joint verification. The three unified-design documents remain `proposed` until that cutover passes. Publishing follows user authorization.

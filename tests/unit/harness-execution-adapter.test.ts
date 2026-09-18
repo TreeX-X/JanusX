@@ -192,4 +192,32 @@ describe('harness execution adapter (S8-JanusX)', () => {
     const empty = await listTaskRuns(root)
     expect(empty).toMatchObject({ runs: [], errors: [] })
   })
+
+  it('finishes only when one receipt covers the task checks and acceptance refs', async () => {
+    const { root, runId, token } = await startedRun()
+    await verifyTaskRun(root, runId, token, [])
+    const snapshot = await collectLiveSnapshot(root, TASK_URI, 'tester', [])
+    expect(snapshot.ok).toBe(true)
+    if (!snapshot.ok) return
+    expect(snapshot.live.acceptanceRefs).toEqual([{ uri: TASK_URI, criterionId: 'AC-1' }])
+    expect(snapshot.live.verification[0].id).toBe('V-1')
+    const receipt: Receipt = {
+      schema: 'harness-receipt/1', id: 'incomplete', taskUri: TASK_URI,
+      mode: 'xdo', attempt: 1, taskContractHash: snapshot.live.taskContractHash,
+      inputs: [], codeManifest: [],
+      checks: [{ id: 'V-1', kind: 'manual', required: true, status: 'passed', repoId: REPO, summary: 'Observed the prepared run.', performedBy: 'tester' }],
+      coverage: [], review: { kind: 'self', verdict: 'approved', reviewedManifestHash: 'a'.repeat(64), actor: 'tester' },
+      createdAt: new Date().toISOString(), actor: 'tester',
+    }
+    expect((await recordTaskReceipt(root, runId, token, receipt)).ok).toBe(true)
+    const refused = await finishTaskRun(root, runId, token, receipt.id, snapshot.live)
+    expect(refused.ok).toBe(false)
+    expect(refused.errors.some((error) => error.path === 'coverage')).toBe(true)
+    expect((await getTaskRun(root, runId)).run?.state).toBe('verifying')
+    const criterion = snapshot.live.criterionHashes.find(([uri]) => uri === TASK_URI)?.[1][0][1] as string
+    const complete: Receipt = { ...receipt, id: 'complete', coverage: [{ uri: TASK_URI, criterionId: 'AC-1', criterionHash: criterion, checkIds: ['V-1'] }] }
+    expect((await recordTaskReceipt(root, runId, token, complete)).ok).toBe(true)
+    expect((await finishTaskRun(root, runId, token, complete.id, snapshot.live)).ok).toBe(true)
+    expect((await getTaskRun(root, runId)).run?.state).toBe('done')
+  })
 })

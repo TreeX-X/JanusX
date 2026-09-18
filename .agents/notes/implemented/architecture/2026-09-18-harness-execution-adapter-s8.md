@@ -14,6 +14,8 @@ Lane closeout keeps one writable truth per lane. The four analyzer/candidate/cur
 
 Run surface follow-up: seven `harness:run:*` IPC channels (prepare, start, status, list, cancel, closeout, handoff) map adapter OpResults onto the shared `HarnessFailure` envelope with renderer-safe input validation, and `HarnessRunPanel` mounts in the focus view aside for task nodes carrying `sourceUri` plus a workspace path. Verify, receipt, finish, repair, pause, resume, takeover, and rebaseline stay executor-side until evidence UX lands.
 
+The live snapshot carries the task's acceptance references and declared verification steps into the shared receipt validator. Missing criteria, omitted or downgraded checks, changed commands, and missing file hashes fail completion. A present null code hash proves a deleted file is absent. Snapshot collection refuses a task changed between scans and never resolves a foreign Note URI by local id. `tests/unit/harness-execution-adapter.test.ts` verifies both incomplete-coverage refusal and completion with one matching receipt; the [shared evidence gates](../../../../../janus-agentX/.agents/notes/implemented/bug-fix/2026-09-18-harness-receipt-gates.md) define the remaining proof rules.
+
 ## Alternatives considered
 
 - Call the dispatcher directly from IPC handlers — strongest case is zero new modules, but every caller would reimplement baseline re-pinning and drift checks, and the first missed check executes a stale contract; the adapter pins once for all callers.

@@ -38,7 +38,7 @@ import {
   type RepairPacket,
 } from '@janus-agent/janus-agent'
 import { buildNoteIndex, collectTaskBaseline } from '@janus-agent/harness-node'
-import { criterionHash, type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
+import { criterionHash, taskContractHash, type BaselineInput, type Diagnostic, type Receipt } from '@janus-agent/harness-core'
 
 function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
   return path === undefined ? { code, message } : { code, message, path }
@@ -161,7 +161,7 @@ export async function collectLiveSnapshot(
   root: string,
   taskRef: string,
   implementor: string,
-  codeHashes: Array<[string, string]>,
+  codeHashes: Array<[string, string | null]>,
 ): Promise<{ ok: true; live: LiveSnapshot } | { ok: false; errors: Diagnostic[] }> {
   const base = await collectTaskBaseline(root, taskRef)
   if (!base.ok) return { ok: false, errors: base.problems }
@@ -172,7 +172,12 @@ export async function collectLiveSnapshot(
     return { ok: false, errors: [diag('IO_ERROR', `cannot scan notes under ${root}: ${(error as Error).message}`)] }
   }
   const criterionHashes: Array<[string, Array<[string, string]>]> = []
-  for (const uri of [base.baseline.taskUri, ...base.baseline.inputs.map((row) => row.uri)]) {
+  const task = index.byId.get(tailId(base.baseline.taskUri))?.note
+  const work = task?.meta.work
+  if (!work) return { ok: false, errors: [diag('NOT_READY', 'task work contract is missing')] }
+  if (!task || taskContractHash(task) !== base.baseline.taskContractHash) return { ok: false, errors: [diag('STALE_BASELINE', 'task moved while collecting evidence')] }
+  for (const uri of new Set([base.baseline.taskUri, ...base.baseline.inputs.map((row) => row.uri), ...work.acceptanceRefs.map((ref) => ref.uri)])) {
+    if (!uri.startsWith(`note://${index.repoId}/`)) return { ok: false, errors: [diag('UNRESOLVED_REFERENCE', `note belongs to another checkout: ${uri}`)] }
     const entry = index.byId.get(tailId(uri))
     if (!entry?.note) {
       return { ok: false, errors: [diag('NOT_FOUND', `note vanished mid-snapshot: ${uri}`, uri)] }
@@ -189,6 +194,8 @@ export async function collectLiveSnapshot(
       inputHashes: base.baseline.inputs.map((row) => [row.uri, row.contentHash] as [string, string]),
       criterionHashes,
       codeHashes,
+      acceptanceRefs: work.acceptanceRefs,
+      verification: work.verification,
       implementor,
     },
   }
