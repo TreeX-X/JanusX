@@ -1,8 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
 import { MARKDOWN_COMPONENTS } from './markdown-components'
+import { MarkdownAssetContext } from './local-asset'
+import { dirnameOfAbsolutePath } from '@/lib/local-asset-resolver'
 import { MonacoViewer } from './MonacoViewer'
 import { PreviewScrollArea } from './PreviewScrollArea'
 import type { FindableEditor } from '@/lib/editor-find'
@@ -13,11 +15,21 @@ interface MarkdownViewerProps {
   onChange: (value: string) => void
   onEditorMount?: (editor: FindableEditor | null) => void
   modelPath?: string
+  workspacePath?: string
+  documentPath?: string
 }
 
-export function MarkdownViewer({ content, originalContent, onChange, onEditorMount, modelPath }: MarkdownViewerProps) {
+export function MarkdownViewer({ content, originalContent, onChange, onEditorMount, modelPath, workspacePath, documentPath }: MarkdownViewerProps) {
   const [splitRatio, setSplitRatio] = useState(50)
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
+  const documentDir = useMemo(
+    () => dirnameOfAbsolutePath(documentPath ?? modelPath),
+    [documentPath, modelPath],
+  )
+  const assetScope = useMemo(
+    () => ({ workspacePath, documentDir }),
+    [workspacePath, documentDir],
+  )
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -141,12 +153,14 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
           }}
         >
           <div className="markdown-preview">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={MARKDOWN_COMPONENTS}
-            >
-              {content}
-            </ReactMarkdown>
+            <MarkdownAssetContext.Provider value={assetScope}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={MARKDOWN_COMPONENTS}
+              >
+                {content}
+              </ReactMarkdown>
+            </MarkdownAssetContext.Provider>
           </div>
         </div>
         </PreviewScrollArea>
