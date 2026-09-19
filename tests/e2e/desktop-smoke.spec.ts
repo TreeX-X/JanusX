@@ -197,7 +197,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       groupName: 'Desktop smoke group',
     })
 
-    await secondWorkspaceRow.click({ button: 'right' })
+    await secondWorkspaceRow.getByRole('button', { name: '更多操作' }).click()
     await page.getByRole('button', { name: '移出分组', exact: true }).click()
     await expect(page.getByText('Desktop smoke group', { exact: true })).toHaveCount(0)
     await expect.poll(async () => page.evaluate(async ({ firstId, secondId }) => {
@@ -221,7 +221,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.mouse.up()
     const launchModal = page.locator('.ws-config-modal')
     await expect(launchModal).toHaveCount(0)
-    await workspaceRow.click({ button: 'right' })
+    await workspaceRow.getByRole('button', { name: '更多操作' }).click()
     await page.getByRole('button', { name: '运行配置…', exact: true }).click()
     await expect(launchModal).toBeVisible()
     await expect(launchModal.getByRole('button', { name: /分析/ })).toHaveCount(1)

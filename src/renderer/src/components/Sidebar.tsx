@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { ChevronRight, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
+import { ChevronRight, Ellipsis, Folder, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
@@ -41,6 +41,7 @@ import {
 const WORKSPACE_DRAG_TYPE = 'application/x-janus-workspace'
 const GROUP_HOVER_DELAY = 300
 const MENU_MARGIN = 8
+const MENU_WIDTH = 188
 
 type WorkspaceDropIntent =
   | { mode: WorkspaceSidebarDropPosition | 'group-pending' | 'group'; targetId: string }
@@ -63,6 +64,7 @@ interface WorkspaceContextMenuProps {
   onDelete: (workspace: Workspace) => void
 }
 
+// Note: expanded workspace rows open this menu only from their persistent ⋯ button; right-click stays on the collapsed rail and group headers — see .agents/notes/implemented/feature/2026-09-19-workspace-row-actions-menu.md
 function WorkspaceContextMenu({
   menu,
   onRunConfiguration,
@@ -95,7 +97,7 @@ function WorkspaceContextMenu({
       style={{
         left: position.x,
         top: position.y,
-        width: 188,
+        width: MENU_WIDTH,
         zIndex: 1200,
         background: 'rgba(25,25,25,0.98)',
         border: '1px solid rgba(255,255,255,0.09)',
@@ -335,14 +337,6 @@ export function Sidebar() {
     return true
   }, [persistWorkspaceLayout])
 
-  const handleDeleteClick = useCallback(
-    (ws: Workspace, e: React.MouseEvent) => {
-      e.stopPropagation()
-      setDeleteTarget(ws)
-    },
-    [],
-  )
-
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
@@ -568,6 +562,17 @@ export function Sidebar() {
     openWorkspaceContextMenu(workspace, event.clientX, event.clientY)
   }, [openWorkspaceContextMenu])
 
+  const handleWorkspaceMenuButtonClick = useCallback((workspace: Workspace, event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    resetWorkspaceDrag()
+    setContextMenu((current) =>
+      current?.target.kind === 'workspace' && current.target.workspace.id === workspace.id
+        ? null
+        : { x: rect.right - MENU_WIDTH, y: rect.bottom + 4, target: { kind: 'workspace', workspace } },
+    )
+  }, [resetWorkspaceDrag])
+
   const handleWorkspaceKeyDown = useCallback((workspace: Workspace, event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.shiftKey && event.key === 'F10') {
       event.preventDefault()
@@ -715,6 +720,7 @@ export function Sidebar() {
                   )
                 const isExpanded = expandedWorkspaceIds.includes(ws.id)
                 const terminalCount = workspaceTerminals.length
+                  const isMenuOpen = contextMenu?.target.kind === 'workspace' && contextMenu.target.workspace.id === ws.id
                   const terminalActivity = summarizeTerminalActivity(workspaceTerminals)
                   const isDragged = draggedWorkspaceId === ws.id
                   const isDropBefore = dropIntent?.targetId === ws.id && dropIntent.mode === 'before'
@@ -800,12 +806,11 @@ export function Sidebar() {
                             title={t('common:workspace.wsTitle', { prefix: group ? `${group.name} · ` : '', name: ws.name })}
                             onClick={() => handleSelect(ws.id)}
                             onKeyDown={(event) => handleWorkspaceKeyDown(ws, event)}
-                            onContextMenu={(event) => handleWorkspaceContextMenu(ws, event)}
                             onDragStart={(event) => handleWorkspaceDragStart(ws, event)}
                             onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
                             onDrop={(event) => handleWorkspaceDrop(ws, event)}
                             onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
-                            className="ws group relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
+                            className="ws relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
                             style={{
                               color: isActive ? 'var(--shell-text)' : 'var(--shell-muted)',
                               background: isGroupTarget
@@ -857,6 +862,7 @@ export function Sidebar() {
                           aria-hidden="true"
                         />
                       </button>
+                      <Folder size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
                       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
                         {ws.name}
                       </span>
@@ -914,15 +920,20 @@ export function Sidebar() {
                       <button
                         type="button"
                         draggable={false}
+                        aria-label={t('common:workspace.moreActions')}
+                        aria-expanded={isMenuOpen}
+                        title={t('common:workspace.moreActions')}
                         onPointerDown={(event) => event.stopPropagation()}
                         onDragStart={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
                         }}
-                        onClick={(event) => handleDeleteClick(ws, event)}
-                        className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
+                        onClick={(event) => handleWorkspaceMenuButtonClick(ws, event)}
+                        className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border-0 transition-colors duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)] ${
+                          isMenuOpen ? 'bg-white/[0.06] text-[#ddd]' : 'bg-transparent text-[#626268]'
+                        }`}
                       >
-                        ×
+                        <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
                       </button>
                     </div>
                     <div

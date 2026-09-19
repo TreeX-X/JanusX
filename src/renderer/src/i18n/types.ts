@@ -484,6 +484,7 @@ export type TypedI18nKey =
   | 'common:workspace.groupNameAria'
   | 'common:workspace.label'
   | 'common:workspace.launcherTitle'
+  | 'common:workspace.moreActions'
   | 'common:workspace.presetIconAlt'
   | 'common:workspace.removeFromGroup'
   | 'common:workspace.renameGroup'
