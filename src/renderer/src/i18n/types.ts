@@ -890,6 +890,7 @@ export type TypedI18nKey =
   | 'janus:harness.runs.aborted'
   | 'janus:harness.runs.attempt'
   | 'janus:harness.runs.authRefLabel'
+  | 'janus:harness.runs.autoRepaired'
   | 'janus:harness.runs.awaitingLaunch'
   | 'janus:harness.runs.cancel'
   | 'janus:harness.runs.cancelFailed'

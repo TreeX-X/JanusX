@@ -74,9 +74,12 @@ re-exports and keeps only the neutral kernel entry.
   review-repair specs drive the selects against the island fixture.
   Typecheck, production build, package boundaries, and bilingual key
   checks pass.
-- **Costs and limits**: there is no granular record/finish IPC and
-  no repair channel: xdo retries re-execute on the same manifest, and repair
-  stays reserved for delegated hosts. Declared commands are trusted
+- **Costs and limits**: the desktop host spends the automatic repair
+  budget through the shared kernel when a finished attempt fails checks:
+  one automatic reopen with the failure context, then it parks for manual
+  repair like before. There is no granular record/finish IPC: xdo retries
+  re-execute on the same manifest, and explicit repair stays available
+  beside the automatic path. Declared commands are trusted
   workspace code under runtime policy, not an operating-system sandbox.
   Single-checkout tasks only; multi-repository work splits per repo. Five
   desktop fixture specs pass in-browser on the dev machine (xdo run,

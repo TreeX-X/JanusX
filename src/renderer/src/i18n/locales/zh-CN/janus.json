@@ -573,6 +573,7 @@
       "prepared": "运行 {{runId}} 已准备并排队。",
       "started": "运行已启动，attempt {{attempt}}。",
       "executed": "执行完成：收据 {{receipt}}，完成 {{completed}}。",
+      "autoRepaired": "检查失败；自动修复已启动（attempt {{attempt}}）。",
       "aborted": "实施已停止，运行{{state}}。",
       "paused": "运行{{state}}。",
       "resumed": "运行{{state}}。",

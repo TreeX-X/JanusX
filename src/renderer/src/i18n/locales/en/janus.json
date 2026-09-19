@@ -574,6 +574,7 @@
       "started": "Run started, attempt {{attempt}}.",
       "cancelled": "Run {{state}}.",
       "executed": "Executed: receipt {{receipt}}, completed {{completed}}.",
+      "autoRepaired": "Checks failed; auto repair started (attempt {{attempt}}).",
       "aborted": "Execution stopped, run {{state}}.",
       "paused": "Run {{state}}.",
       "resumed": "Run {{state}}.",

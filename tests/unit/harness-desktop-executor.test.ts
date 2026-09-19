@@ -133,20 +133,40 @@ describe('desktop xdo host', () => {
     expect((await getTaskRun(root, runId)).run?.state).toBe('done')
   })
 
-  it('records a failed receipt and never completes when a required check fails', async () => {
+  it('records a failed receipt and auto-repairs once within budget', async () => {
     const root = await makeRoot({ exitCode: 1 })
     const { runId, token } = await startedRun(root)
     const executed = await executeDesktopXdo(root, runId, token, {
       ...approvingPorts(root),
       review: async () => ({ verdict: 'needs-fix', coverage: [] }),
     }, { implementor: 'desktop' })
-    expect(executed.ok).toBe(false)
+    expect(executed.ok).toBe(true)
     expect(executed.data.completed).toBe(false)
     expect(executed.data.receiptId).toBeTruthy()
     expect(executed.data.checks).toMatchObject([{ id: 'V-1', status: 'failed' }])
-    // The failure receipt is immutable history; the run stays open for repair.
-    expect((await getTaskRun(root, runId)).run?.state).toBe('verifying')
+    expect(executed.data.repairedAttempt).toBe(2)
+    // The failure receipt is immutable history; the run reopens for a new attempt.
+    expect((await getTaskRun(root, runId)).run?.state).toBe('running')
+    expect((await getTaskRun(root, runId)).run?.attempt).toBe(2)
     expect((await getTaskRun(root, runId)).run?.receipts).toHaveLength(1)
+    expect((await getTaskRun(root, runId)).run?.repairs).toMatchObject([{ attempt: 2, auto: true }])
+  })
+
+  it('stops auto repair at a spent budget and stays verifying', async () => {
+    const root = await makeRoot({ exitCode: 1 })
+    const { runId, token } = await startedRun(root)
+    const failing = {
+      ...approvingPorts(root),
+      review: async () => ({ verdict: 'needs-fix', coverage: [] }),
+    }
+    const first = await executeDesktopXdo(root, runId, token, failing, { implementor: 'desktop' })
+    expect(first.data.repairedAttempt).toBe(2)
+    const second = await executeDesktopXdo(root, runId, token, failing, { implementor: 'desktop' })
+    expect(second.ok).toBe(false)
+    expect(second.data.completed).toBe(false)
+    expect(second.data.repairedAttempt ?? null).toBeNull()
+    expect((await getTaskRun(root, runId)).run?.state).toBe('verifying')
+    expect((await getTaskRun(root, runId)).run?.repairBudget).toMatchObject({ maxAuto: 1, usedAuto: 1 })
   })
 
   it('refuses malformed self-review output and records nothing', async () => {
@@ -278,7 +298,7 @@ describe('task handoff brief', () => {
 
   it('stores one audit copy per attempt', async () => {
     const root = await makeRoot()
-    await saveBriefCopy(root, 'run-1', 2, 'brief body')
+    await saveBriefCopy(root, 'run-1', 'attempt-2', 'brief body')
     const { readFile } = await import('node:fs/promises')
     await expect(readFile(join(root, '.agents', '.local', 'runs', 'run-1', 'briefs', 'attempt-2.md'), 'utf8')).resolves.toBe('brief body')
   })

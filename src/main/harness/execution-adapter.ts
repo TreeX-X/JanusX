@@ -23,6 +23,7 @@ import {
   listRuns,
   loadRun,
   markRun,
+  maybeAutoRepair,
   pauseRun,
   rebaselineRun,
   recordReceipt,
@@ -31,6 +32,7 @@ import {
   startRun,
   takeoverRun,
   verifyRun,
+  type AutoRepairOutcome,
   type CloseoutCheck,
   type CodeRow,
   type HarnessRun,
@@ -193,6 +195,15 @@ export async function repairTaskRun(
   packet: RepairPacket,
 ): Promise<OpResult<{ attempt: number }>> {
   return repairRun(root, runId, token, packet)
+}
+
+/** Spends the automatic repair budget when the live attempt failed checks. */
+export async function maybeAutoRepairTaskRun(
+  root: string,
+  runId: string,
+  token: string,
+): Promise<OpResult<AutoRepairOutcome>> {
+  return maybeAutoRepair(root, runId, token)
 }
 
 export async function pauseTaskRun(root: string, runId: string, token: string): Promise<OpResult<undefined>> {

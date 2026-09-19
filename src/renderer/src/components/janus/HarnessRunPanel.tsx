@@ -295,7 +295,11 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           .map(([stepId, item]) => ({ stepId, observer: item.observer.trim(), observation: item.observation.trim() })),
       })
       setLastResult(result)
-      setNotice(t('janus:harness.runs.executed', { receipt: shortId(result.receiptId), completed: String(result.completed) }))
+      if (result.repairedAttempt != null) {
+        setNotice(t('janus:harness.runs.autoRepaired', { attempt: result.repairedAttempt }))
+      } else {
+        setNotice(t('janus:harness.runs.executed', { receipt: shortId(result.receiptId), completed: String(result.completed) }))
+      }
       await load()
     } catch (err: unknown) {
       setError(t('janus:harness.runs.executeFailed', { message: failureMessage(err) }))

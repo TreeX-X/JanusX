@@ -477,6 +477,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
           receiptId: executed.data.receiptId,
           completed: executed.data.completed,
           checks: executed.data.checks.map((check) => ({ id: check.id, kind: check.kind, status: check.status, summary: check.summary })),
+          repairedAttempt: executed.data.repairedAttempt ?? null,
         }
       } finally {
         inFlight.delete(runId)

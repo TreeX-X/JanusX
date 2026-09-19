@@ -30,6 +30,7 @@ import { buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles, ty
 import {
   finishTaskRun,
   getTaskRun,
+  maybeAutoRepairTaskRun,
   pauseTaskRun,
   recordTaskReceipt,
   verifyTaskRun,
@@ -75,6 +76,7 @@ export interface DesktopExecuteResult {
   receiptId: string
   completed: boolean
   checks: ReceiptCheck[]
+  repairedAttempt?: number | null
 }
 
 interface OpResult<T> {
@@ -387,7 +389,13 @@ export async function executeDesktopXdo(
   }
   if (!live.ok) return fail(stored.run ?? run, live.errors, { receiptId: receipt.id, completed: false, checks })
   const finished = await finishTaskRun(root, runId, token, receipt.id, live.live)
-  if (!finished.ok) return fail(finished.run ?? run, finished.errors, { receiptId: receipt.id, completed: false, checks })
+  if (!finished.ok) {
+    const auto = await maybeAutoRepairTaskRun(root, runId, token)
+    if (auto.ok && auto.data.repaired) {
+      return { ok: true, run: auto.run ?? run, errors: finished.errors, data: { receiptId: receipt.id, completed: false, checks, repairedAttempt: auto.data.attempt } }
+    }
+    return fail(finished.run ?? run, finished.errors, { receiptId: receipt.id, completed: false, checks })
+  }
   return { ok: true, run: finished.run ?? run, errors: [], data: { receiptId: receipt.id, completed: true, checks } }
 }
 

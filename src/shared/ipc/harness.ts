@@ -154,6 +154,7 @@ export interface HarnessRunExecuteResult {
   receiptId: string
   completed: boolean
   checks: Array<{ id: string; kind: string; status: string; summary: string }>
+  repairedAttempt?: number | null
 }
 
 export interface HarnessRunHandoff {
