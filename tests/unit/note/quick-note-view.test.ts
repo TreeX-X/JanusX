@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   applyTerminalNoteLifecycle,
+  clampDrawerHeight,
+  DRAWER_MIN_HEIGHT,
   DRAWER_VIEWS,
   DrawerViewTabs,
   formatNoteAge,
@@ -51,6 +53,16 @@ describe('Quick Note view behavior', () => {
     expect(getDrawerHeight(false, 'note')).toBe('28px')
     expect(getDrawerHeight(true, 'runtime')).toBe('210px')
     expect(getDrawerHeight(true, 'note')).toBe('380px')
+  })
+
+  it('prefers a per-view user height and clamps it between the floor and the pane reserve', () => {
+    expect(getDrawerHeight(true, 'runtime', { runtime: 300 })).toBe('300px')
+    expect(getDrawerHeight(true, 'note', { runtime: 300 })).toBe('380px')
+    expect(getDrawerHeight(false, 'runtime', { runtime: 300 })).toBe('28px')
+    expect(clampDrawerHeight(40, 500)).toBe(DRAWER_MIN_HEIGHT)
+    expect(clampDrawerHeight(900, 500)).toBe(500)
+    expect(clampDrawerHeight(333.6, 500)).toBe(334)
+    expect(clampDrawerHeight(300, 50)).toBe(DRAWER_MIN_HEIGHT)
   })
 
   it('associates the active tab with its panel and uses roving tab focus', () => {
@@ -108,7 +120,7 @@ describe('Quick Note view behavior', () => {
     expect(leafSource).not.toContain('drawerView')
     expect(terminalAreaSource).toContain("display: workspaceVisible ? 'block' : 'none'")
     expect(terminalAreaSource).toContain("...(!workspaceVisible ? { inert: '' } : {})")
-    expect(terminalAreaSource).toContain('height: getDrawerHeight(drawerOpen, drawerView)')
+    expect(terminalAreaSource).toContain('height: getDrawerHeight(drawerOpen, drawerView, drawerHeights)')
   })
 
   it('supports arrow, Home, and End navigation with wrapping', () => {

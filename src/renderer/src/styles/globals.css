@@ -536,6 +536,47 @@ body.desktop-toast-body {
   initial-value: 0deg;
 }
 
+/* 底部运行时抽屉：顶边拖拽把手，悬浮/聚焦/拖动时显示强调色横线 */
+.term-drawer-resize {
+  position: absolute;
+  z-index: 20;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: row-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.term-drawer-resize::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: var(--shell-accent);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 150ms ease;
+  content: '';
+}
+
+.term-drawer-resize:hover::after {
+  opacity: 0.5;
+  transition-delay: 100ms;
+}
+
+.term-drawer-resize:focus-visible::after {
+  opacity: 0.5;
+  transition-delay: 0ms;
+}
+
+.term-drawer-resize[data-resizing='true']::after {
+  opacity: 1;
+  transition-delay: 0ms;
+}
+
 /* 终端状态圆环：颜色来自 getTerminalStatusVisual，形状/动效按状态区分，文字只在悬浮 title 里 */
 .term-status-ring {
   --term-ring-width: 2px;

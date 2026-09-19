@@ -77,9 +77,22 @@ export function DrawerViewTabs({ open, activeView, onSelect }: { open: boolean; 
   )
 }
 
-export function getDrawerHeight(open: boolean, view: DrawerView): string {
-  if (!open) return '28px'
-  return view === 'note' ? '380px' : '210px'
+// Note: the drawer keeps a per-view user height clamped between a floor and the pane reserve — see .agents/notes/implemented/feature/2026-09-19-runtime-drawer-cards-resize.md
+export const DRAWER_COLLAPSED_HEIGHT = 28
+export const DRAWER_MIN_HEIGHT = 120
+export const DRAWER_MIN_PANE_HEIGHT = 160
+export const DRAWER_DEFAULT_HEIGHT: Record<DrawerView, number> = { runtime: 210, note: 380 }
+
+export type DrawerHeights = Partial<Record<DrawerView, number>>
+
+export function clampDrawerHeight(height: number, maximum: number): number {
+  const ceiling = Math.max(DRAWER_MIN_HEIGHT, Math.round(maximum))
+  return Math.min(ceiling, Math.max(DRAWER_MIN_HEIGHT, Math.round(height)))
+}
+
+export function getDrawerHeight(open: boolean, view: DrawerView, heights: DrawerHeights = {}): string {
+  if (!open) return `${DRAWER_COLLAPSED_HEIGHT}px`
+  return `${heights[view] ?? DRAWER_DEFAULT_HEIGHT[view]}px`
 }
 
 export function shouldRemoveTerminalNotes(event: TerminalLifecycleEvent): boolean {

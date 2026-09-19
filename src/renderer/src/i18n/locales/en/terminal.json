@@ -144,6 +144,7 @@
     "runtimePanelToggle": "Toggle Runtime status panel",
     "janusChatFallback": "Janus Chat",
     "runtimeAria": "Runtime telemetry",
+    "drawerResizeAria": "Resize bottom panel height",
     "tokenSummaryTitle": "Input {{input}} · Output {{output}}"
   },
   "paneTree": {

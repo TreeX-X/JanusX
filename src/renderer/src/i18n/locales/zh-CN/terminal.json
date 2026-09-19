@@ -144,6 +144,7 @@
     "runtimePanelToggle": "切换 Runtime 状态面板",
     "janusChatFallback": "Janus 对话",
     "runtimeAria": "运行时遥测",
+    "drawerResizeAria": "调整底部面板高度",
     "tokenSummaryTitle": "输入 {{input}} · 输出 {{output}}"
   },
   "paneTree": {

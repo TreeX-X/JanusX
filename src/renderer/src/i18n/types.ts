@@ -1938,6 +1938,7 @@ export type TypedI18nKey =
   | 'terminal:tab.closeChat'
   | 'terminal:tab.closeTerminal'
   | 'terminal:tab.collapseLayout'
+  | 'terminal:tab.drawerResizeAria'
   | 'terminal:tab.focusWorkspaceTitle'
   | 'terminal:tab.janusChatFallback'
   | 'terminal:tab.killCurrentTerminal'
