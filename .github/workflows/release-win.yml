@@ -36,9 +36,9 @@ jobs:
         run: |
           npm ci
           npm run build --workspace=@janus-agent/agent-core --workspace=@janus-agent/harness-core --if-present
-          npm run build --workspace=@janus-agent/chat-core --workspace=@janus-agent/node-hosts --workspace=@janus-agent/harness-node --if-present
+          npm run build --workspace=@janus-agent/chat-core --workspace=@janus-agent/node-hosts --workspace=@janus-agent/harness-node --workspace=@janus-agent/notes-cli --if-present
           npm run build --workspace=@janus-agent/janus-agent --if-present
-          npm run build --workspace=@janus-agent/cli --workspace=@janus-agent/notes-cli --if-present
+          npm run build --workspace=@janus-agent/cli --if-present
 
       - name: Setup Node
         uses: actions/setup-node@v4
