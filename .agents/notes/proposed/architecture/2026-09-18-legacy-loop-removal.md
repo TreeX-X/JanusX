@@ -15,20 +15,22 @@ capability, and the migration entry it waits on.
 
 Remove in one commit once the gates below hold:
 
-- Service: `respond`, session/steering/trace/controller maps, `start`
+- Service: `respond`, session/steering/trace maps and helpers, `start`
   without conversation, `message`, `propose` (loop-bound), `steerTask`,
-  `cancelSteerTask`, loop-driven `cancel`/`complete`/`dismissProposal`.
-  Keep `proposeForConversation`, selected apply with evidence recheck,
-  audits read, and undo until migration consumes them; they serve frozen
-  legacy tasks, not the loop.
-- IPC: maintenance start, message, propose (loop-bound), steer, steer
-  cancel, cancel, complete, dismiss. Keep apply, undo prepare/apply,
+  `cancelSteerTask`. `cancel`/`complete`/`dismissProposal` stay: the panel
+  footer and the shared proposal dismiss serve both lanes, not the loop.
+  Keep `proposeForConversation`, conversation starts, selected apply with
+  evidence recheck, audits read, and undo until migration consumes them;
+  they serve frozen legacy tasks, not the loop.
+- IPC: maintenance message, propose (loop-bound), steer, steer
+  cancel. Keep start, apply, cancel, complete, dismiss, undo prepare/apply,
   audits, list, and the new harness channels.
 - Renderer: the legacy conversation branch of `MaintenancePanel` with its
-  message/steer/propose wiring; keep proposal selection, apply, audits,
-  and undo presentation until migration repoints them.
-- Store: legacy message/steer/propose actions; keep task list, audits,
-  apply, and undo actions.
+  message/steer/propose wiring and the non-harness start section; keep
+  proposal selection, apply, audits, undo, cancel/complete footer, shared
+  dismiss, and the harness-only start until migration repoints them.
+- Store: legacy message/steer/propose actions; keep start, task list,
+  audits, apply, cancel, complete, dismiss, and undo actions.
 - JSON store: freeze writes after migration repoints the last writer;
   reads stay for migration input. No bulk conversion, no silent deletes.
 

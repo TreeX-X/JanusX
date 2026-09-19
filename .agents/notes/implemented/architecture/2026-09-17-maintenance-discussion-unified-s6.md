@@ -13,17 +13,21 @@ the old loop would hide the fork instead of removing it.
 
 ## Decision
 
-`respond()` in `src/main/janus/maintenance/service.ts` runs the
-discussion through `runChatTurn` with the maintenance hosting contract
-from [chat-turn maintenance hosting](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-17-chat-turn-maintenance-hosting.md):
+Panel discussion runs through janus-chat on the shared turn: the project
+conversation owns messages, model choice, steering, questions, and stop,
+while `proposeForConversation` in
+`src/main/janus/maintenance/service.ts` generates the proposal inside that
+turn with the maintenance hosting contract from [chat-turn maintenance
+hosting](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-17-chat-turn-maintenance-hosting.md):
 caller identity travels as `systemPromptPrefix`, the offering is the
 read-only model tool set, and `sourceTag: 'maintenance'` resolves the
-task workspaces without personal recall or capture. Recall stays
-blueprint-scoped and injected as messages, observation stays on the
-engineering path, and the task keeps its own session, steering port, and
-abort controller, all passed into the shared turn. The blueprint scope
-snapshot is pre-read into context, the same read the proposal path
-performs, since caller tools cannot travel through the turn.
+task workspaces without personal recall or capture. The service-owned
+discussion loop has exited with `respond`, `message`, `propose`, and the
+steering ports; recall stays blueprint-scoped and injected as messages,
+observation stays on the engineering path, and the shared turn owns the
+abort controller. The blueprint scope snapshot is pre-read into context,
+the same read the proposal path performs, since caller tools cannot
+travel through the turn.
 
 Turn events project onto the task channel through
 `toMaintenanceChatEvent`; todo, question, and progress variants never
@@ -60,13 +64,17 @@ the same builder serves chat turns and memory-isolated discussions.
   discussions with shared retry, recovery, compaction, and overflow
   semantics; cancellation surfaces an explicit cancelled end event instead
   of going silent. Verification:
-  `tests/unit/blueprint-maintenance-discussion.test.ts` (5 checks:
-  read-only hosting contract, trace replay without display-asset leakage,
-  cancelled turns land nothing, full event projection, trace roundtrip),
-  twin-updated `tests/unit/blueprint-maintenance-service.test.ts`
-  (provider settings mock, session shape, retryable-error retry),
-  neighboring maintenance/harness/chat/roundtable suites stay green (113
-  checks), `npm run typecheck` passes, scoped eslint reports 0 errors.
+  `tests/unit/blueprint-maintenance-discussion.test.ts` (2 checks: full
+  event projection, trace roundtrip),
+  `tests/unit/blueprint-maintenance-service.test.ts` (6 checks: legacy
+  settlement with concurrent-start guard, evidence and authorization
+  staleness, audit persistence, delete confirmation, audit-sourced undo),
+  `tests/unit/blueprint-maintenance-harness-routing.test.ts` (12 checks:
+  shared conversation binding, project start, harness apply with audit
+  root, loud and scope refusals, undo roundtrip and revision conflict,
+  evidence and delete gates, conversation-linked cancel, concurrent
+  start, multi-workspace start),
+  neighboring maintenance/harness/chat/roundtable suites stay green, `npm run typecheck` passes, scoped eslint reports 0 errors.
 - **Costs and limits**: trace replay into the turn follows the shared
   12-entry cap instead of the former 24; blueprint reads are a pre-read
   snapshot, so mid-turn drill-down beyond the scope needs a new turn;

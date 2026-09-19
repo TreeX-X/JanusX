@@ -2,26 +2,18 @@ import { create } from 'zustand'
 import {
   applyMaintenanceChangeSet,
   applyMaintenanceUndo,
-  cancelMaintenanceSteer,
   cancelMaintenanceTask,
   completeMaintenanceTask,
   dismissMaintenanceProposal,
-  generateMaintenanceProposal,
   listMaintenanceAudits,
   listMaintenanceTasks,
   onMaintenanceTask,
   prepareMaintenanceUndo,
-  sendMaintenanceMessage,
   startMaintenanceTask,
-  steerMaintenanceTask,
   type BlueprintMaintenanceApplyInput,
   type BlueprintMaintenanceAuditRecord,
   type BlueprintMaintenanceDismissInput,
-  type BlueprintMaintenanceMessageInput,
-  type BlueprintMaintenanceProposalInput,
   type BlueprintMaintenanceStartInput,
-  type BlueprintMaintenanceSteerCancelInput,
-  type BlueprintMaintenanceSteerInput,
   type BlueprintMaintenanceTask,
   type BlueprintMaintenanceToolTraceEntry,
   type BlueprintMaintenanceUndoApplyInput,
@@ -46,14 +38,10 @@ interface BlueprintMaintenanceStore {
   requestOpen: (request: Exclude<MaintenanceOpenRequest, null>) => void
   clearOpenRequest: () => void
   start: (input: BlueprintMaintenanceStartInput) => Promise<BlueprintMaintenanceTask | null>
-  message: (input: BlueprintMaintenanceMessageInput) => Promise<void>
-  propose: (input: BlueprintMaintenanceProposalInput) => Promise<void>
   apply: (input: BlueprintMaintenanceApplyInput) => Promise<boolean>
   cancel: (taskId: string) => Promise<void>
   complete: (taskId: string) => Promise<void>
   dismiss: (input: BlueprintMaintenanceDismissInput) => Promise<boolean>
-  steer: (input: BlueprintMaintenanceSteerInput) => Promise<boolean>
-  cancelSteer: (input: BlueprintMaintenanceSteerCancelInput) => Promise<void>
   prepareUndo: (blueprintId: string, auditId: string) => Promise<boolean>
   clearPendingUndo: () => void
   applyUndo: (input: BlueprintMaintenanceUndoApplyInput) => Promise<boolean>
@@ -99,14 +87,6 @@ export const useBlueprintMaintenanceStore = create<BlueprintMaintenanceStore>((s
       return task
     } catch (error) { set({ error: error instanceof Error ? error.message : String(error) }); return null }
   },
-  message: async (input) => {
-    try { const task = await sendMaintenanceMessage(input); set((state) => ({ tasks: upsert(state.tasks, task), error: null })) }
-    catch (error) { set({ error: error instanceof Error ? error.message : String(error) }) }
-  },
-  propose: async (input) => {
-    try { const task = await generateMaintenanceProposal(input); set((state) => ({ tasks: upsert(state.tasks, task), error: null })) }
-    catch (error) { set({ error: error instanceof Error ? error.message : String(error) }) }
-  },
   apply: async (input) => {
     try {
       const result = await applyMaintenanceChangeSet(input)
@@ -130,17 +110,6 @@ export const useBlueprintMaintenanceStore = create<BlueprintMaintenanceStore>((s
       set((state) => ({ tasks: upsert(state.tasks, task), error: null }))
       return true
     } catch (error) { set({ error: error instanceof Error ? error.message : String(error) }); return false }
-  },
-  steer: async (input) => {
-    try {
-      const result = await steerMaintenanceTask(input)
-      if (!result.accepted) set({ error: result.error ?? '当前任务无进行中的流，追问已留在历史中' })
-      return result.accepted
-    } catch (error) { set({ error: error instanceof Error ? error.message : String(error) }); return false }
-  },
-  cancelSteer: async (input) => {
-    try { await cancelMaintenanceSteer(input) }
-    catch (error) { set({ error: error instanceof Error ? error.message : String(error) }) }
   },
   prepareUndo: async (blueprintId, auditId) => {
     try {

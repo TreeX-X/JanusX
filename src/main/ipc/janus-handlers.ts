@@ -38,11 +38,7 @@ import type {
   BlueprintMaintenanceApplyInput,
   BlueprintMaintenanceAuditListInput,
   BlueprintMaintenanceDismissInput,
-  BlueprintMaintenanceMessageInput,
-  BlueprintMaintenanceProposalInput,
   BlueprintMaintenanceStartInput,
-  BlueprintMaintenanceSteerCancelInput,
-  BlueprintMaintenanceSteerInput,
   BlueprintMaintenanceUndoApplyInput,
   BlueprintMaintenanceUndoPrepareInput,
 } from '../../shared/janus/maintenance-types'
@@ -93,14 +89,6 @@ export function registerJanusHandlers(): void {
     async (_event, input: BlueprintMaintenanceStartInput) => blueprintMaintenanceService.start(input)
   )
   ipcMain.handle(
-    JANUS_COMMAND_CHANNELS.maintenanceMessage,
-    async (_event, input: BlueprintMaintenanceMessageInput) => blueprintMaintenanceService.message(input)
-  )
-  ipcMain.handle(
-    JANUS_COMMAND_CHANNELS.maintenancePropose,
-    async (_event, input: BlueprintMaintenanceProposalInput) => blueprintMaintenanceService.propose(input)
-  )
-  ipcMain.handle(
     JANUS_COMMAND_CHANNELS.maintenanceApply,
     async (_event, input: BlueprintMaintenanceApplyInput) => blueprintMaintenanceService.apply(input)
   )
@@ -115,14 +103,6 @@ export function registerJanusHandlers(): void {
   ipcMain.handle(
     JANUS_COMMAND_CHANNELS.maintenanceDismiss,
     async (_event, input: BlueprintMaintenanceDismissInput) => blueprintMaintenanceService.dismissProposal(input.taskId)
-  )
-  ipcMain.handle(
-    JANUS_COMMAND_CHANNELS.maintenanceSteer,
-    async (_event, input: BlueprintMaintenanceSteerInput) => blueprintMaintenanceService.steerTask(input ?? { taskId: '', entryId: '', text: '' })
-  )
-  ipcMain.handle(
-    JANUS_COMMAND_CHANNELS.maintenanceSteerCancel,
-    async (_event, input: BlueprintMaintenanceSteerCancelInput) => blueprintMaintenanceService.cancelSteerTask(input ?? { taskId: '', entryId: '' })
   )
   ipcMain.handle(
     JANUS_COMMAND_CHANNELS.maintenanceUndoPrepare,

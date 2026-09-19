@@ -1,9 +1,4 @@
-import { promises as fs } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Blueprint } from '../../src/shared/janus/types'
-import type { BlueprintMaintenanceTask } from '../../src/shared/janus/maintenance-types'
+import { describe, expect, it, vi } from 'vitest'
 
 vi.setConfig({ testTimeout: 30_000 })
 
@@ -26,8 +21,11 @@ const mocks = vi.hoisted(() => ({
   getAgentMaxSteps: vi.fn(),
 }))
 
-vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
-vi.mock('../../src/main/llm/ai-runtime', () => ({ generateObject: mocks.generateObject, streamText: mocks.streamText }))
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
+vi.mock('../../src/main/llm/ai-runtime', () => ({
+  generateObject: mocks.generateObject,
+  streamText: mocks.streamText,
+}))
 vi.mock('../../src/main/agent/runtime/shell-runtime', () => ({
   workspaceAgentRuntime: {
     registry: { list: () => [] },
@@ -76,172 +74,10 @@ vi.mock('../../src/main/config/service', () => ({
 }))
 
 import {
-  blueprintMaintenanceService,
   toChatTraceEntry,
   toMaintenanceChatEvent,
   toMaintenanceTraceEntry,
 } from '../../src/main/janus/maintenance/service'
-
-const BLUEPRINT_ID = 'bp-discussion'
-const READ_ONLY = [
-  'workspace_list', 'workspace_search', 'workspace_read',
-  'project_detect', 'project_list_processes', 'project_process_output',
-  'git_status', 'git_log', 'git_diff',
-]
-
-function fixture(): Blueprint {
-  return {
-    schemaVersion: 2,
-    contentRevision: 7,
-    id: BLUEPRINT_ID,
-    name: 'Blueprint',
-    description: '',
-    rootNodeId: 'root',
-    nodeIds: ['root'],
-    nodes: {
-      root: {
-        id: 'root', title: 'Root', type: 'epic', status: 'not-started', progress: 0,
-        statusSource: 'manual', positioning: '', description: '', features: [], completedItems: [],
-        techSolution: '', notes: '', todos: [], issues: [], activities: [], analyses: [], workspaceId: null,
-        workspaceSnapshot: null, boundTerminalId: null, terminalHistory: [], lastAnalyzedCommitSha: null,
-        children: [], parentId: null, tags: [], createdAt: '', updatedAt: '',
-      },
-    },
-    relations: [],
-    requirementCandidates: [],
-    mountedTo: null,
-    canvasLayout: {},
-    createdAt: '',
-    updatedAt: '',
-  } as Blueprint
-}
-
-let recordsDir = ''
-let checkoutDir = ''
-
-function serviceOf() {
-  return blueprintMaintenanceService as unknown as {
-    tasks: Map<string, BlueprintMaintenanceTask>
-    cancelAll(): void
-  }
-}
-
-function stageTask(): void {
-  serviceOf().tasks.set('t-1', {
-    id: 't-1',
-    blueprintId: BLUEPRINT_ID,
-    blueprintName: 'Blueprint',
-    baseRevision: 7,
-    workspaceId: 'ws-1',
-    workspaceName: 'W',
-    workspacePath: checkoutDir,
-    authorizedWorkspaces: [{ workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir }],
-    nodeScope: { type: 'blueprint' },
-    goal: 'shape the scope',
-    status: 'active',
-    progress: 0,
-    phase: '',
-    messages: [{ id: 'm0', role: 'user', content: 'hi', createdAt: '' }],
-    changeSet: null,
-    changeSetHistory: [],
-    createdAt: '',
-    updatedAt: '',
-  })
-}
-
-function liveTask(): BlueprintMaintenanceTask {
-  const task = serviceOf().tasks.get('t-1')
-  if (!task) throw new Error('task t-1 missing')
-  return task
-}
-
-const waitFor = <T,>(assertion: () => T) => vi.waitFor(assertion, { timeout: 15_000, interval: 25 })
-
-describe('maintenance discussion on the shared turn', () => {
-  beforeEach(async () => {
-    recordsDir = await fs.mkdtemp(join(tmpdir(), 'maint-discuss-records-'))
-    checkoutDir = await fs.mkdtemp(join(tmpdir(), 'maint-discuss-checkout-'))
-    await fs.writeFile(join(recordsDir, 'ws-1.json'), JSON.stringify({ id: 'ws-1', path: checkoutDir }))
-    mocks.workspacesDir.mockReturnValue(recordsDir)
-    mocks.loadBlueprint.mockReset().mockResolvedValue(fixture())
-    mocks.getDefaultModel.mockReset().mockResolvedValue({ provider: { id: 'p' }, modelId: 'm' })
-    mocks.createSession.mockReset().mockResolvedValue({ id: 's1' })
-    mocks.getSession.mockReset().mockReturnValue({ status: 'idle' })
-    mocks.knowledgeSearch.mockReset().mockResolvedValue({ compactContext: '', items: [] })
-    mocks.knowledgeCapture.mockReset().mockResolvedValue({})
-    mocks.getAgentMaxSteps.mockReset().mockResolvedValue(40)
-    mocks.runChatTurn.mockReset().mockImplementation(async (request: { requestId: string }) => ({
-      requestId: request.requestId,
-      text: 'discussed',
-      toolTraces: [{ toolName: 'workspace_read', workspaceId: 'ws-1', status: 'completed', summary: 'a.ts' }],
-      cancelled: false,
-      todos: [],
-      compacted: false,
-    }))
-    serviceOf().cancelAll()
-  })
-
-  afterEach(async () => {
-    serviceOf().cancelAll()
-    await fs.rm(recordsDir, { recursive: true, force: true }).catch(() => undefined)
-    await fs.rm(checkoutDir, { recursive: true, force: true }).catch(() => undefined)
-  })
-
-  it('drives discussion through runChatTurn with read-only maintenance hosting', async () => {
-    stageTask()
-    await blueprintMaintenanceService.message({ taskId: 't-1', content: 'what next' })
-    await waitFor(() => expect(liveTask().status).toBe('active'))
-    expect(mocks.runChatTurn).toHaveBeenCalledTimes(1)
-    const [request, ports] = mocks.runChatTurn.mock.calls[0] as unknown as [
-      Record<string, unknown>,
-      Record<string, unknown>,
-    ]
-    expect(request.sourceTag).toBe('maintenance')
-    expect([...(request.toolAllowlist as string[])].sort()).toEqual([...READ_ONLY].sort())
-    // Memory separation: the engineering channel never offers person-scope
-    // tools, so no maintenance turn can mint or read user memories.
-    expect((request.toolAllowlist as string[]).some((name) => name.startsWith('user-memory'))).toBe(false)
-    expect(request.systemPromptPrefix as string).toContain('never emit a ChangeSet')
-    expect(request.chatSession).toBeDefined()
-    expect(request.steeringPort).toBeDefined()
-    const userMessage = (request.messages as Array<{ role: string; content: string }>).find((m) => m.role === 'user')
-    expect(userMessage?.content).toContain('Nodes:')
-    expect(userMessage?.content).toContain('shape the scope')
-    expect(ports.question).toBeUndefined()
-    expect(ports.knowledgeSearch).toBeUndefined()
-    expect(ports.knowledgeCapture).toBeUndefined()
-    expect(liveTask().messages[2]?.content).toBe('discussed')
-    expect(liveTask().status).toBe('active')
-  })
-
-  it('replays panel traces without runner-only display assets', async () => {
-    stageTask()
-    await blueprintMaintenanceService.message({ taskId: 't-1', content: 'first' })
-    await waitFor(() => expect(liveTask().status).toBe('active'))
-    await blueprintMaintenanceService.message({ taskId: 't-1', content: 'second' })
-    await waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledTimes(2))
-    const [secondRequest] = mocks.runChatTurn.mock.calls[1] as unknown as [Record<string, unknown>]
-    expect(secondRequest.toolTraces).toEqual([
-      { toolName: 'workspace_read', workspaceId: 'ws-1', status: 'completed', summary: 'a.ts' },
-    ])
-  })
-
-  it('lands no assistant message when the turn is cancelled', async () => {
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => { release = resolve })
-    mocks.runChatTurn.mockReset().mockImplementation(async (request: { requestId: string }) => {
-      await gate
-      return { requestId: request.requestId, text: 'too late', toolTraces: [], cancelled: false, todos: [], compacted: false }
-    })
-    stageTask()
-    await blueprintMaintenanceService.message({ taskId: 't-1', content: 'hi' })
-    await waitFor(() => expect(mocks.runChatTurn).toHaveBeenCalledTimes(1))
-    blueprintMaintenanceService.cancel('t-1')
-    release()
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(liveTask().messages).toHaveLength(2)
-  })
-})
 
 describe('maintenance chat event and trace mapping', () => {
   const taskId = 't-9'

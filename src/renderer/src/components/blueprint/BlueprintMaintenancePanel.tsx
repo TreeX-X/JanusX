@@ -419,13 +419,10 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
   const loadAudits = useBlueprintMaintenanceStore((state) => state.loadAudits)
   const clearOpenRequest = useBlueprintMaintenanceStore((state) => state.clearOpenRequest)
   const start = useBlueprintMaintenanceStore((state) => state.start)
-  const message = useBlueprintMaintenanceStore((state) => state.message)
-  const propose = useBlueprintMaintenanceStore((state) => state.propose)
   const apply = useBlueprintMaintenanceStore((state) => state.apply)
   const cancel = useBlueprintMaintenanceStore((state) => state.cancel)
   const complete = useBlueprintMaintenanceStore((state) => state.complete)
   const dismiss = useBlueprintMaintenanceStore((state) => state.dismiss)
-  const steer = useBlueprintMaintenanceStore((state) => state.steer)
   const pendingUndo = useBlueprintMaintenanceStore((state) => state.pendingUndo)
   const prepareUndo = useBlueprintMaintenanceStore((state) => state.prepareUndo)
   const clearPendingUndo = useBlueprintMaintenanceStore((state) => state.clearPendingUndo)
@@ -434,7 +431,6 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
   const [workspaceIds, setWorkspaceIds] = useState<string[]>(() => activeWorkspaceId ? [activeWorkspaceId] : workspaces[0]?.id ? [workspaces[0].id] : [])
   const [scopeNodeId, setScopeNodeId] = useState(openRequest?.nodeId ?? blueprint?.rootNodeId ?? '')
   const [goal, setGoal] = useState(() => t('blueprint:maintenance.goalDefault'))
-  const [draft, setDraft] = useState('')
   const [panelView, setPanelView] = useState<'conversation' | 'history'>('conversation')
   const [migration, setMigration] = useState<HarnessMigrationPreview | null>(null)
   const [migrated, setMigrated] = useState<HarnessMigrationResult | null>(null)
@@ -594,12 +590,6 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
   const handleDismiss = async () => {
     if (!task) return
     await dismiss({ taskId: task.id })
-  }
-  const handleSteer = async () => {
-    if (!task || !draft.trim()) return
-    const entryId = `steer-${Date.now()}`
-    const accepted = await steer({ taskId: task.id, entryId, text: draft })
-    if (accepted) setDraft('')
   }
   const handlePrepareUndo = async (auditId: string) => {
     if (!blueprint) return
@@ -766,7 +756,7 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
           {undoPanel}
           {auditHistory}
         </div>
-      ) : !task && !chat ? (
+      ) : !task && !chat && blueprint?.source === 'harness' ? (
         <div className="bp-maintenance-start">
           <label>{t('blueprint:maintenance.authorizeWorkspace')}
             <details className="bp-maintenance-workspace-picker">
@@ -876,23 +866,6 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
                 <button className="blueprint-btn" type="button" disabled={chat?.isStreaming} onClick={() => void handleDismiss()}>{t('blueprint:maintenance.dismissProposal')}</button>
               </div>
             </section>
-          ) : null}
-          {!chat && (task.status === 'active' || task.status === 'proposal-ready' || task.status === 'failed') && !taskWorking ? (
-            <div className="bp-maintenance-compose">
-              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('blueprint:maintenance.composePlaceholder')} />
-              <div className="bp-maintenance-compose__actions">
-                <button type="button" disabled={!draft.trim()} onClick={() => { if (draft.trim()) { void message({ taskId: task.id, content: draft }); setDraft('') } }}>{t('blueprint:maintenance.sendMessage')}</button>
-                <button type="button" className="bp-maintenance-compose__proposal" onClick={() => void propose({ taskId: task.id })}>{task.changeSet ? t('blueprint:maintenance.reviseProposal') : t('blueprint:maintenance.composeProposal')}</button>
-              </div>
-            </div>
-          ) : null}
-          {!chat && taskWorking ? (
-            <div className="bp-maintenance-compose">
-              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('blueprint:maintenance.steerPlaceholder')} />
-              <div className="bp-maintenance-compose__actions">
-                <button type="button" disabled={!draft.trim()} onClick={() => void handleSteer()}>{t('blueprint:maintenance.steerAction')}</button>
-              </div>
-            </div>
           ) : null}
           <div ref={conversationBottomRef} className="bp-maintenance-conversation-bottom" aria-hidden="true" />
           {showScrollToBottom ? (

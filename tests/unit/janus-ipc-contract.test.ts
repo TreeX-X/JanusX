@@ -26,14 +26,10 @@ const mocks = vi.hoisted(() => ({
   maintenanceList: vi.fn(),
   maintenanceAuditList: vi.fn(),
   maintenanceStart: vi.fn(),
-  maintenanceMessage: vi.fn(),
-  maintenancePropose: vi.fn(),
   maintenanceApply: vi.fn(),
   maintenanceCancel: vi.fn(),
   maintenanceComplete: vi.fn(),
   maintenanceDismiss: vi.fn(),
-  maintenanceSteer: vi.fn(),
-  maintenanceSteerCancel: vi.fn(),
 }))
 
 let janusApi: JanusAPI
@@ -82,14 +78,10 @@ vi.mock('../../src/main/janus/maintenance/service', () => ({
     list: mocks.maintenanceList,
     listAudits: mocks.maintenanceAuditList,
     start: mocks.maintenanceStart,
-    message: mocks.maintenanceMessage,
-    propose: mocks.maintenancePropose,
     apply: mocks.maintenanceApply,
     cancel: mocks.maintenanceCancel,
     complete: mocks.maintenanceComplete,
     dismissProposal: mocks.maintenanceDismiss,
-    steerTask: mocks.maintenanceSteer,
-    cancelSteerTask: mocks.maintenanceSteerCancel,
   },
 }))
 vi.mock('../../src/main/knowledge/observation-service', () => ({
@@ -150,9 +142,9 @@ describe('Janus IPC contract', () => {
     const commands = Object.values(JANUS_COMMAND_CHANNELS)
     const events = Object.values(JANUS_EVENT_CHANNELS)
 
-    expect(commands).toHaveLength(36)
+    expect(commands).toHaveLength(32)
     expect(events).toHaveLength(3)
-    expect(new Set([...commands, ...events]).size).toBe(39)
+    expect(new Set([...commands, ...events]).size).toBe(35)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining(commands)
     )
@@ -188,8 +180,6 @@ describe('Janus IPC contract', () => {
     }
     const maintenanceStart = { blueprintId: 'bp-1' } as Parameters<JanusAPI['startMaintenanceTask']>[0]
     const maintenanceAudits = { blueprintId: 'bp-1', taskId: 'task-1' }
-    const maintenanceMessage = { taskId: 'task-1', content: '继续讨论' }
-    const maintenanceProposal = { taskId: 'task-1' }
     const maintenanceApply = { taskId: 'task-1', changeSetId: 'set-1', operationIds: ['op-1'] }
 
     await janusApi.listBlueprints('C:\\repo')
@@ -217,14 +207,10 @@ describe('Janus IPC contract', () => {
     await janusApi.listMaintenanceTasks()
     await janusApi.listMaintenanceAudits(maintenanceAudits)
     await janusApi.startMaintenanceTask(maintenanceStart)
-    await janusApi.sendMaintenanceMessage(maintenanceMessage)
-    await janusApi.generateMaintenanceProposal(maintenanceProposal)
     await janusApi.applyMaintenanceChangeSet(maintenanceApply)
     await janusApi.cancelMaintenanceTask('task-1')
     await janusApi.completeMaintenanceTask('task-1')
     await janusApi.dismissMaintenanceProposal({ taskId: 'task-1' })
-    await janusApi.steerMaintenanceTask({ taskId: 'task-1', entryId: 'e-1', text: '第 2 组去掉' })
-    await janusApi.cancelMaintenanceSteer({ taskId: 'task-1', entryId: 'e-1' })
 
     expect(mocks.invoke.mock.calls).toEqual([
       [JANUS_COMMAND_CHANNELS.listBlueprints, 'C:\\repo'],
@@ -252,14 +238,10 @@ describe('Janus IPC contract', () => {
       [JANUS_COMMAND_CHANNELS.maintenanceList],
       [JANUS_COMMAND_CHANNELS.maintenanceAuditList, maintenanceAudits],
       [JANUS_COMMAND_CHANNELS.maintenanceStart, maintenanceStart],
-      [JANUS_COMMAND_CHANNELS.maintenanceMessage, maintenanceMessage],
-      [JANUS_COMMAND_CHANNELS.maintenancePropose, maintenanceProposal],
       [JANUS_COMMAND_CHANNELS.maintenanceApply, maintenanceApply],
       [JANUS_COMMAND_CHANNELS.maintenanceCancel, 'task-1'],
       [JANUS_COMMAND_CHANNELS.maintenanceComplete, 'task-1'],
       [JANUS_COMMAND_CHANNELS.maintenanceDismiss, { taskId: 'task-1' }],
-      [JANUS_COMMAND_CHANNELS.maintenanceSteer, { taskId: 'task-1', entryId: 'e-1', text: '第 2 组去掉' }],
-      [JANUS_COMMAND_CHANNELS.maintenanceSteerCancel, { taskId: 'task-1', entryId: 'e-1' }],
     ])
   })
 

@@ -228,8 +228,6 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
   it('binds proposal-only maintenance to shared conversation history and rejects foreign callers', async () => {
     const task = await blueprintMaintenanceService.start({ blueprintId: PROJECT_ID, workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir, nodeScope: { type: 'blueprint' }, goal: 'Maintain', conversationId: 'shared' })
     expect(task).toMatchObject({ status: 'active', conversationId: 'shared', messages: [] })
-    await expect(blueprintMaintenanceService.message({ taskId: task.id, content: 'other loop' })).rejects.toThrow('linked project conversation')
-    await expect(blueprintMaintenanceService.propose({ taskId: task.id })).rejects.toThrow('linked project conversation')
     const input = { taskId: task.id, conversationId: 'shared', providerId: 'p', modelId: 'm', messages: [{ role: 'user', content: 'Preserve the exact selected scope' }], signal: new AbortController().signal, chatSession: new ChatSessionRuntime(), workspaceIds: ['ws-1'] }
     await expect(blueprintMaintenanceService.proposeForConversation({ ...input, conversationId: 'foreign' })).rejects.toThrow('another conversation')
     await expect(blueprintMaintenanceService.proposeForConversation({ ...input, workspaceIds: [] })).rejects.toThrow('detached')
@@ -292,10 +290,13 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
       workspacePath: checkoutDir,
       nodeScope: { type: 'blueprint' },
       goal: 'improve the widget',
+      conversationId: 'shared-start',
     })
     expect(task.blueprintId).toBe(PROJECT_ID)
     expect(task.baseRevision).toBe(currentRev)
+    expect(task.conversationId).toBe('shared-start')
     expect(mocks.loadBlueprint).not.toHaveBeenCalled()
+    blueprintMaintenanceService.cancel(task.id)
   })
 
   it('applies a selection through the harness transaction and records an audit with the checkout root', async () => {
@@ -441,23 +442,46 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
     expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
   })
 
-  it('refuses legacy steering ports on conversation-linked project tasks', async () => {
+  it('rejects concurrent starts for the same project graph', async () => {
+    let releaseResolve!: () => void
+    const gate = new Promise<{ ok: boolean; root: string; diagnostics: never[] }>((resolve) => {
+      releaseResolve = () => resolve({ ok: true, root: checkoutDir, diagnostics: [] })
+    })
+    mocks.resolveRoot.mockImplementationOnce(() => gate)
+    const input = {
+      blueprintId: PROJECT_ID,
+      workspaceId: 'ws-1',
+      workspaceName: 'W',
+      workspacePath: checkoutDir,
+      nodeScope: { type: 'blueprint' } as const,
+      goal: 'race the shared start',
+      conversationId: 'shared-race',
+    }
+    const first = blueprintMaintenanceService.start(input)
+    await expect(blueprintMaintenanceService.start(input)).rejects.toThrow('已有活动维护任务')
+    releaseResolve()
+    const started = await first
+    expect(started.conversationId).toBe('shared-race')
+    blueprintMaintenanceService.cancel(started.id)
+  })
+
+  it('authorizes multiple workspaces on a shared project start', async () => {
+    await fs.writeFile(join(recordsDir, 'ws-2.json'), JSON.stringify({ id: 'ws-2', path: checkoutDir }))
     const task = await blueprintMaintenanceService.start({
       blueprintId: PROJECT_ID,
       workspaceId: 'ws-1',
       workspaceName: 'W',
       workspacePath: checkoutDir,
+      authorizedWorkspaces: [
+        { workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir },
+        { workspaceId: 'ws-2', workspaceName: 'W2', workspacePath: checkoutDir },
+      ],
       nodeScope: { type: 'blueprint' },
-      goal: 'steering isolation probe',
-      conversationId: 'shared-steer',
+      goal: 'cross-workspace start',
+      conversationId: 'shared-multi',
     })
-    expect(task.status).toBe('active')
-    expect(
-      blueprintMaintenanceService.steerTask({ taskId: task.id, entryId: 'e-1', text: 'redirect the stream' }),
-    ).toMatchObject({ accepted: false })
-    expect(
-      blueprintMaintenanceService.cancelSteerTask({ taskId: task.id, entryId: 'e-1' }),
-    ).toEqual({ cancelled: false })
-    expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+    expect(task.authorizedWorkspaces).toHaveLength(2)
+    expect(task.nodeScope).toEqual({ type: 'blueprint' })
+    blueprintMaintenanceService.cancel(task.id)
   })
 })
