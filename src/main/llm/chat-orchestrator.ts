@@ -65,6 +65,7 @@ export interface ChatStreamRequest {
   domain?: 'personal' | 'project'
   /** Renderer selection request only; never trusted for paths or grants. */
   noteRefs?: Array<{ uri: string; expectedHash?: string }>
+  maintenanceTaskId?: string
 }
 
 /*-- 纯 helper 继续沿用 chat-core（单测经此 re-export，链路不断） --*/
@@ -175,7 +176,7 @@ export function abortChatStream(requestId: string): void {
  * 主侧无需另行落盘；请求结束（成功/失败/取消）即丢弃未消费条目——下次发送
  * 会从渲染端历史自然带上这些文本，不丢不重。
  */
-const activeSteerTargets = new Map<string, { requestId: string; port: AgentSteeringPort }>()
+const activeSteerTargets = new Map<string, { requestId: string; port: AgentSteeringPort; entries: Map<string, string> }>()
 const MAX_STEER_ENTRIES_PER_REQUEST = 10
 
 export function steerChatStream(input: { conversationId?: string; entryId: string; text: string }): { accepted: boolean; error?: string } {
@@ -188,9 +189,12 @@ export function steerChatStream(input: { conversationId?: string; entryId: strin
     if (key) activeSteerTargets.delete(key)
     return { accepted: false, error: 'No active stream for this conversation' }
   }
+  const previous = target.entries.get(input.entryId)
+  if (previous !== undefined) return previous === content ? { accepted: true } : { accepted: false, error: 'Steering identity conflicts with an earlier message' }
   if (target.port.size >= MAX_STEER_ENTRIES_PER_REQUEST) {
     return { accepted: false, error: 'Steering queue is full for this stream' }
   }
+  target.entries.set(input.entryId, content)
   // 入队即抢占：port 内部打断在途流式尝试；工具执行中则到间隙应用。
   target.port.push(input.entryId, { role: 'user', content })
   return { accepted: true }
@@ -200,7 +204,9 @@ export function cancelChatSteer(input: { conversationId?: string; entryId: strin
   const key = input.conversationId || ''
   const target = key ? activeSteerTargets.get(key) : undefined
   if (!target) return { cancelled: false }
-  return { cancelled: target.port.remove(input.entryId) }
+  const cancelled = target.port.remove(input.entryId)
+  if (cancelled) target.entries.delete(input.entryId)
+  return { cancelled }
 }
 
 /** 单向 send/on 模式的 chatStream 事件端点（渲染端按 requestId 过滤） */
@@ -281,13 +287,13 @@ function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['
 function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project'): ChatTurnPorts {
   return buildJanusChatTurnPorts({
     callerId,
-    getProviderSettings: (providerId) => llmService.getProviderSettings(providerId),
-    getLanguageModel: (providerId, modelId) => llmService.getLanguageModel(providerId, modelId),
+    getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
+    getLanguageModel: (providerId, modelId) => llmService.getLanguageModel('janus', providerId, modelId),
     listModels: (providerId) => {
       const catalog = llmService as typeof llmService & {
-        listModels?: (provider: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
+        listModels?: (terminal: string, provider: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
       }
-      return typeof catalog.listModels === 'function' ? catalog.listModels(providerId) : Promise.resolve([])
+      return typeof catalog.listModels === 'function' ? catalog.listModels('janus', providerId) : Promise.resolve([])
     },
     getMaxTurns: () => configService.getAgentMaxSteps().catch(() => CHAT_MAX_STEPS),
     getAgentSession: (agentSessionId) => workspaceAgentRuntime.getSession(agentSessionId),
@@ -362,7 +368,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
   // second entry with the same conversationId steers instead of spawning.
   const steerKey = conversationId || requestId
   const steeringPort = new AgentSteeringPort()
-  activeSteerTargets.set(steerKey, { requestId, port: steeringPort })
+  activeSteerTargets.set(steerKey, { requestId, port: steeringPort, entries: new Map() })
 
   // 窗口销毁后 event.reply 会抛异常并造成 unhandled rejection，统一守卫
   const sendEvent = (
@@ -405,6 +411,39 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     const ports = defaultChatTurnPorts(callerId, requestId, domain)
     const chatSession = getChatSession(conversationId ?? requestId)
 
+    let projectContext: string | undefined
+    if (domain === 'project') {
+      const roots = (workspaceResources ?? []).map((resource) => {
+        const session = workspaceAgentRuntime.getSession(resource.agentSessionId)
+        if (!session || session.status !== 'running' || session.workspace.workspaceId !== resource.workspaceId
+          || session.workspace.workspaceRoot !== resource.workspacePath) throw new Error('PERMISSION_DENIED: project workspace session is unavailable')
+        return session.workspace.workspaceRoot
+      })
+      const { projectChatContext } = await import('../harness/chat-context')
+      projectContext = await projectChatContext(roots, request.noteRefs ?? [])
+      if (!roots.length) ports.knowledgeCapture = undefined
+    }
+
+    if (request.maintenanceTaskId) {
+      if (domain !== 'project' || !conversationId) throw new Error('NOT_READY: maintenance requires a project conversation')
+      const { blueprintMaintenanceService } = await import('../janus/maintenance/service')
+      const history = [...messages]
+      let text: string
+      do {
+        const steered = steeringPort.take()
+        history.push(...steered.map((entry) => ({ role: 'user' as const, content: entry.message.content })))
+        if (steered.length) sendAgentEvent({ type: 'steering_consumed', requestId, keys: steered.map((entry) => entry.key) })
+        text = await blueprintMaintenanceService.proposeForConversation({
+          taskId: request.maintenanceTaskId, conversationId, messages: history, providerId, modelId,
+          signal: controller.signal, chatSession, workspaceIds: (workspaceResources ?? []).map((item) => item.workspaceId),
+        })
+      } while (!controller.signal.aborted && steeringPort.size > 0)
+      if (!controller.signal.aborted) sendAgentEvent({ type: 'text_delta', requestId, delta: text })
+      sendAgentEvent({ type: 'stream_end', requestId, cancelled: controller.signal.aborted })
+      sendEvent(LLM_CHANNELS.done, { requestId })
+      return
+    }
+
     const result = await runChatTurn(
       {
         requestId,
@@ -420,6 +459,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         callerId,
         chatSession,
         steeringPort,
+        ...(projectContext ? {
+          systemPromptPrefix: projectContext,
+          toolAllowlist: ['workspace_list', 'workspace_search', 'workspace_read', 'project_detect', 'project_list_processes', 'project_process_output', 'git_status', 'git_log', 'git_diff', 'ask_user', 'todo_write'],
+        } : {}),
       },
       ports,
       {

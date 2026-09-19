@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   answerChatQuestion,
   chatStream,
-  getDefaultProvider,
-  getProviders,
+  getTerminalDefault,
+  getTerminalProviders,
   listModels,
   cancelSteerChat,
   steerChat,
@@ -21,11 +21,13 @@ import type {
   JanusChatMessage,
   JanusChatStorageSnapshot,
   PersistedJanusConversation,
+  EngineeringContext,
 } from '../../../../shared/ipc/janus-chat'
 import {
   MAX_TOOL_TRACES,
   NEW_CONVERSATION_TITLE,
   capChatMessages,
+  bindProjectConversation,
   compactJanusConversation,
   createJanusConversation,
   getRetryTurn,
@@ -87,6 +89,9 @@ export interface JanusResourceController {
 }
 
 export interface UseJanusChatReturn {
+  engineeringContext?: EngineeringContext
+  setEngineeringContext: (context: EngineeringContext) => void
+  proposeMaintenance: (taskId: string, text: string) => void
   conversationId: string
   conversationTitle: string
   conversations: ConversationSummary[]
@@ -134,6 +139,8 @@ export interface UseJanusChatReturn {
 
 export interface UseJanusChatRegistryReturn {
   islandConversationId: string
+  persistenceReady: boolean
+  bindProject: (context: EngineeringContext, workspaceIds: string[], title: string) => string
   getController: (conversationId?: string) => UseJanusChatReturn
 }
 
@@ -245,11 +252,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   const updateConversations = useCallback((
     update: (current: PersistedJanusConversation[]) => PersistedJanusConversation[],
   ) => {
-    setConversations((current) => {
-      const next = update(current)
-      conversationsRef.current = next
-      return next
-    })
+    const next = update(conversationsRef.current)
+    conversationsRef.current = next
+    setConversations(next)
   }, [])
 
   const updateConversation = useCallback((
@@ -392,13 +397,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
 
   const loadConfiguredModels = useCallback(async (): Promise<ChatModelOption[]> => {
     try {
-      const [providers, defaultProvider] = await Promise.all([getProviders(), getDefaultProvider()])
+      const [providers, defaultProvider] = await Promise.all([getTerminalProviders('janus'), getTerminalDefault('janus')])
       const enabledProviders = providers.filter((provider) => provider.enabled !== false)
       const options = (await Promise.all(enabledProviders.map(async (provider) => {
         const configuredModelIds = provider.models?.length
           ? provider.models
           : [provider.modelId || (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')]
-        const models = await listModels(provider.id).catch(() => [])
+        const models = await listModels('janus', provider.id).catch(() => [])
         const modelIds = [...new Set([...models.map((model) => model.id), ...configuredModelIds].filter(Boolean))]
         return modelIds.map((modelId) => ({
           providerId: provider.id,
@@ -528,7 +533,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     })
   }, [updateConversation])
 
-  const startRequest = useCallback((id: string, history: Message[], userMessage: Message) => {
+  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string) => {
     const runtime = runtimesRef.current[id]
     const conversation = conversationsRef.current.find((item) => item.id === id)
     const handles = getHandles(id)
@@ -618,6 +623,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
           sourceTag: 'janus-chat',
           conversationId: id,
+          ...(maintenanceTaskId ? { maintenanceTaskId } : {}),
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
           // S6: explicit domain; missing = legacy personal. Project never falls back to personal memory.
@@ -919,6 +925,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     return conversation.id
   }, [updateConversations])
 
+  const bindProject = useCallback((context: EngineeringContext, workspaceIds: string[], title: string) => {
+    const bound = bindProjectConversation(conversationsRef.current, context, workspaceIds, title)
+    updateConversations(() => bound.conversations)
+    setIslandConversationId(bound.id)
+    return bound.id
+  }, [updateConversations])
+
   const selectConversation = useCallback((id: string) => {
     if (conversationsRef.current.some((conversation) => conversation.id === id)) {
       setIslandConversationId(id)
@@ -982,6 +995,12 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       ?? null
 
     return {
+      engineeringContext: conversation?.engineeringContext,
+      setEngineeringContext: (context) => updateConversation(id, (current) => ({ ...current, engineeringContext: context, updatedAt: Date.now() })),
+      proposeMaintenance: (taskId, text) => {
+        const latest = conversationsRef.current.find((item) => item.id === id)
+        if (latest) startRequest(id, latest.messages, { id: crypto.randomUUID(), role: 'user', content: text, timestamp: Date.now() }, taskId)
+      },
       conversationId: conversation?.id ?? id,
       conversationTitle: conversation?.title ?? NEW_CONVERSATION_TITLE,
       conversations: summaries,
@@ -1049,7 +1068,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     setApprovalMode,
     stop,
     summaries,
+    startRequest,
+    updateConversation,
   ])
 
-  return { islandConversationId, getController }
+  return { islandConversationId, getController, bindProject, persistenceReady }
 }

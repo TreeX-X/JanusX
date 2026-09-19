@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ProductKind } from '../../../../shared/product'
 import { MARKDOWN_COMPONENTS } from '../viewers/markdown-components'
+import { MarkdownAssetContext, useResolvedHtmlSrcDoc } from '../viewers/local-asset'
+import { dirnameOfAbsolutePath } from '@/lib/local-asset-resolver'
 import { PreviewScrollArea } from '../viewers/PreviewScrollArea'
 import { ImageViewer } from '../viewers/ImageViewer'
 import { useI18n } from '@/i18n/useI18n'
@@ -25,6 +27,16 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
   const [content, setContent] = useState<string | null>(null)
   const [image, setImage] = useState<{ base64: string; mimeType: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const absolutePath = useMemo(
+    () => joinWorkspacePath(workspacePath, relPath),
+    [workspacePath, relPath],
+  )
+  const documentDir = useMemo(() => dirnameOfAbsolutePath(absolutePath), [absolutePath])
+  const assetScope = useMemo(
+    () => ({ workspacePath, documentDir }),
+    [workspacePath, documentDir],
+  )
+  const resolvedHtml = useResolvedHtmlSrcDoc(content ?? '', assetScope)
 
   useEffect(() => {
     let disposed = false
@@ -87,7 +99,9 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
     return <PreviewScrollArea>
       <div className="flex-1" style={{ padding: 16, background: '#0a0a0a', color: '#d4d4d4', minHeight: '100%' }}>
         <div className="markdown-preview">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
+          <MarkdownAssetContext.Provider value={assetScope}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
+          </MarkdownAssetContext.Provider>
         </div>
       </div>
     </PreviewScrollArea>
@@ -104,7 +118,7 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
   }
   return <iframe
     title={t('editor:product.iframeTitle')}
-    srcDoc={content}
+    srcDoc={resolvedHtml}
     // allow-forms/modals/popups：生成的 HTML 页面内可点击、可交互；
     // 仍不授 allow-top-navigation，预览不能劫持主窗口。
     sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"

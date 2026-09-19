@@ -81,11 +81,23 @@ export interface BridgeRefusal {
   reason: string
 }
 
+export interface CreatedRelationRef {
+  ownerId: string
+  type: string
+  targetId: string
+  /** Synthetic projection id `${ownerId}:${type}:${targetId}` using the edge type in the final file. */
+  relationId: string
+}
+
 export interface BridgeResult {
   ops: BridgedOp[]
   untranslatable: BridgeRefusal[]
   /** False when any op was refused; the caller must not apply a partial bridge. */
   complete: boolean
+  /** tempNodeId -> minted note id, only for creates in the emitted ops. */
+  createdNodeIds: Record<string, string>
+  /** tempRelationId -> final edge ref, only for adds whose owner file is emitted. */
+  createdRelations: Record<string, CreatedRelationRef>
 }
 
 /** Canvas relation -> harness edge type for projection matching. */
@@ -334,7 +346,33 @@ export function translateMaintenanceOpsToHarness(
     }
     op.dependsOn = [...deps]
   }
-  return { ops, untranslatable, complete: untranslatable.length === 0 }
+  const emittedUris = new Set(ops.map((o) => o.uri))
+  const createdNodeIds: Record<string, string> = {}
+  for (const [tempId, uri] of tempNodes) {
+    if (emittedUris.has(uri)) createdNodeIds[tempId] = targetId(uri)
+  }
+  const createdRelations: Record<string, CreatedRelationRef> = {}
+  for (const [tempId, temp] of tempRelations) {
+    const file = pending.get(temp.ownerUri)
+    if (!file || !emittedUris.has(temp.ownerUri)) continue
+    // Same-changeset type updates rewrite the edge, so read the final file
+    // instead of trusting the add-time type; fall back when ambiguous.
+    let edgeType = temp.type
+    const live = reparse(file.markdown)
+    if (live.ok) {
+      const hits = (live.note.meta.relations ?? []).filter((r) => r.target === temp.target)
+      if (hits.length === 1) edgeType = hits[0].type
+    }
+    const ownerId = targetId(temp.ownerUri)
+    const targetNoteId = targetId(temp.target)
+    createdRelations[tempId] = {
+      ownerId,
+      type: edgeType,
+      targetId: targetNoteId,
+      relationId: `${ownerId}:${edgeType}:${targetNoteId}`,
+    }
+  }
+  return { ops, untranslatable, complete: untranslatable.length === 0, createdNodeIds, createdRelations }
 }
 
 interface TranslateHelpers {

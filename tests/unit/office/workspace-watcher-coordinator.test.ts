@@ -81,7 +81,10 @@ describe('workspace watcher coordinator', () => {
     expect(first).toHaveBeenCalledWith('change', 'report.docx')
     expect(second).toHaveBeenCalledWith('change', 'report.docx')
     await vi.advanceTimersByTimeAsync(150)
-    expect(send).toHaveBeenCalledWith('filetree:changed', temporaryRoot)
+    expect(send).toHaveBeenCalledWith('filetree:changed', {
+      workspacePath: temporaryRoot,
+      changedFilePath: join(temporaryRoot, 'report.docx'),
+    })
 
     unsubscribeFirst()
     expect(mocks.watchers[0].close).not.toHaveBeenCalled()

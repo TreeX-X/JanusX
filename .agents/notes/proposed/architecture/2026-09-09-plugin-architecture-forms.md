@@ -1,6 +1,13 @@
-# Agent Note: Plugin architecture forms selection
+---
+schema: harness-note/1
+id: 96a2f5cd-166e-4982-a444-7640858f0a5f
+kind: requirement
+lifecycle: draft
+created: 2026-09-09
+class: architecture
+---
 
-Status: proposed
+# Agent Note: Plugin architecture forms selection
 
 ## Problem
 

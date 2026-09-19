@@ -6,7 +6,17 @@ Status: proposed
 
 圆桌讨论、蓝图维护和工程实施需要连成同一个可追踪过程：讨论产出可直接维护的 Note，蓝图展示方案和关系，任务 Note 吸收执行与质量门禁的职责，结果回到原有资产。新标准将移除 Hybrid Tree 独立机制。janus-chat 需要继续作为日常助手，同时利用 janus-agentX 的能力理解和操作这一流程。蓝图内的 Janus 应成为同一个 janus-chat 的工程入口，避免维护两个近似但行为不同的助手。
 
-通用身份、文件结构、分享边界、Wiki 导航和 WorkflowX 独立使用规则见 [统一 Note、蓝图与 Harness 标准](2026-09-16-unified-note-blueprint-harness.md)。本提案只定义跨功能闭环，不重复定义上述规则；所有接口、字段和目录扩展均为待实现方案。本次分析使用 2026-09-16 的工作树，包含已有未提交修改，代码读取结果不等同于已发布能力。本轮只编写旧格式 proposed Note，不改变产品行为。
+通用身份、文件结构、分享边界、Wiki 导航和 WorkflowX 独立使用规则见 [统一 Note、蓝图与 Harness 标准](2026-09-16-unified-note-blueprint-harness.md)。本提案只定义跨功能闭环，不重复定义上述规则。初始分析使用 2026-09-16 的工作树，包含已有未提交修改；下表保留当时的接点和断点。当前实现边界见下述实施状态及对应 implemented Note，不能把设计要求直接当成已发布能力。
+
+### 当前实施状态与下一步
+
+2026-09-18 的 [共享项目会话](../../implemented/architecture/2026-09-18-project-conversation-controller.md) 已将新 Note 蓝图入口接入主 Chat controller，共享消息、单 turn、停止、steering、模型、资源、问题及审批。维护任务只保留提案与审计，采用共享历史生成提案。旧维护生成与对话运行路径的退出及保留的结算能力见 [旧维护循环移除](../../implemented/architecture/2026-09-18-legacy-loop-removal.md)。
+
+[任务合同采纳](../../implemented/architecture/2026-09-18-task-contract-adoption.md) 支持补全圆桌 action 草稿的 scope、AC、引用和验证步骤，显式转为 accepted 后开放执行准备。当前表单限单个 primary repo。集成用例通过共享执行内核运行真实检查命令，以评审 stub 形成正式结果，再从新 clone 重建完成状态及需求覆盖率；浏览器用例使用模拟 IPC/model，不能替代真实 Electron 或模型执行验收。
+
+桌面 internal xdo 的 [实施轮次](../../implemented/architecture/2026-09-19-desktop-task-implementation.md) 从已采纳 task 读取固定合同和基线，使用范围受限的真实文件工具实施，再运行声明检查和自审、保存正式 receipt。失败检查在预算内驱动下一次实施及复验；取消暂停任务，verifying 重试只重跑验收。Ink 的 [宿主接线](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-ink-harness-host.md) 同时覆盖命令与普通消息，历史 Note 与标准 profile 校验由共享文件层统一。宿主保持对等，各自调用共享运行内核和契约校验。
+
+CLI、Ink 与桌面的单任务 xdel/xflow 委派闭环见 [桌面模式实现](../../implemented/architecture/2026-09-19-desktop-delegated-modes.md) 和其引用的共享策略。xdel 一次实施并自审，xflow 以独立只读评审形成最终回执，并在预算内修复。持久实施历史与构建后的 Electron 确定性模型测试覆盖执行、回执、收尾和重启恢复。下一阶段验证外部真实模型、跨机器 runner 编排、完整跨宿主场景等价以及版本化发行组合；多任务依赖调度仍需单独实施。三仓规则切换须等这些门禁满足；总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
 
 ### 当前代码的接点和断点
 
@@ -27,6 +37,8 @@ Status: proposed
 另外，[host-synthesis.ts](../../../../src/shared/roundtable/host-synthesis.ts) 包含基于关键词、去重和截断的确定性整理；摘要卡片不足以无损承接全部要求。产物构建必须读取被选中的完整 facts、用户约束和来源，不能只转存显示卡片。`session:ended`、`synthesis.final` 和 fact 的 `confirmed` 都不代表获得实现授权或通过工程验收。
 
 ## Proposal
+
+各执行入口将结果写入同一 task Note 与正式 receipt，遵循[实施契约 C4](2026-09-16-note-harness-implementation-contract.md#c4-收据覆盖率与落地)。圆桌、聊天和运行面板展示共享证据的当前有效性；未携带本地运行记录的资产不能自动接管活动任务。
 
 ### 一个资产体系及其执行证据
 
@@ -190,7 +202,7 @@ conversationId 标识对话，roundtableSessionId 标识会议，Task URI 标识
 | Profile/Context | resolveProfile、resolveContext、readTemplate | 固定标准版本，识别来源域和授权资源；不支持时禁止写入并解释限制 |
 | Artifact | search、read、neighbors、prepareChangeSet、validate、apply | 校验 URI、文件哈希、关系与授权；返回明确 applied/conflict/invalid 等结果 |
 | Task（Artifact 的类型操作） | prepareTasks、read、validate、apply | 对 task Note 与关系使用同一资产服务，固定 AC 与决策基线；不增设独立计划存储，不因创建任务自动执行 |
-| Execution | start、status、pause、resume、cancel、requestReview | 内置引擎或外部终端适配；保护状态机、幂等、权限、执行拥有者与预算 |
+| Execution | start、status、pause、resume、cancel、requestReview | 中立内核保护状态机、幂等、执行拥有者；CLI 宿主与桌面 xdo 宿主各带自己的命令运行器与评审轮次，互不调用 |
 | Discussion | start/continue/status 圆桌及 prepareArtifacts | 圆桌服务继续负责多角色调度，输出共享 ArtifactBundle；其他宿主可声明不可用 |
 
 底层共享定义使用领域类型，不携带 Electron、React 或窗口对象。JanusX 主进程提供文件根、模型、个人/工程召回和桌面交互适配；janus-agentX CLI 提供 Node 文件、终端交互和执行适配；纯 WorkflowX 用文档与宿主代理实现同一产物和验收契约。缺少圆桌并不影响 Note 或基础实施流程，圆桌是可选的讨论生产者。

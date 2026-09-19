@@ -1,6 +1,13 @@
-# Agent Note: Blueprint independent card UI
+---
+schema: harness-note/1
+id: 032db994-4a8b-483a-93df-3f9c0cc025cf
+kind: requirement
+lifecycle: draft
+created: 2026-09-01
+class: feature
+---
 
-Status: proposed
+# Agent Note: Blueprint independent card UI
 
 ## Problem
 

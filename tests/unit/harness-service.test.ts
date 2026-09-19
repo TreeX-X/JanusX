@@ -1,8 +1,9 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { HarnessNoteService } from '../../src/main/harness/service'
+import { HarnessNoteService, claimsHarnessSchema } from '../../src/main/harness/service'
 import { kindToNodeType, lifecycleToStatus } from '../../src/main/harness/graph-projection'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
@@ -13,7 +14,7 @@ async function makeRoot(withId = true): Promise<string> {
   if (withId) {
     await fs.writeFile(
       join(root, '.agents', 'harness.json'),
-      JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S4' }),
+      JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S4', profile: SUPPORTED_HARNESS_PROFILE }),
     )
   }
   return root
@@ -174,4 +175,54 @@ describe('harness service roundtrip', () => {
     expect(Object.keys(view.blueprint.nodes)).toHaveLength(1000)
     expect(ms).toBeLessThan(30000)
   }, 60000)
+})
+
+describe('own working-note namespace', () => {
+  const WORKING = ['# Agent Note: Working draft', '', 'Status: proposed', '', '## Problem', '', 'Local thinking, not a harness asset.', ''].join('\n')
+
+  it('claims only harness-note/1 frontmatter', () => {
+    expect(claimsHarnessSchema(NOTE('33333333-3333-4333-8333-333333333333', 'requirement', 'proposed', 'T'))).toBe(true)
+    expect(claimsHarnessSchema(WORKING)).toBe(false)
+    expect(claimsHarnessSchema(['---', 'schema: something-else/1', '---', '', '# T', ''].join('\n'))).toBe(false)
+    expect(claimsHarnessSchema(['---', 'schema: harness-note/1 # keep', '---', '', '# T', ''].join('\n'))).toBe(true)
+    expect(claimsHarnessSchema(`\uFEFF${NOTE('33333333-3333-4333-8333-333333333333', 'requirement', 'proposed', 'T')}`)).toBe(true)
+  })
+
+  it('working notes stay out of the graph with zero invalid diagnostics', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    await fs.writeFile(join(root, '.agents', 'notes', '2026-09-18-working--deadbeef.md'), WORKING)
+    const view = await svc.projectView(root)
+    expect(Object.keys(view.blueprint.nodes)).toHaveLength(0)
+    expect(view.invalid).toHaveLength(0)
+  })
+
+  it('files claiming the harness schema keep invalid diagnostics', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    const bad = ['---', 'schema: harness-note/1', 'id: not-a-uuid', 'kind: requirement', 'lifecycle: proposed', 'created: 2026-09-18', '---', '', '# Bad', '', '## Problem', '', 'P.', ''].join('\n')
+    await fs.writeFile(join(root, '.agents', 'notes', '2026-09-18-bad--deadbeef.md'), bad)
+    const view = await svc.projectView(root)
+    expect(view.invalid).toHaveLength(1)
+    expect(view.invalid[0]?.relPath).toContain('2026-09-18-bad')
+  })
+
+  it('mixed valid, foreign, and broken harness notes separate cleanly', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    const id = '33333333-3333-4333-8333-333333333333'
+    await fs.writeFile(join(root, '.agents', 'notes', '2026-09-16-t--33333333.md'), NOTE(id, 'requirement', 'proposed', 'T'))
+    await fs.writeFile(join(root, '.agents', 'notes', '2026-09-18-working--deadbeef.md'), WORKING)
+    const bad = ['---', 'schema: harness-note/1', 'id: not-a-uuid', 'kind: requirement', 'lifecycle: proposed', 'created: 2026-09-18', '---', '', '# Bad', '', '## Problem', '', 'P.', ''].join('\n')
+    await fs.writeFile(join(root, '.agents', 'notes', '2026-09-18-bad--badbadba.md'), bad)
+    const view = await svc.projectView(root)
+    expect(Object.keys(view.blueprint.nodes)).toHaveLength(1)
+    expect(view.invalid).toHaveLength(1)
+    expect(view.invalid[0]?.relPath).toContain('2026-09-18-bad')
+    const exported = await svc.exportSnapshot(root, {}, join(root, 'share.json'))
+    expect(exported.notes).toBe(1)
+  })
 })

@@ -1,3 +1,4 @@
+// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/implemented/feature/2026-09-18-officecli-bundled.md
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { extname } from 'path'
 import {
@@ -16,8 +17,6 @@ import {
   type OfficeResult,
   type OfficeStopPreviewRequest,
   type OfficecliInfo,
-  type OfficecliManualInstallGuidance,
-  type OfficeManagedInstallStatus,
 } from '../../shared/office'
 import {
   OfficeWorkspaceGuardError,
@@ -43,21 +42,14 @@ export interface RegisterOfficeHandlersOptions {
   getAllowedWindows: () => readonly BrowserWindow[]
   resolveWorkspaceRoot: ResolveWorkspaceRoot
   operations?: Partial<OfficeHandlerOperations>
-  installer?: {
-    status(): Promise<OfficeManagedInstallStatus>
-    start(confirmed: boolean): Promise<OfficeManagedInstallStatus>
-    cancel(): void
-    remove(confirmed: boolean): Promise<OfficeManagedInstallStatus>
-    getManagedBinary(): Promise<string | undefined>
-  }
 }
 
 const ERROR_MESSAGES: Record<OfficeErrorCode, string> = {
   INVALID_REQUEST: 'Invalid Office request',
   UNAUTHORIZED: 'Office request is not authorized',
   UNAVAILABLE: 'Office feature is unavailable',
-  NOT_INSTALLED: 'OfficeCLI is not installed',
-  INCOMPATIBLE: 'OfficeCLI is not compatible',
+  NOT_INSTALLED: 'Bundled OfficeCLI is missing; reinstall JanusX',
+  INCOMPATIBLE: 'Bundled OfficeCLI is not compatible; reinstall JanusX',
   NOT_OFFICE: 'Unsupported Office file',
   OUTSIDE_ROOT: 'Office file is outside the workspace',
   START_FAILED: 'Office preview could not start',
@@ -147,30 +139,6 @@ function publicPrompt(prompt: OfficePrompt): OfficePrompt {
   return { text: prompt.text, mode: prompt.mode }
 }
 
-function publicManualInstall(guidance: OfficecliManualInstallGuidance): OfficecliManualInstallGuidance {
-  return {
-    repository: guidance.repository,
-    release: guidance.release,
-    targetVersion: guidance.targetVersion,
-    integrity: guidance.integrity,
-    windows: [...guidance.windows],
-    automaticInstallEnabled: false,
-    automaticUninstallEnabled: false,
-  }
-}
-
-function publicInstallStatus(status: OfficeManagedInstallStatus): OfficeManagedInstallStatus {
-  return {
-    state: status.state,
-    location: status.location,
-    ...(status.version ? { version: status.version } : {}),
-    ...(status.sha256 ? { sha256: status.sha256 } : {}),
-    ...(status.source ? { source: status.source } : {}),
-    ...(status.existingTerminalNotice ? { existingTerminalNotice: status.existingTerminalNotice } : {}),
-    ...(status.error ? { error: 'Managed OfficeCLI operation failed; any previous verified installation was preserved.' } : {}),
-  }
-}
-
 export function registerOfficeHandlers(options: RegisterOfficeHandlersOptions): () => void {
   const { operations: operationOverrides = {}, resolveWorkspaceRoot } = options
   const operations: Partial<OfficeHandlerOperations> = {
@@ -197,8 +165,6 @@ export function registerOfficeHandlers(options: RegisterOfficeHandlersOptions): 
         compatible: info.compatible,
         ...(info.version ? { version: info.version } : {}),
         ...(info.source ? { source: info.source } : {}),
-        ...(info.manualInstall ? { manualInstall: publicManualInstall(info.manualInstall) } : {}),
-        ...(info.existingTerminalNotice ? { existingTerminalNotice: info.existingTerminalNotice } : {}),
       })
     } catch (error) {
       return toPublicError(error)
@@ -287,46 +253,6 @@ export function registerOfficeHandlers(options: RegisterOfficeHandlersOptions): 
       return toPublicError(error)
     }
   })
-
-  for (const channel of [
-    OFFICE_INVOKE_CHANNELS.installerStatus,
-    OFFICE_INVOKE_CHANNELS.installerStart,
-    OFFICE_INVOKE_CHANNELS.installerCancel,
-    OFFICE_INVOKE_CHANNELS.installerRemove,
-  ] as const) {
-    ipcMain.handle(channel, async (event, rawRequest) => {
-      if (!isAuthorizedSender(event, options.getAllowedWindows)) {
-        return officeError('UNAUTHORIZED', ERROR_MESSAGES.UNAUTHORIZED)
-      }
-      const request = validateOfficeInvokeRequest(channel, rawRequest)
-      if (!request.ok) return officeError('INVALID_REQUEST', ERROR_MESSAGES.INVALID_REQUEST)
-      if (!options.installer) return officeError('UNAVAILABLE', ERROR_MESSAGES.UNAVAILABLE)
-      try {
-        if (request.value.workspaceId) {
-          await resolveTrustedOfficeWorkspace(request.value.workspaceId, resolveWorkspaceRoot)
-        }
-        if (channel === OFFICE_INVOKE_CHANNELS.installerStatus) {
-          return officeOk(publicInstallStatus(await options.installer.status()))
-        }
-        if (channel === OFFICE_INVOKE_CHANNELS.installerCancel) {
-          options.installer.cancel()
-          return officeOk(publicInstallStatus(await options.installer.status()))
-        }
-        if (channel === OFFICE_INVOKE_CHANNELS.installerRemove) {
-          const status = await options.installer.remove(true)
-          officecliManager.configureManagedBinaryPath(undefined)
-          await officecliManager.detect()
-          return officeOk(publicInstallStatus(status))
-        }
-        const status = await options.installer.start(true)
-        officecliManager.configureManagedBinaryPath(await options.installer.getManagedBinary())
-        await officecliManager.detect()
-        return officeOk(publicInstallStatus(status))
-      } catch (error) {
-        return officeError('UNAVAILABLE', 'Managed OfficeCLI operation failed')
-      }
-    })
-  }
 
   return () => channels.forEach((channel) => ipcMain.removeHandler(channel))
 }

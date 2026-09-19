@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron'
 import type { OfficeArtifactIndex } from '../office/office-artifact-index'
-import type { OfficecliInstaller } from '../office/officecli-installer'
 import type { OfficeWatchPool } from '../office/office-watch-pool'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 import { createProductionOfficeOperations } from '../office/office-handler-operations'
@@ -41,14 +40,13 @@ import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { subAgentRunRegistry } from '../janus-runner/subagent-run-registry'
 import { ipcMain } from 'electron'
 import { registerAgentRuntimeHandlers } from './agent-runtime-handlers'
-
+import { registerExternalCliHandlers } from './external-cli-handlers'
 export interface RegisterApplicationIpcOptions {
   mainWindow: BrowserWindow
   getAllowedWindows: () => BrowserWindow[]
   resolveWorkspaceRoot: ResolveWorkspaceRoot
   officeWatchPool: OfficeWatchPool
   officeArtifactIndex: OfficeArtifactIndex
-  officecliInstaller: OfficecliInstaller
   browserSurfaces: BrowserSurfaceManager
   languageServiceInstallers: ReadonlyMap<LanguageServiceId, ManagedBinaryInstaller>
 }
@@ -105,6 +103,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerFileHandlers()
   registerProjectHandlers()
   registerLlmHandlers()
+  registerExternalCliHandlers({ getAllowedWindows: options.getAllowedWindows })
   registerJanusHandlers()
   registerHarnessHandlers(getCurrentMainWindow)
   registerJanusChatHandlers()
@@ -156,6 +155,5 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     getAllowedWindows: options.getAllowedWindows,
     resolveWorkspaceRoot: options.resolveWorkspaceRoot,
     operations: createProductionOfficeOperations({ artifactIndex: officeArtifactIndex, watchPool: officeWatchPool }),
-    installer: options.officecliInstaller,
   })
 }

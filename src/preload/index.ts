@@ -30,6 +30,7 @@ import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agen
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
+import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
 import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
@@ -215,14 +216,10 @@ const janusAPI: JanusAPI = {
   listMaintenanceTasks: () => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceList),
   listMaintenanceAudits: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceAuditList, input),
   startMaintenanceTask: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceStart, input),
-  sendMaintenanceMessage: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceMessage, input),
-  generateMaintenanceProposal: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenancePropose, input),
   applyMaintenanceChangeSet: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceApply, input),
   cancelMaintenanceTask: (taskId) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceCancel, taskId),
   completeMaintenanceTask: (taskId) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceComplete, taskId),
   dismissMaintenanceProposal: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceDismiss, input),
-  steerMaintenanceTask: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceSteer, input),
-  cancelMaintenanceSteer: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceSteerCancel, input),
   prepareMaintenanceUndo: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceUndoPrepare, input),
   applyMaintenanceUndo: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceUndoApply, input),
   onAnalysisResult: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.analysis, callback),
@@ -231,6 +228,8 @@ const janusAPI: JanusAPI = {
 }
 
 const harnessAPI: HarnessAPI = {
+  taskRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskRead, cwd, uri),
+  taskAdopt: (cwd, uri, expectedHash, contract) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskAdopt, cwd, uri, expectedHash, contract),
   resolve: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.resolve, cwd),
   projectGraph: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.projectGraph, cwd),
   rescan: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.rescan, cwd),
@@ -238,8 +237,40 @@ const harnessAPI: HarnessAPI = {
   getBindings: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.bindingsGet, cwd),
   setBinding: (cwd, binding) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.bindingsSet, cwd, binding),
   sharePreview: (cwd, selection) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.sharePreview, cwd, selection),
+  runPrepare: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runPrepare, cwd, input),
+  runStart: (cwd, runId, owner, authorization) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runStart, cwd, runId, owner, authorization),
+  runStatus: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runStatus, cwd, runId),
+  runList: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runList, cwd),
+  runCancel: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCancel, cwd, runId),
+  runCloseout: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runCloseout, cwd, runId),
+  runHandoff: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runHandoff, cwd, runId),
+  runHandoffRead: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runHandoffRead, cwd, runId),
+  runTakeover: (cwd, runId, newOwner, reason) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runTakeover, cwd, runId, newOwner, reason),
+  runThreads: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runThreads, cwd),
+  runThread: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runThread, cwd, runId),
+  runTranscript: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runTranscript, cwd, runId),
+  runThreadClose: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runThreadClose, cwd, runId),
+  runReview: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runReview, cwd, input),
+  runFinish: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runFinish, cwd, runId),
+  runRepair: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runRepair, cwd, input),
+  undoPreview: (cwd, txId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.undoPreview, cwd, txId),
+  undoApply: (cwd, txId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.undoApply, cwd, txId),
+  migratePreview: (cwd, blueprintId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.migratePreview, cwd, blueprintId),
+  migrateApply: (cwd, blueprintId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.migrateApply, cwd, blueprintId),
+  runExecute: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runExecute, cwd, input),
+  runPause: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runPause, cwd, runId),
+  runResume: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runResume, cwd, runId),
+  runRebaseline: (cwd, runId, authorization) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runRebaseline, cwd, runId, authorization),
+  runAbort: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runAbort, cwd, runId),
   shareExport: (cwd, selection, outPath) =>
     ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareExport, cwd, selection, outPath),
+  shareImportPreview: (cwd, snapshot) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareImportPreview, cwd, snapshot),
+  shareImportApply: (cwd, snapshot) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareImportApply, cwd, snapshot),
   onChanged: (callback) => subscribeIpcEvent(HARNESS_EVENT_CHANNELS.changed, callback),
 }
 
@@ -262,27 +293,22 @@ const officeAPI: OfficeAPI = {
   stopPreview: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.stopPreview, request),
   reloadPreview: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.reloadPreview, request),
   buildPrompt: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.buildPrompt, request),
-  installerStatus: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerStatus, request),
-  installerStart: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerStart, request),
-  installerCancel: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerCancel, request),
-  installerRemove: (request) => ipcRenderer.invoke(OFFICE_INVOKE_CHANNELS.installerRemove, request),
-  onInstallerProgress: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.installerProgress, callback),
   onFilesChanged: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.filesChanged, callback),
   onWatchEvicted: (callback) => subscribeIpcEvent(OFFICE_EVENT_CHANNELS.watchEvicted, callback),
 }
 
 const llmAPI: LlmAPI = {
-  getProviders: () => ipcRenderer.invoke(LLM_CHANNELS.getProviders),
+  getTerminalProviders: (terminal) => ipcRenderer.invoke(LLM_CHANNELS.getTerminalProviders, terminal),
   getRuntimeStatus: () => ipcRenderer.invoke(LLM_CHANNELS.runtimeStatus),
-  saveProvider: (settings) => ipcRenderer.invoke(LLM_CHANNELS.saveProvider, settings),
+  saveTerminalProvider: (terminal, settings) => ipcRenderer.invoke(LLM_CHANNELS.saveTerminalProvider, terminal, settings),
   testConnection: (settings) => ipcRenderer.invoke(LLM_CHANNELS.testConnection, settings),
-  removeProvider: (providerId) => ipcRenderer.invoke(LLM_CHANNELS.removeProvider, providerId),
-  setDefaultProvider: (providerId) => ipcRenderer.invoke(LLM_CHANNELS.setDefaultProvider, providerId),
-  listModels: (providerId) => ipcRenderer.invoke(LLM_CHANNELS.listModels, providerId),
+  removeTerminalProvider: (terminal, providerId) => ipcRenderer.invoke(LLM_CHANNELS.removeTerminalProvider, terminal, providerId),
+  setTerminalDefault: (terminal, providerId) => ipcRenderer.invoke(LLM_CHANNELS.setTerminalDefault, terminal, providerId),
+  getTerminalDefault: (terminal) => ipcRenderer.invoke(LLM_CHANNELS.getTerminalDefault, terminal),
+  listModels: (terminal, providerId) => ipcRenderer.invoke(LLM_CHANNELS.listModels, terminal, providerId),
   getModelCatalog: () => ipcRenderer.invoke(LLM_CHANNELS.getCatalog),
   refreshModelCatalog: () => ipcRenderer.invoke(LLM_CHANNELS.refreshCatalog),
   getAdapters: () => ipcRenderer.invoke(LLM_CHANNELS.getAdapters),
-  getDefaultProvider: () => ipcRenderer.invoke(LLM_CHANNELS.getDefaultProvider),
   chat: (request) => ipcRenderer.invoke(LLM_CHANNELS.chat, request),
   startChatStream: (request) => ipcRenderer.send(LLM_CHANNELS.chatStream, request),
   abortChat: (requestId) => ipcRenderer.invoke(LLM_CHANNELS.abort, requestId),
@@ -295,6 +321,18 @@ const llmAPI: LlmAPI = {
   onAgentEvent: (callback) => subscribeIpcEvent(LLM_CHANNELS.agentEvent, callback),
   onRecallTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.recallTrace, callback),
   onToolTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.toolTrace, callback),
+}
+
+const externalCliAPI: ExternalCliAPI = {
+  detect: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.detect, toolId),
+  latest: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.latest, toolId),
+  install: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.install, toolId),
+  applyProvider: (request) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.applyProvider, request),
+  syncState: () => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.syncState),
+  rollbackProfile: () => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.rollbackProfile),
+  readTerminalModel: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.terminalRead, toolId),
+  applyTerminalModel: (request) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.terminalApply, request),
+  rollbackTerminal: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.terminalRollback, toolId),
 }
 
 const agentAPI: AgentAPI = {
@@ -486,6 +524,7 @@ contextBridge.exposeInMainWorld('electron', {
   harness: harnessAPI,
   office: officeAPI,
   llm: llmAPI,
+  externalCli: externalCliAPI,
   janusChat: janusChatAPI,
   roundtable: roundtableAPI,
   agent: agentAPI,

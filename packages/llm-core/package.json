@@ -26,12 +26,14 @@
     "llm",
     "ai",
     "provider",
+    "anthropic",
     "vertex-ai",
     "openai"
   ],
   "author": "Tree",
   "license": "MIT",
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.2.12",
     "@ai-sdk/google-vertex": "^4.0.147",
     "@ai-sdk/openai": "^3.0.71",
     "google-auth-library": "^10.7.0",

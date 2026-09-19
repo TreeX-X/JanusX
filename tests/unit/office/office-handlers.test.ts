@@ -8,7 +8,6 @@ type Handler = (...args: any[]) => unknown
 const handlers = new Map<string, Handler>()
 const temporaryDirectories: string[] = []
 const officecliDetect = vi.hoisted(() => vi.fn())
-const configureManagedBinaryPath = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -18,7 +17,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../../src/main/office/officecli-manager', () => ({
-  officecliManager: { detect: officecliDetect, configureManagedBinaryPath },
+  officecliManager: { detect: officecliDetect },
 }))
 
 import { registerOfficeHandlers } from '../../../src/main/ipc/office-handlers'
@@ -34,7 +33,6 @@ describe('Office IPC handlers', () => {
   beforeEach(() => {
     handlers.clear()
     officecliDetect.mockReset()
-    configureManagedBinaryPath.mockReset()
   })
 
   afterEach(async () => {
@@ -62,7 +60,7 @@ describe('Office IPC handlers', () => {
     expect(detect).not.toHaveBeenCalled()
   })
 
-  it('returns only public provider fields and never forwards internal errors', async () => {
+  it('returns only public bundled provider fields and never forwards internal errors', async () => {
     const sender = { isDestroyed: () => false }
     const root = await makeTemporaryDirectory()
     registerOfficeHandlers({
@@ -75,7 +73,7 @@ describe('Office IPC handlers', () => {
           version: '1.2.3',
           path: 'C:\\secret\\officecli.exe',
           runtimeError: 'stack at C:\\secret',
-          source: 'path',
+          source: 'bundled' as const,
         }),
       },
     })
@@ -83,54 +81,24 @@ describe('Office IPC handlers', () => {
     const result = await handlers.get(OFFICE_INVOKE_CHANNELS.detect)!({ sender }, { workspaceId: 'trusted' })
     expect(result).toEqual({
       ok: true,
-      value: { installed: true, compatible: true, version: '1.2.3', source: 'path' },
+      value: { installed: true, compatible: true, version: '1.2.3', source: 'bundled' },
     })
   })
 
-  it('authorizes and validates explicit installer operations before mutation', async () => {
-    const sender = { isDestroyed: () => false }
-    const root = await makeTemporaryDirectory()
-    const installer = {
-      status: vi.fn(async () => ({ state: 'not-installed' as const, location: 'managed' })),
-      start: vi.fn(async () => ({ state: 'ready' as const, location: 'managed', version: '1.0.135' })),
-      cancel: vi.fn(),
-      remove: vi.fn(async () => ({ state: 'not-installed' as const, location: 'managed' })),
-      getManagedBinary: vi.fn(async () => 'C:\\private\\officecli.exe'),
-    }
-    officecliDetect.mockResolvedValue({ installed: true, compatible: true })
+  it('exposes only the six bundled runtime channels', async () => {
     registerOfficeHandlers({
-      getAllowedWindows: () => [{ isDestroyed: () => false, webContents: sender } as any],
-      resolveWorkspaceRoot: async () => root,
-      installer,
+      getAllowedWindows: () => [],
+      resolveWorkspaceRoot: async () => '',
     })
-    const handler = handlers.get(OFFICE_INVOKE_CHANNELS.installerStart)!
-    await expect(handler({ sender: {} }, { workspaceId: 'trusted', confirmed: true })).resolves.toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } })
-    await expect(handler({ sender }, { workspaceId: 'trusted', confirmed: false })).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
-    await expect(handler({ sender }, { workspaceId: 'trusted', confirmed: true, executable: 'C:\\evil.exe' })).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
-    await expect(handler({ sender }, { workspaceId: 'trusted', confirmed: true })).resolves.toMatchObject({ ok: true, value: { state: 'ready' } })
-    expect(installer.start).toHaveBeenCalledWith(true)
-    expect(configureManagedBinaryPath).toHaveBeenCalledWith('C:\\private\\officecli.exe')
+    expect([...handlers.keys()].sort()).toEqual([...Object.values(OFFICE_INVOKE_CHANNELS)].sort())
   })
 
-  it('uses the production singleton and exposes safe unavailable guidance', async () => {
+  it('uses the production singleton and reports a missing bundled engine', async () => {
     const sender = { isDestroyed: () => false }
     const root = await makeTemporaryDirectory()
     officecliDetect.mockResolvedValue({
       installed: false,
       compatible: false,
-      path: 'C:\\secret\\officecli.exe',
-      runtimeError: 'raw stderr C:\\secret',
-      manualInstall: {
-        repository: 'https://github.com/iOfficeAI/OfficeCLI',
-        release: 'https://github.com/iOfficeAI/OfficeCLI/releases/tag/v1.0.135',
-        targetVersion: '1.0.135',
-        integrity: 'No repository-verified hash is recorded.',
-        windows: ['Download and verify the tagged release.'],
-        automaticInstallEnabled: false,
-        automaticUninstallEnabled: false,
-        path: 'C:\\secret',
-      },
-      existingTerminalNotice: 'Restart existing terminals for the updated PATH to take effect.',
     })
     registerOfficeHandlers({
       getAllowedWindows: () => [{ isDestroyed: () => false, webContents: sender } as any],
@@ -144,16 +112,6 @@ describe('Office IPC handlers', () => {
       value: {
         installed: false,
         compatible: false,
-        manualInstall: {
-          repository: 'https://github.com/iOfficeAI/OfficeCLI',
-          release: 'https://github.com/iOfficeAI/OfficeCLI/releases/tag/v1.0.135',
-          targetVersion: '1.0.135',
-          integrity: 'No repository-verified hash is recorded.',
-          windows: ['Download and verify the tagged release.'],
-          automaticInstallEnabled: false,
-          automaticUninstallEnabled: false,
-        },
-        existingTerminalNotice: 'Restart existing terminals for the updated PATH to take effect.',
       },
     })
   })
@@ -257,7 +215,7 @@ describe('Office IPC handlers', () => {
     expect(buildPrompt).toHaveBeenCalledTimes(2)
   })
 
-  it('returns non-executable guidance through the production prompt operation', async () => {
+  it('returns reinstall guidance through the production prompt operation', async () => {
     const root = await makeTemporaryDirectory()
     await writeFile(join(root, 'report.docx'), 'document')
     const sender = { isDestroyed: () => false }
@@ -277,7 +235,7 @@ describe('Office IPC handlers', () => {
       terminalPreset: 'opencode',
     }) as any
     expect(result).toMatchObject({ ok: true, value: { mode: 'guidance' } })
-    expect(result.value.text).toContain('not installed')
+    expect(result.value.text).toContain('Reinstall JanusX')
     expect(result.value.text).not.toContain('create --help')
     expect(officecliDetect).toHaveBeenCalledOnce()
   })

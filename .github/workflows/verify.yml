@@ -19,6 +19,7 @@ concurrency:
 jobs:
   verify:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout JanusX
         uses: actions/checkout@v4
@@ -36,29 +37,80 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: JanusX/package-lock.json
+          cache-dependency-path: |
+            JanusX/package-lock.json
+            janus-agentX/package-lock.json
 
       # @janus-agent/* 以 dist/ 发布，CI 里是源码检出，必须先构建同级仓，
       # 否则 JanusX 侧 typecheck/bundle 找不到模块声明。
-      # 同级仓 workspace 构建顺序不保证拓扑（file: 依赖对排序不可见），
-      # 失败重试可收敛；真正的排序修复归 janus-agentX 仓所有。
+      # 同级仓 workspace 字母序先编 cli 再编其依赖，单次全量构建必败；
+      # 此处按依赖分层显式定序，一次通过，不重试。
+      # cli 必须单独在最后：它消费 notes-cli 的 dist，同批并行必撞 fresh-clone 空 dist。
       - name: Build sibling janus-agentX
         working-directory: janus-agentX
         shell: pwsh
         run: |
           npm ci
-          $built = $false
-          for ($i = 0; $i -lt 3 -and -not $built; $i++) {
-            npm run build --workspaces --if-present
-            if ($?) { $built = $true }
-          }
-          if (-not $built) { exit 1 }
+          npm run build --workspace=@janus-agent/agent-core --workspace=@janus-agent/harness-core --if-present
+          npm run build --workspace=@janus-agent/chat-core --workspace=@janus-agent/node-hosts --workspace=@janus-agent/harness-node --workspace=@janus-agent/notes-cli --if-present
+          npm run build --workspace=@janus-agent/janus-agent --if-present
+          npm run build --workspace=@janus-agent/cli --if-present
 
-      # file: 依赖需要先物化（同 release-win 的 prepackage），否则 install 找不到同级包。
+      # file: 依赖需要先物化，否则 install 找不到同级包。
       - name: Prepackage
         working-directory: JanusX
         run: npm run prepackage
 
-      - name: Verify
+      # 下述步骤与 package.json 的 verify 同序，拆步只为失败归因；
+      # 改链时以 package.json 为准并同步此处。
+      - name: Typecheck
         working-directory: JanusX
-        run: npm run verify
+        run: npm run typecheck
+
+      - name: Typecheck llm-core
+        working-directory: JanusX
+        run: npm run typecheck:llm-core
+
+      - name: Build llm-core
+        working-directory: JanusX
+        run: npm run build:llm-core
+
+      # Windows 上 200+ 文件逐个 fork 易触发 tinypool `Channel closed` /
+      # `ERR_IPC_CHANNEL_CLOSED`（常伴随 libuv `fs-event.c` 断言）杀死整个 run。
+      # vitest.config.ts 在 CI 下已切 singleFork 单进程顺序跑，此处再显式钉死
+      # --maxWorkers=1 --no-file-parallelism 双保险，不依赖 Actions 默认的 CI=true；
+      # NODE_OPTIONS 给足堆，避免 worker 因 OOM 被杀后只剩一句 Channel closed。
+      - name: Unit tests
+        working-directory: JanusX
+        env:
+          CI: 'true'
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run test:unit -- --run --maxWorkers=1 --no-file-parallelism --sequence.shuffle=false
+
+      - name: Test llm-core
+        working-directory: JanusX
+        run: npm run test:llm-core
+
+      - name: Strict unused check
+        working-directory: JanusX
+        run: npm run typecheck:strict-unused
+
+      - name: Build
+        working-directory: JanusX
+        run: npm run build
+
+      - name: Boundary check
+        working-directory: JanusX
+        run: npm run check:package-boundary
+
+      - name: i18n check
+        working-directory: JanusX
+        run: npm run i18n:check
+
+      - name: Lint
+        working-directory: JanusX
+        run: npm run lint
+
+      - name: Desktop smoke
+        working-directory: JanusX
+        run: npm run test:e2e:desktop

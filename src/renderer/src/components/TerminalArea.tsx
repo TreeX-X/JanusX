@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { Globe, SquareTerminal, X } from 'lucide-react'
@@ -8,7 +8,19 @@ import { useBrowserStore } from '@/stores/browser'
 import { BrowserSurface } from './browser/BrowserSurface'
 import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
 import { QuickNote } from './note/QuickNote'
-import { applyTerminalNoteLifecycle, DRAWER_VIEWS, DrawerViewTabs, getDrawerHeight, getDrawerPanelAttributes, type DrawerView } from './note/quick-note-behavior'
+import {
+  applyTerminalNoteLifecycle,
+  clampDrawerHeight,
+  DRAWER_DEFAULT_HEIGHT,
+  DRAWER_MIN_HEIGHT,
+  DRAWER_MIN_PANE_HEIGHT,
+  DRAWER_VIEWS,
+  DrawerViewTabs,
+  getDrawerHeight,
+  getDrawerPanelAttributes,
+  type DrawerHeights,
+  type DrawerView,
+} from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
 import { HoldToConfirm } from './ui/HoldToConfirm'
 import { useI18n } from '@/i18n/useI18n'
@@ -1302,6 +1314,11 @@ export function TerminalArea() {
   const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerView, setDrawerView] = useState<DrawerView>('runtime')
+  const [drawerHeights, setDrawerHeights] = useState<DrawerHeights>({})
+  const [drawerResizing, setDrawerResizing] = useState(false)
+  const drawerResizeRef = useRef<{ pointerId: number; target: HTMLDivElement; startY: number; startHeight: number; maximum: number } | null>(null)
+  const drawerBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
+  const drawerKeyboardResizeUntilRef = useRef(0)
   const [terminalMenuPaneId, setTerminalMenuPaneId] = useState<string | null>(null)
   const [activeDragTerminalId, setActiveDragTerminalId] = useState<string | null>(null)
   const activeDragTerminalRef = useRef<string | null>(null)
@@ -1524,6 +1541,88 @@ export function TerminalArea() {
     ? workspaces.find((workspace) => workspace.id === activeTerminal.workspaceId) ?? null
     : null
   const otherTerminals = terminals.filter((terminal) => terminal.id !== activeTerminal?.id)
+  const drawerHeight = drawerHeights[drawerView] ?? DRAWER_DEFAULT_HEIGHT[drawerView]
+
+  const getDrawerMaxHeight = useCallback(() => {
+    const areaHeight = terminalAreaRef.current?.clientHeight ?? 0
+    return Math.max(DRAWER_MIN_HEIGHT, areaHeight - DRAWER_MIN_PANE_HEIGHT)
+  }, [])
+
+  const finishDrawerResize = useCallback(() => {
+    const session = drawerResizeRef.current
+    if (session?.target.hasPointerCapture(session.pointerId)) {
+      session.target.releasePointerCapture(session.pointerId)
+    }
+    drawerResizeRef.current = null
+    if (session) setDrawerResizing(false)
+    if (drawerBodyStyleRef.current) {
+      document.body.style.cursor = drawerBodyStyleRef.current.cursor
+      document.body.style.userSelect = drawerBodyStyleRef.current.userSelect
+      drawerBodyStyleRef.current = null
+    }
+  }, [])
+
+  useEffect(() => finishDrawerResize, [finishDrawerResize])
+
+  useEffect(() => {
+    if (!drawerOpen) finishDrawerResize()
+  }, [drawerOpen, finishDrawerResize])
+
+  const handleDrawerResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    finishDrawerResize()
+    const maximum = getDrawerMaxHeight()
+    drawerResizeRef.current = {
+      pointerId: event.pointerId,
+      target: event.currentTarget,
+      startY: event.clientY,
+      startHeight: Math.min(drawerHeight, maximum),
+      maximum,
+    }
+    drawerBodyStyleRef.current = {
+      cursor: document.body.style.cursor,
+      userSelect: document.body.style.userSelect,
+    }
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDrawerResizing(true)
+    event.preventDefault()
+  }
+
+  const handleDrawerResizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const session = drawerResizeRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    const height = clampDrawerHeight(session.startHeight + session.startY - event.clientY, session.maximum)
+    setDrawerHeights((current) => ({ ...current, [drawerView]: height }))
+  }
+
+  const handleDrawerResizeEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (drawerResizeRef.current?.pointerId === event.pointerId) finishDrawerResize()
+  }
+
+  const handleDrawerResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const maximum = getDrawerMaxHeight()
+    const current = Math.min(drawerHeight, maximum)
+    const heights: Partial<Record<string, number>> = {
+      ArrowUp: current + 16,
+      ArrowDown: current - 16,
+      Home: DRAWER_MIN_HEIGHT,
+      End: maximum,
+    }
+    const height = heights[event.key]
+    if (height === undefined) return
+    event.preventDefault()
+    // The focused terminal re-takes DOM focus on every refit; keep the handle focused for the keystrokes that follow.
+    drawerKeyboardResizeUntilRef.current = Date.now() + 250
+    const clamped = clampDrawerHeight(height, maximum)
+    setDrawerHeights((current) => ({ ...current, [drawerView]: clamped }))
+  }
+
+  const handleDrawerResizeBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    const stolenByTerminal = event.relatedTarget instanceof HTMLElement && event.relatedTarget.classList.contains('xterm-helper-textarea')
+    if (stolenByTerminal && Date.now() < drawerKeyboardResizeUntilRef.current) event.currentTarget.focus()
+  }
 
   return (
       <div
@@ -1633,13 +1732,35 @@ export function TerminalArea() {
       <div
         className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
         style={{
-          background: drawerOpen ? 'var(--shell-chrome)' : 'var(--shell-canvas)',
+          background: drawerOpen ? 'var(--shell-drawer)' : 'var(--shell-canvas)',
           borderTop: '1px solid var(--shell-border)',
-          height: getDrawerHeight(drawerOpen, drawerView),
+          height: getDrawerHeight(drawerOpen, drawerView, drawerHeights),
+          maxHeight: `calc(100% - ${DRAWER_MIN_PANE_HEIGHT}px)`,
+          transition: drawerResizing ? 'none' : undefined,
         }}
       >
+        {drawerOpen && (
+          <div
+            className="term-drawer-resize"
+            data-resizing={drawerResizing}
+            role="separator"
+            aria-label={t('terminal:tab.drawerResizeAria')}
+            aria-orientation="horizontal"
+            aria-valuemin={DRAWER_MIN_HEIGHT}
+            aria-valuemax={Math.round(getDrawerMaxHeight())}
+            aria-valuenow={Math.round(Math.min(drawerHeight, getDrawerMaxHeight()))}
+            tabIndex={0}
+            onPointerDown={handleDrawerResizeStart}
+            onPointerMove={handleDrawerResizeMove}
+            onPointerUp={handleDrawerResizeEnd}
+            onPointerCancel={handleDrawerResizeEnd}
+            onLostPointerCapture={handleDrawerResizeEnd}
+            onKeyDown={handleDrawerResizeKeyDown}
+            onBlur={handleDrawerResizeBlur}
+          />
+        )}
         <div
-          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] ${drawerOpen ? 'pr-32' : 'pr-3'}`}
+          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] ${drawerOpen ? 'pr-52' : 'pr-3'}`}
           onClick={() => setDrawerOpen((value) => !value)}
         >
           <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
@@ -1737,11 +1858,17 @@ export function TerminalArea() {
             </div>
           </div>
         </div>
-        <DrawerViewTabs
-          open={drawerOpen}
-          activeView={drawerView}
-          onSelect={setDrawerView}
-        />
+        {drawerOpen && (
+          <div className="absolute right-3 top-0 z-10 h-7">
+            <DrawerViewTabs
+              open={drawerOpen}
+              activeView={drawerView}
+              onSelect={setDrawerView}
+              ariaLabel={t('terminal:tab.drawerViewAria')}
+              labels={{ runtime: t('terminal:tab.view.runtime'), note: t('terminal:tab.view.note') }}
+            />
+          </div>
+        )}
         {DRAWER_VIEWS.map((view) => (
           <div
             key={view}
@@ -1760,77 +1887,87 @@ export function TerminalArea() {
               <div className="grid h-full place-items-center text-[#666]">{t('terminal:tab.noActiveTerminal')}</div>
             ) : (
               <section
-                className="min-h-0 overflow-hidden border"
-                style={{
-                  borderColor: 'rgba(255,255,255,0.07)',
-                  background: 'rgba(255,255,255,0.012)',
-                }}
+                className="flex h-full min-h-0 flex-col overflow-hidden border"
+                style={{ borderColor: 'rgba(255,255,255,0.07)' }}
                 aria-label={t('terminal:tab.runtimeAria')}
               >
-              <div className="flex h-8 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>
+              <div className="flex h-8 shrink-0 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>
                 <span className="text-[#8a8a8a]">{t('terminal:tab.terminalRuntime')}</span>
                 <span className="text-[#666]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
               </div>
-              <div className="max-h-[141px] overflow-auto">
+              <div className="min-h-0 flex-1 overflow-auto p-2">
                 {terminals.length === 0 ? (
-                  <div className="px-2.5 py-4 text-[#555]">{t('terminal:tab.noTelemetryData')}</div>
+                  <div className="px-1 py-3 text-[#555]">{t('terminal:tab.noTelemetryData')}</div>
                 ) : (
-                  terminals.map((terminal) => (
-                    <button
-                      key={terminal.id}
-                      type="button"
-                      className="grid w-full cursor-pointer grid-cols-[92px_minmax(96px,140px)_minmax(140px,1fr)_86px] items-center gap-2 border-b px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.03)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
-                      style={{
-                        borderColor: 'rgba(255,255,255,0.035)',
-                        background: terminal.id === activeTerminalId ? 'rgba(255,255,255,0.05)' : 'transparent',
-                      }}
-                      onClick={() => setActiveTerminal(terminal.id)}
-                      title={`${providerLabel(terminal.preset, t)} · ${terminal.cwd}`}
-                    >
-                      <span className="flex min-w-0 items-center gap-1.5 text-[#d4d4d4]">
-                        <span
-                          className="h-[6px] w-[6px] shrink-0 rounded-full"
+                  <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                    {terminals.map((terminal) => {
+                      const ratio = contextRatio(terminal)
+                      const ratioColor = contextRatioColor(ratio)
+                      const isActiveCard = terminal.id === activeTerminalId
+                      return (
+                        <button
+                          key={terminal.id}
+                          type="button"
+                          className="flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
                           style={{
-                            background: getTerminalStatusVisual(terminal.status).color,
-                            boxShadow: `0 0 8px ${getTerminalStatusVisual(terminal.status).color}66`,
+                            borderColor: isActiveCard ? 'var(--shell-accent-border)' : 'rgba(255,255,255,0.07)',
+                            background: isActiveCard ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.018)',
                           }}
-                        />
-                        <span className="truncate">{providerLabel(terminal.preset, t)}</span>
-                      </span>
-                      <span
-                        className="inline-flex h-5 min-w-0 items-center border px-2"
-                        style={{
-                          borderColor: 'rgba(255,255,255,0.055)',
-                          background: 'rgba(255,255,255,0.014)',
-                          color: '#8a8a8a',
-                        }}
-                      >
-                        <span className="truncate">{modelLabel(terminal, t)}</span>
-                      </span>
-                      <ContextUsagePopover
-                        terminal={terminal}
-                        interactive={false}
-                        className="group relative grid min-w-0 grid-cols-[1fr_auto] items-center gap-2"
-                      >
-                        <span
-                          className="h-1 overflow-hidden rounded-full"
-                          style={{ background: 'rgba(255,255,255,0.06)' }}
+                          aria-current={isActiveCard ? 'true' : undefined}
+                          onClick={() => setActiveTerminal(terminal.id)}
+                          title={`${providerLabel(terminal.preset, t)} · ${terminal.cwd}`}
                         >
+                          <span className="flex min-w-0 items-center justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-1.5 text-[#d4d4d4]">
+                              <span
+                                className="h-[6px] w-[6px] shrink-0 rounded-full"
+                                style={{
+                                  background: getTerminalStatusVisual(terminal.status).color,
+                                  boxShadow: `0 0 8px ${getTerminalStatusVisual(terminal.status).color}66`,
+                                }}
+                              />
+                              <span className="truncate">{providerLabel(terminal.preset, t)}</span>
+                            </span>
+                            <span className="shrink-0 text-[10px] text-[#555]" title={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
+                              {formatAge(terminal.telemetryUpdatedAt)}
+                            </span>
+                          </span>
                           <span
-                            className="block h-full rounded-full transition-[width,background] duration-300"
+                            className="inline-flex h-5 min-w-0 max-w-full items-center self-start rounded border px-2"
                             style={{
-                              width: `${Math.round((contextRatio(terminal) ?? 0) * 100)}%`,
-                              background: contextRatioColor(contextRatio(terminal)),
+                              borderColor: 'rgba(255,255,255,0.055)',
+                              background: 'rgba(255,255,255,0.014)',
+                              color: '#8a8a8a',
                             }}
-                          />
-                        </span>
-                        <span className="whitespace-nowrap" style={{ color: contextRatioColor(contextRatio(terminal)) }}>{contextLabel(terminal, t)}</span>
-                      </ContextUsagePopover>
-                      <span className="text-right text-[#555]" title={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
-                        {formatAge(terminal.telemetryUpdatedAt)}
-                      </span>
-                    </button>
-                  ))
+                          >
+                            <span className="truncate">{modelLabel(terminal, t)}</span>
+                          </span>
+                          <ContextUsagePopover
+                            terminal={terminal}
+                            interactive={false}
+                            className="group relative flex min-w-0 flex-col gap-1"
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="truncate text-[10px] text-[#777]">{contextLabel(terminal, t)}</span>
+                              <span className="shrink-0 tabular-nums" style={{ color: ratioColor }}>{contextPercentLabel(terminal)}</span>
+                            </span>
+                            <span
+                              className="block h-1 w-full overflow-hidden rounded-full"
+                              style={{ background: 'rgba(255,255,255,0.06)' }}
+                            >
+                              <span
+                                className="block h-full rounded-full transition-[width,background] duration-300"
+                                style={{
+                                  width: `${Math.round((ratio ?? 0) * 100)}%`,
+                                  background: ratioColor,
+                                }}
+                              />
+                            </span>
+                          </ContextUsagePopover>
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
               </section>

@@ -6,7 +6,13 @@ Status: proposed
 
 [统一资产标准](2026-09-16-unified-note-blueprint-harness.md) 与 [圆桌聊天闭环](2026-09-16-roundtable-chat-harness-loop.md) 定义了产品目标，但仅凭叙述不足以决定解析器、任务校验、事务恢复、接口和交付边界。实现 Agent 若自行补齐这些语义，三个仓库可能产生不同格式或把 Hybrid Tree 换名重建。本文固定第一版实现契约与执行入口；两篇设计负责动机及产品行为，本文负责具体字段、算法、错误和实施验证。冲突应按字段拥有章节回修，不能静默选择有利于当前实现的一篇。
 
-审阅定位的主要缺口为：执行范围只有 prose、AC 引用与状态门禁缺少机器形状、合同哈希没有确定算法、closeout 提前声明提交成功、同名来源包缺少重试规则、轻量 CLI 依赖闭包不成立，以及缺少按仓库分配的可验证交付步骤。本文解决这些缺口。本文件及全部拟新增模块、命令、fixtures 均为待实施，不表示已实现或已测试。
+审阅定位的主要缺口为：执行范围只有 prose、AC 引用与状态门禁缺少机器形状、合同哈希没有确定算法、closeout 提前声明提交成功、同名来源包缺少重试规则、轻量 CLI 依赖闭包不成立，以及缺少按仓库分配的可验证交付步骤。本文固定这些契约；设计条款本身不表示已实现或已测试。各阶段实际证据见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
+
+当前实现与验证边界以 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md) 为总账。CLI、Ink 与桌面支持单任务 xdel/xflow 实施、自审或独立评审，以及对应的修复策略；具体行为及构建后 Electron 验证见 [桌面委派模式](../../implemented/architecture/2026-09-19-desktop-delegated-modes.md) 及其引用的共享策略。Ink 的普通消息和命令均进入任务控制器，CLI 与桌面共用历史 Note 分类和 [标准 profile 门禁](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-harness-profile-namespace.md)。后续验收范围由 [闭环提案](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步) 维护。标准仍为 `harness-note/1`、`1.0.0-s1.1` candidate；实际发行组合与三仓规则切换尚待验证。
+
+2026-09-18 批次仅修改 JanusX，基线为 `902b7bb`；验证时 janus-agentX HEAD 为 `d93b557`、WorkFlowX HEAD 为 `c36309d`，后两仓本批无修改。标准仍是 `harness-note/1`、`1.0.0-s1.1` candidate；WorkFlowX profile 记录摘要 `62e2ae8b674dd5510c9e7b8a2526e4b81710c1b6ad8d075837673708eb3c4a7a`，本批未重新生成标准 bundle 或验证发行组合。
+
+2026-09-18 批次实际检查为 `npm run typecheck`、`npm run build`、`npm run check:package-boundary`、`npm run i18n:types`、`npm run i18n:check` 及修改源码的 ESLint（0 error、5 条既有 warning）。相关回归命令 `npm run test:unit -- --run tests/unit/blueprint-maintenance tests/unit/maintenance-harness-apply.test.ts tests/unit/harness tests/unit/janus-chat tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/task-contract-adoption.test.ts tests/unit/roundtable-artifact-bundle.test.ts` 通过 25 suites / 139 tests；旧维护用例仍输出知识处理和审计写入警告。设置 `JANUS_E2E_PORT=41739` 与 `NO_PROXY=localhost,127.0.0.1,::1` 后，`npx playwright test tests/e2e/project-conversation.spec.ts` 通过 2 项，无页面脚本错误，桌面与 390px 表单截图已检查。未运行完整 `verify`、真实模型 Electron、发行包和跨平台用例，因为本批只验收共享 controller、合同采纳与共享执行内核的集成边界。
 
 ## Proposal
 
@@ -14,7 +20,7 @@ Status: proposed
 
 接手 Agent 先读取三个仓库各自 AGENTS.md、CLAUDE.md 和当前 noteX/orchestrateX，记录 HEAD 与脏文件，不覆盖已有修改。先读本文，再按任务涉及范围查阅两篇设计。当前工作仍遵守旧规则；只有标准、基础工具与双端规则验证完成后才启用新入口。此处的实施分段是交接清单，不是新增 Parent/Child 或计划格式。
 
-确定的边界：一种 `harness-note/1` 格式、五种 kind、同一 note URI；移除 Hybrid Tree 强制机制；task 是实施资产；基础 WorkflowX 无新增运行依赖；AGENTS/CLAUDE 同步；共享内容无本机路径；个人与项目会话隔离；圆桌和内置引擎输出同一资产。旧格式不兼容，但旧数据不得自动删除或批量改写。旧格式文件在扫描时返回 UNSUPPORTED_SCHEMA 诊断，不把空界面解释为数据被删除。
+确定的边界：一种 `harness-note/1` 格式、五种 kind、同一 note URI；移除 Hybrid Tree 强制机制；task 是实施资产；基础 WorkflowX 无新增运行依赖；AGENTS/CLAUDE 同步；共享内容无本机路径；个人与项目会话隔离；圆桌和内置引擎输出同一资产。旧格式不兼容，但旧数据不得自动删除或批量改写。无 Harness schema 声明的历史文件作为 foreign 保留，不参与图、覆盖率或执行；声明未知 harness-note 版本的文件返回 UNSUPPORTED_SCHEMA，声明当前版本但损坏的文件继续报告校验错误。扫描不删除或改写原文，受管写入与执行要求仓库 profile 与安装的标准版本及摘要一致。
 
 第一版不实现多人实时协同、CRDT、团队服务端同步、旧资产转换器或圆桌算法整体迁移；分享以只读文件包完成，团队入口可调用相同资产服务。图、Markdown/表单编辑、外部更新、圆桌成果、统一聊天、外部终端执行、内置有限执行闭环均在范围内。内置线程跨进程恢复可通过重读固定任务和证据重新派发；不以实现完整持久多层子线程为本次完成前提。
 
@@ -125,6 +131,10 @@ queued 检查发现基线失效时也转 blocked；检查失败或预算耗尽�
 
 ### C4 收据、覆盖率与落地
 
+正式执行状态写入 task Note 的 execution，收据写入任务 primary 仓库的 `.agents/evidence/<id>.json`；本地 run、租约和对话不作为可分享结果的真源。受管宿主使用同一仓库锁、文件 expectedHash、本地 run 修订号和恢复日志更新 Note、收据引用及本地记录；任何目标出现外部新内容时停止恢复。详细规范与固定摘要 fixture 见 [执行持久化规范](../../../../../WorkFlowX/standards/harness-note/1/execution-persistence.md)。缺少本地运行记录只能重建结果，不能自动认领其他位置的活动执行。
+
+收据内容摘要使用对象键递归按 Unicode 码点排序的紧凑 UTF-8 JSON，数组顺序和字符串内容保持原样；文件缩进、对象键顺序和 JSON 文件的 LF/CRLF 不影响摘要。依赖 task 的 receiptHash 及 Git 中的收据身份比较均使用此摘要；代码清单仍比较原始字节。任务收据必须由同 mode、attempt 的 done task 正式引用才提供覆盖，不能用孤立收据或本地缓存提前宣告完成。
+
 Receipt 为 `harness-receipt/1`，创建后不可修改，字段为 id、taskUri?、mode、attempt、taskContractHash?、inputs、codeManifest、checks、coverage、review、createdAt、actor。codeManifest 每项含 repoId、path、sha256 或 deleted=true；必须覆盖任务修改的代码/配置/构建输入及实现者声明的关联验证输入，不包含本收据与会变化的 execution 元数据。coverage 每项为 `{uri,criterionId,criterionHash,checkIds}`，checkIds 必须非空且指向同收据内实际通过的检查。sha256 与 deleted=true 互斥，删除项验证目标不存在。taskUri 与 taskContractHash 同时存在或同时省略；仅无 task 的 xdo 允许省略，仍需固定 inputs 与实际检查。
 
 checks 为 `{id,kind,required,status,repoId,command?,exitCode?,summary,performedBy}`，status=passed/failed/not-run；command 复用 program/args/cwd，passed 命令需 exitCode=0，manual 需操作者与实际观察。review 为 `{kind:'self'|'independent'|'manual',verdict:'approved'|'needs-fix'|'blocked',reviewedManifestHash,actor}`。xflow 要 independent 且 actor 与实现者不同；身份只是宿主日志可核验的本地标识，非密码学证明。没有可运行检查时必须记录已接受的具体人工验收，不能自动填 passed。
@@ -163,7 +173,7 @@ janus-chat 的新增持久字段为 engineeringContext、artifactRefs、activeRu
 
 内置启动返回 `{runId,taskUri,state,executor:'internal'}`；外部终端使用同一 Task URI、固定基线及模式生成 handoff 文件 `.local/runs/<runId>/handoff.md`，通过已有 CLI resolver/runner 与参数数组启动。provider 若不能验证支持 prompt 参数，则打开终端并显示可复制的入口指令，run 标 awaiting-launch，不宣称运行成功。进程退出只是事件，不代表任务 done；检测文件与收据决定结果。handoff 不成为长期任务正文，删除本地 run 后 Note 仍可从新宿主继续。
 
-内置 xdel/xflow 要求可调用的子执行器/评审能力；没有能力时返回 CAPABILITY_UNAVAILABLE（CLI 退出码 6），不由主代理冒充 evaluator。xdo 可直接执行。自动启动多任务仅限授权的任务集合及已允许的并发；默认串行依赖调度。失败不自动改写其他任务的 scope。
+内置 xdel/xflow 要求可调用的子执行器/评审能力；没有能力时返回 CAPABILITY_UNAVAILABLE（CLI 退出码 6），不由主代理冒充 evaluator。xdo 可直接执行。桌面 xdo 宿主驻 JanusX 主进程：以中立运行内核推进状态，以桌面命令运行器执行已声明的 command 校验，以项目会话的只读自审轮次生成覆盖映射；不得调用 `@janus-agent/janus-agent` 的 CLI 任务执行宿主，两个宿主只共享内核与收据校验，不共享对方的运行时。自动启动多任务仅限授权的任务集合及已允许的并发；默认串行依赖调度。失败不自动改写其他任务的 scope。
 
 ### C7 包边界与具体文件落点
 
@@ -175,7 +185,7 @@ janus-chat 的新增持久字段为 engineeringContext、artifactRefs、activeRu
 | `packages/harness-node` | `src/repository.ts`、`resolver.ts`、`transaction.ts`、`journal.ts`、`watcher.ts`、`git-evidence.ts`、`index.ts` | harness-core 与 Node 内置模块，无 agent-core |
 | `packages/notes-cli` | `src/cli.ts`、`commands.ts`，bin=`wfx-notes` | harness-core/harness-node；不导入 janus-agent、cli、node-hosts 的 barrel |
 
-janus-agentX 现有 `packages/janus-agent/src/ports.ts`、`orchestrator/chat-turn.ts` 接入可选工程能力，新增 `src/harness/dispatcher.ts` 与 `runtime.ts` 承担运行调度。`packages/cli/src` 增 notes 命令路由与 harness 命令适配；`janus notes` 必须调用 notes-cli 导出的命令函数，不能复制实现。打包先 core -> node -> notes-cli，再构建运行宿主，发布依赖不得保留兄弟目录 file 路径。
+janus-agentX 现有 `packages/janus-agent/src/ports.ts`、`orchestrator/chat-turn.ts` 接入可选工程能力。运行内核（`dispatcher.ts` 与 `run-store.ts`：状态机、租约、收据生命周期）只依赖 `harness-core`、`harness-node` 与 Node 内置模块，不依赖 `agent-core`、`chat-core`、模型或 Electron；它是中立内核，随 `harness-node` 发行，CLI 宿主与桌面宿主都调用它，宿主之间不互相调用。`packages/janus-agent` 只保留 CLI 宿主的任务执行适配（`prepareTaskTurn`/`verifyTaskExecution`，依赖 `ChatTurn` 与终端命令运行时）；JanusX 执行链禁止复用该 CLI 任务执行宿主，对话编排继续复用 `runChatTurn` 不在此限，那是聊天能力，不是执行内核。`packages/cli/src` 增 notes 命令路由与 harness 命令适配；`janus notes` 必须调用 notes-cli 导出的命令函数，不能复制实现。打包先 core -> node -> notes-cli，再构建运行宿主，发布依赖不得保留兄弟目录 file 路径。
 
 JanusX 新增 `src/main/harness/{service,conversation-context,execution-adapter,artifact-producer}.ts` 和 `src/shared/ipc/harness.ts`，调整 `src/preload/index.ts`。`src/main/janus/blueprint-store.ts` 退出 JSON 内容写入，renderer 读取共享图投影；共享类型保留 UI 视图类型，不在两仓库重复定义 Note schema。`src/main/team/local-blueprint-repository.ts` 接入相同服务，团队服务器不在第一版范围。
 

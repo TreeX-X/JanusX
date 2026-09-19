@@ -324,8 +324,12 @@ export class BlueprintStore {
     return bp
   }
 
-  async loadBlueprint(...args: [workspace: string, id: string]): Promise<Blueprint | null> {
-    return this.locked(async () => {
+  /** Drops one id from the in-memory cache; file moves go through here after archiving. */
+  evictBlueprint(id: string): void {
+    this.cache.delete(id)
+  }
+
+  async loadBlueprint(...args: [workspace: string, id: string]): Promise<Blueprint | null> {    return this.locked(async () => {
       // Keep the workspace-first public contract; persisted blueprint files are keyed globally by id.
       const id = args[1]
       if (isProjectGraphId(id)) return this.loadProjectGraph(args[0], id)
@@ -871,6 +875,9 @@ export class BlueprintStore {
     nodeId: string,
     analysis: BlueprintAnalysis
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'analysis records on project graphs stay in analyzer run records; adopt conclusions through the maintenance flow, not legacy writes', nodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return null
@@ -921,6 +928,9 @@ export class BlueprintStore {
       }>
     }
   ): Promise<BlueprintNode | null> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'analysis patches on project graphs are managed by the maintenance flow, not legacy writes', nodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return null
@@ -957,6 +967,9 @@ export class BlueprintStore {
     requirements: DiscoveredRequirement[],
     evidence: string[] = []
   ): Promise<BlueprintRequirementCandidate[]> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'requirement candidates on project graphs become requirement notes through the maintenance flow, not legacy lists', sourceNodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[sourceNodeId]) return []
@@ -1173,6 +1186,9 @@ export class BlueprintStore {
     nodeId: string,
     sha: string | null
   ): Promise<void> {
+    if (isProjectGraphId(blueprintId)) {
+      harnessThrow('HARNESS_MANAGED', 'analyzer cursors on project graphs are not persisted; analysis rescans within its commit budget', nodeId)
+    }
     return this.locked(async () => {
       const bp = await this.loadBlueprint(workspace, blueprintId)
       if (!bp || !bp.nodes[nodeId]) return

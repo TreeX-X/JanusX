@@ -8,17 +8,19 @@ Status: proposed
 
 本文依据 2026-09-16 的本地工作树分析，基准提交分别为 JanusX `017f4fc`、janus-agentX `0af25b5`、WorkFlowX `44bc0ae`。JanusX 有知识与团队相关未提交改动及提案，janus-agentX 有未跟踪的 `.agents/plans/`；这些内容不视作已发布能力。设计工作只维护本文及配套闭环提案，不修改程序、实际工作流规则或无关提案，不实施迁移。文中标为“拟新增”的路径、命令和包均为设计目标。
 
-实施先读 [实施契约与 Agent 交接](2026-09-16-note-harness-implementation-contract.md)：C1–C6 唯一定义具体字段、接口、哈希、状态和错误，C7–C8 定义模块落点及实施依赖。本文负责通用资产、独立使用、分享与导航；[讨论到实施闭环方案](2026-09-16-roundtable-chat-harness-loop.md) 负责圆桌、聊天和实施的产品行为。三篇均为待实施设计；协议变更先修改实施契约，再同步产品描述和示例。
+实施先读 [实施契约与 Agent 交接](2026-09-16-note-harness-implementation-contract.md)：C1–C6 唯一定义具体字段、接口、哈希、状态和错误，C7–C8 定义模块落点及实施依赖。本文负责通用资产、独立使用、分享与导航；[讨论到实施闭环方案](2026-09-16-roundtable-chat-harness-loop.md) 负责圆桌、聊天和实施的产品行为。三篇仍为 proposed 设计，部分阶段已有实现，不能据此视为标准已整体启用；协议变更先修改实施契约，再同步产品描述和示例。
+
+当前实现总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。新 Note 蓝图与主 Chat 共享会话，圆桌 action 草稿支持任务合同编辑与显式采纳；正式证据和新 checkout 结果重建具有集成测试。CLI、Ink 与桌面支持单任务 xdel/xflow 委派、自审或独立评审及对应修复策略，桌面构建产物通过确定性模型的执行与重启测试。CLI 与桌面共用历史 Note 分类和标准 profile 门禁。外部真实模型 Electron、完整跨宿主验收、多任务调度、发行矩阵及三仓库规则切换仍未完成，后续范围见 [闭环提案的当前状态](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步)。
 
 ### 三个仓库的实际职责
 
 | 仓库 | 已存在的机制与证据 | 对统一方案的约束 |
 |---|---|---|
-| WorkFlowX | [noteX](../../../../../WorkFlowX/.codex/skills/noteX/SKILL.md) 定义 Note；[orchestrateX](../../../../../WorkFlowX/.codex/skills/orchestrateX/SKILL.md) 定义 xdo/xdel/xflow；[Hybrid Tree 模板](../../../../../WorkFlowX/.codex/skills/orchestrateX/hybrid-template.md) 定义 Parent/Child | 应拥有新标准及工作流语义，供不同终端使用 |
+| WorkFlowX | [noteX](../../../../../WorkFlowX/.codex/skills/noteX/SKILL.md) 定义 Note；[orchestrateX](../../../../../WorkFlowX/.codex/skills/orchestrateX/SKILL.md) 定义 xdo/xdel/xflow；[标准 task 模板](../../../../../WorkFlowX/standards/harness-note/1/templates/task.md) 定义实施资产 | 拥有新标准及工作流语义，供不同终端使用 |
 | JanusX | [Blueprint 类型](../../../../src/shared/janus/types.ts)、[Store](../../../../src/main/janus/blueprint-store.ts)、[维护服务](../../../../src/main/janus/maintenance/service.ts) 和 [界面 Store](../../../../src/renderer/src/stores/blueprint.ts) 实现蓝图持久化、关系、维护及显示 | 应成为同一资产的图形编辑器，重用现有图形交互与维护能力 |
 | janus-agentX | [ChatTurnPorts](../../../../../janus-agentX/packages/janus-agent/src/ports.ts)、[Node Host 工具](../../../../../janus-agentX/packages/node-hosts/src/index.ts)、[CLI Session](../../../../../janus-agentX/packages/cli/src/session.ts) 提供共享运行时与终端宿主 | 应提供无 Electron 依赖的解析、文件操作和 harness 执行能力 |
 
-JanusX 的 [package.json](../../../../package.json) 已通过 `file:../janus-agentX/packages/...` 引用 `agent-core`、`chat-core`、`janus-agent`。三个仓库的 `.codex/skills/noteX/SKILL.md`、`.codex/skills/orchestrateX/SKILL.md` 同名文件跨仓库哈希一致，三个仓库的 Claude noteX 副本也与 Codex noteX 一致。这说明共享代码和工作流分发已有基础，但本次检查并未证明全部 skills、agents、commands 均一致。
+JanusX 的 [package.json](../../../../package.json) 已通过 `file:../janus-agentX/packages/...` 引用 `agent-core`、`chat-core`、`janus-agent`。WorkFlowX 本地采用 task Note 规则，JanusX 与 janus-agentX 的运行入口仍采用旧规则；工作流分发的三仓切换必须单独验收，不能从同名 skill 推断版本一致。
 
 用户提到的 `.agent/` 在这里对应实际的 `.agents/notes/`。还存在两种容易混淆的 Note：蓝图节点中的 `notes: string` 只是节点字段；[终端便签 Store](../../../../src/renderer/src/stores/note.ts) 中的 NoteCard 是按终端分组的草稿。它们都不是 WorkflowX 决策 Note。
 
@@ -39,11 +41,13 @@ WorkFlowX 的 Note 已包含问题、方案或决策、替代选项、验收或�
 
 当前 [受控蓝图维护 Note](../../implemented/architecture/2026-08-04-blueprint-maintenance.md) 与 [维护契约](../../../../src/shared/janus/maintenance-types.ts) 已覆盖提案、变更集、证据、选择应用、过期检测和撤销。新方案应保留这些能力的作用，把操作对象改为 Note 文件及其关系。现有普通节点编辑和分析回写也能修改 Store，因此不能仅更换维护面板而保留其他 JSON 写入口。
 
-WorkFlowX 的 [Notes 与 Hybrid Tree 设计](../../../../../WorkFlowX/docs/agent-notes-and-hybrid-tree-design.md) 强调长期决策和短期执行的区别；[Proposal Pool 模板](../../../../../WorkFlowX/.codex/skills/noteX/templates/proposal.md) 还提供 exploring/scoped/adopted/dropped 这一套生命周期。统一应减少独立载体，同时保留这三类内容各自的用途与质量要求。该历史设计文档含过往决议和待办，当前执行规则以 skills 为准；例如 noteX 仍注明校验脚本尚未落地，不能把历史文档中的 CI 设想当作现有门禁。
+WorkFlowX 的 [Notes 与 Hybrid Tree 设计](../../../../../WorkFlowX/docs/agent-notes-and-hybrid-tree-design.md) 记录长期决策和短期执行的历史区分。当前格式及模板见 [Harness 标准](../../../../../WorkFlowX/standards/harness-note/1/manifest.json)，当前运行规则以各仓库 skills 为准。统一应减少独立载体，同时保留不同内容的用途与质量要求；历史设计中的设想不能作为现有门禁的证据。
 
 janus-agentX 的 [持久子智能体 harness 提案](../../../../../janus-agentX/.agents/notes/proposed/architecture/2026-09-11-harness-persistent-subagents.md) 仍为 proposed；当前共享编排包含会话级 `todo_write`，参见 [系统提示构造](../../../../../janus-agentX/packages/chat-core/src/main/llm/system-prompt-builder.ts) 和 [todo 工具](../../../../../janus-agentX/packages/janus-agent/src/orchestrator/todo-tool.ts)。不能把会话 todo 当作已实现的仓库任务图。该提案倾向原线程修复，当前 WorkflowX [派发契约](../../../../../WorkFlowX/.codex/skills/orchestrateX/modules/02-bus-payload.md) 则明确修复为新调用；这是后续标准化必须消除的语义分歧。
 
 ## Proposal
+
+执行结果的正式文件、可恢复写入、收据内容摘要与跨 checkout 重建遵循[实施契约 C4](2026-09-16-note-harness-implementation-contract.md#c4-收据覆盖率与落地)。共享结果不包含本地租约或执行拥有权；代码有效性与 Git 落地分别判定。
 
 ### 统一目标与边界
 
@@ -318,9 +322,10 @@ Proposal Pool 由 `kind=idea` 的列表视图表达。新标准移除 Hybrid Tre
 | WorkFlowX | 拟新增 `standards/harness-note/1/`，含规范、JSON Schema、模板、有效/无效 fixtures 和流程行为用例 | 唯一规范源；同时定义 Note、关系、验收和 xdo/xdel/xflow 的含义 |
 | WorkFlowX | `.codex` / `.claude` 下 noteX、proseX、orchestrateX、socratesX、specX、engineeringX、auditX、角色和 commands；根 AGENTS/CLAUDE | 更换路径/身份/模板规则、派发来源与收口约束；清理同事实的重复手写定义 |
 | janus-agentX | 拟新增 `packages/harness-core`，包名 `@janus-agent/harness-core` | 无 Electron、无文件系统副作用的 Note 解析、schema、图校验、状态规则和变更集计算 |
-| janus-agentX | 拟新增 `packages/harness-node`，提供 Note 文件仓库、watcher、锁、恢复日志和 CLI 可复用的操作入口 | 提供共享的 Node 存储适配器，禁止桌面与终端各实现一套持久化规则 |
+| janus-agentX | 拟新增 `packages/harness-node`，提供 Note 文件仓库、watcher、锁、恢复日志、运行内核（状态机、租约、收据生命周期，无 agent 依赖）和 CLI 可复用的操作入口 | 提供共享的 Node 存储与运行适配器，禁止桌面与终端各实现一套持久化或状态机规则 |
 | janus-agentX / WorkFlowX | 前者拟独立打包 `wfx-notes` 的轻量入口；后者提供可选安装说明、基础流程和契约用例 | 校验工具不捆绑代理运行时；没有工具的 WorkflowX 仍须通过独立使用验收 |
-| janus-agentX | `packages/janus-agent` 拟增加 harness 编排与端口；`packages/cli` 接入入口和状态显示 | 派发、快照、任务状态推进、证据及恢复；完整持久子线程独立展开 |
+| janus-agentX | `packages/janus-agent` 拟增加 harness 编排与端口；`packages/cli` 接入入口和状态显示 | 只保留 CLI 宿主的任务执行适配与派发快照；完整持久子线程独立展开 |
+| JanusX | `src/main/harness` 的桌面 xdo 宿主：桌面命令运行器、项目会话自审轮次、run IPC 与运行面板 | 调用中立运行内核，不调用 CLI 任务执行宿主；覆盖映射与收据规则与 CLI 一致 |
 | JanusX | `src/main/janus`、`src/main/ipc/janus-handlers.ts`、shared/preload、renderer services/stores/blueprint components | 切换到共享 Note 仓库；重用画布、详情、维护预览、撤销、焦点和终端关联能力 |
 | JanusX | `src/main/team/local-blueprint-repository.ts`、分析与知识引用入口 | 团队入口遵守项目文件权限与同一写服务，知识引用稳定 Note URI |
 
@@ -340,7 +345,7 @@ WorkFlowX 将发布带版本及内容摘要的标准 bundle。janus-agentX 在�
 2. 先在仅安装 WorkflowX 的 Codex/Claude 环境验证基础文件与导航流程；在 janus-agentX 完成 harness-core、Node 文件仓库和独立 `wfx-notes`，再证明可选工具能校验、更新、引用和恢复同一组文件，不捆绑代理运行时。
 3. 在 JanusX 接入共享仓库及文件事件，完成 Markdown/表单编辑、图关系操作、诊断、冲突与证据展示，同时完成跨仓库范围栏、节点仓库绑定、协作者首次打开、checkout 选择和分享预览。所有普通编辑、AI 维护、分析应用和团队写入口均接入同一服务；不能留 JSON 写旁路。
 4. 调整 WorkflowX 的全部相关 skill、模板、角色与 commands，以 idea 视图替代 Proposal Pool，以 task Note 吸收 Hybrid Tree 职责并移除其模板和强制规则；通过同步工具作用于三个仓库的 Codex/Claude 工作流配置。
-5. 接入 janus-agentX 内置 harness，补齐派发快照、状态机、验收收据和恢复。持久子线程的完整生命周期可另立执行任务，但不得重新发明 Note 或任务图。
+5. 接入内置执行：CLI 宿主与桌面 xdo 宿主对等，共用中立运行内核与收据校验，各带自己的命令运行器与评审轮次，补齐派发快照、状态机、验收收据和恢复。持久子线程的完整生命周期可另立执行任务，但不得重新发明 Note 或任务图。
 6. 用相同 fixtures 与跨终端场景验收发行组合，统一启用新格式。旧资产如何保留或删除不属于本方案的兼容设计，也不授权本轮删除任何文件。
 
 第一条可交付闭环为“仅 WorkflowX 的终端创建并维护 Note -> 可选工具检查同一文件 -> 蓝图显示 -> 蓝图改正文和关系 -> 终端继续维护 -> 外部修改触发刷新并能解决冲突”。完成这个闭环后再将内置任务驱动接入，能分别验证独立工作流、文件标准和执行机制，最终仍必须完成三仓库工作流的整体生效。

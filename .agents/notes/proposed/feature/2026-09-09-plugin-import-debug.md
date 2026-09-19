@@ -1,6 +1,13 @@
-# Agent Note: Third-party plugin import and debug flow
+---
+schema: harness-note/1
+id: 80e8b427-d263-42f4-b7cd-8313548c9e2a
+kind: requirement
+lifecycle: draft
+created: 2026-09-09
+class: feature
+---
 
-Status: proposed
+# Agent Note: Third-party plugin import and debug flow
 
 ## Problem
 

@@ -21,6 +21,7 @@
     "defaultBadge": "默认",
     "typeVertex": "Vertex AI",
     "typeOpenai": "OpenAI Compatible",
+    "typeAnthropic": "Anthropic 原生",
     "setAsDefault": "设为默认",
     "edit": "编辑",
     "delete": "删除",
@@ -28,6 +29,7 @@
     "addTitle": "添加服务",
     "typeLabel": "服务类型 Provider Type",
     "typeOptionOpenai": "OpenAI 兼容接口 (URL + Key)",
+    "typeOptionAnthropic": "Anthropic 原生接口 (x-api-key)",
     "typeOptionVertex": "Google Vertex AI (GCP 认证)"
   },
   "openai": {
@@ -40,6 +42,35 @@
     "apiKeyPlaceholder": "sk-...",
     "modelLabel": "默认模型 Default Model",
     "modelPlaceholder": "gpt-4o, deepseek-chat..."
+  },
+  "anthropic": {
+    "sectionTitle": "Anthropic 原生接口",
+    "nameLabel": "服务名称 Provider Name",
+    "namePlaceholder": "My Anthropic Provider",
+    "baseUrlLabel": "接口地址 Base URL",
+    "baseUrlPlaceholder": "https://api.anthropic.com",
+    "apiKeyLabel": "访问密钥 API Key",
+    "apiKeyPlaceholder": "sk-ant-...",
+    "modelLabel": "默认模型 Default Model",
+    "modelPlaceholder": "claude-sonnet-4-20250514 ..."
+  },
+  "terminals": {
+    "sectionTitle": "按终端维护",
+    "emptyHint": "此终端还没有配置，在下方添加。",
+    "modelRequired": "先填写模型覆盖，或给所选服务设置默认模型。",
+    "liveHint": "各终端只写自己拥有的模型键并自动备份；密钥仍只走 Claude 凭证同步。",
+    "janusBadge": "内部",
+    "internalNote": "Janus 内部对话直连此绑定，不写外部文件。",
+    "fileLabel": "配置文件",
+    "formatLabel": "格式",
+    "ownedKeyLabel": "管理键",
+    "liveModel": "本地模型 {{model}}",
+    "liveMissing": "文件不存在，应用时创建",
+    "outOfSync": "本地与绑定不一致，应用后覆盖本地。",
+    "applyModel": "应用模型",
+    "modelApplied": "模型已写入并备份，重启终端后生效。",
+    "modelRolledBack": "已回滚到上次备份。",
+    "refreshFile": "重读"
   },
   "vertex": {
     "sectionTitle": "Google Vertex AI",
@@ -70,6 +101,31 @@
     "addModel": "添加模型",
     "removeModel": "删除模型",
     "defaultModelLabel": "默认模型"
+  },
+  "cli": {
+    "sectionTitle": "外部终端 CLI",
+    "janus": {
+      "name": "JanusX 内部",
+      "badge": "内部使用",
+      "using": "正在使用默认配置「{{name}}」",
+      "unconfigured": "尚未设置默认配置"
+    },
+    "claude": {
+      "name": "Claude Code",
+      "synced": "已同步「{{name}}」· {{time}}",
+      "notSynced": "尚未同步",
+      "sourceGone": "同步来源已删除",
+      "applyDefault": "同步默认配置",
+      "rollback": "回滚"
+    },
+    "notice": {
+      "synced": "已从「{{name}}」同步并备份，重启终端后生效。",
+      "rolledBack": "已回滚到上次备份。"
+    },
+    "error": {
+      "noProvider": "没有可用的配置：需要带 Base URL 与 API Key 的 OpenAI 兼容或 Anthropic 类型 Provider。"
+    },
+    "hint": "同步前自动备份 Claude Code 配置，可随时回滚；仅同步默认配置，切换默认后需重新同步。"
   },
   "test": {
     "testing": "测试连接中...",

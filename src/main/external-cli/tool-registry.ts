@@ -1,0 +1,93 @@
+import type { ExternalCliToolId } from '../../shared/ipc/external-cli'
+
+export interface ExternalCliToolDescriptor {
+  id: ExternalCliToolId
+  displayName: string
+  /** PATH 与已知位置中查找的可执行文件名（win32 含 .cmd/.exe 变体）。 */
+  binaryNames: readonly string[]
+  /** npm 分发包名；自有源码构建的工具为空。 */
+  npmPackage?: string
+  /** 手动安装命令或指引（展示与复制用，静默执行侧按平台重算）。 */
+  manualInstallCommand: string
+  latestStrategy: 'npm-dist-tags' | 'local-source'
+  /** 各工具原生安装器遗留的额外目录（win32），与 npm 全局目录并列探测。 */
+  extraKnownDirs?: {
+    win32?: readonly string[]
+  }
+  /**
+   * 自有 sibling 源码的构建＋全局 link 生命周期（janus 专用）。
+   * 有源码时静默执行更新；无源码时只展示 manualInstallCommand。
+   */
+  localLifecycle?: {
+    /** sibling 仓库下包目录名，如 'cli'。 */
+    packageDirName: string
+    /** 校验用包名，如 '@janus-agent/cli'。 */
+    packageName: string
+  }
+}
+
+function npmInstallCommand(npmPackage: string): string {
+  return `npm i -g ${npmPackage}@latest`
+}
+
+/**
+ * 工具声明单表：展示名、包名、安装命令、最新版策略收敛在一处，
+ * 前后端不再各维护一份映射（上游三张小表拼凑的教训）。
+ */
+export const EXTERNAL_CLI_TOOLS: Record<ExternalCliToolId, ExternalCliToolDescriptor> = {
+  claude: {
+    id: 'claude',
+    displayName: 'Claude Code',
+    binaryNames: ['claude'],
+    npmPackage: '@anthropic-ai/claude-code',
+    manualInstallCommand: npmInstallCommand('@anthropic-ai/claude-code'),
+    latestStrategy: 'npm-dist-tags',
+    extraKnownDirs: {
+      // 原生安装器位置（上游 build_tool_search_paths 同源）。
+      win32: ['%LOCALAPPDATA%\\Programs\\claude'],
+    },
+  },
+  codex: {
+    id: 'codex',
+    displayName: 'Codex',
+    binaryNames: ['codex'],
+    npmPackage: '@openai/codex',
+    manualInstallCommand: npmInstallCommand('@openai/codex'),
+    latestStrategy: 'npm-dist-tags',
+    extraKnownDirs: {
+      win32: ['%LOCALAPPDATA%\\Programs\\OpenAI\\Codex\\bin'],
+    },
+  },
+  opencode: {
+    id: 'opencode',
+    displayName: 'OpenCode',
+    binaryNames: ['opencode'],
+    npmPackage: 'opencode-ai',
+    manualInstallCommand: npmInstallCommand('opencode-ai'),
+    latestStrategy: 'npm-dist-tags',
+  },
+  pi: {
+    id: 'pi',
+    displayName: 'Pi Agent',
+    binaryNames: ['pi'],
+    npmPackage: '@earendil-works/pi-coding-agent',
+    manualInstallCommand: npmInstallCommand('@earendil-works/pi-coding-agent'),
+    latestStrategy: 'npm-dist-tags',
+  },
+  janus: {
+    id: 'janus',
+    displayName: 'Janus',
+    binaryNames: ['janus'],
+    manualInstallCommand: 'cd ../janus-agentX/packages/cli && npm run build && npm link',
+    latestStrategy: 'local-source',
+    localLifecycle: {
+      packageDirName: 'cli',
+      packageName: '@janus-agent/cli',
+    },
+  },
+}
+
+export function getExternalCliTool(toolId: string): ExternalCliToolDescriptor | undefined {
+  if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'opencode' && toolId !== 'pi' && toolId !== 'janus') return undefined
+  return EXTERNAL_CLI_TOOLS[toolId]
+}

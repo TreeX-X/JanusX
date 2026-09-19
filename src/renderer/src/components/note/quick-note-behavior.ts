@@ -1,5 +1,7 @@
 import { createElement, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { Activity, NotebookPen } from 'lucide-react'
 import { useNoteStore } from '../../stores/note'
+import tabs from '../ui/TabStrip.module.css'
 
 export type DrawerView = 'runtime' | 'note'
 export type TerminalLifecycleEvent = 'kill-removed' | 'exit' | 'workspace-switch'
@@ -30,7 +32,20 @@ export function getNextDrawerView(view: DrawerView, key: string): DrawerView | n
   return DRAWER_VIEWS[(DRAWER_VIEWS.indexOf(view) + offset + DRAWER_VIEWS.length) % DRAWER_VIEWS.length]
 }
 
-export function DrawerViewTabs({ open, activeView, onSelect }: { open: boolean; activeView: DrawerView; onSelect: (view: DrawerView) => void }) {
+const DRAWER_VIEW_ICONS: Record<DrawerView, typeof Activity> = { runtime: Activity, note: NotebookPen }
+
+export interface DrawerViewTabsProps {
+  open: boolean
+  activeView: DrawerView
+  onSelect: (view: DrawerView) => void
+  /** Localized labels; the view id is the fallback so the tabs render without an i18n provider. */
+  labels?: Partial<Record<DrawerView, string>>
+  ariaLabel?: string
+}
+
+// Text tabs with a 2px underline instead of filled chips: no segment carries a background, the selected
+// tab brightens its text, takes the accent on its icon and draws the bar on the header's bottom edge.
+export function DrawerViewTabs({ open, activeView, onSelect, labels, ariaLabel }: DrawerViewTabsProps) {
   const tabRefs = useRef<Record<DrawerView, HTMLButtonElement | null>>({ runtime: null, note: null })
 
   if (!open) return null
@@ -47,8 +62,9 @@ export function DrawerViewTabs({ open, activeView, onSelect }: { open: boolean; 
     'div',
     {
       role: 'tablist',
-      'aria-label': 'Drawer view',
-      className: 'absolute right-3 top-1 flex h-5 overflow-hidden border border-[rgba(255,255,255,0.08)] text-[10px]',
+      'aria-label': ariaLabel ?? 'Drawer view',
+      className: tabs.strip,
+      onClick: (event: ReactMouseEvent<HTMLDivElement>) => event.stopPropagation(),
     },
     DRAWER_VIEWS.map((view) => createElement(
       'button',
@@ -61,25 +77,35 @@ export function DrawerViewTabs({ open, activeView, onSelect }: { open: boolean; 
         'aria-controls': getDrawerPanelId(view),
         'aria-selected': activeView === view,
         tabIndex: activeView === view ? 0 : -1,
-        className: 'px-2 capitalize',
-        style: {
-          color: activeView === view ? '#ffb27d' : '#666',
-          background: activeView === view ? 'rgba(255,120,48,.1)' : '#101112',
-        },
+        className: tabs.tab,
         onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
           event.stopPropagation()
           onSelect(view)
         },
         onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => handleKeyDown(event, view),
       },
-      view,
+      createElement(DRAWER_VIEW_ICONS[view], { className: tabs.icon, strokeWidth: 1.75, 'aria-hidden': true }),
+      createElement('span', null, labels?.[view] ?? view),
     )),
   )
 }
 
-export function getDrawerHeight(open: boolean, view: DrawerView): string {
-  if (!open) return '28px'
-  return view === 'note' ? '380px' : '210px'
+// Note: the drawer keeps a per-view user height clamped between a floor and the pane reserve — see .agents/notes/implemented/feature/2026-09-19-runtime-drawer-cards-resize.md
+export const DRAWER_COLLAPSED_HEIGHT = 28
+export const DRAWER_MIN_HEIGHT = 120
+export const DRAWER_MIN_PANE_HEIGHT = 160
+export const DRAWER_DEFAULT_HEIGHT: Record<DrawerView, number> = { runtime: 210, note: 380 }
+
+export type DrawerHeights = Partial<Record<DrawerView, number>>
+
+export function clampDrawerHeight(height: number, maximum: number): number {
+  const ceiling = Math.max(DRAWER_MIN_HEIGHT, Math.round(maximum))
+  return Math.min(ceiling, Math.max(DRAWER_MIN_HEIGHT, Math.round(height)))
+}
+
+export function getDrawerHeight(open: boolean, view: DrawerView, heights: DrawerHeights = {}): string {
+  if (!open) return `${DRAWER_COLLAPSED_HEIGHT}px`
+  return `${heights[view] ?? DRAWER_DEFAULT_HEIGHT[view]}px`
 }
 
 export function shouldRemoveTerminalNotes(event: TerminalLifecycleEvent): boolean {

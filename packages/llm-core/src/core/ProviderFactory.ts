@@ -12,6 +12,7 @@ import { validateSettings } from '../utils/validation'
 
 const AUTH_TYPE_TO_ADAPTER: Record<string, string> = {
   [AuthType.API_KEY]: 'openai-compatible',
+  [AuthType.ANTHROPIC]: 'anthropic',
   [AuthType.VERTEX_AI]: 'vertex-ai',
   [AuthType.NONE]: 'openai-compatible',
 }

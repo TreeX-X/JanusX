@@ -289,11 +289,17 @@
     }
   },
   "agent": {
-    "section": { "permissions": "权限默认设置", "limits": "循环步数" },
+    "section": {
+      "permissions": "权限默认设置",
+      "limits": "循环步数"
+    },
     "default": {
       "label": "默认审批模式",
       "hint": "新建 Agent 会话会继承此模式；当前会话可直接切换。",
-      "mode": { "perAction": "每次操作都需审批", "autoRun": "自动运行全部操作" }
+      "mode": {
+        "perAction": "每次操作都需审批",
+        "autoRun": "自动运行全部操作"
+      }
     },
     "maxSteps": {
       "label": "最大循环步数",
@@ -305,30 +311,53 @@
       "hint": "关闭后包管理器构建/检查命令也需逐次审批；危险命令始终审批。"
     },
     "safety": "自动运行仍会强制执行工作区范围限制、敏感路径拒绝、输入校验、版本快照和审计记录。",
-    "error": { "load": "加载 Agent 权限设置失败", "save": "保存 Agent 权限设置失败" }
+    "error": {
+      "load": "加载 Agent 权限设置失败",
+      "save": "保存 Agent 权限设置失败"
+    }
   },
-  "officeCli": {
-    "title": "OfficeCLI",
-    "subtitle": "管理 Office CLI 二进制，用于 Office 文档预览与 prompt 生成",
+  "cliTools": {
+    "title": "外部终端",
+    "subtitle": "检测外部 AI 命令行工具的版本，一键安装与升级",
     "loading": "加载中...",
-    "name": "OfficeCLI",
-    "desc": "管理 .docx/.xlsx/.pptx 预览与 prompt 生成的二进制，按需安装。",
+    "tools": {
+      "claude": {
+        "desc": "Anthropic 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。"
+      },
+      "codex": {
+        "desc": "OpenAI 官方 CLI。通过 npm 全局安装与升级，安装后重启终端生效。"
+      },
+      "opencode": {
+        "desc": "开源终端智能体。通过 npm 全局安装与升级，安装后重启终端生效。"
+      },
+      "pi": {
+        "desc": "轻量终端智能体。通过 npm 全局安装与升级，安装后重启终端生效。"
+      },
+      "janus": {
+        "desc": "自有 Janus CLI，随 janus-agentX 源码构建并全局链接，支持一键更新。"
+      }
+    },
     "state": {
       "notInstalled": "未安装",
+      "broken": "已安装但不可运行",
       "ready": "就绪",
-      "busy": "处理中...",
-      "failed": "失败"
+      "updateAvailable": "有新版"
     },
     "label": {
-      "version": "版本",
+      "version": "当前版本",
+      "latest": "最新版本",
       "source": "来源"
     },
     "action": {
       "install": "安装",
-      "repair": "修复",
-      "remove": "移除",
-      "cancel": "取消",
+      "upgrade": "升级",
+      "refresh": "重新检测",
+      "refreshing": "检测中...",
       "working": "处理中..."
+    },
+    "notice": {
+      "existingTerminal": "已打开的终端需重启，新版本与 PATH 才会生效。",
+      "installed": "安装完成，重启终端后生效。"
     }
   },
   "languageService": {

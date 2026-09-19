@@ -47,6 +47,7 @@ function LoadingIndicator() {
 }
 
 export function MonacoViewer({ content, language, onChange, readOnly = false, onEditorMount, originalContent, modelPath, workspacePath, navigationTarget, onDefinitionNavigate, onNavigationComplete, definitionActionLabel, definitionErrorMessage }: MonacoViewerProps) {
+  // Note: one number per pane keeps the preview readable — see .agents/notes/implemented/bug-fix/2026-09-19-monaco-diff-single-line-number.md
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const contentRef = useRef(content)
   const diffChangeSubscriptionRef = useRef<{ dispose(): void } | null>(null)
@@ -162,6 +163,20 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
     padding: { top: 12, bottom: 12 },
   }
 
+  const diffOptions = {
+    ...commonOptions,
+    lineNumbersMinChars: 3,
+    glyphMargin: false,
+    folding: false,
+    renderIndicators: true,
+    renderMarginRevertIcon: false,
+    renderOverviewRuler: false,
+    renderSideBySide: true,
+    useInlineViewWhenSpaceIsLimited: true,
+    renderSideBySideInlineBreakpoint: 800,
+    experimental: { useTrueInlineView: true },
+  }
+
   return (
     <div className="relative h-full w-full overflow-hidden" style={{ background: '#0a0a0a' }}>
       {definitionError && (
@@ -183,7 +198,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           modifiedModelPath={modelPath ? monacoFileUri(modelPath) : undefined}
           theme={JANUSX_DARK_THEME_NAME}
           loading={<LoadingIndicator />}
-          options={{ ...commonOptions, renderSideBySide: false, readOnly, originalEditable: false, domReadOnly: readOnly }}
+          options={{ ...diffOptions, readOnly, originalEditable: false, domReadOnly: readOnly }}
           beforeMount={handleBeforeMount}
           onMount={handleDiffMount}
         />

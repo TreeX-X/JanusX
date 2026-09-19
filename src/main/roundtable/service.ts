@@ -2,7 +2,7 @@ import type { RoundtableEventEnvelope, RoundtableState, RoundtableWorkspaceResou
 import { exportRoundtableMarkdown } from '../../shared/roundtable/export'
 import { markInterrupted, migrateRoundtableState } from '../../shared/roundtable/state'
 import { defaultRoundtableWorkflow } from '../../shared/roundtable/workflow-template'
-import { buildArtifactBundle, snapshotSourceFacts, type ArtifactBundle } from './artifact-bundle'
+import { buildArtifactBundle, resolveBundleRetry, snapshotSourceFacts, staleSnapshotDiagnostic, type ArtifactBundle } from './artifact-bundle'
 import { harnessNoteService } from '../harness/service'
 import { validateBundle, validateChangeSet } from '@janus-agent/harness-core'
 import { RoundtableRuntime } from './runtime'
@@ -49,7 +49,7 @@ export class RoundtableService {
         if (!target) throw new Error('圆桌会议需要全局默认模型：请在设置 → LLM 中把可用的 Provider 设为默认后重试。')
         let model
         try {
-          model = await llmService.getLanguageModel(target.provider.id, target.modelId)
+          model = await llmService.getLanguageModel('janus', target.provider.id, target.modelId)
         } catch (error) {
           throw new Error(`圆桌 Agent 模型创建失败 (${target.provider.id}/${target.modelId})：${error instanceof Error ? error.message : String(error)}`)
         }
@@ -201,8 +201,26 @@ export class RoundtableService {
       }),
     })
     const all = [...diagnostics, ...built.diagnostics]
+    const snapshotHash = snapshotSourceFacts(facts, sessionId, state.roundNumber)
+    if (all.length === 0 && input.bundleId !== undefined) {
+      // Retry guard (C6): the same ids mean the same proposal. An identical
+      // snapshot hands back the persisted bundle so retries keep operation
+      // identities; moved sources demand a new revision, never an overwrite.
+      const revision = input.revision ?? 1
+      const saved = await roundtableStore.loadBundle(input.bundleId, revision)
+      const verdict = resolveBundleRetry(
+        saved === null ? null : (saved as { snapshotHash?: unknown }).snapshotHash,
+        built.bundle.snapshotHash,
+      )
+      if (verdict === 'reuse-saved') {
+        return { bundle: saved as unknown as ArtifactBundle, diagnostics: [], snapshotHash }
+      }
+      if (verdict === 'stale') {
+        return { bundle: built.bundle, diagnostics: [staleSnapshotDiagnostic(revision)], snapshotHash }
+      }
+    }
     if (all.length === 0) await roundtableStore.saveBundle(built.bundle)
-    return { bundle: built.bundle, diagnostics: all, snapshotHash: snapshotSourceFacts(facts, sessionId, state.roundNumber) }
+    return { bundle: built.bundle, diagnostics: all, snapshotHash }
   }
   /**
    * Applies a previously built bundle to a checkout root. The bundle keeps

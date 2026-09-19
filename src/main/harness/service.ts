@@ -13,12 +13,18 @@ import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import {
   parseNote,
+  validateReceiptShape,
   type Diagnostic,
   type ParsedNote,
 } from '@janus-agent/harness-core'
 import {
   applyChangeSet,
   buildNoteIndex,
+  listTaskResults,
+  proveRequirementCoverage,
+  assertAssetPath,
+  assertWritableHarness,
+  withAssetLock,
   readWorkspaceMap,
   sha256HexBytes,
   watchNotes,
@@ -27,7 +33,16 @@ import {
 } from '@janus-agent/harness-node'
 import { projectGraph, projectGraphId, type ProjectedEntry } from './graph-projection'
 import { mergeNoteEdit, type NoteEdit } from './artifact-producer'
+import {
+  assertNoLocalLeak,
+  planShareImport,
+  type IncomingSnapshot,
+} from './share-import'
 import type { Blueprint } from '../../shared/janus/types'
+
+export { assertNoLocalLeak }
+// Note: all hosts share namespace detection — see .agents/notes/implemented/architecture/2026-09-18-own-notes-namespace.md
+export { claimsHarnessSchema } from '@janus-agent/harness-node'
 
 export interface ResolveResult {
   ok: boolean
@@ -55,6 +70,7 @@ export interface ShareSnapshot {
   notes: Array<{ id: string; uri: string | null; relPath: string; markdown: string; sha256: string }>
   repositories: Array<{ repoId: string | null; name: string }>
   unresolved: Array<{ from: string; target: string }>
+  evidence: Array<{ id: string; json: string; sha256: string }>
 }
 
 export interface BindingRecord {
@@ -99,7 +115,7 @@ export class HarnessNoteService {
 
   async rescan(root: string): Promise<{ rev: number; ms: number }> {
     const start = Date.now()
-    const index = await buildNoteIndex(root)
+    const index = await withAssetLock(root, () => buildNoteIndex(root))
     const prev = this.indexes.get(root)?.rev ?? 0
     this.indexes.set(root, { rev: prev + 1, index })
     return { rev: prev + 1, ms: Date.now() - start }
@@ -124,15 +140,18 @@ export class HarnessNoteService {
   }
 
   async projectView(root: string): Promise<ProjectView> {
-    const { rev, index } = await this.cachedIndex(root)
+    const index = await withAssetLock(root, () => buildNoteIndex(root))
+    const rev = this.indexes.get(root)?.rev ?? 0
+    this.indexes.set(root, { rev, index })
     const entries: ProjectedEntry[] = []
-    const invalid: ProjectView['invalid'] = []
+    const invalid: ProjectView['invalid'] = index.diagnostics.map((problem) => ({ relPath: problem.path ?? '.agents/harness.json', diagnostics: [problem] }))
     for (const e of index.entries) {
       if (e.note && e.diagnostics.length === 0) {
         entries.push({ note: e.note, relPath: e.relPath, sha256: e.sha256, diagnostics: [] })
-      } else {
-        invalid.push({ relPath: e.relPath, diagnostics: e.diagnostics })
+        continue
       }
+      if (e.foreign) continue
+      invalid.push({ relPath: e.relPath, diagnostics: e.diagnostics })
     }
     const repoName = await this.repoName(root)
     const ui = await this.loadUiState(root)
@@ -142,6 +161,28 @@ export class HarnessNoteService {
     )
     blueprint.canvasLayout = ui.canvasLayout
     blueprint.collapsedNodeIds = ui.collapsedNodeIds
+    // Note: coverage comes from portable receipts - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
+    if (index.repoId) {
+      const results = await listTaskResults(root)
+      for (const node of Object.values(blueprint.nodes)) {
+        const entry = entries.find((item) => item.note.meta.id === node.id)
+        if (!entry) continue
+        if (entry.note.meta.kind === 'task') {
+          const result = results.find((item) => item.taskUri === node.sourceUri)
+          if (result?.execution?.state === 'done' && result.validity === 'valid') { node.status = 'done'; node.progress = 100 }
+        }
+        if (entry.note.meta.kind === 'requirement') {
+          const proof = await proveRequirementCoverage(root, index.repoId, node.sourceUri!, entry.note)
+          for (const feature of node.features) {
+            const covered = !proof.uncovered.includes(feature.id)
+            feature.progress = covered ? 100 : 0
+            feature.status = covered ? 'done' : 'planned'
+          }
+          node.progress = entry.note.acs.length ? Math.round(100 * (entry.note.acs.length - proof.uncovered.length) / entry.note.acs.length) : 0
+          if (proof.covered) node.status = 'done'
+        }
+      }
+    }
     return { blueprint, rev, repoId: index.repoId, repoName, invalid }
   }
 
@@ -207,6 +248,7 @@ export class HarnessNoteService {
       afterMarkdown?: string
     }>,
     reason: string,
+    opts?: { allowDelete?: boolean },
   ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
     const cs = {
       id: randomUUID(),
@@ -215,7 +257,7 @@ export class HarnessNoteService {
       operations: operations.map((o) => ({ ...o, dependsOn: [] as string[], reason, evidenceRefs: [] as string[], noteDiagnostics: [] as Diagnostic[] })),
     }
     const digest = sha256HexBytes(Buffer.from(JSON.stringify(cs.operations), 'utf8'))
-    return this.runChangeSet(root, cs, digest)
+    return this.runChangeSet(root, cs, digest, opts)
   }
 
   /**
@@ -277,8 +319,9 @@ export class HarnessNoteService {
       }>
     },
     digest: string,
+    opts?: { allowDelete?: boolean },
   ): Promise<{ txId: string; applied: Array<{ operationId: string; relPath?: string }> }> {
-    const report = await applyChangeSet(root, cs, { requestDigest: digest })
+    const report = await applyChangeSet(root, cs, { requestDigest: digest, ...(opts?.allowDelete ? { allowDelete: true } : {}) })
     if (!report.ok) {
       const conflict = report.errors.find((e) => e.code === 'CONFLICT')
       if (conflict) {
@@ -339,31 +382,45 @@ export class HarnessNoteService {
   // ── share (whitelist export; .local/machine paths/credentials never leave) ──
 
   async shareSnapshot(root: string, selection: ShareSelection = {}): Promise<ShareSnapshot> {
-    const { index } = await this.cachedIndex(root)
-    const repoName = await this.repoName(root)
-    const wanted = selection.ids ? new Set(selection.ids) : null
-    const notes: ShareSnapshot['notes'] = []
-    for (const e of index.entries) {
-      if (!e.note || e.diagnostics.length > 0) continue
-      if (wanted && !wanted.has(e.note.meta.id)) continue
-      const raw = await readFile(join(root, e.relPath), 'utf8')
-      notes.push({
-        id: e.note.meta.id,
-        uri: index.repoId ? `note://${index.repoId}/${e.note.meta.id}` : null,
-        relPath: e.relPath,
-        markdown: raw,
-        sha256: e.sha256,
-      })
-    }
-    return {
-      schema: 'harness-share/1',
-      repoId: index.repoId,
-      repoName,
-      exportedAt: new Date().toISOString(),
-      notes,
-      repositories: [{ repoId: index.repoId, name: repoName }],
-      unresolved: [],
-    }
+    return withAssetLock(root, async () => {
+      const index = await buildNoteIndex(root)
+      const repoName = await this.repoName(root)
+      const wanted = selection.ids ? new Set(selection.ids) : null
+      const notes: ShareSnapshot['notes'] = []
+      for (const e of index.entries) {
+        if (!e.note || e.diagnostics.length > 0) continue
+        if (wanted && !wanted.has(e.note.meta.id)) continue
+        const raw = await readFile(join(root, e.relPath), 'utf8')
+        notes.push({
+          id: e.note.meta.id,
+          uri: index.repoId ? `note://${index.repoId}/${e.note.meta.id}` : null,
+          relPath: e.relPath,
+          markdown: raw,
+          sha256: e.sha256,
+        })
+      }
+      const evidence: ShareSnapshot['evidence'] = []
+      const receiptIds = new Set(notes.flatMap((item) => parseNote(item.markdown).meta.execution?.receipts ?? []))
+      for (const id of receiptIds) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw { code: 'SCHEMA_INVALID', message: 'invalid receipt id' }
+        const relPath = `.agents/evidence/${id}.json`
+        await assertAssetPath(root, relPath)
+        const json = await readFile(join(root, relPath), 'utf8')
+        const receipt = JSON.parse(json)
+        if (validateReceiptShape(receipt).length || receipt.id !== id) throw { code: 'SCHEMA_INVALID', message: `invalid formal receipt: ${id}` }
+        evidence.push({ id, json, sha256: sha256HexBytes(Buffer.from(json)) })
+      }
+      return {
+        schema: 'harness-share/1',
+        repoId: index.repoId,
+        repoName,
+        exportedAt: new Date().toISOString(),
+        notes,
+        repositories: [{ repoId: index.repoId, name: repoName }],
+        unresolved: [],
+        evidence,
+      }
+    })
   }
 
   /** Export + leak gate in one step: the file lands only when clean. */
@@ -378,23 +435,113 @@ export class HarnessNoteService {
     await writeFile(outPath, text, 'utf8')
     return { outPath, notes: snapshot.notes.length }
   }
-}
 
-/** Whitelist gate: machine paths, local state, and credentials refuse export. */
-export function assertNoLocalLeak(root: string, text: string): Diagnostic[] {
-  const out: Diagnostic[] = []
-  const needles: Array<[string, string]> = [
-    [root, 'absolute checkout path'],
-    ['.local/', 'local state'],
-    ['.local\\', 'local state'],
-    ['file://', 'file URL'],
-  ]
-  for (const [needle, label] of needles) {
-    if (needle && text.includes(needle)) out.push(diag('PERMISSION_DENIED', `share leaks ${label}`, needle))
+  /** Preview-only import plan: no bytes move, conflicts stay hypothetical. */
+  async previewShareImport(root: string, snapshot: IncomingSnapshot): Promise<ReturnType<typeof planShareImport>> {
+    return withAssetLock(root, async () => {
+      const text = JSON.stringify(snapshot)
+      const leaks = assertNoLocalLeak(root, text)
+      if (leaks.length > 0) {
+        throw { code: 'PERMISSION_DENIED', message: `share blocked: ${leaks[0].message}`, path: leaks[0].path }
+      }
+      const index = await buildNoteIndex(root)
+      return planShareImport(index, snapshot, index.repoId)
+    })
   }
-  const cred = /:\/\/[^/\s]*:[^/\s]*@/.exec(text)
-  if (cred) out.push(diag('PERMISSION_DENIED', 'share leaks credentials', cred[0]))
-  return out
+
+  /**
+   * Applies a snapshot into this checkout and reports per-note outcomes.
+   * Receipts land first (immutable, identical bytes are kept, divergent
+   * bytes with the same id refuse); notes follow in one transaction, so a
+   * concurrent edit fails the whole apply instead of half-applying.
+   * Re-running converges: applied notes become identical skips. The method
+   * takes no outer lock because the transaction locks internally; the
+   * expected hashes compiled above are the concurrency control, and a
+   * conflict simply asks the caller to re-preview.
+   */
+  async applyShareImport(root: string, snapshot: IncomingSnapshot): Promise<{
+    notes: Array<{ id: string; action: 'applied' | 'identical' | 'invalid'; reason?: string }>
+    receipts: Array<{ id: string; action: 'applied' | 'kept' | 'invalid' | 'conflict'; reason?: string }>
+  }> {
+    await assertWritableHarness(root)
+    const text = JSON.stringify(snapshot)
+    const leaks = assertNoLocalLeak(root, text)
+    if (leaks.length > 0) {
+      throw { code: 'PERMISSION_DENIED', message: `share blocked: ${leaks[0].message}`, path: leaks[0].path }
+    }
+    const index = await buildNoteIndex(root)
+    const plan = planShareImport(index, snapshot, index.repoId)
+    const receipts: Array<{ id: string; action: 'applied' | 'kept' | 'invalid' | 'conflict'; reason?: string }> = []
+    for (const item of plan.receipts) {
+      if (item.action === 'invalid') {
+        receipts.push({ id: item.id, action: 'invalid', ...(item.reason ? { reason: item.reason } : {}) })
+        continue
+      }
+      const incoming = snapshot.evidence.find((row) => row.id === item.id)
+      if (!incoming) {
+        receipts.push({ id: item.id, action: 'invalid', reason: 'snapshot dropped the receipt body' })
+        continue
+      }
+      const relPath = `.agents/evidence/${item.id}.json`
+      await assertAssetPath(root, relPath)
+      let current: string | null = null
+      try {
+        current = await readFile(join(root, relPath), 'utf8')
+      } catch {
+        current = null
+      }
+      if (current !== null) {
+        if (current === incoming.json) receipts.push({ id: item.id, action: 'kept' })
+        else receipts.push({ id: item.id, action: 'conflict', reason: 'a different receipt already owns this id' })
+        continue
+      }
+      await mkdir(dirname(join(root, relPath)), { recursive: true })
+      await writeFile(join(root, relPath), incoming.json, 'utf8')
+      receipts.push({ id: item.id, action: 'applied' })
+    }
+    const notes: Array<{ id: string; action: 'applied' | 'identical' | 'invalid'; reason?: string }> = []
+    const operations: Array<{
+      operationId: string
+      type: 'create' | 'replace'
+      uri: string
+      expectedHash: string | null
+      relativePath?: string
+      afterMarkdown: string
+    }> = []
+    const operationOf = new Map<string, string>()
+    for (const item of plan.notes) {
+      if (item.kind !== 'create' && item.kind !== 'replace') continue
+      const operationId = `import-${item.id.slice(0, 8)}-${item.kind}`
+      operationOf.set(item.id, operationId)
+      operations.push({
+        operationId,
+        type: item.kind,
+        uri: item.uri,
+        expectedHash: item.kind === 'replace' ? item.expectedHash : null,
+        ...(item.kind === 'create' ? { relativePath: item.relPath.replace(/^\.agents\/notes\//, '') } : {}),
+        afterMarkdown: item.afterMarkdown,
+      })
+    }
+    let applied = new Set<string>()
+    if (operations.length > 0) {
+      const reason = `share import from ${snapshot.repoName ?? snapshot.repoId ?? 'snapshot'}`
+      const report = await this.applyOperations(root, operations, reason)
+      applied = new Set(report.applied.map((row) => row.operationId))
+    }
+    for (const item of plan.notes) {
+      if (item.kind === 'identical') {
+        notes.push({ id: item.id, action: 'identical' })
+        continue
+      }
+      if (item.kind === 'invalid') {
+        notes.push({ id: item.id, action: 'invalid', reason: item.reason })
+        continue
+      }
+      const operationId = operationOf.get(item.id)
+      if (operationId && applied.has(operationId)) notes.push({ id: item.id, action: 'applied' })
+    }
+    return { notes, receipts }
+  }
 }
 
 /** Strip userinfo (and local schemes) from shared remote descriptors. */

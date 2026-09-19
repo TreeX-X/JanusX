@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { Activity, Bell, ChevronRight, CirclePause, CloudOff, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
+import { ChevronRight, Ellipsis, Folder, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
@@ -41,6 +41,7 @@ import {
 const WORKSPACE_DRAG_TYPE = 'application/x-janus-workspace'
 const GROUP_HOVER_DELAY = 300
 const MENU_MARGIN = 8
+const MENU_WIDTH = 188
 
 type WorkspaceDropIntent =
   | { mode: WorkspaceSidebarDropPosition | 'group-pending' | 'group'; targetId: string }
@@ -63,6 +64,7 @@ interface WorkspaceContextMenuProps {
   onDelete: (workspace: Workspace) => void
 }
 
+// Note: expanded workspace rows open this menu only from their persistent ⋯ button; right-click stays on the collapsed rail and group headers — see .agents/notes/implemented/feature/2026-09-19-workspace-row-actions-menu.md
 function WorkspaceContextMenu({
   menu,
   onRunConfiguration,
@@ -95,7 +97,7 @@ function WorkspaceContextMenu({
       style={{
         left: position.x,
         top: position.y,
-        width: 188,
+        width: MENU_WIDTH,
         zIndex: 1200,
         background: 'rgba(25,25,25,0.98)',
         border: '1px solid rgba(255,255,255,0.09)',
@@ -182,29 +184,29 @@ const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
   'pi': piIcon,
 }
 
+// Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/implemented/feature/2026-09-19-terminal-status-ring.md
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
   const { t } = useI18n('terminal')
   const visual = getTerminalStatusVisual(status)
-  const Icon =
-    status === 'running' ? Activity
-    : status === 'needs-approval' || status === 'needs-input' ? Bell
-    : status === 'degraded' ? CloudOff
-    : status === 'error' ? TriangleAlert
-    : CirclePause
-  const label = t(visual.labelKey)
-  const needsPulse = status === 'needs-approval' || status === 'needs-input'
+  const title = t('common:workspace.terminalStatusTitle', { label: t(visual.labelKey) })
+  const ringClass =
+    status === 'running' ? 'term-status-ring--running'
+    : status === 'needs-approval' || status === 'needs-input' ? 'term-status-pulse'
+    : status === 'degraded' ? 'term-status-ring--degraded'
+    : status === 'error' ? 'term-status-ring--error'
+    : 'term-status-ring--idle'
 
   return (
     <span
-      className="relative inline-flex h-5 shrink-0 items-center gap-1 overflow-hidden rounded-[3px] px-1.5 font-mono text-[9px] font-medium"
-      style={{ color: visual.color, background: visual.background }}
-      title={t('common:workspace.terminalStatusTitle', { label })}
+      role="img"
+      aria-label={title}
+      title={title}
+      className="flex h-5 w-5 shrink-0 items-center justify-center"
+      style={{ color: visual.color }}
     >
-      {status === 'running' && <span className="term-status-orbit" aria-hidden="true" />}
-      <span className="relative flex h-2.5 w-2.5 items-center justify-center">
-        <Icon size={10} strokeWidth={2} className={needsPulse ? 'term-status-pulse relative' : 'relative'} aria-hidden="true" />
+      <span className={`term-status-ring ${ringClass}`} aria-hidden="true">
+        {status === 'running' && <span className="term-status-orbit" />}
       </span>
-      {label}
     </span>
   )
 }
@@ -334,14 +336,6 @@ export function Sidebar() {
     persistWorkspaceLayout(next)
     return true
   }, [persistWorkspaceLayout])
-
-  const handleDeleteClick = useCallback(
-    (ws: Workspace, e: React.MouseEvent) => {
-      e.stopPropagation()
-      setDeleteTarget(ws)
-    },
-    [],
-  )
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -568,6 +562,17 @@ export function Sidebar() {
     openWorkspaceContextMenu(workspace, event.clientX, event.clientY)
   }, [openWorkspaceContextMenu])
 
+  const handleWorkspaceMenuButtonClick = useCallback((workspace: Workspace, event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    resetWorkspaceDrag()
+    setContextMenu((current) =>
+      current?.target.kind === 'workspace' && current.target.workspace.id === workspace.id
+        ? null
+        : { x: rect.right - MENU_WIDTH, y: rect.bottom + 4, target: { kind: 'workspace', workspace } },
+    )
+  }, [resetWorkspaceDrag])
+
   const handleWorkspaceKeyDown = useCallback((workspace: Workspace, event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.shiftKey && event.key === 'F10') {
       event.preventDefault()
@@ -667,12 +672,12 @@ export function Sidebar() {
                 onClick={handleAddWorkspace}
                 className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{
-                  color: 'var(--shell-accent-strong)',
+                  color: 'var(--shell-dim)',
                 }}
                 title={t('common:workspace.add')}
                 aria-label={t('common:workspace.add')}
               >
-                <Plus size={15} strokeWidth={1.7} aria-hidden="true" />
+                <Plus size={15} strokeWidth={1.6} aria-hidden="true" />
               </button>
               <button
                 onClick={toggleSidebar}
@@ -715,6 +720,7 @@ export function Sidebar() {
                   )
                 const isExpanded = expandedWorkspaceIds.includes(ws.id)
                 const terminalCount = workspaceTerminals.length
+                  const isMenuOpen = contextMenu?.target.kind === 'workspace' && contextMenu.target.workspace.id === ws.id
                   const terminalActivity = summarizeTerminalActivity(workspaceTerminals)
                   const isDragged = draggedWorkspaceId === ws.id
                   const isDropBefore = dropIntent?.targetId === ws.id && dropIntent.mode === 'before'
@@ -800,12 +806,11 @@ export function Sidebar() {
                             title={t('common:workspace.wsTitle', { prefix: group ? `${group.name} · ` : '', name: ws.name })}
                             onClick={() => handleSelect(ws.id)}
                             onKeyDown={(event) => handleWorkspaceKeyDown(ws, event)}
-                            onContextMenu={(event) => handleWorkspaceContextMenu(ws, event)}
                             onDragStart={(event) => handleWorkspaceDragStart(ws, event)}
                             onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
                             onDrop={(event) => handleWorkspaceDrop(ws, event)}
                             onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
-                            className="ws group relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
+                            className="ws relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
                             style={{
                               color: isActive ? 'var(--shell-text)' : 'var(--shell-muted)',
                               background: isGroupTarget
@@ -857,6 +862,7 @@ export function Sidebar() {
                           aria-hidden="true"
                         />
                       </button>
+                      <Folder size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
                       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
                         {ws.name}
                       </span>
@@ -914,15 +920,20 @@ export function Sidebar() {
                       <button
                         type="button"
                         draggable={false}
+                        aria-label={t('common:workspace.moreActions')}
+                        aria-expanded={isMenuOpen}
+                        title={t('common:workspace.moreActions')}
                         onPointerDown={(event) => event.stopPropagation()}
                         onDragStart={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
                         }}
-                        onClick={(event) => handleDeleteClick(ws, event)}
-                        className="ws-del w-[16px] h-[16px] rounded-[3px] flex items-center justify-center text-[12px] leading-none text-[#666] opacity-0 group-hover:opacity-100 transition-all hover:bg-[rgba(255,88,88,0.12)] hover:!text-[#ff5858]"
+                        onClick={(event) => handleWorkspaceMenuButtonClick(ws, event)}
+                        className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border-0 transition-colors duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)] ${
+                          isMenuOpen ? 'bg-white/[0.06] text-[#ddd]' : 'bg-transparent text-[#626268]'
+                        }`}
                       >
-                        ×
+                        <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
                       </button>
                     </div>
                     <div
