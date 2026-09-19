@@ -1908,7 +1908,7 @@ export function TerminalArea() {
                           className="flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
                           style={{
                             borderColor: isActiveCard ? 'var(--shell-accent-border)' : 'rgba(255,255,255,0.07)',
-                            background: isActiveCard ? 'var(--shell-accent-soft)' : 'rgba(255,255,255,0.018)',
+                            background: isActiveCard ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.018)',
                           }}
                           aria-current={isActiveCard ? 'true' : undefined}
                           onClick={() => setActiveTerminal(terminal.id)}
