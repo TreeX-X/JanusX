@@ -66,11 +66,9 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
   listTaskRuns: vi.fn(),
   pauseTaskRun: vi.fn(),
   prepareTaskRun: vi.fn(),
-  readTaskHandoff: vi.fn(),
   rebaselineTaskRun: vi.fn(),
   resumeTaskRun: vi.fn(),
   startTaskRun: vi.fn(),
-  takeoverTaskRun: vi.fn(),
 }))
 
 vi.mock('../../src/main/harness/task-thread', () => ({
@@ -104,7 +102,7 @@ vi.mock('../../src/main/janus/maintenance/service', () => ({
 }))
 
 vi.mock('../../src/main/harness/desktop-executor', () => ({
-  executeDesktopXdo: vi.fn(),
+  executeDesktopTask: vi.fn(),
   runDesktopCommand: vi.fn(),
   reviewClaimFromText: vi.fn(),
 }))

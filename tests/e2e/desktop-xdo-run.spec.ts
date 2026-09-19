@@ -19,8 +19,8 @@ test('desktop xdo run executes with evidence, aborts mid-flight, and recovers', 
 
   await task.getByLabel('V-manual observer', { exact: true }).fill('desktop')
   await task.getByLabel('V-manual observation', { exact: true }).fill('Read the run record; values match.')
-  await task.getByLabel('Review provider', { exact: true }).selectOption('p')
-  await task.getByLabel('Review model', { exact: true }).selectOption('model-a')
+  await task.getByLabel('Implementation and review provider', { exact: true }).selectOption('p')
+  await task.getByLabel('Implementation and self-review model', { exact: true }).selectOption('model-a')
 
   await task.getByRole('button', { name: 'Prepare run', exact: true }).click()
   await expect(task.getByRole('button', { name: 'Start', exact: true })).toBeEnabled()

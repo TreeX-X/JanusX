@@ -36,6 +36,7 @@ import {
   verifyTaskRun,
 } from './execution-adapter'
 import { parseDesktopReviewClaim, type DesktopReviewCriterion } from './desktop-review'
+import { prepareDesktopTaskTurn, type DesktopTaskTurn } from './desktop-task-turn'
 
 type DesktopRun = NonNullable<Awaited<ReturnType<typeof getTaskRun>>['run']>
 
@@ -95,7 +96,8 @@ function diag(code: Diagnostic['code'], message: string, path?: string): Diagnos
 /** Host-thrown `CODE: message` errors become diagnostics; anything else is IO. */
 function hostError(error: unknown): Diagnostic[] {
   const message = error instanceof Error ? error.message : String(error)
-  const code = message.split(':')[0]?.trim() as Diagnostic['code']
+  const code = ((error as { code?: string })?.code ?? message.split(':')[0]?.trim()) as Diagnostic['code']
+  if (code === 'UNSUPPORTED_SCHEMA') return [diag(code, message)]
   if (KNOWN_CODES.has(code)) return [diag(code, message)]
   return [diag('IO_ERROR', `desktop executor failed: ${message}`)]
 }
@@ -314,6 +316,7 @@ export async function executeDesktopXdo(
   const criteria: DesktopReviewCriterion[] = snapshot.work.acceptanceRefs.map((ref) => ({
     uri: ref.uri,
     criterionId: ref.criterionId,
+    text: snapshot.notes.find((note) => note.uri === ref.uri)?.sections.find((section) => section.name === 'Acceptance criteria')?.text,
     criterionHash: (snapshot.criterionHashes.find(([uri]) => uri === ref.uri)?.[1].find(([id]) => id === ref.criterionId)?.[1] ?? '') as string,
   }))
   if (criteria.some((item) => !item.criterionHash)) {
@@ -404,4 +407,37 @@ export function reviewClaimFromText(text: string): { ok: true; claim: { verdict:
   const parsed = parseDesktopReviewClaim(text)
   if (!parsed.ok) return { ok: false, errors: parsed.errors as Diagnostic[] }
   return { ok: true, claim: { verdict: parsed.claim.verdict, coverage: parsed.claim.coverage } }
+}
+
+/** Implementation and bounded repair precede immutable verification on each attempt. */
+export async function executeDesktopTask(
+  root: string, runId: string, token: string,
+  ports: DesktopExecutorPorts & { implement(turn: DesktopTaskTurn, signal?: AbortSignal): Promise<{ cancelled: boolean }> },
+  opts?: DesktopExecuteOptions,
+): Promise<OpResult<DesktopExecuteResult>> {
+  let repairedAttempt: number | null = null
+  try {
+    for (;;) {
+      opts?.signal?.throwIfAborted()
+      const loaded = await getTaskRun(root, runId)
+      if (loaded.run?.state === 'running') {
+        const turn = await prepareDesktopTaskTurn(root, runId, token)
+        const implementation = await ports.implement(turn, opts?.signal)
+        if (implementation.cancelled || opts?.signal?.aborted) {
+          await pauseTaskRun(root, runId, token)
+          throw new Error('NOT_READY: implementation cancelled; task paused')
+        }
+        await prepareDesktopTaskTurn(root, runId, token)
+      }
+      const result = await executeDesktopXdo(root, runId, token, ports, opts)
+      if (!result.ok || !result.data.repairedAttempt) {
+        return { ...result, data: { ...result.data, repairedAttempt } }
+      }
+      repairedAttempt = result.data.repairedAttempt
+    }
+  } catch (error) {
+    if (opts?.signal?.aborted) await pauseTaskRun(root, runId, token)
+    const loaded = await getTaskRun(root, runId)
+    return { ok: false, run: loaded.run, errors: hostError(error), data: { receiptId: '', completed: false, checks: [], repairedAttempt } }
+  }
 }

@@ -1,3 +1,4 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -96,7 +97,7 @@ async function makeRoot(withTask: boolean): Promise<string> {
   await fs.mkdir(join(root, '.agents', 'notes'), { recursive: true })
   await fs.writeFile(
     join(root, '.agents', 'harness.json'),
-    JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S9' }),
+    JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S9', profile: SUPPORTED_HARNESS_PROFILE }),
   )
   await fs.writeFile(join(root, '.agents', 'notes', `2026-09-18-race--${REQ_ID.slice(0, 8)}.md`), REQUIREMENT)
   if (withTask) {
@@ -234,7 +235,7 @@ describe('S9 acceptance, JanusX slice', () => {
     const rootB = await fs.mkdtemp(join(tmpdir(), 'harness-s9-twin-'))
     roots.push(rootB)
     await fs.mkdir(join(rootB, '.agents', 'notes'), { recursive: true })
-    await fs.writeFile(join(rootB, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S9-twin' }))
+    await fs.writeFile(join(rootB, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S9-twin', profile: SUPPORTED_HARNESS_PROFILE }))
     await fs.writeFile(join(rootB, '.agents', 'notes', `2026-09-18-race--${REQ_ID.slice(0, 8)}.md`), REQUIREMENT)
     const blueprintId = (await svc.projectView(rootA)).blueprint.id
     expect((await svc.projectView(rootB)).blueprint.id).toBe(blueprintId)

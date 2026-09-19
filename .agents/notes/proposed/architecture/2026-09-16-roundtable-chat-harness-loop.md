@@ -10,11 +10,13 @@ Status: proposed
 
 ### 当前实施状态与下一步
 
-2026-09-18 的 [共享项目会话](../../implemented/architecture/2026-09-18-project-conversation-controller.md) 已将新 Note 蓝图入口接入主 Chat controller，共享消息、单 turn、停止、steering、模型、资源、问题及审批。维护任务只保留提案与审计，采用共享历史生成提案。旧 JSON 蓝图和已有未关联任务仍走旧维护路径，故“原维护 loop 全面退出”尚未验收。
+2026-09-18 的 [共享项目会话](../../implemented/architecture/2026-09-18-project-conversation-controller.md) 已将新 Note 蓝图入口接入主 Chat controller，共享消息、单 turn、停止、steering、模型、资源、问题及审批。维护任务只保留提案与审计，采用共享历史生成提案。旧维护生成与对话运行路径的退出及保留的结算能力见 [旧维护循环移除](../../implemented/architecture/2026-09-18-legacy-loop-removal.md)。
 
 [任务合同采纳](../../implemented/architecture/2026-09-18-task-contract-adoption.md) 支持补全圆桌 action 草稿的 scope、AC、引用和验证步骤，显式转为 accepted 后开放执行准备。当前表单限单个 primary repo。集成用例通过共享执行内核运行真实检查命令，以评审 stub 形成正式结果，再从新 clone 重建完成状态及需求覆盖率；浏览器用例使用模拟 IPC/model，不能替代真实 Electron 或模型执行验收。
 
-下一批接入桌面 xdo 真实执行器：从已采纳 task 读取固定合同和基线，绑定已有授权与范围受限的工具，在同一 run 内执行和取消，运行声明的检查与自审，保存正式 receipt，并刷新蓝图覆盖率及 closeout。桌面宿主调用中立运行内核（状态机、租约、收据生命周期，随 `harness-node` 发行），自带桌面命令运行器与项目会话自审轮次；禁止复用 `@janus-agent/janus-agent` 的 CLI 任务执行宿主，两个宿主对等，只共享契约与校验。验收至少覆盖成功、检查失败、取消、重复启动、重启恢复和基线过期，且无正式收据不能显示完成。之后再接 Ink、外部 runners、xdel/xflow 的独立评审与有限修复，完成实际 Electron、发行包及跨平台联动验证后再切换三仓库规则。状态总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
+桌面 internal xdo 的 [实施轮次](../../implemented/architecture/2026-09-19-desktop-task-implementation.md) 从已采纳 task 读取固定合同和基线，使用范围受限的真实文件工具实施，再运行声明检查和自审、保存正式 receipt。失败检查在预算内驱动下一次实施及复验；取消暂停任务，verifying 重试只重跑验收。Ink 的 [宿主接线](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-ink-harness-host.md) 同时覆盖命令与普通消息，历史 Note 与标准 profile 校验由共享文件层统一。宿主保持对等，各自调用共享运行内核和契约校验。
+
+下一阶段验证真实模型 Electron 和持久实施交互，再补齐终端与桌面 xdel/xflow 委派、跨机器 runner 编排、完整跨宿主场景等价以及版本化发行组合。现有外部进程启动、桌面独立评审和 task thread 不是完整委派闭环的证据。三仓规则切换须等这些门禁满足；总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
 
 ### 当前代码的接点和断点
 

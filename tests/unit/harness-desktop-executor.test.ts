@@ -1,11 +1,16 @@
-﻿import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+﻿import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { codeManifestHash, type ReceiptCoverage } from '@janus-agent/harness-core'
 import { runGit } from '@janus-agent/harness-node'
-import { prepareTaskRun, startTaskRun, getTaskRun } from '../../src/main/harness/execution-adapter'
-import { executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
+import { prepareTaskRun, startTaskRun, getTaskRun, pauseTaskRun } from '../../src/main/harness/execution-adapter'
+import { executeDesktopTask, executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
+import { createDesktopImplementationPort, prepareDesktopTaskTurn } from '../../src/main/harness/desktop-task-turn'
 import { buildDesktopReviewPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
 import { BRIEF_MAX_FILES, buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles } from '../../src/main/harness/task-brief'
 
@@ -63,12 +68,12 @@ function taskNote(extraVerification: string): string {
   ].join('\n')
 }
 
-async function makeRoot(opts?: { exitCode?: number; manual?: boolean }): Promise<string> {
+async function makeRoot(opts?: { exitCode?: number; manual?: boolean; implementation?: boolean }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'desktop-xdo-'))
   roots.push(root)
   await mkdir(join(root, '.agents', 'notes'), { recursive: true })
   await mkdir(join(root, 'src'), { recursive: true })
-  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ repoId: REPO, name: 'Desktop' }))
+  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Desktop', profile: SUPPORTED_HARNESS_PROFILE }))
   await writeFile(join(root, '.gitignore'), '.agents/.local/\n')
   await writeFile(join(root, 'src', 'value.txt'), '42')
   const manual = opts?.manual === true
@@ -85,7 +90,9 @@ async function makeRoot(opts?: { exitCode?: number; manual?: boolean }): Promise
   const exitCode = opts?.exitCode ?? 0
   await writeFile(
     join(root, '.agents', 'notes', `2026-09-18-probe--${TASK_ID.slice(0, 8)}.md`),
-    taskNote(manual).replace('process.exit(0)', `process.exit(${exitCode})`),
+    opts?.implementation
+      ? taskNote(manual).replace("paths: ['./']", "paths: ['src/']").replace("      args: ['-e', 'process.exit(0)']", `      args: ${JSON.stringify(['-e', 'const fs=require("fs");process.exit(fs.readFileSync("src/value.txt","utf8")==="43"?0:1)'])}`)
+      : taskNote(manual).replace('process.exit(0)', `process.exit(${exitCode})`),
   )
   git(root, 'init')
   git(root, 'config', 'core.autocrlf', 'false')
@@ -119,6 +126,109 @@ function approvingPorts(root: string): DesktopExecutorPorts {
     },
   }
 }
+
+describe('desktop implementation loop', () => {
+  function model(streamTextFn: ChatTurnPorts['streamTextFn']) {
+    return createDesktopImplementationPort({ providerId: 'test', modelId: 'test', getModel: async () => ({}), maxTurns: 6, streamTextFn })
+  }
+  function calls(name: string, args: Record<string, unknown>) {
+    return {
+      textStream: (async function* () {})(),
+      fullStream: (async function* () {
+        yield { type: 'tool-call', toolCallId: 'write', toolName: name, args }
+        yield { type: 'finish', finishReason: 'tool-calls' }
+      })(),
+    }
+  }
+  const textOnly = () => ({ textStream: (async function* () { yield 'Implemented' })() })
+
+  it('edits through real tools, repairs failed checks with evidence, and completes attempt two', async () => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root)
+    let round = 0
+    const prompts: string[] = []
+    const implement = model(async (options) => {
+      prompts.push(JSON.stringify(options.messages))
+      const current = round++
+      if (current % 2) return textOnly()
+      const oldText = current === 0 ? '42' : 'wrong'
+      return calls('workspace_edit', { path: 'src/value.txt', expectedHash: createHash('sha256').update(oldText).digest('hex'), replacements: [{ oldText, newText: current === 0 ? 'wrong' : '43' }] })
+    })
+    const review: DesktopExecutorPorts['review'] = async (input) => input.checks.some((check) => check.status === 'failed')
+      ? { verdict: 'needs-fix', coverage: [] } : approvingPorts(root).review(input)
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root), implement, review })
+    expect(result.errors).toEqual([])
+    expect(result.data).toMatchObject({ completed: true, repairedAttempt: 2 })
+    expect(await readFile(join(root, 'src/value.txt'), 'utf8')).toBe('43')
+    const run = (await getTaskRun(root, runId)).run!
+    expect(run).toMatchObject({ state: 'done', attempt: 2, repairBudget: { usedAuto: 1 } })
+    expect(run.receipts).toHaveLength(2)
+    expect(prompts[2]).toContain('failureReceiptId')
+    expect(prompts[2]).toContain('V-1')
+    const receipts = await Promise.all(run.receipts.map(async (id) => JSON.parse(await readFile(join(root, '.agents/evidence', `${id}.json`), 'utf8'))))
+    expect(receipts.map((receipt) => receipt.checks[0].status)).toEqual(['failed', 'passed'])
+  })
+
+  it.each(['outside.txt', '.agents/notes/task.md'])('refuses model writes to %s before verification', async (path) => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root)
+    const command = vi.fn(approvingPorts(root).command)
+    const result = await executeDesktopTask(root, runId, token, {
+      ...approvingPorts(root), command, implement: model(async () => calls('workspace_create', { path, content: 'forbidden' })),
+    })
+    expect(result.ok).toBe(false)
+    expect(result.errors[0].code).toBe('PERMISSION_DENIED')
+    expect(command).not.toHaveBeenCalled()
+    await expect(readFile(join(root, path))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await getTaskRun(root, runId)).run?.receipts).toEqual([])
+  })
+
+  it.each(['lease', 'contract', 'pause', 'profile'])('rechecks %s before a model tool executes', async (change) => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root)
+    const turn = await prepareDesktopTaskTurn(root, runId, token)
+    const implement = model(async () => {
+      if (change === 'lease') await writeFile(join(root, '.agents/.local/runs', runId, 'lease.json'), JSON.stringify({ token: 'replacement' }))
+      if (change === 'pause') expect((await pauseTaskRun(root, runId, token)).ok).toBe(true)
+      if (change === 'contract') {
+        const path = join(root, '.agents/notes', `2026-09-18-probe--${TASK_ID.slice(0, 8)}.md`)
+        await writeFile(path, (await readFile(path, 'utf8')).replace('Probe the desktop', 'Changed task: probe the desktop'))
+      }
+      if (change === 'profile') await writeFile(join(root, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'T', profile: { ...SUPPORTED_HARNESS_PROFILE, version: '2.0.0' } }))
+      return calls('workspace_create', { path: 'src/new.txt', content: 'forbidden' })
+    })
+    await expect(implement(turn)).rejects.toThrow('PERMISSION_DENIED')
+    await expect(readFile(join(root, 'src/new.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    if (change === 'profile') expect((await getTaskRun(root, runId)).errors[0].code).toBe('UNSUPPORTED_SCHEMA')
+  })
+
+  it('pauses cancelled implementation and never verifies it', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root)
+    const controller = new AbortController()
+    const command = vi.fn(approvingPorts(root).command)
+    const result = await executeDesktopTask(root, runId, token, {
+      ...approvingPorts(root), command,
+      implement: model(async () => { controller.abort(); return textOnly() }),
+    }, { signal: controller.signal })
+    expect(result.ok).toBe(false)
+    expect(command).not.toHaveBeenCalled()
+    expect((await getTaskRun(root, runId)).run).toMatchObject({ state: 'paused', receipts: [] })
+  })
+
+  it('stops at the repair budget and retries verification without another implementation', async () => {
+    const root = await makeRoot({ exitCode: 1 })
+    const { runId, token } = await startedRun(root)
+    const implement = vi.fn(async () => ({ cancelled: false }))
+    const ports = { ...approvingPorts(root), implement, review: async () => ({ verdict: 'needs-fix' as const, coverage: [] }) }
+    const result = await executeDesktopTask(root, runId, token, ports)
+    expect(result.data.completed).toBe(false)
+    expect(implement).toHaveBeenCalledTimes(2)
+    expect((await getTaskRun(root, runId)).run).toMatchObject({ state: 'verifying', attempt: 2, repairBudget: { usedAuto: 1 } })
+    await executeDesktopTask(root, runId, token, ports)
+    expect(implement).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('desktop xdo host', () => {
   it('executes declared checks with a real process and completes with a formal receipt', async () => {
@@ -357,7 +467,9 @@ describe('desktop self-review parsing', () => {
     brief: { schema: 'harness-brief/1', runId: 'run-1', taskUri: TASK_URI, attempt: 1, goal: 'Prove it.', constraints: '', criteria: [], files: [], prior: [], truncated: false },
   }
   it('builds a read-only prompt that binds the manifest hash', () => {
-    expect(buildDesktopReviewPrompt(input)).toContain('m')
+    const prompt = buildDesktopReviewPrompt({ ...input, criteria: [{ uri: TASK_URI, criterionId: 'AC-1', criterionHash: 'criterion-digest', text: 'The file value is 43.' }] })
+    expect(prompt).toContain('criterion-digest')
+    expect(prompt).toContain('The file value is 43.')
   })
 
   it('parses strict claims and refuses prose as approval', () => {

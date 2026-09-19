@@ -8,11 +8,11 @@ Status: proposed
 
 审阅定位的主要缺口为：执行范围只有 prose、AC 引用与状态门禁缺少机器形状、合同哈希没有确定算法、closeout 提前声明提交成功、同名来源包缺少重试规则、轻量 CLI 依赖闭包不成立，以及缺少按仓库分配的可验证交付步骤。本文固定这些契约；设计条款本身不表示已实现或已测试。各阶段实际证据见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
 
-2026-09-18 的增量实现覆盖新 Note 蓝图的 [共享 conversation/controller](../../implemented/architecture/2026-09-18-project-conversation-controller.md) 及 [draft task 合同采纳](../../implemented/architecture/2026-09-18-task-contract-adoption.md)。这补齐 S6 的双入口状态与 S5 到 S8 的采纳入口，但不代表旧维护流程移除、桌面真实 executor、Ink、外部 runners 或 S9 发行验收完成。下一步及其验收场景由 [闭环提案](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步) 维护；本契约的状态与收据规则不变。
+当前实现与验证边界以 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md) 为总账。桌面支持范围受限的实施、检查与预算内修复，Ink 的普通消息和命令均进入任务控制器，CLI 与桌面共用历史 Note 分类和标准 profile 门禁。具体行为见 [桌面实施轮次](../../implemented/architecture/2026-09-19-desktop-task-implementation.md)、[Ink 宿主](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-ink-harness-host.md) 和 [共享 profile 门禁](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-harness-profile-namespace.md)。后续验收范围由 [闭环提案](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步) 维护。标准仍为 `harness-note/1`、`1.0.0-s1.1` candidate；实际发行组合与三仓规则切换尚待验证。
 
-本批仅修改 JanusX，基线为 `902b7bb`；验证时 janus-agentX HEAD 为 `d93b557`、WorkFlowX HEAD 为 `c36309d`，后两仓本批无修改。标准仍是 `harness-note/1`、`1.0.0-s1.1` candidate；WorkFlowX profile 记录摘要 `62e2ae8b674dd5510c9e7b8a2526e4b81710c1b6ad8d075837673708eb3c4a7a`，本批未重新生成标准 bundle 或验证发行组合。
+2026-09-18 批次仅修改 JanusX，基线为 `902b7bb`；验证时 janus-agentX HEAD 为 `d93b557`、WorkFlowX HEAD 为 `c36309d`，后两仓本批无修改。标准仍是 `harness-note/1`、`1.0.0-s1.1` candidate；WorkFlowX profile 记录摘要 `62e2ae8b674dd5510c9e7b8a2526e4b81710c1b6ad8d075837673708eb3c4a7a`，本批未重新生成标准 bundle 或验证发行组合。
 
-本批实际检查为 `npm run typecheck`、`npm run build`、`npm run check:package-boundary`、`npm run i18n:types`、`npm run i18n:check` 及修改源码的 ESLint（0 error、5 条既有 warning）。相关回归命令 `npm run test:unit -- --run tests/unit/blueprint-maintenance tests/unit/maintenance-harness-apply.test.ts tests/unit/harness tests/unit/janus-chat tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/task-contract-adoption.test.ts tests/unit/roundtable-artifact-bundle.test.ts` 通过 25 suites / 139 tests；旧维护用例仍输出知识处理和审计写入警告。设置 `JANUS_E2E_PORT=41739` 与 `NO_PROXY=localhost,127.0.0.1,::1` 后，`npx playwright test tests/e2e/project-conversation.spec.ts` 通过 2 项，无页面脚本错误，桌面与 390px 表单截图已检查。未运行完整 `verify`、真实模型 Electron、发行包和跨平台用例，因为本批只验收共享 controller、合同采纳与共享执行内核的集成边界。
+2026-09-18 批次实际检查为 `npm run typecheck`、`npm run build`、`npm run check:package-boundary`、`npm run i18n:types`、`npm run i18n:check` 及修改源码的 ESLint（0 error、5 条既有 warning）。相关回归命令 `npm run test:unit -- --run tests/unit/blueprint-maintenance tests/unit/maintenance-harness-apply.test.ts tests/unit/harness tests/unit/janus-chat tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/task-contract-adoption.test.ts tests/unit/roundtable-artifact-bundle.test.ts` 通过 25 suites / 139 tests；旧维护用例仍输出知识处理和审计写入警告。设置 `JANUS_E2E_PORT=41739` 与 `NO_PROXY=localhost,127.0.0.1,::1` 后，`npx playwright test tests/e2e/project-conversation.spec.ts` 通过 2 项，无页面脚本错误，桌面与 390px 表单截图已检查。未运行完整 `verify`、真实模型 Electron、发行包和跨平台用例，因为本批只验收共享 controller、合同采纳与共享执行内核的集成边界。
 
 ## Proposal
 
@@ -20,7 +20,7 @@ Status: proposed
 
 接手 Agent 先读取三个仓库各自 AGENTS.md、CLAUDE.md 和当前 noteX/orchestrateX，记录 HEAD 与脏文件，不覆盖已有修改。先读本文，再按任务涉及范围查阅两篇设计。当前工作仍遵守旧规则；只有标准、基础工具与双端规则验证完成后才启用新入口。此处的实施分段是交接清单，不是新增 Parent/Child 或计划格式。
 
-确定的边界：一种 `harness-note/1` 格式、五种 kind、同一 note URI；移除 Hybrid Tree 强制机制；task 是实施资产；基础 WorkflowX 无新增运行依赖；AGENTS/CLAUDE 同步；共享内容无本机路径；个人与项目会话隔离；圆桌和内置引擎输出同一资产。旧格式不兼容，但旧数据不得自动删除或批量改写。旧格式文件在扫描时返回 UNSUPPORTED_SCHEMA 诊断，不把空界面解释为数据被删除。
+确定的边界：一种 `harness-note/1` 格式、五种 kind、同一 note URI；移除 Hybrid Tree 强制机制；task 是实施资产；基础 WorkflowX 无新增运行依赖；AGENTS/CLAUDE 同步；共享内容无本机路径；个人与项目会话隔离；圆桌和内置引擎输出同一资产。旧格式不兼容，但旧数据不得自动删除或批量改写。无 Harness schema 声明的历史文件作为 foreign 保留，不参与图、覆盖率或执行；声明未知 harness-note 版本的文件返回 UNSUPPORTED_SCHEMA，声明当前版本但损坏的文件继续报告校验错误。扫描不删除或改写原文，受管写入与执行要求仓库 profile 与安装的标准版本及摘要一致。
 
 第一版不实现多人实时协同、CRDT、团队服务端同步、旧资产转换器或圆桌算法整体迁移；分享以只读文件包完成，团队入口可调用相同资产服务。图、Markdown/表单编辑、外部更新、圆桌成果、统一聊天、外部终端执行、内置有限执行闭环均在范围内。内置线程跨进程恢复可通过重读固定任务和证据重新派发；不以实现完整持久多层子线程为本次完成前提。
 

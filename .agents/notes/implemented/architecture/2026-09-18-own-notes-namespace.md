@@ -10,7 +10,9 @@ The proposal lives in [own working notes proposal](../../proposed/architecture/2
 
 ## Decision
 
-`HarnessNoteService` treats `.agents/notes/` as two namespaces sharing one directory tree. `claimsHarnessSchema` in `src/main/harness/service.ts` returns true only for files carrying a `schema: harness-note/1` frontmatter line, with `BOM` and `CRLF` tolerated and quoted values accepted. `projectView` keeps valid notes in the graph projection and keeps files claiming the harness schema with diagnostics in the invalid list. Files without the harness schema scan as foreign-namespace: they stay out of the graph, coverage, execution, and share previews, and they never appear as invalid assets. `shareSnapshot` already exports valid notes only, so foreign files never enter shares, receipts, or baselines. No working note is renamed, moved, or rewritten by this rule.
+`harness-node` owns the shared namespace detector and exposes `foreign` index entries. `HarnessNoteService` and the CLI consume the same classification. Files claiming any `harness-note/` schema version enter validation; supported valid Notes enter the graph, while unknown versions and malformed claimed documents remain diagnostics. Files without a Harness schema remain foreign: their paths and hashes are readable, but they stay outside graph, coverage, execution and share projections. BOM, CRLF and quoted schema keys or values are tolerated. No historical Note is moved or rewritten.
+
+Repository profile diagnostics also appear in the project invalid list, while compatible Note content stays browsable. Managed writes require the shared exact profile pin; the desktop share importer checks it before writing evidence.
 
 ## Alternatives considered
 
@@ -22,4 +24,4 @@ The proposal lives in [own working notes proposal](../../proposed/architecture/2
 ## Consequences
 
 - **Gains**: a checkout holding only well-formed working notes shows zero invalid diagnostics while keeping its graph empty. Files claiming `harness-note/1` with schema errors still report file and field diagnostics. Four new checks in `tests/unit/harness-service.test.ts` pin the claim detector, the zero-diagnostic view, the broken-harness refusal, and the mixed valid plus foreign plus broken separation with share exclusion. Typecheck passes; the neighboring `harness-s9-acceptance`, `harness-run-handlers`, and `harness-ipc-contract` suites stay green.
-- **Costs and limits**: a real harness asset missing its schema line hides as foreign instead of invalid; creation paths always write the schema, so absence means foreign by construction. `projectView` reads each unparsed file once more to test the claim, which adds one read per invalid candidate and no cost when the tree is clean. No separate foreign list is exposed over `IPC` yet; a future namespace registry extends the label carried by the detector.
+- **Costs and limits**: a real harness asset missing its schema line hides as foreign instead of invalid; creation paths always write the schema, so absence means foreign by construction. The shared index classifies each file on its initial read; the desktop consumes the foreign marker without rereading it. No separate foreign list is exposed over `IPC` yet; a future namespace registry extends the label carried by the detector.

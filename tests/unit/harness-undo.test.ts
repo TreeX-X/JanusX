@@ -1,3 +1,4 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -25,7 +26,7 @@ async function makeRoot(): Promise<{ root: string; rel: string }> {
   const root = await mkdtemp(join(tmpdir(), 'harness-undo-'))
   roots.push(root)
   await mkdir(join(root, '.agents', 'notes'), { recursive: true })
-  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ repoId: REPO, name: 'Undo' }))
+  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Undo', profile: SUPPORTED_HARNESS_PROFILE }))
   const rel = `.agents/notes/2026-09-18-probe--${TASK_ID.slice(0, 8)}.md`
   await writeFile(join(root, rel), taskNote(TASK_ID, 'First scope.'))
   return { root, rel }

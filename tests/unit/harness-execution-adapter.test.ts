@@ -1,3 +1,4 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -77,7 +78,7 @@ async function makeRoot(withIdentity = true): Promise<string> {
   if (withIdentity) {
     await fs.writeFile(
       join(root, '.agents', 'harness.json'),
-      JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Exec' }),
+      JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Exec', profile: SUPPORTED_HARNESS_PROFILE }),
     )
   }
   await fs.writeFile(join(root, '.agents', 'notes', `2026-09-18-probe--${TASK_ID.slice(0, 8)}.md`), taskNote(TASK_ID, 'accepted'))

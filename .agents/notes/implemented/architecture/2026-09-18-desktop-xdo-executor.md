@@ -12,6 +12,8 @@ hosts are peers sharing only the contract and the receipt validator.
 
 ## Decision
 
+The [desktop implementation host](2026-09-19-desktop-task-implementation.md) owns model file changes and repeats them after an automatic repair. This module owns verification, receipts and the completion gate.
+
 `src/main/harness/desktop-executor.ts` owns desktop xdo execution. It gates
 mode `xdo` with an `internal` executor, re-pins the C3 baseline through the
 neutral kernel, collects the scope manifest, verifies, runs every declared

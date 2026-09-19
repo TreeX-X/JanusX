@@ -1,4 +1,5 @@
-﻿import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+﻿import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -69,7 +70,7 @@ async function makeRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'blueprint-migrate-'))
   roots.push(root)
   await mkdir(join(root, '.agents', 'notes'), { recursive: true })
-  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ repoId: REPO, name: 'Migrate' }))
+  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Migrate', profile: SUPPORTED_HARNESS_PROFILE }))
   return root
 }
 

@@ -23,6 +23,7 @@ import {
   listTaskResults,
   proveRequirementCoverage,
   assertAssetPath,
+  assertWritableHarness,
   withAssetLock,
   readWorkspaceMap,
   sha256HexBytes,
@@ -40,6 +41,8 @@ import {
 import type { Blueprint } from '../../shared/janus/types'
 
 export { assertNoLocalLeak }
+// Note: all hosts share namespace detection — see .agents/notes/implemented/architecture/2026-09-18-own-notes-namespace.md
+export { claimsHarnessSchema } from '@janus-agent/harness-node'
 
 export interface ResolveResult {
   ok: boolean
@@ -78,28 +81,6 @@ export interface BindingRecord {
 }
 
 export type ChangeListener = (event: { type: 'harness:changed'; root: string; rev: number; events: WatchEvent[] }) => void
-
-/**
- * Own working notes share `.agents/notes/` with harness assets but belong to
- * a different namespace. Only files claiming `schema: harness-note/1` enter
- * the graph, coverage, execution, and share paths; everything else scans as
- * foreign-namespace and never surfaces as an invalid harness asset.
- */
-// Note: own working notes stay outside the harness graph — see .agents/notes/implemented/architecture/2026-09-18-own-notes-namespace.md
-export function claimsHarnessSchema(raw: string): boolean {
-  const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
-  const lines = text.split(/\r?\n/)
-  if (lines.length < 2 || lines[0].trim() !== '---') return false
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() !== '---') continue
-    for (let j = 1; j < i; j++) {
-      const m = /^\s*schema\s*:\s*(['"]?)(.*?)\1\s*(?:#.*)?$/.exec(lines[j])
-      if (m) return m[2].trim() === 'harness-note/1'
-    }
-    return false
-  }
-  return false
-}
 
 function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
   return path === undefined ? { code, message } : { code, message, path }
@@ -163,25 +144,13 @@ export class HarnessNoteService {
     const rev = this.indexes.get(root)?.rev ?? 0
     this.indexes.set(root, { rev, index })
     const entries: ProjectedEntry[] = []
-    const invalid: ProjectView['invalid'] = []
+    const invalid: ProjectView['invalid'] = index.diagnostics.map((problem) => ({ relPath: problem.path ?? '.agents/harness.json', diagnostics: [problem] }))
     for (const e of index.entries) {
       if (e.note && e.diagnostics.length === 0) {
         entries.push({ note: e.note, relPath: e.relPath, sha256: e.sha256, diagnostics: [] })
         continue
       }
-      // Foreign-namespace working notes never enter the invalid list; only
-      // files claiming the harness schema keep INVALID diagnostics.
-      if (e.note) {
-        invalid.push({ relPath: e.relPath, diagnostics: e.diagnostics })
-        continue
-      }
-      let raw: string | null = null
-      try {
-        raw = await readFile(join(root, e.relPath), 'utf8')
-      } catch {
-        raw = null
-      }
-      if (raw !== null && !claimsHarnessSchema(raw)) continue
+      if (e.foreign) continue
       invalid.push({ relPath: e.relPath, diagnostics: e.diagnostics })
     }
     const repoName = await this.repoName(root)
@@ -494,6 +463,7 @@ export class HarnessNoteService {
     notes: Array<{ id: string; action: 'applied' | 'identical' | 'invalid'; reason?: string }>
     receipts: Array<{ id: string; action: 'applied' | 'kept' | 'invalid' | 'conflict'; reason?: string }>
   }> {
+    await assertWritableHarness(root)
     const text = JSON.stringify(snapshot)
     const leaks = assertNoLocalLeak(root, text)
     if (leaks.length > 0) {

@@ -437,7 +437,8 @@ export async function getTaskRun(root: string, runId: string): Promise<{ run: Ha
   try {
     return { run: await loadRun(root, runId), errors: [] }
   } catch (error) {
-    return { run: null, errors: [diag('IO_ERROR', `cannot load run ${runId}: ${(error as Error).message}`)] }
+    const failure = error as { code?: Diagnostic['code']; message?: string }
+    return { run: null, errors: [diag(failure.code ?? 'IO_ERROR', failure.message ?? `cannot load run ${runId}`)] }
   }
 }
 

@@ -10,17 +10,17 @@ Status: proposed
 
 实施先读 [实施契约与 Agent 交接](2026-09-16-note-harness-implementation-contract.md)：C1–C6 唯一定义具体字段、接口、哈希、状态和错误，C7–C8 定义模块落点及实施依赖。本文负责通用资产、独立使用、分享与导航；[讨论到实施闭环方案](2026-09-16-roundtable-chat-harness-loop.md) 负责圆桌、聊天和实施的产品行为。三篇仍为 proposed 设计，部分阶段已有实现，不能据此视为标准已整体启用；协议变更先修改实施契约，再同步产品描述和示例。
 
-当前实现总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。2026-09-18 的增量补齐新 Note 蓝图与主 Chat 的共享会话，以及圆桌 action 草稿的任务合同编辑与显式采纳。正式证据和新 checkout 结果重建已具备集成测试；桌面真实执行器、完整跨宿主验收、发行矩阵及三仓库规则切换仍未完成。下一批范围见 [闭环提案的当前状态](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步)。
+当前实现总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。新 Note 蓝图与主 Chat 共享会话，圆桌 action 草稿支持任务合同编辑与显式采纳；正式证据和新 checkout 结果重建具有集成测试。桌面支持范围受限的实施及预算内修复，Ink 消息支持任务隔离，CLI 与桌面共用历史 Note 分类和标准 profile 门禁。真实模型 Electron、完整跨宿主验收、发行矩阵及三仓库规则切换仍未完成，后续范围见 [闭环提案的当前状态](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步)。
 
 ### 三个仓库的实际职责
 
 | 仓库 | 已存在的机制与证据 | 对统一方案的约束 |
 |---|---|---|
-| WorkFlowX | [noteX](../../../../../WorkFlowX/.codex/skills/noteX/SKILL.md) 定义 Note；[orchestrateX](../../../../../WorkFlowX/.codex/skills/orchestrateX/SKILL.md) 定义 xdo/xdel/xflow；[Hybrid Tree 模板](../../../../../WorkFlowX/.codex/skills/orchestrateX/hybrid-template.md) 定义 Parent/Child | 应拥有新标准及工作流语义，供不同终端使用 |
+| WorkFlowX | [noteX](../../../../../WorkFlowX/.codex/skills/noteX/SKILL.md) 定义 Note；[orchestrateX](../../../../../WorkFlowX/.codex/skills/orchestrateX/SKILL.md) 定义 xdo/xdel/xflow；[标准 task 模板](../../../../../WorkFlowX/standards/harness-note/1/templates/task.md) 定义实施资产 | 拥有新标准及工作流语义，供不同终端使用 |
 | JanusX | [Blueprint 类型](../../../../src/shared/janus/types.ts)、[Store](../../../../src/main/janus/blueprint-store.ts)、[维护服务](../../../../src/main/janus/maintenance/service.ts) 和 [界面 Store](../../../../src/renderer/src/stores/blueprint.ts) 实现蓝图持久化、关系、维护及显示 | 应成为同一资产的图形编辑器，重用现有图形交互与维护能力 |
 | janus-agentX | [ChatTurnPorts](../../../../../janus-agentX/packages/janus-agent/src/ports.ts)、[Node Host 工具](../../../../../janus-agentX/packages/node-hosts/src/index.ts)、[CLI Session](../../../../../janus-agentX/packages/cli/src/session.ts) 提供共享运行时与终端宿主 | 应提供无 Electron 依赖的解析、文件操作和 harness 执行能力 |
 
-JanusX 的 [package.json](../../../../package.json) 已通过 `file:../janus-agentX/packages/...` 引用 `agent-core`、`chat-core`、`janus-agent`。三个仓库的 `.codex/skills/noteX/SKILL.md`、`.codex/skills/orchestrateX/SKILL.md` 同名文件跨仓库哈希一致，三个仓库的 Claude noteX 副本也与 Codex noteX 一致。这说明共享代码和工作流分发已有基础，但本次检查并未证明全部 skills、agents、commands 均一致。
+JanusX 的 [package.json](../../../../package.json) 已通过 `file:../janus-agentX/packages/...` 引用 `agent-core`、`chat-core`、`janus-agent`。WorkFlowX 本地采用 task Note 规则，JanusX 与 janus-agentX 的运行入口仍采用旧规则；工作流分发的三仓切换必须单独验收，不能从同名 skill 推断版本一致。
 
 用户提到的 `.agent/` 在这里对应实际的 `.agents/notes/`。还存在两种容易混淆的 Note：蓝图节点中的 `notes: string` 只是节点字段；[终端便签 Store](../../../../src/renderer/src/stores/note.ts) 中的 NoteCard 是按终端分组的草稿。它们都不是 WorkflowX 决策 Note。
 
@@ -41,7 +41,7 @@ WorkFlowX 的 Note 已包含问题、方案或决策、替代选项、验收或�
 
 当前 [受控蓝图维护 Note](../../implemented/architecture/2026-08-04-blueprint-maintenance.md) 与 [维护契约](../../../../src/shared/janus/maintenance-types.ts) 已覆盖提案、变更集、证据、选择应用、过期检测和撤销。新方案应保留这些能力的作用，把操作对象改为 Note 文件及其关系。现有普通节点编辑和分析回写也能修改 Store，因此不能仅更换维护面板而保留其他 JSON 写入口。
 
-WorkFlowX 的 [Notes 与 Hybrid Tree 设计](../../../../../WorkFlowX/docs/agent-notes-and-hybrid-tree-design.md) 强调长期决策和短期执行的区别；[Proposal Pool 模板](../../../../../WorkFlowX/.codex/skills/noteX/templates/proposal.md) 还提供 exploring/scoped/adopted/dropped 这一套生命周期。统一应减少独立载体，同时保留这三类内容各自的用途与质量要求。该历史设计文档含过往决议和待办，当前执行规则以 skills 为准；例如 noteX 仍注明校验脚本尚未落地，不能把历史文档中的 CI 设想当作现有门禁。
+WorkFlowX 的 [Notes 与 Hybrid Tree 设计](../../../../../WorkFlowX/docs/agent-notes-and-hybrid-tree-design.md) 记录长期决策和短期执行的历史区分。当前格式及模板见 [Harness 标准](../../../../../WorkFlowX/standards/harness-note/1/manifest.json)，当前运行规则以各仓库 skills 为准。统一应减少独立载体，同时保留不同内容的用途与质量要求；历史设计中的设想不能作为现有门禁的证据。
 
 janus-agentX 的 [持久子智能体 harness 提案](../../../../../janus-agentX/.agents/notes/proposed/architecture/2026-09-11-harness-persistent-subagents.md) 仍为 proposed；当前共享编排包含会话级 `todo_write`，参见 [系统提示构造](../../../../../janus-agentX/packages/chat-core/src/main/llm/system-prompt-builder.ts) 和 [todo 工具](../../../../../janus-agentX/packages/janus-agent/src/orchestrator/todo-tool.ts)。不能把会话 todo 当作已实现的仓库任务图。该提案倾向原线程修复，当前 WorkflowX [派发契约](../../../../../WorkFlowX/.codex/skills/orchestrateX/modules/02-bus-payload.md) 则明确修复为新调用；这是后续标准化必须消除的语义分歧。
 

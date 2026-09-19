@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   pauseTaskRun: vi.fn(),
   resumeTaskRun: vi.fn(),
   rebaselineTaskRun: vi.fn(),
-  executeDesktopXdo: vi.fn(),
+  executeDesktopTask: vi.fn(),
   runDesktopCommand: vi.fn(),
   reviewClaimFromText: vi.fn(),
   buildDesktopReviewPrompt: vi.fn(),
@@ -89,7 +89,7 @@ vi.mock('../../src/main/harness/execution-adapter', () => ({
 }))
 
 vi.mock('../../src/main/harness/desktop-executor', () => ({
-  executeDesktopXdo: mocks.executeDesktopXdo,
+  executeDesktopTask: mocks.executeDesktopTask,
   runDesktopCommand: mocks.runDesktopCommand,
   reviewClaimFromText: mocks.reviewClaimFromText,
 }))
@@ -135,7 +135,7 @@ vi.mock('../../src/main/llm/LlmService', () => ({
 }))
 
 vi.mock('../../src/main/llm/ai-runtime', () => ({
-  generateText: mocks.generateText,
+  generateText: mocks.generateText, streamText: vi.fn(),
 }))
 
 async function handler(channel: string): Promise<(...args: unknown[]) => Promise<unknown>> {
@@ -267,10 +267,10 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     mocks.ensureTaskThread.mockResolvedValueOnce({ runId: 'run-1', model: undefined, attempts: [] })
     mocks.setThreadModel.mockResolvedValueOnce({ runId: 'run-1', attempts: [] })
     mocks.createModelReviewPort.mockReturnValueOnce(async () => ({ verdict: 'approved', coverage: [] }))
-    mocks.executeDesktopXdo.mockImplementationOnce(async (_root: string, runId: string, token: string, ports: unknown) => {
+    mocks.executeDesktopTask.mockImplementationOnce(async (_root: string, runId: string, token: string, ports: unknown) => {
       expect(runId).toBe('run-1')
       expect(token).toBe('tok')
-      expect(ports).toMatchObject({ command: expect.any(Function), review: expect.any(Function) })
+      expect(ports).toMatchObject({ implement: expect.any(Function), command: expect.any(Function), review: expect.any(Function) })
       return { ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-1', completed: true, checks: [] } }
     })
     await expect(execute({}, ROOT, { runId: 'run-1', providerId: 'p', modelId: 'm' })).resolves.toMatchObject({
@@ -286,7 +286,7 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     })
     mocks.ensureTaskThread.mockResolvedValueOnce({ runId: 'run-1', model: { providerId: 'tp', modelId: 'tm' }, attempts: [{ attempt: 1 }] })
     mocks.setThreadModel.mockClear()
-    mocks.executeDesktopXdo.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-2', completed: true, checks: [] } })
+    mocks.executeDesktopTask.mockResolvedValueOnce({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-2', completed: true, checks: [] } })
     await expect(execute({}, ROOT, { runId: 'run-1' })).resolves.toMatchObject({ receiptId: 'r-2' })
     expect(mocks.setThreadModel).not.toHaveBeenCalled()
 
@@ -310,7 +310,7 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     let entered!: () => void
     const enteredGate = new Promise<void>((resolve) => { entered = resolve })
     let release!: (value: unknown) => void
-    mocks.executeDesktopXdo.mockImplementationOnce(
+    mocks.executeDesktopTask.mockImplementationOnce(
       () => new Promise((resolve) => { entered(); release = resolve as (value: unknown) => void }),
     )
     const first = execute({}, ROOT, { runId: 'run-1' })
@@ -318,6 +318,23 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     await expect(execute({}, ROOT, { runId: 'run-2' })).rejects.toMatchObject({ code: 'BUSY', message: expect.stringContaining('budget') })
     release({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-9', completed: true, checks: [] } })
     await expect(first).resolves.toMatchObject({ receiptId: 'r-9' })
+  })
+
+  it('reserves a run before asynchronous preparation and releases a failed reservation', async () => {
+    const execute = await handler(HARNESS_COMMAND_CHANNELS.runExecute)
+    mocks.readDesktopConcurrency.mockResolvedValue(null)
+    let entered!: () => void
+    const enteredGate = new Promise<void>((resolve) => { entered = resolve })
+    let release!: (value: unknown) => void
+    mocks.getTaskRun.mockImplementationOnce(() => new Promise((resolve) => { entered(); release = resolve }))
+    const first = execute({}, ROOT, { runId: 'run-1' })
+    const refusal = expect(first).rejects.toMatchObject({ code: 'UNSUPPORTED_SCHEMA' })
+    await enteredGate
+    await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'BUSY' })
+    release({ run: null, errors: [{ code: 'UNSUPPORTED_SCHEMA', message: 'profile mismatch' }] })
+    await refusal
+    mocks.getTaskRun.mockResolvedValueOnce({ run: null, errors: [{ code: 'NOT_FOUND', message: 'missing' }] })
+    await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 
   it('pauses, resumes, rebaselines, and refuses stray aborts', async () => {

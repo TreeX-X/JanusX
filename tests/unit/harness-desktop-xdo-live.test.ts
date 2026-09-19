@@ -1,3 +1,4 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,7 +27,7 @@ describe.skipIf(!LIVE)('desktop xdo live review (credential-gated acceptance)', 
       }
       await mkdir(join(root, '.agents', 'notes'), { recursive: true })
       await mkdir(join(root, 'src'), { recursive: true })
-      await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ repoId: REPO, name: 'Live' }))
+      await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Live', profile: SUPPORTED_HARNESS_PROFILE }))
       await writeFile(join(root, '.gitignore'), '.agents/.local/\n')
       await writeFile(join(root, 'src', 'value.txt'), '42')
       await writeFile(join(root, '.agents', 'notes', `2026-09-18-live--${TASK_ID.slice(0, 8)}.md`), [

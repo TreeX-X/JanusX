@@ -1,3 +1,4 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -27,7 +28,7 @@ async function makeRoot(): Promise<string> {
   await fs.mkdir(join(root, '.agents', 'notes'), { recursive: true })
   await fs.writeFile(
     join(root, '.agents', 'harness.json'),
-    JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S5' }),
+    JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S5', profile: SUPPORTED_HARNESS_PROFILE }),
   )
   return root
 }

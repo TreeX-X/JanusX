@@ -1,3 +1,4 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,7 +26,7 @@ async function fixture() {
   roots.push(root)
   await mkdir(join(root, '.agents', 'notes'), { recursive: true })
   await mkdir(join(root, 'src'))
-  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ repoId: REPO }))
+  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ name: 'Test', schemaVersion: 1, repoId: REPO, profile: SUPPORTED_HARNESS_PROFILE }))
   await writeFile(join(root, '.gitignore'), '.agents/.local/\n')
   await writeFile(join(root, 'src', 'value.txt'), '42')
   await writeFile(join(root, '.agents', 'notes', 'requirement.md'), [

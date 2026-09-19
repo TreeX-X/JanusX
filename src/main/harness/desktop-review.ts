@@ -15,6 +15,7 @@ export interface DesktopReviewCriterion {
   uri: string
   criterionId: string
   criterionHash: string
+  text?: string
 }
 
 export interface DesktopReviewPromptInput {
@@ -48,7 +49,7 @@ export function buildDesktopReviewPrompt(input: DesktopReviewPromptInput): strin
     .map((check) => `- ${check.id} [${check.kind}/${check.status}]${check.required ? ' required' : ''} repo:${check.repoId}${check.command ? ` ${check.command.program} ${(check.command.args ?? []).join(' ')} (cwd ${check.command.cwd})` : ''} exit:${check.exitCode ?? '-'} :: ${check.summary}`)
     .join('\n')
   const criteriaLines = input.criteria
-    .map((item) => `- ${item.uri}#${item.criterionId} hash:${item.criterionHash}`)
+    .map((item) => `- ${item.uri}#${item.criterionId} hash:${item.criterionHash}${item.text ? `\n${item.text}` : ''}`)
     .join('\n')
   return [
     'Task-bound self-review. You did not implement this task; you review the tested manifest below.',

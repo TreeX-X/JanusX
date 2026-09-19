@@ -1,3 +1,4 @@
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -13,7 +14,7 @@ async function makeRoot(withId = true): Promise<string> {
   if (withId) {
     await fs.writeFile(
       join(root, '.agents', 'harness.json'),
-      JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Import' }),
+      JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Import', profile: SUPPORTED_HARNESS_PROFILE }),
     )
   }
   return root
@@ -65,6 +66,16 @@ afterEach(async () => {
 })
 
 describe('share import into twin checkouts', () => {
+  it('refuses an unsupported profile before writing any imported evidence', async () => {
+    const target = await makeRoot()
+    roots.push(target)
+    await fs.writeFile(join(target, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Import', profile: { ...SUPPORTED_HARNESS_PROFILE, digest: '0'.repeat(64) } }))
+    const service = new HarnessNoteService()
+    await expect(service.applyShareImport(target, snapshotOf([], [{ id: 'rc-import-1', json: RECEIPT_JSON, sha256: 'x' }]))).rejects.toMatchObject({ code: 'UNSUPPORTED_SCHEMA' })
+    await expect(fs.stat(join(target, '.agents/evidence/rc-import-1.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await service.projectView(target)).invalid[0].diagnostics[0].code).toBe('UNSUPPORTED_SCHEMA')
+  })
+
   it('roundtrips an export into an empty twin checkout', async () => {
     const svc = new HarnessNoteService()
     const source = await makeRoot()

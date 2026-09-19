@@ -57,6 +57,8 @@ xdel/xflow rules still require them and skills switch only at S9.
   stay out of the invalid list since
   [own-notes-namespace](../architecture/2026-09-18-own-notes-namespace.md);
   no bulk migration follows. The profile digest must be re-pinned
-  whenever the standard revs; JanusX readers pin but do not yet gate on
-  it, with fail-closed checks arriving at cutover. Revisit when dependency
+  whenever the standard changes. The shared identity reader requires the exact
+  profile id, version and digest before managed writes and execution;
+  mismatches remain visible in the desktop diagnostic list while file
+  browsing stays available. Revisit when dependency
   identities publish or the cutover appends this checkout to the sync list.

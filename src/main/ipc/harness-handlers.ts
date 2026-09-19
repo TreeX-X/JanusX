@@ -26,11 +26,14 @@ import { blueprintStore } from '../janus/blueprint-store'
 import { GLOBAL_BLUEPRINT_SCOPE } from '../janus/blueprint-paths'
 import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { buildEvaluatorPrompt, createModelReviewPort } from '../harness/desktop-review'
-import { executeDesktopXdo, runDesktopCommand } from '../harness/desktop-executor'
+import { executeDesktopTask, runDesktopCommand } from '../harness/desktop-executor'
+import { createDesktopImplementationPort } from '../harness/desktop-task-turn'
+import { configService, DEFAULT_AGENT_MAX_STEPS } from '../config/service'
+import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { finishWithLatestReceipt, requestIndependentReview } from '../harness/independent-review'
 import { ensureTaskThread, readDesktopConcurrency, setThreadModel } from '../harness/task-thread'
 import { llmService } from '../llm/LlmService'
-import { generateText } from '../llm/ai-runtime'
+import { generateText, streamText } from '../llm/ai-runtime'
 import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
 import {
   cancelTaskRun,
@@ -82,6 +85,7 @@ const throwFailure = (code: HarnessFailure['code'], message: string, extra?: Par
 const RUN_FAILURE_CODES: ReadonlySet<string> = new Set([
   'NOT_FOUND',
   'SCHEMA_INVALID',
+  'UNSUPPORTED_SCHEMA',
   'CONFLICT',
   'NOT_READY',
   'STALE_BASELINE',
@@ -455,43 +459,49 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       if (budget && inFlight.size >= budget.maxThreads) {
         throwFailure('BUSY', `desktop concurrency budget spent (${inFlight.size}/${budget.maxThreads}); wait for or abort a running execution`, { path: 'runId' })
       }
-      const loaded = await getTaskRun(root, runId)
-      if (!loaded.run) throwRunFailure(loaded.errors)
-      const leaseToken = loaded.run?.lease?.token
-      if (!leaseToken) throwFailure('BUSY', 'run has no owner lease; start it before executing', { path: 'runId' })
-      const token = leaseToken as string
-      const taskUri = loaded.run?.taskUri as string
-      const attempt = loaded.run?.attempt ?? 0
-      // The thread outlives every turn: recovery reuses the stored model
-      // endpoint, and repairs reattach to the same history.
-      const threadError = (error: unknown): never => throwRunFailure([{ code: 'IO_ERROR', message: error instanceof Error ? error.message : String(error) }])
-      let thread = await ensureTaskThread(root, { runId, taskUri, mode: loaded.run?.mode ?? 'xdo' }).catch(threadError)
-      const providerId = input?.providerId?.trim() || thread.model?.providerId
-      const modelId = input?.modelId?.trim() || thread.model?.modelId
-      if (input?.providerId?.trim() && input?.modelId?.trim()) {
-        thread = await setThreadModel(root, runId, { providerId: input.providerId.trim(), modelId: input.modelId.trim() }).catch(threadError)
-      }
-      const timeoutMs = input?.timeoutMs === undefined ? undefined : Math.min(600_000, Math.max(5_000, Math.floor(input.timeoutMs)))
-      const manualEvidence = Array.isArray(input?.manualEvidence) ? input.manualEvidence : []
-      for (const item of manualEvidence) {
-        if (!item || typeof item.stepId !== 'string' || typeof item.observer !== 'string' || typeof item.observation !== 'string') {
-          throwFailure('SCHEMA_INVALID', 'manual evidence needs stepId, observer, and observation', { path: 'manualEvidence' })
-        }
-      }
+      if (inFlight.has(runId)) throwFailure('BUSY', 'this run already has an in-flight execution', { path: 'runId' })
       const controller = new AbortController()
       inFlight.set(runId, controller)
       try {
-        const executed = await executeDesktopXdo(root, runId, token, {
+        const loaded = await getTaskRun(root, runId)
+        if (!loaded.run) throwRunFailure(loaded.errors)
+        const leaseToken = loaded.run?.lease?.token
+        if (!leaseToken) throwFailure('BUSY', 'run has no owner lease; start it before executing', { path: 'runId' })
+        const token = leaseToken as string
+        const taskUri = loaded.run?.taskUri as string
+        // The thread outlives every turn: recovery reuses the stored model
+        // endpoint, and repairs reattach to the same history.
+        const threadError = (error: unknown): never => throwRunFailure([{ code: 'IO_ERROR', message: error instanceof Error ? error.message : String(error) }])
+        let thread = await ensureTaskThread(root, { runId, taskUri, mode: loaded.run?.mode ?? 'xdo' }).catch(threadError)
+        const providerId = input?.providerId?.trim() || thread.model?.providerId
+        const modelId = input?.modelId?.trim() || thread.model?.modelId
+        if (input?.providerId?.trim() && input?.modelId?.trim()) {
+          thread = await setThreadModel(root, runId, { providerId: input.providerId.trim(), modelId: input.modelId.trim() }).catch(threadError)
+        }
+        const timeoutMs = input?.timeoutMs === undefined ? undefined : Math.min(600_000, Math.max(5_000, Math.floor(input.timeoutMs)))
+        const manualEvidence = Array.isArray(input?.manualEvidence) ? input.manualEvidence : []
+        for (const item of manualEvidence) {
+          if (!item || typeof item.stepId !== 'string' || typeof item.observer !== 'string' || typeof item.observation !== 'string') {
+            throwFailure('SCHEMA_INVALID', 'manual evidence needs stepId, observer, and observation', { path: 'manualEvidence' })
+          }
+        }
+        const executed = await executeDesktopTask(root, runId, token, {
+          implement: createDesktopImplementationPort({
+            providerId: providerId ?? '', modelId: modelId ?? '',
+            getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
+            streamTextFn: streamText as unknown as ChatTurnPorts['streamTextFn'],
+            maxTurns: await configService.getAgentMaxSteps().catch(() => DEFAULT_AGENT_MAX_STEPS),
+          }),
           command: (step, signal) => runDesktopCommand(root, step, { ...(timeoutMs === undefined ? {} : { timeoutMs }), signal }),
-          review: createModelReviewPort(taskUri, attempt, {
+          review: async (input, signal) => createModelReviewPort(taskUri, (await getTaskRun(root, runId)).run?.attempt ?? 0, {
             ...(providerId?.trim() ? { providerId: providerId.trim() } : {}),
             ...(modelId?.trim() ? { modelId: modelId.trim() } : {}),
             getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
-            generateReviewText: async (model, prompt) => {
-              const result = await generateText({ model: model as never, maxSteps: 1, messages: [{ role: 'user', content: prompt }] as never })
+            generateReviewText: async (model, prompt, signal) => {
+              const result = await generateText({ model: model as never, maxSteps: 1, abortSignal: signal, messages: [{ role: 'user', content: prompt }] as never })
               return (result as { text?: string }).text ?? ''
             },
-          }),
+          })(input, signal),
         }, { manualEvidence, ...(timeoutMs === undefined ? {} : { timeoutMs }), signal: controller.signal })
         if (!executed.ok) throwRunFailure(executed.errors)
         return {
