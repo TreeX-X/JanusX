@@ -1,0 +1,71 @@
+/* 页签条：纯文字 + 2px 下划线，没有容器、没有填充。
+   选中态只靠三样东西表达：文字提亮、图标取强调色、底部 2px 强调色条；
+   悬停只提亮文字。任何一段都不刷底色，避免出现"内部一片灰"的色块。
+   底部抽屉的视图切换与笔记面板的编辑模式切换共用这一套。 */
+
+.strip {
+  display: inline-flex;
+  align-items: stretch;
+  align-self: stretch;
+  height: 100%;
+  gap: 14px;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 1px;
+  border: 0;
+  background: transparent;
+  color: var(--shell-dim);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px 1px 0 0;
+  background: transparent;
+  transition: background 140ms ease;
+}
+
+.tab:hover {
+  color: var(--shell-muted);
+}
+
+.tab:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+.tab[aria-selected='true'],
+.tab[aria-pressed='true'] {
+  color: var(--shell-text);
+}
+
+.tab[aria-selected='true']::after,
+.tab[aria-pressed='true']::after {
+  background: var(--shell-accent);
+}
+
+.icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.tab[aria-selected='true'] .icon,
+.tab[aria-pressed='true'] .icon {
+  color: var(--shell-accent);
+}

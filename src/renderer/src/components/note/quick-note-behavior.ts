@@ -1,7 +1,7 @@
 import { createElement, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { Activity, NotebookPen } from 'lucide-react'
 import { useNoteStore } from '../../stores/note'
-import segmented from '../ui/SegmentedControl.module.css'
+import tabs from '../ui/TabStrip.module.css'
 
 export type DrawerView = 'runtime' | 'note'
 export type TerminalLifecycleEvent = 'kill-removed' | 'exit' | 'workspace-switch'
@@ -43,8 +43,8 @@ export interface DrawerViewTabsProps {
   ariaLabel?: string
 }
 
-// A segmented control instead of two filled chips: the selected segment is a neutral raised step of the
-// surface ramp and only its icon carries the accent, so the switch reads as a control, not a status block.
+// Text tabs with a 2px underline instead of filled chips: no segment carries a background, the selected
+// tab brightens its text, takes the accent on its icon and draws the bar on the header's bottom edge.
 export function DrawerViewTabs({ open, activeView, onSelect, labels, ariaLabel }: DrawerViewTabsProps) {
   const tabRefs = useRef<Record<DrawerView, HTMLButtonElement | null>>({ runtime: null, note: null })
 
@@ -63,7 +63,7 @@ export function DrawerViewTabs({ open, activeView, onSelect, labels, ariaLabel }
     {
       role: 'tablist',
       'aria-label': ariaLabel ?? 'Drawer view',
-      className: segmented.group,
+      className: tabs.strip,
       onClick: (event: ReactMouseEvent<HTMLDivElement>) => event.stopPropagation(),
     },
     DRAWER_VIEWS.map((view) => createElement(
@@ -77,14 +77,14 @@ export function DrawerViewTabs({ open, activeView, onSelect, labels, ariaLabel }
         'aria-controls': getDrawerPanelId(view),
         'aria-selected': activeView === view,
         tabIndex: activeView === view ? 0 : -1,
-        className: segmented.item,
+        className: tabs.tab,
         onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
           event.stopPropagation()
           onSelect(view)
         },
         onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => handleKeyDown(event, view),
       },
-      createElement(DRAWER_VIEW_ICONS[view], { className: segmented.icon, strokeWidth: 1.75, 'aria-hidden': true }),
+      createElement(DRAWER_VIEW_ICONS[view], { className: tabs.icon, strokeWidth: 1.75, 'aria-hidden': true }),
       createElement('span', null, labels?.[view] ?? view),
     )),
   )

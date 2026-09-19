@@ -1,7 +1,6 @@
-/* 便签面板：与同一抽屉里的运行时面板共用一套面板处理——1px 发丝边 + 白 1.2% 的抬升底，
-   坐在抽屉 chrome(#1e1e20) 之上而不是挖下去。不再用 #0a0c0d / #0d0f10 这类纯黑块，
-   编辑面与预览面都透明，靠 1px 发丝线分区。
-   控件语言与 RefreshIconButton / RightDock 页签一致：描边图标按钮，hover 提亮，强调色只给图标与聚焦环。 */
+/* 便签面板：坐在黑色抽屉托盘(--shell-drawer)上，自身不刷底——只有 1px 发丝边框与发丝分隔线。
+   选中态（卡片 / 页签）一律用 2px 强调色条 + 文字提亮表达，不用底色块；
+   底色只允许出现在瞬时 hover 的小目标（24px 图标钮、列表行）和弹出菜单上。 */
 
 .root {
   display: grid;
@@ -11,7 +10,7 @@
   overflow: hidden;
   border: 1px solid var(--shell-border);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.012);
+  background: transparent;
   color: var(--shell-muted);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 12px;
@@ -33,7 +32,6 @@
   min-width: 0;
   flex-direction: column;
   border-right: 1px solid var(--shell-border);
-  background: rgba(255, 255, 255, 0.012);
 }
 
 .sidebarHead {
@@ -85,7 +83,7 @@
 }
 
 .card:hover {
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(255, 255, 255, 0.03);
   color: var(--shell-text);
 }
 
@@ -102,7 +100,6 @@
 }
 
 .card.active {
-  background: var(--shell-active);
   color: var(--shell-text);
 }
 
@@ -249,13 +246,8 @@
   font-weight: 500;
 }
 
-.title:hover {
-  background: rgba(255, 255, 255, 0.035);
-}
-
 .title:focus {
   outline: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.045);
   box-shadow: inset 0 -1px 0 var(--shell-accent-border);
 }
 
@@ -419,7 +411,7 @@
   gap: 5px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.035);
+  background: transparent;
   padding: 0 9px;
   color: var(--shell-muted);
   font: inherit;
@@ -433,7 +425,6 @@
 .actions button:hover {
   color: var(--shell-text);
   border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
 }
 
 .actions button:focus-visible {

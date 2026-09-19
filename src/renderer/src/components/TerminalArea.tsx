@@ -1732,7 +1732,7 @@ export function TerminalArea() {
       <div
         className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
         style={{
-          background: drawerOpen ? 'var(--shell-chrome)' : 'var(--shell-canvas)',
+          background: drawerOpen ? 'var(--shell-drawer)' : 'var(--shell-canvas)',
           borderTop: '1px solid var(--shell-border)',
           height: getDrawerHeight(drawerOpen, drawerView, drawerHeights),
           maxHeight: `calc(100% - ${DRAWER_MIN_PANE_HEIGHT}px)`,
@@ -1859,7 +1859,7 @@ export function TerminalArea() {
           </div>
         </div>
         {drawerOpen && (
-          <div className="absolute right-3 top-[3px] z-10">
+          <div className="absolute right-3 top-0 z-10 h-7">
             <DrawerViewTabs
               open={drawerOpen}
               activeView={drawerView}
@@ -1888,10 +1888,7 @@ export function TerminalArea() {
             ) : (
               <section
                 className="flex h-full min-h-0 flex-col overflow-hidden border"
-                style={{
-                  borderColor: 'rgba(255,255,255,0.07)',
-                  background: 'rgba(255,255,255,0.012)',
-                }}
+                style={{ borderColor: 'rgba(255,255,255,0.07)' }}
                 aria-label={t('terminal:tab.runtimeAria')}
               >
               <div className="flex h-8 shrink-0 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>

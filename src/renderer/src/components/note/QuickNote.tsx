@@ -31,7 +31,7 @@ import {
 import { getCardsByTerminal, useNoteStore } from '@/stores/note'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './QuickNote.module.css'
-import segmented from '../ui/SegmentedControl.module.css'
+import tabs from '../ui/TabStrip.module.css'
 import { exportNoteCard, type QuickNoteExportFormat } from './quick-note-export'
 import { formatNoteAge } from './quick-note-behavior'
 import {
@@ -252,17 +252,17 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                 spellCheck={false}
                 onChange={(event) => updateCard(terminalId, active.id, { title: event.target.value })}
               />
-              <div className={segmented.group} role="group" aria-label={t('terminal:note.modeAria')}>
+              <div className={tabs.strip} role="group" aria-label={t('terminal:note.modeAria')}>
                 {MODES.map(({ mode: item, icon: Icon, labelKey }) => (
                   <button
                     key={item}
                     type="button"
-                    className={segmented.item}
+                    className={tabs.tab}
                     aria-pressed={mode === item}
                     title={t(labelKey)}
                     onClick={() => setMode(item)}
                   >
-                    <Icon className={segmented.icon} strokeWidth={1.75} aria-hidden="true" />
+                    <Icon className={tabs.icon} strokeWidth={1.75} aria-hidden="true" />
                     {!compact && <span>{t(labelKey)}</span>}
                   </button>
                 ))}
