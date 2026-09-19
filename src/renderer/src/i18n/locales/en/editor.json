@@ -184,8 +184,8 @@
     "preview": "Preview"
   },
   "office": {
-    "errorNotInstalled": "OfficeCLI is not installed. Please manually install the project-pinned version and retry.",
-    "errorIncompatible": "OfficeCLI version is incompatible. Please manually install the project-pinned version and retry.",
+    "errorNotInstalled": "Bundled Office engine is missing; reinstall JanusX and retry.",
+    "errorIncompatible": "Bundled Office engine is incompatible; reinstall JanusX and retry.",
     "errorTooMany": "Too many previews open. Please close other previews and retry.",
     "errorStartFailed": "Failed to start preview. Retry or close this tab.",
     "errorPortTimeout": "Preview service did not become ready in time. Retry or close this tab.",
@@ -197,14 +197,12 @@
     "errorInvalidRequest": "Invalid preview request.",
     "errorUnauthorized": "This window is not authorized to open this preview.",
     "errorUnavailable": "Office preview is currently unavailable.",
-    "manualInstallSuffix": " Target version: {{version}}. Please follow the fixed guidance to install manually: {{windows}}. Release URL: {{release}}",
     "startingPreview": "Starting preview…",
     "retry": "Retry",
     "close": "Close",
     "reloading": "Reloading from disk…",
     "iframeTitle": "Office document preview",
     "panelTitle": "OFFICE PREVIEW",
-    "officecliButton": "OFFICECLI",
     "closeAria": "Close Office preview",
     "refreshHint": "Live refresh only applies to OfficeCLI writes; other changes require reloading from disk.",
     "closeTabAria": "Close {{relPath}}",
@@ -222,7 +220,6 @@
   },
   "product": {
     "panelTitle": "PRODUCT WORKSPACE",
-    "engineButton": "RENDER ENGINE",
     "closeAria": "Close product workspace",
     "closeTabAria": "Close {{relPath}}",
     "reloadFromDisk": "Reload from disk",

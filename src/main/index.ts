@@ -165,7 +165,7 @@ async function bootstrapApp(): Promise<void> {
     ...(mainWindow && !mainWindow.isDestroyed() ? [mainWindow] : []),
     ...editorWindows.list(),
   ]
-  const { resolveOfficeWorkspaceRoot, officecliInstaller, officeWatchPool, officeArtifactIndex, languageServiceInstallers } =
+  const { resolveOfficeWorkspaceRoot, officeWatchPool, officeArtifactIndex, languageServiceInstallers } =
     createApplicationServices(getOfficeWindows)
 
   appShutdown.configure({
@@ -200,7 +200,6 @@ async function bootstrapApp(): Promise<void> {
       resolveWorkspaceRoot: resolveOfficeWorkspaceRoot,
       officeWatchPool,
       officeArtifactIndex,
-      officecliInstaller,
       browserSurfaces,
       languageServiceInstallers,
     })
@@ -281,7 +280,10 @@ async function bootstrapApp(): Promise<void> {
   } catch (err) {
     console.error('[main] crashReporter.start failed:', err)
   }
-  officecliManager.configureManagedBinaryPath(await officecliInstaller.getManagedBinary())
+  const { resolveBundledOfficecliBinary } = await import('./office/office-bundled-path')
+  officecliManager.configureBundledBinaryPath(
+    resolveBundledOfficecliBinary({ resourcesPath: process.resourcesPath }),
+  )
   await initializeOfficecliProvider()
   createWindow()
   void refreshLlmRuntimeStatus()

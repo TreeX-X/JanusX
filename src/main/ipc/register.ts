@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron'
 import type { OfficeArtifactIndex } from '../office/office-artifact-index'
-import type { OfficecliInstaller } from '../office/officecli-installer'
 import type { OfficeWatchPool } from '../office/office-watch-pool'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 import { createProductionOfficeOperations } from '../office/office-handler-operations'
@@ -48,7 +47,6 @@ export interface RegisterApplicationIpcOptions {
   resolveWorkspaceRoot: ResolveWorkspaceRoot
   officeWatchPool: OfficeWatchPool
   officeArtifactIndex: OfficeArtifactIndex
-  officecliInstaller: OfficecliInstaller
   browserSurfaces: BrowserSurfaceManager
   languageServiceInstallers: ReadonlyMap<LanguageServiceId, ManagedBinaryInstaller>
 }
@@ -157,6 +155,5 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     getAllowedWindows: options.getAllowedWindows,
     resolveWorkspaceRoot: options.resolveWorkspaceRoot,
     operations: createProductionOfficeOperations({ artifactIndex: officeArtifactIndex, watchPool: officeWatchPool }),
-    installer: options.officecliInstaller,
   })
 }

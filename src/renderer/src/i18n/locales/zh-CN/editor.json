@@ -184,8 +184,8 @@
     "preview": "预览"
   },
   "office": {
-    "errorNotInstalled": "OfficeCLI 未安装。请手动安装项目锁定版本后重试。",
-    "errorIncompatible": "OfficeCLI 版本不兼容。请手动安装项目锁定版本后重试。",
+    "errorNotInstalled": "内置Office引擎缺失，请重装JanusX后重试。",
+    "errorIncompatible": "内置Office引擎不兼容，请重装JanusX后重试。",
     "errorTooMany": "已打开过多预览，请关闭其他预览后重试。",
     "errorStartFailed": "预览启动失败，请重试或关闭此标签。",
     "errorPortTimeout": "预览服务未能及时就绪，请重试或关闭此标签。",
@@ -197,14 +197,12 @@
     "errorInvalidRequest": "预览请求无效。",
     "errorUnauthorized": "当前窗口无权打开此预览。",
     "errorUnavailable": "Office 预览当前不可用。",
-    "manualInstallSuffix": " 目标版本：{{version}}。请按固定指引手动安装：{{windows}}。发布地址：{{release}}",
     "startingPreview": "正在启动预览…",
     "retry": "重试",
     "close": "关闭",
     "reloading": "正在从磁盘重新加载…",
     "iframeTitle": "Office document preview",
     "panelTitle": "OFFICE PREVIEW",
-    "officecliButton": "OFFICECLI",
     "closeAria": "Close Office preview",
     "refreshHint": "实时刷新仅适用于 OfficeCLI 写入；其他修改请从磁盘重新加载。",
     "closeTabAria": "关闭 {{relPath}}",
@@ -222,7 +220,6 @@
   },
   "product": {
     "panelTitle": "产物工作区",
-    "engineButton": "预览引擎",
     "closeAria": "关闭产物工作区",
     "closeTabAria": "关闭 {{relPath}}",
     "reloadFromDisk": "从磁盘重新加载",

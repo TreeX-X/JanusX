@@ -672,12 +672,12 @@ export function Sidebar() {
                 onClick={handleAddWorkspace}
                 className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{
-                  color: 'var(--shell-accent-strong)',
+                  color: 'var(--shell-dim)',
                 }}
                 title={t('common:workspace.add')}
                 aria-label={t('common:workspace.add')}
               >
-                <Plus size={15} strokeWidth={1.7} aria-hidden="true" />
+                <Plus size={15} strokeWidth={1.6} aria-hidden="true" />
               </button>
               <button
                 onClick={toggleSidebar}

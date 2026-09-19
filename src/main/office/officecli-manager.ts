@@ -1,30 +1,13 @@
+// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/implemented/feature/2026-09-18-officecli-bundled.md
 import { stat } from 'fs/promises'
-import { homedir } from 'os'
-import { delimiter, dirname, isAbsolute, join, resolve } from 'path'
+import { dirname, isAbsolute, resolve } from 'path'
 import { execa } from 'execa'
-import type { OfficecliInfo, OfficecliManualInstallGuidance } from '../../shared/office'
+import type { OfficecliInfo } from '../../shared/office'
+import { OFFICECLI_BUNDLED_VERSION } from './office-bundled-path'
 
-const SUPPORTED_VERSION = '1.0.135'
+const SUPPORTED_VERSION = OFFICECLI_BUNDLED_VERSION
 const PROBE_TIMEOUT_MS = 5_000
 const REQUIRED_CAPABILITIES = ['watch', 'create', 'batch'] as const
-
-export const OFFICECLI_MANUAL_INSTALL_GUIDANCE: OfficecliManualInstallGuidance = {
-  repository: 'https://github.com/iOfficeAI/OfficeCLI',
-  release: `https://github.com/iOfficeAI/OfficeCLI/releases/tag/v${SUPPORTED_VERSION}`,
-  targetVersion: SUPPORTED_VERSION,
-  integrity: 'Pinned official SHA256: x64 937db176b585e874aa5bff48d536bce78037665cd862b5deefe56e79977e6588; arm64 c818013023f83d3c9ec3dcba4dabaf824bdf861da6fa925d0557f508d3b11558.',
-  windows: [
-    'Download the Windows binary from the tagged official release after verifying its published integrity metadata.',
-    'Run: Copy-Item .\\officecli.exe "$env:LOCALAPPDATA\\OfficeCLI\\officecli.exe"',
-    'Add %LOCALAPPDATA%\\OfficeCLI to the user PATH without replacing existing entries.',
-    `Open a new terminal and run officecli --version; the supported version is ${SUPPORTED_VERSION}.`,
-  ],
-  automaticInstallEnabled: false,
-  automaticUninstallEnabled: false,
-}
-
-export const OFFICECLI_EXISTING_TERMINAL_NOTICE =
-  'Restart existing terminals for the updated PATH to take effect.'
 
 interface CommandResult {
   exitCode: number
@@ -36,26 +19,14 @@ interface CommandResult {
 interface OfficecliManagerDependencies {
   env: NodeJS.ProcessEnv
   platform: NodeJS.Platform
-  homeDir: string
+  bundledBinaryPath?: string
   isRegularFile(path: string): Promise<boolean>
   run(binary: string, args: readonly string[], signal?: AbortSignal): Promise<CommandResult>
 }
 
 interface ResolvedBinary {
   path: string
-  source: 'path' | 'known-location' | 'managed'
-}
-
-function defaultBinaryNames(platform: NodeJS.Platform): readonly string[] {
-  return platform === 'win32' ? ['officecli.exe'] : ['officecli']
-}
-
-function knownLocations(deps: OfficecliManagerDependencies): string[] {
-  if (deps.platform === 'win32') {
-    const localAppData = deps.env.LOCALAPPDATA
-    return localAppData ? [join(localAppData, 'OfficeCLI', 'officecli.exe')] : []
-  }
-  return [join(deps.homeDir, '.local', 'bin', 'officecli'), '/usr/local/bin/officecli']
+  source: 'bundled'
 }
 
 function parseVersion(output: string): string | undefined {
@@ -64,22 +35,14 @@ function parseVersion(output: string): string | undefined {
 
 function boundedRuntimeDiagnostic(result: CommandResult): string {
   const detail = `${result.stderr}\n${result.stdout}`.toLowerCase()
-  if (result.timedOut) return 'OfficeCLI timed out during its startup check. Reinstall it and verify the local runtime.'
+  if (result.timedOut) return 'Bundled OfficeCLI timed out during its startup check. Reinstall JanusX and retry.'
   if (detail.includes('icu') || detail.includes('globalization')) {
-    return 'OfficeCLI could not load ICU/globalization support. Install the required system runtime and retry.'
+    return 'Bundled OfficeCLI could not load ICU/globalization support. Install the required system runtime and retry.'
   }
   if (detail.includes('.net') || detail.includes('hostfxr') || detail.includes('framework')) {
-    return 'OfficeCLI could not load its required .NET runtime. Install the supported .NET runtime and retry.'
+    return 'Bundled OfficeCLI could not load its required .NET runtime. Install the supported .NET runtime and retry.'
   }
-  return `OfficeCLI could not start (exit code ${result.exitCode}). Reinstall version ${SUPPORTED_VERSION} and retry.`
-}
-
-function unavailableInfo(info: OfficecliInfo): OfficecliInfo {
-  return {
-    ...info,
-    manualInstall: OFFICECLI_MANUAL_INSTALL_GUIDANCE,
-    existingTerminalNotice: OFFICECLI_EXISTING_TERMINAL_NOTICE,
-  }
+  return `Bundled OfficeCLI could not start (exit code ${result.exitCode}). Reinstall JanusX version with ${SUPPORTED_VERSION} and retry.`
 }
 
 async function defaultRun(binary: string, args: readonly string[], signal?: AbortSignal): Promise<CommandResult> {
@@ -105,19 +68,21 @@ async function defaultRun(binary: string, args: readonly string[], signal?: Abor
 const defaultDependencies: OfficecliManagerDependencies = {
   env: process.env,
   platform: process.platform,
-  homeDir: homedir(),
+  bundledBinaryPath: undefined,
   isRegularFile: async path => (await stat(path)).isFile(),
   run: defaultRun,
 }
 
 export class OfficecliManager {
   private verifiedBinary?: ResolvedBinary
-  private managedBinaryPath?: string
+  private bundledBinaryPath?: string
 
-  constructor(private readonly deps: OfficecliManagerDependencies = defaultDependencies) {}
+  constructor(private readonly deps: OfficecliManagerDependencies = defaultDependencies) {
+    this.bundledBinaryPath = deps.bundledBinaryPath
+  }
 
-  configureManagedBinaryPath(path: string | undefined): void {
-    this.managedBinaryPath = path
+  configureBundledBinaryPath(path: string | undefined): void {
+    this.bundledBinaryPath = path
     this.verifiedBinary = undefined
   }
 
@@ -127,21 +92,12 @@ export class OfficecliManager {
   }
 
   private async findCandidate(): Promise<ResolvedBinary | undefined> {
-    if (this.managedBinaryPath && await this.isRegularAbsoluteFile(this.managedBinaryPath)) {
-      return { path: resolve(this.managedBinaryPath), source: 'managed' }
+    const override = this.deps.env.JANUSX_OFFICECLI_BINARY
+    if (override && await this.isRegularAbsoluteFile(override)) {
+      return { path: resolve(override), source: 'bundled' }
     }
-    const names = defaultBinaryNames(this.deps.platform)
-    const pathValue = Object.entries(this.deps.env).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? ''
-    const pathCandidates = pathValue
-      .split(delimiter)
-      .filter(Boolean)
-      .flatMap(directory => names.map(name => resolve(directory, name)))
-
-    for (const candidate of pathCandidates) {
-      if (await this.isRegularAbsoluteFile(candidate)) return { path: candidate, source: 'path' }
-    }
-    for (const candidate of knownLocations(this.deps)) {
-      if (await this.isRegularAbsoluteFile(candidate)) return { path: resolve(candidate), source: 'known-location' }
+    if (this.bundledBinaryPath && await this.isRegularAbsoluteFile(this.bundledBinaryPath)) {
+      return { path: resolve(this.bundledBinaryPath), source: 'bundled' }
     }
     return undefined
   }
@@ -156,7 +112,7 @@ export class OfficecliManager {
     return true
   }
 
-  async verifyManagedBinary(binary: string, signal?: AbortSignal): Promise<boolean> {
+  async verifyBundledBinary(binary: string, signal?: AbortSignal): Promise<boolean> {
     if (!(await this.isRegularAbsoluteFile(binary))) return false
     signal?.throwIfAborted()
     const result = await this.deps.run(binary, ['--version'], signal)
@@ -167,21 +123,21 @@ export class OfficecliManager {
   async detect(): Promise<OfficecliInfo> {
     this.verifiedBinary = undefined
     const resolvedBinary = await this.findCandidate()
-    if (!resolvedBinary) return unavailableInfo({ installed: false, compatible: false })
+    if (!resolvedBinary) return { installed: false, compatible: false }
 
     const versionResult = await this.deps.run(resolvedBinary.path, ['--version'])
     if (versionResult.exitCode !== 0) {
-      return unavailableInfo({
+      return {
         installed: true,
         compatible: false,
         source: resolvedBinary.source,
         runtimeError: boundedRuntimeDiagnostic(versionResult),
-      })
+      }
     }
 
     const version = parseVersion(`${versionResult.stdout}\n${versionResult.stderr}`)
     if (version !== SUPPORTED_VERSION || !(await this.verifyCapabilities(resolvedBinary.path))) {
-      return unavailableInfo({ installed: true, compatible: false, version, source: resolvedBinary.source })
+      return { installed: true, compatible: false, version, source: resolvedBinary.source }
     }
 
     this.verifiedBinary = resolvedBinary

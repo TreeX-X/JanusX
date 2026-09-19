@@ -4,7 +4,6 @@ import { Select } from './ui/Select'
 import { LanguageServiceManager } from './LanguageServiceManager'
 import { EXTERNAL_CLI_TOOL_ORDER } from '../../../shared/ipc/external-cli'
 import { ExternalCliManager } from './ExternalCliManager'
-import { OfficeCliManager } from './OfficeCliManager'
 import { UpdaterSettings } from './UpdaterSettings'
 import styles from './AppSettingsModal.module.css'
 
@@ -65,16 +64,6 @@ export function GeneralSettingsPanel() {
         </div>
         <div className={styles.generalControlCol}>
           <UpdaterSettings />
-        </div>
-      </div>
-
-      <div className={styles.generalRow}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('settings:officeCli.title')}</div>
-          <div className={styles.generalHelp}>{t('settings:officeCli.subtitle')}</div>
-        </div>
-        <div className={styles.generalControlCol}>
-          <OfficeCliManager />
         </div>
       </div>
     </div>

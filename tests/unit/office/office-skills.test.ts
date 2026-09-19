@@ -18,7 +18,7 @@ describe('buildOfficePromptForAgent', () => {
       installed: true,
       compatible: true,
       version: '1.0.135',
-      source: 'known-location',
+      source: 'bundled',
       path: BINARY,
     }))
 
@@ -56,10 +56,10 @@ describe('buildOfficePromptForAgent', () => {
   })
 
   it.each([
-    [{ installed: false, compatible: false }, 'not installed'],
-    [{ installed: true, compatible: false, version: '9.9.9' }, 'incompatible'],
-    [{ installed: true, compatible: false, runtimeError: 'OfficeCLI could not load ICU support.' }, 'ICU'],
-  ] satisfies Array<[OfficecliInfo, string]>)('returns non-executable guidance for an unavailable provider', async (info, expected) => {
+    [{ installed: false, compatible: false }, 'Reinstall JanusX'],
+    [{ installed: true, compatible: false, version: '9.9.9' }, 'Reinstall JanusX'],
+    [{ installed: true, compatible: false, runtimeError: 'Bundled OfficeCLI could not load ICU support.' }, 'ICU'],
+  ] satisfies Array<[OfficecliInfo, string]>)('returns reinstall guidance for an unavailable bundled provider', async (info, expected) => {
     const result = await buildOfficePromptForAgent(input(), provider(info))
 
     expect(result.mode).toBe('guidance')
@@ -74,27 +74,5 @@ describe('buildOfficePromptForAgent', () => {
 
     expect(result.mode).toBe('guidance')
     expect(result.text).not.toContain('create --help')
-  })
-
-  it('uses fixed manual-install metadata without inventing an executable command', async () => {
-    const result = await buildOfficePromptForAgent(input(), provider({
-      installed: false,
-      compatible: false,
-      manualInstall: {
-        repository: 'https://example.test/OfficeCLI',
-        release: 'https://example.test/OfficeCLI/releases/v1.0.135',
-        targetVersion: '1.0.135',
-        integrity: 'sha256:test',
-        windows: ['download', 'verify'],
-        automaticInstallEnabled: false,
-        automaticUninstallEnabled: false,
-      },
-    }))
-
-    expect(result.mode).toBe('guidance')
-    expect(result.text).toContain('manual installation')
-    expect(result.text).toContain('https://example.test/OfficeCLI/releases/v1.0.135')
-    expect(result.text).not.toContain('create --help')
-    expect(result.text).not.toContain('watch --help')
   })
 })

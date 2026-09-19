@@ -289,11 +289,17 @@
     }
   },
   "agent": {
-    "section": { "permissions": "Permission defaults", "limits": "Loop steps" },
+    "section": {
+      "permissions": "Permission defaults",
+      "limits": "Loop steps"
+    },
     "default": {
       "label": "Default approval mode",
       "hint": "New Agent sessions inherit this mode. You can switch the active Janus Chat session directly.",
-      "mode": { "perAction": "Approve every action", "autoRun": "Auto-run all actions" }
+      "mode": {
+        "perAction": "Approve every action",
+        "autoRun": "Auto-run all actions"
+      }
     },
     "maxSteps": {
       "label": "Max loop steps",
@@ -305,18 +311,31 @@
       "hint": "When off, package-manager build/check commands also require per-action approval. Risky commands always require approval."
     },
     "safety": "Auto-run still enforces workspace boundaries, sensitive-path denial, input validation, checkpoints and audit records.",
-    "error": { "load": "Failed to load Agent permission settings", "save": "Failed to save Agent permission settings" }
+    "error": {
+      "load": "Failed to load Agent permission settings",
+      "save": "Failed to save Agent permission settings"
+    }
   },
   "cliTools": {
     "title": "External Terminals",
     "subtitle": "Detect versions of external AI CLI tools; install and upgrade in one click",
     "loading": "Loading...",
     "tools": {
-      "claude": { "desc": "Official Anthropic CLI. Installed and upgraded via npm globally; restart terminals afterwards." },
-      "codex": { "desc": "Official OpenAI CLI. Installed and upgraded via npm globally; restart terminals afterwards." },
-      "opencode": { "desc": "Open-source terminal agent. Installed and upgraded via npm globally; restart terminals afterwards." },
-      "pi": { "desc": "Lightweight terminal agent. Installed and upgraded via npm globally; restart terminals afterwards." },
-      "janus": { "desc": "In-house Janus CLI, built from janus-agentX source and linked globally; one-click update." }
+      "claude": {
+        "desc": "Official Anthropic CLI. Installed and upgraded via npm globally; restart terminals afterwards."
+      },
+      "codex": {
+        "desc": "Official OpenAI CLI. Installed and upgraded via npm globally; restart terminals afterwards."
+      },
+      "opencode": {
+        "desc": "Open-source terminal agent. Installed and upgraded via npm globally; restart terminals afterwards."
+      },
+      "pi": {
+        "desc": "Lightweight terminal agent. Installed and upgraded via npm globally; restart terminals afterwards."
+      },
+      "janus": {
+        "desc": "In-house Janus CLI, built from janus-agentX source and linked globally; one-click update."
+      }
     },
     "state": {
       "notInstalled": "Not Installed",
@@ -339,30 +358,6 @@
     "notice": {
       "existingTerminal": "Restart open terminals for the new version and PATH to take effect.",
       "installed": "Install finished. Restart terminals to take effect."
-    }
-  },
-  "officeCli": {
-    "title": "OfficeCLI",
-    "subtitle": "Managed Office CLI binary for Office document preview and prompt generation",
-    "loading": "Loading...",
-    "name": "OfficeCLI",
-    "desc": "Managed binary for .docx/.xlsx/.pptx preview and prompt generation. Installs on demand.",
-    "state": {
-      "notInstalled": "Not Installed",
-      "ready": "Ready",
-      "busy": "Working...",
-      "failed": "Failed"
-    },
-    "label": {
-      "version": "Version",
-      "source": "Source"
-    },
-    "action": {
-      "install": "Install",
-      "repair": "Repair",
-      "remove": "Remove",
-      "cancel": "Cancel",
-      "working": "Working..."
     }
   },
   "languageService": {

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
+// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/implemented/feature/2026-09-18-officecli-bundled.md
 import { spawn, type ChildProcess } from 'child_process'
 import { join } from 'path'
-import { readFile, realpath } from 'fs/promises'
-import { OfficecliInstaller, type OfficecliInstallerDependencies } from './officecli-installer'
-import { resolveOfficecliManagedRoot } from './office-managed-root'
+import { readFile, realpath, stat } from 'fs/promises'
+import { OFFICECLI_BUNDLED_VERSION, resolveBundledOfficecliBinary } from './office-bundled-path'
 import { buildOfficeAgentSession } from './office-agent-policy'
 import {
   applyOfficeProjectRules,
@@ -21,12 +21,11 @@ type LauncherCommand =
   | { command: 'run'; engine: LauncherEngine; workspace: string; args: string[] }
 
 export interface OfficeLauncherDependencies {
-  root: string
+  bundledBinary?: string
+  resourcesPath?: string
   mcpEntry: string
   env: NodeJS.ProcessEnv
   spawn(command: string, args: readonly string[], options: { cwd: string; env: NodeJS.ProcessEnv; stdio: 'inherit'; shell: false }): ChildProcess
-  installer?: Pick<OfficecliInstaller, 'getManagedBinary' | 'status'>
-  installerDependencies?: Partial<OfficecliInstallerDependencies>
   platform: NodeJS.Platform
 }
 
@@ -51,24 +50,37 @@ export function parseOfficeLauncherArgs(argv: readonly string[]): LauncherComman
   throw new Error('Expected status, run, configure, or unconfigure')
 }
 
+async function resolveLauncherBinary(deps: OfficeLauncherDependencies): Promise<string | undefined> {
+  const candidates = [
+    deps.bundledBinary,
+    resolveBundledOfficecliBinary({ resourcesPath: deps.resourcesPath, env: deps.env, platform: deps.platform }),
+  ]
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    try {
+      if ((await stat(candidate)).isFile()) return candidate
+    } catch {}
+  }
+  return undefined
+}
+
 export async function runOfficeLauncher(
   argv: readonly string[],
   overrides: Partial<OfficeLauncherDependencies> = {},
 ): Promise<number> {
   const env = overrides.env ?? process.env
   const deps: OfficeLauncherDependencies = {
-    root: overrides.root ?? resolveOfficecliManagedRoot({ env, platform: overrides.platform ?? process.platform }),
+    bundledBinary: overrides.bundledBinary,
+    resourcesPath: overrides.resourcesPath,
     mcpEntry: overrides.mcpEntry ?? join(import.meta.dirname, 'office-mcp.js'),
     env,
     spawn: overrides.spawn ?? ((command, args, options) => spawn(command, args, options)),
-    installer: overrides.installer,
-    installerDependencies: overrides.installerDependencies,
     platform: overrides.platform ?? process.platform,
   }
   const parsed = parseOfficeLauncherArgs(argv)
-  const installer = deps.installer ?? new OfficecliInstaller(deps.root, undefined, deps.installerDependencies)
   if (parsed.command === 'status') {
-    process.stdout.write(`${JSON.stringify(await installer.status())}\n`)
+    const binary = await resolveLauncherBinary(deps)
+    process.stdout.write(`${JSON.stringify({ state: binary ? 'ready' : 'missing', version: OFFICECLI_BUNDLED_VERSION, location: 'bundled', binary })}\n`)
     return 0
   }
   const workspace = await realpath(parsed.workspace)
@@ -86,8 +98,8 @@ export async function runOfficeLauncher(
     return 0
   }
   if (parsed.command !== 'run') throw new Error('Unsupported launcher command')
-  const binary = await installer.getManagedBinary()
-  if (!binary) throw new Error('Managed OfficeCLI is unavailable; install it from JanusX first')
+  const binary = await resolveLauncherBinary(deps)
+  if (!binary) throw new Error('Bundled OfficeCLI is missing; reinstall JanusX first')
   if (parsed.engine !== 'codex') {
     throw new Error(`${parsed.engine} has no verified Office policy/config adapter in this build`)
   }

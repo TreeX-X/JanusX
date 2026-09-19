@@ -341,20 +341,9 @@ describe('product workspace lifecycle', () => {
     const markup = renderToStaticMarkup(createElement(OfficePreviewFrame, { status: 'error', errorCode: 'TOO_MANY', onRetry: () => {}, onClose: () => {} }))
     expect(markup).toContain('editor:office.errorTooMany')
   })
-  it('renders concrete locked manual-install metadata', () => {
-    const copy = getOfficeErrorCopy('NOT_INSTALLED', {
-      repository: 'repo',
-      release: 'https://example.test/releases/v1.2.3',
-      targetVersion: '1.2.3',
-      integrity: 'sha256-test',
-      windows: ['download', 'verify'],
-      automaticInstallEnabled: false,
-      automaticUninstallEnabled: false,
-    })
-    expect(copy).toContain('1.2.3')
-    expect(copy).toContain('https://example.test/releases/v1.2.3')
+  it('renders bundled reinstall copy for a missing engine', () => {
+    const copy = getOfficeErrorCopy('NOT_INSTALLED')
     expect(copy).toContain('editor:office.errorNotInstalled')
-    expect(copy).toContain('download；verify')
   })
   it('keeps the product stage out of the fixed Panel and inserts its conditional workspace before it', () => {
     const panel = readFileSync(new URL('../../../src/renderer/src/components/Panel.tsx', import.meta.url), 'utf8')
