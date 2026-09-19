@@ -1,6 +1,13 @@
-# Agent Note: Assistant capability scope and chat landing
+---
+schema: harness-note/1
+id: 10bb564c-beff-486e-8ba3-368da1017652
+kind: requirement
+lifecycle: draft
+created: 2026-09-14
+class: feature
+---
 
-Status: proposed
+# Agent Note: Assistant capability scope and chat landing
 
 ## Problem
 

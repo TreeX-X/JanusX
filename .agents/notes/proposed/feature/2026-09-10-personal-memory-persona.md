@@ -1,6 +1,13 @@
-# Agent Note: Personal memory and habit persona
+---
+schema: harness-note/1
+id: f2b9e5d6-8b65-4a46-b634-61eaeec39b33
+kind: requirement
+lifecycle: draft
+created: 2026-09-10
+class: feature
+---
 
-Status: proposed
+# Agent Note: Personal memory and habit persona
 
 ## Problem
 

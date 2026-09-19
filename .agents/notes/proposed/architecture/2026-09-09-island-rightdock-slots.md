@@ -1,6 +1,13 @@
-# Agent Note: In-code contribution slots for Island and RightDock
+---
+schema: harness-note/1
+id: eaa097ff-0344-437d-8bd9-cd61a3ec5a74
+kind: requirement
+lifecycle: draft
+created: 2026-09-09
+class: architecture
+---
 
-Status: proposed
+# Agent Note: In-code contribution slots for Island and RightDock
 
 ## Problem
 
