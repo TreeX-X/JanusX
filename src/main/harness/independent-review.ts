@@ -20,7 +20,7 @@ import {
   type Receipt,
   type ReceiptCoverage,
 } from '@janus-agent/harness-core'
-import { collectLiveSnapshot, collectTaskSnapshot } from '@janus-agent/harness-node'
+import { collectLiveSnapshot, collectTaskSnapshot, TaskScope } from '@janus-agent/harness-node'
 import { finishTaskRun, getTaskRun, recordTaskReceipt } from './execution-adapter'
 import { checkCoverageClaims } from './desktop-executor'
 import { ensureTaskThread, recordThreadEvaluation } from './task-thread'
@@ -143,6 +143,8 @@ export async function requestIndependentReview(
   if (prior.attempt !== run.attempt) {
     return fail(run, [diag('STALE_BASELINE', `receipt ${priorId} belongs to attempt ${prior.attempt}, run is at ${run.attempt}; re-run explicitly`, 'receipts')], { receiptId: '', verdict: 'blocked' as const })
   }
+  if (prior.taskContractHash !== run.baseline.taskContractHash || !sameInputs(prior.inputs, run.baseline.inputs)) return fail(run, [diag('STALE_BASELINE', 'prior receipt uses another task baseline', 'baseline')], { receiptId: '', verdict: 'blocked' as const })
+  if (reviewer === prior.actor) return fail(run, [diag('SCHEMA_INVALID', 'independent reviewer must differ from the receipt implementor', 'review.actor')], { receiptId: '', verdict: 'blocked' as const })
   if (codeManifestHash(prior.codeManifest) !== codeManifestHash(pinned)) {
     return fail(run, [diag('STALE_BASELINE', `receipt ${priorId} pins different files than the verified manifest`, 'codeManifest')], { receiptId: '', verdict: 'blocked' as const })
   }
@@ -201,18 +203,23 @@ export async function requestIndependentReview(
     taskContractHash: run.baseline.taskContractHash, inputs: run.baseline.inputs, codeManifest: pinned,
     checks: prior.checks, coverage: claim.coverage,
     review: { kind: 'independent', verdict: claim.verdict, reviewedManifestHash: manifestHash, actor: reviewer },
-    createdAt: new Date().toISOString(), actor: reviewer,
+    createdAt: new Date().toISOString(), actor: prior.actor,
   }
+  try {
+    const current = await new TaskScope(root, snapshot.repoId, snapshot.work).manifest()
+    if (codeManifestHash(current) !== manifestHash) receipt.review.verdict = 'blocked'
+    opts.signal?.throwIfAborted()
+  } catch (error) { return fail(run, hostError(error), { receiptId: '', verdict: 'blocked' as const }) }
   const stored = await recordTaskReceipt(root, runId, token, receipt)
-  if (!stored.ok) return fail(stored.run ?? run, stored.errors, { receiptId: receipt.id, verdict: claim.verdict })
+  if (!stored.ok) return fail(stored.run ?? run, stored.errors, { receiptId: receipt.id, verdict: receipt.review.verdict })
   try {
     const thread = await ensureTaskThread(root, { runId, taskUri: run.taskUri, mode: run.mode })
     void thread
-    await recordThreadEvaluation(root, runId, { attempt: run.attempt, reviewer, verdict: claim.verdict, receiptId: receipt.id })
+    await recordThreadEvaluation(root, runId, { attempt: run.attempt, reviewer, verdict: receipt.review.verdict, receiptId: receipt.id })
   } catch {
     // Evaluations are auxiliary; the receipt dwarfs them.
   }
-  return { ok: true, run: stored.run ?? run, errors: [], data: { receiptId: receipt.id, verdict: claim.verdict } }
+  return { ok: true, run: stored.run ?? run, errors: [], data: { receiptId: receipt.id, verdict: receipt.review.verdict } }
 }
 
 /**
@@ -240,10 +247,13 @@ export async function finishWithLatestReceipt(
   if (!receiptId) return fail(run, [diag('NOT_READY', 'no receipt recorded; review before finishing', 'receipts')], { receiptId: '', completed: false })
   const manifest = run.verification?.codeManifest
   if (!manifest) return fail(run, [diag('NOT_READY', 'no pinned manifest on this run', 'codeManifest')], { receiptId, completed: false })
-  const implementor = run.lease?.owner ?? 'desktop'
   let live: Awaited<ReturnType<typeof collectLiveSnapshot>>
   try {
-    live = await collectLiveSnapshot(root, run.taskUri, implementor, manifest.map((row) => [codeKey(row.repoId, row.path), row.deleted === true ? null : (row.sha256 as string)]))
+    const receipt = await loadPriorReceipt(root, run.taskUri, receiptId)
+    const snapshot = await collectTaskSnapshot(root, run.taskUri)
+    if (!snapshot.ok) return fail(run, snapshot.errors, { receiptId, completed: false })
+    const current = await new TaskScope(root, snapshot.repoId, snapshot.work).manifest()
+    live = await collectLiveSnapshot(root, run.taskUri, receipt.actor, current.map((row) => [codeKey(row.repoId, row.path), row.deleted === true ? null : (row.sha256 as string)]))
   } catch (error) {
     return fail(run, hostError(error), { receiptId, completed: false })
   }

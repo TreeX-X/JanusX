@@ -297,6 +297,8 @@ export interface TaskThreadView {
 
 export interface TaskThreadDetail extends TaskThreadView {
   model?: { providerId: string; modelId: string }
+  reviewerModel?: { providerId: string; modelId: string }
+  reviewer?: string
   history: Array<{ attempt: number; manifestHash: string; checks: Array<{ id: string; kind: string; status: string }>; reviewVerdict?: string; receiptId?: string; at: string }>
 }
 
@@ -379,6 +381,8 @@ export async function openTaskThread(root: string, runId: string): Promise<OpRes
       ...(history.length > 0 && history[history.length - 1]?.reviewVerdict ? { lastVerdict: history[history.length - 1]?.reviewVerdict as string } : {}),
       hasModel: Boolean(stored.model),
       ...(stored.model ? { model: { ...stored.model } } : {}),
+      ...(stored.reviewerModel ? { reviewerModel: { ...stored.reviewerModel } } : {}),
+      ...(stored.reviewer ? { reviewer: stored.reviewer } : {}),
       history,
     },
   }

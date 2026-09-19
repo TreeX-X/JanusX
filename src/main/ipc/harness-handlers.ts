@@ -27,12 +27,12 @@ import { GLOBAL_BLUEPRINT_SCOPE } from '../janus/blueprint-paths'
 import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { buildEvaluatorPrompt, createModelReviewPort } from '../harness/desktop-review'
 import { executeDesktopTask, runDesktopCommand } from '../harness/desktop-executor'
-import { createDesktopImplementationPort } from '../harness/desktop-task-turn'
+import { createDesktopImplementationPort, generateDesktopReviewText } from '../harness/desktop-task-turn'
 import { readTaskTranscript } from '../harness/task-transcript'
 import { configService, DEFAULT_AGENT_MAX_STEPS } from '../config/service'
 import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { finishWithLatestReceipt, requestIndependentReview } from '../harness/independent-review'
-import { ensureTaskThread, readDesktopConcurrency, setThreadModel } from '../harness/task-thread'
+import { ensureTaskThread, readDesktopConcurrency, setThreadModel, setThreadReviewer } from '../harness/task-thread'
 import { llmService } from '../llm/LlmService'
 import { generateText, streamText } from '../llm/ai-runtime'
 import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
@@ -493,6 +493,26 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
         if (input?.providerId?.trim() && input?.modelId?.trim()) {
           thread = await setThreadModel(root, runId, { providerId: input.providerId.trim(), modelId: input.modelId.trim() }).catch(threadError)
         }
+        const reviewerProviderId = input?.reviewerProviderId?.trim() || thread.reviewerModel?.providerId || providerId
+        const reviewerModelId = input?.reviewerModelId?.trim() || thread.reviewerModel?.modelId || modelId
+        const reviewer = input?.reviewer?.trim() || thread.reviewer
+        if (loaded.run?.mode === 'xflow' && reviewerProviderId && reviewerModelId) {
+          thread = await setThreadReviewer(root, runId, { providerId: reviewerProviderId, modelId: reviewerModelId }, reviewer).catch(threadError)
+        }
+        const maxTurns = await configService.getAgentMaxSteps().catch(() => DEFAULT_AGENT_MAX_STEPS)
+        const reviewPort = (kind: 'self' | 'independent') => async (evidence: Parameters<ReturnType<typeof createModelReviewPort>>[0], signal?: AbortSignal) => {
+          const provider = kind === 'independent' ? reviewerProviderId : providerId
+          const model = kind === 'independent' ? reviewerModelId : modelId
+          return createModelReviewPort(taskUri, (await getTaskRun(root, runId)).run?.attempt ?? 0, {
+            providerId: provider, modelId: model,
+            getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
+            generateReviewText: (_model, prompt, signal) => generateDesktopReviewText(root, runId, token, kind, {
+              providerId: provider ?? '', modelId: model ?? '', maxTurns,
+              getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
+              streamTextFn: streamText as unknown as ChatTurnPorts['streamTextFn'],
+            }, prompt, signal),
+          }, kind === 'independent' ? buildEvaluatorPrompt : undefined)(evidence, signal)
+        }
         const timeoutMs = input?.timeoutMs === undefined ? undefined : Math.min(600_000, Math.max(5_000, Math.floor(input.timeoutMs)))
         const manualEvidence = Array.isArray(input?.manualEvidence) ? input.manualEvidence : []
         for (const item of manualEvidence) {
@@ -505,19 +525,12 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
             providerId: providerId ?? '', modelId: modelId ?? '',
             getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
             streamTextFn: streamText as unknown as ChatTurnPorts['streamTextFn'],
-            maxTurns: await configService.getAgentMaxSteps().catch(() => DEFAULT_AGENT_MAX_STEPS),
+            maxTurns,
           }),
           command: (step, signal) => runDesktopCommand(root, step, { ...(timeoutMs === undefined ? {} : { timeoutMs }), signal }),
-          review: async (input, signal) => createModelReviewPort(taskUri, (await getTaskRun(root, runId)).run?.attempt ?? 0, {
-            ...(providerId?.trim() ? { providerId: providerId.trim() } : {}),
-            ...(modelId?.trim() ? { modelId: modelId.trim() } : {}),
-            getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
-            generateReviewText: async (model, prompt, signal) => {
-              const result = await generateText({ model: model as never, maxSteps: 1, abortSignal: signal, messages: [{ role: 'user', content: prompt }] as never })
-              return (result as { text?: string }).text ?? ''
-            },
-          })(input, signal),
-        }, { manualEvidence, ...(timeoutMs === undefined ? {} : { timeoutMs }), signal: controller.signal })
+          review: reviewPort('self'),
+          ...(loaded.run?.mode === 'xflow' ? { independentReview: reviewPort('independent') } : {}),
+        }, { manualEvidence, reviewer, ...(timeoutMs === undefined ? {} : { timeoutMs }), signal: controller.signal })
         if (!executed.ok) throwRunFailure(executed.errors)
         return {
           receiptId: executed.data.receiptId,

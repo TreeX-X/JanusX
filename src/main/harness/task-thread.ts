@@ -42,6 +42,8 @@ export interface TaskThread {
   taskUri: string
   mode: string
   model?: TaskThreadModel
+  reviewerModel?: TaskThreadModel
+  reviewer?: string
   attempts: TaskThreadAttempt[]
   evaluations: TaskThreadEvaluation[]
   createdAt: string
@@ -117,6 +119,14 @@ export async function setThreadModel(root: string, runId: string, model: TaskThr
   const thread = await loadTaskThread(root, runId)
   if (!thread) throw new Error(`IO_ERROR: no task thread for run ${runId}`)
   const next: TaskThread = { ...thread, model }
+  await writeThread(root, next)
+  return next
+}
+
+export async function setThreadReviewer(root: string, runId: string, reviewerModel: TaskThreadModel, reviewer?: string): Promise<TaskThread> {
+  const thread = await loadTaskThread(root, runId)
+  if (!thread) throw new Error(`IO_ERROR: no task thread for run ${runId}`)
+  const next: TaskThread = { ...thread, reviewerModel, ...(reviewer ? { reviewer } : {}) }
   await writeThread(root, next)
   return next
 }

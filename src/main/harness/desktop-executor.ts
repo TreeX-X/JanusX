@@ -1,6 +1,6 @@
 // Note: desktop xdo host owns checks and self-review — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
 /**
- * @file Desktop xdo execution host (S8-JanusX).
+ * @file Desktop verification and delegated execution host.
  * @description Runs an accepted task's declared verification on the desktop:
  *  pins the live snapshot, executes command steps in a validated child
  *  process (never a shell string), collects operator evidence for manual
@@ -18,6 +18,7 @@ import { relative, resolve } from 'node:path'
 import {
   codeKey,
   codeManifestHash,
+  taskExecutionPolicy,
   type Diagnostic,
   type Receipt,
   type ReceiptCheck,
@@ -25,7 +26,7 @@ import {
   type VerificationStep,
 } from '@janus-agent/harness-core'
 import { TaskScope, collectLiveSnapshot, collectTaskSnapshot } from '@janus-agent/harness-node'
-import { ensureTaskThread, recordThreadAttempt } from './task-thread'
+import { ensureTaskThread, recordThreadAttempt, recordThreadEvaluation } from './task-thread'
 import { buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles, type TaskBrief } from './task-brief'
 import {
   finishTaskRun,
@@ -57,7 +58,8 @@ export interface DesktopReviewPortInput {
 
 export interface DesktopExecutorPorts {
   command(step: VerificationStep, signal?: AbortSignal): Promise<DesktopCommandOutcome>
-  review(input: DesktopReviewPortInput, signal?: AbortSignal): Promise<{ verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[] }>
+  review(input: DesktopReviewPortInput, signal?: AbortSignal): Promise<{ verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[]; summary?: string }>
+  independentReview?: DesktopExecutorPorts['review']
 }
 
 export interface DesktopManualEvidence {
@@ -68,6 +70,7 @@ export interface DesktopManualEvidence {
 
 export interface DesktopExecuteOptions {
   implementor?: string
+  reviewer?: string
   timeoutMs?: number
   manualEvidence?: DesktopManualEvidence[]
   signal?: AbortSignal
@@ -112,14 +115,6 @@ function sameInputs(a: Array<{ uri: string; contentHash: string; criteria?: stri
 
 const SUMMARY_LIMIT = 4000
 
-function summarizeCommand(step: VerificationStep, outcome: DesktopCommandOutcome): string {
-  const head = outcome.timedOut
-    ? `command timed out`
-    : `exit ${outcome.exitCode ?? 'unknown'}`
-  const body = (outcome.summary || 'Command produced no output').slice(0, SUMMARY_LIMIT)
-  return `${step.program} ${(step.args ?? []).join(' ')} (cwd ${step.cwd}) :: ${head}\n${body}`
-}
-
 /**
  * Executes one declared command step without a shell. The program and args
  * travel as an array, the cwd must resolve inside the checkout, and output
@@ -152,17 +147,16 @@ export function runDesktopCommand(
     }
     child.stdout?.on('data', append)
     child.stderr?.on('data', append)
-    child.on('error', (error: Error) => {
-      promiseResolve({ ok: false, summary: `command failed to start: ${error.message}` })
-    })
+    let failure: Error | undefined
+    child.on('error', (error: Error) => { failure = error })
     child.on('close', (code: number | null, signalName: NodeJS.Signals | null) => {
       const timedOut = signalName === 'SIGTERM' && (opts?.signal?.aborted ?? false) === false && code === null
       const aborted = opts?.signal?.aborted ?? false
       promiseResolve({
-        ok: aborted === false && timedOut === false && code === 0,
+        ok: !failure && aborted === false && timedOut === false && code === 0,
         ...(code === null ? {} : { exitCode: code }),
         ...(timedOut || aborted ? { timedOut: true } : {}),
-        summary: output || 'Command produced no output',
+        summary: failure ? `command failed: ${failure.message}\n${output}` : output || 'Command produced no output',
       })
     })
   })
@@ -193,11 +187,11 @@ export function checkCoverageClaims(
 }
 
 /**
- * Executes the pinned xdo run to a receipt: verify, checks, self-review,
+ * Executes the pinned run to a receipt: verify, checks, mode-specific review,
  * record, finish. Failures record immutable receipts where one exists;
  * malformed review output records nothing and never completes.
  */
-export async function executeDesktopXdo(
+export async function verifyDesktopTask(
   root: string,
   runId: string,
   token: string,
@@ -213,8 +207,11 @@ export async function executeDesktopXdo(
   }
   const run = loaded.run
   if (!run) return fail(null, loaded.errors, { receiptId: '', completed: false, checks: [] })
-  if (run.mode !== 'xdo') {
-    return fail(run, [diag('CAPABILITY_UNAVAILABLE', `desktop host executes xdo only (run is ${run.mode}); delegated modes need their own host`, 'mode')], { receiptId: '', completed: false, checks: [] })
+  const policy = taskExecutionPolicy(run.mode, run.lease?.owner ?? 'desktop', runId)
+  const implementor = opts?.implementor ?? policy.implementor
+  const reviewer = opts?.reviewer?.trim() || policy.reviewer
+  if (policy.independent && (!ports.independentReview || reviewer === implementor || reviewer === run.lease?.owner)) {
+    return fail(run, [diag('CAPABILITY_UNAVAILABLE', 'xflow requires a separate independent reviewer', 'review')], { receiptId: '', completed: false, checks: [] })
   }
   if (run.executor !== 'internal') {
     return fail(run, [diag('CAPABILITY_UNAVAILABLE', 'external runs finish through their own host and handoff', 'executor')], { receiptId: '', completed: false, checks: [] })
@@ -249,7 +246,6 @@ export async function executeDesktopXdo(
       // Thread history is auxiliary; the receipt dwarfs it. Never fail the run for it.
     }
   }
-  const implementor = opts?.implementor ?? run.lease?.owner ?? 'desktop'
   let snapshot: Awaited<ReturnType<typeof collectTaskSnapshot>>
   try {
     snapshot = await collectTaskSnapshot(root, run.taskUri)
@@ -284,9 +280,14 @@ export async function executeDesktopXdo(
   }
   const evidence = new Map((opts?.manualEvidence ?? []).map((item) => [item.stepId, item]))
   const checks: ReceiptCheck[] = []
+  const checkCurrent = async () => {
+    opts?.signal?.throwIfAborted()
+    const current = await prepareDesktopTaskTurn(root, runId, token, 'self')
+    if (current.attempt !== run.attempt) throw new Error('STALE_BASELINE: task attempt changed')
+  }
   try {
     for (const step of snapshot.work.verification) {
-      opts?.signal?.throwIfAborted()
+      await checkCurrent()
       if (step.repoId !== snapshot.repoId) {
         return fail(run, [diag('CAPABILITY_UNAVAILABLE', `verification step ${step.id} targets another checkout; split multi-repository work into per-repo tasks`, 'verification')], { receiptId: '', completed: false, checks })
       }
@@ -322,7 +323,7 @@ export async function executeDesktopXdo(
   if (criteria.some((item) => !item.criterionHash)) {
     return fail(run, [diag('NOT_FOUND', 'an acceptance reference resolves to no hashed criterion; re-adopt the task contract', 'acceptanceRefs')], { receiptId: '', completed: false, checks })
   }
-  let claim: { verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[] }
+  let claim: { verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[]; summary?: string }
   const brief = buildTaskBrief({
     runId,
     taskUri: run.taskUri,
@@ -341,8 +342,14 @@ export async function executeDesktopXdo(
     // Brief copies are audit-only; the live brief above is what the review uses.
   }
   try {
-    opts?.signal?.throwIfAborted()
+    await checkCurrent()
     claim = await ports.review({ manifest, manifestHash, checks, criteria, brief }, opts?.signal)
+    if (!['approved', 'needs-fix', 'blocked'].includes(claim.verdict)) throw new Error('SCHEMA_INVALID: invalid self-review verdict')
+    if (policy.independent) {
+      await checkCurrent()
+      claim = await ports.independentReview!({ manifest, manifestHash, checks, criteria, brief: { ...brief, prior: [] } }, opts?.signal)
+    }
+    await checkCurrent()
   } catch (error) {
     if (opts?.signal?.aborted) await pauseTaskRun(root, runId, token)
     await noteAttempt({ checks })
@@ -360,16 +367,18 @@ export async function executeDesktopXdo(
     return fail(run, coverageProblems, { receiptId: '', completed: false, checks })
   }
   let receipt: Receipt = {
-    schema: 'harness-receipt/1', id: randomUUID(), taskUri: run.taskUri, mode: 'xdo', attempt: run.attempt,
+    schema: 'harness-receipt/1', id: randomUUID(), taskUri: run.taskUri, mode: run.mode, attempt: run.attempt,
     taskContractHash: run.baseline.taskContractHash, inputs: run.baseline.inputs, codeManifest: manifest,
     checks, coverage: claim.coverage,
-    review: { kind: 'self', verdict: claim.verdict, reviewedManifestHash: manifestHash, actor: implementor },
+    review: { kind: policy.independent ? 'independent' : 'self', verdict: claim.verdict, reviewedManifestHash: manifestHash, actor: policy.independent ? reviewer : implementor, ...(claim.summary ? { summary: claim.summary.slice(0, SUMMARY_LIMIT) } : {}) },
     createdAt: new Date().toISOString(), actor: implementor,
   }
   let current: Receipt['codeManifest']
   try {
     current = await scope.manifest()
+    await checkCurrent()
   } catch (error) {
+    if (opts?.signal?.aborted) await pauseTaskRun(root, runId, token)
     return fail(run, hostError(error), { receiptId: '', completed: false, checks })
   }
   // Drift during checks or review invalidates the evidence itself, but the
@@ -384,15 +393,21 @@ export async function executeDesktopXdo(
   const stored = await recordTaskReceipt(root, runId, token, receipt)
   if (!stored.ok) return fail(stored.run ?? run, stored.errors, { receiptId: receipt.id, completed: false, checks })
   await noteAttempt({ reviewVerdict: receipt.review.verdict, receiptId: receipt.id, checks })
+  if (policy.independent) {
+    await recordThreadEvaluation(root, runId, { attempt: run.attempt, reviewer, verdict: receipt.review.verdict, receiptId: receipt.id }).catch(() => undefined)
+  }
   let live: Awaited<ReturnType<typeof collectLiveSnapshot>>
   try {
     live = await collectLiveSnapshot(root, run.taskUri, implementor, current.map((row) => [codeKey(row.repoId, row.path), row.deleted === true ? null : (row.sha256 as string)]))
+    await checkCurrent()
   } catch (error) {
+    if (opts?.signal?.aborted) await pauseTaskRun(root, runId, token)
     return fail(stored.run ?? run, hostError(error), { receiptId: receipt.id, completed: false, checks })
   }
   if (!live.ok) return fail(stored.run ?? run, live.errors, { receiptId: receipt.id, completed: false, checks })
   const finished = await finishTaskRun(root, runId, token, receipt.id, live.live)
   if (!finished.ok) {
+    if (!policy.autoRepair || receipt.review.verdict === 'blocked') return fail(finished.run ?? run, finished.errors, { receiptId: receipt.id, completed: false, checks })
     const auto = await maybeAutoRepairTaskRun(root, runId, token)
     if (auto.ok && auto.data.repaired) {
       return { ok: true, run: auto.run ?? run, errors: finished.errors, data: { receiptId: receipt.id, completed: false, checks, repairedAttempt: auto.data.attempt } }
@@ -401,6 +416,9 @@ export async function executeDesktopXdo(
   }
   return { ok: true, run: finished.run ?? run, errors: [], data: { receiptId: receipt.id, completed: true, checks } }
 }
+
+/** Compatibility export for callers of the original verification-only host. */
+export const executeDesktopXdo = verifyDesktopTask
 
 /** Validates a raw model review text into a port output. Parse failures refuse; they never approve. */
 export function reviewClaimFromText(text: string): { ok: true; claim: { verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[] } } | { ok: false; errors: Diagnostic[] } {
@@ -420,6 +438,11 @@ export async function executeDesktopTask(
     for (;;) {
       opts?.signal?.throwIfAborted()
       const loaded = await getTaskRun(root, runId)
+      if (loaded.run?.mode === 'xflow') {
+        const policy = taskExecutionPolicy(loaded.run.mode, loaded.run.lease?.owner ?? 'desktop', runId)
+        const reviewer = opts?.reviewer?.trim() || policy.reviewer
+        if (!ports.independentReview || reviewer === (opts?.implementor ?? policy.implementor) || reviewer === loaded.run.lease?.owner) throw new Error('CAPABILITY_UNAVAILABLE: xflow requires a separate independent reviewer')
+      }
       if (loaded.run?.state === 'running') {
         const turn = await prepareDesktopTaskTurn(root, runId, token)
         const implementation = await ports.implement(turn, opts?.signal)
@@ -429,7 +452,7 @@ export async function executeDesktopTask(
         }
         await prepareDesktopTaskTurn(root, runId, token)
       }
-      const result = await executeDesktopXdo(root, runId, token, ports, opts)
+      const result = await verifyDesktopTask(root, runId, token, ports, opts)
       if (!result.ok || !result.data.repairedAttempt) {
         return { ...result, data: { ...result.data, repairedAttempt } }
       }

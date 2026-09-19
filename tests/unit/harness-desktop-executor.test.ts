@@ -10,7 +10,7 @@ import { codeManifestHash, type ReceiptCoverage } from '@janus-agent/harness-cor
 import { runGit } from '@janus-agent/harness-node'
 import { prepareTaskRun, startTaskRun, getTaskRun, pauseTaskRun, rebaselineTaskRun } from '../../src/main/harness/execution-adapter'
 import { executeDesktopTask, executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
-import { createDesktopImplementationPort, prepareDesktopTaskTurn } from '../../src/main/harness/desktop-task-turn'
+import { createDesktopImplementationPort, generateDesktopReviewText, prepareDesktopTaskTurn } from '../../src/main/harness/desktop-task-turn'
 import { readTaskTranscript } from '../../src/main/harness/task-transcript'
 import { buildDesktopReviewPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
 import { BRIEF_MAX_FILES, buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles } from '../../src/main/harness/task-brief'
@@ -104,7 +104,7 @@ async function makeRoot(opts?: { exitCode?: number; manual?: boolean; implementa
   return root
 }
 
-async function startedRun(root: string, mode: 'xdo' | 'xdel' = 'xdo'): Promise<{ runId: string; token: string }> {
+async function startedRun(root: string, mode: 'xdo' | 'xdel' | 'xflow' = 'xdo'): Promise<{ runId: string; token: string }> {
   const prepared = await prepareTaskRun(root, { taskRef: TASK_URI, mode, closeout: 'commit-required' })
   expect(prepared.errors).toEqual([])
   const started = await startTaskRun(root, prepared.data.runId, 'desktop', { by: 'desktop' })
@@ -129,6 +129,111 @@ function approvingPorts(root: string): DesktopExecutorPorts {
 }
 
 describe('desktop implementation loop', () => {
+  it.each(['xdel', 'xflow'] as const)('executes %s with separate actors and the expected review stages', async (mode) => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root, mode)
+    const review = vi.fn(approvingPorts(root).review)
+    const independentReview = vi.fn(async (input) => {
+      expect(input.brief.prior).toEqual([])
+      const turn = await prepareDesktopTaskTurn(root, runId, token, 'independent')
+      expect(turn.request.systemPromptPrefix).not.toContain('failureReceipt')
+      expect(await turn.request.toolGate!({ name: 'workspace_edit', arguments: { path: 'src/value.txt' } })).toMatchObject({ block: true })
+      expect(turn.request.toolAllowlist).toEqual(['workspace.read'])
+      expect(await turn.request.toolGate!({ name: 'workspace_read', arguments: { path: '.agents/.local/implementation.json' } })).toMatchObject({ block: true })
+      return approvingPorts(root).review(input)
+    })
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root), review, independentReview,
+      implement: async () => { await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false } },
+    })
+    expect(result.errors).toEqual([])
+    expect(result.data.completed).toBe(true)
+    expect(review).toHaveBeenCalledTimes(1)
+    expect(independentReview).toHaveBeenCalledTimes(mode === 'xflow' ? 1 : 0)
+    const receipt = JSON.parse(await readFile(join(root, '.agents/evidence', `${result.data.receiptId}.json`), 'utf8'))
+    expect(receipt.mode).toBe(mode)
+    expect(receipt.actor).toContain(':implementor:')
+    expect(receipt.actor === receipt.review.actor).toBe(mode === 'xdel')
+  })
+
+  it('repairs an independent finding once and stops when the budget is spent', async () => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root, 'xflow')
+    let attempts = 0
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root),
+      implement: async (turn) => {
+        if (++attempts === 2) expect(turn.request.systemPromptPrefix).toContain('Handle the empty value in src/value.txt')
+        await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false }
+      },
+      independentReview: async () => ({ verdict: 'needs-fix', coverage: [], summary: 'Handle the empty value in src/value.txt' }),
+    })
+    expect(result.data.completed).toBe(false)
+    expect(attempts).toBe(2)
+    expect((await getTaskRun(root, runId)).run).toMatchObject({ state: 'verifying', attempt: 2, repairBudget: { usedAuto: 1 } })
+  })
+
+  it('xdel stops after a failed check without evaluator or automatic repair', async () => {
+    const root = await makeRoot({ exitCode: 1 })
+    const { runId, token } = await startedRun(root, 'xdel')
+    const independentReview = vi.fn()
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root), independentReview,
+      implement: async () => ({ cancelled: false }), review: async () => ({ verdict: 'needs-fix', coverage: [] }),
+    })
+    expect(result.data.completed).toBe(false)
+    expect(independentReview).not.toHaveBeenCalled()
+    expect((await getTaskRun(root, runId)).run).toMatchObject({ state: 'verifying', attempt: 1, repairBudget: { usedAuto: 0 } })
+  })
+
+  it.each(['drift', 'cancel', 'blocked'] as const)('xflow refuses %s during independent review without automatic repair', async (condition) => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root, 'xflow')
+    const abort = new AbortController()
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root),
+      implement: async () => ({ cancelled: false }),
+      independentReview: async (input) => {
+        if (condition === 'drift') await writeFile(join(root, 'src/value.txt'), 'changed during review')
+        if (condition === 'cancel') abort.abort()
+        return condition === 'blocked' ? { verdict: 'blocked', coverage: [] } : approvingPorts(root).review(input)
+      },
+    }, { signal: abort.signal })
+    expect(result.data.completed).toBe(false)
+    expect((await getTaskRun(root, runId)).run).toMatchObject({ state: condition === 'cancel' ? 'paused' : 'verifying', attempt: 1, repairBudget: { usedAuto: 0 } })
+  })
+
+  it('rejects same-actor xflow before implementation', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root, 'xflow')
+    const implement = vi.fn()
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root), implement, independentReview: approvingPorts(root).review }, { reviewer: 'desktop' })
+    expect(result.errors[0].code).toBe('CAPABILITY_UNAVAILABLE')
+    expect(implement).not.toHaveBeenCalled()
+  })
+
+  it('independent model reads source through tools without implementation history or writes', async () => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root, 'xflow')
+    let rounds = 0
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root),
+      implement: async () => { await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false } },
+      independentReview: async (input) => {
+        const text = await generateDesktopReviewText(root, runId, token, 'independent', {
+          providerId: 'test', modelId: 'test', getModel: async () => ({}), maxTurns: 4,
+          streamTextFn: async (options) => {
+            const prompt = JSON.stringify(options.messages)
+            expect(prompt).not.toContain('Recovered implementation')
+            expect(Object.keys(options.tools ?? {})).not.toContain('workspace_edit')
+            if (rounds++ === 0) return calls('workspace_read', { path: 'src/value.txt' })
+            expect(prompt).toContain('43')
+            return { textStream: (async function* () { yield 'inspected' })() }
+          },
+        }, 'Read src/value.txt and inspect it.')
+        expect(text).toBe('inspected')
+        return approvingPorts(root).review(input)
+      },
+    })
+    expect(result.errors).toEqual([])
+    expect(result.data.completed).toBe(true)
+    expect(rounds).toBe(2)
+  })
   function model(streamTextFn: ChatTurnPorts['streamTextFn']) {
     return createDesktopImplementationPort({ providerId: 'test', modelId: 'test', getModel: async () => ({}), maxTurns: 6, streamTextFn })
   }
@@ -362,9 +467,9 @@ describe('desktop xdo host', () => {
     ])
   })
 
-  it('refuses delegated modes and stale contracts without executing', async () => {
+  it('refuses missing independent capability and stale contracts without executing', async () => {
     const root = await makeRoot()
-    const delegated = await startedRun(root, 'xdel')
+    const delegated = await startedRun(root, 'xflow')
     const refused = await executeDesktopXdo(root, delegated.runId, delegated.token, approvingPorts(root), { implementor: 'desktop' })
     expect(refused.ok).toBe(false)
     expect(refused.errors.some((error) => error.code === 'CAPABILITY_UNAVAILABLE')).toBe(true)

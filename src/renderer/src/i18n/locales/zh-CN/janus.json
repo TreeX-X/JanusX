@@ -550,6 +550,8 @@
       "title": "任务运行",
       "empty": "该任务暂无运行。准备一次运行以固定基线。",
       "modeLabel": "模式",
+      "xdelExecutionHint": "xdel 委派一次实施并自审；进一步修复需要明确发起。",
+      "xflowExecutionHint": "xflow 增加独立只读评审，并在修复预算内重新实施与验证。",
       "closeoutLabel": "落盘策略",
       "closeoutCommit": "必须提交",
       "closeoutWorktree": "工作树授权",

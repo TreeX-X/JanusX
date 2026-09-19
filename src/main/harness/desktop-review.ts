@@ -118,7 +118,7 @@ export interface DesktopModelReviewDeps {
 }
 
 export interface DesktopModelReviewPort {
-  (input: Omit<DesktopReviewPromptInput, 'taskUri' | 'attempt'>, signal?: AbortSignal): Promise<{ verdict: DesktopReviewVerdict; coverage: ReceiptCoverage[] }>
+  (input: Omit<DesktopReviewPromptInput, 'taskUri' | 'attempt'>, signal?: AbortSignal): Promise<{ verdict: DesktopReviewVerdict; coverage: ReceiptCoverage[]; summary?: string }>
 }
 
 export type DesktopPromptBuilder = (input: DesktopReviewPromptInput) => string
@@ -158,6 +158,6 @@ export function createModelReviewPort(
     if (!text) throw new Error('NOT_READY: self-review returned no text; refusing completion')
     const claim = parseDesktopReviewClaim(text)
     if (!claim.ok) throw new Error(`${claim.errors[0]?.code ?? 'SCHEMA_INVALID'}: ${claim.errors[0]?.message ?? 'self-review refused'}`)
-    return { verdict: claim.claim.verdict, coverage: claim.claim.coverage }
+    return { verdict: claim.claim.verdict, coverage: claim.claim.coverage, summary: claim.claim.summary.slice(0, 4000) }
   }
 }

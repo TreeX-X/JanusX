@@ -550,6 +550,8 @@
       "title": "Task runs",
       "empty": "No runs for this task yet. Prepare one to pin the baseline.",
       "modeLabel": "Mode",
+      "xdelExecutionHint": "xdel delegates one implementation and self-review. Further repairs require an explicit action.",
+      "xflowExecutionHint": "xflow adds an independent read-only review and repeats implementation within the repair budget.",
       "closeoutLabel": "Closeout",
       "closeoutCommit": "Commit required",
       "closeoutWorktree": "Working tree authorized",

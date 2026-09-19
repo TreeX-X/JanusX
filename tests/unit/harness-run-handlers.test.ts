@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   createModelReviewPort: vi.fn(),
   ensureTaskThread: vi.fn(),
   setThreadModel: vi.fn(),
+  setThreadReviewer: vi.fn(),
   readDesktopConcurrency: vi.fn(),
   readTaskTranscript: vi.fn(),
   getLanguageModel: vi.fn(),
@@ -128,6 +129,7 @@ vi.mock('../../src/main/harness/desktop-review', () => ({
 vi.mock('../../src/main/harness/task-thread', () => ({
   ensureTaskThread: mocks.ensureTaskThread,
   setThreadModel: mocks.setThreadModel,
+  setThreadReviewer: mocks.setThreadReviewer,
   readDesktopConcurrency: mocks.readDesktopConcurrency,
 }))
 
@@ -300,6 +302,27 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'BUSY' })
 
     await expect(execute({}, ROOT, { runId: '' })).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'runId' })
+  })
+
+  it('restores xflow reviewer identity and model separately from the implementor', async () => {
+    const execute = await handler(HARNESS_COMMAND_CHANNELS.runExecute)
+    mocks.readDesktopConcurrency.mockResolvedValue(null)
+    mocks.getTaskRun.mockResolvedValue({ run: { ...RUN, mode: 'xflow', state: 'running', attempt: 1, lease: { owner: 'desktop', token: 'tok' } }, errors: [] })
+    const thread = { model: { providerId: 'p', modelId: 'm' }, reviewerModel: { providerId: 'review-p', modelId: 'review-m' }, reviewer: 'auditor', attempts: [] }
+    mocks.ensureTaskThread.mockResolvedValueOnce(thread)
+    mocks.setThreadReviewer.mockResolvedValueOnce(thread)
+    mocks.createModelReviewPort.mockReset().mockImplementation((_uri, _attempt, deps, builder) => {
+      expect(deps).toMatchObject(thread.reviewerModel)
+      expect(builder).toBe(mocks.buildEvaluatorPrompt)
+      return async () => ({ verdict: 'approved', coverage: [] })
+    })
+    mocks.executeDesktopTask.mockImplementationOnce(async (_root, _runId, _token, ports, opts) => {
+      expect(opts.reviewer).toBe('auditor')
+      await ports.independentReview({})
+      return { ok: true, run: RUN, errors: [], data: { receiptId: 'independent', completed: true, checks: [] } }
+    })
+    await expect(execute({}, ROOT, { runId: 'run-1' })).resolves.toMatchObject({ receiptId: 'independent' })
+    expect(mocks.setThreadReviewer).toHaveBeenCalledWith(ROOT, 'run-1', thread.reviewerModel, 'auditor')
   })
 
   it('refuses executions past the desktop concurrency budget', async () => {

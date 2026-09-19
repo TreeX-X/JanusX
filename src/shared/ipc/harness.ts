@@ -171,6 +171,9 @@ export interface HarnessRunExecuteInput {
   runId: string
   providerId?: string
   modelId?: string
+  reviewer?: string
+  reviewerProviderId?: string
+  reviewerModelId?: string
   manualEvidence?: HarnessRunManualEvidence[]
   timeoutMs?: number
 }
@@ -212,6 +215,8 @@ export interface HarnessThreadSummary {
 
 export interface HarnessThreadDetail extends HarnessThreadSummary {
   model?: { providerId: string; modelId: string }
+  reviewerModel?: { providerId: string; modelId: string }
+  reviewer?: string
   history: HarnessThreadAttempt[]
 }
 

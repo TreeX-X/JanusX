@@ -8,6 +8,7 @@ import {
   readDesktopConcurrency,
   recordThreadAttempt,
   setThreadModel,
+  setThreadReviewer,
 } from '../../src/main/harness/task-thread'
 
 const roots: string[] = []
@@ -26,10 +27,13 @@ describe('task-bound thread store', () => {
     const created = await ensureTaskThread(root, { runId: 'run-1', taskUri: 'note://r/t', mode: 'xdo' })
     expect(created.attempts).toEqual([])
     await setThreadModel(root, 'run-1', { providerId: 'p', modelId: 'm' })
+    await setThreadReviewer(root, 'run-1', { providerId: 'review-p', modelId: 'review-m' }, 'auditor')
     await recordThreadAttempt(root, 'run-1', { attempt: 1, manifestHash: 'h1', checks: [{ id: 'V-1', kind: 'command', status: 'failed' }] })
     await recordThreadAttempt(root, 'run-1', { attempt: 1, manifestHash: 'h1', checks: [{ id: 'V-1', kind: 'command', status: 'passed' }], reviewVerdict: 'approved', receiptId: 'r-1' })
     const reloaded = await ensureTaskThread(root, { runId: 'run-1', taskUri: 'note://r/t', mode: 'xdo' })
     expect(reloaded.model).toEqual({ providerId: 'p', modelId: 'm' })
+    expect(reloaded.reviewerModel).toEqual({ providerId: 'review-p', modelId: 'review-m' })
+    expect(reloaded.reviewer).toBe('auditor')
     expect(reloaded.attempts).toHaveLength(1)
     expect(reloaded.attempts[0]).toMatchObject({ attempt: 1, receiptId: 'r-1', reviewVerdict: 'approved' })
   })

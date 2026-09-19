@@ -1,5 +1,5 @@
 import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -45,28 +45,29 @@ async function makeRoot(): Promise<string> {
   return root
 }
 
-async function startedRun(root: string): Promise<{ runId: string; token: string }> {
-  const prepared = await prepareTaskRun(root, { taskRef: TASK_URI, mode: 'xdo', closeout: 'commit-required' })
+async function startedRun(root: string, mode: 'xdo' | 'xflow' = 'xdo'): Promise<{ runId: string; token: string }> {
+  const prepared = await prepareTaskRun(root, { taskRef: TASK_URI, mode, closeout: 'commit-required', maxAutoRepairs: mode === 'xflow' ? 0 : 1 })
   expect(prepared.errors).toEqual([])
   const started = await startTaskRun(root, prepared.data.runId, 'desktop', { by: 'desktop' })
   expect(started.errors).toEqual([])
   return { runId: prepared.data.runId, token: started.run?.lease?.token as string }
 }
 
-async function verifiedRun(root: string): Promise<{ runId: string; token: string }> {
-  const { runId, token } = await startedRun(root)
+async function verifiedRun(root: string, mode: 'xdo' | 'xflow' = 'xdo'): Promise<{ runId: string; token: string }> {
+  const { runId, token } = await startedRun(root, mode)
   const executed = await executeDesktopXdo(root, runId, token, {
     command: (step, signal) => runDesktopCommand(root, step, { signal }),
     review: async () => ({ verdict: 'needs-fix', coverage: [] }),
-  }, { implementor: 'desktop' })
+    independentReview: async () => ({ verdict: 'needs-fix', coverage: [] }),
+  })
   expect(executed.data.receiptId).toBeTruthy()
   return { runId, token }
 }
 
 describe('independent review', () => {
-  it('audits pinned checks on its own thread and finishes on approval', async () => {
+  it.each(['xdo', 'xflow'] as const)('audits %s pinned checks on its own thread and finishes on approval', async (mode) => {
     const root = await makeRoot()
-    const { runId, token } = await verifiedRun(root)
+    const { runId, token } = await verifiedRun(root, mode)
     const reviewed = await requestIndependentReview(root, runId, token, {
       review: async (input) => {
         expect(input.checks).toMatchObject([{ id: 'V-1', status: 'passed' }])
@@ -77,11 +78,26 @@ describe('independent review', () => {
     }, { reviewer: 'evaluator' })
     expect(reviewed.errors).toEqual([])
     expect(reviewed.data.verdict).toBe('approved')
+    const receipt = JSON.parse(await readFile(join(root, '.agents/evidence', `${reviewed.data.receiptId}.json`), 'utf8'))
+    expect(receipt.actor).not.toBe(receipt.review.actor)
+    expect(receipt.actor).toBe(mode === 'xdo' ? 'desktop' : `desktop:implementor:${runId}`)
     const thread = await loadTaskThread(root, runId)
-    expect(thread?.evaluations).toMatchObject([{ reviewer: 'evaluator', verdict: 'approved', receiptId: reviewed.data.receiptId }])
+    expect(thread?.evaluations).toHaveLength(mode === 'xflow' ? 2 : 1)
+    expect(thread?.evaluations.at(-1)).toMatchObject({ reviewer: 'evaluator', verdict: 'approved', receiptId: reviewed.data.receiptId })
     const finished = await finishWithLatestReceipt(root, runId, token)
     expect(finished.errors).toEqual([])
     expect(finished.data).toMatchObject({ receiptId: reviewed.data.receiptId, completed: true })
+  })
+
+  it('blocks changed files during audit and rechecks files at standalone finish', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await verifiedRun(root)
+    const reviewed = await requestIndependentReview(root, runId, token, { review: async (input) => {
+      await writeFile(join(root, 'src/value.txt'), 'changed')
+      return { verdict: 'approved', coverage: input.criteria.map((criterion) => ({ ...criterion, checkIds: ['V-1'] })) }
+    } }, { reviewer: 'evaluator' })
+    expect(reviewed.data.verdict).toBe('blocked')
+    expect((await finishWithLatestReceipt(root, runId, token)).data.completed).toBe(false)
   })
 
   it('refuses same-actor review, unpinned runs, and missing evidence', async () => {

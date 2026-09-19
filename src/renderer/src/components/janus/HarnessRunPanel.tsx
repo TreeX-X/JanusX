@@ -96,8 +96,8 @@ function shortId(runId: string): string {
 }
 
 /**
- * Run panel (S8-JanusX surface): prepares, starts, executes (desktop xdo host
- * with declared checks plus self-review), independently reviews through a
+ * Run panel: prepares, starts, executes internal task modes with declared
+ * checks and mode-specific review, independently reviews through a
  * read-only evaluator turn, finishes against the latest receipt, repairs
  * through explicit packets, refreshes, pauses, resumes, rebaselines,
  * cancels, closeout-checks, hands off, and takes over task runs through the
@@ -204,6 +204,18 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   }, [load])
 
   const selected = runs.find((run) => run.runId === selectedId) ?? null
+  const localSelection = selected?.local !== false
+  useEffect(() => {
+    if (!selectedId || !localSelection) return
+    let cancelled = false
+    void runThread(cwd, selectedId).then((thread) => {
+      if (cancelled) return
+      if (thread.model) { setProviderId(thread.model.providerId); setModelId(thread.model.modelId) }
+      if (thread.reviewerModel) { setReviewerProvider(thread.reviewerModel.providerId); setReviewerModel(thread.reviewerModel.modelId) }
+      if (thread.reviewer) setReviewer(thread.reviewer)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [cwd, selectedId, localSelection])
   const history = useImplementationHistory(cwd, selected?.local === false ? null : selectedId, load)
   const executing = executingRun === JSON.stringify([cwd, selectedId]) || history?.transcript?.active === true
   const manualSteps = (draft?.contract?.work?.verification ?? []).filter((step) => step.kind === 'manual')
@@ -298,6 +310,11 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
         runId: selected.runId,
         ...(providerId.trim() ? { providerId: providerId.trim() } : {}),
         ...(modelId.trim() ? { modelId: modelId.trim() } : {}),
+        ...(selected.mode === 'xflow' ? {
+          ...(reviewer.trim() ? { reviewer: reviewer.trim() } : {}),
+          ...(reviewerProvider.trim() ? { reviewerProviderId: reviewerProvider.trim() } : {}),
+          ...(reviewerModel.trim() ? { reviewerModelId: reviewerModel.trim() } : {}),
+        } : {}),
         manualEvidence: Object.entries(evidence)
           .filter(([, item]) => item.observer.trim() && item.observation.trim())
           .map(([stepId, item]) => ({ stepId, observer: item.observer.trim(), observation: item.observation.trim() })),
@@ -609,6 +626,8 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
         <span className="harness-run-panel__title">{t('janus:harness.runs.title')}</span>
       </div>
       {draft ? <TaskContractEditor key={`${draft.uri}:${draft.hash}`} draft={draft} cwd={cwd} onReload={() => void load()} onAdopted={(accepted) => { setDraft(accepted); void load() }} /> : null}
+      {(selected?.mode ?? mode) === 'xdel' ? <p className="harness-run-panel__notice">{t('janus:harness.runs.xdelExecutionHint')}</p> : null}
+      {(selected?.mode ?? mode) === 'xflow' ? <p className="harness-run-panel__notice">{t('janus:harness.runs.xflowExecutionHint')}</p> : null}
       <div className="harness-run-panel__row">
         <label>
           <span>{t('janus:harness.runs.modeLabel')}</span>
@@ -705,7 +724,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
             <button type="button" className="blueprint-btn" disabled={!!busy || selected.local === false || selected.state !== 'queued'} onClick={() => void handleStart()}>
               {busy === 'start' ? t('janus:harness.runs.starting') : t('janus:harness.runs.start')}
             </button>
-            <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy || executing || selected.local === false || selected.executor !== 'internal' || !['running', 'verifying'].includes(selected.state) || selected.mode !== 'xdo'} onClick={() => void handleExecute()}>
+            <button type="button" className="blueprint-btn blueprint-btn--primary" disabled={!!busy || executing || selected.local === false || selected.executor !== 'internal' || !['running', 'verifying'].includes(selected.state)} onClick={() => void handleExecute()}>
               {busy === 'execute' ? t('janus:harness.runs.executing') : t('janus:harness.runs.execute')}
             </button>
             {executing ? (

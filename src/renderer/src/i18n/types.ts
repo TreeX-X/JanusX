@@ -1022,6 +1022,8 @@ export type TypedI18nKey =
   | 'janus:harness.runs.undoPreviewing'
   | 'janus:harness.runs.undoTitle'
   | 'janus:harness.runs.undone'
+  | 'janus:harness.runs.xdelExecutionHint'
+  | 'janus:harness.runs.xflowExecutionHint'
   | 'janus:identity.agent.abstracter'
   | 'janus:identity.agent.coder'
   | 'janus:identity.agent.evaluator'

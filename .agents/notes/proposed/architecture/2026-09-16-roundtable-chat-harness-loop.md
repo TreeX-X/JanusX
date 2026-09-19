@@ -16,7 +16,7 @@ Status: proposed
 
 桌面 internal xdo 的 [实施轮次](../../implemented/architecture/2026-09-19-desktop-task-implementation.md) 从已采纳 task 读取固定合同和基线，使用范围受限的真实文件工具实施，再运行声明检查和自审、保存正式 receipt。失败检查在预算内驱动下一次实施及复验；取消暂停任务，verifying 重试只重跑验收。Ink 的 [宿主接线](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-ink-harness-host.md) 同时覆盖命令与普通消息，历史 Note 与标准 profile 校验由共享文件层统一。宿主保持对等，各自调用共享运行内核和契约校验。
 
-下一阶段验证真实模型 Electron 和持久实施交互，再补齐终端与桌面 xdel/xflow 委派、跨机器 runner 编排、完整跨宿主场景等价以及版本化发行组合。现有外部进程启动、桌面独立评审和 task thread 不是完整委派闭环的证据。三仓规则切换须等这些门禁满足；总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
+CLI、Ink 与桌面的单任务 xdel/xflow 委派闭环见 [桌面模式实现](../../implemented/architecture/2026-09-19-desktop-delegated-modes.md) 和其引用的共享策略。xdel 一次实施并自审，xflow 以独立只读评审形成最终回执，并在预算内修复。持久实施历史与构建后的 Electron 确定性模型测试覆盖执行、回执、收尾和重启恢复。下一阶段验证外部真实模型、跨机器 runner 编排、完整跨宿主场景等价以及版本化发行组合；多任务依赖调度仍需单独实施。三仓规则切换须等这些门禁满足；总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
 
 ### 当前代码的接点和断点
 

@@ -8,7 +8,7 @@ Status: proposed
 
 审阅定位的主要缺口为：执行范围只有 prose、AC 引用与状态门禁缺少机器形状、合同哈希没有确定算法、closeout 提前声明提交成功、同名来源包缺少重试规则、轻量 CLI 依赖闭包不成立，以及缺少按仓库分配的可验证交付步骤。本文固定这些契约；设计条款本身不表示已实现或已测试。各阶段实际证据见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。
 
-当前实现与验证边界以 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md) 为总账。桌面支持范围受限的实施、检查与预算内修复，Ink 的普通消息和命令均进入任务控制器，CLI 与桌面共用历史 Note 分类和标准 profile 门禁。具体行为见 [桌面实施轮次](../../implemented/architecture/2026-09-19-desktop-task-implementation.md)、[Ink 宿主](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-ink-harness-host.md) 和 [共享 profile 门禁](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-harness-profile-namespace.md)。后续验收范围由 [闭环提案](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步) 维护。标准仍为 `harness-note/1`、`1.0.0-s1.1` candidate；实际发行组合与三仓规则切换尚待验证。
+当前实现与验证边界以 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md) 为总账。CLI、Ink 与桌面支持单任务 xdel/xflow 实施、自审或独立评审，以及对应的修复策略；具体行为及构建后 Electron 验证见 [桌面委派模式](../../implemented/architecture/2026-09-19-desktop-delegated-modes.md) 及其引用的共享策略。Ink 的普通消息和命令均进入任务控制器，CLI 与桌面共用历史 Note 分类和 [标准 profile 门禁](../../../../../janus-agentX/.agents/notes/implemented/architecture/2026-09-19-harness-profile-namespace.md)。后续验收范围由 [闭环提案](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步) 维护。标准仍为 `harness-note/1`、`1.0.0-s1.1` candidate；实际发行组合与三仓规则切换尚待验证。
 
 2026-09-18 批次仅修改 JanusX，基线为 `902b7bb`；验证时 janus-agentX HEAD 为 `d93b557`、WorkFlowX HEAD 为 `c36309d`，后两仓本批无修改。标准仍是 `harness-note/1`、`1.0.0-s1.1` candidate；WorkFlowX profile 记录摘要 `62e2ae8b674dd5510c9e7b8a2526e4b81710c1b6ad8d075837673708eb3c4a7a`，本批未重新生成标准 bundle 或验证发行组合。
 

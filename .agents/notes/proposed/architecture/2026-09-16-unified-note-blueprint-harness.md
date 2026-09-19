@@ -10,7 +10,7 @@ Status: proposed
 
 实施先读 [实施契约与 Agent 交接](2026-09-16-note-harness-implementation-contract.md)：C1–C6 唯一定义具体字段、接口、哈希、状态和错误，C7–C8 定义模块落点及实施依赖。本文负责通用资产、独立使用、分享与导航；[讨论到实施闭环方案](2026-09-16-roundtable-chat-harness-loop.md) 负责圆桌、聊天和实施的产品行为。三篇仍为 proposed 设计，部分阶段已有实现，不能据此视为标准已整体启用；协议变更先修改实施契约，再同步产品描述和示例。
 
-当前实现总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。新 Note 蓝图与主 Chat 共享会话，圆桌 action 草稿支持任务合同编辑与显式采纳；正式证据和新 checkout 结果重建具有集成测试。桌面支持范围受限的实施及预算内修复，Ink 消息支持任务隔离，CLI 与桌面共用历史 Note 分类和标准 profile 门禁。真实模型 Electron、完整跨宿主验收、发行矩阵及三仓库规则切换仍未完成，后续范围见 [闭环提案的当前状态](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步)。
+当前实现总账见 [S9 readiness](../../implemented/architecture/2026-09-18-harness-s9-readiness.md)。新 Note 蓝图与主 Chat 共享会话，圆桌 action 草稿支持任务合同编辑与显式采纳；正式证据和新 checkout 结果重建具有集成测试。CLI、Ink 与桌面支持单任务 xdel/xflow 委派、自审或独立评审及对应修复策略，桌面构建产物通过确定性模型的执行与重启测试。CLI 与桌面共用历史 Note 分类和标准 profile 门禁。外部真实模型 Electron、完整跨宿主验收、多任务调度、发行矩阵及三仓库规则切换仍未完成，后续范围见 [闭环提案的当前状态](2026-09-16-roundtable-chat-harness-loop.md#当前实施状态与下一步)。
 
 ### 三个仓库的实际职责
 
