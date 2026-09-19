@@ -266,6 +266,10 @@ const harnessAPI: HarnessAPI = {
   runAbort: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runAbort, cwd, runId),
   shareExport: (cwd, selection, outPath) =>
     ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareExport, cwd, selection, outPath),
+  shareImportPreview: (cwd, snapshot) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareImportPreview, cwd, snapshot),
+  shareImportApply: (cwd, snapshot) =>
+    ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.shareImportApply, cwd, snapshot),
   onChanged: (callback) => subscribeIpcEvent(HARNESS_EVENT_CHANNELS.changed, callback),
 }
 

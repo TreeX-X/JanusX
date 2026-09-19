@@ -18,6 +18,7 @@ import {
   nodeTypeToKind,
 } from '../harness/artifact-producer'
 import { harnessNoteService } from '../harness/service'
+import type { IncomingSnapshot } from '../harness/share-import'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
 import { applyUndo, previewUndo } from '../harness/undo'
 import { applyMigration, archiveBlueprintSource, previewMigration } from '../janus/blueprint-migrate'
@@ -283,6 +284,26 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     async (_e, cwd: string, selection: HarnessShareSelection, outPath: string) => {
       const root = await withRoot(cwd)
       return harnessNoteService.exportSnapshot(root, selection, outPath)
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.shareImportPreview,
+    async (_e, cwd: string, snapshot: IncomingSnapshot) => {
+      const root = await withRoot(cwd)
+      const plan = await harnessNoteService.previewShareImport(root, snapshot)
+      return {
+        notes: plan.notes.map((item) => ({ id: item.id, action: item.kind, ...('reason' in item && item.reason ? { reason: item.reason } : {}) })),
+        receipts: plan.receipts.map((item) => ({ id: item.id, action: item.action, ...(item.reason ? { reason: item.reason } : {}) })),
+      }
+    },
+  )
+
+  ipcMain.handle(
+    HARNESS_COMMAND_CHANNELS.shareImportApply,
+    async (_e, cwd: string, snapshot: IncomingSnapshot) => {
+      const root = await withRoot(cwd)
+      return harnessNoteService.applyShareImport(root, snapshot)
     },
   )
 

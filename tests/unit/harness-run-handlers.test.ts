@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => ({
   readDesktopConcurrency: vi.fn(),
   getLanguageModel: vi.fn(),
   generateText: vi.fn(),
+  previewShareImport: vi.fn(),
+  applyShareImport: vi.fn(),
 }))
 
 const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
@@ -57,7 +59,13 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../src/main/harness/service', () => ({
-  harnessNoteService: { resolveRoot: mocks.resolveRoot, onChange: vi.fn(), projectView: mocks.projectView },
+  harnessNoteService: {
+    resolveRoot: mocks.resolveRoot,
+    onChange: vi.fn(),
+    projectView: mocks.projectView,
+    previewShareImport: mocks.previewShareImport,
+    applyShareImport: mocks.applyShareImport,
+  },
 }))
 
 vi.mock('../../src/main/harness/execution-adapter', () => ({
@@ -170,6 +178,31 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     })
     expect(mocks.prepareTaskRun).not.toHaveBeenCalled()
     mocks.resolveRoot.mockResolvedValue({ ok: true, root: ROOT, diagnostics: [] })
+  })
+
+  it('previews share imports without prose and applies them through', async () => {
+    mocks.resolveRoot.mockResolvedValue({ ok: true, root: ROOT, diagnostics: [] })
+    const preview = await handler(HARNESS_COMMAND_CHANNELS.shareImportPreview)
+    mocks.previewShareImport.mockResolvedValueOnce({
+      notes: [
+        { kind: 'create', id: 'n1', uri: 'note://r/n1', relPath: '.agents/notes/a.md', afterMarkdown: '# T' },
+        { kind: 'invalid', id: 'n2', reason: 'bad prose' },
+      ],
+      receipts: [{ id: 'rc1', action: 'write' }],
+    })
+    await expect(preview({}, ROOT, { snapshot: true })).resolves.toEqual({
+      notes: [{ id: 'n1', action: 'create' }, { id: 'n2', action: 'invalid', reason: 'bad prose' }],
+      receipts: [{ id: 'rc1', action: 'write' }],
+    })
+    const apply = await handler(HARNESS_COMMAND_CHANNELS.shareImportApply)
+    mocks.applyShareImport.mockResolvedValueOnce({
+      notes: [{ id: 'n1', action: 'applied' }],
+      receipts: [{ id: 'rc1', action: 'applied' }],
+    })
+    await expect(apply({}, ROOT, { snapshot: true })).resolves.toEqual({
+      notes: [{ id: 'n1', action: 'applied' }],
+      receipts: [{ id: 'rc1', action: 'applied' }],
+    })
   })
 
   it('prepares runs and surfaces the first diagnostic as the failure', async () => {

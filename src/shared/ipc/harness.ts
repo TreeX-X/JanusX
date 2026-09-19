@@ -10,6 +10,8 @@ export const HARNESS_COMMAND_CHANNELS = {
   bindingsSet: 'harness:bindings:set',
   sharePreview: 'harness:share:preview',
   shareExport: 'harness:share:export',
+  shareImportPreview: 'harness:share:import-preview',
+  shareImportApply: 'harness:share:import-apply',
   runPrepare: 'harness:run:prepare',
   runStart: 'harness:run:start',
   runStatus: 'harness:run:status',
@@ -89,6 +91,28 @@ export interface HarnessBinding {
 
 export interface HarnessShareSelection {
   ids?: string[]
+}
+
+export interface HarnessShareImportNote {
+  id: string
+  action: 'create' | 'replace' | 'identical' | 'invalid'
+  reason?: string
+}
+
+export interface HarnessShareImportReceipt {
+  id: string
+  action: 'applied' | 'kept' | 'invalid' | 'conflict'
+  reason?: string
+}
+
+export interface HarnessShareImportPreview {
+  notes: HarnessShareImportNote[]
+  receipts: HarnessShareImportReceipt[]
+}
+
+export interface HarnessShareImportResult {
+  notes: Array<{ id: string; action: 'applied' | 'identical' | 'invalid'; reason?: string }>
+  receipts: HarnessShareImportReceipt[]
 }
 
 export interface HarnessChangedEvent {
@@ -283,6 +307,8 @@ export interface HarnessAPI {
   setBinding(cwd: string, binding: HarnessBinding): Promise<HarnessBinding[]>
   sharePreview(cwd: string, selection: HarnessShareSelection): Promise<{ notes: number; json: string }>
   shareExport(cwd: string, selection: HarnessShareSelection, outPath: string): Promise<{ outPath: string; notes: number }>
+  shareImportPreview(cwd: string, snapshot: unknown): Promise<HarnessShareImportPreview>
+  shareImportApply(cwd: string, snapshot: unknown): Promise<HarnessShareImportResult>
   runPrepare(cwd: string, input: HarnessRunPrepareInput): Promise<HarnessRunPrepared>
   runStart(cwd: string, runId: string, owner: string, authorization: { by: string; ref?: string } | null): Promise<{ attempt: number }>
   runStatus(cwd: string, runId: string): Promise<HarnessRunState>

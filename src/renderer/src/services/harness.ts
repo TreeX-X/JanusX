@@ -16,6 +16,8 @@ import type {
   HarnessRunReviewInput,
   HarnessRunReviewResult,
   HarnessRunState,
+  HarnessShareImportPreview,
+  HarnessShareImportResult,
   HarnessShareSelection,
   HarnessThreadDetail,
   HarnessThreadSummary,
@@ -42,6 +44,8 @@ export type {
   HarnessRunReviewInput,
   HarnessRunReviewResult,
   HarnessRunState,
+  HarnessShareImportPreview,
+  HarnessShareImportResult,
   HarnessShareSelection,
   HarnessThreadDetail,
   HarnessThreadSummary,
@@ -85,6 +89,14 @@ export function shareExport(
   outPath: string,
 ): Promise<{ outPath: string; notes: number }> {
   return window.electron.harness.shareExport(cwd, selection, outPath)
+}
+
+export function shareImportPreview(cwd: string, snapshot: unknown): Promise<HarnessShareImportPreview> {
+  return window.electron.harness.shareImportPreview(cwd, snapshot)
+}
+
+export function shareImportApply(cwd: string, snapshot: unknown): Promise<HarnessShareImportResult> {
+  return window.electron.harness.shareImportApply(cwd, snapshot)
 }
 
 export function runPrepare(cwd: string, input: HarnessRunPrepareInput): Promise<HarnessRunPrepared> {

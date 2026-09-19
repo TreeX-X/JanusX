@@ -156,6 +156,8 @@ describe('harness IPC contract', () => {
       'setBinding',
       'sharePreview',
       'shareExport',
+      'shareImportPreview',
+      'shareImportApply',
       'runPrepare',
       'runStart',
       'runStatus',

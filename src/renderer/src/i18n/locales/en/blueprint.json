@@ -410,6 +410,11 @@
     "bindingLabel": "Checkout",
     "sharePreview": "Share preview",
     "shareExport": "Export share",
+    "shareImport": "Import share",
+    "shareImportSummary": "Preview: {{created}} new, {{updated}} changed, {{identical}} unchanged, {{invalid}} invalid; {{receipts}} receipts.",
+    "shareImportApply": "Apply import",
+    "shareImportDone": "Imported {{applied}} notes ({{identical}} unchanged, {{invalid}} invalid); {{receipts}} receipts written.",
+    "shareImportBadFile": "Share file is not valid JSON: {{message}}",
     "conflictTitle": "Save conflict",
     "conflictReload": "External change won the save. Reload to continue.",
     "invalidKept": "{{count}} invalid files kept, not executed"
