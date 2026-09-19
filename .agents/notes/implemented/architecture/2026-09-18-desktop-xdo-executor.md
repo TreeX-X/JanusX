@@ -67,11 +67,17 @@ re-exports and keeps only the neutral kernel entry.
   `tests/unit/harness-desktop-xdo-live.test.ts` stays skipped without
   `JANUS_XDO_LIVE_PROVIDER` and `JANUS_XDO_LIVE_MODEL`; with credentials it
   completes a real task against live review plus a real commit closeout.
+  The run panel binds the chat model catalog instead of free text: execute
+  and review endpoints render provider and model selects from the same
+  janus provider source and chat default, with free-text fallback when
+  nothing is configured and no IPC or kernel change. The desktop run and
+  review-repair specs drive the selects against the island fixture.
   Typecheck, production build, package boundaries, and bilingual key
   checks pass.
-- **Costs and limits**: the review model is typed per execution; binding the
-  chat model picker is follow-up. There is no granular record/finish IPC and
+- **Costs and limits**: there is no granular record/finish IPC and
   no repair channel: xdo retries re-execute on the same manifest, and repair
   stays reserved for delegated hosts. Declared commands are trusted
   workspace code under runtime policy, not an operating-system sandbox.
-  Single-checkout tasks only; multi-repository work splits per repo.
+  Single-checkout tasks only; multi-repository work splits per repo. The
+  desktop Electron run of the updated specs stays unverified in this
+  environment; island browser coverage passes.

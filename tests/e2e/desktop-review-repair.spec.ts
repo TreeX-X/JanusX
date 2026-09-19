@@ -19,8 +19,8 @@ test('independent review audits, repair re-opens, and finish completes', async (
   await task.getByRole('button', { name: 'Start', exact: true }).click()
 
   await task.getByLabel('Reviewer', { exact: true }).fill('evaluator')
-  await task.getByLabel('Reviewer provider', { exact: true }).fill('p')
-  await task.getByLabel('Reviewer model', { exact: true }).fill('model-b')
+  await task.getByLabel('Reviewer provider', { exact: true }).selectOption('p')
+  await task.getByLabel('Reviewer model', { exact: true }).selectOption('model-b')
   await task.getByRole('button', { name: 'Independent review', exact: true }).click()
   await expect(task).toContainText('Review verdict needs-fix')
 

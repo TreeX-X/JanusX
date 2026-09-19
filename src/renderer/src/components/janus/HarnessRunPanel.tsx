@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 // Note: independent review and limited repair — see .agents/notes/implemented/architecture/2026-09-18-independent-review-repair.md
 // Note: reversible managed writes — see .agents/notes/implemented/architecture/2026-09-18-harness-undo.md
 import { useI18n } from '@/i18n/useI18n'
+import { getTerminalDefault, getTerminalProviders, listModels } from '@/services/llm'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
 import { TaskContractEditor } from './TaskContractEditor'
 import {
@@ -46,6 +47,39 @@ interface HarnessRunPanelProps {
 }
 
 type HarnessRunExecutor = 'internal' | 'external'
+
+interface ChatModelOption {
+  providerId: string
+  providerName: string
+  modelId: string
+  label: string
+  isDefault: boolean
+}
+
+/**
+ * Same catalog source as the chat model picker: enabled janus providers
+ * plus catalog-listed models, with the chat default flagged. The run
+ * panel stays usable with free text when nothing is configured.
+ */
+async function loadChatModelOptions(): Promise<ChatModelOption[]> {
+  const [providers, defaultProvider] = await Promise.all([getTerminalProviders('janus'), getTerminalDefault('janus')])
+  const enabledProviders = providers.filter((provider) => provider.enabled !== false)
+  const options = (await Promise.all(enabledProviders.map(async (provider) => {
+    const configuredModelIds = provider.models?.length
+      ? provider.models
+      : [provider.modelId || (defaultProvider?.provider.id === provider.id ? defaultProvider.modelId : '')]
+    const models = await listModels('janus', provider.id).catch(() => [])
+    const modelIds = [...new Set([...models.map((model) => model.id), ...configuredModelIds].filter(Boolean))]
+    return modelIds.map((modelId) => ({
+      providerId: provider.id,
+      providerName: provider.name,
+      modelId,
+      label: `${provider.name} / ${modelId}`,
+      isDefault: defaultProvider?.provider.id === provider.id && defaultProvider.modelId === modelId,
+    }))
+  }))).flat()
+  return options
+}
 
 function failureMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'code' in err) {
@@ -90,6 +124,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const [reviewer, setReviewer] = useState('reviewer')
   const [reviewerProvider, setReviewerProvider] = useState('')
   const [reviewerModel, setReviewerModel] = useState('')
+  const [modelOptions, setModelOptions] = useState<ChatModelOption[]>([])
   const [repairSummary, setRepairSummary] = useState('')
   const [takeoverReason, setTakeoverReason] = useState('')
   const [evidence, setEvidence] = useState<Record<string, { observer: string; observation: string }>>({})
@@ -103,6 +138,32 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const [lastResult, setLastResult] = useState<HarnessRunExecuteResult | null>(null)
   const [reviewResult, setReviewResult] = useState<HarnessRunReviewResult | null>(null)
   const [undo, setUndo] = useState<HarnessUndoPreview | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const options = await loadChatModelOptions()
+        if (cancelled) return
+        setModelOptions(options)
+        const fallback = options.find((option) => option.isDefault) ?? options[0]
+        if (fallback) {
+          setProviderId((current) => current || fallback.providerId)
+          setModelId((current) => current || fallback.modelId)
+          setReviewerProvider((current) => current || fallback.providerId)
+          setReviewerModel((current) => current || fallback.modelId)
+        }
+      } catch {
+        if (!cancelled) setModelOptions([])
+      }
+    }
+    void refresh()
+    window.addEventListener('janus:llm-config-changed', refresh)
+    return () => {
+      cancelled = true
+      window.removeEventListener('janus:llm-config-changed', refresh)
+    }
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -138,6 +199,29 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
 
   const selected = runs.find((run) => run.runId === selectedId) ?? null
   const manualSteps = (draft?.contract?.work?.verification ?? []).filter((step) => step.kind === 'manual')
+  const providers = [...new Map(modelOptions.map((option) => [option.providerId, option.providerName])).entries()]
+  const modelsFor = (providerIdForModels: string): ChatModelOption[] => (
+    providerIdForModels ? modelOptions.filter((option) => option.providerId === providerIdForModels) : modelOptions
+  )
+  const modelChoices = (providerIdForModels: string, current: string): ChatModelOption[] => {
+    const list = modelsFor(providerIdForModels)
+    if (current && !list.some((option) => option.modelId === current)) {
+      const owner = modelOptions.find((option) => option.modelId === current)
+      return [...list, {
+        providerId: owner?.providerId ?? providerIdForModels,
+        providerName: owner?.providerName ?? '',
+        modelId: current,
+        label: current,
+        isDefault: false,
+      }]
+    }
+    return list
+  }
+  const pickProvider = (providerIdPicked: string, setPickedProvider: (value: string) => void, setPickedModel: (value: string) => void) => {
+    setPickedProvider(providerIdPicked)
+    const first = modelsFor(providerIdPicked)[0]
+    setPickedModel(first ? first.modelId : '')
+  }
   const entryCommand = selected
     ? [`cd "${cwd}"`, 'janus', `/harness ${taskUri} --mode ${selected.mode}`, `# pinned baseline: ${handoffContent?.path ?? 'write the handoff first'}`].join('\n')
     : ''
@@ -550,11 +634,23 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
       <div className="harness-run-panel__row">
         <label>
           <span>{t('janus:harness.runs.providerLabel')}</span>
-          <input value={providerId} onChange={(event) => setProviderId(event.target.value)} aria-label={t('janus:harness.runs.providerLabel')} placeholder="openai-compatible" />
+          {modelOptions.length ? (
+            <select value={providerId} onChange={(event) => pickProvider(event.target.value, setProviderId, setModelId)} aria-label={t('janus:harness.runs.providerLabel')}>
+              {providers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          ) : (
+            <input value={providerId} onChange={(event) => setProviderId(event.target.value)} aria-label={t('janus:harness.runs.providerLabel')} placeholder="openai-compatible" />
+          )}
         </label>
         <label>
           <span>{t('janus:harness.runs.modelLabel')}</span>
-          <input value={modelId} onChange={(event) => setModelId(event.target.value)} aria-label={t('janus:harness.runs.modelLabel')} placeholder="gpt-4o-mini" />
+          {modelOptions.length ? (
+            <select value={modelId} onChange={(event) => setModelId(event.target.value)} aria-label={t('janus:harness.runs.modelLabel')}>
+              {modelChoices(providerId, modelId).map((option) => <option key={`${option.providerId}/${option.modelId}`} value={option.modelId}>{option.label}</option>)}
+            </select>
+          ) : (
+            <input value={modelId} onChange={(event) => setModelId(event.target.value)} aria-label={t('janus:harness.runs.modelLabel')} placeholder="gpt-4o-mini" />
+          )}
         </label>
       </div>
       {manualSteps.length > 0 ? (
@@ -639,11 +735,23 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
             </label>
             <label>
               <span>{t('janus:harness.runs.reviewerProviderLabel')}</span>
-              <input value={reviewerProvider} onChange={(event) => setReviewerProvider(event.target.value)} aria-label={t('janus:harness.runs.reviewerProviderLabel')} />
+              {modelOptions.length ? (
+                <select value={reviewerProvider} onChange={(event) => pickProvider(event.target.value, setReviewerProvider, setReviewerModel)} aria-label={t('janus:harness.runs.reviewerProviderLabel')}>
+                  {providers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              ) : (
+                <input value={reviewerProvider} onChange={(event) => setReviewerProvider(event.target.value)} aria-label={t('janus:harness.runs.reviewerProviderLabel')} />
+              )}
             </label>
             <label>
               <span>{t('janus:harness.runs.reviewerModelLabel')}</span>
-              <input value={reviewerModel} onChange={(event) => setReviewerModel(event.target.value)} aria-label={t('janus:harness.runs.reviewerModelLabel')} />
+              {modelOptions.length ? (
+                <select value={reviewerModel} onChange={(event) => setReviewerModel(event.target.value)} aria-label={t('janus:harness.runs.reviewerModelLabel')}>
+                  {modelChoices(reviewerProvider, reviewerModel).map((option) => <option key={`${option.providerId}/${option.modelId}`} value={option.modelId}>{option.label}</option>)}
+                </select>
+              ) : (
+                <input value={reviewerModel} onChange={(event) => setReviewerModel(event.target.value)} aria-label={t('janus:harness.runs.reviewerModelLabel')} />
+              )}
             </label>
           </div>
           {selected.repairBudget ? (
