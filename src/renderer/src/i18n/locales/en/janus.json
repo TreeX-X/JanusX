@@ -518,6 +518,19 @@
     }
   },
   "harness": {
+    "history": {
+      "title": "Implementation history",
+      "active": "Execution is active. You can stop it from this panel.",
+      "empty": "No implementation output recorded yet.",
+      "loadFailed": "Cannot load implementation history: {{message}}",
+      "turn": "Attempt {{attempt}} · {{status}}",
+      "running": "Implementing",
+      "completed": "Implementation turn ended",
+      "cancelled": "Stopped",
+      "failed": "Failed",
+      "interrupted": "Interrupted; tool outcomes may be uncertain",
+      "truncated": "Only bounded output is retained. Task completion is determined by verification receipts."
+    },
     "contract": {
       "title": "Task contract",
       "add": "Add",

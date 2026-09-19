@@ -518,6 +518,19 @@
     }
   },
   "harness": {
+    "history": {
+      "title": "实施记录",
+      "active": "任务正在执行，可在此面板停止。",
+      "empty": "尚无实施输出记录。",
+      "loadFailed": "无法读取实施记录：{{message}}",
+      "turn": "第 {{attempt}} 次尝试 · {{status}}",
+      "running": "实施中",
+      "completed": "本次实施已结束",
+      "cancelled": "已停止",
+      "failed": "失败",
+      "interrupted": "已中断，工具结果可能未确认",
+      "truncated": "仅保留有限输出，任务是否完成以验证收据为准。"
+    },
     "contract": {
       "title": "任务合同",
       "add": "添加",

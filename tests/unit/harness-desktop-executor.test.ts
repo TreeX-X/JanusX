@@ -8,9 +8,10 @@ import { createHash } from 'node:crypto'
 import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { codeManifestHash, type ReceiptCoverage } from '@janus-agent/harness-core'
 import { runGit } from '@janus-agent/harness-node'
-import { prepareTaskRun, startTaskRun, getTaskRun, pauseTaskRun } from '../../src/main/harness/execution-adapter'
+import { prepareTaskRun, startTaskRun, getTaskRun, pauseTaskRun, rebaselineTaskRun } from '../../src/main/harness/execution-adapter'
 import { executeDesktopTask, executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
 import { createDesktopImplementationPort, prepareDesktopTaskTurn } from '../../src/main/harness/desktop-task-turn'
+import { readTaskTranscript } from '../../src/main/harness/task-transcript'
 import { buildDesktopReviewPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
 import { BRIEF_MAX_FILES, buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles } from '../../src/main/harness/task-brief'
 
@@ -165,6 +166,11 @@ describe('desktop implementation loop', () => {
     expect(run.receipts).toHaveLength(2)
     expect(prompts[2]).toContain('failureReceiptId')
     expect(prompts[2]).toContain('V-1')
+    expect(prompts[2]).toContain('Prior implementation observations')
+    const history = await readTaskTranscript(root, runId)
+    expect(history.active).toBe(false)
+    expect(history.turns.map((turn) => turn.attempt)).toEqual([1, 2])
+    expect(history.turns[0].tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'workspace_edit', status: 'completed' })]))
     const receipts = await Promise.all(run.receipts.map(async (id) => JSON.parse(await readFile(join(root, '.agents/evidence', `${id}.json`), 'utf8'))))
     expect(receipts.map((receipt) => receipt.checks[0].status)).toEqual(['failed', 'passed'])
   })
@@ -214,6 +220,37 @@ describe('desktop implementation loop', () => {
     expect(result.ok).toBe(false)
     expect(command).not.toHaveBeenCalled()
     expect((await getTaskRun(root, runId)).run).toMatchObject({ state: 'paused', receipts: [] })
+    expect((await readTaskTranscript(root, runId)).turns[0].status).toBe('cancelled')
+  })
+
+  it('restores observations through a recreated model port on the same pinned task', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root)
+    const turn = await prepareDesktopTaskTurn(root, runId, token)
+    await model(async () => textOnly())(turn)
+    const prompts: string[] = []
+    await model(async (options) => { prompts.push(JSON.stringify(options.messages)); return textOnly() })(await prepareDesktopTaskTurn(root, runId, token))
+    expect(prompts[0]).toContain('Prior implementation observations')
+    expect(prompts[0]).toContain('Implemented')
+    expect((await readTaskTranscript(root, runId)).turns).toHaveLength(2)
+  })
+
+  it('retains old history for display but excludes it after an explicit rebaseline', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root)
+    const original = await prepareDesktopTaskTurn(root, runId, token)
+    await model(async () => textOnly())(original)
+    expect((await pauseTaskRun(root, runId, token)).ok).toBe(true)
+    const notePath = join(root, '.agents/notes', `2026-09-18-probe--${TASK_ID.slice(0, 8)}.md`)
+    await writeFile(notePath, (await readFile(notePath, 'utf8')).replace('Probe the desktop', 'Verify the revised desktop'))
+    expect((await rebaselineTaskRun(root, runId, token, TASK_URI, { by: 'desktop' })).ok).toBe(true)
+    const started = await startTaskRun(root, runId, 'desktop', { by: 'desktop' })
+    const fresh = await prepareDesktopTaskTurn(root, runId, started.run!.lease!.token)
+    expect(fresh.baselineHash).not.toBe(original.baselineHash)
+    const prompts: string[] = []
+    await model(async (options) => { prompts.push(JSON.stringify(options.messages)); return textOnly() })(fresh)
+    expect(prompts[0]).not.toContain('Prior implementation observations')
+    expect((await readTaskTranscript(root, runId)).turns).toHaveLength(2)
   })
 
   it('stops at the repair budget and retries verification without another implementation', async () => {

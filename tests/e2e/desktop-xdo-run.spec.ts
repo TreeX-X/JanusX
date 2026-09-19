@@ -39,11 +39,20 @@ test('desktop xdo run executes with evidence, aborts mid-flight, and recovers', 
   await page.evaluate(() => { (window as any).projectFixture.gateExecute = true })
   await task.getByRole('button', { name: 'Execute and verify', exact: true }).click()
   await expect(task.getByRole('button', { name: 'Stop execution', exact: true })).toBeVisible()
+  await expect(task.getByRole('region', { name: 'Implementation history' })).toContainText('Reading the accepted task')
+  await page.getByRole('button', { name: 'Toggle task', exact: true }).click()
+  await expect(task).toHaveCount(0)
+  await page.getByRole('button', { name: 'Toggle task', exact: true }).click()
+  await expect(task.getByRole('button', { name: 'Stop execution', exact: true })).toBeVisible()
+  await expect(task.getByRole('button', { name: 'Execute and verify', exact: true })).toBeDisabled()
+  await expect(task.getByRole('region', { name: 'Implementation history' })).toContainText('workspace.edit [running]')
   await task.getByRole('button', { name: 'Stop execution', exact: true }).click()
   await page.evaluate(() => { (window as any).projectFixture.gateResolve?.() })
-  await expect(task).toContainText('Receipt receipt-1')
-  await expect(task).toContainText('verified complete')
-  await expect(task).toContainText('V-1 [command/passed]')
+  await expect(task.getByRole('button', { name: 'Stop execution', exact: true })).toHaveCount(0)
+  await expect(task.getByRole('region', { name: 'Implementation history' })).toContainText('workspace.edit [completed]')
+  await page.getByRole('button', { name: 'Toggle task', exact: true }).click()
+  await page.getByRole('button', { name: 'Toggle task', exact: true }).click()
+  await expect(task.getByRole('region', { name: 'Implementation history' })).toContainText('Reading the accepted task')
 
   const counts = await page.evaluate(() => {
     const fixture = (window as any).projectFixture

@@ -250,6 +250,7 @@ const harnessAPI: HarnessAPI = {
     ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runTakeover, cwd, runId, newOwner, reason),
   runThreads: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runThreads, cwd),
   runThread: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runThread, cwd, runId),
+  runTranscript: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runTranscript, cwd, runId),
   runThreadClose: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runThreadClose, cwd, runId),
   runReview: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runReview, cwd, input),
   runFinish: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runFinish, cwd, runId),

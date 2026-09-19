@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 // Note: desktop entry to task runs incl. the xdo host — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
 // Note: external runner backflow surface — see .agents/notes/implemented/architecture/2026-09-18-external-runner-backflow.md
 // Note: thread registry, activation, and close — see .agents/notes/implemented/architecture/2026-09-18-thread-registry-activation.md
@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n/useI18n'
 import { getTerminalDefault, getTerminalProviders, listModels } from '@/services/llm'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
 import { TaskContractEditor } from './TaskContractEditor'
+import { HarnessImplementationHistory, useImplementationHistory } from './HarnessImplementationHistory'
 import {
   runAbort,
   runCancel,
@@ -108,6 +109,9 @@ function shortId(runId: string): string {
  */
 export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const { t } = useI18n('janus')
+  const viewKey = JSON.stringify([cwd, taskUri])
+  const currentView = useRef(viewKey)
+  currentView.current = viewKey
   const [runs, setRuns] = useState<HarnessRunState[]>([])
   const [threads, setThreads] = useState<HarnessThreadSummary[]>([])
   const [threadDetail, setThreadDetail] = useState<HarnessThreadDetail | null>(null)
@@ -129,7 +133,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const [takeoverReason, setTakeoverReason] = useState('')
   const [evidence, setEvidence] = useState<Record<string, { observer: string; observation: string }>>({})
   const [busy, setBusy] = useState<string | null>(null)
-  const [executing, setExecuting] = useState(false)
+  const [executingRun, setExecutingRun] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [closeoutMsg, setCloseoutMsg] = useState<string | null>(null)
@@ -167,14 +171,16 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
 
   const load = useCallback(async () => {
     try {
-      setDraft(await window.electron.harness.taskRead(cwd, taskUri))
-      const listed = await runList(cwd)
+      const [draft, listed, threads] = await Promise.all([window.electron.harness.taskRead(cwd, taskUri), runList(cwd), runThreads(cwd)])
+      if (currentView.current !== JSON.stringify([cwd, taskUri])) return
+      setDraft(draft)
       const own = listed.filter((run) => run.taskUri === taskUri)
       setRuns(own)
       setSelectedId((current) => (current && own.some((run) => run.runId === current) ? current : (own[0]?.runId ?? null)))
-      setThreads((await runThreads(cwd)).filter((thread) => thread.taskUri === taskUri))
+      setThreads(threads.filter((thread) => thread.taskUri === taskUri))
       setError(null)
     } catch (err: unknown) {
+      if (currentView.current !== JSON.stringify([cwd, taskUri])) return
       setError(t('janus:harness.runs.listFailed', { message: failureMessage(err) }))
     }
   }, [cwd, taskUri, t])
@@ -198,6 +204,8 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   }, [load])
 
   const selected = runs.find((run) => run.runId === selectedId) ?? null
+  const history = useImplementationHistory(cwd, selected?.local === false ? null : selectedId, load)
+  const executing = executingRun === JSON.stringify([cwd, selectedId]) || history?.transcript?.active === true
   const manualSteps = (draft?.contract?.work?.verification ?? []).filter((step) => step.kind === 'manual')
   const providers = [...new Map(modelOptions.map((option) => [option.providerId, option.providerName])).entries()]
   const modelsFor = (providerIdForModels: string): ChatModelOption[] => (
@@ -281,7 +289,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
   const handleExecute = async () => {
     if (busy || executing || !selected) return
     setBusy('execute')
-    setExecuting(true)
+    setExecutingRun(JSON.stringify([cwd, selected.runId]))
     setError(null)
     setNotice(null)
     setLastResult(null)
@@ -305,7 +313,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
       setError(t('janus:harness.runs.executeFailed', { message: failureMessage(err) }))
       await load()
     } finally {
-      setExecuting(false)
+      setExecutingRun(null)
       setBusy(null)
     }
   }
@@ -890,6 +898,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           </div>
         ) : null}
       </div>
+      {selected?.local !== false && selectedId ? <HarnessImplementationHistory transcript={history?.transcript} error={history?.error} /> : null}
       {lastResult ? (
         <div className="harness-run-panel__result" role="status">
           <span>{t('janus:harness.runs.receiptLabel', { receipt: shortId(lastResult.receiptId) })}</span>

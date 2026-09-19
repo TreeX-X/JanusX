@@ -20,6 +20,7 @@ import type {
   HarnessShareImportResult,
   HarnessShareSelection,
   HarnessThreadDetail,
+  HarnessTranscript,
   HarnessThreadSummary,
   HarnessUndoPreview,
   HarnessUndoResult,
@@ -146,6 +147,10 @@ export function runThreads(cwd: string): Promise<HarnessThreadSummary[]> {
 
 export function runThread(cwd: string, runId: string): Promise<HarnessThreadDetail> {
   return window.electron.harness.runThread(cwd, runId)
+}
+
+export function runTranscript(cwd: string, runId: string): Promise<HarnessTranscript> {
+  return window.electron.harness.runTranscript(cwd, runId)
 }
 
 export function runThreadClose(cwd: string, runId: string): Promise<{ closed: boolean }> {

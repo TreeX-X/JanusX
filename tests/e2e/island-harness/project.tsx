@@ -9,7 +9,7 @@ import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import type { ChatAgentEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
-import type { HarnessTaskDraft } from '../../../src/shared/ipc/harness'
+import type { HarnessTaskDraft, HarnessTranscript } from '../../../src/shared/ipc/harness'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
 import '../../../src/renderer/src/components/blueprint/blueprint.css'
@@ -30,6 +30,7 @@ const fixture = {
   prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0, reviews: 0, finishes: 0, repairs: 0, undoPreviews: 0, undoApplies: 0,
   gateExecute: false, gateResolve: null as null | (() => void),
   lastExecute: null as null | { runId: string; providerId?: string; modelId?: string; manualEvidence?: Array<{ stepId: string; observer: string; observation: string }> },
+  transcript: { runId: 'run-1', active: false, turns: [] } as HarnessTranscript,
   runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean }>,
 }
 ;(window as any).projectFixture = fixture
@@ -72,6 +73,7 @@ Object.assign(window.electron.harness, {
     return draft
   },
   runList: async () => fixture.runs,
+  runTranscript: async () => structuredClone(fixture.transcript),
   runPrepare: async (_cwd: string, input: { taskUri: string; mode: string; closeout: string; executor?: string }) => {
     fixture.prepares++
     fixture.runs.push({ runId: 'run-1', taskUri: input.taskUri, mode: input.mode, state: 'queued', attempt: 0, executor: input.executor ?? 'internal', closeout: input.closeout, receipts: 0, updatedAt: '', local: true, repairBudget: { maxAuto: 1, usedAuto: 0 } })
@@ -94,10 +96,18 @@ Object.assign(window.electron.harness, {
   runExecute: async (_cwd: string, input: NonNullable<typeof fixture.lastExecute>) => {
     fixture.executes++
     fixture.lastExecute = input
+    fixture.transcript = { runId: input.runId, active: true, turns: [{
+      id: 'turn-1', taskUri: uri, attempt: 1, baselineHash: 'baseline', providerId: 'p', modelId: 'model-a',
+      status: 'running', text: 'Reading the accepted task and updating src/value.txt.',
+      tools: [{ id: 'edit-1', name: 'workspace.edit', status: 'running' }], truncated: false, startedAt: '', updatedAt: '',
+    }] }
     if (fixture.gateExecute) await new Promise<void>((resolve) => { fixture.gateResolve = resolve })
     const run = fixture.runs.find((item) => item.runId === input.runId)!
     run.state = 'done'
     run.receipts = 1
+    fixture.transcript.active = false
+    fixture.transcript.turns[0].status = 'completed'
+    fixture.transcript.turns[0].tools[0].status = 'completed'
     return { receiptId: 'receipt-1', completed: true, checks: [{ id: 'V-1', kind: 'command', status: 'passed', summary: 'exit 0' }] }
   },
   runPause: async (_cwd: string, runId: string) => {
@@ -173,6 +183,7 @@ Object.assign(window.electron.harness, {
     fixture.threadCloses++
     const holder = fixture as unknown as { threadDetails?: Record<string, unknown> }
     if (holder.threadDetails) delete holder.threadDetails[runId]
+    fixture.transcript.turns = []
     return { closed: true }
   },
 })
@@ -181,8 +192,10 @@ function App() {
   const chat = useJanusChatController()
   const projectChat = useOptionalJanusChatController({ ownerRepoId: repoId, viewId: blueprint.id })
   const [open, setOpen] = useState(true)
+  const [taskOpen, setTaskOpen] = useState(true)
   return <main>
     <button onClick={() => setOpen((value) => !value)}>Toggle blueprint</button>
+    <button onClick={() => setTaskOpen((value) => !value)}>Toggle task</button>
     <button onClick={() => chat.selectModel('p', 'model-b')}>Choose model B</button>
     <button onClick={() => chat.createConversation()}>New personal chat</button>
     <button onClick={() => projectChat && chat.selectConversation(projectChat.conversationId)}>Return to project</button>
@@ -200,7 +213,7 @@ function App() {
     <div className="fixture-layout">
       <section data-testid="main-chat"><JanusChat visible docked compactNavigation focused={!open} modeColor="#318b78" messages={chat.messages} pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error} modelOptions={chat.modelOptions} activeModel={chat.activeModel} resourceController={chat.resourceController} conversationController={chat} onSelectModel={chat.selectModel} onSend={chat.send} onRewrite={chat.rewrite} onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} /></section>
       {open ? <section data-testid="blueprint-chat"><BlueprintMaintenancePanel onClose={() => setOpen(false)} /></section> : null}
-      <section data-testid="task"><HarnessRunPanel cwd={workspace.path} taskUri={uri} /></section>
+      {taskOpen ? <section data-testid="task"><HarnessRunPanel cwd={workspace.path} taskUri={uri} /></section> : null}
     </div>
   </main>
 }

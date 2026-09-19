@@ -1,5 +1,5 @@
 // Note: desktop implementation uses a scoped model turn — see .agents/notes/implemented/architecture/2026-09-19-desktop-task-implementation.md
-import { randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { createAgentRuntime, FilePolicyAuditStore, registerWorkspaceTools } from '@janus-agent/agent-core'
 import { ChatSessionRuntime } from '@janus-agent/chat-core'
@@ -8,12 +8,14 @@ import { collectTaskSnapshot, TaskScope } from '@janus-agent/harness-node'
 import { readLease, runChatTurn, type ChatTurnPorts, type ChatTurnRequest } from '@janus-agent/janus-agent'
 import { buildJanusChatTurnPorts } from '../llm/janus-agent-ports'
 import { getTaskRun } from './execution-adapter'
+import { beginTaskTranscript } from './task-transcript'
 
 export interface DesktopTaskTurn {
   root: string
   runId: string
   taskUri: string
   attempt: number
+  baselineHash: string
   request: Pick<ChatTurnRequest, 'sourceTag' | 'conversationId' | 'systemPromptPrefix' | 'toolAllowlist' | 'toolGate'>
 }
 
@@ -46,6 +48,7 @@ export async function prepareDesktopTaskTurn(root: string, runId: string, token:
   const repair = run.repairs.find((item) => item.attempt === run.attempt)
   return {
     root, runId, taskUri: run.taskUri, attempt: run.attempt,
+    baselineHash: createHash('sha256').update(canon(run.baseline)).digest('hex'),
     request: {
       sourceTag: 'harness', conversationId: `harness-${runId}-${run.attempt}`,
       systemPromptPrefix: [
@@ -94,10 +97,15 @@ export function createDesktopImplementationPort(deps: DesktopTaskModelDeps) {
     registerWorkspaceTools(runtime.registry)
     const session = await runtime.createSession({ workspaceId, workspaceRoot: turn.root, approvalMode: 'auto-run' }, callerId)
     let cancellation: Promise<unknown> | undefined
+    let transcript: Awaited<ReturnType<typeof beginTaskTranscript>> | undefined
     const cancel = () => { cancellation ??= runtime.cancelSession(session.id) }
     signal?.addEventListener('abort', cancel, { once: true })
     try {
       signal?.throwIfAborted()
+      transcript = await beginTaskTranscript(turn.root, turn.runId, {
+        taskUri: turn.taskUri, attempt: turn.attempt, baselineHash: turn.baselineHash,
+        providerId: deps.providerId, modelId: deps.modelId,
+      })
       const ports = buildJanusChatTurnPorts({
         callerId,
         getProviderSettings: async () => ({ modelId: deps.modelId }),
@@ -111,8 +119,10 @@ export function createDesktopImplementationPort(deps: DesktopTaskModelDeps) {
       })
       let denied: string | undefined
       const result = await runChatTurn({
-        ...turn.request, requestId: randomUUID(), providerId: deps.providerId, modelId: deps.modelId, callerId,
+        ...turn.request, requestId: transcript.id, providerId: deps.providerId, modelId: deps.modelId, callerId,
+        systemPromptPrefix: [turn.request.systemPromptPrefix, transcript.recovery].filter(Boolean).join('\n'),
         toolGate: async (call) => {
+          await transcript!.flush()
           const gate = await turn.request.toolGate?.(call)
           if (gate) denied = gate.reason
           return gate
@@ -120,11 +130,15 @@ export function createDesktopImplementationPort(deps: DesktopTaskModelDeps) {
         messages: [{ role: 'user', content: 'Implement the accepted task now. Read the relevant files and make the required edits within its scope. The host will run the declared checks.' }],
         workspaceResources: [{ workspaceId, workspacePath: session.workspace.workspaceRoot, workspaceName: 'Task workspace', agentSessionId: session.id }],
         chatSession: new ChatSessionRuntime(),
-      }, ports, {}, signal)
+      }, ports, { onEvent: (event) => transcript!.onEvent(event) }, signal)
       const failed = result.toolTraces.find((trace) => trace.status !== 'completed')
+      await transcript.finish(result.cancelled ? 'cancelled' : denied || failed ? 'failed' : 'completed', result, denied ?? failed?.summary)
       if (denied) throw new Error(`PERMISSION_DENIED: ${denied}`)
       if (!result.cancelled && failed) throw new Error(`NOT_READY: implementation tool failed: ${failed.summary}`)
       return { cancelled: result.cancelled }
+    } catch (error) {
+      await transcript?.finish(signal?.aborted ? 'cancelled' : 'failed', undefined, error)
+      throw error
     } finally {
       signal?.removeEventListener('abort', cancel)
       cancel()

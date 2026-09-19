@@ -23,6 +23,7 @@ export const HARNESS_COMMAND_CHANNELS = {
   runTakeover: 'harness:run:takeover',
   runThreads: 'harness:run:threads',
   runThread: 'harness:run:thread',
+  runTranscript: 'harness:run:transcript',
   runThreadClose: 'harness:run:thread-close',
   runReview: 'harness:run:review',
   runFinish: 'harness:run:finish',
@@ -214,6 +215,28 @@ export interface HarnessThreadDetail extends HarnessThreadSummary {
   history: HarnessThreadAttempt[]
 }
 
+export interface HarnessImplementationTurn {
+  id: string
+  taskUri: string
+  attempt: number
+  baselineHash: string
+  providerId: string
+  modelId: string
+  status: 'running' | 'completed' | 'cancelled' | 'failed' | 'interrupted'
+  text: string
+  tools: Array<{ id: string; name: string; status: string; summary?: string }>
+  error?: string
+  truncated: boolean
+  startedAt: string
+  updatedAt: string
+}
+
+export interface HarnessTranscript {
+  runId: string
+  active: boolean
+  turns: HarnessImplementationTurn[]
+}
+
 export interface HarnessRunReviewInput {
   runId: string
   reviewer: string
@@ -320,6 +343,7 @@ export interface HarnessAPI {
   runTakeover(cwd: string, runId: string, newOwner: string, reason: string): Promise<{ state: string }>
   runThreads(cwd: string): Promise<HarnessThreadSummary[]>
   runThread(cwd: string, runId: string): Promise<HarnessThreadDetail>
+  runTranscript(cwd: string, runId: string): Promise<HarnessTranscript>
   runThreadClose(cwd: string, runId: string): Promise<{ closed: boolean }>
   runReview(cwd: string, input: HarnessRunReviewInput): Promise<HarnessRunReviewResult>
   runFinish(cwd: string, runId: string): Promise<{ receiptId: string; completed: boolean }>

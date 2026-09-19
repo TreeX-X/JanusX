@@ -46,6 +46,7 @@ import type { HarnessRunState } from '../../shared/ipc/harness'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ensureTaskThread, loadTaskThread } from './task-thread'
+import { removeTaskTranscript } from './task-transcript'
 
 // Note: desktop and terminal read the same portable proof - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
 function resultState(result: TaskResult, run?: HarnessRun): HarnessRunState {
@@ -384,7 +385,7 @@ export async function openTaskThread(root: string, runId: string): Promise<OpRes
 }
 
 /**
- * Destroys a thread file plus its briefs after an explicit user decision.
+ * Destroys a thread file, implementation history and briefs after an explicit user decision.
  * Notes, receipts, and run records always survive. Active owned runs refuse:
  * pause, cancel, or finish first so no turn loses its thread mid-flight.
  */
@@ -402,10 +403,12 @@ export async function closeTaskThread(root: string, runId: string): Promise<OpRe
   const stored = await loadTaskThread(root, runId).catch(() => null)
   if (!stored) return { ok: false, run, errors: [diag('NOT_FOUND', `no thread to close for run ${runId}`)], data: { closed: false } }
   try {
+    await removeTaskTranscript(root, runId)
     await rm(join(root, '.agents', '.local', 'runs', runId, 'thread.json'), { force: true })
     await rm(join(root, '.agents', '.local', 'runs', runId, 'briefs'), { recursive: true, force: true })
   } catch (error) {
-    return { ok: false, run, errors: [diag('IO_ERROR', `cannot close thread for run ${runId}: ${(error as Error).message}`)], data: { closed: false } }
+    const failure = error as { code?: Diagnostic['code']; message?: string }
+    return { ok: false, run, errors: [diag(failure.code ?? 'IO_ERROR', `cannot close thread for run ${runId}: ${failure.message}`)], data: { closed: false } }
   }
   return { ok: true, run, errors: [], data: { closed: true } }
 }

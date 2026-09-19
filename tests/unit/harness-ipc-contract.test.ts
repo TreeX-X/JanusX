@@ -167,6 +167,7 @@ describe('harness IPC contract', () => {
       'runTakeover',
       'runThreads',
       'runThread',
+      'runTranscript',
       'runThreadClose',
       'runReview',
       'runFinish',

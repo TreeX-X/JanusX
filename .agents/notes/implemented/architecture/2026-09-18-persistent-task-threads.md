@@ -18,7 +18,7 @@ thread, and model endpoints restored together with history.
 
 `src/main/harness/task-thread.ts` persists one thread per run under
 `.agents/.local/runs/<runId>/thread.json` with atomic temp-plus-rename
-writes. Each thread carries the review model endpoint and one entry per
+writes. Separate [implementation observations](2026-09-19-desktop-implementation-history.md) carry bounded model output, tool outcomes and baseline-matched recovery. Each thread carries the review model endpoint and one entry per
 attempt with the tested manifest hash, check outcomes, review verdict,
 receipt id, and repair packet. `executeDesktopXdo` ensures the thread on
 entry, feeds the last attempts as review history, and records the attempt
@@ -61,5 +61,5 @@ fresh thread while run records, Notes, and receipts stay intact.
   Notes. Hidden-thread approval routing does not apply:
   desktop turns run no interactive tools, so there are no hidden approvals
   to route. `max_depth` holds trivially because direct turns never nest.
-  The overall job time budget stays unenforced until progress events make
-  long executions cancellable mid-turn from the panel.
+  The panel restores cancellation controls from host activity after remount.
+  The overall job time budget remains unenforced.

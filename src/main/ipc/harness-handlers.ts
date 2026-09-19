@@ -28,6 +28,7 @@ import { blueprintMaintenanceService } from '../janus/maintenance/service'
 import { buildEvaluatorPrompt, createModelReviewPort } from '../harness/desktop-review'
 import { executeDesktopTask, runDesktopCommand } from '../harness/desktop-executor'
 import { createDesktopImplementationPort } from '../harness/desktop-task-turn'
+import { readTaskTranscript } from '../harness/task-transcript'
 import { configService, DEFAULT_AGENT_MAX_STEPS } from '../config/service'
 import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { finishWithLatestReceipt, requestIndependentReview } from '../harness/independent-review'
@@ -421,6 +422,20 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   // Lease tokens never cross IPC; the renderer passes intent and evidence only.
 
   const inFlight = new Map<string, AbortController>()
+  const executionKey = (root: string, runId: string) => JSON.stringify([process.platform === 'win32' ? root.toLowerCase() : root, runId])
+
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.runTranscript, async (_e, cwd: string, runId: string) => {
+    const root = await withRoot(cwd)
+    try {
+      const transcript = await readTaskTranscript(root, runId)
+      return { ...transcript, active: transcript.active || inFlight.has(executionKey(root, runId)) }
+    } catch (error) {
+      const failure = error as { code?: HarnessFailure['code']; message?: string }
+      const code = failure.code ?? 'IO_ERROR'
+      // Electron serializes Error.message; thrown records become "[object Object]".
+      throw Object.assign(new Error(`${code}: ${failure.message ?? 'Cannot read implementation history'}`), { code })
+    }
+  })
 
   async function runStateOf(root: string, runId: string): Promise<{ state: string }> {
     const loaded = await getTaskRun(root, runId)
@@ -453,15 +468,15 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       const root = await withRoot(cwd)
       const runId = input?.runId
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run execute needs a run id', { path: 'runId' })
-      if (inFlight.has(runId)) throwFailure('BUSY', 'this run already has an in-flight execution; abort it first', { path: 'runId' })
+      if (inFlight.has(executionKey(root, runId))) throwFailure('BUSY', 'this run already has an in-flight execution; abort it first', { path: 'runId' })
       const configRoot = desktopConfigRoot()
       const budget = configRoot ? await readDesktopConcurrency(configRoot) : null
       if (budget && inFlight.size >= budget.maxThreads) {
         throwFailure('BUSY', `desktop concurrency budget spent (${inFlight.size}/${budget.maxThreads}); wait for or abort a running execution`, { path: 'runId' })
       }
-      if (inFlight.has(runId)) throwFailure('BUSY', 'this run already has an in-flight execution', { path: 'runId' })
+      if (inFlight.has(executionKey(root, runId))) throwFailure('BUSY', 'this run already has an in-flight execution', { path: 'runId' })
       const controller = new AbortController()
-      inFlight.set(runId, controller)
+      inFlight.set(executionKey(root, runId), controller)
       try {
         const loaded = await getTaskRun(root, runId)
         if (!loaded.run) throwRunFailure(loaded.errors)
@@ -511,7 +526,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
           repairedAttempt: executed.data.repairedAttempt ?? null,
         }
       } finally {
-        inFlight.delete(runId)
+        inFlight.delete(executionKey(root, runId))
       }
     },
   )
@@ -560,7 +575,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     async (_e, cwd: string, runId: string): Promise<{ state: string }> => {
       const root = await withRoot(cwd)
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run abort needs a run id', { path: 'runId' })
-      const controller = inFlight.get(runId)
+      const controller = inFlight.get(executionKey(root, runId))
       if (!controller) throwFailure('NOT_READY', 'no in-flight execution owns this run', { path: 'runId' })
       ;(controller as AbortController).abort()
       return runStateOf(root, runId)
@@ -590,7 +605,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run takeover needs a run id', { path: 'runId' })
       if (typeof newOwner !== 'string' || !newOwner.trim()) throwFailure('SCHEMA_INVALID', 'run takeover needs a new owner', { path: 'newOwner' })
       if (typeof reason !== 'string' || !reason.trim()) throwFailure('SCHEMA_INVALID', 'takeover needs a reason; silent ownership changes strand runs', { path: 'reason' })
-      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      if (inFlight.has(executionKey(root, runId))) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
       const taken = await takeoverTaskRun(root, runId, newOwner.trim(), reason.trim())
       if (!taken.ok) throwRunFailure(taken.errors)
       return runStateOf(root, runId)
@@ -626,7 +641,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     async (_e, cwd: string, runId: string): Promise<{ closed: boolean }> => {
       const root = await withRoot(cwd)
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run thread close needs a run id', { path: 'runId' })
-      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      if (inFlight.has(executionKey(root, runId))) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
       const closed = await closeTaskThread(root, runId)
       if (!closed.ok) throwRunFailure(closed.errors)
       return closed.data
@@ -655,7 +670,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run review needs a run id', { path: 'runId' })
       const reviewer = input?.reviewer?.trim() ?? ''
       if (!reviewer) throwFailure('SCHEMA_INVALID', 'independent review needs a reviewer identity', { path: 'reviewer' })
-      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      if (inFlight.has(executionKey(root, runId))) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
       const { token } = await runOwnerToken(root, runId)
       const loaded = await getTaskRun(root, runId)
       const taskUri = loaded.run?.taskUri as string
@@ -683,7 +698,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
     async (_e, cwd: string, runId: string): Promise<{ receiptId: string; completed: boolean }> => {
       const root = await withRoot(cwd)
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run finish needs a run id', { path: 'runId' })
-      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      if (inFlight.has(executionKey(root, runId))) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
       const { token } = await runOwnerToken(root, runId)
       const finished = await finishWithLatestReceipt(root, runId, token)
       if (!finished.ok) throwRunFailure(finished.errors)
@@ -699,7 +714,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       if (typeof runId !== 'string' || !runId) throwFailure('SCHEMA_INVALID', 'run repair needs a run id', { path: 'runId' })
       const summary = input?.summary?.trim() ?? ''
       if (!summary) throwFailure('SCHEMA_INVALID', 'repair needs a short failure summary', { path: 'summary' })
-      if (inFlight.has(runId)) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
+      if (inFlight.has(executionKey(root, runId))) throwFailure('BUSY', 'an in-flight desktop execution owns this run; abort it first', { path: 'runId' })
       const loaded = await getTaskRun(root, runId)
       if (!loaded.run) throwRunFailure(loaded.errors)
       const failureReceiptId = loaded.run?.receipts[(loaded.run?.receipts.length ?? 1) - 1]

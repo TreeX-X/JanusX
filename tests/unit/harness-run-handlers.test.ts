@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   ensureTaskThread: vi.fn(),
   setThreadModel: vi.fn(),
   readDesktopConcurrency: vi.fn(),
+  readTaskTranscript: vi.fn(),
   getLanguageModel: vi.fn(),
   generateText: vi.fn(),
   previewShareImport: vi.fn(),
@@ -129,6 +130,8 @@ vi.mock('../../src/main/harness/task-thread', () => ({
   setThreadModel: mocks.setThreadModel,
   readDesktopConcurrency: mocks.readDesktopConcurrency,
 }))
+
+vi.mock('../../src/main/harness/task-transcript', () => ({ readTaskTranscript: mocks.readTaskTranscript }))
 
 vi.mock('../../src/main/llm/LlmService', () => ({
   llmService: { getLanguageModel: mocks.getLanguageModel },
@@ -331,8 +334,16 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     const refusal = expect(first).rejects.toMatchObject({ code: 'UNSUPPORTED_SCHEMA' })
     await enteredGate
     await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'BUSY' })
+    const transcript = await handler(HARNESS_COMMAND_CHANNELS.runTranscript)
+    mocks.readTaskTranscript.mockResolvedValue({ runId: 'run-1', active: false, turns: [] })
+    await expect(transcript({}, ROOT, 'run-1')).resolves.toMatchObject({ active: true, turns: [] })
+    mocks.resolveRoot.mockResolvedValueOnce({ ok: true, root: 'C:\\another-checkout', diagnostics: [] })
+    await expect(transcript({}, 'C:\\another-checkout', 'run-1')).resolves.toMatchObject({ active: false })
     release({ run: null, errors: [{ code: 'UNSUPPORTED_SCHEMA', message: 'profile mismatch' }] })
     await refusal
+    await expect(transcript({}, ROOT, 'run-1')).resolves.toMatchObject({ active: false })
+    mocks.readTaskTranscript.mockRejectedValueOnce(Object.assign(new Error('invalid history'), { code: 'RECOVERY_REQUIRED' }))
+    await expect(transcript({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'RECOVERY_REQUIRED' })
     mocks.getTaskRun.mockResolvedValueOnce({ run: null, errors: [{ code: 'NOT_FOUND', message: 'missing' }] })
     await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })

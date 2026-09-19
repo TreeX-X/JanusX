@@ -19,7 +19,7 @@ Recorded F-matrix (J = JanusX test, A = janus-agentX suite, E = existing suite, 
 - F05 bundle retry and coverage: J direct (artifact-bundle suite plus the retry guard).
 - F06 receipt validity: A (evaluateReceipt, canonical review digest, scoped execution and verification); J live-snapshot and adapter coverage with the same shared validator.
 - F07 closeout lattice: A (commit/dirty/no-git branches); J gate-level (receipt-less refusal, unsatisfied passthrough).
-- F08 dual entry and power scope: J/E (shared project controller, turn exclusion, proposal ownership, validated Note context and browser dual-entry interaction with mocked host ports); real-model Electron acceptance remains G.
+- F08 dual entry and power scope: J/E (shared project controller, turn exclusion, proposal ownership, validated Note context and browser dual-entry interaction with mocked host ports). The [durable-history boundary](2026-09-19-desktop-implementation-history.md) includes built Electron acceptance with deterministic HTTP model responses, real scoped file tools, checks, receipts, closeout and application restart. External real-model Electron acceptance remains G.
 - F09 external runners and idempotence: J direct (double start, verifying park, handoff file, idempotent create retry).
 - F10 cross-host equivalence and index rebuild: J partial (rescan stability, shared `validateNote` across producers, roundtable draft adoption through real verification and fresh-clone result/coverage reconstruction); shared foreign-asset/profile checks and desktop implementation/repair tool tests pass; complete chat/CLI/built-in interaction equivalence remains G.
 - F11 degraded-mode honesty: J direct (fallback rejects; the panel carries no install prompt by construction).
