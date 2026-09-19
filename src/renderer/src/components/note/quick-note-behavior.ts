@@ -1,5 +1,7 @@
 import { createElement, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { Activity, NotebookPen } from 'lucide-react'
 import { useNoteStore } from '../../stores/note'
+import segmented from '../ui/SegmentedControl.module.css'
 
 export type DrawerView = 'runtime' | 'note'
 export type TerminalLifecycleEvent = 'kill-removed' | 'exit' | 'workspace-switch'
@@ -30,7 +32,20 @@ export function getNextDrawerView(view: DrawerView, key: string): DrawerView | n
   return DRAWER_VIEWS[(DRAWER_VIEWS.indexOf(view) + offset + DRAWER_VIEWS.length) % DRAWER_VIEWS.length]
 }
 
-export function DrawerViewTabs({ open, activeView, onSelect }: { open: boolean; activeView: DrawerView; onSelect: (view: DrawerView) => void }) {
+const DRAWER_VIEW_ICONS: Record<DrawerView, typeof Activity> = { runtime: Activity, note: NotebookPen }
+
+export interface DrawerViewTabsProps {
+  open: boolean
+  activeView: DrawerView
+  onSelect: (view: DrawerView) => void
+  /** Localized labels; the view id is the fallback so the tabs render without an i18n provider. */
+  labels?: Partial<Record<DrawerView, string>>
+  ariaLabel?: string
+}
+
+// A segmented control instead of two filled chips: the selected segment is a neutral raised step of the
+// surface ramp and only its icon carries the accent, so the switch reads as a control, not a status block.
+export function DrawerViewTabs({ open, activeView, onSelect, labels, ariaLabel }: DrawerViewTabsProps) {
   const tabRefs = useRef<Record<DrawerView, HTMLButtonElement | null>>({ runtime: null, note: null })
 
   if (!open) return null
@@ -47,8 +62,9 @@ export function DrawerViewTabs({ open, activeView, onSelect }: { open: boolean; 
     'div',
     {
       role: 'tablist',
-      'aria-label': 'Drawer view',
-      className: 'absolute right-3 top-1 flex h-5 overflow-hidden border border-[rgba(255,255,255,0.08)] text-[10px]',
+      'aria-label': ariaLabel ?? 'Drawer view',
+      className: segmented.group,
+      onClick: (event: ReactMouseEvent<HTMLDivElement>) => event.stopPropagation(),
     },
     DRAWER_VIEWS.map((view) => createElement(
       'button',
@@ -61,18 +77,15 @@ export function DrawerViewTabs({ open, activeView, onSelect }: { open: boolean; 
         'aria-controls': getDrawerPanelId(view),
         'aria-selected': activeView === view,
         tabIndex: activeView === view ? 0 : -1,
-        className: 'px-2 capitalize',
-        style: {
-          color: activeView === view ? '#ffb27d' : '#666',
-          background: activeView === view ? 'rgba(255,120,48,.1)' : '#101112',
-        },
+        className: segmented.item,
         onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
           event.stopPropagation()
           onSelect(view)
         },
         onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => handleKeyDown(event, view),
       },
-      view,
+      createElement(DRAWER_VIEW_ICONS[view], { className: segmented.icon, strokeWidth: 1.75, 'aria-hidden': true }),
+      createElement('span', null, labels?.[view] ?? view),
     )),
   )
 }

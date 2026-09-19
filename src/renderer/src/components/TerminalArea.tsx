@@ -1760,7 +1760,7 @@ export function TerminalArea() {
           />
         )}
         <div
-          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] ${drawerOpen ? 'pr-32' : 'pr-3'}`}
+          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] ${drawerOpen ? 'pr-52' : 'pr-3'}`}
           onClick={() => setDrawerOpen((value) => !value)}
         >
           <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
@@ -1858,11 +1858,17 @@ export function TerminalArea() {
             </div>
           </div>
         </div>
-        <DrawerViewTabs
-          open={drawerOpen}
-          activeView={drawerView}
-          onSelect={setDrawerView}
-        />
+        {drawerOpen && (
+          <div className="absolute right-3 top-[3px] z-10">
+            <DrawerViewTabs
+              open={drawerOpen}
+              activeView={drawerView}
+              onSelect={setDrawerView}
+              ariaLabel={t('terminal:tab.drawerViewAria')}
+              labels={{ runtime: t('terminal:tab.view.runtime'), note: t('terminal:tab.view.note') }}
+            />
+          </div>
+        )}
         {DRAWER_VIEWS.map((view) => (
           <div
             key={view}

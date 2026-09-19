@@ -145,7 +145,58 @@
     "janusChatFallback": "Janus 对话",
     "runtimeAria": "运行时遥测",
     "drawerResizeAria": "调整底部面板高度",
-    "tokenSummaryTitle": "输入 {{input}} · 输出 {{output}}"
+    "tokenSummaryTitle": "输入 {{input}} · 输出 {{output}}",
+    "drawerViewAria": "底部面板视图",
+    "view": {
+      "runtime": "上下文监控",
+      "note": "Markdown"
+    }
+  },
+  "note": {
+    "listAria": "当前终端的笔记",
+    "listTitle": "笔记",
+    "listEmpty": "还没有笔记",
+    "newNote": "新建笔记",
+    "untitled": "未命名",
+    "emptyExcerpt": "空白",
+    "deleteNote": "删除 {{title}}",
+    "editorAria": "笔记编辑器",
+    "empty": "为这个终端创建一条笔记。",
+    "titleAria": "笔记标题",
+    "modeAria": "编辑模式",
+    "mode": {
+      "edit": "编辑",
+      "split": "分栏",
+      "preview": "预览"
+    },
+    "toolbarAria": "Markdown 工具栏",
+    "tool": {
+      "h1": "一级标题",
+      "h2": "二级标题",
+      "h3": "三级标题",
+      "bold": "加粗",
+      "italic": "斜体",
+      "strike": "删除线",
+      "code": "行内代码",
+      "bullet": "无序列表",
+      "ordered": "有序列表",
+      "task": "任务列表",
+      "quote": "引用",
+      "link": "链接",
+      "codeBlock": "代码块",
+      "table": "表格",
+      "hr": "分隔线"
+    },
+    "contentAria": "笔记内容",
+    "placeholder": "用 Markdown 记录…",
+    "previewAria": "Markdown 预览",
+    "previewEmpty": "预览为空，切到编辑开始书写。",
+    "stats": {
+      "words": "{{value}} 词",
+      "chars": "{{value}} 字符"
+    },
+    "export": "导出",
+    "pasteToTerminal": "粘贴到终端"
   },
   "paneTree": {
     "waitingTerminal": "等待加载终端..."
