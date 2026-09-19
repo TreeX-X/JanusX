@@ -368,4 +368,38 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
     expect(undoAudit?.harnessRoot).toBe(checkoutDir)
     expect(undone.auditId).toBe(undoAudit?.id)
   })
+
+  it('marks the harness apply stale when evidence drifts before apply', async () => {
+    stageTask(changeSetWith([updateOp('m1', REQ, 'Requirement two')]))
+    mocks.collectEvidence.mockImplementationOnce(async (_root: string, workspaceId: string) => ({
+      ok: true,
+      value: {
+        manifest: { workspaceId, workspaceRootFingerprint: 'fp', gitHead: 'moved', files: [] },
+        context: '',
+      },
+    }))
+    await expect(
+      blueprintMaintenanceService.apply({ taskId: 't-1', changeSetId: 'cs-1', operationIds: ['m1'] }),
+    ).rejects.toThrow('工程证据已变化')
+    expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+    expect(serviceOf().tasks.get('t-1')?.status).toBe('stale')
+  })
+
+  it('refuses harness deletes without individual high-risk confirmation', async () => {
+    const delOp: BlueprintOperation = {
+      operationId: 'm-del',
+      type: 'delete-node',
+      nodeId: REQ,
+      reason: 'Obsolete node',
+      evidenceRefs: [],
+      dependsOn: [],
+      risk: 'high',
+      impact: { title: 'Requirement one', parentId: null, childIds: [], incomingRelationIds: [], outgoingRelationIds: [] },
+    }
+    stageTask(changeSetWith([delOp]))
+    await expect(
+      blueprintMaintenanceService.apply({ taskId: 't-1', changeSetId: 'cs-1', operationIds: ['m-del'] }),
+    ).rejects.toThrow('逐项高风险确认')
+    expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+  })
 })
