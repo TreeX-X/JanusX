@@ -78,6 +78,8 @@ re-exports and keeps only the neutral kernel entry.
   no repair channel: xdo retries re-execute on the same manifest, and repair
   stays reserved for delegated hosts. Declared commands are trusted
   workspace code under runtime policy, not an operating-system sandbox.
-  Single-checkout tasks only; multi-repository work splits per repo. The
-  desktop Electron run of the updated specs stays unverified in this
-  environment; island browser coverage passes.
+  Single-checkout tasks only; multi-repository work splits per repo. Five
+  desktop fixture specs pass in-browser on the dev machine (xdo run,
+  review-repair, undo, thread registry, external backflow); the
+  real-Electron smoke fails on an unrelated right-dock collapse assertion
+  against a fresh build, pointing outside this work.
