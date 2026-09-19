@@ -32,7 +32,14 @@ import {
 } from '@janus-agent/harness-node'
 import { projectGraph, projectGraphId, type ProjectedEntry } from './graph-projection'
 import { mergeNoteEdit, type NoteEdit } from './artifact-producer'
+import {
+  assertNoLocalLeak,
+  planShareImport,
+  type IncomingSnapshot,
+} from './share-import'
 import type { Blueprint } from '../../shared/janus/types'
+
+export { assertNoLocalLeak }
 
 export interface ResolveResult {
   ok: boolean
@@ -459,23 +466,112 @@ export class HarnessNoteService {
     await writeFile(outPath, text, 'utf8')
     return { outPath, notes: snapshot.notes.length }
   }
-}
 
-/** Whitelist gate: machine paths, local state, and credentials refuse export. */
-export function assertNoLocalLeak(root: string, text: string): Diagnostic[] {
-  const out: Diagnostic[] = []
-  const needles: Array<[string, string]> = [
-    [root, 'absolute checkout path'],
-    ['.local/', 'local state'],
-    ['.local\\', 'local state'],
-    ['file://', 'file URL'],
-  ]
-  for (const [needle, label] of needles) {
-    if (needle && text.includes(needle)) out.push(diag('PERMISSION_DENIED', `share leaks ${label}`, needle))
+  /** Preview-only import plan: no bytes move, conflicts stay hypothetical. */
+  async previewShareImport(root: string, snapshot: IncomingSnapshot): Promise<ReturnType<typeof planShareImport>> {
+    return withAssetLock(root, async () => {
+      const text = JSON.stringify(snapshot)
+      const leaks = assertNoLocalLeak(root, text)
+      if (leaks.length > 0) {
+        throw { code: 'PERMISSION_DENIED', message: `share blocked: ${leaks[0].message}`, path: leaks[0].path }
+      }
+      const index = await buildNoteIndex(root)
+      return planShareImport(index, snapshot, index.repoId)
+    })
   }
-  const cred = /:\/\/[^/\s]*:[^/\s]*@/.exec(text)
-  if (cred) out.push(diag('PERMISSION_DENIED', 'share leaks credentials', cred[0]))
-  return out
+
+  /**
+   * Applies a snapshot into this checkout and reports per-note outcomes.
+   * Receipts land first (immutable, identical bytes are kept, divergent
+   * bytes with the same id refuse); notes follow in one transaction, so a
+   * concurrent edit fails the whole apply instead of half-applying.
+   * Re-running converges: applied notes become identical skips. The method
+   * takes no outer lock because the transaction locks internally; the
+   * expected hashes compiled above are the concurrency control, and a
+   * conflict simply asks the caller to re-preview.
+   */
+  async applyShareImport(root: string, snapshot: IncomingSnapshot): Promise<{
+    notes: Array<{ id: string; action: 'applied' | 'identical' | 'invalid'; reason?: string }>
+    receipts: Array<{ id: string; action: 'applied' | 'kept' | 'invalid' | 'conflict'; reason?: string }>
+  }> {
+    const text = JSON.stringify(snapshot)
+    const leaks = assertNoLocalLeak(root, text)
+    if (leaks.length > 0) {
+      throw { code: 'PERMISSION_DENIED', message: `share blocked: ${leaks[0].message}`, path: leaks[0].path }
+    }
+    const index = await buildNoteIndex(root)
+    const plan = planShareImport(index, snapshot, index.repoId)
+    const receipts: Array<{ id: string; action: 'applied' | 'kept' | 'invalid' | 'conflict'; reason?: string }> = []
+    for (const item of plan.receipts) {
+      if (item.action === 'invalid') {
+        receipts.push({ id: item.id, action: 'invalid', ...(item.reason ? { reason: item.reason } : {}) })
+        continue
+      }
+      const incoming = snapshot.evidence.find((row) => row.id === item.id)
+      if (!incoming) {
+        receipts.push({ id: item.id, action: 'invalid', reason: 'snapshot dropped the receipt body' })
+        continue
+      }
+      const relPath = `.agents/evidence/${item.id}.json`
+      await assertAssetPath(root, relPath)
+      let current: string | null = null
+      try {
+        current = await readFile(join(root, relPath), 'utf8')
+      } catch {
+        current = null
+      }
+      if (current !== null) {
+        if (current === incoming.json) receipts.push({ id: item.id, action: 'kept' })
+        else receipts.push({ id: item.id, action: 'conflict', reason: 'a different receipt already owns this id' })
+        continue
+      }
+      await mkdir(dirname(join(root, relPath)), { recursive: true })
+      await writeFile(join(root, relPath), incoming.json, 'utf8')
+      receipts.push({ id: item.id, action: 'applied' })
+    }
+    const notes: Array<{ id: string; action: 'applied' | 'identical' | 'invalid'; reason?: string }> = []
+    const operations: Array<{
+      operationId: string
+      type: 'create' | 'replace'
+      uri: string
+      expectedHash: string | null
+      relativePath?: string
+      afterMarkdown: string
+    }> = []
+    const operationOf = new Map<string, string>()
+    for (const item of plan.notes) {
+      if (item.kind !== 'create' && item.kind !== 'replace') continue
+      const operationId = `import-${item.id.slice(0, 8)}-${item.kind}`
+      operationOf.set(item.id, operationId)
+      operations.push({
+        operationId,
+        type: item.kind,
+        uri: item.uri,
+        expectedHash: item.kind === 'replace' ? item.expectedHash : null,
+        ...(item.kind === 'create' ? { relativePath: item.relPath.replace(/^\.agents\/notes\//, '') } : {}),
+        afterMarkdown: item.afterMarkdown,
+      })
+    }
+    let applied = new Set<string>()
+    if (operations.length > 0) {
+      const reason = `share import from ${snapshot.repoName ?? snapshot.repoId ?? 'snapshot'}`
+      const report = await this.applyOperations(root, operations, reason)
+      applied = new Set(report.applied.map((row) => row.operationId))
+    }
+    for (const item of plan.notes) {
+      if (item.kind === 'identical') {
+        notes.push({ id: item.id, action: 'identical' })
+        continue
+      }
+      if (item.kind === 'invalid') {
+        notes.push({ id: item.id, action: 'invalid', reason: item.reason })
+        continue
+      }
+      const operationId = operationOf.get(item.id)
+      if (operationId && applied.has(operationId)) notes.push({ id: item.id, action: 'applied' })
+    }
+    return { notes, receipts }
+  }
 }
 
 /** Strip userinfo (and local schemes) from shared remote descriptors. */
