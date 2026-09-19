@@ -15,11 +15,9 @@ import {
   type BlueprintMaintenanceDismissInput,
   type BlueprintMaintenanceStartInput,
   type BlueprintMaintenanceTask,
-  type BlueprintMaintenanceToolTraceEntry,
   type BlueprintMaintenanceUndoApplyInput,
   type BlueprintMaintenanceUndoPrepareResult,
 } from '@/services/blueprint'
-import { appendReasoningDelta, emptyReasoning, type ReasoningSnapshot } from '@/components/janus/janusReasoning'
 
 type MaintenanceOpenRequest = { blueprintId: string; nodeId?: string } | null
 
@@ -30,9 +28,6 @@ interface BlueprintMaintenanceStore {
   openRequest: MaintenanceOpenRequest
   initialized: boolean
   error: string | null
-  /** Ephemeral agent stream state per task, mirroring janus-chat ThinkingRegion. */
-  reasoning: Record<string, ReasoningSnapshot>
-  toolTraces: Record<string, BlueprintMaintenanceToolTraceEntry[]>
   initialize: () => Promise<void>
   loadAudits: (blueprintId: string, taskId?: string) => Promise<void>
   requestOpen: (request: Exclude<MaintenanceOpenRequest, null>) => void
@@ -55,20 +50,10 @@ let unsubscribe: (() => void) | null = null
 
 export const useBlueprintMaintenanceStore = create<BlueprintMaintenanceStore>((set) => ({
   tasks: [], audits: {}, pendingUndo: null, openRequest: null, initialized: false, error: null,
-  reasoning: {}, toolTraces: {},
   initialize: async () => {
-    if (!unsubscribe) unsubscribe = onMaintenanceTask(({ task, agentEvent, toolTrace }) => set((state) => {
-      const next: Partial<BlueprintMaintenanceStore> = { tasks: upsert(state.tasks, task) }
-      if (toolTrace) next.toolTraces = { ...state.toolTraces, [toolTrace.taskId]: toolTrace.entries }
-      if (agentEvent?.type === 'reasoning_delta') {
-        const current = state.reasoning[agentEvent.taskId] ?? emptyReasoning()
-        next.reasoning = { ...state.reasoning, [agentEvent.taskId]: appendReasoningDelta(current, agentEvent.delta) }
-      }
-      if (agentEvent?.type === 'agent_start') {
-        next.reasoning = { ...state.reasoning, [agentEvent.taskId]: emptyReasoning() }
-      }
-      return next
-    }))
+    if (!unsubscribe) unsubscribe = onMaintenanceTask(({ task }) => set((state) => ({
+      tasks: upsert(state.tasks, task),
+    })))
     try { set({ tasks: await listMaintenanceTasks(), initialized: true, error: null }) }
     catch (error) { set({ initialized: true, error: error instanceof Error ? error.message : String(error) }) }
   },

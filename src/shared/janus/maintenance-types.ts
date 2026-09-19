@@ -256,19 +256,6 @@ export interface BlueprintMaintenanceStartInput {
   modelId?: string
 }
 
-export interface BlueprintMaintenanceMessageInput {
-  taskId: string
-  content: string
-  providerId?: string
-  modelId?: string
-}
-
-export interface BlueprintMaintenanceProposalInput {
-  taskId: string
-  providerId?: string
-  modelId?: string
-}
-
 export interface BlueprintMaintenanceApplyInput {
   taskId: string
   changeSetId: string
@@ -353,22 +340,6 @@ export interface BlueprintMaintenanceUndoApplyResult {
 
 export interface BlueprintMaintenanceDismissInput {
   taskId: string
-}
-
-export interface BlueprintMaintenanceSteerInput {
-  taskId: string
-  entryId: string
-  text: string
-}
-
-export interface BlueprintMaintenanceSteerResult {
-  accepted: boolean
-  error?: string
-}
-
-export interface BlueprintMaintenanceSteerCancelInput {
-  taskId: string
-  entryId: string
 }
 
 /**

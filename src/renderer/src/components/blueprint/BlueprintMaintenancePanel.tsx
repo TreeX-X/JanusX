@@ -9,7 +9,6 @@ import type {
   BlueprintChangeSet,
   BlueprintMaintenanceAuditRecord,
   BlueprintMaintenanceIntentGroup,
-  BlueprintMaintenanceToolTraceEntry,
   BlueprintOperation,
 } from '@/services/blueprint'
 import {
@@ -18,9 +17,6 @@ import {
   formatAuditValue,
   selectedAuditOperations,
 } from './maintenanceAuditDetails'
-import { ThinkingRegion } from '../janus/ThinkingRegion'
-import { ToolCallGroup } from '../janus/ToolCallCard'
-import type { ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import { JanusChat } from '../janus/JanusChat'
 import { useJanusChatRegistry } from '../janus/JanusChatProvider'
 import type { UseJanusChatReturn } from '../janus/useJanusChat'
@@ -34,20 +30,7 @@ import {
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
 const EMPTY_AUDITS: BlueprintMaintenanceAuditRecord[] = []
-const EMPTY_TOOL_TRACES: BlueprintMaintenanceToolTraceEntry[] = []
 const MESSAGE_SUMMARY_LIMIT = 220
-
-/** Panel trace to shared chat trace: the card summaries ride through, runner-only display assets stay behind. */
-function toChatTraceEntry(entry: BlueprintMaintenanceToolTraceEntry): ChatToolTraceEntry {
-  return {
-    toolName: entry.toolName,
-    workspaceId: entry.workspaceId,
-    status: entry.status,
-    summary: entry.summary,
-    ...(entry.argsDigest ? { argsDigest: entry.argsDigest } : {}),
-    ...(entry.resultDigest ? { resultDigest: entry.resultDigest } : {}),
-  }
-}
 
 export function splitMaintenanceReply(content: string): { summary: string; details: string | null } {
   const normalized = content.trim()
@@ -445,9 +428,6 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
   const proposalGroups = useGroupSelection(task?.changeSet ?? null)
   const hasProposalGroups = (task?.changeSet?.groups?.length ?? 0) > 0
   const undoSelection = useOperationSelection(pendingUndo?.changeSet ?? null)
-  const taskId = task?.id
-  const taskReasoning = useBlueprintMaintenanceStore((state) => (taskId ? state.reasoning[taskId] : undefined))
-  const taskToolTraces = useBlueprintMaintenanceStore((state) => (taskId ? state.toolTraces[taskId] ?? EMPTY_TOOL_TRACES : EMPTY_TOOL_TRACES))
 
   useEffect(() => { void initialize() }, [initialize])
   useEffect(() => {
@@ -495,7 +475,6 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
   const selectedWorkspaces = workspaces.filter((item) => chat
     ? chat.resourceController.resources.some((resource) => resource.workspaceId === item.id)
     : workspaceIds.includes(item.id))
-  const workspaceNameMap = useMemo(() => new Map(workspaces.map((item) => [item.id, item.name])), [workspaces])
   const nodeOptions = blueprint?.nodeIds.map((id) => ({ value: id, label: blueprint.nodes[id]?.title ?? id })) ?? []
   const proposalLegacyGroups = useMemo(() => groupOperations(task?.changeSet?.operations ?? []), [task?.changeSet])
   const undoGroups = useMemo(() => groupOperations(pendingUndo?.changeSet.operations ?? []), [pendingUndo?.changeSet])
@@ -820,15 +799,6 @@ function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { 
               <div className="bp-maintenance-thinking" role="status" aria-live="polite">
                 <span>{t('blueprint:maintenance.roleJanus')}</span>
                 <div><i /><i /><i /><em>{task.phase}</em></div>
-                {taskReasoning && taskReasoning.chars > 0 ? (
-                  <ThinkingRegion snapshot={taskReasoning} streaming />
-                ) : null}
-                {taskToolTraces.length ? (
-                  <div className="bp-maintenance-tool-traces">
-                    <span>{t('blueprint:maintenance.toolTraceTitle', { count: taskToolTraces.length })}</span>
-                    <ToolCallGroup entries={taskToolTraces.slice(-5).map(toChatTraceEntry)} workspaceNames={workspaceNameMap} />
-                  </div>
-                ) : null}
               </div>
             ) : null}
             {task.error ? <div className="bp-maintenance-error">{task.error}</div> : null}
