@@ -164,6 +164,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.setViewportSize({ width: 1200, height: 800 })
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: '稍后再说，先用本地功能' }).click()
 
     const workspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace' }).first()
     await expect(workspaceRow).toBeVisible()
@@ -241,7 +242,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await expect(dock).toBeVisible()
     await expect(rail).toBeVisible()
     expect((await rail.boundingBox())?.width).toBe(48)
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
 
     const filesRailButton = page.getByRole('button', { name: /打开文件工具/ })
     if (
@@ -312,7 +313,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('button', { name: /打开文件工具，当前/ }).click()
     await page.setViewportSize({ width: 1200, height: 800 })
     await expect(panelShell).toBeVisible()
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
 
     const fileRow = filesPanel.locator('[data-file-path="dock-file.txt"]')
     await expect(fileRow).toBeVisible()
@@ -329,7 +330,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const embeddedEditor = page.getByRole('region', { name: 'Embedded file editor' })
     await expect(embeddedEditor).toBeVisible()
     await expect(panelShell).toBeHidden()
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
     const editorSeparator = page.getByRole('separator', { name: 'Resize embedded editor' })
     await editorSeparator.focus()
     await editorSeparator.press('Home')
@@ -350,14 +351,14 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     await page.getByTitle('收起侧栏').click()
     await expect(rail).toBeVisible()
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
-    await page.locator('main').getByText('Shell', { exact: true }).click()
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    await page.getByRole('main').getByText('Shell', { exact: true }).click()
     const terminalInput = page.locator('.xterm-helper-textarea').first()
     await expect(terminalInput).toBeAttached({ timeout: 15_000 })
     const terminalScreen = page.locator('.xterm-screen').first()
     await expect(terminalScreen).toBeVisible()
     const terminalBox = await terminalScreen.boundingBox()
-    const centerBox = await page.locator('main').boundingBox()
+    const centerBox = await page.getByRole('main').boundingBox()
     expect(terminalBox?.width).toBeGreaterThan(0)
     expect(terminalBox?.width).toBeLessThanOrEqual(centerBox?.width ?? 0)
     await terminalInput.focus()
@@ -371,8 +372,8 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const firstTerminalElement = await terminalScreen.elementHandle()
     if (!firstTerminalElement) throw new Error('First terminal did not expose an xterm screen')
 
-    await page.locator('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
-    await page.locator('main').getByRole('button', { name: 'New Shell terminal', exact: true }).click()
+    await page.getByRole('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
+    await page.getByRole('main').getByRole('button', { name: 'New Shell terminal', exact: true }).click()
     await expect(terminalTabs).toHaveCount(2, { timeout: 15_000 })
     await expect(page.locator('.xterm-screen')).toHaveCount(2, { timeout: 15_000 })
     await expect(firstTerminalView).toHaveAttribute('aria-hidden', 'true')
