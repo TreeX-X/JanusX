@@ -16,8 +16,9 @@ land first.
 
 `.agents/harness.json` carries `schemaVersion: 1`, a stable repo id,
 the name JanusX, and a profile pinning the `workflowx` standard
-`1.0.0-s1` with the manifest digest (SHA-256 over LF-normalized
-`standards/harness-note/1/manifest.json` bytes). The repo id is a fresh
+`1.0.0-s1.1` with the manifest digest (SHA-256 over LF-normalized
+`standards/harness-note/1/manifest.json` bytes, verified against the
+standard release). The repo id is a fresh
 UUID: ordinary clones keep it, renames and moves never change it, and a
 fork that joins the same blueprint graph mints a new one while recording
 its source. Dependency repositories stay omitted because no dependency
@@ -46,14 +47,16 @@ xdel/xflow rules still require them and skills switch only at S9.
 ## Consequences
 
 - **Gains**: the checkout resolves an identity and mints URIs for
-  new-format notes. Verification: read-only rescan over the repo root
-  reports `repoId=972afef3-2fc7-49de-a3ee-7e041225d28c` with 73 scanned
-  entries via `buildNoteIndex`; `npm run typecheck` passes; the
-  harness-service suite with temp checkouts stays green.
-- **Costs and limits**: all 73 existing notes report `SCHEMA_INVALID`
-  under the new schema because they use the old note format; the graph
-  projection shows them as invalid until the S9 migration, which is
-  expected and not data loss. The profile digest must be re-pinned
-  whenever the standard revs; a stale digest fails closed at readers that
-  check it. Revisit when dependency identities publish or the cutover
-  appends this checkout to the sync list.
+  new-format notes. The shared receipt-content hash matches the standard
+  `receipt-content-hash` fixture digit for digit, so the s1.1 execution
+  persistence rules need no code change on this side. Verification:
+  read-only rescan over the repo root reports
+  `repoId=972afef3-2fc7-49de-a3ee-7e041225d28c`; `npm run typecheck`
+  passes; the harness-service suite with temp checkouts stays green.
+- **Costs and limits**: old working notes scan as foreign-namespace and
+  stay out of the invalid list since
+  [own-notes-namespace](../architecture/2026-09-18-own-notes-namespace.md);
+  no bulk migration follows. The profile digest must be re-pinned
+  whenever the standard revs; JanusX readers pin but do not yet gate on
+  it, with fail-closed checks arriving at cutover. Revisit when dependency
+  identities publish or the cutover appends this checkout to the sync list.
