@@ -440,4 +440,24 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
     expect(cancelled.changeSet).toBeNull()
     expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
   })
+
+  it('refuses legacy steering ports on conversation-linked project tasks', async () => {
+    const task = await blueprintMaintenanceService.start({
+      blueprintId: PROJECT_ID,
+      workspaceId: 'ws-1',
+      workspaceName: 'W',
+      workspacePath: checkoutDir,
+      nodeScope: { type: 'blueprint' },
+      goal: 'steering isolation probe',
+      conversationId: 'shared-steer',
+    })
+    expect(task.status).toBe('active')
+    expect(
+      blueprintMaintenanceService.steerTask({ taskId: task.id, entryId: 'e-1', text: 'redirect the stream' }),
+    ).toMatchObject({ accepted: false })
+    expect(
+      blueprintMaintenanceService.cancelSteerTask({ taskId: task.id, entryId: 'e-1' }),
+    ).toEqual({ cancelled: false })
+    expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+  })
 })
