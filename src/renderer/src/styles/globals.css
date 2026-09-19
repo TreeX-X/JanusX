@@ -536,12 +536,43 @@ body.desktop-toast-body {
   initial-value: 0deg;
 }
 
-/* 终端运行态：光带沿徽章边框匀速走圈 */
+/* 终端状态圆环：颜色来自 getTerminalStatusVisual，形状/动效按状态区分，文字只在悬浮 title 里 */
+.term-status-ring {
+  --term-ring-width: 2px;
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  border: var(--term-ring-width) solid currentColor;
+}
+
+/* 运行中：淡底环 + 亮弧走圈（弧由 .term-status-orbit 绘制） */
+.term-status-ring--running {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+/* 受限：虚线环 */
+.term-status-ring--degraded {
+  border-style: dashed;
+}
+
+/* 异常：实心填充 */
+.term-status-ring--error {
+  background: currentColor;
+}
+
+/* 空闲：细线空心环，降低存在感 */
+.term-status-ring--idle {
+  opacity: 0.55;
+}
+
+/* 终端运行态：光弧沿圆环匀速走圈，厚度与底环一致，覆盖在 border 之上 */
 .term-status-orbit {
   position: absolute;
-  inset: 0;
+  inset: calc(-1 * var(--term-ring-width, 1px));
   border-radius: inherit;
-  padding: 1px;
+  padding: var(--term-ring-width, 1px);
   background: conic-gradient(
     from var(--term-orbit-angle),
     transparent 0deg 286deg,

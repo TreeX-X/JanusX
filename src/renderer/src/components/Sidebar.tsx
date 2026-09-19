@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { Activity, Bell, ChevronRight, CirclePause, CloudOff, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert } from 'lucide-react'
+import { ChevronRight, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
@@ -182,29 +182,29 @@ const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
   'pi': piIcon,
 }
 
+// Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/implemented/feature/2026-09-19-terminal-status-ring.md
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
   const { t } = useI18n('terminal')
   const visual = getTerminalStatusVisual(status)
-  const Icon =
-    status === 'running' ? Activity
-    : status === 'needs-approval' || status === 'needs-input' ? Bell
-    : status === 'degraded' ? CloudOff
-    : status === 'error' ? TriangleAlert
-    : CirclePause
-  const label = t(visual.labelKey)
-  const needsPulse = status === 'needs-approval' || status === 'needs-input'
+  const title = t('common:workspace.terminalStatusTitle', { label: t(visual.labelKey) })
+  const ringClass =
+    status === 'running' ? 'term-status-ring--running'
+    : status === 'needs-approval' || status === 'needs-input' ? 'term-status-pulse'
+    : status === 'degraded' ? 'term-status-ring--degraded'
+    : status === 'error' ? 'term-status-ring--error'
+    : 'term-status-ring--idle'
 
   return (
     <span
-      className="relative inline-flex h-5 shrink-0 items-center gap-1 overflow-hidden rounded-[3px] px-1.5 font-mono text-[9px] font-medium"
-      style={{ color: visual.color, background: visual.background }}
-      title={t('common:workspace.terminalStatusTitle', { label })}
+      role="img"
+      aria-label={title}
+      title={title}
+      className="flex h-5 w-5 shrink-0 items-center justify-center"
+      style={{ color: visual.color }}
     >
-      {status === 'running' && <span className="term-status-orbit" aria-hidden="true" />}
-      <span className="relative flex h-2.5 w-2.5 items-center justify-center">
-        <Icon size={10} strokeWidth={2} className={needsPulse ? 'term-status-pulse relative' : 'relative'} aria-hidden="true" />
+      <span className={`term-status-ring ${ringClass}`} aria-hidden="true">
+        {status === 'running' && <span className="term-status-orbit" />}
       </span>
-      {label}
     </span>
   )
 }
