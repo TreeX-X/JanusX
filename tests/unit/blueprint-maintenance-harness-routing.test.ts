@@ -402,4 +402,42 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
     ).rejects.toThrow('逐项高风险确认')
     expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
   })
+
+  it('refuses a bridged undo when the projection moves before apply', async () => {
+    stageTask(changeSetWith([updateOp('m1', REQ, 'Requirement two')]))
+    await blueprintMaintenanceService.apply({ taskId: 't-1', changeSetId: 'cs-1', operationIds: ['m1'] })
+    serviceOf().complete('t-1')
+    const audits = await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })
+    expect(audits).toHaveLength(1)
+    const prepared = await blueprintMaintenanceService.prepareUndo({ blueprintId: PROJECT_ID, auditId: audits[0]?.id as string })
+    const undoIds = prepared.changeSet.operations.map((op) => op.operationId)
+    currentRev += 1
+    mocks.applyBundleChangeSet.mockClear()
+    await expect(
+      blueprintMaintenanceService.applyUndo({
+        blueprintId: PROJECT_ID,
+        undoChangeSetId: prepared.changeSet.id,
+        operationIds: undoIds,
+      }),
+    ).rejects.toThrow('蓝图版本已变化')
+    expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+  })
+
+  it('cancels a conversation-linked project task with no writes', async () => {
+    const task = await blueprintMaintenanceService.start({
+      blueprintId: PROJECT_ID,
+      workspaceId: 'ws-1',
+      workspaceName: 'W',
+      workspacePath: checkoutDir,
+      nodeScope: { type: 'blueprint' },
+      goal: 'cancel equivalence probe',
+      conversationId: 'shared-cancel',
+    })
+    expect(task.status).toBe('active')
+    mocks.applyBundleChangeSet.mockClear()
+    const cancelled = blueprintMaintenanceService.cancel(task.id)
+    expect(cancelled.status).toBe('cancelled')
+    expect(cancelled.changeSet).toBeNull()
+    expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+  })
 })

@@ -67,10 +67,11 @@ guard](2026-09-17-maintenance-harness-guard-s6.md).
   update plus create with created ids, refusal with zero bytes written,
   relation id recording, delete-to-archive downgrade, checkout resolve
   plus ambiguity refusal, scope gate, created-mapping exposure),
-  `tests/unit/blueprint-maintenance-harness-routing.test.ts` (7 checks:
+  `tests/unit/blueprint-maintenance-harness-routing.test.ts` (9 checks:
   project start, harness apply with audit root, loud refusal, scope
   refusal, undo roundtrip, evidence-drift stale with zero writes,
-  delete-confirm refusal with zero writes), neighboring `maintenance-bridge`,
+  delete-confirm refusal with zero writes, undo revision conflict
+  with zero writes, conversation-linked cancel with zero writes), neighboring `maintenance-bridge`,
   `harness-service`, `harness-store-branch`, `blueprint-maintenance-*`,
   and roundtable suites stay green (50 plus 18 checks),
   `npm run typecheck` passes, and `npm run check:package-boundary`
