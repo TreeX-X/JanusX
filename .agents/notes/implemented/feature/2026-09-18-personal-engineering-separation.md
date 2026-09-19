@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-Person memory and project knowledge shared one review queue, one tool surface, and overlapping recall paths. Person candidates drowned in engineering volume during batch review, any model turn could mint or read person scope through the shared registry, and team sharing would leak person traits into shared recall. The [separation proposal](../proposed/architecture/2026-09-15-personal-vs-engineering-memory.md) names the end state; this slice lands its enforceable kernel on JanusX without touching the agent-core boundary.
+Person memory and project knowledge shared one review queue, one tool surface, and overlapping recall paths. Person candidates drowned in engineering volume during batch review, any model turn could mint or read person scope through the shared registry, and team sharing would leak person traits into shared recall. The [separation proposal](../../proposed/architecture/2026-09-15-personal-vs-engineering-memory.md) names the end state; this slice lands its enforceable kernel on JanusX without touching the agent-core boundary.
 
 ## Decision
 
