@@ -134,7 +134,7 @@ export function harvestAnsweredTexts(
   return scanSectionLines(cards, {
     header: /^(answered|已回答|已确认|resolved)\s*[:：]/i,
     hint: /回答|确认|answered|resolved/i,
-    accept: (line, inSection) => inSection,
+    accept: (_line, inSection) => inSection,
     limit,
   })
 }

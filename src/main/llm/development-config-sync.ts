@@ -22,7 +22,6 @@ export interface DevelopmentLlmSyncStatus {
   error?: string
 }
 
-const EMPTY_CONFIG: LlmConfig = emptyLlmConfig()
 let latestStatus: DevelopmentLlmSyncStatus = { state: 'not-applicable', importedProviderCount: 0 }
 
 function parseConfig(path: string): LlmConfig | null {

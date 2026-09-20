@@ -43,6 +43,9 @@ desktop.ini
 *.swp
 *.swo
 
+# Downloaded and checksum-verified by release-win before packaging.
+resources/officecli/*.exe
+
 # Environment / secrets
 .env
 .env.*

@@ -1,11 +1,19 @@
 import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
+import { realpathSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
-// Note: CI 内单进程顺序执行用例文件——见 .agents/notes/implemented/process/2026-09-17-verify-pipeline-harden.md
-// Windows runner 上 200+ 文件逐个 fork 会高频触发 tinypool `Channel closed` /
-// `ERR_IPC_CHANNEL_CLOSED`（常伴随 libuv `fs-event.c` 断言），本质是 fork 启停 churn +
-// 文件 watcher 句柄在 IPC 通道上的竞态。CI 下用 singleFork 复用同一个子进程跑全量，
-// 消除 200+ 次 spawn/teardown；本地保持并行速度。
+// Note: canonical temp paths avoid libuv's Windows short-path assertion — see .agents/notes/2026-09-20-reproducible-verification.md
+// https://github.com/libuv/libuv/issues/5010: watcher events expand 8.3 names,
+// but affected libuv versions compare them against the unexpanded directory.
+// Set these before workers start so real filesystem tests use long paths too.
+if (process.platform === 'win32') {
+  const temp = realpathSync.native(tmpdir())
+  process.env.TEMP = temp
+  process.env.TMP = temp
+}
+
+// Keep CI's memory use bounded; serialization alone does not fix native watchers.
 const isCI = process.env.CI === 'true'
 
 export default defineConfig({
@@ -23,7 +31,7 @@ export default defineConfig({
     maxWorkers: isCI ? 1 : undefined,
     minWorkers: isCI ? 1 : undefined,
     fileParallelism: !isCI,
-    // 顺序即确定性：CI 全量失败集合不再随调度漂移，本地 `CI=true` 即复现远端顺序。
+    // Do not shuffle CI test files; duration caching can still affect ordering.
     sequence: {
       shuffle: false,
     },

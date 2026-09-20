@@ -11,7 +11,7 @@
  *  No Electron import, so unit tests drive real temp checkouts.
  */
 import { randomUUID } from 'node:crypto'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { parseNote, type Diagnostic } from '@janus-agent/harness-core'
 import {

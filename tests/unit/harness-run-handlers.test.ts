@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HARNESS_COMMAND_CHANNELS } from '../../src/shared/ipc/harness'
 
 const mocks = vi.hoisted(() => ({
+  configExists: vi.fn(),
   resolveRoot: vi.fn(),
   projectView: vi.fn(),
   prepareTaskRun: vi.fn(),
@@ -49,6 +50,18 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
+
+// Note: tests own config discovery — see .agents/notes/2026-09-20-reproducible-verification.md
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...fs,
+    existsSync: (path: Parameters<typeof fs.existsSync>[0]) =>
+      String(path).replace(/\\/g, '/').endsWith('/.codex/config.toml')
+        ? mocks.configExists()
+        : fs.existsSync(path),
+  }
+})
 
 vi.mock('electron', () => ({
   app: { getPath: () => `${process.env.TEMP ?? process.cwd()}\\janusx-harness-run-${process.pid}` },
@@ -175,6 +188,13 @@ const RUN = {
 }
 
 describe('harness run IPC mapping (S8-JanusX surface)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mocks.configExists.mockReturnValue(true)
+    mocks.resolveRoot.mockResolvedValue({ ok: true, root: ROOT, diagnostics: [] })
+    mocks.readDesktopConcurrency.mockResolvedValue(null)
+  })
+
   it('resolves the checkout before touching runs', async () => {
     mocks.resolveRoot.mockResolvedValueOnce({ ok: false, diagnostics: [{ code: 'NOT_FOUND', message: 'no .agents' }] })
     const prepare = await handler(HARNESS_COMMAND_CHANNELS.runPrepare)
@@ -341,9 +361,24 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     )
     const first = execute({}, ROOT, { runId: 'run-1' })
     await enteredGate
-    await expect(execute({}, ROOT, { runId: 'run-2' })).rejects.toMatchObject({ code: 'BUSY', message: expect.stringContaining('budget') })
-    release({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-9', completed: true, checks: [] } })
-    await expect(first).resolves.toMatchObject({ receiptId: 'r-9' })
+    try {
+      await expect(execute({}, ROOT, { runId: 'run-2' })).rejects.toMatchObject({ code: 'BUSY', message: expect.stringContaining('budget') })
+    } finally {
+      release({ ok: true, run: { ...RUN, state: 'done' }, errors: [], data: { receiptId: 'r-9', completed: true, checks: [] } })
+      await expect(first).resolves.toMatchObject({ receiptId: 'r-9' })
+    }
+  })
+
+  it('executes without a personal config on a clean checkout', async () => {
+    mocks.configExists.mockReturnValue(false)
+    mocks.getTaskRun.mockResolvedValue({
+      run: { ...RUN, state: 'running', lease: { token: 'tok', owner: 'desktop' } }, errors: [],
+    })
+    mocks.ensureTaskThread.mockResolvedValue({ runId: 'run-1', model: { providerId: 'p', modelId: 'm' }, attempts: [] })
+    mocks.executeDesktopTask.mockResolvedValue({ ok: true, run: RUN, errors: [], data: { receiptId: 'clean', completed: true, checks: [] } })
+    const execute = await handler(HARNESS_COMMAND_CHANNELS.runExecute)
+    await expect(execute({}, ROOT, { runId: 'run-1' })).resolves.toMatchObject({ receiptId: 'clean' })
+    expect(mocks.readDesktopConcurrency).not.toHaveBeenCalled()
   })
 
   it('reserves a run before asynchronous preparation and releases a failed reservation', async () => {
@@ -354,16 +389,19 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     let release!: (value: unknown) => void
     mocks.getTaskRun.mockImplementationOnce(() => new Promise((resolve) => { entered(); release = resolve }))
     const first = execute({}, ROOT, { runId: 'run-1' })
-    const refusal = expect(first).rejects.toMatchObject({ code: 'UNSUPPORTED_SCHEMA' })
+    const outcome = first.then(() => null, (error: unknown) => error)
     await enteredGate
-    await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'BUSY' })
     const transcript = await handler(HARNESS_COMMAND_CHANNELS.runTranscript)
     mocks.readTaskTranscript.mockResolvedValue({ runId: 'run-1', active: false, turns: [] })
-    await expect(transcript({}, ROOT, 'run-1')).resolves.toMatchObject({ active: true, turns: [] })
-    mocks.resolveRoot.mockResolvedValueOnce({ ok: true, root: 'C:\\another-checkout', diagnostics: [] })
-    await expect(transcript({}, 'C:\\another-checkout', 'run-1')).resolves.toMatchObject({ active: false })
-    release({ run: null, errors: [{ code: 'UNSUPPORTED_SCHEMA', message: 'profile mismatch' }] })
-    await refusal
+    try {
+      await expect(execute({}, ROOT, { runId: 'run-1' })).rejects.toMatchObject({ code: 'BUSY' })
+      await expect(transcript({}, ROOT, 'run-1')).resolves.toMatchObject({ active: true, turns: [] })
+      mocks.resolveRoot.mockResolvedValueOnce({ ok: true, root: 'C:\\another-checkout', diagnostics: [] })
+      await expect(transcript({}, 'C:\\another-checkout', 'run-1')).resolves.toMatchObject({ active: false })
+    } finally {
+      release({ run: null, errors: [{ code: 'UNSUPPORTED_SCHEMA', message: 'profile mismatch' }] })
+      expect(await outcome).toMatchObject({ code: 'UNSUPPORTED_SCHEMA' })
+    }
     await expect(transcript({}, ROOT, 'run-1')).resolves.toMatchObject({ active: false })
     mocks.readTaskTranscript.mockRejectedValueOnce(Object.assign(new Error('invalid history'), { code: 'RECOVERY_REQUIRED' }))
     await expect(transcript({}, ROOT, 'run-1')).rejects.toMatchObject({ code: 'RECOVERY_REQUIRED' })
@@ -463,7 +501,7 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
 
   it('reviews independently, finishes on the latest receipt, and repairs explicitly', async () => {
     const review = await handler(HARNESS_COMMAND_CHANNELS.runReview)
-    mocks.getTaskRun.mockResolvedValueOnce({
+    mocks.getTaskRun.mockResolvedValue({
       run: { ...RUN, state: 'verifying', attempt: 1, lease: { token: 'tok', owner: 'desktop', at: 'now' } },
       errors: [],
     })

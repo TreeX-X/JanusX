@@ -239,6 +239,11 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const dock = page.locator('[aria-label="右侧工具 Dock"]')
     const rail = page.getByRole('toolbar', { name: '右侧工具' })
     const panelShell = page.getByTestId('right-tool-panel-shell')
+    const expectPanelClosed = async () => {
+      await expect(panelShell).toHaveAttribute('aria-hidden', 'true')
+      await expect(panelShell).toHaveAttribute('inert', '')
+      await expect(panelShell).toHaveCSS('opacity', '0')
+    }
     await expect(dock).toBeVisible()
     await expect(rail).toBeVisible()
     expect((await rail.boundingBox())?.width).toBe(48)
@@ -247,7 +252,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const filesRailButton = page.getByRole('button', { name: /打开文件工具/ })
     if (
       !(await filesRailButton.getAttribute('aria-label'))?.includes('当前') ||
-      await panelShell.isHidden()
+      await panelShell.getAttribute('data-visible') === 'false'
     ) {
       await filesRailButton.click()
     }
@@ -259,7 +264,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await expect(fileExplorerContent).toBeVisible()
     const originalFilesPanel = await filesPanel.elementHandle()
     await filesRailButton.click()
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(true)
     await filesRailButton.click()
     await expect(panelShell).toBeVisible()
@@ -267,7 +272,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await fileExplorerContent.click({ button: 'right', position: { x: 16, y: 16 } })
     await expect(page.getByRole('button', { name: '新建文件', exact: true })).toBeVisible()
     await filesRailButton.click()
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     await expect(page.getByRole('button', { name: '新建文件', exact: true })).toHaveCount(0)
     expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(true)
     await filesRailButton.click()
@@ -287,7 +292,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('button', { name: '关闭 Git' }).click()
     await page.getByRole('button', { name: '关闭 文件' }).click()
     expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(false)
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     await expect(rail).toBeVisible()
     await page.getByRole('button', { name: /打开文件工具，已关闭/ }).click()
     await expect(panelShell).toBeVisible()
@@ -308,7 +313,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     expect(await page.evaluate(() => ({ cursor: document.body.style.cursor, userSelect: document.body.style.userSelect }))).toEqual({ cursor: '', userSelect: '' })
 
     await page.setViewportSize({ width: 680, height: 800 })
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     await expect(rail).toBeVisible()
     await page.getByRole('button', { name: /打开文件工具，当前/ }).click()
     await page.setViewportSize({ width: 1200, height: 800 })
@@ -329,7 +334,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     const embeddedEditor = page.getByRole('region', { name: 'Embedded file editor' })
     await expect(embeddedEditor).toBeVisible()
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
     const editorSeparator = page.getByRole('separator', { name: 'Resize embedded editor' })
     await editorSeparator.focus()
@@ -373,7 +378,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     if (!firstTerminalElement) throw new Error('First terminal did not expose an xterm screen')
 
     await page.getByRole('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
-    await page.getByRole('main').getByRole('button', { name: 'New Shell terminal', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'New Shell terminal', exact: true }).click()
     await expect(terminalTabs).toHaveCount(2, { timeout: 15_000 })
     await expect(page.locator('.xterm-screen')).toHaveCount(2, { timeout: 15_000 })
     await expect(firstTerminalView).toHaveAttribute('aria-hidden', 'true')

@@ -618,10 +618,6 @@ export class KnowledgeRecallService {
     return parts.filter(Boolean).join('|')
   }
 
-  private async cachedDocuments(layer: KnowledgeRecallLayer): Promise<KnowledgeRecallDocument[]> {
-    return (await this.cachedDocumentsWithFingerprint(layer)).documents
-  }
-
   private async cachedDocumentsWithFingerprint(
     layer: KnowledgeRecallLayer,
   ): Promise<{ fingerprint: string; documents: KnowledgeRecallDocument[] }> {

@@ -14,7 +14,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parseNote, validateNote, type Diagnostic } from '@janus-agent/harness-core'
+import { parseNote, validateNote } from '@janus-agent/harness-core'
 import type {
   Blueprint,
   BlueprintIssue,
@@ -53,10 +53,6 @@ export interface MigrationResult {
   uris: string[]
   reportUri: string
   archivedPath: string
-}
-
-function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
-  return path === undefined ? { code, message } : { code, message, path }
 }
 
 function slugify(title: string): string {

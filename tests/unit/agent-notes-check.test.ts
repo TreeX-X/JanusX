@@ -92,10 +92,24 @@ describe('agent-notes mechanical gate', () => {
 })
 
 describe('skills-sync gate', () => {
-  it('passes the real repo with zero errors', () => {
-    const { errors, compared } = checkSkillsSync(process.cwd())
+  it('compares matching host skills without requiring personal checkout files', async () => {
+    const root = await makeTree({
+      '.claude/skills/example/SKILL.md': 'Read .claude/skills/example/guide.md and CLAUDE.md.\n',
+      '.codex/skills/example/SKILL.md': 'Read .codex/skills/example/guide.md and AGENTS.md.\n',
+    })
+    const { errors, compared } = checkSkillsSync(root)
     expect(errors).toEqual([])
-    expect(compared).toBeGreaterThan(0)
+    expect(compared).toBe(1)
+  })
+
+  it('reports missing hosts and logic drift as failures', async () => {
+    const missing = await makeTree({ '.claude/skills/example/SKILL.md': 'A' })
+    expect(checkSkillsSync(missing).errors).toContain('missing .codex/skills directory')
+    const drift = await makeTree({
+      '.claude/skills/example/SKILL.md': 'A',
+      '.codex/skills/example/SKILL.md': 'B',
+    })
+    expect(checkSkillsSync(drift).errors.join('\n')).toContain('logic drift')
   })
 
   it('normalizes host paths before comparing', () => {

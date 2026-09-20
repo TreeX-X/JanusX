@@ -131,10 +131,6 @@ function isStringRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function hasNonEmptyString(record: Record<string, unknown>, key: string): boolean {
-  return typeof record[key] === 'string' && (record[key] as string).length > 0
-}
-
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }

@@ -28,9 +28,10 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   getSession: vi.fn(),
   cancelSession: vi.fn(),
+  userData: '',
 }))
 
-vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
+vi.mock('electron', () => ({ app: { getPath: () => mocks.userData } }))
 vi.mock('../../src/main/llm/ai-runtime', () => ({
   generateObject: mocks.generateObject,
   streamText: mocks.streamText,
@@ -94,6 +95,7 @@ describe('Blueprint maintenance legacy settlement', () => {
 
   beforeAll(async () => {
     root = await fs.mkdtemp(join(tmpdir(), 'janusx-maintenance-'))
+    mocks.userData = root
     workspace = join(root, 'workspace')
     workspace2 = join(root, 'workspace-2')
     registry = join(root, 'registry')
@@ -193,12 +195,12 @@ describe('Blueprint maintenance legacy settlement', () => {
   }
 
   async function auditFiles(): Promise<string[]> {
-    const auditDirectory = join(tmpdir(), 'janusx', 'blueprint-maintenance-audit')
+    const auditDirectory = join(root, 'janusx', 'blueprint-maintenance-audit')
     return fs.readdir(auditDirectory).catch(() => [])
   }
 
   async function removeAuditFiles(names: string[]): Promise<void> {
-    const auditDirectory = join(tmpdir(), 'janusx', 'blueprint-maintenance-audit')
+    const auditDirectory = join(root, 'janusx', 'blueprint-maintenance-audit')
     for (const file of names) {
       await fs.rm(join(auditDirectory, file), { force: true }).catch(() => undefined)
     }
@@ -274,7 +276,7 @@ describe('Blueprint maintenance legacy settlement', () => {
 
     const created = (await auditFiles()).filter((file) => !existingAudits.has(file))
     expect(created).toHaveLength(1)
-    const audit = JSON.parse(await fs.readFile(join(tmpdir(), 'janusx', 'blueprint-maintenance-audit', created[0]), 'utf8'))
+    const audit = JSON.parse(await fs.readFile(join(root, 'janusx', 'blueprint-maintenance-audit', created[0]), 'utf8'))
     expect(audit).toMatchObject({
       status: 'applied',
       changeSetSnapshot: { id: 'cs-1' },
@@ -306,7 +308,7 @@ describe('Blueprint maintenance legacy settlement', () => {
   })
 
   it('prepares and applies a reverse ChangeSet from an applied audit record', async () => {
-    const auditDirectory = join(tmpdir(), 'janusx', 'blueprint-maintenance-audit')
+    const auditDirectory = join(root, 'janusx', 'blueprint-maintenance-audit')
     await fs.mkdir(auditDirectory, { recursive: true })
     const before = fixture()
     const applied = fixture()
