@@ -1,4 +1,4 @@
-import type { OfficeErrorCode, OfficecliManualInstallGuidance } from '../../../../shared/office'
+import type { OfficeErrorCode } from '../../../../shared/office'
 import { useI18n } from '@/i18n/useI18n'
 import type { TFunction } from 'i18next'
 
@@ -26,27 +26,15 @@ interface Props {
   port?: number
   status: 'starting' | 'ready' | 'reloading' | 'error'
   errorCode?: OfficeErrorCode
-  manualInstall?: OfficecliManualInstallGuidance
   onRetry: () => void
   onClose: () => void
 }
 
-export function getOfficeErrorCopy(errorCode: OfficeErrorCode, manualInstall?: OfficecliManualInstallGuidance, t?: TFunction): string {
-  const baseCopy = t ? t(ERROR_KEY[errorCode]) : ERROR_KEY[errorCode]
-  if ((errorCode === 'NOT_INSTALLED' || errorCode === 'INCOMPATIBLE') && manualInstall) {
-    const suffix = t
-      ? t('editor:office.manualInstallSuffix', {
-          version: manualInstall.targetVersion,
-          windows: manualInstall.windows.join('；'),
-          release: manualInstall.release,
-        })
-      : ` 目标版本：${manualInstall.targetVersion}。请按固定指引手动安装：${manualInstall.windows.join('；')}。发布地址：${manualInstall.release}`
-    return `${baseCopy}${suffix}`
-  }
-  return baseCopy
+export function getOfficeErrorCopy(errorCode: OfficeErrorCode, t?: TFunction): string {
+  return t ? t(ERROR_KEY[errorCode]) : ERROR_KEY[errorCode]
 }
 
-export function OfficePreviewFrame({ port, status, errorCode, manualInstall, onRetry, onClose }: Props) {
+export function OfficePreviewFrame({ port, status, errorCode, onRetry, onClose }: Props) {
   const { t } = useI18n('editor')
   const src = buildOfficePreviewUrl(port)
   if (status === 'error' || !src) {
@@ -55,7 +43,7 @@ export function OfficePreviewFrame({ port, status, errorCode, manualInstall, onR
       <span>{t('editor:office.startingPreview')}</span>
     </div>
     return <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-xs text-[#aaa]">
-      <div>{getOfficeErrorCopy(errorCode ?? 'UNAVAILABLE', manualInstall, t)}</div>
+      <div>{getOfficeErrorCopy(errorCode ?? 'UNAVAILABLE', t)}</div>
       <div className="flex gap-2">
         <button className="rounded border border-white/10 px-2 py-1 hover:bg-white/5" onClick={onRetry}>{t('editor:office.retry')}</button>
         <button className="rounded border border-white/10 px-2 py-1 hover:bg-white/5" onClick={onClose}>{t('editor:office.close')}</button>

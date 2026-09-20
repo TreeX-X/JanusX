@@ -1,15 +1,12 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import {
   LANGUAGE_SERVICE_CHANNELS,
-  LANGUAGE_SERVICE_EVENT_CHANNELS,
   type LanguageServiceId,
-  type LanguageServiceInstallerProgressEvent,
   type LanguageServiceManagedInstallStatus,
   type LanguageServiceInstallerStartRequest,
   type LanguageServiceInstallerRemoveRequest,
-  type LanguageServiceInstallerStatusRequest,
 } from '../../shared/ipc/language-service'
-import { getDescriptor, getAllDescriptors } from '../language-service/registry'
+import { getAllDescriptors } from '../language-service/registry'
 import type { ManagedBinaryInstaller } from '../language-service/installer'
 import { clangdManager } from '../language-service/clangd-manager'
 
@@ -41,14 +38,6 @@ function publicStatus(status: LanguageServiceManagedInstallStatus): LanguageServ
 }
 
 export function registerLanguageServiceInstallerHandlers(options: LanguageServiceInstallerHandlerOptions): () => void {
-  const broadcast = (event: LanguageServiceInstallerProgressEvent) => {
-    for (const window of options.getAllowedWindows()) {
-      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send(LANGUAGE_SERVICE_EVENT_CHANNELS.installerProgress, event)
-      }
-    }
-  }
-
   const channels = [
     LANGUAGE_SERVICE_CHANNELS.installerStatus,
     LANGUAGE_SERVICE_CHANNELS.installerStart,
@@ -87,7 +76,6 @@ export function registerLanguageServiceInstallerHandlers(options: LanguageServic
 
       try {
         if (channel === LANGUAGE_SERVICE_CHANNELS.installerStatus) {
-          const req = rawRequest as LanguageServiceInstallerStatusRequest
           return publicStatus(await installer.status())
         }
         if (channel === LANGUAGE_SERVICE_CHANNELS.installerCancel) {

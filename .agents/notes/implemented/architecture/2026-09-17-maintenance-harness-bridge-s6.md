@@ -18,5 +18,9 @@ The S6-c guard keeps project graphs safe by refusing maintenance writes, but no 
 
 ## Consequences
 
-- **Gains**: the mapping table is executable and reviewed as code. Verification: `tests/unit/maintenance-bridge.test.ts` (12 checks: full-prose create with temp resolution, fused update plus move, refusal taxonomy, work preservation, relation direction and ownership, synthetic-id update plus remove, archive downgrade, restore edge check, dependency mapping with cycle refusal), existing harness plus roundtable suites (20 checks) stay green through the `mergeNoteEdit` move, `npm run typecheck` passes, scoped eslint on touched sources reports 0 errors.
-- **Costs and limits**: output is single-use (create URIs mint fresh ids) and unwired — no service path consumes it yet. Relation prose has no edge equivalent and fails loudly by design; `update-workspace-binding` and cross-owner type changes need contract decisions, not code. The maintenance loop still runs its own circuit; discussion unification and the service apply wiring arrive next.
+- **Gains**: the mapping table is executable and reviewed as code. The
+  service wiring consumes it through `src/main/harness/maintenance-apply.ts`,
+  which also exposes the created node and relation ids the bridge reports
+  for audit bookkeeping (see the [harness apply routing](2026-09-17-maintenance-harness-apply-s6.md)).
+  Verification: `tests/unit/maintenance-bridge.test.ts` (12 checks: full-prose create with temp resolution, fused update plus move, refusal taxonomy, work preservation, relation direction and ownership, synthetic-id update plus remove, archive downgrade, restore edge check, dependency mapping with cycle refusal), existing harness plus roundtable suites (20 checks) stay green through the `mergeNoteEdit` move, `npm run typecheck` passes, scoped eslint on touched sources reports 0 errors.
+- **Costs and limits**: output is single-use (create URIs mint fresh ids). Relation prose has no edge equivalent and fails loudly by design; `update-workspace-binding` and cross-owner type changes need contract decisions, not code. The maintenance loop still runs its own circuit; discussion unification and the service apply wiring arrive next.

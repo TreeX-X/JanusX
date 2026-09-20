@@ -479,7 +479,7 @@ export function JanusIslandExpandedShell({
                     onOpenQuestions={onOpenQuestionsDetail}
                     onStateChange={onRoundtableStateChange}
                     onRequestAuxiliaryClose={onRequestAuxiliaryClose}
-                    center={(onRoundtableSend, roundtableMessages, workingRole, cards, hostQuestions, inputPlaceholder) => <>
+                    center={(onRoundtableSend, roundtableMessages, _workingRole, cards, hostQuestions, inputPlaceholder) => <>
                       <JanusChat
                         visible={stage === 'expanded' && view === 'roundtable'}
                         docked discussionOnly

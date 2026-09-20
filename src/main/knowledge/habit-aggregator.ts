@@ -51,7 +51,7 @@ export interface HabitPromotion {
 /** Group near-duplicate preference/habit observations; promote groups at frequency >= 3. */
 export function proposeHabitCandidates(
   observations: HabitObservationInput[],
-  nowIso: string = new Date().toISOString(),
+  _nowIso: string = new Date().toISOString(),
 ): HabitPromotion[] {
   const groups: Array<{ members: HabitObservationInput[]; latestText: string }> = []
   const sorted = [...observations].sort((left, right) => left.createdAt.localeCompare(right.createdAt))

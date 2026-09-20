@@ -8,6 +8,7 @@ import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
 import { createDesktopTestEnv } from './desktop-test-env'
 
 interface DesktopAPI {
+  system: { setLanguage(language: string): Promise<void> }
   project: ProjectAPI
   terminal: TerminalAPI
   workspace: WorkspaceAPI
@@ -125,6 +126,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       return Boolean(api?.workspace?.create && api?.terminal?.create && api?.project?.detect)
     })
     await expect(page.locator('body')).toBeVisible()
+    await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('zh-CN'))
 
     const workspace = await page.evaluate(
       ({ workspacePath }) =>
@@ -164,6 +166,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.setViewportSize({ width: 1200, height: 800 })
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: '稍后再说，先用本地功能' }).click()
 
     const workspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace' }).first()
     await expect(workspaceRow).toBeVisible()
@@ -196,7 +199,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       groupName: 'Desktop smoke group',
     })
 
-    await secondWorkspaceRow.click({ button: 'right' })
+    await secondWorkspaceRow.getByRole('button', { name: '更多操作' }).click()
     await page.getByRole('button', { name: '移出分组', exact: true }).click()
     await expect(page.getByText('Desktop smoke group', { exact: true })).toHaveCount(0)
     await expect.poll(async () => page.evaluate(async ({ firstId, secondId }) => {
@@ -220,7 +223,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.mouse.up()
     const launchModal = page.locator('.ws-config-modal')
     await expect(launchModal).toHaveCount(0)
-    await workspaceRow.click({ button: 'right' })
+    await workspaceRow.getByRole('button', { name: '更多操作' }).click()
     await page.getByRole('button', { name: '运行配置…', exact: true }).click()
     await expect(launchModal).toBeVisible()
     await expect(launchModal.getByRole('button', { name: /分析/ })).toHaveCount(1)
@@ -238,15 +241,20 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const dock = page.locator('[aria-label="右侧工具 Dock"]')
     const rail = page.getByRole('toolbar', { name: '右侧工具' })
     const panelShell = page.getByTestId('right-tool-panel-shell')
+    const expectPanelClosed = async () => {
+      await expect(panelShell).toHaveAttribute('aria-hidden', 'true')
+      await expect(panelShell).toHaveAttribute('inert', '')
+      await expect(panelShell).toHaveCSS('opacity', '0')
+    }
     await expect(dock).toBeVisible()
     await expect(rail).toBeVisible()
     expect((await rail.boundingBox())?.width).toBe(48)
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
 
     const filesRailButton = page.getByRole('button', { name: /打开文件工具/ })
     if (
       !(await filesRailButton.getAttribute('aria-label'))?.includes('当前') ||
-      await panelShell.isHidden()
+      await panelShell.getAttribute('data-visible') === 'false'
     ) {
       await filesRailButton.click()
     }
@@ -258,7 +266,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await expect(fileExplorerContent).toBeVisible()
     const originalFilesPanel = await filesPanel.elementHandle()
     await filesRailButton.click()
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(true)
     await filesRailButton.click()
     await expect(panelShell).toBeVisible()
@@ -266,7 +274,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await fileExplorerContent.click({ button: 'right', position: { x: 16, y: 16 } })
     await expect(page.getByRole('button', { name: '新建文件', exact: true })).toBeVisible()
     await filesRailButton.click()
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     await expect(page.getByRole('button', { name: '新建文件', exact: true })).toHaveCount(0)
     expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(true)
     await filesRailButton.click()
@@ -286,7 +294,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('button', { name: '关闭 Git' }).click()
     await page.getByRole('button', { name: '关闭 文件' }).click()
     expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(false)
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     await expect(rail).toBeVisible()
     await page.getByRole('button', { name: /打开文件工具，已关闭/ }).click()
     await expect(panelShell).toBeVisible()
@@ -307,12 +315,12 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     expect(await page.evaluate(() => ({ cursor: document.body.style.cursor, userSelect: document.body.style.userSelect }))).toEqual({ cursor: '', userSelect: '' })
 
     await page.setViewportSize({ width: 680, height: 800 })
-    await expect(panelShell).toBeHidden()
+    await expectPanelClosed()
     await expect(rail).toBeVisible()
     await page.getByRole('button', { name: /打开文件工具，当前/ }).click()
     await page.setViewportSize({ width: 1200, height: 800 })
     await expect(panelShell).toBeVisible()
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
 
     const fileRow = filesPanel.locator('[data-file-path="dock-file.txt"]')
     await expect(fileRow).toBeVisible()
@@ -328,8 +336,8 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     const embeddedEditor = page.getByRole('region', { name: 'Embedded file editor' })
     await expect(embeddedEditor).toBeVisible()
-    await expect(panelShell).toBeHidden()
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    await expectPanelClosed()
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
     const editorSeparator = page.getByRole('separator', { name: 'Resize embedded editor' })
     await editorSeparator.focus()
     await editorSeparator.press('Home')
@@ -350,16 +358,18 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     await page.getByTitle('收起侧栏').click()
     await expect(rail).toBeVisible()
-    expect((await page.locator('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
-    await page.locator('main').getByText('Shell', { exact: true }).click()
+    expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
+    await page.getByRole('main').getByText('Shell', { exact: true }).click()
     const terminalInput = page.locator('.xterm-helper-textarea').first()
     await expect(terminalInput).toBeAttached({ timeout: 15_000 })
     const terminalScreen = page.locator('.xterm-screen').first()
     await expect(terminalScreen).toBeVisible()
     const terminalBox = await terminalScreen.boundingBox()
-    const centerBox = await page.locator('main').boundingBox()
+    const centerBox = await page.getByRole('main').boundingBox()
     expect(terminalBox?.width).toBeGreaterThan(0)
     expect(terminalBox?.width).toBeLessThanOrEqual(centerBox?.width ?? 0)
+    // Note: wait for the shell, not only xterm's DOM — see .agents/notes/2026-09-20-reproducible-verification.md
+    await expect(page.locator('.xterm-rows').first()).toContainText(/[>$#]\s*$/, { timeout: 30_000 })
     await terminalInput.focus()
     await terminalInput.pressSequentially('echo JANUSX_DOCK_FIT')
     await terminalInput.press('Enter')
@@ -371,8 +381,8 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const firstTerminalElement = await terminalScreen.elementHandle()
     if (!firstTerminalElement) throw new Error('First terminal did not expose an xterm screen')
 
-    await page.locator('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
-    await page.locator('main').getByRole('button', { name: 'New Shell terminal', exact: true }).click()
+    await page.getByRole('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'New Shell terminal', exact: true }).click()
     await expect(terminalTabs).toHaveCount(2, { timeout: 15_000 })
     await expect(page.locator('.xterm-screen')).toHaveCount(2, { timeout: 15_000 })
     await expect(firstTerminalView).toHaveAttribute('aria-hidden', 'true')
@@ -381,6 +391,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const secondTerminalInput = page.locator('.xterm-helper-textarea').nth(1)
     const secondTerminalScreen = page.locator('.xterm-screen').nth(1)
     await expect(secondTerminalScreen).toBeVisible()
+    await expect(page.locator('.xterm-rows').nth(1)).toContainText(/[>$#]\s*$/, { timeout: 30_000 })
     await secondTerminalInput.focus()
     await secondTerminalInput.pressSequentially('echo JANUSX_SECOND_TAB')
     await secondTerminalInput.press('Enter')

@@ -9,6 +9,7 @@
 
 import { isValidElement, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Components } from 'react-markdown'
+import { useLocalAssetAbsolutePath, useLocalAssetUrl } from './local-asset'
 
 const CODE_FONT = "'Cascadia Code', 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace"
 const PROSE_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif"
@@ -125,6 +126,32 @@ const tdStyle: CSSProperties = {
   verticalAlign: 'top',
 }
 
+function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const absolutePath = useLocalAssetAbsolutePath(src)
+  const resolved = useLocalAssetUrl(src)
+  // Local files load through `file:readBinary` into a `data:` URL because the
+  // renderer cannot reach workspace paths directly. While a local asset is
+  // still loading the `src` stays unset so a relative path never fires a
+  // broken request against the app bundle; remote URLs render immediately.
+  const pendingLocal = Boolean(absolutePath && !resolved)
+  return (
+    <img
+      src={pendingLocal ? undefined : resolved}
+      alt={alt ?? ''}
+      loading="lazy"
+      style={{
+        maxWidth: '100%',
+        height: 'auto',
+        display: 'block',
+        borderRadius: 8,
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        margin: '10px 0',
+        background: '#000',
+      }}
+    />
+  )
+}
+
 export const MARKDOWN_COMPONENTS: Components = {
   h1: ({ children }) => (
     <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, marginBottom: 12, marginTop: 20, lineHeight: 1.3, paddingBottom: 8, borderBottom: '1px solid rgba(255, 255, 255, 0.12)' }}>
@@ -175,22 +202,7 @@ export const MARKDOWN_COMPONENTS: Components = {
   del: ({ children }) => (
     <del style={{ color: '#888' }}>{children}</del>
   ),
-  img: ({ src, alt }) => (
-    <img
-      src={src}
-      alt={alt ?? ''}
-      loading="lazy"
-      style={{
-        maxWidth: '100%',
-        height: 'auto',
-        display: 'block',
-        borderRadius: 8,
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        margin: '10px 0',
-        background: '#000',
-      }}
-    />
-  ),
+  img: ({ src, alt }) => <ResolvedMarkdownImage src={src} alt={alt ?? ''} />,
   input: ({ checked }) => (
     <input
       type="checkbox"

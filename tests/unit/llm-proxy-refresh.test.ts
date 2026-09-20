@@ -46,7 +46,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../../src/main/llm/ConfigStore', () => ({
   llmConfigStore: {
-    getProviderSettings: vi.fn(async () => ({
+    getTerminalProvider: vi.fn(async () => ({
       id: 'vertex', name: 'Vertex', authType: 'vertex-ai', vertexAI: {},
     })),
   },
@@ -63,18 +63,18 @@ describe('LLM proxy refresh', () => {
     vi.resetModules()
     const { llmService } = await import('../../src/main/llm/LlmService')
 
-    await llmService.getLanguageModel('vertex', 'gemini-test')
+    await llmService.getLanguageModel('janus', 'vertex', 'gemini-test')
     expect(mocks.clearCache).not.toHaveBeenCalled()
 
     mocks.detectedProxy = 'http://127.0.0.1:7897'
-    await llmService.getLanguageModel('vertex', 'gemini-test')
+    await llmService.getLanguageModel('janus', 'vertex', 'gemini-test')
 
     const fixedProxy = { mode: 'fixed_servers', proxyRules: 'http://127.0.0.1:7897' }
     expect(mocks.setAppProxy).toHaveBeenCalledWith(fixedProxy)
     expect(mocks.setDefaultSessionProxy).toHaveBeenCalledWith(fixedProxy)
     expect(mocks.clearCache).toHaveBeenCalledOnce()
 
-    await llmService.getLanguageModel('vertex', 'gemini-test')
+    await llmService.getLanguageModel('janus', 'vertex', 'gemini-test')
     expect(mocks.clearCache).toHaveBeenCalledOnce()
   })
 
@@ -82,11 +82,11 @@ describe('LLM proxy refresh', () => {
     mocks.detectedProxy = 'http://127.0.0.1:7897'
     vi.resetModules()
     const { llmService } = await import('../../src/main/llm/LlmService')
-    await llmService.getLanguageModel('vertex', 'gemini-test')
+    await llmService.getLanguageModel('janus', 'vertex', 'gemini-test')
     mocks.clearCache.mockClear()
 
     mocks.detectedProxy = null
-    await llmService.getLanguageModel('vertex', 'gemini-test')
+    await llmService.getLanguageModel('janus', 'vertex', 'gemini-test')
 
     expect(mocks.setAppProxy).toHaveBeenLastCalledWith({ mode: 'direct' })
     expect(mocks.clearCache).toHaveBeenCalledOnce()

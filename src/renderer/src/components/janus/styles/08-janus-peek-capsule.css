@@ -194,7 +194,7 @@
   .janus-capsule { padding: 0 12px; }
 }
 
-/* ── LED 状态点（hifi S2：光纤发光 + 微光晕 ::after） ──────────
+/* ── LED 状态点（hifi S2：扁平圆点，无光晕/无发光） ──────────
  * info=亮灰 · success=翡翠绿 · attention=亮橙呼吸 · failed=红呼吸 */
 
 .janus-capsule-led {
@@ -202,34 +202,15 @@
   height: 7px;
   border-radius: 999px;
   flex: 0 0 auto;
-  position: relative;
   background: rgba(255, 255, 255, 0.35);
 }
 
-.janus-capsule-led::after {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: inherit;
-  background: inherit;
-  opacity: 0.4;
-  filter: blur(3px);
-  pointer-events: none;
-}
-
-/* 通知面（徽标/托盘行/钉条）内的光球不带光晕 —— 一级胶囊 LED 独享 */
-.janus-notify-badge .janus-capsule-led::after,
-.janus-notify-row .janus-capsule-led::after,
-.janus-notify-banner .janus-capsule-led::after {
-  display: none;
-}
-
 .janus-capsule-led.sev-info { background: #a1a1a6; }
-.janus-capsule-led.sev-success { background: #00ff88; box-shadow: 0 0 6px rgba(0, 255, 136, 0.55); }
-.janus-capsule-led.sev-attention { background: #ff9159; box-shadow: 0 0 8px rgba(255, 145, 89, 0.55); animation: capsule-led-breathe 1.5s ease-in-out infinite; }
-.janus-capsule-led.sev-failed { background: #ff4a4a; box-shadow: 0 0 8px rgba(255, 74, 74, 0.55); animation: capsule-led-breathe 1s ease-in-out infinite; }
+.janus-capsule-led.sev-success { background: #00ff88; }
+.janus-capsule-led.sev-attention { background: #ff9159; animation: capsule-led-breathe 1.5s ease-in-out infinite; }
+.janus-capsule-led.sev-failed { background: #ff4a4a; animation: capsule-led-breathe 1s ease-in-out infinite; }
 
-/* 双相位差呼吸：缩放 + 透明度 + 光晕同步脉动 */
+/* 缩放呼吸：缩放 + 透明度脉动 */
 @keyframes capsule-led-breathe {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.15); opacity: 0.6; }

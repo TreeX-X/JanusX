@@ -16,6 +16,8 @@
        canvas #151517  center workbench bed + terminal canvas
        pane   #191919  pane body
        chrome #1e1e20  left rail, right dock, titlebar, settings rail
+       drawer #0c0c0e  expanded bottom drawer tray — the one user-visible
+                       black, chosen by the user; panels on it stay transparent
 
      Anything that used to be `#000` / `rgba(0,0,0,…)` as a *surface* should
      pull from this ramp. Pure black stays reserved for shadows and scrims. */
@@ -28,6 +30,9 @@
   /* 卡片底：在 canvas(#151517) 与 chrome(#1e1e20) 之间取一档偏黑的灰，
      代替纯 chrome-raised，让卡片“黑里透灰”而不是“灰块”。 */
   --shell-card: #1c1c1f;
+  /* 底部抽屉展开面：用户要求展开页是黑色托盘，比 void 再低一档、比终端画布(#151517)更沉，
+     是 ramp 之外唯一允许用户看见的黑面；抽屉里的面板一律透明 + 发丝边，不再各自刷底。 */
+  --shell-drawer: #0c0c0e;
   /* 单行控件统一高度：两边窗口的所有输入框、下拉触发器、页签按钮都吃这一档，
      以后想整体调高矮只改这里。紧凑型小按钮（删除/行内操作）各留本地值。 */
   --control-h: 30px;
@@ -536,12 +541,84 @@ body.desktop-toast-body {
   initial-value: 0deg;
 }
 
-/* 终端运行态：光带沿徽章边框匀速走圈 */
+/* 底部运行时抽屉：顶边拖拽把手，悬浮/聚焦/拖动时显示强调色横线 */
+.term-drawer-resize {
+  position: absolute;
+  z-index: 20;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: row-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.term-drawer-resize::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: var(--shell-accent);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 150ms ease;
+  content: '';
+}
+
+.term-drawer-resize:hover::after {
+  opacity: 0.5;
+  transition-delay: 100ms;
+}
+
+.term-drawer-resize:focus-visible::after {
+  opacity: 0.5;
+  transition-delay: 0ms;
+}
+
+.term-drawer-resize[data-resizing='true']::after {
+  opacity: 1;
+  transition-delay: 0ms;
+}
+
+/* 终端状态圆环：颜色来自 getTerminalStatusVisual，形状/动效按状态区分，文字只在悬浮 title 里 */
+.term-status-ring {
+  --term-ring-width: 2px;
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  border: var(--term-ring-width) solid currentColor;
+}
+
+/* 运行中：淡底环 + 亮弧走圈（弧由 .term-status-orbit 绘制） */
+.term-status-ring--running {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+/* 受限：虚线环 */
+.term-status-ring--degraded {
+  border-style: dashed;
+}
+
+/* 异常：实心填充 */
+.term-status-ring--error {
+  background: currentColor;
+}
+
+/* 空闲：细线空心环，降低存在感 */
+.term-status-ring--idle {
+  opacity: 0.55;
+}
+
+/* 终端运行态：光弧沿圆环匀速走圈，厚度与底环一致，覆盖在 border 之上 */
 .term-status-orbit {
   position: absolute;
-  inset: 0;
+  inset: calc(-1 * var(--term-ring-width, 1px));
   border-radius: inherit;
-  padding: 1px;
+  padding: var(--term-ring-width, 1px);
   background: conic-gradient(
     from var(--term-orbit-angle),
     transparent 0deg 286deg,

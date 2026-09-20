@@ -119,6 +119,13 @@ export function validateApiKeySettings(settings: ProviderSettings): ValidationRe
 }
 
 /**
+ * 验证 Anthropic 原生配置（复用 api-key 形态：baseURL + apiKey）。
+ */
+export function validateAnthropicSettings(settings: ProviderSettings): ValidationResult {
+  return validateApiKeySettings(settings)
+}
+
+/**
  * 验证 PEM 私钥格式
  */
 export function validatePrivateKey(key: string): { valid: boolean; error?: string } {
@@ -238,6 +245,9 @@ export function validateSettings(settings: ProviderSettings): ValidationResult {
   switch (settings.authType) {
     case AuthType.API_KEY:
       return validateApiKeySettings(settings)
+
+    case AuthType.ANTHROPIC:
+      return validateAnthropicSettings(settings)
 
     case AuthType.VERTEX_AI:
       if (!settings.vertexAI) {

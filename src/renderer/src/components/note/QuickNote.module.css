@@ -1,30 +1,509 @@
-.root { display:grid; grid-template-columns:190px minmax(0,1fr); height:100%; overflow:hidden; border:1px solid rgba(255,255,255,.07); border-radius:6px; background:#0d0f10; }
-.sidebar { display:flex; min-width:0; flex-direction:column; border-right:1px solid rgba(255,255,255,.07); }
-.list { flex:1; overflow:auto; padding:6px; }
-.card { display:flex; width:100%; align-items:center; gap:4px; border-radius:4px; background:transparent; color:#999; }
-.card:hover,.active { background:rgba(255,255,255,.05); color:#eee; }
-.selectCard { min-width:0; flex:1; overflow:hidden; border:0; background:transparent; padding:7px 8px; color:inherit; text-align:left; }
-.selectCard span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.selectCard time { display:block; margin-top:2px; color:#666; font-size:10px; }
-.deleteCard { width:26px; height:26px; border:0; background:transparent; color:#777; }
-.deleteCard:hover { color:#ff8b8b; }
-.add { margin:6px; padding:7px; border:1px solid rgba(255,255,255,.1); border-radius:4px; background:#151719; color:#bbb; }
-.editor { position:relative; display:flex; min-width:0; flex-direction:column; padding:8px; }
-.toolbar { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
-.toolbar input { min-width:0; flex:1; border:1px solid rgba(255,255,255,.1); border-radius:4px; background:#111315; padding:6px 8px; color:#eee; }
-.toolbar button,.paste { border:1px solid rgba(255,255,255,.1); border-radius:4px; background:#17191b; padding:6px 9px; color:#aaa; }
-.toolbar button[aria-pressed='true'] { color:#ffb27d; border-color:rgba(255,120,48,.35); }
-.editor textarea,.preview { min-height:0; flex:1; resize:none; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:4px; background:#0a0c0d; padding:12px 14px; color:#d5d5d5; font:13px/1.65 'Cascadia Code','JetBrains Mono','Fira Code',ui-monospace,monospace; }
+/* 便签面板：坐在黑色抽屉托盘(--shell-drawer)上，自身不刷底——只有 1px 发丝边框与发丝分隔线。
+   选中态（卡片 / 页签）一律用 2px 强调色条 + 文字提亮表达，不用底色块；
+   底色只允许出现在瞬时 hover 的小目标（24px 图标钮、列表行）和弹出菜单上。 */
+
+.root {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.root[data-compact='true'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.root[data-compact='true'] .sidebar {
+  display: none;
+}
+
+/* ── 左栏：卡片列表 ─────────────────────────────────────────────────────── */
+
+.sidebar {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--shell-border);
+}
+
+.sidebarHead {
+  display: flex;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+
+.sidebarTitle {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--shell-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebarCount {
+  color: var(--shell-dim);
+  font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: stretch;
+  border-radius: 4px;
+  color: var(--shell-muted);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.card:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--shell-text);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: transparent;
+  transition: background 140ms ease;
+}
+
+.card.active {
+  color: var(--shell-text);
+}
+
+.card.active::before {
+  background: var(--shell-accent);
+}
+
+.selectCard {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 6px 26px 6px 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selectCard:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+.cardTitle {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMeta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--shell-dim);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.cardExcerpt {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMeta time {
+  flex: 0 0 auto;
+  font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.deleteCard {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-dim);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 140ms ease, color 140ms ease, background 140ms ease;
+}
+
+.card:hover .deleteCard,
+.card:focus-within .deleteCard {
+  opacity: 1;
+}
+
+.deleteCard:hover {
+  color: #ff8b8b;
+  background: rgba(255, 139, 139, 0.1);
+}
+
+.deleteCard:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+.listEmpty {
+  display: grid;
+  min-height: 72px;
+  place-items: center;
+  padding: 12px;
+  color: var(--shell-dim);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ── 右栏：编辑器 ───────────────────────────────────────────────────────── */
+
+.editor {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.head {
+  display: flex;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 4px;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+
+.title {
+  min-width: 0;
+  flex: 1;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 8px;
+  color: var(--shell-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.title::placeholder {
+  color: var(--shell-dim);
+  font-weight: 500;
+}
+
+.title:focus {
+  outline: 1px solid transparent;
+  box-shadow: inset 0 -1px 0 var(--shell-accent-border);
+}
+
+/* 工具栏：图标按钮成组，组间竖分隔线；宽度不够时折行 */
+
+.toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+
+.toolGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.toolGroup + .toolGroup::before {
+  content: '';
+  width: 1px;
+  height: 14px;
+  margin: 0 5px;
+  background: var(--shell-border);
+}
+
+.tool {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-dim);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.tool:hover {
+  color: var(--shell-text);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.tool:active {
+  background: var(--shell-active);
+}
+
+.tool:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+.tool svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 书写面：编辑 / 分栏 / 预览 */
+
+.body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.body[data-mode='split'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.body[data-mode='split'] .preview {
+  border-left: 1px solid var(--shell-border-soft);
+}
+
+.editor textarea,
+.preview {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  resize: none;
+  overflow: auto;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 12px 14px;
+  color: #d5d5d5;
+  font: 13px/1.65 'Cascadia Code', 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  tab-size: 2;
+}
+
+.editor textarea::placeholder {
+  color: var(--shell-dim);
+}
+
 .editor textarea:focus { outline:none; box-shadow:none; }
-.preview { padding:14px 18px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif; font-size:13px; line-height:1.7; color:#d4d4d4; }
-.paste { align-self:flex-end; margin-top:7px; }
-.actions { display:flex; justify-content:flex-end; gap:5px; margin-top:7px; }
-.actions button { border:1px solid rgba(255,255,255,.1); border-radius:4px; background:#17191b; padding:6px 9px; color:#aaa; }
-.actions .paste { margin-top:0; }
-.exportControl { position:relative; }
-.exportMenu { position:absolute; right:0; bottom:calc(100% + 6px); z-index:2; display:grid; min-width:150px; gap:2px; border:1px solid rgba(255,255,255,.1); border-radius:6px; background:#151719; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
-.exportMenu button { border-color:transparent; background:transparent; text-align:left; white-space:nowrap; }
-.exportMenu button:hover,.exportMenu button:focus-visible { background:rgba(255,255,255,.06); color:#eee; }
-.error { margin-top:5px; color:#ff8b8b; text-align:right; }
-.empty { display:grid; height:100%; place-items:center; color:#666; }
-.listEmpty { display:grid; min-height:72px; place-items:center; color:#666; }
+
+.preview {
+  padding: 14px 18px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #d4d4d4;
+}
+
+.previewEmpty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--shell-dim);
+  font-size: 11px;
+}
+
+/* 底栏：统计 + 导出 + 粘贴 */
+
+.foot {
+  display: flex;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 6px 0 12px;
+  border-top: 1px solid var(--shell-border-soft);
+}
+
+.stats {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--shell-dim);
+  font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.stats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.actions button {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 9px;
+  color: var(--shell-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.actions button:hover {
+  color: var(--shell-text);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.actions button:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: 1px;
+}
+
+.actions button svg {
+  width: 12px;
+  height: 12px;
+  color: var(--shell-dim);
+}
+
+.actions button:hover svg {
+  color: var(--shell-accent);
+}
+
+.paste {
+  border-color: var(--shell-accent-border);
+}
+
+.exportControl {
+  position: relative;
+}
+
+.exportMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 2;
+  display: grid;
+  min-width: 160px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: var(--shell-chrome-raised);
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.exportMenu button {
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.exportMenu button:hover,
+.exportMenu button:focus-visible {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--shell-text);
+}
+
+.error {
+  position: absolute;
+  right: 8px;
+  bottom: 36px;
+  border: 1px solid rgba(255, 139, 139, 0.3);
+  border-radius: 4px;
+  background: var(--shell-chrome-raised);
+  padding: 4px 8px;
+  color: #ff8b8b;
+  font-size: 11px;
+}
+
+.empty {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--shell-dim);
+  font-size: 11px;
+}
+
+.emptyIcon {
+  width: 22px;
+  height: 22px;
+  color: rgba(255, 255, 255, 0.18);
+}

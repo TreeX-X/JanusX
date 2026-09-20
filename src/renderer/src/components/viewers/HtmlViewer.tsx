@@ -1,6 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
 import { MonacoViewer } from './MonacoViewer'
+import { useResolvedHtmlSrcDoc } from './local-asset'
+import { dirnameOfAbsolutePath } from '@/lib/local-asset-resolver'
 import type { FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
 
@@ -10,9 +12,11 @@ interface HtmlViewerProps {
   onChange: (value: string) => void
   onEditorMount?: (editor: FindableEditor | null) => void
   modelPath?: string
+  workspacePath?: string
+  documentPath?: string
 }
 
-export function HtmlViewer({ content, originalContent, onChange, onEditorMount, modelPath }: HtmlViewerProps) {
+export function HtmlViewer({ content, originalContent, onChange, onEditorMount, modelPath, workspacePath, documentPath }: HtmlViewerProps) {
   const { t } = useI18n('editor')
   const [splitRatio, setSplitRatio] = useState(50)
   const [scriptsEnabled, setScriptsEnabled] = useState(true)
@@ -21,6 +25,11 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount, 
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const documentDir = useMemo(
+    () => dirnameOfAbsolutePath(documentPath ?? modelPath),
+    [documentPath, modelPath],
+  )
+  const resolvedHtml = useResolvedHtmlSrcDoc(previewContent, { workspacePath, documentDir })
   useEffect(() => {
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current)
@@ -175,7 +184,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount, 
             <div className="flex-1 overflow-hidden" style={{ height: '100%', position: 'relative' }}>
               <iframe
                 key={scriptsEnabled ? 'scripts-on' : 'scripts-off'}
-                srcDoc={`${previewContent}<style>html{scrollbar-width:auto}html::-webkit-scrollbar{width:12px;height:12px}html::-webkit-scrollbar-track{background:rgba(0,0,0,0.03)}html::-webkit-scrollbar-thumb{background:rgba(255,120,48,0.42);border:4px solid transparent;background-clip:padding-box;border-radius:8px;transition:background 120ms ease,border-width 140ms ease}html.preview-scroll-active::-webkit-scrollbar-thumb,html::-webkit-scrollbar-thumb:hover,html::-webkit-scrollbar-thumb:active{background:rgba(255,120,48,0.72);border-width:1px}</style><script>document.addEventListener('mousemove',function(e){document.documentElement.classList.toggle('preview-scroll-active',e.clientX>=window.innerWidth-18)});document.addEventListener('mouseleave',function(){document.documentElement.classList.remove('preview-scroll-active')})</script>`}
+                srcDoc={`${resolvedHtml}<style>html{scrollbar-width:auto}html::-webkit-scrollbar{width:12px;height:12px}html::-webkit-scrollbar-track{background:rgba(0,0,0,0.03)}html::-webkit-scrollbar-thumb{background:rgba(255,120,48,0.42);border:4px solid transparent;background-clip:padding-box;border-radius:8px;transition:background 120ms ease,border-width 140ms ease}html.preview-scroll-active::-webkit-scrollbar-thumb,html::-webkit-scrollbar-thumb:hover,html::-webkit-scrollbar-thumb:active{background:rgba(255,120,48,0.72);border-width:1px}</style><script>document.addEventListener('mousemove',function(e){document.documentElement.classList.toggle('preview-scroll-active',e.clientX>=window.innerWidth-18)});document.addEventListener('mouseleave',function(){document.documentElement.classList.remove('preview-scroll-active')})</script>`}
                 sandbox={sandboxValue}
                 className="border-0"
                 style={{ background: '#ffffff', position: 'absolute', inset: 0, width: '100%', height: '100%' }}

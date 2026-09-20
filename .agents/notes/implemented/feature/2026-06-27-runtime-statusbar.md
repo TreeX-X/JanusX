@@ -8,7 +8,7 @@ Running state has no stable address. Terminal, model, context, cost, subagent, a
 
 ## Decision
 
-The existing bottom bar serves as the application running-state layer rather than any single terminal accessory. It stays lightweight at chrome height, shows focused-terminal plus aggregate summaries under an explicit scope, and opens a monitoring drawer for full telemetry detail on demand. The island keeps task posture while the bar keeps telemetry; panes keep execution while the drawer keeps observation. The bar never grows into an operations console.
+The existing bottom bar serves as the application running-state layer rather than any single terminal accessory. It stays lightweight at chrome height, shows focused-terminal plus aggregate summaries under an explicit scope, and opens a monitoring drawer for full telemetry detail on demand. The drawer renders one card per terminal and its height follows a drag handle, owned by [runtime drawer cards and drag height](./2026-09-19-runtime-drawer-cards-resize.md). The island keeps task posture while the bar keeps telemetry; panes keep execution while the drawer keeps observation. The bar never grows into an operations console.
 
 ## Alternatives considered
 

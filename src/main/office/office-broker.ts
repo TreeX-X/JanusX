@@ -3,7 +3,7 @@ import { lstat, open, realpath, stat } from 'fs/promises'
 import { extname, isAbsolute, relative, resolve, sep } from 'path'
 import { execa } from 'execa'
 import { OFFICE_EXTENSIONS } from '../../shared/office'
-import { resolveOfficecliInstallArtifact } from './officecli-install-policy'
+import { expectedBundledOfficecliSha256 } from './office-bundled-path'
 
 export type OfficeBrokerTool = 'office_create' | 'office_batch' | 'office_help'
 
@@ -37,7 +37,7 @@ const defaultDependencies: OfficeBrokerDependencies = {
     return { exitCode: result.exitCode ?? 1, stdout: result.stdout, stderr: result.stderr }
   },
   verifyExecutable: async (binary) => {
-    const expected = resolveOfficecliInstallArtifact()
+    const expectedSha256 = expectedBundledOfficecliSha256()
     const hash = createHash('sha256')
     const handle = await open(binary, 'r')
     try {
@@ -50,7 +50,7 @@ const defaultDependencies: OfficeBrokerDependencies = {
         position += bytesRead
       }
     } finally { await handle.close() }
-    return hash.digest('hex') === expected.sha256
+    return hash.digest('hex') === expectedSha256
   },
 }
 

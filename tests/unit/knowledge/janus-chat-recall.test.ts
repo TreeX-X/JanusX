@@ -276,13 +276,14 @@ describe('Janus Chat knowledge recall', () => {
       ],
     })
 
+    // 受信工具子集归同级仓 READ_ONLY_NAMES 加 actionRisk 判定所有（P3 引擎分离后），
+    // generate/apply-config 等写入类生命周期工具不在其中，此处只锁当前子集。
     expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
       maxSteps: 1,
       tools: expect.objectContaining({
         workspace_list: expect.any(Object),
         workspace_read: expect.any(Object),
         project_detect: expect.any(Object),
-        project_generate_config: expect.any(Object),
         project_process_output: expect.any(Object),
         git_status: expect.any(Object),
         command_run: expect.any(Object),

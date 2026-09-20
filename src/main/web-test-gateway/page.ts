@@ -742,7 +742,7 @@ function ensureXterm() {
    注意：本文件是外层模板字符串，服务端 JS 里的反斜杠需双写（\\x1b 才会在页面里留下 \x1b）。 */
 function stripAnsiForPre(text) {
   var s = String(text == null ? '' : text);
-  /* OSC（ESC ] ... BEL 或 ESC \)先清，否则残留可读字符 */
+  /* OSC 序列先清，否则残留可读字符 */
   s = s.replace(/\\x1b\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)/g, '');
   /* CSI / DCS / 通用 ESC 序列 */
   s = s.replace(/\\x1b\\[[0-9;?]*[A-Za-z]/g, '').replace(/\\x1b\\([0-9A-B]/g, '').replace(/\\x1b[()][0-9A-Za-z]/g, '').replace(/\\x1b[#>%()=+\\/\\\\*]/g, '').replace(/\\x9b[0-9;?]*[A-Za-z]/g, '');

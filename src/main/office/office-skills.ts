@@ -1,3 +1,4 @@
+// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/implemented/feature/2026-09-18-officecli-bundled.md
 import type { OfficecliInfo, OfficePrompt, OfficeSkillId } from '../../shared/office'
 import { OFFICE_SKILL_IDS } from '../../shared/office'
 import { officecliManager, type OfficecliManager } from './officecli-manager'
@@ -15,27 +16,24 @@ const SKILL_GOALS: Record<OfficeSkillId, string> = {
 }
 
 function guidancePrompt(info: OfficecliInfo): OfficePrompt {
-  const release = info.manualInstall?.release ?? info.manualInstall?.repository
-  const releaseGuidance = release ? ` Review the supported release at ${release}.` : ''
-
   if (!info.installed) {
     return {
       mode: 'guidance',
-      text: `OfficeCLI is not installed. Complete the manual installation before generating an Office editing prompt.${releaseGuidance}`,
+      text: 'The bundled OfficeCLI is missing. Reinstall JanusX before generating an Office editing prompt.',
     }
   }
 
   if (info.runtimeError) {
     return {
       mode: 'guidance',
-      text: `${info.runtimeError} Repair the local runtime, then retry OfficeCLI detection.${releaseGuidance}`,
+      text: `${info.runtimeError} Repair the local runtime, then retry.`,
     }
   }
 
   const version = info.version ? ` Detected version: ${info.version}.` : ''
   return {
     mode: 'guidance',
-    text: `The installed OfficeCLI is incompatible with this JanusX build.${version} Install the supported version, then retry detection.${releaseGuidance}`,
+    text: `The bundled OfficeCLI is incompatible with this JanusX build.${version} Reinstall JanusX, then retry detection.`,
   }
 }
 

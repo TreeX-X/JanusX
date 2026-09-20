@@ -69,6 +69,7 @@ interface JanusChatProps {
   visible: boolean
   /** 停靠态：作为右侧 flex 列，而非绝对浮层 */
   docked?: boolean
+  compactNavigation?: boolean
   /** Embed only the discussion and composer (workspace scope stays in the main chat view). */
   discussionOnly?: boolean
   /** Only the focused presentation owns input focus and global shortcuts. */
@@ -321,6 +322,7 @@ const EMPTY_REASONING_BY_TURN: Record<string, ReasoningSnapshot> = {}
 export function JanusChat({
   visible,
   docked = false,
+  compactNavigation = false,
   discussionOnly = false,
   focused = true,
   modeColor,
@@ -942,13 +944,14 @@ export function JanusChat({
   return (
     <div
       ref={chatRootRef}
+      data-compact-navigation={compactNavigation || undefined}
       tabIndex={-1}
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !discussionOnly ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !discussionOnly && !compactNavigation ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
       onKeyDownCapture={handleChatKeyDownCapture}
       onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {docked && conversations && !discussionOnly && (
+      {docked && conversations && !discussionOnly && !compactNavigation && (
         <aside className="janus-chat-sidebar" aria-label={t('janus:chat.thread.menuHeader')}>
           <div className="janus-chat-sidebar-header">
             <div>
@@ -1040,15 +1043,15 @@ export function JanusChat({
             aria-label={t('janus:chat.thread.selectAria')}
             aria-expanded={threadMenuOpen}
             onClick={() => setThreadMenuOpen((open) => !open)}
-            disabled={!conversations}
+            disabled={!conversations || compactNavigation}
           >
             <span>
               <span className="janus-chat-toolbar-kicker">{t('janus:chat.thread.kicker')}</span>
               <strong>{conversations?.conversationTitle ?? t('janus:chat.thread.fallbackTitle')}</strong>
             </span>
-            {conversations && <ChevronDown size={13} aria-hidden="true" />}
+            {conversations && !compactNavigation && <ChevronDown size={13} aria-hidden="true" />}
           </button>
-          {threadMenuOpen && conversations && (
+          {threadMenuOpen && conversations && !compactNavigation && (
             <div className="janus-chat-thread-menu" role="menu" aria-label={t('janus:chat.thread.menuHeader')}>
               <div className="janus-chat-thread-menu-header">
                 <span>{t('janus:chat.thread.menuHeader')}</span>

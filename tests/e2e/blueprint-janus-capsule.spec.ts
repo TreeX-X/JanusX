@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
 import { createDesktopTestEnv } from './desktop-test-env'
 
-type TestWindow = Window & { electron: { workspace: WorkspaceAPI } }
+type TestWindow = Window & { electron: { workspace: WorkspaceAPI; system: { setLanguage(language: string): Promise<void> } } }
 
 test('JanusX capsule keeps detail, canvas, and conversation as independent cards', async () => {
   const entry = resolve('out/main/index.js')
@@ -24,6 +24,12 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       env: createDesktopTestEnv(root),
     })
     const page = await application.firstWindow({ timeout: 30_000 })
+    await page.evaluate(() => (window as TestWindow).electron.system.setLanguage('zh-CN'))
+    const settleWorkbench = () => page.locator('.blueprint-workbench-shell').evaluate(async (element) => {
+      const animations = element.getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+      await Promise.all(animations.map((animation) => animation.finished.catch(() => undefined)))
+    })
     await page.setViewportSize({ width: 1920, height: 1080 })
     await page.evaluate(
       (path) => (window as TestWindow).electron.workspace.create({ name: 'Blueprint UI fixture', path }),
@@ -77,18 +83,22 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await page.locator('.react-flow__node').first().dblclick()
     const nodeDetail = page.locator('.blueprint-workbench-detail-slot > .bp-node-detail')
     await expect(nodeDetail).toBeVisible()
+    await settleWorkbench()
     const canvasWidthAfter = (await page.locator('.blueprint-view--workbench').boundingBox())?.width
     expect(canvasWidthBefore).toBeDefined()
     expect(canvasWidthAfter).toBeLessThan(canvasWidthBefore!)
-    const conversationBox = await conversation.boundingBox()
-    const canvasBox = await page.locator('.blueprint-workbench-card--canvas').boundingBox()
-    const detailBox = await nodeDetail.boundingBox()
     expect(conversationBoxBeforeDetail).not.toBeNull()
-    expect(conversationBox).not.toBeNull()
-    expect(canvasBox).not.toBeNull()
-    expect(detailBox).not.toBeNull()
-    expect(detailBox!.x + detailBox!.width).toBeLessThan(canvasBox!.x)
-    expect(canvasBox!.x + canvasBox!.width).toBeLessThan(conversationBox!.x)
+    // Visibility precedes the grid-track transition; check the settled layout.
+    await expect(async () => {
+      const conversationBox = await conversation.boundingBox()
+      const canvasBox = await canvasCard.boundingBox()
+      const detailBox = await nodeDetail.boundingBox()
+      expect(conversationBox).not.toBeNull()
+      expect(canvasBox).not.toBeNull()
+      expect(detailBox).not.toBeNull()
+      expect(detailBox!.x + detailBox!.width).toBeLessThan(canvasBox!.x)
+      expect(canvasBox!.x + canvasBox!.width).toBeLessThan(conversationBox!.x)
+    }).toPass({ timeout: 5_000 })
 
     const staggerMetadata = await page.locator('.blueprint-workbench-shell').evaluate((element) => ({
       cardCount: getComputedStyle(element).getPropertyValue('--card-count').trim(),
@@ -107,6 +117,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     const nodeActions = canvasToolbar.getByRole('group', { name: /节点操作/ })
     await expect(search).toBeVisible()
     await expect(nodeActions).toBeVisible()
+    await settleWorkbench()
     const [narrowCanvasBox, searchBox, nodeActionsBox] = await Promise.all([
       canvasAfterResize.boundingBox(),
       search.boundingBox(),
@@ -166,6 +177,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await shell.evaluate((element) => { element.style.width = '420px' })
     const capsuleName = capsule.locator('.blueprint-janus-capsule__name')
     await expect(capsuleName).toBeHidden()
+    await settleWorkbench()
     const [topbarBox, tabBox, actionBox] = await Promise.all([
       page.locator('.blueprint-workbench-topbar').boundingBox(),
       page.locator('.blueprint-workbench-tab').boundingBox(),
@@ -184,7 +196,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     const threeCardMetadata = await page.locator('.blueprint-workbench-shell').evaluate((element) => ({
       cardCount: element.getAttribute('data-card-count'),
       cardIndexes: [
-        ...element.querySelectorAll<HTMLElement>('.blueprint-workbench-topbar, .blueprint-workbench-detail-slot, .blueprint-workbench-card'),
+        ...element.querySelectorAll<HTMLElement>('.blueprint-workbench-topbar, .blueprint-workbench-detail-slot[data-open="true"], .blueprint-workbench-card--canvas, .blueprint-workbench-janus-slot[data-visible="true"] .blueprint-workbench-card'),
       ].map((card) => card.style.getPropertyValue('--card-index')),
     }))
     expect(threeCardMetadata.cardCount).toBe('3')

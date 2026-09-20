@@ -11,6 +11,10 @@ files:
   - out/renderer/**
   - package.json
 
+extraResources:
+  - from: resources/officecli
+    to: officecli
+
 asarUnpack:
   - node_modules/node-pty/**/*
 

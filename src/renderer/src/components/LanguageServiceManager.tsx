@@ -5,7 +5,6 @@ import type {
   LanguageServiceInstallerProgressEvent,
   LanguageServiceManagedInstallStatus,
 } from '../../../shared/ipc/language-service'
-import { Select } from './ui/Select'
 import styles from './AppSettingsModal.module.css'
 
 interface ServiceCard {

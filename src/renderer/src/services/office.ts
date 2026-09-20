@@ -9,14 +9,8 @@ import {
   type OfficeResult,
   type OfficeStopPreviewRequest,
   type OfficeWatchEvictedEvent,
-  type OfficeInstallerStatusRequest,
-  type OfficeInstallerCancelRequest,
   type OfficeWorkspaceRequest,
   type OfficecliPublicInfo,
-  type OfficeInstallerProgressEvent,
-  type OfficeInstallerRemoveRequest,
-  type OfficeInstallerStartRequest,
-  type OfficeManagedInstallStatus,
 } from '../../../shared/office'
 
 export interface OfficeService {
@@ -26,11 +20,6 @@ export interface OfficeService {
   stopPreview(request: OfficeStopPreviewRequest): Promise<OfficeResult<null>>
   reloadPreview(request: OfficeReloadPreviewRequest): Promise<OfficeResult<OfficePreviewLease>>
   buildPrompt(request: OfficeBuildPromptRequest): Promise<OfficeResult<OfficePrompt>>
-  installerStatus(request: OfficeInstallerStatusRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
-  installerStart(request: OfficeInstallerStartRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
-  installerCancel(request: OfficeInstallerCancelRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
-  installerRemove(request: OfficeInstallerRemoveRequest): Promise<OfficeResult<OfficeManagedInstallStatus>>
-  onInstallerProgress(listener: (event: OfficeInstallerProgressEvent) => void): () => void
   onFilesChanged(listener: (event: OfficeFilesChangedEvent) => void): () => void
   onWatchEvicted(listener: (event: OfficeWatchEvictedEvent) => void): () => void
 }
@@ -42,11 +31,6 @@ export const officeService: OfficeService = {
   stopPreview: (request) => window.electron.office.stopPreview(request),
   reloadPreview: (request) => window.electron.office.reloadPreview(request),
   buildPrompt: (request) => window.electron.office.buildPrompt(request),
-  installerStatus: (request) => window.electron.office.installerStatus(request),
-  installerStart: (request) => window.electron.office.installerStart(request),
-  installerCancel: (request) => window.electron.office.installerCancel(request),
-  installerRemove: (request) => window.electron.office.installerRemove(request),
-  onInstallerProgress: (listener) => window.electron.office.onInstallerProgress(listener),
   onFilesChanged: (listener) => window.electron.office.onFilesChanged(listener),
   onWatchEvicted: (listener) => window.electron.office.onWatchEvicted(listener),
 }

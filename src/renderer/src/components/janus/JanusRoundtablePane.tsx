@@ -66,8 +66,6 @@ export function JanusRoundtablePane({
   onToggleParchment,
   onOpenParchmentDetail,
   center,
-  workingAgents = [],
-  resultCards = [],
   onOpenAgentResult,
   onOpenQuestions,
   onStateChange,

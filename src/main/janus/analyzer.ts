@@ -23,7 +23,7 @@ import {
   commitExists,
   type CommitRangeItem
 } from '../git/service'
-import { blueprintStore } from './blueprint-store'
+import { blueprintStore, isProjectGraphId } from './blueprint-store'
 import { JANUS_PERSONA } from '../../shared/janus/persona'
 import {
   JANUS_EVENT_CHANNELS,
@@ -424,7 +424,7 @@ async function callLLM(
   if (!def) {
     throw new Error('no-default-llm')
   }
-  const model = await llmService.getLanguageModel(def.provider.id, def.modelId)
+  const model = await llmService.getLanguageModel('janus', def.provider.id, def.modelId)
   const generateStructuredObject = generateObject as unknown as (
     options: unknown,
   ) => Promise<{ object: SegmentResult }>
@@ -597,6 +597,9 @@ class JanusAnalyzer {
       return null
     }
     const { blueprintId, node } = found
+    // 项目图不落 legacy JSON：分析照常跑内存并通知，结论经维护流采纳为 Note；
+    // 游标不持久化，下次在 commit 上限内重扫。
+    const persist = !isProjectGraphId(blueprintId)
 
     // ---- 校验游标有效性 ----
     let cursor = node.lastAnalyzedCommitSha
@@ -619,7 +622,7 @@ class JanusAnalyzer {
         blueprint: summarizeBlueprint(node),
         actual: `待分析 commit：${commits.length} 个（上限 ${commitLimit}）`
       }, null, normalizeAnalysisError(new Error('no-default-llm')).message)
-      await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
+      if (persist) await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
       this.emitAnalysis(analysis, node, blueprintId, workspace)
       return analysis
     }
@@ -628,7 +631,7 @@ class JanusAnalyzer {
     const segments = await buildSegments(workspace, commits)
     if (segments.length === 0) {
       // 有 commit 但 diff 全空（如 merge commit），直接推进游标，不留痕
-      await blueprintStore.setCursor(workspace, blueprintId, nodeId, commits[commits.length - 1].hash)
+      if (persist) await blueprintStore.setCursor(workspace, blueprintId, nodeId, commits[commits.length - 1].hash)
       return null
     }
 
@@ -660,7 +663,7 @@ class JanusAnalyzer {
         null,
         summarizeAnalysisErrors(errors, true)
       )
-      await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
+      if (persist) await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
       this.emitAnalysis(analysis, node, blueprintId, workspace)
       return analysis
     }
@@ -685,30 +688,33 @@ class JanusAnalyzer {
     )
 
     // ---- 落库 + 回写状态 + 推进游标 ----
-    await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
-    if (analysis.applied && analysis.result) {
-      await blueprintStore.applyAnalysisPatch(workspace, blueprintId, nodeId, {
-        progress: analysis.result.progress,
-        status: analysis.result.status,
-        featureUpdates: analysis.result.featureUpdates
-      })
+    let candidates: BlueprintRequirementCandidate[] = []
+    if (persist) {
+      await blueprintStore.appendAnalysis(workspace, blueprintId, nodeId, analysis)
+      if (analysis.applied && analysis.result) {
+        await blueprintStore.applyAnalysisPatch(workspace, blueprintId, nodeId, {
+          progress: analysis.result.progress,
+          status: analysis.result.status,
+          featureUpdates: analysis.result.featureUpdates
+        })
+      }
+      const candidateRequirements = [
+        ...merged.discoveredRequirements,
+        ...merged.newFeatureRequirements
+      ]
+      candidates =
+        analysis.applied && candidateRequirements.length > 0
+          ? await blueprintStore.upsertRequirementCandidates(
+              workspace,
+              blueprintId,
+              nodeId,
+              analysis.id,
+              candidateRequirements,
+              merged.evidence
+            )
+          : []
+      await blueprintStore.setCursor(workspace, blueprintId, nodeId, lastSha)
     }
-    const candidateRequirements = [
-      ...merged.discoveredRequirements,
-      ...merged.newFeatureRequirements
-    ]
-    const candidates =
-      analysis.applied && candidateRequirements.length > 0
-        ? await blueprintStore.upsertRequirementCandidates(
-            workspace,
-            blueprintId,
-            nodeId,
-            analysis.id,
-            candidateRequirements,
-            merged.evidence
-          )
-        : []
-    await blueprintStore.setCursor(workspace, blueprintId, nodeId, lastSha)
 
     // ---- Island 通知 ----
     this.emitAnalysis(analysis, node, blueprintId, workspace)

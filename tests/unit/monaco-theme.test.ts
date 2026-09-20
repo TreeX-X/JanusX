@@ -36,10 +36,13 @@ describe('monaco theme', () => {
   it('uses restrained full-line diff colors and stronger local change markers', () => {
     const colors = JANUSX_DARK_THEME.colors as Record<string, string>
 
-    expect(colors['diffEditor.insertedLineBackground']).toMatch(/0d$/)
-    expect(colors['diffEditor.removedLineBackground']).toMatch(/0d$/)
-    expect(colors['diffEditor.insertedTextBackground']).toMatch(/2e$/)
-    expect(colors['diffEditor.removedTextBackground']).toMatch(/2e$/)
+    for (const change of ['inserted', 'removed']) {
+      const lineAlpha = parseInt(colors[`diffEditor.${change}LineBackground`].slice(7), 16)
+      const textAlpha = parseInt(colors[`diffEditor.${change}TextBackground`].slice(7), 16)
+      expect(lineAlpha).toBeGreaterThan(0)
+      expect(lineAlpha).toBeLessThan(textAlpha)
+      expect(textAlpha).toBeLessThan(128)
+    }
   })
 
   it('is defined in exactly one viewer and reused by markdown and html', () => {

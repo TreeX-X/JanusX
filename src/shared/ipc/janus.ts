@@ -17,12 +17,7 @@ import type {
   BlueprintMaintenanceAuditRecord,
   BlueprintMaintenanceDismissInput,
   BlueprintMaintenanceEvent,
-  BlueprintMaintenanceMessageInput,
-  BlueprintMaintenanceProposalInput,
   BlueprintMaintenanceStartInput,
-  BlueprintMaintenanceSteerCancelInput,
-  BlueprintMaintenanceSteerInput,
-  BlueprintMaintenanceSteerResult,
   BlueprintMaintenanceTask,
   BlueprintMaintenanceUndoApplyInput,
   BlueprintMaintenanceUndoApplyResult,
@@ -57,14 +52,10 @@ export const JANUS_COMMAND_CHANNELS = {
   maintenanceList: 'blueprint:maintenance:list',
   maintenanceAuditList: 'blueprint:maintenance:audit:list',
   maintenanceStart: 'blueprint:maintenance:start',
-  maintenanceMessage: 'blueprint:maintenance:message',
-  maintenancePropose: 'blueprint:maintenance:propose',
   maintenanceApply: 'blueprint:maintenance:apply',
   maintenanceCancel: 'blueprint:maintenance:cancel',
   maintenanceComplete: 'blueprint:maintenance:complete',
   maintenanceDismiss: 'blueprint:maintenance:dismiss',
-  maintenanceSteer: 'blueprint:maintenance:steer',
-  maintenanceSteerCancel: 'blueprint:maintenance:steer-cancel',
   maintenanceUndoPrepare: 'blueprint:maintenance:undo:prepare',
   maintenanceUndoApply: 'blueprint:maintenance:undo:apply',
 } as const
@@ -227,14 +218,10 @@ export interface JanusAPI {
   listMaintenanceTasks(): Promise<BlueprintMaintenanceTask[]>
   listMaintenanceAudits(input: BlueprintMaintenanceAuditListInput): Promise<BlueprintMaintenanceAuditRecord[]>
   startMaintenanceTask(input: BlueprintMaintenanceStartInput): Promise<BlueprintMaintenanceTask>
-  sendMaintenanceMessage(input: BlueprintMaintenanceMessageInput): Promise<BlueprintMaintenanceTask>
-  generateMaintenanceProposal(input: BlueprintMaintenanceProposalInput): Promise<BlueprintMaintenanceTask>
   applyMaintenanceChangeSet(input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult>
   cancelMaintenanceTask(taskId: string): Promise<BlueprintMaintenanceTask>
   completeMaintenanceTask(taskId: string): Promise<BlueprintMaintenanceTask>
   dismissMaintenanceProposal(input: BlueprintMaintenanceDismissInput): Promise<BlueprintMaintenanceTask>
-  steerMaintenanceTask(input: BlueprintMaintenanceSteerInput): Promise<BlueprintMaintenanceSteerResult>
-  cancelMaintenanceSteer(input: BlueprintMaintenanceSteerCancelInput): Promise<{ cancelled: boolean }>
   prepareMaintenanceUndo(input: BlueprintMaintenanceUndoPrepareInput): Promise<BlueprintMaintenanceUndoPrepareResult>
   applyMaintenanceUndo(input: BlueprintMaintenanceUndoApplyInput): Promise<BlueprintMaintenanceUndoApplyResult>
   onMaintenanceTask(callback: (event: BlueprintMaintenanceEvent) => void): () => void

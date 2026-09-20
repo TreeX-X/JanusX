@@ -69,7 +69,7 @@ export function KnowledgeStatusBar({ stats, busy, onProcessNow }: Props) {
   )
 }
 
-function formatTime(value: string, unknownLabel: string): string {
+function formatTime(value: string, _unknownLabel: string): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }

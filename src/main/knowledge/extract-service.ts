@@ -578,7 +578,7 @@ export class KnowledgeExtractService {
     // 7. Phase 2：超时 + 重试调用（对齐 analyzer.ts:409-433 的 generateObject 模式）。
     // 失败/超时/非法输出在这里只记 degraded，由 llm-stage 转为队列 llm 失败账本；
     // 确定性产物不受影响（它早已在确定性阶段落盘）。
-    const model = await llmService.getLanguageModel(def.provider.id, def.modelId)
+    const model = await llmService.getLanguageModel('janus', def.provider.id, def.modelId)
     let result: ExtractResult
     try {
       result = await callWithRetry(

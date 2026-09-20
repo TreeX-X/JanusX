@@ -1,6 +1,7 @@
 import type {
   JanusChatStorageSnapshot,
   PersistedJanusConversation,
+  EngineeringContext,
 } from '../../../../shared/ipc/janus-chat'
 // Retained for isolated renderer harnesses; production conversations are persisted by main IPC.
 export const CONVERSATION_STORAGE_KEY = 'janusx.janus-chat.conversations.v1'
@@ -48,6 +49,25 @@ export function getRetryTurn(messages: PersistedJanusConversation['messages']): 
 export function createInitialSnapshot(): JanusChatStorageSnapshot {
   const conversation = createJanusConversation()
   return { version: 1, activeConversationId: conversation.id, conversations: [conversation] }
+}
+
+// Note: both project entry points share one conversation - see .agents/notes/implemented/architecture/2026-09-18-project-conversation-controller.md
+export function bindProjectConversation(
+  conversations: PersistedJanusConversation[],
+  context: EngineeringContext,
+  workspaceIds: string[],
+  title: string,
+): { conversations: PersistedJanusConversation[]; id: string } {
+  if (context.domain !== 'project' || !context.viewRef) throw new Error('Project conversation needs a view identity')
+  const existing = conversations.find((item) => item.engineeringContext?.domain === 'project'
+    && item.engineeringContext.viewRef?.ownerRepoId === context.viewRef!.ownerRepoId
+    && item.engineeringContext.viewRef?.viewId === context.viewRef!.viewId)
+  if (existing) return { conversations, id: existing.id }
+  const conversation = {
+    ...createJanusConversation(), title, engineeringContext: context,
+    attachedWorkspaceIds: [...new Set(workspaceIds)],
+  }
+  return { conversations: [conversation, ...conversations], id: conversation.id }
 }
 
 /* ════════════════════════════════════════════════════════════

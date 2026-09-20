@@ -1,6 +1,5 @@
 import type { InitOptions } from 'i18next'
 import {
-  DEFAULT_LANGUAGE,
   FALLBACK_LANGUAGE,
   DEFAULT_NAMESPACE,
   NAMESPACE_LIST,

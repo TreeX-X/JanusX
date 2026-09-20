@@ -38,7 +38,7 @@ export function Titlebar() {
   const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const { stage: islandStage, knowledge: knowledgePeek } = island
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('notifications')
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 侧栏团队区请求打开设置 team 页（计数器变化即打开）。
   const teamSettingsRequest = useTeamStore((s) => s.settingsRequest)
@@ -200,7 +200,7 @@ export function Titlebar() {
 
 
   const handleSettingsTriggerClick = useCallback(() => {
-    setSettingsInitialTab('notifications')
+    setSettingsInitialTab('general')
     setSettingsModalOpen(true)
   }, [])
 

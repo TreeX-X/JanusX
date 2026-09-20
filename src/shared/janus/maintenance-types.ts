@@ -216,6 +216,7 @@ export interface BlueprintChangeSet {
 
 export interface BlueprintMaintenanceTask {
   id: string
+  conversationId?: string
   blueprintId: string
   blueprintName: string
   baseRevision: number
@@ -244,25 +245,13 @@ export interface BlueprintMaintenanceWorkspace {
 
 export interface BlueprintMaintenanceStartInput {
   blueprintId: string
+  conversationId?: string
   workspaceId: string
   workspaceName: string
   workspacePath: string
   authorizedWorkspaces?: BlueprintMaintenanceWorkspace[]
   nodeScope: BlueprintMaintenanceScope
   goal: string
-  providerId?: string
-  modelId?: string
-}
-
-export interface BlueprintMaintenanceMessageInput {
-  taskId: string
-  content: string
-  providerId?: string
-  modelId?: string
-}
-
-export interface BlueprintMaintenanceProposalInput {
-  taskId: string
   providerId?: string
   modelId?: string
 }
@@ -313,6 +302,12 @@ export interface BlueprintMaintenanceAuditRecord {
   createdRelationIds?: Record<string, string>
   /** Set when this record was produced by applying a reverse ChangeSet. */
   undoOfAuditId?: string
+  /**
+   * Local checkout root for audits on harness project graphs. Restart-safe
+   * undo resolves through it first; the registered workspace list is the
+   * fallback. Local-only: never enters shared exports.
+   */
+  harnessRoot?: string
   beforeSnapshot: unknown
   afterSnapshot?: unknown
   createdAt: string
@@ -345,22 +340,6 @@ export interface BlueprintMaintenanceUndoApplyResult {
 
 export interface BlueprintMaintenanceDismissInput {
   taskId: string
-}
-
-export interface BlueprintMaintenanceSteerInput {
-  taskId: string
-  entryId: string
-  text: string
-}
-
-export interface BlueprintMaintenanceSteerResult {
-  accepted: boolean
-  error?: string
-}
-
-export interface BlueprintMaintenanceSteerCancelInput {
-  taskId: string
-  entryId: string
 }
 
 /**

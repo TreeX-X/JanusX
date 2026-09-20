@@ -51,7 +51,7 @@ describe('remaining typed IPC contracts', () => {
     await api.checkpoint.list({ cwd: 'C:\\repo' })
     await api.git.status('C:\\repo')
     await api.git.fileBaseline('C:\\repo', 'README.md')
-    await api.llm.getProviders()
+    await api.llm.getTerminalProviders('janus')
     await api.llm.answerQuestion({ requestId: 'r1', callId: 'c1', answer: { status: 'cancelled' } })
     await api.notificationSettings.get()
     await api.notificationSettings.getFeishuControlStatus()
@@ -65,7 +65,7 @@ describe('remaining typed IPC contracts', () => {
       [CHECKPOINT_CHANNELS.list, { cwd: 'C:\\repo' }],
       [GIT_CHANNELS.status, 'C:\\repo'],
       [GIT_CHANNELS.fileBaseline, 'C:\\repo', 'README.md'],
-      [LLM_CHANNELS.getProviders],
+      [LLM_CHANNELS.getTerminalProviders, 'janus'],
       [LLM_CHANNELS.answerQuestion, { requestId: 'r1', callId: 'c1', answer: { status: 'cancelled' } }],
       [NOTIFICATION_SETTINGS_CHANNELS.get],
       [NOTIFICATION_SETTINGS_CHANNELS.feishuControlStatus],

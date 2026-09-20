@@ -98,6 +98,31 @@ export function snapshotSourceFacts(
   return sha256Hex(JSON.stringify(canon))
 }
 
+export type BundleRetryVerdict = 'save' | 'reuse-saved' | 'stale'
+
+/**
+ * Retry guard (C6): retries reuse the same bundle ids so operation identities
+ * survive; a changed source snapshot demands a new bundle revision instead of
+ * overwriting proposal history. Pure so the service and unit tests share one
+ * verdict; the service owns loading and persisting the saved file.
+ */
+export function resolveBundleRetry(savedSnapshotHash: unknown, snapshotHash: string): BundleRetryVerdict {
+  // No prior proposal: persist the fresh build. Anything else — a matching
+  // hash for idempotent retry, a moved or unreadable history demanding a new
+  // revision — must never silently overwrite the saved file.
+  if (savedSnapshotHash === null) return 'save'
+  if (typeof savedSnapshotHash !== 'string') return 'stale'
+  return savedSnapshotHash === snapshotHash ? 'reuse-saved' : 'stale'
+}
+
+export function staleSnapshotDiagnostic(revision: number): Diagnostic {
+  return {
+    code: 'STALE_BASELINE',
+    message: `source snapshot moved under bundle revision ${revision}; rebuild with a new revision instead of overwriting`,
+    path: 'revision',
+  }
+}
+
 function factTarget(fact: RoundtableFact): { kind: NoteKind; lifecycle: 'draft' | 'proposed' } {
   switch (fact.kind) {
     case 'requirement':

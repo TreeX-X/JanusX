@@ -12,9 +12,13 @@ import {
   resolveProject,
   setBinding,
   shareExport,
+  shareImportApply,
+  shareImportPreview,
   sharePreview,
   type HarnessBinding,
   type HarnessResolveResult,
+  type HarnessShareImportPreview,
+  type HarnessShareImportResult,
 } from '@/services/harness'
 
 interface HarnessStore {
@@ -22,6 +26,9 @@ interface HarnessStore {
   bindings: HarnessBinding[]
   shareJson: string | null
   shareNotes: number
+  shareImportSnapshot: unknown | null
+  shareImportPreview: HarnessShareImportPreview | null
+  shareImportReport: HarnessShareImportResult | null
   conflict: string | null
   loading: boolean
   error: string | null
@@ -32,6 +39,9 @@ interface HarnessStore {
   saveBinding: (cwd: string, binding: HarnessBinding) => Promise<void>
   previewShare: (cwd: string) => Promise<void>
   exportShare: (cwd: string, outPath: string) => Promise<boolean>
+  previewShareImport: (cwd: string, snapshot: unknown) => Promise<HarnessShareImportPreview | null>
+  applyShareImport: (cwd: string, snapshot: unknown) => Promise<HarnessShareImportResult | null>
+  clearShareImport: () => void
   noticeConflict: (message: string) => void
   dismissConflict: () => void
 }
@@ -41,6 +51,9 @@ export const useHarnessStore = create<HarnessStore>((set) => ({
   bindings: [],
   shareJson: null,
   shareNotes: 0,
+  shareImportSnapshot: null,
+  shareImportPreview: null,
+  shareImportReport: null,
   conflict: null,
   loading: false,
   error: null,
@@ -93,6 +106,30 @@ export const useHarnessStore = create<HarnessStore>((set) => ({
       return false
     }
   },
+
+  previewShareImport: async (cwd, snapshot) => {
+    try {
+      const preview = await shareImportPreview(cwd, snapshot)
+      set({ shareImportSnapshot: snapshot, shareImportPreview: preview, shareImportReport: null, error: null })
+      return preview
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+      return null
+    }
+  },
+
+  applyShareImport: async (cwd, snapshot) => {
+    try {
+      const report = await shareImportApply(cwd, snapshot)
+      set({ shareImportReport: report, error: null })
+      return report
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+      return null
+    }
+  },
+
+  clearShareImport: () => set({ shareImportSnapshot: null, shareImportPreview: null, shareImportReport: null }),
 
   noticeConflict: (message) => set({ conflict: message }),
   dismissConflict: () => set({ conflict: null }),

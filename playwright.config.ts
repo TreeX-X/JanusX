@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test'
 
-const islandPort = 41731
+const islandPort = Number(process.env.JANUS_E2E_PORT ?? 41731)
 
 export default defineConfig({
   testDir: './tests/e2e',

@@ -1,6 +1,13 @@
-# Agent Note: Agent HTML artifacts auto-preview
+---
+schema: harness-note/1
+id: e74d8e85-e690-44f8-8b0b-d229b7113401
+kind: requirement
+lifecycle: draft
+created: 2026-09-09
+class: feature
+---
 
-Status: proposed
+# Agent Note: Agent HTML artifacts auto-preview
 
 ## Problem
 

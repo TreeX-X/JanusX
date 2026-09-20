@@ -1,0 +1,210 @@
+// Note: maintenance proposals land on project graphs here — see .agents/notes/implemented/architecture/2026-09-17-maintenance-harness-apply-s6.md
+/**
+ * @file Maintenance -> harness apply wiring (S6-c slice 2b)
+ * @description Consumes the pure translator from maintenance-bridge and lands
+ *  the result through HarnessNoteService.applyBundleChangeSet. Translation is
+ *  all-or-nothing: any refusal fails loudly before any byte is written, so a
+ *  partial bridge never reaches the transaction. Crash recovery between the
+ *  journal commit and the response replays through the harness journal; a
+ *  brand-new apply call of one selection behaves like the legacy lane (a
+ *  create runs again), so callers must not blindly retry a successful apply.
+ *
+ *  No Electron here: checkout roots arrive from callers, workspace scanning
+ *  arrives as an injected lister. No model calls, no discussion loop.
+ */
+import { randomUUID } from 'crypto'
+import type { Blueprint } from '../../shared/janus/types'
+import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
+import { translateMaintenanceOpsToHarness } from './maintenance-bridge'
+import type { HarnessNoteService } from './service'
+
+export interface ProjectCheckout {
+  root: string
+  repoId: string
+  repoName: string
+  rev: number
+  blueprint: Blueprint
+}
+
+export interface HarnessSelectionRequest {
+  root: string
+  repoId: string
+  operations: BlueprintOperation[]
+  taskId: string
+  changeSetVersion: number
+  reason: string
+}
+
+export interface HarnessSelectionResult {
+  txId: string
+  /** Maintenance operation ids covered by the applied bridge, in apply order. */
+  appliedMaintenanceIds: string[]
+  /** tempNodeId -> minted note id for creates in this selection. */
+  createdNodeIds: Record<string, string>
+  /** tempRelationId -> synthetic projection id for adds in this selection. */
+  createdRelationIds: Record<string, string>
+}
+
+/**
+ * Finds the local checkout serving a project graph id. The id only carries an
+ * 8-char prefix, so it never identifies a checkout alone: the preferred path
+ * (task workspace or audit record) wins, and the injected workspace list is
+ * the restart-safe fallback. Throws before any write when nothing matches.
+ */
+export async function resolveProjectCheckout(
+  service: HarnessNoteService,
+  blueprintId: string,
+  preferredPath?: string,
+  listWorkspacePaths?: () => Promise<string[]>,
+): Promise<ProjectCheckout> {
+  const tried: string[] = []
+  let missingRepo = false
+  const attempt = async (candidate: string): Promise<ProjectCheckout | null> => {
+    tried.push(candidate)
+    const resolved = await service.resolveRoot(candidate).catch(() => null)
+    if (!resolved?.ok || !resolved.root) return null
+    const view = await service.projectView(resolved.root)
+    if (view.blueprint.id !== blueprintId) return null
+    if (!view.repoId) {
+      missingRepo = true
+      return null
+    }
+    return { root: resolved.root, repoId: view.repoId, repoName: view.repoName, rev: view.rev, blueprint: view.blueprint }
+  }
+  if (preferredPath) {
+    const hit = await attempt(preferredPath)
+    if (hit) return hit
+  }
+  if (listWorkspacePaths) {
+    const matches: ProjectCheckout[] = []
+    for (const candidate of await listWorkspacePaths()) {
+      if (tried.includes(candidate)) continue
+      const hit = await attempt(candidate)
+      if (hit) matches.push(hit)
+    }
+    // Project ids only carry an 8-char prefix, so a scan may hit two
+    // checkouts of one repo: choosing silently would write the wrong files.
+    if (matches.length > 1) {
+      throw new Error(`项目 Note 有多个本机 checkout（${blueprintId}）：${matches.map((m) => m.root).join('、')}，请先明确绑定目录`)
+    }
+    if (matches.length === 1) return matches[0]
+  }
+  if (missingRepo) throw new Error('项目 Note 缺少 repo 身份：先在 .agents/harness.json 填写 repoId 才能维护')
+  throw new Error(`找不到项目 Note 的本机 checkout（${blueprintId}）：已尝试 ${tried.length} 个位置，请先绑定可写目录`)
+}
+
+/**
+ * Keeps the legacy node-scope gate on the harness lane. Proposal-local temp
+ * ids always pass; every other referenced node or relation owner must sit
+ * inside the allowed set. Unparseable relation ids pass here and fail loudly
+ * inside the translator instead of being silently dropped.
+ */
+export function assertHarnessScope(operations: BlueprintOperation[], allowed: Set<string>): void {
+  const temps = new Set<string>()
+  for (const op of operations) {
+    if (op.type === 'create-node') temps.add(op.tempNodeId)
+    if (op.type === 'add-relation') temps.add(op.tempRelationId)
+  }
+  const inside = (id: string): boolean => temps.has(id) || allowed.has(id)
+  const violations: string[] = []
+  const check = (operationId: string, id: string | null | undefined): void => {
+    if (id && !inside(id)) violations.push(`${operationId}: ${id}`)
+  }
+  for (const op of operations) {
+    switch (op.type) {
+      case 'create-node': check(op.operationId, op.parentId); break
+      case 'update-node':
+      case 'move-node':
+      case 'archive-node':
+      case 'delete-node':
+      case 'restore-node': check(op.operationId, op.nodeId); break
+      case 'add-relation':
+        check(op.operationId, op.after.sourceNodeId)
+        check(op.operationId, op.after.targetNodeId)
+        break
+      case 'update-relation':
+      case 'remove-relation': {
+        const parts = op.relationId.split(':')
+        check(op.operationId, parts.length === 3 && parts[0] ? parts[0] : null)
+        break
+      }
+      case 'update-workspace-binding': check(op.operationId, op.nodeId); break
+    }
+    if (op.type === 'move-node') check(op.operationId, op.afterParentId)
+    if (op.type === 'restore-node') {
+      if (op.node.parentId) check(op.operationId, op.node.parentId)
+      for (const relation of op.relations) {
+        check(op.operationId, relation.sourceNodeId)
+        check(op.operationId, relation.targetNodeId)
+      }
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(`维护节点范围外禁止写入：${violations.slice(0, 5).join('；')}${violations.length > 5 ? ` 等 ${violations.length} 项` : ''}`)
+  }
+}
+
+/**
+ * Translates one maintenance selection and applies it as a single harness
+ * transaction. Throws with every refusal reason and writes nothing when the
+ * bridge is incomplete; concurrent external edits surface HARNESS_CONFLICT
+ * from the transaction instead of overwriting.
+ */
+export async function applyMaintenanceSelection(
+  service: HarnessNoteService,
+  req: HarnessSelectionRequest,
+): Promise<HarnessSelectionResult> {
+  const snapshots = new Map<string, { uri: string; expectedHash: string; markdown: string }>()
+  const view = await service.projectView(req.root)
+  if (view.repoId !== req.repoId) {
+    throw new Error(`仓库身份已变化：期望 ${req.repoId}，当前 ${view.repoId ?? '未初始化'}，请重新确认绑定`)
+  }
+  for (const nodeId of view.blueprint.nodeIds) {
+    try {
+      const read = await service.readNote(req.root, nodeId)
+      snapshots.set(nodeId, {
+        uri: `note://${req.repoId}/${nodeId}`,
+        expectedHash: read.sha256,
+        markdown: read.raw,
+      })
+    } catch {
+      // Invalid notes stay out of the bridge context; touching them fails
+      // loudly inside the translator as an unknown note.
+    }
+  }
+  const bridge = translateMaintenanceOpsToHarness(req.operations, {
+    repoId: req.repoId,
+    resolveNote: (nodeId: string) => snapshots.get(nodeId) ?? null,
+  })
+  if (!bridge.complete) {
+    const reasons = bridge.untranslatable.map((item) => `${item.operationId}: ${item.reason}`)
+    throw new Error(`项目 Note 转换失败，未写入任何内容：${reasons.slice(0, 5).join('；')}${reasons.length > 5 ? ` 等 ${reasons.length} 项` : ''}`)
+  }
+  const applied = await service.applyBundleChangeSet(
+    req.root,
+    {
+      id: `maintenance-${req.taskId}-${randomUUID().slice(0, 8)}`,
+      revision: req.changeSetVersion,
+      source: { type: 'harness', id: `maintenance:${req.taskId}`, revision: req.changeSetVersion },
+      operations: bridge.ops.map((op) => ({
+        operationId: op.operationId,
+        type: op.type,
+        uri: op.uri,
+        expectedHash: op.expectedHash,
+        afterMarkdown: op.afterMarkdown,
+        dependsOn: op.dependsOn,
+        evidenceRefs: op.evidenceRefs,
+      })),
+    },
+    req.reason,
+  )
+  const appliedSet = new Set(applied.applied.map((item) => item.operationId))
+  const createdRelationIds: Record<string, string> = {}
+  for (const [tempId, ref] of Object.entries(bridge.createdRelations)) createdRelationIds[tempId] = ref.relationId
+  return {
+    txId: applied.txId,
+    appliedMaintenanceIds: bridge.ops.filter((op) => appliedSet.has(op.operationId)).flatMap((op) => op.maintenanceOperationIds),
+    createdNodeIds: { ...bridge.createdNodeIds },
+    createdRelationIds,
+  }
+}

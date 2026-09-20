@@ -53,6 +53,74 @@ vi.mock('../../src/main/harness/service', () => ({
   },
 }))
 
+vi.mock('../../src/main/harness/execution-adapter', () => ({
+  cancelTaskRun: vi.fn(),
+  closeoutTaskRun: vi.fn(),
+  getTaskRun: vi.fn(),
+  handoffTaskRun: vi.fn(),
+  readTaskHandoff: vi.fn(),
+  takeoverTaskRun: vi.fn(),
+  listTaskThreads: vi.fn(),
+  openTaskThread: vi.fn(),
+  closeTaskThread: vi.fn(),
+  listTaskRuns: vi.fn(),
+  pauseTaskRun: vi.fn(),
+  prepareTaskRun: vi.fn(),
+  rebaselineTaskRun: vi.fn(),
+  resumeTaskRun: vi.fn(),
+  startTaskRun: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/task-thread', () => ({
+  ensureTaskThread: vi.fn(),
+  setThreadModel: vi.fn(),
+  readDesktopConcurrency: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/independent-review', () => ({
+  requestIndependentReview: vi.fn(),
+  finishWithLatestReceipt: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/undo', () => ({
+  previewUndo: vi.fn(),
+  applyUndo: vi.fn(),
+}))
+
+vi.mock('../../src/main/janus/blueprint-migrate', () => ({
+  previewMigration: vi.fn(),
+  applyMigration: vi.fn(),
+  archiveBlueprintSource: vi.fn(),
+}))
+
+vi.mock('../../src/main/janus/blueprint-store', () => ({
+  blueprintStore: { loadBlueprint: vi.fn(), evictBlueprint: vi.fn() },
+}))
+
+vi.mock('../../src/main/janus/maintenance/service', () => ({
+  blueprintMaintenanceService: { listAudits: vi.fn() },
+}))
+
+vi.mock('../../src/main/harness/desktop-executor', () => ({
+  executeDesktopTask: vi.fn(),
+  runDesktopCommand: vi.fn(),
+  reviewClaimFromText: vi.fn(),
+}))
+
+vi.mock('../../src/main/harness/desktop-review', () => ({
+  buildDesktopReviewPrompt: vi.fn(),
+  createModelReviewPort: vi.fn(),
+  parseDesktopReviewClaim: vi.fn(),
+}))
+
+vi.mock('../../src/main/llm/LlmService', () => ({
+  llmService: { getLanguageModel: vi.fn() },
+}))
+
+vi.mock('../../src/main/llm/ai-runtime', () => ({
+  generateText: vi.fn(),
+}))
+
 async function loadAll(): Promise<void> {
   handlers.clear()
   await import('../../src/main/ipc/harness-handlers')
@@ -86,6 +154,33 @@ describe('harness IPC contract', () => {
       'setBinding',
       'sharePreview',
       'shareExport',
+      'shareImportPreview',
+      'shareImportApply',
+      'runPrepare',
+      'runStart',
+      'runStatus',
+      'runList',
+      'runCancel',
+      'runCloseout',
+      'runHandoff',
+      'runHandoffRead',
+      'runTakeover',
+      'runThreads',
+      'runThread',
+      'runTranscript',
+      'runThreadClose',
+      'runReview',
+      'runFinish',
+      'runRepair',
+      'undoPreview',
+      'undoApply',
+      'migratePreview',
+      'migrateApply',
+      'runExecute',
+      'runPause',
+      'runResume',
+      'runRebaseline',
+      'runAbort',
       'onChanged',
     ] as const) {
       expect(typeof harnessApi[method], method).toBe('function')

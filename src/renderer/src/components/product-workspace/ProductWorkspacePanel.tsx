@@ -1,14 +1,11 @@
-// Note: 产物预览列只承载用户点开过的文件（水平 tab 即开即显），产物目录本身由
-// 灵动岛一级提醒与监控界面产物分区承载，面板顶部不再重复全量文件列表。
+// Note: OfficeCLI is a bundled asset, preview failures mean reinstall — see .agents/notes/implemented/feature/2026-09-18-officecli-bundled.md
 // See .agents/notes/implemented/feature/2026-09-13-product-workspace.md
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { OfficecliManualInstallGuidance } from '../../../../shared/office'
+import { useEffect, useMemo, useRef } from 'react'
 import { officeService } from '@/services/office'
 import { useProductWorkspaceStore } from '@/stores/productWorkspace'
 import { useI18n } from '@/i18n/useI18n'
 import { LocalFileStage } from './LocalFileStage'
 import { OfficePreviewFrame } from '../office/OfficePreviewFrame'
-import { OfficeSetupGate } from '../office/OfficeSetupGate'
 
 export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
   workspaceId: string | null
@@ -24,8 +21,6 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
   const reloadTab = useProductWorkspaceStore((state) => state.reloadTab)
   const releaseWorkspace = useProductWorkspaceStore((state) => state.releaseWorkspace)
   const handleEvicted = useProductWorkspaceStore((state) => state.handleEvicted)
-  const [manualInstall, setManualInstall] = useState<OfficecliManualInstallGuidance>()
-  const [setupOpen, setSetupOpen] = useState(false)
   const previousWorkspace = useRef<string | null>(null)
   const workspaceTabs = useMemo(() => tabs.filter((tab) => tab.workspaceId === workspaceId), [tabs, workspaceId])
   const activeTab = workspaceTabs.find((tab) => tab.tabId === activeTabIds[workspaceId ?? '']) ?? workspaceTabs[0]
@@ -39,14 +34,6 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
   // NOTE: no unmount release here - closing the workspace is owned by
   // closeProductWorkspace (tabs + lease release). Releasing on unmount would
   // wipe tabs freshly created by openPreview during a StrictMode remount.
-  useEffect(() => {
-    let disposed = false
-    setManualInstall(undefined)
-    if (workspaceId) void officeService.detect({ workspaceId }).then((result) => {
-      if (!disposed && result.ok) setManualInstall(result.value.manualInstall)
-    })
-    return () => { disposed = true }
-  }, [workspaceId])
 
   const retryActiveTab = () => {
     if (!activeTab || !workspaceId) return
@@ -61,9 +48,6 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
     }
     void reloadTab(activeTab.tabId)
   }
-  useEffect(() => {
-    if (activeTab?.errorCode === 'NOT_INSTALLED' || activeTab?.errorCode === 'INCOMPATIBLE') setSetupOpen(true)
-  }, [activeTab?.errorCode])
   if (!workspaceId) return <div className="flex h-full items-center justify-center text-xs text-[#666]">{t('editor:product.selectWorkspace')}</div>
 
   return <div className="product-panel-enter relative flex h-full min-h-0 flex-col bg-[var(--bg-deep)]">
@@ -71,7 +55,6 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
       <div className="min-w-0">
         <span className="text-[10px] font-semibold tracking-[0.14em] text-[#ff7830]">{t('editor:product.panelTitle')}</span>
       </div>
-      {activeTab?.kind === 'office' && <button type="button" className="ml-auto mr-1 text-[9px] text-[#777] hover:text-white" onClick={() => setSetupOpen(true)}>{t('editor:product.engineButton')}</button>}
       <button
         type="button"
         aria-label={t('editor:product.closeAria')}
@@ -101,12 +84,12 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         {activeTab.kind === 'office'
-          ? <OfficePreviewFrame port={activeTab.port} status={activeTab.status} errorCode={activeTab.errorCode} manualInstall={manualInstall} onRetry={retryActiveTab} onClose={() => void closeTab(activeTab.tabId)} />
+          ? <OfficePreviewFrame port={activeTab.port} status={activeTab.status} errorCode={activeTab.errorCode} onRetry={retryActiveTab} onClose={() => void closeTab(activeTab.tabId)} />
           : activeTab.kind === 'unsupported' || !workspacePath
             ? <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[#666]">{t('editor:product.unsupportedKind')}</div>
             : <LocalFileStage workspacePath={workspacePath} relPath={activeTab.relPath} kind={activeTab.kind} revision={activeTab.revision} />}
       </div>
     </> : <div className="flex min-h-32 flex-1 items-center justify-center px-4 text-center text-xs text-[#666]">{t('editor:product.emptyStage')}</div>}
-    {setupOpen && <OfficeSetupGate workspaceId={workspaceId} onClose={() => setSetupOpen(false)} onReady={() => { setSetupOpen(false); if (activeTab?.status === 'error') retryActiveTab() }} />}
   </div>
 }
+

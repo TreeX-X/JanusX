@@ -9,7 +9,6 @@ import type {
   BlueprintChangeSet,
   BlueprintMaintenanceAuditRecord,
   BlueprintMaintenanceIntentGroup,
-  BlueprintMaintenanceToolTraceEntry,
   BlueprintOperation,
 } from '@/services/blueprint'
 import {
@@ -18,11 +17,19 @@ import {
   formatAuditValue,
   selectedAuditOperations,
 } from './maintenanceAuditDetails'
+import { JanusChat } from '../janus/JanusChat'
+import { useJanusChatRegistry } from '../janus/JanusChatProvider'
+import type { UseJanusChatReturn } from '../janus/useJanusChat'
+import {
+  migrateApply,
+  migratePreview,
+  type HarnessMigrationPreview,
+  type HarnessMigrationResult,
+} from '@/services/harness'
 
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
 const EMPTY_AUDITS: BlueprintMaintenanceAuditRecord[] = []
-const EMPTY_TOOL_TRACES: BlueprintMaintenanceToolTraceEntry[] = []
 const MESSAGE_SUMMARY_LIMIT = 220
 
 export function splitMaintenanceReply(content: string): { summary: string; details: string | null } {
@@ -347,6 +354,38 @@ function DeleteOperationList({ operations, confirmedDeletes, onToggle, t }: {
 }
 
 export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanelProps) {
+  const blueprint = useBlueprintStore((state) => state.currentBlueprint)
+  const legacyTask = useBlueprintMaintenanceStore((state) => state.tasks.some((task) => task.blueprintId === blueprint?.id && !task.conversationId && !['completed', 'cancelled'].includes(task.status)))
+  return blueprint?.source === 'harness' && !legacyTask
+    ? <ProjectMaintenancePanel key={blueprint.id} onClose={onClose} />
+    : <MaintenancePanel onClose={onClose} />
+}
+
+function ProjectMaintenancePanel({ onClose }: BlueprintMaintenancePanelProps) {
+  const registry = useJanusChatRegistry()
+  const blueprint = useBlueprintStore((state) => state.currentBlueprint)!
+  const session = useBlueprintStore((state) => state.activeSession)
+  const workspaces = useWorkspaceStore((state) => state.workspaces)
+  const openRequest = useBlueprintMaintenanceStore((state) => state.openRequest)
+  const [conversationId, setConversationId] = useState<string>()
+  const selected = blueprint.nodes[openRequest?.nodeId ?? blueprint.rootNodeId]
+  const repoId = selected?.sourceUri?.split('/')[2]
+  const bindProject = registry.bindProject
+  const boundExists = !!conversationId && registry.getController(conversationId).conversationId === conversationId
+  useEffect(() => {
+    if (!registry.persistenceReady || !repoId || boundExists) return
+    const workspace = workspaces.find((item) => item.path === session?.workspacePath)
+    setConversationId(bindProject({
+      domain: 'project', intent: 'maintain', scope: 'selected', repoIds: [repoId],
+      viewRef: { ownerRepoId: repoId, viewId: blueprint.id },
+      noteRefs: selected?.sourceUri ? [{ uri: selected.sourceUri, expectedHash: selected.sourceHash }] : [],
+    }, workspace ? [workspace.id] : [], blueprint.name))
+  }, [bindProject, registry.persistenceReady, repoId, blueprint.id, blueprint.name, session?.workspacePath, workspaces, selected?.sourceHash, selected?.sourceUri, boundExists])
+  if (!boundExists) return null
+  return <MaintenancePanel onClose={onClose} chat={registry.getController(conversationId)} />
+}
+
+function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { chat?: UseJanusChatReturn }) {
   const { t } = useI18n('blueprint')
   const blueprint = useBlueprintStore((state) => state.currentBlueprint)
   const reloadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
@@ -363,13 +402,10 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const loadAudits = useBlueprintMaintenanceStore((state) => state.loadAudits)
   const clearOpenRequest = useBlueprintMaintenanceStore((state) => state.clearOpenRequest)
   const start = useBlueprintMaintenanceStore((state) => state.start)
-  const message = useBlueprintMaintenanceStore((state) => state.message)
-  const propose = useBlueprintMaintenanceStore((state) => state.propose)
   const apply = useBlueprintMaintenanceStore((state) => state.apply)
   const cancel = useBlueprintMaintenanceStore((state) => state.cancel)
   const complete = useBlueprintMaintenanceStore((state) => state.complete)
   const dismiss = useBlueprintMaintenanceStore((state) => state.dismiss)
-  const steer = useBlueprintMaintenanceStore((state) => state.steer)
   const pendingUndo = useBlueprintMaintenanceStore((state) => state.pendingUndo)
   const prepareUndo = useBlueprintMaintenanceStore((state) => state.prepareUndo)
   const clearPendingUndo = useBlueprintMaintenanceStore((state) => state.clearPendingUndo)
@@ -378,8 +414,11 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const [workspaceIds, setWorkspaceIds] = useState<string[]>(() => activeWorkspaceId ? [activeWorkspaceId] : workspaces[0]?.id ? [workspaces[0].id] : [])
   const [scopeNodeId, setScopeNodeId] = useState(openRequest?.nodeId ?? blueprint?.rootNodeId ?? '')
   const [goal, setGoal] = useState(() => t('blueprint:maintenance.goalDefault'))
-  const [draft, setDraft] = useState('')
   const [panelView, setPanelView] = useState<'conversation' | 'history'>('conversation')
+  const [migration, setMigration] = useState<HarnessMigrationPreview | null>(null)
+  const [migrated, setMigrated] = useState<HarnessMigrationResult | null>(null)
+  const [migrating, setMigrating] = useState(false)
+  const [migrationError, setMigrationError] = useState<string | null>(null)
   const taskScrollRef = useRef<HTMLDivElement>(null)
   const conversationBottomRef = useRef<HTMLDivElement>(null)
   const followsConversationRef = useRef(true)
@@ -389,9 +428,6 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const proposalGroups = useGroupSelection(task?.changeSet ?? null)
   const hasProposalGroups = (task?.changeSet?.groups?.length ?? 0) > 0
   const undoSelection = useOperationSelection(pendingUndo?.changeSet ?? null)
-  const taskId = task?.id
-  const taskReasoning = useBlueprintMaintenanceStore((state) => (taskId ? state.reasoning[taskId] : undefined))
-  const taskToolTraces = useBlueprintMaintenanceStore((state) => (taskId ? state.toolTraces[taskId] ?? EMPTY_TOOL_TRACES : EMPTY_TOOL_TRACES))
 
   useEffect(() => { void initialize() }, [initialize])
   useEffect(() => {
@@ -436,7 +472,9 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     return () => window.cancelAnimationFrame(frame)
   }, [scrollConversationToBottom, task?.changeSet?.id, task?.messages.length])
 
-  const selectedWorkspaces = workspaces.filter((item) => workspaceIds.includes(item.id))
+  const selectedWorkspaces = workspaces.filter((item) => chat
+    ? chat.resourceController.resources.some((resource) => resource.workspaceId === item.id)
+    : workspaceIds.includes(item.id))
   const nodeOptions = blueprint?.nodeIds.map((id) => ({ value: id, label: blueprint.nodes[id]?.title ?? id })) ?? []
   const proposalLegacyGroups = useMemo(() => groupOperations(task?.changeSet?.operations ?? []), [task?.changeSet])
   const undoGroups = useMemo(() => groupOperations(pendingUndo?.changeSet.operations ?? []), [pendingUndo?.changeSet])
@@ -444,10 +482,43 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const taskWorking = task?.status === 'analyzing' || task?.status === 'applying'
   const taskNeedsNotice = taskWorking || task?.status === 'failed' || task?.status === 'stale'
 
+  const migrateCwd = selectedWorkspaces[0]?.path ?? ''
+
+  const handleMigratePreview = async () => {
+    if (migrating || !blueprint || !migrateCwd) return
+    setMigrating(true)
+    setMigrationError(null)
+    setMigration(null)
+    try {
+      setMigration(await migratePreview(migrateCwd, blueprint.id))
+    } catch (err: unknown) {
+      setMigrationError(t('blueprint:maintenance.migrateFailed', { message: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setMigrating(false)
+    }
+  }
+
+  const handleMigrateApply = async () => {
+    if (migrating || !blueprint || !migrateCwd) return
+    setMigrating(true)
+    setMigrationError(null)
+    try {
+      const result = await migrateApply(migrateCwd, blueprint.id)
+      setMigrated(result)
+      setMigration(null)
+      await reloadBlueprint(blueprint.id)
+    } catch (err: unknown) {
+      setMigrationError(t('blueprint:maintenance.migrateApplyFailed', { message: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setMigrating(false)
+    }
+  }
+
   const handleStart = async () => {
     const primaryWorkspace = selectedWorkspaces[0]
     if (!blueprint || !primaryWorkspace || !scopeNodeId) return
-    await start({
+    return start({
+      ...(chat ? { conversationId: chat.conversationId } : {}),
       blueprintId: blueprint.id,
       workspaceId: primaryWorkspace.id,
       workspaceName: primaryWorkspace.name,
@@ -461,6 +532,19 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
       goal,
     })
   }
+  const handleSharedProposal = async () => {
+    if (!chat || chat.isStreaming || taskWorking) return
+    const target = task ?? await handleStart()
+    if (target) chat.proposeMaintenance(target.id, t('blueprint:maintenance.composeProposal'))
+  }
+  const contextNode = blueprint?.nodes[scopeNodeId]
+  useEffect(() => {
+    if (!chat?.engineeringContext || chat.isStreaming || !contextNode?.sourceUri) return
+    const ref = chat.engineeringContext.noteRefs[0]
+    if (ref?.uri === contextNode.sourceUri && ref.expectedHash === contextNode.sourceHash) return
+    chat.setEngineeringContext({ ...chat.engineeringContext, noteRefs: [{ uri: contextNode.sourceUri, expectedHash: contextNode.sourceHash }] })
+  }, [chat, contextNode?.sourceUri, contextNode?.sourceHash])
+
   const handleApply = async () => {
     if (!task?.changeSet || !blueprint) return
     if (hasProposalGroups) {
@@ -485,12 +569,6 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const handleDismiss = async () => {
     if (!task) return
     await dismiss({ taskId: task.id })
-  }
-  const handleSteer = async () => {
-    if (!task || !draft.trim()) return
-    const entryId = `steer-${Date.now()}`
-    const accepted = await steer({ taskId: task.id, entryId, text: draft })
-    if (accepted) setDraft('')
   }
   const handlePrepareUndo = async (auditId: string) => {
     if (!blueprint) return
@@ -616,6 +694,33 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
           <X size={16} aria-hidden="true" />
         </button>
       </header>
+      {!chat && blueprint && blueprint.source !== 'harness' ? (
+        <section className="bp-maintenance-migrate" aria-label={t('blueprint:maintenance.migrateTitle')}>
+          <strong>{t('blueprint:maintenance.migrateTitle')}</strong>
+          <p>{t('blueprint:maintenance.migrateHint')}</p>
+          {migration ? (
+            <div role="status">
+              <span>{t('blueprint:maintenance.migrateNotes', { count: migration.notes.length })}</span>
+              <span>{t('blueprint:maintenance.migrateRelations', { count: migration.relationCount })}</span>
+              {migration.warnings.length ? (
+                <div>
+                  <strong>{t('blueprint:maintenance.migrateWarnings')}</strong>
+                  <ul>{migration.warnings.map((warning) => <li key={warning.slice(0, 48)}>{warning}</li>)}</ul>
+                </div>
+              ) : null}
+              <button className="blueprint-btn blueprint-btn--primary" type="button" disabled={migrating || !migrateCwd} onClick={() => void handleMigrateApply()}>
+                {migrating ? t('blueprint:maintenance.migrateApplying') : t('blueprint:maintenance.migrateApply')}
+              </button>
+            </div>
+          ) : (
+            <button className="blueprint-btn" type="button" disabled={migrating || !migrateCwd} onClick={() => void handleMigratePreview()}>
+              {migrating ? t('blueprint:maintenance.migratePreviewing') : t('blueprint:maintenance.migratePreview')}
+            </button>
+          )}
+          {migrated ? <p role="status">{t('blueprint:maintenance.migrated', { count: migrated.uris.length, report: migrated.reportUri })}</p> : null}
+          {migrationError ? <p role="alert">{migrationError}</p> : null}
+        </section>
+      ) : null}
       <nav className="bp-maintenance-panel__tabs" aria-label={t('blueprint:maintenance.viewAria')}>
         <button type="button" className={panelView === 'conversation' ? 'is-active' : ''} onClick={() => setPanelView('conversation')} aria-pressed={panelView === 'conversation'}>
           {t('blueprint:maintenance.viewConversation')}
@@ -630,7 +735,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
           {undoPanel}
           {auditHistory}
         </div>
-      ) : !task ? (
+      ) : !task && !chat && blueprint?.source === 'harness' ? (
         <div className="bp-maintenance-start">
           <label>{t('blueprint:maintenance.authorizeWorkspace')}
             <details className="bp-maintenance-workspace-picker">
@@ -656,6 +761,17 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
         </div>
       ) : (
         <div className="bp-maintenance-task" ref={taskScrollRef} onScroll={handleTaskScroll}>
+          {chat ? <>
+            <label>{t('blueprint:maintenance.targetNode')}<select value={scopeNodeId} disabled={chat.isStreaming || !!task} onChange={(event) => setScopeNodeId(event.target.value)}>{nodeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <JanusChat visible docked compactNavigation focused modeColor="#318b78" messages={chat.messages}
+              pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
+              modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
+              resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}
+              onSelectModel={chat.selectModel} onSend={chat.send} onRewrite={chat.rewrite}
+              onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} />
+            <button type="button" className="blueprint-btn" disabled={chat.isStreaming || taskWorking || !selectedWorkspaces.length} onClick={() => void handleSharedProposal()}>{t('blueprint:maintenance.composeProposal')}</button>
+          </> : null}
+          {task ? <>
           {taskNeedsNotice ? <div className="bp-maintenance-task-overview" role="status" aria-live="polite">
             <div className="bp-maintenance-status" data-status={task.status}>
               <div><strong>{task.phase}</strong><span>{t('blueprint:maintenance.taskRevision', { workspace: task.workspaceName, revision: task.baseRevision })}</span></div>
@@ -663,7 +779,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
             </div>
             <div className="bp-maintenance-progress"><span style={{ width: `${task.progress}%` }} /></div>
           </div> : null}
-          <div className="bp-maintenance-messages">
+          {!chat ? <div className="bp-maintenance-messages">
             {task.messages.map((item) => {
               const reply = item.role === 'assistant' ? splitMaintenanceReply(item.content) : null
               return (
@@ -683,22 +799,10 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
               <div className="bp-maintenance-thinking" role="status" aria-live="polite">
                 <span>{t('blueprint:maintenance.roleJanus')}</span>
                 <div><i /><i /><i /><em>{task.phase}</em></div>
-                {taskReasoning && taskReasoning.text ? (
-                  <details className="bp-maintenance-message-details">
-                    <summary>{t('blueprint:maintenance.thinkingDetails', { count: taskReasoning.chars })}</summary>
-                    <div>{taskReasoning.text}{taskReasoning.truncated ? t('blueprint:maintenance.thinkingTruncated') : null}</div>
-                  </details>
-                ) : null}
-                {taskToolTraces.length ? (
-                  <div className="bp-maintenance-tool-traces">
-                    <span>{t('blueprint:maintenance.toolTraceTitle', { count: taskToolTraces.length })}</span>
-                    <ul>{taskToolTraces.slice(-5).map((entry, index) => <li key={`${entry.toolName}-${index}`}>{entry.toolName} · {entry.summary}</li>)}</ul>
-                  </div>
-                ) : null}
               </div>
             ) : null}
             {task.error ? <div className="bp-maintenance-error">{task.error}</div> : null}
-          </div>
+          </div> : null}
           {task.changeSet ? (
             <section className="bp-maintenance-proposal">
               <header><strong>{t('blueprint:maintenance.pendingProposal', { version: task.changeSet.version })}</strong><span>{hasProposalGroups
@@ -723,32 +827,15 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
                   className="blueprint-btn blueprint-btn--primary"
                   type="button"
                   onClick={() => void handleApply()}
-                  disabled={hasProposalGroups
+                  disabled={chat?.isStreaming || (hasProposalGroups
                     ? !proposalGroups.groupIds.length && !proposalGroups.confirmedDeleteOperationIds.length
-                    : !proposalSelection.selectionIds.length}
+                    : !proposalSelection.selectionIds.length)}
                 >
                   {t('blueprint:maintenance.approveSelected')}
                 </button>
-                <button className="blueprint-btn" type="button" onClick={() => void handleDismiss()}>{t('blueprint:maintenance.dismissProposal')}</button>
+                <button className="blueprint-btn" type="button" disabled={chat?.isStreaming} onClick={() => void handleDismiss()}>{t('blueprint:maintenance.dismissProposal')}</button>
               </div>
             </section>
-          ) : null}
-          {(task.status === 'active' || task.status === 'proposal-ready' || task.status === 'failed') && !taskWorking ? (
-            <div className="bp-maintenance-compose">
-              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('blueprint:maintenance.composePlaceholder')} />
-              <div className="bp-maintenance-compose__actions">
-                <button type="button" disabled={!draft.trim()} onClick={() => { if (draft.trim()) { void message({ taskId: task.id, content: draft }); setDraft('') } }}>{t('blueprint:maintenance.sendMessage')}</button>
-                <button type="button" className="bp-maintenance-compose__proposal" onClick={() => void propose({ taskId: task.id })}>{task.changeSet ? t('blueprint:maintenance.reviseProposal') : t('blueprint:maintenance.composeProposal')}</button>
-              </div>
-            </div>
-          ) : null}
-          {taskWorking ? (
-            <div className="bp-maintenance-compose">
-              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('blueprint:maintenance.steerPlaceholder')} />
-              <div className="bp-maintenance-compose__actions">
-                <button type="button" disabled={!draft.trim()} onClick={() => void handleSteer()}>{t('blueprint:maintenance.steerAction')}</button>
-              </div>
-            </div>
           ) : null}
           <div ref={conversationBottomRef} className="bp-maintenance-conversation-bottom" aria-hidden="true" />
           {showScrollToBottom ? (
@@ -763,9 +850,10 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
             </button>
           ) : null}
           <footer>
-            {!['cancelled', 'completed'].includes(task.status) ? <button className="blueprint-btn" type="button" onClick={() => void cancel(task.id)}>{t('blueprint:maintenance.cancelTask')}</button> : null}
+            {!['cancelled', 'completed'].includes(task.status) ? <button className="blueprint-btn" type="button" onClick={() => { chat?.stop(); void cancel(task.id) }}>{t('blueprint:maintenance.cancelTask')}</button> : null}
             {task.status === 'active' ? <button className="blueprint-btn" type="button" onClick={() => void complete(task.id)}>{t('blueprint:maintenance.completeMaintenance')}</button> : null}
           </footer>
+          </> : null}
         </div>
       )}
       {error ? <div className="bp-maintenance-error">{error}</div> : null}

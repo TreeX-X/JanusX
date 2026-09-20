@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   applyTerminalNoteLifecycle,
+  clampDrawerHeight,
+  DRAWER_MIN_HEIGHT,
   DRAWER_VIEWS,
   DrawerViewTabs,
   formatNoteAge,
@@ -24,19 +26,20 @@ describe('Quick Note view behavior', () => {
   it('uses restrained radii on the note container, cards, editing surfaces, and controls', () => {
     const css = readFileSync(new URL('../../../src/renderer/src/components/note/QuickNote.module.css', import.meta.url), 'utf8')
 
-    expect(css).toMatch(/\.root \{[^}]*border-radius:6px/)
-    expect(css).toMatch(/\.card \{[^}]*border-radius:4px/)
-    expect(css).toMatch(/\.toolbar input \{[^}]*border-radius:4px/)
-    expect(css).toMatch(/\.editor textarea,\.preview \{[^}]*border-radius:4px/)
-    expect(css).toMatch(/\.actions button \{[^}]*border-radius:4px/)
-    expect(css).not.toContain('border-radius:999')
+    expect(css).toMatch(/\.root \{[^}]*border-radius: ?6px/)
+    expect(css).toMatch(/\.card \{[^}]*border-radius: ?4px/)
+    expect(css).toMatch(/\.title \{[^}]*border-radius: ?4px/)
+    expect(css).toMatch(/\.editor textarea,\s*\.preview \{[^}]*border-radius: ?4px/)
+    expect(css).toMatch(/\.actions button \{[^}]*border-radius: ?4px/)
+    expect(css).toMatch(/\.tool \{[^}]*border-radius: ?4px/)
+    expect(css).not.toMatch(/border-radius: ?999/)
   })
 
   it('keeps export formats in an accessible conditional menu', () => {
     const source = readFileSync(new URL('../../../src/renderer/src/components/note/QuickNote.tsx', import.meta.url), 'utf8')
 
-    expect(source.match(/>Export<\/button>/g)).toHaveLength(1)
-    expect(source).toContain('aria-haspopup="menu"')
+    expect(source.match(/aria-haspopup="menu"/g)).toHaveLength(1)
+    expect(source).toContain("{t('terminal:note.export')}")
     expect(source).toContain('aria-expanded={exportOpen}')
     expect(source).toContain('{exportOpen && (')
     expect(source).toContain('role="menu" aria-label="Export format"')
@@ -53,11 +56,21 @@ describe('Quick Note view behavior', () => {
     expect(getDrawerHeight(true, 'note')).toBe('380px')
   })
 
+  it('prefers a per-view user height and clamps it between the floor and the pane reserve', () => {
+    expect(getDrawerHeight(true, 'runtime', { runtime: 300 })).toBe('300px')
+    expect(getDrawerHeight(true, 'note', { runtime: 300 })).toBe('380px')
+    expect(getDrawerHeight(false, 'runtime', { runtime: 300 })).toBe('28px')
+    expect(clampDrawerHeight(40, 500)).toBe(DRAWER_MIN_HEIGHT)
+    expect(clampDrawerHeight(900, 500)).toBe(500)
+    expect(clampDrawerHeight(333.6, 500)).toBe(334)
+    expect(clampDrawerHeight(300, 50)).toBe(DRAWER_MIN_HEIGHT)
+  })
+
   it('associates the active tab with its panel and uses roving tab focus', () => {
     const markup = renderToStaticMarkup(createElement(
       'div',
       null,
-      createElement(DrawerViewTabs, { open: true, activeView: 'note', onSelect: () => {} }),
+      createElement(DrawerViewTabs, { open: true, activeView: 'note', onSelect: () => {}, labels: { runtime: 'Context', note: 'Markdown' }, ariaLabel: 'Bottom panel view' }),
       ...DRAWER_VIEWS.map((view) => createElement('div', { key: view, ...getDrawerPanelAttributes(view) })),
     ))
 
@@ -69,6 +82,10 @@ describe('Quick Note view behavior', () => {
     expect(markup).toContain('id="drawer-note-panel" role="tabpanel" aria-labelledby="drawer-note-tab"')
     expect(markup).toContain('aria-selected="true" tabindex="0"')
     expect(markup).toContain('aria-selected="false" tabindex="-1"')
+    expect(markup).toContain('aria-label="Bottom panel view"')
+    expect(markup).toContain('<span>Context</span>')
+    expect(markup).toContain('<span>Markdown</span>')
+    expect(markup).toContain('<svg')
   })
 
   it('does not render drawer tabs while the drawer is collapsed', () => {
@@ -83,7 +100,7 @@ describe('Quick Note view behavior', () => {
 
   it('reserves header space for tabs only while the drawer is expanded', () => {
     const source = readFileSync(new URL('../../../src/renderer/src/components/TerminalArea.tsx', import.meta.url), 'utf8')
-    expect(source).toContain("drawerOpen ? 'pr-32' : 'pr-3'")
+    expect(source).toContain("drawerOpen ? 'pr-52' : 'pr-3'")
   })
 
   it('keeps the production terminal tree mounted independently from drawer state', () => {
@@ -108,7 +125,7 @@ describe('Quick Note view behavior', () => {
     expect(leafSource).not.toContain('drawerView')
     expect(terminalAreaSource).toContain("display: workspaceVisible ? 'block' : 'none'")
     expect(terminalAreaSource).toContain("...(!workspaceVisible ? { inert: '' } : {})")
-    expect(terminalAreaSource).toContain('height: getDrawerHeight(drawerOpen, drawerView)')
+    expect(terminalAreaSource).toContain('height: getDrawerHeight(drawerOpen, drawerView, drawerHeights)')
   })
 
   it('supports arrow, Home, and End navigation with wrapping', () => {

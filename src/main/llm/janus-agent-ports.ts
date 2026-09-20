@@ -56,9 +56,18 @@ export interface JanusChatTurnPortsDeps {
   executeFunctionCall: (input: ExecuteToolInput, callerId: string) => Promise<ToolResult>
   listRegistryTools: () => ToolDefinition[]
   listRegistryManifests: () => ToolManifest[] | undefined
-  knowledgeSearch: NonNullable<ChatTurnPorts['knowledgeSearch']>
-  captureObservation: (input: JanusCaptureInput) => Promise<{ workspaceId?: string } | null | undefined>
-  scheduleSettled: (workspaceId: string) => void
+  /**
+   * Project recall for chat turns. Absent = no turn-level recall; the caller
+   * injects its own context as messages instead (maintenance discussions keep
+   * their blueprint-scoped recall and never fuse personal history).
+   */
+  knowledgeSearch?: NonNullable<ChatTurnPorts['knowledgeSearch']>
+  /**
+   * Turn capture for memory compounding. Absent = no capture; maintenance
+   * discussions keep their own engineering observation path.
+   */
+  captureObservation?: (input: JanusCaptureInput) => Promise<{ workspaceId?: string } | null | undefined>
+  scheduleSettled?: (workspaceId: string) => void
   streamTextFn: ChatTurnPorts['streamTextFn']
   /** Mid-turn question UI bridge (shell owns lifecycle; this file only passes it through). */
   question?: ChatTurnPorts['question']
@@ -73,6 +82,8 @@ export interface JanusChatTurnPortsDeps {
  *   `notifySettled` fires once per target workspace after capture
  */
 export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnPorts {
+  // Narrowed once: the async capture closure below keeps the check.
+  const captureObservation = deps.captureObservation
   return {
     model: {
       resolve: async (providerId, modelId) => {
@@ -120,8 +131,9 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
     },
     streamTextFn: deps.streamTextFn,
     ...(deps.question ? { question: deps.question } : {}),
-    knowledgeSearch: deps.knowledgeSearch,
-    knowledgeCapture: {
+    ...(deps.knowledgeSearch ? { knowledgeSearch: deps.knowledgeSearch } : {}),
+    ...(captureObservation ? {
+      knowledgeCapture: {
       captureTurn: async (capture) => {
         // Note: workspace-free turns compound into person scope — see .agents/notes/implemented/feature/2026-09-15-user-memory-mvp-closeout.md
         // Empty targets mean a workspace-free turn; fall back to the person
@@ -137,7 +149,7 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
         for (const target of targets) {
           const sessionId = target.sessionId || capture.correlationId
           if (capture.userText) {
-            await deps.captureObservation({
+            await captureObservation({
               workspaceId: target.workspaceId,
               workspacePath: target.workspacePath,
               source: 'janus-chat',
@@ -150,7 +162,7 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
               sessionId,
             })
           }
-          await deps.captureObservation({
+          await captureObservation({
             workspaceId: target.workspaceId,
             workspacePath: target.workspacePath,
             source: 'janus-chat',
@@ -166,8 +178,9 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
         }
       },
       notifySettled: async (workspaceId) => {
-        deps.scheduleSettled(workspaceId)
+        deps.scheduleSettled?.(workspaceId)
       },
-    },
+      },
+    } : {}),
   }
 }

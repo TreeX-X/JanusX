@@ -2,6 +2,7 @@
 # electron-builder 同步生成 latest.yml，桌面端 updater 拉该 feed。
 # 前提：package.json 用 file: 引用 ../janus-agentX，先把它检出到同级目录
 #（仓库名取自 file:../janus-agentX 路径，owner 跟随当前仓库）。
+# Note: reproducible inputs and release naming — see .agents/notes/2026-09-20-reproducible-verification.md
 name: release-win
 
 on:
@@ -25,33 +26,39 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/janus-agentX
+          ref: 317a5afe42ded8ee8c6f0def4b3dcd1188d5945c
           path: janus-agentX
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: JanusX/.node-version
+          cache: npm
+          cache-dependency-path: |
+            JanusX/package-lock.json
+            janus-agentX/package-lock.json
 
       # @janus-agent/* 以 dist/ 发布，CI 里是源码检出，必须先构建同级仓，
       # 否则 JanusX 侧构建找不到模块入口（verify 曾因此全红）。
-      # 构建顺序说明见 verify.yml 同名步骤。
+      # 构建顺序说明见 verify.yml 同名步骤（依赖分层定序，一次通过）。
       - name: Build sibling janus-agentX
         working-directory: janus-agentX
         shell: pwsh
         run: |
           npm ci
-          $built = $false
-          for ($i = 0; $i -lt 3 -and -not $built; $i++) {
-            npm run build --workspaces --if-present
-            if ($?) { $built = $true }
-          }
-          if (-not $built) { exit 1 }
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: JanusX/package-lock.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --workspace=@janus-agent/agent-core --workspace=@janus-agent/harness-core --if-present
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --workspace=@janus-agent/chat-core --workspace=@janus-agent/node-hosts --workspace=@janus-agent/harness-node --workspace=@janus-agent/notes-cli --if-present
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --workspace=@janus-agent/janus-agent --if-present
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --workspace=@janus-agent/cli --if-present
 
       # publisher 用 package.json 的 version 生成 tag 名与 latest.yml；
       # tag 与包版本错位会产出名字错乱的 Release 或静默无更新，先拦。
       - name: Version guard
+        id: version
         working-directory: JanusX
         shell: pwsh
         run: |
@@ -60,6 +67,8 @@ jobs:
             Write-Error "tag ${{ github.ref_name }} != package.json v$pkg"
             exit 1
           }
+          $releaseType = if ($pkg.Contains('-')) { 'prerelease' } else { 'release' }
+          "release-type=$releaseType" >> $env:GITHUB_OUTPUT
 
       - name: Install
         working-directory: JanusX
@@ -73,8 +82,21 @@ jobs:
         working-directory: JanusX
         run: npm run check:package-boundary
 
+      # The binary is intentionally untracked; fresh runners must materialize
+      # the same pinned artifact before electron-builder copies extraResources.
+      - name: Prepare bundled OfficeCLI
+        working-directory: JanusX
+        shell: pwsh
+        run: |
+          $binary = 'resources/officecli/officecli.exe'
+          Invoke-WebRequest -Uri 'https://github.com/iOfficeAI/OfficeCLI/releases/download/v1.0.135/officecli-win-x64.exe' -OutFile $binary
+          $expected = '937db176b585e874aa5bff48d536bce78037665cd862b5deefe56e79977e6588'
+          if ((Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+            throw 'Bundled OfficeCLI SHA256 mismatch'
+          }
+
       - name: Publish to GitHub Releases
         working-directory: JanusX
-        run: npx electron-builder --win --publish always
+        run: npx electron-builder --win --x64 --publish always -c.publish.releaseType=${{ steps.version.outputs.release-type }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

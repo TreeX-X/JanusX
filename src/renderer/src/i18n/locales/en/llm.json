@@ -21,6 +21,7 @@
     "defaultBadge": "Default",
     "typeVertex": "Vertex AI",
     "typeOpenai": "OpenAI Compatible",
+    "typeAnthropic": "Anthropic Native",
     "setAsDefault": "Set as default",
     "edit": "Edit",
     "delete": "Delete",
@@ -28,6 +29,7 @@
     "addTitle": "Add provider",
     "typeLabel": "Provider Type",
     "typeOptionOpenai": "OpenAI-compatible endpoint (URL + Key)",
+    "typeOptionAnthropic": "Anthropic native endpoint (x-api-key)",
     "typeOptionVertex": "Google Vertex AI (GCP auth)"
   },
   "openai": {
@@ -40,6 +42,35 @@
     "apiKeyPlaceholder": "sk-...",
     "modelLabel": "Default Model",
     "modelPlaceholder": "gpt-4o, deepseek-chat..."
+  },
+  "anthropic": {
+    "sectionTitle": "Anthropic native endpoint",
+    "nameLabel": "Provider Name",
+    "namePlaceholder": "My Anthropic Provider",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "https://api.anthropic.com",
+    "apiKeyLabel": "API Key",
+    "apiKeyPlaceholder": "sk-ant-...",
+    "modelLabel": "Default Model",
+    "modelPlaceholder": "claude-sonnet-4-20250514 ..."
+  },
+  "terminals": {
+    "sectionTitle": "Per-terminal bindings",
+    "emptyHint": "No providers for this terminal yet; add one below.",
+    "modelRequired": "Fill in a model override first, or set a default model on the provider.",
+    "liveHint": "Each terminal writes only its owned model key with backup; secrets still sync through Claude credentials only.",
+    "janusBadge": "Internal",
+    "internalNote": "Janus internal chat reads this binding directly and writes no external file.",
+    "fileLabel": "Config file",
+    "formatLabel": "Format",
+    "ownedKeyLabel": "Owned key",
+    "liveModel": "Local model {{model}}",
+    "liveMissing": "File is missing; applying creates it",
+    "outOfSync": "Local differs from the binding; applying overwrites local.",
+    "applyModel": "Apply model",
+    "modelApplied": "Model written and backed up. Restart terminals to take effect.",
+    "modelRolledBack": "Rolled back to the last backup.",
+    "refreshFile": "Re-read"
   },
   "vertex": {
     "sectionTitle": "Google Vertex AI",
@@ -70,6 +101,31 @@
     "addModel": "Add model",
     "removeModel": "Remove model",
     "defaultModelLabel": "Default model"
+  },
+  "cli": {
+    "sectionTitle": "External terminal CLIs",
+    "janus": {
+      "name": "JanusX internal",
+      "badge": "Internal",
+      "using": "Using default provider “{{name}}”",
+      "unconfigured": "No default provider set"
+    },
+    "claude": {
+      "name": "Claude Code",
+      "synced": "Synced “{{name}}” · {{time}}",
+      "notSynced": "Not synced",
+      "sourceGone": "sync source was deleted",
+      "applyDefault": "Sync default provider",
+      "rollback": "Roll back"
+    },
+    "notice": {
+      "synced": "Synced from “{{name}}” and backed up. Restart terminals to take effect.",
+      "rolledBack": "Rolled back to the last backup."
+    },
+    "error": {
+      "noProvider": "No usable provider: an OpenAI-compatible or Anthropic provider with base URL and API key is required."
+    },
+    "hint": "Claude Code config is backed up before every sync and can be rolled back; only the default provider syncs, re-sync after changing the default."
   },
   "test": {
     "testing": "Testing connection...",

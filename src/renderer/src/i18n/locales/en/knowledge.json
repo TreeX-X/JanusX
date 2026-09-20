@@ -132,6 +132,12 @@
     "empty": {
       "title": "No proposed candidates",
       "detail": "Run extraction after a task to populate the review queue."
+    },
+    "scope": {
+      "label": "Review scope",
+      "all": "All",
+      "personal": "Personal",
+      "engineering": "Engineering"
     }
   },
   "library": {

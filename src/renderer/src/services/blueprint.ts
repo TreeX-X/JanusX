@@ -30,12 +30,7 @@ import type {
   BlueprintMaintenanceAuditRecord,
   BlueprintMaintenanceDismissInput,
   BlueprintMaintenanceEvent,
-  BlueprintMaintenanceMessageInput,
-  BlueprintMaintenanceProposalInput,
   BlueprintMaintenanceStartInput,
-  BlueprintMaintenanceSteerCancelInput,
-  BlueprintMaintenanceSteerInput,
-  BlueprintMaintenanceSteerResult,
   BlueprintMaintenanceTask,
   BlueprintMaintenanceUndoApplyInput,
   BlueprintMaintenanceUndoApplyResult,
@@ -93,13 +88,8 @@ export type {
   BlueprintMaintenanceDismissInput,
   BlueprintMaintenanceEvent,
   BlueprintMaintenanceIntentGroup,
-  BlueprintMaintenanceMessageInput,
-  BlueprintMaintenanceProposalInput,
   BlueprintMaintenanceScope,
   BlueprintMaintenanceStartInput,
-  BlueprintMaintenanceSteerCancelInput,
-  BlueprintMaintenanceSteerInput,
-  BlueprintMaintenanceSteerResult,
   BlueprintMaintenanceTask,
   BlueprintMaintenanceTaskStatus,
   BlueprintMaintenanceToolTraceEntry,
@@ -261,10 +251,6 @@ export const listMaintenanceAudits = (input: BlueprintMaintenanceAuditListInput)
   window.electron.janus.listMaintenanceAudits(input)
 export const startMaintenanceTask = (input: BlueprintMaintenanceStartInput): Promise<BlueprintMaintenanceTask> =>
   window.electron.janus.startMaintenanceTask(input)
-export const sendMaintenanceMessage = (input: BlueprintMaintenanceMessageInput): Promise<BlueprintMaintenanceTask> =>
-  window.electron.janus.sendMaintenanceMessage(input)
-export const generateMaintenanceProposal = (input: BlueprintMaintenanceProposalInput): Promise<BlueprintMaintenanceTask> =>
-  window.electron.janus.generateMaintenanceProposal(input)
 export const applyMaintenanceChangeSet = (input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult> =>
   window.electron.janus.applyMaintenanceChangeSet(input)
 export const cancelMaintenanceTask = (taskId: string): Promise<BlueprintMaintenanceTask> =>
@@ -273,10 +259,6 @@ export const completeMaintenanceTask = (taskId: string): Promise<BlueprintMainte
   window.electron.janus.completeMaintenanceTask(taskId)
 export const dismissMaintenanceProposal = (input: BlueprintMaintenanceDismissInput): Promise<BlueprintMaintenanceTask> =>
   window.electron.janus.dismissMaintenanceProposal(input)
-export const steerMaintenanceTask = (input: BlueprintMaintenanceSteerInput): Promise<BlueprintMaintenanceSteerResult> =>
-  window.electron.janus.steerMaintenanceTask(input)
-export const cancelMaintenanceSteer = (input: BlueprintMaintenanceSteerCancelInput): Promise<{ cancelled: boolean }> =>
-  window.electron.janus.cancelMaintenanceSteer(input)
 export const prepareMaintenanceUndo = (input: BlueprintMaintenanceUndoPrepareInput): Promise<BlueprintMaintenanceUndoPrepareResult> =>
   window.electron.janus.prepareMaintenanceUndo(input)
 export const applyMaintenanceUndo = (input: BlueprintMaintenanceUndoApplyInput): Promise<BlueprintMaintenanceUndoApplyResult> =>

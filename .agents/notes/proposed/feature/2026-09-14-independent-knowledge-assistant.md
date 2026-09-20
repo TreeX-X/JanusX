@@ -1,6 +1,13 @@
-# Agent Note: Independent knowledge and assistant MVP
+---
+schema: harness-note/1
+id: 6e34d77d-edb9-4181-8ff1-dd18e6804539
+kind: requirement
+lifecycle: draft
+created: 2026-09-14
+class: feature
+---
 
-Status: proposed
+# Agent Note: Independent knowledge and assistant MVP
 
 ## Problem
 

@@ -44,12 +44,12 @@ export const JANUSX_DARK_THEME = {
     'editor.findMatchHighlightBackground': '#ff78302e',
 
     /*-- Diff: quiet full-line tint, clearer changed text and gutter markers --*/
-    'diffEditor.insertedLineBackground': '#37633f0d',
-    'diffEditor.removedLineBackground': '#713a3a0d',
-    'diffEditor.insertedTextBackground': '#4d8a582e',
-    'diffEditor.removedTextBackground': '#9a4d4d2e',
-    'diffEditorGutter.insertedLineBackground': '#5a9d6418',
-    'diffEditorGutter.removedLineBackground': '#bd626218',
+    'diffEditor.insertedLineBackground': '#37633f2e',
+    'diffEditor.removedLineBackground': '#713a3a2e',
+    'diffEditor.insertedTextBackground': '#4d8a5855',
+    'diffEditor.removedTextBackground': '#9a4d4d55',
+    'diffEditorGutter.insertedLineBackground': '#5a9d6433',
+    'diffEditorGutter.removedLineBackground': '#bd626233',
   },
 } as const
 

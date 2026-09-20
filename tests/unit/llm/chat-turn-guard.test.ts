@@ -11,6 +11,8 @@ const { search, capture, streamText, getSession, executeFunctionCall, scheduleIm
   capturePersonTurn: vi.fn(),
   capturePersonEpisode: vi.fn(),
 }))
+const { proposeForConversation } = vi.hoisted(() => ({ proposeForConversation: vi.fn() }))
+vi.mock('../../../src/main/janus/maintenance/service', () => ({ blueprintMaintenanceService: { proposeForConversation } }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/janusx-test' } }))
 vi.mock('../../../src/main/knowledge/context-service', () => ({
@@ -44,7 +46,7 @@ vi.mock('../../../src/main/agent/runtime/shell-runtime', () => ({
   },
 }))
 
-import { answerChatQuestion, handleChatStream, prepareJanusChatRecall } from '../../../src/main/llm/chat-orchestrator'
+import { abortChatStream, answerChatQuestion, handleChatStream, prepareJanusChatRecall, steerChatStream } from '../../../src/main/llm/chat-orchestrator'
 
 const emptyResult: KnowledgeContextResult = {
   items: [],
@@ -66,6 +68,46 @@ function immediateStream(text: string) {
 }
 
 describe('chat turn guard (S6-a)', () => {
+  it('shares proposal turn ownership, consumes steering once and streams the result through chat events', async () => {
+    let release!: () => void
+    proposeForConversation.mockReset().mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => { release = resolve })
+      return 'first proposal'
+    }).mockResolvedValue('revised proposal')
+    const reply = vi.fn()
+    const request = { requestId: 'proposal-1', conversationId: 'project-proposal', providerId: 'p', domain: 'project' as const, messages: userMessages, maintenanceTaskId: 'task' }
+    const turn = handleChatStream({ reply } as never, request)
+    await vi.waitFor(() => expect(proposeForConversation).toHaveBeenCalledTimes(1))
+    const competing = vi.fn()
+    await handleChatStream({ reply: competing } as never, { ...request, requestId: 'proposal-2' })
+    expect(competing).toHaveBeenCalledWith('llm:chat:error', expect.objectContaining({ error: expect.stringContaining('BUSY') }))
+    for (let index = 0; index < 9; index++) {
+      expect(steerChatStream({ conversationId: request.conversationId, entryId: `queued-${index}`, text: `Constraint ${index}` }).accepted).toBe(true)
+    }
+    expect(steerChatStream({ conversationId: request.conversationId, entryId: 'followup', text: 'Use the revised scope' }).accepted).toBe(true)
+    expect(steerChatStream({ conversationId: request.conversationId, entryId: 'followup', text: 'Use the revised scope' }).accepted).toBe(true)
+    expect(steerChatStream({ conversationId: request.conversationId, entryId: 'followup', text: 'Different content' }).accepted).toBe(false)
+    expect(steerChatStream({ conversationId: request.conversationId, entryId: 'overflow', text: 'Extra entry' }).error).toContain('full')
+    release()
+    await turn
+    expect(proposeForConversation).toHaveBeenCalledTimes(2)
+    expect(proposeForConversation.mock.calls[1][0].messages.at(-1).content).toBe('Use the revised scope')
+    expect(reply).toHaveBeenCalledWith('llm:chat:agent-event', expect.objectContaining({ type: 'text_delta', delta: 'revised proposal' }))
+  })
+
+  it('cancels a proposal through the ordinary chat stop route and releases its turn', async () => {
+    proposeForConversation.mockReset().mockImplementation(async ({ signal }: { signal: AbortSignal }) => {
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
+      return 'cancelled'
+    })
+    const reply = vi.fn()
+    const turn = handleChatStream({ reply } as never, { requestId: 'proposal-cancel', conversationId: 'project-cancel', providerId: 'p', domain: 'project', messages: userMessages, maintenanceTaskId: 'task' })
+    await vi.waitFor(() => expect(proposeForConversation).toHaveBeenCalledTimes(1))
+    abortChatStream('proposal-cancel')
+    await turn
+    expect(reply).toHaveBeenCalledWith('llm:chat:agent-event', expect.objectContaining({ type: 'stream_end', cancelled: true }))
+    expect(steerChatStream({ conversationId: 'project-cancel', entryId: 'late', text: 'late' }).accepted).toBe(false)
+  })
   beforeEach(() => {
     search.mockReset().mockResolvedValue(emptyResult)
     capture.mockReset().mockResolvedValue(undefined)

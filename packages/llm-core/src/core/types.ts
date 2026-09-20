@@ -16,6 +16,8 @@ import type { LanguageModelV1, EmbeddingModel } from 'ai'
 export enum AuthType {
   /** API Key 认证（标准 OpenAI 兼容） */
   API_KEY = 'api-key',
+  /** Anthropic 原生认证（x-api-key + Messages API） */
+  ANTHROPIC = 'anthropic',
   /** Google Cloud Vertex AI 认证 */
   VERTEX_AI = 'vertex-ai',
   /** OAuth 2.0 认证 */

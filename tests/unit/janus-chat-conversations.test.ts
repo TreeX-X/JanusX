@@ -4,6 +4,7 @@ import { normalizeJanusChatSnapshot } from '../../src/shared/ipc/janus-chat'
 import {
   COMPACT_SUMMARY_MAX_CHARS,
   capChatMessages,
+  bindProjectConversation,
   compactJanusConversation,
   getRetryTurn,
   parseCompactCommand,
@@ -27,6 +28,20 @@ function conversation(id: string): PersistedJanusConversation {
 }
 
 describe('Janus Chat conversation domain', () => {
+  it('reuses the project conversation across entry points and persisted reloads', () => {
+    const personal = conversation('personal')
+    const context = { domain: 'project' as const, intent: 'maintain' as const, scope: 'selected' as const, noteRefs: [], repoIds: ['repo'], viewRef: { ownerRepoId: 'repo', viewId: 'view' } }
+    const first = bindProjectConversation([personal], context, ['ws'], 'Project')
+    first.conversations[0].messages.push(message('shared', 'user', 'Keep this decision'))
+    const persisted = normalizeJanusChatSnapshot({ version: 1, activeConversationId: first.id, conversations: first.conversations })!
+    const second = bindProjectConversation(persisted.conversations, context, ['other'], 'Project')
+    expect(second.id).toBe(first.id)
+    expect(second.conversations).toHaveLength(2)
+    expect(second.conversations[0].messages[0].content).toBe('Keep this decision')
+    expect(second.conversations[0].attachedWorkspaceIds).toEqual(['ws'])
+    expect(personal.messages).toEqual([])
+    expect(bindProjectConversation(second.conversations, { ...context, viewRef: { ...context.viewRef, ownerRepoId: 'another' } }, [], 'Other').id).not.toBe(first.id)
+  })
   it('derives a compact title from the first user message', () => {
     expect(titleFromMessages([
       message('assistant', 'assistant'),

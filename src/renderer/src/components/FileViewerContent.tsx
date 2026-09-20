@@ -76,6 +76,8 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
           content={file.content}
           originalContent={diffOriginalContent}
           modelPath={file.absolutePath}
+          workspacePath={workspacePath}
+          documentPath={file.absolutePath}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />
@@ -86,6 +88,8 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
           content={file.content}
           originalContent={diffOriginalContent}
           modelPath={file.absolutePath}
+          workspacePath={workspacePath}
+          documentPath={file.absolutePath}
           onChange={onContentChange}
           onEditorMount={onEditorMount}
         />
