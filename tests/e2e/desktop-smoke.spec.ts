@@ -368,6 +368,8 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const centerBox = await page.getByRole('main').boundingBox()
     expect(terminalBox?.width).toBeGreaterThan(0)
     expect(terminalBox?.width).toBeLessThanOrEqual(centerBox?.width ?? 0)
+    // Note: wait for the shell, not only xterm's DOM — see .agents/notes/2026-09-20-reproducible-verification.md
+    await expect(page.locator('.xterm-rows').first()).toContainText(/[>$#]\s*$/, { timeout: 30_000 })
     await terminalInput.focus()
     await terminalInput.pressSequentially('echo JANUSX_DOCK_FIT')
     await terminalInput.press('Enter')
@@ -389,6 +391,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     const secondTerminalInput = page.locator('.xterm-helper-textarea').nth(1)
     const secondTerminalScreen = page.locator('.xterm-screen').nth(1)
     await expect(secondTerminalScreen).toBeVisible()
+    await expect(page.locator('.xterm-rows').nth(1)).toContainText(/[>$#]\s*$/, { timeout: 30_000 })
     await secondTerminalInput.focus()
     await secondTerminalInput.pressSequentially('echo JANUSX_SECOND_TAB')
     await secondTerminalInput.press('Enter')

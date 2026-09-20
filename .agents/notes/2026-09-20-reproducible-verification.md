@@ -37,6 +37,8 @@ Release preparation installs Node before any build, verifies the pinned OfficeCL
 
 ## Consequences
 
+Desktop terminal input waits for the shell prompt before typing into xterm. A mounted terminal textarea only proves renderer readiness; on a cold Windows runner the PowerShell process can still be starting and discard early input. Both terminal tabs retain their command/output assertions after this readiness check.
+
 Node and sibling pins require deliberate updates in both workflows. Temporary-path canonicalization covers the verification environment; it is not a claim that every application watcher accepts short aliases. Single-worker tests still use real filesystem events and preserve native watcher coverage. Release publishing requires an authorized tag push; validation of the workflow does not itself publish a release.
 
 Verification on Windows: `CI=true` with the pinned Node executable running `node_modules/vitest/vitest.mjs run` passes 251 files and 1791 tests, with two existing opt-in tests skipped. A separate invocation of `tests/unit/agent-turn-sentinel.test.ts` with TEMP and TMP set to an actual 8.3 directory alias passes all 13 tests. The llm-core suite passes 74 tests. Type checking, strict unused checking, application build, package boundary, i18n, and Note checks pass; workflow YAML, verification command parity, dependency pins and this Note's schema are checked directly.
