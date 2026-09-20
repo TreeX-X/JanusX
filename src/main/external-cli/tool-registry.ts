@@ -5,7 +5,7 @@ export interface ExternalCliToolDescriptor {
   displayName: string
   /** PATH 与已知位置中查找的可执行文件名（win32 含 .cmd/.exe 变体）。 */
   binaryNames: readonly string[]
-  /** npm 分发包名；自有源码构建的工具为空。 */
+  /** npm 分发包名；不走 npm 的工具为空。 */
   npmPackage?: string
   /** 手动安装命令或指引（展示与复制用，静默执行侧按平台重算）。 */
   manualInstallCommand: string
@@ -15,8 +15,8 @@ export interface ExternalCliToolDescriptor {
     win32?: readonly string[]
   }
   /**
-   * 自有 sibling 源码的构建＋全局 link 生命周期（janus 专用）。
-   * 有源码时静默执行更新；无源码时只展示 manualInstallCommand。
+   * 自有 sibling 源码的构建＋全局 link 生命周期（janus 开发回退）。
+   * 有源码时静默执行更新；无源码时回退到 npmPackage 安装。
    */
   localLifecycle?: {
     /** sibling 仓库下包目录名，如 'cli'。 */
@@ -78,8 +78,9 @@ export const EXTERNAL_CLI_TOOLS: Record<ExternalCliToolId, ExternalCliToolDescri
     id: 'janus',
     displayName: 'Janus',
     binaryNames: ['janus'],
-    manualInstallCommand: 'cd ../janus-agentX/packages/cli && npm run build && npm link',
-    latestStrategy: 'local-source',
+    npmPackage: '@janus-agent/cli',
+    manualInstallCommand: npmInstallCommand('@janus-agent/cli'),
+    latestStrategy: 'npm-dist-tags',
     localLifecycle: {
       packageDirName: 'cli',
       packageName: '@janus-agent/cli',

@@ -12,11 +12,10 @@ describe('external-cli tool registry', () => {
     for (const id of EXTERNAL_CLI_TOOL_ORDER) {
       const tool = getExternalCliTool(id)
       expect(tool?.displayName).toBe(EXTERNAL_CLI_TOOL_META[id]?.displayName)
-      // npm 分发走包名校验；自有源码走 localLifecycle 声明，二者必居其一。
-      if (tool?.latestStrategy === 'npm-dist-tags') {
-        expect(tool.npmPackage).toMatch(/^(@[^/]+\/[^/]+|[^/]+)$/)
-      } else {
-        expect(tool?.localLifecycle?.packageName).toMatch(/^@[^/]+\/[^/]+$/)
+      // 全工具 npm 分发走包名校验；janus 额外保留 localLifecycle 作 dev 回退。
+      expect(tool?.npmPackage).toMatch(/^(@[^/]+\/[^/]+|[^/]+)$/)
+      if (tool?.localLifecycle) {
+        expect(tool.localLifecycle.packageName).toMatch(/^@[^/]+\/[^/]+$/)
       }
     }
   })

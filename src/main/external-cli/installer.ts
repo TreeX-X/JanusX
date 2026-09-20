@@ -162,8 +162,11 @@ export class CliInstaller {
       if (!located) return { success: false, command: tool.manualInstallCommand, error: 'npm was not found. Run the manual command in a terminal.' }
       if (tool.localLifecycle) {
         const source = await this.locateLocalSource(tool)
-        if (!source) return { success: false, command: tool.manualInstallCommand, error: 'Local janus-agentX source was not found. Follow the manual steps in a terminal.' }
-        return this.installLocal(located.path, located.pathDirs, source)
+        if (source) return this.installLocal(located.path, located.pathDirs, source)
+        if (!tool.npmPackage) {
+          return { success: false, command: tool.manualInstallCommand, error: 'Local janus-agentX source was not found. Follow the manual steps in a terminal.' }
+        }
+        // 无源码回退到 npm 安装（janus 已发布到 registry）。
       }
       if (!tool.npmPackage) return { success: false, command: tool.manualInstallCommand, error: 'No install strategy for this tool.' }
       const command = this.buildCommand(located.path, tool)

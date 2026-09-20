@@ -334,7 +334,7 @@
         "desc": "轻量终端智能体。通过 npm 全局安装与升级，安装后重启终端生效。"
       },
       "janus": {
-        "desc": "自有 Janus CLI，随 janus-agentX 源码构建并全局链接，支持一键更新。"
+        "desc": "自有 Janus CLI。通过 npm 全局安装与升级，安装后重启终端生效。"
       }
     },
     "state": {

@@ -32,8 +32,8 @@ describe('external CLI tool matrix', () => {
       expect(tool.displayName.trim().length).toBeGreaterThan(0)
       expect(tool.binaryNames.length).toBeGreaterThan(0)
       expect(tool.manualInstallCommand.trim().length).toBeGreaterThan(0)
-      // Exactly one distribution story per tool: npm package or sibling source.
-      expect(Boolean(tool.npmPackage) !== Boolean(tool.localLifecycle)).toBe(true)
+      // 每个工具都有 npm 分发；janus 额外保留 sibling 源码 dev 回退。
+      expect(tool.npmPackage).toMatch(/^(@[^/]+\/[^/]+|[^/]+)$/)
     }
     expect(EXTERNAL_CLI_TOOLS.janus.localLifecycle?.packageName).toBe('@janus-agent/cli')
   })
@@ -61,7 +61,7 @@ describe('external CLI tool matrix', () => {
     })
   })
 
-  it('builds npm install commands for npm tools and refuses janus', () => {
+  it('builds npm install commands for every tool, including janus', () => {
     const installer = new CliInstaller({
       platform: 'win32',
       env: { PATH: '' },
@@ -69,10 +69,21 @@ describe('external CLI tool matrix', () => {
       isRegularFile: async () => false,
       run: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '' })),
     })
-    for (const toolId of ['claude', 'codex', 'opencode', 'pi'] as const) {
+    for (const toolId of EXTERNAL_CLI_TOOL_ORDER) {
       const command = installer.buildCommand('C:\\npm\\npm.cmd', EXTERNAL_CLI_TOOLS[toolId])
       expect(command.display).toContain(`i -g ${EXTERNAL_CLI_TOOLS[toolId].npmPackage}`)
     }
-    expect(() => installer.buildCommand('C:\\npm\\npm.cmd', EXTERNAL_CLI_TOOLS.janus)).toThrow()
+  })
+
+  it('refuses to build an install command without an npm package', () => {
+    const installer = new CliInstaller({
+      platform: 'win32',
+      env: { PATH: '' },
+      homeDir: 'C:\\Users\\test',
+      isRegularFile: async () => false,
+      run: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '' })),
+    })
+    const sourceless = { ...EXTERNAL_CLI_TOOLS.janus, npmPackage: undefined }
+    expect(() => installer.buildCommand('C:\\npm\\npm.cmd', sourceless)).toThrow()
   })
 })
