@@ -1,7 +1,9 @@
-import { createElement, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { Activity, NotebookPen } from 'lucide-react'
+// Note: the Markdown view tab uses the conventional file glyph in components/ui/MarkdownIcon.tsx — see .agents/notes/implemented/feature/2026-09-21-drawer-markdown-file-glyph.md
+import { createElement, useRef, type ComponentType, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { Activity } from 'lucide-react'
 import { useNoteStore } from '../../stores/note'
 import tabs from '../ui/TabStrip.module.css'
+import { MarkdownIcon, type MarkdownIconProps } from '../ui/MarkdownIcon'
 
 export type DrawerView = 'runtime' | 'note'
 export type TerminalLifecycleEvent = 'kill-removed' | 'exit' | 'workspace-switch'
@@ -32,7 +34,7 @@ export function getNextDrawerView(view: DrawerView, key: string): DrawerView | n
   return DRAWER_VIEWS[(DRAWER_VIEWS.indexOf(view) + offset + DRAWER_VIEWS.length) % DRAWER_VIEWS.length]
 }
 
-const DRAWER_VIEW_ICONS: Record<DrawerView, typeof Activity> = { runtime: Activity, note: NotebookPen }
+const DRAWER_VIEW_ICONS: Record<DrawerView, ComponentType<MarkdownIconProps>> = { runtime: Activity, note: MarkdownIcon }
 
 export interface DrawerViewTabsProps {
   open: boolean
