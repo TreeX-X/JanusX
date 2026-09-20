@@ -95,8 +95,11 @@ jobs:
             throw 'Bundled OfficeCLI SHA256 mismatch'
           }
 
+      # 注意：必须用双横线 --c. 传内联配置。单横线 -c.publish... 会被
+      # Windows PowerShell 拆成两个参数（-c 和 .publish...），yargs 就会
+      # 把它当成配置文件路径，报 ENOENT ...\.publish.releaseType=...。
       - name: Publish to GitHub Releases
         working-directory: JanusX
-        run: npx electron-builder --win --x64 --publish always -c.publish.releaseType=${{ steps.version.outputs.release-type }}
+        run: npx electron-builder --win --x64 --publish always --c.publish.releaseType=${{ steps.version.outputs.release-type }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
