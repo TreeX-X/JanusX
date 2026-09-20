@@ -95,6 +95,13 @@ jobs:
             throw 'Bundled OfficeCLI SHA256 mismatch'
           }
 
+      # devDependencies 不进 archive。重新把 electron-builder.yml 的 dev-only
+      # 排除块对齐当前生产闭包再打包：清单本身已提交，这里同步只是保证
+      # 依赖变动后不会带着旧的排除集合发布。
+      - name: Sync packaging exclusions
+        working-directory: JanusX
+        run: npm run exclusions:sync
+
       # 注意：必须用双横线 --c. 传内联配置。单横线 -c.publish... 会被
       # Windows PowerShell 拆成两个参数（-c 和 .publish...），yargs 就会
       # 把它当成配置文件路径，报 ENOENT ...\.publish.releaseType=...。
@@ -103,3 +110,10 @@ jobs:
         run: npx electron-builder --win --x64 --publish always --c.publish.releaseType=${{ steps.version.outputs.release-type }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 发布后再验一次：从仓库外的临时目录启动 unpacked 与 portable，
+      # 两种 smoke 模式都必须退出 0。打包期漏进 archive 的解析断裂
+      # （ERR_MODULE_NOT_FOUND）只在真实启动时才暴露。
+      - name: Verify packaged runtime
+        working-directory: JanusX
+        run: npm run check:portable-runtime

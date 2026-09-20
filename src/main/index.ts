@@ -4,9 +4,11 @@ import { configureApplicationProfile, configureChromiumSessionPaths } from './bo
 
 const isHookClient = isAgentHookClientInvocation()
 const isLlmRuntimeSmoke = process.argv.includes('--smoke-test=llm-runtime')
+const isModuleGraphSmoke = process.argv.includes('--smoke-test=module-graph')
+const isSmokeTest = isLlmRuntimeSmoke || isModuleGraphSmoke
 
-configureApplicationProfile(isHookClient || isLlmRuntimeSmoke)
-configureChromiumSessionPaths(isHookClient || isLlmRuntimeSmoke)
+configureApplicationProfile(isHookClient || isSmokeTest)
+configureChromiumSessionPaths(isHookClient || isSmokeTest)
 
 // AC1 / AC4: process-level exception fences.
 // - Fatal exceptions during bootstrap (before app services are up) exit the
@@ -77,6 +79,8 @@ if (isHookClient) {
     })
 } else if (isLlmRuntimeSmoke) {
   void runLlmRuntimeSmoke()
+} else if (isModuleGraphSmoke) {
+  void runModuleGraphSmoke()
 } else {
   void bootstrapApp().then(() => {
     bootstrapComplete = true
@@ -115,6 +119,52 @@ async function runLlmRuntimeSmoke(): Promise<void> {
   }
 }
 
+// The bootstrap module graph is shared with `--smoke-test=module-graph` so the
+// packaged runtime check exercises every import startup performs. A dependency
+// that packaging nested away from app.asar's node_modules root surfaces here as
+// ERR_MODULE_NOT_FOUND, not as a missing feature at runtime.
+// Note: entry — see .agents/notes/implemented/bug-fix/2026-09-20-packaged-hoisted-deps.md
+function importBootstrapModules() {
+  return Promise.all([
+    import('./ipc/handlers'),
+    import('./ipc/project-handlers'),
+    import('./ipc/llm-handlers'),
+    import('./ipc/register'),
+    import('./office/officecli-manager'),
+    import('./bootstrap/services'),
+    import('./terminal/manager'),
+    import('./janus-runner/stream-manager'),
+    import('./janus/analyzer'),
+    import('./janus/maintenance/service'),
+    import('./notifications/desktop-toast-window'),
+    import('./shutdown/AppShutdown'),
+    import('./windows/editor-window'),
+    import('./windows/main-window'),
+    import('./windows/register-window-ipc'),
+    import('./remote-notifications/feishu-inbound/runtime'),
+    import('./browser/surface-manager'),
+    import('./language-service/clangd-manager'),
+  ])
+}
+
+async function runModuleGraphSmoke(): Promise<void> {
+  try {
+    await app.whenReady()
+    await importBootstrapModules()
+    // The remaining startup imports, resolved lazily by createWindow.
+    await Promise.all([
+      import('./updater/service'),
+      import('./config/service'),
+      import('./web-test-gateway/starter'),
+    ])
+    console.log('[module-graph-smoke] ok')
+    app.exit(0)
+  } catch (error) {
+    console.error('[module-graph-smoke] failed:', error)
+    app.exit(1)
+  }
+}
+
 async function bootstrapApp(): Promise<void> {
   const [
     { disposeWorkspaceWatchers },
@@ -135,26 +185,7 @@ async function bootstrapApp(): Promise<void> {
     { feishuInboundRuntime },
     { BrowserSurfaceManager },
     { clangdManager },
-  ] = await Promise.all([
-    import('./ipc/handlers'),
-    import('./ipc/project-handlers'),
-    import('./ipc/llm-handlers'),
-    import('./ipc/register'),
-    import('./office/officecli-manager'),
-    import('./bootstrap/services'),
-    import('./terminal/manager'),
-    import('./janus-runner/stream-manager'),
-    import('./janus/analyzer'),
-    import('./janus/maintenance/service'),
-    import('./notifications/desktop-toast-window'),
-    import('./shutdown/AppShutdown'),
-    import('./windows/editor-window'),
-    import('./windows/main-window'),
-    import('./windows/register-window-ipc'),
-    import('./remote-notifications/feishu-inbound/runtime'),
-    import('./browser/surface-manager'),
-    import('./language-service/clangd-manager'),
-  ])
+  ] = await importBootstrapModules()
 
   let mainWindow: BrowserWindow | null = null
   let quitAck: (() => void) | null = null

@@ -112,13 +112,8 @@ describe('ExternalCliService provider sync', () => {
     expect(resolver).not.toHaveBeenCalled()
   })
 
-  it('reads the janus latest version from the sibling source', async () => {
-    const { mkdir, writeFile } = await import('fs/promises')
+  it('reads the janus latest version from npm dist-tags', async () => {
     const { CliInstaller } = await import('../../../src/main/external-cli/installer')
-    const root = await createTempDir('janusx-cc-janus-latest-')
-    const packageDir = join(root, 'packages', 'cli')
-    await mkdir(packageDir, { recursive: true })
-    await writeFile(join(packageDir, 'package.json'), JSON.stringify({ name: '@janus-agent/cli', version: '0.2.0' }), 'utf8')
     const homeDir = await createTempDir('janusx-cc-janus-latest-home-')
     const userDataDir = await createTempDir('janusx-cc-janus-latest-data-')
     const service = new DefaultExternalCliService(
@@ -132,14 +127,24 @@ describe('ExternalCliService provider sync', () => {
         homeDir,
         isRegularFile: async () => false,
         run: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
-        resolveSiblingRoot: () => root,
+        resolveSiblingRoot: () => undefined,
       }),
     )
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ latest: '0.2.0' }),
+    })))
 
-    await expect(service.latest('janus')).resolves.toEqual({ toolId: 'janus', latestVersion: '0.2.0' })
+    try {
+      await expect(service.latest('janus')).resolves.toEqual({ toolId: 'janus', latestVersion: '0.2.0' })
+      expect(vi.mocked(fetch)).toHaveBeenCalledOnce()
+      expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain('%2f')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
-  it('reports unknown janus latest when the sibling source is absent', async () => {
+  it('reports unknown janus latest when dist-tags is unreachable', async () => {
     const { CliInstaller } = await import('../../../src/main/external-cli/installer')
     const homeDir = await createTempDir('janusx-cc-janus-absent-home-')
     const userDataDir = await createTempDir('janusx-cc-janus-absent-data-')
@@ -157,7 +162,14 @@ describe('ExternalCliService provider sync', () => {
         resolveSiblingRoot: () => undefined,
       }),
     )
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('offline')
+    }))
 
-    await expect(service.latest('janus')).resolves.toEqual({ toolId: 'janus', latestVersion: undefined })
+    try {
+      await expect(service.latest('janus')).resolves.toEqual({ toolId: 'janus', latestVersion: undefined })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

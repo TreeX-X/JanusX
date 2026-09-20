@@ -103,19 +103,22 @@ describe('CliInstaller', () => {
     expect(calls.every(call => call.cwd === packageDir)).toBe(true)
   })
 
-  it('falls back to manual guidance when the janus source is absent', async () => {
+  it('falls back to npm install when the janus source is absent', async () => {
+    const npmPath = '/usr/bin/npm'
+    const run = vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '' }))
     const installer = new CliInstaller({
       platform: 'linux',
-      env: { PATH: '' },
+      env: { PATH: '/usr/bin' },
       homeDir: '/nonexistent',
-      isRegularFile: async () => true,
-      run: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
+      isRegularFile: async candidate => resolve(candidate) === resolve(npmPath),
+      run,
       resolveSiblingRoot: () => undefined,
     })
 
     const result = await installer.install(EXTERNAL_CLI_TOOLS.janus)
-    expect(result).toMatchObject({ success: false })
-    expect(result.command).toContain('npm link')
+    expect(result).toMatchObject({ success: true })
+    expect(result.command).toContain('i -g @janus-agent/cli@latest')
+    expect(run).toHaveBeenCalledOnce()
   })
 
   it('stops before link when the janus build fails', async () => {    const root = await mkdtemp(join(tmpdir(), 'janusx-janus-fail-'))
@@ -156,15 +159,24 @@ describe('CliInstaller', () => {
     expect(run.mock.calls[0][1].join(' ')).toContain('rm -g @openai/codex')
   })
 
-  it('reports uninstall failures with the tail output and refuses non-npm tools', async () => {
+  it('reports uninstall failures and refuses non-npm tools', async () => {
     const npmPath = 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd'
     const { installer } = createHarness({ npmPath, exitCode: 1, stderr: 'npm ERR! not found' })
 
     const failed = await installer.uninstall(EXTERNAL_CLI_TOOLS.codex)
     expect(failed.success).toBe(false)
     expect(failed.error).toContain('npm ERR! not found')
+  })
 
-    await expect(installer.uninstall(EXTERNAL_CLI_TOOLS.janus)).resolves.toMatchObject({ success: false })
+  it('uninstalls janus through npm like every other tool', async () => {
+    const npmPath = 'C:\\Users\\test\\AppData\\Roaming\\npm\\npm.cmd'
+    const { installer, run } = createHarness({ npmPath })
+
+    await expect(installer.uninstall(EXTERNAL_CLI_TOOLS.janus)).resolves.toEqual({
+      success: true,
+      command: `& "${npmPath}" rm -g @janus-agent/cli`,
+    })
+    expect(run.mock.calls[0][1].join(' ')).toContain('rm -g @janus-agent/cli')
   })
 })
 

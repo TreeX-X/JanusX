@@ -1,11 +1,24 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const REQUIRED_PATTERNS = [
-  'out/main/**',
-  'out/preload/**',
-  'out/renderer/**',
-  'package.json',
+// node_modules is copied verbatim (electron-builder.yml's beforeBuild hook), so
+// the boundary gate guards the opposite direction: nothing from the working tree
+// may reach the archive, and nothing build-only may stay in node_modules.
+const REQUIRED_TREE_EXCLUSIONS = [
+  'src',
+  'tests',
+  'docs',
+  'wiki',
+  'design',
+  'artifacts',
+  'test-results',
+  'release',
+  '.agents',
+  '.claude',
+  '.codex',
+  '.github',
+  '.cache',
+  '.janusX',
 ]
 
 const REQUIRED_OUTPUTS = [
@@ -54,25 +67,58 @@ export function parseFilesList(yaml) {
       continue
     }
 
-    const item = line.match(/^  -\s+([A-Za-z0-9_./*+-]+)\s*$/)
+    const item = line.match(/^  -\s+(\S+)\s*$/)
     if (!item) throw new Error(`Unsupported files sequence content at line ${index + 1}`)
-    values.push(item[1])
+    // YAML scalars: patterns are quoted when they carry minimatch punctuation.
+    const raw = item[1]
+    const quoted = raw.length > 1 && ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'")))
+    values.push(quoted ? raw.slice(1, -1) : raw)
   }
 
   if (!foundFiles) throw new Error('Missing top-level files list')
   return values
 }
 
+// `!prefix{,/**/*}` -> `prefix`
+function exclusionTarget(pattern) {
+  return pattern.slice(1).replace(/[,{].*$/, '')
+}
+
 export function validateFilePatterns(patterns) {
   if (new Set(patterns).size !== patterns.length) {
     throw new Error('Package files allowlist contains duplicate entries')
   }
-  const missing = REQUIRED_PATTERNS.filter((pattern) => !patterns.includes(pattern))
-  const unexpected = patterns.filter((pattern) => !REQUIRED_PATTERNS.includes(pattern))
-  if (missing.length || unexpected.length) {
-    throw new Error(
-      `Package files must be the explicit runtime allowlist. Missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}`,
-    )
+
+  const inclusions = patterns.filter((pattern) => !pattern.startsWith('!'))
+  if (!inclusions.includes('**/*')) {
+    throw new Error('Package files must copy the installed tree through the **/* pattern')
+  }
+  if (!inclusions.includes('package.json')) {
+    throw new Error('Package files must include package.json')
+  }
+  const leaked = inclusions.filter((pattern) => REQUIRED_TREE_EXCLUSIONS.some((prefix) => pattern === prefix))
+  if (leaked.length) {
+    throw new Error(`Package files must not include repository sources or caches: ${leaked.join(', ')}`)
+  }
+
+  const exclusionTargets = new Set(patterns.filter((pattern) => pattern.startsWith('!')).map(exclusionTarget))
+  const missing = REQUIRED_TREE_EXCLUSIONS.filter((prefix) => !exclusionTargets.has(prefix))
+  if (missing.length) {
+    throw new Error(`Package files must exclude repository sources and caches: ${missing.join(', ')}`)
+  }
+  // Named repository trees must be excluded explicitly; node_modules entries and
+  // root-level dev files (playwright configs, *.log, scratch files) are free-form.
+  // An extension-wide negation drops a debug artifact class from every packaged
+  // tree at once, so it is judged by shape rather than by path.
+  const EXTENSION_EXCLUSION = /^\*\*\/\*\.[A-Za-z0-9]{1,8}$/
+  const allowedExclusion = (pattern) =>
+    REQUIRED_TREE_EXCLUSIONS.includes(pattern) ||
+    pattern.startsWith('node_modules/') ||
+    EXTENSION_EXCLUSION.test(pattern) ||
+    !pattern.includes('/')
+  const unexpected = [...exclusionTargets].filter((pattern) => !allowedExclusion(pattern))
+  if (unexpected.length) {
+    throw new Error(`Package files exclude unknown paths: ${unexpected.join(', ')}`)
   }
 }
 
@@ -133,7 +179,7 @@ export function checkPackageBoundary(root = process.cwd()) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try {
     checkPackageBoundary()
-    console.log('Package boundary verified: explicit runtime allowlist and required outputs are present.')
+    console.log('Package boundary verified: the installed tree is packaged and no working-tree path leaks in.')
   } catch (error) {
     console.error(error instanceof Error ? error.message : error)
     process.exitCode = 1
