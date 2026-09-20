@@ -1,13 +1,14 @@
 # PR 统一门禁：在 Windows runner 上跑仓库的 `verify` 全链。
 # release-win 只管发版，这条管合入质量；分支保护要求 `verify` 变绿。
 # Note: reproducible inputs and clean-checkout tests — see .agents/notes/2026-09-20-reproducible-verification.md
+# Note: development promotion — see .agents/notes/2026-09-20-development-branch.md
 name: verify
 
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:

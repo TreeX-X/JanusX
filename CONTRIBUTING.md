@@ -4,15 +4,16 @@
 
 ## 分支与 PR
 
-- `main` 受分支保护：一切改动走功能分支 → PR → CI 变绿 → 合并，禁止直推 `main`。
+- `main` 是稳定主分支，`develop` 是长期开发分支。日常改动在 `develop` 完成，本地 `npm run verify` 通过后推送，再创建 `develop` → `main` 的 PR；PR 的 `verify` 通过且满足审核规则后才能合并，禁止直推 `main`。
+- `develop` → `main` 使用 merge commit 保留共同历史，避免长期分支反复 squash 后重复携带已合入提交。合并后将 `main` 同步回 `develop`：`git fetch origin`、`git switch develop`、`git merge --ff-only origin/main`、`git push origin develop`。若无法快进，先合并 `origin/main`、解决冲突并重新验证，禁止强推覆盖其他开发。
 - 管理员仅在 CI 故障等紧急情况可 bypass，事后在 PR 或 Issue 留书面说明。
 - Agent 落地（`xdo`/`xdel`/`xflow`）同样走 PR，紧急修复例外，理由写进 Note。
 - PR 标题沿用提交风格（如 `xdo: …`），描述填 Issue 号与 Note 路径（模板自动加载）。
-- 一个分支只承载一个有边界的交付；CI 修复分支不继续承接无关功能。合并后删除功能分支，`gh-pages` 作为官网来源独立保留。worktree 分支在对应工作区结束后清理。
+- 每批开发保持明确范围，及时合入主分支。需要隔离的实验可使用短期功能分支，交付后删除；不复用修复分支积累其他功能。`develop` 长期保留，`gh-pages` 作为官网来源独立保留，worktree 分支在对应工作区结束后清理。决策见 `.agents/notes/2026-09-20-development-branch.md`。
 
 ## CI
 
-- PR 与 `main` 推送自动跑 `verify`（Windows runner）：typecheck、单测、构建、边界检查、lint、i18n、桌面冒烟。红灯不合。
+- 面向 `main` 的 PR，以及 `main`、`develop` 推送自动跑 `verify`（Windows runner）：typecheck、单测、构建、边界检查、lint、i18n、桌面冒烟。红灯不合；`develop` 的推送检查用于提前发现故障，PR 检查验证与主分支的合并结果。
 - 本地先跑 `npm run verify`，不要把红灯推上去浪费 CI 分钟数。
 - Node 版本以 `.node-version` 为准；两个 workflow 固定同一 `janus-agentX` commit，升级同级依赖时一起更新并验证。
 - `npm run verify` 包含仓库 Note 检查。未提交的 `.claude/skills` 和 `.codex/skills` 由本机维护者使用 `npm run check:skills-sync` 检查；`npm run verify:local` 连同该检查一起执行。产品 CI 和单测不依赖个人技能目录。
