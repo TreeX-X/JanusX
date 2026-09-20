@@ -121,3 +121,12 @@ jobs:
       - name: Desktop smoke
         working-directory: JanusX
         run: npm run test:e2e:desktop
+
+      - name: Upload desktop failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-failure-traces
+          path: JanusX/test-results
+          if-no-files-found: ignore
+          retention-days: 7

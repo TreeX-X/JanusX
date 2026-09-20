@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
 import { createDesktopTestEnv } from './desktop-test-env'
 
-type TestWindow = Window & { electron: { workspace: WorkspaceAPI } }
+type TestWindow = Window & { electron: { workspace: WorkspaceAPI; system: { setLanguage(language: string): Promise<void> } } }
 
 test('JanusX capsule keeps detail, canvas, and conversation as independent cards', async () => {
   const entry = resolve('out/main/index.js')
@@ -24,6 +24,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       env: createDesktopTestEnv(root),
     })
     const page = await application.firstWindow({ timeout: 30_000 })
+    await page.evaluate(() => (window as TestWindow).electron.system.setLanguage('zh-CN'))
     const settleWorkbench = () => page.locator('.blueprint-workbench-shell').evaluate(async (element) => {
       const animations = element.getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)

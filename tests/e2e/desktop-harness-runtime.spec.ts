@@ -29,6 +29,15 @@ for (const mode of ['xdo', 'xdel', 'xflow'] as const) test(`built desktop ${mode
       const chunks: Buffer[] = []
       for await (const chunk of request) chunks.push(Buffer.from(chunk))
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      // Runtime status probes use Chat Completions before the task's Responses
+      // stream. Serve the health check without consuming a scripted task turn.
+      if (request.url === '/v1/chat/completions' && body.stream !== true) {
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(JSON.stringify({ id: 'health', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }] }))
+        return
+      }
+      expect(request.url).toBe('/v1/responses')
+      expect(body.input).toBeDefined()
       const prompt = JSON.stringify(body.input)
       const reviewing = prompt.includes('Reply with exactly one JSON object')
       const independent = prompt.includes('Independent read-only audit.')

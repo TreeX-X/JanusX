@@ -8,6 +8,7 @@ import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
 import { createDesktopTestEnv } from './desktop-test-env'
 
 interface DesktopAPI {
+  system: { setLanguage(language: string): Promise<void> }
   project: ProjectAPI
   terminal: TerminalAPI
   workspace: WorkspaceAPI
@@ -125,6 +126,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       return Boolean(api?.workspace?.create && api?.terminal?.create && api?.project?.detect)
     })
     await expect(page.locator('body')).toBeVisible()
+    await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('zh-CN'))
 
     const workspace = await page.evaluate(
       ({ workspacePath }) =>

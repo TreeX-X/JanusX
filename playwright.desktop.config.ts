@@ -1,4 +1,13 @@
 import { defineConfig } from '@playwright/test'
+import { realpathSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+
+// Note: one path spelling across IPC and Monaco — see .agents/notes/2026-09-20-reproducible-verification.md
+if (process.platform === 'win32') {
+  const temp = realpathSync.native(tmpdir())
+  process.env.TEMP = temp
+  process.env.TMP = temp
+}
 
 export default defineConfig({
   testDir: './tests/e2e',
