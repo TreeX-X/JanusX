@@ -6,6 +6,7 @@
 // .agents/notes/implemented/feature/2026-09-21-worktree-ship-merge.md
 import { execFile, spawn, type ChildProcess } from 'child_process'
 import { createHash } from 'crypto'
+import { realpathSync } from 'fs'
 import { access, copyFile, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
 import { promisify } from 'util'
@@ -101,9 +102,17 @@ async function remoteUrl(cwd: string, name: string): Promise<string | null> {
  * Filesystem path equality across git and app spellings. Git prints
  * forward slashes while the workspace registry keeps native separators,
  * so raw string comparison duplicates the main checkout as a linked row.
+ * Realpath resolves symlinks and subst drives; any failure falls back
+ * to plain resolve so a missing path never breaks listing.
  */
 export function normalizeFsPath(value: string): string {
-  const resolved = resolve(value.trim())
+  const trimmed = value.trim()
+  let resolved = resolve(trimmed)
+  try {
+    resolved = realpathSync.native(resolved)
+  } catch {
+    // Keep the resolved spelling.
+  }
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
@@ -171,7 +180,7 @@ export async function listWorktrees(workspaceId: string, workspacePath: string):
       .filter((entry) => !entry.bare && !samePath(entry.path, workspacePath))
       .map(async (entry): Promise<WorktreeInfo> => {
         // Normalize once: git prints forward slashes, the shell keys native paths.
-        const entryPath = resolve(entry.path)
+        const entryPath = normalizeFsPath(entry.path)
         const meta = await worktreeMetaStore.get(entryPath).catch(() => null)
         return {
           id: entryPath,
@@ -444,7 +453,7 @@ export async function removeWorktree(
 ): Promise<RemoveWorktreeResult> {
   const root = resolve(workspacePath)
   const target = resolve(worktreePath)
-  if (target === root) throw new Error('主盘不能在这里删除')
+  if (samePath(target, root)) throw new Error('主盘不能在这里删除')
   const branch = await currentBranch(target)
   const remove = await runGit(root, force ? ['worktree', 'remove', '--force', target] : ['worktree', 'remove', target])
   if (remove === null) throw new Error(`git worktree remove 失败：${target}`)

@@ -19,7 +19,7 @@ Every workspace listed its main checkout twice. Git prints worktree paths with f
 
 ## Decision
 
-All worktree path comparisons go through a normalized form that resolves separators and casefolds on Windows, with linked entries rewritten to native paths once at listing time so renderer keys, active-path checks, and metadata lookups share one spelling. A real-git regression test locks the lone-checkout count. Row icons rest on the borderless folder glyph; the cached avatar crossfades in over it on row hover only, reusing the existing group-hover reveal, and missing avatars never swap.
+All worktree path comparisons go through a normalized form that resolves separators, symlinks, and subst drives with case folding on Windows, with linked entries rewritten to native paths once at listing time so renderer keys, active-path checks, and metadata lookups share one spelling. A real-git regression test locks the lone-checkout count. Row icons rest on the borderless folder glyph; the cached avatar crossfades in over it on row hover only, reusing the existing group-hover reveal, and missing avatars never swap.
 
 ## Alternatives considered
 
