@@ -3,6 +3,9 @@ export const SESSION_CHANNELS = {
   get: 'session:get',
   continue: 'session:continue',
   event: 'session:event',
+  saveLayout: 'session:save-layout',
+  getLayout: 'session:get-layout',
+  clearLayout: 'session:clear-layout',
 } as const
 
 export type AgentSessionStatus = 'active' | 'done' | 'failed' | 'interrupted'
@@ -71,4 +74,24 @@ export interface SessionAPI {
   get(sessionId: string): Promise<AgentSessionDetail | null>
   continue(input: SessionContinueInput): Promise<SessionContinueResult>
   onEvent(callback: (payload: { type: string; sessionId?: string }) => void): () => void
+  saveLayout(layout: ShellRestoreManifest): Promise<{ success: boolean }>
+  getLayout(): Promise<ShellRestoreManifest | null>
+  clearLayout(): Promise<{ success: boolean }>
+}
+
+export interface ShellRestoreTerminal {
+  cwd: string
+  preset: string
+  name: string
+}
+
+export interface ShellRestoreWorkspace {
+  workspaceId: string
+  terminals: ShellRestoreTerminal[]
+}
+
+export interface ShellRestoreManifest {
+  version: 1
+  savedAt: string
+  workspaces: ShellRestoreWorkspace[]
 }

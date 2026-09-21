@@ -4,6 +4,7 @@ import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGitStore } from '@/stores/git'
 import { getActiveWorkspacePath, loadWorkspaceFileTree } from './actions'
+import { collectShellRestore, restoreShells } from '@/lib/shell-restore'
 
 export function useWorkspaceBootstrap(): void {
   useEffect(() => {
@@ -29,8 +30,18 @@ export function useWorkspaceBootstrap(): void {
       useAppStore.setState({ loadState: 'no-terminal' })
       const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)
       if (activeWorkspace) await loadWorkspaceFileTree(activeWorkspace.path).catch(() => {})
+      // One-shot cold restore of pre-quit shells; agents never auto-run.
+      void restoreShells().catch(() => undefined)
     }).catch(() => useAppStore.setState({ loadState: 'no-workspace' }))
   }, [])
+
+  useEffect(() => window.electron.system.onPrepareQuit(async () => {
+    try {
+      await window.electron.session.saveLayout(collectShellRestore())
+    } catch {
+      // Quit must never block on a failed snapshot.
+    }
+  }), [])
 
   useEffect(() => window.electron.fileTree.onChanged((payload) => {
     const workspacePath = payload.workspacePath

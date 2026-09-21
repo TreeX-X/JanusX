@@ -71,6 +71,30 @@ describe('agent session registry', () => {
     expect(registry.listSessions({ includeArchived: true })).toHaveLength(2)
   })
 
+  it('round-trips shell-restore layouts with caps and validation', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    expect(await registry.getLayout()).toBeNull()
+    const terminals = Array.from({ length: 15 }, (_, i) => ({
+      cwd: `/repo-${i}`,
+      preset: 'claude',
+      name: `t-${i}`,
+    }))
+    await registry.saveLayout({
+      version: 1,
+      savedAt: 'x',
+      workspaces: [
+        { workspaceId: 'ws-1', terminals },
+        { workspaceId: 'ws-2', terminals: [{ cwd: '', preset: 'shell', name: 'bad' }] },
+      ],
+    })
+    const layout = await registry.getLayout()
+    expect(layout?.workspaces).toHaveLength(1)
+    expect(layout?.workspaces[0].terminals).toHaveLength(10)
+    expect(layout?.workspaces[0].terminals[0]).toMatchObject({ cwd: '/repo-0', preset: 'claude' })
+    await registry.clearLayout()
+    expect(await registry.getLayout()).toBeNull()
+  })
+
   it('archives sessions by worktree path on disk removal', async () => {
     const registry = track(new AgentSessionRegistry(await userDataDir()))
     const kept = registry.createSession(createInput('term-1'))

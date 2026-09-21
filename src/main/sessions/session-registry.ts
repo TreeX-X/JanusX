@@ -2,7 +2,7 @@
 // session cards, scoped checkpoints, and Continue handoff — see
 // .agents/notes/implemented/feature/2026-09-21-workspace-sessions-v1.md
 import { randomUUID } from 'crypto'
-import { copyFile, readFile } from 'fs/promises'
+import { copyFile, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
@@ -13,6 +13,7 @@ import type {
   AgentSessionTurnKind,
   SessionFilter,
   SessionTurnRecord,
+  ShellRestoreManifest,
 } from '../../shared/ipc/session'
 
 export interface AgentSessionRecord extends AgentSessionDetail {
@@ -30,8 +31,10 @@ interface SessionStoreDocument {
 }
 
 const STORE_FILE = 'agent-sessions.json'
+const LAYOUT_FILE = 'shell-restore.json'
 const MAX_SESSIONS = 200
 const MAX_TURNS_PER_SESSION = 50
+const MAX_RESTORE_TERMINALS = 10
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -131,6 +134,52 @@ export class AgentSessionRegistry {
   /** Drain pending persists (tests and shutdown paths). */
   flush(): Promise<void> {
     return this.ensureLoaded().then(() => this.writeQueue.run(() => Promise.resolve()))
+  }
+
+  private layoutPath(): string {
+    const base = this.userDataDir ?? app.getPath('userData')
+    return join(base, 'janusx', LAYOUT_FILE)
+  }
+
+  /**
+   * One-shot cold-restore manifest: shell terminals per workspace, never
+   * agents. Consumed once on boot, then cleared by the caller.
+   */
+  async saveLayout(manifest: ShellRestoreManifest): Promise<void> {
+    const clean: ShellRestoreManifest = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      workspaces: manifest.workspaces
+        .filter((entry) => typeof entry.workspaceId === 'string' && Array.isArray(entry.terminals))
+        .map((entry) => ({
+          workspaceId: entry.workspaceId,
+          terminals: entry.terminals
+            .filter((terminal) => typeof terminal.cwd === 'string' && terminal.cwd)
+            .slice(0, MAX_RESTORE_TERMINALS)
+            .map((terminal) => ({
+              cwd: terminal.cwd,
+              preset: typeof terminal.preset === 'string' ? terminal.preset : 'shell',
+              name: typeof terminal.name === 'string' ? terminal.name.slice(0, 80) : 'shell',
+            })),
+        }))
+        .filter((entry) => entry.terminals.length > 0),
+    }
+    await writeFileAtomic(this.layoutPath(), `${JSON.stringify(clean, null, 2)}\n`)
+  }
+
+  async getLayout(): Promise<ShellRestoreManifest | null> {
+    try {
+      const raw = await readFile(this.layoutPath(), 'utf-8')
+      const parsed = JSON.parse(raw) as Partial<ShellRestoreManifest>
+      if (parsed.version !== 1 || !Array.isArray(parsed.workspaces)) return null
+      return parsed as ShellRestoreManifest
+    } catch {
+      return null
+    }
+  }
+
+  async clearLayout(): Promise<void> {
+    await rm(this.layoutPath(), { force: true }).catch(() => undefined)
   }
 
   createSession(input: {

@@ -3,6 +3,7 @@ import {
   SESSION_CHANNELS,
   type SessionContinueInput,
   type SessionFilter,
+  type ShellRestoreManifest,
 } from '../../shared/ipc/session'
 import { agentSessionRegistry } from '../sessions/session-registry'
 import { continueAgentSession } from './terminal-handlers'
@@ -33,5 +34,19 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
 
   ipcMain.handle(SESSION_CHANNELS.continue, async (_event, input: SessionContinueInput) => {
     return continueAgentSession(input.sessionId, { engine: input.engine })
+  })
+
+  ipcMain.handle(SESSION_CHANNELS.saveLayout, async (_event, layout: ShellRestoreManifest) => {
+    await agentSessionRegistry.saveLayout(layout)
+    return { success: true }
+  })
+
+  ipcMain.handle(SESSION_CHANNELS.getLayout, async () => {
+    return agentSessionRegistry.getLayout()
+  })
+
+  ipcMain.handle(SESSION_CHANNELS.clearLayout, async () => {
+    await agentSessionRegistry.clearLayout()
+    return { success: true }
   })
 }
