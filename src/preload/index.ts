@@ -30,6 +30,7 @@ import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agen
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
 import { SESSION_CHANNELS, type SessionAPI } from '../shared/ipc/session'
 import { WORKTREE_CHANNELS, type WorktreeAPI } from '../shared/ipc/worktree'
+import { HOSTED_CHANNELS, type HostedAPI } from '../shared/ipc/hosted'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
@@ -523,6 +524,16 @@ const worktreeAPI: WorktreeAPI = {
   shipAbort: (workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.shipAbort, { workspacePath }),
 }
 
+const hostedAPI: HostedAPI = {
+  detect: (workspacePath) => ipcRenderer.invoke(HOSTED_CHANNELS.detect, { workspacePath }),
+  listReviews: (workspacePath, branch) => ipcRenderer.invoke(HOSTED_CHANNELS.listReviews, { workspacePath, branch }),
+  checks: (workspacePath, branch) => ipcRenderer.invoke(HOSTED_CHANNELS.checks, { workspacePath, branch }),
+  failedLogs: (workspacePath, branch) => ipcRenderer.invoke(HOSTED_CHANNELS.failedLogs, { workspacePath, branch }),
+  createReview: (input) => ipcRenderer.invoke(HOSTED_CHANNELS.createReview, input),
+  mergeReview: (workspacePath, number, method) =>
+    ipcRenderer.invoke(HOSTED_CHANNELS.mergeReview, { workspacePath, number, method }),
+}
+
 const desktopToastAPI: DesktopToastAPI = {
   ready: () => ipcRenderer.send(SYSTEM_CHANNELS.toastReady),
   action: (action) => ipcRenderer.send(SYSTEM_CHANNELS.toastAction, { action }),
@@ -559,6 +570,7 @@ contextBridge.exposeInMainWorld('electron', {
   checkpoint: checkpointAPI,
   session: sessionAPI,
   worktree: worktreeAPI,
+  hosted: hostedAPI,
   git: gitAPI,
   notificationSettings: notificationSettingsAPI,
   agentSettings: agentSettingsAPI,

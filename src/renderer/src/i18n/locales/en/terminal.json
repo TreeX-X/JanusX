@@ -259,6 +259,26 @@
     "abortMerge": "Abort merge",
     "deleteAfterShip": "Delete worktree and archive",
     "mainDirtyBlock": "The main checkout has uncommitted changes.",
-    "worktreeDirtyNote": "Uncommitted changes in the worktree, commit first."
+    "worktreeDirtyNote": "Uncommitted changes in the worktree, commit first.",
+    "prSection": "Hosted review",
+    "prCreate": "Create PR",
+    "prTitlePh": "PR title",
+    "prBodyPh": "PR description (optional)",
+    "draftPr": "Draft",
+    "prOpen": "Open",
+    "prDraft": "Draft",
+    "prMerged": "Merged",
+    "prClosed": "Closed",
+    "checksTitle": "Checks",
+    "checksRefresh": "Refresh",
+    "checksEmpty": "No checks",
+    "viewLogs": "View failure logs",
+    "copyFix": "Copy fix instructions",
+    "copied": "Copied",
+    "mergePr": "Merge PR",
+    "checksPass": "Pass",
+    "checksFail": "Fail",
+    "checksPending": "Pending",
+    "checksSkipped": "Skipped"
   }
 }

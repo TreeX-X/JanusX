@@ -259,6 +259,26 @@
     "abortMerge": "中止合并",
     "deleteAfterShip": "删除任务盘并归档",
     "mainDirtyBlock": "主盘有未提交改动，请先处理。",
-    "worktreeDirtyNote": "盘内有未提交改动，请先提交。"
+    "worktreeDirtyNote": "盘内有未提交改动，请先提交。",
+    "prSection": "托管评审",
+    "prCreate": "创建 PR",
+    "prTitlePh": "PR 标题",
+    "prBodyPh": "PR 描述（可选）",
+    "draftPr": "草稿",
+    "prOpen": "评审中",
+    "prDraft": "草稿",
+    "prMerged": "已合并",
+    "prClosed": "已关闭",
+    "checksTitle": "检查",
+    "checksRefresh": "刷新",
+    "checksEmpty": "暂无检查",
+    "viewLogs": "查看失败日志",
+    "copyFix": "复制修复指令",
+    "copied": "已复制",
+    "mergePr": "合并 PR",
+    "checksPass": "通过",
+    "checksFail": "失败",
+    "checksPending": "等待中",
+    "checksSkipped": "跳过"
   }
 }

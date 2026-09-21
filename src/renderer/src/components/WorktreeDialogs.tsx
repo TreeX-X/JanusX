@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { BranchDiff } from '../../../shared/ipc/worktree'
+import type { FailedCheckLog, HostedCheck, HostedReview } from '../../../shared/ipc/hosted'
 import type { WorktreeInfo } from '../../../shared/ipc/worktree'
 import type { Workspace } from '@/types'
 
@@ -524,6 +525,13 @@ export function WorktreeShipDialog({
               {t('terminal:worktree.pushBase')}
             </label>
           )}
+
+          <HostedReviewSection
+            workspacePath={workspacePath}
+            worktreePath={worktree.path}
+            branch={branch}
+            base={base}
+          />
         </div>
         <div
           className="flex justify-end"
@@ -569,5 +577,308 @@ export function WorktreeShipDialog({
       </div>
     </div>,
     document.body,
+  )
+}
+
+function reviewStateLabel(state: HostedReview['state'], t: (k: string) => string): string {
+  if (state === 'draft') return t('terminal:worktree.prDraft')
+  if (state === 'merged') return t('terminal:worktree.prMerged')
+  if (state === 'closed') return t('terminal:worktree.prClosed')
+  return t('terminal:worktree.prOpen')
+}
+
+function checkStateLabel(state: HostedCheck['state'], t: (k: string) => string): string {
+  if (state === 'pass') return t('terminal:worktree.checksPass')
+  if (state === 'fail') return t('terminal:worktree.checksFail')
+  if (state === 'skipped') return t('terminal:worktree.checksSkipped')
+  return t('terminal:worktree.checksPending')
+}
+
+function checkStateColor(state: HostedCheck['state']): string {
+  if (state === 'pass') return '#4ec9b0'
+  if (state === 'fail') return '#e06c75'
+  return '#777'
+}
+
+function buildFixPrompt(review: HostedReview, logs: FailedCheckLog[]): string {
+  const lines = [
+    `修复 PR #${review.number}「${review.title}」（${review.head} → ${review.base}）的失败检查：`,
+    ...logs.flatMap((entry) => ['', `## ${entry.name}${entry.truncated ? '（日志已截断取尾部）' : ''}`, entry.log]),
+    '',
+    '要求：只修失败相关的代码，保持其他行为不变；跑通相关测试后推送。',
+  ]
+  return lines.join('\n')
+}
+
+/**
+ * Hosted review surface inside Ship. Renders nothing when the checkout
+ * has no provider (local-only work keeps zero hosted chrome).
+ */
+function HostedReviewSection({
+  workspacePath,
+  worktreePath,
+  branch,
+  base,
+}: {
+  workspacePath: string
+  worktreePath: string
+  branch: string
+  base: string
+}) {
+  const { t } = useI18n('terminal')
+  const [provider, setProvider] = useState<'github' | 'gitlab' | null | 'unknown'>('unknown')
+  const [reviews, setReviews] = useState<HostedReview[]>([])
+  const [checks, setChecks] = useState<HostedCheck[]>([])
+  const [logs, setLogs] = useState<FailedCheckLog[] | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [title, setTitle] = useState(branch)
+  const [body, setBody] = useState('')
+  const [draft, setDraft] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    const [detected, reviewList, checkList] = await Promise.all([
+      window.electron.hosted.detect(workspacePath),
+      window.electron.hosted.listReviews(workspacePath, branch).catch(() => []),
+      window.electron.hosted.checks(workspacePath, branch).catch(() => []),
+    ])
+    return { detected, reviewList, checkList }
+  }, [workspacePath, branch])
+
+  useEffect(() => {
+    let alive = true
+    void refresh()
+      .then(({ detected, reviewList, checkList }) => {
+        if (!alive) return
+        setProvider(detected)
+        setReviews(reviewList)
+        setChecks(checkList)
+      })
+      .catch(() => {
+        if (alive) setProvider(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [refresh])
+
+  const reload = useCallback(async () => {
+    setError(null)
+    try {
+      const { reviewList, checkList } = await refresh()
+      setReviews(reviewList)
+      setChecks(checkList)
+      setLogs(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [refresh])
+
+  if (provider !== 'github' && provider !== 'gitlab') return null
+
+  const open = reviews.find((r) => r.head === branch && (r.state === 'open' || r.state === 'draft')) ?? null
+  const failing = checks.filter((c) => c.state === 'fail')
+
+  const runCreate = async () => {
+    if (!title.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await window.electron.hosted.createReview({
+        workspacePath,
+        title: title.trim(),
+        body: body.trim() || undefined,
+        base,
+        head: branch,
+        draft,
+        worktreePath,
+      })
+      setShowCreate(false)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runMergePr = async () => {
+    if (!open || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await window.electron.hosted.mergeReview(workspacePath, open.number, 'squash')
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runViewLogs = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await window.electron.hosted.failedLogs(workspacePath, branch)
+      setLogs(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runCopyFix = async () => {
+    if (!open) return
+    let entries = logs
+    if (!entries) {
+      try {
+        entries = await window.electron.hosted.failedLogs(workspacePath, branch)
+        setLogs(entries)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(buildFixPrompt(open, entries))
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('clipboard unavailable')
+    }
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
+      <div className="flex items-center" style={{ gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#aaa' }}>
+          {t('terminal:worktree.prSection')}
+        </span>
+        <button
+          onClick={() => void reload()}
+          className="cursor-pointer"
+          style={{ marginLeft: 'auto', fontSize: 10, color: '#777', background: 'none', border: 'none', padding: 0 }}
+        >
+          {t('terminal:worktree.checksRefresh')}
+        </button>
+      </div>
+
+      {!open && !showCreate && (
+        <button
+          onClick={() => {
+            setTitle(branch)
+            setShowCreate(true)
+          }}
+          className="rounded cursor-pointer"
+          style={{ height: 26, padding: '0 14px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+        >
+          {t('terminal:worktree.prCreate')}
+        </button>
+      )}
+
+      {showCreate && !open && (
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <input
+            value={title}
+            placeholder={t('terminal:worktree.prTitlePh')}
+            onChange={(event) => setTitle(event.target.value)}
+            style={{ ...inputStyle, fontSize: 11 }}
+          />
+          <input
+            value={body}
+            placeholder={t('terminal:worktree.prBodyPh')}
+            onChange={(event) => setBody(event.target.value)}
+            style={{ ...inputStyle, fontSize: 11 }}
+          />
+          <div className="flex items-center" style={{ gap: 8 }}>
+            <label className="flex items-center" style={{ gap: 6, fontSize: 11, color: '#888', cursor: 'pointer' }}>
+              <input type="checkbox" checked={draft} onChange={(event) => setDraft(event.target.checked)} />
+              {t('terminal:worktree.draftPr')}
+            </label>
+            <button
+              onClick={() => void runCreate()}
+              disabled={!title.trim() || busy}
+              className="rounded cursor-pointer"
+              style={{ height: 26, padding: '0 14px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', opacity: !title.trim() || busy ? 0.45 : 1, marginLeft: 'auto' }}
+            >
+              {t('terminal:worktree.prCreate')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <div className="flex items-center" style={{ gap: 7, fontSize: 11.5, color: '#d4d4d4' }}>
+            <span style={{ color: '#8ab4ff' }}>#{open.number}</span>
+            <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{open.title}</span>
+            <span style={{ fontSize: 10, color: '#777' }}>{reviewStateLabel(open.state, t)}</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, color: '#666', marginBottom: 4 }}>
+              {t('terminal:worktree.checksTitle')}
+            </div>
+            {checks.length === 0 && (
+              <div style={{ fontSize: 10.5, color: '#555' }}>{t('terminal:worktree.checksEmpty')}</div>
+            )}
+            {checks.map((check) => (
+              <div key={check.name} className="flex items-center" style={{ gap: 7, fontSize: 10.5, color: '#888', lineHeight: 1.9 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: checkStateColor(check.state), flexShrink: 0 }} />
+                <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{check.name}</span>
+                <span style={{ color: checkStateColor(check.state) }}>{checkStateLabel(check.state, t)}</span>
+              </div>
+            ))}
+          </div>
+          {logs && logs.map((entry) => (
+            <div key={entry.name} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, padding: '7px 9px' }}>
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#999', marginBottom: 4 }}>
+                {entry.name}{entry.truncated ? ' · truncated' : ''}
+              </div>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#777', maxHeight: 140, overflowY: 'auto' }}>
+                {entry.log}
+              </pre>
+            </div>
+          ))}
+          <div className="flex" style={{ gap: 6 }}>
+            {failing.length > 0 && (
+              <>
+                <button
+                  onClick={() => void runViewLogs()}
+                  disabled={busy}
+                  className="flex-1 rounded cursor-pointer"
+                  style={{ height: 24, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
+                >
+                  {t('terminal:worktree.viewLogs')}
+                </button>
+                <button
+                  onClick={() => void runCopyFix()}
+                  disabled={busy}
+                  className="flex-1 rounded cursor-pointer"
+                  style={{ height: 24, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+                >
+                  {copied ? t('terminal:worktree.copied') : t('terminal:worktree.copyFix')}
+                </button>
+              </>
+            )}
+            {open.state === 'open' && (
+              <button
+                onClick={() => void runMergePr()}
+                disabled={busy}
+                className="flex-1 rounded cursor-pointer"
+                style={{ height: 24, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+              >
+                {t('terminal:worktree.mergePr')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {error && <div style={{ fontSize: 11, color: '#e06c75', lineHeight: 1.6 }}>{error}</div>}
+    </div>
   )
 }

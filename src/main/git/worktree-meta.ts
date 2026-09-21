@@ -8,6 +8,10 @@ export interface WorktreeMeta {
   startFrom: string
   branch: string
   createdAt: string
+  provider?: 'github' | 'gitlab'
+  linkedIssue?: string
+  linkedReview?: number
+  pushTarget?: string
 }
 
 interface MetaDocument {

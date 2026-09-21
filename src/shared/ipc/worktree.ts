@@ -25,6 +25,10 @@ export interface WorktreeInfo {
   external: boolean
   /** Creation start point; absent for external or legacy entries. */
   startFrom?: string
+  provider?: 'github' | 'gitlab'
+  linkedIssue?: string
+  linkedReview?: number
+  pushTarget?: string
   locked?: boolean
   prunable?: boolean
 }

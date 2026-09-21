@@ -12,6 +12,7 @@ import type { AgentRuntimeAPI } from '../../../shared/ipc/agent-runtime'
 import type { CheckpointAPI } from '../../../shared/ipc/checkpoint'
 import type { SessionAPI } from '../../../shared/ipc/session'
 import type { WorktreeAPI } from '../../../shared/ipc/worktree'
+import type { HostedAPI } from '../../../shared/ipc/hosted'
 import type { GitAPI } from '../../../shared/ipc/git'
 import type { LlmAPI } from '../../../shared/ipc/llm'
 import type { ExternalCliAPI } from '../../../shared/ipc/external-cli'
@@ -47,6 +48,7 @@ interface ElectronAPI {
   checkpoint: CheckpointAPI
   session: SessionAPI
   worktree: WorktreeAPI
+  hosted: HostedAPI
   git: GitAPI
   notificationSettings: NotificationSettingsAPI
   agentSettings: AgentSettingsAPI

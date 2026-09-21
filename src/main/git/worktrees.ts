@@ -97,6 +97,11 @@ async function remoteUrl(cwd: string, name: string): Promise<string | null> {
   return url ? url : null
 }
 
+/** Remote URL for callers outside this module (hosted detection); null when absent. */
+export async function gitRemoteUrl(cwd: string, name: string): Promise<string | null> {
+  return remoteUrl(cwd, name)
+}
+
 /**
  * Offline repo identity: origin remote plus an upstream fork hint.
  * Never touches the network; unresolvable checkouts yield null.
@@ -157,6 +162,10 @@ export async function listWorktrees(workspaceId: string, workspacePath: string):
           isMain: false,
           external: !meta,
           ...(meta ? { startFrom: meta.startFrom } : {}),
+          ...(meta?.provider ? { provider: meta.provider } : {}),
+          ...(meta?.linkedIssue ? { linkedIssue: meta.linkedIssue } : {}),
+          ...(meta?.linkedReview !== undefined ? { linkedReview: meta.linkedReview } : {}),
+          ...(meta?.pushTarget ? { pushTarget: meta.pushTarget } : {}),
           ...(entry.locked ? { locked: true } : {}),
           ...(entry.prunable ? { prunable: true } : {}),
         }

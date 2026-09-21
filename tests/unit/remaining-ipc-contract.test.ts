@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CHANNELS, SUBAGENT_RUN_CHANNELS, type AgentAPI, type SubAgentRunAPI } from '../../src/shared/ipc/janus-runner'
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../../src/shared/ipc/checkpoint'
+import { HOSTED_CHANNELS, type HostedAPI } from '../../src/shared/ipc/hosted'
 import { SESSION_CHANNELS, type SessionAPI } from '../../src/shared/ipc/session'
 import { WORKTREE_CHANNELS, type WorktreeAPI } from '../../src/shared/ipc/worktree'
 import { GIT_CHANNELS, type GitAPI } from '../../src/shared/ipc/git'
@@ -13,7 +14,7 @@ const send = vi.fn()
 const on = vi.fn()
 const removeListener = vi.fn()
 let api: {
-  agent: AgentAPI; checkpoint: CheckpointAPI; session: SessionAPI; worktree: WorktreeAPI; git: GitAPI; llm: LlmAPI
+  agent: AgentAPI; checkpoint: CheckpointAPI; session: SessionAPI; worktree: WorktreeAPI; hosted: HostedAPI; git: GitAPI; llm: LlmAPI
   notificationSettings: NotificationSettingsAPI; subAgentRun: SubAgentRunAPI
   dialog: DialogAPI; window: WindowAPI; system: SystemAPI; desktopToast: DesktopToastAPI
 }
@@ -39,7 +40,7 @@ describe('remaining typed IPC contracts', () => {
     const channels = [
       ...Object.values(AGENT_CHANNELS), ...Object.values(SUBAGENT_RUN_CHANNELS),
       ...Object.values(CHECKPOINT_CHANNELS), ...Object.values(SESSION_CHANNELS),
-      ...Object.values(WORKTREE_CHANNELS), ...Object.values(GIT_CHANNELS),
+      ...Object.values(WORKTREE_CHANNELS), ...Object.values(HOSTED_CHANNELS), ...Object.values(GIT_CHANNELS),
       ...Object.values(LLM_CHANNELS), ...Object.values(NOTIFICATION_SETTINGS_CHANNELS),
       ...Object.values(SYSTEM_CHANNELS),
     ]
@@ -54,6 +55,7 @@ describe('remaining typed IPC contracts', () => {
     await api.checkpoint.list({ cwd: 'C:\\repo' })
     await api.session.list({ workspaceId: 'ws-1' })
     await api.worktree.identity('C:\\repo')
+    await api.hosted.checks('C:\\repo', 'feat')
     await api.git.status('C:\\repo')
     await api.git.fileBaseline('C:\\repo', 'README.md')
     await api.llm.getTerminalProviders('janus')
@@ -70,6 +72,7 @@ describe('remaining typed IPC contracts', () => {
       [CHECKPOINT_CHANNELS.list, { cwd: 'C:\\repo' }],
       [SESSION_CHANNELS.list, { workspaceId: 'ws-1' }],
       [WORKTREE_CHANNELS.identity, { workspacePath: 'C:\\repo' }],
+      [HOSTED_CHANNELS.checks, { workspacePath: 'C:\\repo', branch: 'feat' }],
       [GIT_CHANNELS.status, 'C:\\repo'],
       [GIT_CHANNELS.fileBaseline, 'C:\\repo', 'README.md'],
       [LLM_CHANNELS.getTerminalProviders, 'janus'],

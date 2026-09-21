@@ -11,6 +11,7 @@ import { registerBrowserHandlers } from './browser-handlers'
 import { registerCheckpointHandlers } from './checkpoint-handlers'
 import { registerSessionHandlers } from './session-handlers'
 import { registerWorktreeHandlers } from './worktree-handlers'
+import { registerHostedHandlers } from './hosted-handlers'
 import { registerFileHandlers } from './file-handlers'
 import { registerGitHandlers } from './git-handlers'
 import { disposeWorkspaceWatchers, registerWorkspaceHandlers } from './handlers'
@@ -104,6 +105,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerCheckpointHandlers()
   registerSessionHandlers(getCurrentMainWindow)
   registerWorktreeHandlers()
+  registerHostedHandlers()
   registerFileHandlers()
   registerProjectHandlers()
   registerLlmHandlers()

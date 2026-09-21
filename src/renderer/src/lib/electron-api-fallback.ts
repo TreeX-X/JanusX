@@ -264,6 +264,14 @@ export function installElectronApiFallback(): void {
       shipMerge: unavailable,
       shipAbort: unavailable,
     },
+    hosted: {
+      detect: () => Promise.resolve(null),
+      listReviews: () => Promise.resolve([]),
+      checks: () => Promise.resolve([]),
+      failedLogs: () => Promise.resolve([]),
+      createReview: unavailable,
+      mergeReview: unavailable,
+    },
     git: {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,
       commit: unavailable, push: unavailable, pull: unavailable, discard: unavailable, commitChanges: unavailable, fileBaseline: unavailable,
