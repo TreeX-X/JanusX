@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSessionStore, type AgentSessionSummary } from '@/stores/session'
 import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
 import terminalIcon from '@/assets/icons/terminal.svg'
@@ -64,20 +65,38 @@ export function SessionPanel() {
   const subscribeToEvents = useSessionStore((s) => s.subscribeToEvents)
   const clearWorkspaceScope = useSessionStore((s) => s.clearWorkspaceScope)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
+  // AC-10: card scope follows the active worktree path, not the workspace root.
+  const worktrees = useWorktreeStore((s) => (activeWorkspaceId ? (s.worktreesByWorkspace[activeWorkspaceId] ?? []) : []))
+  const activeWorktreePath = useWorktreeStore((s) => (activeWorkspaceId ? (s.activePaths[activeWorkspaceId] ?? null) : null))
+  const scopePath = activeWorktreePath ?? activeWorkspace?.path ?? null
+  const activeWorktree = worktrees.find((w) => w.path === scopePath) ?? null
+  const uiForPath = useWorktreeStore((s) => s.uiForPath)
+  const setUiForPath = useWorktreeStore((s) => s.setUiForPath)
+  const expandedId = scopePath ? (uiForPath(scopePath).expandedSessionId ?? null) : null
   const [scope, setScope] = useState<Scope>('workspace')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [continueTarget, setContinueTarget] = useState<AgentSessionSummary | null>(null)
 
   useEffect(() => {
-    setExpandedId(null)
     setContinueTarget(null)
-    if (!activeWorkspaceId && scope !== 'all') {
+    if (scope === 'all') {
+      void fetchSessions({})
+      return
+    }
+    if (!activeWorkspaceId && !scopePath) {
       clearWorkspaceScope()
       return
     }
     // Project scope follows the workspace until the project model lands (P2).
-    void fetchSessions(scope === 'all' ? {} : { workspaceId: activeWorkspaceId ?? undefined })
-  }, [fetchSessions, clearWorkspaceScope, activeWorkspaceId, scope])
+    void fetchSessions(scopePath ? { cwd: scopePath } : { workspaceId: activeWorkspaceId ?? undefined })
+  }, [fetchSessions, clearWorkspaceScope, activeWorkspaceId, scopePath, scope])
+
+  const handleToggle = useCallback((sessionId: string) => {
+    if (!scopePath) return
+    const current = uiForPath(scopePath).expandedSessionId ?? null
+    setUiForPath(scopePath, { expandedSessionId: current === sessionId ? null : sessionId })
+  }, [scopePath, uiForPath, setUiForPath])
 
   useEffect(() => subscribeToEvents(), [subscribeToEvents])
 
@@ -90,7 +109,7 @@ export function SessionPanel() {
         <div style={{ fontSize: 13, fontWeight: 650, color: '#eee' }}>
           {t('terminal:agentSession.title')}
         </div>
-        <div className="flex" style={{ gap: 16, marginTop: 8 }}>
+        <div className="flex" style={{ gap: 16, marginTop: 8, alignItems: 'flex-end' }}>
           {(Object.keys(SCOPE_KEYS) as Scope[]).map((key) => (
             <button
               key={key}
@@ -109,6 +128,23 @@ export function SessionPanel() {
               {t(SCOPE_KEYS[key])}
             </button>
           ))}
+          {scope !== 'all' && activeWorktree && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                marginBottom: 6,
+                fontFamily: "'SF Mono', monospace",
+                fontSize: 10,
+                color: '#777',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 4,
+                padding: '2px 8px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {activeWorktree.branch ?? activeWorktree.path}
+            </span>
+          )}
         </div>
       </div>
 
@@ -129,7 +165,7 @@ export function SessionPanel() {
             key={session.id}
             session={session}
             expanded={expandedId === session.id}
-            onToggle={() => setExpandedId((current) => (current === session.id ? null : session.id))}
+            onToggle={() => handleToggle(session.id)}
             onContinue={() => setContinueTarget(session)}
           />
         ))}

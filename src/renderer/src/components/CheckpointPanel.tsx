@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useCheckpointStore, type CheckpointSummary } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
 import { Select } from './ui/Select'
@@ -84,25 +85,34 @@ export function CheckpointPanel() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
+  // AC-10: the checkpoint scope follows the active worktree, falling back to
+  // the workspace root when no worktree is selected yet.
+  const activeWorktreePath = useWorktreeStore((s) =>
+    activeWorkspaceId ? (s.activePaths[activeWorkspaceId] ?? null) : null,
+  )
+  const scopeCwd = activeWorktreePath ?? activeWorkspace?.path
   const [filter, setFilter] = useState('all')
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [restoreTarget, setRestoreTarget] = useState<CheckpointSummary | null>(null)
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null)
+  const uiForPath = useWorktreeStore((s) => s.uiForPath)
+  const setUiForPath = useWorktreeStore((s) => s.setUiForPath)
 
   useEffect(() => {
-    setExpandedDiffId(null)
+    // Per-worktree UI state restores on return instead of resetting.
+    setExpandedDiffId(scopeCwd ? (uiForPath(scopeCwd).expandedCheckpointId ?? null) : null)
     setExpandedPromptId(null)
     setRestoreTarget(null)
     setShowModal(false)
 
-    if (!activeWorkspace?.path) {
+    if (!scopeCwd) {
       clearWorkspaceScope()
       return
     }
 
-    fetchCheckpoints({ cwd: activeWorkspace.path })
-  }, [fetchCheckpoints, clearWorkspaceScope, activeWorkspace?.path])
+    fetchCheckpoints({ cwd: scopeCwd })
+  }, [fetchCheckpoints, clearWorkspaceScope, scopeCwd, uiForPath])
 
   const filteredCheckpoints =
     filter === 'all' ? checkpoints : checkpoints.filter((cp) => cp.engine === filter)
@@ -112,26 +122,25 @@ export function CheckpointPanel() {
 
   const handleRestore = useCallback(async () => {
     if (!restoreTarget) return
-    const cwd = activeWorkspace?.path ?? ''
+    const cwd = scopeCwd ?? ''
     await restoreCheckpoint(restoreTarget.id, cwd)
     setShowModal(false)
     setRestoreTarget(null)
-  }, [restoreTarget, restoreCheckpoint, activeWorkspace?.path])
+  }, [restoreTarget, restoreCheckpoint, scopeCwd])
 
   const handleToggleDiff = useCallback(
     (cpId: string) => {
-      const cwd = activeWorkspace?.path ?? ''
+      const cwd = scopeCwd ?? ''
       const key = `${cpId}:`
-      if (expandedDiffId === key) {
-        setExpandedDiffId(null)
-      } else {
-        if (!(key in diffs)) {
-          fetchAllDiffs(cpId, cwd)
-        }
-        setExpandedDiffId(key)
+      const next = expandedDiffId === key ? null : key
+      setExpandedDiffId(next)
+      if (scopeCwd) setUiForPath(scopeCwd, { expandedCheckpointId: next })
+      if (!next) return
+      if (!(key in diffs)) {
+        fetchAllDiffs(cpId, cwd)
       }
     },
-    [activeWorkspace?.path, diffs, fetchAllDiffs, expandedDiffId],
+    [scopeCwd, diffs, fetchAllDiffs, expandedDiffId, setUiForPath],
   )
 
   return (
@@ -172,12 +181,12 @@ export function CheckpointPanel() {
         />
         <button
           onClick={async () => {
-            if (!activeWorkspace?.path) return
+            if (!scopeCwd) return
             await createCheckpoint({
               terminalId: 'manual',
               engine: 'manual',
               prompt: t('terminal:checkpoint.manualDefault'),
-              cwd: activeWorkspace.path,
+              cwd: scopeCwd,
             })
           }}
           className="h-6 px-2 rounded text-[10px] transition-colors shrink-0"

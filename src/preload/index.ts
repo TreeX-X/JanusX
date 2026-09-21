@@ -29,6 +29,7 @@ import { AGENT_CHANNELS, SUBAGENT_RUN_CHANNELS, type AgentAPI, type SubAgentRunA
 import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agent-runtime'
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
 import { SESSION_CHANNELS, type SessionAPI } from '../shared/ipc/session'
+import { WORKTREE_CHANNELS, type WorktreeAPI } from '../shared/ipc/worktree'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
@@ -505,6 +506,13 @@ const sessionAPI: SessionAPI = {
   onEvent: (callback) => subscribeIpcEvent(SESSION_CHANNELS.event, callback),
 }
 
+const worktreeAPI: WorktreeAPI = {
+  list: (workspaceId, workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.list, { workspaceId, workspacePath }),
+  identity: (workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.identity, { workspacePath }),
+  avatar: (workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.avatar, { workspacePath }),
+  onEvent: (callback) => subscribeIpcEvent(WORKTREE_CHANNELS.event, callback),
+}
+
 const desktopToastAPI: DesktopToastAPI = {
   ready: () => ipcRenderer.send(SYSTEM_CHANNELS.toastReady),
   action: (action) => ipcRenderer.send(SYSTEM_CHANNELS.toastAction, { action }),
@@ -540,6 +548,7 @@ contextBridge.exposeInMainWorld('electron', {
   agentRuntime: agentRuntimeAPI,
   checkpoint: checkpointAPI,
   session: sessionAPI,
+  worktree: worktreeAPI,
   git: gitAPI,
   notificationSettings: notificationSettingsAPI,
   agentSettings: agentSettingsAPI,

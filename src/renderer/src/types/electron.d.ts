@@ -11,6 +11,7 @@ import type { AgentAPI, SubAgentRunAPI } from '../../../shared/ipc/janus-runner'
 import type { AgentRuntimeAPI } from '../../../shared/ipc/agent-runtime'
 import type { CheckpointAPI } from '../../../shared/ipc/checkpoint'
 import type { SessionAPI } from '../../../shared/ipc/session'
+import type { WorktreeAPI } from '../../../shared/ipc/worktree'
 import type { GitAPI } from '../../../shared/ipc/git'
 import type { LlmAPI } from '../../../shared/ipc/llm'
 import type { ExternalCliAPI } from '../../../shared/ipc/external-cli'
@@ -45,6 +46,7 @@ interface ElectronAPI {
   agentRuntime: AgentRuntimeAPI
   checkpoint: CheckpointAPI
   session: SessionAPI
+  worktree: WorktreeAPI
   git: GitAPI
   notificationSettings: NotificationSettingsAPI
   agentSettings: AgentSettingsAPI

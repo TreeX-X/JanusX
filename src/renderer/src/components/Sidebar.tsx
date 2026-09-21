@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { ChevronRight, Ellipsis, Folder, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
+import { ChevronRight, Ellipsis, Folder, GitBranch, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
@@ -215,6 +216,91 @@ function workspaceInitial(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?'
 }
 
+// Note: repo avatar replaces the folder glyph when the checkout resolves to
+// a GitHub remote; every other state keeps the folder — see
+// .agents/notes/implemented/feature/2026-09-21-worktree-sidebar-scoping.md
+function RepoRowIcon({ workspacePath }: { workspacePath: string }) {
+  const avatar = useWorktreeStore((s) => s.avatars[workspacePath])
+  const [failed, setFailed] = useState(false)
+  if (avatar && !failed) {
+    return (
+      <img
+        src={avatar}
+        alt=""
+        aria-hidden="true"
+        className="shrink-0"
+        style={{ width: 14, height: 14, borderRadius: 4, objectFit: 'cover' }}
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+  return <Folder size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
+}
+
+function worktreeDisplayName(path: string, branch: string | null): string {
+  if (branch) return branch
+  const parts = path.split(/[/\\]/).filter(Boolean)
+  return parts.at(-1) ?? path
+}
+
+function WorktreeSubList({ workspaceId, workspacePath }: { workspaceId: string; workspacePath: string }) {
+  const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? [])
+  const activePath = useWorktreeStore((s) => s.activePaths[workspaceId] ?? workspacePath)
+  const fetchWorktrees = useWorktreeStore((s) => s.fetchWorktrees)
+  const setActivePath = useWorktreeStore((s) => s.setActivePath)
+
+  useEffect(() => {
+    void fetchWorktrees(workspaceId, workspacePath)
+  }, [fetchWorktrees, workspaceId, workspacePath])
+
+  // Single-checkout workspaces keep the existing terminals-only view.
+  if (worktrees.length <= 1) return null
+
+  return (
+    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
+      {worktrees.map((worktree) => {
+        const focused = activePath === worktree.path
+        return (
+          <div
+            key={worktree.id}
+            role="button"
+            tabIndex={0}
+            aria-label={worktree.path}
+            title={worktree.path}
+            onClick={(event) => {
+              event.stopPropagation()
+              setActivePath(workspaceId, worktree.path)
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              event.stopPropagation()
+              setActivePath(workspaceId, worktree.path)
+            }}
+            className="mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+            style={{
+              background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
+              color: focused ? '#d8d8d8' : '#8a8a8a',
+            }}
+          >
+            <span className="flex h-[18px] w-[18px] items-center justify-center">
+              <GitBranch size={14} strokeWidth={1.6} aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate font-mono text-[11px]">
+                {worktreeDisplayName(worktree.path, worktree.branch)}
+              </span>
+              <span className="block truncate text-[9px] text-[#55555b]">
+                {worktree.path}
+              </span>
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function Sidebar() {
   const { t } = useI18n()
   // P5: useShallow 细粒度订阅，避免整 store 任意变化带动整个侧栏重渲染
@@ -300,6 +386,13 @@ export function Sidebar() {
   useEffect(() => () => {
     if (groupHoverTimerRef.current) clearTimeout(groupHoverTimerRef.current)
   }, [])
+
+  const fetchWorktreeIdentity = useWorktreeStore((s) => s.fetchIdentity)
+  useEffect(() => {
+    for (const workspace of orderedWorkspaces) {
+      if (workspace.path) void fetchWorktreeIdentity(workspace.path)
+    }
+  }, [orderedWorkspaces, fetchWorktreeIdentity])
 
   const handleAddWorkspace = useCallback(async () => {
     try {
@@ -862,7 +955,7 @@ export function Sidebar() {
                           aria-hidden="true"
                         />
                       </button>
-                      <Folder size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
+                      <RepoRowIcon workspacePath={ws.path} />
                       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
                         {ws.name}
                       </span>
@@ -949,6 +1042,7 @@ export function Sidebar() {
                           className="ml-5 mr-1 py-1"
                           style={{ borderLeft: '1px solid rgba(255,255,255,0.055)' }}
                         >
+                        <WorktreeSubList workspaceId={ws.id} workspacePath={ws.path} />
                         {workspaceTerminals.length === 0 ? (
                           <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
                         ) : (
