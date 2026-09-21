@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { ChevronRight, Ellipsis, Folder, GitBranch, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
+import { ChevronRight, Ellipsis, Folder, GitBranch, PanelLeftClose, PanelLeftOpen, Plus, Terminal as TerminalGlyph } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { EMPTY_PENDING_LIST, EMPTY_STRING_LIST, EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
@@ -390,7 +390,7 @@ function WorktreeTerminalBadge({ terminals }: { terminals: Terminal[] }) {
           : '',
       })}
     >
-      <img src={terminalIcon} alt="" className="h-3 w-3 opacity-70" />
+      <TerminalGlyph size={12} strokeWidth={1.6} className="opacity-70" aria-hidden="true" />
       <span>{activity.total}</span>
       <span className="inline-flex items-center gap-1">
         {activity.running > 0 && (
@@ -1223,7 +1223,6 @@ export function Sidebar() {
                 const isExpanded = expandedWorkspaceIds.includes(ws.id)
                 const terminalCount = workspaceTerminals.length
                   const isMenuOpen = contextMenu?.target.kind === 'workspace' && contextMenu.target.workspace.id === ws.id
-                  const terminalActivity = summarizeTerminalActivity(workspaceTerminals)
                   const isDragged = draggedWorkspaceId === ws.id
                   const isDropBefore = dropIntent?.targetId === ws.id && dropIntent.mode === 'before'
                   const isDropAfter = dropIntent?.targetId === ws.id && dropIntent.mode === 'after'
@@ -1368,57 +1367,6 @@ export function Sidebar() {
                       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
                         {ws.name}
                       </span>
-                      {terminalCount > 0 && (
-                        <span
-                          className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] tabular-nums"
-                          style={{
-                            color: terminalActivity.errors > 0
-                              ? '#ff8585'
-                              : terminalActivity.needsAction > 0
-                                ? '#f0a35e'
-                                : terminalActivity.running > 0
-                                  ? '#87d9aa'
-                                  : '#77777d',
-                            background: terminalActivity.errors > 0
-                              ? 'rgba(255,88,88,0.08)'
-                              : terminalActivity.needsAction > 0
-                                ? 'rgba(240,163,94,0.1)'
-                                : terminalActivity.running > 0
-                                  ? 'rgba(70,190,125,0.08)'
-                                  : 'rgba(255,255,255,0.035)',
-                          }}
-                          title={t('common:workspace.terminalCountTitle', {
-                            total: terminalActivity.total,
-                            running: terminalActivity.running,
-                            attention: terminalActivity.needsAction > 0
-                              ? t('common:workspace.terminalCountAttentionSuffix', { count: terminalActivity.needsAction })
-                              : '',
-                            errors: terminalActivity.errors
-                              ? t('common:workspace.terminalCountErrorsSuffix', { count: terminalActivity.errors })
-                              : '',
-                          })}
-                        >
-                          <img src={terminalIcon} alt="" className="h-3 w-3 opacity-70" />
-                          <span>{terminalActivity.total}</span>
-                          <span className="inline-flex items-center gap-1">
-                            {terminalActivity.running > 0 && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#58c98d]" />
-                            )}
-                            {terminalActivity.needsAction > 0 && (
-                              <span className="term-status-pulse h-1.5 w-1.5 rounded-full bg-[#f0a35e]" />
-                            )}
-                            {terminalActivity.degraded > 0 && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#c9a0ff]" />
-                            )}
-                            {terminalActivity.errors > 0 && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#ff6666]" />
-                            )}
-                            {terminalActivity.running === 0 && terminalActivity.needsAction === 0 && terminalActivity.errors === 0 && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#55555b]" />
-                            )}
-                          </span>
-                        </span>
-                      )}
                       <button
                         type="button"
                         draggable={false}
