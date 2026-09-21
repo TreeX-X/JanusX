@@ -20,7 +20,7 @@ Restore stays a two-phase action inside the expanded checkpoint, and execution s
 
 ### New capability: click-to-expand session detail (orca parity)
 
-Orca session cards expand on click to detailed session content; the orca source is not present in this checkout, so the detail contract below is an assumption flagged in Open questions. Card header click toggles a detail section fed by the existing `fetchSessionDetail` (`session:get`, no new IPC): turn list with per-turn kind badge (`done` / `failed` / `interrupted`), time range, and linked checkpoint index via `turn.checkpointId`; owning `terminalIds`; `transcriptPath` as a read-only reference; `continuedFrom` when present; created/updated timestamps; cwd plus branch. The header toggle owns detail only; the `还原点 N ▾` button keeps owning the checkpoint list, so the two expansions never fight. Detail loads lazily on first expand and caches per session id for the panel lifetime.
+Orca session cards expand on click to detailed session content; the orca source is not present in this checkout, so the detail contract below is an assumption flagged in Open questions. Card header click toggles a detail section fed by the existing `fetchSessionDetail` (`session:get`, no new IPC): the section opens with at most two meta lines (cwd, branch, terminal; transcript reference plus start time) and continues with one question-answer pair per turn, each pair carrying the user prompt and the matching agent response plus turn kind badge (`done` / `failed` / `interrupted`), time, and linked checkpoint index via `turn.checkpointId`. The header toggle owns detail only; the `还原点 N ▾` button keeps owning the checkpoint list, so the two expansions never fight. Detail loads lazily on first expand and caches per session id for the panel lifetime.
 
 ### Removal checklist (lands with the migration, one commit)
 
@@ -35,7 +35,7 @@ Orca session cards expand on click to detailed session content; the orca source 
 - AC-1: With the standalone tool removed, every checkpoint reachable before remains reachable under its session card, and no right-dock tab references `checkpoints`.
 - AC-2: Each expanded checkpoint offers a diff toggle rendering the full unified diff, except binary/oversized checkpoints which render the size row and no toggle.
 - AC-3: Restore executes only from the review block after explicit confirm; the block shows prune count, file list, and on-demand diff before execution, and conflict files with red styling after a conflicting restore.
-- AC-4: Clicking a session card header expands detail (turns with kind, time, linked checkpoint; terminals; transcript reference; continued-from; timestamps) fed by `session:get`, lazily loaded once per session.
+- AC-4: Clicking a session card header expands detail (at most two meta lines, then one question-answer pair per turn with kind, time, and linked checkpoint) fed by `session:get`, lazily loaded once per session.
 - AC-5: Archived sessions still refuse restore with the existing hint, and restores still refresh the checkpoint list.
 
 ## Verification
