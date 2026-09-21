@@ -256,18 +256,183 @@ function worktreeDisplayName(path: string, branch: string | null): string {
   return parts.at(-1) ?? path
 }
 
+// Note: terminals are level-3 items grouped under their worktree (hi-fi:
+// design/session-mgmt-hifi.html `.terms` block follows each `.ws` row) — see
+// .agents/notes/implemented/feature/2026-09-21-sidebar-terminal-hierarchy.md
+/** Terminal cwd belongs to a worktree path across git/native spellings and case. */
+function isCwdWithinWorktree(cwd: string, base: string): boolean {
+  const norm = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '')
+  const left = norm(cwd)
+  const right = norm(base)
+  if (!left || !right) return false
+  if (left === right || left.startsWith(`${right}/`)) return true
+  const lowerLeft = left.toLowerCase()
+  const lowerRight = right.toLowerCase()
+  return lowerLeft === lowerRight || lowerLeft.startsWith(`${lowerRight}/`)
+}
+
+/** Short workdir suffix for the terminal sub-line: `…/<basename>`. */
+function shortCwd(cwd: string): string {
+  const last = cwd.split(/[/\\]/).filter(Boolean).at(-1)
+  return last ? `…/${last}` : ''
+}
+
+/** Display-only base ref: `origin/main` reads as `main`. */
+function displayBaseRef(ref: string): string {
+  return ref.startsWith('origin/') ? ref.slice(7) : ref
+}
+
+interface WorktreeTerminalGroup {
+  worktree: WorktreeInfo | null
+  terminals: Terminal[]
+}
+
+/** Terminals follow their worktree; unmatched fall back to main, then to a bare group. */
+function groupTerminalsByWorktree(worktrees: WorktreeInfo[], terminals: Terminal[]): WorktreeTerminalGroup[] {
+  const buckets = new Map<string, Terminal[]>()
+  const unmatched: Terminal[] = []
+  for (const terminal of terminals) {
+    const owner = terminal.cwd
+      ? worktrees.find((worktree) => isCwdWithinWorktree(terminal.cwd, worktree.path))
+      : undefined
+    if (owner) {
+      const list = buckets.get(owner.id) ?? []
+      list.push(terminal)
+      buckets.set(owner.id, list)
+    } else {
+      unmatched.push(terminal)
+    }
+  }
+  const groups = worktrees.map((worktree) => ({ worktree, terminals: buckets.get(worktree.id) ?? [] }))
+  if (unmatched.length === 0) return groups
+  const fallback = groups.find((group) => group.worktree?.isMain) ?? groups[0]
+  if (fallback) {
+    fallback.terminals.push(...unmatched)
+    return groups
+  }
+  return [{ worktree: null, terminals: unmatched }]
+}
+
+function sortTerminalsByAttention(terminals: Terminal[]): Terminal[] {
+  return [...terminals].sort((a, b) => (TERMINAL_ATTENTION_ORDER[a.status] ?? 99) - (TERMINAL_ATTENTION_ORDER[b.status] ?? 99))
+}
+
+function TerminalRow({
+  terminal,
+  focused,
+  onDragStart,
+}: {
+  terminal: Terminal
+  focused: boolean
+  onDragStart: (terminal: Terminal, event: React.DragEvent<HTMLDivElement>) => void
+}) {
+  const { t } = useI18n()
+  const presetLabel = terminalPresetLabel(terminal.preset, t)
+  const displayName = terminal.name || presetLabel
+  const suffix = shortCwd(terminal.cwd)
+  return (
+    <div
+      draggable
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+      onDragStart={(event) => onDragStart(terminal, event)}
+      onDragEnd={() => clearTerminalDragData(terminal.id)}
+      className="group/terminal mb-0.5 grid w-full cursor-grab grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)] active:cursor-grabbing"
+      style={{
+        background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
+        color: focused ? '#d8d8d8' : '#8a8a8a',
+      }}
+      title={`${presetLabel} · ${terminal.cwd}`}
+    >
+      <span
+        className="flex h-[18px] w-[18px] items-center justify-center"
+        title={presetLabel}
+      >
+        <img
+          src={TERMINAL_PRESET_ICONS[terminal.preset]}
+          alt={t('common:workspace.presetIconAlt', { preset: presetLabel })}
+          className="h-3.5 w-3.5 object-contain"
+        />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate font-mono text-[11px]">
+          {displayName}
+        </span>
+        <span className="block truncate text-[9px] text-[#55555b]">
+          {suffix ? `${presetLabel} · ${suffix}` : presetLabel}
+        </span>
+      </span>
+      <TerminalStatusIndicator status={terminal.status} />
+    </div>
+  )
+}
+
+/** Neutral per-worktree terminal count; severity lives only in the status dots. */
+function WorktreeTerminalBadge({ terminals }: { terminals: Terminal[] }) {
+  const { t } = useI18n()
+  if (terminals.length === 0) return null
+  const activity = summarizeTerminalActivity(terminals)
+  return (
+    <span
+      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] tabular-nums"
+      style={{ color: '#777', background: 'rgba(255,255,255,0.035)' }}
+      title={t('common:workspace.terminalCountTitle', {
+        total: activity.total,
+        running: activity.running,
+        attention: activity.needsAction > 0
+          ? t('common:workspace.terminalCountAttentionSuffix', { count: activity.needsAction })
+          : '',
+        errors: activity.errors
+          ? t('common:workspace.terminalCountErrorsSuffix', { count: activity.errors })
+          : '',
+      })}
+    >
+      <img src={terminalIcon} alt="" className="h-3 w-3 opacity-70" />
+      <span>{activity.total}</span>
+      <span className="inline-flex items-center gap-1">
+        {activity.running > 0 && (
+          <span className="h-1.5 w-1.5 rounded-full bg-[#58c98d]" />
+        )}
+        {activity.needsApproval + activity.needsInput > 0 && (
+          <span className="term-status-pulse h-1.5 w-1.5 rounded-full bg-[#f0a35e]" />
+        )}
+        {activity.degraded > 0 && (
+          <span className="h-1.5 w-1.5 rounded-full bg-[#c9a0ff]" />
+        )}
+        {activity.errors > 0 && (
+          <span className="h-1.5 w-1.5 rounded-full bg-[#ff6666]" />
+        )}
+        {activity.running === 0 && activity.needsAction === 0 && activity.errors === 0 && (
+          <span className="h-1.5 w-1.5 rounded-full bg-[#55555b]" />
+        )}
+      </span>
+    </span>
+  )
+}
+
 function WorktreeSubList({
   workspaceId,
   workspacePath,
   lastKeptBranch,
+  terminals,
+  activeTerminalId,
+  isActiveWorkspace,
   onDeleteRequest,
   onShipRequest,
+  onTerminalDragStart,
 }: {
   workspaceId: string
   workspacePath: string
   lastKeptBranch: string | null
+  terminals: Terminal[]
+  activeTerminalId: string | null
+  isActiveWorkspace: boolean
   onDeleteRequest: (worktree: WorktreeInfo) => void
   onShipRequest: (worktree: WorktreeInfo) => void
+  onTerminalDragStart: (terminal: Terminal, event: React.DragEvent<HTMLDivElement>) => void
 }) {
   const { t } = useI18n('terminal')
   const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? EMPTY_WORKTREE_LIST)
@@ -286,8 +451,32 @@ function WorktreeSubList({
     void fetchWorktrees(workspaceId, workspacePath)
   }, [fetchWorktrees, workspaceId, workspacePath])
 
-  // Single-checkout workspaces keep the existing terminals-only view.
-  if (worktrees.length <= 1 && pendingCreations.length === 0 && preservedBranches.length === 0) return null
+  // The main checkout stays visible even when alone so single-worktree
+  // workspaces still show their branch/path row; the empty hint covers
+  // non-git workspaces instead of hiding the whole section.
+  if (worktrees.length === 0 && pendingCreations.length === 0 && preservedBranches.length === 0 && terminals.length > 0) {
+    return (
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
+        {sortTerminalsByAttention(terminals).map((terminal) => (
+          <TerminalRow
+            key={terminal.id}
+            terminal={terminal}
+            focused={isActiveWorkspace && terminal.id === activeTerminalId}
+            onDragStart={onTerminalDragStart}
+          />
+        ))}
+      </div>
+    )
+  }
+  if (worktrees.length === 0 && pendingCreations.length === 0 && preservedBranches.length === 0) {
+    return (
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
+        <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
+      </div>
+    )
+  }
+
+  const groups = groupTerminalsByWorktree(worktrees, terminals)
 
   const handleDeleteBranch = async (branch: string) => {
     if (armingBranch !== branch) {
@@ -353,77 +542,101 @@ function WorktreeSubList({
           )}
         </div>
       ))}
-      {worktrees.length > 1 && worktrees.map((worktree) => {
+      {groups.map(({ worktree, terminals: groupTerminals }) => {
+        if (!worktree) return null
         const focused = activePath === worktree.path
         return (
-          <div
-            key={worktree.id}
-            role="button"
-            tabIndex={0}
-            aria-label={worktree.path}
-            title={worktree.path}
-            onClick={(event) => {
-              event.stopPropagation()
-              setActivePath(workspaceId, worktree.path)
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return
-              event.preventDefault()
-              event.stopPropagation()
-              setActivePath(workspaceId, worktree.path)
-            }}
-            className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
-            style={{
-              background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
-              color: focused ? '#d8d8d8' : '#8a8a8a',
-            }}
-          >
-            <span className="flex h-[18px] w-[18px] items-center justify-center">
-              <GitBranch size={14} strokeWidth={1.6} aria-hidden="true" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate font-mono text-[11px]">
-                {worktreeDisplayName(worktree.path, worktree.branch)}
+          <div key={worktree.id}>
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={worktree.path}
+              title={worktree.path}
+              onClick={(event) => {
+                event.stopPropagation()
+                setActivePath(workspaceId, worktree.path)
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                event.stopPropagation()
+                setActivePath(workspaceId, worktree.path)
+              }}
+              className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+              style={{
+                background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
+                color: focused ? '#d8d8d8' : '#8a8a8a',
+              }}
+            >
+              <span className="flex h-[18px] w-[18px] items-center justify-center">
+                <GitBranch size={14} strokeWidth={1.6} aria-hidden="true" />
               </span>
-              <span className="block truncate text-[9px] text-[#55555b]">
-                {worktree.path}
+              <span className="min-w-0">
+                <span className="block truncate font-mono text-[11px]">
+                  {worktreeDisplayName(worktree.path, worktree.branch)}
+                </span>
+                <span className="block truncate text-[9px] text-[#55555b]">
+                  {worktree.path}
+                </span>
               </span>
-            </span>
-            {!worktree.isMain && worktree.branch && (
-              <button
-                type="button"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onShipRequest(worktree)
-                }}
-                onKeyDown={(event) => event.stopPropagation()}
-                className="shrink-0 cursor-pointer rounded-[3px] border-0 opacity-0 transition-opacity duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:opacity-100 group-hover/wt:opacity-100"
-                style={{ color: '#626268', background: 'transparent', fontSize: 10, padding: '2px 6px' }}
-              >
-                {t('terminal:worktree.shipAction')}
-              </button>
-            )}
-            {!worktree.isMain && (
-              <button
-                type="button"
-                aria-label={t('terminal:worktree.deleteTitle')}
-                title={t('terminal:worktree.deleteTitle')}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDeleteRequest(worktree)
-                }}
-                onKeyDown={(event) => event.stopPropagation()}
-                className="grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 transition-[width,opacity] duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:w-5 focus-visible:opacity-100 group-hover/wt:w-5 group-hover/wt:opacity-100"
-                style={{ color: '#626268', background: 'transparent' }}
-              >
-                <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
-              </button>
+              <WorktreeTerminalBadge terminals={groupTerminals} />
+              {!worktree.isMain && worktree.branch && (
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onShipRequest(worktree)
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  className="shrink-0 cursor-pointer rounded-[3px] border-0 opacity-0 transition-opacity duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:opacity-100 group-hover/wt:opacity-100"
+                  style={{ color: '#626268', background: 'transparent', fontSize: 10, padding: '2px 6px' }}
+                >
+                  {t('terminal:worktree.shipAction')}
+                </button>
+              )}
+              {!worktree.isMain && (
+                <button
+                  type="button"
+                  aria-label={t('terminal:worktree.deleteTitle')}
+                  title={t('terminal:worktree.deleteTitle')}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onDeleteRequest(worktree)
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  className="grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 transition-[width,opacity] duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:w-5 focus-visible:opacity-100 group-hover/wt:w-5 group-hover/wt:opacity-100"
+                  style={{ color: '#626268', background: 'transparent' }}
+                >
+                  <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            {groupTerminals.length > 0 && (
+              <div style={{ margin: '0 4px 2px 26px', padding: '4px 0', borderLeft: '1px solid rgba(255,255,255,0.055)' }}>
+                {worktree.branch && (
+                  <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#555', padding: '6px 12px 4px' }}>
+                    {t('terminal:worktree.branchLabel')} <b style={{ color: '#888', fontWeight: 400 }}>{worktree.branch}</b>
+                    {worktree.startFrom ? ` → ${displayBaseRef(worktree.startFrom)}` : ''}
+                  </div>
+                )}
+                {sortTerminalsByAttention(groupTerminals).map((terminal) => (
+                  <TerminalRow
+                    key={terminal.id}
+                    terminal={terminal}
+                    focused={isActiveWorkspace && terminal.id === activeTerminalId}
+                    onDragStart={onTerminalDragStart}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )
       })}
+      {terminals.length === 0 && (
+        <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
+      )}
       {lastKeptBranch && (
         <div style={{ fontSize: 10, color: '#8a8a8a', padding: '4px 8px', lineHeight: 1.6 }}>
           {t('terminal:worktree.branchKept', { branch: lastKeptBranch })}
@@ -1242,66 +1455,17 @@ export function Sidebar() {
                           workspaceId={ws.id}
                           workspacePath={ws.path}
                           lastKeptBranch={lastKeptBranchByWorkspace[ws.id] ?? null}
+                          terminals={workspaceTerminals}
+                          activeTerminalId={activeTerminalId}
+                          isActiveWorkspace={isActive}
                           onDeleteRequest={(worktree) => setWorktreeDeleteTarget({ workspace: ws, worktree })}
                           onShipRequest={(worktree) => setShipTarget({ workspace: ws, worktree })}
+                          onTerminalDragStart={handleTerminalPreviewDragStart}
                         />
-                        {workspaceTerminals.length === 0 ? (
-                          <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
-                        ) : (
-                          [...workspaceTerminals]
-                            .sort((a, b) => (TERMINAL_ATTENTION_ORDER[a.status] ?? 99) - (TERMINAL_ATTENTION_ORDER[b.status] ?? 99))
-                            .map((terminal) => {
-                            const isFocusedTerminal = isActive && terminal.id === activeTerminalId
-                            const presetLabel = terminalPresetLabel(terminal.preset, t)
-                            const displayName = terminal.name || presetLabel
-                            const showPresetLabel = displayName.trim().toLocaleLowerCase() !== presetLabel.trim().toLocaleLowerCase()
-                            return (
-                              <div
-                                key={terminal.id}
-                                draggable
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                  event.preventDefault()
-                                  event.stopPropagation()
-                                }}
-                                onDragStart={(event) => handleTerminalPreviewDragStart(terminal, event)}
-                                onDragEnd={() => clearTerminalDragData(terminal.id)}
-                                className="group/terminal mb-0.5 grid w-full cursor-grab grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)] active:cursor-grabbing"
-                                style={{
-                                  background: isFocusedTerminal ? 'rgba(255,120,48,0.055)' : 'transparent',
-                                  color: isFocusedTerminal ? '#d8d8d8' : '#8a8a8a',
-                                }}
-                                title={`${presetLabel} · ${terminal.cwd}`}
-                              >
-                                <span
-                                  className="flex h-[18px] w-[18px] items-center justify-center"
-                                  title={presetLabel}
-                                >
-                                  <img
-                                    src={TERMINAL_PRESET_ICONS[terminal.preset]}
-                                    alt={t('common:workspace.presetIconAlt', { preset: presetLabel })}
-                                    className="h-3.5 w-3.5 object-contain"
-                                  />
-                                </span>
-                                <span className="min-w-0">
-                                  <span className="block truncate font-mono text-[11px]">
-                                    {displayName}
-                                  </span>
-                                  {showPresetLabel && (
-                                    <span className="block truncate text-[9px] text-[#55555b]">
-                                      {presetLabel}
-                                    </span>
-                                  )}
-                                </span>
-                                <TerminalStatusIndicator status={terminal.status} />
-                              </div>
-                            )
-                          })
-                        )}
+                        </div>
                         </div>
                       </div>
                     </div>
-                        </div>
                       )}
                     </div>
                   )
