@@ -19,6 +19,10 @@ let fileTreeLoadGeneration = 0
 // directory updates separately so the older root snapshot cannot erase newly loaded children.
 let fileTreeDirectoryMutationGeneration = 0
 const pendingDirectoryLoads = new Map<string, Promise<void>>()
+// Note: background refreshes must never cancel a pending switch sweep — see .agents/notes/implemented/bug-fix/2026-09-21-file-tree-reveal-race.md
+// 未播出的切换扫描：visual load 起飞时登记目标路径，之后任意一次成功提交（visual 或后台刷新）
+// 若命中该路径就播一次 revealing，保证切换扫光一定出现；后台提交永不掐断已在播的 reveal。
+let pendingVisualRevealPath: string | null = null
 
 export interface FileTreeLoadOptions {
   /** Used when the visible workspace changes; background refreshes keep the current tree in place. */
@@ -39,6 +43,7 @@ export async function loadWorkspaceFileTree(
   const directoryMutationGeneration = fileTreeDirectoryMutationGeneration
   const shouldAnimate = options.visualTransition === true
   if (shouldAnimate && shouldCommit()) {
+    pendingVisualRevealPath = workspacePath
     useWorkspaceStore.setState({ fileTreeLoadState: 'loading' })
   }
 
@@ -74,9 +79,17 @@ export async function loadWorkspaceFileTree(
   ) return
   if (!shouldCommit() || directoryMutationGeneration !== fileTreeDirectoryMutationGeneration) return
 
-  useWorkspaceStore.setState({
-    fileTree: applyLoadedChildren(rootNodes, childrenByPath),
-    fileTreeLoadState: shouldAnimate ? 'revealing' : 'idle',
+  // visual 提交必播；后台提交若命中待播路径也播一次（可视加载可能已被后台代际抢占）。
+  // 非播出提交保持现状：已在播的 reveal 不被后台刷新掐断，error/loading 按原逻辑回到 idle。
+  const playReveal = shouldAnimate || pendingVisualRevealPath === workspacePath
+  if (playReveal) pendingVisualRevealPath = null
+
+  useWorkspaceStore.setState((state) => {
+    const keepRevealing = !playReveal && state.fileTreeLoadState === 'revealing'
+    return {
+      fileTree: applyLoadedChildren(rootNodes, childrenByPath),
+      fileTreeLoadState: playReveal || keepRevealing ? 'revealing' : 'idle',
+    }
   })
 
 }
