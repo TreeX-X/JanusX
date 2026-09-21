@@ -199,6 +199,8 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       groupName: 'Desktop smoke group',
     })
 
+    // Note: the row's ⋯ button is hover-revealed, so the row must be hovered before it has a hit box — see .agents/notes/implemented/feature/2026-09-21-workspace-row-hover-reveal.md
+    await secondWorkspaceRow.hover()
     await secondWorkspaceRow.getByRole('button', { name: '更多操作' }).click()
     await page.getByRole('button', { name: '移出分组', exact: true }).click()
     await expect(page.getByText('Desktop smoke group', { exact: true })).toHaveCount(0)
@@ -223,6 +225,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.mouse.up()
     const launchModal = page.locator('.ws-config-modal')
     await expect(launchModal).toHaveCount(0)
+    await workspaceRow.hover()
     await workspaceRow.getByRole('button', { name: '更多操作' }).click()
     await page.getByRole('button', { name: '运行配置…', exact: true }).click()
     await expect(launchModal).toBeVisible()

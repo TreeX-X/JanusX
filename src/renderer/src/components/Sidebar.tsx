@@ -64,7 +64,7 @@ interface WorkspaceContextMenuProps {
   onDelete: (workspace: Workspace) => void
 }
 
-// Note: expanded workspace rows open this menu only from their persistent ⋯ button; right-click stays on the collapsed rail and group headers — see .agents/notes/implemented/feature/2026-09-19-workspace-row-actions-menu.md
+// Note: expanded workspace rows open this menu only from their ⋯ button, which stays hidden until the row is hovered or focused so the terminal badge keeps the right edge; right-click stays on the collapsed rail and group headers — see .agents/notes/implemented/feature/2026-09-19-workspace-row-actions-menu.md and .agents/notes/implemented/feature/2026-09-21-workspace-row-hover-reveal.md
 function WorkspaceContextMenu({
   menu,
   onRunConfiguration,
@@ -810,7 +810,7 @@ export function Sidebar() {
                             onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
                             onDrop={(event) => handleWorkspaceDrop(ws, event)}
                             onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
-                            className="ws relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
+                            className="ws group/ws relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
                             style={{
                               color: isActive ? 'var(--shell-text)' : 'var(--shell-muted)',
                               background: isGroupTarget
@@ -929,8 +929,10 @@ export function Sidebar() {
                           event.stopPropagation()
                         }}
                         onClick={(event) => handleWorkspaceMenuButtonClick(ws, event)}
-                        className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border-0 transition-colors duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)] ${
-                          isMenuOpen ? 'bg-white/[0.06] text-[#ddd]' : 'bg-transparent text-[#626268]'
+                        className={`grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 pointer-events-none transition-[width,margin,opacity,color,background-color] duration-200 ease-out motion-reduce:transition-none group-hover/ws:mr-0 group-hover/ws:w-5 group-hover/ws:opacity-100 group-hover/ws:pointer-events-auto hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:mr-0 focus-visible:w-5 focus-visible:opacity-100 focus-visible:pointer-events-auto focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)] ${
+                          isMenuOpen
+                            ? 'mr-0 w-5 bg-white/[0.06] text-[#ddd] opacity-100 pointer-events-auto'
+                            : '-mr-2 bg-transparent text-[#626268]'
                         }`}
                       >
                         <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
