@@ -9,6 +9,10 @@ export const HOSTED_CHANNELS = {
   gitlabSave: 'hosted:gitlab-save',
   gitlabVerify: 'hosted:gitlab-verify',
   gitlabClearToken: 'hosted:gitlab-clear-token',
+  listIssues: 'hosted:list-issues',
+  listComments: 'hosted:list-comments',
+  postComment: 'hosted:post-comment',
+  setAutoMerge: 'hosted:set-auto-merge',
 } as const
 
 export type HostedProviderId = 'github' | 'gitlab'
@@ -44,6 +48,23 @@ export interface FailedCheckLog {
   name: string
   log: string
   truncated: boolean
+}
+
+export interface HostedIssue {
+  number: number
+  title: string
+  state: 'open' | 'closed'
+  url: string
+  labels: string[]
+}
+
+export interface HostedComment {
+  id: string
+  author: string
+  body: string
+  path?: string
+  line?: number
+  createdAt: string
 }
 
 export interface CreateReviewInput {
@@ -93,4 +114,8 @@ export interface HostedAPI {
   gitlabSave(input: GitlabSaveInput): Promise<GitlabInstanceConfig>
   gitlabVerify(input?: Partial<GitlabSaveInput>): Promise<GitlabVerifyResult>
   gitlabClearToken(): Promise<GitlabInstanceConfig>
+  listIssues(workspacePath: string, query?: string): Promise<HostedIssue[]>
+  listComments(workspacePath: string, number: number): Promise<HostedComment[]>
+  postComment(workspacePath: string, number: number, body: string): Promise<{ posted: boolean }>
+  setAutoMerge(workspacePath: string, number: number, enable: boolean): Promise<{ autoMerge: boolean }>
 }

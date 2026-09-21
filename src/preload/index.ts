@@ -536,6 +536,12 @@ const hostedAPI: HostedAPI = {
   gitlabSave: (input) => ipcRenderer.invoke(HOSTED_CHANNELS.gitlabSave, input),
   gitlabVerify: (input) => ipcRenderer.invoke(HOSTED_CHANNELS.gitlabVerify, input),
   gitlabClearToken: () => ipcRenderer.invoke(HOSTED_CHANNELS.gitlabClearToken),
+  listIssues: (workspacePath, query) => ipcRenderer.invoke(HOSTED_CHANNELS.listIssues, { workspacePath, query }),
+  listComments: (workspacePath, number) => ipcRenderer.invoke(HOSTED_CHANNELS.listComments, { workspacePath, number }),
+  postComment: (workspacePath, number, body) =>
+    ipcRenderer.invoke(HOSTED_CHANNELS.postComment, { workspacePath, number, body }),
+  setAutoMerge: (workspacePath, number, enable) =>
+    ipcRenderer.invoke(HOSTED_CHANNELS.setAutoMerge, { workspacePath, number, enable }),
 }
 
 const desktopToastAPI: DesktopToastAPI = {

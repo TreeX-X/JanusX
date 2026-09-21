@@ -8,6 +8,8 @@ import { promisify } from 'util'
 import type {
   FailedCheckLog,
   HostedCheck,
+  HostedComment,
+  HostedIssue,
   HostedReview,
 } from '../../shared/ipc/hosted'
 import type { HostedProvider } from './github'
@@ -82,6 +84,52 @@ export function truncateLog(log: string, maxBytes = FAILED_LOG_BYTES): { log: st
 }
 
 /** owner/repo to URL-encoded project path. */
+interface GitlabIssue {
+  iid?: number
+  title?: string
+  state?: string
+  web_url?: string
+  labels?: string[]
+}
+
+export function parseGitlabIssues(payload: unknown): HostedIssue[] {
+  if (!Array.isArray(payload)) return []
+  return payload
+    .filter((item): item is GitlabIssue => !!item && typeof item === 'object')
+    .filter((item) => typeof item.iid === 'number')
+    .map((item) => ({
+      number: item.iid as number,
+      title: String(item.title ?? ''),
+      state: String(item.state ?? '').toLowerCase() === 'closed' ? 'closed' : 'open',
+      url: String(item.web_url ?? ''),
+      labels: Array.isArray(item.labels) ? item.labels.map(String) : [],
+    }))
+}
+
+interface GitlabNote {
+  id?: number
+  body?: string
+  created_at?: string
+  author?: { username?: string }
+  position?: { new_path?: string; new_line?: number }
+  system?: boolean
+}
+
+export function parseGitlabNotes(payload: unknown): HostedComment[] {
+  if (!Array.isArray(payload)) return []
+  return payload
+    .filter((item): item is GitlabNote => !!item && typeof item === 'object')
+    .filter((item) => item.system !== true && typeof item.body === 'string' && item.body.trim())
+    .map((item) => ({
+      id: `gl-${String(item.id ?? Math.random())}`,
+      author: String(item.author?.username ?? ''),
+      body: String(item.body ?? ''),
+      ...(typeof item.position?.new_path === 'string' ? { path: item.position.new_path } : {}),
+      ...(typeof item.position?.new_line === 'number' ? { line: item.position.new_line } : {}),
+      createdAt: String(item.created_at ?? ''),
+    }))
+}
+
 export function projectPath(owner: string, repo: string): string | null {
   if (!owner || !repo) return null
   return encodeURIComponent(`${owner}/${repo}`)
@@ -295,5 +343,80 @@ export class GitlabProvider implements HostedProvider {
     if (status >= 200 && status < 300) return { merged: true }
     const message = typeof body?.message === 'string' ? body.message : `合并 MR 失败（${status}）`
     throw new Error(message)
+  }
+
+  async listIssues(cwd: string, query?: string): Promise<HostedIssue[]> {
+    const resolved = await this.resolve(cwd)
+    if (!resolved) return []
+    const params = new URLSearchParams({ state: 'opened', per_page: '20', order_by: 'updated_at', sort: 'desc' })
+    if (query?.trim()) params.set('search', query.trim())
+    const { status, body } = await apiRequestJson<unknown>(
+      'GET',
+      resolved.baseUrl,
+      `/projects/${resolved.project}/issues?${params.toString()}`,
+      this.options(resolved),
+    ).catch(() => ({ status: 0, body: [] as unknown }))
+    if (status !== 200) return []
+    return parseGitlabIssues(body)
+  }
+
+  async listComments(cwd: string, number: number): Promise<HostedComment[]> {
+    if (!Number.isFinite(number)) throw new Error(`MR 编号无效：${number}`)
+    const resolved = await this.resolve(cwd)
+    if (!resolved) return []
+    const { status, body } = await apiRequestJson<unknown>(
+      'GET',
+      resolved.baseUrl,
+      `/projects/${resolved.project}/merge_requests/${number}/notes?per_page=50&sort=asc&order_by=created_at`,
+      this.options(resolved),
+    ).catch(() => ({ status: 0, body: [] as unknown }))
+    if (status !== 200) return []
+    return parseGitlabNotes(body)
+  }
+
+  async postComment(cwd: string, number: number, comment: string): Promise<{ posted: boolean }> {
+    if (!Number.isFinite(number)) throw new Error(`MR 编号无效：${number}`)
+    if (!comment.trim()) throw new Error('评论内容不能为空')
+    const resolved = await this.resolve(cwd)
+    if (!resolved) throw new Error('当前仓库未接入已配置的 GitLab 实例')
+    const { status } = await apiRequestJson<unknown>(
+      'POST',
+      resolved.baseUrl,
+      `/projects/${resolved.project}/merge_requests/${number}/notes`,
+      this.options(resolved),
+      { body: comment.trim() },
+    ).catch((err: unknown) => {
+      throw new Error(err instanceof Error ? err.message : String(err))
+    })
+    if (status < 200 || status >= 300) throw new Error(`发表评论失败（${status}）`)
+    return { posted: true }
+  }
+
+  async setAutoMerge(cwd: string, number: number, enable: boolean): Promise<{ autoMerge: boolean }> {
+    if (!Number.isFinite(number)) throw new Error(`MR 编号无效：${number}`)
+    const resolved = await this.resolve(cwd)
+    if (!resolved) throw new Error('当前仓库未接入已配置的 GitLab 实例')
+    if (enable) {
+      const { status } = await apiRequestJson<unknown>(
+        'PUT',
+        resolved.baseUrl,
+        `/projects/${resolved.project}/merge_requests/${number}/merge?merge_when_pipeline_succeeds=true`,
+        this.options(resolved),
+      ).catch((err: unknown) => {
+        throw new Error(err instanceof Error ? err.message : String(err))
+      })
+      if (status < 200 || status >= 300) throw new Error(`设置自动合并失败（${status}）`)
+      return { autoMerge: true }
+    }
+    const { status } = await apiRequestJson<unknown>(
+      'POST',
+      resolved.baseUrl,
+      `/projects/${resolved.project}/merge_requests/${number}/cancel_auto_merge_when_pipeline_succeeds`,
+      this.options(resolved),
+    ).catch((err: unknown) => {
+      throw new Error(err instanceof Error ? err.message : String(err))
+    })
+    if (status < 200 || status >= 300) throw new Error(`取消自动合并失败（${status}）`)
+    return { autoMerge: false }
   }
 }

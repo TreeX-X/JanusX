@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
   parseChecks,
+  parseIssues,
+  parsePrComments,
   parsePrList,
   resetAuthCache,
   selectFailedRuns,
@@ -117,5 +119,47 @@ describe('truncateLog', () => {
     expect(result.truncated).toBe(true)
     expect(result.log.endsWith('TAIL')).toBe(true)
     expect(Buffer.byteLength(result.log)).toBeLessThanOrEqual(6 * 1024 + 64)
+  })
+})
+
+describe('parseIssues', () => {
+  it('keeps numbered issues with labels', () => {
+    expect(
+      parseIssues([
+        { number: 3, title: 'Bug', state: 'OPEN', url: 'https://x/3', labels: [{ name: 'bug' }, {}] },
+        { number: 4, title: 'Old', state: 'CLOSED', url: 'https://x/4' },
+        { title: 'no-number' },
+      ]),
+    ).toEqual([
+      { number: 3, title: 'Bug', state: 'open', url: 'https://x/3', labels: ['bug'] },
+      { number: 4, title: 'Old', state: 'closed', url: 'https://x/4', labels: [] },
+    ])
+    expect(parseIssues(null)).toEqual([])
+  })
+})
+
+describe('parsePrComments', () => {
+  it('flattens top-level and inline review comments', () => {
+    const comments = parsePrComments({
+      comments: [{ author: { login: 'a' }, body: 'looks good', createdAt: 't1' }],
+      reviews: [
+        {
+          author: { login: 'b' },
+          body: 'needs work',
+          submittedAt: 't2',
+          comments: [{ author: { login: 'b' }, body: 'here', createdAt: 't3', path: 'a.ts', line: 10 }],
+        },
+        { author: { login: 'c' }, body: '  ', submittedAt: 't4' },
+      ],
+    })
+    expect(comments).toEqual([
+      { id: 'gh-1', author: 'a', body: 'looks good', createdAt: 't1' },
+      { id: 'gh-2', author: 'b', body: 'needs work', createdAt: 't2' },
+      { id: 'gh-3', author: 'b', body: 'here', path: 'a.ts', line: 10, createdAt: 't3' },
+    ])
+  })
+
+  it('rejects non-objects', () => {
+    expect(parsePrComments(null)).toEqual([])
   })
 })

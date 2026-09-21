@@ -4,7 +4,7 @@ import { useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { BranchDiff } from '../../../shared/ipc/worktree'
-import type { FailedCheckLog, HostedCheck, HostedReview } from '../../../shared/ipc/hosted'
+import type { FailedCheckLog, HostedCheck, HostedComment, HostedIssue, HostedReview } from '../../../shared/ipc/hosted'
 import type { WorktreeInfo } from '../../../shared/ipc/worktree'
 import type { Workspace } from '@/types'
 
@@ -46,6 +46,11 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
   const [branchTouched, setBranchTouched] = useState(false)
   const [startFrom, setStartFrom] = useState('origin/main')
   const [busy, setBusy] = useState(false)
+  const [showIssues, setShowIssues] = useState(false)
+  const [issueQuery, setIssueQuery] = useState('')
+  const [issues, setIssues] = useState<HostedIssue[]>([])
+  const [issuesBusy, setIssuesBusy] = useState(false)
+  const [linkedIssue, setLinkedIssue] = useState<string | null>(null)
 
   // Orca pattern: submit closes immediately; progress, cancel, and retry
   // live on the sidebar row while creation runs in the background.
@@ -56,6 +61,7 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
       name: name.trim(),
       branch: branch.trim() || undefined,
       startFrom: startFrom.trim() || undefined,
+      linkedIssue: linkedIssue ?? undefined,
     }
     onClose()
     try {
@@ -63,6 +69,25 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
     } catch {
       // Failure lands on the sidebar progress row with retry.
     }
+  }
+
+  const searchIssues = async () => {
+    setIssuesBusy(true)
+    try {
+      const results = await window.electron.hosted.listIssues(workspace.path, issueQuery.trim() || undefined)
+      setIssues(results)
+    } catch {
+      setIssues([])
+    } finally {
+      setIssuesBusy(false)
+    }
+  }
+
+  const applyIssue = (issue: HostedIssue) => {
+    setName(issue.title)
+    if (!branchTouched) setBranch(slugify(issue.title))
+    setLinkedIssue(`#${issue.number}`)
+    setShowIssues(false)
   }
 
   return createPortal(
@@ -128,6 +153,72 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
               }}
               style={{ ...inputStyle, fontFamily: "'SF Mono', monospace" }}
             />
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showIssues
+                setShowIssues(next)
+                if (next && issues.length === 0 && !issuesBusy) void searchIssues()
+              }}
+              className="cursor-pointer"
+              style={{ fontSize: 11, color: '#888', background: 'none', border: 'none', padding: 0 }}
+            >
+              {t('terminal:worktree.issueSection')}{linkedIssue ? ` · ${linkedIssue}` : ''} {showIssues ? '▴' : '▾'}
+            </button>
+            {linkedIssue && !showIssues && (
+              <button
+                type="button"
+                onClick={() => setLinkedIssue(null)}
+                className="cursor-pointer"
+                style={{ fontSize: 10, color: '#666', background: 'none', border: 'none', padding: 0, marginLeft: 8 }}
+              >
+                ✕
+              </button>
+            )}
+            {showIssues && (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="flex" style={{ gap: 6 }}>
+                  <input
+                    value={issueQuery}
+                    placeholder={t('terminal:worktree.issueSearchPh')}
+                    onChange={(event) => setIssueQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void searchIssues()
+                    }}
+                    style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 11 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void searchIssues()}
+                    disabled={issuesBusy}
+                    className="rounded cursor-pointer"
+                    style={{ height: 30, padding: '0 12px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
+                  >
+                    {t('terminal:worktree.issueSearch')}
+                  </button>
+                </div>
+                {issues.map((issue) => (
+                  <div key={issue.number} className="flex items-center" style={{ gap: 8, fontSize: 11 }}>
+                    <span style={{ fontFamily: "'SF Mono', monospace", color: '#666', flexShrink: 0 }}>
+                      #{issue.number}
+                    </span>
+                    <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: '#bbb' }}>
+                      {issue.title}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => applyIssue(issue)}
+                      className="cursor-pointer"
+                      style={{ fontSize: 10, color: '#aaa', background: 'none', border: 'none', padding: 0, flexShrink: 0 }}
+                    >
+                      {t('terminal:worktree.issueUse')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div
@@ -630,6 +721,9 @@ function HostedReviewSection({
   const [reviews, setReviews] = useState<HostedReview[]>([])
   const [checks, setChecks] = useState<HostedCheck[]>([])
   const [logs, setLogs] = useState<FailedCheckLog[] | null>(null)
+  const [comments, setComments] = useState<HostedComment[] | null>(null)
+  const [commentDraft, setCommentDraft] = useState('')
+  const [autoMerge, setAutoMerge] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [title, setTitle] = useState(branch)
   const [body, setBody] = useState('')
@@ -671,6 +765,7 @@ function HostedReviewSection({
       setReviews(reviewList)
       setChecks(checkList)
       setLogs(null)
+      setComments(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
@@ -724,6 +819,50 @@ function HostedReviewSection({
     try {
       const result = await window.electron.hosted.failedLogs(workspacePath, branch)
       setLogs(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runLoadComments = async () => {
+    if (!open || comments) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await window.electron.hosted.listComments(workspacePath, open.number)
+      setComments(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runPostComment = async () => {
+    if (!open || !commentDraft.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await window.electron.hosted.postComment(workspacePath, open.number, commentDraft.trim())
+      setCommentDraft('')
+      const result = await window.electron.hosted.listComments(workspacePath, open.number)
+      setComments(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runAutoMerge = async () => {
+    if (!open || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await window.electron.hosted.setAutoMerge(workspacePath, open.number, !autoMerge)
+      setAutoMerge(result.autoMerge)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -832,6 +971,62 @@ function HostedReviewSection({
                 <span style={{ color: checkStateColor(check.state) }}>{checkStateLabel(check.state, t)}</span>
               </div>
             ))}
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => void runLoadComments()}
+              className="cursor-pointer"
+              style={{ fontSize: 10.5, color: '#777', background: 'none', border: 'none', padding: 0, marginBottom: comments ? 6 : 0 }}
+            >
+              {t('terminal:worktree.commentsTitle')}{comments ? ` · ${comments.length}` : ''}
+            </button>
+            {comments && (
+              <div className="flex flex-col" style={{ gap: 6, marginBottom: 6 }}>
+                {comments.map((comment) => (
+                  <div key={comment.id} style={{ fontSize: 10.5, lineHeight: 1.6 }}>
+                    <span style={{ color: '#999' }}>{comment.author || '?'}</span>
+                    {comment.path && (
+                      <span style={{ fontFamily: "'SF Mono', monospace", color: '#555' }}>
+                        {' '}· {comment.path}{typeof comment.line === 'number' ? `:${comment.line}` : ''}
+                      </span>
+                    )}
+                    <div style={{ color: '#bbb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{comment.body}</div>
+                  </div>
+                ))}
+                <div className="flex" style={{ gap: 6 }}>
+                  <input
+                    value={commentDraft}
+                    placeholder={t('terminal:worktree.commentPh')}
+                    onChange={(event) => setCommentDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void runPostComment()
+                    }}
+                    style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 11 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void runPostComment()}
+                    disabled={!commentDraft.trim() || busy}
+                    className="rounded cursor-pointer"
+                    style={{ height: 28, padding: '0 12px', fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
+                  >
+                    {t('terminal:worktree.commentSend')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => void runAutoMerge()}
+              disabled={busy}
+              className="cursor-pointer"
+              style={{ fontSize: 10.5, color: autoMerge ? '#4ec9b0' : '#777', background: 'none', border: 'none', padding: 0 }}
+            >
+              {autoMerge ? t('terminal:worktree.autoMergeOff') : t('terminal:worktree.autoMergeOn')}
+            </button>
           </div>
           {logs && logs.map((entry) => (
             <div key={entry.name} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, padding: '7px 9px' }}>

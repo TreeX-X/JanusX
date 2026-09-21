@@ -6,6 +6,8 @@ import type {
   FailedCheckLog,
   HostedCapability,
   HostedCheck,
+  HostedComment,
+  HostedIssue,
   HostedProviderId,
   HostedReview,
 } from '../../shared/ipc/hosted'
@@ -24,6 +26,10 @@ export interface HostedProvider {
   getFailedLogs(cwd: string, branch: string): Promise<FailedCheckLog[]>
   createReview(cwd: string, input: { title: string; body?: string; base: string; head: string; draft?: boolean }): Promise<HostedReview>
   mergeReview(cwd: string, number: number, method?: 'squash' | 'merge' | 'rebase'): Promise<{ merged: boolean }>
+  listIssues(cwd: string, query?: string): Promise<HostedIssue[]>
+  listComments(cwd: string, number: number): Promise<HostedComment[]>
+  postComment(cwd: string, number: number, body: string): Promise<{ posted: boolean }>
+  setAutoMerge(cwd: string, number: number, enable: boolean): Promise<{ autoMerge: boolean }>
 }
 
 async function runGh(cwd: string, args: string[]): Promise<string> {
@@ -217,6 +223,114 @@ class GitHubProvider implements HostedProvider {
     await runGh(cwd, ['pr', 'merge', String(number), `--${method}`])
     return { merged: true }
   }
+
+  async listIssues(cwd: string, query?: string): Promise<HostedIssue[]> {
+    const args = ['issue', 'list', '--state', 'open', '--limit', '20', '--json', 'number,title,state,url,labels']
+    if (query?.trim()) args.push('--search', query.trim())
+    const stdout = await runGh(cwd, args)
+    return parseIssues(safeJson(stdout))
+  }
+
+  async listComments(cwd: string, number: number): Promise<HostedComment[]> {
+    if (!Number.isFinite(number)) throw new Error(`PR 编号无效：${number}`)
+    const stdout = await runGh(cwd, ['pr', 'view', String(number), '--json', 'comments,reviews'])
+    return parsePrComments(safeJson(stdout))
+  }
+
+  async postComment(cwd: string, number: number, body: string): Promise<{ posted: boolean }> {
+    if (!Number.isFinite(number)) throw new Error(`PR 编号无效：${number}`)
+    if (!body.trim()) throw new Error('评论内容不能为空')
+    await runGh(cwd, ['pr', 'comment', String(number), '--body', body.trim()])
+    return { posted: true }
+  }
+
+  async setAutoMerge(cwd: string, number: number, enable: boolean): Promise<{ autoMerge: boolean }> {
+    if (!Number.isFinite(number)) throw new Error(`PR 编号无效：${number}`)
+    await runGh(cwd, enable ? ['pr', 'merge', String(number), '--auto', '--squash'] : ['pr', 'merge', '--disable-auto', String(number)])
+    return { autoMerge: enable }
+  }
+}
+
+interface GhIssue {
+  number?: number
+  title?: string
+  state?: string
+  url?: string
+  labels?: Array<{ name?: string }>
+}
+
+export function parseIssues(payload: unknown): HostedIssue[] {
+  if (!Array.isArray(payload)) return []
+  return payload
+    .filter((item): item is GhIssue => !!item && typeof item === 'object')
+    .filter((item) => typeof item.number === 'number')
+    .map((item) => ({
+      number: item.number as number,
+      title: String(item.title ?? ''),
+      state: String(item.state ?? '').toUpperCase() === 'CLOSED' ? 'closed' : 'open',
+      url: String(item.url ?? ''),
+      labels: Array.isArray(item.labels)
+        ? item.labels.map((label) => String(label?.name ?? '')).filter(Boolean)
+        : [],
+    }))
+}
+
+interface GhReviewComment {
+  author?: { login?: string }
+  body?: string
+  createdAt?: string
+  path?: string
+  line?: number
+}
+
+interface GhReview {
+  author?: { login?: string }
+  body?: string
+  state?: string
+  submittedAt?: string
+  comments?: GhReviewComment[]
+}
+
+interface GhPrView {
+  comments?: GhReviewComment[]
+  reviews?: GhReview[]
+}
+
+export function parsePrComments(payload: unknown): HostedComment[] {
+  if (!payload || typeof payload !== 'object') return []
+  const view = payload as GhPrView
+  const comments: HostedComment[] = []
+  let seq = 0
+  const push = (author: string, body: string, createdAt: string, path?: string, line?: number) => {
+    if (!body.trim()) return
+    seq += 1
+    comments.push({
+      id: `gh-${seq}`,
+      author,
+      body,
+      ...(path ? { path } : {}),
+      ...(typeof line === 'number' ? { line } : {}),
+      createdAt,
+    })
+  }
+  for (const comment of view.comments ?? []) {
+    push(String(comment.author?.login ?? ''), String(comment.body ?? ''), String(comment.createdAt ?? ''))
+  }
+  for (const review of view.reviews ?? []) {
+    const author = String(review.author?.login ?? '')
+    const at = String(review.submittedAt ?? '')
+    push(author, String(review.body ?? ''), at)
+    for (const inline of review.comments ?? []) {
+      push(
+        String(inline.author?.login ?? author),
+        String(inline.body ?? ''),
+        String(inline.createdAt ?? at),
+        inline.path,
+        inline.line,
+      )
+    }
+  }
+  return comments
 }
 
 import { GitlabProvider } from './gitlab'

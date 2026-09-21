@@ -262,6 +262,7 @@ export interface CreateWorktreeInput {
   name: string
   branch?: string
   startFrom?: string
+  linkedIssue?: string
 }
 
 export interface CreateWorktreeResult {
@@ -322,7 +323,12 @@ export async function createWorktree(
   const { shared, copied } = await shareNewWorktreeDeps(root, path)
   // Metadata must never fail creation; the base falls back to origin/main.
   await worktreeMetaStore
-    .set(path, { startFrom, branch, createdAt: new Date().toISOString() })
+    .set(path, {
+      startFrom,
+      branch,
+      createdAt: new Date().toISOString(),
+      ...(input.linkedIssue?.trim() ? { linkedIssue: input.linkedIssue.trim() } : {}),
+    })
     .catch(() => undefined)
   return {
     worktree: {

@@ -275,6 +275,10 @@ export function installElectronApiFallback(): void {
       gitlabSave: unavailable,
       gitlabVerify: unavailable,
       gitlabClearToken: unavailable,
+      listIssues: () => Promise.resolve([]),
+      listComments: () => Promise.resolve([]),
+      postComment: unavailable,
+      setAutoMerge: unavailable,
     },
     git: {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,

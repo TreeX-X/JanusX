@@ -57,6 +57,7 @@ export interface WorktreeCreateInput {
   name: string
   branch?: string
   startFrom?: string
+  linkedIssue?: string
 }
 
 export interface WorktreeCreateResult {

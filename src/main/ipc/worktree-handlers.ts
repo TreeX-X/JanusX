@@ -42,6 +42,7 @@ export function registerWorktreeHandlers(): void {
         name: input.name,
         branch: input.branch,
         startFrom: input.startFrom,
+        linkedIssue: input.linkedIssue,
       },
       input.creationId,
     )

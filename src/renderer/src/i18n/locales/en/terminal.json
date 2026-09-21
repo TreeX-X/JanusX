@@ -280,6 +280,16 @@
     "checksPass": "Pass",
     "checksFail": "Fail",
     "checksPending": "Pending",
-    "checksSkipped": "Skipped"
+    "checksSkipped": "Skipped",
+    "issueSection": "Create from issue",
+    "issueSearch": "Search",
+    "issueSearchPh": "Filter issues by keyword",
+    "issueUse": "Use",
+    "commentsTitle": "Comments",
+    "commentPh": "Write a comment…",
+    "commentSend": "Send",
+    "autoMergeOn": "Enable auto-merge",
+    "autoMergeOff": "Disable auto-merge",
+    "linkedIssue": "Linked issue"
   }
 }

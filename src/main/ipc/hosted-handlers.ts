@@ -99,4 +99,43 @@ export function registerHostedHandlers(): void {
   ipcMain.handle(HOSTED_CHANNELS.gitlabClearToken, async () => {
     return gitlabConfigStore.clearToken()
   })
+
+  ipcMain.handle(
+    HOSTED_CHANNELS.listIssues,
+    async (_event, { workspacePath, query }: { workspacePath: string; query?: string }) => {
+      const provider = await detectProvider(workspacePath)
+      if (!provider) return []
+      return provider.listIssues(workspacePath, query)
+    },
+  )
+
+  ipcMain.handle(
+    HOSTED_CHANNELS.listComments,
+    async (_event, { workspacePath, number }: { workspacePath: string; number: number }) => {
+      const provider = await detectProvider(workspacePath)
+      if (!provider) return []
+      return provider.listComments(workspacePath, number)
+    },
+  )
+
+  ipcMain.handle(
+    HOSTED_CHANNELS.postComment,
+    async (_event, { workspacePath, number, body }: { workspacePath: string; number: number; body: string }) => {
+      const provider = await detectProvider(workspacePath)
+      if (!provider) throw new Error('当前仓库未接入托管平台')
+      return provider.postComment(workspacePath, number, body)
+    },
+  )
+
+  ipcMain.handle(
+    HOSTED_CHANNELS.setAutoMerge,
+    async (
+      _event,
+      { workspacePath, number, enable }: { workspacePath: string; number: number; enable: boolean },
+    ) => {
+      const provider = await detectProvider(workspacePath)
+      if (!provider) throw new Error('当前仓库未接入托管平台')
+      return provider.setAutoMerge(workspacePath, number, enable)
+    },
+  )
 }

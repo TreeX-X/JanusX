@@ -280,6 +280,16 @@
     "checksPass": "通过",
     "checksFail": "失败",
     "checksPending": "等待中",
-    "checksSkipped": "跳过"
+    "checksSkipped": "跳过",
+    "issueSection": "从 Issue 创建",
+    "issueSearch": "搜索",
+    "issueSearchPh": "关键词过滤 Issue",
+    "issueUse": "使用",
+    "commentsTitle": "评论",
+    "commentPh": "写评论…",
+    "commentSend": "发送",
+    "autoMergeOn": "启用自动合并",
+    "autoMergeOff": "取消自动合并",
+    "linkedIssue": "关联 Issue"
   }
 }

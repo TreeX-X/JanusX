@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { GitlabConfigStore } from '../../src/main/hosted/gitlab-config'
-import { GitlabProvider, parseJobs, parseMrs, projectPath } from '../../src/main/hosted/gitlab'
+import { GitlabProvider, parseGitlabIssues, parseGitlabNotes, parseJobs, parseMrs, projectPath } from '../../src/main/hosted/gitlab'
 
 const execFileAsync = promisify(execFile)
 const roots: string[] = []
@@ -85,6 +85,36 @@ describe('projectPath', () => {
   })
 })
 
+describe('parseGitlabIssues', () => {
+  it('keeps opened issues with labels', () => {
+    expect(
+      parseGitlabIssues([
+        { iid: 5, title: 'Bug', state: 'opened', web_url: 'https://h/i/5', labels: ['bug'] },
+        { iid: 6, title: 'Old', state: 'closed', web_url: 'https://h/i/6' },
+      ]),
+    ).toEqual([
+      { number: 5, title: 'Bug', state: 'open', url: 'https://h/i/5', labels: ['bug'] },
+      { number: 6, title: 'Old', state: 'closed', url: 'https://h/i/6', labels: [] },
+    ])
+  })
+})
+
+describe('parseGitlabNotes', () => {
+  it('drops system notes and keeps inline positions', () => {
+    expect(
+      parseGitlabNotes([
+        { id: 1, body: 'lgtm', created_at: 't1', author: { username: 'a' } },
+        { id: 2, body: 'here', created_at: 't2', author: { username: 'b' }, position: { new_path: 'a.ts', new_line: 3 } },
+        { id: 3, body: 'merged it', system: true },
+        { id: 4, body: '   ' },
+      ]),
+    ).toEqual([
+      { id: 'gl-1', author: 'a', body: 'lgtm', createdAt: 't1' },
+      { id: 'gl-2', author: 'b', body: 'here', path: 'a.ts', line: 3, createdAt: 't2' },
+    ])
+  })
+})
+
 describe.skipIf(!gitAvailable())('GitlabProvider against a stub instance', () => {
   async function stub() {
     const calls: Array<{ method: string; url: string; body: string }> = []
@@ -102,9 +132,24 @@ describe.skipIf(!gitAvailable())('GitlabProvider against a stub instance', () =>
           res.end(JSON.stringify(body))
         }
         if (url === '/api/v4/user') return json(200, { username: 'zhangsan' })
+        if (/\/merge_requests\/7\/notes/.test(url) && req.method === 'GET') {
+          return json(200, [
+            { id: 1, body: 'lgtm', created_at: 't1', author: { username: 'reviewer' } },
+          ])
+        }
+        if (/\/merge_requests\/7\/notes/.test(url) && req.method === 'POST') {
+          const parsed = JSON.parse(raw || '{}') as { body?: string }
+          if (!parsed.body) return json(400, { message: 'empty' })
+          return json(201, { id: 2 })
+        }
         if (url.startsWith('/api/v4/projects/team%2Fapp/merge_requests') && req.method === 'GET') {
           return json(200, [
             { iid: 7, title: 'Auth', state: 'opened', target_branch: 'main', source_branch: 'feat', web_url: `${origin}/team/app/-/merge_requests/7` },
+          ])
+        }
+        if (url.startsWith('/api/v4/projects/team%2Fapp/issues') && req.method === 'GET') {
+          return json(200, [
+            { iid: 5, title: 'Bug', state: 'opened', web_url: `${origin}/team/app/-/issues/5`, labels: ['bug'] },
           ])
         }
         if (url.startsWith('/api/v4/projects/team%2Fapp/merge_requests') && req.method === 'POST') {
@@ -196,5 +241,15 @@ describe.skipIf(!gitAvailable())('GitlabProvider against a stub instance', () =>
     expect(created).toMatchObject({ number: 8, state: 'draft' })
 
     await expect(provider.mergeReview(repo, 8)).resolves.toEqual({ merged: true })
+
+    const issues = await provider.listIssues(repo, 'bug')
+    expect(issues).toMatchObject([{ number: 5, state: 'open' }])
+
+    const comments = await provider.listComments(repo, 7)
+    expect(comments).toEqual([
+      { id: 'gl-1', author: 'reviewer', body: 'lgtm', createdAt: 't1' },
+    ])
+    await expect(provider.postComment(repo, 7, 'ack')).resolves.toEqual({ posted: true })
+    await expect(provider.postComment(repo, 7, '  ')).rejects.toThrow('不能为空')
   })
 })

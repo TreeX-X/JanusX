@@ -11,6 +11,7 @@ export interface PendingCreation {
   name: string
   branch?: string
   startFrom?: string
+  linkedIssue?: string
   error?: string
 }
 
@@ -33,7 +34,7 @@ interface WorktreeStore {
   createWorktree: (
     workspaceId: string,
     workspacePath: string,
-    input: { name: string; branch?: string; startFrom?: string },
+    input: { name: string; branch?: string; startFrom?: string; linkedIssue?: string },
   ) => Promise<{ shared: string[]; copied: string[]; path: string }>
   retryCreation: (workspaceId: string, workspacePath: string, pendingId: string) => Promise<void>
   cancelCreation: (workspaceId: string, workspacePath: string, pendingId: string) => Promise<void>
@@ -122,6 +123,7 @@ export const useWorktreeStore = create<WorktreeStore>((set, get) => ({
       name: input.name,
       ...(input.branch ? { branch: input.branch } : {}),
       ...(input.startFrom ? { startFrom: input.startFrom } : {}),
+      ...(input.linkedIssue ? { linkedIssue: input.linkedIssue } : {}),
     }
     set((state) => ({
       pendingCreations: {
@@ -175,6 +177,7 @@ export const useWorktreeStore = create<WorktreeStore>((set, get) => ({
         name: pending.name,
         branch: pending.branch,
         startFrom: pending.startFrom,
+        linkedIssue: pending.linkedIssue,
       })
       const worktrees = await window.electron.worktree.list(workspaceId, workspacePath).catch(() => [])
       set((state) => ({
