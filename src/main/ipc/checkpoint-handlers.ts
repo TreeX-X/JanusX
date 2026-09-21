@@ -2,21 +2,17 @@
 import { ipcMain } from 'electron'
 import { access } from 'fs/promises'
 import { checkpointManager } from '@janus-agent/agent-core'
-import type { CheckpointEngine } from '@janus-agent/agent-core'
+import type { CheckpointEngine, RestoreScope } from '@janus-agent/agent-core'
 import { captureForCwd, logKnowledgeCaptureFailure } from '../knowledge/workspace-identity'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
+import type { CheckpointCreateInput, CheckpointFilter } from '../../shared/ipc/checkpoint'
 
 export function registerCheckpointHandlers(): void {
   ipcMain.handle(
     CHECKPOINT_CHANNELS.create,
     async (
       _event,
-      options: {
-        terminalId: string
-        engine: CheckpointEngine
-        prompt: string
-        cwd: string
-      }
+      options: CheckpointCreateInput & { terminalId: string; engine: CheckpointEngine }
     ) => {
       const cwd = options.cwd?.trim()
       if (!cwd) throw new Error('Workspace path is empty')
@@ -43,6 +39,7 @@ export function registerCheckpointHandlers(): void {
           terminalId: cp.terminalId,
           branch: cp.branch,
           conversationIndex: cp.conversationIndex,
+          sessionId: cp.sessionId,
         },
       }).catch(logKnowledgeCaptureFailure)
       return {
@@ -56,6 +53,7 @@ export function registerCheckpointHandlers(): void {
         fileCount: Object.keys(cp.filesSnapshot).length,
         changedFileCount: 0,
         status: cp.status,
+        sessionId: cp.sessionId,
       }
     }
   )
@@ -79,8 +77,8 @@ export function registerCheckpointHandlers(): void {
 
   ipcMain.handle(
     CHECKPOINT_CHANNELS.restore,
-    async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
-      const result = await checkpointManager.restoreCheckpoint(checkpointId, cwd)
+    async (_event, { checkpointId, cwd, scope }: { checkpointId: string; cwd: string; scope?: RestoreScope }) => {
+      const result = await checkpointManager.restoreCheckpoint(checkpointId, cwd, scope)
       void captureForCwd(cwd, {
         source: 'checkpoint',
         type: 'checkpoint-event',
@@ -96,8 +94,10 @@ export function registerCheckpointHandlers(): void {
 
   ipcMain.handle(
     CHECKPOINT_CHANNELS.list,
-    async (_event, filter?: { terminalId?: string; engine?: CheckpointEngine; cwd?: string }) => {
-      const cps = await checkpointManager.listCheckpoints(filter)
+    async (_event, filter?: CheckpointFilter) => {
+      const cps = await checkpointManager.listCheckpoints(
+        filter ? { ...filter, engine: filter.engine as CheckpointEngine | undefined } : undefined,
+      )
       const changedCounts = await checkpointManager.getChangedFileCounts(
         cps.map(cp => cp.id),
         filter?.cwd,
@@ -113,6 +113,7 @@ export function registerCheckpointHandlers(): void {
           fileCount: Object.keys(cp.filesSnapshot).length,
           changedFileCount: changedCounts[cp.id] ?? 0,
           status: cp.status,
+          sessionId: cp.sessionId,
         }))
     }
   )
@@ -131,6 +132,13 @@ export function registerCheckpointHandlers(): void {
     CHECKPOINT_CHANNELS.diffAll,
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
       return checkpointManager.getAllDiffs(checkpointId, cwd)
+    }
+  )
+
+  ipcMain.handle(
+    CHECKPOINT_CHANNELS.records,
+    async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
+      return checkpointManager.getChangedFileRecords(checkpointId, cwd)
     }
   )
 

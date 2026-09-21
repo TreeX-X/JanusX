@@ -10,6 +10,7 @@ import type { OfficeAPI } from '../../../shared/office'
 import type { AgentAPI, SubAgentRunAPI } from '../../../shared/ipc/janus-runner'
 import type { AgentRuntimeAPI } from '../../../shared/ipc/agent-runtime'
 import type { CheckpointAPI } from '../../../shared/ipc/checkpoint'
+import type { SessionAPI } from '../../../shared/ipc/session'
 import type { GitAPI } from '../../../shared/ipc/git'
 import type { LlmAPI } from '../../../shared/ipc/llm'
 import type { ExternalCliAPI } from '../../../shared/ipc/external-cli'
@@ -43,6 +44,7 @@ interface ElectronAPI {
   agent: AgentAPI
   agentRuntime: AgentRuntimeAPI
   checkpoint: CheckpointAPI
+  session: SessionAPI
   git: GitAPI
   notificationSettings: NotificationSettingsAPI
   agentSettings: AgentSettingsAPI

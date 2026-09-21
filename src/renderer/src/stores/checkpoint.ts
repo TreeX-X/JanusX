@@ -1,23 +1,25 @@
 import { create } from 'zustand'
 import { useWorkspaceStore } from './workspace'
-import type { CheckpointConflict as ConflictInfo, CheckpointSummary } from '../../../shared/ipc/checkpoint'
+import type { ChangedFileRecord, CheckpointConflict as ConflictInfo, CheckpointSummary, RestoreScope } from '../../../shared/ipc/checkpoint'
 
-export type { CheckpointSummary, ConflictInfo }
+export type { ChangedFileRecord, CheckpointSummary, ConflictInfo, RestoreScope }
 
 interface CheckpointStore {
   workspaceCwd: string | null
   checkpoints: CheckpointSummary[]
   selectedCheckpoint: CheckpointSummary | null
   diffs: Record<string, string>
+  records: Record<string, ChangedFileRecord[]>
   conflicts: ConflictInfo[]
   loading: boolean
   error: string | null
 
-  fetchCheckpoints: (filter?: { terminalId?: string; engine?: string; cwd?: string }) => Promise<void>
+  fetchCheckpoints: (filter?: { terminalId?: string; engine?: string; cwd?: string; sessionId?: string }) => Promise<void>
   createCheckpoint: (options: { terminalId: string; engine: string; prompt: string; cwd: string }) => Promise<void>
-  restoreCheckpoint: (checkpointId: string, cwd: string) => Promise<void>
+  restoreCheckpoint: (checkpointId: string, cwd: string, scope?: RestoreScope) => Promise<void>
   fetchDiff: (checkpointId: string, filePath: string, cwd: string) => Promise<void>
   fetchAllDiffs: (checkpointId: string, cwd: string) => Promise<void>
+  fetchRecords: (checkpointId: string, cwd: string) => Promise<void>
   deleteCheckpoint: (checkpointId: string, cwd?: string) => Promise<void>
   clearWorkspaceScope: () => void
   setSelected: (checkpoint: CheckpointSummary | null) => void
@@ -29,8 +31,9 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
   workspaceCwd: null,
   checkpoints: [],
   selectedCheckpoint: null,
-  diffs: {},
-  conflicts: [],
+            diffs: {},
+            records: {},
+            conflicts: [],
   loading: false,
   error: null,
 
@@ -42,6 +45,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
         checkpoints: [],
         selectedCheckpoint: null,
         diffs: {},
+        records: {},
         conflicts: [],
         loading: false,
         error: null,
@@ -59,6 +63,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
             checkpoints: [],
             selectedCheckpoint: null,
             diffs: {},
+    records: {},
             conflicts: [],
           }
         : {}),
@@ -91,10 +96,10 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
     }
   },
 
-  restoreCheckpoint: async (checkpointId, cwd) => {
+  restoreCheckpoint: async (checkpointId, cwd, scope) => {
     set({ loading: true, error: null, conflicts: [] })
     try {
-      const result = await window.electron.checkpoint.restore(checkpointId, cwd)
+      const result = await window.electron.checkpoint.restore(checkpointId, cwd, scope)
       set({ loading: false, conflicts: result.conflicts })
       await get().fetchCheckpoints({ cwd })
     } catch (err) {
@@ -124,6 +129,19 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
     }
   },
 
+  fetchRecords: async (checkpointId, cwd) => {
+    const key = `${checkpointId}:records`
+    if (get().records[key]) return
+    try {
+      const records = await window.electron.checkpoint.records(checkpointId, cwd)
+      set((state) => ({
+        records: { ...state.records, [key]: records },
+      }))
+    } catch (err) {
+      set({ error: (err as Error).message })
+    }
+  },
+
   deleteCheckpoint: async (checkpointId, cwd) => {
     try {
       await window.electron.checkpoint.delete(checkpointId, cwd)
@@ -143,6 +161,7 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
       checkpoints: [],
       selectedCheckpoint: null,
       diffs: {},
+      records: {},
       conflicts: [],
       loading: false,
       error: null,

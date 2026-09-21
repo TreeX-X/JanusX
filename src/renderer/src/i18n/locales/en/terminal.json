@@ -200,5 +200,29 @@
   },
   "paneTree": {
     "waitingTerminal": "Waiting for terminal..."
+  },
+  "agentSession": {
+    "title": "Sessions",
+    "scopeWorkspace": "Workspace",
+    "scopeProject": "Project",
+    "scopeAll": "All",
+    "empty": "No sessions",
+    "loading": "Loading",
+    "checkpoints": "Checkpoints {{count}}",
+    "turns": "{{count}} turns",
+    "continue": "Continue in New Session",
+    "restoreTo": "Restore to #{{index}}",
+    "restoreConfirm": "Confirm restore",
+    "restoreUnavailable": "Restore unavailable",
+    "archivedHint": "Checkpoints were deleted with the worktree. Restore is unavailable; the conversation stays readable and can continue in a new session.",
+    "archived": "Archived",
+    "continueTitle": "Continue in New Session",
+    "continueBody": "Open a fresh sequential session for the same task. The original session stays untouched and readable.",
+    "continueStart": "Start new session",
+    "activeNow": "Active",
+    "statusActive": "Active",
+    "statusDone": "Done",
+    "statusFailed": "Failed",
+    "statusInterrupted": "Interrupted"
   }
 }

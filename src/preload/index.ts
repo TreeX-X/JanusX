@@ -28,6 +28,7 @@ import {
 import { AGENT_CHANNELS, SUBAGENT_RUN_CHANNELS, type AgentAPI, type SubAgentRunAPI } from '../shared/ipc/janus-runner'
 import { AGENT_RUNTIME_CHANNELS, type AgentRuntimeAPI } from '../shared/ipc/agent-runtime'
 import { CHECKPOINT_CHANNELS, type CheckpointAPI } from '../shared/ipc/checkpoint'
+import { SESSION_CHANNELS, type SessionAPI } from '../shared/ipc/session'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
@@ -361,10 +362,11 @@ const agentRuntimeAPI: AgentRuntimeAPI = {
 const checkpointAPI: CheckpointAPI = {
   create: (input) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.create, input),
   finalize: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.finalize, { checkpointId, cwd }),
-  restore: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.restore, { checkpointId, cwd }),
+  restore: (checkpointId, cwd, scope) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.restore, { checkpointId, cwd, scope }),
   list: (filter) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.list, filter),
   diff: (checkpointId, filePath, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.diff, { checkpointId, filePath, cwd }),
   diffAll: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.diffAll, { checkpointId, cwd }),
+  records: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.records, { checkpointId, cwd }),
   delete: (checkpointId, cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.delete, { checkpointId, cwd }),
   clearAll: (cwd) => ipcRenderer.invoke(CHECKPOINT_CHANNELS.clearAll, cwd ? { cwd } : undefined),
   onEvent: (callback) => subscribeIpcEvent(CHECKPOINT_CHANNELS.event, callback),
@@ -496,6 +498,13 @@ const systemAPI: SystemAPI = {
     return () => ipcRenderer.removeListener(SYSTEM_CHANNELS.prepareQuit, handler)
   },
 }
+const sessionAPI: SessionAPI = {
+  list: (filter) => ipcRenderer.invoke(SESSION_CHANNELS.list, filter),
+  get: (sessionId) => ipcRenderer.invoke(SESSION_CHANNELS.get, { sessionId }),
+  continue: (input) => ipcRenderer.invoke(SESSION_CHANNELS.continue, input),
+  onEvent: (callback) => subscribeIpcEvent(SESSION_CHANNELS.event, callback),
+}
+
 const desktopToastAPI: DesktopToastAPI = {
   ready: () => ipcRenderer.send(SYSTEM_CHANNELS.toastReady),
   action: (action) => ipcRenderer.send(SYSTEM_CHANNELS.toastAction, { action }),
@@ -530,6 +539,7 @@ contextBridge.exposeInMainWorld('electron', {
   agent: agentAPI,
   agentRuntime: agentRuntimeAPI,
   checkpoint: checkpointAPI,
+  session: sessionAPI,
   git: gitAPI,
   notificationSettings: notificationSettingsAPI,
   agentSettings: agentSettingsAPI,

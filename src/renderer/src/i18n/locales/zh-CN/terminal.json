@@ -200,5 +200,29 @@
   },
   "paneTree": {
     "waitingTerminal": "等待加载终端..."
+  },
+  "agentSession": {
+    "title": "会话管理",
+    "scopeWorkspace": "工作区",
+    "scopeProject": "项目",
+    "scopeAll": "全部",
+    "empty": "暂无会话",
+    "loading": "加载中",
+    "checkpoints": "还原点 {{count}}",
+    "turns": "{{count}} 轮次",
+    "continue": "在新会话中继续",
+    "restoreTo": "恢复到 #{{index}}",
+    "restoreConfirm": "确认恢复",
+    "restoreUnavailable": "恢复不可用",
+    "archivedHint": "还原点已随盘删除。恢复不可用，对话可查阅，可在新会话中继续。",
+    "archived": "归档",
+    "continueTitle": "在新会话中继续",
+    "continueBody": "为同一任务开一个全新的顺序会话，原会话保持不动、仍可查阅。",
+    "continueStart": "开始新会话",
+    "activeNow": "进行中",
+    "statusActive": "进行中",
+    "statusDone": "已完成",
+    "statusFailed": "失败",
+    "statusInterrupted": "已中断"
   }
 }

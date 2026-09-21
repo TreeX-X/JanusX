@@ -9,6 +9,7 @@ import type { LanguageServiceId } from '../../shared/ipc/language-service'
 import { registerAgentHandlers } from './janus-runner-handlers'
 import { registerBrowserHandlers } from './browser-handlers'
 import { registerCheckpointHandlers } from './checkpoint-handlers'
+import { registerSessionHandlers } from './session-handlers'
 import { registerFileHandlers } from './file-handlers'
 import { registerGitHandlers } from './git-handlers'
 import { disposeWorkspaceWatchers, registerWorkspaceHandlers } from './handlers'
@@ -100,6 +101,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerGitHandlers()
   registerAgentHandlers(getCurrentMainWindow)
   registerCheckpointHandlers()
+  registerSessionHandlers(getCurrentMainWindow)
   registerFileHandlers()
   registerProjectHandlers()
   registerLlmHandlers()

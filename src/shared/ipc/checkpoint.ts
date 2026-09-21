@@ -7,6 +7,7 @@ export const CHECKPOINT_CHANNELS = {
   list: 'checkpoint:list',
   diff: 'checkpoint:diff',
   diffAll: 'checkpoint:diff:all',
+  records: 'checkpoint:records',
   delete: 'checkpoint:delete',
   clearAll: 'checkpoint:clearAll',
   event: 'checkpoint:event',
@@ -26,6 +27,22 @@ export interface CheckpointSummary {
   fileCount: number
   changedFileCount: number
   status: 'ready'
+  sessionId?: string
+}
+
+export type ChangedFileStatus = 'added' | 'deleted' | 'modified' | 'binary' | 'oversized'
+
+export interface ChangedFileRecord {
+  path: string
+  status: ChangedFileStatus
+  additions: number | null
+  deletions: number | null
+  size: number
+}
+
+export interface RestoreScope {
+  sessionId?: string
+  terminalId?: string
 }
 
 export interface CheckpointConflict {
@@ -33,16 +50,27 @@ export interface CheckpointConflict {
   resolution: 'snapshot'
 }
 
-export interface CheckpointFilter { terminalId?: string; engine?: string; cwd?: string }
-export interface CheckpointCreateInput { terminalId: string; engine: string; prompt: string; cwd: string }
+export interface CheckpointFilter { terminalId?: string; engine?: string; cwd?: string; sessionId?: string }
+export interface CheckpointCreateInput {
+  terminalId: string
+  engine: string
+  prompt: string
+  cwd: string
+  sessionId?: string
+  turnId?: string
+  kind?: 'done' | 'failed' | 'interrupted'
+  worktreeId?: string
+  parentId?: string
+}
 
 export interface CheckpointAPI {
   create(input: CheckpointCreateInput): Promise<CheckpointSummary>
   finalize(checkpointId: string, cwd: string): Promise<{ success: boolean }>
-  restore(checkpointId: string, cwd: string): Promise<{ conflicts: CheckpointConflict[] }>
+  restore(checkpointId: string, cwd: string, scope?: RestoreScope): Promise<{ conflicts: CheckpointConflict[] }>
   list(filter?: CheckpointFilter): Promise<CheckpointSummary[]>
   diff(checkpointId: string, filePath: string, cwd: string): Promise<string>
   diffAll(checkpointId: string, cwd: string): Promise<string>
+  records(checkpointId: string, cwd: string): Promise<ChangedFileRecord[]>
   delete(checkpointId: string, cwd?: string): Promise<{ success: boolean }>
   clearAll(cwd?: string): Promise<{ success: boolean }>
   onEvent(callback: (payload: { type?: string; error?: string }) => void): () => void

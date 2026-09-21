@@ -242,8 +242,14 @@ export function installElectronApiFallback(): void {
     },
     checkpoint: {
       create: unavailable, finalize: unavailable, restore: unavailable, list: unavailable,
-      diff: unavailable, diffAll: unavailable, delete: unavailable, clearAll: unavailable,
+      diff: unavailable, diffAll: unavailable, records: unavailable, delete: unavailable, clearAll: unavailable,
       onEvent: () => () => {}, onReady: () => () => {},
+    },
+    session: {
+      list: () => Promise.resolve([]),
+      get: () => Promise.resolve(null),
+      continue: unavailable,
+      onEvent: () => () => {},
     },
     git: {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,
