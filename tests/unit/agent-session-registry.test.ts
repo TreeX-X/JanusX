@@ -60,6 +60,22 @@ describe('agent session registry', () => {
     expect(summary).toMatchObject({ checkpointCount: 1, turnCount: 1 })
   })
 
+  it('retains only live checkpoint ids so the card count matches storage', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const record = registry.createSession(createInput('term-1'))
+    registry.noteCheckpoint('term-1', 'cp-1')
+    registry.noteCheckpoint('term-1', 'cp-2')
+    registry.noteCheckpoint('term-1', 'cp-3')
+    registry.retainCheckpoints(record.id, new Set(['cp-1', 'cp-3']))
+    expect(registry.getSession(record.id)).toMatchObject({ checkpointCount: 2 })
+    const [summary] = registry.listSessions({ workspaceId: 'ws-1' })
+    expect(summary).toMatchObject({ checkpointCount: 2 })
+    // Unknown sessions and fully-live ledgers persist nothing.
+    registry.retainCheckpoints('missing', new Set())
+    registry.retainCheckpoints(record.id, new Set(['cp-1', 'cp-3']))
+    expect(registry.getSession(record.id)).toMatchObject({ checkpointCount: 2 })
+  })
+
   it('filters by workspace and hides archived sessions by default', async () => {
     const registry = track(new AgentSessionRegistry(await userDataDir()))
     const first = registry.createSession(createInput('term-1'))

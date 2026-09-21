@@ -284,11 +284,14 @@ function processCheckpointQueue(id: string): void {
   const previousCpId = state.checkpointId
   state.checkpointId = null
 
+  // Note: session tag joins the card count with the session-scoped list — see .agents/notes/implemented/bug-fix/2026-09-22-session-checkpoint-count-truth.md
+  const sessionId = agentSessionRegistry.sessionIdForTerminal(id)
   checkpointManager.finalizeAndCreateCheckpoint(previousCpId, {
     terminalId: id,
     engine: state.engine,
     prompt,
     cwd: state.cwd,
+    ...(sessionId ? { sessionId } : {}),
   }).then(({ finalized, checkpoint }) => {
     if (finalized && previousCpId) {
       sendToRenderer(getHostWindow(), CHECKPOINT_CHANNELS.event, {

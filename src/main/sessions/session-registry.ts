@@ -265,6 +265,22 @@ export class AgentSessionRegistry {
     this.persist()
   }
 
+  /**
+   * Drops checkpoint ids that no longer exist in storage (restore prune,
+   * retention caps) so the card count matches the session-scoped list.
+   * Turn records keep their own checkpoint references and never shrink here.
+   */
+  retainCheckpoints(sessionId: string, liveIds: Set<string>): void {
+    const record = this.sessions.get(sessionId)
+    if (!record) return
+    const kept = record.checkpointIds.filter((id) => liveIds.has(id))
+    if (kept.length === record.checkpointIds.length) return
+    record.checkpointIds = kept
+    record.checkpointCount = kept.length
+    record.updatedAt = new Date().toISOString()
+    this.persist()
+  }
+
   noteProviderSession(terminalId: string, providerSessionId?: string, transcriptPath?: string): void {
     const record = this.recordForTerminal(terminalId)
     if (!record) return
