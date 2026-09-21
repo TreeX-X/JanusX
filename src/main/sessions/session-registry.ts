@@ -250,6 +250,23 @@ export class AgentSessionRegistry {
     return true
   }
 
+  /** Archive every session owned by a removed worktree path. */
+  archiveSessionsByCwd(cwd: string): string[] {
+    const ids: string[] = []
+    for (const record of this.sessions.values()) {
+      if (record.cwd === cwd && !record.archived) {
+        record.archived = true
+        record.updatedAt = new Date().toISOString()
+        ids.push(record.id)
+      }
+    }
+    if (ids.length > 0) {
+      this.persist()
+      this.notify()
+    }
+    return ids
+  }
+
   getSession(sessionId: string): AgentSessionRecord | null {
     return this.sessions.get(sessionId) ?? null
   }

@@ -38,6 +38,7 @@
       "empty": "暂无终端"
     },
     "runConfiguration": "运行配置…",
+ "createWorktree": "新建任务盘…",
     "renameGroup": "重命名分组…",
     "removeFromGroup": "移出分组",
     "deleteWorkspace": "删除工作区",

@@ -255,7 +255,11 @@ export function installElectronApiFallback(): void {
       list: () => Promise.resolve([]),
       identity: () => Promise.resolve(null),
       avatar: () => Promise.resolve({ dataUrl: null, cached: false }),
-      onEvent: () => () => {},
+      create: unavailable,
+      cancelCreate: unavailable,
+      delete: unavailable,
+      status: unavailable,
+      deleteBranch: unavailable,
     },
     git: {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,

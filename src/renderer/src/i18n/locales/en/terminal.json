@@ -224,5 +224,25 @@
     "statusDone": "Done",
     "statusFailed": "Failed",
     "statusInterrupted": "Interrupted"
+  },
+  "worktree": {
+    "composerTitle": "New worktree",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. auth retry",
+    "branchLabel": "Branch",
+    "startFromLabel": "Start from",
+    "create": "Create",
+    "creating": "Creating…",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "sharedNote": "Linked {{items}}, copied {{copied}}",
+    "deleteTitle": "Delete worktree",
+    "deleteBody": "Delete this worktree? Its directory will be removed and sessions archived.",
+    "deleteConfirm": "Delete",
+    "forceDelete": "Force delete",
+    "dirtyWarn": "Uncommitted changes will be lost; only force delete proceeds.",
+    "branchKept": "Branch {{branch}} has unmerged commits and was kept for review.",
+    "preservedTitle": "Preserved branches",
+    "deleteBranch": "Delete branch"
   }
 }

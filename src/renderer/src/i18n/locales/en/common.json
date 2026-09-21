@@ -38,6 +38,7 @@
       "empty": "No terminals"
     },
     "runConfiguration": "Run configuration…",
+    "createWorktree": "New worktree…",
     "renameGroup": "Rename group…",
     "removeFromGroup": "Remove from group",
     "deleteWorkspace": "Delete workspace",

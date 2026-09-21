@@ -1,9 +1,11 @@
 // Note: offline worktree discovery plus login-free repo avatars — see
 // .agents/notes/implemented/feature/2026-09-21-worktree-sidebar-scoping.md
-import { execFile } from 'child_process'
+// Note: background creation, scoped deletion, and branch review — see
+// .agents/notes/implemented/feature/2026-09-21-worktree-create-delete.md
+import { execFile, spawn, type ChildProcess } from 'child_process'
 import { createHash } from 'crypto'
-import { mkdir, readFile, stat, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { access, copyFile, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises'
+import { basename, dirname, join, resolve } from 'path'
 import { promisify } from 'util'
 import type { RepoIdentity, WorktreeInfo } from '../../shared/ipc/worktree'
 
@@ -209,4 +211,206 @@ export async function fetchRepoAvatar(
 
 export function isAvatarFresh(mtimeMs: number, nowMs = Date.now()): boolean {
   return nowMs - mtimeMs < AVATAR_CACHE_TTL_MS
+}
+
+/** Display name to branch slug: lowercase, dash-joined, git-safe. */
+export function slugifyWorktreeName(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-./]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^[./-]+|[./-]+$/g, '')
+  return slug || 'worktree'
+}
+
+/** Sibling directory for a new worktree; numeric suffix on collision. */
+export async function worktreeDirFor(workspacePath: string, slug: string): Promise<string> {
+  const base = `${basename(resolve(workspacePath))}-${slug}`
+  const parent = dirname(resolve(workspacePath))
+  let candidate = join(parent, base)
+  for (let attempt = 2; ; attempt++) {
+    try {
+      await access(candidate)
+      candidate = join(parent, `${base}-${attempt}`)
+    } catch {
+      return candidate
+    }
+  }
+}
+
+export interface CreateWorktreeInput {
+  name: string
+  branch?: string
+  startFrom?: string
+}
+
+export interface CreateWorktreeResult {
+  worktree: WorktreeInfo
+  shared: string[]
+  copied: string[]
+}
+
+async function verifyStartPoint(workspacePath: string, startFrom: string): Promise<void> {
+  const checked = await runGit(workspacePath, ['rev-parse', '--verify', startFrom])
+  if (!checked) throw new Error(`起始点不存在：${startFrom}`)
+}
+
+/**
+ * Minimal dependency sharing for a fresh checkout. Large rebuildable
+ * directories arrive as links, local secrets as owned copies; every step
+ * is best-effort and reported rather than failing creation.
+ */
+async function shareNewWorktreeDeps(workspacePath: string, worktreePath: string): Promise<{ shared: string[]; copied: string[] }> {
+  const shared: string[] = []
+  const copied: string[] = []
+  const nodeModulesSrc = join(workspacePath, 'node_modules')
+  const nodeModulesDst = join(worktreePath, 'node_modules')
+  try {
+    const stats = await lstat(nodeModulesSrc).catch(() => null)
+    if (stats?.isDirectory() && !(await lstat(nodeModulesDst).catch(() => null))) {
+      await symlink(nodeModulesSrc, nodeModulesDst, process.platform === 'win32' ? 'junction' : 'dir')
+      shared.push('node_modules')
+    }
+  } catch {
+    // Rebuildable: a missing link only costs an install.
+  }
+  for (const file of ['.env', '.env.local']) {
+    try {
+      await access(join(workspacePath, file))
+      await copyFile(join(workspacePath, file), join(worktreePath, file))
+      copied.push(file)
+    } catch {
+      // Absent secrets are normal; never fail creation for them.
+    }
+  }
+  return { shared, copied }
+}
+
+/** Create a linked worktree on a new branch; failures throw with git output. */
+export async function createWorktree(
+  workspacePath: string,
+  input: CreateWorktreeInput,
+  creationId?: string,
+): Promise<CreateWorktreeResult> {
+  const root = resolve(workspacePath)
+  const branch = (input.branch?.trim() || slugifyWorktreeName(input.name))
+  const startFrom = input.startFrom?.trim() || 'origin/main'
+  if (!input.name.trim()) throw new Error('任务盘名称不能为空')
+  await verifyStartPoint(root, startFrom)
+  const path = await worktreeDirFor(root, slugifyWorktreeName(branch))
+  await runWorktreeAdd(root, branch, path, startFrom, creationId)
+  const { shared, copied } = await shareNewWorktreeDeps(root, path)
+  return {
+    worktree: {
+      id: path,
+      workspaceId: '',
+      path,
+      branch,
+      detached: false,
+      isMain: false,
+      external: false,
+    },
+    shared,
+    copied,
+  }
+}
+
+const pendingCreations = new Map<string, { child: ChildProcess; path: string }>()
+
+function runWorktreeAdd(
+  root: string,
+  branch: string,
+  path: string,
+  startFrom: string,
+  creationId?: string,
+): Promise<void> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('git', ['worktree', 'add', '-b', branch, path, startFrom], {
+      cwd: root,
+      timeout: LOCAL_GIT_TIMEOUT_MS,
+    })
+    if (creationId) pendingCreations.set(creationId, { child, path })
+    let stderr = ''
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+    child.on('error', (err) => {
+      if (creationId) pendingCreations.delete(creationId)
+      rejectPromise(err)
+    })
+    child.on('close', (code, signal) => {
+      if (creationId) pendingCreations.delete(creationId)
+      if (code === 0) resolvePromise()
+      else if (signal) rejectPromise(new Error(`创建已取消：${branch}`))
+      else rejectPromise(new Error(stderr.trim() || `git worktree add 失败：${branch}`))
+    })
+  })
+}
+
+/** Cancel a running creation; best-effort prune of partial state. */
+export async function cancelCreateWorktree(workspacePath: string, creationId: string): Promise<boolean> {
+  const pending = pendingCreations.get(creationId)
+  if (!pending) return false
+  pendingCreations.delete(creationId)
+  try {
+    pending.child.kill('SIGTERM')
+  } catch {
+    return false
+  }
+  const root = resolve(workspacePath)
+  await runGit(root, ['worktree', 'prune'])
+  await rm(pending.path, { recursive: true, force: true }).catch(() => undefined)
+  return true
+}
+
+export interface RemoveWorktreeResult {
+  branch: string | null
+  branchDeleted: boolean
+  /** Set when git refuses to drop the branch (unmerged commits). */
+  branchKept?: string
+}
+
+/** Current branch of a checkout; null when detached or unresolvable. */
+export async function worktreeBranch(worktreePath: string): Promise<string | null> {
+  return currentBranch(worktreePath)
+}
+
+/** True when the worktree has uncommitted changes. */
+export async function isWorktreeDirty(worktreePath: string): Promise<boolean> {
+  const output = await runGit(worktreePath, ['status', '--porcelain'])
+  return output !== null && output.trim().length > 0
+}
+
+/**
+ * Remove disk plus branch. The main checkout refuses here; branches git
+ * will not drop stay listed via branchKept for explicit review instead of
+ * force-deletion. Protected names (the main checkout's own branch) are
+ * never deleted.
+ */
+export async function removeWorktree(
+  workspacePath: string,
+  worktreePath: string,
+  force = false,
+): Promise<RemoveWorktreeResult> {
+  const root = resolve(workspacePath)
+  const target = resolve(worktreePath)
+  if (target === root) throw new Error('主盘不能在这里删除')
+  const branch = await currentBranch(target)
+  const remove = await runGit(root, force ? ['worktree', 'remove', '--force', target] : ['worktree', 'remove', target])
+  if (remove === null) throw new Error(`git worktree remove 失败：${target}`)
+  await runGit(root, ['worktree', 'prune'])
+  if (!branch) return { branch: null, branchDeleted: false }
+  const mainBranch = await currentBranch(root)
+  if (mainBranch && branch === mainBranch) return { branch, branchDeleted: false }
+  const deleted = await runGit(root, ['branch', '-d', branch])
+  if (deleted === null) return { branch, branchDeleted: false, branchKept: branch }
+  return { branch, branchDeleted: true }
+}
+
+/** Explicit branch deletion for the preserved-branches review list. */
+export async function deleteBranch(workspacePath: string, branch: string, force = false): Promise<void> {
+  const removed = await runGit(resolve(workspacePath), ['branch', force ? '-D' : '-d', branch])
+  if (removed === null) throw new Error(`删除分支失败：${branch}`)
 }

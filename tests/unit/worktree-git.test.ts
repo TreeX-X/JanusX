@@ -1,13 +1,22 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execFile, execFileSync } from 'node:child_process'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   avatarUrlFor,
+  createWorktree,
+  deleteBranch,
   fetchRepoAvatar,
   isAvatarFresh,
+  isWorktreeDirty,
   parseGitRemote,
   parseWorktreeList,
+  removeWorktree,
+  slugifyWorktreeName,
+  worktreeDirFor,
+  worktreeBranch,
 } from '../../src/main/git/worktrees'
 
 const roots: string[] = []
@@ -123,5 +132,104 @@ describe('isAvatarFresh', () => {
     const now = Date.now()
     expect(isAvatarFresh(now - 1000, now)).toBe(true)
     expect(isAvatarFresh(now - 8 * 24 * 60 * 60 * 1000, now)).toBe(false)
+  })
+})
+
+describe('slugifyWorktreeName', () => {
+  it.each([
+    ['登录重试', 'worktree'],
+    ['Auth Retry', 'auth-retry'],
+    ['  Feature_X  ', 'feature-x'],
+    ['a/b', 'a/b'],
+    ['---', 'worktree'],
+    ['', 'worktree'],
+  ])('slugifies %s', (name, expected) => {
+    expect(slugifyWorktreeName(name)).toBe(expected)
+  })
+})
+
+const execFileAsync = promisify(execFile)
+
+function gitAvailable(): boolean {
+  try {
+    execFileSync('git', ['--version'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function initRepo(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'wt-repo-'))
+  roots.push(dir)
+  const git = (args: string[]) =>
+    execFileAsync('git', ['-c', 'user.email=test@local', '-c', 'user.name=test', ...args], { cwd: dir })
+  await git(['init', '-b', 'main'])
+  const { writeFile, mkdir } = await import('node:fs/promises')
+  // Realistic checkout: dependencies and secrets stay untracked.
+  await writeFile(join(dir, '.gitignore'), 'node_modules/\n.env\n.env.local\n')
+  await writeFile(join(dir, 'README.md'), '# repo\n')
+  await mkdir(join(dir, 'node_modules'))
+  await writeFile(join(dir, 'node_modules', 'pkg.json'), '{}')
+  await writeFile(join(dir, '.env'), 'SECRET=1\n')
+  await git(['add', '-A'])
+  await git(['commit', '-m', 'init'])
+  return dir
+}
+
+describe.skipIf(!gitAvailable())('worktree create/remove against real git', () => {
+  it('creates on a new branch with shared deps, then removes disk and branch', async () => {
+    const repo = await initRepo()
+    const created = await createWorktree(repo, { name: 'Auth Retry', startFrom: 'HEAD' })
+    roots.push(created.worktree.path)
+    expect(created.worktree.branch).toBe('auth-retry')
+    expect(created.shared).toEqual(['node_modules'])
+    expect(created.copied).toEqual(['.env'])
+
+    // Unmerged branch survives disk removal for review.
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(created.worktree.path, 'work.txt'), 'x')
+    const git = (args: string[]) =>
+      execFileAsync('git', ['-c', 'user.email=test@local', '-c', 'user.name=test', ...args], {
+        cwd: created.worktree.path,
+      })
+    await git(['add', '-A'])
+    await git(['commit', '-m', 'work'])
+    const removed = await removeWorktree(repo, created.worktree.path)
+    expect(removed.branchKept).toBe('auth-retry')
+    expect(removed.branchDeleted).toBe(false)
+
+    await deleteBranch(repo, 'auth-retry', true)
+    const branches = await execFileAsync('git', ['branch', '--list', 'auth-retry'], { cwd: repo })
+    expect(branches.stdout.trim()).toBe('')
+  })
+
+  it('deletes merged branches with the disk', async () => {
+    const repo = await initRepo()
+    const created = await createWorktree(repo, { name: 'fix', branch: 'fix-1', startFrom: 'HEAD' })
+    roots.push(created.worktree.path)
+    await execFileAsync('git', ['merge', '--no-ff', 'fix-1', '-m', 'merge'], { cwd: repo })
+    const removed = await removeWorktree(repo, created.worktree.path)
+    expect(removed).toMatchObject({ branch: 'fix-1', branchDeleted: true })
+  })
+
+  it('refuses the main checkout and reports dirtiness', async () => {
+    const repo = await initRepo()
+    await expect(removeWorktree(repo, repo)).rejects.toThrow('主盘')
+    expect(await isWorktreeDirty(repo)).toBe(false)
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(repo, 'dirty.txt'), 'x')
+    expect(await isWorktreeDirty(repo)).toBe(true)
+    expect(await worktreeBranch(repo)).toBe('main')
+  })
+
+  it('dedupes worktree directories on collision', async () => {
+    const repo = await initRepo()
+    const first = await worktreeDirFor(repo, 'fix')
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(first, { recursive: true })
+    const second = await worktreeDirFor(repo, 'fix')
+    expect(second).not.toBe(first)
+    expect(second.endsWith('-2')).toBe(true)
   })
 })

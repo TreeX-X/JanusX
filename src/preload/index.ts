@@ -510,7 +510,13 @@ const worktreeAPI: WorktreeAPI = {
   list: (workspaceId, workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.list, { workspaceId, workspacePath }),
   identity: (workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.identity, { workspacePath }),
   avatar: (workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.avatar, { workspacePath }),
-  onEvent: (callback) => subscribeIpcEvent(WORKTREE_CHANNELS.event, callback),
+  create: (input) => ipcRenderer.invoke(WORKTREE_CHANNELS.create, input),
+  cancelCreate: (creationId, workspacePath) =>
+    ipcRenderer.invoke(WORKTREE_CHANNELS.cancelCreate, { creationId, workspacePath }),
+  delete: (input) => ipcRenderer.invoke(WORKTREE_CHANNELS.delete, input),
+  status: (worktreePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.status, { worktreePath }),
+  deleteBranch: (workspacePath, branch, force) =>
+    ipcRenderer.invoke(WORKTREE_CHANNELS.deleteBranch, { workspacePath, branch, force }),
 }
 
 const desktopToastAPI: DesktopToastAPI = {

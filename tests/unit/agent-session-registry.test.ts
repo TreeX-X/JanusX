@@ -71,8 +71,18 @@ describe('agent session registry', () => {
     expect(registry.listSessions({ includeArchived: true })).toHaveLength(2)
   })
 
-  it('detaching a terminal keeps the session for resume', async () => {
+  it('archives sessions by worktree path on disk removal', async () => {
     const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const kept = registry.createSession(createInput('term-1'))
+    const removed = registry.createSession({ ...createInput('term-2'), cwd: '/repo-a' })
+    expect(registry.archiveSessionsByCwd('/repo-a')).toEqual([removed.id])
+    expect(registry.getSession(removed.id)?.archived).toBe(true)
+    expect(registry.getSession(kept.id)?.archived).toBe(false)
+    expect(registry.listSessions()).toHaveLength(1)
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(2)
+  })
+
+  it('detaching a terminal keeps the session for resume', async () => {    const registry = track(new AgentSessionRegistry(await userDataDir()))
     const record = registry.createSession(createInput('term-1'))
     registry.detachTerminal('term-1')
     expect(registry.sessionIdForTerminal('term-1')).toBeNull()

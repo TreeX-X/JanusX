@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
 import type { TerminalPreset } from '@/types'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
 import {
@@ -78,6 +79,7 @@ export function TerminalSelector() {
           preset,
           workspaceId: activeWorkspaceId,
           workspacePath: workspace.path,
+          cwd: useWorktreeStore.getState().activePaths[activeWorkspaceId] ?? workspace.path,
         })
       } finally {
         setLaunchingPreset(null)

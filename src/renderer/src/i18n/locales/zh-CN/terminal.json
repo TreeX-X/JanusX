@@ -224,5 +224,25 @@
     "statusDone": "已完成",
     "statusFailed": "失败",
     "statusInterrupted": "已中断"
+  },
+  "worktree": {
+    "composerTitle": "新建任务盘",
+    "nameLabel": "名称",
+    "namePlaceholder": "如：登录重试",
+    "branchLabel": "分支",
+    "startFromLabel": "起始点",
+    "create": "创建",
+    "creating": "创建中…",
+    "retry": "重试",
+    "cancel": "取消",
+    "sharedNote": "已链接 {{items}}，已复制 {{copied}}",
+    "deleteTitle": "删除任务盘",
+    "deleteBody": "确认删除该任务盘吗？磁盘目录将被移除，会话进入归档。",
+    "deleteConfirm": "删除",
+    "forceDelete": "强制删除",
+    "dirtyWarn": "盘内有未提交改动，删除将丢失，只能强制删除继续。",
+    "branchKept": "分支 {{branch}} 含未合并提交，已保留待复核。",
+    "preservedTitle": "保留的分支",
+    "deleteBranch": "删除分支"
   }
 }

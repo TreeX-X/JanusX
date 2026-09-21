@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { Globe, SquareTerminal, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useBrowserStore } from '@/stores/browser'
 import { BrowserSurface } from './browser/BrowserSurface'
@@ -1521,6 +1522,7 @@ export function TerminalArea() {
           preset: preset.type,
           workspaceId: activeWorkspaceId,
           workspacePath: workspace.path,
+          cwd: useWorktreeStore.getState().activePaths[activeWorkspaceId] ?? workspace.path,
           name: preset.name.toLowerCase(),
         })
       } finally {

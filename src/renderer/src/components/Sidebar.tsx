@@ -7,9 +7,11 @@ import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
+import { WorktreeComposer, WorktreeDeleteDialog } from './WorktreeDialogs'
 import { ModalCloseButton } from './ModalCloseButton'
 import { TeamFooter, TeamFooterCollapsed } from './team/TeamFooter'
 import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
+import type { WorktreeInfo } from '../../../shared/ipc/worktree'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
 import { chooseAndCreateWorkspace, getActiveWorkspacePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
@@ -59,6 +61,7 @@ type WorkspaceContextMenuState = {
 interface WorkspaceContextMenuProps {
   menu: WorkspaceContextMenuState
   onRunConfiguration: (workspace: Workspace) => void
+  onCreateWorktree: (workspace: Workspace) => void
   onRenameGroup: (group: WorkspaceSidebarGroup) => void
   onRemoveFromGroup: (workspaceId: string) => void
   onClearGroup: (groupId: string) => void
@@ -69,6 +72,7 @@ interface WorkspaceContextMenuProps {
 function WorkspaceContextMenu({
   menu,
   onRunConfiguration,
+  onCreateWorktree,
   onRenameGroup,
   onRemoveFromGroup,
   onClearGroup,
@@ -116,6 +120,9 @@ function WorkspaceContextMenu({
         <>
           <button type="button" className={itemClassName} onClick={() => onRunConfiguration(target.workspace)}>
             {t('common:workspace.runConfiguration')}
+          </button>
+          <button type="button" className={itemClassName} onClick={() => onCreateWorktree(target.workspace)}>
+            {t('common:workspace.createWorktree')}
           </button>
           {target.workspace.sidebarGroup && (
             <>
@@ -243,22 +250,102 @@ function worktreeDisplayName(path: string, branch: string | null): string {
   return parts.at(-1) ?? path
 }
 
-function WorktreeSubList({ workspaceId, workspacePath }: { workspaceId: string; workspacePath: string }) {
+function WorktreeSubList({
+  workspaceId,
+  workspacePath,
+  lastKeptBranch,
+  onDeleteRequest,
+}: {
+  workspaceId: string
+  workspacePath: string
+  lastKeptBranch: string | null
+  onDeleteRequest: (worktree: WorktreeInfo) => void
+}) {
+  const { t } = useI18n('terminal')
   const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? [])
   const activePath = useWorktreeStore((s) => s.activePaths[workspaceId] ?? workspacePath)
   const fetchWorktrees = useWorktreeStore((s) => s.fetchWorktrees)
   const setActivePath = useWorktreeStore((s) => s.setActivePath)
+  const preservedBranches = useWorktreeStore((s) => s.preservedBranches[workspaceId] ?? [])
+  const deleteBranch = useWorktreeStore((s) => s.deleteBranch)
+  const pendingCreations = useWorktreeStore((s) => s.pendingCreations[workspaceId] ?? [])
+  const retryCreation = useWorktreeStore((s) => s.retryCreation)
+  const cancelCreation = useWorktreeStore((s) => s.cancelCreation)
+  const [armingBranch, setArmingBranch] = useState<string | null>(null)
+  const [branchError, setBranchError] = useState<string | null>(null)
 
   useEffect(() => {
     void fetchWorktrees(workspaceId, workspacePath)
   }, [fetchWorktrees, workspaceId, workspacePath])
 
   // Single-checkout workspaces keep the existing terminals-only view.
-  if (worktrees.length <= 1) return null
+  if (worktrees.length <= 1 && pendingCreations.length === 0 && preservedBranches.length === 0) return null
+
+  const handleDeleteBranch = async (branch: string) => {
+    if (armingBranch !== branch) {
+      setArmingBranch(branch)
+      setBranchError(null)
+      return
+    }
+    setArmingBranch(null)
+    try {
+      await deleteBranch(workspaceId, workspacePath, branch, false)
+    } catch {
+      try {
+        await deleteBranch(workspaceId, workspacePath, branch, true)
+      } catch (err) {
+        setBranchError(err instanceof Error ? err.message : String(err))
+      }
+    }
+  }
 
   return (
     <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
-      {worktrees.map((worktree) => {
+      {pendingCreations.map((pending) => (
+        <div
+          key={pending.id}
+          className="mb-0.5 grid w-full grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5"
+          style={{ color: '#8a8a8a' }}
+        >
+          <span className="flex h-[18px] w-[18px] items-center justify-center">
+            <GitBranch size={14} strokeWidth={1.6} aria-hidden="true" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-mono text-[11px]">{pending.name}</span>
+            <span className="block truncate text-[9px]" style={{ color: pending.error ? '#e06c75' : '#55555b' }}>
+              {pending.error ?? t('terminal:worktree.creating')}
+            </span>
+          </span>
+          {pending.error ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                void retryCreation(workspaceId, workspacePath, pending.id)
+              }}
+              className="cursor-pointer"
+              style={{ fontSize: 10, color: '#aaa', background: 'none', border: 'none', padding: 0 }}
+            >
+              {t('terminal:worktree.retry')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label={t('terminal:worktree.cancel')}
+              title={t('terminal:worktree.cancel')}
+              onClick={(event) => {
+                event.stopPropagation()
+                void cancelCreation(workspaceId, workspacePath, pending.id)
+              }}
+              className="cursor-pointer"
+              style={{ fontSize: 12, color: '#626268', background: 'none', border: 'none', padding: '0 2px' }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      {worktrees.length > 1 && worktrees.map((worktree) => {
         const focused = activePath === worktree.path
         return (
           <div
@@ -277,7 +364,7 @@ function WorktreeSubList({ workspaceId, workspacePath }: { workspaceId: string; 
               event.stopPropagation()
               setActivePath(workspaceId, worktree.path)
             }}
-            className="mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+            className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
             style={{
               background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
               color: focused ? '#d8d8d8' : '#8a8a8a',
@@ -294,9 +381,62 @@ function WorktreeSubList({ workspaceId, workspacePath }: { workspaceId: string; 
                 {worktree.path}
               </span>
             </span>
+            {!worktree.isMain && (
+              <button
+                type="button"
+                aria-label={t('terminal:worktree.deleteTitle')}
+                title={t('terminal:worktree.deleteTitle')}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDeleteRequest(worktree)
+                }}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 transition-[width,opacity] duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:w-5 focus-visible:opacity-100 group-hover/wt:w-5 group-hover/wt:opacity-100"
+                style={{ color: '#626268', background: 'transparent' }}
+              >
+                <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            )}
           </div>
         )
       })}
+      {lastKeptBranch && (
+        <div style={{ fontSize: 10, color: '#8a8a8a', padding: '4px 8px', lineHeight: 1.6 }}>
+          {t('terminal:worktree.branchKept', { branch: lastKeptBranch })}
+        </div>
+      )}
+      {preservedBranches.length > 0 && (
+        <div style={{ padding: '2px 8px 4px' }}>
+          <div style={{ fontSize: 9.5, color: '#555', marginBottom: 3 }}>
+            {t('terminal:worktree.preservedTitle')}
+          </div>
+          {preservedBranches.map((branch) => (
+            <div key={branch} className="flex items-center" style={{ gap: 6, padding: '2px 0' }}>
+              <span
+                className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#777' }}
+              >
+                {branch}
+              </span>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void handleDeleteBranch(branch)
+                }}
+                className="cursor-pointer"
+                style={{ fontSize: 10, color: armingBranch === branch ? '#e06c75' : '#666', background: 'none', border: 'none', padding: 0 }}
+              >
+                {t('terminal:worktree.deleteBranch')}
+              </button>
+            </div>
+          ))}
+          {branchError && (
+            <div style={{ fontSize: 10, color: '#e06c75', lineHeight: 1.6 }}>{branchError}</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -325,6 +465,12 @@ export function Sidebar() {
 
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null)
   const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
+  const [composerTarget, setComposerTarget] = useState<Workspace | null>(null)
+  const [worktreeDeleteTarget, setWorktreeDeleteTarget] = useState<{
+    workspace: Workspace
+    worktree: WorktreeInfo
+  } | null>(null)
+  const [lastKeptBranchByWorkspace, setLastKeptBranchByWorkspace] = useState<Record<string, string>>({})
   const [projectCandidate, setProjectCandidate] = useState<JanusProjectCandidate | null>(null)
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([])
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<string[]>([])
@@ -393,6 +539,24 @@ export function Sidebar() {
       if (workspace.path) void fetchWorktreeIdentity(workspace.path)
     }
   }, [orderedWorkspaces, fetchWorktreeIdentity])
+
+  // Creation submits close the composer at once; the progress row must be
+  // visible, so expand arriving workspaces automatically exactly once.
+  const expandRequests = useWorktreeStore((s) => s.expandRequests)
+  const expandRequestsRef = useRef<Record<string, number>>({})
+  useEffect(() => {
+    const seen = expandRequestsRef.current
+    let changed = false
+    for (const [workspaceId, count] of Object.entries(expandRequests)) {
+      if ((seen[workspaceId] ?? 0) < count) {
+        changed = true
+        setExpandedWorkspaceIds((current) =>
+          current.includes(workspaceId) ? current : [...current, workspaceId],
+        )
+      }
+    }
+    if (changed) expandRequestsRef.current = { ...expandRequests }
+  }, [expandRequests])
 
   const handleAddWorkspace = useCallback(async () => {
     try {
@@ -723,6 +887,11 @@ export function Sidebar() {
     setConfigTarget(workspace)
   }, [])
 
+  const handleCreateWorktree = useCallback((workspace: Workspace) => {
+    setContextMenu(null)
+    setComposerTarget(workspace)
+  }, [])
+
   const handleRemoveFromGroup = useCallback((workspaceId: string) => {
     setContextMenu(null)
     updateWorkspaceLayout((current) => removeWorkspaceFromSidebarGroup(current, workspaceId))
@@ -1042,7 +1211,12 @@ export function Sidebar() {
                           className="ml-5 mr-1 py-1"
                           style={{ borderLeft: '1px solid rgba(255,255,255,0.055)' }}
                         >
-                        <WorktreeSubList workspaceId={ws.id} workspacePath={ws.path} />
+                        <WorktreeSubList
+                          workspaceId={ws.id}
+                          workspacePath={ws.path}
+                          lastKeptBranch={lastKeptBranchByWorkspace[ws.id] ?? null}
+                          onDeleteRequest={(worktree) => setWorktreeDeleteTarget({ workspace: ws, worktree })}
+                        />
                         {workspaceTerminals.length === 0 ? (
                           <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
                         ) : (
@@ -1220,10 +1394,30 @@ export function Sidebar() {
         <WorkspaceContextMenu
           menu={contextMenu}
           onRunConfiguration={handleRunConfiguration}
+          onCreateWorktree={handleCreateWorktree}
           onRenameGroup={startRenamingGroup}
           onRemoveFromGroup={handleRemoveFromGroup}
           onClearGroup={handleClearGroup}
           onDelete={handleContextDelete}
+        />
+      )}
+      {composerTarget && (
+        <WorktreeComposer workspace={composerTarget} onClose={() => setComposerTarget(null)} />
+      )}
+      {worktreeDeleteTarget && (
+        <WorktreeDeleteDialog
+          workspaceId={worktreeDeleteTarget.workspace.id}
+          workspacePath={worktreeDeleteTarget.workspace.path}
+          worktree={worktreeDeleteTarget.worktree}
+          onClose={(branchKept) => {
+            if (branchKept) {
+              setLastKeptBranchByWorkspace((current) => ({
+                ...current,
+                [worktreeDeleteTarget.workspace.id]: branchKept,
+              }))
+            }
+            setWorktreeDeleteTarget(null)
+          }}
         />
       )}
       {/* 删除确认弹窗 — portal 到 body 级别，居窗口中央 */}

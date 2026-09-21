@@ -96,6 +96,8 @@ export interface LaunchTerminalPresetOptions {
   preset: TerminalPreset
   workspaceId: string
   workspacePath: string
+  /** Working directory; defaults to the workspace root (active worktree when set by callers). */
+  cwd?: string
   /** Defaults to preset meta name. */
   name?: string
   /** Defaults true — enter terminal UI immediately after addTerminal. */
@@ -119,11 +121,14 @@ export async function launchTerminalPreset(
     preset,
     workspaceId,
     workspacePath,
+    cwd: cwdOverride,
     name,
     enterTerminalUi = true,
   } = options
 
   if (!workspaceId || !workspacePath) return null
+
+  const cwd = cwdOverride ?? workspacePath
 
   // Enter UI immediately with a warm cache or instant platform fallback.
   // Resolve the real default shell in parallel so create still gets the correct value.
@@ -140,7 +145,7 @@ export async function launchTerminalPreset(
     workspaceId,
     name: name ?? presetMeta.name,
     preset,
-    cwd: workspacePath,
+    cwd,
     shell,
     autoCommand,
     pid: null,
@@ -170,7 +175,7 @@ export async function launchTerminalPreset(
     const result = await window.electron.terminal.create({
       id: terminalId,
       workspaceId,
-      cwd: workspacePath,
+      cwd,
       shell: resolvedShell,
       autoCommand,
       preset,
