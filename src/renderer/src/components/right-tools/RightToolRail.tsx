@@ -93,7 +93,7 @@ function ToolIcon({ toolId }: { toolId: RightToolId }) {
   return <Icon className={styles.railIcon} size={16} strokeWidth={1.6} aria-hidden="true" />
 }
 
-/** Quiet badge: pending habit candidates awaiting Inbox review. Shows state only. */
+/** Quiet count: pending habit candidates awaiting Inbox review. Plain number near the icon, no filled pill. */
 function PersonaPendingDot() {
   const [pending, setPending] = useState(0)
   useEffect(() => {

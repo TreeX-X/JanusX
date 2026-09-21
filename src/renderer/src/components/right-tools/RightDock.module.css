@@ -298,20 +298,20 @@
   opacity: 1;
 }
 
+/* 画像候选数：去色块的极简数字。无填充、与图标同色（currentColor 随 dim/hover/active 自动一致），
+   置于图标右下方附近，不遮挡画像主体。 */
 .railBadge {
   position: absolute;
-  top: 5px;
   right: 5px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  display: grid;
-  place-items: center;
-  border-radius: 7px;
-  background: var(--shell-accent-strong);
-  color: #fff;
-  font-size: 9px;
+  bottom: 3px;
+  display: block;
+  background: none;
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 500;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
   pointer-events: none;
 }
 
