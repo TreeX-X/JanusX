@@ -110,6 +110,7 @@ const terminalAPI: TerminalAPI = {
   onCreated: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.created, callback),
   onStatus: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.status, callback),
   onTelemetry: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.telemetry, callback),
+  onTurnChanges: (callback) => subscribeIpcEvent(TERMINAL_EVENT_CHANNELS.turnChanges, callback),
 }
 
 const projectAPI: ProjectAPI = {

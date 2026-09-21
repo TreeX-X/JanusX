@@ -291,5 +291,10 @@
     "autoMergeOn": "启用自动合并",
     "autoMergeOff": "取消自动合并",
     "linkedIssue": "关联 Issue"
+  },
+  "turnChanges": {
+    "files": "{{count}} 个文件",
+    "more": "其余 {{count}} 个见会话面板",
+    "empty": "本回合无文件变更"
   }
 }

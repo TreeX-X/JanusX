@@ -653,6 +653,7 @@ body.desktop-toast-body {
 
 @media (prefers-reduced-motion: reduce) {
   .term-status-pulse { animation: none; }
+  [data-turn-island] { transition: none !important; }
 }
 
 /*-- 长按工作区视觉反馈：径向渐变波纹从中心扩散 --*/

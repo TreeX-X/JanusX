@@ -122,6 +122,27 @@ describe('Terminal IPC contract', () => {
     expect(mocks.removeListener).toHaveBeenCalledWith(TERMINAL_EVENT_CHANNELS.telemetry, handler)
   })
 
+  it('forwards turn-change events', () => {
+    const callback = vi.fn()
+    const unsubscribe = terminalApi.onTurnChanges(callback)
+    const handler = mocks.onRenderer.mock.calls.at(-1)?.[1]
+    const payload = {
+      id: 'terminal-1',
+      kind: 'done',
+      checkpointId: 'cp-1',
+      files: [{ path: 'a.ts', status: 'modified', additions: 2, deletions: 1, size: 40 }],
+      fileCount: 1,
+      additions: 2,
+      deletions: 1,
+      endedAt: '2026-09-21T00:00:00.000Z',
+    }
+
+    handler({}, payload)
+    expect(callback).toHaveBeenCalledWith(payload)
+    unsubscribe()
+    expect(mocks.removeListener).toHaveBeenCalledWith(TERMINAL_EVENT_CHANNELS.turnChanges, handler)
+  })
+
   it('does not expose a generic bridge', () => {
     expect(mocks.expose.mock.calls[0]?.[0]).not.toHaveProperty('invoke')
   })

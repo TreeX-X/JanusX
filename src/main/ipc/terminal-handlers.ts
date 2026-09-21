@@ -479,7 +479,38 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
           : event === JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted || event === 'sessionend'
             ? 'interrupted'
             : 'done'
-        agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, state.checkpointId ?? undefined)
+        const baselineId = state.checkpointId ?? undefined
+        const baselineCwd = state.cwd
+        agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, baselineId)
+        // Turn-change island feed: per-file records against the baseline.
+        // Best-effort and off the turn pipeline; quiet trees hit the mtime
+        // fast path, binaries and oversized files never enter memory.
+        void (async () => {
+          try {
+            const records = baselineId
+              ? await checkpointManager.getChangedFileRecords(baselineId, baselineCwd)
+              : []
+            const files = records.slice(0, 100)
+            sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.turnChanges, {
+              id: terminal.terminalId,
+              kind,
+              checkpointId: baselineId ?? null,
+              files: files.map((record) => ({
+                path: record.path,
+                status: record.status,
+                additions: record.additions,
+                deletions: record.deletions,
+                size: record.size,
+              })),
+              fileCount: records.length,
+              additions: records.reduce((total, record) => total + (record.additions ?? 0), 0),
+              deletions: records.reduce((total, record) => total + (record.deletions ?? 0), 0),
+              endedAt: new Date().toISOString(),
+            })
+          } catch (err) {
+            console.error('[terminal] turn-changes feed failed:', err)
+          }
+        })()
       }
       companionSessionState.handleHookPayload(payload)
       agentTurnRecorder.handleHookPayload(payload)

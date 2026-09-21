@@ -23,6 +23,7 @@ import {
   type DrawerView,
 } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
+import { TurnChangeIsland } from './TurnChangeIsland'
 import { HoldToConfirm } from './ui/HoldToConfirm'
 import { useI18n } from '@/i18n/useI18n'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
@@ -1239,6 +1240,10 @@ function LeafPane({
                   </div>
                 </div>
               )}
+              <TurnChangeIsland
+                terminalId={terminal.id}
+                focused={workspaceVisible && isFocused && isActive}
+              />
             </div>
           )
         })}

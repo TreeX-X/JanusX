@@ -291,5 +291,10 @@
     "autoMergeOn": "Enable auto-merge",
     "autoMergeOff": "Disable auto-merge",
     "linkedIssue": "Linked issue"
+  },
+  "turnChanges": {
+    "files": "{{count}} files",
+    "more": "+{{count}} more in Sessions",
+    "empty": "No file changes this turn"
   }
 }

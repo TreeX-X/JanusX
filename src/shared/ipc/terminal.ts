@@ -20,6 +20,7 @@ export const TERMINAL_EVENT_CHANNELS = {
   created: 'terminal:created',
   status: 'terminal:status',
   telemetry: 'terminal:telemetry',
+  turnChanges: 'terminal:turn-changes',
 } as const
 
 export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
@@ -104,6 +105,31 @@ export interface TerminalTelemetryEvent {
   telemetry: RuntimeTelemetrySnapshot
 }
 
+export type TurnChangeKind = 'done' | 'failed' | 'interrupted'
+
+export interface TurnChangedFile {
+  path: string
+  status: 'added' | 'deleted' | 'modified' | 'binary' | 'oversized'
+  additions: number | null
+  deletions: number | null
+  size: number
+}
+
+/**
+ * Turn-end change set for the per-pane island. Files cap at 100 entries;
+ * fileCount carries the true total and the session panel holds the record.
+ */
+export interface TerminalTurnChangesEvent {
+  id: string
+  kind: TurnChangeKind
+  checkpointId: string | null
+  files: TurnChangedFile[]
+  fileCount: number
+  additions: number
+  deletions: number
+  endedAt: string
+}
+
 export interface TerminalReplayResult {
   data: string
   seq: number
@@ -123,4 +149,5 @@ export interface TerminalAPI {
   onCreated(callback: (event: TerminalCreatedEvent) => void): () => void
   onStatus(callback: (event: TerminalStatusEvent) => void): () => void
   onTelemetry(callback: (event: TerminalTelemetryEvent) => void): () => void
+  onTurnChanges(callback: (event: TerminalTurnChangesEvent) => void): () => void
 }
