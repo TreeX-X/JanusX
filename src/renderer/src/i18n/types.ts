@@ -2110,6 +2110,7 @@ export type TypedI18nKey =
   | 'terminal:worktree.mergePr'
   | 'terminal:worktree.mergedOk'
   | 'terminal:worktree.merging'
+  | 'terminal:worktree.mrCreate'
   | 'terminal:worktree.nameLabel'
   | 'terminal:worktree.namePlaceholder'
   | 'terminal:worktree.prBodyPh'

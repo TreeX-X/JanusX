@@ -600,9 +600,9 @@ function checkStateColor(state: HostedCheck['state']): string {
   return '#777'
 }
 
-function buildFixPrompt(review: HostedReview, logs: FailedCheckLog[]): string {
+function buildFixPrompt(kind: 'PR' | 'MR', review: HostedReview, logs: FailedCheckLog[]): string {
   const lines = [
-    `修复 PR #${review.number}「${review.title}」（${review.head} → ${review.base}）的失败检查：`,
+    `修复 ${kind} #${review.number}「${review.title}」（${review.head} → ${review.base}）的失败检查：`,
     ...logs.flatMap((entry) => ['', `## ${entry.name}${entry.truncated ? '（日志已截断取尾部）' : ''}`, entry.log]),
     '',
     '要求：只修失败相关的代码，保持其他行为不变；跑通相关测试后推送。',
@@ -744,7 +744,7 @@ function HostedReviewSection({
       }
     }
     try {
-      await navigator.clipboard.writeText(buildFixPrompt(open, entries))
+      await navigator.clipboard.writeText(buildFixPrompt(provider === 'gitlab' ? 'MR' : 'PR', open, entries))
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -768,16 +768,16 @@ function HostedReviewSection({
       </div>
 
       {!open && !showCreate && (
-        <button
-          onClick={() => {
-            setTitle(branch)
-            setShowCreate(true)
-          }}
-          className="rounded cursor-pointer"
-          style={{ height: 26, padding: '0 14px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
-        >
-          {t('terminal:worktree.prCreate')}
-        </button>
+            <button
+              onClick={() => {
+                setTitle(branch)
+                setShowCreate(true)
+              }}
+              className="rounded cursor-pointer"
+              style={{ height: 26, padding: '0 14px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+            >
+              {provider === 'gitlab' ? t('terminal:worktree.mrCreate') : t('terminal:worktree.prCreate')}
+            </button>
       )}
 
       {showCreate && !open && (
@@ -805,7 +805,7 @@ function HostedReviewSection({
               className="rounded cursor-pointer"
               style={{ height: 26, padding: '0 14px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', opacity: !title.trim() || busy ? 0.45 : 1, marginLeft: 'auto' }}
             >
-              {t('terminal:worktree.prCreate')}
+              {provider === 'gitlab' ? t('terminal:worktree.mrCreate') : t('terminal:worktree.prCreate')}
             </button>
           </div>
         </div>

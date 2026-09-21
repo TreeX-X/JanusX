@@ -262,6 +262,7 @@
     "worktreeDirtyNote": "Uncommitted changes in the worktree, commit first.",
     "prSection": "Hosted review",
     "prCreate": "Create PR",
+    "mrCreate": "Create MR",
     "prTitlePh": "PR title",
     "prBodyPh": "PR description (optional)",
     "draftPr": "Draft",

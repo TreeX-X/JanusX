@@ -34,6 +34,9 @@ describe('parseGitRemote', () => {
     ['ssh://git@github.com/TreeX-X/JanusX.git', { host: 'github.com', owner: 'TreeX-X', repo: 'JanusX' }],
     ['https://gitlab.example.com/team/app.git', { host: 'gitlab.example.com', owner: 'team', repo: 'app' }],
     ['git@gitlab.example.com:team/app.git', { host: 'gitlab.example.com', owner: 'team', repo: 'app' }],
+    ['https://git.company.com:8443/team/app.git', { host: 'git.company.com', owner: 'team', repo: 'app' }],
+    ['https://gitlab.example.com/group/sub/app.git', { host: 'gitlab.example.com', owner: 'group/sub', repo: 'app' }],
+    ['git@gitlab.example.com:group/sub/app.git', { host: 'gitlab.example.com', owner: 'group/sub', repo: 'app' }],
   ])('parses %s', (url, expected) => {
     expect(parseGitRemote(url)).toEqual(expected)
   })

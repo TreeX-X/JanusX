@@ -219,7 +219,9 @@ class GitHubProvider implements HostedProvider {
   }
 }
 
-const providers: HostedProvider[] = [new GitHubProvider()]
+import { GitlabProvider } from './gitlab'
+
+const providers: HostedProvider[] = [new GitHubProvider(), new GitlabProvider()]
 
 /** First provider that claims the checkout, or null for local-only work. */
 export async function detectProvider(cwd: string): Promise<HostedProvider | null> {

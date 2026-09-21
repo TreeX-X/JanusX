@@ -31,9 +31,9 @@ export function parseGitRemote(url: string): ParsedRemote | null {
   if (!trimmed) return null
   const withoutGit = trimmed.endsWith('.git') ? trimmed.slice(0, -4) : trimmed
   const patterns = [
-    /^https?:\/\/([^/:]+)\/([^/]+)\/([^/]+)$/,
-    /^ssh:\/\/[^@]*@([^/:]+)(?::\d+)?\/([^/]+)\/([^/]+)$/,
-    /^[^@/:]+@([^:]+):([^/]+)\/([^/]+)$/,
+    /^https?:\/\/([^/:]+)(?::\d+)?\/(.+)\/([^/]+)$/,
+    /^ssh:\/\/[^@]*@([^/:]+)(?::\d+)?\/(.+)\/([^/]+)$/,
+    /^[^@/:]+@([^:]+):(.+)\/([^/]+)$/,
   ]
   for (const pattern of patterns) {
     const match = pattern.exec(withoutGit)

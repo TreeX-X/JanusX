@@ -262,6 +262,7 @@
     "worktreeDirtyNote": "盘内有未提交改动，请先提交。",
     "prSection": "托管评审",
     "prCreate": "创建 PR",
+    "mrCreate": "创建 MR",
     "prTitlePh": "PR 标题",
     "prBodyPh": "PR 描述（可选）",
     "draftPr": "草稿",

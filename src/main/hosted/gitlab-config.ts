@@ -103,16 +103,27 @@ export interface ApiRequestOptions {
   token: string
 }
 
-/** Minimal authenticated GET with explicit TLS control. */
-export function apiGetJson<T>(baseUrl: string, path: string, options: ApiRequestOptions): Promise<{ status: number; body: T }> {
+/** Minimal authenticated request with explicit TLS control. */
+export function apiRequestJson<T>(
+  method: 'GET' | 'POST' | 'PUT',
+  baseUrl: string,
+  path: string,
+  options: ApiRequestOptions,
+  payload?: unknown,
+): Promise<{ status: number; body: T }> {
   const target = new URL(`${baseUrl}/api/v4${path}`)
   const requestImpl = target.protocol === 'http:' ? httpRequest : httpsRequest
+  const data = payload === undefined ? null : Buffer.from(JSON.stringify(payload))
   return new Promise((resolve, reject) => {
     const request = requestImpl(
       target,
       {
-        method: 'GET',
-        headers: { 'PRIVATE-TOKEN': options.token, Accept: 'application/json' },
+        method,
+        headers: {
+          'PRIVATE-TOKEN': options.token,
+          Accept: 'application/json',
+          ...(data ? { 'Content-Type': 'application/json', 'Content-Length': data.byteLength } : {}),
+        },
         rejectUnauthorized: !options.allowInsecure,
         timeout: options.timeoutMs,
       },
@@ -120,8 +131,13 @@ export function apiGetJson<T>(baseUrl: string, path: string, options: ApiRequest
         const chunks: Buffer[] = []
         response.on('data', (chunk: Buffer) => chunks.push(chunk))
         response.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8')
+          if (!text) {
+            resolve({ status: response.statusCode ?? 0, body: {} as T })
+            return
+          }
           try {
-            resolve({ status: response.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as T })
+            resolve({ status: response.statusCode ?? 0, body: JSON.parse(text) as T })
           } catch (err) {
             reject(err)
           }
@@ -131,8 +147,14 @@ export function apiGetJson<T>(baseUrl: string, path: string, options: ApiRequest
     )
     request.on('timeout', () => request.destroy(new Error('ETIMEDOUT')))
     request.on('error', reject)
+    if (data) request.write(data)
     request.end()
   })
+}
+
+/** Minimal authenticated GET with explicit TLS control. */
+export function apiGetJson<T>(baseUrl: string, path: string, options: ApiRequestOptions): Promise<{ status: number; body: T }> {
+  return apiRequestJson<T>('GET', baseUrl, path, options)
 }
 
 interface StoredConfig {
@@ -266,6 +288,12 @@ export class GitlabConfigStore {
       })
     }
     return this.getConfig()
+  }
+
+  /** Effective token for provider calls: env first, then the keychain. */
+  async resolveToken(): Promise<string | null> {
+    if (process.env.GITLAB_TOKEN?.trim()) return process.env.GITLAB_TOKEN.trim()
+    return this.readStoredToken()
   }
 
   /**
