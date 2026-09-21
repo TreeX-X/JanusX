@@ -73,9 +73,11 @@ export function SessionPanel() {
   const activeWorktreePath = useWorktreeStore((s) => (activeWorkspaceId ? (s.activePaths[activeWorkspaceId] ?? null) : null))
   const scopePath = activeWorktreePath ?? activeWorkspace?.path ?? null
   const activeWorktree = worktrees.find((w) => w.path === scopePath) ?? null
-  const uiForPath = useWorktreeStore((s) => s.uiForPath)
   const setUiForPath = useWorktreeStore((s) => s.setUiForPath)
-  const expandedId = scopePath ? (uiForPath(scopePath).expandedSessionId ?? null) : null
+  // Note: expanded id subscribes to uiByPath so checkpoint toggles re-render — see .agents/notes/implemented/bug-fix/2026-09-22-session-checkpoint-expand.md
+  const expandedId = useWorktreeStore((s) =>
+    scopePath ? (s.uiByPath[scopePath]?.expandedSessionId ?? null) : null,
+  )
   const [scope, setScope] = useState<Scope>('workspace')
   const [continueTarget, setContinueTarget] = useState<AgentSessionSummary | null>(null)
 
@@ -99,9 +101,9 @@ export function SessionPanel() {
 
   const handleToggle = useCallback((sessionId: string) => {
     if (!scopePath) return
-    const current = uiForPath(scopePath).expandedSessionId ?? null
+    const current = useWorktreeStore.getState().uiByPath[scopePath]?.expandedSessionId ?? null
     setUiForPath(scopePath, { expandedSessionId: current === sessionId ? null : sessionId })
-  }, [scopePath, uiForPath, setUiForPath])
+  }, [scopePath, setUiForPath])
 
   useEffect(() => subscribeToEvents(), [subscribeToEvents])
 
@@ -412,7 +414,7 @@ function SessionCard({
       {detailOpen && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
           {!detail ? (
-            <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : ''}</div>
+            <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
           ) : (
             <>
               <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8f8f96', lineHeight: 1.8 }}>
@@ -495,13 +497,21 @@ function SessionCard({
         <div style={{ marginTop: 4 }}>
           {checkpoints.map((cp) => {
             const recs = records[`${cp.id}:records`]
+            const recordsLoading = recs === undefined
             const canDiff = !!recs && !recs.some((record) => record.status === 'binary' || record.status === 'oversized')
             const diffKey = `${cp.id}:`
             const fullDiff = diffs[diffKey]
             const pruneCount = checkpoints.filter((other) => other.conversationIndex > cp.conversationIndex).length
             return (
               <div key={cp.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: '#c9c9c9' }}>
+                <div
+                  className="flex items-center"
+                  style={{ gap: 7, fontSize: 11, color: '#c9c9c9', cursor: canDiff ? 'pointer' : 'default' }}
+                  title={canDiff ? t('terminal:checkpoint.diff') : undefined}
+                  onClick={() => {
+                    if (canDiff) toggleDiff(cp)
+                  }}
+                >
                   <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#666' }}>
                     #{cp.conversationIndex}
                   </span>
@@ -512,14 +522,24 @@ function SessionCard({
                 </div>
                 <CheckpointFiles records={recs} />
                 <div className="flex" style={{ gap: 6, marginTop: 6 }}>
-                  {canDiff && (
+                  {recordsLoading ? (
                     <button
-                      onClick={() => toggleDiff(cp)}
-                      className="flex-1 rounded cursor-pointer"
-                      style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
+                      disabled
+                      className="flex-1 rounded"
+                      style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
                     >
-                      {t('terminal:checkpoint.diff')} {diffOpenId === cp.id ? '▴' : '▾'}
+                      {t('terminal:checkpoint.diffLoading')}
                     </button>
+                  ) : (
+                    canDiff && (
+                      <button
+                        onClick={() => toggleDiff(cp)}
+                        className="flex-1 rounded cursor-pointer"
+                        style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
+                      >
+                        {t('terminal:checkpoint.diff')} {diffOpenId === cp.id ? '▴' : '▾'}
+                      </button>
+                    )
                   )}
                   <button
                     onClick={() => {
