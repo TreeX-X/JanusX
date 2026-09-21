@@ -1,5 +1,4 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { CheckpointPanel } from '@/components/CheckpointPanel'
 import { SessionPanel } from '@/components/SessionPanel'
 import { FileExplorerTool } from '@/components/FileExplorerTool'
 import { GitPanel } from '@/components/GitPanel'
@@ -69,7 +68,6 @@ function ToolContent({
 }) {
   if (toolId === 'files') return <FileExplorerTool active={active} />
   if (toolId === 'git') return <GitPanel active={active} />
-  if (toolId === 'checkpoints') return <CheckpointPanel />
   if (toolId === 'sessions') return <SessionPanel />
   if (toolId === 'persona') return <UserPersonaTool />
   return <KnowledgeAssist workspaceId={workspaceId} workspacePath={workspacePath} />

@@ -15,9 +15,7 @@ interface CheckpointStore {
   error: string | null
 
   fetchCheckpoints: (filter?: { terminalId?: string; engine?: string; cwd?: string; sessionId?: string }) => Promise<void>
-  createCheckpoint: (options: { terminalId: string; engine: string; prompt: string; cwd: string }) => Promise<void>
   restoreCheckpoint: (checkpointId: string, cwd: string, scope?: RestoreScope) => Promise<void>
-  fetchDiff: (checkpointId: string, filePath: string, cwd: string) => Promise<void>
   fetchAllDiffs: (checkpointId: string, cwd: string) => Promise<void>
   fetchRecords: (checkpointId: string, cwd: string) => Promise<void>
   deleteCheckpoint: (checkpointId: string, cwd?: string) => Promise<void>
@@ -79,23 +77,6 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
     }
   },
 
-  createCheckpoint: async (options) => {
-    const cwd = options.cwd.trim()
-    if (!cwd) return
-
-    set({ loading: true, error: null })
-    try {
-      const cp = await window.electron.checkpoint.create({ ...options, cwd })
-      set((state) => ({
-        workspaceCwd: cwd,
-        checkpoints: state.workspaceCwd && state.workspaceCwd !== cwd ? [cp] : [cp, ...state.checkpoints],
-        loading: false,
-      }))
-    } catch (err) {
-      set({ error: (err as Error).message, loading: false })
-    }
-  },
-
   restoreCheckpoint: async (checkpointId, cwd, scope) => {
     set({ loading: true, error: null, conflicts: [] })
     try {
@@ -104,17 +85,6 @@ export const useCheckpointStore = create<CheckpointStore>((set, get) => ({
       await get().fetchCheckpoints({ cwd })
     } catch (err) {
       set({ error: (err as Error).message, loading: false })
-    }
-  },
-
-  fetchDiff: async (checkpointId, filePath, cwd) => {
-    try {
-      const diff = await window.electron.checkpoint.diff(checkpointId, filePath, cwd)
-      set((state) => ({
-        diffs: { ...state.diffs, [`${checkpointId}:${filePath}`]: diff },
-      }))
-    } catch (err) {
-      set({ error: (err as Error).message })
     }
   },
 

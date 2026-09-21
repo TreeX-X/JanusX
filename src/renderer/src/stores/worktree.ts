@@ -3,7 +3,6 @@ import type { RepoIdentity, WorktreeInfo, WorktreeStatus } from '../../../shared
 
 interface WorktreeUiState {
   expandedSessionId?: string | null
-  expandedCheckpointId?: string | null
 }
 
 /**
@@ -52,6 +51,7 @@ interface WorktreeStore {
     workspacePath: string,
     worktreePath: string,
     force?: boolean,
+    branch?: string | null,
   ) => Promise<{ branchKept?: string }>
   deleteBranch: (workspaceId: string, workspacePath: string, branch: string, force?: boolean) => Promise<void>
   worktreeStatus: (worktreePath: string) => Promise<WorktreeStatus>
@@ -226,8 +226,8 @@ export const useWorktreeStore = create<WorktreeStore>((set, get) => ({
     }))
   },
 
-  deleteWorktree: async (workspaceId, workspacePath, worktreePath, force) => {
-    const result = await window.electron.worktree.delete({ workspacePath, worktreePath, force })
+  deleteWorktree: async (workspaceId, workspacePath, worktreePath, force, branch) => {
+    const result = await window.electron.worktree.delete({ workspacePath, worktreePath, force, branch: branch ?? null })
     const worktrees = await window.electron.worktree.list(workspaceId, workspacePath).catch(() => [])
     set((state) => ({
       worktreesByWorkspace: { ...state.worktreesByWorkspace, [workspaceId]: worktrees },

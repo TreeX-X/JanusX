@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useSessionStore, type AgentSessionSummary } from '@/stores/session'
-import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary } from '@/stores/checkpoint'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
+import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, type ConflictInfo } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
@@ -254,6 +254,20 @@ function statusLabel(status: AgentSessionSummary['status'], t: (k: string) => st
   return t('terminal:agentSession.statusInterrupted')
 }
 
+function turnKindLabel(kind: string, t: (k: string) => string): string {
+  if (kind === 'done') return t('terminal:agentSession.statusDone')
+  if (kind === 'failed') return t('terminal:agentSession.statusFailed')
+  return t('terminal:agentSession.statusInterrupted')
+}
+
+function baseNameOf(path: string): string {
+  return path.split(/[/\\]/).filter(Boolean).at(-1) ?? path
+}
+
+// Note: session-owned checkpoints with review-gated restore and expandable
+// detail absorb the retired standalone checkpoints tool — see
+// .agents/notes/implemented/feature/2026-09-21-session-checkpoint-migration.md
+
 function SessionCard({
   session,
   expanded,
@@ -267,9 +281,17 @@ function SessionCard({
 }) {
   const { t } = useI18n('terminal')
   const restoreCheckpoint = useCheckpointStore((s) => s.restoreCheckpoint)
+  const fetchAllDiffs = useCheckpointStore((s) => s.fetchAllDiffs)
+  const diffs = useCheckpointStore((s) => s.diffs)
   const [checkpoints, setCheckpoints] = useState<CheckpointSummary[]>([])
   const [records, setRecords] = useState<Record<string, ChangedFileRecord[]>>({})
-  const [armingId, setArmingId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [reviewId, setReviewId] = useState<string | null>(null)
+  const [diffOpenId, setDiffOpenId] = useState<string | null>(null)
+  const [conflictFor, setConflictFor] = useState<string | null>(null)
+  const [restoreConflicts, setRestoreConflicts] = useState<ConflictInfo[]>([])
 
   const loadRecords = useCallback(async (checkpointId: string, cwd: string) => {
     const key = `${checkpointId}:records`
@@ -295,20 +317,42 @@ function SessionCard({
   }, [expanded, session.id, session.archived, session.cwd, loadRecords])
 
   const handleRestore = async (checkpointId: string) => {
-    if (armingId !== checkpointId) {
-      setArmingId(checkpointId)
-      window.setTimeout(() => {
-        setArmingId((current) => (current === checkpointId ? null : current))
-      }, 5000)
-      return
-    }
-    setArmingId(null)
+    setReviewId(null)
     await restoreCheckpoint(checkpointId, session.cwd, { sessionId: session.id })
+    setRestoreConflicts(useCheckpointStore.getState().conflicts)
+    setConflictFor(checkpointId)
     const cps = await window.electron.checkpoint
       .list({ sessionId: session.id, cwd: session.cwd })
       .catch(() => [])
     setCheckpoints(cps)
   }
+
+  const toggleDiff = (checkpoint: CheckpointSummary) => {
+    const next = diffOpenId === checkpoint.id ? null : checkpoint.id
+    setDiffOpenId(next)
+    if (next) void fetchAllDiffs(checkpoint.id, session.cwd)
+  }
+
+  const toggleDetail = useCallback(async () => {
+    const next = !detailOpen
+    setDetailOpen(next)
+    if (!next || detail) return
+    setDetailLoading(true)
+    try {
+      const [fetched, cps] = await Promise.all([
+        window.electron.session.get(session.id).catch(() => null),
+        checkpoints.length > 0
+          ? Promise.resolve(checkpoints)
+          : window.electron.checkpoint.list({ sessionId: session.id, cwd: session.cwd }).catch(() => []),
+      ])
+      if (fetched) setDetail(fetched)
+      setCheckpoints(cps)
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [detailOpen, detail, session.id, session.cwd, checkpoints])
+
+  const checkpointById = useMemo(() => new Map(checkpoints.map((cp) => [cp.id, cp])), [checkpoints])
 
   const icon = ENGINE_ICONS[session.engine] ?? terminalIcon
 
@@ -323,7 +367,12 @@ function SessionCard({
         opacity: session.archived ? 0.62 : 1,
       }}
     >
-      <div className="flex items-center" style={{ gap: 7 }}>
+      <div
+        className="flex items-center"
+        style={{ gap: 7, cursor: 'pointer' }}
+        title={t('terminal:checkpoint.expand')}
+        onClick={() => void toggleDetail()}
+      >
         <img src={icon} alt={session.engine} style={{ width: 14, height: 14, objectFit: 'contain' }} />
         <span style={{ fontSize: 11, color: '#a8a8a8' }}>{session.engine}</span>
         <span
@@ -335,6 +384,7 @@ function SessionCard({
         <span style={{ fontSize: 10, color: '#666', fontFamily: "'SF Mono', monospace" }}>
           {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)}
         </span>
+        <span style={{ fontSize: 10, color: '#555' }}>{detailOpen ? '▴' : '▾'}</span>
       </div>
 
       {session.firstPrompt && (
@@ -358,6 +408,53 @@ function SessionCard({
       <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#555', marginTop: 2 }}>
         {session.cwd}{session.branch ? ` · ${session.branch}` : ''}
       </div>
+
+      {detailOpen && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+          {!detail ? (
+            <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : ''}</div>
+          ) : (
+            <>
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8f8f96', lineHeight: 1.8 }}>
+                <div>…/{baseNameOf(detail.cwd)}{detail.branch ? ` · ${detail.branch}` : ''}</div>
+                {detail.transcriptPath && (
+                  <div>transcript …/{baseNameOf(detail.transcriptPath)}（只读）· {formatDate(detail.createdAt, t)}</div>
+                )}
+              </div>
+              <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 10px' }}>
+                {detail.turns.map((turn, index) => {
+                  const linked = turn.checkpointId ? checkpointById.get(turn.checkpointId) : undefined
+                  return (
+                    <div key={turn.id} style={{ padding: '8px 0', borderTop: index === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+                      {linked?.prompt && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 4 }}>
+                            turn {index + 1} · {formatDate(turn.startedAt, t)}
+                          </div>
+                          <div style={{ fontSize: 12, lineHeight: 1.6, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                            {linked.prompt}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777' }}>
+                        <span>{session.engine}</span>
+                        <span style={{ color: turn.kind === 'done' ? '#999' : '#e06c75', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
+                          {turnKindLabel(turn.kind, t)}
+                        </span>
+                        {linked && <span style={{ color: '#8ab4ff' }}>#{linked.conversationIndex}</span>}
+                        {!linked?.prompt && <span>turn {index + 1} · {formatDate(turn.startedAt, t)}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+                {detail.turns.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#555', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {session.archived && (
         <div
@@ -396,29 +493,99 @@ function SessionCard({
 
       {expanded && !session.archived && (
         <div style={{ marginTop: 4 }}>
-          {checkpoints.map((cp) => (
-            <div key={cp.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-              <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: '#c9c9c9' }}>
-                <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#666' }}>
-                  #{cp.conversationIndex}
-                </span>
-                <span>{cp.changedFileCount} files</span>
-                <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#555' }}>
-                  {formatDate(cp.createdAt, t)}
-                </span>
+          {checkpoints.map((cp) => {
+            const recs = records[`${cp.id}:records`]
+            const canDiff = !!recs && !recs.some((record) => record.status === 'binary' || record.status === 'oversized')
+            const diffKey = `${cp.id}:`
+            const fullDiff = diffs[diffKey]
+            const pruneCount = checkpoints.filter((other) => other.conversationIndex > cp.conversationIndex).length
+            return (
+              <div key={cp.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: '#c9c9c9' }}>
+                  <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#666' }}>
+                    #{cp.conversationIndex}
+                  </span>
+                  <span>{cp.changedFileCount} files</span>
+                  <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#555' }}>
+                    {formatDate(cp.createdAt, t)}
+                  </span>
+                </div>
+                <CheckpointFiles records={recs} />
+                <div className="flex" style={{ gap: 6, marginTop: 6 }}>
+                  {canDiff && (
+                    <button
+                      onClick={() => toggleDiff(cp)}
+                      className="flex-1 rounded cursor-pointer"
+                      style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
+                    >
+                      {t('terminal:checkpoint.diff')} {diffOpenId === cp.id ? '▴' : '▾'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setConflictFor(null)
+                      setRestoreConflicts([])
+                      setReviewId(reviewId === cp.id ? null : cp.id)
+                    }}
+                    className="flex-1 rounded cursor-pointer"
+                    style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
+                  >
+                    {t('terminal:agentSession.restoreTo', { index: cp.conversationIndex })}
+                  </button>
+                </div>
+                {diffOpenId === cp.id && (
+                  <div style={{ marginTop: 6, background: 'rgba(10,10,10,0.6)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 4, padding: 8, fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.6 }}>
+                    {fullDiff ? (
+                      fullDiff.split('\n').map((line, i) => (
+                        <div key={i} style={{ color: line.startsWith('-') ? '#e06c75' : line.startsWith('+') ? '#4ec9b0' : '#888' }}>
+                          {line}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffLoading')}</div>
+                    )}
+                  </div>
+                )}
+                {reviewId === cp.id && (
+                  <div style={{ marginTop: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+                    {pruneCount > 0 && (
+                      <div style={{ padding: '8px 10px', background: 'rgba(255,120,48,0.03)', border: '1px solid rgba(255,120,48,0.18)', borderRadius: 6, fontSize: 11, color: '#999', marginBottom: 8, lineHeight: 1.6 }}>
+                        {t('terminal:checkpoint.pruneWarn', { count: pruneCount })}
+                      </div>
+                    )}
+                    <CheckpointFiles records={recs} />
+                    <div className="flex" style={{ gap: 6, marginTop: 8 }}>
+                      <button
+                        onClick={() => void handleRestore(cp.id)}
+                        className="flex-1 rounded cursor-pointer"
+                        style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+                      >
+                        {t('terminal:agentSession.restoreConfirm')}
+                      </button>
+                      <button
+                        onClick={() => setReviewId(null)}
+                        className="flex-1 rounded cursor-pointer"
+                        style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
+                      >
+                        {t('common:action.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {conflictFor === cp.id && restoreConflicts.length > 0 && (
+                  <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(224,108,117,0.02)', border: '1px solid rgba(224,108,117,0.3)', borderRadius: 6, fontSize: 11, color: '#999', lineHeight: 1.6 }}>
+                    <div>{t('terminal:checkpoint.conflictFiles', { count: restoreConflicts.length })} · {t('terminal:checkpoint.conflictBadge')}</div>
+                    {restoreConflicts.map((conflict) => (
+                      <div key={conflict.filePath} style={{ fontFamily: "'SF Mono', monospace", marginTop: 4 }}>
+                        {conflict.filePath}
+                      </div>
+                    ))}
+                    <div style={{ marginTop: 4 }}>{t('terminal:checkpoint.conflictHint')}</div>
+                  </div>
+                )}
               </div>
-              <CheckpointFiles records={records[`${cp.id}:records`]} />
-              <button
-                onClick={() => handleRestore(cp.id)}
-                className="rounded cursor-pointer"
-                style={{ marginTop: 6, height: 22, fontSize: 10, padding: '0 12px', border: '1px solid var(--control-border)', background: 'transparent', color: armingId === cp.id ? '#e06c75' : 'var(--shell-muted)' }}
-              >
-                {armingId === cp.id
-                  ? t('terminal:agentSession.restoreConfirm')
-                  : t('terminal:agentSession.restoreTo', { index: cp.conversationIndex })}
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

@@ -23,16 +23,6 @@ export const RIGHT_TOOL_REGISTRY = [
     mountPolicy: 'while-open',
   },
   {
-    id: 'checkpoints',
-    titleKey: 'common:rightTool.tool.checkpoints.title',
-    shortTitleKey: 'common:rightTool.tool.checkpoints.shortTitle',
-    ariaLabelKey: 'common:rightTool.tool.checkpoints.ariaLabel',
-    icon: 'checkpoints',
-    order: 2,
-    instancePolicy: 'single',
-    mountPolicy: 'while-open',
-  },
-  {
     id: 'assist',
     titleKey: 'common:rightTool.tool.assist.title',
     shortTitleKey: 'common:rightTool.tool.assist.shortTitle',

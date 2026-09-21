@@ -1,6 +1,6 @@
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/implemented/bug-fix/2026-09-16-right-dock-empty-collapse.md
 import { useEffect, useState } from 'react'
-import { Files, GitBranch, History, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
+import { Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
@@ -83,7 +83,6 @@ export function RightToolRail({
 const TOOL_ICONS: Record<RightToolId, LucideIcon> = {
   files: Files,
   git: GitBranch,
-  checkpoints: History,
   assist: Sparkles,
   persona: UserRound,
   sessions: MessagesSquare,
