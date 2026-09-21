@@ -161,5 +161,28 @@
     "close": "关闭",
     "minimize": "最小化",
     "maximize": "最大化"
+  },
+  "hosted": {
+    "nav": "托管平台",
+    "navMeta": "GitHub 与 GitLab",
+    "title": "托管平台",
+    "subtitle": "代码托管连接",
+    "githubSection": "GitHub",
+    "githubHint": "通过本机 gh CLI 鉴权，终端运行 gh auth login。",
+    "gitlabSection": "GitLab 自建实例",
+    "urlLabel": "实例地址",
+    "urlPlaceholder": "https://git.company.com",
+    "tokenLabel": "PAT（api 权限）",
+    "tokenPlaceholder": "glpat-…（留空保留已存）",
+    "tokenSaved": "已存钥匙串",
+    "tokenEnv": "正使用 GITLAB_TOKEN 环境变量",
+    "tokenNone": "未配置",
+    "insecureLabel": "跳过证书校验（仅内网自签）",
+    "insecureWarn": "关闭校验会暴露中间人风险，仅内网使用。",
+    "timeoutLabel": "超时（秒）",
+    "verify": "验证连接",
+    "save": "保存",
+    "clearToken": "清除 PAT",
+    "connectedAs": "已连接：{{name}}"
   }
 }

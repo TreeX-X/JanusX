@@ -8,11 +8,12 @@ import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
 import { ModelCatalogPanel } from './ModelCatalogPanel'
 import { AgentSettingsPanel } from './AgentSettingsPanel'
+import { HostedSettingsPanel } from './HostedSettingsPanel'
 import { TeamSettingsPanel } from './team/TeamSettingsPanel'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-export type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models' | 'team'
+export type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models' | 'team' | 'hosted'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -20,7 +21,7 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team']
+const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team', 'hosted']
 
 // Note: settings open/close mirrors the blueprint workbench card lifecycle — see .agents/notes/implemented/feature/2026-09-18-settings-workbench-transition.md
 const SETTINGS_CARD_ENTER_DURATION_MS = 260
@@ -30,6 +31,7 @@ const SETTINGS_EXIT_MS = SETTINGS_CARD_ENTER_DURATION_MS + SETTINGS_EXIT_BUFFER_
 export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: AppSettingsModalProps) {
   const { t } = useI18n('settings')
   const { t: tTeam } = useI18n('team')
+  const { t: tCommon } = useI18n('common')
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
   const [revealReady, setRevealReady] = useState(false)
   const panelRef = useRef<HTMLDivElement | null>(null)
@@ -80,14 +82,27 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
   if (phase === 'hidden') return null
 
   // team 页文案走 team 命名空间（settings.json 存在历史编码损坏，不再追加 key）。
-  const tabNav = (tab: SettingsTab) => (tab === 'team' ? tTeam('team:settingsTab.nav') : t(`settings:tab.${tab}.nav`))
-  const tabNavMeta = (tab: SettingsTab) => (tab === 'team' ? tTeam('team:settingsTab.navMeta') : t(`settings:tab.${tab}.navMeta`))
+  // hosted 页同理走 common 命名空间。
+  const tabNav = (tab: SettingsTab) =>
+    tab === 'team'
+      ? tTeam('team:settingsTab.nav')
+      : tab === 'hosted'
+        ? tCommon('common:hosted.nav')
+        : t(`settings:tab.${tab}.nav`)
+  const tabNavMeta = (tab: SettingsTab) =>
+    tab === 'team'
+      ? tTeam('team:settingsTab.navMeta')
+      : tab === 'hosted'
+        ? tCommon('common:hosted.navMeta')
+        : t(`settings:tab.${tab}.navMeta`)
   const meta = activeTab === 'team'
     ? { title: tTeam('team:settingsTab.title'), subtitle: tTeam('team:settingsTab.subtitle') }
-    : {
-      title: t(`settings:tab.${activeTab}.title`),
-      subtitle: t(`settings:tab.${activeTab}.subtitle`),
-    }
+    : activeTab === 'hosted'
+      ? { title: tCommon('common:hosted.title'), subtitle: tCommon('common:hosted.subtitle') }
+      : {
+        title: t(`settings:tab.${activeTab}.title`),
+        subtitle: t(`settings:tab.${activeTab}.subtitle`),
+      }
 
   return createPortal(
     <div
@@ -147,6 +162,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
             {activeTab === 'llm' && <LlmConfigModal embedded />}
             {activeTab === 'models' && <ModelCatalogPanel />}
             {activeTab === 'team' && <TeamSettingsPanel />}
+            {activeTab === 'hosted' && <HostedSettingsPanel />}
           </main>
         </section>
       </div>

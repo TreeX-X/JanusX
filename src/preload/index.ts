@@ -532,6 +532,10 @@ const hostedAPI: HostedAPI = {
   createReview: (input) => ipcRenderer.invoke(HOSTED_CHANNELS.createReview, input),
   mergeReview: (workspacePath, number, method) =>
     ipcRenderer.invoke(HOSTED_CHANNELS.mergeReview, { workspacePath, number, method }),
+  gitlabGet: () => ipcRenderer.invoke(HOSTED_CHANNELS.gitlabGet),
+  gitlabSave: (input) => ipcRenderer.invoke(HOSTED_CHANNELS.gitlabSave, input),
+  gitlabVerify: (input) => ipcRenderer.invoke(HOSTED_CHANNELS.gitlabVerify, input),
+  gitlabClearToken: () => ipcRenderer.invoke(HOSTED_CHANNELS.gitlabClearToken),
 }
 
 const desktopToastAPI: DesktopToastAPI = {

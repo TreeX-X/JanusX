@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
-import { HOSTED_CHANNELS, type CreateReviewInput } from '../../shared/ipc/hosted'
+import { HOSTED_CHANNELS, type CreateReviewInput, type GitlabSaveInput } from '../../shared/ipc/hosted'
 import { detectProvider, getProvider } from '../hosted/github'
+import { gitlabConfigStore } from '../hosted/gitlab-config'
 import { worktreeMetaStore } from '../git/worktree-meta'
 
 export function registerHostedHandlers(): void {
@@ -79,4 +80,23 @@ export function registerHostedHandlers(): void {
       return provider.mergeReview(workspacePath, number, method)
     },
   )
+
+  ipcMain.handle(HOSTED_CHANNELS.gitlabGet, async () => {
+    return gitlabConfigStore.getConfig()
+  })
+
+  ipcMain.handle(HOSTED_CHANNELS.gitlabSave, async (_event, input: GitlabSaveInput) => {
+    return gitlabConfigStore.saveConfig(input)
+  })
+
+  ipcMain.handle(
+    HOSTED_CHANNELS.gitlabVerify,
+    async (_event, input?: Partial<GitlabSaveInput>) => {
+      return gitlabConfigStore.verify(input)
+    },
+  )
+
+  ipcMain.handle(HOSTED_CHANNELS.gitlabClearToken, async () => {
+    return gitlabConfigStore.clearToken()
+  })
 }

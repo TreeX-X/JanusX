@@ -161,5 +161,28 @@
     "close": "Close",
     "minimize": "Minimize",
     "maximize": "Maximize"
+  },
+  "hosted": {
+    "nav": "Hosting",
+    "navMeta": "GitHub & GitLab",
+    "title": "Hosting",
+    "subtitle": "Code hosting connections",
+    "githubSection": "GitHub",
+    "githubHint": "Authenticated via the local gh CLI; run gh auth login in a terminal.",
+    "gitlabSection": "Self-hosted GitLab",
+    "urlLabel": "Instance URL",
+    "urlPlaceholder": "https://git.company.com",
+    "tokenLabel": "PAT (api scope)",
+    "tokenPlaceholder": "glpat-… (empty keeps stored)",
+    "tokenSaved": "Stored in keychain",
+    "tokenEnv": "Using GITLAB_TOKEN env",
+    "tokenNone": "Not configured",
+    "insecureLabel": "Skip TLS verification (intranet self-signed only)",
+    "insecureWarn": "Disabling verification exposes MITM risk; intranet only.",
+    "timeoutLabel": "Timeout (s)",
+    "verify": "Verify",
+    "save": "Save",
+    "clearToken": "Clear PAT",
+    "connectedAs": "Connected: {{name}}"
   }
 }
