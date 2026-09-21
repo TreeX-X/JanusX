@@ -533,6 +533,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   // Window close without full quit still needs local cleanup.
   appShutdown.configure({
     finalizePendingCheckpoints: () => finalizePendingTerminalCheckpoints(),
+    flushAgentSessions: () => agentSessionRegistry.flush(),
     stopHookBridge: () => hookBridge.stop(),
     disposeTerminalSession: () => {
       for (const id of [...pendingTerminalData.keys()]) dropPendingTerminalData(id)

@@ -206,6 +206,7 @@
     "scopeWorkspace": "Workspace",
     "scopeProject": "Project",
     "scopeAll": "All",
+    "scopeArchived": "Archived",
     "empty": "No sessions",
     "loading": "Loading",
     "checkpoints": "Checkpoints {{count}}",

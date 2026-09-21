@@ -206,6 +206,7 @@
     "scopeWorkspace": "工作区",
     "scopeProject": "项目",
     "scopeAll": "全部",
+    "scopeArchived": "归档",
     "empty": "暂无会话",
     "loading": "加载中",
     "checkpoints": "还原点 {{count}}",

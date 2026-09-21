@@ -2,7 +2,7 @@
 // session cards, scoped checkpoints, and Continue handoff — see
 // .agents/notes/implemented/feature/2026-09-21-workspace-sessions-v1.md
 import { randomUUID } from 'crypto'
-import { readFile } from 'fs/promises'
+import { copyFile, readFile } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
@@ -43,7 +43,8 @@ export class AgentSessionRegistry {
   private readonly pendingTurnStart = new Map<string, string>()
   private readonly writeQueue = new SerialQueue()
   private changeListener?: (sessionId?: string) => void
-  private loaded = false
+  private loadTask: Promise<void> | null = null
+  private loadOk = false
 
   constructor(private readonly userDataDir?: string) {}
 
@@ -65,13 +66,22 @@ export class AgentSessionRegistry {
   }
 
   /** Load persisted sessions; corrupt files recover to empty without failing. */
-  async load(): Promise<void> {
-    if (this.loaded) return
-    this.loaded = true
+  load(): Promise<void> {
+    return this.ensureLoaded()
+  }
+
+  private ensureLoaded(): Promise<void> {
+    return (this.loadTask ??= this.doLoad())
+  }
+
+  private async doLoad(): Promise<void> {
     try {
       const raw = await readFile(this.storePath(), 'utf-8')
       const document = JSON.parse(raw) as Partial<SessionStoreDocument>
-      if (!isRecord(document) || !Array.isArray(document.sessions)) return
+      if (!isRecord(document) || !Array.isArray(document.sessions)) {
+        console.error('[sessions] store has unexpected shape; writes paused to protect disk state')
+        return
+      }
       for (const entry of document.sessions) {
         if (!isRecord(entry) || typeof entry.id !== 'string' || typeof entry.cwd !== 'string') continue
         const record = entry as unknown as AgentSessionRecord
@@ -83,24 +93,44 @@ export class AgentSessionRegistry {
           archived: record.archived === true,
         })
       }
-    } catch {
-      // Fresh start: no store yet or unreadable store.
+      this.loadOk = true
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        // Fresh start: no store yet, writes proceed.
+        this.loadOk = true
+        return
+      }
+      console.error('[sessions] store failed to load; writes paused to protect disk state')
     }
   }
 
   private persist(): void {
-    const document: SessionStoreDocument = {
-      version: 1,
-      sessions: Array.from(this.sessions.values()),
-    }
-    void this.writeQueue
-      .run(() => writeFileAtomic(this.storePath(), `${JSON.stringify(document, null, 2)}\n`))
+    // Mutations gate on load so a fresh process never clobbers disk state
+    // it has not read yet; a failed load pauses writes instead of
+    // overwriting possibly valid data with a partial view.
+    void this.ensureLoaded()
+      .then(() => {
+        if (!this.loadOk) {
+          console.error('[sessions] persist refused: store failed to load')
+          return undefined
+        }
+        return this.writeQueue.run(async () => {
+          const path = this.storePath()
+          // One-level rollback copy; failures here never block the write.
+          await copyFile(path, `${path}.prev`).catch(() => undefined)
+          const document: SessionStoreDocument = {
+            version: 1,
+            sessions: Array.from(this.sessions.values()),
+          }
+          await writeFileAtomic(path, `${JSON.stringify(document, null, 2)}\n`)
+        })
+      })
       .catch((err) => console.error('[sessions] persist failed:', err))
   }
 
   /** Drain pending persists (tests and shutdown paths). */
   flush(): Promise<void> {
-    return this.writeQueue.run(() => Promise.resolve())
+    return this.ensureLoaded().then(() => this.writeQueue.run(() => Promise.resolve()))
   }
 
   createSession(input: {

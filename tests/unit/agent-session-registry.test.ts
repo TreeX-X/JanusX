@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -111,5 +111,67 @@ describe('agent session registry', () => {
       registry.createSession(createInput(`term-${i}`, `ws-${i}`))
     }
     expect(registry.listSessions().length).toBeLessThanOrEqual(200)
+  })
+
+  function seedDoc(sessions: Array<Record<string, unknown>>) {
+    return JSON.stringify({ version: 1, sessions })
+  }
+
+  function seedRecord(id: string, cwd: string): Record<string, unknown> {
+    return {
+      id,
+      workspaceId: 'ws-1',
+      engine: 'claude',
+      cwd,
+      firstPrompt: 'seeded',
+      lastPrompt: 'seeded',
+      turnCount: 1,
+      checkpointCount: 0,
+      checkpointIds: [],
+      status: 'done',
+      terminalIds: [],
+      turns: [],
+      createdAt: '2026-09-21T00:00:00.000Z',
+      updatedAt: '2026-09-21T00:00:00.000Z',
+      archived: false,
+    }
+  }
+
+  it('never clobbers disk state it has not read yet', async () => {
+    const dir = await userDataDir()
+    const storePath = join(dir, 'janusx', 'agent-sessions.json')
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(join(dir, 'janusx'), { recursive: true })
+    await writeFile(storePath, seedDoc([seedRecord('seed-1', '/repo')]))
+    // No explicit load: the first mutation gates on it internally.
+    const registry = track(new AgentSessionRegistry(dir))
+    registry.createSession(createInput('term-new'))
+    await registry.flush()
+    const reloaded = track(new AgentSessionRegistry(dir))
+    await reloaded.load()
+    expect(reloaded.getSession('seed-1')?.firstPrompt).toBe('seeded')
+    expect(reloaded.listSessions()).toHaveLength(2)
+  })
+
+  it('refuses to overwrite a corrupt store and keeps a rollback copy', async () => {
+    const dir = await userDataDir()
+    const storePath = join(dir, 'janusx', 'agent-sessions.json')
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(join(dir, 'janusx'), { recursive: true })
+    await writeFile(storePath, seedDoc([seedRecord('seed-1', '/repo')]))
+    const registry = track(new AgentSessionRegistry(dir))
+    await registry.load()
+    // Healthy write leaves a rollback copy of the previous bytes.
+    registry.createSession(createInput('term-new'))
+    await registry.flush()
+    expect(await readFile(`${storePath}.prev`, 'utf8')).toBe(seedDoc([seedRecord('seed-1', '/repo')]))
+
+    await writeFile(storePath, '{broken')
+    const corrupt = track(new AgentSessionRegistry(dir))
+    await corrupt.load()
+    expect(corrupt.listSessions()).toEqual([])
+    corrupt.createSession(createInput('term-x'))
+    await corrupt.flush()
+    expect(await readFile(storePath, 'utf8')).toBe('{broken')
   })
 })

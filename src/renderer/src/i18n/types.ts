@@ -1894,6 +1894,7 @@ export type TypedI18nKey =
   | 'terminal:agentSession.restoreTo'
   | 'terminal:agentSession.restoreUnavailable'
   | 'terminal:agentSession.scopeAll'
+  | 'terminal:agentSession.scopeArchived'
   | 'terminal:agentSession.scopeProject'
   | 'terminal:agentSession.scopeWorkspace'
   | 'terminal:agentSession.statusActive'

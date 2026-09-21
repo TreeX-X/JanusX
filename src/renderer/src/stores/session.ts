@@ -31,6 +31,7 @@ function activeWorkspaceId(): string | null {
 function scopeKeyFor(filter?: SessionFilter): string {
   if (filter?.workspaceId) return `ws:${filter.workspaceId}`
   if (filter?.cwd) return `cwd:${filter.cwd}`
+  if (filter?.includeArchived) return 'archived'
   return 'all'
 }
 

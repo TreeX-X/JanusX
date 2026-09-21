@@ -21,12 +21,13 @@ const ENGINE_ICONS: Record<string, string> = {
   'pi': piIcon,
 }
 
-type Scope = 'workspace' | 'project' | 'all'
+type Scope = 'workspace' | 'project' | 'all' | 'archived'
 
 const SCOPE_KEYS = {
   workspace: 'terminal:agentSession.scopeWorkspace',
   project: 'terminal:agentSession.scopeProject',
   all: 'terminal:agentSession.scopeAll',
+  archived: 'terminal:agentSession.scopeArchived',
 } as const
 
 function formatDate(iso: string, t: (k: string, opt?: Record<string, unknown>) => string): string {
@@ -84,6 +85,10 @@ export function SessionPanel() {
       void fetchSessions({})
       return
     }
+    if (scope === 'archived') {
+      void fetchSessions({ includeArchived: true })
+      return
+    }
     if (!activeWorkspaceId && !scopePath) {
       clearWorkspaceScope()
       return
@@ -99,6 +104,8 @@ export function SessionPanel() {
   }, [scopePath, uiForPath, setUiForPath])
 
   useEffect(() => subscribeToEvents(), [subscribeToEvents])
+
+  const visible = scope === 'archived' ? sessions.filter((s) => s.archived) : sessions.filter((s) => !s.archived)
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -155,12 +162,12 @@ export function SessionPanel() {
         {error && (
           <div className="text-xs" style={{ color: '#e06c75' }}>{error}</div>
         )}
-        {!loading && sessions.length === 0 && (
+        {!loading && visible.length === 0 && (
           <div className="flex items-center justify-center h-full text-xs" style={{ color: '#555' }}>
             {t('terminal:agentSession.empty')}
           </div>
         )}
-        {sessions.map((session) => (
+        {visible.map((session) => (
           <SessionCard
             key={session.id}
             session={session}
