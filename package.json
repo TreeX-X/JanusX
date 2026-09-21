@@ -52,7 +52,8 @@
     "package:win:publish": "npm run prepackage && npm run build && npm run check:package-boundary && npm run exclusions:sync && electron-builder --win --publish always",
     "package:mac": "npm run prepackage && npm run build && npm run check:package-boundary && electron-builder --mac",
     "package:linux": "npm run prepackage && npm run build && npm run check:package-boundary && electron-builder --linux",
-    "prepackage": "npm install --install-links"
+    "prepackage": "npm install --install-links",
+    "release:tag": "node scripts/release-tag.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

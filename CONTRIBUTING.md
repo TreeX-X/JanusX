@@ -30,6 +30,7 @@
 - 内测注意：任何 `v*` tag 都会公开发布，不存在"静默内测 tag"。版本带 prerelease 后缀时，workflow 自动创建 GitHub prerelease；tag 必须仍与 `package.json` 完全一致。
 - Windows 发布固定为 x64，workflow 在打包前下载固定版本 OfficeCLI 并核验 SHA256。历史大写 tag 不自动转换，也不补发版本。
 - 禁止 draft Release：更新 feed 与落地页读不到 draft。
+- 本地打版走 `npm run release:tag -- <版本>`（如 `npm run release:tag -- 0.8.8`）：脚本依次校验工作树干净、`main` 与远端同步、版本号递增、tag 不存在，再改版本提交并打 annotated tag；默认只做到本地，加 `--push` 才推送（推送即公开发布，有二次确认）。发版说明模板自动生成为 `release-notes-vX.Y.Z.md`（不入库），CI 建好 Release 后用 `gh release edit <tag> --notes-file <模板>` 或网页编辑填入正文。
 
 ## Issue
 
