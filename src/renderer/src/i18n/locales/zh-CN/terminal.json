@@ -243,6 +243,21 @@
     "dirtyWarn": "盘内有未提交改动，删除将丢失，只能强制删除继续。",
     "branchKept": "分支 {{branch}} 含未合并提交，已保留待复核。",
     "preservedTitle": "保留的分支",
-    "deleteBranch": "删除分支"
+    "deleteBranch": "删除分支",
+    "shipAction": "合并",
+    "shipTitle": "合并到主分支",
+    "shipDiffEmpty": "与 {{base}} 无文件差异",
+    "commitMessage": "提交信息",
+    "commitRun": "提交盘内改动",
+    "pushBase": "同时推送主分支",
+    "doMerge": "合并到 {{base}}",
+    "merging": "合并中…",
+    "mergedOk": "已合并，可删除任务盘。",
+    "upToDateNote": "已是最新，无需合并。",
+    "conflictsNote": "存在冲突文件，合并已停止。",
+    "abortMerge": "中止合并",
+    "deleteAfterShip": "删除任务盘并归档",
+    "mainDirtyBlock": "主盘有未提交改动，请先处理。",
+    "worktreeDirtyNote": "盘内有未提交改动，请先提交。"
   }
 }

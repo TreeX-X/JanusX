@@ -7,6 +7,9 @@ export const WORKTREE_CHANNELS = {
   delete: 'worktree:delete',
   status: 'worktree:status',
   deleteBranch: 'worktree:delete-branch',
+  shipDiff: 'worktree:ship-diff',
+  shipMerge: 'worktree:ship-merge',
+  shipAbort: 'worktree:ship-abort',
 } as const
 
 export interface WorktreeInfo {
@@ -20,6 +23,8 @@ export interface WorktreeInfo {
   isMain: boolean
   /** True when created outside JanusX (plain `git worktree add`). */
   external: boolean
+  /** Creation start point; absent for external or legacy entries. */
+  startFrom?: string
   locked?: boolean
   prunable?: boolean
 }
@@ -74,6 +79,26 @@ export interface WorktreeStatus {
   dirty: boolean
 }
 
+export interface BranchFileDiff {
+  path: string
+  additions: number | null
+  deletions: number | null
+}
+
+export interface BranchDiff {
+  base: string
+  branch: string
+  files: BranchFileDiff[]
+  additions: number
+  deletions: number
+}
+
+export interface MergeResult {
+  merged: boolean
+  upToDate: boolean
+  conflicts: string[]
+}
+
 export interface WorktreeAPI {
   list(workspaceId: string, workspacePath: string): Promise<WorktreeInfo[]>
   identity(workspacePath: string): Promise<RepoIdentity | null>
@@ -83,4 +108,7 @@ export interface WorktreeAPI {
   delete(input: WorktreeDeleteInput): Promise<WorktreeDeleteResult>
   status(worktreePath: string): Promise<WorktreeStatus>
   deleteBranch(workspacePath: string, branch: string, force?: boolean): Promise<{ success: boolean }>
+  shipDiff(workspacePath: string, base: string, branch: string): Promise<BranchDiff>
+  shipMerge(workspacePath: string, branch: string): Promise<MergeResult>
+  shipAbort(workspacePath: string): Promise<{ success: boolean }>
 }

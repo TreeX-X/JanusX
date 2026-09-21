@@ -7,7 +7,7 @@ import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
-import { WorktreeComposer, WorktreeDeleteDialog } from './WorktreeDialogs'
+import { WorktreeComposer, WorktreeDeleteDialog, WorktreeShipDialog } from './WorktreeDialogs'
 import { ModalCloseButton } from './ModalCloseButton'
 import { TeamFooter, TeamFooterCollapsed } from './team/TeamFooter'
 import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
@@ -255,11 +255,13 @@ function WorktreeSubList({
   workspacePath,
   lastKeptBranch,
   onDeleteRequest,
+  onShipRequest,
 }: {
   workspaceId: string
   workspacePath: string
   lastKeptBranch: string | null
   onDeleteRequest: (worktree: WorktreeInfo) => void
+  onShipRequest: (worktree: WorktreeInfo) => void
 }) {
   const { t } = useI18n('terminal')
   const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? [])
@@ -364,7 +366,7 @@ function WorktreeSubList({
               event.stopPropagation()
               setActivePath(workspaceId, worktree.path)
             }}
-            className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+            className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
             style={{
               background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
               color: focused ? '#d8d8d8' : '#8a8a8a',
@@ -381,6 +383,21 @@ function WorktreeSubList({
                 {worktree.path}
               </span>
             </span>
+            {!worktree.isMain && worktree.branch && (
+              <button
+                type="button"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onShipRequest(worktree)
+                }}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="shrink-0 cursor-pointer rounded-[3px] border-0 opacity-0 transition-opacity duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:opacity-100 group-hover/wt:opacity-100"
+                style={{ color: '#626268', background: 'transparent', fontSize: 10, padding: '2px 6px' }}
+              >
+                {t('terminal:worktree.shipAction')}
+              </button>
+            )}
             {!worktree.isMain && (
               <button
                 type="button"
@@ -466,6 +483,10 @@ export function Sidebar() {
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null)
   const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
   const [composerTarget, setComposerTarget] = useState<Workspace | null>(null)
+  const [shipTarget, setShipTarget] = useState<{
+    workspace: Workspace
+    worktree: WorktreeInfo
+  } | null>(null)
   const [worktreeDeleteTarget, setWorktreeDeleteTarget] = useState<{
     workspace: Workspace
     worktree: WorktreeInfo
@@ -1216,6 +1237,7 @@ export function Sidebar() {
                           workspacePath={ws.path}
                           lastKeptBranch={lastKeptBranchByWorkspace[ws.id] ?? null}
                           onDeleteRequest={(worktree) => setWorktreeDeleteTarget({ workspace: ws, worktree })}
+                          onShipRequest={(worktree) => setShipTarget({ workspace: ws, worktree })}
                         />
                         {workspaceTerminals.length === 0 ? (
                           <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
@@ -1403,6 +1425,14 @@ export function Sidebar() {
       )}
       {composerTarget && (
         <WorktreeComposer workspace={composerTarget} onClose={() => setComposerTarget(null)} />
+      )}
+      {shipTarget && (
+        <WorktreeShipDialog
+          workspaceId={shipTarget.workspace.id}
+          workspacePath={shipTarget.workspace.path}
+          worktree={shipTarget.worktree}
+          onClose={() => setShipTarget(null)}
+        />
       )}
       {worktreeDeleteTarget && (
         <WorktreeDeleteDialog

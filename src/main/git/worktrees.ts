@@ -2,12 +2,15 @@
 // .agents/notes/implemented/feature/2026-09-21-worktree-sidebar-scoping.md
 // Note: background creation, scoped deletion, and branch review — see
 // .agents/notes/implemented/feature/2026-09-21-worktree-create-delete.md
+// Note: creation metadata plus local Ship diff/merge/abort — see
+// .agents/notes/implemented/feature/2026-09-21-worktree-ship-merge.md
 import { execFile, spawn, type ChildProcess } from 'child_process'
 import { createHash } from 'crypto'
 import { access, copyFile, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
 import { promisify } from 'util'
 import type { RepoIdentity, WorktreeInfo } from '../../shared/ipc/worktree'
+import { worktreeMetaStore } from './worktree-meta'
 
 const execFileAsync = promisify(execFile)
 const LOCAL_GIT_TIMEOUT_MS = 10000
@@ -140,19 +143,25 @@ export async function listWorktrees(workspaceId: string, workspacePath: string):
   }
   const output = await runGit(workspacePath, ['worktree', 'list', '--porcelain'])
   if (!output) return [main]
-  const linked = parseWorktreeList(output)
-    .filter((entry) => !entry.bare && entry.path !== workspacePath)
-    .map((entry) => ({
-      id: entry.path,
-      workspaceId,
-      path: entry.path,
-      branch: entry.branch,
-      detached: entry.detached,
-      isMain: false,
-      external: true,
-      ...(entry.locked ? { locked: true } : {}),
-      ...(entry.prunable ? { prunable: true } : {}),
-    }))
+  const linked = await Promise.all(
+    parseWorktreeList(output)
+      .filter((entry) => !entry.bare && entry.path !== workspacePath)
+      .map(async (entry): Promise<WorktreeInfo> => {
+        const meta = await worktreeMetaStore.get(entry.path).catch(() => null)
+        return {
+          id: entry.path,
+          workspaceId,
+          path: entry.path,
+          branch: entry.branch,
+          detached: entry.detached,
+          isMain: false,
+          external: !meta,
+          ...(meta ? { startFrom: meta.startFrom } : {}),
+          ...(entry.locked ? { locked: true } : {}),
+          ...(entry.prunable ? { prunable: true } : {}),
+        }
+      }),
+  )
   return [main, ...linked]
 }
 
@@ -302,6 +311,10 @@ export async function createWorktree(
   const path = await worktreeDirFor(root, slugifyWorktreeName(branch))
   await runWorktreeAdd(root, branch, path, startFrom, creationId)
   const { shared, copied } = await shareNewWorktreeDeps(root, path)
+  // Metadata must never fail creation; the base falls back to origin/main.
+  await worktreeMetaStore
+    .set(path, { startFrom, branch, createdAt: new Date().toISOString() })
+    .catch(() => undefined)
   return {
     worktree: {
       id: path,
@@ -401,6 +414,7 @@ export async function removeWorktree(
   const remove = await runGit(root, force ? ['worktree', 'remove', '--force', target] : ['worktree', 'remove', target])
   if (remove === null) throw new Error(`git worktree remove 失败：${target}`)
   await runGit(root, ['worktree', 'prune'])
+  await worktreeMetaStore.remove(target).catch(() => undefined)
   if (!branch) return { branch: null, branchDeleted: false }
   const mainBranch = await currentBranch(root)
   if (mainBranch && branch === mainBranch) return { branch, branchDeleted: false }
@@ -413,4 +427,73 @@ export async function removeWorktree(
 export async function deleteBranch(workspacePath: string, branch: string, force = false): Promise<void> {
   const removed = await runGit(resolve(workspacePath), ['branch', force ? '-D' : '-d', branch])
   if (removed === null) throw new Error(`删除分支失败：${branch}`)
+}
+
+export interface BranchFileDiff {
+  path: string
+  additions: number | null
+  deletions: number | null
+}
+
+export interface BranchDiff {
+  base: string
+  branch: string
+  files: BranchFileDiff[]
+  additions: number
+  deletions: number
+}
+
+/** Committed diff of a branch against its base (three-dot range). */
+export async function diffBranchToBase(mainPath: string, base: string, branch: string): Promise<BranchDiff> {
+  const root = resolve(mainPath)
+  const output = await runGit(root, ['diff', '--numstat', `${base}...${branch}`])
+  if (output === null) throw new Error(`读取分支差异失败：${branch} → ${base}`)
+  const files: BranchFileDiff[] = []
+  let additions = 0
+  let deletions = 0
+  for (const line of output.split('\n')) {
+    const match = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line)
+    if (!match) continue
+    const additionsForFile = match[1] === '-' ? null : Number(match[1])
+    const deletionsForFile = match[2] === '-' ? null : Number(match[2])
+    files.push({ path: match[3], additions: additionsForFile, deletions: deletionsForFile })
+    additions += additionsForFile ?? 0
+    deletions += deletionsForFile ?? 0
+  }
+  return { base, branch, files, additions, deletions }
+}
+
+export interface MergeResult {
+  merged: boolean
+  upToDate: boolean
+  conflicts: string[]
+}
+
+/**
+ * Merge a worktree branch into the main checkout's current branch.
+ * Conflicts return as a list for explicit abort; nothing merges silently.
+ */
+export async function mergeBranchToBase(mainPath: string, branch: string): Promise<MergeResult> {
+  const root = resolve(mainPath)
+  const current = await currentBranch(root)
+  if (current && current === branch) throw new Error('不能把分支合并到自己')
+  const dirty = await runGit(root, ['status', '--porcelain'])
+  if (dirty === null) throw new Error('读取主盘状态失败')
+  if (dirty.trim()) throw new Error('主盘有未提交改动，先提交或清理后再合并')
+  const output = await runGit(root, ['merge', '--no-ff', branch, '-m', `Merge branch '${branch}'`])
+  if (output !== null) {
+    return { merged: true, upToDate: /already up to date/i.test(output), conflicts: [] }
+  }
+  const conflicted = await runGit(root, ['diff', '--name-only', '--diff-filter=U'])
+  return {
+    merged: false,
+    upToDate: false,
+    conflicts: conflicted ? conflicted.split('\n').map((line) => line.trim()).filter(Boolean) : [],
+  }
+}
+
+/** Abort an in-progress conflicted merge in the main checkout. */
+export async function abortMerge(mainPath: string): Promise<void> {
+  const aborted = await runGit(resolve(mainPath), ['merge', '--abort'])
+  if (aborted === null) throw new Error('中止合并失败')
 }

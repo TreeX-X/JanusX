@@ -5,12 +5,15 @@ import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  abortMerge,
   avatarUrlFor,
   createWorktree,
   deleteBranch,
+  diffBranchToBase,
   fetchRepoAvatar,
   isAvatarFresh,
   isWorktreeDirty,
+  mergeBranchToBase,
   parseGitRemote,
   parseWorktreeList,
   removeWorktree,
@@ -18,6 +21,7 @@ import {
   worktreeDirFor,
   worktreeBranch,
 } from '../../src/main/git/worktrees'
+import { WorktreeMetaStore } from '../../src/main/git/worktree-meta'
 
 const roots: string[] = []
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
@@ -127,6 +131,21 @@ describe('fetchRepoAvatar', () => {
   })
 })
 
+describe('worktree meta store', () => {
+  it('round-trips per-path metadata without electron', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'wt-meta-'))
+    roots.push(dir)
+    const store = new WorktreeMetaStore(dir)
+    expect(await store.get('/wt/a')).toBeNull()
+    await store.set('/wt/a', { startFrom: 'origin/main', branch: 'a', createdAt: 't' })
+    expect(await store.get('/wt/a')).toMatchObject({ startFrom: 'origin/main', branch: 'a' })
+    const reloaded = new WorktreeMetaStore(dir)
+    expect(await reloaded.get('/wt/a')).toMatchObject({ branch: 'a' })
+    await reloaded.remove('/wt/a')
+    expect(await reloaded.get('/wt/a')).toBeNull()
+  })
+})
+
 describe('isAvatarFresh', () => {
   it('expires after seven days', () => {
     const now = Date.now()
@@ -231,5 +250,66 @@ describe.skipIf(!gitAvailable())('worktree create/remove against real git', () =
     const second = await worktreeDirFor(repo, 'fix')
     expect(second).not.toBe(first)
     expect(second.endsWith('-2')).toBe(true)
+  })
+
+  async function commitFile(dir: string, name: string, content: string, message: string) {
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(dir, name), content)
+    await execFileAsync('git', ['-c', 'user.email=test@local', '-c', 'user.name=test', 'add', '-A'], { cwd: dir })
+    await execFileAsync('git', ['-c', 'user.email=test@local', '-c', 'user.name=test', 'commit', '-m', message], {
+      cwd: dir,
+    })
+  }
+
+  it('diffs a branch against its base with line counts', async () => {
+    const repo = await initRepo()
+    await commitFile(repo, 'a.txt', 'one\ntwo\n', 'base file')
+    await execFileAsync('git', ['checkout', '-b', 'feat'], { cwd: repo })
+    await commitFile(repo, 'a.txt', 'one\nTWO\nthree\n', 'change')
+    await execFileAsync('git', ['checkout', 'main'], { cwd: repo })
+    const diff = await diffBranchToBase(repo, 'main', 'feat')
+    expect(diff).toMatchObject({ base: 'main', branch: 'feat', additions: 2, deletions: 1 })
+    expect(diff.files).toHaveLength(1)
+    expect(diff.files[0]).toMatchObject({ path: 'a.txt', additions: 2, deletions: 1 })
+  })
+
+  it('merges cleanly and reports up-to-date reruns', async () => {
+    const repo = await initRepo()
+    await commitFile(repo, 'a.txt', 'v1\n', 'base')
+    await execFileAsync('git', ['checkout', '-b', 'feat'], { cwd: repo })
+    await commitFile(repo, 'a.txt', 'v2\n', 'change')
+    await execFileAsync('git', ['checkout', 'main'], { cwd: repo })
+    const first = await mergeBranchToBase(repo, 'feat')
+    expect(first).toMatchObject({ merged: true, conflicts: [] })
+    const second = await mergeBranchToBase(repo, 'feat')
+    expect(second.upToDate).toBe(true)
+  })
+
+  it('returns conflicts instead of merging silently', async () => {
+    const repo = await initRepo()
+    await commitFile(repo, 'a.txt', 'base\n', 'base')
+    await execFileAsync('git', ['checkout', '-b', 'feat'], { cwd: repo })
+    await commitFile(repo, 'a.txt', 'feat-side\n', 'feat change')
+    await execFileAsync('git', ['checkout', 'main'], { cwd: repo })
+    await commitFile(repo, 'a.txt', 'main-side\n', 'main change')
+    const result = await mergeBranchToBase(repo, 'feat')
+    expect(result.merged).toBe(false)
+    expect(result.conflicts).toEqual(['a.txt'])
+    await abortMerge(repo)
+    const { readFile } = await import('node:fs/promises')
+    const restored = await readFile(join(repo, 'a.txt'), 'utf8')
+    expect(restored.replace(/\r\n/g, '\n')).toBe('main-side\n')
+  })
+
+  it('refuses dirty main checkouts and self merges', async () => {
+    const repo = await initRepo()
+    await execFileAsync('git', ['checkout', '-b', 'feat'], { cwd: repo })
+    await execFileAsync('git', ['checkout', 'main'], { cwd: repo })
+    const { writeFile, rm } = await import('node:fs/promises')
+    await writeFile(join(repo, 'dirty.txt'), 'x')
+    await expect(mergeBranchToBase(repo, 'feat')).rejects.toThrow('未提交改动')
+    // Self-merge guard fires before the dirty check by construction.
+    await rm(join(repo, 'dirty.txt'), { force: true })
+    await expect(mergeBranchToBase(repo, 'main')).rejects.toThrow('自己')
   })
 })

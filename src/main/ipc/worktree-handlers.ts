@@ -2,13 +2,16 @@ import { ipcMain } from 'electron'
 import { app } from 'electron'
 import { WORKTREE_CHANNELS, type WorktreeCreateInput, type WorktreeDeleteInput } from '../../shared/ipc/worktree'
 import {
+  abortMerge,
   cancelCreateWorktree,
   createWorktree,
   deleteBranch,
+  diffBranchToBase,
   fetchRepoAvatar,
   getRepoIdentity,
   isWorktreeDirty,
   listWorktrees,
+  mergeBranchToBase,
   removeWorktree,
   worktreeBranch,
 } from '../git/worktrees'
@@ -73,4 +76,23 @@ export function registerWorktreeHandlers(): void {
       return { success: true }
     },
   )
+
+  ipcMain.handle(
+    WORKTREE_CHANNELS.shipDiff,
+    async (_event, { workspacePath, base, branch }: { workspacePath: string; base: string; branch: string }) => {
+      return diffBranchToBase(workspacePath, base, branch)
+    },
+  )
+
+  ipcMain.handle(
+    WORKTREE_CHANNELS.shipMerge,
+    async (_event, { workspacePath, branch }: { workspacePath: string; branch: string }) => {
+      return mergeBranchToBase(workspacePath, branch)
+    },
+  )
+
+  ipcMain.handle(WORKTREE_CHANNELS.shipAbort, async (_event, { workspacePath }: { workspacePath: string }) => {
+    await abortMerge(workspacePath)
+    return { success: true }
+  })
 }

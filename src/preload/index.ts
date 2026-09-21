@@ -517,6 +517,10 @@ const worktreeAPI: WorktreeAPI = {
   status: (worktreePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.status, { worktreePath }),
   deleteBranch: (workspacePath, branch, force) =>
     ipcRenderer.invoke(WORKTREE_CHANNELS.deleteBranch, { workspacePath, branch, force }),
+  shipDiff: (workspacePath, base, branch) =>
+    ipcRenderer.invoke(WORKTREE_CHANNELS.shipDiff, { workspacePath, base, branch }),
+  shipMerge: (workspacePath, branch) => ipcRenderer.invoke(WORKTREE_CHANNELS.shipMerge, { workspacePath, branch }),
+  shipAbort: (workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.shipAbort, { workspacePath }),
 }
 
 const desktopToastAPI: DesktopToastAPI = {

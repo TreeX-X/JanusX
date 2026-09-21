@@ -260,6 +260,9 @@ export function installElectronApiFallback(): void {
       delete: unavailable,
       status: unavailable,
       deleteBranch: unavailable,
+      shipDiff: unavailable,
+      shipMerge: unavailable,
+      shipAbort: unavailable,
     },
     git: {
       status: unavailable, log: unavailable, stage: unavailable, unstage: unavailable,

@@ -243,6 +243,21 @@
     "dirtyWarn": "Uncommitted changes will be lost; only force delete proceeds.",
     "branchKept": "Branch {{branch}} has unmerged commits and was kept for review.",
     "preservedTitle": "Preserved branches",
-    "deleteBranch": "Delete branch"
+    "deleteBranch": "Delete branch",
+    "shipAction": "Ship",
+    "shipTitle": "Ship to base branch",
+    "shipDiffEmpty": "No file changes against {{base}}",
+    "commitMessage": "Commit message",
+    "commitRun": "Commit worktree changes",
+    "pushBase": "Also push the base branch",
+    "doMerge": "Merge into {{base}}",
+    "merging": "Merging…",
+    "mergedOk": "Merged. The worktree can now be deleted.",
+    "upToDateNote": "Already up to date, nothing to merge.",
+    "conflictsNote": "Conflicting files stopped the merge.",
+    "abortMerge": "Abort merge",
+    "deleteAfterShip": "Delete worktree and archive",
+    "mainDirtyBlock": "The main checkout has uncommitted changes.",
+    "worktreeDirtyNote": "Uncommitted changes in the worktree, commit first."
   }
 }
