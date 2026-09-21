@@ -18,7 +18,6 @@ import {
   ListChecks,
   ListOrdered,
   Minus,
-  NotebookPen,
   PencilLine,
   Plus,
   Quote,
@@ -48,6 +47,7 @@ import {
   type NoteFormatAction,
 } from './quick-note-format'
 import { MARKDOWN_COMPONENTS } from '@/components/viewers/markdown-components'
+import { MarkdownIcon } from '../ui/MarkdownIcon'
 
 const EXPORT_OPTIONS: { format: QuickNoteExportFormat; label: string }[] = [
   { format: 'md', label: 'Markdown (.md)' },
@@ -232,7 +232,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
       <section className={styles.editor} aria-label={t('terminal:note.editorAria')}>
         {!active ? (
           <div className={styles.empty}>
-            <NotebookPen className={styles.emptyIcon} strokeWidth={1.5} aria-hidden="true" />
+            <MarkdownIcon className={styles.emptyIcon} strokeWidth={1.4} aria-hidden="true" />
             <span>{t('terminal:note.empty')}</span>
             <div className={styles.actions}>
               <button type="button" onClick={createCard}>

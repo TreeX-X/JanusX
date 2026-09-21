@@ -502,8 +502,9 @@
   font-size: 11px;
 }
 
+/* 空状态图标：比 NotebookPen 少了装订线与笔，各补一档尺寸与不透明度，否则在黑色托盘上几乎看不见 */
 .emptyIcon {
-  width: 22px;
-  height: 22px;
-  color: rgba(255, 255, 255, 0.18);
+  width: 24px;
+  height: 24px;
+  color: rgba(255, 255, 255, 0.22);
 }
