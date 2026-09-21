@@ -270,6 +270,8 @@ function baseNameOf(path: string): string {
 // detail absorb the retired standalone checkpoints tool — see
 // .agents/notes/implemented/feature/2026-09-21-session-checkpoint-migration.md
 
+// Note: checkpoint expand content follows HiFi v3 with status-only answers — see .agents/notes/implemented/feature/2026-09-22-session-checkpoint-expand-content.md
+
 function SessionCard({
   session,
   expanded,
@@ -286,6 +288,8 @@ function SessionCard({
   const fetchAllDiffs = useCheckpointStore((s) => s.fetchAllDiffs)
   const diffs = useCheckpointStore((s) => s.diffs)
   const [checkpoints, setCheckpoints] = useState<CheckpointSummary[]>([])
+  const [cpLoaded, setCpLoaded] = useState(false)
+  const [cpError, setCpError] = useState<string | null>(null)
   const [records, setRecords] = useState<Record<string, ChangedFileRecord[]>>({})
   const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -294,6 +298,7 @@ function SessionCard({
   const [diffOpenId, setDiffOpenId] = useState<string | null>(null)
   const [conflictFor, setConflictFor] = useState<string | null>(null)
   const [restoreConflicts, setRestoreConflicts] = useState<ConflictInfo[]>([])
+  const [restoreDone, setRestoreDone] = useState<{ id: string; pruned: string } | null>(null)
 
   const loadRecords = useCallback(async (checkpointId: string, cwd: string) => {
     const key = `${checkpointId}:records`
@@ -304,25 +309,40 @@ function SessionCard({
   useEffect(() => {
     if (!expanded || session.archived) return
     let alive = true
+    setCpError(null)
     window.electron.checkpoint
       .list({ sessionId: session.id, cwd: session.cwd })
       .then((cps) => {
         if (!alive) return
         setCheckpoints(cps)
+        setCpLoaded(true)
         // Per-checkpoint lazy change records; diffs stay on demand per file.
         void Promise.all(cps.map((cp) => loadRecords(cp.id, session.cwd)))
       })
-      .catch(() => undefined)
+      .catch((err) => {
+        if (!alive) return
+        setCpLoaded(true)
+        setCpError(err instanceof Error ? err.message : String(err))
+      })
     return () => {
       alive = false
     }
   }, [expanded, session.id, session.archived, session.cwd, loadRecords])
 
-  const handleRestore = async (checkpointId: string) => {
+  const handleRestore = async (checkpoint: CheckpointSummary) => {
+    const pruned = checkpoints
+      .filter((other) => other.conversationIndex > checkpoint.conversationIndex)
+      .map((other) => `#${other.conversationIndex}`)
+      .join(' · ')
     setReviewId(null)
-    await restoreCheckpoint(checkpointId, session.cwd, { sessionId: session.id })
-    setRestoreConflicts(useCheckpointStore.getState().conflicts)
-    setConflictFor(checkpointId)
+    setRestoreDone(null)
+    await restoreCheckpoint(checkpoint.id, session.cwd, { sessionId: session.id })
+    const state = useCheckpointStore.getState()
+    setRestoreConflicts(state.conflicts)
+    setConflictFor(checkpoint.id)
+    if (!state.error) {
+      setRestoreDone({ id: checkpoint.id, pruned })
+    }
     const cps = await window.electron.checkpoint
       .list({ sessionId: session.id, cwd: session.cwd })
       .catch(() => [])
@@ -355,6 +375,14 @@ function SessionCard({
   }, [detailOpen, detail, session.id, session.cwd, checkpoints])
 
   const checkpointById = useMemo(() => new Map(checkpoints.map((cp) => [cp.id, cp])), [checkpoints])
+
+  const turnKindByCheckpointId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const turn of detail?.turns ?? []) {
+      if (turn.checkpointId) map.set(turn.checkpointId, turn.kind)
+    }
+    return map
+  }, [detail])
 
   const icon = ENGINE_ICONS[session.engine] ?? terminalIcon
 
@@ -495,13 +523,22 @@ function SessionCard({
 
       {expanded && !session.archived && (
         <div style={{ marginTop: 4 }}>
-          {checkpoints.map((cp) => {
+          {!cpLoaded ? (
+            <div style={{ fontSize: 11, color: '#555' }}>{t('terminal:checkpoint.loading')}</div>
+          ) : cpError && checkpoints.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#e06c75' }}>{cpError}</div>
+          ) : checkpoints.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#555' }}>{t('terminal:checkpoint.empty')}</div>
+          ) : checkpoints.map((cp) => {
             const recs = records[`${cp.id}:records`]
             const recordsLoading = recs === undefined
             const canDiff = !!recs && !recs.some((record) => record.status === 'binary' || record.status === 'oversized')
             const diffKey = `${cp.id}:`
             const fullDiff = diffs[diffKey]
             const pruneCount = checkpoints.filter((other) => other.conversationIndex > cp.conversationIndex).length
+            const turnKind = turnKindByCheckpointId.get(cp.id)
+            const addTotal = (recs ?? []).reduce((sum, record) => sum + (record.additions ?? 0), 0)
+            const delTotal = (recs ?? []).reduce((sum, record) => sum + (record.deletions ?? 0), 0)
             return (
               <div key={cp.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <div
@@ -515,7 +552,22 @@ function SessionCard({
                   <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#666' }}>
                     #{cp.conversationIndex}
                   </span>
-                  <span>{cp.changedFileCount} files</span>
+                  <span>
+                    {cp.changedFileCount} files
+                    {recs && (addTotal > 0 || delTotal > 0) && (
+                      <>
+                        {' · '}
+                        {addTotal > 0 && <span style={{ color: '#4ec9b0' }}>+{addTotal}</span>}
+                        {addTotal > 0 && delTotal > 0 && ' '}
+                        {delTotal > 0 && <span style={{ color: '#e06c75' }}>−{delTotal}</span>}
+                      </>
+                    )}
+                  </span>
+                  {turnKind && (
+                    <span style={{ fontSize: 9.5, color: turnKind === 'done' ? '#999' : '#e06c75', border: turnKind === 'done' ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(224,108,117,0.25)', borderRadius: 3, padding: '0 5px' }}>
+                      {turnKindLabel(turnKind, t)}
+                    </span>
+                  )}
                   <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#555' }}>
                     {formatDate(cp.createdAt, t)}
                   </span>
@@ -545,6 +597,7 @@ function SessionCard({
                     onClick={() => {
                       setConflictFor(null)
                       setRestoreConflicts([])
+                      setRestoreDone(null)
                       setReviewId(reviewId === cp.id ? null : cp.id)
                     }}
                     className="flex-1 rounded cursor-pointer"
@@ -568,15 +621,19 @@ function SessionCard({
                 )}
                 {reviewId === cp.id && (
                   <div style={{ marginTop: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
-                    {pruneCount > 0 && (
+                    {pruneCount > 0 ? (
                       <div style={{ padding: '8px 10px', background: 'rgba(255,120,48,0.03)', border: '1px solid rgba(255,120,48,0.18)', borderRadius: 6, fontSize: 11, color: '#999', marginBottom: 8, lineHeight: 1.6 }}>
                         {t('terminal:checkpoint.pruneWarn', { count: pruneCount })}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: '#6bd89b', marginBottom: 8, lineHeight: 1.6 }}>
+                        {t('terminal:checkpoint.pruneOk')}
                       </div>
                     )}
                     <CheckpointFiles records={recs} />
                     <div className="flex" style={{ gap: 6, marginTop: 8 }}>
                       <button
-                        onClick={() => void handleRestore(cp.id)}
+                        onClick={() => void handleRestore(cp)}
                         className="flex-1 rounded cursor-pointer"
                         style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
                       >
@@ -590,6 +647,13 @@ function SessionCard({
                         {t('common:action.cancel')}
                       </button>
                     </div>
+                  </div>
+                )}
+                {restoreDone?.id === cp.id && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: '#6bd89b', lineHeight: 1.6 }}>
+                    {restoreDone.pruned
+                      ? t('terminal:checkpoint.restoreDonePruned', { index: cp.conversationIndex, pruned: restoreDone.pruned })
+                      : t('terminal:checkpoint.restoreDone', { index: cp.conversationIndex })}
                   </div>
                 )}
                 {conflictFor === cp.id && restoreConflicts.length > 0 && (
