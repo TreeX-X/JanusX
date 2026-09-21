@@ -1784,6 +1784,7 @@
   white-space: nowrap;
 }
 
+/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/implemented/bug-fix/2026-09-21-workbench-close-hit-slop.md */
 .blueprint-workbench-close {
   position: relative;
   justify-self: end;
@@ -1801,7 +1802,32 @@
   justify-content: center;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.26),
     0 0 0 1px rgba(0, 0, 0, 0.22);
-  transition: filter 0.2s ease, transform 0.2s ease;
+  transition: filter 0.2s ease;
+}
+
+.blueprint-workbench-close::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  background: transparent;
+}
+
+.blueprint-workbench-close::after {
+  content: '\2715';
+  font-size: 8px;
+  line-height: 1;
+  font-weight: bold;
+  color: transparent;
+  transition: color 0.15s ease;
+}
+
+.blueprint-workbench-close:hover::after {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.blueprint-workbench-close:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
 }
 
 .blueprint-workbench-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; min-width: 0; }
@@ -1917,7 +1943,7 @@
 }
 
 .blueprint-workbench-close:active {
-  transform: scale(0.9);
+  filter: brightness(0.9);
 }
 
 /* Side tracks stay in the grid at 0px when closed so the track collapse and

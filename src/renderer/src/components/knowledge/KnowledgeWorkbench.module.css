@@ -446,21 +446,7 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-.closeButton {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.035);
-  color: #96969d;
-  cursor: pointer;
-  font-size: 12px;
-  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
-}
-
+/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/implemented/bug-fix/2026-09-21-workbench-close-hit-slop.md */
 .closeButton {
   position: relative;
   width: 14px;
@@ -476,15 +462,40 @@
   justify-content: center;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.26),
     0 0 0 1px rgba(0, 0, 0, 0.22);
-  transition: filter 0.2s ease, transform 0.2s ease;
+  transition: filter 0.2s ease;
+}
+
+.closeButton::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  background: transparent;
+}
+
+.closeButton::after {
+  content: '\2715';
+  font-size: 7px;
+  line-height: 1;
+  color: transparent;
+  font-weight: bold;
+  transition: color 0.15s ease;
 }
 
 .closeButton:hover {
   filter: brightness(1.1);
 }
 
+.closeButton:hover::after {
+  color: rgba(0, 0, 0, 0.55);
+}
+
 .closeButton:active {
-  transform: scale(0.9);
+  filter: brightness(0.9);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.7);
+  outline-offset: 2px;
 }
 
 /* §9.1: demo skeleton — three independent cards (210px 1fr 340px + gap 16px).
