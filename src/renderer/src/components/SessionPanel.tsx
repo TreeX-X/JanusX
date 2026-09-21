@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSessionStore, type AgentSessionSummary } from '@/stores/session'
 import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useWorktreeStore } from '@/stores/worktree'
+import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
 import terminalIcon from '@/assets/icons/terminal.svg'
@@ -69,7 +69,7 @@ export function SessionPanel() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
   // AC-10: card scope follows the active worktree path, not the workspace root.
-  const worktrees = useWorktreeStore((s) => (activeWorkspaceId ? (s.worktreesByWorkspace[activeWorkspaceId] ?? []) : []))
+  const worktrees = useWorktreeStore((s) => (activeWorkspaceId ? (s.worktreesByWorkspace[activeWorkspaceId] ?? EMPTY_WORKTREE_LIST) : EMPTY_WORKTREE_LIST))
   const activeWorktreePath = useWorktreeStore((s) => (activeWorkspaceId ? (s.activePaths[activeWorkspaceId] ?? null) : null))
   const scopePath = activeWorktreePath ?? activeWorkspace?.path ?? null
   const activeWorktree = worktrees.find((w) => w.path === scopePath) ?? null

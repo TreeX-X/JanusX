@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import { ChevronRight, Ellipsis, Folder, GitBranch, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useWorktreeStore } from '@/stores/worktree'
+import { EMPTY_PENDING_LIST, EMPTY_STRING_LIST, EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
@@ -264,13 +264,13 @@ function WorktreeSubList({
   onShipRequest: (worktree: WorktreeInfo) => void
 }) {
   const { t } = useI18n('terminal')
-  const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? [])
+  const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? EMPTY_WORKTREE_LIST)
   const activePath = useWorktreeStore((s) => s.activePaths[workspaceId] ?? workspacePath)
   const fetchWorktrees = useWorktreeStore((s) => s.fetchWorktrees)
   const setActivePath = useWorktreeStore((s) => s.setActivePath)
-  const preservedBranches = useWorktreeStore((s) => s.preservedBranches[workspaceId] ?? [])
+  const preservedBranches = useWorktreeStore((s) => s.preservedBranches[workspaceId] ?? EMPTY_STRING_LIST)
   const deleteBranch = useWorktreeStore((s) => s.deleteBranch)
-  const pendingCreations = useWorktreeStore((s) => s.pendingCreations[workspaceId] ?? [])
+  const pendingCreations = useWorktreeStore((s) => s.pendingCreations[workspaceId] ?? EMPTY_PENDING_LIST)
   const retryCreation = useWorktreeStore((s) => s.retryCreation)
   const cancelCreation = useWorktreeStore((s) => s.cancelCreation)
   const [armingBranch, setArmingBranch] = useState<string | null>(null)

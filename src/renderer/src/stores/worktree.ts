@@ -6,6 +6,15 @@ interface WorktreeUiState {
   expandedCheckpointId?: string | null
 }
 
+/**
+ * Stable empty refs for selectors: inline `?? []` fallbacks allocate per
+ * snapshot and drive infinite re-renders (black screen via update-depth
+ * crash). Always fall back to these.
+ */
+export const EMPTY_WORKTREE_LIST: WorktreeInfo[] = []
+export const EMPTY_STRING_LIST: string[] = []
+export const EMPTY_PENDING_LIST: PendingCreation[] = []
+
 export interface PendingCreation {
   id: string
   name: string
