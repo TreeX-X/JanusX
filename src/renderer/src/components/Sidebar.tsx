@@ -223,25 +223,31 @@ function workspaceInitial(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?'
 }
 
-// Note: repo avatar replaces the folder glyph when the checkout resolves to
-// a GitHub remote; every other state keeps the folder — see
+// Note: folder is the resting glyph; the repo avatar crossfades in on row
+// hover only, with no bordered box in either state — see
 // .agents/notes/implemented/feature/2026-09-21-worktree-sidebar-scoping.md
 function RepoRowIcon({ workspacePath }: { workspacePath: string }) {
   const avatar = useWorktreeStore((s) => s.avatars[workspacePath])
   const [failed, setFailed] = useState(false)
-  if (avatar && !failed) {
-    return (
+  if (!avatar || failed) {
+    return <Folder size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
+  }
+  return (
+    <span className="relative flex shrink-0" style={{ width: 14, height: 14 }} aria-hidden="true">
+      <Folder
+        size={14}
+        strokeWidth={1.6}
+        className="transition-opacity duration-150 group-hover/ws:opacity-0"
+      />
       <img
         src={avatar}
         alt=""
-        aria-hidden="true"
-        className="shrink-0"
-        style={{ width: 14, height: 14, borderRadius: 4, objectFit: 'cover' }}
         onError={() => setFailed(true)}
+        className="absolute inset-0 transition-opacity duration-150 opacity-0 group-hover/ws:opacity-100"
+        style={{ width: 14, height: 14, borderRadius: 4, objectFit: 'cover' }}
       />
-    )
-  }
-  return <Folder size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
+    </span>
+  )
 }
 
 function worktreeDisplayName(path: string, branch: string | null): string {

@@ -97,6 +97,24 @@ async function remoteUrl(cwd: string, name: string): Promise<string | null> {
   return url ? url : null
 }
 
+/**
+ * Filesystem path equality across git and app spellings. Git prints
+ * forward slashes while the workspace registry keeps native separators,
+ * so raw string comparison duplicates the main checkout as a linked row.
+ */
+export function normalizeFsPath(value: string): string {
+  const resolved = resolve(value.trim())
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+export function samePath(left: string, right: string): boolean {
+  try {
+    return normalizeFsPath(left) === normalizeFsPath(right)
+  } catch {
+    return left === right
+  }
+}
+
 /** Remote URL for callers outside this module (hosted detection); null when absent. */
 export async function gitRemoteUrl(cwd: string, name: string): Promise<string | null> {
   return remoteUrl(cwd, name)
@@ -150,13 +168,15 @@ export async function listWorktrees(workspaceId: string, workspacePath: string):
   if (!output) return [main]
   const linked = await Promise.all(
     parseWorktreeList(output)
-      .filter((entry) => !entry.bare && entry.path !== workspacePath)
+      .filter((entry) => !entry.bare && !samePath(entry.path, workspacePath))
       .map(async (entry): Promise<WorktreeInfo> => {
-        const meta = await worktreeMetaStore.get(entry.path).catch(() => null)
+        // Normalize once: git prints forward slashes, the shell keys native paths.
+        const entryPath = resolve(entry.path)
+        const meta = await worktreeMetaStore.get(entryPath).catch(() => null)
         return {
-          id: entry.path,
+          id: entryPath,
           workspaceId,
-          path: entry.path,
+          path: entryPath,
           branch: entry.branch,
           detached: entry.detached,
           isMain: false,

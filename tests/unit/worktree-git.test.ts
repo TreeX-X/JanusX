@@ -13,10 +13,13 @@ import {
   fetchRepoAvatar,
   isAvatarFresh,
   isWorktreeDirty,
+  listWorktrees,
   mergeBranchToBase,
+  normalizeFsPath,
   parseGitRemote,
   parseWorktreeList,
   removeWorktree,
+  samePath,
   slugifyWorktreeName,
   worktreeDirFor,
   worktreeBranch,
@@ -49,8 +52,34 @@ describe('parseGitRemote', () => {
   )
 })
 
-describe('parseWorktreeList', () => {
-  it('parses main plus linked entries with flags', () => {
+describe('samePath', () => {
+  it('unifies git and native spellings so main never duplicates', () => {
+    expect(samePath('C:/Users/Tree/Desktop/git/JanusX', 'C:\\Users\\Tree\\Desktop\\git\\JanusX')).toBe(true)
+    expect(samePath('C:\\Users\\Tree\\Desktop\\git\\JanusX', 'C:\\Users\\Tree\\Desktop\\git\\Other')).toBe(false)
+    expect(normalizeFsPath('C:/a/b/../b')).toBe(normalizeFsPath('C:\\a\\b'))
+  })
+})
+
+describe.skipIf(!gitAvailable())('listWorktrees against real git', () => {
+  it('lists a lone checkout exactly once', async () => {
+    const repo = await initRepo()
+    const worktrees = await listWorktrees('ws-1', repo)
+    expect(worktrees).toHaveLength(1)
+    expect(worktrees[0]).toMatchObject({ isMain: true, path: repo })
+  })
+
+  it('normalizes linked paths to native separators', async () => {
+    const repo = await initRepo()
+    const created = await createWorktree(repo, { name: 'fix', branch: 'fix-1', startFrom: 'HEAD' })
+    roots.push(created.worktree.path)
+    const worktrees = await listWorktrees('ws-1', repo)
+    expect(worktrees).toHaveLength(2)
+    expect(worktrees[1].path).not.toContain('/')
+    await removeWorktree(repo, created.worktree.path)
+  })
+})
+
+describe('parseWorktreeList', () => {  it('parses main plus linked entries with flags', () => {
     const output = [
       'worktree /repo',
       'branch refs/heads/main',
