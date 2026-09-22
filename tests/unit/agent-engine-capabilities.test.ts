@@ -31,7 +31,8 @@ describe('agent engine capabilities', () => {
     }
     expect(AGENT_ENGINE_CAPABILITIES.claude.sessionStore).toBe('claude-projects')
     expect(AGENT_ENGINE_CAPABILITIES.codex.sessionStore).toBe('codex-sessions')
-    for (const source of ['opencode', 'janus', 'pi'] as const) {
+    expect(AGENT_ENGINE_CAPABILITIES.opencode.sessionStore).toBe('opencode-sqlite')
+    for (const source of ['janus', 'pi'] as const) {
       expect(AGENT_ENGINE_CAPABILITIES[source].sessionStore).toBeNull()
     }
   })
@@ -50,7 +51,9 @@ describe('agent engine capabilities', () => {
       join(home, '.claude', 'projects'),
     )
     expect(resolveSessionStorePath('janus', {}, home)).toBeNull()
-    expect(resolveSessionStorePath('opencode', {}, home)).toBeNull()
+    expect(resolveSessionStorePath('opencode', {}, home)).toBe(
+      join(home, '.local', 'share', 'opencode', 'opencode.db'),
+    )
     expect(resolveSessionStorePath('pi', {}, home)).toBeNull()
   })
 

@@ -271,9 +271,10 @@ async function janusExcerpt(baseDir: string, sessionId: string): Promise<string 
 /**
  * Best-effort answer excerpt for a finished turn. Dispatches on the engine
  * capability table and never throws: every failure yields undefined so a
- * missing or unreadable transcript cannot block turn recording. Engines
- * without a readable transcript store (opencode sqlite, pi none) stay
- * status-only by table contract.
+ * missing or unreadable transcript cannot block turn recording. Turn-end
+ * excerpts cover file transcripts only; opencode sqlite serves list and
+ * detail reads through sessions/opencode-sessions while its turns stay
+ * status-only here, and pi has no store at all.
  */
 export async function readAssistantExcerpt(context: ExcerptContext): Promise<string | undefined> {
   try {

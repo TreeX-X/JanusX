@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   TRANSCRIPT_TEXT_CAP,
@@ -98,5 +99,31 @@ describe('transcript reader', () => {
     const path = await writeLines(await tempFile('other.jsonl'), [claudeUser('q')])
     await expect(readTranscriptDetail(path, 'pi')).resolves.toBeNull()
     await expect(readTranscriptDetail('', 'claude')).resolves.toBeNull()
+  })
+
+  it('reads opencode pairs from sqlite by session id', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'transcript-oc-'))
+    roots.push(dir)
+    const path = join(dir, 'opencode.db')
+    const database = new DatabaseSync(path)
+    database.exec(`
+      CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+      CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+      CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+      INSERT INTO session VALUES ('ses-1', 'C:/repo', 't', 1000, 2000);
+      INSERT INTO message VALUES ('m-1', 'ses-1', 1100, '{"role":"user"}');
+      INSERT INTO part VALUES ('p-1', 'm-1', 'ses-1', 1100, '{"type":"text","text":"oc question"}');
+      INSERT INTO message VALUES ('m-2', 'ses-1', 1200, '{"role":"assistant"}');
+      INSERT INTO part VALUES ('p-2', 'm-2', 'ses-1', 1200, '{"type":"reasoning","text":"thinking"}');
+      INSERT INTO part VALUES ('p-3', 'm-2', 'ses-1', 1210, '{"type":"text","text":"oc answer"}');
+    `)
+    database.close()
+    const detail = await readTranscriptDetail(path, 'opencode', 'ses-1')
+    expect(detail?.transcriptPath).toBe(path)
+    expect(detail?.totalTurns).toBe(1)
+    expect(detail?.truncated).toBe(false)
+    expect(detail?.turns).toEqual([{ prompt: 'oc question', excerpt: 'oc answer' }])
+    await expect(readTranscriptDetail(path, 'opencode')).resolves.toBeNull()
+    await expect(readTranscriptDetail(path, 'opencode', 'missing')).resolves.toBeNull()
   })
 })

@@ -6,6 +6,7 @@ import { basename, join } from 'node:path'
 import { resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
 import type { AgentHookSource } from '../notifications/agent-hook-types'
 import type { AgentSessionRegistry, ImportExternalSessionInput } from './session-registry'
+import { listOpencodeSessions } from './opencode-sessions'
 
 export interface ExternalScanOptions {
   env?: NodeJS.ProcessEnv
@@ -20,9 +21,9 @@ export interface ExternalScanSummary {
   skipped: number
 }
 
-type ScanEngine = Extract<AgentHookSource, 'claude' | 'codex'>
+type ScanEngine = Extract<AgentHookSource, 'claude' | 'codex' | 'opencode'>
 
-const SCAN_ENGINES: ScanEngine[] = ['claude', 'codex']
+const SCAN_ENGINES: ScanEngine[] = ['claude', 'codex', 'opencode']
 const MAX_FILES_PER_ENGINE = 200
 /** Full read cap; larger files fall back to head plus tail windows. */
 const MAX_FULL_BYTES = 512 * 1024
@@ -334,6 +335,50 @@ function parseCodexFile(lines: string[], path: string, mtimeMs: number): ParsedT
 }
 
 /**
+ * Opencode sqlite backfill over the session table, newest rows first. One bad
+ * row never fails the scan; an unreadable database skips the engine silently
+ * like a missing transcript store.
+ */
+function scanOpencodeStore(
+  registry: AgentSessionRegistry,
+  dbPath: string,
+  maxFiles: number,
+  summary: ExternalScanSummary,
+  known: Set<string>,
+): void {
+  let rows: ReturnType<typeof listOpencodeSessions>
+  try {
+    rows = listOpencodeSessions(dbPath, maxFiles)
+  } catch {
+    return
+  }
+  for (const row of rows) {
+    summary.scanned += 1
+    const input: ImportExternalSessionInput = {
+      engine: 'opencode',
+      cwd: row.cwd,
+      providerSessionId: row.providerSessionId,
+      transcriptPath: dbPath,
+      firstPrompt: row.firstPrompt,
+      ...(row.lastExcerpt ? { lastExcerpt: row.lastExcerpt } : {}),
+      turnCount: row.turnCount,
+      ...(row.createdAt ? { createdAt: row.createdAt } : {}),
+      ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}),
+    }
+    const key = `opencode::${row.providerSessionId}`
+    const isKnown = known.has(key)
+    try {
+      registry.importExternalSession(input)
+      known.add(key)
+      if (isKnown) summary.updated += 1
+      else summary.imported += 1
+    } catch (err) {
+      console.error('[sessions] external import failed:', row.providerSessionId, err)
+      summary.skipped += 1
+    }
+  }
+}
+/**
  * Pull-mode backfill over provider transcript stores. Every file tolerates
  * unknown shapes and corrupt lines; a single bad file never fails the scan.
  * Repeat scans deduplicate on engine plus provider session id inside the
@@ -354,6 +399,12 @@ export async function scanExternalSessions(
   for (const engine of SCAN_ENGINES) {
     const store = resolveSessionStorePath(engine as AgentHookSource, env, home)
     if (!store) continue
+    // Opencode persists sessions in sqlite, not transcript files: list the
+    // newest rows directly instead of walking for jsonl.
+    if (engine === 'opencode') {
+      scanOpencodeStore(registry, store, maxFiles, summary, known)
+      continue
+    }
     const candidates = await collectCandidates(store, maxFiles)
     for (const candidate of candidates) {
       summary.scanned += 1

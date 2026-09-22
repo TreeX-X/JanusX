@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionRegistry } from '../../src/main/sessions/session-registry'
 import { scanExternalSessions } from '../../src/main/sessions/external-session-scanner'
@@ -183,5 +184,48 @@ describe('external session scanner', () => {
     const summary = await scanExternalSessions(registry, { env: {}, home })
     expect(summary).toEqual({ scanned: 0, imported: 0, updated: 0, skipped: 0 })
     expect(registry.listSessions()).toEqual([])
+  })
+
+  it('imports opencode sqlite sessions with cwd, prompts, and counts', async () => {
+    const home = await tempDir('scan-home-')
+    const data = await tempDir('scan-data-')
+    const registry = new AgentSessionRegistry(data)
+    registries.push(registry)
+    const dbPath = join(home, '.local', 'share', 'opencode', 'opencode.db')
+    await mkdir(join(home, '.local', 'share', 'opencode'), { recursive: true })
+    const database = new DatabaseSync(dbPath)
+    database.exec(`
+      CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+      CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+      CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+      INSERT INTO session VALUES ('ses-1', 'C:/repo/proj', 't', 1000, 2000);
+      INSERT INTO message VALUES ('m-1', 'ses-1', 1100, '{"role":"user"}');
+      INSERT INTO part VALUES ('p-1', 'm-1', 'ses-1', 1100, '{"type":"text","text":"opencode question"}');
+      INSERT INTO message VALUES ('m-2', 'ses-1', 1200, '{"role":"assistant"}');
+      INSERT INTO part VALUES ('p-2', 'm-2', 'ses-1', 1200, '{"type":"text","text":"opencode answer"}');
+    `)
+    database.close()
+
+    const summary = await scanExternalSessions(registry, { env: {}, home })
+    expect(summary.scanned).toBe(1)
+    expect(summary.imported).toBe(1)
+    const [session] = registry.listSessions()
+    expect(session).toMatchObject({
+      engine: 'opencode',
+      cwd: 'C:/repo/proj',
+      firstPrompt: 'opencode question',
+      turnCount: 1,
+      external: true,
+    })
+    expect(session.transcriptPath).toBe(dbPath)
+    expect(session.providerSessionId).toBe('ses-1')
+    expect(registry.getSession(session.id)?.turns[0]).toMatchObject({
+      prompt: 'opencode question',
+      excerpt: 'opencode answer',
+    })
+    // Repeat scans converge without duplicating.
+    const second = await scanExternalSessions(registry, { env: {}, home })
+    expect(second.imported).toBe(0)
+    expect(registry.listSessions()).toHaveLength(1)
   })
 })

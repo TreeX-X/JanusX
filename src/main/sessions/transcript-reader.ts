@@ -10,14 +10,19 @@ import {
   parseJsonLine,
   readBounded,
 } from './external-session-scanner'
+import { readOpencodeTurns } from './opencode-sessions'
 
 /** Most-recent pairs kept; older pairs drop with the truncated flag set. */
 export const TRANSCRIPT_TURN_CAP = 100
 /** Per-side character cap; the provider store stays the lossless source. */
 export const TRANSCRIPT_TEXT_CAP = 2000
 
-function truncateTurn(text: string): string {
+export function truncateTranscriptText(text: string): string {
   return text.length > TRANSCRIPT_TEXT_CAP ? `${text.slice(0, TRANSCRIPT_TEXT_CAP)}…` : text
+}
+
+function truncateTurn(text: string): string {
+  return truncateTranscriptText(text)
 }
 
 /**
@@ -28,8 +33,17 @@ function truncateTurn(text: string): string {
 export async function readTranscriptDetail(
   transcriptPath: string,
   engine: string,
+  sessionId?: string,
 ): Promise<TranscriptDetail | null> {
   if (!transcriptPath) return null
+  // Opencode detail reads query the sqlite store for one session; the
+  // transcript path carries the database location.
+  if (engine === 'opencode') {
+    if (!sessionId) return null
+    const list = readOpencodeTurns(transcriptPath, sessionId)
+    if (!list) return null
+    return { transcriptPath, turns: list.turns, totalTurns: list.totalTurns, truncated: list.truncated }
+  }
   if (engine !== 'claude' && engine !== 'codex') return null
   const bounded = await readBounded(transcriptPath)
   if (!bounded) return null

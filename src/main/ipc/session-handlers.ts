@@ -50,7 +50,7 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
     await agentSessionRegistry.load().catch(() => undefined)
     const record = agentSessionRegistry.getSession(sessionId)
     if (!record?.transcriptPath) return null
-    return readTranscriptDetail(record.transcriptPath, record.engine)
+    return readTranscriptDetail(record.transcriptPath, record.engine, record.providerSessionId)
   })
 
   ipcMain.handle(SESSION_CHANNELS.saveLayout, async (_event, layout: ShellRestoreManifest) => {

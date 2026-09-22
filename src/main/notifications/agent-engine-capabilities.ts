@@ -10,7 +10,7 @@ import type { AgentHookSource } from './agent-hook-types'
 export type TranscriptKind = 'claude-jsonl' | 'codex-rollout' | 'janus-history' | null
 
 /** Provider on-disk store of session transcripts (external backfill source). */
-export type SessionStoreKind = 'claude-projects' | 'codex-sessions' | null
+export type SessionStoreKind = 'claude-projects' | 'codex-sessions' | 'opencode-sqlite' | null
 
 export type EngineEventPhase = 'start' | 'complete' | 'fail' | 'approval' | 'attention'
 
@@ -87,10 +87,11 @@ export const AGENT_ENGINE_CAPABILITIES: Record<AgentHookSource, AgentEngineCapab
     fail: [{ event: 'session.error' }],
     approval: ['permission.asked'],
     attention: ['permission.asked'],
-    // Sessions persist in sqlite without a driver in this repo.
+    // Sessions persist in sqlite with a list/detail driver in
+    // sessions/opencode-sessions; turn-end excerpts stay status-only.
     transcript: null,
     sentinel: false,
-    sessionStore: null,
+    sessionStore: 'opencode-sqlite',
   },
 }
 
@@ -112,6 +113,9 @@ export function resolveSessionStorePath(
   if (kind === 'codex-sessions') {
     const codeHome = env.CODEX_HOME?.trim()
     return join(codeHome && codeHome.length > 0 ? codeHome : join(home, '.codex'), 'sessions')
+  }
+  if (kind === 'opencode-sqlite') {
+    return join(home, '.local', 'share', 'opencode', 'opencode.db')
   }
   return null
 }

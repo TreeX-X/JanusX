@@ -102,6 +102,7 @@ export function buildProviderResumeArgs(engine: string, providerSessionId?: stri
   if (!providerSessionId) return null
   if (engine === 'claude') return ['--resume', providerSessionId]
   if (engine === 'codex') return ['resume', providerSessionId]
+  if (engine === 'opencode') return ['--session', providerSessionId]
   return null
 }
 
