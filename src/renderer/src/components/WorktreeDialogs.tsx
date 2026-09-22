@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorktreeStore } from '@/stores/worktree'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { refreshScopeFileTree } from '@/features/workspace/actions'
 import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
 import type { BranchDiff } from '../../../shared/ipc/worktree'
@@ -65,7 +67,10 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
     }
     onClose()
     try {
-      await createWorktree(workspace.id, workspace.path, payload)
+      const result = await createWorktree(workspace.id, workspace.path, payload)
+      if (useWorkspaceStore.getState().activeWorkspaceId === workspace.id) {
+        await refreshScopeFileTree(result.path, true).catch(() => {})
+      }
     } catch {
       // Failure lands on the sidebar progress row with retry.
     }
@@ -280,7 +285,12 @@ export function WorktreeDeleteDialog({  workspaceId,
     setBusy(true)
     setError(null)
     try {
-      const result = await deleteWorktree(workspaceId, workspacePath, worktree.path, force)
+      const wasActive = (useWorktreeStore.getState().activePaths[workspaceId] ?? workspacePath) === worktree.path
+      const result = await deleteWorktree(workspaceId, workspacePath, worktree.path, force, worktree.branch)
+      if (wasActive && useWorkspaceStore.getState().activeWorkspaceId === workspaceId) {
+        const scopePath = useWorktreeStore.getState().activePaths[workspaceId] ?? workspacePath
+        await refreshScopeFileTree(scopePath, true).catch(() => {})
+      }
       onClose(result.branchKept)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -482,7 +492,12 @@ export function WorktreeShipDialog({
   const runDeleteAfterShip = async () => {
     setBusy(true)
     try {
-      await deleteWorktree(workspaceId, workspacePath, worktree.path, false)
+      const wasActive = (useWorktreeStore.getState().activePaths[workspaceId] ?? workspacePath) === worktree.path
+      await deleteWorktree(workspaceId, workspacePath, worktree.path, false, worktree.branch)
+      if (wasActive && useWorkspaceStore.getState().activeWorkspaceId === workspaceId) {
+        const scopePath = useWorktreeStore.getState().activePaths[workspaceId] ?? workspacePath
+        await refreshScopeFileTree(scopePath, true).catch(() => {})
+      }
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

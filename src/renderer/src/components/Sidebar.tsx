@@ -13,7 +13,7 @@ import { TeamFooter, TeamFooterCollapsed } from './team/TeamFooter'
 import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
 import type { WorktreeInfo } from '../../../shared/ipc/worktree'
 import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-reference'
-import { chooseAndCreateWorkspace, getActiveWorkspacePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
+import { chooseAndCreateWorkspace, getActiveScopePath, getScopePathForWorkspace, loadWorkspaceFileTree, refreshScopeFileTree, switchActiveWorktree } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
 import { TERMINAL_ATTENTION_ORDER, getTerminalStatusVisual, summarizeTerminalActivity } from '@/lib/terminal-sidebar-visual'
 import terminalIcon from '@/assets/icons/terminal.svg'
@@ -438,7 +438,6 @@ function WorktreeSubList({
   const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? EMPTY_WORKTREE_LIST)
   const activePath = useWorktreeStore((s) => s.activePaths[workspaceId] ?? workspacePath)
   const fetchWorktrees = useWorktreeStore((s) => s.fetchWorktrees)
-  const setActivePath = useWorktreeStore((s) => s.setActivePath)
   const preservedBranches = useWorktreeStore((s) => s.preservedBranches[workspaceId] ?? EMPTY_STRING_LIST)
   const deleteBranch = useWorktreeStore((s) => s.deleteBranch)
   const pendingCreations = useWorktreeStore((s) => s.pendingCreations[workspaceId] ?? EMPTY_PENDING_LIST)
@@ -518,7 +517,13 @@ function WorktreeSubList({
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
-                void retryCreation(workspaceId, workspacePath, pending.id)
+                void (async () => {
+                  await retryCreation(workspaceId, workspacePath, pending.id)
+                  const scopePath = useWorktreeStore.getState().activePaths[workspaceId] ?? workspacePath
+                  if (useWorkspaceStore.getState().activeWorkspaceId === workspaceId) {
+                    await refreshScopeFileTree(scopePath, true).catch(() => {})
+                  }
+                })()
               }}
               className="cursor-pointer"
               style={{ fontSize: 10, color: '#aaa', background: 'none', border: 'none', padding: 0 }}
@@ -554,13 +559,14 @@ function WorktreeSubList({
               title={worktree.path}
               onClick={(event) => {
                 event.stopPropagation()
-                setActivePath(workspaceId, worktree.path)
+                // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/implemented/bug-fix/2026-09-22-worktree-file-tree-scope.md
+                void switchActiveWorktree(workspaceId, worktree.path)
               }}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return
                 event.preventDefault()
                 event.stopPropagation()
-                setActivePath(workspaceId, worktree.path)
+                void switchActiveWorktree(workspaceId, worktree.path)
               }}
               className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
               style={{
@@ -868,11 +874,12 @@ export function Sidebar() {
       // 根据目标工作区是否有终端来设置状态
       const stateAfterSwitch = useWorkspaceStore.getState()
       setLoadState(stateAfterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
-      // 加载文件树(统一入口,带工作区未再切换的竞态守卫)
+      // 加载文件树(统一入口,带工作区未再切换的竞态守卫;目标为 worktree scope)
       const ws = workspaces.find((w) => w.id === id)
       if (!ws) return
-      invalidateEditorFileCache(ws.path)
-      await loadWorkspaceFileTree(ws.path, () => getActiveWorkspacePath() === ws.path, { visualTransition: true }).catch((err) => {
+      const scopePath = getScopePathForWorkspace(id, ws.path)
+      invalidateEditorFileCache(scopePath)
+      await loadWorkspaceFileTree(scopePath, () => getActiveScopePath() === scopePath, { visualTransition: true }).catch((err) => {
         console.error('Failed to load file tree:', err)
       })
     },

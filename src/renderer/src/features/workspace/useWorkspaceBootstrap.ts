@@ -2,22 +2,29 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/stores/app'
 import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
 import { useGitStore } from '@/stores/git'
-import { getActiveWorkspacePath, loadWorkspaceFileTree } from './actions'
+import { getActiveScopePath, getScopePathForWorkspace, loadWorkspaceFileTree } from './actions'
 import { collectShellRestore, restoreShells } from '@/lib/shell-restore'
 
 export function useWorkspaceBootstrap(): void {
   useEffect(() => {
-    let activeWorkspacePath: string | null = null
+    let activeScopePath: string | null = null
     const refreshActiveWorkspace = () => {
       const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
-      const nextPath = workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null
-      if (nextPath === activeWorkspacePath) return
-      activeWorkspacePath = nextPath
+      const workspace = workspaces.find((item) => item.id === activeWorkspaceId)
+      const nextPath = workspace ? getScopePathForWorkspace(workspace.id, workspace.path) : null
+      if (nextPath === activeScopePath) return
+      activeScopePath = nextPath
       if (nextPath) void useGitStore.getState().fetchStatus(nextPath)
     }
     refreshActiveWorkspace()
-    return useWorkspaceStore.subscribe(refreshActiveWorkspace)
+    const unsubscribeWorkspace = useWorkspaceStore.subscribe(refreshActiveWorkspace)
+    const unsubscribeWorktree = useWorktreeStore.subscribe(refreshActiveWorkspace)
+    return () => {
+      unsubscribeWorkspace()
+      unsubscribeWorktree()
+    }
   }, [])
 
   useEffect(() => {
@@ -45,12 +52,11 @@ export function useWorkspaceBootstrap(): void {
 
   useEffect(() => window.electron.fileTree.onChanged((payload) => {
     const workspacePath = payload.workspacePath
-    const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState()
-    const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
-    if (!activeWorkspace || activeWorkspace.path !== workspacePath) return
+    const scopePath = getActiveScopePath()
+    if (!scopePath || scopePath !== workspacePath) return
     invalidateEditorFileCache(workspacePath)
     void useGitStore.getState().fetchStatus(workspacePath)
-    void loadWorkspaceFileTree(workspacePath, () => getActiveWorkspacePath() === workspacePath).catch(() => {})
+    void loadWorkspaceFileTree(workspacePath, () => getActiveScopePath() === workspacePath).catch(() => {})
     void useEditorStore.getState().reloadOpenFiles(workspacePath, payload.changedFilePath ?? null)
   }), [])
 }

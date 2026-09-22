@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
 import {
-  getActiveWorkspacePath,
+  getActiveScopePath,
   loadWorkspaceFileTree,
   reloadWorkspaceDirectory,
 } from '@/features/workspace/actions'
@@ -73,6 +74,9 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const setActiveFilePath = useWorkspaceStore((s) => s.setActiveFilePath)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const worktreeActivePath = useWorktreeStore((s) =>
+    activeWorkspaceId ? (s.activePaths[activeWorkspaceId] ?? null) : null,
+  )
   const gitStatus = useGitStore((s) => s.status)
   const [contextMenu, setContextMenu] = useState<FileTreeContextMenuState | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PendingFileTreeDelete | null>(null)
@@ -86,6 +90,8 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
     [activeWorkspaceId, workspaces],
   )
+  // Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/implemented/bug-fix/2026-09-22-worktree-file-tree-scope.md
+  const activeScopePath = worktreeActivePath ?? activeWorkspacePath
   const fileTreeViewportRef = useRef<HTMLDivElement>(null)
   const fileChangeMap = useMemo(() => {
     const map = new Map<string, GitFileChange>()
@@ -136,17 +142,17 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
   const loadingDirectoryPaths = useMemo(() => {
     const paths = new Set<string>()
-    if (!activeWorkspacePath) return paths
-    const prefix = `${activeWorkspacePath}\0`
+    if (!activeScopePath) return paths
+    const prefix = `${activeScopePath}\0`
     for (const key of loadingDirectoryKeys) {
       if (key.startsWith(prefix)) paths.add(key.slice(prefix.length))
     }
     return paths
-  }, [activeWorkspacePath, loadingDirectoryKeys])
+  }, [activeScopePath, loadingDirectoryKeys])
 
   const reloadDirectory = useCallback(async (path: string, expectedWorkspacePath?: string) => {
-    const workspacePath = expectedWorkspacePath ?? getActiveWorkspacePath()
-    if (!workspacePath || getActiveWorkspacePath() !== workspacePath) return
+    const workspacePath = expectedWorkspacePath ?? getActiveScopePath()
+    if (!workspacePath || getActiveScopePath() !== workspacePath) return
     const loadKey = `${workspacePath}\0${path}`
     if (path) {
       setLoadingDirectoryKeys((current) => {
@@ -161,7 +167,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       if (path) {
         await reloadWorkspaceDirectory(workspacePath, path)
       } else {
-        await loadWorkspaceFileTree(workspacePath, () => getActiveWorkspacePath() === workspacePath)
+        await loadWorkspaceFileTree(workspacePath, () => getActiveScopePath() === workspacePath)
       }
     } catch (err: any) {
       setErrorMessage(err?.message || t('editor:fileTree.reloadFailed'))
@@ -178,34 +184,34 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   }, [])
 
   const retryFileTreeLoad = useCallback(() => {
-    if (!activeWorkspacePath) return
+    if (!activeScopePath) return
     void loadWorkspaceFileTree(
-      activeWorkspacePath,
-      () => getActiveWorkspacePath() === activeWorkspacePath,
+      activeScopePath,
+      () => getActiveScopePath() === activeScopePath,
       { visualTransition: true },
     )
-  }, [activeWorkspacePath])
+  }, [activeScopePath])
 
   const openWorkspaceInVSCode = useCallback(async () => {
-    if (!activeWorkspacePath || openingVSCode) return
+    if (!activeScopePath || openingVSCode) return
     setOpeningVSCode(true)
     try {
-      const result = await window.electron.system.openVSCode(activeWorkspacePath)
+      const result = await window.electron.system.openVSCode(activeScopePath)
       if (!result.success) setErrorMessage(result.error || t('editor:fileTree.openVSCodeFailed'))
     } catch (error: any) {
       setErrorMessage(error?.message || t('editor:fileTree.openVSCodeFailed'))
     } finally {
       setOpeningVSCode(false)
     }
-  }, [activeWorkspacePath, openingVSCode, t])
+  }, [activeScopePath, openingVSCode, t])
 
   useEffect(() => {
-    if (!activeWorkspacePath) return
+    if (!activeScopePath) return
     setExpandedPaths(new Set())
     setLoadingDirectoryKeys(new Set())
     setSearchQuery('')
     if (fileTreeViewportRef.current) fileTreeViewportRef.current.scrollTop = 0
-  }, [activeWorkspacePath])
+  }, [activeScopePath])
 
   const finishFileTreeReveal = useCallback(() => {
     useWorkspaceStore.setState((state) =>
@@ -219,7 +225,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     if (fileTreeLoadState !== 'revealing') return
     const viewport = fileTreeViewportRef.current
     if (viewport && viewport.scrollTop !== 0) viewport.scrollTop = 0
-  }, [fileTreeLoadState, activeWorkspacePath])
+  }, [fileTreeLoadState, activeScopePath])
 
   // animationend 是唯一结束路径时，切后台或动画被中断就会卡在遮罩态；按固定时长兜底收尾，
   // 保证每次切换后工作区文件一定可见。
@@ -227,7 +233,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     if (fileTreeLoadState !== 'revealing') return
     const timer = window.setTimeout(finishFileTreeReveal, SCAN_BASE_MS + 150)
     return () => window.clearTimeout(timer)
-  }, [fileTreeLoadState, activeWorkspacePath, finishFileTreeReveal])
+  }, [fileTreeLoadState, activeScopePath, finishFileTreeReveal])
 
   // 外部 FS 变更/重命名/删除后,丢弃树上已不存在的展开路径
   useEffect(() => {
@@ -236,7 +242,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
 
   // 搜索时按需加载有限个未展开目录,让嵌套匹配逐步出现
   useEffect(() => {
-    if (!trimmedQuery || !activeWorkspacePath) return
+    if (!trimmedQuery || !activeScopePath) return
 
     let cancelled = false
     const timer = setTimeout(() => {
@@ -253,8 +259,8 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       void (async () => {
         for (const path of paths) {
           if (cancelled) return
-          if (getActiveWorkspacePath() !== activeWorkspacePath) return
-          await reloadDirectory(path, activeWorkspacePath)
+          if (getActiveScopePath() !== activeScopePath) return
+          await reloadDirectory(path, activeScopePath)
         }
       })()
     }, 180)
@@ -264,7 +270,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       clearTimeout(timer)
     }
     // expandedPaths 有意不入依赖:加载候选会主动 expand,避免与 setExpanded 形成环
-  }, [activeWorkspacePath, fileTree, reloadDirectory, trimmedQuery])
+  }, [activeScopePath, fileTree, reloadDirectory, trimmedQuery])
 
   const handleToggleDirectory = useCallback(
     (node: FileNode) => {
@@ -284,22 +290,19 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     [expandedPaths, loadingDirectoryPaths, reloadDirectory],
   )
 
-  const getActiveWorkspace = useCallback(() => {
-    const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
-    return workspaces.find((item) => item.id === activeWorkspaceId) ?? null
-  }, [])
+  const getActiveScope = useCallback(() => getActiveScopePath(), [])
 
   const openFileInEditorWindow = useCallback(async (relativePath: string) => {
-    const workspace = getActiveWorkspace()
-    if (!workspace) return
+    const scopePath = getActiveScope()
+    if (!scopePath) return
 
-    const absolutePath = getAbsolutePath(workspace.path, relativePath)
+    const absolutePath = getAbsolutePath(scopePath, relativePath)
     setActiveFilePath(relativePath)
     await window.electron.window.openEditor({
       filePath: absolutePath,
-      workspacePath: workspace.path,
+      workspacePath: scopePath,
     })
-  }, [getActiveWorkspace, setActiveFilePath])
+  }, [getActiveScope, setActiveFilePath])
 
   const openContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, node: FileNode | null) => {
     setContextMenu({
@@ -384,27 +387,27 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   const handleCopyContextPath = useCallback(
     async (mode: 'relative' | 'absolute') => {
       if (!contextMenu) return
-      const workspace = getActiveWorkspace()
-      if (!workspace) return
+      const scopePath = getActiveScope()
+      if (!scopePath) return
 
       const value =
         mode === 'relative'
           ? contextMenu.target.path || '.'
-          : getAbsolutePath(workspace.path, contextMenu.target.path)
+          : getAbsolutePath(scopePath, contextMenu.target.path)
       await navigator.clipboard.writeText(value)
       setContextMenu(null)
     },
-    [contextMenu, getActiveWorkspace],
+    [contextMenu, getActiveScope],
   )
 
   const handleRevealContextTarget = useCallback(async () => {
     if (!contextMenu) return
-    const workspace = getActiveWorkspace()
-    if (!workspace) return
+    const scopePath = getActiveScope()
+    if (!scopePath) return
 
-    await runFileTreeMutation(() => window.electron.fileTree.reveal(workspace.path, contextMenu.target.path))
+    await runFileTreeMutation(() => window.electron.fileTree.reveal(scopePath, contextMenu.target.path))
     setContextMenu(null)
-  }, [contextMenu, getActiveWorkspace, runFileTreeMutation])
+  }, [contextMenu, getActiveScope, runFileTreeMutation])
 
   const openNamingDialog = useCallback(
     (mode: NamingDialogState['mode']) => {
@@ -434,24 +437,24 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       if (!namingDialog) return
       const dialog = namingDialog
       setNamingDialog(null)
-      const workspace = getActiveWorkspace()
-      if (!workspace) return
+      const scopePath = getActiveScope()
+      if (!scopePath) return
 
       if (dialog.mode === 'rename') {
         if (name === dialog.defaultValue) return
         const oldPath = dialog.path
         const parentPath = getParentPath(oldPath)
         const result = await runFileTreeMutation(() =>
-          window.electron.fileTree.rename(workspace.path, oldPath, name),
+          window.electron.fileTree.rename(scopePath, oldPath, name),
         )
         if (!result?.path) return
         const newPath = result.path
 
         // 同步依赖旧路径的状态:编辑器 tab/缓存、展开集合、当前选中
         remapEditorPaths(
-          getAbsolutePath(workspace.path, oldPath),
-          getAbsolutePath(workspace.path, newPath),
-          workspace.path,
+          getAbsolutePath(scopePath, oldPath),
+          getAbsolutePath(scopePath, newPath),
+          scopePath,
         )
         setExpandedPaths((current) => {
           const next = new Set<string>()
@@ -463,14 +466,14 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
           setActiveFilePath(remapPath(currentActive, oldPath, newPath))
         }
         await reloadDirectory(parentPath)
-        void useGitStore.getState().fetchStatus(workspace.path)
+        void useGitStore.getState().fetchStatus(scopePath)
         return
       }
 
       const result = await runFileTreeMutation(() =>
         dialog.mode === 'create-file'
-          ? window.electron.fileTree.createFile(workspace.path, dialog.path, name)
-          : window.electron.fileTree.createDirectory(workspace.path, dialog.path, name),
+          ? window.electron.fileTree.createFile(scopePath, dialog.path, name)
+          : window.electron.fileTree.createDirectory(scopePath, dialog.path, name),
       )
       if (!result) return
 
@@ -479,9 +482,9 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
         setExpandedPaths((current) => new Set(current).add(dialog.path))
       }
       if (dialog.mode === 'create-file' && result.path) setActiveFilePath(result.path)
-      void useGitStore.getState().fetchStatus(workspace.path)
+      void useGitStore.getState().fetchStatus(scopePath)
     },
-    [getActiveWorkspace, namingDialog, reloadDirectory, runFileTreeMutation, setActiveFilePath],
+    [getActiveScope, namingDialog, reloadDirectory, runFileTreeMutation, setActiveFilePath],
   )
 
   const handleMoveFile = useCallback(async (
@@ -489,22 +492,22 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     targetDirectoryPath: string,
     sourceWorkspacePath: string,
   ) => {
-    const workspace = getActiveWorkspace()
-    if (!workspace || workspace.path !== sourceWorkspacePath) return
+    const scopePath = getActiveScope()
+    if (!scopePath || scopePath !== sourceWorkspacePath) return
 
     const sourceParentPath = getParentPath(sourcePath)
     if (sourceParentPath === targetDirectoryPath) return
 
     const result = await runFileTreeMutation(() =>
-      window.electron.fileTree.move(workspace.path, sourcePath, targetDirectoryPath),
+      window.electron.fileTree.move(scopePath, sourcePath, targetDirectoryPath),
     )
-    if (!result?.path || getActiveWorkspace()?.path !== sourceWorkspacePath) return
+    if (!result?.path || getActiveScope() !== sourceWorkspacePath) return
 
     const targetPath = result.path
     remapEditorPaths(
-      getAbsolutePath(workspace.path, sourcePath),
-      getAbsolutePath(workspace.path, targetPath),
-      workspace.path,
+      getAbsolutePath(scopePath, sourcePath),
+      getAbsolutePath(scopePath, targetPath),
+      scopePath,
     )
     const currentActive = useWorkspaceStore.getState().activeFilePath
     if (currentActive === sourcePath) setActiveFilePath(targetPath)
@@ -514,17 +517,17 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     if (targetDirectoryPath !== sourceParentPath) {
       await reloadDirectory(targetDirectoryPath, sourceWorkspacePath)
     }
-    void useGitStore.getState().fetchStatus(workspace.path)
-  }, [getActiveWorkspace, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+    void useGitStore.getState().fetchStatus(scopePath)
+  }, [getActiveScope, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
   const handleDeleteContextTarget = useCallback(() => {
     if (!contextMenu || !contextMenu.target.node) return
-    const workspace = getActiveWorkspace()
-    if (!workspace) return
+    const scopePath = getActiveScope()
+    if (!scopePath) return
 
-    setPendingDelete(createPendingFileTreeDelete(workspace.path, contextMenu.target))
+    setPendingDelete(createPendingFileTreeDelete(scopePath, contextMenu.target))
     setContextMenu(null)
-  }, [contextMenu, getActiveWorkspace])
+  }, [contextMenu, getActiveScope])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!pendingDelete) return
@@ -534,7 +537,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     await executeFileTreeDelete(request, {
       deleteTarget: (workspacePath, targetPath) =>
         runFileTreeMutation(() => window.electron.fileTree.delete(workspacePath, targetPath)),
-      isWorkspaceActive: (workspacePath) => getActiveWorkspace()?.path === workspacePath,
+      isWorkspaceActive: (workspacePath) => getActiveScope() === workspacePath,
       reloadDirectory,
       onDeleted: (targetPath) => {
         closeEditorFilesUnderPath(getAbsolutePath(request.workspacePath, targetPath))
@@ -550,7 +553,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
       },
     })
     void useGitStore.getState().fetchStatus(request.workspacePath)
-  }, [getActiveWorkspace, pendingDelete, reloadDirectory, runFileTreeMutation, setActiveFilePath])
+  }, [getActiveScope, pendingDelete, reloadDirectory, runFileTreeMutation, setActiveFilePath])
 
   const namingCopy = namingDialog ? NAMING_DIALOG_KEYS[namingDialog.mode] : null
 
@@ -581,7 +584,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[rgba(255,255,255,0.08)] text-[#999] transition-colors hover:border-[rgba(255,120,48,0.4)] hover:text-[#ff7830] disabled:cursor-not-allowed disabled:opacity-40"
             title={t('editor:fileTree.openInVSCode')}
             aria-label={t('editor:fileTree.openInVSCode')}
-            disabled={!activeWorkspacePath || openingVSCode}
+            disabled={!activeScopePath || openingVSCode}
             onClick={() => void openWorkspaceInVSCode()}
           >
             <ExternalLink size={14} aria-hidden="true" />
@@ -620,7 +623,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
                   <div key={node.path}>
                     <FileTreeItem
                       node={node}
-                      workspacePath={activeWorkspacePath ?? ''}
+                      workspacePath={activeScopePath ?? ''}
                       depth={0}
                       activeFilePath={activeFilePath}
                       expanded={expandedPaths.has(node.path) || filtered?.expandedDirs.has(node.path) === true}
@@ -647,7 +650,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
               之前挂在 .tree 内拿的是内容高度，长树后半程跑到折叠线以下，看起来像提前消失。 */}
           {fileTreeLoadState === 'revealing' && (
             <div
-              key={activeWorkspacePath ?? 'empty'}
+              key={activeScopePath ?? 'empty'}
               className={styles.scanOverlay}
               style={{ '--scan-duration': `${SCAN_BASE_MS}ms` } as CSSProperties}
               aria-hidden="true"

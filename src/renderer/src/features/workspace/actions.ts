@@ -1,11 +1,28 @@
 import type { FileNode, Workspace } from '@/types'
 import { invalidateEditorFileCache } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useWorktreeStore } from '@/stores/worktree'
+import { useGitStore } from '@/stores/git'
 import { applyLoadedChildren, collectLoadedDirectoryPaths, injectDirectoryChildren } from './file-tree'
 
 export function getActiveWorkspacePath(): string | null {
   const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
   return workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null
+}
+
+// Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/implemented/bug-fix/2026-09-22-worktree-file-tree-scope.md
+/** Effective file-tree root: active worktree path when set, otherwise the workspace root. */
+export function getActiveScopePath(): string | null {
+  const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
+  if (!activeWorkspaceId) return null
+  const scoped = useWorktreeStore.getState().activePaths[activeWorkspaceId]
+  if (scoped) return scoped
+  return workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null
+}
+
+/** Scope path for a given workspace (used when the target workspace is not yet active). */
+export function getScopePathForWorkspace(workspaceId: string, workspacePath: string): string {
+  return useWorktreeStore.getState().activePaths[workspaceId] ?? workspacePath
 }
 
 /**
@@ -57,9 +74,9 @@ export async function loadWorkspaceFileTree(
     throw error
   }
 
-  // 当前 store 中的树属于活动工作区;仅当目标一致时才带着已展开分支去刷新
+  // 当前 store 中的树属于活动 scope;仅当目标一致时才带着已展开分支去刷新
   const loadedPaths =
-    getActiveWorkspacePath() === workspacePath
+    getActiveScopePath() === workspacePath
       ? collectLoadedDirectoryPaths(useWorkspaceStore.getState().fileTree)
       : []
   const childrenByPath = new Map<string, FileNode[]>()
@@ -111,11 +128,11 @@ export async function reloadWorkspaceDirectory(workspacePath: string, path: stri
 
   const operation = (async () => {
     const children = await window.electron.fileTree.children(workspacePath, path)
-    if (getActiveWorkspacePath() !== workspacePath) return
+    if (getActiveScopePath() !== workspacePath) return
 
     let committed = false
     useWorkspaceStore.setState((state) => {
-      if (getActiveWorkspacePath() !== workspacePath) return {}
+      if (getActiveScopePath() !== workspacePath) return {}
       if (!containsDirectory(state.fileTree, path)) return {}
       committed = true
       return { fileTree: injectDirectoryChildren(state.fileTree, path, children) }
@@ -142,4 +159,33 @@ export async function chooseAndCreateWorkspace(): Promise<Workspace | null> {
   invalidateEditorFileCache(folderPath)
   await loadWorkspaceFileTree(folderPath).catch(() => {})
   return workspace
+}
+
+/**
+ * Scope 刷新统一入口:清选中、清编辑器缓存、刷 git、带扫描线重拉文件树。
+ * 调用方只传 scope 根目录;是否提交由 scope 竞态守卫决定。
+ */
+export async function refreshScopeFileTree(scopePath: string, visual = true): Promise<void> {
+  if (getActiveScopePath() !== scopePath) return
+  invalidateEditorFileCache(scopePath)
+  void useGitStore.getState().fetchStatus(scopePath)
+  useWorkspaceStore.setState({ activeFilePath: null })
+  await loadWorkspaceFileTree(
+    scopePath,
+    () => getActiveScopePath() === scopePath,
+    visual ? { visualTransition: true } : {},
+  )
+}
+
+/**
+ * 切换活动 worktree 并走扫描线加载;目标已是当前 scope 时直接返回 false。
+ */
+export async function switchActiveWorktree(workspaceId: string, nextPath: string): Promise<boolean> {
+  const { workspaces } = useWorkspaceStore.getState()
+  const workspacePath = workspaces.find((workspace) => workspace.id === workspaceId)?.path ?? null
+  const current = useWorktreeStore.getState().activePaths[workspaceId] ?? workspacePath
+  if (!workspacePath || current === nextPath) return false
+  useWorktreeStore.getState().setActivePath(workspaceId, nextPath)
+  await refreshScopeFileTree(nextPath, true).catch(() => {})
+  return true
 }
