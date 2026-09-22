@@ -1051,6 +1051,12 @@ function SessionDetailWindow({
   const [restoreConflicts, setRestoreConflicts] = useState<ConflictInfo[]>([])
   const [restoreDone, setRestoreDone] = useState<{ id: string; pruned: string } | null>(null)
   const [transcript, setTranscript] = useState<TranscriptDetail | null>(null)
+  const [activeTurnId, setActiveTurnId] = useState<string | null>(null)
+  const turnRefs = useMemo(() => new Map<string, HTMLDivElement | null>(), [])
+  const jumpToTurn = useCallback((id: string) => {
+    setActiveTurnId(id)
+    turnRefs.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [turnRefs])
   const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
   // External and archived rows carry no restorable state: the window reads the
   // transcript ledger only and never fetches checkpoints.
@@ -1271,7 +1277,7 @@ function SessionDetailWindow({
         aria-label={session.firstPrompt || session.engine}
         className="overflow-hidden flex flex-col"
         style={{
-          width: diffCp ? 1240 : 880,
+          width: diffCp ? 1300 : 1020,
           maxWidth: 'calc(100vw - 40px)',
           height: 660,
           maxHeight: 'calc(100vh - 60px)',
@@ -1323,6 +1329,59 @@ function SessionDetailWindow({
           </div>
         )}
         <div className="flex" style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ width: 168, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)', overflowY: 'auto', padding: '10px 8px', background: 'rgba(0,0,0,0.18)' }}>
+            <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#5a5a60', padding: '0 6px 6px' }}>
+              {t('terminal:agentSession.turns', { count: displayTurns.length })}
+            </div>
+            {displayTurns.map((turn, index) => {
+              const label = (turn.prompt ?? turn.excerpt ?? '').replace(/\s+/g, ' ').trim().slice(0, 20) || `turn ${index + 1}`
+              const active = activeTurnId === turn.id
+              return (
+                <button
+                  key={turn.id}
+                  onClick={() => jumpToTurn(turn.id)}
+                  title={turn.prompt ?? turn.excerpt ?? `turn ${index + 1}`}
+                  className="cursor-pointer"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    padding: '5px 6px', borderRadius: 4, border: 0, cursor: 'pointer',
+                    background: active ? 'rgba(138,180,255,0.10)' : 'transparent',
+                    color: active ? '#d4d4d4' : '#9d9da3',
+                    fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: turn.kind === 'done' ? '#6bd89b' : '#e06c75' }} />
+                  <span style={{ color: '#666', flexShrink: 0 }}>{index + 1}</span>
+                  <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{label}</span>
+                </button>
+              )
+            })}
+            {orphans.length > 0 && (
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#5a5a60', padding: '8px 6px 6px' }}>
+                #
+              </div>
+            )}
+            {orphans.map((cp) => {
+              const active = activeTurnId === `orphan-${cp.id}`
+              return (
+                <button
+                  key={cp.id}
+                  onClick={() => jumpToTurn(`orphan-${cp.id}`)}
+                  title={cp.prompt ?? `#${cp.conversationIndex}`}
+                  className="cursor-pointer"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    padding: '5px 6px', borderRadius: 4, border: 0, cursor: 'pointer',
+                    background: active ? 'rgba(138,180,255,0.10)' : 'transparent',
+                    color: active ? '#d4d4d4' : '#8ab4ff',
+                    fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
+                  }}
+                >
+                  <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">#{cp.conversationIndex}</span>
+                </button>
+              )
+            })}
+          </div>
           <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 16px' }}>
             {!detail ? (
               <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
@@ -1338,7 +1397,15 @@ function SessionDetailWindow({
                   // Turn-owned prompt survives checkpoint prune; linked prompt stays as fallback.
                   const question = turn.prompt ?? linked?.prompt
                   return (
-                    <div key={turn.id} style={{ background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '11px 12px', marginBottom: 10 }}>
+                    <div
+                      key={turn.id}
+                      ref={(node) => { turnRefs.set(turn.id, node) }}
+                      style={{
+                        background: 'rgba(0,0,0,0.28)',
+                        border: activeTurnId === turn.id ? '1px solid rgba(138,180,255,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                        borderRadius: 8, padding: '11px 12px', marginBottom: 10,
+                      }}
+                    >
                       {question && (
                         <div style={{ marginBottom: 9 }}>
                           <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 5 }}>
@@ -1383,7 +1450,15 @@ function SessionDetailWindow({
                   <div style={{ fontSize: 11, color: '#e06c75', padding: '6px 0' }}>{cpError}</div>
                 )}
                 {orphans.map((cp) => (
-                  <div key={cp.id} style={{ background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '11px 12px', marginBottom: 10 }}>
+                  <div
+                    key={cp.id}
+                    ref={(node) => { turnRefs.set(`orphan-${cp.id}`, node) }}
+                    style={{
+                      background: 'rgba(0,0,0,0.28)',
+                      border: activeTurnId === `orphan-${cp.id}` ? '1px solid rgba(138,180,255,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: 8, padding: '11px 12px', marginBottom: 10,
+                    }}
+                  >
                     {cp.prompt && (
                       <div style={{ fontSize: 12.5, lineHeight: 1.65, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 4 }}>
                         {cp.prompt}
