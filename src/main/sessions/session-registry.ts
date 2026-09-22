@@ -44,6 +44,7 @@ export class AgentSessionRegistry {
   private readonly sessions = new Map<string, AgentSessionRecord>()
   private readonly terminalToSession = new Map<string, string>()
   private readonly pendingTurnStart = new Map<string, string>()
+  private readonly pendingTurnPrompt = new Map<string, string>()
   private readonly writeQueue = new SerialQueue()
   private changeListener?: (sessionId?: string) => void
   private loadTask: Promise<void> | null = null
@@ -234,6 +235,12 @@ export class AgentSessionRegistry {
     return this.terminalToSession.get(terminalId) ?? null
   }
 
+  /** Transcript path persisted for the terminal session, if any. */
+  transcriptPathForTerminal(terminalId: string): string | undefined {
+    const record = this.recordForTerminal(terminalId)
+    return record?.transcriptPath
+  }
+
   noteTerminal(terminalId: string, sessionId: string): void {
     const record = this.sessions.get(sessionId)
     if (!record) return
@@ -250,6 +257,9 @@ export class AgentSessionRegistry {
     record.lastPrompt = prompt
     record.status = 'active'
     this.pendingTurnStart.set(record.id, new Date().toISOString())
+    // Question snapshot source: consumed once by recordTurnEnd so the turn
+    // owns its prompt even after checkpoint prune.
+    this.pendingTurnPrompt.set(record.id, prompt)
     record.updatedAt = new Date().toISOString()
     this.persist()
     // Card-visible mutation (first prompt, active status): push session:event
@@ -308,16 +318,25 @@ export class AgentSessionRegistry {
     this.notify(record.id)
   }
 
-  recordTurnEnd(terminalId: string, kind: AgentSessionTurnKind, checkpointId?: string): void {
+  recordTurnEnd(
+    terminalId: string,
+    kind: AgentSessionTurnKind,
+    checkpointId?: string,
+    excerpt?: string,
+  ): void {
     const record = this.recordForTerminal(terminalId)
     if (!record) return
     const now = new Date().toISOString()
+    const prompt = this.pendingTurnPrompt.get(record.id)
+    this.pendingTurnPrompt.delete(record.id)
     const turn: SessionTurnRecord = {
       id: randomUUID(),
       kind,
       checkpointId: checkpointId ?? record.checkpointIds.at(-1),
       startedAt: this.pendingTurnStart.get(record.id) ?? now,
       endedAt: now,
+      ...(prompt ? { prompt } : {}),
+      ...(excerpt ? { excerpt } : {}),
     }
     this.pendingTurnStart.delete(record.id)
     record.turns.push(turn)

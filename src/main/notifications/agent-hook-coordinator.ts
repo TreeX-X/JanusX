@@ -157,7 +157,7 @@ function resolveTurnEndKind(payload: AgentHookPayload): AgentHookCompletionKind 
   return null
 }
 
-function getRawString(raw: unknown, keys: string[]): string | undefined {
+export function getRawString(raw: unknown, keys: string[]): string | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const record = raw as Record<string, unknown>
   for (const key of keys) {

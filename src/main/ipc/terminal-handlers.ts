@@ -11,7 +11,7 @@ import { subAgentRunRegistry } from '../janus-runner/subagent-run-registry'
 import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
 import { AgentHookConfigManager } from '../notifications/agent-hook-config'
-import { AgentHookCoordinator } from '../notifications/agent-hook-coordinator'
+import { AgentHookCoordinator, getRawString } from '../notifications/agent-hook-coordinator'
 import { AgentTurnSentinel } from '../notifications/agent-turn-sentinel'
 import {
   JANUSX_SYNTHETIC_HOOK_EVENTS,
@@ -25,6 +25,7 @@ import {
 } from '../notifications/agent-hook-diagnostics'
 import { logTerminalDiagnostic } from '../terminal/diagnostics'
 import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
+import { readAssistantExcerpt } from '../sessions/transcript-excerpt'
 import { appShutdown } from '../shutdown/AppShutdown'
 import { officecliManager } from '../office/officecli-manager'
 import { existsSync } from 'fs'
@@ -436,7 +437,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     onTurnEnded: (terminalId) => {
       turnSentinel.endTurn(terminalId)
     },
-    onResolvedPayload: (payload, terminal) => {
+    onResolvedPayload: async (payload, terminal) => {
       const state = terminalStates.get(terminal.terminalId)
       const event = payload.event.toLowerCase()
       const rawStatus = JSON.stringify(payload.raw ?? '')
@@ -484,7 +485,13 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
             : 'done'
         const baselineId = state.checkpointId ?? undefined
         const baselineCwd = state.cwd
-        agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, baselineId)
+        // Answer prose (orca-style tail read): hook raw first, session
+        // record second. Failures yield undefined and never block recording.
+        const transcriptPath =
+          getRawString(payload.raw, ['transcript_path', 'transcriptPath']) ??
+          agentSessionRegistry.transcriptPathForTerminal(terminal.terminalId)
+        const excerpt = await readAssistantExcerpt(transcriptPath, terminal.engine)
+        agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, baselineId, excerpt)
         // Turn-change island feed: per-file records against the baseline.
         // Best-effort and off the turn pipeline; quiet trees hit the mtime
         // fast path, binaries and oversized files never enter memory.

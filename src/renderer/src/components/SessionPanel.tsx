@@ -923,15 +923,17 @@ function SessionCard({
               <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 10px' }}>
                 {detail.turns.map((turn, index) => {
                   const linked = turn.checkpointId ? checkpointById.get(turn.checkpointId) : undefined
+                  // Turn-owned prompt survives checkpoint prune; linked prompt stays as fallback.
+                  const question = turn.prompt ?? linked?.prompt
                   return (
                     <div key={turn.id} style={{ padding: '8px 0', borderTop: index === 0 && orphans.length === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
-                      {linked?.prompt && (
+                      {question && (
                         <div style={{ marginBottom: 8 }}>
                           <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 4 }}>
                             turn {index + 1} · {formatDate(turn.startedAt, t)}
                           </div>
                           <div style={{ fontSize: 12, lineHeight: 1.6, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
-                            {linked.prompt}
+                            {question}
                           </div>
                         </div>
                       )}
@@ -941,8 +943,13 @@ function SessionCard({
                           {turnKindLabel(turn.kind, t)}
                         </span>
                         {linked && <span style={{ color: '#8ab4ff' }}>#{linked.conversationIndex}</span>}
-                        {!linked?.prompt && <span>turn {index + 1} · {formatDate(turn.startedAt, t)}</span>}
+                        {!question && <span>turn {index + 1} · {formatDate(turn.startedAt, t)}</span>}
                       </div>
+                      {turn.excerpt && (
+                        <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.6, color: '#c9c9c9', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                          {turn.excerpt}
+                        </div>
+                      )}
                       {linked && renderStrip(linked)}
                       {!linked && !turn.checkpointId && cpLoaded && (
                         <div

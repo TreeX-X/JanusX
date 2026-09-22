@@ -17,6 +17,10 @@ export interface SessionTurnRecord {
   checkpointId?: string
   startedAt: string
   endedAt: string
+  /** Question snapshot taken at turn end; survives checkpoint prune. */
+  prompt?: string
+  /** Answer excerpt parsed from the provider transcript tail; capped. */
+  excerpt?: string
 }
 
 export interface AgentSessionSummary {

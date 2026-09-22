@@ -243,4 +243,19 @@ describe('agent session registry', () => {
     registry.noteCheckpoint('missing', 'cp-x')
     expect(seen).toHaveLength(6)
   })
+
+  it('snapshots the prompt and excerpt onto the turn so content survives prune', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const record = registry.createSession(createInput('term-1'))
+    registry.notePrompt('term-1', 'do the thing')
+    registry.noteCheckpoint('term-1', 'cp-1')
+    registry.recordTurnEnd('term-1', 'done', 'cp-1', 'did it')
+    // Pending prompt clears after one turn; the next turn without a new
+    // submit carries no stale question.
+    registry.recordTurnEnd('term-1', 'done', 'cp-1')
+    const turns = registry.getSession(record.id)?.turns ?? []
+    expect(turns).toHaveLength(2)
+    expect(turns[0]).toMatchObject({ prompt: 'do the thing', excerpt: 'did it' })
+    expect(turns[1].prompt).toBeUndefined()
+  })
 })
