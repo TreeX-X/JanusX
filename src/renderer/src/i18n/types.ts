@@ -1931,6 +1931,7 @@ export type TypedI18nKey =
   | 'terminal:agentSession.resumeUnavailable'
   | 'terminal:agentSession.scopeAll'
   | 'terminal:agentSession.scopeArchived'
+  | 'terminal:agentSession.scopeEmptyCounts'
   | 'terminal:agentSession.scopeProject'
   | 'terminal:agentSession.scopeWorkspace'
   | 'terminal:agentSession.searchPlaceholder'

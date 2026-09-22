@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
 import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, type ConflictInfo } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -117,6 +118,7 @@ export function SessionPanel() {
   const [continueTarget, setContinueTarget] = useState<AgentSessionSummary | null>(null)
   const [detailTarget, setDetailTarget] = useState<AgentSessionSummary | null>(null)
   const [query, setQuery] = useState('')
+  const [allCounts, setAllCounts] = useState<{ all: number; archived: number } | null>(null)
   // Note: open-card live refresh follows the same session:event — debounced
   // so submit/checkpoint/turn bursts reload the timeline once — see
   // .agents/notes/implemented/feature/2026-09-22-session-timeline-live.md
@@ -175,6 +177,27 @@ export function SessionPanel() {
       || (s.branch ?? '').toLowerCase().includes(q),
     )
   }, [sessions, scope, query])
+
+  // An empty scope tab is ambiguous with no data at all: one unfiltered fetch
+  // reports the totals so the empty state names the other scopes. Runs only
+  // while the visible list stays empty.
+  useEffect(() => {
+    if (loading || visible.length > 0) return
+    let alive = true
+    window.electron.session
+      .list({ includeArchived: true })
+      .catch(() => [])
+      .then((rows) => {
+        if (!alive) return
+        setAllCounts({
+          all: rows.filter((row) => !row.archived).length,
+          archived: rows.filter((row) => row.archived).length,
+        })
+      })
+    return () => {
+      alive = false
+    }
+  }, [loading, visible.length])
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -245,8 +268,13 @@ export function SessionPanel() {
           <div className="text-xs" style={{ color: '#e06c75' }}>{error}</div>
         )}
         {!loading && visible.length === 0 && (
-          <div className="flex items-center justify-center h-full text-xs" style={{ color: '#555' }}>
-            {t('terminal:agentSession.empty')}
+          <div className="flex flex-col items-center justify-center h-full text-xs" style={{ color: '#555', gap: 6 }}>
+            <span>{t('terminal:agentSession.empty')}</span>
+            {allCounts && (allCounts.all > 0 || allCounts.archived > 0) && (
+              <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10 }}>
+                {t('terminal:agentSession.scopeEmptyCounts', { all: allCounts.all, archived: allCounts.archived })}
+              </span>
+            )}
           </div>
         )}
         {visible.map((session) => (
@@ -262,7 +290,7 @@ export function SessionPanel() {
         ))}
       </div>
 
-      {detailTarget && (
+      {detailTarget && createPortal(
         <SessionDetailWindow
           session={detailTarget}
           timelineTick={timelineTick}
@@ -279,10 +307,11 @@ export function SessionPanel() {
             setDetailTarget(null)
             setContinueTarget(detailTarget)
           }}
-        />
+        />,
+        document.body,
       )}
 
-      {continueTarget && (
+      {continueTarget && createPortal(
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.64)', zIndex: 1000 }}
@@ -340,7 +369,8 @@ export function SessionPanel() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

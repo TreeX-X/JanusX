@@ -412,9 +412,21 @@ export class AgentSessionRegistry {
     )
     if (existing) {
       if (existing.external !== true) {
+        let changed = false
         if (!existing.transcriptPath) {
           existing.transcriptPath = transcriptPath
           existing.updatedAt = updatedAt > existing.updatedAt ? updatedAt : existing.updatedAt
+          changed = true
+        }
+        // Hook-owned rows whose prompt never reached submit-line stay
+        // titleless; the transcript first question restores their
+        // recognizability without touching their turns.
+        if (!existing.firstPrompt && firstPrompt) {
+          existing.firstPrompt = firstPrompt
+          existing.lastPrompt = firstPrompt
+          changed = true
+        }
+        if (changed) {
           this.persist()
           this.notify(existing.id)
         }

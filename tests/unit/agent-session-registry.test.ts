@@ -129,6 +129,28 @@ describe('agent session registry', () => {
     expect(registry.getSession(record.id)).not.toBeNull()
   })
 
+  it('backfills a titleless hook-owned session from the transcript import', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const record = registry.createSession({ ...createInput('term-1'), providerSessionId: 'p-1' })
+    registry.recordTurnEnd('term-1', 'done')
+    expect(registry.getSession(record.id)?.firstPrompt).toBe('')
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'p-1',
+      transcriptPath: '/tmp/sess.jsonl',
+      firstPrompt: '  fix the login retry  ',
+      turnCount: 3,
+    })
+    const detail = registry.getSession(record.id)
+    expect(detail?.external).toBeUndefined()
+    expect(detail?.firstPrompt).toBe('fix the login retry')
+    expect(detail?.lastPrompt).toBe('fix the login retry')
+    // Hook-owned turns stay authoritative; the import never rewrites them.
+    expect(detail?.turnCount).toBe(1)
+    expect(detail?.transcriptPath).toBe('/tmp/sess.jsonl')
+  })
+
   it('persists across reloads and recovers from corrupt stores', async () => {
     const dir = await userDataDir()
     const registry = track(new AgentSessionRegistry(dir))
