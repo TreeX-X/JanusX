@@ -55,6 +55,45 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+// Note: windowed session reading with orca-aligned preview layers — internal
+// turns keep scoped checkpoints with inline diff, external rows stay
+// transcript-only — see
+// .agents/notes/implemented/feature/2026-09-22-session-windowed-reading.md
+
+/** Provider resume command for external rows (orca parity); null when the engine has no known resume shape. */
+function buildResumeCommand(session: AgentSessionSummary): string | null {
+  const id = session.providerSessionId
+  if (!id) return null
+  if (session.engine === 'claude') return `claude --resume ${id}`
+  if (session.engine === 'codex') return `codex resume ${id}`
+  return null
+}
+
+function CopyButton({ text, label, grow }: { text: string; label?: string; grow?: boolean }) {
+  const { t } = useI18n('terminal')
+  const [copied, setCopied] = useState(false)
+  const timer = useMemo(() => ({ id: null as ReturnType<typeof setTimeout> | null }), [])
+  useEffect(() => () => {
+    if (timer.id) clearTimeout(timer.id)
+  }, [timer])
+  return (
+    <button
+      onClick={(event) => {
+        event.stopPropagation()
+        void navigator.clipboard?.writeText(text).catch(() => undefined).then(() => {
+          setCopied(true)
+          if (timer.id) clearTimeout(timer.id)
+          timer.id = setTimeout(() => setCopied(false), 1200)
+        })
+      }}
+      className="rounded cursor-pointer"
+      style={{ height: grow ? 24 : 20, padding: '0 8px', fontSize: grow ? 10.5 : 10, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#8a8a8e', fontFamily: "'SF Mono', monospace", flexShrink: 0, flex: grow ? 1 : undefined }}
+    >
+      {copied ? t('terminal:agentSession.copied') : (label ?? t('terminal:agentSession.copy'))}
+    </button>
+  )
+}
+
 export function SessionPanel() {
   const { t } = useI18n('terminal')
   const sessions = useSessionStore((s) => s.sessions)
@@ -79,6 +118,8 @@ export function SessionPanel() {
   )
   const [scope, setScope] = useState<Scope>('workspace')
   const [continueTarget, setContinueTarget] = useState<AgentSessionSummary | null>(null)
+  const [detailTarget, setDetailTarget] = useState<AgentSessionSummary | null>(null)
+  const [query, setQuery] = useState('')
   // Note: open-card live refresh follows the same session:event — debounced
   // so submit/checkpoint/turn bursts reload the timeline once — see
   // .agents/notes/implemented/feature/2026-09-22-session-timeline-live.md
@@ -126,7 +167,17 @@ export function SessionPanel() {
     }
   }, [])
 
-  const visible = scope === 'archived' ? sessions.filter((s) => s.archived) : sessions.filter((s) => !s.archived)
+  const visible = useMemo(() => {
+    const scoped = scope === 'archived' ? sessions.filter((s) => s.archived) : sessions.filter((s) => !s.archived)
+    const q = query.trim().toLowerCase()
+    if (!q) return scoped
+    return scoped.filter((s) =>
+      (s.firstPrompt ?? '').toLowerCase().includes(q)
+      || s.engine.toLowerCase().includes(q)
+      || s.cwd.toLowerCase().includes(q)
+      || (s.branch ?? '').toLowerCase().includes(q),
+    )
+  }, [sessions, scope, query])
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -136,6 +187,19 @@ export function SessionPanel() {
       >
         <div style={{ fontSize: 13, fontWeight: 650, color: '#eee' }}>
           {t('terminal:agentSession.title')}
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('terminal:agentSession.searchPlaceholder')}
+            aria-label={t('terminal:agentSession.searchPlaceholder')}
+            style={{
+              width: '100%', height: 26, fontSize: 11.5, color: '#d4d4d4',
+              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 6, padding: '0 9px', outline: 'none', fontFamily: 'inherit',
+            }}
+          />
         </div>
         <div className="flex" style={{ gap: 16, marginTop: 8, alignItems: 'flex-end' }}>
           {(Object.keys(SCOPE_KEYS) as Scope[]).map((key) => (
@@ -196,9 +260,22 @@ export function SessionPanel() {
             timelineTick={timelineTick}
             onToggle={() => handleToggle(session.id)}
             onContinue={() => setContinueTarget(session)}
+            onDetail={() => setDetailTarget(session)}
           />
         ))}
       </div>
+
+      {detailTarget && (
+        <SessionDetailWindow
+          session={detailTarget}
+          timelineTick={timelineTick}
+          onClose={() => setDetailTarget(null)}
+          onContinue={() => {
+            setDetailTarget(null)
+            setContinueTarget(detailTarget)
+          }}
+        />
+      )}
 
       {continueTarget && (
         <div
@@ -398,6 +475,7 @@ function CheckpointStrip({
   const hiddenCount = recs.length - visibleRecs.length
   return (
     <div
+      data-cp-strip={cp.id}
       style={{
         marginTop: 8,
         border: '1px solid rgba(255,255,255,0.07)',
@@ -530,7 +608,10 @@ function CheckpointStrip({
   )
 }
 
-function DiffModal({
+// Note: right-side diff panel inside SessionDetailWindow — the dialog widens
+// rightward when it mounts, so file-heavy diffs never stretch the timeline.
+
+function DiffSidePanel({
   cp,
   cwd,
   records,
@@ -556,14 +637,6 @@ function DiffModal({
     void fetchAllDiffs(cp.id, cwd)
   }, [cp.id, cwd, fetchAllDiffs])
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const recs = records ?? []
   const hasBinary = recs.some((record) => record.status === 'binary' || record.status === 'oversized')
 
@@ -588,119 +661,97 @@ function DiffModal({
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.64)', zIndex: 1000 }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
+      className="flex flex-col"
+      style={{ width: 520, maxWidth: '45%', flexShrink: 0, minHeight: 0, borderLeft: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.25)' }}
+      aria-label={t('terminal:checkpoint.diffPreview')}
     >
-      <div
-        role="dialog"
-        aria-label={t('terminal:checkpoint.diffPreview')}
-        className="overflow-hidden flex flex-col"
-        style={{
-          width: 780,
-          maxWidth: 'calc(100vw - 80px)',
-          height: 600,
-          maxHeight: 'calc(100vh - 80px)',
-          background: 'var(--shell-chrome)',
-          border: '1px solid var(--shell-border)',
-          borderRadius: 8,
-          boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
-        }}
-      >
-        <TrafficBar
-          title={`#${cp.conversationIndex} · ${t('terminal:checkpoint.diffPreview')}`}
-          onClose={onClose}
-        />
-        <div
-          className="flex items-center"
-          style={{ gap: 10, padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#777', flexShrink: 0 }}
-        >
-          <span>…/{baseNameOf(cwd)} · {formatDate(cp.createdAt, t)}</span>
-          <span style={{ marginLeft: 'auto' }}>
-            {pruneCount > 0
-              ? t('terminal:checkpoint.pruneWarn', { count: pruneCount })
-              : t('terminal:checkpoint.pruneOk')}
-          </span>
-        </div>
-        <div className="flex" style={{ flex: 1, minHeight: 0 }}>
-          <div style={{ width: 200, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)', overflowY: 'auto', padding: 6 }}>
-            {recs.length === 0 && (
-              <div style={{ fontSize: 11, color: '#555', padding: '7px 9px' }}>{t('terminal:checkpoint.diffEmpty')}</div>
-            )}
-            {recs.map((record) => {
-              const isText = record.status !== 'binary' && record.status !== 'oversized'
-              const active = activePath === record.path
-              return (
-                <div
-                  key={record.path}
-                  onClick={() => {
-                    if (isText) openFile(record.path)
-                  }}
-                  title={isText ? undefined : t('terminal:checkpoint.binaryNoDiff')}
-                  style={{
-                    padding: '7px 9px',
-                    borderRadius: 4,
-                    cursor: isText ? 'pointer' : 'default',
-                    opacity: isText ? 1 : 0.55,
-                    background: active ? 'rgba(138,180,255,0.08)' : 'transparent',
-                    color: active ? '#d4d4d4' : '#9d9da3',
-                    fontFamily: "'SF Mono', monospace",
-                    fontSize: 10.5,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {record.path}
-                  <div style={{ fontSize: 9.5, color: '#666' }}>
-                    <FileCounts record={record} />
-                    {!isText && ` · ${t('terminal:checkpoint.binaryNoDiff')}`}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '10px 12px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.65, background: 'rgba(0,0,0,0.35)' }}>
-            {activePath && (
-              <div style={{ position: 'sticky', top: -10, background: '#1a1a1d', color: '#888', padding: '6px 8px', margin: '0 -12px 6px', paddingLeft: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                {activePath}
-              </div>
-            )}
-            {fileError && <div style={{ color: '#e06c75' }}>{fileError}</div>}
-            {!fileError && shown !== undefined && shown !== null && shown !== '' && renderLines(shown)}
-            {!fileError && (shown === undefined || shown === null) && (
-              <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffLoading')}</div>
-            )}
-            {!fileError && shown === '' && (
-              <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffEmpty')}</div>
-            )}
-          </div>
-        </div>
-        <div
-          className="flex items-center"
-          style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}
-        >
-          <span style={{ fontSize: 11, color: pruneCount > 0 ? '#c98a5e' : '#999', flex: 1 }}>
-            {pruneCount > 0
-              ? t('terminal:checkpoint.pruneWarn', { count: pruneCount })
-              : t('terminal:checkpoint.pruneOk')}
-            {hasBinary && ` · ${t('terminal:checkpoint.binaryNoDiff')}`}
+      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: '#ddd' }}>
+            #{cp.conversationIndex} · {t('terminal:checkpoint.diffPreview')}
           </span>
           <button
             onClick={onClose}
             className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: '#888', flexShrink: 0 }}
+            style={{ marginLeft: 'auto', height: 22, padding: '0 10px', fontSize: 10, fontFamily: "'SF Mono', monospace", border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: '#8a8a8e', flexShrink: 0 }}
           >
-            {t('common:action.close')}
-          </button>
-          <button
-            onClick={onRestore}
-            className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
-          >
-            {t('terminal:agentSession.restoreTo', { index: cp.conversationIndex })}
+            {t('terminal:agentSession.diffCollapse')} ⟶
           </button>
         </div>
+        <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#666', marginTop: 3 }}>
+          …/{baseNameOf(cwd)} · {formatDate(cp.createdAt, t)}
+        </div>
+      </div>
+      <div style={{ maxHeight: 150, overflowY: 'auto', padding: 6, borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        {recs.length === 0 && (
+          <div style={{ fontSize: 11, color: '#555', padding: '7px 9px' }}>{t('terminal:checkpoint.diffEmpty')}</div>
+        )}
+        {recs.map((record) => {
+          const isText = record.status !== 'binary' && record.status !== 'oversized'
+          const active = activePath === record.path
+          return (
+            <div
+              key={record.path}
+              onClick={() => {
+                if (isText) openFile(record.path)
+              }}
+              title={isText ? undefined : t('terminal:checkpoint.binaryNoDiff')}
+              style={{
+                padding: '7px 9px',
+                borderRadius: 4,
+                cursor: isText ? 'pointer' : 'default',
+                opacity: isText ? 1 : 0.55,
+                background: active ? 'rgba(138,180,255,0.08)' : 'transparent',
+                color: active ? '#d4d4d4' : '#9d9da3',
+                fontFamily: "'SF Mono', monospace",
+                fontSize: 10.5,
+                lineHeight: 1.5,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {record.path}
+              <div style={{ fontSize: 9.5, color: '#666' }}>
+                <FileCounts record={record} />
+                {!isText && ` · ${t('terminal:checkpoint.binaryNoDiff')}`}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.65, background: 'rgba(0,0,0,0.35)' }}>
+        {activePath && (
+          <div style={{ position: 'sticky', top: -10, background: '#1a1a1d', color: '#888', padding: '6px 8px', margin: '0 -12px 6px', paddingLeft: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            {activePath}
+          </div>
+        )}
+        {fileError && <div style={{ color: '#e06c75' }}>{fileError}</div>}
+        {!fileError && shown !== undefined && shown !== null && shown !== '' && renderLines(shown)}
+        {!fileError && (shown === undefined || shown === null) && (
+          <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffLoading')}</div>
+        )}
+        {!fileError && shown === '' && (
+          <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffEmpty')}</div>
+        )}
+      </div>
+      <div
+        className="flex items-center"
+        style={{ gap: 8, padding: '9px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}
+      >
+        <span style={{ fontSize: 10, fontFamily: "'SF Mono', monospace", color: pruneCount > 0 ? '#c98a5e' : '#999', flex: 1 }}>
+          {pruneCount > 0
+            ? t('terminal:checkpoint.pruneWarn', { count: pruneCount })
+            : t('terminal:checkpoint.pruneOk')}
+          {hasBinary && ` · ${t('terminal:checkpoint.binaryNoDiff')}`}
+        </span>
+        <button
+          onClick={onRestore}
+          className="rounded cursor-pointer"
+          style={{ height: 26, padding: '0 12px', fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
+        >
+          {t('terminal:agentSession.restoreTo', { index: cp.conversationIndex })}
+        </button>
       </div>
     </div>
   )
@@ -715,40 +766,25 @@ function SessionCard({
   timelineTick,
   onToggle,
   onContinue,
+  onDetail,
 }: {
   session: AgentSessionSummary
   expanded: boolean
   timelineTick: number
   onToggle: () => void
   onContinue: () => void
+  onDetail: () => void
 }) {
   const { t } = useI18n('terminal')
-  const restoreCheckpoint = useCheckpointStore((s) => s.restoreCheckpoint)
-  const [checkpoints, setCheckpoints] = useState<CheckpointSummary[]>([])
-  const [cpLoaded, setCpLoaded] = useState(false)
-  const [cpError, setCpError] = useState<string | null>(null)
-  const [records, setRecords] = useState<Record<string, ChangedFileRecord[]>>({})
   const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [reviewId, setReviewId] = useState<string | null>(null)
-  const [filesOpenIds, setFilesOpenIds] = useState<Set<string>>(new Set())
-  const [diffCp, setDiffCp] = useState<CheckpointSummary | null>(null)
-  const [conflictFor, setConflictFor] = useState<string | null>(null)
-  const [restoreConflicts, setRestoreConflicts] = useState<ConflictInfo[]>([])
-  const [restoreDone, setRestoreDone] = useState<{ id: string; pruned: string } | null>(null)
-
-  const loadRecords = useCallback(async (checkpointId: string, cwd: string) => {
-    const key = `${checkpointId}:records`
-    const fresh = await window.electron.checkpoint.records(checkpointId, cwd).catch(() => [])
-    setRecords((state) => (state[key] ? state : { ...state, [key]: fresh }))
-  }, [])
 
   useEffect(() => {
     if (!expanded) return
     let alive = true
-    // Open timelines reload on every debounced session:event so questions,
-    // excerpts, and checkpoint strips arrive mid-conversation. Review, file,
-    // and restore states stay keyed by checkpoint id and survive the reload.
+    // L2 previews reload on every debounced session:event so the first prompt
+    // and recent turns arrive mid-conversation. Checkpoint and diff work lives
+    // in SessionDetailWindow; the dock never fetches it.
     setDetailLoading(true)
     window.electron.session
       .get(session.id)
@@ -758,140 +794,17 @@ function SessionCard({
         if (fetched) setDetail(fetched)
         setDetailLoading(false)
       })
-    if (session.archived) {
-      setCpLoaded(true)
-      return () => {
-        alive = false
-      }
-    }
-    setCpError(null)
-    window.electron.checkpoint
-      .list({ sessionId: session.id, cwd: session.cwd })
-      .then((cps) => {
-        if (!alive) return
-        setCheckpoints(cps)
-        setCpLoaded(true)
-        // Drop records of pruned checkpoints; the rest reload lazily.
-        setRecords((state) => {
-          const keep = new Set(cps.map((cp) => `${cp.id}:records`))
-          const next: Record<string, ChangedFileRecord[]> = {}
-          let dropped = false
-          for (const [key, value] of Object.entries(state)) {
-            if (keep.has(key)) next[key] = value
-            else dropped = true
-          }
-          return dropped ? next : state
-        })
-        // Per-checkpoint lazy change records; diffs stay on demand in the modal.
-        void Promise.all(cps.map((cp) => loadRecords(cp.id, session.cwd)))
-      })
-      .catch((err) => {
-        if (!alive) return
-        setCpLoaded(true)
-        setCpError(err instanceof Error ? err.message : String(err))
-      })
     return () => {
       alive = false
     }
-  }, [expanded, session.id, session.archived, session.cwd, timelineTick, loadRecords])
+  }, [expanded, session.id, timelineTick])
 
-  const handleRestore = async (checkpoint: CheckpointSummary) => {
-    const pruned = checkpoints
-      .filter((other) => other.conversationIndex > checkpoint.conversationIndex)
-      .map((other) => `#${other.conversationIndex}`)
-      .join(' · ')
-    setReviewId(null)
-    setRestoreDone(null)
-    await restoreCheckpoint(checkpoint.id, session.cwd, { sessionId: session.id })
-    const state = useCheckpointStore.getState()
-    setRestoreConflicts(state.conflicts)
-    setConflictFor(checkpoint.id)
-    if (!state.error) {
-      setRestoreDone({ id: checkpoint.id, pruned })
-    }
-    const cps = await window.electron.checkpoint
-      .list({ sessionId: session.id, cwd: session.cwd })
-      .catch(() => [])
-    setCheckpoints(cps)
-  }
-
-  const toggleFiles = useCallback((checkpointId: string) => {
-    setFilesOpenIds((state) => {
-      const next = new Set(state)
-      if (next.has(checkpointId)) next.delete(checkpointId)
-      else next.add(checkpointId)
-      return next
-    })
-  }, [])
-
-  const openReview = useCallback((checkpoint: CheckpointSummary) => {
-    setConflictFor(null)
-    setRestoreConflicts([])
-    setRestoreDone(null)
-    // Review expands the file list so the confirm step sees the files.
-    setFilesOpenIds((state) => new Set(state).add(checkpoint.id))
-    setReviewId(checkpoint.id)
-  }, [])
-
-  const checkpointById = useMemo(() => new Map(checkpoints.map((cp) => [cp.id, cp])), [checkpoints])
-
-  const turnKindByCheckpointId = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const turn of detail?.turns ?? []) {
-      if (turn.checkpointId) map.set(turn.checkpointId, turn.kind)
-    }
-    return map
-  }, [detail])
-
-  const referencedIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const turn of detail?.turns ?? []) {
-      if (turn.checkpointId) ids.add(turn.checkpointId)
-    }
-    return ids
-  }, [detail])
-
-  // Checkpoints no turn points at (running turn, legacy data): appended after
-  // the turns so the timeline never hides restorable state.
-  const orphans = useMemo(
-    () => checkpoints.filter((cp) => !referencedIds.has(cp.id)),
-    [checkpoints, referencedIds],
-  )
-
-  const pruneCountFor = useCallback(
-    (checkpoint: CheckpointSummary) =>
-      checkpoints.filter((other) => other.conversationIndex > checkpoint.conversationIndex).length,
-    [checkpoints],
-  )
-
-  const renderStrip = (checkpoint: CheckpointSummary) => {
-    const key = `${checkpoint.id}:records`
-    const recs = records[key]
-    return (
-      <CheckpointStrip
-        key={checkpoint.id}
-        cp={checkpoint}
-        records={recs}
-        recordsLoading={recs === undefined}
-        turnKind={turnKindByCheckpointId.get(checkpoint.id)}
-        pruneCount={pruneCountFor(checkpoint)}
-        filesOpen={filesOpenIds.has(checkpoint.id)}
-        onToggleFiles={() => toggleFiles(checkpoint.id)}
-        reviewOpen={reviewId === checkpoint.id}
-        onToggleReview={(open) => {
-          if (open) openReview(checkpoint)
-          else setReviewId(null)
-        }}
-        onConfirmRestore={() => void handleRestore(checkpoint)}
-        restoreDonePruned={restoreDone?.id === checkpoint.id ? restoreDone.pruned : null}
-        showRestoreDone={restoreDone?.id === checkpoint.id}
-        conflicts={conflictFor === checkpoint.id ? restoreConflicts : null}
-        onViewDiff={() => setDiffCp(checkpoint)}
-      />
-    )
-  }
-
+  const recentTurns = useMemo(() => (detail?.turns ?? []).slice(-2), [detail])
+  const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
   const icon = ENGINE_ICONS[session.engine] ?? terminalIcon
+
+  // Checkpoint strips, diffs, reviews, and restore state live in
+  // SessionDetailWindow below; the dock keeps only the L2 preview.
 
   return (
     <div
@@ -954,37 +867,397 @@ function SessionCard({
       )}
       <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#666', marginTop: 5 }}>
         {t('terminal:agentSession.turns', { count: session.turnCount })} ·{' '}
-        {t('terminal:agentSession.checkpoints', { count: session.checkpointCount })} · {formatDate(session.updatedAt, t)}
+        {session.external === true
+          ? <span style={{ color: '#5a5a60' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
+          : t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}{' '}
+        · {formatDate(session.updatedAt, t)}
       </div>
       <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#555', marginTop: 2 }}>
         {session.cwd}{session.branch ? ` · ${session.branch}` : ''}
       </div>
 
       {expanded && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-          {!detail ? (
-            <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
-          ) : (
-            <>
-              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8f8f96', lineHeight: 1.8 }}>
-                <div>…/{baseNameOf(detail.cwd)}{detail.branch ? ` · ${detail.branch}` : ''}</div>
-                {detail.transcriptPath && (
-                  <div>transcript …/{baseNameOf(detail.transcriptPath)}（只读）· {formatDate(detail.createdAt, t)}</div>
-                )}
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8f8f96', lineHeight: 1.8 }}>
+            <div>…/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''}</div>
+            {(detail?.transcriptPath ?? session.transcriptPath) && (
+              <div>transcript …/{baseNameOf((detail?.transcriptPath ?? session.transcriptPath) as string)}（{t('terminal:agentSession.readOnly')}）</div>
+            )}
+          </div>
+          {session.firstPrompt && (
+            <div style={{ marginTop: 8, background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '9px 10px' }}>
+              <div className="flex items-center" style={{ gap: 8, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 6 }}>
+                <span>{t('terminal:agentSession.firstPrompt')}</span>
+                <span style={{ marginLeft: 'auto' }}>
+                  <CopyButton text={session.firstPrompt} />
+                </span>
               </div>
-              <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 10px' }}>
-                {detail.turns.map((turn, index) => {
-                  const linked = turn.checkpointId ? checkpointById.get(turn.checkpointId) : undefined
+              <div style={{ fontSize: 12, lineHeight: 1.6, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                {session.firstPrompt}
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 10px' }}>
+            <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', padding: '8px 0 0' }}>
+              {t('terminal:agentSession.recentTurns')}
+            </div>
+            {!detail ? (
+              <div style={{ fontSize: 11, color: '#555', padding: '6px 0' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
+            ) : recentTurns.length === 0 ? (
+              <div style={{ fontSize: 11, color: '#555', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
+            ) : (
+              recentTurns.map((turn) => {
+                const question = turn.prompt
+                return (
+                  <div key={turn.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 4 }}>
+                      <span>turn · {formatDate(turn.startedAt, t)}</span>
+                      <span style={{ color: turn.kind === 'done' ? '#999' : '#e06c75', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
+                        {turnKindLabel(turn.kind, t)}
+                      </span>
+                    </div>
+                    {question && (
+                      <div style={{ fontSize: 11.5, lineHeight: 1.6, color: '#c9c9c9', wordBreak: 'break-all', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {question}
+                      </div>
+                    )}
+                    {turn.excerpt && (
+                      <div style={{ marginTop: 4, fontSize: 11.5, lineHeight: 1.6, color: '#9d9da3', wordBreak: 'break-all', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {turn.excerpt}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+          <div className="flex" style={{ gap: 6, marginTop: 9 }}>
+            <button
+              onClick={onDetail}
+              className="flex-1 rounded cursor-pointer"
+              style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: '#e8e8e8' }}
+            >
+              {t('terminal:agentSession.viewDetail')}
+            </button>
+            {session.archived ? null : session.external === true ? (
+              resumeCommand ? (
+                <CopyButton text={resumeCommand} label={t('terminal:agentSession.resumeCopy')} grow />
+              ) : (
+                <button
+                  disabled
+                  title={t('terminal:agentSession.resumeUnavailable')}
+                  className="flex-1 rounded"
+                  style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
+                >
+                  {t('terminal:agentSession.resumeCopy')}
+                </button>
+              )
+            ) : (
+              <button
+                onClick={onContinue}
+                className="flex-1 rounded cursor-pointer"
+                style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+              >
+                {t('terminal:agentSession.continue')}
+              </button>
+            )}
+          </div>
+          <div style={{ fontSize: 10, color: '#5a5a60', marginTop: 7, lineHeight: 1.6 }}>
+            {t('terminal:agentSession.detailHint', { count: session.turnCount })}
+          </div>
+          {session.archived && (
+            <div
+              style={{
+                fontSize: 10.5, color: '#666', marginTop: 8, padding: '7px 9px',
+                border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 4, lineHeight: 1.6,
+              }}
+            >
+              {t('terminal:agentSession.archivedHint')}
+            </div>
+          )}
+          {session.external === true && !session.archived && (
+            <div style={{ fontSize: 10, color: '#555', marginTop: 6, lineHeight: 1.6 }}>
+              {t('terminal:agentSession.externalHint')}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SessionDetailWindow({
+  session,
+  timelineTick,
+  onClose,
+  onContinue,
+}: {
+  session: AgentSessionSummary
+  timelineTick: number
+  onClose: () => void
+  onContinue: () => void
+}) {
+  const { t } = useI18n('terminal')
+  const restoreCheckpoint = useCheckpointStore((s) => s.restoreCheckpoint)
+  const [checkpoints, setCheckpoints] = useState<CheckpointSummary[]>([])
+  const [cpLoaded, setCpLoaded] = useState(false)
+  const [cpError, setCpError] = useState<string | null>(null)
+  const [records, setRecords] = useState<Record<string, ChangedFileRecord[]>>({})
+  const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [reviewId, setReviewId] = useState<string | null>(null)
+  const [filesOpenIds, setFilesOpenIds] = useState<Set<string>>(new Set())
+  const [diffCp, setDiffCp] = useState<CheckpointSummary | null>(null)
+  const [conflictFor, setConflictFor] = useState<string | null>(null)
+  const [restoreConflicts, setRestoreConflicts] = useState<ConflictInfo[]>([])
+  const [restoreDone, setRestoreDone] = useState<{ id: string; pruned: string } | null>(null)
+  const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
+  // External and archived rows carry no restorable state: the window reads the
+  // transcript ledger only and never fetches checkpoints.
+  const readableOnly = session.external === true || session.archived
+
+  const loadRecords = useCallback(async (checkpointId: string, cwd: string) => {
+    const key = `${checkpointId}:records`
+    const fresh = await window.electron.checkpoint.records(checkpointId, cwd).catch(() => [])
+    setRecords((state) => (state[key] ? state : { ...state, [key]: fresh }))
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    // The open window reloads on every debounced session:event so questions,
+    // excerpts, and checkpoint strips arrive mid-conversation. Review, file,
+    // and restore states stay keyed by checkpoint id and survive the reload.
+    setDetailLoading(true)
+    window.electron.session
+      .get(session.id)
+      .catch(() => null)
+      .then((fetched) => {
+        if (!alive) return
+        if (fetched) setDetail(fetched)
+        setDetailLoading(false)
+      })
+    if (readableOnly) {
+      setCpLoaded(true)
+      return () => {
+        alive = false
+      }
+    }
+    setCpError(null)
+    window.electron.checkpoint
+      .list({ sessionId: session.id, cwd: session.cwd })
+      .then((cps) => {
+        if (!alive) return
+        setCheckpoints(cps)
+        setCpLoaded(true)
+        // Drop records of pruned checkpoints; the rest reload lazily.
+        setRecords((state) => {
+          const keep = new Set(cps.map((cp) => `${cp.id}:records`))
+          const next: Record<string, ChangedFileRecord[]> = {}
+          let dropped = false
+          for (const [key, value] of Object.entries(state)) {
+            if (keep.has(key)) next[key] = value
+            else dropped = true
+          }
+          return dropped ? next : state
+        })
+        // Per-checkpoint lazy change records; diffs stay on demand in the side panel.
+        void Promise.all(cps.map((cp) => loadRecords(cp.id, session.cwd)))
+      })
+      .catch((err) => {
+        if (!alive) return
+        setCpLoaded(true)
+        setCpError(err instanceof Error ? err.message : String(err))
+      })
+    return () => {
+      alive = false
+    }
+  }, [session.id, session.cwd, readableOnly, timelineTick, loadRecords])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const handleRestore = async (checkpoint: CheckpointSummary) => {
+    const pruned = checkpoints
+      .filter((other) => other.conversationIndex > checkpoint.conversationIndex)
+      .map((other) => `#${other.conversationIndex}`)
+      .join(' · ')
+    setReviewId(null)
+    setRestoreDone(null)
+    await restoreCheckpoint(checkpoint.id, session.cwd, { sessionId: session.id })
+    const state = useCheckpointStore.getState()
+    setRestoreConflicts(state.conflicts)
+    setConflictFor(checkpoint.id)
+    if (!state.error) {
+      setRestoreDone({ id: checkpoint.id, pruned })
+    }
+    const cps = await window.electron.checkpoint
+      .list({ sessionId: session.id, cwd: session.cwd })
+      .catch(() => [])
+    setCheckpoints(cps)
+  }
+
+  const toggleFiles = useCallback((checkpointId: string) => {
+    setFilesOpenIds((state) => {
+      const next = new Set(state)
+      if (next.has(checkpointId)) next.delete(checkpointId)
+      else next.add(checkpointId)
+      return next
+    })
+  }, [])
+
+  const openReview = useCallback((checkpoint: CheckpointSummary) => {
+    setConflictFor(null)
+    setRestoreConflicts([])
+    setRestoreDone(null)
+    // Review expands the file list so the confirm step sees the files.
+    setFilesOpenIds((state) => new Set(state).add(checkpoint.id))
+    setReviewId(checkpoint.id)
+  }, [])
+
+  const checkpointById = useMemo(() => new Map(checkpoints.map((cp) => [cp.id, cp])), [checkpoints])
+
+  const turnKindByCheckpointId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const turn of detail?.turns ?? []) {
+      if (turn.checkpointId) map.set(turn.checkpointId, turn.kind)
+    }
+    return map
+  }, [detail])
+
+  const referencedIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const turn of detail?.turns ?? []) {
+      if (turn.checkpointId) ids.add(turn.checkpointId)
+    }
+    return ids
+  }, [detail])
+
+  // Checkpoints no turn points at (running turn, legacy data): appended after
+  // the turns so the window never hides restorable state.
+  const orphans = useMemo(
+    () => checkpoints.filter((cp) => !referencedIds.has(cp.id)),
+    [checkpoints, referencedIds],
+  )
+
+  const pruneCountFor = useCallback(
+    (checkpoint: CheckpointSummary) =>
+      checkpoints.filter((other) => other.conversationIndex > checkpoint.conversationIndex).length,
+    [checkpoints],
+  )
+
+  const renderStrip = (checkpoint: CheckpointSummary) => {
+    const key = `${checkpoint.id}:records`
+    const recs = records[key]
+    return (
+      <CheckpointStrip
+        key={checkpoint.id}
+        cp={checkpoint}
+        records={recs}
+        recordsLoading={recs === undefined}
+        turnKind={turnKindByCheckpointId.get(checkpoint.id)}
+        pruneCount={pruneCountFor(checkpoint)}
+        filesOpen={filesOpenIds.has(checkpoint.id)}
+        onToggleFiles={() => toggleFiles(checkpoint.id)}
+        reviewOpen={reviewId === checkpoint.id}
+        onToggleReview={(open) => {
+          if (open) openReview(checkpoint)
+          else setReviewId(null)
+        }}
+        onConfirmRestore={() => void handleRestore(checkpoint)}
+        restoreDonePruned={restoreDone?.id === checkpoint.id ? restoreDone.pruned : null}
+        showRestoreDone={restoreDone?.id === checkpoint.id}
+        conflicts={conflictFor === checkpoint.id ? restoreConflicts : null}
+        onViewDiff={() => setDiffCp((current) => (current?.id === checkpoint.id ? null : checkpoint))}
+      />
+    )
+  }
+
+  const icon = ENGINE_ICONS[session.engine] ?? terminalIcon
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.64)', zIndex: 1000 }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-label={session.firstPrompt || session.engine}
+        className="overflow-hidden flex flex-col"
+        style={{
+          width: diffCp ? 1240 : 880,
+          maxWidth: 'calc(100vw - 40px)',
+          height: 660,
+          maxHeight: 'calc(100vh - 60px)',
+          background: 'var(--shell-chrome)',
+          border: '1px solid var(--shell-border)',
+          borderRadius: 8,
+          boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
+          transition: 'width 0.25s ease',
+        }}
+      >
+        <TrafficBar
+          title={
+            <>
+              <img src={icon} alt={session.engine} style={{ width: 12, height: 12, objectFit: 'contain', display: 'inline-block', verticalAlign: -1, marginRight: 6 }} />
+              {session.firstPrompt || session.engine}
+            </>
+          }
+          onClose={onClose}
+        />
+        <div style={{ padding: '9px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: '#8f8f96', lineHeight: 1.7 }}>
+            …/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''} · {session.engine} ·{' '}
+            {t('terminal:agentSession.turns', { count: session.turnCount })}
+            {session.external !== true && !session.archived && (
+              <> · {t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}</>
+            )}
+          </div>
+          <div className="flex" style={{ gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            {session.firstPrompt && <CopyButton text={session.firstPrompt} label={t('terminal:agentSession.firstPrompt')} />}
+            {(detail?.transcriptPath ?? session.transcriptPath) && (
+              <CopyButton text={(detail?.transcriptPath ?? session.transcriptPath) as string} label={t('terminal:agentSession.copyLogPath')} />
+            )}
+            {(detail?.providerSessionId ?? session.providerSessionId) && (
+              <CopyButton text={(detail?.providerSessionId ?? session.providerSessionId) as string} label={t('terminal:agentSession.copySessionId')} />
+            )}
+          </div>
+        </div>
+        {session.external === true && !session.archived && (
+          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed rgba(138,180,255,0.35)', borderRadius: 6, fontSize: 11, color: '#8ab4ff', lineHeight: 1.6, flexShrink: 0 }}>
+            {t('terminal:agentSession.detailExternalBanner')}
+          </div>
+        )}
+        {session.archived && (
+          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed rgba(255,255,255,0.14)', borderRadius: 6, fontSize: 11, color: '#8b8b91', lineHeight: 1.6, flexShrink: 0 }}>
+            {t('terminal:agentSession.archivedHint')}
+          </div>
+        )}
+        <div className="flex" style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 16px' }}>
+            {!detail ? (
+              <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
+            ) : (
+              <>
+                {(detail.turns ?? []).map((turn, index) => {
+                  const linked = !readableOnly && turn.checkpointId ? checkpointById.get(turn.checkpointId) : undefined
                   // Turn-owned prompt survives checkpoint prune; linked prompt stays as fallback.
                   const question = turn.prompt ?? linked?.prompt
                   return (
-                    <div key={turn.id} style={{ padding: '8px 0', borderTop: index === 0 && orphans.length === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+                    <div key={turn.id} style={{ background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '11px 12px', marginBottom: 10 }}>
                       {question && (
-                        <div style={{ marginBottom: 8 }}>
-                          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 4 }}>
+                        <div style={{ marginBottom: 9 }}>
+                          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 5 }}>
                             turn {index + 1} · {formatDate(turn.startedAt, t)}
                           </div>
-                          <div style={{ fontSize: 12, lineHeight: 1.6, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                          <div style={{ fontSize: 12.5, lineHeight: 1.65, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
                             {question}
                           </div>
                         </div>
@@ -998,21 +1271,13 @@ function SessionCard({
                         {!question && <span>turn {index + 1} · {formatDate(turn.startedAt, t)}</span>}
                       </div>
                       {turn.excerpt && (
-                        <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.6, color: '#c9c9c9', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                        <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.65, color: '#c4c4c5', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
                           {turn.excerpt}
                         </div>
                       )}
                       {linked && renderStrip(linked)}
-                      {!linked && !turn.checkpointId && cpLoaded && (
-                        <div
-                          style={{
-                            marginTop: 8,
-                            border: '1px dashed rgba(255,255,255,0.07)',
-                            borderRadius: 6,
-                            padding: '8px 10px',
-                            opacity: 0.75,
-                          }}
-                        >
+                      {!readableOnly && !linked && !turn.checkpointId && cpLoaded && (
+                        <div style={{ marginTop: 8, border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 6, padding: '8px 10px', opacity: 0.75 }}>
                           <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: '#c9c9c9' }}>
                             <span>{t('terminal:checkpoint.noCheckpoint')}</span>
                             <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#7a7a80' }}>
@@ -1031,86 +1296,77 @@ function SessionCard({
                   <div style={{ fontSize: 11, color: '#e06c75', padding: '6px 0' }}>{cpError}</div>
                 )}
                 {orphans.map((cp) => (
-                  <div key={cp.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div key={cp.id} style={{ background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '11px 12px', marginBottom: 10 }}>
                     {cp.prompt && (
-                      <div style={{ fontSize: 12, lineHeight: 1.6, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 4 }}>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.65, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 4 }}>
                         {cp.prompt}
                       </div>
                     )}
                     {renderStrip(cp)}
                   </div>
                 ))}
-              </div>
-            </>
+              </>
+            )}
+          </div>
+          {diffCp && (
+            <DiffSidePanel
+              cp={diffCp}
+              cwd={session.cwd}
+              records={records[`${diffCp.id}:records`]}
+              pruneCount={pruneCountFor(diffCp)}
+              onClose={() => setDiffCp(null)}
+              onRestore={() => {
+                const cp = diffCp
+                setDiffCp(null)
+                openReview(cp)
+                // Review renders in the left pane; keep it in view.
+                requestAnimationFrame(() => {
+                  document.querySelector(`[data-cp-strip="${cp.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                })
+              }}
+            />
           )}
         </div>
-      )}
-
-      {session.archived && (
         <div
-          style={{
-            fontSize: 10.5,
-            color: '#666',
-            marginTop: 8,
-            padding: '7px 9px',
-            border: '1px dashed rgba(255,255,255,0.1)',
-            borderRadius: 4,
-            lineHeight: 1.6,
-          }}
+          className="flex items-center"
+          style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}
         >
-          {t('terminal:agentSession.archivedHint')}
+          <span style={{ fontSize: 11, color: '#999', flex: 1 }}>
+            {readableOnly
+              ? t('terminal:agentSession.externalHint')
+              : t('terminal:checkpoint.pruneOk')}
+          </span>
+          <button
+            onClick={onClose}
+            className="rounded cursor-pointer"
+            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: '#888', flexShrink: 0 }}
+          >
+            {t('common:action.close')}
+          </button>
+          {session.archived ? null : session.external === true ? (
+            resumeCommand ? (
+              <CopyButton text={resumeCommand} label={t('terminal:agentSession.resumeCopy')} grow />
+            ) : (
+              <button
+                disabled
+                title={t('terminal:agentSession.resumeUnavailable')}
+                className="rounded"
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, flexShrink: 0 }}
+              >
+                {t('terminal:agentSession.resumeCopy')}
+              </button>
+            )
+          ) : (
+            <button
+              onClick={onContinue}
+              className="rounded cursor-pointer"
+              style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
+            >
+              {t('terminal:agentSession.continue')}
+            </button>
+          )}
         </div>
-      )}
-
-      <div className="flex" style={{ gap: 6, borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 8, marginTop: 8 }}>
-        {session.archived && (
-          <button
-            disabled
-            className="flex-1 rounded"
-            style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
-          >
-            {t('terminal:agentSession.restoreUnavailable')}
-          </button>
-        )}
-        {session.external === true ? (
-          <button
-            disabled
-            title={t('terminal:agentSession.continueUnavailable')}
-            className="flex-1 rounded"
-            style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
-          >
-            {t('terminal:agentSession.continue')}
-          </button>
-        ) : (
-          <button
-            onClick={onContinue}
-            className="flex-1 rounded cursor-pointer"
-            style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
-          >
-            {t('terminal:agentSession.continue')}
-          </button>
-        )}
       </div>
-      {session.external === true && !session.archived && (
-        <div style={{ fontSize: 10, color: '#555', marginTop: 6, lineHeight: 1.6 }}>
-          {t('terminal:agentSession.continueUnavailable')}
-        </div>
-      )}
-
-      {diffCp && (
-        <DiffModal
-          cp={diffCp}
-          cwd={session.cwd}
-          records={records[`${diffCp.id}:records`]}
-          pruneCount={pruneCountFor(diffCp)}
-          onClose={() => setDiffCp(null)}
-          onRestore={() => {
-            const cp = diffCp
-            setDiffCp(null)
-            openReview(cp)
-          }}
-        />
-      )}
     </div>
   )
 }
