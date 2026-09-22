@@ -50,8 +50,8 @@ Continue behavior splits by origin. Internal sessions continue through the exist
 
 ## Acceptance criteria
 
-- [ ] AC-1: L1 cards show engine, truncated first prompt, status, turns, checkpoint count or external marker, and recency without file lists or diffs.
-- [ ] AC-2: L2 preview shows the full first prompt with Copy, working directory, branch, model, message count, and the two most recent turns with kind badges.
+- [ ] AC-1: L1 cards show engine icon, truncated first prompt, external marker where applicable, and expand affordance only.
+- [ ] AC-2: L2 preview shows engine, status, counts, recency, the full first prompt with Copy, working directory, branch, model, message count, and the two most recent turns with kind badges.
 - [ ] AC-3: L3 window opens from 查看详情, centers under the traffic bar, and scrolls full turns with prompts, excerpts, badges, and transcript reference.
 - [ ] AC-4: L3 prose resolves from a bounded transcript read with head-plus-tail fallback, corrupt-line tolerance, and excerpt-first instant render.
 - [ ] AC-5: Internal mutating turns bind one checkpoint each; pure question turns render a dashed no-change strip preserving alignment.

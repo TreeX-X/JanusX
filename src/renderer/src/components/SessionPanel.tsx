@@ -860,8 +860,7 @@ function SessionCard({
         title={t('terminal:checkpoint.expand')}
         onClick={onToggle}
       >
-        <img src={icon} alt={session.engine} style={{ width: 14, height: 14, objectFit: 'contain' }} />
-        <span style={{ fontSize: 11, color: '#a8a8a8' }}>{session.engine}</span>
+        <img src={icon} alt={session.engine} title={session.engine} style={{ width: 14, height: 14, objectFit: 'contain' }} />
         {session.external === true && (
           <span
             style={{
@@ -882,40 +881,20 @@ function SessionCard({
         >
           {session.firstPrompt || session.engine}
         </span>
-        <span style={{ fontSize: 10, color: '#666', fontFamily: "'SF Mono', monospace" }}>
-          {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)}
-        </span>
         <span style={{ fontSize: 10, color: '#555' }}>{expanded ? '▴' : '▾'}</span>
-      </div>
-
-      {session.firstPrompt && (
-        <div
-          style={{
-            fontSize: 12,
-            color: '#d4d4d4',
-            lineHeight: 1.5,
-            marginTop: 6,
-            wordBreak: 'break-all',
-            whiteSpace: 'pre-wrap',
-          }}
-        >
-          {session.firstPrompt}
-        </div>
-      )}
-      <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#666', marginTop: 5 }}>
-        {t('terminal:agentSession.turns', { count: session.turnCount })} ·{' '}
-        {session.external === true
-          ? <span style={{ color: '#5a5a60' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
-          : t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}{' '}
-        · {formatDate(session.updatedAt, t)}
-      </div>
-      <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#555', marginTop: 2 }}>
-        {session.cwd}{session.branch ? ` · ${session.branch}` : ''}
       </div>
 
       {expanded && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8f8f96', lineHeight: 1.8 }}>
+            <div>
+              {session.engine} · {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)} ·{' '}
+              {t('terminal:agentSession.turns', { count: session.turnCount })} ·{' '}
+              {session.external === true
+                ? <span style={{ color: '#5a5a60' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
+                : t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}{' '}
+              · {formatDate(session.updatedAt, t)}
+            </div>
             <div>…/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''}</div>
             {(detail?.transcriptPath ?? session.transcriptPath) && (
               <div>transcript …/{baseNameOf((detail?.transcriptPath ?? session.transcriptPath) as string)}（{t('terminal:agentSession.readOnly')}）</div>
