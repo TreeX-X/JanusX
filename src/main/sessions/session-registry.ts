@@ -241,6 +241,12 @@ export class AgentSessionRegistry {
     return record?.transcriptPath
   }
 
+  /** Provider session id persisted for the terminal session, if any. */
+  providerSessionIdForTerminal(terminalId: string): string | undefined {
+    const record = this.recordForTerminal(terminalId)
+    return record?.providerSessionId
+  }
+
   noteTerminal(terminalId: string, sessionId: string): void {
     const record = this.sessions.get(sessionId)
     if (!record) return

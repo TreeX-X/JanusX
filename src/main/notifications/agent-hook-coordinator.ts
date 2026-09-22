@@ -15,6 +15,7 @@ import {
   type AgentHookTurnStart,
   type RegisteredHookTerminal,
 } from './agent-hook-types'
+import { matchesEngineEvents, normalizeHookEventName } from './agent-engine-capabilities'
 
 interface ActiveHookTurn {
   id: string
@@ -41,10 +42,6 @@ interface TerminalResolution {
   reason?: string
 }
 
-const COMPLETION_EVENTS = new Set(['Stop'])
-const FAILURE_EVENTS = new Set(['StopFailure', 'PostToolUseFailure'])
-const APPROVAL_EVENTS = new Set(['PermissionRequest'])
-const START_EVENTS = new Set(['UserPromptSubmit'])
 const SYNTHETIC_FAILURE_EVENTS = new Set<string>([
   JANUSX_SYNTHETIC_HOOK_EVENTS.apiError,
   JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned,
@@ -55,31 +52,9 @@ function toIsoString(timestampMs: number): string {
   return new Date(timestampMs).toISOString()
 }
 
-function normalizeHookEvent(payload: AgentHookPayload): string {
-  if (payload.source === 'opencode') {
-    return payload.event
-  }
-  return payload.event.trim()
-}
-
 function normalizePathForMatch(value?: string): string | undefined {
   const normalized = value?.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
   return normalized || undefined
-}
-
-function getOpencodeStatus(raw: unknown): string | undefined {
-  if (!raw || typeof raw !== 'object') return undefined
-  const record = raw as Record<string, unknown>
-  const properties = record.properties
-  const candidates = [
-    record.status,
-    record.state,
-    properties && typeof properties === 'object'
-      ? (properties as Record<string, unknown>).status
-      : undefined,
-  ]
-
-  return candidates.find((value): value is string => typeof value === 'string')
 }
 
 function getHookMatcher(payload: AgentHookPayload): string | undefined {
@@ -114,24 +89,16 @@ function isHookAttentionNotification(payload: AgentHookPayload): boolean {
 }
 
 function isStartEvent(payload: AgentHookPayload): boolean {
-  if (payload.source === 'opencode') {
-    if (payload.event !== 'session.status') return false
-    const status = getOpencodeStatus(payload.raw)
-    return status === 'busy' || status === 'running'
-  }
-
-  return START_EVENTS.has(payload.event)
+  return matchesEngineEvents(payload.source, 'start', payload.event, payload.raw)
 }
 
 function isCompletionEvent(payload: AgentHookPayload): boolean {
-  if (payload.source === 'opencode') return payload.event === 'session.idle'
-  return COMPLETION_EVENTS.has(payload.event)
+  return matchesEngineEvents(payload.source, 'complete', payload.event, payload.raw)
 }
 
 function isFailureEvent(payload: AgentHookPayload): boolean {
   if (SYNTHETIC_FAILURE_EVENTS.has(payload.event)) return true
-  if (payload.source === 'opencode') return payload.event === 'session.error'
-  return FAILURE_EVENTS.has(payload.event)
+  return matchesEngineEvents(payload.source, 'fail', payload.event, payload.raw)
 }
 
 function isInterruptEvent(payload: AgentHookPayload): boolean {
@@ -168,12 +135,22 @@ export function getRawString(raw: unknown, keys: string[]): string | undefined {
 }
 
 function isAttentionEvent(payload: AgentHookPayload): boolean {
-  if (payload.source === 'opencode') return payload.event === 'permission.asked'
-  return APPROVAL_EVENTS.has(payload.event) || isHookAttentionNotification(payload)
+  // opencode never consults the matcher contract; native sources layer it on.
+  if (payload.source === 'opencode') {
+    return matchesEngineEvents(payload.source, 'approval', payload.event, payload.raw)
+  }
+  return (
+    matchesEngineEvents(payload.source, 'approval', payload.event, payload.raw) ||
+    isHookAttentionNotification(payload)
+  )
 }
 
 function isApprovalEvent(payload: AgentHookPayload): boolean {
-  return APPROVAL_EVENTS.has(payload.event) || payload.event === 'permission.asked'
+  // Engine-agnostic by design: either approval literal qualifies everywhere.
+  return (
+    matchesEngineEvents(payload.source, 'approval', payload.event, payload.raw) ||
+    payload.event === 'permission.asked'
+  )
 }
 
 function buildAttentionRemoteEventId(
@@ -244,7 +221,7 @@ export class AgentHookCoordinator {
   }
 
   handleHookPayload(payload: AgentHookPayload): void {
-    const normalizedEvent = normalizeHookEvent(payload)
+    const normalizedEvent = normalizeHookEventName(payload.source, payload.event)
     this.emit({
       type: 'received',
       terminalId: payload.terminalId,

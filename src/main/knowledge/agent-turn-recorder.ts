@@ -5,6 +5,10 @@ import {
   type AgentHookPayload,
   type RegisteredHookTerminal,
 } from '../notifications/agent-hook-types'
+import {
+  matchesEngineEvents,
+  normalizeHookEventName,
+} from '../notifications/agent-engine-capabilities'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
 
@@ -35,62 +39,32 @@ export interface AgentTurnRecorderEvent {
   observationId?: string
 }
 
-const START_EVENTS = new Set(['UserPromptSubmit'])
-const COMPLETION_EVENTS = new Set(['Stop'])
-const FAILURE_EVENTS = new Set([
-  'StopFailure',
-  'PostToolUseFailure',
-  // Synthetic aborts (transcript sentinel / pty exit): the turn ended without
-  // a completion hook, record it as failed instead of leaking an open turn.
-  JANUSX_SYNTHETIC_HOOK_EVENTS.apiError,
-  JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned,
-])
-const ATTENTION_EVENTS = new Set(['PermissionRequest', 'Notification'])
-
 function normalizePath(value?: string): string | undefined {
   return value?.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase() || undefined
 }
 
-function getOpencodeStatus(raw: unknown): string | undefined {
-  if (!raw || typeof raw !== 'object') return undefined
-  const record = raw as Record<string, unknown>
-  const properties = record.properties
-  const candidates = [
-    record.status,
-    record.state,
-    properties && typeof properties === 'object'
-      ? (properties as Record<string, unknown>).status
-      : undefined,
-  ]
-  return candidates.find((value): value is string => typeof value === 'string')
-}
-
-function normalizeHookEvent(payload: AgentHookPayload): string {
-  return payload.source === 'opencode' ? payload.event : payload.event.trim()
-}
-
 function isStartEvent(payload: AgentHookPayload): boolean {
-  if (payload.source === 'opencode') {
-    if (payload.event !== 'session.status') return false
-    const status = getOpencodeStatus(payload.raw)
-    return status === 'busy' || status === 'running'
-  }
-  return START_EVENTS.has(payload.event)
+  return matchesEngineEvents(payload.source, 'start', payload.event, payload.raw)
 }
 
 function isCompletionEvent(payload: AgentHookPayload): boolean {
-  if (payload.source === 'opencode') return payload.event === 'session.idle'
-  return COMPLETION_EVENTS.has(payload.event)
+  return matchesEngineEvents(payload.source, 'complete', payload.event, payload.raw)
 }
 
 function isFailureEvent(payload: AgentHookPayload): boolean {
+  if (
+    payload.event === JANUSX_SYNTHETIC_HOOK_EVENTS.apiError ||
+    payload.event === JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned
+  ) {
+    return true
+  }
   if (payload.source === 'opencode') return payload.event === 'session.error'
-  return FAILURE_EVENTS.has(payload.event)
+  return matchesEngineEvents(payload.source, 'fail', payload.event, payload.raw)
 }
 
 function isAttentionEvent(payload: AgentHookPayload): boolean {
   if (payload.source === 'opencode') return payload.event === 'permission.asked'
-  return ATTENTION_EVENTS.has(payload.event)
+  return matchesEngineEvents(payload.source, 'attention', payload.event, payload.raw)
 }
 
 function hasText(value?: string): value is string {
@@ -191,7 +165,7 @@ class AgentTurnRecorder {
 
     const payload = {
       ...rawPayload,
-      event: normalizeHookEvent(rawPayload),
+      event: normalizeHookEventName(rawPayload.source, rawPayload.event),
     }
     const terminal = this.resolveTerminal(payload)
     if (!terminal?.cwd) {

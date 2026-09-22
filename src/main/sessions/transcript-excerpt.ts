@@ -1,52 +1,35 @@
-// Note: orca-style transcript tail read for turn answer prose — see
-// .agents/notes/implemented/feature/2026-09-22-session-conversation-content.md
-import { open } from 'node:fs/promises'
+// Note: orca-style transcript tail read per engine capability — see
+// .agents/notes/implemented/feature/2026-09-22-session-engine-capabilities.md
+import { open, readdir, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { basename, join } from 'node:path'
+import { AGENT_ENGINE_CAPABILITIES } from '../notifications/agent-engine-capabilities'
+import type { AgentHookSource } from '../notifications/agent-hook-types'
 
 // Orca parity: backward chunk reads with a hard cap; full history never loads.
 const TRANSCRIPT_TAIL_BYTES = 64 * 1024
 const EXCERPT_MAX_CHARS = 500
+/** Single-doc histories (janus) parse whole with a size cap instead. */
+const SINGLE_DOC_MAX_BYTES = 2 * 1024 * 1024
+const META_HEAD_BYTES = 4096
 
-interface ClaudeContentBlock {
-  type?: string
-  text?: string
+export interface ExcerptContext {
+  transcriptPath?: string
+  sessionId?: string
+  threadId?: string
+  cwd?: string
+  engine: string
+  /** Test seam: home directory override for transcript stores. */
+  baseDir?: string
 }
 
-function claudeTextOf(record: unknown): string | undefined {
-  if (!record || typeof record !== 'object') return undefined
-  const message = (record as { message?: unknown }).message
-  if (!message || typeof message !== 'object') return undefined
-  const content = (message as { content?: unknown }).content
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return undefined
-  const texts = content
-    .filter(
-      (block): block is ClaudeContentBlock =>
-        !!block && typeof block === 'object' && (block as ClaudeContentBlock).type === 'text',
-    )
-    .map((block) => (typeof block.text === 'string' ? block.text : ''))
-    .join('')
-    .trim()
-  return texts || undefined
+function truncate(text: string): string {
+  return text.length > EXCERPT_MAX_CHARS ? text.slice(0, EXCERPT_MAX_CHARS) : text
 }
 
-function lastClaudeAssistantText(tail: string): string | undefined {
-  const lines = tail.split('\n')
-  // First line may be a partial record cut by the tail window; skip it when
-  // more than one line exists.
-  const start = lines.length > 1 ? 1 : 0
-  for (let i = lines.length - 1; i >= start; i -= 1) {
-    const line = lines[i].trim()
-    if (!line) continue
-    try {
-      const record = JSON.parse(line) as { type?: string }
-      if (record.type !== 'assistant') continue
-      const text = claudeTextOf(record)
-      if (text) return text
-    } catch {
-      // Mixed or corrupt lines never block the scan.
-    }
-  }
-  return undefined
+function normalizePath(value?: string): string | undefined {
+  const normalized = value?.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
+  return normalized || undefined
 }
 
 async function readTail(path: string, maxBytes: number): Promise<string | undefined> {
@@ -71,25 +54,244 @@ async function readTail(path: string, maxBytes: number): Promise<string | undefi
   }
 }
 
-/**
- * Best-effort answer excerpt for a finished turn. Reads only the transcript
- * tail with hard caps and never throws: every failure yields undefined so a
- * missing or unreadable transcript cannot block turn recording. Phase 1
- * covers claude JSONL writers; every other engine skips.
- */
-export async function readAssistantExcerpt(
-  transcriptPath: string | undefined,
-  engine: string,
-): Promise<string | undefined> {
+function parseJsonLine(line: string): Record<string, unknown> | null {
   try {
-    if (engine !== 'claude') return undefined
-    const path = transcriptPath?.trim()
-    if (!path) return undefined
-    const tail = await readTail(path, TRANSCRIPT_TAIL_BYTES)
-    if (!tail) return undefined
-    const text = lastClaudeAssistantText(tail)
-    if (!text) return undefined
-    return text.length > EXCERPT_MAX_CHARS ? text.slice(0, EXCERPT_MAX_CHARS) : text
+    const parsed = JSON.parse(line) as unknown
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+/** Last assistant text wins scanning backward; corrupt lines never block. */
+function lastAssistantText(
+  lines: string[],
+  roleOf: (record: Record<string, unknown>) => string | undefined,
+  textOf: (record: Record<string, unknown>) => string | undefined,
+): string | undefined {
+  const start = lines.length > 1 ? 1 : 0
+  for (let i = lines.length - 1; i >= start; i -= 1) {
+    const line = lines[i].trim()
+    if (!line) continue
+    const record = parseJsonLine(line)
+    if (!record || roleOf(record) !== 'assistant') continue
+    const text = textOf(record)
+    if (text) return text
+  }
+  return undefined
+}
+
+interface ClaudeContentBlock {
+  type?: string
+  text?: string
+}
+
+function claudeTextOf(record: Record<string, unknown>): string | undefined {
+  const message = record.message
+  if (!message || typeof message !== 'object') return undefined
+  const content = (message as { content?: unknown }).content
+  if (typeof content === 'string') return content.trim() || undefined
+  if (!Array.isArray(content)) return undefined
+  const texts = content
+    .filter(
+      (block): block is ClaudeContentBlock =>
+        !!block && typeof block === 'object' && (block as ClaudeContentBlock).type === 'text',
+    )
+    .map((block) => (typeof block.text === 'string' ? block.text : ''))
+    .join('')
+    .trim()
+  return texts || undefined
+}
+
+function claudeRoleOf(record: Record<string, unknown>): string | undefined {
+  return typeof record.type === 'string' ? record.type : undefined
+}
+
+async function claudeExcerpt(transcriptPath: string): Promise<string | undefined> {
+  const tail = await readTail(transcriptPath, TRANSCRIPT_TAIL_BYTES)
+  if (!tail) return undefined
+  const text = lastAssistantText(tail.split('\n'), claudeRoleOf, claudeTextOf)
+  return text ? truncate(text) : undefined
+}
+
+interface CodexContentBlock {
+  type?: string
+  text?: string
+}
+
+function codexTextOf(record: Record<string, unknown>): string | undefined {
+  const payload = record.payload
+  if (!payload || typeof payload !== 'object') return undefined
+  const content = (payload as { content?: unknown }).content
+  if (!Array.isArray(content)) return undefined
+  const texts = content
+    .filter(
+      (block): block is CodexContentBlock =>
+        !!block && typeof block === 'object' && (block as CodexContentBlock).type === 'output_text',
+    )
+    .map((block) => (typeof block.text === 'string' ? block.text : ''))
+    .join('')
+    .trim()
+  return texts || undefined
+}
+
+function codexRoleOf(record: Record<string, unknown>): string | undefined {
+  const payload = record.payload
+  if (!payload || typeof payload !== 'object') return undefined
+  const role = (payload as { role?: unknown }).role
+  if (role !== 'assistant' || record.type !== 'response_item') return undefined
+  return 'assistant'
+}
+
+async function codexMetaHead(path: string): Promise<Record<string, unknown> | null> {
+  const head = await readTail(path, META_HEAD_BYTES)
+  if (!head) return null
+  // session_meta is the first record; the head window may cut mid-line, so
+  // only the first complete line qualifies.
+  return parseJsonLine(head.split('\n')[0])
+}
+
+async function* walkJsonlFiles(root: string): AsyncGenerator<string> {
+  let entries
+  try {
+    entries = await readdir(root, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    const full = join(root, entry.name)
+    if (entry.isDirectory()) {
+      yield* walkJsonlFiles(full)
+    } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+      yield full
+    }
+  }
+}
+
+/**
+ * Rollout files end with the thread id (`rollout-<ts>-<threadId>.jsonl`);
+ * without one, the freshest rollout whose session_meta cwd matches wins.
+ */
+async function resolveCodexRollout(
+  baseDir: string,
+  threadId?: string,
+  cwd?: string,
+): Promise<string | undefined> {
+  const wantedThread = threadId?.trim().toLowerCase()
+  const wantedCwd = normalizePath(cwd)
+  let fallback: { path: string; mtimeMs: number } | null = null
+  for await (const path of walkJsonlFiles(join(baseDir, '.codex', 'sessions'))) {
+    if (wantedThread && basename(path).toLowerCase().endsWith(`-${wantedThread}.jsonl`)) {
+      return path
+    }
+    if (!wantedThread && wantedCwd) {
+      const meta = await codexMetaHead(path)
+      const metaCwd =
+        meta && meta.type === 'session_meta'
+          ? normalizePath(
+              ((meta.payload as { cwd?: unknown } | undefined)?.cwd as string | undefined) ??
+                undefined,
+            )
+          : undefined
+      if (metaCwd === wantedCwd) {
+        try {
+          const mtimeMs = (await stat(path)).mtimeMs
+          if (!fallback || mtimeMs > fallback.mtimeMs) fallback = { path, mtimeMs }
+        } catch {
+          // Raced deletion between walk and stat.
+        }
+      }
+    }
+  }
+  return fallback?.path
+}
+
+async function codexExcerpt(
+  baseDir: string,
+  threadId?: string,
+  cwd?: string,
+): Promise<string | undefined> {
+  const path = await resolveCodexRollout(baseDir, threadId, cwd)
+  if (!path) return undefined
+  const tail = await readTail(path, TRANSCRIPT_TAIL_BYTES)
+  if (!tail) return undefined
+  const text = lastAssistantText(tail.split('\n'), codexRoleOf, codexTextOf)
+  return text ? truncate(text) : undefined
+}
+
+interface JanusMessagePart {
+  type?: string
+  text?: string
+}
+
+function janusTextOf(message: unknown): string | undefined {
+  if (!message || typeof message !== 'object') return undefined
+  const record = message as { role?: unknown; content?: unknown }
+  if (record.role !== 'assistant') return undefined
+  if (typeof record.content === 'string') return record.content.trim() || undefined
+  if (!Array.isArray(record.content)) return undefined
+  const texts = record.content
+    .filter(
+      (part): part is JanusMessagePart =>
+        !!part && typeof part === 'object' && (part as JanusMessagePart).type === 'text',
+    )
+    .map((part) => (typeof part.text === 'string' ? part.text : ''))
+    .join('')
+    .trim()
+  return texts || undefined
+}
+
+async function janusExcerpt(baseDir: string, sessionId: string): Promise<string | undefined> {
+  const path = join(baseDir, '.janus', 'history', `${sessionId}.jsonl`)
+  let raw: string
+  try {
+    const handle = await open(path, 'r')
+    try {
+      const size = (await handle.stat()).size
+      if (size <= 0 || size > SINGLE_DOC_MAX_BYTES) return undefined
+      const buffer = Buffer.alloc(size)
+      const { bytesRead } = await handle.read(buffer, 0, size, 0)
+      raw = buffer.subarray(0, bytesRead).toString('utf-8')
+    } finally {
+      await handle.close().catch(() => undefined)
+    }
+  } catch {
+    return undefined
+  }
+  const parsed = parseJsonLine(raw)
+  const messages = parsed?.messages
+  if (!Array.isArray(messages)) return undefined
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const text = janusTextOf(messages[i])
+    if (text) return truncate(text)
+  }
+  return undefined
+}
+
+/**
+ * Best-effort answer excerpt for a finished turn. Dispatches on the engine
+ * capability table and never throws: every failure yields undefined so a
+ * missing or unreadable transcript cannot block turn recording. Engines
+ * without a readable transcript store (opencode sqlite, pi none) stay
+ * status-only by table contract.
+ */
+export async function readAssistantExcerpt(context: ExcerptContext): Promise<string | undefined> {
+  try {
+    const capability =
+      AGENT_ENGINE_CAPABILITIES[context.engine as AgentHookSource] ?? null
+    if (!capability || capability.transcript === null) return undefined
+    const baseDir = context.baseDir ?? homedir()
+    if (capability.transcript === 'claude-jsonl') {
+      const path = context.transcriptPath?.trim()
+      if (!path) return undefined
+      return claudeExcerpt(path)
+    }
+    if (capability.transcript === 'codex-rollout') {
+      return codexExcerpt(baseDir, context.threadId, context.cwd)
+    }
+    const sessionId = context.sessionId?.trim()
+    if (!sessionId) return undefined
+    return janusExcerpt(baseDir, sessionId)
   } catch {
     return undefined
   }

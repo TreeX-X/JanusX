@@ -12,6 +12,7 @@ import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
 import { AgentHookConfigManager } from '../notifications/agent-hook-config'
 import { AgentHookCoordinator, getRawString } from '../notifications/agent-hook-coordinator'
+import { AGENT_ENGINE_CAPABILITIES } from '../notifications/agent-engine-capabilities'
 import { AgentTurnSentinel } from '../notifications/agent-turn-sentinel'
 import {
   JANUSX_SYNTHETIC_HOOK_EVENTS,
@@ -87,8 +88,11 @@ function getHookRawMatcher(raw: unknown): string | undefined {
 }
 
 function isHookApprovalRequest(payload: AgentHookPayload, lowerEvent: string): boolean {
-  if (payload.source === 'opencode') return lowerEvent === 'permission.asked'
-  if (lowerEvent === 'permissionrequest') return true
+  const approvals = AGENT_ENGINE_CAPABILITIES[payload.source].approval
+  if (payload.source === 'opencode') {
+    return approvals.some((name) => name.toLowerCase() === lowerEvent)
+  }
+  if (approvals.some((name) => name.toLowerCase() === lowerEvent)) return true
   if (lowerEvent !== 'notification') return false
   return getHookRawMatcher(payload.raw) === 'permission_prompt'
 }
@@ -424,9 +428,10 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     },
     onTurnStarted: (turn) => {
       agentSessionRegistry.noteProviderSession(turn.terminalId, turn.sessionId, turn.transcriptPath)
-      // Transcript sentinel is claude-specific: opencode reports session.error
-      // itself and codex has no transcript contract yet (pty-exit still covers it).
-      if (turn.source !== 'claude') return
+      // Transcript sentinel watches engines with a tail-readable transcript
+      // contract; today only claude. Others rely on their own failure hooks
+      // (opencode session.error, codex service-error) plus pty-exit.
+      if (!AGENT_ENGINE_CAPABILITIES[turn.source].sentinel) return
       turnSentinel.beginTurn({
         terminalId: turn.terminalId,
         engine: turn.engine,
@@ -485,12 +490,19 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
             : 'done'
         const baselineId = state.checkpointId ?? undefined
         const baselineCwd = state.cwd
-        // Answer prose (orca-style tail read): hook raw first, session
-        // record second. Failures yield undefined and never block recording.
-        const transcriptPath =
-          getRawString(payload.raw, ['transcript_path', 'transcriptPath']) ??
-          agentSessionRegistry.transcriptPathForTerminal(terminal.terminalId)
-        const excerpt = await readAssistantExcerpt(transcriptPath, terminal.engine)
+        // Answer prose resolves per engine capability (hook raw first,
+        // session record second). Failures yield undefined and never block.
+        const excerpt = await readAssistantExcerpt({
+          transcriptPath:
+            getRawString(payload.raw, ['transcript_path', 'transcriptPath']) ??
+            agentSessionRegistry.transcriptPathForTerminal(terminal.terminalId),
+          sessionId:
+            payload.sessionId ??
+            agentSessionRegistry.providerSessionIdForTerminal(terminal.terminalId),
+          threadId: getRawString(payload.raw, ['thread_id', 'threadId']),
+          cwd: state.cwd,
+          engine: terminal.engine,
+        })
         agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, baselineId, excerpt)
         // Turn-change island feed: per-file records against the baseline.
         // Best-effort and off the turn pipeline; quiet trees hit the mtime
