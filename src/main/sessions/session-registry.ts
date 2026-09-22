@@ -252,6 +252,9 @@ export class AgentSessionRegistry {
     this.pendingTurnStart.set(record.id, new Date().toISOString())
     record.updatedAt = new Date().toISOString()
     this.persist()
+    // Card-visible mutation (first prompt, active status): push session:event
+    // so the panel refreshes on submit, not only on turn end.
+    this.notify(record.id)
   }
 
   noteCheckpoint(terminalId: string, checkpointId: string): void {
@@ -263,6 +266,9 @@ export class AgentSessionRegistry {
     }
     record.updatedAt = new Date().toISOString()
     this.persist()
+    // Card-visible mutation (checkpoint count): push session:event so the
+    // panel refreshes on checkpoint creation, not only on turn end.
+    this.notify(record.id)
   }
 
   /**
@@ -284,10 +290,22 @@ export class AgentSessionRegistry {
   noteProviderSession(terminalId: string, providerSessionId?: string, transcriptPath?: string): void {
     const record = this.recordForTerminal(terminalId)
     if (!record) return
-    if (providerSessionId) record.providerSessionId = providerSessionId
-    if (transcriptPath) record.transcriptPath = transcriptPath
+    // Hot path: every hook payload carrying a session id lands here. Emit
+    // session:event only when a card-visible field actually changes, otherwise
+    // each tool call would refetch and reorder the panel.
+    let changed = false
+    if (providerSessionId && record.providerSessionId !== providerSessionId) {
+      record.providerSessionId = providerSessionId
+      changed = true
+    }
+    if (transcriptPath && record.transcriptPath !== transcriptPath) {
+      record.transcriptPath = transcriptPath
+      changed = true
+    }
+    if (!changed) return
     record.updatedAt = new Date().toISOString()
     this.persist()
+    this.notify(record.id)
   }
 
   recordTurnEnd(terminalId: string, kind: AgentSessionTurnKind, checkpointId?: string): void {
@@ -319,6 +337,7 @@ export class AgentSessionRegistry {
     record.branch = branch
     record.updatedAt = new Date().toISOString()
     this.persist()
+    this.notify(record.id)
   }
 
   detachTerminal(terminalId: string): void {

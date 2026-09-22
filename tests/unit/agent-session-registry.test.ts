@@ -214,4 +214,33 @@ describe('agent session registry', () => {
     await corrupt.flush()
     expect(await readFile(storePath, 'utf8')).toBe('{broken')
   })
+
+  it('emits change events on conversation writes so the panel refreshes mid-turn', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const seen: Array<string | undefined> = []
+    registry.setChangeListener((sessionId) => {
+      seen.push(sessionId)
+    })
+    const record = registry.createSession(createInput('term-1'))
+    expect(seen).toEqual([record.id])
+
+    // Submit path: prompt text and checkpoint count reach the card at once.
+    registry.notePrompt('term-1', 'do the thing')
+    registry.noteCheckpoint('term-1', 'cp-1')
+    registry.noteBranch('term-1', 'feature/x')
+    expect(seen).toEqual([record.id, record.id, record.id, record.id])
+
+    // Provider path: first values notify, repeats stay silent (hot hook path).
+    registry.noteProviderSession('term-1', 'prov-1', '/tmp/t.jsonl')
+    expect(seen).toHaveLength(5)
+    registry.noteProviderSession('term-1', 'prov-1', '/tmp/t.jsonl')
+    expect(seen).toHaveLength(5)
+    registry.noteProviderSession('term-1', 'prov-2')
+    expect(seen).toHaveLength(6)
+
+    // Unknown terminals never notify.
+    registry.notePrompt('missing', 'nope')
+    registry.noteCheckpoint('missing', 'cp-x')
+    expect(seen).toHaveLength(6)
+  })
 })
