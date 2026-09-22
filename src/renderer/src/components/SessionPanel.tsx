@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
 import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, type ConflictInfo } from '@/stores/checkpoint'
@@ -1053,6 +1053,8 @@ function SessionDetailWindow({
   const [transcript, setTranscript] = useState<TranscriptDetail | null>(null)
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null)
   const turnRefs = useMemo(() => new Map<string, HTMLDivElement | null>(), [])
+  const turnsPaneRef = useRef<HTMLDivElement | null>(null)
+  const navPaneRef = useRef<HTMLDivElement | null>(null)
   const jumpToTurn = useCallback((id: string) => {
     setActiveTurnId(id)
     turnRefs.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1229,6 +1231,40 @@ function SessionDetailWindow({
     [checkpoints, referencedIds],
   )
 
+  // Scroll-spy: the rail follows the turn nearest the top of the reading pane.
+  useEffect(() => {
+    const pane = turnsPaneRef.current
+    if (!pane) return
+    const keyOf = (node: Element): string | null => {
+      for (const [key, el] of turnRefs) {
+        if (el === node) return key
+      }
+      return null
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        const key = visible.length > 0 ? keyOf(visible[0].target) : null
+        if (key) setActiveTurnId(key)
+      },
+      { root: pane, threshold: [0, 0.25, 0.5, 0.75, 1] },
+    )
+    for (const el of turnRefs.values()) {
+      if (el) observer.observe(el)
+    }
+    return () => observer.disconnect()
+  }, [displayTurns, orphans, turnRefs])
+
+  // Keep the active rail entry in view without stealing the reading scroll.
+  useEffect(() => {
+    if (!activeTurnId) return
+    navPaneRef.current
+      ?.querySelector(`[data-nav="${CSS.escape(activeTurnId)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [activeTurnId])
+
   const pruneCountFor = useCallback(
     (checkpoint: CheckpointSummary) =>
       checkpoints.filter((other) => other.conversationIndex > checkpoint.conversationIndex).length,
@@ -1329,7 +1365,7 @@ function SessionDetailWindow({
           </div>
         )}
         <div className="flex" style={{ flex: 1, minHeight: 0 }}>
-          <div style={{ width: 168, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)', overflowY: 'auto', padding: '10px 8px', background: 'rgba(0,0,0,0.18)' }}>
+          <div ref={navPaneRef} style={{ width: 168, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)', overflowY: 'auto', padding: '10px 8px', background: 'rgba(0,0,0,0.18)' }}>
             <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#5a5a60', padding: '0 6px 6px' }}>
               {t('terminal:agentSession.turns', { count: displayTurns.length })}
             </div>
@@ -1339,6 +1375,7 @@ function SessionDetailWindow({
               return (
                 <button
                   key={turn.id}
+                  data-nav={turn.id}
                   onClick={() => jumpToTurn(turn.id)}
                   title={turn.prompt ?? turn.excerpt ?? `turn ${index + 1}`}
                   className="cursor-pointer"
@@ -1366,6 +1403,7 @@ function SessionDetailWindow({
               return (
                 <button
                   key={cp.id}
+                  data-nav={`orphan-${cp.id}`}
                   onClick={() => jumpToTurn(`orphan-${cp.id}`)}
                   title={cp.prompt ?? `#${cp.conversationIndex}`}
                   className="cursor-pointer"
@@ -1382,7 +1420,7 @@ function SessionDetailWindow({
               )
             })}
           </div>
-          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 16px' }}>
+          <div ref={turnsPaneRef} style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 16px' }}>
             {!detail ? (
               <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
             ) : (
