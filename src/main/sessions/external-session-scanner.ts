@@ -2,8 +2,12 @@
 // .agents/notes/implemented/feature/2026-09-22-external-session-backfill.md
 import { open, readdir, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
-import { resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
+import { basename, dirname, join } from 'node:path'
+import {
+  AGENT_ENGINE_CAPABILITIES,
+  resolveSessionStorePath,
+  type SessionStoreKind,
+} from '../notifications/agent-engine-capabilities'
 import type { AgentHookSource } from '../notifications/agent-hook-types'
 import type { AgentSessionRegistry, ImportExternalSessionInput } from './session-registry'
 import { listOpencodeSessions } from './opencode-sessions'
@@ -21,9 +25,14 @@ export interface ExternalScanSummary {
   skipped: number
 }
 
-type ScanEngine = Extract<AgentHookSource, 'claude' | 'codex' | 'opencode'>
-
-const SCAN_ENGINES: ScanEngine[] = ['claude', 'codex', 'opencode']
+/**
+ * Engines with a readable session store, derived from the capability table in
+ * table order. Adding a driver is a capability-table row plus a parser entry
+ * below — this list never needs a manual edit.
+ */
+const SCAN_ENGINES: AgentHookSource[] = (
+  Object.keys(AGENT_ENGINE_CAPABILITIES) as AgentHookSource[]
+).filter((source) => AGENT_ENGINE_CAPABILITIES[source].sessionStore !== null)
 const MAX_FILES_PER_ENGINE = 200
 /** Full read cap; larger files fall back to head plus tail windows. */
 const MAX_FULL_BYTES = 512 * 1024
@@ -155,6 +164,21 @@ export function codexAssistantText(record: Record<string, unknown>): string | un
     }
   }
   return undefined
+}
+
+function piMessageText(record: Record<string, unknown>, role: string): string | undefined {
+  if (readString(record.type)?.toLowerCase() !== 'message') return undefined
+  const message = asRecord(record.message)
+  if (!message || readString(message.role)?.toLowerCase() !== role) return undefined
+  return textOfContent(message.content)
+}
+
+export function piUserText(record: Record<string, unknown>): string | undefined {
+  return piMessageText(record, 'user')
+}
+
+export function piAssistantText(record: Record<string, unknown>): string | undefined {
+  return piMessageText(record, 'assistant')
 }
 
 function codexThreadFromFilename(path: string): string | undefined {
@@ -335,6 +359,81 @@ function parseCodexFile(lines: string[], path: string, mtimeMs: number): ParsedT
 }
 
 /**
+ * Pi slug directories encode the cwd (`--C--Users-Tree-...--`). The session
+ * record carries the authoritative cwd; this decode is the fallback only, and
+ * directory names containing dashes stay approximate.
+ */
+function decodePiSlugDir(slug: string): string | undefined {
+  const trimmed = slug.replace(/^-+|-+$/g, '')
+  const drive = trimmed.match(/^([A-Za-z])--(.*)$/)
+  if (!drive) return undefined
+  const rest = drive[2].replace(/-{2,}/g, '/').replace(/-/g, '/')
+  if (!rest) return undefined
+  return `${drive[1]}:/${rest}`
+}
+
+function piSessionIdFromFilename(path: string): string | undefined {
+  const base = basename(path)
+  const match = base.match(/_([0-9a-f-]{8,})\.jsonl$/i)
+  if (match?.[1]) return match[1]
+  return base.endsWith('.jsonl') && base.length > 6 ? base.slice(0, -6) : undefined
+}
+
+function parsePiFile(lines: string[], path: string, mtimeMs: number): ParsedTranscript | null {
+  let providerSessionId: string | undefined
+  let cwd: string | undefined
+  let firstPrompt: string | undefined
+  let lastExcerpt: string | undefined
+  let turnCount = 0
+  let earliest: string | undefined
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const record = parseJsonLine(trimmed)
+    if (!record) continue
+    if (readString(record.type)?.toLowerCase() === 'session') {
+      providerSessionId ??= readString(record.id)
+      cwd ??= readString(record.cwd)
+    }
+    const stamp = recordTimestamp(record)
+    if (stamp && (!earliest || stamp < earliest)) earliest = stamp
+    if (!firstPrompt) firstPrompt = piUserText(record)
+    const answer = piAssistantText(record)
+    if (answer) {
+      turnCount += 1
+      lastExcerpt = answer
+    }
+  }
+  providerSessionId ??= piSessionIdFromFilename(path)
+  cwd ??= decodePiSlugDir(basename(dirname(path)))
+  if (!providerSessionId || !cwd) return null
+  if (!firstPrompt && !lastExcerpt) return null
+  const updatedAt = new Date(mtimeMs).toISOString()
+  return {
+    providerSessionId,
+    cwd,
+    firstPrompt: firstPrompt ?? '',
+    ...(lastExcerpt ? { lastExcerpt: truncate(lastExcerpt) } : {}),
+    turnCount,
+    ...(earliest ? { createdAt: earliest } : {}),
+    updatedAt,
+  }
+}
+
+type TranscriptFileParser = (lines: string[], path: string, mtimeMs: number) => ParsedTranscript | null
+
+/**
+ * File-based transcript parsers keyed by the capability-table store kind. A
+ * new file-backed engine lands here beside its table row; engines without an
+ * entry skip file by file instead of failing the scan.
+ */
+const FILE_PARSERS: Partial<Record<Exclude<SessionStoreKind, null>, TranscriptFileParser>> = {
+  'claude-projects': parseClaudeFile,
+  'codex-sessions': parseCodexFile,
+  'pi-sessions': parsePiFile,
+}
+
+/**
  * Opencode sqlite backfill over the session table, newest rows first. One bad
  * row never fails the scan; an unreadable database skips the engine silently
  * like a missing transcript store.
@@ -413,10 +512,13 @@ export async function scanExternalSessions(
         summary.skipped += 1
         continue
       }
-      const parsed =
-        engine === 'claude'
-          ? parseClaudeFile(bounded.lines, candidate.path, bounded.mtimeMs)
-          : parseCodexFile(bounded.lines, candidate.path, bounded.mtimeMs)
+      const kind: SessionStoreKind = AGENT_ENGINE_CAPABILITIES[engine].sessionStore
+      const parser = kind ? FILE_PARSERS[kind] : undefined
+      if (!parser) {
+        summary.skipped += 1
+        continue
+      }
+      const parsed = parser(bounded.lines, candidate.path, bounded.mtimeMs)
       if (!parsed) {
         summary.skipped += 1
         continue

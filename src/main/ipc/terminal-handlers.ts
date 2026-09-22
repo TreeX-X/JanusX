@@ -1128,7 +1128,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     // Hook env follows the engine preset, so turns track live from here; the
     // pty inherits the app environment (including CODEX_HOME when set).
     if (source.external === true) {
-      const resumeArgs = buildProviderResumeArgs(source.engine, source.providerSessionId)
+      const resumeArgs = buildProviderResumeArgs(source.engine, source.providerSessionId, source.transcriptPath)
       if (!resumeArgs) {
         throw new Error(`Resume is not supported for engine: ${source.engine}`)
       }

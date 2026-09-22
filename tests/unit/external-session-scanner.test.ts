@@ -228,4 +228,39 @@ describe('external session scanner', () => {
     expect(second.imported).toBe(0)
     expect(registry.listSessions()).toHaveLength(1)
   })
+
+  it('imports pi session files with slug fallback and file-based resume', async () => {
+    const home = await tempDir('scan-home-')
+    const data = await tempDir('scan-data-')
+    const registry = new AgentSessionRegistry(data)
+    registries.push(registry)
+    await writeJsonl(
+      join(home, '.pi', 'agent', 'sessions', '--C--repo-proj--', '2026-09-22T10-00-00-000Z_pi-1.jsonl'),
+      [
+        { type: 'session', version: 3, id: 'pi-1', timestamp: '2026-09-22T10:00:00.000Z', cwd: 'C:/repo/proj' },
+        { type: 'message', id: 'm-1', timestamp: '2026-09-22T10:01:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'pi question' }] } },
+        { type: 'message', id: 'm-2', timestamp: '2026-09-22T10:02:00.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'pi answer' }] } },
+      ],
+    )
+    // No session record: the slug directory still attributes the cwd.
+    await writeJsonl(
+      join(home, '.pi', 'agent', 'sessions', '--C--repo-other--', '2026-09-22T11-00-00-000Z_pi-2.jsonl'),
+      [
+        { type: 'message', id: 'm-1', timestamp: '2026-09-22T11:01:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'slug question' }] } },
+      ],
+    )
+
+    const summary = await scanExternalSessions(registry, { env: {}, home })
+    expect(summary.scanned).toBe(2)
+    expect(summary.imported).toBe(2)
+    const sessions = registry.listSessions()
+    expect(sessions).toHaveLength(2)
+    const first = sessions.find((session) => session.providerSessionId === 'pi-1')
+    expect(first).toMatchObject({ engine: 'pi', cwd: 'C:/repo/proj', firstPrompt: 'pi question', turnCount: 1, external: true })
+    expect(first?.transcriptPath).toContain('pi-1.jsonl')
+    expect(registry.getSession(first!.id)?.turns[0]).toMatchObject({ prompt: 'pi question', excerpt: 'pi answer' })
+    const slug = sessions.find((session) => (session.transcriptPath ?? '').includes('pi-2.jsonl'))
+    expect(slug?.providerSessionId).toBeTruthy()
+    expect(slug?.cwd).toBe('C:/repo/other')
+  })
 })

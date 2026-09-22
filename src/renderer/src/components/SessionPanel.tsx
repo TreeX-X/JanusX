@@ -64,7 +64,7 @@ function formatSize(bytes: number): string {
 
 /** Provider resume command for external rows (orca parity); null when the engine has no known resume shape. */
 function buildResumeCommand(session: AgentSessionSummary): string | null {
-  return buildProviderResumeCommand(session.engine, session.providerSessionId)
+  return buildProviderResumeCommand(session.engine, session.providerSessionId, session.transcriptPath)
 }
 
 function CopyButton({ text, label, grow }: { text: string; label?: string; grow?: boolean }) {

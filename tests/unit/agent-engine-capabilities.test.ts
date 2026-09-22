@@ -32,7 +32,8 @@ describe('agent engine capabilities', () => {
     expect(AGENT_ENGINE_CAPABILITIES.claude.sessionStore).toBe('claude-projects')
     expect(AGENT_ENGINE_CAPABILITIES.codex.sessionStore).toBe('codex-sessions')
     expect(AGENT_ENGINE_CAPABILITIES.opencode.sessionStore).toBe('opencode-sqlite')
-    for (const source of ['janus', 'pi'] as const) {
+    expect(AGENT_ENGINE_CAPABILITIES.pi.sessionStore).toBe('pi-sessions')
+    for (const source of ['janus'] as const) {
       expect(AGENT_ENGINE_CAPABILITIES[source].sessionStore).toBeNull()
     }
   })
@@ -54,7 +55,7 @@ describe('agent engine capabilities', () => {
     expect(resolveSessionStorePath('opencode', {}, home)).toBe(
       join(home, '.local', 'share', 'opencode', 'opencode.db'),
     )
-    expect(resolveSessionStorePath('pi', {}, home)).toBeNull()
+    expect(resolveSessionStorePath('pi', {}, home)).toBe(join(home, '.pi', 'agent', 'sessions'))
   })
 
   it('classifies native turn events identically across hook-native engines', () => {

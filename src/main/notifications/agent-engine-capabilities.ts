@@ -10,7 +10,7 @@ import type { AgentHookSource } from './agent-hook-types'
 export type TranscriptKind = 'claude-jsonl' | 'codex-rollout' | 'janus-history' | null
 
 /** Provider on-disk store of session transcripts (external backfill source). */
-export type SessionStoreKind = 'claude-projects' | 'codex-sessions' | 'opencode-sqlite' | null
+export type SessionStoreKind = 'claude-projects' | 'codex-sessions' | 'opencode-sqlite' | 'pi-sessions' | null
 
 export type EngineEventPhase = 'start' | 'complete' | 'fail' | 'approval' | 'attention'
 
@@ -76,10 +76,11 @@ export const AGENT_ENGINE_CAPABILITIES: Record<AgentHookSource, AgentEngineCapab
   pi: {
     ...NATIVE_TURNS,
     ...NATIVE_ATTENTION,
-    // No transcript store and no provider session id reach the bridge.
+    // Pi sessions read from the on-disk session files; turn-end excerpts
+    // stay status-only and resume runs from the session file path.
     transcript: null,
     sentinel: false,
-    sessionStore: null,
+    sessionStore: 'pi-sessions',
   },
   opencode: {
     start: [{ event: 'session.status', rawStatus: ['busy', 'running'] }],
@@ -116,6 +117,9 @@ export function resolveSessionStorePath(
   }
   if (kind === 'opencode-sqlite') {
     return join(home, '.local', 'share', 'opencode', 'opencode.db')
+  }
+  if (kind === 'pi-sessions') {
+    return join(home, '.pi', 'agent', 'sessions')
   }
   return null
 }

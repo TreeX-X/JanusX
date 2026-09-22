@@ -97,8 +97,21 @@ describe('transcript reader', () => {
     const missing = join(tmpdir(), 'transcript-detail-absent.jsonl')
     await expect(readTranscriptDetail(missing, 'claude')).resolves.toBeNull()
     const path = await writeLines(await tempFile('other.jsonl'), [claudeUser('q')])
-    await expect(readTranscriptDetail(path, 'pi')).resolves.toBeNull()
+    await expect(readTranscriptDetail(path, 'janus')).resolves.toBeNull()
     await expect(readTranscriptDetail('', 'claude')).resolves.toBeNull()
+  })
+
+  it('pairs pi session-file turns in order', async () => {
+    const path = await writeLines(await tempFile('pi.jsonl'), [
+      { type: 'session', version: 3, id: 'pi-1', timestamp: '2026-09-22T10:00:00.000Z', cwd: 'C:/repo/proj' },
+      { type: 'message', id: 'm-1', timestamp: '2026-09-22T10:01:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'pi question' }] } },
+      { type: 'thinking_level_change', thinkingLevel: 'off' },
+      { type: 'message', id: 'm-2', timestamp: '2026-09-22T10:02:00.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'pi answer' }] } },
+    ])
+    const detail = await readTranscriptDetail(path, 'pi')
+    expect(detail?.totalTurns).toBe(1)
+    expect(detail?.truncated).toBe(false)
+    expect(detail?.turns).toEqual([{ prompt: 'pi question', excerpt: 'pi answer' }])
   })
 
   it('reads opencode pairs from sqlite by session id', async () => {

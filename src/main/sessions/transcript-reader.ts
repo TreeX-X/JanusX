@@ -8,6 +8,8 @@ import {
   codexAssistantText,
   codexUserText,
   parseJsonLine,
+  piAssistantText,
+  piUserText,
   readBounded,
 } from './external-session-scanner'
 import { readOpencodeTurns } from './opencode-sessions'
@@ -44,11 +46,12 @@ export async function readTranscriptDetail(
     if (!list) return null
     return { transcriptPath, turns: list.turns, totalTurns: list.totalTurns, truncated: list.truncated }
   }
-  if (engine !== 'claude' && engine !== 'codex') return null
+  if (engine !== 'claude' && engine !== 'codex' && engine !== 'pi') return null
   const bounded = await readBounded(transcriptPath)
   if (!bounded) return null
-  const userOf = engine === 'claude' ? claudeUserText : codexUserText
-  const assistantOf = engine === 'claude' ? claudeAssistantText : codexAssistantText
+  const userOf = engine === 'claude' ? claudeUserText : engine === 'codex' ? codexUserText : piUserText
+  const assistantOf =
+    engine === 'claude' ? claudeAssistantText : engine === 'codex' ? codexAssistantText : piAssistantText
   const turns: TranscriptTurn[] = []
   let pending: string | undefined
   let totalTurns = 0

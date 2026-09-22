@@ -96,19 +96,29 @@ export interface TranscriptDetail {
 
 /**
  * Provider resume argv tail for external rows (orca parity). Null when the
- * engine has no known resume shape or the provider session id is missing.
+ * engine has no known resume shape, the id is missing, or (pi) the session
+ * file path is missing — pi resumes from the file, never from a bare id.
  */
-export function buildProviderResumeArgs(engine: string, providerSessionId?: string): string[] | null {
+export function buildProviderResumeArgs(
+  engine: string,
+  providerSessionId?: string,
+  transcriptPath?: string,
+): string[] | null {
   if (!providerSessionId) return null
   if (engine === 'claude') return ['--resume', providerSessionId]
   if (engine === 'codex') return ['resume', providerSessionId]
   if (engine === 'opencode') return ['--session', providerSessionId]
+  if (engine === 'pi') return transcriptPath ? ['--session', transcriptPath] : null
   return null
 }
 
 /** Display form of the resume invocation; matches the executed argv tail. */
-export function buildProviderResumeCommand(engine: string, providerSessionId?: string): string | null {
-  const args = buildProviderResumeArgs(engine, providerSessionId)
+export function buildProviderResumeCommand(
+  engine: string,
+  providerSessionId?: string,
+  transcriptPath?: string,
+): string | null {
+  const args = buildProviderResumeArgs(engine, providerSessionId, transcriptPath)
   if (!args) return null
   return `${engine} ${args.join(' ')}`
 }
