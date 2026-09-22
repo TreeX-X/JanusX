@@ -79,6 +79,10 @@ export function SessionPanel() {
   )
   const [scope, setScope] = useState<Scope>('workspace')
   const [continueTarget, setContinueTarget] = useState<AgentSessionSummary | null>(null)
+  // Note: open-card live refresh follows the same session:event — debounced
+  // so submit/checkpoint/turn bursts reload the timeline once — see
+  // .agents/notes/implemented/feature/2026-09-22-session-timeline-live.md
+  const [timelineTick, setTimelineTick] = useState(0)
 
   useEffect(() => {
     setContinueTarget(null)
@@ -105,6 +109,18 @@ export function SessionPanel() {
   }, [scopePath, setUiForPath])
 
   useEffect(() => subscribeToEvents(), [subscribeToEvents])
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const unsubscribe = window.electron.session.onEvent(() => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setTimelineTick((tick) => tick + 1), 600)
+    })
+    return () => {
+      if (timer) clearTimeout(timer)
+      unsubscribe()
+    }
+  }, [])
 
   const visible = scope === 'archived' ? sessions.filter((s) => s.archived) : sessions.filter((s) => !s.archived)
 
@@ -173,6 +189,7 @@ export function SessionPanel() {
             key={session.id}
             session={session}
             expanded={expandedId === session.id}
+            timelineTick={timelineTick}
             onToggle={() => handleToggle(session.id)}
             onContinue={() => setContinueTarget(session)}
           />
@@ -691,11 +708,13 @@ function DiffModal({
 function SessionCard({
   session,
   expanded,
+  timelineTick,
   onToggle,
   onContinue,
 }: {
   session: AgentSessionSummary
   expanded: boolean
+  timelineTick: number
   onToggle: () => void
   onContinue: () => void
 }) {
@@ -723,39 +742,54 @@ function SessionCard({
   useEffect(() => {
     if (!expanded) return
     let alive = true
-    if (!detail) {
-      setDetailLoading(true)
-      window.electron.session
-        .get(session.id)
-        .catch(() => null)
-        .then((fetched) => {
-          if (!alive) return
-          if (fetched) setDetail(fetched)
-          setDetailLoading(false)
-        })
+    // Open timelines reload on every debounced session:event so questions,
+    // excerpts, and checkpoint strips arrive mid-conversation. Review, file,
+    // and restore states stay keyed by checkpoint id and survive the reload.
+    setDetailLoading(true)
+    window.electron.session
+      .get(session.id)
+      .catch(() => null)
+      .then((fetched) => {
+        if (!alive) return
+        if (fetched) setDetail(fetched)
+        setDetailLoading(false)
+      })
+    if (session.archived) {
+      setCpLoaded(true)
+      return () => {
+        alive = false
+      }
     }
-    if (!session.archived && !cpLoaded) {
-      setCpError(null)
-      window.electron.checkpoint
-        .list({ sessionId: session.id, cwd: session.cwd })
-        .then((cps) => {
-          if (!alive) return
-          setCheckpoints(cps)
-          setCpLoaded(true)
-          // Per-checkpoint lazy change records; diffs stay on demand in the modal.
-          void Promise.all(cps.map((cp) => loadRecords(cp.id, session.cwd)))
+    setCpError(null)
+    window.electron.checkpoint
+      .list({ sessionId: session.id, cwd: session.cwd })
+      .then((cps) => {
+        if (!alive) return
+        setCheckpoints(cps)
+        setCpLoaded(true)
+        // Drop records of pruned checkpoints; the rest reload lazily.
+        setRecords((state) => {
+          const keep = new Set(cps.map((cp) => `${cp.id}:records`))
+          const next: Record<string, ChangedFileRecord[]> = {}
+          let dropped = false
+          for (const [key, value] of Object.entries(state)) {
+            if (keep.has(key)) next[key] = value
+            else dropped = true
+          }
+          return dropped ? next : state
         })
-        .catch((err) => {
-          if (!alive) return
-          setCpLoaded(true)
-          setCpError(err instanceof Error ? err.message : String(err))
-        })
-    }
-    if (session.archived) setCpLoaded(true)
+        // Per-checkpoint lazy change records; diffs stay on demand in the modal.
+        void Promise.all(cps.map((cp) => loadRecords(cp.id, session.cwd)))
+      })
+      .catch((err) => {
+        if (!alive) return
+        setCpLoaded(true)
+        setCpError(err instanceof Error ? err.message : String(err))
+      })
     return () => {
       alive = false
     }
-  }, [expanded, session.id, session.archived, session.cwd, detail, cpLoaded, loadRecords])
+  }, [expanded, session.id, session.archived, session.cwd, timelineTick, loadRecords])
 
   const handleRestore = async (checkpoint: CheckpointSummary) => {
     const pruned = checkpoints
