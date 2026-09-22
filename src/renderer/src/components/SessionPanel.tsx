@@ -4,6 +4,7 @@ import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, typ
 import { useWorkspaceStore } from '@/stores/workspace'
 import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
+import { buildProviderResumeCommand, type TranscriptDetail } from '../../../shared/ipc/session'
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
 import codexIcon from '@/assets/icons/codex.svg'
@@ -62,11 +63,7 @@ function formatSize(bytes: number): string {
 
 /** Provider resume command for external rows (orca parity); null when the engine has no known resume shape. */
 function buildResumeCommand(session: AgentSessionSummary): string | null {
-  const id = session.providerSessionId
-  if (!id) return null
-  if (session.engine === 'claude') return `claude --resume ${id}`
-  if (session.engine === 'codex') return `codex resume ${id}`
-  return null
+  return buildProviderResumeCommand(session.engine, session.providerSessionId)
 }
 
 function CopyButton({ text, label, grow }: { text: string; label?: string; grow?: boolean }) {
@@ -271,6 +268,14 @@ export function SessionPanel() {
           timelineTick={timelineTick}
           onClose={() => setDetailTarget(null)}
           onContinue={() => {
+            // External rows resume through the provider CLI in a fresh
+            // terminal; failures surface on the panel error line.
+            if (detailTarget.external === true) {
+              const id = detailTarget.id
+              setDetailTarget(null)
+              void continueSession(id)
+              return
+            }
             setDetailTarget(null)
             setContinueTarget(detailTarget)
           }}
@@ -778,6 +783,8 @@ function SessionCard({
   const { t } = useI18n('terminal')
   const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [resuming, setResuming] = useState(false)
+  const runContinue = useSessionStore((s) => s.continueSession)
 
   useEffect(() => {
     if (!expanded) return
@@ -941,7 +948,18 @@ function SessionCard({
             </button>
             {session.archived ? null : session.external === true ? (
               resumeCommand ? (
-                <CopyButton text={resumeCommand} label={t('terminal:agentSession.resumeCopy')} grow />
+                <button
+                  onClick={() => {
+                    if (resuming) return
+                    setResuming(true)
+                    void runContinue(session.id).finally(() => setResuming(false))
+                  }}
+                  disabled={resuming}
+                  className="flex-1 rounded cursor-pointer"
+                  style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: '#e8e8e8', opacity: resuming ? 0.6 : 1 }}
+                >
+                  {t('terminal:agentSession.resume')}
+                </button>
               ) : (
                 <button
                   disabled
@@ -1011,6 +1029,7 @@ function SessionDetailWindow({
   const [conflictFor, setConflictFor] = useState<string | null>(null)
   const [restoreConflicts, setRestoreConflicts] = useState<ConflictInfo[]>([])
   const [restoreDone, setRestoreDone] = useState<{ id: string; pruned: string } | null>(null)
+  const [transcript, setTranscript] = useState<TranscriptDetail | null>(null)
   const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
   // External and archived rows carry no restorable state: the window reads the
   // transcript ledger only and never fetches checkpoints.
@@ -1080,6 +1099,45 @@ function SessionDetailWindow({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Bounded full-prose transcript read, fetched once per window open. Registry
+  // excerpts stay the live source; transcript pairs only backfill missing
+  // prose or replace the single seeded turn on external rows.
+  useEffect(() => {
+    let alive = true
+    setTranscript(null)
+    window.electron.session
+      .getTranscript(session.id)
+      .catch(() => null)
+      .then((fetched) => {
+        if (!alive) return
+        if (fetched) setTranscript(fetched)
+      })
+    return () => {
+      alive = false
+    }
+  }, [session.id])
+
+  const displayTurns = useMemo(() => {
+    const base = detail?.turns ?? []
+    if (!transcript || transcript.turns.length === 0) return base
+    if (transcript.turns.length > base.length) {
+      return transcript.turns.map((turn, index) => ({
+        id: `transcript-${index}`,
+        kind: 'done' as const,
+        checkpointId: undefined as string | undefined,
+        startedAt: detail?.createdAt ?? session.createdAt,
+        endedAt: detail?.updatedAt ?? session.updatedAt,
+        prompt: turn.prompt,
+        excerpt: turn.excerpt,
+      }))
+    }
+    return base.map((turn, index) => {
+      const extra = transcript.turns[index]
+      if (!extra) return turn
+      return { ...turn, prompt: turn.prompt ?? extra.prompt, excerpt: turn.excerpt ?? extra.excerpt }
+    })
+  }, [detail, transcript, session.createdAt, session.updatedAt])
 
   const handleRestore = async (checkpoint: CheckpointSummary) => {
     const pruned = checkpoints
@@ -1228,6 +1286,9 @@ function SessionDetailWindow({
             {(detail?.providerSessionId ?? session.providerSessionId) && (
               <CopyButton text={(detail?.providerSessionId ?? session.providerSessionId) as string} label={t('terminal:agentSession.copySessionId')} />
             )}
+            {session.external === true && resumeCommand && (
+              <CopyButton text={resumeCommand} label={t('terminal:agentSession.resumeCopy')} />
+            )}
           </div>
         </div>
         {session.external === true && !session.archived && (
@@ -1246,7 +1307,12 @@ function SessionDetailWindow({
               <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
             ) : (
               <>
-                {(detail.turns ?? []).map((turn, index) => {
+                {transcript?.truncated && (
+                  <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#5a5a60', padding: '2px 0 8px' }}>
+                    {t('terminal:agentSession.transcriptTruncated', { total: transcript.totalTurns, shown: transcript.turns.length })}
+                  </div>
+                )}
+                {displayTurns.map((turn, index) => {
                   const linked = !readableOnly && turn.checkpointId ? checkpointById.get(turn.checkpointId) : undefined
                   // Turn-owned prompt survives checkpoint prune; linked prompt stays as fallback.
                   const question = turn.prompt ?? linked?.prompt
@@ -1289,7 +1355,7 @@ function SessionDetailWindow({
                     </div>
                   )
                 })}
-                {detail.turns.length === 0 && orphans.length === 0 && (
+                {displayTurns.length === 0 && orphans.length === 0 && (
                   <div style={{ fontSize: 11, color: '#555', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
                 )}
                 {cpError && checkpoints.length === 0 && (
@@ -1345,7 +1411,13 @@ function SessionDetailWindow({
           </button>
           {session.archived ? null : session.external === true ? (
             resumeCommand ? (
-              <CopyButton text={resumeCommand} label={t('terminal:agentSession.resumeCopy')} grow />
+              <button
+                onClick={onContinue}
+                className="rounded cursor-pointer"
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: '#e8e8e8', flexShrink: 0 }}
+              >
+                {t('terminal:agentSession.resume')}
+              </button>
             ) : (
               <button
                 disabled

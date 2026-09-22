@@ -25,6 +25,7 @@ import {
   summarizeHookPayload,
 } from '../notifications/agent-hook-diagnostics'
 import { logTerminalDiagnostic } from '../terminal/diagnostics'
+import { getDefaultShell } from '../terminal/presets'
 import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
 import { readAssistantExcerpt } from '../sessions/transcript-excerpt'
 import { appShutdown } from '../shutdown/AppShutdown'
@@ -44,6 +45,7 @@ import {
 } from '../../shared/ipc/terminal'
 import { AGENT_CHANNELS } from '../../shared/ipc/janus-runner'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
+import { buildProviderResumeArgs } from '../../shared/ipc/session'
 import { companionSessionState } from '../companion/session-state'
 import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
 import { terminalContextCoordinator } from '../runtime-telemetry/coordinator'
@@ -657,7 +659,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   })
 
   const createTerminalLifecycle = async (config: TerminalCreateRequest) => {
-    const { id, cwd, shell, preset, command, args, cols, rows } = config
+    const { id, cwd, shell, preset, command, args, cols, rows, extraArgs } = config
 
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
     const engine: CheckpointEngine =
@@ -809,7 +811,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         // Best effort: launch bare pi below.
       }
     }
-    const programArgs = [...(resolvedProgram?.args ?? []), ...piExtensionArgs]
+    const programArgs = [...(resolvedProgram?.args ?? []), ...piExtensionArgs, ...(extraArgs ?? [])]
 
     logTerminalDiagnostic('terminal create requested', {
       id,
@@ -1121,6 +1123,45 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   continueSessionImpl = async (sessionId, opts) => {
     const source = agentSessionRegistry.getSession(sessionId)
     if (!source) throw new Error(`Session not found: ${sessionId}`)
+    // External rows have no shell capture and no handoff to deliver: resume by
+    // spawning the provider CLI with its own resume argv in the recorded cwd.
+    // Hook env follows the engine preset, so turns track live from here; the
+    // pty inherits the app environment (including CODEX_HOME when set).
+    if (source.external === true) {
+      const resumeArgs = buildProviderResumeArgs(source.engine, source.providerSessionId)
+      if (!resumeArgs) {
+        throw new Error(`Resume is not supported for engine: ${source.engine}`)
+      }
+      const shell = getDefaultShell()
+      const preset = isTerminalPreset(source.engine) ? source.engine : undefined
+      const terminalId = randomUUID()
+      const record = agentSessionRegistry.createSession({
+        terminalId,
+        workspaceId: source.workspaceId,
+        engine: source.engine,
+        cwd: source.cwd,
+        shell,
+        preset,
+        branch: source.branch,
+        providerSessionId: source.providerSessionId,
+        transcriptPath: source.transcriptPath,
+        continuedFrom: source.id,
+      })
+      try {
+        await createTerminalLifecycle({
+          id: terminalId,
+          workspaceId: source.workspaceId || undefined,
+          cwd: source.cwd,
+          shell,
+          preset,
+          extraArgs: resumeArgs,
+        })
+      } catch (err) {
+        agentSessionRegistry.archiveSession(record.id)
+        throw err
+      }
+      return { sessionId: record.id, terminalId }
+    }
     const engine = (opts?.engine ?? source.engine) as CheckpointEngine
     if (!source.shell) {
       throw new Error('Session predates shell capture; open a terminal manually')

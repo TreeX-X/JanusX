@@ -59,7 +59,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
-function parseJsonLine(line: string): Record<string, unknown> | null {
+export function parseJsonLine(line: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(line) as unknown
     return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
@@ -81,7 +81,7 @@ function toIso(value: unknown): string | undefined {
 }
 
 /** Message content as string or text blocks, across claude and codex shapes. */
-function textOfContent(content: unknown): string | undefined {
+export function textOfContent(content: unknown): string | undefined {
   if (typeof content === 'string') return content.trim() || undefined
   if (!Array.isArray(content)) return undefined
   const texts: string[] = []
@@ -100,21 +100,21 @@ function textOfContent(content: unknown): string | undefined {
   return joined || undefined
 }
 
-function claudeUserText(record: Record<string, unknown>): string | undefined {
+export function claudeUserText(record: Record<string, unknown>): string | undefined {
   if (readString(record.type)?.toLowerCase() !== 'user') return undefined
   const message = asRecord(record.message)
   if (!message || readString(message.role)?.toLowerCase() !== 'user') return undefined
   return textOfContent(message.content)
 }
 
-function claudeAssistantText(record: Record<string, unknown>): string | undefined {
+export function claudeAssistantText(record: Record<string, unknown>): string | undefined {
   if (readString(record.type)?.toLowerCase() !== 'assistant') return undefined
   const message = asRecord(record.message)
   if (!message || readString(message.role)?.toLowerCase() !== 'assistant') return undefined
   return textOfContent(message.content)
 }
 
-function codexUserText(record: Record<string, unknown>): string | undefined {
+export function codexUserText(record: Record<string, unknown>): string | undefined {
   const payload = asRecord(record.payload)
   const rootType = readString(record.type)?.toLowerCase()
   if (payload) {
@@ -138,7 +138,7 @@ function codexUserText(record: Record<string, unknown>): string | undefined {
   return undefined
 }
 
-function codexAssistantText(record: Record<string, unknown>): string | undefined {
+export function codexAssistantText(record: Record<string, unknown>): string | undefined {
   const payload = asRecord(record.payload)
   if (payload) {
     const role = readString(payload.role)?.toLowerCase()
@@ -195,13 +195,13 @@ async function collectCandidates(root: string, maxFiles: number): Promise<FileCa
   return candidates.slice(0, maxFiles)
 }
 
-interface BoundedContent {
+export interface BoundedContent {
   lines: string[]
   size: number
   mtimeMs: number
 }
 
-async function readBounded(path: string): Promise<BoundedContent | null> {
+export async function readBounded(path: string): Promise<BoundedContent | null> {
   let info
   try {
     info = await stat(path)

@@ -7,6 +7,7 @@ import {
 } from '../../shared/ipc/session'
 import { agentSessionRegistry } from '../sessions/session-registry'
 import { scanExternalSessions } from '../sessions/external-session-scanner'
+import { readTranscriptDetail } from '../sessions/transcript-reader'
 import { continueAgentSession } from './terminal-handlers'
 
 export function registerSessionHandlers(getMainWindow: () => BrowserWindow | null): void {
@@ -43,6 +44,13 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
   ipcMain.handle(SESSION_CHANNELS.scanExternal, async () => {
     await agentSessionRegistry.load().catch(() => undefined)
     return scanExternalSessions(agentSessionRegistry)
+  })
+
+  ipcMain.handle(SESSION_CHANNELS.getTranscript, async (_event, { sessionId }: { sessionId: string }) => {
+    await agentSessionRegistry.load().catch(() => undefined)
+    const record = agentSessionRegistry.getSession(sessionId)
+    if (!record?.transcriptPath) return null
+    return readTranscriptDetail(record.transcriptPath, record.engine)
   })
 
   ipcMain.handle(SESSION_CHANNELS.saveLayout, async (_event, layout: ShellRestoreManifest) => {

@@ -48,6 +48,12 @@ export interface TerminalCreateRequest {
   command?: string
   args?: string[]
   autoCommand?: string
+  /**
+   * Extra argv appended after the preset launch program. Lets a caller resume
+   * a provider session (for example `claude --resume <id>`) while the preset
+   * keeps hook wiring on the owning engine.
+   */
+  extraArgs?: string[]
   cols?: number
   rows?: number
 }
