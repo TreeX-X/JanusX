@@ -228,6 +228,8 @@
     "continueTitle": "Continue in New Session",
     "continueBody": "Open a fresh sequential session for the same task. The original session stays untouched and readable.",
     "continueStart": "Start new session",
+    "external": "External",
+    "continueUnavailable": "External session from a terminal outside JanusX; no local shell to continue into, read-only.",
     "activeNow": "Active",
     "statusActive": "Active",
     "statusDone": "Done",

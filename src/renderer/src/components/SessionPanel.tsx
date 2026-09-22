@@ -86,6 +86,10 @@ export function SessionPanel() {
 
   useEffect(() => {
     setContinueTarget(null)
+    // Pull-mode backfill: provider transcripts written outside JanusX have no
+    // hook traffic, so each panel open triggers one bounded rescan; the
+    // registry notifies on import and the event subscription refreshes cards.
+    void window.electron.session.scanExternal().catch(() => undefined)
     if (scope === 'all') {
       void fetchSessions({})
       return
@@ -908,6 +912,20 @@ function SessionCard({
       >
         <img src={icon} alt={session.engine} style={{ width: 14, height: 14, objectFit: 'contain' }} />
         <span style={{ fontSize: 11, color: '#a8a8a8' }}>{session.engine}</span>
+        {session.external === true && (
+          <span
+            style={{
+              fontSize: 9.5,
+              color: '#8ab4ff',
+              border: '1px solid rgba(138,180,255,0.3)',
+              borderRadius: 3,
+              padding: '0 5px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('terminal:agentSession.external')}
+          </span>
+        )}
         <span
           className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap"
           style={{ fontSize: 12, color: '#d4d4d4', fontWeight: 500 }}
@@ -1054,14 +1072,30 @@ function SessionCard({
             {t('terminal:agentSession.restoreUnavailable')}
           </button>
         )}
-        <button
-          onClick={onContinue}
-          className="flex-1 rounded cursor-pointer"
-          style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
-        >
-          {t('terminal:agentSession.continue')}
-        </button>
+        {session.external === true ? (
+          <button
+            disabled
+            title={t('terminal:agentSession.continueUnavailable')}
+            className="flex-1 rounded"
+            style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
+          >
+            {t('terminal:agentSession.continue')}
+          </button>
+        ) : (
+          <button
+            onClick={onContinue}
+            className="flex-1 rounded cursor-pointer"
+            style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+          >
+            {t('terminal:agentSession.continue')}
+          </button>
+        )}
       </div>
+      {session.external === true && !session.archived && (
+        <div style={{ fontSize: 10, color: '#555', marginTop: 6, lineHeight: 1.6 }}>
+          {t('terminal:agentSession.continueUnavailable')}
+        </div>
+      )}
 
       {diffCp && (
         <DiffModal

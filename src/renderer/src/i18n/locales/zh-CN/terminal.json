@@ -228,6 +228,8 @@
     "continueTitle": "在新会话中继续",
     "continueBody": "为同一任务开一个全新的顺序会话，原会话保持不动、仍可查阅。",
     "continueStart": "开始新会话",
+    "external": "外部",
+    "continueUnavailable": "外部会话来自软件外终端，无本地 shell 支撑，仅可查阅。",
     "activeNow": "进行中",
     "statusActive": "进行中",
     "statusDone": "已完成",

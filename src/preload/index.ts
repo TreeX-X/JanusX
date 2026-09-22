@@ -506,6 +506,7 @@ const sessionAPI: SessionAPI = {
   get: (sessionId) => ipcRenderer.invoke(SESSION_CHANNELS.get, { sessionId }),
   continue: (input) => ipcRenderer.invoke(SESSION_CHANNELS.continue, input),
   onEvent: (callback) => subscribeIpcEvent(SESSION_CHANNELS.event, callback),
+  scanExternal: () => ipcRenderer.invoke(SESSION_CHANNELS.scanExternal),
   saveLayout: (layout) => ipcRenderer.invoke(SESSION_CHANNELS.saveLayout, layout),
   getLayout: () => ipcRenderer.invoke(SESSION_CHANNELS.getLayout),
   clearLayout: () => ipcRenderer.invoke(SESSION_CHANNELS.clearLayout),

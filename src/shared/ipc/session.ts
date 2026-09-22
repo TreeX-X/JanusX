@@ -3,6 +3,7 @@ export const SESSION_CHANNELS = {
   get: 'session:get',
   continue: 'session:continue',
   event: 'session:event',
+  scanExternal: 'session:scan-external',
   saveLayout: 'session:save-layout',
   getLayout: 'session:get-layout',
   clearLayout: 'session:clear-layout',
@@ -39,6 +40,8 @@ export interface AgentSessionSummary {
   createdAt: string
   updatedAt: string
   archived: boolean
+  /** Imported from a provider transcript store; no live JanusX terminal. */
+  external?: boolean
 }
 
 export interface AgentSessionDetail extends AgentSessionSummary {
@@ -78,9 +81,17 @@ export interface SessionAPI {
   get(sessionId: string): Promise<AgentSessionDetail | null>
   continue(input: SessionContinueInput): Promise<SessionContinueResult>
   onEvent(callback: (payload: { type: string; sessionId?: string }) => void): () => void
+  scanExternal(): Promise<ExternalScanSummary>
   saveLayout(layout: ShellRestoreManifest): Promise<{ success: boolean }>
   getLayout(): Promise<ShellRestoreManifest | null>
   clearLayout(): Promise<{ success: boolean }>
+}
+
+export interface ExternalScanSummary {
+  scanned: number
+  imported: number
+  updated: number
+  skipped: number
 }
 
 export interface ShellRestoreTerminal {

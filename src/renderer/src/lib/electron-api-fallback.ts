@@ -251,6 +251,7 @@ export function installElectronApiFallback(): void {
       get: () => Promise.resolve(null),
       continue: unavailable,
       onEvent: () => () => {},
+      scanExternal: () => Promise.resolve({ scanned: 0, imported: 0, updated: 0, skipped: 0 }),
       saveLayout: () => Promise.resolve({ success: false }),
       getLayout: () => Promise.resolve(null),
       clearLayout: () => Promise.resolve({ success: false }),

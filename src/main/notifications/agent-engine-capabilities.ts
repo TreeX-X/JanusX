@@ -1,9 +1,16 @@
 // Note: engine differences live here as data, never in branches (orca
 // TUI_AGENT_CONFIG pattern) — see
 // .agents/notes/implemented/feature/2026-09-22-session-engine-capabilities.md
+// Note: external transcript backfill reads provider session stores — see
+// .agents/notes/proposed/architecture/2026-09-22-external-session-transcript-backfill.md
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { AgentHookSource } from './agent-hook-types'
 
 export type TranscriptKind = 'claude-jsonl' | 'codex-rollout' | 'janus-history' | null
+
+/** Provider on-disk store of session transcripts (external backfill source). */
+export type SessionStoreKind = 'claude-projects' | 'codex-sessions' | null
 
 export type EngineEventPhase = 'start' | 'complete' | 'fail' | 'approval' | 'attention'
 
@@ -28,6 +35,8 @@ export interface AgentEngineCapability {
   transcript: TranscriptKind
   /** Transcript sentinel watches this engine for mid-turn aborts. */
   sentinel: boolean
+  /** On-disk session store for external backfill; null means none/no driver. */
+  sessionStore: SessionStoreKind
 }
 
 const NATIVE_TURNS = {
@@ -47,18 +56,22 @@ export const AGENT_ENGINE_CAPABILITIES: Record<AgentHookSource, AgentEngineCapab
     ...NATIVE_ATTENTION,
     transcript: 'claude-jsonl',
     sentinel: true,
+    sessionStore: 'claude-projects',
   },
   codex: {
     ...NATIVE_TURNS,
     ...NATIVE_ATTENTION,
     transcript: 'codex-rollout',
     sentinel: false,
+    sessionStore: 'codex-sessions',
   },
   janus: {
     ...NATIVE_TURNS,
     ...NATIVE_ATTENTION,
     transcript: 'janus-history',
     sentinel: false,
+    // Janus history is local to this app, not an external provider store.
+    sessionStore: null,
   },
   pi: {
     ...NATIVE_TURNS,
@@ -66,6 +79,7 @@ export const AGENT_ENGINE_CAPABILITIES: Record<AgentHookSource, AgentEngineCapab
     // No transcript store and no provider session id reach the bridge.
     transcript: null,
     sentinel: false,
+    sessionStore: null,
   },
   opencode: {
     start: [{ event: 'session.status', rawStatus: ['busy', 'running'] }],
@@ -76,7 +90,30 @@ export const AGENT_ENGINE_CAPABILITIES: Record<AgentHookSource, AgentEngineCapab
     // Sessions persist in sqlite without a driver in this repo.
     transcript: null,
     sentinel: false,
+    sessionStore: null,
   },
+}
+
+/**
+ * Absolute path of the provider session store for an engine, or null when the
+ * engine has no readable external store. Env/home are injectable test seams so
+ * unit tests never touch the real user profile.
+ */
+export function resolveSessionStorePath(
+  source: AgentHookSource,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
+): string | null {
+  const kind = AGENT_ENGINE_CAPABILITIES[source].sessionStore
+  if (kind === 'claude-projects') {
+    const configDir = env.CLAUDE_CONFIG_DIR?.trim()
+    return join(configDir && configDir.length > 0 ? configDir : join(home, '.claude'), 'projects')
+  }
+  if (kind === 'codex-sessions') {
+    const codeHome = env.CODEX_HOME?.trim()
+    return join(codeHome && codeHome.length > 0 ? codeHome : join(home, '.codex'), 'sessions')
+  }
+  return null
 }
 
 /** Raw status candidates for status-shaped events (opencode plugin contract). */

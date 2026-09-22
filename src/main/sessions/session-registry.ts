@@ -1,6 +1,8 @@
 // Note: stable session identity over volatile terminal ids for workspace
 // session cards, scoped checkpoints, and Continue handoff — see
 // .agents/notes/implemented/feature/2026-09-21-workspace-sessions-v1.md
+// Note: external provider sessions import by transcript backfill — see
+// .agents/notes/implemented/feature/2026-09-22-external-session-backfill.md
 import { randomUUID } from 'crypto'
 import { copyFile, readFile, rm } from 'fs/promises'
 import { join } from 'path'
@@ -23,6 +25,18 @@ export interface AgentSessionRecord extends AgentSessionDetail {
   args?: string[]
   lastPrompt: string
   checkpointIds: string[]
+}
+
+export interface ImportExternalSessionInput {
+  engine: string
+  cwd: string
+  providerSessionId: string
+  transcriptPath: string
+  firstPrompt: string
+  lastExcerpt?: string
+  turnCount: number
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface SessionStoreDocument {
@@ -95,6 +109,7 @@ export class AgentSessionRegistry {
           turns: Array.isArray(record.turns) ? record.turns.slice(-MAX_TURNS_PER_SESSION) : [],
           checkpointIds: Array.isArray(record.checkpointIds) ? record.checkpointIds : [],
           archived: record.archived === true,
+          external: record.external === true || undefined,
         })
       }
       this.loadOk = true
@@ -370,6 +385,121 @@ export class AgentSessionRegistry {
     this.persist()
   }
 
+  /**
+   * Import a provider transcript as a read-only external session. Hook-owned
+   * sessions stay the source of truth: when the same engine plus provider id
+   * already exists as a live session, the import only backfills a missing
+   * transcript path and never overwrites turns. Repeat scans match on the
+   * same key and refresh excerpt, count, and timestamps without duplicating.
+   */
+  importExternalSession(input: ImportExternalSessionInput): AgentSessionRecord {
+    const engine = input.engine.trim()
+    const cwd = input.cwd.trim()
+    const providerSessionId = input.providerSessionId.trim()
+    const transcriptPath = input.transcriptPath.trim()
+    if (!engine || !cwd || !providerSessionId || !transcriptPath) {
+      throw new Error('importExternalSession requires engine, cwd, providerSessionId, and transcriptPath')
+    }
+    const now = new Date().toISOString()
+    const createdAt = toImportTimestamp(input.createdAt) ?? toImportTimestamp(input.updatedAt) ?? now
+    const updatedAt = toImportTimestamp(input.updatedAt) ?? toImportTimestamp(input.createdAt) ?? now
+    const firstPrompt = input.firstPrompt.trim()
+    const lastExcerpt = input.lastExcerpt?.trim() ? input.lastExcerpt.trim() : undefined
+    const turnCount = Number.isFinite(input.turnCount) ? Math.max(0, Math.floor(input.turnCount)) : 0
+
+    const existing = Array.from(this.sessions.values()).find(
+      (record) => record.engine === engine && record.providerSessionId === providerSessionId,
+    )
+    if (existing) {
+      if (existing.external !== true) {
+        if (!existing.transcriptPath) {
+          existing.transcriptPath = transcriptPath
+          existing.updatedAt = updatedAt > existing.updatedAt ? updatedAt : existing.updatedAt
+          this.persist()
+          this.notify(existing.id)
+        }
+        return existing
+      }
+      let changed = false
+      if (!existing.firstPrompt && firstPrompt) {
+        existing.firstPrompt = firstPrompt
+        existing.lastPrompt = firstPrompt
+        changed = true
+      }
+      if (turnCount > existing.turnCount) {
+        existing.turnCount = turnCount
+        changed = true
+      }
+      if (existing.transcriptPath !== transcriptPath) {
+        existing.transcriptPath = transcriptPath
+        changed = true
+      }
+      if (updatedAt > existing.updatedAt) {
+        existing.updatedAt = updatedAt
+        changed = true
+      }
+      const seed = existing.turns[0]
+      if (seed && lastExcerpt && seed.excerpt !== lastExcerpt) {
+        seed.excerpt = lastExcerpt
+        seed.endedAt = existing.updatedAt
+        changed = true
+      }
+      if (seed && firstPrompt && !seed.prompt) {
+        seed.prompt = firstPrompt
+        changed = true
+      }
+      if (changed) {
+        this.persist()
+        this.notify(existing.id)
+      }
+      return existing
+    }
+
+    const record: AgentSessionRecord = {
+      id: randomUUID(),
+      workspaceId: '',
+      engine,
+      cwd,
+      branch: undefined,
+      shell: undefined,
+      preset: undefined,
+      command: undefined,
+      args: undefined,
+      firstPrompt,
+      lastPrompt: firstPrompt,
+      turnCount,
+      checkpointCount: 0,
+      status: 'done',
+      providerSessionId,
+      transcriptPath,
+      continuedFrom: undefined,
+      terminalIds: [],
+      turns:
+        firstPrompt || lastExcerpt
+          ? [
+              {
+                id: randomUUID(),
+                kind: 'done',
+                startedAt: createdAt,
+                endedAt: updatedAt,
+                ...(firstPrompt ? { prompt: firstPrompt } : {}),
+                ...(lastExcerpt ? { excerpt: lastExcerpt } : {}),
+              },
+            ]
+          : [],
+      checkpointIds: [],
+      createdAt,
+      updatedAt,
+      archived: false,
+      external: true,
+    }
+    this.sessions.set(record.id, record)
+    this.prune()
+    this.persist()
+    this.notify(record.id)
+    return record
+  }
+
   setPendingHandoff(sessionId: string, handoff: string | undefined): void {
     const record = this.sessions.get(sessionId)
     if (!record) return
@@ -415,7 +545,7 @@ export class AgentSessionRegistry {
       .filter((record) => {
         if (!filter?.includeArchived && record.archived) return false
         if (filter?.workspaceId && record.workspaceId !== filter.workspaceId) return false
-        if (filter?.cwd && record.cwd !== filter.cwd) return false
+        if (filter?.cwd && !matchesCwdScope(record.cwd, filter.cwd)) return false
         if (filter?.engine && record.engine !== filter.engine) return false
         return true
       })
@@ -457,11 +587,38 @@ function toSummary(record: AgentSessionRecord): AgentSessionSummary {
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     archived: record.archived,
+    ...(record.external === true ? { external: true } : {}),
   }
+}
+
+function normalizeCwd(value: string): string {
+  return value.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
+}
+
+/**
+ * Exact match still wins; external sessions may live under a child path of a
+ * workspace scope, so fall back to prefix (boundary '/') or substring after
+ * normalizing separators, trailing slashes, and case.
+ */
+function matchesCwdScope(recordCwd: string, scopeCwd: string): boolean {
+  if (recordCwd === scopeCwd) return true
+  const record = normalizeCwd(recordCwd)
+  const scope = normalizeCwd(scopeCwd)
+  if (!record || !scope) return false
+  if (record === scope) return true
+  if (record.startsWith(`${scope}/`)) return true
+  return record.includes(scope)
 }
 
 function toStatus(record: AgentSessionRecord): AgentSessionStatus {
   return record.status
+}
+
+function toImportTimestamp(value?: string): string | undefined {
+  if (!value) return undefined
+  const parsed = Date.parse(value)
+  if (!Number.isFinite(parsed)) return undefined
+  return new Date(parsed).toISOString()
 }
 
 export const agentSessionRegistry = new AgentSessionRegistry()

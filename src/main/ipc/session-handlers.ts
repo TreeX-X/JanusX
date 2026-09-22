@@ -6,12 +6,16 @@ import {
   type ShellRestoreManifest,
 } from '../../shared/ipc/session'
 import { agentSessionRegistry } from '../sessions/session-registry'
+import { scanExternalSessions } from '../sessions/external-session-scanner'
 import { continueAgentSession } from './terminal-handlers'
 
 export function registerSessionHandlers(getMainWindow: () => BrowserWindow | null): void {
-  void agentSessionRegistry.load().catch((err) => {
-    console.error('[sessions] load failed:', err)
-  })
+  void agentSessionRegistry
+    .load()
+    .then(() => scanExternalSessions(agentSessionRegistry).catch((err) => console.error('[sessions] boot backfill failed:', err)))
+    .catch((err) => {
+      console.error('[sessions] load failed:', err)
+    })
   agentSessionRegistry.setChangeListener((sessionId) => {
     const window = getMainWindow()
     if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return
@@ -34,6 +38,11 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
 
   ipcMain.handle(SESSION_CHANNELS.continue, async (_event, input: SessionContinueInput) => {
     return continueAgentSession(input.sessionId, { engine: input.engine })
+  })
+
+  ipcMain.handle(SESSION_CHANNELS.scanExternal, async () => {
+    await agentSessionRegistry.load().catch(() => undefined)
+    return scanExternalSessions(agentSessionRegistry)
   })
 
   ipcMain.handle(SESSION_CHANNELS.saveLayout, async (_event, layout: ShellRestoreManifest) => {

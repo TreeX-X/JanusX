@@ -1,9 +1,11 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_ENGINE_CAPABILITIES,
   extractHookRawStatus,
   matchesEngineEvents,
   normalizeHookEventName,
+  resolveSessionStorePath,
 } from '../../src/main/notifications/agent-engine-capabilities'
 import type { AgentHookSource } from '../../src/main/notifications/agent-hook-types'
 
@@ -27,6 +29,29 @@ describe('agent engine capabilities', () => {
     for (const source of ['codex', 'opencode', 'janus', 'pi'] as const) {
       expect(AGENT_ENGINE_CAPABILITIES[source].sentinel).toBe(false)
     }
+    expect(AGENT_ENGINE_CAPABILITIES.claude.sessionStore).toBe('claude-projects')
+    expect(AGENT_ENGINE_CAPABILITIES.codex.sessionStore).toBe('codex-sessions')
+    for (const source of ['opencode', 'janus', 'pi'] as const) {
+      expect(AGENT_ENGINE_CAPABILITIES[source].sessionStore).toBeNull()
+    }
+  })
+
+  it('resolves session store paths from env with home fallbacks', () => {
+    const home = join('home', 'user')
+    expect(resolveSessionStorePath('claude', {}, home)).toBe(join(home, '.claude', 'projects'))
+    expect(resolveSessionStorePath('codex', {}, home)).toBe(join(home, '.codex', 'sessions'))
+    expect(
+      resolveSessionStorePath('claude', { CLAUDE_CONFIG_DIR: '/opt/claude' }, home),
+    ).toBe(join('/opt/claude', 'projects'))
+    expect(resolveSessionStorePath('codex', { CODEX_HOME: '/opt/codex' }, home)).toBe(
+      join('/opt/codex', 'sessions'),
+    )
+    expect(resolveSessionStorePath('claude', { CLAUDE_CONFIG_DIR: '  ' }, home)).toBe(
+      join(home, '.claude', 'projects'),
+    )
+    expect(resolveSessionStorePath('janus', {}, home)).toBeNull()
+    expect(resolveSessionStorePath('opencode', {}, home)).toBeNull()
+    expect(resolveSessionStorePath('pi', {}, home)).toBeNull()
   })
 
   it('classifies native turn events identically across hook-native engines', () => {
