@@ -881,7 +881,19 @@ function SessionCard({
         >
           {session.firstPrompt || session.engine}
         </span>
-        <span style={{ fontSize: 10, color: '#555' }}>{expanded ? '▴' : '▾'}</span>
+        <span
+          style={{
+            display: 'flex',
+            color: '#888',
+            transform: expanded ? 'rotate(90deg)' : 'none',
+            transition: 'transform 0.15s ease',
+            flexShrink: 0,
+          }}
+        >
+          <svg viewBox="0 0 24 24" style={{ width: 12, height: 12, stroke: 'currentColor', fill: 'none', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </span>
       </div>
 
       {expanded && (
