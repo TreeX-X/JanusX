@@ -1350,7 +1350,7 @@ function SessionDetailWindow({
                     fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
                   }}
                 >
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: turn.kind === 'done' ? '#6bd89b' : '#e06c75' }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: turn.kind === 'done' ? 'transparent' : turn.kind === 'failed' ? '#e06c75' : '#f0a35e' }} />
                   <span style={{ color: '#666', flexShrink: 0 }}>{index + 1}</span>
                   <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{label}</span>
                 </button>
