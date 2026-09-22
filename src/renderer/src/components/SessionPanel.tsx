@@ -1231,30 +1231,40 @@ function SessionDetailWindow({
     [checkpoints, referencedIds],
   )
 
-  // Scroll-spy: the rail follows the turn nearest the top of the reading pane.
+  // Scroll-spy: the rail follows the turn under a reading line near the top
+  // of the pane. A zero-width line sits inside exactly one turn at a time, so
+  // the focus changes once per boundary crossing and never flickers between
+  // neighbors the way threshold-chasing observers do.
   useEffect(() => {
     const pane = turnsPaneRef.current
     if (!pane) return
-    const keyOf = (node: Element): string | null => {
+    let raf = 0
+    const update = () => {
+      raf = 0
+      const line = pane.getBoundingClientRect().top + pane.clientHeight * 0.2
+      let current: string | null = null
       for (const [key, el] of turnRefs) {
-        if (el === node) return key
+        if (!el || !el.isConnected) {
+          turnRefs.delete(key)
+          continue
+        }
+        const box = el.getBoundingClientRect()
+        if (box.top <= line && box.bottom > line) {
+          current = key
+          break
+        }
       }
-      return null
+      if (current) setActiveTurnId((prev) => (prev === current ? prev : current))
     }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-        const key = visible.length > 0 ? keyOf(visible[0].target) : null
-        if (key) setActiveTurnId(key)
-      },
-      { root: pane, threshold: [0, 0.25, 0.5, 0.75, 1] },
-    )
-    for (const el of turnRefs.values()) {
-      if (el) observer.observe(el)
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update)
     }
-    return () => observer.disconnect()
+    pane.addEventListener('scroll', onScroll, { passive: true })
+    update()
+    return () => {
+      pane.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
   }, [displayTurns, orphans, turnRefs])
 
   // Keep the active rail entry in view without stealing the reading scroll.
