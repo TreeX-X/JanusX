@@ -153,6 +153,7 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
   const [live, setLive] = useState<TerminalModelState | null>(null)
   const [liveLoading, setLiveLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [usingId, setUsingId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
@@ -234,15 +235,49 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
     if (isJanus) notifyJanusLlmConfigChanged(preferDefault, updatedProviderId)
   }, [isJanus])
 
-  const handleSetDefault = async (providerId: string) => {
-    try {
-      await setTerminalDefault(consumer, providerId)
-      setDefaultProviderId(providerId)
-      notifyIfJanus(true, providerId)
-    } catch (setError) {
-      console.error('Failed to set terminal default provider:', setError)
+  /** ccswitch 式一键“使用”：设为默认 + 写 live 配置文件（备份+重读校验），一行搞定。 */
+  const handleUseProvider = useCallback(async (provider: ProviderSettings) => {
+    const model = defaultModelOf(provider)
+    if (!isJanus && !isClaude && !model) {
+      setError(t('llm:terminals.modelRequired'))
+      return
     }
-  }
+    setUsingId(provider.id)
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await setTerminalDefault(consumer, provider.id)
+      setDefaultProviderId(provider.id)
+      notifyIfJanus(true, provider.id)
+      if (isJanus) {
+        setNotice(t('llm:terminals.switched', { name: provider.name }))
+        return
+      }
+      if (isClaude) {
+        const result = await externalCliService.applyProvider({ toolId: 'claude', providerId: provider.id })
+        if (!result.success) {
+          setError(result.error === 'NO_LLM_PROVIDER' ? t('llm:cli.error.noProvider') : (result.error ?? ''))
+          return
+        }
+        setNotice(t('llm:cli.notice.synced', { name: result.providerName ?? provider.name }))
+        await refreshSyncState()
+        return
+      }
+      const result = await externalCliService.applyTerminalModel({ toolId: terminal, model })
+      if (!result.success) {
+        setError(result.error ?? '')
+        return
+      }
+      setNotice(t('llm:terminals.switched', { name: provider.name }))
+      await refreshLive()
+    } catch (useError: unknown) {
+      setError(useError instanceof Error ? useError.message : String(useError))
+    } finally {
+      setUsingId(null)
+      setBusy(false)
+    }
+  }, [consumer, isJanus, isClaude, notifyIfJanus, refreshLive, refreshSyncState, terminal, t])
 
   const handleEdit = (provider: ProviderSettings) => {
     setEditingId(provider.id)
@@ -397,26 +432,6 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
     }
   }
 
-  const handleApplyClaude = useCallback(async () => {
-    setBusy(true)
-    setError('')
-    setNotice('')
-    try {
-      // Claude 终端用自己的默认配置做凭证同步
-      const result = await externalCliService.applyProvider({ toolId: 'claude', providerId: null })
-      if (!result.success) {
-        setError(result.error === 'NO_LLM_PROVIDER' ? t('llm:cli.error.noProvider') : (result.error ?? ''))
-        return
-      }
-      setNotice(t('llm:cli.notice.synced', { name: result.providerName ?? '' }))
-      await refreshSyncState()
-    } catch (applyError: unknown) {
-      setError(applyError instanceof Error ? applyError.message : String(applyError))
-    } finally {
-      setBusy(false)
-    }
-  }, [refreshSyncState, t])
-
   const handleRollbackClaude = useCallback(async () => {
     setBusy(true)
     setError('')
@@ -435,36 +450,6 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
       setBusy(false)
     }
   }, [refreshSyncState, t])
-
-  const defaultEntry = providers.find((provider) => provider.id === defaultProviderId) ?? null
-  const defaultModel = defaultEntry ? defaultModelOf(defaultEntry) : ''
-  const outOfSync = Boolean(
-    fileMeta && live?.exists && !live.error && live.model !== undefined &&
-    defaultModel && live.model !== defaultModel,
-  )
-
-  const handleApplyModel = useCallback(async () => {
-    if (!defaultModel) {
-      setError(t('llm:terminals.modelRequired'))
-      return
-    }
-    setBusy(true)
-    setError('')
-    setNotice('')
-    try {
-      const result = await externalCliService.applyTerminalModel({ toolId: terminal, model: defaultModel })
-      if (!result.success) {
-        setError(result.error ?? '')
-        return
-      }
-      setNotice(t('llm:terminals.modelApplied'))
-      await refreshLive()
-    } catch (applyError: unknown) {
-      setError(applyError instanceof Error ? applyError.message : String(applyError))
-    } finally {
-      setBusy(false)
-    }
-  }, [defaultModel, refreshLive, terminal, t])
 
   const handleRollbackModel = useCallback(async () => {
     setBusy(true)
@@ -518,13 +503,16 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
                 </div>
               </div>
               <div className={styles.providerActions}>
-                {defaultProviderId !== provider.id && (
+                {defaultProviderId === provider.id ? (
+                  <span className={styles.providerBadge}>{t('llm:provider.inUse')}</span>
+                ) : (
                   <button
                     type="button"
                     className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact} ${styles.btnAccent}`}
-                    onClick={() => handleSetDefault(provider.id)}
+                    disabled={busy && usingId === provider.id}
+                    onClick={() => void handleUseProvider(provider)}
                   >
-                    {t('llm:provider.setAsDefault')}
+                    {usingId === provider.id ? t('llm:provider.using') : t('llm:provider.use')}
                   </button>
                 )}
                 <button
@@ -825,24 +813,18 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
               : t('llm:cli.claude.notSynced')}
             {claude && !sourceAlive && ` · ${t('llm:cli.claude.sourceGone')}`}
           </div>
-          <div className={styles.footerActions}>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact} ${styles.btnAccent}`}
-              disabled={busy}
-              onClick={() => void handleApplyClaude()}
-            >
-              {t('llm:cli.claude.applyDefault')}
-            </button>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
-              disabled={busy || !claude}
-              onClick={() => void handleRollbackClaude()}
-            >
-              {t('llm:cli.claude.rollback')}
-            </button>
-          </div>
+          {claude && (
+            <div className={styles.footerActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
+                disabled={busy || !claude}
+                onClick={() => void handleRollbackClaude()}
+              >
+                {t('llm:cli.claude.rollback')}
+              </button>
+            </div>
+          )}
           <div className={styles.inlineHint}>{t('llm:cli.hint')}</div>
         </>
       )}
@@ -850,40 +832,15 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
       {fileMeta && (
         <div className={styles.terminalFile}>
           <div className={styles.providerModel}>
-            {t('llm:terminals.fileLabel')}: {live?.configPath ?? '…'}
-          </div>
-          <div className={styles.providerModel}>
-            {t('llm:terminals.formatLabel')}: {fileMeta.format} · {t('llm:terminals.ownedKeyLabel')}: {fileMeta.ownedKey}
-          </div>
-          <div className={styles.providerModel}>
             {liveLoading
               ? t('llm:test.testing')
               : live?.error
                 ? live.error
-                : live?.exists
-                  ? live.model
-                    ? t('llm:terminals.liveModel', { model: live.model })
-                    : t('llm:terminals.liveMissing')
-                  : t('llm:terminals.liveMissing')}
+                : live?.model
+                  ? t('llm:terminals.activeModel', { model: live.model })
+                  : t('llm:terminals.activeMissing')}
           </div>
-          {outOfSync && <div className={styles.inlineHint}>{t('llm:terminals.outOfSync')}</div>}
           <div className={styles.footerActions}>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact} ${styles.btnAccent}`}
-              disabled={busy || !defaultModel}
-              onClick={() => void handleApplyModel()}
-            >
-              {t('llm:terminals.applyModel')}
-            </button>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}
-              disabled={busy}
-              onClick={() => void refreshLive()}
-            >
-              {t('llm:terminals.refreshFile')}
-            </button>
             <button
               type="button"
               className={`${styles.btn} ${styles.btnGhost} ${styles.btnCompact}`}

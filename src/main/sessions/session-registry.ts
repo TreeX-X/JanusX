@@ -63,6 +63,12 @@ export class AgentSessionRegistry {
   private changeListener?: (sessionId?: string) => void
   private loadTask: Promise<void> | null = null
   private loadOk = false
+  // Bulk-import suppression: scans import hundreds of rows; each row must
+  // not emit its own session:event or the panel refetches per row.
+  // beginBatch/endBatch collapse one bulk pass into a single notify.
+  // See .agents/notes/implemented/bug-fix/2026-09-22-session-flicker-storm.md
+  private batchDepth = 0
+  private batchDirty = false
 
   constructor(private readonly userDataDir?: string) {}
 
@@ -70,7 +76,25 @@ export class AgentSessionRegistry {
     this.changeListener = listener
   }
 
+  /** Collapse the notifies of one bulk pass into a single event. */
+  beginBatch(): void {
+    this.batchDepth += 1
+  }
+
+  endBatch(): void {
+    if (this.batchDepth <= 0) return
+    this.batchDepth -= 1
+    if (this.batchDepth === 0 && this.batchDirty) {
+      this.batchDirty = false
+      this.notify()
+    }
+  }
+
   private notify(sessionId?: string): void {
+    if (this.batchDepth > 0) {
+      this.batchDirty = true
+      return
+    }
     try {
       this.changeListener?.(sessionId)
     } catch (err) {

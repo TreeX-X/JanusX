@@ -266,6 +266,30 @@ describe('agent session registry', () => {
     expect(seen).toHaveLength(6)
   })
 
+  it('collapses bulk imports into a single change event', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const seen: Array<string | undefined> = []
+    registry.setChangeListener((sessionId) => {
+      seen.push(sessionId)
+    })
+    registry.beginBatch()
+    for (let i = 0; i < 3; i += 1) {
+      registry.importExternalSession({
+        engine: 'claude',
+        cwd: '/repo',
+        providerSessionId: `sess-${i}`,
+        transcriptPath: `/tmp/t-${i}.jsonl`,
+        firstPrompt: `prompt ${i}`,
+        turnCount: 1,
+      })
+    }
+    // No per-row events while the batch is open.
+    expect(seen).toHaveLength(0)
+    registry.endBatch()
+    expect(seen).toHaveLength(1)
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(3)
+  })
+
   it('snapshots the prompt and excerpt onto the turn so content survives prune', async () => {
     const registry = track(new AgentSessionRegistry(await userDataDir()))
     const record = registry.createSession(createInput('term-1'))

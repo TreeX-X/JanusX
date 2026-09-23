@@ -10,6 +10,9 @@ export const WORKTREE_CHANNELS = {
   shipDiff: 'worktree:ship-diff',
   shipMerge: 'worktree:ship-merge',
   shipAbort: 'worktree:ship-abort',
+  unwatch: 'worktree:unwatch',
+  /** Main -> renderer push when the git worktree set changes outside JanusX. */
+  changed: 'worktree:changed',
 } as const
 
 export interface WorktreeInfo {
@@ -70,9 +73,12 @@ export interface WorktreeDeleteInput {
   workspacePath: string
   worktreePath: string
   force?: boolean
+  /** Branch shown on the worktree row; fallback when git no longer registers the path. */
+  branch?: string | null
 }
 
 export interface WorktreeDeleteResult {
+  path: string
   branch: string | null
   branchDeleted: boolean
   branchKept?: string
@@ -82,6 +88,12 @@ export interface WorktreeDeleteResult {
 export interface WorktreeStatus {
   branch: string | null
   dirty: boolean
+}
+
+export interface WorktreeChangedPayload {
+  workspaceId: string
+  workspacePath: string
+  worktrees: WorktreeInfo[]
 }
 
 export interface BranchFileDiff {
@@ -116,4 +128,6 @@ export interface WorktreeAPI {
   shipDiff(workspacePath: string, base: string, branch: string): Promise<BranchDiff>
   shipMerge(workspacePath: string, branch: string): Promise<MergeResult>
   shipAbort(workspacePath: string): Promise<{ success: boolean }>
+  unwatch(workspaceId: string, workspacePath: string): Promise<{ success: boolean }>
+  onChanged(callback: (payload: WorktreeChangedPayload) => void): () => void
 }

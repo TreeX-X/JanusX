@@ -269,6 +269,8 @@ export function installElectronApiFallback(): void {
       shipDiff: unavailable,
       shipMerge: unavailable,
       shipAbort: unavailable,
+      unwatch: () => Promise.resolve({ success: true }),
+      onChanged: () => () => {},
     },
     hosted: {
       detect: () => Promise.resolve(null),

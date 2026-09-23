@@ -1922,7 +1922,6 @@ export type TypedI18nKey =
   | 'terminal:agentSession.firstPrompt'
   | 'terminal:agentSession.loading'
   | 'terminal:agentSession.noCheckpointExternal'
-  | 'terminal:agentSession.readOnly'
   | 'terminal:agentSession.recentTurns'
   | 'terminal:agentSession.restoreConfirm'
   | 'terminal:agentSession.restoreTo'

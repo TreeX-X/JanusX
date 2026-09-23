@@ -10,7 +10,7 @@ import { registerAgentHandlers } from './janus-runner-handlers'
 import { registerBrowserHandlers } from './browser-handlers'
 import { registerCheckpointHandlers } from './checkpoint-handlers'
 import { registerSessionHandlers } from './session-handlers'
-import { registerWorktreeHandlers } from './worktree-handlers'
+import { disposeWorktreeWatchers, registerWorktreeHandlers } from './worktree-handlers'
 import { registerHostedHandlers } from './hosted-handlers'
 import { registerFileHandlers } from './file-handlers'
 import { registerGitHandlers } from './git-handlers'
@@ -83,6 +83,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     subAgentRunRegistry.setMainWindow(null)
     // Also disposed from AppShutdown; function is idempotent.
     disposeWorkspaceWatchers()
+    disposeWorktreeWatchers()
     handleTerminalHostWindowClosed()
   })
 
@@ -104,7 +105,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerAgentHandlers(getCurrentMainWindow)
   registerCheckpointHandlers()
   registerSessionHandlers(getCurrentMainWindow)
-  registerWorktreeHandlers()
+  registerWorktreeHandlers(getCurrentMainWindow)
   registerHostedHandlers()
   registerFileHandlers()
   registerProjectHandlers()

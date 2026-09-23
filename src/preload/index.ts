@@ -528,6 +528,9 @@ const worktreeAPI: WorktreeAPI = {
     ipcRenderer.invoke(WORKTREE_CHANNELS.shipDiff, { workspacePath, base, branch }),
   shipMerge: (workspacePath, branch) => ipcRenderer.invoke(WORKTREE_CHANNELS.shipMerge, { workspacePath, branch }),
   shipAbort: (workspacePath) => ipcRenderer.invoke(WORKTREE_CHANNELS.shipAbort, { workspacePath }),
+  unwatch: (workspaceId, workspacePath) =>
+    ipcRenderer.invoke(WORKTREE_CHANNELS.unwatch, { workspaceId, workspacePath }),
+  onChanged: (callback) => subscribeIpcEvent(WORKTREE_CHANNELS.changed, callback),
 }
 
 const hostedAPI: HostedAPI = {

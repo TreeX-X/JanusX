@@ -121,6 +121,24 @@ export function HostedSettingsPanel() {
       : tokenSource === 'keychain'
         ? t('common:hosted.tokenSaved')
         : t('common:hosted.tokenNone')
+  const statusClass =
+    status === 'error'
+      ? `${styles.status} ${styles.statusError}`
+      : status === 'saved' || status === 'verified'
+        ? `${styles.status} ${styles.statusSuccess}`
+        : styles.status
+  const statusText =
+    status === 'loading'
+      ? t('common:hosted.loading')
+      : status === 'saving'
+        ? t('common:hosted.saving')
+        : status === 'verifying'
+          ? t('common:hosted.verifying')
+          : status === 'verified' && verifiedName
+            ? t('common:hosted.connectedAs', { name: verifiedName })
+            : status === 'saved' && !message
+              ? 'OK'
+              : (message ?? '')
 
   return (
     <div className={styles.panel}>
@@ -144,7 +162,7 @@ export function HostedSettingsPanel() {
               markDirty()
             }}
             disabled={busy}
-            className={styles.input}
+            className={`${styles.input} ${styles.textInput}`}
           />
         </div>
 
@@ -162,7 +180,7 @@ export function HostedSettingsPanel() {
               markDirty()
             }}
             disabled={busy}
-            className={styles.input}
+            className={`${styles.input} ${styles.textInput}`}
           />
         </div>
 
@@ -170,56 +188,76 @@ export function HostedSettingsPanel() {
           <div className={styles.label}>
             <span className={styles.labelText}>{t('common:hosted.timeoutLabel')}</span>
           </div>
-          <input
-            value={timeoutSeconds}
-            inputMode="numeric"
-            onChange={(event) => {
-              setTimeoutSeconds(event.target.value)
-              markDirty()
-            }}
-            disabled={busy}
-            className={styles.input} style={{ width: 90 }}
-          />
+          <div className={styles.numberControl}>
+            <input
+              value={timeoutSeconds}
+              inputMode="numeric"
+              type="number"
+              min={1}
+              max={120}
+              step={1}
+              onChange={(event) => {
+                setTimeoutSeconds(event.target.value)
+                markDirty()
+              }}
+              disabled={busy}
+              className={styles.input}
+            />
+            <span className={styles.unit}>s</span>
+          </div>
         </div>
 
-        <label className={styles.row} style={{ cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={allowInsecure}
-            onChange={(event) => {
-              setAllowInsecure(event.target.checked)
-              markDirty()
-            }}
-            disabled={busy}
-          />
+        <div className={styles.row}>
           <div className={styles.label}>
             <span className={styles.labelText}>{t('common:hosted.insecureLabel')}</span>
             <span className={styles.hint}>{t('common:hosted.insecureWarn')}</span>
           </div>
-        </label>
+          <label className={styles.switch}>
+            <input
+              type="checkbox"
+              checked={allowInsecure}
+              onChange={(event) => {
+                setAllowInsecure(event.target.checked)
+                markDirty()
+              }}
+              disabled={busy}
+            />
+            <span className={styles.switchTrack} />
+          </label>
+        </div>
+      </section>
 
-        {status === 'verified' && verifiedName && (
-          <p className={styles.statusSuccess}>{t('common:hosted.connectedAs', { name: verifiedName })}</p>
-        )}
-        {(status === 'error' || status === 'saved') && message && (
-          <p className={status === 'error' ? styles.statusError : styles.statusSuccess}>{message}</p>
-        )}
-        {status === 'saved' && !message && <p className={styles.statusSuccess}>OK</p>}
-
+      <div className={styles.footer}>
+        <div className={statusClass}>{statusText}</div>
         <div className={styles.actions}>
-          <button type="button" className={styles.button} onClick={() => void handleVerify()} disabled={busy || !url.trim()}>
+          <button
+            type="button"
+            className={`${styles.button} ${styles.ghostButton}`}
+            onClick={() => void handleVerify()}
+            disabled={busy || !url.trim()}
+          >
             {t('common:hosted.verify')}
           </button>
-          <button type="button" className={styles.primaryButton} onClick={() => void handleSave()} disabled={busy || !url.trim()}>
-            {t('common:hosted.save')}
-          </button>
           {tokenSource === 'keychain' && (
-            <button type="button" className={styles.ghostButton} onClick={() => void handleClearToken()} disabled={busy}>
+            <button
+              type="button"
+              className={`${styles.button} ${styles.ghostButton}`}
+              onClick={() => void handleClearToken()}
+              disabled={busy}
+            >
               {t('common:hosted.clearToken')}
             </button>
           )}
+          <button
+            type="button"
+            className={`${styles.button} ${styles.primaryButton}`}
+            onClick={() => void handleSave()}
+            disabled={busy || !url.trim()}
+          >
+            {t('common:hosted.save')}
+          </button>
         </div>
-      </section>
+      </div>
     </div>
   )
 }

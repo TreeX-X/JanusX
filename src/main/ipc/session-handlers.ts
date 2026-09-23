@@ -6,14 +6,33 @@ import {
   type ShellRestoreManifest,
 } from '../../shared/ipc/session'
 import { agentSessionRegistry } from '../sessions/session-registry'
-import { scanExternalSessions } from '../sessions/external-session-scanner'
+import { scanExternalSessions, type ExternalScanSummary } from '../sessions/external-session-scanner'
 import { readTranscriptDetail } from '../sessions/transcript-reader'
 import { continueAgentSession } from './terminal-handlers'
+
+// Panel mounts, scope tabs, and boot each trigger a scan; one pass walks
+// hundreds of transcript files for ~60s. Overlapping passes redo the same
+// work and emit duplicate event bursts, so concurrent callers share one
+// in-flight pass instead of starting their own.
+// See .agents/notes/implemented/bug-fix/2026-09-22-session-flicker-storm.md
+let scanInFlight: Promise<ExternalScanSummary> | null = null
+
+function runScanSerialized(): Promise<ExternalScanSummary> {
+  if (!scanInFlight) {
+    scanInFlight = (async () => {
+      await agentSessionRegistry.load().catch(() => undefined)
+      return scanExternalSessions(agentSessionRegistry)
+    })().finally(() => {
+      scanInFlight = null
+    })
+  }
+  return scanInFlight
+}
 
 export function registerSessionHandlers(getMainWindow: () => BrowserWindow | null): void {
   void agentSessionRegistry
     .load()
-    .then(() => scanExternalSessions(agentSessionRegistry).catch((err) => console.error('[sessions] boot backfill failed:', err)))
+    .then(() => runScanSerialized().catch((err) => console.error('[sessions] boot backfill failed:', err)))
     .catch((err) => {
       console.error('[sessions] load failed:', err)
     })
@@ -42,8 +61,7 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
   })
 
   ipcMain.handle(SESSION_CHANNELS.scanExternal, async () => {
-    await agentSessionRegistry.load().catch(() => undefined)
-    return scanExternalSessions(agentSessionRegistry)
+    return runScanSerialized()
   })
 
   ipcMain.handle(SESSION_CHANNELS.getTranscript, async (_event, { sessionId }: { sessionId: string }) => {

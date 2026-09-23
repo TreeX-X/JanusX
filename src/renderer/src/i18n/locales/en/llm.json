@@ -23,6 +23,9 @@
     "typeOpenai": "OpenAI Compatible",
     "typeAnthropic": "Anthropic Native",
     "setAsDefault": "Set as default",
+    "use": "Use",
+    "inUse": "In use",
+    "using": "Switching...",
     "edit": "Edit",
     "delete": "Delete",
     "editTitle": "Edit provider",
@@ -58,7 +61,10 @@
     "sectionTitle": "Per-terminal bindings",
     "emptyHint": "No providers for this terminal yet; add one below.",
     "modelRequired": "Fill in a model override first, or set a default model on the provider.",
-    "liveHint": "Each terminal writes only its owned model key with backup; secrets still sync through Claude credentials only.",
+    "liveHint": "Click “Use” to switch and write the terminal config file (auto-backed-up). External terminals take effect after restart; Janus internal applies immediately.",
+    "activeModel": "Active: {{model}}",
+    "activeMissing": "Not active yet — click “Use” above to write config.",
+    "switched": "Switched to “{{name}}”. Restart terminals to take effect.",
     "janusBadge": "Internal",
     "internalNote": "Janus internal chat reads this binding directly and writes no external file.",
     "fileLabel": "Config file",
@@ -125,7 +131,7 @@
     "error": {
       "noProvider": "No usable provider: an OpenAI-compatible or Anthropic provider with base URL and API key is required."
     },
-    "hint": "Claude Code config is backed up before every sync and can be rolled back; only the default provider syncs, re-sync after changing the default."
+    "hint": "Clicking “Use” on a provider syncs that provider with backup; rollback is available anytime. Janus internal switches apply immediately."
   },
   "test": {
     "testing": "Testing connection...",

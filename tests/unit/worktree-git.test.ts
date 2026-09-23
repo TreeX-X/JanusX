@@ -11,6 +11,7 @@ import {
   deleteBranch,
   diffBranchToBase,
   fetchRepoAvatar,
+  gitCommonDir,
   isAvatarFresh,
   isWorktreeDirty,
   listWorktrees,
@@ -23,6 +24,7 @@ import {
   slugifyWorktreeName,
   worktreeDirFor,
   worktreeBranch,
+  worktreeListSignature,
 } from '../../src/main/git/worktrees'
 import { WorktreeMetaStore } from '../../src/main/git/worktree-meta'
 
@@ -76,6 +78,33 @@ describe.skipIf(!gitAvailable())('listWorktrees against real git', () => {
     expect(worktrees).toHaveLength(2)
     expect(worktrees[1].path).not.toContain('/')
     await removeWorktree(repo, created.worktree.path)
+  })
+
+  it('detects plain git worktree add/remove as external entries', async () => {
+    const repo = await initRepo()
+    const before = await listWorktrees('ws-1', repo)
+    expect(before).toHaveLength(1)
+
+    // Bypass JanusX creation: no metadata, so the row must read as external.
+    const externalPath = join(tmpdir(), `wt-external-${Date.now()}`)
+    roots.push(externalPath)
+    await execFileAsync('git', ['worktree', 'add', '-b', 'external-1', externalPath, 'HEAD'], { cwd: repo })
+    const added = await listWorktrees('ws-1', repo)
+    expect(added).toHaveLength(2)
+    expect(added[1]).toMatchObject({ branch: 'external-1', isMain: false, external: true })
+    expect(worktreeListSignature(added)).not.toBe(worktreeListSignature(before))
+
+    await execFileAsync('git', ['worktree', 'remove', '--force', externalPath], { cwd: repo })
+    const removed = await listWorktrees('ws-1', repo)
+    expect(removed).toHaveLength(1)
+    expect(worktreeListSignature(removed)).toBe(worktreeListSignature(before))
+  })
+
+  it('resolves the common dir from the main checkout', async () => {
+    const repo = await initRepo()
+    const commonDir = await gitCommonDir(repo)
+    expect(commonDir).not.toBeNull()
+    expect(commonDir!.replace(/\\/g, '/').endsWith('/.git')).toBe(true)
   })
 })
 

@@ -448,6 +448,12 @@ function WorktreeSubList({
 
   useEffect(() => {
     void fetchWorktrees(workspaceId, workspacePath)
+    // Unmount (workspace removed) stops the main-side watch for this listing.
+    // `list` re-arms it on every mount; external add/remove in between
+    // arrives via the global `worktree.onChanged` subscription.
+    return () => {
+      void window.electron.worktree.unwatch(workspaceId, workspacePath).catch(() => {})
+    }
   }, [fetchWorktrees, workspaceId, workspacePath])
 
   // The main checkout stays visible even when alone so single-worktree

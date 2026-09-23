@@ -495,57 +495,64 @@ export async function scanExternalSessions(
     registry.listSessions({ includeArchived: true }).map((session) => `${session.engine}::${session.providerSessionId ?? ''}`),
   )
 
-  for (const engine of SCAN_ENGINES) {
-    const store = resolveSessionStorePath(engine as AgentHookSource, env, home)
-    if (!store) continue
-    // Opencode persists sessions in sqlite, not transcript files: list the
-    // newest rows directly instead of walking for jsonl.
-    if (engine === 'opencode') {
-      scanOpencodeStore(registry, store, maxFiles, summary, known)
-      continue
+  // One bulk pass emits one session:event: per-row notifies would refetch
+  // and reorder the card list hundreds of times per scan.
+  registry.beginBatch()
+  try {
+    for (const engine of SCAN_ENGINES) {
+      const store = resolveSessionStorePath(engine as AgentHookSource, env, home)
+      if (!store) continue
+      // Opencode persists sessions in sqlite, not transcript files: list the
+      // newest rows directly instead of walking for jsonl.
+      if (engine === 'opencode') {
+        scanOpencodeStore(registry, store, maxFiles, summary, known)
+        continue
+      }
+      const candidates = await collectCandidates(store, maxFiles)
+      for (const candidate of candidates) {
+        summary.scanned += 1
+        const bounded = await readBounded(candidate.path)
+        if (!bounded) {
+          summary.skipped += 1
+          continue
+        }
+        const kind: SessionStoreKind = AGENT_ENGINE_CAPABILITIES[engine].sessionStore
+        const parser = kind ? FILE_PARSERS[kind] : undefined
+        if (!parser) {
+          summary.skipped += 1
+          continue
+        }
+        const parsed = parser(bounded.lines, candidate.path, bounded.mtimeMs)
+        if (!parsed) {
+          summary.skipped += 1
+          continue
+        }
+        const input: ImportExternalSessionInput = {
+          engine,
+          cwd: parsed.cwd,
+          providerSessionId: parsed.providerSessionId,
+          transcriptPath: candidate.path,
+          firstPrompt: parsed.firstPrompt,
+          ...(parsed.lastExcerpt ? { lastExcerpt: parsed.lastExcerpt } : {}),
+          turnCount: parsed.turnCount,
+          ...(parsed.createdAt ? { createdAt: parsed.createdAt } : {}),
+          ...(parsed.updatedAt ? { updatedAt: parsed.updatedAt } : {}),
+        }
+        const key = `${engine}::${parsed.providerSessionId}`
+        const isKnown = known.has(key)
+        try {
+          registry.importExternalSession(input)
+          known.add(key)
+          if (isKnown) summary.updated += 1
+          else summary.imported += 1
+        } catch (err) {
+          console.error('[sessions] external import failed:', candidate.path, err)
+          summary.skipped += 1
+        }
+      }
     }
-    const candidates = await collectCandidates(store, maxFiles)
-    for (const candidate of candidates) {
-      summary.scanned += 1
-      const bounded = await readBounded(candidate.path)
-      if (!bounded) {
-        summary.skipped += 1
-        continue
-      }
-      const kind: SessionStoreKind = AGENT_ENGINE_CAPABILITIES[engine].sessionStore
-      const parser = kind ? FILE_PARSERS[kind] : undefined
-      if (!parser) {
-        summary.skipped += 1
-        continue
-      }
-      const parsed = parser(bounded.lines, candidate.path, bounded.mtimeMs)
-      if (!parsed) {
-        summary.skipped += 1
-        continue
-      }
-      const input: ImportExternalSessionInput = {
-        engine,
-        cwd: parsed.cwd,
-        providerSessionId: parsed.providerSessionId,
-        transcriptPath: candidate.path,
-        firstPrompt: parsed.firstPrompt,
-        ...(parsed.lastExcerpt ? { lastExcerpt: parsed.lastExcerpt } : {}),
-        turnCount: parsed.turnCount,
-        ...(parsed.createdAt ? { createdAt: parsed.createdAt } : {}),
-        ...(parsed.updatedAt ? { updatedAt: parsed.updatedAt } : {}),
-      }
-      const key = `${engine}::${parsed.providerSessionId}`
-      const isKnown = known.has(key)
-      try {
-        registry.importExternalSession(input)
-        known.add(key)
-        if (isKnown) summary.updated += 1
-        else summary.imported += 1
-      } catch (err) {
-        console.error('[sessions] external import failed:', candidate.path, err)
-        summary.skipped += 1
-      }
-    }
+    return summary
+  } finally {
+    registry.endBatch()
   }
-  return summary
 }

@@ -243,7 +243,6 @@
     "copySessionId": "Copy session ID",
     "copyLogPath": "Copy log path",
     "diffCollapse": "Collapse diff",
-    "readOnly": "read-only",
     "detailExternalBanner": "External session · no checkpoints — created outside JanusX; the detail window reads its transcript file only, without restore or diff.",
     "transcriptTruncated": "{{total}} transcript turns total, showing the most recent {{shown}}",
     "scopeEmptyCounts": "{{all}} total · {{archived}} archived — switch scope tabs to browse",

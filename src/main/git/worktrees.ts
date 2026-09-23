@@ -92,6 +92,82 @@ async function runGit(cwd: string, args: string[]): Promise<string | null> {
   }
 }
 
+interface GitCaptureOk {
+  ok: true
+  stdout: string
+  stderr: string
+}
+
+interface GitCaptureFail {
+  ok: false
+  stdout: string
+  stderr: string
+  message: string
+}
+
+type GitCapture = GitCaptureOk | GitCaptureFail;
+
+/** Run git while preserving stderr so failures stay actionable instead of collapsing to null. */
+async function runGitCapture(cwd: string, args: string[]): Promise<GitCapture> {
+  try {
+    const { stdout, stderr } = await execFileAsync('git', args, { cwd, timeout: LOCAL_GIT_TIMEOUT_MS })
+    return { ok: true, stdout: stdout ?? '', stderr: (stderr as string | undefined) ?? '' }
+  } catch (err) {
+    const failure = err as { stdout?: unknown; stderr?: unknown; message?: unknown }
+    const stdout = typeof failure.stdout === 'string' ? failure.stdout : String(failure.stdout ?? '')
+    const stderr = typeof failure.stderr === 'string' ? failure.stderr : String(failure.stderr ?? '')
+    const message =
+      typeof failure.message === 'string' && failure.message ? failure.message : stderr || 'git 命令执行失败'
+    return { ok: false, stdout, stderr, message }
+  }
+}
+
+/** First meaningful line of git output for compact error messages. */
+function gitErrorText(capture: GitCaptureFail): string {
+  const detail = (capture.stderr || capture.stdout || '').trim()
+  if (!detail) return capture.message.trim() || 'git 命令执行失败'
+  const first = detail.split('\n').map((line) => line.trim()).filter(Boolean)[0] ?? detail
+  return first.length > 300 ? first.slice(0, 300) : first
+}
+
+/** Registered (non-bare) worktree matching a path across git/native spellings and case. */
+async function registeredWorktreeEntry(root: string, requested: string): Promise<ParsedWorktree | null> {
+  const output = await runGit(root, ['worktree', 'list', '--porcelain'])
+  if (!output) return null
+  return parseWorktreeList(output).find((entry) => !entry.bare && samePath(entry.path, requested)) ?? null
+}
+
+async function localBranchExists(root: string, branch: string): Promise<boolean> {
+  const output = await runGit(root, ['show-ref', '--verify', `refs/heads/${branch}`])
+  return output !== null
+}
+
+function safeNormalizeFsPath(value: string): string {
+  try {
+    return normalizeFsPath(value)
+  } catch {
+    return value
+  }
+}
+
+/** Every meta-store key spelling that may hold a worktree entry (raw plus normalized). */
+function metaKeysFor(...paths: Array<string | null | undefined>): string[] {
+  const keys: string[] = []
+  for (const candidate of paths) {
+    if (!candidate) continue
+    if (!keys.includes(candidate)) keys.push(candidate)
+    const normalized = safeNormalizeFsPath(candidate)
+    if (!keys.includes(normalized)) keys.push(normalized)
+  }
+  return keys
+}
+
+async function removeMetaKeys(keys: string[]): Promise<void> {
+  for (const key of keys) {
+    await worktreeMetaStore.remove(key).catch(() => undefined)
+  }
+}
+
 async function remoteUrl(cwd: string, name: string): Promise<string | null> {
   const output = await runGit(cwd, ['remote', 'get-url', name])
   const url = output?.trim()
@@ -127,6 +203,29 @@ export function samePath(left: string, right: string): boolean {
 /** Remote URL for callers outside this module (hosted detection); null when absent. */
 export async function gitRemoteUrl(cwd: string, name: string): Promise<string | null> {
   return remoteUrl(cwd, name)
+}
+
+/**
+ * Absolute git common dir for any checkout of the repo (main or linked
+ * worktree). Null for non-git paths. `git rev-parse` may print a relative
+ * spelling, so it is resolved against cwd.
+ */
+export async function gitCommonDir(cwd: string): Promise<string | null> {
+  const output = await runGit(cwd, ['rev-parse', '--git-common-dir'])
+  const raw = output?.trim()
+  if (!raw) return null
+  return resolve(cwd, raw)
+}
+
+/**
+ * Stable signature of a listing for change detection. Covers path, branch,
+ * and detached/main flags so external add/remove plus branch switches all
+ * produce a different signature.
+ */
+export function worktreeListSignature(worktrees: WorktreeInfo[]): string {
+  return worktrees
+    .map((entry) => `${entry.path}|${entry.branch ?? ''}|${entry.detached ? 1 : 0}|${entry.isMain ? 1 : 0}`)
+    .join('\n')
 }
 
 /**
@@ -181,7 +280,9 @@ export async function listWorktrees(workspaceId: string, workspacePath: string):
       .map(async (entry): Promise<WorktreeInfo> => {
         // Normalize once: git prints forward slashes, the shell keys native paths.
         const entryPath = normalizeFsPath(entry.path)
-        const meta = await worktreeMetaStore.get(entryPath).catch(() => null)
+        const meta =
+          (await worktreeMetaStore.get(entryPath).catch(() => null)) ??
+          (await worktreeMetaStore.get(entry.path).catch(() => null))
         return {
           id: entryPath,
           workspaceId,
@@ -351,8 +452,10 @@ export async function createWorktree(
   await runWorktreeAdd(root, branch, path, startFrom, creationId)
   const { shared, copied } = await shareNewWorktreeDeps(root, path)
   // Metadata must never fail creation; the base falls back to origin/main.
+  // Keys stay normalized so `git worktree list` spellings (forward slashes,
+  // Windows case) always hit; the raw spelling is a legacy fallback on read.
   await worktreeMetaStore
-    .set(path, {
+    .set(safeNormalizeFsPath(path), {
       startFrom,
       branch,
       createdAt: new Date().toISOString(),
@@ -423,6 +526,8 @@ export async function cancelCreateWorktree(workspacePath: string, creationId: st
 }
 
 export interface RemoveWorktreeResult {
+  /** Canonical worktree path git reported (or the requested path when unregistered). */
+  path: string
   branch: string | null
   branchDeleted: boolean
   /** Set when git refuses to drop the branch (unmerged commits). */
@@ -445,32 +550,115 @@ export async function isWorktreeDirty(worktreePath: string): Promise<boolean> {
  * will not drop stay listed via branchKept for explicit review instead of
  * force-deletion. Protected names (the main checkout's own branch) are
  * never deleted.
+ *
+ * The renderer keys linked worktrees by normalized path (lowercased on
+ * Windows) while git records the original spelling, so the registered entry
+ * is resolved with samePath and its canonical spelling drives
+ * `git worktree remove`. Git stderr is preserved: dirty/locked/busy
+ * checkouts surface the real reason instead of a bare failure. A requested
+ * path with no registered entry (orphan directory, manually deleted .git)
+ * never auto-deletes user files without force; it prunes stale admin state
+ * and guides branch-only cleanup.
  */
 export async function removeWorktree(
   workspacePath: string,
   worktreePath: string,
   force = false,
+  branchHint?: string | null,
 ): Promise<RemoveWorktreeResult> {
   const root = resolve(workspacePath)
-  const target = resolve(worktreePath)
-  if (samePath(target, root)) throw new Error('主盘不能在这里删除')
-  const branch = await currentBranch(target)
-  const remove = await runGit(root, force ? ['worktree', 'remove', '--force', target] : ['worktree', 'remove', target])
-  if (remove === null) throw new Error(`git worktree remove 失败：${target}`)
+  const requested = resolve(worktreePath)
+  if (samePath(requested, root)) throw new Error('主盘不能在这里删除')
+  const hint = branchHint?.trim() ? branchHint.trim() : null
+  const entry = await registeredWorktreeEntry(root, requested)
+  if (!entry) {
+    await runGit(root, ['worktree', 'prune'])
+    await removeMetaKeys(metaKeysFor(requested, worktreePath))
+    const hintExists = hint ? await localBranchExists(root, hint) : false
+    let diskExists = false
+    try {
+      await access(requested)
+      diskExists = true
+    } catch {
+      diskExists = false
+    }
+    if (!diskExists) {
+      if (hint && hintExists) return { path: requested, branch: hint, branchDeleted: false, branchKept: hint }
+      return { path: requested, branch: hint, branchDeleted: false }
+    }
+    if (!force) {
+      throw new Error(
+        `该目录不是已注册的任务盘，已执行 prune：${requested}。残留目录可手动删除${hint && hintExists ? `，分支“${hint}”请用“删除分支”清理` : '，遗留分支请用“删除分支”清理'}。`,
+      )
+    }
+    await rm(requested, { recursive: true, force: true }).catch(() => undefined)
+    await runGit(root, ['worktree', 'prune'])
+    if (hint && hintExists) return { path: requested, branch: hint, branchDeleted: false, branchKept: hint }
+    return { path: requested, branch: hint, branchDeleted: false }
+  }
+  // Canonical spelling: git's own record, not the lowercased renderer key.
+  const targetForGit = entry.path
+  const branch =
+    entry.branch ?? hint ?? (await currentBranch(targetForGit)) ?? (await currentBranch(requested))
+  const removal = await runGitCapture(
+    root,
+    force ? ['worktree', 'remove', '--force', targetForGit] : ['worktree', 'remove', targetForGit],
+  )
+  if (!removal.ok) {
+    const reason = gitErrorText(removal)
+    await runGit(root, ['worktree', 'prune'])
+    if (!force && /uncommitted|dirty|untracked|modified|changes|未提交|未暂存/i.test(reason)) {
+      throw new Error(`任务盘有未提交改动，git 拒绝删除：${reason}。确认丢弃可用强制删除。`)
+    }
+    if (/locked/i.test(reason)) throw new Error(`任务盘被锁定，git 拒绝删除：${reason}。`)
+    if (/permission|denied|resource busy|being used|in use|正被另一进程使用|拒绝访问/i.test(reason)) {
+      throw new Error(`磁盘目录被占用，git 删除失败：${reason}。关闭占用进程后重试。`)
+    }
+    throw new Error(`git worktree remove 失败：${targetForGit}：${reason}`)
+  }
   await runGit(root, ['worktree', 'prune'])
-  await worktreeMetaStore.remove(target).catch(() => undefined)
-  if (!branch) return { branch: null, branchDeleted: false }
+  await removeMetaKeys(metaKeysFor(requested, worktreePath, targetForGit))
+  if (!branch) return { path: targetForGit, branch: null, branchDeleted: false }
   const mainBranch = await currentBranch(root)
-  if (mainBranch && branch === mainBranch) return { branch, branchDeleted: false }
-  const deleted = await runGit(root, ['branch', '-d', branch])
-  if (deleted === null) return { branch, branchDeleted: false, branchKept: branch }
-  return { branch, branchDeleted: true }
+  if (mainBranch && branch === mainBranch) return { path: targetForGit, branch, branchDeleted: false }
+  const deleted = await runGitCapture(root, ['branch', '-d', branch])
+  if (deleted.ok) return { path: targetForGit, branch, branchDeleted: true }
+  return { path: targetForGit, branch, branchDeleted: false, branchKept: branch }
 }
 
-/** Explicit branch deletion for the preserved-branches review list. */
+/**
+ * Explicit branch deletion for the preserved-branches review list.
+ * Refuses branches still checked out in any worktree (including the main
+ * checkout) with the occupying path, so a branch cleanup never masquerades
+ * as a worktree deletion. Git stderr is preserved for unmerged/missing
+ * branches.
+ */
 export async function deleteBranch(workspacePath: string, branch: string, force = false): Promise<void> {
-  const removed = await runGit(resolve(workspacePath), ['branch', force ? '-D' : '-d', branch])
-  if (removed === null) throw new Error(`删除分支失败：${branch}`)
+  const name = branch.trim()
+  if (!name) throw new Error('分支名不能为空')
+  const root = resolve(workspacePath)
+  const listing = await runGit(root, ['worktree', 'list', '--porcelain'])
+  const occupant = listing
+    ? parseWorktreeList(listing).find((item) => !item.bare && item.branch === name)
+    : undefined
+  if (occupant) {
+    throw new Error(`分支“${name}”仍被任务盘占用：${occupant.path}，请先删除任务盘（磁盘目录将被移除），不要直接删分支。`)
+  }
+  const mainBranch = await currentBranch(root)
+  if (mainBranch === name) throw new Error(`分支“${name}”是主盘当前分支，请先切换主盘分支后再删除。`)
+  const result = await runGitCapture(root, ['branch', force ? '-D' : '-d', name])
+  if (result.ok) return
+  const reason = gitErrorText(result)
+  if (!force && /not fully merged|not merged|未合并|包含未合并/i.test(reason)) {
+    throw new Error(`删除分支失败：${name}：${reason}。确认丢弃未合并提交可二次确认强制删除。`)
+  }
+  if (/not found|no branch|unknown revision|ambiguous argument|找不到|不存在/i.test(reason)) {
+    throw new Error(`删除分支失败：${name}：分支不存在（${reason}）。`)
+  }
+  if (/checked out|already checked|checked-out|被占用|当前分支/i.test(reason)) {
+    throw new Error(`删除分支失败：${name}：${reason}。该分支仍被某任务盘占用，请先删除任务盘。`)
+  }
+  throw new Error(`删除分支失败：${name}：${reason}`)
 }
 
 export interface BranchFileDiff {

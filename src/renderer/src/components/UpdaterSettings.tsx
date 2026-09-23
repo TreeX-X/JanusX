@@ -96,7 +96,7 @@ export function UpdaterSettings() {
   }
 
   if (!window.electron?.updater) {
-    return <div style={{ fontSize: 12, color: '#8a8a8a' }}>{t('settings:updater.unsupportedDev')}</div>
+    return <div className={styles.status}>{t('settings:updater.unsupportedDev')}</div>
   }
 
   const unsupportedKey = state && !state.supported && state.unsupportedReason
@@ -104,8 +104,8 @@ export function UpdaterSettings() {
     : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
-      <div style={{ color: '#8a8a8a' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', fontSize: 12 }}>
+      <div className={styles.status}>
         {t('settings:updater.currentVersion', { version: state?.currentVersion ?? '…' })}
       </div>
       <SettingSwitch
@@ -118,9 +118,13 @@ export function UpdaterSettings() {
       {unsupportedKey
         ? (
           <>
-            <div style={{ color: '#8a8a8a' }}>{t(unsupportedKey)}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" onClick={() => void openReleases()}>
+            <div className={styles.status}>{t(unsupportedKey)}</div>
+            <div className={styles.testRow}>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.ghostButton}`}
+                onClick={() => void openReleases()}
+              >
                 {t('settings:updater.openReleases')}
               </button>
             </div>
@@ -129,23 +133,29 @@ export function UpdaterSettings() {
         : (
           <>
             <StatusLine state={state} />
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className={styles.testRow}>
               <button
                 type="button"
+                className={`${styles.button} ${styles.ghostButton}`}
                 onClick={() => void check()}
                 disabled={busy || state?.phase === 'checking' || state?.phase === 'downloading'}
               >
                 {state?.phase === 'checking' ? t('settings:updater.checking') : t('settings:updater.check')}
               </button>
               {state?.phase === 'downloaded' && (
-                <button type="button" onClick={() => void install()} disabled={busy}>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.primaryButton}`}
+                  onClick={() => void install()}
+                  disabled={busy}
+                >
                   {t('settings:updater.restart')}
                 </button>
               )}
             </div>
           </>
         )}
-      {error && <div style={{ color: '#c96a5e' }}>{error}</div>}
+      {error && <div className={`${styles.status} ${styles.statusError}`}>{error}</div>}
     </div>
   )
 }
@@ -155,25 +165,25 @@ function StatusLine({ state }: { state: UpdaterState | null }) {
   if (!state) return null
   switch (state.phase) {
     case 'up-to-date':
-      return <div style={{ color: '#7fb069' }}>{t('settings:updater.upToDate')}</div>
+      return <div className={`${styles.status} ${styles.statusSuccess}`}>{t('settings:updater.upToDate')}</div>
     case 'available':
       return (
         <>
-          <div>{t('settings:updater.available', { version: state.availableVersion ?? '' })}</div>
+          <div className={styles.status}>{t('settings:updater.available', { version: state.availableVersion ?? '' })}</div>
           <ReleaseNotes notes={state.releaseNotes} />
         </>
       )
     case 'downloading':
-      return <div>{t('settings:updater.downloading', { percent: state.downloadPercent ?? 0 })}</div>
+      return <div className={styles.status}>{t('settings:updater.downloading', { percent: state.downloadPercent ?? 0 })}</div>
     case 'downloaded':
       return (
         <>
-          <div style={{ color: '#7fb069' }}>{t('settings:updater.downloaded', { version: state.availableVersion ?? '' })}</div>
+          <div className={`${styles.status} ${styles.statusSuccess}`}>{t('settings:updater.downloaded', { version: state.availableVersion ?? '' })}</div>
           <ReleaseNotes notes={state.releaseNotes} />
         </>
       )
     case 'error':
-      return <div style={{ color: '#c96a5e' }}>{t('settings:updater.error.update', { message: state.error ?? '' })}</div>
+      return <div className={`${styles.status} ${styles.statusError}`}>{t('settings:updater.error.update', { message: state.error ?? '' })}</div>
     default:
       return null
   }
@@ -184,8 +194,8 @@ function ReleaseNotes({ notes }: { notes: string | null }) {
   if (!notes) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ color: '#8a8a8a' }}>{t('settings:updater.releaseNotes.label')}</div>
-      <div style={{ maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap', color: '#c4c4c4' }}>{notes}</div>
+      <div className={styles.hint}>{t('settings:updater.releaseNotes.label')}</div>
+      <div className={styles.hint} style={{ maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>{notes}</div>
     </div>
   )
 }

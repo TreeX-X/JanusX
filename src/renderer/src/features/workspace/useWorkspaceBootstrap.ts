@@ -4,7 +4,7 @@ import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useGitStore } from '@/stores/git'
-import { getActiveScopePath, getScopePathForWorkspace, loadWorkspaceFileTree } from './actions'
+import { getActiveScopePath, getScopePathForWorkspace, loadWorkspaceFileTree, refreshScopeFileTree } from './actions'
 import { collectShellRestore, restoreShells } from '@/lib/shell-restore'
 
 export function useWorkspaceBootstrap(): void {
@@ -48,6 +48,17 @@ export function useWorkspaceBootstrap(): void {
     } catch {
       // Quit must never block on a failed snapshot.
     }
+  }), [])
+
+  // Note: 外部 `git worktree add/remove` 由主进程 watch + 轮询推送，左侧无需手动刷新
+  useEffect(() => window.electron.worktree.onChanged((payload) => {
+    const prevScope = useWorktreeStore.getState().activePaths[payload.workspaceId] ?? payload.workspacePath
+    useWorktreeStore.getState().applyExternalWorktrees(payload.workspaceId, payload.workspacePath, payload.worktrees)
+    const nextScope = useWorktreeStore.getState().activePaths[payload.workspaceId] ?? payload.workspacePath
+    if (prevScope === nextScope) return
+    // 外部删除命中活动盘时回落到主盘并重刷文件树；新增从不抢占当前 scope
+    if (useWorkspaceStore.getState().activeWorkspaceId !== payload.workspaceId) return
+    void refreshScopeFileTree(nextScope, true).catch(() => {})
   }), [])
 
   useEffect(() => window.electron.fileTree.onChanged((payload) => {

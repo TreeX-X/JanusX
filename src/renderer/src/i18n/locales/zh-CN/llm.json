@@ -23,6 +23,9 @@
     "typeOpenai": "OpenAI Compatible",
     "typeAnthropic": "Anthropic 原生",
     "setAsDefault": "设为默认",
+    "use": "使用",
+    "inUse": "使用中",
+    "using": "使用中...",
     "edit": "编辑",
     "delete": "删除",
     "editTitle": "编辑服务",
@@ -58,7 +61,10 @@
     "sectionTitle": "按终端维护",
     "emptyHint": "此终端还没有配置，在下方添加。",
     "modelRequired": "先填写模型覆盖，或给所选服务设置默认模型。",
-    "liveHint": "各终端只写自己拥有的模型键并自动备份；密钥仍只走 Claude 凭证同步。",
+    "liveHint": "点击“使用”即切换并写入对应终端配置文件（自动备份）；外部终端重启后生效，Janus 内部即时生效。",
+    "activeModel": "当前生效：{{model}}",
+    "activeMissing": "尚未生效，在上方点“使用”即写配置。",
+    "switched": "已切换到「{{name}}」，重启终端后生效。",
     "janusBadge": "内部",
     "internalNote": "Janus 内部对话直连此绑定，不写外部文件。",
     "fileLabel": "配置文件",
@@ -125,7 +131,7 @@
     "error": {
       "noProvider": "没有可用的配置：需要带 Base URL 与 API Key 的 OpenAI 兼容或 Anthropic 类型 Provider。"
     },
-    "hint": "同步前自动备份 Claude Code 配置，可随时回滚；仅同步默认配置，切换默认后需重新同步。"
+    "hint": "点某条配置的“使用”即同步该配置并备份，可随时回滚；Janus 内部切换即时生效。"
   },
   "test": {
     "testing": "测试连接中...",

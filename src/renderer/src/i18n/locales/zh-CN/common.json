@@ -182,6 +182,9 @@
     "verify": "验证连接",
     "save": "保存",
     "clearToken": "清除 PAT",
+    "loading": "加载中…",
+    "saving": "保存中…",
+    "verifying": "验证中…",
     "connectedAs": "已连接：{{name}}"
   }
 }

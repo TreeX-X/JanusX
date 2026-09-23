@@ -182,6 +182,9 @@
     "verify": "Verify",
     "save": "Save",
     "clearToken": "Clear PAT",
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "verifying": "Verifying…",
     "connectedAs": "Connected: {{name}}"
   }
 }

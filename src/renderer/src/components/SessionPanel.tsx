@@ -129,6 +129,7 @@ export function SessionPanel() {
     // Pull-mode backfill: provider transcripts written outside JanusX have no
     // hook traffic, so each panel open triggers one bounded rescan; the
     // registry notifies on import and the event subscription refreshes cards.
+    // Concurrent scans share one in-flight pass main-side.
     void window.electron.session.scanExternal().catch(() => undefined)
     if (scope === 'all') {
       void fetchSessions({})
@@ -261,7 +262,10 @@ export function SessionPanel() {
       </div>
 
       <div className="flex-1 flex flex-col" style={{ gap: 10, padding: 12, overflowY: 'auto' }}>
-        {loading && (
+        {/* Loading banner only on a truly empty list: background refreshes
+            keep stale cards (stale-while-revalidate), so a banner above the
+            list would shift every card per session:event. */}
+        {loading && sessions.length === 0 && (
           <div className="text-xs" style={{ color: '#555' }}>{t('terminal:agentSession.loading')}</div>
         )}
         {error && (
@@ -815,6 +819,9 @@ function SessionCard({
   const [detailLoading, setDetailLoading] = useState(false)
   const [resuming, setResuming] = useState(false)
   const runContinue = useSessionStore((s) => s.continueSession)
+  // Stale-while-revalidate marker: the card instance is keyed by session.id,
+  // so one flag covers first-load vs background refresh.
+  const loadedRef = useRef(false)
 
   useEffect(() => {
     if (!expanded) return
@@ -822,13 +829,18 @@ function SessionCard({
     // L2 previews reload on every debounced session:event so the first prompt
     // and recent turns arrive mid-conversation. Checkpoint and diff work lives
     // in SessionDetailWindow; the dock never fetches it.
-    setDetailLoading(true)
+    // Refreshes keep the previous preview visible; only the first load shows
+    // the loading line, otherwise every background event flashes the card.
+    if (!loadedRef.current) setDetailLoading(true)
     window.electron.session
       .get(session.id)
       .catch(() => null)
       .then((fetched) => {
         if (!alive) return
-        if (fetched) setDetail(fetched)
+        if (fetched) {
+          loadedRef.current = true
+          setDetail(fetched)
+        }
         setDetailLoading(false)
       })
     return () => {
@@ -908,9 +920,6 @@ function SessionCard({
               · {formatDate(session.updatedAt, t)}
             </div>
             <div>…/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''}</div>
-            {(detail?.transcriptPath ?? session.transcriptPath) && (
-              <div>transcript …/{baseNameOf((detail?.transcriptPath ?? session.transcriptPath) as string)}（{t('terminal:agentSession.readOnly')}）</div>
-            )}
           </div>
           {session.firstPrompt && (
             <div style={{ marginTop: 8, background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '9px 10px' }}>

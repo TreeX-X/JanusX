@@ -14,6 +14,21 @@ export const EMPTY_WORKTREE_LIST: WorktreeInfo[] = []
 export const EMPTY_STRING_LIST: string[] = []
 export const EMPTY_PENDING_LIST: PendingCreation[] = []
 
+/**
+ * Scope-path equality across git/native spellings. Git prints forward
+ * slashes while the workspace registry keeps native separators, so raw
+ * string comparison misses the same directory (mirrors the sidebar
+ * `isCwdWithinWorktree` fallback plus the main-side `samePath`).
+ */
+export function sameScopePath(left: string, right: string): boolean {
+  const norm = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '')
+  const a = norm(left)
+  const b = norm(right)
+  if (!a || !b) return false
+  if (a === b) return true
+  return a.toLowerCase() === b.toLowerCase()
+}
+
 export interface PendingCreation {
   id: string
   name: string
@@ -56,6 +71,12 @@ interface WorktreeStore {
   deleteBranch: (workspaceId: string, workspacePath: string, branch: string, force?: boolean) => Promise<void>
   worktreeStatus: (worktreePath: string) => Promise<WorktreeStatus>
   clearWorkspace: (workspaceId: string) => void
+  /**
+   * Merge a main-push worktree listing (external `git worktree add/remove`).
+   * Never steals the active scope; when the active path vanished from git,
+   * it falls back to the workspace root so the file tree has a live root.
+   */
+  applyExternalWorktrees: (workspaceId: string, workspacePath: string, worktrees: WorktreeInfo[]) => void
 }
 
 export const useWorktreeStore = create<WorktreeStore>((set, get) => ({
@@ -268,4 +289,15 @@ export const useWorktreeStore = create<WorktreeStore>((set, get) => ({
       return { worktreesByWorkspace, activePaths }
     },
   ),
+
+  applyExternalWorktrees: (workspaceId, workspacePath, worktrees) =>
+    set((state) => {
+      const active = state.activePaths[workspaceId] ?? workspacePath
+      const alive =
+        sameScopePath(active, workspacePath) || worktrees.some((entry) => sameScopePath(entry.path, active))
+      return {
+        worktreesByWorkspace: { ...state.worktreesByWorkspace, [workspaceId]: worktrees },
+        activePaths: alive ? state.activePaths : { ...state.activePaths, [workspaceId]: workspacePath },
+      }
+    }),
 }))
