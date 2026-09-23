@@ -72,6 +72,14 @@ interface JanusChatProps {
   compactNavigation?: boolean
   /** Embed only the discussion and composer (workspace scope stays in the main chat view). */
   discussionOnly?: boolean
+  /**
+   * V2 blueprint column: chipless composer matching design/blueprint-note-graph.html.
+   * Hides the thread toolbar, resource scope, message edit actions, model
+   * notice and the whole status bar; selection menus never open. Kept:
+   * messages (author/time + thinking + tool cards), approval slot, todo strip,
+   * question gates, composer (with › prefix + square orange send).
+   */
+  minimalComposer?: boolean
   /** Only the focused presentation owns input focus and global shortcuts. */
   focused?: boolean
   /** 当前模式颜色 */
@@ -324,6 +332,7 @@ export function JanusChat({
   docked = false,
   compactNavigation = false,
   discussionOnly = false,
+  minimalComposer = false,
   focused = true,
   modeColor,
   messages,
@@ -420,6 +429,7 @@ export function JanusChat({
   const permissionOptions = useMemo<PermissionOption[]>(() => [
     { value: 'per-action', label: t('janus:chat.permission.perAction') },
     { value: 'auto-run', label: t('janus:chat.permission.autoRun') },
+    { value: 'plan', label: t('janus:chat.permission.plan') },
   ], [t])
   const menuOptions = selectionMenu === 'provider' ? providerOptions : activeProviderModels
   const workspaceNames = new Map((resourceController?.resources ?? []).map((resource) => [resource.workspaceId, resource.workspaceName]))
@@ -649,6 +659,7 @@ export function JanusChat({
   }, [])
 
   const openSelectionMenu = useCallback((menu: SelectionMenu) => {
+    if (minimalComposer) return
     if (menu === 'permission') {
       const activeIndex = permissionOptions.findIndex((option) => option.value === activeApprovalMode)
       setSelectionMenu(menu)
@@ -667,7 +678,7 @@ export function JanusChat({
     setSelectionMenu(menu)
     setMenuIndex(activeIndex >= 0 ? activeIndex : 0)
     window.requestAnimationFrame(() => inputRef.current?.focus())
-  }, [activeApprovalMode, activeModel, modelOptions, permissionOptions])
+  }, [activeApprovalMode, activeModel, minimalComposer, modelOptions, permissionOptions])
 
   const selectMenuOption = useCallback((option: ChatModelOption | { value: AgentApprovalMode; label: string }) => {
     if (selectionMenu === 'permission') {
@@ -942,9 +953,10 @@ export function JanusChat({
   const activeModelLabel = activeModel?.modelId ?? t('janus:chat.model.noneConfigured')
 
   return (
-    <div
-      ref={chatRootRef}
-      data-compact-navigation={compactNavigation || undefined}
+      <div
+        ref={chatRootRef}
+        data-compact-navigation={compactNavigation || undefined}
+        data-minimal-composer={minimalComposer || undefined}
       tabIndex={-1}
       className={`janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !discussionOnly && !compactNavigation ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
       onKeyDownCapture={handleChatKeyDownCapture}
@@ -1035,7 +1047,7 @@ export function JanusChat({
         </aside>
       )}
       <div className="janus-chat-main">
-      {!discussionOnly && <div className="janus-chat-toolbar">
+      {!discussionOnly && !minimalComposer && <div className="janus-chat-toolbar">
         <div ref={threadSelectorRef} className="janus-chat-thread-selector">
           <button
             type="button"
@@ -1142,7 +1154,7 @@ export function JanusChat({
         </div>
       </div>}
 
-      {resourceController && !discussionOnly && (
+      {resourceController && !discussionOnly && !minimalComposer && (
         <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
           <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
@@ -1298,7 +1310,7 @@ export function JanusChat({
               <time className="janus-chat-message-time" dateTime={new Date(msg.timestamp).toISOString()}>
                 {formatMessageTime(msg.timestamp)}
               </time>
-              {!discussionOnly && <div className="janus-chat-message-edit-actions">
+              {!discussionOnly && !minimalComposer && <div className="janus-chat-message-edit-actions">
                 <button
                   className="janus-chat-message-edit"
                   type="button"
@@ -1457,9 +1469,10 @@ export function JanusChat({
         <QuestionGate key={gate.callId} gate={gate} onAnswer={(answer) => answerQuestion(gate.callId, answer)} />
       ))}
 
-      {/* 输入区域 �?opencode 风格方框 composer：单�?prompt + textarea + 按钮 */}
+      {/* 输入区域：opencode 风格方框 composer；minimal 下加 › 前缀（对齐蓝图高保真） */}
       <div className="janus-chat-input-wrapper" data-has-input={input.length > 0}>
         <div className="janus-chat-composer-row">
+          {minimalComposer && <span className="janus-chat-prompt-prefix" aria-hidden="true">›</span>}
           <textarea
             ref={inputRef}
             className="janus-chat-input"
@@ -1491,7 +1504,7 @@ export function JanusChat({
                 aria-label={t('janus:chat.queue.sendAria')}
                 type="button"
               >
-                <Send size={14} strokeWidth={2} aria-hidden="true" />
+                {minimalComposer ? <span aria-hidden="true">↑</span> : <Send size={14} strokeWidth={2} aria-hidden="true" />}
               </button>
             </>
           ) : (
@@ -1503,11 +1516,11 @@ export function JanusChat({
               aria-label={t('janus:chat.send.aria')}
               type="button"
             >
-              <Send size={14} strokeWidth={2} aria-hidden="true" />
+              {minimalComposer ? <span aria-hidden="true">↑</span> : <Send size={14} strokeWidth={2} aria-hidden="true" />}
             </button>
           )}
         </div>
-        {!discussionOnly && <div className="janus-chat-status-bar">
+        {!discussionOnly && !minimalComposer && <div className="janus-chat-status-bar">
           <button
             type="button"
             className="janus-chat-model-tag"
@@ -1602,9 +1615,10 @@ export function JanusChat({
               )}
             </div>
           )}
-        </div>}
+          </div>
+        }
       </div>
-      {modelNotice && <div className="janus-chat-model-notice">{modelNotice}</div>}
+      {modelNotice && !minimalComposer && <div className="janus-chat-model-notice">{modelNotice}</div>}
       </div>
       <PromptDialog
         open={pendingDeleteConversation !== null}

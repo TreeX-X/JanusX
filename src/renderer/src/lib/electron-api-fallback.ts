@@ -298,7 +298,9 @@ export function installElectronApiFallback(): void {
     },
     agentSettings: {      get: () => Promise.resolve({ approvalMode: 'per-action' as const, agentMaxSteps: 40, safeCompileAutoAllow: true }),
       update: (settings: { approvalMode?: unknown; agentMaxSteps?: unknown; safeCompileAutoAllow?: unknown }) => {
-        const approvalMode = settings?.approvalMode === 'auto-run' ? ('auto-run' as const) : ('per-action' as const)
+        const approvalMode = settings?.approvalMode === 'auto-run'
+          ? ('auto-run' as const)
+          : settings?.approvalMode === 'plan' ? ('plan' as const) : ('per-action' as const)
         const parsed = typeof settings?.agentMaxSteps === 'string' ? Number(settings.agentMaxSteps) : settings?.agentMaxSteps
         const agentMaxSteps = typeof parsed !== 'number' || !Number.isFinite(parsed)
           ? 40

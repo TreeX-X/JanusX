@@ -55,6 +55,31 @@ export function warmDefaultShellCache(): void {
 }
 
 /**
+ * Waits for the main-process `terminal:created` event for one terminal.
+ * Resolves false on timeout or when the event API is unavailable (e.g. tests).
+ */
+function waitForTerminalCreated(terminalId: string, timeoutMs = 8000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const onCreated = window.electron?.terminal?.onCreated
+    if (!onCreated) {
+      resolve(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      off()
+      resolve(false)
+    }, timeoutMs)
+    const off = onCreated((event) => {
+      if (event?.id === terminalId) {
+        clearTimeout(timer)
+        off()
+        resolve(true)
+      }
+    })
+  })
+}
+
+/**
  * Fire-and-forget main-process prewarm for terminal creation:
  * CLI path cache, optional engine hook install, officecli binary cache.
  */
@@ -102,10 +127,16 @@ export interface LaunchTerminalPresetOptions {
   name?: string
   /** Defaults true — enter terminal UI immediately after addTerminal. */
   enterTerminalUi?: boolean
+  /**
+   * Prefill text written to the PTY after spawn WITHOUT submitting (no trailing
+   * newline is appended): the user reviews and sends it manually. Blueprint
+   * "implement in terminal" passes the Goal/AC prompt here.
+   */
+  initialInput?: string
 }
 
 export type LaunchTerminalResult =
-  | { ok: true; terminalId: string; pid: number }
+  | { ok: true; terminalId: string; pid: number; prefilled: boolean }
   | { ok: false; terminalId: string; error: string }
 
 /**
@@ -124,6 +155,7 @@ export async function launchTerminalPreset(
     cwd: cwdOverride,
     name,
     enterTerminalUi = true,
+    initialInput,
   } = options
 
   if (!workspaceId || !workspacePath) return null
@@ -136,6 +168,8 @@ export async function launchTerminalPreset(
   const shell = cachedDefaultShell ?? fallbackShell()
 
   const terminalId = crypto.randomUUID()
+  // Subscribe before spawn: the created event may arrive before create resolves.
+  const createdPromise = initialInput ? waitForTerminalCreated(terminalId) : null
   const presetMeta = getTerminalPresetMeta(preset)
   const autoCommand = resolveTerminalLaunchCommand(preset)
   const telemetryStartedAt = Date.now()
@@ -193,7 +227,12 @@ export async function launchTerminalPreset(
     // Correct any residual mismatch after PTY spawn (TUI reflow via resize).
     requestTerminalForceFit(terminalId)
 
-    return { ok: true, terminalId, pid: result.pid }
+    let prefilled = false
+    if (initialInput && createdPromise && (await createdPromise)) {
+      window.electron.terminal.input(terminalId, initialInput)
+      prefilled = true
+    }
+    return { ok: true, terminalId, pid: result.pid, prefilled }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('Failed to create terminal:', err)

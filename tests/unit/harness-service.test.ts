@@ -4,7 +4,8 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HarnessNoteService, claimsHarnessSchema } from '../../src/main/harness/service'
-import { kindToNodeType, lifecycleToStatus } from '../../src/main/harness/graph-projection'
+import { kindToNodeType, lifecycleToStatus } from '../../src/main/notes/note-to-blueprint'
+import { toNoteDoc } from '../../src/main/notes/note-provider'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 
@@ -79,13 +80,15 @@ describe('harness service roundtrip', () => {
     expect(rev).toBe(1)
     const view = await svc.projectView(root)
     expect(view.blueprint.source).toBe('harness')
+    expect(view.adapterVersion).toBe('v1')
+    expect(view.blueprint.adapterVersion).toBe('v1')
     expect(view.blueprint.nodes[id]?.title).toBe('T')
     expect(view.blueprint.nodes[id]?.sourceHash).toHaveLength(64)
     // UI side: hashed replace through the single transaction.
     const hash = view.blueprint.nodes[id]?.sourceHash as string
     const current = await svc.readNote(root, id)
-    const { applyNodePatch } = await import('../../src/main/harness/artifact-producer')
-    const produced = applyNodePatch(current.note, { title: 'T2' })
+    const { applyNodePatch } = await import('../../src/main/notes/note-to-blueprint')
+    const produced = applyNodePatch(toNoteDoc(current.note), { title: 'T2' })
     if (!('edit' in produced)) throw new Error('patch rejected')
     const markdown = svc.mergeNoteEdit(current.note, current.raw, produced.edit, 'test')
     const report = await svc.applyOperations(
@@ -115,8 +118,8 @@ describe('harness service roundtrip', () => {
       NOTE(id, 'requirement', 'proposed', 'Terminal'),
     )
     const current = await svc.readNote(root, id)
-    const { applyNodePatch } = await import('../../src/main/harness/artifact-producer')
-    const produced = applyNodePatch(current.note, { title: 'UI' })
+    const { applyNodePatch } = await import('../../src/main/notes/note-to-blueprint')
+    const produced = applyNodePatch(toNoteDoc(current.note), { title: 'UI' })
     if (!('edit' in produced)) throw new Error('patch rejected')
     // Merge against the stale read: the transaction must refuse.
     const staleRaw = NOTE(id, 'requirement', 'proposed', 'T')
@@ -131,6 +134,23 @@ describe('harness service roundtrip', () => {
       ),
     ).rejects.toMatchObject({ code: 'HARNESS_CONFLICT' })
     expect(await fs.readFile(join(root, '.agents', 'notes', '2026-09-16-t--33333333.md'), 'utf8')).toContain('# Terminal')
+  })
+
+  it('a broken note lands in the invalid lane without breaking the graph', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    const id = '33333333-3333-4333-8333-333333333333'
+    await fs.writeFile(join(root, '.agents', 'notes', '2026-09-16-t--33333333.md'), NOTE(id, 'requirement', 'proposed', 'T'))
+    const bad = ['---', 'schema: harness-note/1', 'id: not-a-uuid', 'kind: requirement', 'lifecycle: proposed', 'created: 2026-09-16', '---', '', '# Bad', '', '## Problem', '', 'P.', ''].join('\n')
+    await fs.writeFile(join(root, '.agents', 'notes', '2026-09-16-bad--deadbeef.md'), bad)
+    const view = await svc.projectView(root)
+    expect(view.blueprint.nodes[id]?.title).toBe('T')
+    expect(view.invalid).toHaveLength(1)
+    expect(view.invalid[0]?.relPath).toContain('2026-09-16-bad')
+    expect(view.blueprint.invalidNotes).toHaveLength(1)
+    expect(view.blueprint.invalidNotes?.[0]?.relPath).toContain('2026-09-16-bad')
+    expect(view.blueprint.invalidNotes?.[0]?.diagnostics[0]?.code).toBe(view.invalid[0]?.diagnostics[0]?.code)
   })
 
   it('share export carries no local paths, machine paths, or credentials', async () => {

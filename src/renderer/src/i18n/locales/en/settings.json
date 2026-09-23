@@ -298,7 +298,8 @@
       "hint": "New Agent sessions inherit this mode. You can switch the active Janus Chat session directly.",
       "mode": {
         "perAction": "Approve every action",
-        "autoRun": "Auto-run all actions"
+        "autoRun": "Auto-run all actions",
+        "plan": "Plan mode: read-only exploration"
       }
     },
     "maxSteps": {

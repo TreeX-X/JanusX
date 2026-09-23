@@ -40,7 +40,8 @@
       "shortcutTitle": "Ctrl+F open permission menu",
       "aria": "Agent permission mode",
       "perAction": "Approve every action",
-      "autoRun": "Auto-run all actions"
+      "autoRun": "Auto-run all actions",
+      "plan": "Plan mode: read-only exploration"
     },
     "error": {
       "retry": "Retry",

@@ -31,7 +31,9 @@ import {
   type NoteIndex,
   type WatchEvent,
 } from '@janus-agent/harness-node'
-import { projectGraph, projectGraphId, type ProjectedEntry } from './graph-projection'
+import { projectGraph, projectGraphId } from '../notes/note-to-blueprint'
+import { ADAPTER_VERSION } from '../notes/note-types'
+import { loadNoteEntries } from '../notes/note-provider'
 import { mergeNoteEdit, type NoteEdit } from './artifact-producer'
 import {
   assertNoLocalLeak,
@@ -56,6 +58,7 @@ export interface ProjectView {
   repoId: string | null
   repoName: string
   invalid: Array<{ relPath: string; diagnostics: Diagnostic[] }>
+  adapterVersion: string
 }
 
 export interface ShareSelection {
@@ -140,50 +143,51 @@ export class HarnessNoteService {
   }
 
   async projectView(root: string): Promise<ProjectView> {
-    const index = await withAssetLock(root, () => buildNoteIndex(root))
+    const loaded = await loadNoteEntries(root)
     const rev = this.indexes.get(root)?.rev ?? 0
-    this.indexes.set(root, { rev, index })
-    const entries: ProjectedEntry[] = []
-    const invalid: ProjectView['invalid'] = index.diagnostics.map((problem) => ({ relPath: problem.path ?? '.agents/harness.json', diagnostics: [problem] }))
-    for (const e of index.entries) {
-      if (e.note && e.diagnostics.length === 0) {
-        entries.push({ note: e.note, relPath: e.relPath, sha256: e.sha256, diagnostics: [] })
-        continue
-      }
-      if (e.foreign) continue
-      invalid.push({ relPath: e.relPath, diagnostics: e.diagnostics })
-    }
+    this.indexes.set(root, { rev, index: loaded.index })
     const repoName = await this.repoName(root)
     const ui = await this.loadUiState(root)
     const blueprint = projectGraph(
-      { repoId: index.repoId, repoName, entries, revision: rev },
+      {
+        repoId: loaded.repoId,
+        repoName,
+        entries: loaded.entries.map((e) => ({ doc: e.doc, relPath: e.relPath, sha256: e.sha256 })),
+        revision: rev,
+      },
       root,
     )
     blueprint.canvasLayout = ui.canvasLayout
     blueprint.collapsedNodeIds = ui.collapsedNodeIds
+    // Invalid notes stay out of the graph but travel on the projection for
+    // the invalid-lane UI; the canvas must never throw on them.
+    blueprint.invalidNotes = loaded.invalid.map((item) => ({
+      relPath: item.relPath,
+      diagnostics: item.diagnostics.map((d) => ({ code: d.code, message: d.message })),
+    }))
     // Note: coverage comes from portable receipts - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
-    if (index.repoId) {
+    if (loaded.repoId) {
       const results = await listTaskResults(root)
       for (const node of Object.values(blueprint.nodes)) {
-        const entry = entries.find((item) => item.note.meta.id === node.id)
+        const entry = loaded.entries.find((item) => item.doc.id === node.id)
         if (!entry) continue
-        if (entry.note.meta.kind === 'task') {
+        if (entry.doc.kind === 'task') {
           const result = results.find((item) => item.taskUri === node.sourceUri)
           if (result?.execution?.state === 'done' && result.validity === 'valid') { node.status = 'done'; node.progress = 100 }
         }
-        if (entry.note.meta.kind === 'requirement') {
-          const proof = await proveRequirementCoverage(root, index.repoId, node.sourceUri!, entry.note)
+        if (entry.doc.kind === 'requirement') {
+          const proof = await proveRequirementCoverage(root, loaded.repoId, node.sourceUri!, entry.raw)
           for (const feature of node.features) {
             const covered = !proof.uncovered.includes(feature.id)
             feature.progress = covered ? 100 : 0
             feature.status = covered ? 'done' : 'planned'
           }
-          node.progress = entry.note.acs.length ? Math.round(100 * (entry.note.acs.length - proof.uncovered.length) / entry.note.acs.length) : 0
+          node.progress = entry.doc.acs.length ? Math.round(100 * (entry.doc.acs.length - proof.uncovered.length) / entry.doc.acs.length) : 0
           if (proof.covered) node.status = 'done'
         }
       }
     }
-    return { blueprint, rev, repoId: index.repoId, repoName, invalid }
+    return { blueprint, rev, repoId: loaded.repoId, repoName, invalid: loaded.invalid, adapterVersion: ADAPTER_VERSION }
   }
 
   projectIdForRoot(root: string, repoId: string | null): string {

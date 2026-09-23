@@ -1,4 +1,4 @@
-import type { NoteCard } from '@/stores/note'
+import type { DraftCard } from '@/stores/draft-card'
 
 export type QuickNoteExportFormat = 'md' | 'txt' | 'html'
 
@@ -36,11 +36,11 @@ export function mdToPayload(markdown: string, format: QuickNoteExportFormat): st
   return format === 'txt' ? stripMarkdown(markdown) : buildHtmlDocument(markdown)
 }
 
-export async function exportNoteCard(card: NoteCard, format: QuickNoteExportFormat): Promise<'saved' | 'canceled'> {
-  const base = (card.title.trim() || `Note-${card.id.slice(0, 8)}`).replace(/[\\/:"*?<>|]/g, '-').trim()
+export async function exportDraftCard(draft: DraftCard, format: QuickNoteExportFormat): Promise<'saved' | 'canceled'> {
+  const base = (draft.title.trim() || `Draft-${draft.id.slice(0, 8)}`).replace(/[\\/:"*?<>|]/g, '-').trim()
   const dialog = await window.electron.dialog.saveFile({ defaultName: `${base}.${format}`, extension: format })
   if (dialog.canceled || !dialog.filePath) return 'canceled'
-  const result = await window.electron.file.save(dialog.filePath, mdToPayload(card.content, format))
+  const result = await window.electron.file.save(dialog.filePath, mdToPayload(draft.content, format))
   if (result?.error) throw new Error(result.error)
   return 'saved'
 }

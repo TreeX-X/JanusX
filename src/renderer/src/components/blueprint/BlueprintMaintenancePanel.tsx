@@ -1,367 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, Check, ChevronDown, X } from 'lucide-react'
+/**
+ * @file 蓝图右侧对话列（V2）
+ * @description
+ *  右列只有对话功能：JanusChat（chipless composer，plan-first）。
+ *  机器面（提案/审计/撤销/迁移/start 表单/tabs）已移除——变更走对话 +
+ *  Agent 事务与原生审批轨；main 侧 service/IPC 保留，能力不断不断档，
+ *  待 agent 接管 apply 后重新接线。样式见 ./blueprint.css。
+ */
+import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
-import type { TFunction } from 'i18next'
-import type {
-  BlueprintChangeSet,
-  BlueprintMaintenanceAuditRecord,
-  BlueprintMaintenanceIntentGroup,
-  BlueprintOperation,
-} from '@/services/blueprint'
-import {
-  auditOperationChanges,
-  auditOperationEvidence,
-  formatAuditValue,
-  selectedAuditOperations,
-} from './maintenanceAuditDetails'
 import { JanusChat } from '../janus/JanusChat'
 import { useJanusChatRegistry } from '../janus/JanusChatProvider'
 import type { UseJanusChatReturn } from '../janus/useJanusChat'
-import {
-  migrateApply,
-  migratePreview,
-  type HarnessMigrationPreview,
-  type HarnessMigrationResult,
-} from '@/services/harness'
 
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
-const EMPTY_AUDITS: BlueprintMaintenanceAuditRecord[] = []
-const MESSAGE_SUMMARY_LIMIT = 220
-
-export function splitMaintenanceReply(content: string): { summary: string; details: string | null } {
-  const normalized = content.trim()
-  const sections = normalized.split(/\n\s*\n/).map((section) => section.trim()).filter(Boolean)
-  if (sections.length > 1) return { summary: sections[0], details: sections.slice(1).join('\n\n') }
-  if (normalized.length <= MESSAGE_SUMMARY_LIMIT) return { summary: normalized, details: null }
-  const sentenceEnd = normalized.slice(60, MESSAGE_SUMMARY_LIMIT).search(/[。！？.!?](?:\s|$)/)
-  const summaryWindow = normalized.slice(0, MESSAGE_SUMMARY_LIMIT)
-  const lastWhitespace = Math.max(summaryWindow.lastIndexOf(' '), summaryWindow.lastIndexOf('\n'))
-  const splitAt = sentenceEnd >= 0
-    ? 60 + sentenceEnd + 1
-    : lastWhitespace > 80
-      ? lastWhitespace
-      : MESSAGE_SUMMARY_LIMIT
-  return {
-    summary: normalized.slice(0, splitAt).trim(),
-    details: normalized.slice(splitAt).trim() || null,
-  }
-}
-
-function relationTypeLabel(type: string, t: TFunction): string {
-  const labels: Record<string, string> = {
-    'depends-on': t('blueprint:maintenance.relationType.dependsOn'),
-    blocks: t('blueprint:maintenance.relationType.blocks'),
-    'related-to': t('blueprint:maintenance.relationType.relatedTo'),
-    implements: t('blueprint:maintenance.relationType.implements'),
-  }
-  return labels[type] ?? type
-}
-
-function operationLabel(operation: BlueprintOperation, t: TFunction): string {
-  switch (operation.type) {
-    case 'create-node': return t('blueprint:maintenance.opCreate', { title: operation.after.title })
-    case 'move-node': return t('blueprint:maintenance.opMove', { nodeId: operation.nodeId })
-    case 'update-node': return t('blueprint:maintenance.opUpdate', { nodeId: operation.nodeId })
-    case 'add-relation': return t('blueprint:maintenance.opAddRelation', {
-      type: relationTypeLabel(operation.after.relationType, t),
-      source: operation.after.sourceNodeId,
-      target: operation.after.targetNodeId,
-    })
-    case 'update-relation': return t('blueprint:maintenance.opUpdateRelation', { relationId: operation.relationId })
-    case 'remove-relation': return t('blueprint:maintenance.opRemoveRelation', { relationId: operation.relationId })
-    case 'update-workspace-binding': return t('blueprint:maintenance.opBinding', { nodeId: operation.nodeId })
-    case 'archive-node': return t('blueprint:maintenance.opArchive', { nodeId: operation.nodeId })
-    case 'delete-node': return t('blueprint:maintenance.opDelete', { title: operation.impact.title })
-    case 'restore-node': return t('blueprint:maintenance.opRestore', { title: operation.node.title })
-  }
-}
-
-function riskLabel(risk: BlueprintOperation['risk'], t: TFunction): string {
-  if (risk === 'high') return t('blueprint:maintenance.riskHigh')
-  if (risk === 'medium') return t('blueprint:maintenance.riskMedium')
-  return t('blueprint:maintenance.riskLow')
-}
-
-function fieldLabel(field: string, t: TFunction): string {
-  const labels: Record<string, string> = {
-    title: t('blueprint:maintenance.auditField.title'),
-    type: t('blueprint:maintenance.auditField.type'),
-    status: t('blueprint:maintenance.auditField.status'),
-    progress: t('blueprint:maintenance.auditField.progress'),
-    positioning: t('blueprint:maintenance.auditField.positioning'),
-    description: t('blueprint:maintenance.auditField.description'),
-    features: t('blueprint:maintenance.auditField.features'),
-    techSolution: t('blueprint:maintenance.auditField.techSolution'),
-    notes: t('blueprint:maintenance.auditField.notes'),
-    tags: t('blueprint:maintenance.auditField.tags'),
-    parentId: t('blueprint:maintenance.auditField.parentId'),
-    relationType: t('blueprint:maintenance.auditField.relationType'),
-    sourceNodeId: t('blueprint:maintenance.auditField.sourceNodeId'),
-    targetNodeId: t('blueprint:maintenance.auditField.targetNodeId'),
-    primaryWorkspaceId: t('blueprint:maintenance.auditField.primaryWorkspaceId'),
-    linkedWorkspaceIds: t('blueprint:maintenance.auditField.linkedWorkspaceIds'),
-  }
-  return labels[field] ?? field
-}
-
-const RELATION_OPERATION_TYPES = new Set(['add-relation', 'update-relation', 'remove-relation'])
-
-interface OperationGroups {
-  nodeOps: BlueprintOperation[]
-  relationOps: BlueprintOperation[]
-  deleteOps: BlueprintOperation[]
-}
-
-function groupOperations(operations: BlueprintOperation[]): OperationGroups {
-  const groups: OperationGroups = { nodeOps: [], relationOps: [], deleteOps: [] }
-  for (const operation of operations) {
-    if (operation.type === 'delete-node') groups.deleteOps.push(operation)
-    else if (RELATION_OPERATION_TYPES.has(operation.type)) groups.relationOps.push(operation)
-    else groups.nodeOps.push(operation)
-  }
-  return groups
-}
-
-/** Selection helpers shared by proposal approval and undo approval. */
-function useOperationSelection(changeSet: BlueprintChangeSet | null) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [confirmedDeletes, setConfirmedDeletes] = useState<Set<string>>(new Set())
-  useEffect(() => {
-    // Deletions never join the default bulk selection (doc §9.3).
-    setSelected(new Set(changeSet?.operations
-      .filter((item) => item.type !== 'delete-node')
-      .map((item) => item.operationId) ?? []))
-    setConfirmedDeletes(new Set())
-    // Keyed on changeSet.id only: every task event clones the operations array,
-    // and depending on its identity would reset the user's selection on each
-    // status update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeSet?.id])
-
-  const operations = changeSet?.operations ?? []
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const byId = useMemo(() => new Map(operations.map((item) => [item.operationId, item])), [changeSet?.id])
-
-  const cascadeRemove = (seed: string, selectedNext: Set<string>, deletesNext: Set<string>) => {
-    const remove = new Set([seed])
-    let changed = true
-    while (changed) {
-      changed = false
-      for (const item of operations) {
-        if (!remove.has(item.operationId) && item.dependsOn.some((id) => remove.has(id))) {
-          remove.add(item.operationId)
-          changed = true
-        }
-      }
-    }
-    remove.forEach((id) => { selectedNext.delete(id); deletesNext.delete(id) })
-  }
-
-  const includeDependencies = (seed: BlueprintOperation, selectedNext: Set<string>) => {
-    const include = (id: string) => {
-      const item = byId.get(id)
-      if (!item || item.type === 'delete-node') return
-      selectedNext.add(id)
-      item.dependsOn.forEach(include)
-    }
-    seed.dependsOn.forEach(include)
-  }
-
-  const toggleNormal = (operation: BlueprintOperation) => {
-    setSelected((current) => {
-      const next = new Set(current)
-      const deletesNext = new Set(confirmedDeletes)
-      if (next.has(operation.operationId)) {
-        cascadeRemove(operation.operationId, next, deletesNext)
-        setConfirmedDeletes(deletesNext)
-      } else {
-        next.add(operation.operationId)
-        includeDependencies(operation, next)
-      }
-      return next
-    })
-  }
-
-  const toggleDelete = (operation: BlueprintOperation) => {
-    setConfirmedDeletes((current) => {
-      const next = new Set(current)
-      if (next.has(operation.operationId)) {
-        next.delete(operation.operationId)
-      } else {
-        next.add(operation.operationId)
-        setSelected((selectedCurrent) => {
-          const selectedNext = new Set(selectedCurrent)
-          includeDependencies(operation, selectedNext)
-          return selectedNext
-        })
-      }
-      return next
-    })
-  }
-
-  const selectionIds = [...selected, ...confirmedDeletes]
-  return { selected, confirmedDeletes, toggleNormal, toggleDelete, selectionIds }
-}
-
-function groupRiskLabel(risk: BlueprintMaintenanceIntentGroup['risk'], t: TFunction): string {
-  return riskLabel(risk, t)
-}
-
-/** Node-aggregated approval selection: groups are the unit, deletes still need explicit confirm. */
-function useGroupSelection(changeSet: BlueprintChangeSet | null) {
-  // Keyed on changeSet.id like useOperationSelection: task events clone the
-  // operations array on every status update and must not reset selection.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const groups = useMemo(() => changeSet?.groups ?? [], [changeSet?.id])
-  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
-  const [confirmedDeletes, setConfirmedDeletes] = useState<Set<string>>(new Set())
-  useEffect(() => {
-    // Low/medium groups default-selected; high-risk (deletes) never join bulk.
-    setSelectedGroups(new Set(groups.filter((group) => group.risk !== 'high').map((group) => group.id)))
-    setConfirmedDeletes(new Set())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeSet?.id])
-  const toggleGroup = (group: BlueprintMaintenanceIntentGroup) => {
-    if (group.kind === 'deletes') {
-      setConfirmedDeletes((current) => {
-        const next = new Set(current)
-        const key = group.operationIds[0] ?? group.id
-        if (next.has(key)) next.delete(key)
-        else next.add(key)
-        return next
-      })
-      return
-    }
-    setSelectedGroups((current) => {
-      const next = new Set(current)
-      if (next.has(group.id)) next.delete(group.id)
-      else next.add(group.id)
-      return next
-    })
-  }
-  const operationIds = useMemo(() => groups
-    .filter((group) => group.kind !== 'deletes' && selectedGroups.has(group.id))
-    .flatMap((group) => group.operationIds), [groups, selectedGroups])
-  const confirmedDeleteOperationIds = useMemo(() => {
-    const ids: string[] = []
-    groups.filter((group) => group.kind === 'deletes').forEach((group) => {
-      const key = group.operationIds[0] ?? group.id
-      if (confirmedDeletes.has(key)) ids.push(...group.operationIds)
-    })
-    return ids
-  }, [groups, confirmedDeletes])
-  const groupIds = useMemo(() => groups
-    .filter((group) => group.kind !== 'deletes' && selectedGroups.has(group.id))
-    .map((group) => group.id), [groups, selectedGroups])
-  return { groups, selectedGroups, confirmedDeletes, toggleGroup, operationIds, confirmedDeleteOperationIds, groupIds }
-}
-
-function GroupList({ groups, selectedGroups, confirmedDeletes, onToggle, t }: {
-  groups: BlueprintMaintenanceIntentGroup[]
-  selectedGroups: Set<string>
-  confirmedDeletes: Set<string>
-  onToggle: (group: BlueprintMaintenanceIntentGroup) => void
-  t: TFunction
-}) {
-  return (
-    <>
-      {groups.map((group) => {
-        const isDelete = group.kind === 'deletes'
-        const checked = isDelete
-          ? confirmedDeletes.has(group.operationIds[0] ?? group.id)
-          : selectedGroups.has(group.id)
-        return (
-          <label key={group.id} className={`bp-maintenance-operation${isDelete ? ' bp-maintenance-operation--delete' : ''}`}>
-            <input type="checkbox" checked={checked} onChange={() => onToggle(group)} />
-            <div>
-              <strong>{group.title}</strong>
-              <p>{group.summary}</p>
-              <span>
-                {groupRiskLabel(group.risk, t)}
-                {' · '}
-                {t('blueprint:maintenance.groupOperations', { count: group.operationIds.length })}
-                {' · '}
-                {t('blueprint:maintenance.evidenceCount', { count: group.evidenceRefs.length })}
-              </span>
-              {isDelete ? <span>{t('blueprint:maintenance.deleteConfirm')}</span> : null}
-            </div>
-          </label>
-        )
-      })}
-    </>
-  )
-}
-
-function OperationList({ operations, checkedIds, onToggle, t }: {
-  operations: BlueprintOperation[]
-  checkedIds: Set<string>
-  onToggle: (operation: BlueprintOperation) => void
-  t: TFunction
-}) {
-  return (
-    <>
-      {operations.map((operation) => (
-        <label key={operation.operationId} className="bp-maintenance-operation">
-          <input type="checkbox" checked={checkedIds.has(operation.operationId)} onChange={() => onToggle(operation)} />
-          <div>
-            <strong>{operationLabel(operation, t)}</strong>
-            <p>{operation.reason}</p>
-            <span>{riskLabel(operation.risk, t)} · {t('blueprint:maintenance.evidenceCount', { count: operation.evidenceRefs.length })}</span>
-          </div>
-        </label>
-      ))}
-    </>
-  )
-}
-
-function DeleteOperationList({ operations, confirmedDeletes, onToggle, t }: {
-  operations: BlueprintOperation[]
-  confirmedDeletes: Set<string>
-  onToggle: (operation: BlueprintOperation) => void
-  t: TFunction
-}) {
-  return (
-    <>
-      {operations.map((operation) => operation.type === 'delete-node' ? (
-        <div key={operation.operationId} className="bp-maintenance-operation bp-maintenance-operation--delete">
-          <div>
-            <strong>{operationLabel(operation, t)}</strong>
-            <p>{operation.reason}</p>
-            <span>
-              {t('blueprint:maintenance.deleteImpact', {
-                children: operation.impact.childIds.length,
-                incoming: operation.impact.incomingRelationIds.length,
-                outgoing: operation.impact.outgoingRelationIds.length,
-              })}
-            </span>
-            <label className="bp-maintenance-operation__confirm">
-              <input
-                type="checkbox"
-                checked={confirmedDeletes.has(operation.operationId)}
-                onChange={() => onToggle(operation)}
-              />
-              {t('blueprint:maintenance.deleteConfirm')}
-            </label>
-          </div>
-        </div>
-      ) : null)}
-    </>
-  )
-}
-
 export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanelProps) {
   const blueprint = useBlueprintStore((state) => state.currentBlueprint)
-  const legacyTask = useBlueprintMaintenanceStore((state) => state.tasks.some((task) => task.blueprintId === blueprint?.id && !task.conversationId && !['completed', 'cancelled'].includes(task.status)))
-  return blueprint?.source === 'harness' && !legacyTask
-    ? <ProjectMaintenancePanel key={blueprint.id} onClose={onClose} />
-    : <MaintenancePanel onClose={onClose} />
+  return blueprint?.source === 'harness'
+    ? <ProjectChatColumn key={blueprint.id} onClose={onClose} />
+    : <ChatPlaceholder onClose={onClose} />
 }
 
-function ProjectMaintenancePanel({ onClose }: BlueprintMaintenancePanelProps) {
+function ProjectChatColumn({ onClose }: BlueprintMaintenancePanelProps) {
   const registry = useJanusChatRegistry()
   const blueprint = useBlueprintStore((state) => state.currentBlueprint)!
   const session = useBlueprintStore((state) => state.activeSession)
@@ -375,488 +39,61 @@ function ProjectMaintenancePanel({ onClose }: BlueprintMaintenancePanelProps) {
   useEffect(() => {
     if (!registry.persistenceReady || !repoId || boundExists) return
     const workspace = workspaces.find((item) => item.path === session?.workspacePath)
-    setConversationId(bindProject({
+    const boundId = bindProject({
       domain: 'project', intent: 'maintain', scope: 'selected', repoIds: [repoId],
       viewRef: { ownerRepoId: repoId, viewId: blueprint.id },
       noteRefs: selected?.sourceUri ? [{ uri: selected.sourceUri, expectedHash: selected.sourceHash }] : [],
-    }, workspace ? [workspace.id] : [], blueprint.name))
-  }, [bindProject, registry.persistenceReady, repoId, blueprint.id, blueprint.name, session?.workspacePath, workspaces, selected?.sourceHash, selected?.sourceUri, boundExists])
+    }, workspace ? [workspace.id] : [], blueprint.name)
+    // V2 plan-first: blueprint sessions explore read-only; writes go through
+    // per-action approval. Set once at creation; later opens reuse the stored mode.
+    registry.getController(boundId).setApprovalMode('plan')
+    setConversationId(boundId)
+  }, [bindProject, registry, registry.persistenceReady, repoId, blueprint.id, blueprint.name, session?.workspacePath, workspaces, selected?.sourceHash, selected?.sourceUri, boundExists])
   if (!boundExists) return null
-  return <MaintenancePanel onClose={onClose} chat={registry.getController(conversationId)} />
+  return <ChatColumn onClose={onClose} chat={registry.getController(conversationId)} />
 }
 
-function MaintenancePanel({ onClose, chat }: BlueprintMaintenancePanelProps & { chat?: UseJanusChatReturn }) {
+function ChatPlaceholder({ onClose }: BlueprintMaintenancePanelProps) {
   const { t } = useI18n('blueprint')
-  const blueprint = useBlueprintStore((state) => state.currentBlueprint)
-  const reloadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
-  const workspaces = useWorkspaceStore((state) => state.workspaces)
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
-  const setWorkspaces = useWorkspaceStore((state) => state.setWorkspaces)
-  const tasks = useBlueprintMaintenanceStore((state) => state.tasks)
-  const openRequest = useBlueprintMaintenanceStore((state) => state.openRequest)
-  const error = useBlueprintMaintenanceStore((state) => state.error)
-  const initialize = useBlueprintMaintenanceStore((state) => state.initialize)
-  const audits = useBlueprintMaintenanceStore((state) => (
-    blueprint ? state.audits[blueprint.id] ?? EMPTY_AUDITS : EMPTY_AUDITS
-  ))
-  const loadAudits = useBlueprintMaintenanceStore((state) => state.loadAudits)
-  const clearOpenRequest = useBlueprintMaintenanceStore((state) => state.clearOpenRequest)
-  const start = useBlueprintMaintenanceStore((state) => state.start)
-  const apply = useBlueprintMaintenanceStore((state) => state.apply)
-  const cancel = useBlueprintMaintenanceStore((state) => state.cancel)
-  const complete = useBlueprintMaintenanceStore((state) => state.complete)
-  const dismiss = useBlueprintMaintenanceStore((state) => state.dismiss)
-  const pendingUndo = useBlueprintMaintenanceStore((state) => state.pendingUndo)
-  const prepareUndo = useBlueprintMaintenanceStore((state) => state.prepareUndo)
-  const clearPendingUndo = useBlueprintMaintenanceStore((state) => state.clearPendingUndo)
-  const applyUndo = useBlueprintMaintenanceStore((state) => state.applyUndo)
-  const task = tasks.find((item) => item.blueprintId === blueprint?.id && !['completed', 'cancelled'].includes(item.status)) ?? null
-  const [workspaceIds, setWorkspaceIds] = useState<string[]>(() => activeWorkspaceId ? [activeWorkspaceId] : workspaces[0]?.id ? [workspaces[0].id] : [])
-  const [scopeNodeId, setScopeNodeId] = useState(openRequest?.nodeId ?? blueprint?.rootNodeId ?? '')
-  const [goal, setGoal] = useState(() => t('blueprint:maintenance.goalDefault'))
-  const [panelView, setPanelView] = useState<'conversation' | 'history'>('conversation')
-  const [migration, setMigration] = useState<HarnessMigrationPreview | null>(null)
-  const [migrated, setMigrated] = useState<HarnessMigrationResult | null>(null)
-  const [migrating, setMigrating] = useState(false)
-  const [migrationError, setMigrationError] = useState<string | null>(null)
-  const taskScrollRef = useRef<HTMLDivElement>(null)
-  const conversationBottomRef = useRef<HTMLDivElement>(null)
-  const followsConversationRef = useRef(true)
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
-
-  const proposalSelection = useOperationSelection(task?.changeSet ?? null)
-  const proposalGroups = useGroupSelection(task?.changeSet ?? null)
-  const hasProposalGroups = (task?.changeSet?.groups?.length ?? 0) > 0
-  const undoSelection = useOperationSelection(pendingUndo?.changeSet ?? null)
-
-  useEffect(() => { void initialize() }, [initialize])
-  useEffect(() => {
-    void window.electron.workspace.list().then((items) => {
-      setWorkspaces(items)
-      setWorkspaceIds((current) => {
-        const valid = current.filter((id) => items.some((item) => item.id === id))
-        if (valid.length) return valid
-        const fallback = items.find((item) => item.id === activeWorkspaceId) ?? items[0]
-        return fallback ? [fallback.id] : []
-      })
-    }).catch(() => undefined)
-  }, [activeWorkspaceId, setWorkspaces])
-  useEffect(() => { if (blueprint?.id) void loadAudits(blueprint.id) }, [blueprint?.id, loadAudits])
-  useEffect(() => {
-    if (!openRequest || openRequest.blueprintId !== blueprint?.id) return
-    if (openRequest.nodeId) setScopeNodeId(openRequest.nodeId)
-    clearOpenRequest()
-  }, [blueprint?.id, clearOpenRequest, openRequest])
-
-  const scrollConversationToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    const container = taskScrollRef.current
-    const target = conversationBottomRef.current
-    if (!container || !target) return
-    container.scrollTo({ top: Math.max(0, target.offsetTop - container.clientHeight + 24), behavior })
-    followsConversationRef.current = true
-    setShowScrollToBottom(false)
-  }, [])
-
-  const handleTaskScroll = useCallback(() => {
-    const container = taskScrollRef.current
-    const target = conversationBottomRef.current
-    if (!container || !target) return
-    const awayFromBottom = target.offsetTop - container.scrollTop - container.clientHeight > 96
-    followsConversationRef.current = !awayFromBottom
-    setShowScrollToBottom(awayFromBottom)
-  }, [])
-
-  useEffect(() => {
-    if (!task || !followsConversationRef.current) return
-    const frame = window.requestAnimationFrame(() => scrollConversationToBottom('auto'))
-    return () => window.cancelAnimationFrame(frame)
-  }, [scrollConversationToBottom, task?.changeSet?.id, task?.messages.length])
-
-  const selectedWorkspaces = workspaces.filter((item) => chat
-    ? chat.resourceController.resources.some((resource) => resource.workspaceId === item.id)
-    : workspaceIds.includes(item.id))
-  const nodeOptions = blueprint?.nodeIds.map((id) => ({ value: id, label: blueprint.nodes[id]?.title ?? id })) ?? []
-  const proposalLegacyGroups = useMemo(() => groupOperations(task?.changeSet?.operations ?? []), [task?.changeSet])
-  const undoGroups = useMemo(() => groupOperations(pendingUndo?.changeSet.operations ?? []), [pendingUndo?.changeSet])
-  const appliedAudits = audits.filter((record) => record.status === 'applied')
-  const taskWorking = task?.status === 'analyzing' || task?.status === 'applying'
-  const taskNeedsNotice = taskWorking || task?.status === 'failed' || task?.status === 'stale'
-
-  const migrateCwd = selectedWorkspaces[0]?.path ?? ''
-
-  const handleMigratePreview = async () => {
-    if (migrating || !blueprint || !migrateCwd) return
-    setMigrating(true)
-    setMigrationError(null)
-    setMigration(null)
-    try {
-      setMigration(await migratePreview(migrateCwd, blueprint.id))
-    } catch (err: unknown) {
-      setMigrationError(t('blueprint:maintenance.migrateFailed', { message: err instanceof Error ? err.message : String(err) }))
-    } finally {
-      setMigrating(false)
-    }
-  }
-
-  const handleMigrateApply = async () => {
-    if (migrating || !blueprint || !migrateCwd) return
-    setMigrating(true)
-    setMigrationError(null)
-    try {
-      const result = await migrateApply(migrateCwd, blueprint.id)
-      setMigrated(result)
-      setMigration(null)
-      await reloadBlueprint(blueprint.id)
-    } catch (err: unknown) {
-      setMigrationError(t('blueprint:maintenance.migrateApplyFailed', { message: err instanceof Error ? err.message : String(err) }))
-    } finally {
-      setMigrating(false)
-    }
-  }
-
-  const handleStart = async () => {
-    const primaryWorkspace = selectedWorkspaces[0]
-    if (!blueprint || !primaryWorkspace || !scopeNodeId) return
-    return start({
-      ...(chat ? { conversationId: chat.conversationId } : {}),
-      blueprintId: blueprint.id,
-      workspaceId: primaryWorkspace.id,
-      workspaceName: primaryWorkspace.name,
-      workspacePath: primaryWorkspace.path,
-      authorizedWorkspaces: selectedWorkspaces.map((workspace) => ({
-        workspaceId: workspace.id,
-        workspaceName: workspace.name,
-        workspacePath: workspace.path,
-      })),
-      nodeScope: { type: 'node', nodeId: scopeNodeId },
-      goal,
-    })
-  }
-  const handleSharedProposal = async () => {
-    if (!chat || chat.isStreaming || taskWorking) return
-    const target = task ?? await handleStart()
-    if (target) chat.proposeMaintenance(target.id, t('blueprint:maintenance.composeProposal'))
-  }
-  const contextNode = blueprint?.nodes[scopeNodeId]
-  useEffect(() => {
-    if (!chat?.engineeringContext || chat.isStreaming || !contextNode?.sourceUri) return
-    const ref = chat.engineeringContext.noteRefs[0]
-    if (ref?.uri === contextNode.sourceUri && ref.expectedHash === contextNode.sourceHash) return
-    chat.setEngineeringContext({ ...chat.engineeringContext, noteRefs: [{ uri: contextNode.sourceUri, expectedHash: contextNode.sourceHash }] })
-  }, [chat, contextNode?.sourceUri, contextNode?.sourceHash])
-
-  const handleApply = async () => {
-    if (!task?.changeSet || !blueprint) return
-    if (hasProposalGroups) {
-      const ok = await apply({
-        taskId: task.id,
-        changeSetId: task.changeSet.id,
-        operationIds: [...proposalGroups.operationIds, ...proposalGroups.confirmedDeleteOperationIds],
-        groupIds: proposalGroups.groupIds,
-        confirmedDeleteOperationIds: proposalGroups.confirmedDeleteOperationIds,
-      })
-      if (ok) await reloadBlueprint(blueprint.id)
-      return
-    }
-    const ok = await apply({
-      taskId: task.id,
-      changeSetId: task.changeSet.id,
-      operationIds: proposalSelection.selectionIds,
-      confirmedDeleteOperationIds: [...proposalSelection.confirmedDeletes],
-    })
-    if (ok) await reloadBlueprint(blueprint.id)
-  }
-  const handleDismiss = async () => {
-    if (!task) return
-    await dismiss({ taskId: task.id })
-  }
-  const handlePrepareUndo = async (auditId: string) => {
-    if (!blueprint) return
-    await prepareUndo(blueprint.id, auditId)
-  }
-  const handleApplyUndo = async () => {
-    if (!blueprint || !pendingUndo) return
-    const ok = await applyUndo({
-      blueprintId: blueprint.id,
-      undoChangeSetId: pendingUndo.changeSet.id,
-      operationIds: undoSelection.selectionIds,
-      confirmedDeleteOperationIds: [...undoSelection.confirmedDeletes],
-    })
-    if (ok) await reloadBlueprint(blueprint.id)
-  }
-
-  const renderGroups = (groups: OperationGroups, selection: ReturnType<typeof useOperationSelection>) => (
-    <>
-      {groups.nodeOps.length ? (
-        <div className="bp-maintenance-group">
-          <span className="bp-maintenance-group__title">{t('blueprint:maintenance.groupNodes')}</span>
-          <OperationList operations={groups.nodeOps} checkedIds={selection.selected} onToggle={selection.toggleNormal} t={t} />
-        </div>
-      ) : null}
-      {groups.relationOps.length ? (
-        <div className="bp-maintenance-group">
-          <span className="bp-maintenance-group__title">{t('blueprint:maintenance.groupRelations')}</span>
-          <OperationList operations={groups.relationOps} checkedIds={selection.selected} onToggle={selection.toggleNormal} t={t} />
-        </div>
-      ) : null}
-      {groups.deleteOps.length ? (
-        <div className="bp-maintenance-group bp-maintenance-group--delete">
-          <span className="bp-maintenance-group__title">{t('blueprint:maintenance.groupDeletes')}</span>
-          <p className="bp-maintenance-group__hint">{t('blueprint:maintenance.deleteBulkExcluded')}</p>
-          <DeleteOperationList operations={groups.deleteOps} confirmedDeletes={selection.confirmedDeletes} onToggle={selection.toggleDelete} t={t} />
-        </div>
-      ) : null}
-    </>
-  )
-
-  const auditHistory = (
-    <section className="bp-maintenance-history">
-      <header><strong>{t('blueprint:maintenance.auditHistory')}</strong><span>{appliedAudits.length}</span></header>
-      {appliedAudits.length ? appliedAudits.map((record) => (
-        <details key={record.id} className="bp-maintenance-history__item">
-          <summary>
-            <div>
-              <time dateTime={record.appliedAt ?? record.createdAt}>{new Date(record.appliedAt ?? record.createdAt).toLocaleString()}</time>
-              <strong>{t('blueprint:maintenance.auditRevision', { before: record.beforeRevision, after: record.afterRevision })}</strong>
-              <span>{t('blueprint:maintenance.auditOperations', { count: record.selectedOperationIds.length })}</span>
-              {record.undoOfAuditId ? <span className="bp-maintenance-history__badge">{t('blueprint:maintenance.auditUndoBadge')}</span> : null}
-            </div>
-          </summary>
-          <div className="bp-maintenance-history__details">
-            {selectedAuditOperations(record).map((operation) => {
-              const evidence = auditOperationEvidence(record, operation)
-              return (
-                <section key={operation.operationId} className="bp-maintenance-history__operation">
-                  <header><strong>{operationLabel(operation, t)}</strong><span>{operation.reason}</span></header>
-                  <div className="bp-maintenance-history__diff">
-                    <span>{t('blueprint:maintenance.auditFieldLabel')}</span>
-                    <span>{t('blueprint:maintenance.auditBefore')}</span>
-                    <span>{t('blueprint:maintenance.auditAfter')}</span>
-                    {auditOperationChanges(operation).map((change) => (
-                      <div key={change.field} className="bp-maintenance-history__change">
-                        <strong>{fieldLabel(change.field, t)}</strong>
-                        <code>{formatAuditValue(change.before, t('blueprint:maintenance.auditEmptyValue'))}</code>
-                        <code>{formatAuditValue(change.after, t('blueprint:maintenance.auditEmptyValue'))}</code>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="bp-maintenance-history__evidence">
-                    <strong>{t('blueprint:maintenance.auditEvidence')}</strong>
-                    {evidence.length ? <ul>{evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <span>{t('blueprint:maintenance.auditNoEvidence')}</span>}
-                  </div>
-                </section>
-              )
-            })}
-            <div className="bp-maintenance-history__actions">
-              <button
-                className="blueprint-btn"
-                type="button"
-                disabled={!!task}
-                title={task ? t('blueprint:maintenance.undoBlockedActive') : undefined}
-                onClick={() => void handlePrepareUndo(record.id)}
-              >
-                {t('blueprint:maintenance.undoAction')}
-              </button>
-            </div>
-          </div>
-        </details>
-      )) : <p>{t('blueprint:maintenance.auditEmpty')}</p>}
-    </section>
-  )
-
-  const undoPanel = pendingUndo ? (
-    <section className="bp-maintenance-proposal bp-maintenance-proposal--undo">
-      <header>
-        <strong>{t('blueprint:maintenance.undoTitle')}</strong>
-        <span>{t('blueprint:maintenance.proposalSelection', { selected: undoSelection.selectionIds.length, total: pendingUndo.changeSet.operations.length })}</span>
-      </header>
-      {pendingUndo.conflicts.length ? (
-        <div className="bp-maintenance-undo__conflicts">
-          <strong>{t('blueprint:maintenance.undoConflicts')}</strong>
-          <ul>{pendingUndo.conflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}</ul>
-        </div>
-      ) : null}
-      {renderGroups(undoGroups, undoSelection)}
-      <div className="bp-maintenance-compose__actions">
-        <button className="blueprint-btn blueprint-btn--primary" type="button" onClick={() => void handleApplyUndo()} disabled={!undoSelection.selectionIds.length}>{t('blueprint:maintenance.undoApply')}</button>
-        <button className="blueprint-btn" type="button" onClick={clearPendingUndo}>{t('blueprint:maintenance.undoCancel')}</button>
-      </div>
-    </section>
-  ) : null
-
   return (
     <aside className="bp-maintenance-panel" aria-label={t('blueprint:maintenance.consoleAria')}>
       <header className="bp-maintenance-panel__header">
-        <div className="bp-maintenance-panel__identity">
-          <div><span>{t('blueprint:maintenance.engineLabel')}</span><strong>{t('blueprint:maintenance.controlLabel')}</strong></div>
+        <div className="bp-maintenance-janus-head">
+          <span className="bp-maintenance-janus-dot" aria-hidden="true" />
+          <strong>Janus</strong>
         </div>
         <button type="button" className="bp-panel-close" onClick={onClose} aria-label={t('blueprint:maintenance.closeConsole')} title={t('common:action.close')}>
           <X size={16} aria-hidden="true" />
         </button>
       </header>
-      {!chat && blueprint && blueprint.source !== 'harness' ? (
-        <section className="bp-maintenance-migrate" aria-label={t('blueprint:maintenance.migrateTitle')}>
-          <strong>{t('blueprint:maintenance.migrateTitle')}</strong>
-          <p>{t('blueprint:maintenance.migrateHint')}</p>
-          {migration ? (
-            <div role="status">
-              <span>{t('blueprint:maintenance.migrateNotes', { count: migration.notes.length })}</span>
-              <span>{t('blueprint:maintenance.migrateRelations', { count: migration.relationCount })}</span>
-              {migration.warnings.length ? (
-                <div>
-                  <strong>{t('blueprint:maintenance.migrateWarnings')}</strong>
-                  <ul>{migration.warnings.map((warning) => <li key={warning.slice(0, 48)}>{warning}</li>)}</ul>
-                </div>
-              ) : null}
-              <button className="blueprint-btn blueprint-btn--primary" type="button" disabled={migrating || !migrateCwd} onClick={() => void handleMigrateApply()}>
-                {migrating ? t('blueprint:maintenance.migrateApplying') : t('blueprint:maintenance.migrateApply')}
-              </button>
-            </div>
-          ) : (
-            <button className="blueprint-btn" type="button" disabled={migrating || !migrateCwd} onClick={() => void handleMigratePreview()}>
-              {migrating ? t('blueprint:maintenance.migratePreviewing') : t('blueprint:maintenance.migratePreview')}
-            </button>
-          )}
-          {migrated ? <p role="status">{t('blueprint:maintenance.migrated', { count: migrated.uris.length, report: migrated.reportUri })}</p> : null}
-          {migrationError ? <p role="alert">{migrationError}</p> : null}
-        </section>
-      ) : null}
-      <nav className="bp-maintenance-panel__tabs" aria-label={t('blueprint:maintenance.viewAria')}>
-        <button type="button" className={panelView === 'conversation' ? 'is-active' : ''} onClick={() => setPanelView('conversation')} aria-pressed={panelView === 'conversation'}>
-          {t('blueprint:maintenance.viewConversation')}
+      <div className="bp-maintenance-history-view">
+        <p>{t('blueprint:view.emptySelectHint')}</p>
+      </div>
+    </aside>
+  )
+}
+
+function ChatColumn({ onClose, chat }: BlueprintMaintenancePanelProps & { chat: UseJanusChatReturn }) {
+  const { t } = useI18n('blueprint')
+  return (
+    <aside className="bp-maintenance-panel" aria-label={t('blueprint:maintenance.consoleAria')}>
+      <header className="bp-maintenance-panel__header">
+        <div className="bp-maintenance-janus-head">
+          <span className="bp-maintenance-janus-dot" aria-hidden="true" />
+          <strong>Janus</strong>
+        </div>
+        <button type="button" className="bp-panel-close" onClick={onClose} aria-label={t('blueprint:maintenance.closeConsole')} title={t('common:action.close')}>
+          <X size={16} aria-hidden="true" />
         </button>
-        <button type="button" className={panelView === 'history' ? 'is-active' : ''} onClick={() => setPanelView('history')} aria-pressed={panelView === 'history'}>
-          {t('blueprint:maintenance.viewHistory')}
-          {appliedAudits.length ? <span>{appliedAudits.length}</span> : null}
-        </button>
-      </nav>
-      {panelView === 'history' ? (
-        <div className="bp-maintenance-history-view">
-          {undoPanel}
-          {auditHistory}
-        </div>
-      ) : !task && !chat && blueprint?.source === 'harness' ? (
-        <div className="bp-maintenance-start">
-          <label>{t('blueprint:maintenance.authorizeWorkspace')}
-            <details className="bp-maintenance-workspace-picker">
-              <summary>
-                <span>{selectedWorkspaces.length ? t('blueprint:maintenance.workspaceSelected', { count: selectedWorkspaces.length }) : t('blueprint:maintenance.workspaceSelectPlaceholder')}</span>
-                <ChevronDown size={13} aria-hidden="true" />
-              </summary>
-              <div role="group" aria-label={t('blueprint:maintenance.authorizeWorkspace')}>
-                {workspaces.length ? workspaces.map((workspace) => {
-                  const selected = workspaceIds.includes(workspace.id)
-                  return <button key={workspace.id} type="button" className={selected ? 'is-selected' : ''} aria-pressed={selected} onClick={() => setWorkspaceIds((current) => selected ? current.filter((id) => id !== workspace.id) : [...current, workspace.id])}>
-                    <span><strong>{workspace.name}</strong><small>{workspace.path}</small></span>
-                    {selected ? <Check size={14} aria-hidden="true" /> : null}
-                  </button>
-                }) : <p>{t('blueprint:maintenance.workspaceEmpty')}</p>}
-              </div>
-            </details>
-          </label>
-          <label>{t('blueprint:maintenance.targetNode')}<select value={scopeNodeId} onChange={(event) => setScopeNodeId(event.target.value)}>{nodeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          <label>{t('blueprint:maintenance.maintenanceGoal')}<textarea value={goal} onChange={(event) => setGoal(event.target.value)} /></label>
-          <p>{t('blueprint:maintenance.policyHint')}</p>
-          <button className="blueprint-btn blueprint-btn--primary" type="button" onClick={() => void handleStart()} disabled={!blueprint || !selectedWorkspaces.length || !scopeNodeId || !goal.trim()}>{t('blueprint:maintenance.startConversation')}</button>
-        </div>
-      ) : (
-        <div className="bp-maintenance-task" ref={taskScrollRef} onScroll={handleTaskScroll}>
-          {chat ? <>
-            <label>{t('blueprint:maintenance.targetNode')}<select value={scopeNodeId} disabled={chat.isStreaming || !!task} onChange={(event) => setScopeNodeId(event.target.value)}>{nodeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-            <JanusChat visible docked compactNavigation focused modeColor="#318b78" messages={chat.messages}
-              pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
-              modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
-              resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}
-              onSelectModel={chat.selectModel} onSend={chat.send} onRewrite={chat.rewrite}
-              onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} />
-            <button type="button" className="blueprint-btn" disabled={chat.isStreaming || taskWorking || !selectedWorkspaces.length} onClick={() => void handleSharedProposal()}>{t('blueprint:maintenance.composeProposal')}</button>
-          </> : null}
-          {task ? <>
-          {taskNeedsNotice ? <div className="bp-maintenance-task-overview" role="status" aria-live="polite">
-            <div className="bp-maintenance-status" data-status={task.status}>
-              <div><strong>{task.phase}</strong><span>{t('blueprint:maintenance.taskRevision', { workspace: task.workspaceName, revision: task.baseRevision })}</span></div>
-              <em>{task.progress}%</em>
-            </div>
-            <div className="bp-maintenance-progress"><span style={{ width: `${task.progress}%` }} /></div>
-          </div> : null}
-          {!chat ? <div className="bp-maintenance-messages">
-            {task.messages.map((item) => {
-              const reply = item.role === 'assistant' ? splitMaintenanceReply(item.content) : null
-              return (
-                <div key={item.id} data-role={item.role}>
-                  <span>{item.role === 'user' ? t('blueprint:maintenance.roleUser') : t('blueprint:maintenance.roleJanus')}</span>
-                  <p>{reply?.summary ?? item.content}</p>
-                  {reply?.details ? (
-                    <details className="bp-maintenance-message-details">
-                      <summary>{t('blueprint:maintenance.expandReply')}</summary>
-                      <div>{reply.details}</div>
-                    </details>
-                  ) : null}
-                </div>
-              )
-            })}
-            {taskWorking ? (
-              <div className="bp-maintenance-thinking" role="status" aria-live="polite">
-                <span>{t('blueprint:maintenance.roleJanus')}</span>
-                <div><i /><i /><i /><em>{task.phase}</em></div>
-              </div>
-            ) : null}
-            {task.error ? <div className="bp-maintenance-error">{task.error}</div> : null}
-          </div> : null}
-          {task.changeSet ? (
-            <section className="bp-maintenance-proposal">
-              <header><strong>{t('blueprint:maintenance.pendingProposal', { version: task.changeSet.version })}</strong><span>{hasProposalGroups
-                ? t('blueprint:maintenance.proposalGroupSelection', { selected: proposalGroups.groupIds.length + (proposalGroups.confirmedDeleteOperationIds.length ? 1 : 0), total: proposalGroups.groups.length })
-                : t('blueprint:maintenance.proposalSelection', { selected: proposalSelection.selectionIds.length, total: task.changeSet.operations.length })}</span></header>
-              {task.changeSet.digest ? (
-                <details className="bp-maintenance-message-details" open>
-                  <summary>{t('blueprint:maintenance.digestTitle')}</summary>
-                  <div>{task.changeSet.digest}</div>
-                </details>
-              ) : null}
-              {hasProposalGroups ? (
-                <div className="bp-maintenance-group">
-                  <span className="bp-maintenance-group__title">{t('blueprint:maintenance.groupByNode')}</span>
-                  <GroupList groups={proposalGroups.groups} selectedGroups={proposalGroups.selectedGroups} confirmedDeletes={proposalGroups.confirmedDeletes} onToggle={proposalGroups.toggleGroup} t={t} />
-                </div>
-              ) : (
-                <>{renderGroups(proposalLegacyGroups, proposalSelection)}</>
-              )}
-              <div className="bp-maintenance-compose__actions">
-                <button
-                  className="blueprint-btn blueprint-btn--primary"
-                  type="button"
-                  onClick={() => void handleApply()}
-                  disabled={chat?.isStreaming || (hasProposalGroups
-                    ? !proposalGroups.groupIds.length && !proposalGroups.confirmedDeleteOperationIds.length
-                    : !proposalSelection.selectionIds.length)}
-                >
-                  {t('blueprint:maintenance.approveSelected')}
-                </button>
-                <button className="blueprint-btn" type="button" disabled={chat?.isStreaming} onClick={() => void handleDismiss()}>{t('blueprint:maintenance.dismissProposal')}</button>
-              </div>
-            </section>
-          ) : null}
-          <div ref={conversationBottomRef} className="bp-maintenance-conversation-bottom" aria-hidden="true" />
-          {showScrollToBottom ? (
-            <button
-              type="button"
-              className="bp-maintenance-scroll-bottom"
-              onClick={() => scrollConversationToBottom()}
-              aria-label={t('blueprint:maintenance.scrollToBottom')}
-              title={t('blueprint:maintenance.scrollToBottom')}
-            >
-              <ArrowDownToLine size={15} aria-hidden="true" />
-            </button>
-          ) : null}
-          <footer>
-            {!['cancelled', 'completed'].includes(task.status) ? <button className="blueprint-btn" type="button" onClick={() => { chat?.stop(); void cancel(task.id) }}>{t('blueprint:maintenance.cancelTask')}</button> : null}
-            {task.status === 'active' ? <button className="blueprint-btn" type="button" onClick={() => void complete(task.id)}>{t('blueprint:maintenance.completeMaintenance')}</button> : null}
-          </footer>
-          </> : null}
-        </div>
-      )}
-      {error ? <div className="bp-maintenance-error">{error}</div> : null}
+      </header>
+      <div className="bp-maintenance-task">
+        <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
+          pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
+          modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
+          resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}
+          onSelectModel={chat.selectModel} onSend={chat.send} onRewrite={chat.rewrite}
+          onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} minimalComposer />
+      </div>
     </aside>
   )
 }

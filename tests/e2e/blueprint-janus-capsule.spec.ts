@@ -111,25 +111,22 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
 
     await page.screenshot({ path: test.info().outputPath('blueprint-janus-capsule.png') })
     await page.setViewportSize({ width: 1024, height: 820 })
-    const canvasAfterResize = page.locator('.blueprint-workbench-card--canvas')
-    const canvasToolbar = canvasAfterResize.locator('.blueprint-toolbar--canvas')
-    const search = canvasToolbar.locator('.blueprint-toolbar__search')
-    const nodeActions = canvasToolbar.getByRole('group', { name: /节点操作/ })
+    // 统一操作栏横跨三列之上（复刻 design toolbar）；画布内旧栏与节点操作组已收敛。
+    const workbenchToolbar = page.locator('.blueprint-workbench-toolbar')
+    const search = workbenchToolbar.locator('.blueprint-toolbar__search')
     await expect(search).toBeVisible()
-    await expect(nodeActions).toBeVisible()
+    await expect(workbenchToolbar.getByRole('group', { name: /节点操作/ })).toHaveCount(0)
+    await expect(canvasCard.locator('.blueprint-toolbar--canvas')).toHaveCount(0)
     await settleWorkbench()
-    const [narrowCanvasBox, searchBox, nodeActionsBox] = await Promise.all([
-      canvasAfterResize.boundingBox(),
+    const shellBox = await workbenchShell.boundingBox()
+    const [searchBox] = await Promise.all([
       search.boundingBox(),
-      nodeActions.boundingBox(),
     ])
-    expect(narrowCanvasBox).not.toBeNull()
+    expect(shellBox).not.toBeNull()
     expect(searchBox).not.toBeNull()
-    expect(nodeActionsBox).not.toBeNull()
-    expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(narrowCanvasBox!.x + narrowCanvasBox!.width)
-    expect(nodeActionsBox!.x + nodeActionsBox!.width).toBeLessThanOrEqual(narrowCanvasBox!.x + narrowCanvasBox!.width)
+    expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(shellBox!.x + shellBox!.width)
 
-    const focusControls = canvasToolbar.locator('.blueprint-toolbar__group--focus > *')
+    const focusControls = workbenchToolbar.locator('.blueprint-toolbar__search-wrap, .blueprint-select')
     const focusControlBoxes = await focusControls.evaluateAll((elements) =>
       elements.map((element) => {
         const { bottom, left, right, top } = element.getBoundingClientRect()
@@ -137,8 +134,8 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       }),
     )
     for (const box of focusControlBoxes) {
-      expect(box.left).toBeGreaterThanOrEqual(narrowCanvasBox!.x)
-      expect(box.right).toBeLessThanOrEqual(narrowCanvasBox!.x + narrowCanvasBox!.width)
+      expect(box.left).toBeGreaterThanOrEqual(shellBox!.x)
+      expect(box.right).toBeLessThanOrEqual(shellBox!.x + shellBox!.width)
     }
     for (let index = 0; index < focusControlBoxes.length; index += 1) {
       for (let nextIndex = index + 1; nextIndex < focusControlBoxes.length; nextIndex += 1) {
@@ -149,25 +146,23 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       }
     }
 
-    const managerControls = page.locator(
-      '.blueprint-workbench-card--canvas .blueprint-view--workbench > .blueprint-toolbar .blueprint-toolbar__group--manager > .blueprint-select--toolbar, ' +
-      '.blueprint-workbench-card--canvas .blueprint-view--workbench > .blueprint-toolbar .blueprint-toolbar__group--manager > .blueprint-btn'
-    )
-    await expect(managerControls).toHaveCount(4)
-    const managerControlBoxes = await managerControls.evaluateAll((elements) =>
+    // 统一栏三按钮：适应画布 / 重放加载 / 在对话中变更，不溢出 shell。
+    const toolbarActions = workbenchToolbar.locator('.blueprint-btn')
+    await expect(toolbarActions).toHaveCount(3)
+    const toolbarActionBoxes = await toolbarActions.evaluateAll((elements) =>
       elements.map((element) => {
         const { bottom, left, right, top } = element.getBoundingClientRect()
         return { bottom, left, right, top }
       })
     )
-    for (const box of managerControlBoxes) {
-      expect(box.left).toBeGreaterThanOrEqual(narrowCanvasBox!.x)
-      expect(box.right).toBeLessThanOrEqual(narrowCanvasBox!.x + narrowCanvasBox!.width)
+    for (const box of toolbarActionBoxes) {
+      expect(box.left).toBeGreaterThanOrEqual(shellBox!.x)
+      expect(box.right).toBeLessThanOrEqual(shellBox!.x + shellBox!.width)
     }
-    for (let index = 0; index < managerControlBoxes.length; index += 1) {
-      for (let nextIndex = index + 1; nextIndex < managerControlBoxes.length; nextIndex += 1) {
-        const current = managerControlBoxes[index]
-        const next = managerControlBoxes[nextIndex]
+    for (let index = 0; index < toolbarActionBoxes.length; index += 1) {
+      for (let nextIndex = index + 1; nextIndex < toolbarActionBoxes.length; nextIndex += 1) {
+        const current = toolbarActionBoxes[index]
+        const next = toolbarActionBoxes[nextIndex]
         const overlaps = current.left < next.right && current.right > next.left && current.top < next.bottom && current.bottom > next.top
         expect(overlaps).toBe(false)
       }
@@ -178,16 +173,16 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     const capsuleName = capsule.locator('.blueprint-janus-capsule__name')
     await expect(capsuleName).toBeHidden()
     await settleWorkbench()
-    const [topbarBox, tabBox, actionBox] = await Promise.all([
+    const [topbarBox, switchBox, actionBox] = await Promise.all([
       page.locator('.blueprint-workbench-topbar').boundingBox(),
-      page.locator('.blueprint-workbench-tab').boundingBox(),
+      page.locator('.blueprint-workbench-switch').boundingBox(),
       page.locator('.blueprint-workbench-actions').boundingBox(),
     ])
     expect(topbarBox).not.toBeNull()
-    expect(tabBox).not.toBeNull()
+    expect(switchBox).not.toBeNull()
     expect(actionBox).not.toBeNull()
-    expect(tabBox!.x).toBeGreaterThanOrEqual(topbarBox!.x)
-    expect(tabBox!.x + tabBox!.width).toBeLessThanOrEqual(actionBox!.x)
+    expect(switchBox!.x).toBeGreaterThanOrEqual(topbarBox!.x)
+    expect(switchBox!.x + switchBox!.width).toBeLessThanOrEqual(actionBox!.x)
     await shell.evaluate((element) => { element.style.removeProperty('width') })
 
     await capsule.click()

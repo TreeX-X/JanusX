@@ -3,8 +3,9 @@
  * @description
  *  - 从 store 加载蓝图，把 Blueprint.nodes（Record）转成 React Flow nodes + edges。
  *  - 树形布局：根居中、子节点向下展开（简单递归，无 dagre）。
- *  - 交互：拖拽 / 选中 / 双击（onNodeOpen 回调）/ 右键菜单（加子节点 / 删除 / 状态标记）。
- *  - 工具栏：新建根节点 / 分析选中节点 / 适应画布。
+ *  - 交互：拖拽 / 选中 / 双击（onNodeOpen 回调）/ 右键菜单（工作会话 / 终端 / 状态标记，只读）。
+ *  - 工具栏：分析选中节点 / 适应画布；新建、删除入口已移除（V2 只读，变更走对话）。
+ *  - 详情面板：只读预览 + 终端快捷；内容变更走对话 + Agent 事务。
  *  - canvasLayout：拖拽后防抖写回 Blueprint.canvasLayout。
  */
 
@@ -28,27 +29,30 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import type { TerminalPreset } from '@/types'
 import {
-  createNode as createNodeIPC,
   bindTerminal as bindTerminalIPC,
   updateBlueprint as updateBlueprintIPC,
   type BlueprintFeatureItem,
-  type BlueprintIssue,
   type BlueprintIssueSeverity,
   type BlueprintIssueStatus,
-  type BlueprintNode,
-  type BlueprintNodeType,
-  type BlueprintNodeStatus
+  type BlueprintNode
 } from '@/services/blueprint'
 import { BlueprintNodeCard, BlueprintCardActionsContext, type BlueprintNodeData } from './BlueprintNodeCard'
 import { BlueprintAdaptiveEdge } from './BlueprintAdaptiveEdge'
-import { STATUS_VISUALS, STATUS_ORDER, NODE_TYPE_LABEL_KEY } from './blueprintStatus'
+import { STATUS_VISUALS, STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, noteKindOf } from './blueprintStatus'
+import { useOptionalBlueprintToolbar, type ToolbarKindFilter, type ToolbarStatusFilter } from './BlueprintToolbar'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
+import terminalIcon from '@/assets/icons/terminal.svg'
+import claudeIcon from '@/assets/icons/claude.svg'
+import codexIcon from '@/assets/icons/codex.svg'
+import opencodeIcon from '@/assets/icons/opencode.svg'
+import janusIcon from '@/assets/icons/janus.svg'
+import piIcon from '@/assets/icons/pi.svg'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { useBlueprintDetailPortal } from './blueprintDetailPortal'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
 import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
-import { launchTerminalPreset } from '@/lib/terminal-launch'
+import { launchTerminalPreset, warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
@@ -56,7 +60,6 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { collectLocalHierarchyIds, computeInitialCollapsedIds, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 import { useI18n } from '@/i18n/useI18n'
 
-const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
 const ANALYSIS_COMMIT_LIMIT_MIN = 1
 const ANALYSIS_COMMIT_LIMIT_MAX = 50
@@ -79,11 +82,18 @@ function createTerminalPreset(type: TerminalPreset): { type: TerminalPreset; lab
   const meta = getTerminalPresetMeta(type)
   return { type, label: meta.label, name: meta.name }
 }
-type TextItemField = 'positioning' | 'techSolution'
-type StatusFilter = BlueprintNodeStatus | 'all'
-const NODE_TYPE_ORDER: BlueprintNodeType[] = ['epic', 'feature', 'task', 'issue']
-const ISSUE_SEVERITY_VALUES = ['low', 'medium', 'high', 'critical'] as const
-const ISSUE_STATUS_VALUES = ['open', 'resolved', 'wontfix'] as const
+
+/** 终端预设官方图标（与 TerminalSelector 共用同一套 assets，V2 左列图标语言） */
+const TERMINAL_PRESET_ICONS: Record<TerminalPreset, string> = {
+  shell: terminalIcon,
+  janus: janusIcon,
+  claude: claudeIcon,
+  codex: codexIcon,
+  opencode: opencodeIcon,
+  pi: piIcon,
+}
+type StatusFilter = ToolbarStatusFilter
+type KindFilter = ToolbarKindFilter
 const ISSUE_SEVERITY_LABEL_KEY: Record<BlueprintIssueSeverity, string> = {
   low: 'blueprint:issueSeverity.low',
   medium: 'blueprint:issueSeverity.medium',
@@ -116,20 +126,17 @@ function splitLines(value: string): string[] {
     .filter(Boolean)
 }
 
-function normalizeIssueSeverity(value: string): BlueprintNode['issues'][number]['severity'] {
-  return ISSUE_SEVERITY_VALUES.includes(value as BlueprintNode['issues'][number]['severity'])
-    ? (value as BlueprintNode['issues'][number]['severity'])
-    : 'medium'
-}
-
-function normalizeIssueStatus(value: string): BlueprintNode['issues'][number]['status'] {
-  return ISSUE_STATUS_VALUES.includes(value as BlueprintNode['issues'][number]['status'])
-    ? (value as BlueprintNode['issues'][number]['status'])
-    : 'open'
-}
-
-function serializeItems(items: string[]): string {
-  return items.map((item) => item.trim()).filter(Boolean).join('\n')
+/** Goal/AC 实施 prompt（左列"在终端中实施"与"复制"共用；只预填不提交） */
+function buildImplementPrompt(node: BlueprintNode): string {
+  const lines = [`# ${node.title || node.id}`, '', '按蓝图节点实施：']
+  const goal = node.positioning || node.description
+  if (goal) lines.push(`Goal: ${goal}`)
+  if (node.features?.length) {
+    lines.push('AC:')
+    for (const feature of node.features) lines.push(`- [ ] ${feature.title}`)
+  }
+  lines.push('', '约束：只改实现，不改 note；验收回执另行提交。')
+  return lines.join('\n')
 }
 
 function normalizeSearchText(value: string): string {
@@ -139,6 +146,8 @@ function normalizeSearchText(value: string): string {
 function buildNodeSearchText(node: BlueprintNode): string {
   return [
     node.title,
+    node.kind,
+    node.lifecycle,
     node.type,
     node.status,
     STATUS_VISUALS[node.status]?.label,
@@ -164,30 +173,11 @@ function buildNodeSearchText(node: BlueprintNode): string {
     .toLowerCase()
 }
 
-function nodeMatchesFocus(node: BlueprintNode, query: string, statusFilter: StatusFilter): boolean {
+function nodeMatchesFocus(node: BlueprintNode, query: string, statusFilter: StatusFilter, kindFilter: KindFilter): boolean {
   const statusMatches = statusFilter === 'all' || node.status === statusFilter
+  const kindMatches = kindFilter === 'all' || noteKindOf(node) === kindFilter
   const queryMatches = !query || buildNodeSearchText(node).includes(query)
-  return statusMatches && queryMatches
-}
-
-function makeRequirementItem(input: {
-  title: string
-  description?: string
-  progress?: number
-  status?: BlueprintFeatureItem['status']
-  note?: string
-}): BlueprintFeatureItem {
-  const now = new Date().toISOString()
-  return {
-    id: crypto.randomUUID(),
-    title: input.title,
-    description: input.description ?? '',
-    progress: input.progress ?? 0,
-    status: input.status ?? 'planned',
-    requirementNotes: input.note ? [input.note] : [],
-    createdAt: now,
-    updatedAt: now
-  }
+  return statusMatches && kindMatches && queryMatches
 }
 
 function getTerminalPreset(preset: TerminalPreset) {
@@ -196,21 +186,6 @@ function getTerminalPreset(preset: TerminalPreset) {
     TERMINAL_PRESETS.find((item) => item.type === DEFAULT_NODE_TERMINAL_PRESET) ??
     TERMINAL_PRESETS[0]
   )
-}
-
-function collectDescendantIds(nodes: Record<string, BlueprintNode>, nodeId: string): Set<string> {
-  const out = new Set<string>()
-  const visit = (id: string) => {
-    const node = nodes[id]
-    if (!node) return
-    for (const childId of node.children) {
-      if (out.has(childId)) continue
-      out.add(childId)
-      visit(childId)
-    }
-  }
-  visit(nodeId)
-  return out
 }
 
 /* Context menu */
@@ -239,9 +214,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
-  const updateNode = useBlueprintStore((s) => s.updateNode)
   const mergeCanvasLayout = useBlueprintStore((s) => s.mergeCanvasLayout)
-  const deleteNode = useBlueprintStore((s) => s.deleteNode)
   const focusNodeSession = useBlueprintStore((s) => s.focusNode)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
@@ -261,8 +234,17 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  // 统一顶栏（workbench）存在时过滤走 provider 受控；embedded 无 provider 时走本地态。
+  const toolbarState = useOptionalBlueprintToolbar()
+  const [innerSearchQuery, setInnerSearchQuery] = useState('')
+  const [innerStatusFilter, setInnerStatusFilter] = useState<StatusFilter>('all')
+  const [innerKindFilter, setInnerKindFilter] = useState<KindFilter>('all')
+  const searchQuery = toolbarState?.searchQuery ?? innerSearchQuery
+  const setSearchQuery = toolbarState?.setSearchQuery ?? setInnerSearchQuery
+  const statusFilter = toolbarState?.statusFilter ?? innerStatusFilter
+  const setStatusFilter = toolbarState?.setStatusFilter ?? setInnerStatusFilter
+  const kindFilter = toolbarState?.kindFilter ?? innerKindFilter
+  const setKindFilter = toolbarState?.setKindFilter ?? setInnerKindFilter
   const [localFocusActive, setLocalFocusActive] = useState(false)
   const [descendantDepth, setDescendantDepth] = useState(2)
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(() => new Set())
@@ -285,13 +267,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     analyzeSelected,
     normalizeAnalysisCommitLimit,
   } = useBlueprintAnalysisActions({ blueprintId, selectedId, detailNodeId, setActionError })
-  const [promptState, setPromptState] = useState<
-    | { kind: 'child'; parentId: string }
-    | { kind: 'root' }
-    | null
-  >(null)
-  const [deleteTarget, setDeleteTarget] = useState<{ nodeId: string; message: string } | null>(null)
   const [restoreLayoutConfirmOpen, setRestoreLayoutConfirmOpen] = useState(false)
+  const [promptCopied, setPromptCopied] = useState(false)
+  const [terminalLaunching, setTerminalLaunching] = useState(false)
 
   const rfInstanceRef = useRef<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>(null)
   const canvasMainRef = useRef<HTMLDivElement | null>(null)
@@ -314,6 +292,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const detailNode = activeDetailNode ?? (detailAnim.rendered ? leavingNodeRef.current : null)
   const detailInCanvas = Boolean(detailNode && !detailPortal)
   const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
+  /** 详情展示 note 原始词汇（HTML 高保真同构；legacy 缺透传时回退映射标签） */
+  const detailKind = detailNode ? noteKindOf(detailNode) : ''
   const initialCollapsedNodeIds = useMemo(
     () => {
       if (currentBlueprint?.id !== blueprintId) return new Set<string>()
@@ -339,11 +319,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     [canvasLoadPlan, emptyCollapsedNodeIds],
   )
   const normalizedSearchQuery = useMemo(() => normalizeSearchText(searchQuery), [searchQuery])
-  const searchFilterActive = normalizedSearchQuery.length > 0 || statusFilter !== 'all'
+  const searchFilterActive = normalizedSearchQuery.length > 0 || statusFilter !== 'all' || kindFilter !== 'all'
   const allSearchMatchIds = useMemo(() => currentBlueprint?.nodeIds.filter((id) => {
     const node = currentBlueprint.nodes[id]
-    return node ? nodeMatchesFocus(node, normalizedSearchQuery, statusFilter) : false
-  }) ?? [], [currentBlueprint, normalizedSearchQuery, statusFilter])
+    return node ? nodeMatchesFocus(node, normalizedSearchQuery, statusFilter, kindFilter) : false
+  }) ?? [], [currentBlueprint, normalizedSearchQuery, statusFilter, kindFilter])
   const searchMatchIds = useMemo(() => currentBlueprint
     ? visibleNodeIds(currentBlueprint.nodes, allSearchMatchIds, effectiveCollapsedNodeIds)
     : [], [allSearchMatchIds, currentBlueprint, effectiveCollapsedNodeIds])
@@ -367,20 +347,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     }
     return analysisHistory[0]
   }, [analysisHistory, selectedAnalysisId])
-  const detailNodeParentOptions = useMemo(() => {
-    if (!currentBlueprint || !detailNode) return []
-    const descendants = collectDescendantIds(currentBlueprint.nodes, detailNode.id)
-    return [
-      { value: '', label: t('blueprint:detailPanel.asRoot') },
-      ...currentBlueprint.nodeIds
-        .filter((id) => id !== detailNode.id && !descendants.has(id))
-        .map((id) => ({
-          value: id,
-          label: currentBlueprint.nodes[id]?.title || id
-        }))
-    ]
-  }, [currentBlueprint, detailNode, t])
-
   const fitViewWhenReady = useCallback((duration = 180) => {
     if (fitFrameRef.current !== null) cancelAnimationFrame(fitFrameRef.current)
     let attempts = 0
@@ -404,7 +370,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   }, [])
 
   const persistCollapsedNodeIds = useCallback(async (nodeIds: Set<string>) => {
-    const updated = await updateBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, {
+    const cwd = useBlueprintStore.getState().workspacePathFor(blueprintId)
+    if (!cwd) throw new Error('找不到该图谱所属的工作区')
+    const updated = await updateBlueprintIPC(cwd, blueprintId, {
       collapsedNodeIds: [...nodeIds]
     })
     if (!updated) throw new Error('Failed to persist blueprint collapse state')
@@ -492,6 +460,35 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     onDetailOpenChange?.(Boolean(detailNode))
   }, [detailNode, onDetailOpenChange])
 
+  // 高保真左列常驻（Note 预览）：蓝图载入后默认选中根并展开预览；
+  // 后续单击选中即展开预览，保证左列始终有内容而非常开空白。
+  useEffect(() => {
+    if (!currentBlueprint || currentBlueprint.id !== blueprintId) return
+    if (detailNodeId || selectedId) return
+    const root = currentBlueprint.rootNodeId && currentBlueprint.nodes[currentBlueprint.rootNodeId]
+      ? currentBlueprint.rootNodeId
+      : currentBlueprint.nodeIds[0] ?? null
+    if (!root) return
+    setSelectedId(root)
+    setDetailNodeId(root)
+  }, [currentBlueprint, blueprintId, detailNodeId, selectedId])
+  useEffect(() => {
+    if (selectedId && !detailNodeId) setDetailNodeId(selectedId)
+  }, [selectedId, detailNodeId])
+
+  // 统一顶栏接线（workbench）：注册 fit 入口，回報选中与保存态
+  useEffect(() => {
+    if (!toolbarState) return
+    toolbarState.fitRef.current = () => fitViewWhenReady(200)
+    return () => { toolbarState.fitRef.current = null }
+  }, [toolbarState, fitViewWhenReady])
+  useEffect(() => {
+    toolbarState?.reportSelectedId(selectedId)
+  }, [toolbarState, selectedId])
+  useEffect(() => {
+    toolbarState?.reportSaveStatus(layoutSaveStatus)
+  }, [toolbarState, layoutSaveStatus])
+
   useEffect(() => {
     if (!detailAnim.rendered) leavingNodeRef.current = null
   }, [detailAnim.rendered])
@@ -538,79 +535,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     }
   }, [contextMenu])
 
-  /* 操作 */
-  const addChild = useCallback((parentId: string) => {
-    setPromptState({ kind: 'child', parentId })
-  }, [])
-
-  const addRoot = useCallback(() => {
-    setPromptState({ kind: 'root' })
-  }, [])
-
-  const handlePromptConfirm = useCallback(
-    async (title: string) => {
-      if (!promptState) return
-      if (promptState.kind === 'child') {
-        const parent = currentBlueprint?.nodes[promptState.parentId]
-        const created = await createNodeIPC(
-          GLOBAL_BLUEPRINT_SCOPE,
-          blueprintId,
-          { title, type: 'task', workspaceId: parent?.workspaceId ?? null, workspaceSnapshot: parent?.workspaceSnapshot ?? null },
-          promptState.parentId
-        )
-        setPromptState(null)
-        if (!created) return
-        await loadBlueprint(blueprintId)
-      } else {
-        setPromptState(null)
-        await createNodeIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, { title, type: 'task', workspaceId: null }, null)
-        await loadBlueprint(blueprintId)
-      }
-    },
-    [promptState, currentBlueprint, blueprintId, loadBlueprint]
-  )
-
-  const removeNode = useCallback(
-    async (nodeId: string) => {
-      const node = currentBlueprint?.nodes[nodeId]
-      if (!node) return
-      const isPrimaryRoot = currentBlueprint?.rootNodeId === nodeId
-      const isRoot = !node.parentId
-      const message = isPrimaryRoot
-        ? t('blueprint:confirm.deletePrimaryRoot', { name: node.title || nodeId })
-        : isRoot
-          ? t('blueprint:confirm.deleteRoot', { name: node.title || nodeId })
-          : t('blueprint:confirm.deleteNode', { name: node.title || nodeId })
-      setContextMenu(null)
-      setDeleteTarget({ nodeId, message })
-    },
-    [currentBlueprint, t]
-  )
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!deleteTarget) return
-    const { nodeId } = deleteTarget
-    const ok = await deleteNode(blueprintId, nodeId)
-    setDeleteTarget(null)
-      if (ok) {
-        setSelectedId((current) => (current === nodeId ? null : current))
-        setDetailNodeId((current) => (current === nodeId ? null : current))
-        setActionError(null)
-      } else {
-        setActionError(t('blueprint:error.cannotDeleteLast'))
-      }
-    },
-    [blueprintId, deleteNode, deleteTarget, t]
-  )
-
-  const markStatus = useCallback(
-    async (nodeId: string, status: BlueprintNodeStatus) => {
-      await updateNode(blueprintId, nodeId, { status, statusSource: 'manual' })
-      setContextMenu(null)
-    },
-    [blueprintId, updateNode]
-  )
-
+  /* 操作（只读：内容变更走对话 + Agent 事务，本画布不直写节点字段） */
   const activateWorkSession = useCallback(
     async (node: BlueprintNode) => {
       setActionError(null)
@@ -639,8 +564,27 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     [blueprintId, focusNodeSession, setActiveWorkspace, workspaces, t]
   )
 
+  const copyImplementPrompt = useCallback(async (node: BlueprintNode) => {
+    try {
+      await navigator.clipboard.writeText(buildImplementPrompt(node))
+      setPromptCopied(true)
+      setTimeout(() => setPromptCopied(false), 1500)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, [])
+
+  const warmTerminalPreset = useCallback((preset: TerminalPreset) => {
+    if (preset === 'shell') {
+      warmDefaultShellCache()
+      return
+    }
+    warmTerminalCreatePath([preset])
+  }, [])
+
   const focusOrCreateTerminal = useCallback(
     async (node: BlueprintNode, requestedPreset: TerminalPreset = terminalPreset) => {
+      if (terminalLaunching) return
       setActionError(null)
       if (!node.workspaceId) {
         setActionError(t('blueprint:error.bindWorkspaceFirst'))
@@ -652,45 +596,59 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         return
       }
 
-      setActiveWorkspace(workspace.id)
-      const afterSwitch = useWorkspaceStore.getState()
-      const existing = node.boundTerminalId
-        ? afterSwitch.terminals.find((t) => t.id === node.boundTerminalId)
-        : null
-
-      setBlueprintMode(false)
-      setLoadState(existing ? 'terminal-active' : afterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
-
-      if (existing) {
-        setActiveTerminal(existing.id)
-        await bindTerminalIPC(workspace.path, node.id, existing.id)
-        await loadBlueprint(blueprintId)
-        return
-      }
-
-      const preset = getTerminalPreset(requestedPreset)
-      const launched = await launchTerminalPreset({
-        preset: preset.type,
-        workspaceId: workspace.id,
-        workspacePath: workspace.path,
-        name: preset.name,
-      })
-
-      if (!launched) {
-        setActionError(t('blueprint:error.terminalCreateFailed'))
-        return
-      }
-
-      if (!launched.ok) {
-        setActionError(t('blueprint:error.terminalCreateFailedReason', { error: launched.error }))
-        return
-      }
-
+      setTerminalLaunching(true)
       try {
-        await bindTerminalIPC(workspace.path, node.id, launched.terminalId)
-        await loadBlueprint(blueprintId)
-      } catch (err) {
-        setActionError(t('blueprint:error.terminalBindFailed', { message: (err as Error).message }))
+        setActiveWorkspace(workspace.id)
+        const afterSwitch = useWorkspaceStore.getState()
+        const existing = node.boundTerminalId
+          ? afterSwitch.terminals.find((t) => t.id === node.boundTerminalId)
+          : null
+
+        setBlueprintMode(false)
+        setLoadState(existing ? 'terminal-active' : afterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
+
+        if (existing) {
+          setActiveTerminal(existing.id)
+          await bindTerminalIPC(workspace.path, node.id, existing.id)
+          await loadBlueprint(blueprintId)
+          return
+        }
+
+        const preset = getTerminalPreset(requestedPreset)
+        const launched = await launchTerminalPreset({
+          preset: preset.type,
+          workspaceId: workspace.id,
+          workspacePath: workspace.path,
+          name: preset.name,
+          initialInput: buildImplementPrompt(node),
+        })
+
+        if (!launched) {
+          setActionError(t('blueprint:error.terminalCreateFailed'))
+          return
+        }
+
+        if (!launched.ok) {
+          setActionError(t('blueprint:error.terminalCreateFailedReason', { error: launched.error }))
+          return
+        }
+
+        try {
+          await bindTerminalIPC(workspace.path, node.id, launched.terminalId)
+          if (!launched.prefilled) {
+            // 预填失败时退回剪贴板（静默）：用户去终端粘贴即可。
+            try {
+              await navigator.clipboard.writeText(buildImplementPrompt(node))
+            } catch {
+              /* clipboard unavailable */
+            }
+          }
+          await loadBlueprint(blueprintId)
+        } catch (err) {
+          setActionError(t('blueprint:error.terminalBindFailed', { message: (err as Error).message }))
+        }
+      } finally {
+        setTerminalLaunching(false)
       }
     },
     [
@@ -702,134 +660,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       loadBlueprint,
       blueprintId,
       terminalPreset,
+      terminalLaunching,
       t
     ]
   )
 
-  const bindNodeWorkspace = useCallback(
-    async (nodeId: string, workspaceId: string) => {
-      const nextWorkspaceId = workspaceId || null
-      const workspace = nextWorkspaceId ? workspaces.find((item) => item.id === nextWorkspaceId) : null
-      await updateNode(blueprintId, nodeId, {
-        workspaceId: nextWorkspaceId,
-        workspaceSnapshot: workspace ? { name: workspace.name, path: workspace.path } : null,
-        boundTerminalId: null
-      })
-      setActionError(null)
-    },
-    [blueprintId, updateNode, workspaces]
-  )
-
-  const bindNodeParent = useCallback(
-    async (nodeId: string, parentId: string) => {
-      await updateNode(blueprintId, nodeId, {
-        parentId: parentId || null
-      })
-      setActionError(null)
-    },
-    [blueprintId, updateNode]
-  )
-
-  const persistNodePatch = useCallback(
-    async (nodeId: string, patch: Partial<BlueprintNode>) => {
-      await updateNode(blueprintId, nodeId, patch)
-      setActionError(null)
-    },
-    [blueprintId, updateNode]
-  )
-
-  const addTextItem = useCallback(
-    async (node: BlueprintNode, field: TextItemField, defaultValue: string) => {
-      await persistNodePatch(node.id, {
-        [field]: serializeItems([...splitLines(node[field] ?? ''), defaultValue])
-      } as Partial<BlueprintNode>)
-    },
-    [persistNodePatch]
-  )
-
-  const updateTextItem = useCallback(
-    async (node: BlueprintNode, field: TextItemField, index: number, value: string) => {
-      const items = splitLines(node[field] ?? '')
-      items[index] = value
-      await persistNodePatch(node.id, { [field]: serializeItems(items) } as Partial<BlueprintNode>)
-    },
-    [persistNodePatch]
-  )
-
-  const removeTextItem = useCallback(
-    async (node: BlueprintNode, field: TextItemField, index: number) => {
-      const items = splitLines(node[field] ?? '').filter((_, itemIndex) => itemIndex !== index)
-      await persistNodePatch(node.id, { [field]: serializeItems(items) } as Partial<BlueprintNode>)
-    },
-    [persistNodePatch]
-  )
-
-  const addFeature = useCallback(
-    async (node: BlueprintNode) => {
-      const feature = makeRequirementItem({ title: t('blueprint:feature.newItem') })
-      await persistNodePatch(node.id, { features: [...(node.features ?? []), feature] })
-    },
-    [persistNodePatch, t]
-  )
-
-  const updateFeature = useCallback(
-    async (node: BlueprintNode, featureId: string, patch: Partial<Pick<BlueprintFeatureItem, 'title' | 'description'>>) => {
-      const features = (node.features ?? []).map((feature) =>
-        feature.id === featureId ? { ...feature, ...patch, updatedAt: new Date().toISOString() } : feature
-      )
-      await persistNodePatch(node.id, { features })
-    },
-    [persistNodePatch]
-  )
-
-  const removeFeature = useCallback(
-    async (node: BlueprintNode, featureId: string) => {
-      await persistNodePatch(node.id, { features: (node.features ?? []).filter((feature) => feature.id !== featureId) })
-    },
-    [persistNodePatch]
-  )
-
-  const addIssue = useCallback(
-    async (node: BlueprintNode) => {
-      const now = new Date().toISOString()
-      const issue: BlueprintIssue = {
-        id: crypto.randomUUID(),
-        title: t('blueprint:issue.newItem'),
-        description: '',
-        severity: 'medium',
-        status: 'open',
-        createdAt: now
-      }
-      await persistNodePatch(node.id, { issues: [...(node.issues ?? []), issue] })
-    },
-    [persistNodePatch, t]
-  )
-
-  const updateIssue = useCallback(
-    async (node: BlueprintNode, issueId: string, patch: Partial<BlueprintIssue>) => {
-      const issues = (node.issues ?? []).map((issue) => {
-        if (issue.id !== issueId) return issue
-        const nextStatus = patch.status ? normalizeIssueStatus(patch.status) : issue.status
-        return {
-          ...issue,
-          ...patch,
-          severity: patch.severity ? normalizeIssueSeverity(patch.severity) : issue.severity,
-          status: nextStatus,
-          resolvedAt: nextStatus === 'resolved' ? issue.resolvedAt ?? new Date().toISOString() : undefined
-        }
-      })
-      await persistNodePatch(node.id, { issues })
-    },
-    [persistNodePatch]
-  )
-
-  const removeIssue = useCallback(
-    async (node: BlueprintNode, issueId: string) => {
-      await persistNodePatch(node.id, { issues: (node.issues ?? []).filter((issue) => issue.id !== issueId) })
-    },
-    [persistNodePatch]
-  )
-
+  /* 详情只读：内容变更走对话 + Agent 事务，本文件不再直写节点字段 */
   const fitView = useCallback(() => {
     fitViewWhenReady(200)
   }, [fitViewWhenReady])
@@ -858,13 +694,18 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     ],
     [t]
   )
-  const featureActionLabel = t('blueprint:action.addFeature')
-  const featureActionHint = t('blueprint:feature.actionHint')
-
+  const kindFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: t('blueprint:search.kindAll') },
+      ...NOTE_KINDS.map((kind) => ({ value: kind, label: t(NOTE_KIND_LABEL_KEY[kind]) }))
+    ],
+    [t]
+  )
   return (
     <div className={`blueprint-canvas-wrapper${detailInCanvas ? ' blueprint-canvas-wrapper--detail-open' : ''}`}>
       <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'}>
-      {/* 画布操作工具栏 */}
+      {/* 画布操作工具栏（embedded 保留；workbench 已收敛到顶栏统一栏，此处不再渲染） */}
+      {toolbarState ? null : (
       <div className="blueprint-toolbar blueprint-toolbar--canvas">
         <div className="blueprint-toolbar__main">
           <div className="blueprint-toolbar__identity">
@@ -899,6 +740,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
                 className="blueprint-select blueprint-select--status-filter"
                 getPortalContainer={getSelectPortalContainer}
               />
+              <Select
+                value={kindFilter}
+                onChange={(value) => setKindFilter(value as KindFilter)}
+                options={kindFilterOptions}
+                className="blueprint-select blueprint-select--status-filter"
+                getPortalContainer={getSelectPortalContainer}
+              />
               <button className="blueprint-btn" onClick={() => focusMatch(-1)} disabled={!searchMatchIds.length} title={t('blueprint:action.prevMatch')} aria-label={t('blueprint:ariaLabel.prevMatch')}>‹</button>
               <button className="blueprint-btn" onClick={() => focusMatch(1)} disabled={!searchMatchIds.length} title={t('blueprint:action.nextMatch')} aria-label={t('blueprint:ariaLabel.nextMatch')}>›</button>
               <button
@@ -906,6 +754,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
                 onClick={() => {
                   setSearchQuery('')
                   setStatusFilter('all')
+                  setKindFilter('all')
                 }}
                 disabled={!searchFilterActive}
               >
@@ -919,9 +768,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               aria-label={t('blueprint:ariaLabel.nodeActions')}
               data-active={selectedId ? 'true' : 'false'}
             >
-              <button className="blueprint-btn" onClick={() => selectedId && addChild(selectedId)} disabled={!selectedId}>
-                {t('blueprint:action.childNode')}
-              </button>
               <button className="blueprint-btn" onClick={() => selectedId && setDetailNodeId(selectedId)} disabled={!selectedId}>
                 {t('blueprint:action.nodeDetail')}
               </button>
@@ -934,7 +780,27 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             </div>
 
             <div className="blueprint-toolbar__group blueprint-toolbar__group--utility" role="group" aria-label={t('blueprint:ariaLabel.utility')}>
-              <button className="blueprint-btn blueprint-btn--primary" onClick={addRoot}>{t('blueprint:action.addRoot')}</button>
+              {/* 高保真主行：适应画布 / 重放加载 / 在对话中变更 + 本机布局保存态 */}
+              <button className="blueprint-btn" onClick={fitView} title={t('blueprint:action.fitCanvas')}>
+                {t('blueprint:action.fitCanvas')}
+              </button>
+              <button className="blueprint-btn" onClick={() => loadBlueprint(blueprintId)} title={t('blueprint:action.replayLoading')}>
+                {t('blueprint:action.replayLoading')}
+              </button>
+              <button
+                className="blueprint-btn blueprint-btn--primary"
+                onClick={() => requestMaintenanceOpen(selectedId ? { blueprintId, nodeId: selectedId } : { blueprintId })}
+                title={t('blueprint:action.editInChat')}
+              >
+                {t('blueprint:action.editInChat')}
+              </button>
+              {layoutSaveStatus !== 'clean' ? (
+                <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${layoutSaveStatus}`}>
+                  {layoutSaveStatus === 'saving' ? '保存中…' : layoutSaveStatus === 'pending' ? '待保存' : layoutSaveStatus === 'failed' ? '保存失败' : '已保存'}
+                </span>
+              ) : (
+                <span className="blueprint-toolbar__save-status blueprint-toolbar__save-status--saved">布局已保存（本机）</span>
+              )}
               <button
                 className={`blueprint-btn blueprint-toolbar__toggle${toolbarExpanded ? ' blueprint-toolbar__toggle--active' : ''}`}
                 onClick={() => setToolbarExpanded((current) => !current)}
@@ -1010,14 +876,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               </div>
             </div>
 
-            <div className="blueprint-toolbar__zone blueprint-toolbar__zone--danger" role="group" aria-label={t('blueprint:toolbar.zoneDanger')}>
-              <span className="blueprint-toolbar__zone-title">{t('blueprint:toolbar.zoneDanger')}</span>
-              <div className="blueprint-toolbar__zone-body">
-                <button className="blueprint-btn blueprint-btn--danger" onClick={() => selectedId && removeNode(selectedId)} disabled={!selectedId}>
-                  {t('blueprint:action.deleteSelected')}
-                </button>
-              </div>
-            </div>
             {loading ? <span className="blueprint-toolbar__loading">{t('blueprint:toolbar.loading')}</span> : null}
             {layoutSaveStatus !== 'clean' ? <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${layoutSaveStatus}`}>{layoutSaveStatus === 'saving' ? '保存中…' : layoutSaveStatus === 'pending' ? '待保存' : layoutSaveStatus === 'failed' ? '保存失败' : '已保存'}</span> : null}
           </div>
@@ -1025,6 +883,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
 
         {actionError || error ? <span className="blueprint-toolbar__error">{actionError ?? error}</span> : null}
       </div>
+      )}
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
       {!graphReady ? <div className="blueprint-canvas-loading" aria-live="polite" aria-label={t('blueprint:toolbar.loading')} /> : null}
@@ -1062,6 +921,27 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           style={{ background: 'rgba(12,12,12,0.9)' }}
         />
       </ReactFlow>
+      <div className="bp-canvas-legend" aria-hidden="true">
+        {(['planning', 'in-progress', 'done', 'archived'] as const).map((status) => (
+          <span key={status}>
+            <i className="ld" style={{ background: STATUS_VISUALS[status].color }} />
+            {t(STATUS_VISUALS[status].labelKey)}
+          </span>
+        ))}
+        <span><i style={{ color: '#8a8a8a' }}>━</i> {t('blueprint:legend.parent')}</span>
+        {([
+          { type: 'depends-on', dash: '5 4', labelKey: 'blueprint:maintenance.relationType.dependsOn' },
+          { type: 'implements', dash: '2 3', labelKey: 'blueprint:maintenance.relationType.implements' },
+          { type: 'related-to', dash: '5 5', labelKey: 'blueprint:maintenance.relationType.relatedTo' },
+        ] as const).map((entry) => (
+          <span key={entry.type}>
+            <svg width="18" height="6" aria-hidden="true">
+              <line x1="0" y1="3" x2="18" y2="3" stroke="#8a8a8a" strokeWidth="1.5" strokeDasharray={entry.dash} />
+            </svg>
+            {t(entry.labelKey)}
+          </span>
+        ))}
+      </div>
       </BlueprintCardActionsContext.Provider>
       </div>
 
@@ -1096,32 +976,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           >
             {t('blueprint:contextMenu.enterTerminal')}
           </button>
-          <button className="bp-context-menu__item" onClick={() => { addChild(contextMenu.nodeId); setContextMenu(null) }}>
-            {t('blueprint:contextMenu.addChild')}
-          </button>
-          <button
-            className="bp-context-menu__item bp-context-menu__item--danger"
-            onClick={() => { removeNode(contextMenu.nodeId); setContextMenu(null) }}
-          >
-            {currentBlueprint?.rootNodeId === contextMenu.nodeId ? t('blueprint:contextMenu.deletePrimaryRoot') : t('blueprint:contextMenu.deleteNode')}
-          </button>
-          <div className="bp-context-menu__sep" />
-          <div className="bp-context-menu__label">{t('blueprint:contextMenu.markStatus')}</div>
-          <div className="bp-context-menu__status-grid">
-            {STATUS_ORDER.map((s) => (
-              <button
-                key={s}
-                className="bp-context-menu__status"
-                onClick={() => markStatus(contextMenu.nodeId, s)}
-              >
-                <span
-                  className="bp-context-menu__status-dot"
-                  style={{ background: STATUS_VISUALS[s].color }}
-                />
-                {t(STATUS_VISUALS[s].labelKey)}
-              </button>
-            ))}
-          </div>
         </div>
       ) : null}
       </div>
@@ -1136,12 +990,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         >
           <div className="bp-node-detail__header">
             <div>
-              <div className="bp-node-detail__eyebrow">{t('blueprint:detailPanel.eyebrow')}</div>
+              <div className="bp-node-detail__eyebrow">{detailKind} · {detailNode.lifecycle ?? t(STATUS_VISUALS[detailNode.status]?.labelKey ?? `blueprint:status.${detailNode.status}`)}</div>
               <div className="bp-node-detail__title">{detailNode.title || <span className="bp-node-detail__title--empty">{t('blueprint:detailPanel.untitled')}</span>}</div>
               <div className="bp-node-detail__summary">
-                <span>{t(NODE_TYPE_LABEL_KEY[detailNode.type] ?? `blueprint:nodeType.${detailNode.type}`)}</span>
-                <span>{t(STATUS_VISUALS[detailNode.status]?.labelKey ?? `blueprint:status.${detailNode.status}`)}</span>
-                <span>{Math.max(0, Math.min(100, detailNode.progress))}%</span>
+                <span>{detailKind && NOTE_KIND_LABEL_KEY[detailKind] ? t(NOTE_KIND_LABEL_KEY[detailKind]) : detailKind}</span>
+                <span>{detailNode.lifecycle ?? t(STATUS_VISUALS[detailNode.status]?.labelKey ?? `blueprint:status.${detailNode.status}`)}</span>
+                {(detailNode.tags ?? []).map((tag) => <span key={tag}>#{tag}</span>)}
               </div>
             </div>
             <button className="bp-panel-close" onClick={() => setDetailNodeId(null)} aria-label={t('blueprint:ariaLabel.closeNodeDetail')} title={t('common:action.close')}>
@@ -1161,85 +1015,26 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               >
                 {t('blueprint:action.startWork')}
               </button>
-              <button
-                className="blueprint-btn"
-                onClick={() => focusOrCreateTerminal(detailNode, terminalPreset)}
-                disabled={!detailNode.workspaceId || detailWorkspaceMissing}
-              >
-                {t('blueprint:action.enterTerminal')}
-              </button>
-            </div>
-          </div>
-
-          <div className="bp-node-detail__section bp-node-detail__section--identity">
-            <label className="bp-node-detail__label">{t('blueprint:detailPanel.title')}</label>
-            <input
-              className="bp-node-detail__input"
-              defaultValue={detailNode.title}
-              onBlur={(event) => persistNodePatch(detailNode.id, { title: event.currentTarget.value.trim() || detailNode.title })}
-            />
-          </div>
-
-          <div className="bp-node-detail__grid bp-node-detail__grid--meta">
-            <div className="bp-node-detail__section">
-              <label className="bp-node-detail__label">{t('blueprint:detailPanel.type')}</label>
-              <Select
-                value={detailNode.type}
-                onChange={(value) => persistNodePatch(detailNode.id, { type: value as BlueprintNodeType })}
-                options={NODE_TYPE_ORDER.map((type) => ({ value: type, label: t(NODE_TYPE_LABEL_KEY[type] ?? `blueprint:nodeType.${type}`) }))}
-                className="blueprint-select bp-node-detail__select"
-                dropdownClassName="bp-node-detail__dropdown"
-                getPortalContainer={getSelectPortalContainer}
-              />
-            </div>
-            <div className="bp-node-detail__section">
-              <label className="bp-node-detail__label">{t('blueprint:detailPanel.status')}</label>
-              <Select
-                value={detailNode.status}
-                onChange={(value) =>
-                  persistNodePatch(detailNode.id, {
-                    status: value as BlueprintNodeStatus,
-                    statusSource: 'manual'
-                  })
-                }
-                options={STATUS_ORDER.map((status) => ({ value: status, label: t(STATUS_VISUALS[status].labelKey) }))}
-                className="blueprint-select bp-node-detail__select"
-                dropdownClassName="bp-node-detail__dropdown"
-                getPortalContainer={getSelectPortalContainer}
-              />
             </div>
           </div>
 
           <div className="bp-node-detail__section bp-node-detail__section--content">
             <label className="bp-node-detail__label">{t('blueprint:detailPanel.description')}</label>
-            <textarea
-              key={`${detailNode.id}-${detailNode.updatedAt}-description`}
-              className="bp-node-detail__textarea"
-              defaultValue={detailNode.description}
-              placeholder={t('blueprint:detailPanel.descriptionPlaceholder')}
-              onBlur={(event) => persistNodePatch(detailNode.id, { description: event.currentTarget.value.trim() })}
-            />
+            {detailNode.description ? (
+              <p className="bp-node-detail__text">{detailNode.description}</p>
+            ) : (
+              <div className="bp-feature-empty">{t('blueprint:detailPanel.none')}</div>
+            )}
           </div>
 
           <div className="bp-node-detail__section bp-node-detail__section--content">
             <div className="bp-node-detail__section-head">
               <label className="bp-node-detail__label">{t('blueprint:detailPanel.positioning')}</label>
-              <button className="bp-node-detail__feature-add" onClick={() => addTextItem(detailNode, 'positioning', t('blueprint:detailPanel.newPositioning'))}>
-                <span className="bp-node-detail__feature-add-icon">+</span>
-                <span>{t('blueprint:action.addPositioning')}</span>
-              </button>
             </div>
             <div className="bp-item-list">
               {splitLines(detailNode.positioning).map((item, index) => (
                 <div className="bp-item-card" key={`${detailNode.id}-positioning-${index}`}>
-                  <input
-                    className="bp-feature-card__input"
-                    defaultValue={item}
-                    onBlur={(event) => updateTextItem(detailNode, 'positioning', index, event.currentTarget.value)}
-                  />
-                  <button className="bp-feature-card__delete" onClick={() => removeTextItem(detailNode, 'positioning', index)}>
-                    {t('blueprint:action.delete')}
-                  </button>
+                  <span className="bp-item-card__text">{item}</span>
                 </div>
               ))}
               {splitLines(detailNode.positioning).length === 0 ? <div className="bp-feature-empty">{t('blueprint:detailPanel.noPositioning')}</div> : null}
@@ -1249,22 +1044,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           <div className="bp-node-detail__section bp-node-detail__section--content">
             <div className="bp-node-detail__section-head">
               <label className="bp-node-detail__label">{t('blueprint:detailPanel.techSolution')}</label>
-              <button className="bp-node-detail__feature-add" onClick={() => addTextItem(detailNode, 'techSolution', t('blueprint:detailPanel.newTechSolution'))}>
-                <span className="bp-node-detail__feature-add-icon">+</span>
-                <span>{t('blueprint:action.addSolution')}</span>
-              </button>
             </div>
             <div className="bp-item-list">
               {splitLines(detailNode.techSolution).map((item, index) => (
                 <div className="bp-item-card" key={`${detailNode.id}-tech-${index}`}>
-                  <input
-                    className="bp-feature-card__input bp-feature-card__input--mono"
-                    defaultValue={item}
-                    onBlur={(event) => updateTextItem(detailNode, 'techSolution', index, event.currentTarget.value)}
-                  />
-                  <button className="bp-feature-card__delete" onClick={() => removeTextItem(detailNode, 'techSolution', index)}>
-                    {t('blueprint:action.delete')}
-                  </button>
+                  <span className="bp-item-card__text">{item}</span>
                 </div>
               ))}
               {splitLines(detailNode.techSolution).length === 0 ? <div className="bp-feature-empty">{t('blueprint:detailPanel.noTechSolution')}</div> : null}
@@ -1274,34 +1058,14 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           <div className="bp-node-detail__section bp-node-detail__section--content">
             <div className="bp-node-detail__section-head">
               <label className="bp-node-detail__label">{t('blueprint:detailPanel.requirementDesc')}</label>
-              <button
-                className="bp-node-detail__feature-add"
-                onClick={() => addFeature(detailNode)}
-                title={featureActionHint}
-              >
-                <span className="bp-node-detail__feature-add-icon">+</span>
-                <span>{featureActionLabel}</span>
-              </button>
             </div>
             <div className="bp-feature-list">
               {(detailNode.features ?? []).map((feature) => (
                 <div className="bp-feature-card" key={feature.id}>
                   <div className="bp-feature-card__row">
-                    <input
-                      className="bp-feature-card__input"
-                      defaultValue={feature.title}
-                      onBlur={(event) => updateFeature(detailNode, feature.id, { title: event.currentTarget.value.trim() || feature.title })}
-                    />
-                    <button className="bp-feature-card__delete" onClick={() => removeFeature(detailNode, feature.id)}>
-                      {t('blueprint:action.delete')}
-                    </button>
+                    <span className="bp-feature-card__title">{feature.title}</span>
                   </div>
-                  <input
-                    className="bp-feature-card__input"
-                    defaultValue={feature.description}
-                    placeholder={t('blueprint:detailPanel.featurePlaceholder')}
-                    onBlur={(event) => updateFeature(detailNode, feature.id, { description: event.currentTarget.value })}
-                  />
+                  {feature.description ? <p className="bp-feature-card__desc">{feature.description}</p> : null}
                   <div className="bp-feature-card__readonly">
                     <span>
                       {t('blueprint:detailPanel.janusProgress')} <strong>{Math.max(0, Math.min(100, feature.progress))}%</strong>
@@ -1320,46 +1084,18 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           <div className="bp-node-detail__section bp-node-detail__section--content">
             <div className="bp-node-detail__section-head">
               <label className="bp-node-detail__label">{t('blueprint:detailPanel.issueLog')}</label>
-              <button className="bp-node-detail__feature-add" onClick={() => addIssue(detailNode)}>
-                <span className="bp-node-detail__feature-add-icon">+</span>
-                <span>{t('blueprint:action.addIssue')}</span>
-              </button>
             </div>
             <div className="bp-feature-list">
               {(detailNode.issues ?? []).map((issue) => (
                 <div className="bp-feature-card" key={issue.id}>
                   <div className="bp-feature-card__row">
-                    <input
-                      className="bp-feature-card__input"
-                      defaultValue={issue.title}
-                      onBlur={(event) => updateIssue(detailNode, issue.id, { title: event.currentTarget.value.trim() || issue.title })}
-                    />
-                    <button className="bp-feature-card__delete" onClick={() => removeIssue(detailNode, issue.id)}>
-                      {t('blueprint:action.delete')}
-                    </button>
+                    <span className="bp-feature-card__title">{issue.title}</span>
                   </div>
-                  <div className="bp-feature-card__grid">
-                    <Select
-                      value={issue.severity}
-                      onChange={(value) => updateIssue(detailNode, issue.id, { severity: value as BlueprintIssueSeverity })}
-                      options={ISSUE_SEVERITY_VALUES.map((severity) => ({ value: severity, label: t(ISSUE_SEVERITY_LABEL_KEY[severity]) }))}
-                      className="blueprint-select bp-node-detail__select"
-                      getPortalContainer={getSelectPortalContainer}
-                    />
-                    <Select
-                      value={issue.status}
-                      onChange={(value) => updateIssue(detailNode, issue.id, { status: value as BlueprintIssueStatus })}
-                      options={ISSUE_STATUS_VALUES.map((status) => ({ value: status, label: t(ISSUE_STATUS_LABEL_KEY[status]) }))}
-                      className="blueprint-select bp-node-detail__select"
-                      getPortalContainer={getSelectPortalContainer}
-                    />
+                  <div className="bp-feature-card__readonly">
+                    <span>{t(ISSUE_SEVERITY_LABEL_KEY[issue.severity])}</span>
+                    <span>{t(ISSUE_STATUS_LABEL_KEY[issue.status])}</span>
                   </div>
-                  <input
-                    className="bp-feature-card__input"
-                    defaultValue={issue.description}
-                    placeholder={t('blueprint:detailPanel.issuePlaceholder')}
-                    onBlur={(event) => updateIssue(detailNode, issue.id, { description: event.currentTarget.value })}
-                  />
+                  {issue.description ? <p className="bp-feature-card__desc">{issue.description}</p> : null}
                 </div>
               ))}
               {(detailNode.issues ?? []).length === 0 ? <div className="bp-feature-empty">{t('blueprint:detailPanel.noIssue')}</div> : null}
@@ -1369,26 +1105,16 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           <div className="bp-node-detail__section bp-node-detail__section--system">
             <div className="bp-node-detail__section-head">
               <label className="bp-node-detail__label">{t('blueprint:detailPanel.bindWorkspace')}</label>
-              <button
-                className="bp-node-detail__feature-add"
-                onClick={() => bindNodeWorkspace(detailNode.id, '')}
-                disabled={!detailNode.workspaceId}
-              >
-                {t('blueprint:action.unbindWorkspace')}
-              </button>
             </div>
-            <Select
-              value={detailNode.workspaceId ?? ''}
-              onChange={(value) => bindNodeWorkspace(detailNode.id, value)}
-              placeholder={t('blueprint:detailPanel.selectWorkspace')}
-              options={[
-                { value: '', label: t('blueprint:detailPanel.unbindWorkspace') },
-                ...workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))
-              ]}
-              className="blueprint-select bp-node-detail__select"
-              dropdownClassName="bp-node-detail__dropdown"
-              getPortalContainer={getSelectPortalContainer}
-            />
+            <div className="bp-item-list">
+              <div className="bp-item-card">
+                <span className="bp-item-card__text">
+                  {detailNode.workspaceId
+                    ? (workspaceNameById[detailNode.workspaceId] ?? detailNode.workspaceSnapshot?.name ?? detailNode.workspaceId)
+                    : t('blueprint:detailPanel.unbindWorkspace')}
+                </span>
+              </div>
+            </div>
             {detailWorkspaceMissing ? (
               <div className="bp-node-detail__warning">
                 {t('blueprint:detailPanel.workspaceMissing')}
@@ -1399,27 +1125,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
 
           <div className="bp-node-detail__section bp-node-detail__section--system">
             <label className="bp-node-detail__label">{t('blueprint:detailPanel.mountPosition')}</label>
-            <Select
-              value={detailNode.parentId ?? ''}
-              onChange={(value) => bindNodeParent(detailNode.id, value)}
-              options={detailNodeParentOptions}
-              disabled={currentBlueprint?.rootNodeId === detailNode.id}
-              className="blueprint-select bp-node-detail__select"
-              dropdownClassName="bp-node-detail__dropdown"
-              getPortalContainer={getSelectPortalContainer}
-            />
-          </div>
-
-          <div className="bp-node-detail__section bp-node-detail__section--system">
-            <label className="bp-node-detail__label">{t('blueprint:detailPanel.newTerminalType')}</label>
-            <Select
-              value={terminalPreset}
-              onChange={(value) => setTerminalPreset(value as TerminalPreset)}
-              options={TERMINAL_PRESETS.map((preset) => ({ value: preset.type, label: preset.label }))}
-              className="blueprint-select bp-node-detail__select"
-              dropdownClassName="bp-node-detail__dropdown"
-              getPortalContainer={getSelectPortalContainer}
-            />
+            <div className="bp-item-list">
+              <div className="bp-item-card">
+                <span className="bp-item-card__text">
+                  {detailNode.parentId
+                    ? (currentBlueprint?.nodes[detailNode.parentId]?.title || detailNode.parentId)
+                    : t('blueprint:detailPanel.asRoot')}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="bp-node-detail__meta">
@@ -1431,10 +1145,18 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               <span>{t('blueprint:detailPanel.source')}</span>
               <strong>{detailNode.statusSource === 'janus' ? t('blueprint:statusSource.janus') : t('blueprint:statusSource.manual')}</strong>
             </div>
-            <div>
-              <span>{t('blueprint:detailPanel.terminal')}</span>
-              <strong>{detailNode.boundTerminalId ? detailNode.boundTerminalId.slice(0, 8) : '—'}</strong>
-            </div>
+            {detailNode.sourceRelPath ? (
+              <div>
+                <span>{t('blueprint:detailPanel.sourceFile')}</span>
+                <strong title={detailNode.sourceRelPath}>{detailNode.sourceRelPath}</strong>
+              </div>
+            ) : null}
+            {detailNode.sourceHash ? (
+              <div>
+                <span>{t('blueprint:detailPanel.sourceHash')}</span>
+                <strong title={detailNode.sourceHash}>{detailNode.sourceHash.length > 10 ? `${detailNode.sourceHash.slice(0, 6)}…${detailNode.sourceHash.slice(-4)}` : detailNode.sourceHash}</strong>
+              </div>
+            ) : null}
             <div>
               <span>{t('blueprint:detailPanel.analysisCursor')}</span>
               <strong>{detailNode.lastAnalyzedCommitSha ? detailNode.lastAnalyzedCommitSha.slice(0, 8) : '—'}</strong>
@@ -1592,27 +1314,52 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               {(detailNode.activities ?? []).length === 0 ? <div className="bp-node-detail__empty">{t('blueprint:detailPanel.noActivity')}</div> : null}
             </div>
           </div>
+
+          <div className="bp-node-detail__terminal-footer">
+            <div className="bp-node-detail__section-head">
+              <label className="bp-node-detail__label">{t('blueprint:detailPanel.terminal')}</label>
+            </div>
+            <span onMouseEnter={() => warmTerminalPreset(terminalPreset)}>
+              <Select
+                value={terminalPreset}
+                onChange={(value) => setTerminalPreset(value as TerminalPreset)}
+                options={TERMINAL_PRESETS.map((preset) => ({ value: preset.type, label: preset.label }))}
+                prefix={<img src={TERMINAL_PRESET_ICONS[terminalPreset]} alt="" aria-hidden="true" width={16} height={16} />}
+                getPortalContainer={getSelectPortalContainer}
+              />
+            </span>
+            <div className="bp-node-detail__terminal-meta">
+              <span className={`bp-node-detail__terminal-dot${terminalLaunching ? ' bp-node-detail__terminal-dot--busy' : detailNode.boundTerminalId ? ' bp-node-detail__terminal-dot--bound' : ''}`} />
+              <span>
+                {terminalLaunching
+                  ? t('blueprint:detailPanel.terminalStarting')
+                  : detailNode.boundTerminalId
+                    ? t('blueprint:detailPanel.terminalBound', { id: detailNode.boundTerminalId.slice(0, 8) })
+                    : t('blueprint:detailPanel.terminalUnbound')}
+              </span>
+            </div>
+            <div className="bp-node-detail__terminal-actions">
+              <button
+                className="blueprint-btn blueprint-btn--primary"
+                onClick={() => focusOrCreateTerminal(detailNode, terminalPreset)}
+                disabled={!detailNode.workspaceId || detailWorkspaceMissing || terminalLaunching}
+              >
+                {t('blueprint:action.enterTerminal')}
+              </button>
+              <button
+                className="blueprint-btn"
+                onClick={() => void copyImplementPrompt(detailNode)}
+                disabled={promptCopied}
+                title={t('blueprint:action.copyPrompt')}
+              >
+                {promptCopied ? t('blueprint:action.copied') : t('blueprint:action.copyPrompt')}
+              </button>
+            </div>
+          </div>
         </aside>
         </BlueprintDetailMount>
       ) : null}
-      <PromptDialog
-        open={promptState !== null}
-        title={promptState?.kind === 'child' ? t('blueprint:prompt.newChild') : t('blueprint:prompt.newRoot')}
-        label={promptState?.kind === 'child' ? t('blueprint:prompt.childTitle') : t('blueprint:prompt.rootTitle')}
-        placeholder={t('blueprint:prompt.inputTitle')}
-        onConfirm={handlePromptConfirm}
-        onCancel={() => setPromptState(null)}
-      />
-      <PromptDialog
-        open={deleteTarget !== null}
-        title={t('blueprint:confirm.deleteTitle')}
-        description={deleteTarget?.message}
-        confirmOnly
-        confirmText={t('blueprint:confirm.deleteConfirm')}
-        tone="danger"
-        onConfirm={() => void handleDeleteConfirm()}
-        onCancel={() => setDeleteTarget(null)}
-      />
+      {!toolbarState ? (
       <PromptDialog
         open={restoreLayoutConfirmOpen}
         title={t('blueprint:confirm.restoreLayoutTitle')}
@@ -1625,6 +1372,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         }}
         onCancel={() => setRestoreLayoutConfirmOpen(false)}
       />
+      ) : null}
     </div>
   )
 }

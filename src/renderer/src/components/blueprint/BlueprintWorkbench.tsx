@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { createPortal } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { useBlueprintStore } from '@/stores/blueprint'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { JanusIdentityCore } from '@/components/janus/JanusIdentityCore'
 import { useOptionalJanusChatController } from '@/components/janus/JanusChatProvider'
 import { BlueprintView } from './BlueprintView'
-import { HarnessScopeBar } from './HarnessScopeBar'
+import { BlueprintToolbar, BlueprintToolbarProvider } from './BlueprintToolbar'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
+import { Select } from '../ui/Select'
 import { BlueprintDetailPortalContext } from './blueprintDetailPortal'
 import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
@@ -37,10 +39,13 @@ interface WorkbenchCardPlan {
 export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps) {
   const { t } = useI18n('blueprint')
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const blueprints = useBlueprintStore((s) => s.blueprints)
+  const blueprintWorkspace = useBlueprintStore((s) => s.blueprintWorkspace)
+  const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
+  const activeWorkspacePath = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.path ?? null)
   const ownerRepoId = currentBlueprint?.nodes[currentBlueprint.rootNodeId]?.sourceUri?.split('/')[2]
   const chat = useOptionalJanusChatController(ownerRepoId && currentBlueprint ? { ownerRepoId, viewId: currentBlueprint.id } : undefined)
   const projectChat = chat?.engineeringContext?.viewRef?.viewId === currentBlueprint?.id ? chat : null
-  const activeSession = useBlueprintStore((s) => s.activeSession)
   const maintenanceTasks = useBlueprintMaintenanceStore((s) => s.tasks)
   const maintenanceInitialized = useBlueprintMaintenanceStore((s) => s.initialized)
   const openRequest = useBlueprintMaintenanceStore((s) => s.openRequest)
@@ -163,9 +168,37 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
           } as CSSProperties}
           aria-label={t('blueprint:workbench.ariaLabel')}
         >
+        <BlueprintToolbarProvider>
         <header className="blueprint-workbench-topbar" style={cardStyle(0)}>
-          <div className="blueprint-workbench-tab" title={currentBlueprint?.name ?? t('blueprint:workbench.breadcrumb')}>
-            {currentBlueprint?.name ?? t('blueprint:workbench.breadcrumb')}
+          <button
+            type="button"
+            className="blueprint-workbench-close"
+            onClick={requestClose}
+            aria-label={t('blueprint:workbench.closeAria')}
+            title={t('blueprint:workbench.closeTitle')}
+          >
+            <span aria-hidden="true" />
+          </button>
+          {/* 高保真 bp-switch：默认当前工作区，下拉切其他（选中=直线左光条，见 Select） */}
+          <div className="blueprint-workbench-switch" title={currentBlueprint?.name ?? t('blueprint:workbench.breadcrumb')}>
+            <Select
+              value={currentBlueprint?.id ?? ''}
+              onChange={(id) => { if (id && id !== currentBlueprint?.id) void loadBlueprint(id) }}
+              disabled={blueprints.length === 0}
+              placeholder={t('blueprint:workbench.breadcrumb')}
+              options={
+                blueprints.length === 0
+                  ? [{ value: '', label: t('blueprint:view.noBlueprints') }]
+                  : blueprints.map((b) => ({
+                    value: b.id,
+                    label: blueprintWorkspace[b.id] && blueprintWorkspace[b.id] === activeWorkspacePath
+                      ? `${b.name} · 当前`
+                      : b.name,
+                  }))
+              }
+              className="blueprint-select blueprint-workbench-switch__select"
+              getPortalContainer={selectPortalNode ? () => selectPortalNode : undefined}
+            />
           </div>
           <div className="blueprint-workbench-actions">
             <button
@@ -208,22 +241,10 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
               </span>
               <ChevronRight className="blueprint-janus-capsule__chevron" size={13} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              className="blueprint-workbench-close"
-              onClick={requestClose}
-              aria-label={t('blueprint:workbench.closeAria')}
-              title={t('blueprint:workbench.closeTitle')}
-            >
-              <span aria-hidden="true" />
-            </button>
           </div>
         </header>
-        <HarnessScopeBar
-          cwd={activeSession?.workspacePath ?? null}
-          blueprintId={currentBlueprint?.id ?? null}
-          blueprintSource={currentBlueprint?.source}
-        />
+        {/* 高保真统一操作栏：横跨三列之上（复刻 design toolbar） */}
+        <BlueprintToolbar getSelectPortalContainer={selectPortalNode ? () => selectPortalNode : undefined} />
 
         <div
           className="blueprint-workbench-body"
@@ -254,6 +275,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
             </div>
           ) : null}
         </div>
+        </BlueprintToolbarProvider>
       </section>
     </div>
       {createPortal(

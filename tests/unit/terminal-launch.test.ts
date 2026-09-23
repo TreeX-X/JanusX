@@ -183,6 +183,7 @@ describe('terminal-launch', () => {
       ok: true,
       terminalId: terminal.id,
       pid: 4242,
+      prefilled: false,
     })
 
     expect(updateTerminal).toHaveBeenCalledWith(
@@ -257,5 +258,50 @@ describe('terminal-launch', () => {
     expect(create.mock.invocationCallOrder[0]).toBeLessThan(
       requestTerminalForceFit.mock.invocationCallOrder[0],
     )
+  })
+
+  it('prefills initial input after created without submitting', async () => {
+    const getDefaultShell = window.electron.system.getDefaultShell as ReturnType<typeof vi.fn>
+    const create = window.electron.terminal.create as ReturnType<typeof vi.fn>
+    getDefaultShell.mockResolvedValue('powershell.exe')
+    create.mockResolvedValue({ pid: 7777 })
+    const input = vi.fn()
+    let createdCb: ((event: { id: string }) => void) | null = null
+    Object.assign(window.electron.terminal, {
+      input,
+      onCreated: vi.fn((cb: (event: { id: string }) => void) => {
+        createdCb = cb
+        return () => {
+          createdCb = null
+        }
+      }),
+    })
+
+    const {
+      __resetDefaultShellCacheForTests,
+      launchTerminalPreset,
+    } = await import('../../src/renderer/src/lib/terminal-launch')
+
+    __resetDefaultShellCacheForTests()
+    const launchPromise = launchTerminalPreset({
+      preset: 'codex',
+      workspaceId: 'ws-1',
+      workspacePath: 'C:/repo',
+      initialInput: '# Title\nGoal: G.',
+    })
+
+    await vi.waitFor(() => {
+      expect(addTerminal).toHaveBeenCalled()
+    })
+    const terminalId = addTerminal.mock.calls[0][0].id as string
+    createdCb?.({ id: terminalId })
+
+    await expect(launchPromise).resolves.toEqual({
+      ok: true,
+      terminalId,
+      pid: 7777,
+      prefilled: true,
+    })
+    expect(input).toHaveBeenCalledWith(terminalId, '# Title\nGoal: G.')
   })
 })

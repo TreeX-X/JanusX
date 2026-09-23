@@ -652,7 +652,8 @@
 .blueprint-toolbar__save-status--saving,
 .blueprint-toolbar__save-status--pending { color: #fbbf24; }
 .blueprint-toolbar__save-status--failed { color: #f87171; }
-.blueprint-toolbar__save-status--saved { color: #86efac; }
+/* 高保真：保存态为中性灰（全画布唯一的语义色只给在途状态灯） */
+.blueprint-toolbar__save-status--saved { color: #777; }
 
 .blueprint-canvas-wrapper--detail-open {
   display: grid;
@@ -739,6 +740,37 @@
   to { opacity: 1; }
 }
 
+.bp-canvas-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 60%;
+  pointer-events: none;
+}
+
+.bp-canvas-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: #9a9a9a;
+  background: rgba(10, 10, 13, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.bp-canvas-legend .ld {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+}
+
 .blueprint-canvas-wrapper--detail-open .blueprint-canvas-main {
   grid-column: 2;
 }
@@ -771,9 +803,13 @@
   filter: saturate(0.55);
 }
 
-/* —— 节点类型分级：层级一眼可辨 —— */
-.bp-node-card--type-epic {
-  border-left: 3px solid rgba(255, 120, 48, 0.75);
+/* —— 节点类型分级：高保真黑灰+橙 —— 类型不再用彩色左边框，
+   状态只用一颗状态灯 + kindtag 文字表达（见 design/blueprint-note-graph.html） */
+.bp-node-card--type-epic,
+.bp-node-card--type-feature,
+.bp-node-card--type-task,
+.bp-node-card--type-issue {
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .bp-node-card--type-epic .bp-node-card__title {
@@ -781,12 +817,13 @@
   font-weight: 600;
 }
 
-.bp-node-card--type-feature {
-  border-left: 3px solid rgba(59, 130, 246, 0.7);
-}
-
-.bp-node-card--type-issue {
-  border-left: 3px solid rgba(239, 68, 68, 0.7);
+.bp-node-card__kindtag {
+  font-size: 9px;
+  color: #8a8a8a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
 /* —— 卡片折叠入口（chevron + 子项数徽章） —— */
@@ -880,7 +917,8 @@
 
 .bp-node-card__progress-bar {
   height: 100%;
-  background: var(--janus-order, #ff7830);
+  /* 高保真：进度条为中性灰，在途语义只由状态灯的橙表达 */
+  background: #8f8f96;
   border-radius: 2px;
   transition: width 0.3s;
 }
@@ -1091,51 +1129,6 @@
   border-bottom: 0;
 }
 
-.bp-node-detail__input {
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.065);
-  background: rgba(0, 0, 0, 0.18);
-  color: #e4e4e4;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.45;
-  outline: none;
-}
-
-.bp-node-detail__input {
-  height: 32px;
-}
-
-.bp-node-detail__input:focus {
-  border-color: rgba(255, 120, 48, 0.45);
-  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.12);
-}
-
-.bp-node-detail__textarea {
-  width: 100%;
-  min-height: 76px;
-  box-sizing: border-box;
-  resize: vertical;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.065);
-  background: rgba(0, 0, 0, 0.18);
-  color: #e4e4e4;
-  padding: 8px 10px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.45;
-  letter-spacing: 0;
-  outline: none;
-}
-
-.bp-node-detail__textarea:focus {
-  border-color: rgba(255, 120, 48, 0.45);
-  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.12);
-}
-
 .bp-node-detail__hint,
 .bp-node-detail__empty {
   color: #777;
@@ -1155,51 +1148,57 @@
   min-height: 26px;
 }
 
+/* 终端执行底部固定区（V2 左列：内容滚动，操作不跟随） */
+.bp-node-detail__terminal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 13, 15, 0.98);
+}
+
+.bp-node-detail__terminal-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #666;
+}
+
+.bp-node-detail__terminal-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #555;
+}
+
+.bp-node-detail__terminal-dot--busy {
+  background: #ff7830;
+  box-shadow: 0 0 6px rgba(255, 120, 48, 0.9);
+}
+
+.bp-node-detail__terminal-dot--bound {
+  background: #d7d7db;
+}
+
+.bp-node-detail__terminal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bp-node-detail__terminal-actions .blueprint-btn--primary {
+  flex: 1;
+}
+
 .bp-feature-list {
   display: flex;
   flex-direction: column;
   gap: 0;
-}
-
-.bp-node-detail__feature-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.035);
-  color: #aaa;
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
-}
-
-.bp-node-detail__feature-add:hover:not(:disabled) {
-  border-color: rgba(255, 120, 48, 0.32);
-  background: rgba(255, 120, 48, 0.09);
-  color: #ffd3b7;
-}
-
-.bp-node-detail__feature-add:disabled,
-.bp-node-detail__feature-add--disabled {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: #777;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.bp-node-detail__feature-add-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-  font-size: 13px;
-  line-height: 1;
 }
 
 .bp-feature-hint {
@@ -1243,55 +1242,38 @@
   margin-bottom: 6px;
 }
 
-.bp-feature-card__input {
+/* 只读详情静态文本（V2：内容变更走对话，本文件无直写输入） */
+.bp-node-detail__text {
+  margin: 0;
+  color: #c9c9c9;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bp-item-card__text {
   flex: 1;
   min-width: 0;
-  height: 30px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.055);
-  background: rgba(0, 0, 0, 0.14);
-  color: #e4e4e4;
-  padding: 0 10px;
+  color: #c9c9c9;
   font-size: 12px;
-  outline: none;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
-.bp-feature-card__input--mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+.bp-feature-card__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e4e4e4;
+  overflow-wrap: anywhere;
 }
 
-.bp-feature-card__input:focus {
-  border-color: rgba(255, 120, 48, 0.45);
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: 0 0 0 1px rgba(255, 120, 48, 0.12);
-  outline: none;
-}
-
-.bp-feature-card__delete {
-  flex: 0 0 auto;
-  height: 30px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: #777;
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
-}
-
-.bp-feature-card__delete:hover {
-  color: #ff9f66;
-  border-color: rgba(255, 120, 48, 0.22);
-  background: rgba(255, 120, 48, 0.06);
-}
-
-.bp-feature-card__grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 6px;
+.bp-feature-card__desc {
+  margin: 4px 0 0;
+  color: #c9c9c9;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .bp-feature-card__readonly {
@@ -1350,14 +1332,6 @@
 .bp-node-detail__title--empty {
   color: var(--text-muted, #888);
   font-style: italic;
-}
-
-.bp-node-detail__select {
-  width: 100%;
-}
-
-.bp-node-detail__dropdown {
-  max-height: 220px;
 }
 
 .bp-node-detail__label {
@@ -1724,7 +1698,8 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  /* 顶栏 + 统一操作栏 + 三列机身（复刻 design topbar/toolbar/body） */
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
   overflow: visible;
   color: #e7e7e8;
@@ -1782,6 +1757,30 @@
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 高保真 bp-switch：顶栏蓝图切换（文字型触发 + 当前徽，下拉走 Select 直线左光条） */
+.blueprint-workbench-switch {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.blueprint-workbench-switch__select {
+  width: auto;
+  max-width: 100%;
+  min-height: 26px;
+  background: transparent;
+  border-color: transparent;
+  color: #f0f0f1;
+  font-weight: 600;
+}
+
+.blueprint-workbench-switch__select:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/implemented/bug-fix/2026-09-21-workbench-close-hit-slop.md */
@@ -1909,7 +1908,115 @@
     padding-inline: 10px;
   }
 
-  .blueprint-workbench-tab {
+/* 高保真统一操作栏：scope 徽 + 只读锁 + 搜索 + 双过滤 + 三按钮 + 保存态，
+   横跨三列之上（复刻 design/blueprint-note-graph.html .toolbar） */
+.blueprint-workbench-toolbar {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  /* 单行（复刻 design .toolbar 一行）：不换行，靠省略收敛，窄屏藏保存态 */
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  background: var(--chrome-bg, rgba(12, 12, 12, 0.85));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: blueprint-workbench-card-rise var(--card-enter-duration, 380ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 120ms;
+}
+
+.blueprint-workbench-shell[data-closing='true'] .blueprint-workbench-toolbar {
+  animation-name: blueprint-workbench-card-descend;
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+  animation-fill-mode: both;
+  animation-delay: calc((var(--card-count, 1) - 0 - 1) * var(--card-exit-stagger, 180ms));
+}
+
+.blueprint-toolbar__scope {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.blueprint-toolbar__lock {
+  flex: none;
+  font-size: 11px;
+  color: #ffb27d;
+  border: 1px solid rgba(255, 120, 48, 0.3);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.blueprint-workbench-toolbar .blueprint-toolbar__spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
+.blueprint-workbench-toolbar .blueprint-toolbar__search-wrap {
+  flex: 0 1 140px;
+  min-width: 60px;
+}
+
+.blueprint-workbench-toolbar .blueprint-select,
+.blueprint-workbench-toolbar .blueprint-btn,
+.blueprint-workbench-toolbar .blueprint-toolbar__loading,
+.blueprint-workbench-toolbar .blueprint-toolbar__error {
+  flex: none;
+}
+
+.blueprint-workbench-toolbar .blueprint-toolbar__save-status {
+  flex: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  .blueprint-workbench-toolbar .blueprint-toolbar__save-status {
+    display: none;
+  }
+}
+
+.blueprint-select--kind-filter {
+  width: 140px;
+  height: 28px;
+  flex: 0 0 140px;
+}
+
+/* 高保真主按钮：透明底 + 橙边（复刻 design .btn--primary） */
+.blueprint-btn--primary-ghost {
+  background: transparent;
+  border-color: rgba(255, 120, 48, 0.4);
+  color: #ffb27d;
+}
+
+.blueprint-btn--primary-ghost:hover:not(:disabled) {
+  background: rgba(255, 120, 48, 0.1);
+  border-color: rgba(255, 120, 48, 0.6);
+}
+
+.blueprint-workbench-shell:not([data-reveal-ready='true']) .blueprint-workbench-toolbar {
+  opacity: 0;
+  animation: none;
+}
+
+.blueprint-workbench-tab {
     flex-basis: 0;
   }
 
@@ -1953,7 +2060,8 @@
 .blueprint-workbench-body {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(340px, 390px);
+  /* 高保真三列：左 260-300 · 中自适应 · 右 360-420 */
+  grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(360px, 420px);
   column-gap: 0;
   min-width: 0;
   min-height: 0;
@@ -1974,7 +2082,7 @@
 }
 
 .blueprint-workbench-body[data-detail-open='true'][data-janus-open='true'] {
-  grid-template-columns: minmax(260px, 300px) minmax(420px, 1fr) minmax(320px, 360px);
+  grid-template-columns: minmax(260px, 300px) minmax(420px, 1fr) minmax(360px, 420px);
 }
 
 .blueprint-workbench-detail-slot {
@@ -2120,7 +2228,7 @@
 
 @media (max-width: 1180px) {
   .blueprint-workbench-body {
-    grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(280px, 32%);
+    grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(320px, 360px);
   }
 
   .blueprint-workbench-body[data-janus-open='false'] {
@@ -2132,7 +2240,7 @@
   }
 
   .blueprint-workbench-body[data-detail-open='true'][data-janus-open='true'] {
-    grid-template-columns: minmax(240px, 270px) minmax(0, 1fr) minmax(280px, 31%);
+    grid-template-columns: minmax(240px, 270px) minmax(0, 1fr) minmax(320px, 360px);
   }
 
   .blueprint-workbench-detail-slot[data-open='true'] {
@@ -2335,6 +2443,14 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .bp-maintenance-panel__identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+/* 对话优先（V2 右列）：Janus 头 + 机器折叠，能力不断 */
+.bp-maintenance-janus-head { display: flex; align-items: center; gap: 8px; color: #e4e4e4; font-size: 12px; letter-spacing: 0.02em; }
+.bp-maintenance-janus-head strong { font-weight: 600; }
+.bp-maintenance-janus-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #ff7830; box-shadow: 0 0 6px rgba(255, 120, 48, 0.9); }
+.bp-maintenance-machine { border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 8px; }
+.bp-maintenance-machine > summary { cursor: pointer; color: #8a8a8a; font-size: 11px; padding: 4px 0; }
+.bp-maintenance-machine > summary:hover { color: #e4e4e4; }
 .bp-maintenance-panel__identity > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .bp-maintenance-panel__identity span { color: #666; font-size: 9px; }
 .bp-maintenance-panel__identity strong { color: #eee; font-size: 14px; }
@@ -3220,6 +3336,108 @@
 .janus-chat[data-compact-navigation] .janus-chat-model-tag { display: flex; gap: 4px; min-width: 0; max-width: 100%; }
 .janus-chat[data-compact-navigation] .janus-chat-model-tag strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .janus-chat[data-compact-navigation] .janus-chat-status-actions, .janus-chat[data-compact-navigation] .janus-chat-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* V2 blueprint column: 高保真 composer（design/blueprint-note-graph.html）：
+   › 前缀 + 无边框 textarea + 38 方块橙发，无 meta 条。 */
+.bp-maintenance-task > .janus-chat--docked { flex: 1 0 500px; width: 100%; min-width: 0; min-height: 500px; }
+.janus-chat[data-minimal-composer] .janus-chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: #08080a;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.janus-chat[data-minimal-composer] .janus-chat-input-wrapper:focus-within {
+  border-color: rgba(255, 122, 26, 0.34);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(255, 122, 26, 0.08);
+}
+.janus-chat[data-minimal-composer] .janus-chat-composer-row {
+  order: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  min-height: 46px;
+  padding: 0;
+}
+.janus-chat-prompt-prefix {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 122, 26, 0.78);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+.janus-chat[data-minimal-composer] .janus-chat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: none;
+  min-height: 46px;
+  max-height: 150px;
+  padding: 14px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  outline: none;
+  box-shadow: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow-y: auto;
+}
+.janus-chat[data-minimal-composer] .janus-chat-input::placeholder { color: rgba(255, 255, 255, 0.26); }
+.janus-chat[data-minimal-composer] .janus-chat-input:focus { outline: 0; border: 0; }
+.janus-chat[data-minimal-composer] .janus-chat-send {
+  flex: 0 0 auto;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  margin: 4px 6px 4px 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.janus-chat[data-minimal-composer] .janus-chat-send:not(:disabled) {
+  color: #0a0a0b;
+  background: #ff7a1a;
+  border-color: rgba(255, 122, 26, 0.55);
+}
+.janus-chat[data-minimal-composer] .janus-chat-send:hover:not(:disabled) { background: #ff8a2e; }
+.janus-chat[data-minimal-composer] .janus-chat-send:disabled {
+  color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: not-allowed;
+}
+.janus-chat[data-minimal-composer] .janus-chat-stop {
+  flex: 0 0 auto;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  margin: 4px 6px 4px 0;
+  border-radius: 4px;
+}
 .janus-chat[data-compact-navigation] .janus-chat-shortcuts kbd { display: none; }
 .janus-chat[data-compact-navigation] .janus-question-gate { flex-shrink: 0; max-height: 240px; overflow-y: auto; }
 .harness-run-panel { display: grid; gap: 10px; min-width: 0; font-size: 12px; }

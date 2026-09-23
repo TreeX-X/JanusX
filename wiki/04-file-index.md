@@ -276,7 +276,7 @@ Use this as a lookup table before opening source.
 | `src/renderer/src/stores/checkpoint.ts` | checkpoint state/actions |
 | `src/renderer/src/stores/editor.ts` | editor tab state |
 | `src/renderer/src/stores/git.ts` | git state/actions |
-| `src/renderer/src/stores/note.ts` | quick note state |
+| `src/renderer/src/stores/draft-card.ts` | quick note state |
 | `src/renderer/src/stores/office.ts` | office state |
 | `src/renderer/src/stores/right-tools.ts` | right tools dock state |
 | `src/renderer/src/stores/subagent-run.ts` | subagent run state |
@@ -315,7 +315,7 @@ Use this as a lookup table before opening source.
 | App shutdown | `tests/unit/app-shutdown.test.ts` |
 | i18n/development config | `tests/unit/development-llm-config-sync.test.ts`, `llm-proxy-refresh.test.ts` |
 | Right tools | `tests/unit/right-tool-*.test.ts` |
-| Notes | `tests/unit/note/*.test.ts` |
+| Notes | `tests/unit/draft-card/*.test.ts` |
 | Built desktop critical path | `tests/e2e/desktop-smoke.spec.ts` |
 | Editor E2E | `tests/e2e/editor-definition.spec.ts`, `editor-find-widget.spec.ts`, `editor-window-tabs.spec.ts` |
 | Blueprint capsule E2E | `tests/e2e/blueprint-janus-capsule.spec.ts` |

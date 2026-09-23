@@ -50,6 +50,7 @@ import {
   nodeTypeToKind,
   type NodeFieldPatch,
 } from './artifact-producer'
+import { toNoteDoc } from '../notes/note-provider'
 import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
 
 export interface BridgeNoteSnapshot {
@@ -442,7 +443,7 @@ function translateCreate(
       h.refuse(op.operationId, `skeleton unreadable: ${skeleton.reason}`)
       return
     }
-    const produced = applyNodePatch(skeleton.note, patch)
+    const produced = applyNodePatch(toNoteDoc(skeleton.note), patch)
     if (!('edit' in produced)) {
       h.refuse(op.operationId, `${produced.code}: ${produced.message}`)
       return
@@ -504,7 +505,7 @@ function translateUpdate(
     h.refuse(op.operationId, `base note unreadable: ${parsed.reason}`)
     return
   }
-  const produced = applyNodePatch(parsed.note, patch)
+  const produced = applyNodePatch(toNoteDoc(parsed.note), patch)
   if (!('edit' in produced)) {
     h.refuse(op.operationId, `${produced.code}: ${produced.message}`)
     return

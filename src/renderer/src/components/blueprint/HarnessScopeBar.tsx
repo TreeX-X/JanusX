@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useHarnessStore } from '@/stores/harness'
 import { useBlueprintStore } from '@/stores/blueprint'
+import { onHarnessChanged } from '@/services/harness'
 import { useI18n } from '@/i18n/useI18n'
 
 interface HarnessScopeBarProps {
@@ -10,16 +11,15 @@ interface HarnessScopeBarProps {
 }
 
 /**
- * Project scope strip (S4): repo identity, binding state, share entry, and
- * save-conflict notice for harness-backed graphs. Legacy JSON blueprints
- * render nothing here.
+ * Project scope strip (S4): repo identity, binding state, share entry.
+ * V2 readonly: no save-conflict notice — external writes converge by
+ * auto-reloading the open graph on watch rev bumps (see below).
+ * Legacy JSON blueprints render nothing here.
  */
 export function HarnessScopeBar({ cwd, blueprintId, blueprintSource }: HarnessScopeBarProps) {
   const { t } = useI18n('blueprint')
   const scope = useHarnessStore((s) => s.scope)
   const bindings = useHarnessStore((s) => s.bindings)
-  const conflict = useHarnessStore((s) => s.conflict)
-  const dismissConflict = useHarnessStore((s) => s.dismissConflict)
   const resolveScope = useHarnessStore((s) => s.resolveScope)
   const exportShare = useHarnessStore((s) => s.exportShare)
   const previewShareImport = useHarnessStore((s) => s.previewShareImport)
@@ -37,17 +37,31 @@ export function HarnessScopeBar({ cwd, blueprintId, blueprintSource }: HarnessSc
     if (cwd) void resolveScope(cwd)
   }, [cwd, resolveScope])
 
+  // Converge on external writes: watch rev bumps reload the open graph
+  // silently (trailing debounce absorbs multi-file bursts).
+  const scopeRoot = scope?.root
+  useEffect(() => {
+    if (!cwd || blueprintSource !== 'harness' || !blueprintId) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const off = onHarnessChanged((event) => {
+      if (event.root !== scopeRoot) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        void loadBlueprint(blueprintId)
+      }, 1000)
+    })
+    return () => {
+      off()
+      if (timer) clearTimeout(timer)
+    }
+  }, [cwd, blueprintSource, blueprintId, scopeRoot, loadBlueprint])
+
   if (!cwd || blueprintSource !== 'harness' || !scope?.ok) return null
 
   const onExport = async (): Promise<void> => {
     const picked = await window.electron.dialog.saveFile({ defaultName: 'harness-share.json', extension: 'json' })
     if (picked.canceled || !picked.filePath) return
     void exportShare(cwd, picked.filePath)
-  }
-
-  const onReload = async (): Promise<void> => {
-    dismissConflict()
-    if (blueprintId) await loadBlueprint(blueprintId)
   }
 
   const onPickImport = (): void => {
@@ -146,15 +160,6 @@ export function HarnessScopeBar({ cwd, blueprintId, blueprintSource }: HarnessSc
           <span>{importError}</span>
           <button type="button" onClick={onCancelImport}>
             {t('common:action.cancel')}
-          </button>
-        </div>
-      ) : null}
-      {conflict ? (
-        <div className="harness-scope-bar__conflict" role="alert">
-          <strong>{t('blueprint:harness.conflictTitle')}</strong>
-          <span>{conflict}</span>
-          <button type="button" onClick={() => void onReload()}>
-            {t('blueprint:harness.conflictReload')}
           </button>
         </div>
       ) : null}

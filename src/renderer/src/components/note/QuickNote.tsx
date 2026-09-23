@@ -27,11 +27,11 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
-import { getCardsByTerminal, useNoteStore } from '@/stores/note'
+import { getDraftsByTerminal, useDraftCardStore } from '@/stores/draft-card'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './QuickNote.module.css'
 import tabs from '../ui/TabStrip.module.css'
-import { exportNoteCard, type QuickNoteExportFormat } from './quick-note-export'
+import { exportDraftCard, type QuickNoteExportFormat } from './quick-note-export'
 import { formatNoteAge } from './quick-note-behavior'
 import {
   applyEdit,
@@ -76,12 +76,12 @@ const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(naviga
 
 export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: string; onPasteToTerminal: (text: string) => void }) {
   const { t } = useI18n('terminal')
-  const cards = useNoteStore((state) => getCardsByTerminal(state, terminalId))
-  const activeId = useNoteStore((state) => state.activeCardIdByTerminal[terminalId] ?? null)
-  const addCard = useNoteStore((state) => state.addCard)
-  const removeCard = useNoteStore((state) => state.removeCard)
-  const updateCard = useNoteStore((state) => state.updateCard)
-  const setActiveCard = useNoteStore((state) => state.setActiveCard)
+  const drafts = useDraftCardStore((state) => getDraftsByTerminal(state, terminalId))
+  const activeId = useDraftCardStore((state) => state.activeDraftIdByTerminal[terminalId] ?? null)
+  const addDraft = useDraftCardStore((state) => state.addDraft)
+  const removeDraft = useDraftCardStore((state) => state.removeDraft)
+  const updateDraft = useDraftCardStore((state) => state.updateDraft)
+  const setActiveDraft = useDraftCardStore((state) => state.setActiveDraft)
   const [mode, setMode] = useState<NoteMode>('edit')
   const [compact, setCompact] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -90,7 +90,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const exportButtonRef = useRef<HTMLButtonElement>(null)
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
-  const active = cards.find((card) => card.id === activeId) ?? null
+  const active = drafts.find((draft) => draft.id === activeId) ?? null
   const editing = mode !== 'preview'
 
   useEffect(() => {
@@ -134,8 +134,8 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
       return
     }
     pendingSelectionRef.current = { start: edit.selectionStart, end: edit.selectionEnd }
-    updateCard(terminalId, active.id, { content: expected })
-  }, [active, terminalId, updateCard])
+    updateDraft(terminalId, active.id, { content: expected })
+  }, [active, terminalId, updateDraft])
 
   const runAction = useCallback((action: NoteFormatAction) => {
     const editor = editorRef.current
@@ -165,21 +165,21 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
     }
   }
 
-  const selectCard = (cardId: string) => {
+  const selectDraft = (draftId: string) => {
     setExportOpen(false)
-    setActiveCard(terminalId, cardId)
+    setActiveDraft(terminalId, draftId)
   }
 
-  const createCard = () => {
+  const createDraft = () => {
     setMode('edit')
     setExportOpen(false)
-    addCard(terminalId)
+    addDraft(terminalId)
   }
 
-  const exportCard = (format: QuickNoteExportFormat) => {
+  const exportDraft = (format: QuickNoteExportFormat) => {
     setExportOpen(false)
     setExportError('')
-    void exportNoteCard(active!, format).catch((error) => setExportError(error instanceof Error ? error.message : 'Export failed'))
+    void exportDraftCard(active!, format).catch((error) => setExportError(error instanceof Error ? error.message : 'Export failed'))
   }
 
   const toolTitle = (action: NoteFormatAction): string => {
@@ -202,26 +202,26 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
         <div className={styles.sidebarHead}>
           <span className={styles.sidebarTitle}>
             {t('terminal:note.listTitle')}
-            <span className={styles.sidebarCount}>{cards.length}</span>
+            <span className={styles.sidebarCount}>{drafts.length}</span>
           </span>
-          <button type="button" className={styles.tool} onClick={createCard} title={t('terminal:note.newNote')} aria-label={t('terminal:note.newNote')}>
+          <button type="button" className={styles.tool} onClick={createDraft} title={t('terminal:note.newNote')} aria-label={t('terminal:note.newNote')}>
             <Plus strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
         <div className={styles.list}>
-          {cards.length === 0 && <div className={styles.listEmpty}>{t('terminal:note.listEmpty')}</div>}
-          {cards.map((card) => {
-            const title = card.title || t('terminal:note.untitled')
+          {drafts.length === 0 && <div className={styles.listEmpty}>{t('terminal:note.listEmpty')}</div>}
+          {drafts.map((draft) => {
+            const title = draft.title || t('terminal:note.untitled')
             return (
-              <div key={card.id} className={`${styles.card} ${card.id === activeId ? styles.active : ''}`}>
-                <button type="button" className={styles.selectCard} aria-current={card.id === activeId ? 'true' : undefined} onClick={() => selectCard(card.id)}>
+              <div key={draft.id} className={`${styles.card} ${draft.id === activeId ? styles.active : ''}`}>
+                <button type="button" className={styles.selectCard} aria-current={draft.id === activeId ? 'true' : undefined} onClick={() => selectDraft(draft.id)}>
                   <span className={styles.cardTitle}>{title}</span>
                   <span className={styles.cardMeta}>
-                    <span className={styles.cardExcerpt}>{noteExcerpt(card.content) || t('terminal:note.emptyExcerpt')}</span>
-                    <time dateTime={new Date(card.updatedAt).toISOString()}>{formatNoteAge(card.updatedAt)}</time>
+                    <span className={styles.cardExcerpt}>{noteExcerpt(draft.content) || t('terminal:note.emptyExcerpt')}</span>
+                    <time dateTime={new Date(draft.updatedAt).toISOString()}>{formatNoteAge(draft.updatedAt)}</time>
                   </span>
                 </button>
-                <button type="button" className={styles.deleteCard} aria-label={t('terminal:note.deleteNote', { title })} title={t('terminal:note.deleteNote', { title })} onClick={() => removeCard(terminalId, card.id)}>
+                <button type="button" className={styles.deleteCard} aria-label={t('terminal:note.deleteNote', { title })} title={t('terminal:note.deleteNote', { title })} onClick={() => removeDraft(terminalId, draft.id)}>
                   <Trash2 size={12} strokeWidth={1.75} aria-hidden="true" />
                 </button>
               </div>
@@ -235,7 +235,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
             <MarkdownIcon className={styles.emptyIcon} strokeWidth={1.4} aria-hidden="true" />
             <span>{t('terminal:note.empty')}</span>
             <div className={styles.actions}>
-              <button type="button" onClick={createCard}>
+              <button type="button" onClick={createDraft}>
                 <Plus strokeWidth={1.75} aria-hidden="true" />
                 {t('terminal:note.newNote')}
               </button>
@@ -250,7 +250,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                 aria-label={t('terminal:note.titleAria')}
                 placeholder={t('terminal:note.untitled')}
                 spellCheck={false}
-                onChange={(event) => updateCard(terminalId, active.id, { title: event.target.value })}
+                onChange={(event) => updateDraft(terminalId, active.id, { title: event.target.value })}
               />
               <div className={tabs.strip} role="group" aria-label={t('terminal:note.modeAria')}>
                 {MODES.map(({ mode: item, icon: Icon, labelKey }) => (
@@ -297,7 +297,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                   placeholder={t('terminal:note.placeholder')}
                   spellCheck={false}
                   value={active.content}
-                  onChange={(event) => updateCard(terminalId, active.id, { content: event.target.value })}
+                  onChange={(event) => updateDraft(terminalId, active.id, { content: event.target.value })}
                   onKeyDown={handleEditorKeyDown}
                 />
               )}
@@ -334,7 +334,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                   {exportOpen && (
                     <div className={styles.exportMenu} role="menu" aria-label="Export format">
                       {EXPORT_OPTIONS.map(({ format, label }) => (
-                        <button key={format} type="button" role="menuitem" onClick={() => exportCard(format)}>{label}</button>
+                        <button key={format} type="button" role="menuitem" onClick={() => exportDraft(format)}>{label}</button>
                       ))}
                     </div>
                   )}

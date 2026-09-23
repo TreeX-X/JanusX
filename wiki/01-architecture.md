@@ -107,7 +107,7 @@ Component -> Zustand store or service wrapper -> typed window.electron domain AP
 | Agent CLI streaming | `stores/app.ts` (agent events) | `ipc/agent-handlers.ts`, `agent/stream-manager.ts` |
 | Knowledge | `services/knowledge.ts`, `services/knowledge-settings.ts`, `components/knowledge/KnowledgeGraphCanvas.tsx`, `knowledgeGraph.ts` | `ipc/knowledge-handlers.ts`, `knowledge/*` (queue/LLM-stage/external-mcp) |
 | Office | `stores/office.ts`, `services/office.ts` | `ipc/office-handlers.ts`, `office/*` |
-| Notes | `stores/note.ts` | (renderer-internal) |
+| Notes | `stores/draft-card.ts` | (renderer-internal) |
 | Right tools dock | `stores/right-tools.ts`, `right-tools/registry.ts` | (renderer-internal) |
 | Editor | `stores/editor.ts` | `ipc/file-handlers.ts`, `language-service/*` (client/manager/registry/installer), `ipc/language-service-installer-handlers.ts` |
 | Git | `stores/git.ts` | `ipc/git-handlers.ts`, `git/service.ts` |

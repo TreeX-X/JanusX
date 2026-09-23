@@ -1,41 +1,25 @@
 /**
  * @file Blueprint Store — 蓝图数据状态管理
  * @description
- *  P1 渲染层蓝图数据底座。仅持有数据，不含任何画布 / 视图逻辑（画布是 P2）。
- *  actions 直接委托 services/blueprint.ts 的 IPC 封装；store 不直接碰 window.electron。
+ *  V2 工作区投影底座：只在工作区之间切换，不读取 legacy JSON 蓝图。
+ *  `blueprints` 为各工作区 checkout 的 note 投影摘要；`blueprintWorkspace`
+ *  记录每个投影所属的 checkout 路径，后续 load 经同一路径回源，保证读写
+ *  同一工作区。内容变更走对话 + Agent 事务，本 store 不再持有任何直写入口。
  * 仿照 stores/git.ts 的 async + loading/error 风格。
  */
 
 import { create } from 'zustand'
-import { useHarnessStore } from '@/stores/harness'
 import {
   listBlueprintSummaries,
   loadBlueprint,
-  createBlueprint as createBlueprintIPC,
-  deleteBlueprint as deleteBlueprintIPC,
-  updateBlueprint as updateBlueprintIPC,
-  updateNode as updateNodeIPC,
-  deleteNode as deleteNodeIPC,
   focusNode as focusNodeIPC,
   type Blueprint,
   type BlueprintSummary,
-  type BlueprintCreateInput,
   type BlueprintNode
 } from '@/services/blueprint'
+import { useWorkspaceStore } from '@/stores/workspace'
 
-const GLOBAL_BLUEPRINT_SCOPE = '__global__'
-
-function toBlueprintSummary(blueprint: Blueprint): BlueprintSummary {
-  return {
-    id: blueprint.id,
-    name: blueprint.name,
-    description: blueprint.description,
-    contentRevision: blueprint.contentRevision,
-    nodeCount: blueprint.nodeIds.length,
-    createdAt: blueprint.createdAt,
-    updatedAt: blueprint.updatedAt,
-  }
-}
+const PROJECT_GRAPH_PREFIX = 'harness:project:'
 
 export interface ActiveBlueprintSession {
   blueprintId: string
@@ -48,10 +32,12 @@ export interface ActiveBlueprintSession {
 }
 
 interface BlueprintStore {
-  /** 应用级全局蓝图摘要列表 */
+  /** 各工作区投影摘要（仅 harness:project:*，无 legacy） */
   blueprints: BlueprintSummary[]
-  /** 当前打开的蓝图（含 nodes 树） */
+  /** 当前打开的投影（含 nodes 树） */
   currentBlueprint: Blueprint | null
+  /** 投影 id -> 所属 checkout 路径；回源加载与 overlay 写回共用 */
+  blueprintWorkspace: Record<string, string>
   /** 当前通过“开始工作”激活的节点协作会话 */
   activeSession: ActiveBlueprintSession | null
   loading: boolean
@@ -61,16 +47,12 @@ interface BlueprintStore {
   loadState: 'idle' | 'listing' | 'loading' | 'refreshing' | 'error'
   error: string | null
 
-  /** 拉取应用级全局蓝图列表；参数仅为兼容旧调用 */
-  loadBlueprints: (workspacePath?: string) => Promise<void>
-  /** 加载指定蓝图的完整数据（含 nodes 树） */
+  /** 拉取给定 checkout 列表的投影摘要并合并；只保留 project 通道 */
+  loadBlueprints: (workspacePaths: string[]) => Promise<void>
+  /** 加载指定投影；非 project id 直接拒绝，不发 IPC */
   loadBlueprint: (id: string) => Promise<void>
-  /** 新建蓝图，成功后追加到列表并设为 currentBlueprint */
-  createBlueprint: (input: BlueprintCreateInput) => Promise<Blueprint | null>
-  /** 删除蓝图，成功后从列表和当前视图移除 */
-  deleteBlueprint: (id: string) => Promise<boolean>
-  /** 重命名顶层蓝图，成功后同步 blueprints 列表与 currentBlueprint */
-  renameBlueprint: (id: string, name: string) => Promise<boolean>
+  /** 查询投影所属 checkout 路径（布局持久化等 overlay 写回共用） */
+  workspacePathFor: (blueprintId: string) => string | null
   /** 激活节点协作会话，不创建终端，不注入上下文 */
   focusNode: (input: {
     blueprintId: string
@@ -79,15 +61,7 @@ interface BlueprintStore {
     workspaceName: string
     workspacePath: string
   }) => Promise<BlueprintNode | null>
-  /** 局部更新节点，成功后同步 currentBlueprint.nodes */
-  updateNode: (
-    blueprintId: string,
-    nodeId: string,
-    patch: Partial<Blueprint['nodes'][string]>
-  ) => Promise<void>
   mergeCanvasLayout: (blueprintId: string, canvasLayout: Blueprint['canvasLayout']) => void
-  /** 删除节点，成功后重新拉取 currentBlueprint */
-  deleteNode: (blueprintId: string, nodeId: string) => Promise<boolean>
   /** 分析完成后，重新拉取 currentBlueprint 以同步 analyzer 写入的字段 */
   refreshAfterAnalysis: () => Promise<void>
 }
@@ -101,6 +75,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
   return {
   blueprints: [],
   currentBlueprint: null,
+  blueprintWorkspace: {},
   activeSession: null,
   loading: false,
   loadingBlueprintId: null,
@@ -108,15 +83,31 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
   loadState: 'idle',
   error: null,
 
-  loadBlueprints: async (workspacePath) => {
-    const requestKey = workspacePath ?? GLOBAL_BLUEPRINT_SCOPE
+  loadBlueprints: async (workspacePaths) => {
+    const paths = [...new Set(workspacePaths.filter(Boolean))].sort()
+    const requestKey = paths.join('\u0000')
     if (listRequest && listRequestKey === requestKey) return listRequest
     set({ loading: true, loadState: 'listing', error: null })
     listRequestKey = requestKey
     listRequest = (async () => {
       try {
-        const list = await listBlueprintSummaries(requestKey)
-        set({ blueprints: list ?? [], loading: false, loadState: 'idle' })
+        const merged: BlueprintSummary[] = []
+        const owners: Record<string, string> = {}
+        for (const cwd of paths) {
+          const list = await listBlueprintSummaries(cwd).catch(() => null)
+          for (const summary of list ?? []) {
+            if (!summary.id.startsWith(PROJECT_GRAPH_PREFIX)) continue
+            if (merged.some((item) => item.id === summary.id)) continue
+            merged.push(summary)
+            owners[summary.id] = cwd
+          }
+        }
+        set((s) => ({
+          blueprints: merged,
+          blueprintWorkspace: { ...s.blueprintWorkspace, ...owners },
+          loading: false,
+          loadState: 'idle',
+        }))
       } catch (err: unknown) {
         set({ error: err instanceof Error ? err.message : String(err), loading: false, loadState: 'error' })
       } finally {
@@ -128,19 +119,32 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
   },
 
   loadBlueprint: async (id) => {
+    if (!id.startsWith(PROJECT_GRAPH_PREFIX)) {
+      set({ error: '仅支持工作区图谱，旧蓝图数据不再读取', loading: false })
+      return
+    }
     const existingRequest = blueprintRequests.get(id)
     if (existingRequest) return existingRequest
+    const workspaceState = useWorkspaceStore.getState()
+    const cwd = get().blueprintWorkspace[id]
+      ?? workspaceState.workspaces.find((w) => w.id === workspaceState.activeWorkspaceId)?.path
+      ?? null
+    if (!cwd) {
+      set({ error: '找不到该图谱所属的工作区', loading: false })
+      return
+    }
     const requestId = ++loadRequestId
     set({ loading: true, loadingBlueprintId: id, loadState: get().currentBlueprint ? 'refreshing' : 'loading', error: null })
     const request = (async () => {
       try {
-        const bp = await loadBlueprint(GLOBAL_BLUEPRINT_SCOPE, id)
+        const bp = await loadBlueprint(cwd, id)
         if (requestId !== loadRequestId) return
         set((s) => {
           const active = s.activeSession
           const nextNode = active && bp?.id === active.blueprintId ? bp.nodes[active.nodeId] : null
           return {
             currentBlueprint: bp,
+            blueprintWorkspace: bp ? { ...s.blueprintWorkspace, [bp.id]: cwd } : s.blueprintWorkspace,
             activeSession: active && nextNode ? { ...active, nodeSnapshot: nextNode } : active,
             loading: false,
             loadingBlueprintId: null,
@@ -159,76 +163,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
     return request
   },
 
-  createBlueprint: async (input) => {
-    set({ loading: true, error: null })
-    try {
-      const bp = await createBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, input)
-      set((s) => ({
-        blueprints: [...s.blueprints, toBlueprintSummary(bp)],
-        currentBlueprint: bp,
-        loading: false
-      }))
-      return bp
-    } catch (err: unknown) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-        loading: false
-      })
-      return null
-    }
-  },
-
-  deleteBlueprint: async (id) => {
-    set({ loading: true, error: null })
-    try {
-      const ok = await deleteBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, id)
-      if (!ok) {
-        set({ loading: false })
-        return false
-      }
-      set((s) => {
-        const next = s.blueprints.filter((bp) => bp.id !== id)
-        return {
-          blueprints: next,
-          currentBlueprint: s.currentBlueprint?.id === id ? null : s.currentBlueprint,
-          activeSession: s.activeSession?.blueprintId === id ? null : s.activeSession,
-          loading: false
-        }
-      })
-      return true
-    } catch (err: unknown) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-        loading: false
-      })
-      return false
-    }
-  },
-
-  renameBlueprint: async (id, name) => {
-    const trimmed = name.trim()
-    if (!trimmed) return false
-    set({ loading: true, error: null })
-    try {
-      const bp = await updateBlueprintIPC(GLOBAL_BLUEPRINT_SCOPE, id, { name: trimmed })
-      if (!bp) {
-        set({ loading: false })
-        return false
-      }
-      set((s) => ({
-        blueprints: s.blueprints.map((item) => (item.id === id ? toBlueprintSummary(bp) : item)),
-        currentBlueprint: s.currentBlueprint?.id === id ? bp : s.currentBlueprint,
-        loading: false
-      }))
-      return true
-    } catch (err: unknown) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-        loading: false
-      })
-      return false
-    }
-  },
+  workspacePathFor: (blueprintId) => get().blueprintWorkspace[blueprintId] ?? null,
 
   focusNode: async (input) => {
     set({ error: null })
@@ -265,88 +200,10 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
     }
   },
 
-  updateNode: async (blueprintId, nodeId, patch) => {
-    const current = get().currentBlueprint
-    if (!current || current.id !== blueprintId) {
-      set({ error: '当前未打开目标蓝图，无法更新节点' })
-      return
-    }
-    set({ loading: true, error: null })
-    try {
-      // Project lane: carry the last-seen file hash so a terminal write that
-      // landed after this canvas load surfaces as HARNESS_CONFLICT below.
-      const seen = current.source === 'harness' ? current.nodes[nodeId]?.sourceHash : undefined
-      const updated = await updateNodeIPC(
-        GLOBAL_BLUEPRINT_SCOPE,
-        blueprintId,
-        nodeId,
-        seen ? { ...patch, sourceHash: seen } : patch,
-      )
-      if (updated) {
-        set((s) => ({
-          currentBlueprint: s.currentBlueprint
-            ? {
-                ...s.currentBlueprint,
-                nodes: { ...s.currentBlueprint.nodes, [nodeId]: updated }
-              }
-            : null,
-          activeSession:
-            s.activeSession?.blueprintId === blueprintId && s.activeSession.nodeId === nodeId
-              ? { ...s.activeSession, nodeSnapshot: updated }
-              : s.activeSession,
-          loading: false
-        }))
-      } else {
-        set({ loading: false })
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (message.includes('HARNESS_CONFLICT')) {
-        useHarnessStore.getState().noticeConflict(message)
-        void get().loadBlueprint(blueprintId)
-      }
-      set({
-        error: message,
-        loading: false
-      })
-    }
-  },
-
   mergeCanvasLayout: (blueprintId, canvasLayout) => {
     set((s) => s.currentBlueprint?.id === blueprintId
       ? { currentBlueprint: { ...s.currentBlueprint, canvasLayout } }
       : s)
-  },
-
-  deleteNode: async (blueprintId, nodeId) => {
-    const current = get().currentBlueprint
-    if (!current || current.id !== blueprintId) {
-      set({ error: '当前未打开目标蓝图，无法删除节点' })
-      return false
-    }
-    set({ loading: true, error: null })
-    try {
-      const ok = await deleteNodeIPC(GLOBAL_BLUEPRINT_SCOPE, blueprintId, nodeId)
-      if (ok) {
-        await get().loadBlueprint(blueprintId)
-        set((s) => ({
-          activeSession:
-            s.activeSession?.blueprintId === blueprintId && s.activeSession.nodeId === nodeId
-              ? null
-              : s.activeSession
-        }))
-        return true
-      } else {
-        set({ error: '无法删除最后一个节点，请直接删除蓝图', loading: false })
-        return false
-      }
-    } catch (err: unknown) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-        loading: false
-      })
-      return false
-    }
   },
 
   refreshAfterAnalysis: async () => {

@@ -40,7 +40,8 @@
       "shortcutTitle": "Ctrl+F 打开权限菜单",
       "aria": "Agent 权限模式",
       "perAction": "每次操作都需审批",
-      "autoRun": "自动运行全部操作"
+      "autoRun": "自动运行全部操作",
+      "plan": "计划模式：只读探索"
     },
     "error": {
       "retry": "重试",
