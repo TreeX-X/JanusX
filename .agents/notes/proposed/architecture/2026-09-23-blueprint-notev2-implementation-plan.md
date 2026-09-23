@@ -1,0 +1,198 @@
+# Agent Note: 蓝图重构 noteV2 实施计划（机制 + UI）
+
+Status: proposed
+
+> **修订（2026-09-23，E 段）**：本轮对话确立了**架构师工作区模型**
+> （[note](./2026-09-23-architect-workspace-model.md)）。P0/P1 的既有勾选记录继续有效，但**实施顺序
+> 重排**：四条正确的/基础性的缺陷提到最前（E 段），V3 组合装配降为后续。阅读顺序建议：先 E 段，
+> 再看 P0/P1 的历史记录。
+
+## Problem
+
+V2 基线为 `2026-09-22-blueprint-note-graph-readonly.md`（只读 NoteGraph 语义）与
+`2026-09-23-blueprint-workspace-graph-v2.md`（单工作区三列高保真）。
+上一轮汇报确认：`src/main/notes/` 三件套与 shim 已建，但以下未闭环——
+`projectView` 未透出 `adapterVersion`（工具栏徽是写死字符串）、`invalid[]` 无 UI、
+`NoteCard` 与 workspace notes 同名、`create/update/delete` 直写后门仍在、
+legacy JSON 仍可写、维护面板仍是自定义 queue 而非原生 approval、`plan` 模式缺失、
+V2 左列终端 footer / 图例分型 / 加载 stagger / composer 去 chips / native select
+清理均未对齐原型。V3（`2026-09-23-blueprint-composition-v3.md`）不在本计划内。
+
+## Proposal
+
+按 P0（正确性/只读闭环）→ P1（V2 高保真对齐）顺序实施，每步最小改动 + 可验证。
+V3 assembler / `module` kind / 跨库 orange 边 / stale 重绑明确为后续，不在本计划动 adapter 以外。
+
+### P0-1: `projectView` 透出 `adapterVersion`（本步先做）
+
+- `HarnessNoteService.projectView` 返回 `{ blueprint, rev, repoId, repoName, invalid, adapterVersion }`，
+  值为 `src/main/notes/note-types.ts` 的 `ADAPTER_VERSION`（当前 `v1`）。
+- `HarnessGraphResult` 同步加 `adapterVersion`；`Blueprint` 加可选 `adapterVersion?: string`，
+  `projectGraph()` 写入，legacy JSON 不写（undefined 即旧数据）。
+- 工具栏 `scopeBadge` 由写死 `NoteAdapter v1` 改为读 `currentBlueprint.adapterVersion ?? 'v1'`。
+- 测试：adapter golden 断言 `projectGraph().adapterVersion === 'v1'`；
+  `harness-service` 断言 `projectView().adapterVersion === 'v1'`。
+
+### P0-2: `invalid` lane 渲染
+
+- Renderer 读取 `projectView.invalid`（经 IPC `HarnessGraphResult.invalid`），画布不抛错；
+  工具栏或图例旁显示 `invalid N` + 点击定位 relPath + 首条 diagnostic。
+- `adapterVersion` 徽与 invalid 计数同行，避免第二徽。
+- 测试：含坏 note 的 fixture → `invalid.length === 1` 且画布仍渲染有效节点。
+
+### P0-3: `DraftCard` 改名去歧义
+
+- 按 `2026-09-22-notecard-rename-draft-card.md`：`stores/note.ts` → `stores/draft-card.ts`，
+  `NoteCard→DraftCard` 等纯改名，行为不变；`components/note/*` 与 `tests/unit/note/*` 同步。
+- AC：`NoteCard|useNoteStore` 在 `src/renderer` 零命中（shim 也不留）。
+
+### P0-4: 收敛直写入口 + legacy 过渡说明
+
+- renderer 直写已删：右键 markStatus 菜单与回调移除；stores/blueprint.ts 的
+  updateNode/deleteNode/renameBlueprint/deleteBlueprint 对 harness lane 直接拒绝
+  （项目图谱为只读：变更走对话 + Agent 事务，不发 IPC）；createBlueprint 在
+  renderer 层直接拒绝（无新建 UI，新图由 Agent/迁移创建）；BlueprintView 重命名按钮
+  对 harness 源禁用；updateBlueprint 仅 canvasLayout/collapsedNodeIds overlay
+  可写（main updateProjectGraph 本就拒掉共享元数据）。
+- main project-lane 守卫复核：约 15 处 isProjectGraphId 分支已覆盖内容写
+  （HARNESS_MANAGED/HARNESS_READONLY），本次未新增——唯一可达的 renderer 调用
+  已在上条收敛。
+- legacy JSON deliberately 保持可写（迁移过渡）：blueprint-store.test.ts 4 用例、
+  team local-blueprint-repository 新建、分析器回写、候选采纳、维护结算仍服务于
+  未迁移蓝图，与 2026-09-18-blueprint-migration（loop stays until consumers
+  migrate）一致；全量硬拒会与其冲突，故拒绝点收敛到 renderer 新建入口。
+  逐个蓝图迁移归档后 legacy 自然清空，无需批量锁死。
+- plan approval 回填与 blueprint-tools ViewPatch 校验见 P0-4c/P0-4d
+  （AgentApprovalMode 加 plan，未知值回退 per-action）。
+
+### P1: V2 高保真对齐（原型 v9 逐项，2026-09-23 落地记录）
+
+1. scope 徽完整 `<ws>·rev·NoteAdapter <ver>·M notes·layout本机` + `在对话中变更` 按钮。
+2. [x] 左列终端 footer 核验已实现（BlueprintCanvas 1234-1274：图标/预热/guard/复用/预填/复制），未重复造。
+3. [x] 边分型落地：parent 灰实线，depends-on 5 4 / implements 2 3 / related-to 5 5（relationDash），图例 SVG 分型 + 复用 maintenance.relationType 文案；canvas-layout 单测同步。
+4. 加载：900ms pulse + stagger（320ms + 70ms，边滞后）+ `正在投影 note…` + `重放加载` rev bump。
+5. 右列纯 `JanusChat`：composer 去 model/permission chips，单张原生确认卡，单行 wiki trace。
+6. 清理残留 native `<select>`（维护面板 targetNode 等）→ 自定义 `Select`。
+
+## Acceptance criteria
+
+- [x] P0-1: `projectView` 与 IPC 结果含 `adapterVersion === 'v1'`，工具栏徽为真实版本回显。
+- [x] P0-2: 坏 note 进 `invalid` lane，有计数与定位，无未捕获抛错。
+- [x] P0-3: 改名后终端草稿单测全绿，`note` 仅指 workspace notes。
+- [x] P0-4a/b: project lane 无 renderer 直写可达路径（UI 入口删 + store 守卫）；legacy 保持迁移过渡可写，拒绝点收敛到 renderer 新建入口。
+- [x] P0-4c: plan 档贯通（类型/normalize/双端选项/读免审由兄弟仓策略层执行，默认仍为 per-action）。
+- [x] P0-4d: blueprint-tools 加 janus.blueprint.view，zod strict 校验 ViewPatch（overlay-only），未知节点/超限/文件字段 fail-closed。
+- [x] P1: 4 项落地 + 2 项核验已实现（P1-2/P1-4），P1-5 deferred 见上。
+
+## Risks
+
+- `Blueprint` 加可选字段需兼容旧 JSON 持久化；`ProjectView/HarnessGraphResult` 加必填字段需同步所有 mock。
+- locale `scopeBadge` 改插值需同步 en/zh-CN，否则 `i18n:check` 失败。
+- P0-4 改动面大，拆分为“先 UI 入口删除，再 store/IPC 守卫”，避免一次大爆炸。
+
+
+## B: V2 终态右列（2026-09-23 落地记录）
+
+方向：右列换纯 JanusChat + 删 queue chrome + composer 去 chips。
+
+- [x] B1: JanusChat 加 minimalComposer（选择菜单永不打开，只读 model tag + plan pill，快捷键入口同步守卫；其余调用方不受影响）。
+- [x] B2: 维护面板 chat-first：删 tabs 与 start 表单（启动收敛到机器区生成提案按钮，用选中节点 + 默认目标）；提案/审计/撤销/迁移 capability 原样保留，历史折进 details；legacy 无任务时只剩迁移卡 + 历史。
+- [x] plan 缺省：项目会话绑定创建时 setApprovalMode(plan) 一次，之后沿用持久化值；全局默认仍为 per-action。
+- 未做（V3）：提案审批从自定义 queue 迁移到原生 approval 卡（需 main 侧 agent 工具接管 apply）；候选 inbox、HarnessScopeBar、顶栏切换器、左列常驻仍是旧 IA 残留，待后续收敛。
+
+
+## C: 工作区切换 + 右列纯对话（新标准，2026-09-23 落地记录）
+
+标准：只在工作区之间切换，不读取旧蓝图数据；右列只有对话（对齐 design/blueprint-note-graph.html）。
+
+### C1: 只在工作区之间切换
+
+- main listBlueprintSummaries 只返回本 checkout 的 note 投影，不再列 legacy、不再触发 legacy 迁移拷贝；listBlueprints（团队面）不动。
+- renderer store workspace 化：blueprintWorkspace 记录投影归属 checkout；loadBlueprints(paths) 合并多工作区投影（仅 harness:project:*）；loadBlueprint 拒非 project id；overlay 写回（布局/折叠）与分析历史经同一路径回源，修复 GLOBAL scope 在 dev 下漂到仓库自身的旧 bug。
+- BlueprintView：切换器=各工作区投影（活动工作区优先）；删除候选 inbox、分析 notice、重命名按钮及相关 handler（均为 legacy 流）。
+- main 侧 legacy 方法（loadBlueprint/loadBlueprints/team/analyzer/migrate）保留，团队与分析器内部不断档；视图层不再请求。
+
+### C2: 右列纯对话
+
+- BlueprintMaintenancePanel 压成 header + 绑定后 JanusChat（minimalComposer）+ 空态；删 tabs/start 表单/机器区/提案/审计/撤销/迁移 UI；maintenanceAuditDetails.ts 及其两份单测退役。
+- 绑定创建时 setApprovalMode(plan) 一次；composer 无 chips，只读 model tag + plan pill。
+- 后果（显式）：维护 start/apply/audit/undo、迁移、候选采纳暂无 UI 入口，service/IPC 保留待 agent 接管 apply（V3）。
+
+
+## D: 右列对齐 HTML 原型（2026-09-23 落地记录）
+
+根因：minimalComposer 只去了 chips，但右列仍渲染 JanusChat 全套 chrome（thread 栏、资源条、状态条、消息按钮、model notice），而原型 body 只有审批槽 + 消息流 + wiki 单行 + todo + composer。
+
+- [x] minimal 下隐藏 thread 栏、资源 scope、model notice、消息按钮、整个状态条；选择菜单永不打开（含快捷键守卫）。
+- [x] composer 加 › 前缀 + 38px 方形橙发送（无边框 textarea），data-minimal-composer 作用域 CSS。
+- [x] 保留：消息（author/time + thinking + tool 卡）、审批槽单卡、todo 条、中途提问门（功能必需，藏起会导致 turn 卡死）、错误卡。
+- 未做：wiki 单行索引（本仓无对应数据面，tool 卡已覆盖已读展示）、消息气泡像素级重绘、发送 glyph 换 ↑、空态横幅。
+
+
+## E: 架构师工作区模型 —— 实施顺序重排（2026-09-23）
+
+依据：[架构师工作区模型](./2026-09-23-architect-workspace-model.md)（新）
+与 [V3](./2026-09-23-blueprint-composition-v3.md)（已部分修订）。
+原则：**先修正确的与基础性的缺陷，再谈组合装配**。E 段不引入新概念，全部是本仓投影层的修复。
+
+### E0 前置（顺序：E0 → E1 → E2 → E3 → E4）
+
+| 编号 | 内容 | 为什么排这么前 |
+|---|---|---|
+| E0-1 | `projectGraphId` 从 `repoId.slice(0,8)` 改为按 `rootKey` | 纯 bug。同 repo 多 worktree 撞 id，renderer 去重后第二个消失（`stores/blueprint.ts:100`）。**"多工作区表达一个项目"的地基**，不修则后续全部工作在错误前提上 |
+| E0-2 | `note-provider.ts` 的 `toNoteDoc` 透出 `repositories` 与 `codeRefs` | 模块↔工作区绑定的唯一载体，当前被整个丢弃。`NoteDoc` 加两个可选字段 |
+| E0-3 | `projectRelations` 保留完整 target URI（含 repoId），不再 `split('/').pop()` | `note-to-blueprint.ts:246` 把 `note://<repoId>/<id>` 截成末段，repoId 丢失 → 无法判定跨库、无法上橙色边、同 id 撞车会静默连错 |
+| E0-4 | 投影节点写入真实 `primaryWorkspaceId`（来自 `repositories.primary`） | 当前恒为 null（`note-to-blueprint.ts:215-218`），导致 Canvas"进入终端"**必定**报 `bindWorkspaceFirst`（`BlueprintCanvas.tsx:542,589`）。原型里最核心的动作是死的 |
+| E0-5 | 恢复 `harness:changed` 订阅（`HarnessScopeBar` 已无挂载点） | 外部改 note 后画布不刷新；read-only note 承诺的 "auto-refreshes on watchNotes rev bumps" 是空话 |
+
+E0 的四项可独立提交、可独立验证，互不阻塞。建议 E0-1 与 E0-4 优先（前者是正确性，后者是可用性）。
+
+### E1 恢复"部分通过"（后端已备，只缺入口）
+
+- `changeset.ts`（795 行）完整保留：`expandGroupSelection`（依赖闭包补齐）、`selectOperations`
+  （拓扑排序 + 环检测）、delete 逐项确认、审计落盘、撤销 —— 全部可用且无调用方。
+- 需恢复的 UI：工程区生成提案按钮 + 组级勾选（`BlueprintMaintenanceIntentGroup`：node / bindings /
+  relations / deletes）+ 一次性通过 / 部分通过两个动作。
+- **C2 段删除整包审批是能力退化**：用 agent 逐动作审批"替换"了变更集审批，而不是串联。正确关系：
+  - 内层 = agentX `policy-gate` 逐动作审批（管"这个工具调用放行吗"）
+  - 外层 = changeset 组级审批（管"这份提案你要哪几条"）
+- 顺带修复：`BlueprintMaintenancePanel` 建会话时的 `setApprovalMode('plan')` 使**所有写操作被
+  `PLAN_MODE_BLOCKED` 拒绝**（agentX `policy-gate.ts:179`），且 project domain 的 `toolAllowlist`
+  只含只读工具 —— 结果"写走 approval"从未接上。需在提案阶段后切换到可写模式。
+
+### E2 架构师工作区可被识别
+
+- 一个带 `.agents/harness.json` 的 git 仓库应能作为普通工作区加入注册表并被投影（`resolveRoot` 已
+  只认 `<cwd>/.agents`，预计无需改动，须验证）。
+- 验证 `kind: initiative` 的模块 note 写 `related-to` 无 `INVALID_RELATION` 诊断
+  （`depends-on` 的 owner 白名单为 `requirement`/`task`，`initiative` 不可用见 `parse.ts:462`）。
+- i18n：模块级规划的新文案（提供/需要接口、悬空需求、闲置供给、未接入）。
+
+### E3 装配器（新模块，main 侧）
+
+按架构师工作区模型 §6：接口匹配（实边 / 悬空需求 / 闲置供给）、按 repoId 装配证据、库不可达降级、
+id 命名空间化、rev 汇总。**严守单导入者纪律**（`note-provider.ts` 与装配器不得并行 import
+harness-core/harness-node）。
+
+测试：装配金样（接口匹配三分支、跨库解析、不可达降级、id 命名空间）；含坏 note 的 fixture 不得抛错。
+
+### E4 原型（先设计后动手）
+
+**按既有约定，E3/E4 的 UI 部分须先出原型再动手。** 需覆盖的新视觉：
+- 模块节点上的"归属工作区"行 + "未接入"标记
+- 跨库边橙色虚线（原型 v10 已有样式，需接真实数据）
+- 悬空需求 / 闲置供给的节点或边样式（**原型未定义，需新设计**）
+- 架构师工作区在切换器中的位置（项目全景为默认项）
+
+现有原型 `design/blueprint-note-graph-composition.html`（v10）可直接作为基线；
+`module` kind 过滤项应移除或改为 `initiative`。
+
+### 明确不在本计划内
+
+- 新增 note kind（`module` 已撤回）；任何 `harness-core` / agentX 的 schema 变更
+- 放开 `parse.ts:462` 的 `depends-on` kind 限制（方案 A 验证失败后才考虑）
+- legacy 蓝图的处理方式：C1 段"不读取"会使画布上用户写过的 description / todos / issues /
+  techSolution 成为孤儿（adapter 无对应段）。**建议改为一次性迁移归档**
+  （`blueprint-migrate.ts:335` 的 `applyMigration` 已具备能力），不做静默丢弃 —— 待确认。
+
+(End of file)

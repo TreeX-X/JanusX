@@ -208,6 +208,29 @@ describe('Janus resource scope UI', () => {
     expect(markup).toContain('janus-chat-permission-select')
   })
 
+  it('renders a chipless composer matching the blueprint HiFi column', () => {
+    const markup = renderToStaticMarkup(createElement(JanusChat, {
+      ...commonProps,
+      minimalComposer: true,
+      conversationController: conversationController({ approvalMode: 'plan' }),
+      messages: [
+        { id: 'answer-1', role: 'assistant', content: 'Hi', timestamp: 1 },
+      ],
+    }))
+    // Prototype column: prompt prefix, no thread/resource/status chrome, no
+    // per-message buttons, but messages + composer stay.
+    expect(markup).toContain('data-minimal-composer="true"')
+    expect(markup).toContain('janus-chat-prompt-prefix')
+    expect(markup).toContain('janus-chat-message-author')
+    expect(markup).not.toContain('janus-chat-permission-select')
+    expect(markup).not.toContain('aria-label="janus:chat.permission.aria"')
+    expect(markup).not.toContain('data-selection-trigger')
+    expect(markup).not.toContain('janus-chat-toolbar')
+    expect(markup).not.toContain('janus-resource-scope')
+    expect(markup).not.toContain('janus-chat-status-bar')
+    expect(markup).not.toContain('janus-chat-message-edit-actions')
+  })
+
   it('keeps completed live tool cards visible while the response is still streaming', () => {
     const markup = renderToStaticMarkup(createElement(JanusChat, {
       ...commonProps,

@@ -1,22 +1,26 @@
 import { readFile } from 'fs/promises'
 import { describe, expect, it } from 'vitest'
 
-describe('Blueprint maintenance audit history UI', () => {
-  it('loads scoped audits and renders translated revision, operation, and empty states', async () => {
+describe('Blueprint right column is chat-only', () => {
+  it('renders the bound project chat with no machine surface', async () => {
     const panel = await readFile('src/renderer/src/components/blueprint/BlueprintMaintenancePanel.tsx', 'utf8')
-    const store = await readFile('src/renderer/src/stores/blueprint-maintenance.ts', 'utf8')
 
-    expect(store).toContain('listMaintenanceAudits({ blueprintId, taskId })')
-    expect(panel).toContain("t('blueprint:maintenance.auditHistory')")
-    expect(panel).toContain("t('blueprint:maintenance.auditRevision'")
-    expect(panel).toContain("t('blueprint:maintenance.auditOperations'")
-    expect(panel).toContain("t('blueprint:maintenance.auditEmpty')")
-    expect(panel).toContain('record.selectedOperationIds.length')
-    expect(panel).toContain('selectedAuditOperations(record)')
-    expect(panel).toContain('auditOperationChanges(operation)')
-    expect(panel).toContain('auditOperationEvidence(record, operation)')
-    expect(panel).toContain("panelView === 'history'")
-    expect(panel).toContain("setPanelView('conversation')")
-    expect(panel).toContain("setPanelView('history')")
+    // Chat-only: bound project conversation, chipless composer, plan-first.
+    expect(panel).toContain('bindProject(')
+    expect(panel).toContain('minimalComposer')
+    expect(panel).toContain("setApprovalMode('plan')")
+    expect(panel).toContain('<JanusChat')
+    // No queue chrome and no legacy readers.
+    expect(panel).not.toContain('bp-maintenance-start')
+    expect(panel).not.toContain('bp-maintenance-machine')
+    expect(panel).not.toContain('bp-maintenance-proposal')
+    expect(panel).not.toContain('bp-maintenance-history__item')
+    expect(panel).not.toContain('bp-maintenance-migrate')
+    expect(panel).not.toContain('undoPanel')
+    expect(panel).not.toContain('auditHistory')
+    expect(panel).not.toContain('panelView')
+    expect(panel).not.toContain('migratePreview')
+    expect(panel).not.toContain('acceptRequirementCandidate')
+    expect(panel).not.toContain('maintenanceAuditDetails')
   })
 })

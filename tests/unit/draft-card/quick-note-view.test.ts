@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  applyTerminalNoteLifecycle,
+  applyTerminalDraftLifecycle,
   clampDrawerHeight,
   DRAWER_MIN_HEIGHT,
   DRAWER_VIEWS,
@@ -12,9 +12,9 @@ import {
   getDrawerHeight,
   getDrawerPanelAttributes,
   getNextDrawerView,
-  shouldRemoveTerminalNotes,
+  shouldRemoveTerminalDrafts,
 } from '../../../src/renderer/src/components/note/quick-note-behavior'
-import { useNoteStore } from '../../../src/renderer/src/stores/note'
+import { useDraftCardStore } from '../../../src/renderer/src/stores/draft-card'
 
 describe('Quick Note view behavior', () => {
   it('suppresses only the content editor perimeter focus highlight', () => {
@@ -138,24 +138,24 @@ describe('Quick Note view behavior', () => {
     expect(getNextDrawerView('runtime', 'Enter')).toBeNull()
   })
 
-  it('clears terminal notes only after the kill/remove branch', () => {
-    expect(shouldRemoveTerminalNotes('kill-removed')).toBe(true)
-    expect(shouldRemoveTerminalNotes('exit')).toBe(false)
-    expect(shouldRemoveTerminalNotes('workspace-switch')).toBe(false)
+  it('clears terminal drafts only after the kill/remove branch', () => {
+    expect(shouldRemoveTerminalDrafts('kill-removed')).toBe(true)
+    expect(shouldRemoveTerminalDrafts('exit')).toBe(false)
+    expect(shouldRemoveTerminalDrafts('workspace-switch')).toBe(false)
 
-    useNoteStore.getState().clearAll()
-    useNoteStore.getState().addCard('killed')
-    useNoteStore.getState().addCard('exited')
-    useNoteStore.getState().addCard('switched')
-    applyTerminalNoteLifecycle('kill-removed', 'killed')
-    applyTerminalNoteLifecycle('exit', 'exited')
-    applyTerminalNoteLifecycle('workspace-switch', 'switched')
-    expect(useNoteStore.getState().drafts['killed']).toBeUndefined()
-    expect(useNoteStore.getState().drafts['exited']).toHaveLength(1)
-    expect(useNoteStore.getState().drafts['switched']).toHaveLength(1)
+    useDraftCardStore.getState().clearAll()
+    useDraftCardStore.getState().addDraft('killed')
+    useDraftCardStore.getState().addDraft('exited')
+    useDraftCardStore.getState().addDraft('switched')
+    applyTerminalDraftLifecycle('kill-removed', 'killed')
+    applyTerminalDraftLifecycle('exit', 'exited')
+    applyTerminalDraftLifecycle('workspace-switch', 'switched')
+    expect(useDraftCardStore.getState().drafts['killed']).toBeUndefined()
+    expect(useDraftCardStore.getState().drafts['exited']).toHaveLength(1)
+    expect(useDraftCardStore.getState().drafts['switched']).toHaveLength(1)
   })
 
-  it('formats card update times for the list metadata', () => {
+  it('formats draft update times for the list metadata', () => {
     const now = Date.UTC(2026, 6, 13, 12)
     expect(formatNoteAge(now - 30_000, now)).toBe('just now')
     expect(formatNoteAge(now - 3 * 60_000, now)).toBe('3m ago')
@@ -163,11 +163,11 @@ describe('Quick Note view behavior', () => {
     expect(formatNoteAge(now - 3 * 24 * 60 * 60_000, now)).toBe('3d ago')
   })
 
-  it('switches card groups with the active terminal id without deleting either group', () => {
-    useNoteStore.getState().clearAll()
-    useNoteStore.getState().addCard('terminal-a')
-    useNoteStore.getState().addCard('terminal-b')
-    expect(useNoteStore.getState().drafts['terminal-a']).toHaveLength(1)
-    expect(useNoteStore.getState().drafts['terminal-b']).toHaveLength(1)
+  it('switches draft groups with the active terminal id without deleting either group', () => {
+    useDraftCardStore.getState().clearAll()
+    useDraftCardStore.getState().addDraft('terminal-a')
+    useDraftCardStore.getState().addDraft('terminal-b')
+    expect(useDraftCardStore.getState().drafts['terminal-a']).toHaveLength(1)
+    expect(useDraftCardStore.getState().drafts['terminal-b']).toHaveLength(1)
   })
 })

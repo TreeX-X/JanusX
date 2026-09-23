@@ -28,6 +28,7 @@ export function useBlueprintAnalysisActions(options: {
   const loadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
   const refreshAfterAnalysis = useBlueprintStore((state) => state.refreshAfterAnalysis)
   const workspaces = useWorkspaceStore((state) => state.workspaces)
+  const blueprintWorkspacePath = useBlueprintStore((state) => state.blueprintWorkspace[blueprintId])
   const [analyzing, setAnalyzing] = useState(false)
   const [commitLimit, setCommitLimit] = useState(String(DEFAULT_COMMIT_LIMIT))
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -45,8 +46,10 @@ export function useBlueprintAnalysisActions(options: {
   }, [detailNodeId])
 
   const workspacePathFor = useCallback((node: BlueprintNode) => {
-    return workspaces.find((workspace) => workspace.id === node.workspaceId)?.path ?? GLOBAL_BLUEPRINT_SCOPE
-  }, [workspaces])
+    return workspaces.find((workspace) => workspace.id === node.workspaceId)?.path
+      ?? blueprintWorkspacePath
+      ?? GLOBAL_BLUEPRINT_SCOPE
+  }, [workspaces, blueprintWorkspacePath])
 
   const loadHistory = useCallback(async (node: BlueprintNode) => {
     setHistoryLoading(true)

@@ -69,6 +69,7 @@ export interface HarnessGraphResult {
   repoId: string | null
   repoName: string
   invalid: Array<{ relPath: string; diagnostics: Array<{ code: string; message: string }> }>
+  adapterVersion: string
 }
 
 export type HarnessEditOp =

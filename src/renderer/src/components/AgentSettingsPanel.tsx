@@ -71,6 +71,7 @@ export function AgentSettingsPanel() {
   const options = [
     { value: 'per-action', label: t('settings:agent.default.mode.perAction') },
     { value: 'auto-run', label: t('settings:agent.default.mode.autoRun') },
+    { value: 'plan', label: t('settings:agent.default.mode.plan') },
   ]
 
   return <div className={styles.panel}>

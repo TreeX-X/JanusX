@@ -1,7 +1,7 @@
 // Note: the Markdown view tab uses the conventional file glyph in components/ui/MarkdownIcon.tsx — see .agents/notes/implemented/feature/2026-09-21-drawer-markdown-file-glyph.md
 import { createElement, useRef, type ComponentType, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { Activity } from 'lucide-react'
-import { useNoteStore } from '../../stores/note'
+import { useDraftCardStore } from '../../stores/draft-card'
 import tabs from '../ui/TabStrip.module.css'
 import { MarkdownIcon, type MarkdownIconProps } from '../ui/MarkdownIcon'
 
@@ -110,12 +110,12 @@ export function getDrawerHeight(open: boolean, view: DrawerView, heights: Drawer
   return `${heights[view] ?? DRAWER_DEFAULT_HEIGHT[view]}px`
 }
 
-export function shouldRemoveTerminalNotes(event: TerminalLifecycleEvent): boolean {
+export function shouldRemoveTerminalDrafts(event: TerminalLifecycleEvent): boolean {
   return event === 'kill-removed'
 }
 
-export function applyTerminalNoteLifecycle(event: TerminalLifecycleEvent, terminalId: string): void {
-  if (shouldRemoveTerminalNotes(event)) useNoteStore.getState().removeTerminalGroup(terminalId)
+export function applyTerminalDraftLifecycle(event: TerminalLifecycleEvent, terminalId: string): void {
+  if (shouldRemoveTerminalDrafts(event)) useDraftCardStore.getState().removeTerminalDraftGroup(terminalId)
 }
 
 export function formatNoteAge(updatedAt: number, now = Date.now()): string {

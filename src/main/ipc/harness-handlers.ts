@@ -17,6 +17,7 @@ import {
   createNoteOp,
   nodeTypeToKind,
 } from '../harness/artifact-producer'
+import { toNoteDoc } from '../notes/note-provider'
 import { harnessNoteService } from '../harness/service'
 import type { IncomingSnapshot } from '../harness/share-import'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
@@ -188,7 +189,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
           const current = await currentNote(root, op.uri)
           const managed = checkWritablePatch(op.patch)
           if (managed) throwFailure('HARNESS_MANAGED', managed.message, { path: op.uri })
-          const produced = applyNodePatch(current.note, op.patch)
+          const produced = applyNodePatch(toNoteDoc(current.note), op.patch)
           if ('edit' in produced) {
             const raw = await readFile(join(root, current.relPath), 'utf8')
             const markdown = harnessNoteService.mergeNoteEdit(current.note, raw, produced.edit, reason)

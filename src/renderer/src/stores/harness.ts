@@ -29,7 +29,6 @@ interface HarnessStore {
   shareImportSnapshot: unknown | null
   shareImportPreview: HarnessShareImportPreview | null
   shareImportReport: HarnessShareImportResult | null
-  conflict: string | null
   loading: boolean
   error: string | null
 
@@ -42,8 +41,6 @@ interface HarnessStore {
   previewShareImport: (cwd: string, snapshot: unknown) => Promise<HarnessShareImportPreview | null>
   applyShareImport: (cwd: string, snapshot: unknown) => Promise<HarnessShareImportResult | null>
   clearShareImport: () => void
-  noticeConflict: (message: string) => void
-  dismissConflict: () => void
 }
 
 export const useHarnessStore = create<HarnessStore>((set) => ({
@@ -54,7 +51,6 @@ export const useHarnessStore = create<HarnessStore>((set) => ({
   shareImportSnapshot: null,
   shareImportPreview: null,
   shareImportReport: null,
-  conflict: null,
   loading: false,
   error: null,
 
@@ -130,7 +126,4 @@ export const useHarnessStore = create<HarnessStore>((set) => ({
   },
 
   clearShareImport: () => set({ shareImportSnapshot: null, shareImportPreview: null, shareImportReport: null }),
-
-  noticeConflict: (message) => set({ conflict: message }),
-  dismissConflict: () => set({ conflict: null }),
 }))

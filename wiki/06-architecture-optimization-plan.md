@@ -51,7 +51,7 @@ After the Phase 1-5 optimization, the project advanced from v0.5.0 to v0.8.2 wit
 | Development Config Sync | `src/main/llm/development-config-sync.ts` | Complete — dev profile LLM config synchronization |
 | i18n Framework | `src/renderer/src/i18n/` | Complete — i18next, en/zh-CN locales, type generation, check pipeline |
 | Right Tools Dock | `src/renderer/src/components/right-tools/`, `stores/right-tools.ts` | Complete — dockable tool panels, rail, tabs |
-| Quick Notes | `src/renderer/src/components/note/`, `stores/note.ts` | Complete — quick note editor, behavior, export |
+| Quick Notes | `src/renderer/src/components/note/`, `stores/draft-card.ts` | Complete — quick note editor, behavior, export |
 | Workbench Switcher | `src/renderer/src/components/WorkbenchSwitcher.tsx` | Complete — workspace switcher with styled icons |
 | File Explorer Tool | `src/renderer/src/components/FileExplorerTool.tsx` | Complete — file tree tool panel |
 | Blueprint Graph Controller | `src/renderer/src/features/blueprint/useBlueprintGraphController.ts` | Complete — graph state and node interaction |

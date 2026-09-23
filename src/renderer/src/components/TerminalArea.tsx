@@ -10,7 +10,7 @@ import { BrowserSurface } from './browser/BrowserSurface'
 import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
 import { QuickNote } from './note/QuickNote'
 import {
-  applyTerminalNoteLifecycle,
+  applyTerminalDraftLifecycle,
   clampDrawerHeight,
   DRAWER_DEFAULT_HEIGHT,
   DRAWER_MIN_HEIGHT,
@@ -1422,7 +1422,7 @@ export function TerminalArea() {
         // ignore
       }
       removeTerminal(id)
-      applyTerminalNoteLifecycle('kill-removed', id)
+      applyTerminalDraftLifecycle('kill-removed', id)
       useTurnChangesStore.getState().clearTerminal(id)
       if (useWorkspaceStore.getState().terminals.length === 0) {
         setLoadState('no-terminal')

@@ -129,7 +129,8 @@
   bottom: 4px;
   width: 2px;
   background: var(--janus-order, #ff7830);
-  border-radius: 2px;
+  /* V2 设计语言：选中光条为直线，无圆角（见 design/blueprint-note-graph.html） */
+  border-radius: 0;
 }
 
 .optionDisabled {

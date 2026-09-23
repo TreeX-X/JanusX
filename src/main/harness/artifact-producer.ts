@@ -1,14 +1,14 @@
 /**
- * @file Harness artifact producer for canvas edits (S4, pure)
- * @description Translates UI-level node edits into NoteChangeSet operations.
- *  Field-to-note mapping is explicit and lossy by design: title goes to H1,
- *  prose fields go to kind-appropriate sections, lifecycle follows status.
- *  Feature/todo/issue/analysis arrays are NOT writable here; those flows
- *  arrive with maintenance and execution (S6/S8) and report HARNESS_MANAGED.
+ * @file Harness artifact merge engine + op factories (S4, pure)
+ * @description V2 readonly refactor: every mapping table (kind->type,
+ *  lifecycle->status, kind->sections, patch translation) moved to NoteAdapter
+ *  v1 (`src/main/notes/note-to-blueprint.ts`). What stays here is the merge
+ *  engine (section slicing, round-trip guard) and the op factories used by
+ *  Agent write flows. Mapping names are re-exported as deprecated shims.
  *  No filesystem, no Electron.
+ *  See .agents/notes/proposed/architecture/2026-09-22-blueprint-note-graph-readonly.md
  */
 import { randomUUID } from 'crypto'
-import type { BlueprintNodeType } from '../../shared/janus/types'
 import {
   parseNote,
   serializeNote,
@@ -16,23 +16,19 @@ import {
   validateNote,
   type ParsedNote,
 } from '@janus-agent/harness-core'
+import { KIND_SECTIONS, type NoteEdit, type NoteKind } from '../notes/note-to-blueprint'
 
-export type NoteKind = 'idea' | 'initiative' | 'requirement' | 'decision' | 'task'
+/** @deprecated Import mapping tables from NoteAdapter v1 instead. */
+export {
+  applyNodePatch,
+  checkWritablePatch,
+  mapStatusToLifecycle,
+  nodeTypeToKind,
+  type NodeFieldPatch,
+} from '../notes/note-to-blueprint'
 
-export function nodeTypeToKind(type: BlueprintNodeType, preferred?: NoteKind): NoteKind {
-  if (preferred) return preferred
-  switch (type) {
-    case 'task':
-      return 'task'
-    case 'feature':
-      return 'requirement'
-    case 'issue':
-      return 'requirement'
-    case 'epic':
-    default:
-      return 'initiative'
-  }
-}
+/** @deprecated `NoteKind` now lives in `src/main/notes/note-types.ts`. */
+export type { NoteKind } from '../notes/note-to-blueprint'
 
 export interface ProducedOp {
   operationId: string
@@ -44,14 +40,6 @@ export interface ProducedOp {
   dependsOn: string[]
   reason: string
   evidenceRefs: string[]
-}
-
-const KIND_SECTIONS: Record<NoteKind, string[]> = {
-  idea: ['Background', 'Idea', 'Open questions'],
-  initiative: ['Goal', 'Scope', 'Acceptance criteria'],
-  requirement: ['Problem', 'Expected behavior', 'Scope', 'Acceptance criteria'],
-  decision: ['Problem', 'Proposal', 'Alternatives considered', 'Risks'],
-  task: ['Scope', 'Acceptance criteria', 'Verification'],
 }
 
 function today(): string {
@@ -98,30 +86,6 @@ export function createNoteOp(repoId: string, kind: NoteKind, title: string, pare
   }
 }
 
-export interface NodeFieldPatch {
-  title?: string
-  description?: string
-  positioning?: string
-  techSolution?: string
-  notes?: string
-  status?: string
-  tags?: string[]
-  parentUri?: string | null
-}
-
-const MANAGED_ARRAYS = ['features', 'todos', 'issues', 'analyses', 'children'] as const
-
-/** Rejects maintenance-owned arrays with HARNESS_MANAGED; maps the rest. */
-export function checkWritablePatch(patch: Record<string, unknown>): { code: string; message: string } | null {
-  for (const key of MANAGED_ARRAYS) {
-    const value = patch[key]
-    if (Array.isArray(value) && value.length > 0) {
-      return { code: 'HARNESS_MANAGED', message: `${key} on project notes is managed by maintenance/execution flows` }
-    }
-  }
-  return null
-}
-
 /** Line-based section replace used by the service merger (hash-stable slicing). */
 export function setSection(body: string, name: string, text: string): string {
   const lines = body.replace(/\r\n/g, '\n').split('\n')
@@ -166,12 +130,7 @@ export function setSection(body: string, name: string, text: string): string {
   return out.join('\n').replace(/\n{3,}/g, '\n\n')
 }
 
-export interface NoteEdit {
-  title?: string
-  sections: Record<string, string>
-  frontmatter: { tags?: string[]; parent?: string | null; lifecycle?: string }
-}
-
+export type { NoteEdit }
 /** Merge a structured edit onto parsed note bytes (frontmatter via data, prose via slices). */
 export function mergeNoteEdit(note: ParsedNote, rawText: string, edit: NoteEdit, reason?: string): string {
   const meta = { ...(note.meta as unknown as Record<string, unknown>) } as Record<string, unknown> & ParsedNote['meta']
@@ -206,65 +165,6 @@ export function mergeNoteEdit(note: ParsedNote, rawText: string, edit: NoteEdit,
     throw { code: 'SCHEMA_INVALID', message: problems[0].message, path: problems[0].path }
   }
   return out
-}
-
-/**
- * Translates a canvas field patch into a structured note edit. Frontmatter
- * writes (tags, parent, lifecycle) travel as data; the service merges them
- * and re-serializes through harness-core, preserving unknown fields.
- */
-export function applyNodePatch(
-  note: ParsedNote,
-  patch: NodeFieldPatch,
-): { edit: NoteEdit } | { code: string; message: string } {
-  const kind = note.meta.kind as NoteKind
-  const edit: NoteEdit = { sections: {}, frontmatter: {} }
-  if (patch.title !== undefined) {
-    if (!patch.title.trim()) return { code: 'SCHEMA_INVALID', message: 'title must not be empty' }
-    edit.title = patch.title.trim()
-  }
-  const sectionFor: Record<string, string[]> = {
-    description: kind === 'idea' ? ['Background'] : kind === 'initiative' ? ['Goal'] : ['Problem'],
-    positioning: ['Background', 'Goal'],
-    techSolution: kind === 'decision' ? ['Proposal', 'Decision'] : ['Scope'],
-    notes: ['Open questions'],
-  }
-  for (const [field, names] of Object.entries(sectionFor)) {
-    const value = patch[field as keyof NodeFieldPatch]
-    if (typeof value === 'string') edit.sections[names[0]] = value
-  }
-  if (patch.tags !== undefined) edit.frontmatter.tags = [...patch.tags]
-  if (patch.parentUri !== undefined) edit.frontmatter.parent = patch.parentUri
-  if (patch.status !== undefined) {
-    const mapped = mapStatusToLifecycle(kind, patch.status)
-    if (!mapped.ok) return { code: mapped.code, message: mapped.message }
-    edit.frontmatter.lifecycle = mapped.lifecycle
-  }
-  return { edit }
-}
-
-export function mapStatusToLifecycle(
-  kind: NoteKind,
-  status: string,
-): { ok: true; lifecycle: string } | { ok: false; code: string; message: string } {
-  if (status === 'archived') return { ok: true, lifecycle: 'archived' }
-  if (status === 'done' && kind === 'task') {
-    return { ok: false, code: 'HARNESS_MANAGED', message: 'task completion requires acceptance evidence (task flow)' }
-  }
-  switch (status) {
-    case 'not-started':
-    case 'planning':
-      return { ok: true, lifecycle: 'draft' }
-    case 'in-progress':
-    case 'testing':
-    case 'bug-fixing':
-    case 'blocked':
-    case 'paused':
-    case 'done':
-      return { ok: true, lifecycle: 'accepted' }
-    default:
-      return { ok: false, code: 'SCHEMA_INVALID', message: `unknown status ${status}` }
-  }
 }
 
 /** Archive-by-default delete (C2): true removal needs explicit destructive scope (later). */

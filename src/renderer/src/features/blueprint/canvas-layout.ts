@@ -1,7 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'
-import { STATUS_VISUALS } from '@/components/blueprint/blueprintStatus'
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2, critical: 3 } as const
 const SEVERITY_LABEL = ['低', '中', '高', '严重'] as const
@@ -75,6 +74,7 @@ export function deriveBlueprintCardData(
     title: node.title,
     status: node.status,
     nodeType: node.type,
+    kind: node.kind ?? null,
     progress: node.progress,
     workspaceName: node.workspaceId ? workspaceNameById[node.workspaceId] ?? node.workspaceSnapshot?.name ?? null : null,
     boundTerminalId: node.boundTerminalId,
@@ -319,9 +319,46 @@ export function deriveBlueprintFlow(
       target: id,
       type: 'blueprintAdaptive',
       style: {
-        stroke: `${STATUS_VISUALS[blueprint.nodes[id].status]?.color ?? '#888888'}66`,
+        stroke: '#8a8a8a',
         strokeWidth: 1.6
       },
     }))
-  return { nodes, edges }
+  // Relation edges: gray dashed by type (depends-on 5 4 / implements 2 3 /
+  // related-to 5 5). Pairs already joined by a parent edge are skipped to
+  // avoid double-drawing the same link.
+  const parentPairs = new Set(
+    edges.map((edge) => [edge.source, edge.target].sort().join('|'))
+  )
+  const relationEdges: Edge[] = (blueprint.relations ?? [])
+    .filter((rel) => {
+      if (!rel.sourceNodeId || !rel.targetNodeId || rel.sourceNodeId === rel.targetNodeId) return false
+      if (hidden.has(rel.sourceNodeId) || hidden.has(rel.targetNodeId)) return false
+      if (!blueprint.nodes[rel.sourceNodeId] || !blueprint.nodes[rel.targetNodeId]) return false
+      return !parentPairs.has([rel.sourceNodeId, rel.targetNodeId].sort().join('|'))
+    })
+    .map((rel) => ({
+      id: `e-rel-${rel.sourceNodeId}-${rel.type}-${rel.targetNodeId}`,
+      source: rel.sourceNodeId,
+      target: rel.targetNodeId,
+      type: 'blueprintAdaptive',
+      style: {
+        stroke: 'rgba(255,255,255,.2)',
+        strokeWidth: 1.5,
+        strokeDasharray: relationDash(rel.type)
+      },
+    }))
+  return { nodes, edges: [...edges, ...relationEdges] }
+}
+
+/** Canvas dash language, mirrored by the legend in BlueprintCanvas. */
+export function relationDash(type: string): string {
+  switch (type) {
+    case 'depends-on':
+      return '5 4'
+    case 'implements':
+      return '2 3'
+    case 'related-to':
+    default:
+      return '5 5'
+  }
 }

@@ -16,6 +16,13 @@
     "task": "Task",
     "issue": "Issue"
   },
+  "noteKind": {
+    "idea": "idea",
+    "initiative": "initiative",
+    "requirement": "requirement",
+    "decision": "decision",
+    "task": "task"
+  },
   "issueSeverity": {
     "low": "Low",
     "medium": "Medium",
@@ -76,8 +83,12 @@
     "nextMatch": "Next",
     "refresh": "Refresh",
     "refreshing": "Refreshing...",
+    "replayLoading": "Replay loading",
+    "editInChat": "Edit in chat",
     "viewHistory": "View History",
     "collapseHistory": "Collapse History",
+    "copied": "Copied",
+    "copyPrompt": "Copy implement prompt",
     "reapply": "Reapply",
     "applying": "Applying...",
     "maintainNode": "Maintain Node",
@@ -103,7 +114,7 @@
     "closeNodeDetail": "Close node detail"
   },
   "toolbar": {
-    "loading": "Loading…",
+    "loading": "Projecting notes…",
     "recent": "Last",
     "times": "commits",
     "descendantLevel": "Focus Depth",
@@ -143,6 +154,11 @@
     "asRoot": "As root node",
     "newTerminalType": "New Terminal Type",
     "source": "Source",
+    "sourceFile": "File",
+    "sourceHash": "Hash",
+    "terminalBound": "Bound {{id}}",
+    "terminalStarting": "Starting…",
+    "terminalUnbound": "Unbound",
     "terminal": "Terminal",
     "analysisCursor": "Analysis Cursor",
     "janusAnalysis": "Janus Analysis",
@@ -180,9 +196,15 @@
     "warningWorkspaceInvalid": "Workspace invalid",
     "workspaceUnbound": "No workspace bound"
   },
+  "legend": {
+    "parent": "Parent",
+    "relation": "Related"
+  },
   "search": {
-    "placeholder": "Search nodes",
-    "statusAll": "All statuses"
+    "placeholder": "Search title / status / tag…",
+    "statusAll": "All statuses",
+    "typeAll": "All types",
+    "kindAll": "All kinds"
   },
   "prompt": {
     "newChild": "New Child Node",
@@ -227,6 +249,9 @@
     "noBlueprints": "(No blueprints)",
     "newBlueprint": "+ New",
     "rename": "Rename",
+    "readOnlyBadge": "Agent maintained · read-only",
+    "scopeBadge": "{{name}} · rev {{rev}} · NoteAdapter {{adapter}} · {{count}} notes · layout local",
+    "invalidBadge": "{{count}} invalid",
     "janusAnalysisDone": "Janus Analysis Complete",
     "janusAnalysisNotApplied": "Janus Analysis Not Applied",
     "close": "Close",
@@ -276,6 +301,7 @@
     "scopeBlueprint": "Entire blueprint",
     "targetNode": "Target node",
     "maintenanceGoal": "Maintenance goal",
+    "maintenanceTaskFold": "Maintenance task",
     "goalDefault": "Review blueprint node content and hierarchy based on current workspace implementation",
     "policyHint": "Janus can freely discuss within this authorization scope; it only modifies the blueprint after explicitly generating and approving a proposal.",
     "startConversation": "Start conversation",

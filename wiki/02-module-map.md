@@ -56,7 +56,7 @@ Last analyzed: 2026-09-06
 | LLM config/chat | `components/LlmConfigModal.tsx`, `services/llm.ts` | provider CRUD, test, chat, streaming chat subscription |
 | Blueprint UI | `components/blueprint/*`, `features/blueprint/*`, `stores/blueprint.ts`, `stores/blueprint-maintenance.ts`, `services/blueprint.ts` | React Flow views/store, layout derivation, adaptive edge geometry, canvas navigation, graph controller, analysis actions, maintenance panel, audit details, workbench |
 | Janus island/chat | `components/janus/*` | titlebar island, eye, identity core, expanded UI, chat pane/provider, conversations, reasoning region (`janusReasoning.ts` + `ThinkingRegion.tsx`), tool call card, project candidate, resources, runtime state, streaming printer, island gesture, knowledge peek, roundtable pane/stage/parchment |
-| Quick notes | `components/note/*`, `stores/note.ts` | quick note editor, behavior, export |
+| Quick notes | `components/note/*`, `stores/draft-card.ts` | quick note editor, behavior, export |
 | Checkpoint UI | `components/CheckpointPanel.tsx`, `stores/checkpoint.ts` | checkpoint list, diff, restore |
 | Git UI | `components/GitPanel.tsx`, `stores/git.ts` | git status/action panel |
 | Office UI | `components/office/*`, `stores/office.ts`, `services/office.ts` | office file list, preview panel/frame, prompt preview, setup gate, discovery, resize |

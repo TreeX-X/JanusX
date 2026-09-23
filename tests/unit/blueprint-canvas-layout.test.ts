@@ -4,7 +4,8 @@ import {
   computeBlueprintSubtreeLayout,
   computeVisibleBlueprintLayout,
   deriveBlueprintFlow,
-  deriveBlueprintCardData
+  deriveBlueprintCardData,
+  relationDash
 } from '../../src/renderer/src/features/blueprint/canvas-layout'
 import type { Blueprint, BlueprintNode } from '../../src/renderer/src/services/blueprint'
 
@@ -24,7 +25,42 @@ describe('blueprint canvas layout', () => {
     expect(result.nodes.find((node) => node.id === 'root')?.position).toEqual({ x: 42, y: 24 })
     expect(result.nodes.find((node) => node.id === 'child')?.data.searchMatched).toBe(true)
     expect(result.edges).toEqual([expect.objectContaining({ source: 'root', target: 'child' })])
-    expect(result.edges[0].style?.stroke).toBe('#22c55e66')
+    expect(result.edges[0].style).toMatchObject({ stroke: '#8a8a8a', strokeWidth: 1.6 })
+    expect(result.edges[0].style).not.toHaveProperty('strokeDasharray')
+  })
+
+  it('renders note relations as dashed edges, skipping parent duplicates', () => {
+    const blueprint = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'a', 'b'], canvasLayout: {},
+      nodes: {
+        root: { id: 'root', title: 'Root', type: 'epic', status: 'planned', progress: 0, parentId: null, children: ['a', 'b'] },
+        a: { id: 'a', title: 'A', type: 'task', status: 'in-progress', progress: 0, parentId: 'root', children: [] },
+        b: { id: 'b', title: 'B', type: 'task', status: 'done', progress: 100, parentId: 'root', children: [] },
+      },
+      relations: [
+        { id: 'a:depends-on:b', sourceNodeId: 'a', targetNodeId: 'b', type: 'depends-on' },
+        { id: 'a:related-to:root', sourceNodeId: 'a', targetNodeId: 'root', type: 'related-to' },
+        { id: 'a:related-to:missing', sourceNodeId: 'a', targetNodeId: 'missing', type: 'related-to' },
+      ],
+    } as unknown as Blueprint
+
+    const result = deriveBlueprintFlow(blueprint, undefined, {}, new Set(), false)
+
+    const rel = result.edges.find((edge) => edge.id === 'e-rel-a-depends-on-b')
+    expect(rel).toMatchObject({ source: 'a', target: 'b' })
+    expect(rel?.style).toMatchObject({ stroke: 'rgba(255,255,255,.2)', strokeDasharray: '5 4' })
+    // Mirrors the parent edge root->a: skipped to avoid double-drawing.
+    expect(result.edges.some((edge) => edge.id === 'e-rel-a-related-to-root')).toBe(false)
+    // Dangling targets never render.
+    expect(result.edges.some((edge) => String(edge.id).includes('missing'))).toBe(false)
+  })
+
+  it('maps each relation type onto its own dash language', () => {
+    expect(relationDash('depends-on')).toBe('5 4')
+    expect(relationDash('implements')).toBe('2 3')
+    expect(relationDash('related-to')).toBe('5 5')
+    expect(relationDash('blocks')).toBe('5 5')
+    expect(relationDash('')).toBe('5 5')
   })
 
   it('wraps wide leaf sets into a near-square grid instead of a single row', () => {

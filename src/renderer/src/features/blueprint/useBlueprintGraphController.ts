@@ -7,6 +7,7 @@ import {
 } from '@xyflow/react'
 import { updateBlueprint } from '@/services/blueprint'
 import type { Blueprint } from '@/services/blueprint'
+import { useBlueprintStore } from '@/stores/blueprint'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'
 import {
   collectSubtreeIds,
@@ -15,7 +16,6 @@ import {
   deriveBlueprintFlow
 } from './canvas-layout'
 
-const GLOBAL_BLUEPRINT_SCOPE = '__global__'
 const SAVE_DELAY_MS = 500
 const RETRY_DELAYS_MS = [500, 1_000, 2_000, 4_000]
 const NODE_BATCH_SIZE = 8
@@ -197,7 +197,10 @@ export function useBlueprintGraphController({
       async (targetBlueprintId, layout) => {
         const known = blueprintRef.current?.id === targetBlueprintId ? blueprintRef.current.nodeIds : null
         const filtered = known ? Object.fromEntries(Object.entries(layout).filter(([id]) => known.includes(id))) : layout
-        await updateBlueprint(GLOBAL_BLUEPRINT_SCOPE, targetBlueprintId, { canvasLayout: filtered })
+        // Overlay 写回必须命中投影所属 checkout；GLOBAL  scope 在 dev 下会漂到仓库自身。
+        const cwd = useBlueprintStore.getState().workspacePathFor(targetBlueprintId)
+        if (!cwd) throw new Error('找不到该图谱所属的工作区')
+        await updateBlueprint(cwd, targetBlueprintId, { canvasLayout: filtered })
       },
       (message) => onErrorRef.current(message),
       SAVE_DELAY_MS,

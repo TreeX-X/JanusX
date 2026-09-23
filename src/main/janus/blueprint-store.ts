@@ -53,6 +53,7 @@ import {
   createNoteOp,
   nodeTypeToKind,
 } from '../harness/artifact-producer'
+import { toNoteDoc } from '../notes/note-provider'
 import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
 import { applyOperations } from './maintenance/changeset'
 import type { OwnerScope } from '../../shared/team/types'
@@ -241,38 +242,25 @@ export class BlueprintStore {
     })
   }
 
+  /**
+   * Workspace-only listing (V2): returns exactly the live projection over
+   * this checkout's `.agents/notes`, never legacy JSON. Legacy reads stay
+   * available on `loadBlueprint`/`listBlueprints` for team/analyzer internals
+   * until each workspace migrates; the view layer no longer asks for them.
+   */
   async listBlueprintSummaries(workspace: string) {
     return this.locked(async () => {
-      await this.migrateLegacyWorkspace(workspace)
-      const idx = await this.loadIndex(workspace)
-      const out = []
-      for (const id of idx.blueprints) {
-        const bp = this.cache.get(id) ?? (await readJson<Blueprint>(blueprintFile(id)))
-        if (!bp) continue
-        this.cache.set(id, bp)
-        out.push({
-          id: bp.id,
-          name: bp.name,
-          description: bp.description,
-          contentRevision: bp.contentRevision,
-          nodeCount: bp.nodeIds.length,
-          createdAt: bp.createdAt,
-          updatedAt: bp.updatedAt,
-        })
-      }
       const project = await this.loadProjectGraph(workspace)
-      if (project) {
-        out.push({
-          id: project.id,
-          name: project.name,
-          description: project.description,
-          contentRevision: project.contentRevision,
-          nodeCount: project.nodeIds.length,
-          createdAt: project.createdAt,
-          updatedAt: project.updatedAt,
-        })
-      }
-      return out
+      if (!project) return []
+      return [{
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        contentRevision: project.contentRevision,
+        nodeCount: project.nodeIds.length,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+      }]
     })
   }
 
@@ -666,7 +654,7 @@ export class BlueprintStore {
         parentUri = parent.sourceUri
       }
     }
-    const produced = applyNodePatch(current.note, {
+    const produced = applyNodePatch(toNoteDoc(current.note), {
       ...(fields.title !== undefined ? { title: fields.title } : {}),
       ...(fields.description !== undefined ? { description: fields.description } : {}),
       ...(fields.positioning !== undefined ? { positioning: fields.positioning } : {}),

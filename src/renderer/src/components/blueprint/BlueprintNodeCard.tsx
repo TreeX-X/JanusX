@@ -6,7 +6,7 @@
 import { createContext, memo, useContext } from 'react'
 import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/react'
 import type { BlueprintNodeStatus, BlueprintNodeType } from '@/services/blueprint'
-import { STATUS_VISUALS, NODE_TYPE_LABEL_KEY } from './blueprintStatus'
+import { STATUS_VISUALS, NODE_TYPE_LABEL, NOTE_KIND_LABEL_KEY, noteKindOf } from './blueprintStatus'
 import { useI18n } from '@/i18n/useI18n'
 
 /** 低于该缩放阈值时卡片进入极简渲染（只保留状态点 + 标题 + 折叠入口） */
@@ -22,6 +22,8 @@ export interface BlueprintNodeData extends Record<string, unknown> {
   title: string
   status: BlueprintNodeStatus
   nodeType: BlueprintNodeType
+  /** note 原始 kind（harness 透传；缺省时 kindtag 按 type 回退） */
+  kind?: string | null
   progress: number
   workspaceName: string | null
   boundTerminalId: string | null
@@ -48,6 +50,7 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
   const progress = Math.max(0, Math.min(100, d.progress ?? 0))
   const childCount = d.childCount ?? 0
   const collapsed = d.collapsed ?? false
+  const noteKind = noteKindOf({ kind: d.kind ?? undefined, type: d.nodeType })
 
   return (
     <div
@@ -64,8 +67,9 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
 
       <div className="bp-node-card__header">
         <span className="bp-node-card__dot" style={{ background: visual.color, color: visual.color }} />
+        <span className="bp-node-card__kindtag">{NOTE_KIND_LABEL_KEY[noteKind] ? t(NOTE_KIND_LABEL_KEY[noteKind]) : noteKind}</span>
         {minimal ? null : (
-          <span className="bp-node-card__type">{NODE_TYPE_LABEL_KEY[d.nodeType] ? t(NODE_TYPE_LABEL_KEY[d.nodeType]) : d.nodeType}</span>
+          <span className="bp-node-card__type">{NODE_TYPE_LABEL[d.nodeType]?.toUpperCase() ?? d.nodeType}</span>
         )}
         {childCount > 0 && actions ? (
           <button
@@ -92,11 +96,11 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
       {minimal ? null : (
         <>
           <div className="bp-node-card__progress">
-            <div className="bp-node-card__progress-bar" style={{ width: `${progress}%`, background: visual.color }} />
+            <div className="bp-node-card__progress-bar" style={{ width: `${progress}%` }} />
           </div>
 
           <div className="bp-node-card__footer">
-            <span style={{ color: visual.color }}>{t(visual.labelKey)}</span>
+            <span>{t(visual.labelKey)}</span>
             <span className={`bp-node-card__workspace${d.workspaceName ? '' : ' bp-node-card__workspace--empty'}`}>
               {d.workspaceName ?? t('blueprint:nodeCard.noWorkspace')}
             </span>

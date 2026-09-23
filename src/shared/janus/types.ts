@@ -165,6 +165,13 @@ export interface BlueprintNode {
   title: string
   type: BlueprintNodeType
   status: BlueprintNodeStatus
+  /**
+   * 原始 note 词汇（NoteAdapter v1 透传；legacy JSON 缺省）。
+   * type/status 是映射后的画布词汇，kind/lifecycle 是 note 原文，
+   * 详情 eyebrow/chips 与 kind 过滤直接读这里，不做二次映射。
+   */
+  kind?: string
+  lifecycle?: string
   progress: number
   statusSource: BlueprintStatusSource
   positioning: string
@@ -200,11 +207,18 @@ export interface BlueprintNode {
   updatedAt: string
 }
 
+export interface BlueprintInvalidNote {
+  relPath: string
+  diagnostics: Array<{ code: string; message: string }>
+}
+
 export interface Blueprint {
   /** Persisted schema version; absent means the legacy v0 shape. */
   schemaVersion?: number
   /** 'harness' marks a live projection over `.agents/notes`; default lane is 'json'. */
   source?: 'json' | 'harness'
+  /** NoteAdapter version that produced this projection (harness lane only; legacy JSON leaves it undefined). */
+  adapterVersion?: string
   /** Monotonic version for semantic changes. Canvas-only changes do not increment it. */
   contentRevision: number
   id: string
@@ -228,6 +242,11 @@ export interface Blueprint {
   canvasLayout: Record<string, { x: number; y: number }>
   /** Persisted collapsed node ids; null/undefined means not initialized yet. */
   collapsedNodeIds?: string[] | null
+  /**
+   * Notes that failed validation, excluded from the graph but surfaced for
+   * repair. Transient (fresh per projection, never persisted to JSON).
+   */
+  invalidNotes?: BlueprintInvalidNote[]
   createdAt: string
   updatedAt: string
 }

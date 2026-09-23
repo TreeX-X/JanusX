@@ -16,6 +16,13 @@
     "task": "Task",
     "issue": "Issue"
   },
+  "noteKind": {
+    "idea": "idea",
+    "initiative": "initiative",
+    "requirement": "requirement",
+    "decision": "decision",
+    "task": "task"
+  },
   "issueSeverity": {
     "low": "低",
     "medium": "中",
@@ -76,8 +83,12 @@
     "nextMatch": "下一项",
     "refresh": "刷新",
     "refreshing": "刷新中...",
+    "replayLoading": "重放加载",
+    "editInChat": "在对话中变更",
     "viewHistory": "查看历史",
     "collapseHistory": "收起历史",
+    "copied": "已复制",
+    "copyPrompt": "复制实施 prompt",
     "reapply": "重新应用",
     "applying": "应用中...",
     "maintainNode": "维护此节点",
@@ -103,7 +114,7 @@
     "closeNodeDetail": "关闭节点详情"
   },
   "toolbar": {
-    "loading": "加载中…",
+    "loading": "正在投影 note…",
     "recent": "最近",
     "times": "次",
     "descendantLevel": "聚焦深度",
@@ -143,6 +154,11 @@
     "asRoot": "作为根节点",
     "newTerminalType": "新建终端类型",
     "source": "来源",
+    "sourceFile": "文件",
+    "sourceHash": "哈希",
+    "terminalBound": "已绑定 {{id}}",
+    "terminalStarting": "启动中…",
+    "terminalUnbound": "未绑定",
     "terminal": "终端",
     "analysisCursor": "分析游标",
     "janusAnalysis": "Janus 分析",
@@ -180,9 +196,15 @@
     "warningWorkspaceInvalid": "工作区失效",
     "workspaceUnbound": "未绑定工作区"
   },
+  "legend": {
+    "parent": "父子",
+    "relation": "关联"
+  },
   "search": {
-    "placeholder": "搜索节点",
-    "statusAll": "全部状态"
+    "placeholder": "搜索标题 / 状态 / tag…",
+    "statusAll": "全部状态",
+    "typeAll": "全部类型",
+    "kindAll": "全部 kind"
   },
   "prompt": {
     "newChild": "新建子节点",
@@ -227,6 +249,9 @@
     "noBlueprints": "（暂无蓝图）",
     "newBlueprint": "+ 新建",
     "rename": "重命名",
+    "readOnlyBadge": "Agent 维护 · 用户只读",
+    "scopeBadge": "{{name}} · rev {{rev}} · NoteAdapter {{adapter}} · {{count}} notes · layout本机",
+    "invalidBadge": "{{count}} 篇无效",
     "janusAnalysisDone": "Janus 分析完成",
     "janusAnalysisNotApplied": "Janus 分析未应用",
     "close": "关闭",
@@ -276,6 +301,7 @@
     "scopeBlueprint": "整张蓝图",
     "targetNode": "目标节点",
     "maintenanceGoal": "维护目标",
+    "maintenanceTaskFold": "维护任务",
     "goalDefault": "根据当前工作区实现情况整理蓝图节点内容和层级",
     "policyHint": "Janus 可在本次授权范围内自由讨论；只有显式生成并批准提案后才会修改蓝图。",
     "startConversation": "开始对话",

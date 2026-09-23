@@ -75,6 +75,77 @@ export function blueprintNodeContext(blueprint: Blueprint, allowed: Set<string>)
   return JSON.stringify({ nodes, relations }, null, 2)
 }
 
+/**
+ * ViewPatch: the only thing the Agent may change about the canvas itself.
+ * Overlay-only (layout coordinates, subtree collapse, focus) — never note
+ * content. `.strict()` rejects raw file-edit fields (title/features/status/…).
+ */
+export const blueprintViewPatchSchema = z.object({
+  summary: z.string().min(1).max(500),
+  layout: z.record(
+    z.string().min(1),
+    z.object({
+      x: z.number().finite().min(-100000).max(100000),
+      y: z.number().finite().min(-100000).max(100000),
+    }),
+  ).optional(),
+  collapsedNodeIds: z.array(z.string().min(1)).max(500).nullable().optional(),
+  focusNodeId: z.string().min(1).nullable().optional(),
+}).strict()
+
+export type BlueprintViewPatch = z.infer<typeof blueprintViewPatchSchema>
+
+const VIEW_PATCH_LAYOUT_LIMIT = 200
+
+/**
+ * Validates a ViewPatch against the live blueprint scope. Unknown node ids,
+ * oversized layouts, and out-of-scope focus fail closed with a coded error;
+ * content fields never reach here (the strict schema drops them at parse).
+ */
+export function validateViewPatch(
+  blueprint: Blueprint,
+  input: unknown,
+): { ok: true; patch: BlueprintViewPatch } | { ok: false; code: string; message: string } {
+  let parsed: BlueprintViewPatch
+  try {
+    parsed = blueprintViewPatchSchema.parse(input)
+  } catch (err) {
+    return { ok: false, code: 'SCHEMA_INVALID', message: err instanceof Error ? err.message : String(err) }
+  }
+  const known = new Set(blueprint.nodeIds)
+  const layoutKeys = Object.keys(parsed.layout ?? {})
+  if (layoutKeys.length > VIEW_PATCH_LAYOUT_LIMIT) {
+    return { ok: false, code: 'SCHEMA_INVALID', message: `layout covers ${layoutKeys.length} nodes, limit is ${VIEW_PATCH_LAYOUT_LIMIT}` }
+  }
+  for (const id of layoutKeys) {
+    if (!known.has(id)) return { ok: false, code: 'NOT_FOUND', message: `unknown layout node: ${id}` }
+  }
+  for (const id of parsed.collapsedNodeIds ?? []) {
+    if (!known.has(id)) return { ok: false, code: 'NOT_FOUND', message: `unknown collapse node: ${id}` }
+  }
+  if (parsed.focusNodeId != null && !known.has(parsed.focusNodeId)) {
+    return { ok: false, code: 'NOT_FOUND', message: `unknown focus node: ${parsed.focusNodeId}` }
+  }
+  return { ok: true, patch: parsed }
+}
+
+/**
+ * Pure overlay merge: layout entries overwrite per node, collapse replaces
+ * only when present, focus travels as metadata for the host. No IO — the
+ * caller persists through the existing canvasLayout/collapsedNodeIds overlay
+ * paths (local-only, never note bytes).
+ */
+export function applyViewPatch(
+  blueprint: Blueprint,
+  patch: BlueprintViewPatch,
+): { canvasLayout: Blueprint['canvasLayout']; collapsedNodeIds: Blueprint['collapsedNodeIds']; focusNodeId: string | null } {
+  return {
+    canvasLayout: { ...blueprint.canvasLayout, ...(patch.layout ?? {}) },
+    collapsedNodeIds: patch.collapsedNodeIds !== undefined ? patch.collapsedNodeIds : blueprint.collapsedNodeIds,
+    focusNodeId: patch.focusNodeId ?? null,
+  }
+}
+
 export function createJanusBlueprintTools(options: {
   readOnlyTools?: JanusAgentTool[]
   blueprint: Blueprint
@@ -104,7 +175,20 @@ export function createJanusBlueprintTools(options: {
       }
     },
   }
-  return [...(options.readOnlyTools ?? []), read, propose]
+  const view: JanusAgentTool = {
+    name: 'janus.blueprint.view',
+    executionMode: 'parallel',
+    execute: async (call) => {
+      const checked = validateViewPatch(options.blueprint, call.arguments)
+      if (!checked.ok) throw new Error(`${checked.code}: ${checked.message}`)
+      const applied = applyViewPatch(options.blueprint, checked.patch)
+      return {
+        content: JSON.stringify({ summary: checked.patch.summary, ...applied }),
+        details: { summary: checked.patch.summary, ...applied },
+      }
+    },
+  }
+  return [...(options.readOnlyTools ?? []), read, propose, view]
 }
 
 export const blueprintReadModelTool = {
