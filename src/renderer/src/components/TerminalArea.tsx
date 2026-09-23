@@ -59,6 +59,7 @@ import {
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
 import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
+import { useTurnChangesStore } from '@/stores/turn-changes'
 import {
   buildWorkspaceTerminalSurfaces,
   HOT_WORKSPACE_EVICTION_GRACE_MS,
@@ -1422,6 +1423,7 @@ export function TerminalArea() {
       }
       removeTerminal(id)
       applyTerminalNoteLifecycle('kill-removed', id)
+      useTurnChangesStore.getState().clearTerminal(id)
       if (useWorkspaceStore.getState().terminals.length === 0) {
         setLoadState('no-terminal')
       }

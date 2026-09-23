@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useTurnChangesStore } from '@/stores/turn-changes'
 
 export function useTerminalLifecycle(): void {
   const updateTerminal = useWorkspaceStore((state) => state.updateTerminal)
@@ -18,6 +19,7 @@ export function useTerminalLifecycle(): void {
   useEffect(() => window.electron.terminal.onExit(({ id, exitCode }) => {
     if (exitCode === 0) {
       removeTerminal(id)
+      useTurnChangesStore.getState().clearTerminal(id)
       return
     }
     updateTerminal(id, { status: 'error', exitCode, updatedAt: Date.now() })

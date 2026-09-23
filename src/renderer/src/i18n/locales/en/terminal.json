@@ -322,6 +322,12 @@
   "turnChanges": {
     "files": "{{count}} files",
     "more": "+{{count}} more in Sessions",
-    "empty": "No file changes this turn"
+    "empty": "No file changes this turn",
+    "latest": "Latest",
+    "history": "History {{count}}",
+    "hint": "Click for the latest turn, double-click for history",
+    "turns": "{{count}} turns",
+    "openFile": "Open in editor",
+    "deletedNoPreview": "File deleted, no preview"
   }
 }

@@ -1,21 +1,43 @@
 import { useEffect, useRef, useState } from 'react'
-import { useTurnChangesStore } from '@/stores/turn-changes'
+import { useTurnChangesStore, type TerminalTurnChangesEvent } from '@/stores/turn-changes'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useEditorStore } from '@/stores/editor'
 import { useI18n } from '@/i18n/useI18n'
 
 const COLLAPSE_TTL_MS = 6000
 const NARROW_PANE_PX = 360
 const MAX_VISIBLE_FILES = 10
+const MAX_HISTORY_FILES_PER_TURN = 5
 
+type IslandView = 'latest' | 'history'
+
+const EMPTY_TURNS: TerminalTurnChangesEvent[] = []
+
+// Note: per-terminal turn file history lives on the pane's right edge — see .agents/notes/implemented/feature/2026-09-23-terminal-right-island-turn-history.md
 /**
- * Turn-change island: one overlay per terminal pane, identical for all
- * engines. Transient signal only — the session panel holds the record.
+ * Turn-change island: one persistent overlay per terminal pane, identical for
+ * all engines. The pill stays on the right edge once the first turn lands;
+ * single click expands the latest turn, double click expands per-turn history.
+ * File rows reuse the embedded editor preview; the session panel holds the
+ * audit record.
  */
 export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; focused: boolean }) {
   const { t } = useI18n('terminal')
   const change = useTurnChangesStore((s) => s.changesByTerminal[terminalId])
-  const dismiss = useTurnChangesStore((s) => s.dismiss)
+  const history = useTurnChangesStore((s) => s.historyByTerminal[terminalId] ?? EMPTY_TURNS)
   const subscribeToEvents = useTurnChangesStore((s) => s.subscribeToEvents)
+  const cwd = useWorkspaceStore((s) => {
+    const active = s.terminals.find((item) => item.id === terminalId)
+    if (active) return active.cwd
+    for (const snapshot of Object.values(s.terminalSnapshots)) {
+      const found = snapshot.terminals.find((item) => item.id === terminalId)
+      if (found) return found.cwd
+    }
+    return null
+  })
+  const openFile = useEditorStore((s) => s.openFile)
   const [expanded, setExpanded] = useState(false)
+  const [view, setView] = useState<IslandView>('latest')
   const [pinned, setPinned] = useState(false)
   const [hovering, setHovering] = useState(false)
   const [focusWithin, setFocusWithin] = useState(false)
@@ -27,12 +49,15 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
 
   useEffect(() => subscribeToEvents(), [subscribeToEvents])
 
-  // New turn-end arrives: expand only when this pane is focused.
+  // New turn-end arrives: expand only when this pane is focused; unfocused
+  // and narrow panes keep the pill with the fresh count as the signal.
+  const turnKey = change ? `${change.checkpointId ?? ''}:${change.endedAt}` : null
   useEffect(() => {
-    if (!change) return
+    if (!turnKey) return
     setExpanded(focusedRef.current && !narrow)
+    setView('latest')
     setPinned(false)
-  }, [change, narrow])
+  }, [turnKey, narrow])
 
   // Pane width decides whether the expanded form fits at all.
   useEffect(() => {
@@ -63,19 +88,19 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
         timerRef.current = null
       }
     }
-  }, [expanded, pinned, hovering, focusWithin, change?.endedAt])
+  }, [expanded, pinned, hovering, focusWithin, turnKey, view])
 
-  // Esc and click-away dismiss the island until the next turn.
+  // Esc and click-away collapse the island to the persistent pill.
   useEffect(() => {
     if (!expanded || !change) return
     const onPointerDown = (event: PointerEvent) => {
       if (pinned) return
       if (rootRef.current?.contains(event.target as Node)) return
-      dismiss(terminalId)
+      setExpanded(false)
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      dismiss(terminalId)
+      setExpanded(false)
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -83,18 +108,38 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [expanded, pinned, change, dismiss, terminalId])
+  }, [expanded, pinned, change])
   if (!change) return null
 
   const summary = `${t('terminal:turnChanges.files', { count: change.fileCount })} · +${change.additions} −${change.deletions}`
   const visibleFiles = change.files.slice(0, MAX_VISIBLE_FILES)
   const hiddenCount = change.fileCount - visibleFiles.length
 
+  const openPreview = (relPath: string, status: string) => {
+    if (!cwd || status === 'deleted') return
+    void openFile(`${cwd}/${relPath}`.replace(/\\/g, '/'), cwd)
+  }
+
+  const expandLatest = () => {
+    if (narrow) return
+    setView('latest')
+    setExpanded(true)
+    setPinned(true)
+  }
+
+  const expandHistory = () => {
+    if (narrow) return
+    setView('history')
+    setExpanded(true)
+    setPinned(true)
+  }
+
   return (
     <div
       ref={rootRef}
       data-turn-island=""
       data-stage={expanded ? 'expanded' : 'collapsed'}
+      data-view={expanded ? view : undefined}
       onMouseDown={(event) => {
         // The chrome never steals xterm focus; only controls focus themselves.
         event.preventDefault()
@@ -106,11 +151,10 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       className="absolute z-20"
       style={{
         right: 8,
-        // Heuristic composer clearance: the CLI prompt band lives at the
-        // bottom of the TUI and reports no geometry to the shell.
-        bottom: 72,
-        width: expanded ? 'min(300px, 52%)' : 'auto',
-        maxHeight: expanded ? 'min(46%, 320px)' : 'none',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        width: expanded ? 'min(320px, 60%)' : 'auto',
+        maxHeight: expanded ? '70%' : 'none',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -124,11 +168,9 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       {!expanded ? (
         <button
           type="button"
-          onClick={() => {
-            if (narrow) return
-            setExpanded(true)
-            setPinned(true)
-          }}
+          title={t('terminal:turnChanges.hint')}
+          onClick={expandLatest}
+          onDoubleClick={expandHistory}
           onMouseDown={(event) => event.stopPropagation()}
           className="cursor-pointer whitespace-nowrap"
           style={{
@@ -142,17 +184,47 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
           }}
         >
           {summary}
+          {history.length > 1 ? ` · ${t('terminal:turnChanges.turns', { count: history.length })}` : null}
         </button>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div className="flex items-center" style={{ gap: 8, padding: '8px 10px 6px' }}>
-            <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: '#d4d4d4' }}>
-              {summary}
-            </span>
+            <button
+              type="button"
+              onClick={() => setView('latest')}
+              onMouseDown={(event) => event.stopPropagation()}
+              className="cursor-pointer"
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                fontFamily: "'SF Mono', monospace",
+                fontSize: 10.5,
+                color: view === 'latest' ? '#d4d4d4' : '#666',
+              }}
+            >
+              {t('terminal:turnChanges.latest')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('history')}
+              onMouseDown={(event) => event.stopPropagation()}
+              className="cursor-pointer"
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                fontFamily: "'SF Mono', monospace",
+                fontSize: 10.5,
+                color: view === 'history' ? '#d4d4d4' : '#666',
+              }}
+            >
+              {t('terminal:turnChanges.history', { count: history.length })}
+            </button>
             <button
               type="button"
               aria-label="close"
-              onClick={() => dismiss(terminalId)}
+              onClick={() => setExpanded(false)}
               onMouseDown={(event) => event.stopPropagation()}
               className="cursor-pointer"
               style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#666', fontSize: 12, padding: '0 2px' }}
@@ -160,31 +232,142 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               ×
             </button>
           </div>
-          <div style={{ overflowY: 'auto', padding: '0 10px 8px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.9 }}>
-            {visibleFiles.map((file) => (
-              <div key={file.path} className="flex" style={{ gap: 8 }}>
-                <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: '#999' }}>
-                  {file.path}
-                </span>
-                <FileCounts
+          {view === 'latest' ? (
+            <div style={{ overflowY: 'auto', padding: '0 10px 8px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.9 }}>
+              <div style={{ color: '#d4d4d4', marginBottom: 2 }}>{summary}</div>
+              {visibleFiles.map((file) => (
+                <FileRow
+                  key={file.path}
+                  path={file.path}
+                  status={file.status}
                   additions={file.additions}
                   deletions={file.deletions}
-                  status={file.status}
                   size={file.size}
+                  disabled={!cwd || file.status === 'deleted'}
+                  title={file.status === 'deleted' ? t('terminal:turnChanges.deletedNoPreview') : t('terminal:turnChanges.openFile')}
+                  onOpen={() => openPreview(file.path, file.status)}
                 />
-              </div>
-            ))}
-            {hiddenCount > 0 && (
-              <div style={{ color: '#555', fontSize: 10 }}>
-                {t('terminal:turnChanges.more', { count: hiddenCount })}
-              </div>
-            )}
-            {visibleFiles.length === 0 && (
-              <div style={{ color: '#555', fontSize: 10 }}>{t('terminal:turnChanges.empty')}</div>
-            )}
-          </div>
+              ))}
+              {hiddenCount > 0 && (
+                <div style={{ color: '#555', fontSize: 10 }}>
+                  {t('terminal:turnChanges.more', { count: hiddenCount })}
+                </div>
+              )}
+              {visibleFiles.length === 0 && (
+                <div style={{ color: '#555', fontSize: 10 }}>{t('terminal:turnChanges.empty')}</div>
+              )}
+            </div>
+          ) : (
+            <div style={{ overflowY: 'auto', padding: '0 10px 8px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.9 }}>
+              {[...history].reverse().map((turn, reversedIndex) => (
+                <HistoryTurn
+                  key={`${turn.checkpointId ?? turn.endedAt}:${turn.endedAt}`}
+                  index={history.length - reversedIndex}
+                  turn={turn}
+                  onOpen={(relPath, status) => openPreview(relPath, status)}
+                  openTitle={t('terminal:turnChanges.openFile')}
+                  deletedTitle={t('terminal:turnChanges.deletedNoPreview')}
+                  canPreview={cwd !== null}
+                />
+              ))}
+              {history.length === 0 && (
+                <div style={{ color: '#555', fontSize: 10 }}>{t('terminal:turnChanges.empty')}</div>
+              )}
+            </div>
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+function FileRow({
+  path,
+  status,
+  additions,
+  deletions,
+  size,
+  disabled,
+  title,
+  onOpen,
+}: {
+  path: string
+  status: string
+  additions: number | null
+  deletions: number | null
+  size: number
+  disabled: boolean
+  title: string
+  onOpen: () => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      onClick={onOpen}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      className="flex w-full text-left"
+      style={{
+        gap: 8,
+        background: 'none',
+        border: 'none',
+        padding: '1px 0',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
+      <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: '#999' }}>
+        {path}
+      </span>
+      <FileCounts
+        additions={additions}
+        deletions={deletions}
+        status={status}
+        size={size}
+      />
+    </button>
+  )
+}
+
+function HistoryTurn({
+  index,
+  turn,
+  onOpen,
+  openTitle,
+  deletedTitle,
+  canPreview,
+}: {
+  index: number
+  turn: TerminalTurnChangesEvent
+  onOpen: (relPath: string, status: string) => void
+  openTitle: string
+  deletedTitle: string
+  canPreview: boolean
+}) {
+  const visible = turn.files.slice(0, MAX_HISTORY_FILES_PER_TURN)
+  const hidden = turn.fileCount - visible.length
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ color: '#d4d4d4', fontSize: 10.5 }}>
+        #{index} · {turn.kind} · {turn.fileCount} · +{turn.additions} −{turn.deletions}
+      </div>
+      {visible.map((file) => (
+        <FileRow
+          key={file.path}
+          path={file.path}
+          status={file.status}
+          additions={file.additions}
+          deletions={file.deletions}
+          size={file.size}
+          disabled={!canPreview || file.status === 'deleted'}
+          title={file.status === 'deleted' ? deletedTitle : openTitle}
+          onOpen={() => onOpen(file.path, file.status)}
+        />
+      ))}
+      {hidden > 0 && <div style={{ color: '#555', fontSize: 10 }}>+{hidden}</div>}
+      {visible.length === 0 && <div style={{ color: '#555', fontSize: 10 }}>—</div>}
     </div>
   )
 }

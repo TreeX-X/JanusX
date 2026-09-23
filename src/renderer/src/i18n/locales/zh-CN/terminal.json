@@ -322,6 +322,12 @@
   "turnChanges": {
     "files": "{{count}} 个文件",
     "more": "其余 {{count}} 个见会话面板",
-    "empty": "本回合无文件变更"
+    "empty": "本回合无文件变更",
+    "latest": "最新",
+    "history": "历史 {{count}}",
+    "hint": "单击看最新一轮，双击看历史",
+    "turns": "{{count}} 轮",
+    "openFile": "在编辑器中打开",
+    "deletedNoPreview": "文件已删除，无法预览"
   }
 }
