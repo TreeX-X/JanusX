@@ -102,42 +102,29 @@ V3 assembler / `module` kind / 跨库 orange 边 / stale 重绑明确为后续�
 - P0-4 改动面大，拆分为“先 UI 入口删除，再 store/IPC 守卫”，避免一次大爆炸。
 
 
-## B: V2 终态右列（2026-09-23 落地记录）
+## B: V2 终态右列（2026-09-23，已落地，明细见 git 历史）
 
-方向：右列换纯 JanusChat + 删 queue chrome + composer 去 chips。
-
-- [x] B1: JanusChat 加 minimalComposer（选择菜单永不打开，只读 model tag + plan pill，快捷键入口同步守卫；其余调用方不受影响）。
-- [x] B2: 维护面板 chat-first：删 tabs 与 start 表单（启动收敛到机器区生成提案按钮，用选中节点 + 默认目标）；提案/审计/撤销/迁移 capability 原样保留，历史折进 details；legacy 无任务时只剩迁移卡 + 历史。
-- [x] plan 缺省：项目会话绑定创建时 setApprovalMode(plan) 一次，之后沿用持久化值；全局默认仍为 per-action。
-- 未做（V3）：提案审批从自定义 queue 迁移到原生 approval 卡（需 main 侧 agent 工具接管 apply）；候选 inbox、HarnessScopeBar、顶栏切换器、左列常驻仍是旧 IA 残留，待后续收敛。
+方向：右列换纯 JanusChat + 删 queue chrome + composer 去 chips。三项全[x]
+（B1 minimalComposer、B2 维护面板 chat-first、plan 缺省 setApprovalMode 一次）。
+未做（V3）：原生 approval 接管 apply、候选 inbox 等旧 IA 残留 → E1/E3。
 
 
-## C: 工作区切换 + 右列纯对话（新标准，2026-09-23 落地记录）
+## C: 工作区切换 + 右列纯对话（2026-09-23，已落地，明细见 git 历史）
 
 标准：只在工作区之间切换，不读取旧蓝图数据；右列只有对话（对齐 design/blueprint-note-graph.html）。
-
-### C1: 只在工作区之间切换
-
-- main listBlueprintSummaries 只返回本 checkout 的 note 投影，不再列 legacy、不再触发 legacy 迁移拷贝；listBlueprints（团队面）不动。
-- renderer store workspace 化：blueprintWorkspace 记录投影归属 checkout；loadBlueprints(paths) 合并多工作区投影（仅 harness:project:*）；loadBlueprint 拒非 project id；overlay 写回（布局/折叠）与分析历史经同一路径回源，修复 GLOBAL scope 在 dev 下漂到仓库自身的旧 bug。
-- BlueprintView：切换器=各工作区投影（活动工作区优先）；删除候选 inbox、分析 notice、重命名按钮及相关 handler（均为 legacy 流）。
-- main 侧 legacy 方法（loadBlueprint/loadBlueprints/team/analyzer/migrate）保留，团队与分析器内部不断档；视图层不再请求。
-
-### C2: 右列纯对话
-
-- BlueprintMaintenancePanel 压成 header + 绑定后 JanusChat（minimalComposer）+ 空态；删 tabs/start 表单/机器区/提案/审计/撤销/迁移 UI；maintenanceAuditDetails.ts 及其两份单测退役。
-- 绑定创建时 setApprovalMode(plan) 一次；composer 无 chips，只读 model tag + plan pill。
-- 后果（显式）：维护 start/apply/audit/undo、迁移、候选采纳暂无 UI 入口，service/IPC 保留待 agent 接管 apply（V3）。
+C1 只切工作区（listBlueprintSummaries 只返本 checkout 投影、store workspace 化、
+切换器=各工作区投影、删 legacy 流入口）与 C2 右列纯对话（面板压成 header +
+JanusChat + 空态）全[x]。后果（显式）：维护 start/apply/audit/undo、迁移、
+候选采纳暂无 UI 入口，service/IPC 保留待 agent 接管 apply（V3）。
 
 
-## D: 右列对齐 HTML 原型（2026-09-23 落地记录）
+## D: 右列对齐 HTML 原型（2026-09-23，已落地，明细见 git 历史）
 
-根因：minimalComposer 只去了 chips，但右列仍渲染 JanusChat 全套 chrome（thread 栏、资源条、状态条、消息按钮、model notice），而原型 body 只有审批槽 + 消息流 + wiki 单行 + todo + composer。
-
-- [x] minimal 下隐藏 thread 栏、资源 scope、model notice、消息按钮、整个状态条；选择菜单永不打开（含快捷键守卫）。
-- [x] composer 加 › 前缀 + 38px 方形橙发送（无边框 textarea），data-minimal-composer 作用域 CSS。
-- [x] 保留：消息（author/time + thinking + tool 卡）、审批槽单卡、todo 条、中途提问门（功能必需，藏起会导致 turn 卡死）、错误卡。
-- 未做：wiki 单行索引（本仓无对应数据面，tool 卡已覆盖已读展示）、消息气泡像素级重绘、发送 glyph 换 ↑、空态横幅。
+根因：minimalComposer 只去了 chips，右列仍渲染 JanusChat 全套 chrome，而原型 body
+只有审批槽 + 消息流 + wiki 单行 + todo + composer。四项全[x]
+（藏 thread 栏/资源 scope/model notice/消息按钮/状态条 + 选择菜单永不打开、
+composer › 前缀 + 38px 橙发送、保留消息/审批单卡/todo/中途提问门/错误卡）。
+未做：wiki 单行索引、气泡像素重绘、发送 glyph、空态横幅。
 
 
 ## 实施总序（2026-09-25 用户拍板，12 项已裁决）

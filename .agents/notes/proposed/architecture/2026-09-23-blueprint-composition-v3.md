@@ -114,7 +114,7 @@ selected + one-hop + same-module ancestor chain; cross-module full graph only on
   workspace differs (including skeleton children under the unbound root).
 - Cross-workspace edges: orange dashed (`6 3`, `rgba(255,120,48,.6)`); same-workspace relations stay gray
   dashed; parent stays gray solid. Legend gains the `跨工作区` orange chip. Orange's new appearance is
-  confined to this one meaning.
+  confined to this one meaning. 悬空需求 / 闲置供给的节点或边样式原型未定义，以架构师模型 E4 为准，此处不画。
 - Everything else reuses V2 verbatim (see inventory below).
 
 ## Reusable mechanisms inventory (do not lose)

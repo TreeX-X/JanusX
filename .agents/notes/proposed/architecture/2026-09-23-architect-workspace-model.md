@@ -9,6 +9,9 @@ model, cross-workspace relations, stale-evidence rule and reusable-mechanism inv
 git 仓库里的标准 harness note". No prototype yet: the design landed in conversation first, prototype is
 the next gate per the standing rule (先设计原型图才动手).
 
+> 修订线：2026-09-23 初版（取代 V3 存储半）→ 2026-09-24 三阶段/P1 冻结/§9 无 1.2/§9b 运行约定/
+> §10 三能力评估 → 2026-09-25 重排 P1→P2→P2b→P3、§8b `xarch`、§10b 打包版本道。各节标题不再重复标日期。
+
 ## Problem
 
 V3 定义了"规划骨架 × 证据装配"的读时组合，但把骨架放在 userData 的 GLOBAL JSON 里，并假设
@@ -50,27 +53,20 @@ V3 定义了"规划骨架 × 证据装配"的读时组合，但把骨架放在 u
 
 ## Proposal
 
+### 术语（全文以此为准）
+
+- note = 资产正文（`.agents/notes/*.md`，跟 repo 走的唯一真源）；
+- 投影 = 单工作区的读时视图（NoteAdapter v1 → `projectGraph`，不持久化）；
+- 蓝图 = 画布呈现（对投影/组合视图的渲染，布局只存本机）；
+- 组合视图 = 骨架 × N 个工作区投影（读时装配，L2）；
+- lane = 蓝图内分区（harness 投影 / legacy JSON / invalid 坏件），不是三种资产。
+
 ### 0. 一条更正：schema 不需要扩展
 
-结论先行：**架构师仓库所需的一切 `harness-note/1` 都有，且解析器逐字保留。**
-
-`harness-core/src/schema.ts:154-170` 的 `HarnessNoteMeta`：
-
-```ts
-schema; id; kind; lifecycle; created; class?; tags?; parent?;
-relations?: Relation[];                                   // target 支持 note://<repoId>/<noteId>
-repositories?: { primary?: string; related?: string[] };   // 模块 ↔ 开发工作区归属
-codeRefs?: CodeRef[];                                     // 跨库代码定位 {repoId, path, role}
-work?; execution?; disposition?; extensions?;             // extensions 是官方逃生舱
-```
-
-`ParsedNote.unknownFields`（`schema.ts:187`）逐字保留未知顶层 key。UUID 校验（`parse.ts:415,421,494`）
-说明 `repositories` 与 `codeRefs` **本来就是为跨库设计的**。
-
-真正的缺口在投影层：`note-provider.ts` 的 `toNoteDoc` 只取 `id/kind/lifecycle/tags/parent/created/
-relations`，**`repositories` 与 `codeRefs` 被整个丢弃**，连 `NoteDoc` 都不传。
-
-一句话：**不是 schema 缺字段，是 NoteAdapter 没把这些字段透出来。**
+结论先行：**架构师仓库所需的一切 `harness-note/1` 都有**（`HarnessNoteMeta` 自带
+`relations`/`repositories`/`codeRefs` 跨库字段，解析器逐字保留未知 key）。
+缺口在投影层：`toNoteDoc` 丢弃 `repositories`/`codeRefs`——修 adapter，不动 schema
+（选用理由并入 §4 方案 A 的论证）。
 
 ### 1. 三层资产（接 V3，替换 L1 的存储）
 
@@ -274,7 +270,7 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
 
 恢复成本极低：`changeset.ts` 795 行完整保留，只缺 UI 入口。**"一次性通过 + 部分通过"后端一行都不用写。**
 
-### 8b. `xarch` 指令（与 `xdo` 同构，建仓脚手架，2026-09-25 落定）
+### 8b. `xarch` 指令（与 `xdo` 同构，建仓脚手架）
 
 触发形态与 `xdo` 一致：前缀一敲即执行令，不经 prompt 猜、不停在计划页。
 定义面仿 `.claude/commands/xdo.md` + `orchestrateX` direct 模式：Main Agent 直接执行，
@@ -332,13 +328,10 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
       `INVALID_RELATION` 诊断。
 - [ ] UI→业务层、UI→渲染模块的**接口匹配**装配为实边；业务层→算法模块、业务层→数据载入层同理。
 - [ ] 单边声明渲染为悬空需求 / 闲置供给，带可点击定位（不崩、不抛错）。
-- [ ] 模块 note 的 `repositories.primary` / `codeRefs` 经 NoteAdapter 透出到 `NoteDoc`，组合图节点
-      可据此解析其开发工作区。
+- [ ] E0 投影层五项见实施计划 E0（透出/URI/主工作区/id/订阅）；本仓验收只认两条：
+      双 worktree 双条目、终端不再 `bindWorkspaceFirst`。
 - [ ] 某个开发工作区未打开/不可达时，组合图仍完整渲染骨架，缺失部分标"未接入"，无未捕获异常。
 - [ ] 只打开架构师工作区即可看到完整项目全景（不依赖其它工作区已加载）。
-- [ ] 两个 worktree 同时打开时，切换器出现**两个独立条目**（`projectGraphId` 按 rootKey 而非
-      repoId 前缀）。
-- [ ] 对 harness 投影节点，"进入终端"不再报 `bindWorkspaceFirst`。
 - [ ] 维护面板可发起提案并支持**一次性通过**与**部分通过**（组级勾选 + 依赖闭包自动补齐）；delete
       仍需逐项确认。
 - [ ] 架构师工作区与开发工作区的并发修改：冲突由 Agent 转内重试并叙述，不出现用户可见冲突条。
@@ -360,7 +353,7 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
 - **repoId 登记流程**：架构师要把新工作区的 repoId 写进模块 note 才能绑定，这是人际流程而非技术问题。
   缓解：登记动作产品化为一个明确的"接入工作区"操作。
 
-## Scope boundary: 三阶段 + note迁移（2026-09-24 修订，2026-09-25 重排执行顺序）
+## Scope boundary: 三阶段 + note迁移
 
 执行顺序：P1 → P2 → P2b → P3，单源以本节为准，实施计划 E 段服从本节门禁。
 
@@ -387,7 +380,7 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
   `repositories.primary` 装配），页签与过滤只存本机 `.local`。
 - 上述 8 项收敛一律不做，维持 1.0 原样。
 
-## 9b. 运行与索引约定（2026-09-24 落定）
+## 9b. 运行与索引约定
 
 - `notes/` 为唯一真源：扁平存放，稳定 UUID，`parent` 树表达层级，`relations[]` 表达边。
 - `evidence/` 只属 task：永久随提交、建后不可改，`execution.receipts` 引用；临时过程只放
@@ -400,7 +393,7 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
 - 读取走轻索引（URI/标题/kind/lifecycle/摘要/codeRefs），默认选中+一跳+同模块祖先链，
   全图按需取；终端直写文件由 watcher 重扫，坏值进 `invalid` lane，不抛错、不导入、不换 ID。
 
-## 10. 三能力评估（2026-09-24，以当前 note 为基）
+## 10. 三能力评估（以当前 note 为基）
 
 要求 1——完整表达工作区机制和能力：部分，不及格。能：initiative→requirement→task +
 parent 树，codeRefs/work.scope/work.verification 落点，decision 四节。不能：无能力注册表
@@ -421,35 +414,22 @@ taskContractHash + receipts/changeset/bundle + xdo/xdel/xflow + changeset.ts 整
 
 修复序：1 机制表达 → 2 索引 → 3 task 收敛。后续设计讨论以本节为基。
 
-## 10b. 打包版本道 + 逐项裁决（2026-09-25，标尺：简洁高效好用）
+## 10b. 打包版本道（标尺：简洁高效好用；裁决单源见实施计划“实施总序” ballot）
 
 原则：凡碰密封文件的优化项，一律攒进**同一次**版本 bump（新版本 + 新 digest +
 三仓 checkout 重记 + F01–F12 重跑），不零散改标准；实现层可修的不进版本道；
 判冗余的直接砍并记理由。字段只增不减是负债：快变信息不出规划 note，
 派生信息由实现层算、不存第二份。
 
-| 项 | 属实？ | 裁决与修法 | 去向 |
-|---|---|---|---|
-| 能力注册表 | 缺口部分属实 | 不加。能力是快变的运行时资产，note 是慢变的规划资产，耦合必腐坏；`codeRefs` + `work.scope` 已覆盖定位 | 砍 |
-| 接口一等字段 | 属实（软匹配定责弱） | 保持软匹配 + 悬空标记（零字段拿主要诊断价值）；P3 证伪后才加最小 `interfaces[]`，且明确不进 contract hash | 版本道（有条件） |
-| 机制行为栏 | 非 schema 缺口，是文档分层问题 | `codeRefs` 指代码，不搬状态机/API 签名正文 | 砍 |
-| 边界栏 role 三档 | 举证不足（暂无消费者喊不够） | 保持三档，等装配器规则真需要再议 | 后议 |
-| 反链 | 属实但属实现缺口（索引已有 byId + relations，派生查询即可） | P2 实现层做 | P2，不进版本道 |
-| 摘要栏 | 属实但加栏必致双源分叉（与 §9 砍掉的同类冗余） | 索引层按节提取 + 绑哈希；或约定 Goal/Decision 节即摘要，零字段 | 不加字段 |
-| 接口表进索引 | 同接口字段 | 定正文约定格式，索引层解析约定 | 不加字段 |
-| 多任务调度 | 属实但属 scope 问题 | S9 另立项 | 另立项 |
-| AC 编号错配 | 属实但属 UI 层 | 进位显示 `URI + AC-1` | 工具层 |
-| hash 雪崩 | 属实但保守方向正确（误过期优于误通过） | 维持；放宽需数据证明误过期成本 | 维持 |
-| lifecycle/execution 双轨 | 重叠属实但双轨承重（execution 进 hash 则收据自失效） | 文档定界（lifecycle 管接受态，execution 管运行态），不并字段 | 不并 |
-| 接口载体结构化 | 合理 | 只定正文约定格式，机器读约定 | 约定层 |
+逐项理由一句话：能力/机制行为栏是快变资产进慢变 note、耦合必腐坏故砍；
+摘要栏加栏必致双源分叉故砍；双轨承重（execution 进 hash 则收据自失效）故只定界不并；
+hash 保守方向正确（误过期优于误通过）故维持；反链/AC 显示/接口约定属实现层故不进版本道；
+接口字段待 P3 证伪后附条件进版。明细与用户裁决只记 ballot，此处不复记。
 
-## Open questions
+## Open questions（已决项已移出：布局不跨机见 Risks，接口载体见 ballot #12）
 
 - 多架构师工作区并存：无 views，全景即各架构仓内容，多全景并存、各管各，不合并；
   默认项为本机 pin（`.local`），待 E2 定案。
 - 架构师工作区是否需要独立的 `NOTE_CLASS`（如 `planning`）以便过滤？当前 `class` 是可选自由值。
 - 模块 `lifecycle` 与证据 `lifecycle` 不同步时（模块 accepted、证据全 draft）的展示规则。
-- 接口声明列表是否需要一个更结构化的载体（现为 `## Decision` 下的约定列表 + `relations[].reason`
-  双写）；若后续要做机器校验，可能需要规范化格式。
-- 组合全景的布局不跨机共享（存 `<checkout>/.agents/.local/ui/project.json`，各 checkout 独立）。
 - "接入工作区"操作是否应写入 `repositories.related[]` 而非仅 `primary`。
