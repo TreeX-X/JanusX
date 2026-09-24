@@ -17,7 +17,7 @@ work:
     - repoId: d2499d5b-4ceb-4d46-aa3b-18e5c9b86034
       paths: [standards/harness-note/1/, scripts/, .codex/, .claude/, .agents/, AGENTS.md, CLAUDE.md]
     - repoId: 62b44166-82f0-41ff-838d-e2b02388ed06
-      paths: [packages/harness-core/, packages/harness-node/, packages/notes-cli/, .agents/, .codex/, .claude/, AGENTS.md, CLAUDE.md]
+      paths: [packages/harness-core/, packages/harness-node/, packages/notes-cli/, package-lock.json, .agents/, .codex/, .claude/, AGENTS.md, CLAUDE.md]
     - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
       paths: [.agents/, .codex/, .claude/, AGENTS.md, CLAUDE.md, tests/unit/, package-lock.json]
   acceptanceRefs:
