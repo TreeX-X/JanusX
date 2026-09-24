@@ -1,232 +1,120 @@
-# Agent Note: 蓝图重构 noteV2 实施计划（机制 + UI）
+---
+schema: harness-note/1
+id: e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
+kind: initiative
+lifecycle: accepted
+created: 2026-09-23
+class: architecture
+tags: [blueprint, wiki, note-index, migration]
+relations:
+  - type: governed-by
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/41e93b25-92ce-4547-9250-e28cf4b1907f
+---
 
-Status: proposed
+# Note、wiki 与蓝图实施计划
 
-> **修订（2026-09-23，E 段）**：本轮对话确立了**架构师工作区模型**
-> （[note](./2026-09-23-architect-workspace-model.md)）。P0/P1 的既有勾选记录继续有效，但**实施顺序
-> 重排**：四条正确的/基础性的缺陷提到最前（E 段），V3 组合装配降为后续。阅读顺序建议：先 E 段，
-> 再看 P0/P1 的历史记录。
->
-> **修订（2026-09-25，总序，用户拍板）**：实施总序改为 WorkFlowX 新版（逐项过、用户审核敲定）
-> → 同步 agentX 贯通机制 → JanusX 最后（蓝图消费者，只做适配）。原“P3 证据门”降为例行输入，
-> 不再作为版本道前置条件。逐项裁决见“实施总序”节，用户确认一项落一项。
+## Goal
 
-## Problem
+让同一份工程资产能够在 wiki 中浏览、检索和回溯，在蓝图中呈现层级、关系与跨仓项目全景。设计真源为[共同契约](./2026-09-23-architect-workspace-model.md)（note://972afef3-2fc7-49de-a3ee-7e041225d28c/41e93b25-92ce-4547-9250-e28cf4b1907f），本文只记录基线、交付边界、依赖和验收。
 
-V2 基线为 `2026-09-22-blueprint-note-graph-readonly.md`（只读 NoteGraph 语义）与
-`2026-09-23-blueprint-workspace-graph-v2.md`（单工作区三列高保真）。
-上一轮汇报确认：`src/main/notes/` 三件套与 shim 已建，但以下未闭环——
-`projectView` 未透出 `adapterVersion`（工具栏徽是写死字符串）、`invalid[]` 无 UI、
-`NoteCard` 与 workspace notes 同名、`create/update/delete` 直写后门仍在、
-legacy JSON 仍可写、维护面板仍是自定义 queue 而非原生 approval、`plan` 模式缺失、
-V2 左列终端 footer / 图例分型 / 加载 stagger / composer 去 chips / native select
-清理均未对齐原型。V3（`2026-09-23-blueprint-composition-v3.md`）不在本计划内。
+用户已授权将本轮重构连续实施到完成。按 R1–R5 的依赖顺序建立 task，每段固定范围、AC 引用和验证命令；实现后接受独立 review，修复阻断项并验收通过后才能推进下一段。具体执行状态和验收证据写入对应 task。
 
-## Proposal
+## Scope
 
-按 P0（正确性/只读闭环）→ P1（V2 高保真对齐）顺序实施，每步最小改动 + 可验证。
-V3 assembler / `module` kind / 跨库 orange 边 / stale 重绑明确为后续，不在本计划动 adapter 以外。
+### 当前完成位置
 
-### P0-1: `projectView` 透出 `adapterVersion`（本步先做）
+以下基线来自代码与文件检查：WorkFlowX `fa91b4c`、janus-agentX `9e8ad2f`、JanusX `5f56e9f`。后续实施须核对实际 checkout，不能把文档完成当成功能完成。
 
-- `HarnessNoteService.projectView` 返回 `{ blueprint, rev, repoId, repoName, invalid, adapterVersion }`，
-  值为 `src/main/notes/note-types.ts` 的 `ADAPTER_VERSION`（当前 `v1`）。
-- `HarnessGraphResult` 同步加 `adapterVersion`；`Blueprint` 加可选 `adapterVersion?: string`，
-  `projectGraph()` 写入，legacy JSON 不写（undefined 即旧数据）。
-- 工具栏 `scopeBadge` 由写死 `NoteAdapter v1` 改为读 `currentBlueprint.adapterVersion ?? 'v1'`。
-- 测试：adapter golden 断言 `projectGraph().adapterVersion === 'v1'`；
-  `harness-service` 断言 `projectView().adapterVersion === 'v1'`。
+| 部分 | 已有能力 | 未闭环部分 |
+|---|---|---|
+| WorkFlowX | xarch 双端指令；S1.2 initiative 接口字段候选；共享派生索引约定 | S1.2 仍为 candidate，正式版本与三仓共同接入未完成 |
+| agentX | URI、正式关系、反链、过滤、正文搜索、短摘录；已有哈希、事务、锁与 watcher | profile 与解析器仍为 S1.1；接口字段和完整消费契约待接入 |
+| JanusX 单仓投影 | adapterVersion、invalid 展示、DraftCard、只读限制、工作区切换、右列精简对话 | 元数据和关系有损转换；刷新订阅缺入口 |
+| wiki | fact/observation 来源链与查询 | 工程 Note 阅读入口及知识 wiki 的 Note 来源桥接未接通 |
+| 项目组合与维护 | V3 原型基线、changeset 选择/依赖闭包/审计/撤销后端 | 装配器、接口边与未接入展示、组级部分通过到事务的入口未闭环 |
 
-### P0-2: `invalid` lane 渲染
+V2 的 P0、P1 及 B/C/D 已有落地记录保留在上述基线与 Git 历史。P0-1/2/3、P0-4a/b/c/d 覆盖版本回显、坏件展示、改名、只读守卫、plan 类型与 overlay 校验；plan 类型存在不代表维护写链已接通。关系线型、加载、终端 footer 与 composer 精简已有实现，wiki 单行入口和局部视觉仍有待办。
 
-- Renderer 读取 `projectView.invalid`（经 IPC `HarnessGraphResult.invalid`），画布不抛错；
-  工具栏或图例旁显示 `invalid N` + 点击定位 relPath + 首条 diagnostic。
-- `adapterVersion` 徽与 invalid 计数同行，避免第二徽。
-- 测试：含坏 note 的 fixture → `invalid.length === 1` 且画布仍渲染有效节点。
+原 E0 编号保留，供现有代码反向注释定位：
 
-### P0-3: `DraftCard` 改名去歧义
+| 编号 | 当前状态 | 对应后续交付 |
+|---|---|---|
+| E0-1 | 已按 checkout rootKey 生成图 ID | 保持同仓多 worktree 可区分 |
+| E0-2 | repositories、codeRefs 未透出，interfaces 未接入 | R2 共同读模型 |
+| E0-3 | 关系 target 截短，部分 type 转为 related-to | R2 完整身份及关系 |
+| E0-4 | checkout 路径终端定位已补齐；模块目标仓绑定未完成 | R4 显式 repoId 到 checkout 映射 |
+| E0-5 | harness:changed 订阅组件未挂载 | R2 失效通知与刷新 |
 
-- 按 `2026-09-22-notecard-rename-draft-card.md`：`stores/note.ts` → `stores/draft-card.ts`，
-  `NoteCard→DraftCard` 等纯改名，行为不变；`components/note/*` 与 `tests/unit/note/*` 同步。
-- AC：`NoteCard|useNoteStore` 在 `src/renderer` 零命中（shim 也不留）。
+文档修订前的 JanusX 语料基线为 181 文件：23 个通过单文件校验、33 个有诊断、125 个旧格式被 foreign 分支跳过。该数量只用于说明迁移规模；这两篇 Note 原位规范化后及每批迁移前后，都须重新盘点。旧格式、外来格式和损坏文件必须明确归类，不能静默排除。
 
-### P0-4: 收敛直写入口 + legacy 过渡说明
+### 实施顺序
 
-- renderer 直写已删：右键 markStatus 菜单与回调移除；stores/blueprint.ts 的
-  updateNode/deleteNode/renameBlueprint/deleteBlueprint 对 harness lane 直接拒绝
-  （项目图谱为只读：变更走对话 + Agent 事务，不发 IPC）；createBlueprint 在
-  renderer 层直接拒绝（无新建 UI，新图由 Agent/迁移创建）；BlueprintView 重命名按钮
-  对 harness 源禁用；updateBlueprint 仅 canvasLayout/collapsedNodeIds overlay
-  可写（main updateProjectGraph 本就拒掉共享元数据）。
-- main project-lane 守卫复核：约 15 处 isProjectGraphId 分支已覆盖内容写
-  （HARNESS_MANAGED/HARNESS_READONLY），本次未新增——唯一可达的 renderer 调用
-  已在上条收敛。
-- legacy JSON deliberately 保持可写（迁移过渡）：blueprint-store.test.ts 4 用例、
-  team local-blueprint-repository 新建、分析器回写、候选采纳、维护结算仍服务于
-  未迁移蓝图，与 2026-09-18-blueprint-migration（loop stays until consumers
-  migrate）一致；全量硬拒会与其冲突，故拒绝点收敛到 renderer 新建入口。
-  逐个蓝图迁移归档后 legacy 自然清空，无需批量锁死。
-- plan approval 回填与 blueprint-tools ViewPatch 校验见 P0-4c/P0-4d
-  （AgentApprovalMode 加 plan，未知值回退 per-action）。
+保持已裁决的总序：WorkFlowX → agentX → JanusX，按 R1 → R2 → R3 → R4 → R5 连续实施，每段 review 验收通过后推进。语料盘点可与版本收口同步；对应 UI 以用户指定的 `design/blueprint-note-graph-v11.html` 为视觉与交互基线，过时字段按正式 Note 契约更新。
 
-### P1: V2 高保真对齐（原型 v9 逐项，2026-09-23 落地记录）
+| 交付 | 范围与归属 | 前置与完成出口 |
+|---|---|---|
+| R1 版本贯通 | WorkFlowX 正式标准、agentX 接口解析与校验、三仓 profile/digest、受管规则和发布矩阵 | 正式版本决策后实施；AC-1 |
+| R2 共同读链与语料显式化 | agentX 复用已有索引补齐契约；JanusX note-provider/NoteDoc 接入完整元数据、关系、诊断及刷新；盘点全部语料并迁移有效试点集 | R1；AC-2、AC-3 |
+| R3 wiki 索引与来源 | 工程 wiki 直读 Note；知识 wiki 增加最小来源引用；正文链接及反向引用；复用现有搜索与阅读入口 | R2、相关原型；AC-4、AC-5 |
+| R4 架构师工作区与组合蓝图 | xarch 模板与注册对齐；显式 checkout 绑定；模块骨架、证据、接口匹配、未接入及过期展示 | R2/R3 的共同读契约、有效试点与组合原型；AC-6、AC-7 |
+| R5 维护闭环与存量收口 | 组级全选/部分通过、模式及白名单切换、事务/审计/撤销；分批迁移剩余 Note，确认后归档旧蓝图资产 | R4；AC-8、AC-9 |
 
-1. scope 徽完整 `<ws>·rev·NoteAdapter <ver>·M notes·layout本机` + `在对话中变更` 按钮。
-2. [x] 左列终端 footer 核验已实现（BlueprintCanvas 1234-1274：图标/预热/guard/复用/预填/复制），未重复造。
-3. [x] 边分型落地：parent 灰实线，depends-on 5 4 / implements 2 3 / related-to 5 5（relationDash），图例 SVG 分型 + 复用 maintenance.relationType 文案；canvas-layout 单测同步。
-4. 加载：900ms pulse + stagger（320ms + 70ms，边滞后）+ `正在投影 note…` + `重放加载` rev bump。
-5. 右列纯 `JanusChat`：composer 去 model/permission chips，单张原生确认卡，单行 wiki trace。
-6. 清理残留 native `<select>`（维护面板 targetNode 等）→ 自定义 `Select`。
+### 各段的最小工作量
 
-## Alternatives considered
+R1 将 S1.2 接口正例和反例纳入消费者覆盖，保证接口字段仍不进入 taskContractHash。最终 version、digest 与三仓 checkout 写入已有 release-matrix；本计划不复制一份锁值。既有哈希、锁、恢复与 CLI 机制优先复用，只修真实的兼容缺口。
 
-- V3 组合装配优先（先做 assembler/跨库橙边/stale 重绑）：最强论据是早见全景，但 E0 的四个基础缺陷（多 worktree 撞 id、`repositories`/`codeRefs` 丢弃、跨库 target 截断、`primaryWorkspaceId` 恒 null、`harness:changed` 无订阅）会让装配建在错误前提上；故降为后续，先修正确性与基础性缺陷。
-- legacy JSON 全量硬拒写：最强论据是一刀切只读闭环，但与 `2026-09-18-blueprint-migration`（loop stays until consumers migrate）冲突，未迁移蓝图的分析回写/候选采纳/维护结算仍需写通道；故拒绝点收敛到 renderer 新建入口，存量逐个迁移归档。
-- 用 agent 逐动作审批替换变更集审批：最强论据是少一套 UI，但 C2 整包删除是能力退化（E1：“部分通过”消失）；正确关系是两层串联（内层管工具调用放行，外层管提案要哪几条），故恢复组级勾选入口而非二选一。
-- Do nothing / 停在 P0/P1 不做 E 段：零增量风险，但“进入终端必报 `bindWorkspaceFirst`”、多 worktree 吞条目、外部改 note 不刷新三个缺陷继续成立，原型核心动作保持死亡；故 E 段必须做。
+R2 由现有扫描链统一产生索引。JanusX 的 note-provider 输出共同读快照，独立的蓝图解析中间层将快照转换为视图模型，UI 不直接解释文件或 frontmatter。转换保留完整 URI、关系类型与附带信息，透传仓库、代码和接口声明，恢复变更刷新。盘点先覆盖所有文件；迁移先选能表达目录、依赖、决策和代码关联的有效试点。全量迁移可以分批，但交付不得隐藏尚未迁移的资产。
+
+R3 的字段、链接分类和来源更新规则只在[共同契约](./2026-09-23-architect-workspace-model.md)中维护。先实现目录、阅读、正式关系与反链，再接正文引用及知识 wiki 来源；不建设第二套工程正文库。已有 wiki 写入与审核路径同步支持来源引用，旧页面继续可读并明确来源未记录。
+
+R4 使用一个架构仓、两个开发仓及一个未接入模块组成最小可见样例。覆盖同仓多个 checkout、模块跨库及一库多模块。界面沿用 `design/blueprint-note-graph-v11.html`，完成目录/反链、搜索过滤、选择定位、来源状态、悬空需求及未接入展示；旧 module 过滤项改用 initiative。Note 详情适配正式版本全部有用字段。部分内容尚未接入时仍显示完整声明骨架。
+
+R5 接通右侧维护对话：传递当前蓝图及选中节点上下文，流式对话、停止与错误恢复可用，支持节点调整提案。复用 changeset 的选择、依赖闭包和撤销能力，接通提案到事务及刷新后的节点详情，保留删除逐项确认。旧蓝图先列清单与迁移预览，用户确认后再归档；每个仓库独立提交并说明结果。
+
+### 简洁约束
+
+- 设计只维护在共同契约中，本文只维护交付与验收，执行状态随后只写入 task。
+- 保留五 kind 与既有状态机；新增工程信息优先使用 URI、relations、codeRefs 和已裁决的接口字段。
+- 反链、短摘录和普通链接均由源文档派生；不要求人工维护重复字段或第二份索引。
+- 首版沿用内存索引与现有宿主缓存，按实际成本决定持久缓存；不引入数据库、通用图框架或后台索引服务。
+- 正文双括号链接、代码推断接口、多任务调度、共享视角与跨仓原子提交均不进入本轮交付。
+
+### 已裁决范围
+
+保留已确认的 12 项裁决，作为范围边界；实现进展由对应 task 的验收证据证明。
+
+| 项 | 裁决 |
+|---|---|
+| 能力注册表 | 砍，不新增 |
+| 接口一等字段 | 采用最小字段，不进 contract hash；对应 S1.2 正式接入 |
+| 机制行为栏 | 砍，不新增 |
+| 边界栏 role 三档 | 后议，现有枚举不动 |
+| 反链 | 实现层派生，已有基础复用 |
+| 摘要字段 | 不加字段；索引提取并绑定源哈希 |
+| 接口表进索引 | 消费接口声明，正文解释不另作机器真源 |
+| 多任务调度 | S9 另立项 |
+| AC 编号错配 | 工具层展示 Note URI、标题与 AC 编号 |
+| hash 雪崩放宽 | 不改现行哈希语义 |
+| lifecycle/execution 双轨 | 保留，文档和展示明确分工 |
+| 接口载体结构化 | 约定与消费层接入，标准内容以 S1.2 为准 |
+
+原先未开启的验收/验证/仓库/relation/文件名/class-tags/状态/版本单钉八项继续关闭，只有用户点名才重开。S1.2 仅在 R1 的消费者兼容性、三仓同步及独立 review 全部通过后激活；尚未实现的能力不得记为完成。
 
 ## Acceptance criteria
 
-- [x] P0-1: `projectView` 与 IPC 结果含 `adapterVersion === 'v1'`，工具栏徽为真实版本回显。
-- [x] P0-2: 坏 note 进 `invalid` lane，有计数与定位，无未捕获抛错。
-- [x] P0-3: 改名后终端草稿单测全绿，`note` 仅指 workspace notes。
-- [x] P0-4a/b: project lane 无 renderer 直写可达路径（UI 入口删 + store 守卫）；legacy 保持迁移过渡可写，拒绝点收敛到 renderer 新建入口。
-- [x] P0-4c: plan 档贯通（类型/normalize/双端选项/读免审由兄弟仓策略层执行，默认仍为 per-action）。
-- [x] P0-4d: blueprint-tools 加 janus.blueprint.view，zod strict 校验 ViewPatch（overlay-only），未知节点/超限/文件字段 fail-closed。
-- [x] P1: 4 项落地 + 2 项核验已实现（P1-2/P1-4），P1-5 deferred 见上。
+以下条目由对应 task 的实现和验收证据证明；未通过条目保持未完成。
 
-## Risks
+- [ ] AC-1: 三仓使用同一个正式 profile/version/digest；新版接口合法与非法样例在标准和消费者中判定一致，接口修改不改变原任务契约哈希；发布矩阵记录实际组合。
+- [ ] AC-2: 每个 Note 文件都有明确分类；有效条目、旧格式、外来格式、损坏、重复身份及未解析引用均可查。迁移保持已存在身份和可解析链接，不伪造执行证据；可用资产与剩余清单能够对账。
+- [ ] AC-3: 共同读模型完整保留身份、关系类型及附带信息、仓库/代码/接口声明、哈希和诊断。重建结果确定；外部编辑和分支切换使对应视图刷新，两个 checkout 不混用。
+- [ ] AC-4: 同一 Note 可从工程 wiki 与蓝图双向定位，目录、原文、一跳关系、反链与代码入口一致；正文链接归入引用层，不自动变成工程依赖。
+- [ ] AC-5: 知识 wiki 可引用多篇 Note，并能反查相关页面；来源哈希变化、目标缺失和仓库未接入分别展示；未复核内容不自动更新来源哈希，旧页面不被伪装为最新。
+- [ ] AC-6: xarch 建立合法架构师仓库并完成注册与投影；仅打开架构仓也可呈现全部模块声明；模块绑定明确区分 repoId 与本机 checkout，多候选不随机选中。
+- [ ] AC-7: 组合图支持跨仓解析、接口匹配与悬空需求，保留未接入及过期证据；同名接口不产生未经声明的连线，模块与任务状态不互相冒充。
+- [ ] AC-8: 维护提案支持全选及部分选择，依赖闭包、删除逐项确认、模式/白名单、expectedHash、审计和撤销连成可达流程；提案内容变化后重新确认，跨仓结果逐库可见。
+- [ ] AC-9: 剩余 Note 的迁移或保留理由逐项可追溯；旧蓝图内容经盘点、预览、确认后处理，原始正文与可解析引用没有静默丢失。
+- [ ] AC-10: 蓝图界面以 v11 为基线具备完整可达的操作；解析中间层、正式 Note 详情和右侧对话节点调整链均有针对性检查与可复现的交互验收。各阶段有独立 review 结论和修复记录。
 
-- `Blueprint` 加可选字段需兼容旧 JSON 持久化；`ProjectView/HarnessGraphResult` 加必填字段需同步所有 mock。
-- locale `scopeBadge` 改插值需同步 en/zh-CN，否则 `i18n:check` 失败。
-- P0-4 改动面大，拆分为“先 UI 入口删除，再 store/IPC 守卫”，避免一次大爆炸。
+## Verification
 
-
-## B: V2 终态右列（2026-09-23，已落地，明细见 git 历史）
-
-方向：右列换纯 JanusChat + 删 queue chrome + composer 去 chips。三项全[x]
-（B1 minimalComposer、B2 维护面板 chat-first、plan 缺省 setApprovalMode 一次）。
-未做（V3）：原生 approval 接管 apply、候选 inbox 等旧 IA 残留 → E1/E3。
-
-
-## C: 工作区切换 + 右列纯对话（2026-09-23，已落地，明细见 git 历史）
-
-标准：只在工作区之间切换，不读取旧蓝图数据；右列只有对话（对齐 design/blueprint-note-graph.html）。
-C1 只切工作区（listBlueprintSummaries 只返本 checkout 投影、store workspace 化、
-切换器=各工作区投影、删 legacy 流入口）与 C2 右列纯对话（面板压成 header +
-JanusChat + 空态）全[x]。后果（显式）：维护 start/apply/audit/undo、迁移、
-候选采纳暂无 UI 入口，service/IPC 保留待 agent 接管 apply（V3）。
-
-
-## D: 右列对齐 HTML 原型（2026-09-23，已落地，明细见 git 历史）
-
-根因：minimalComposer 只去了 chips，右列仍渲染 JanusChat 全套 chrome，而原型 body
-只有审批槽 + 消息流 + wiki 单行 + todo + composer。四项全[x]
-（藏 thread 栏/资源 scope/model notice/消息按钮/状态条 + 选择菜单永不打开、
-composer › 前缀 + 38px 橙发送、保留消息/审批单卡/todo/中途提问门/错误卡）。
-未做：wiki 单行索引、气泡像素重绘、发送 glyph、空态横幅。
-
-
-## 实施总序（2026-09-25 用户拍板，12 项已裁决）
-
-1. WorkFlowX 新版：下表逐项过，用户审核敲定后发版（新版本 + 新 digest +
-   fixtures/expected-hashes 锁 + release-matrix）。
-2. 同步 agentX：harness-core/node 按新版实现贯通（哈希/校验/仓库/watcher/锁/恢复 +
-   wfx-notes 同结果 + 同步工具）。
-3. JanusX 最后：蓝图投影 + 装配器 + UI 只做消费者适配（E0 剩余 → 装配器 →
-   橙边/未接入 → 部分通过），不动标准。
-
-| # | 项 | §10b 建议 | 用户裁决（2026-09-25） |
-|---|---|---|---|
-| 1 | 能力注册表 | 砍 | 砍：不改 |
-| 2 | 接口一等字段 | 版本道（有条件） | 过：最小字段 + 不进 contract hash |
-| 3 | 机制行为栏 | 砍 | 砍：不改 |
-| 4 | 边界栏 role 三档 | 后议 | 议：先不动 |
-| 5 | 反链 | P2 实现层 | 过：P2 实现，不碰密封 |
-| 6 | 摘要栏 | 不加字段 | 砍字段：索引层按节提取 + 绑哈希 |
-| 7 | 接口表进索引 | 不加字段 | 过：约定层 |
-| 8 | 多任务调度 | S9 另立项 | 议：S9 另立项 |
-| 9 | AC 编号错配 | 工具层 | 过：工具层显示 |
-| 10 | hash 雪崩放宽 | 维持 | 维持：不换 |
-| 11 | lifecycle/execution 双轨 | 不并 | 不并：只文档定界 |
-| 12 | 接口载体结构化 | 约定层 | 过：约定层 |
-| — | §9 已砍 8 项（验收/验证/仓库/relation/文件名/class-tags/状态/版本单钉） | 默认不开启 | 不开：需点名才重开 |
-
-## E: 架构师工作区模型 —— 实施顺序重排（2026-09-23，2026-09-25 服从 P1/P2/P2b/P3）
-
-依据：[架构师工作区模型](./2026-09-23-architect-workspace-model.md)（新，执行顺序以其 Scope boundary 为准）
-与 [V3](./2026-09-23-blueprint-composition-v3.md)（已部分修订）。
-原则：**P1 冻结 → P2 三仓底层 → P2b note 迁移 → P3 蓝图上层**；E 段内再按正确性/基础性排序。
-E 段不引入新概念，E0-2 之后全部是本仓投影层 + 装配器的修复。
-
-### E0 前置（拆分执行：E0-1/E0-4 随 P1，其余随 P3；E 段内顺序 E0 → E1 → E2 → E3 → E4）
-
-| 编号 | 内容 | 为什么排这么前 |
-|---|---|---|
-| E0-1 | `projectGraphId` 从 `repoId.slice(0,8)` 改为按 `rootKey` | 纯 bug。同 repo 多 worktree 撞 id，renderer 去重后第二个消失（`stores/blueprint.ts:100`）。**"多工作区表达一个项目"的地基**，不修则后续全部工作在错误前提上 |
-| E0-2 | `note-provider.ts` 的 `toNoteDoc` 透出 `repositories` 与 `codeRefs` | 模块↔工作区绑定的唯一载体，当前被整个丢弃。`NoteDoc` 加两个可选字段 |
-| E0-3 | `projectRelations` 保留完整 target URI（含 repoId），不再 `split('/').pop()` | `note-to-blueprint.ts:246` 把 `note://<repoId>/<id>` 截成末段，repoId 丢失 → 无法判定跨库、无法上橙色边、同 id 撞车会静默连错 |
-| E0-4 | 投影节点写入真实 `primaryWorkspaceId`（来自 `repositories.primary`） | 当前恒为 null（`note-to-blueprint.ts:215-218`），导致 Canvas"进入终端"**必定**报 `bindWorkspaceFirst`（`BlueprintCanvas.tsx:542,589`）。原型里最核心的动作是死的 |
-| E0-5 | 恢复 `harness:changed` 订阅（`HarnessScopeBar` 已无挂载点） | 外部改 note 后画布不刷新；read-only note 承诺的 "auto-refreshes on watchNotes rev bumps" 是空话 |
-
-E0 的五项可独立提交、可独立验证，互不阻塞。拆分执行：E0-1 与 E0-4 随 P1（前者是正确性，后者是可用性，
-均与 schema 无关）；E0-2/E0-3/E0-5 随 P3（依赖 P2 的哈希/watcher/锁语义稳定后）。
-
-### E1 恢复"部分通过"（后端已备，只缺入口）
-
-- `changeset.ts`（795 行）完整保留：`expandGroupSelection`（依赖闭包补齐）、`selectOperations`
-  （拓扑排序 + 环检测）、delete 逐项确认、审计落盘、撤销 —— 全部可用且无调用方。
-- 需恢复的 UI：工程区生成提案按钮 + 组级勾选（`BlueprintMaintenanceIntentGroup`：node / bindings /
-  relations / deletes）+ 一次性通过 / 部分通过两个动作。
-- **C2 段删除整包审批是能力退化**：用 agent 逐动作审批"替换"了变更集审批，而不是串联。正确关系：
-  - 内层 = agentX `policy-gate` 逐动作审批（管"这个工具调用放行吗"）
-  - 外层 = changeset 组级审批（管"这份提案你要哪几条"）
-- 顺带修复：`BlueprintMaintenancePanel` 建会话时的 `setApprovalMode('plan')` 使**所有写操作被
-  `PLAN_MODE_BLOCKED` 拒绝**（agentX `policy-gate.ts:179`），且 project domain 的 `toolAllowlist`
-  只含只读工具 —— 结果"写走 approval"从未接上。需在提案阶段后切换到可写模式。
-
-### E2 架构师工作区可被识别
-
-- 一个带 `.agents/harness.json` 的 git 仓库应能作为普通工作区加入注册表并被投影（`resolveRoot` 已
-  只认 `<cwd>/.agents`，预计无需改动，须验证）。
-- 验证 `kind: initiative` 的模块 note 写 `related-to` 无 `INVALID_RELATION` 诊断
-  （`depends-on` 的 owner 白名单为 `requirement`/`task`，`initiative` 不可用见 `parse.ts:462`）。
-- i18n：模块级规划的新文案（提供/需要接口、悬空需求、闲置供给、未接入）。
-
-### E3 装配器（新模块，main 侧）
-
-按架构师工作区模型 §6：接口匹配（实边 / 悬空需求 / 闲置供给）、按 repoId 装配证据、库不可达降级、
-id 命名空间化、rev 汇总。**严守单导入者纪律**（`note-provider.ts` 与装配器不得并行 import
-harness-core/harness-node）。
-
-测试：装配金样（接口匹配三分支、跨库解析、不可达降级、id 命名空间）；含坏 note 的 fixture 不得抛错。
-
-### E4 原型（先设计后动手）
-
-**按既有约定，E3/E4 的 UI 部分须先出原型再动手。** 需覆盖的新视觉：
-- 模块节点上的"归属工作区"行 + "未接入"标记
-- 跨库边橙色虚线（原型 v10 已有样式，需接真实数据）
-- 悬空需求 / 闲置供给的节点或边样式（**原型未定义，需新设计**）
-- 架构师工作区在切换器中的位置（项目全景为默认项）
-
-现有原型 `design/blueprint-note-graph-composition.html`（v10）可直接作为基线；
-`module` kind 过滤项应移除或改为 `initiative`。
-
-### P2b: JanusX note 按 WorkFlowX 标准迁移（新增待办，后做）
-
-- 范围：`.agents/notes/` 内存量（约 181 文件，混合旧 `# Agent Note:` + `Status:` 行与新
-  `harness-note/1` frontmatter）按 `WorkFlowX/standards/harness-note/1` 规范化：
-  frontmatter（schema/id/kind/lifecycle/created）+ 只留五 kind + 扁平 `notes/` +
-  无 `views/` + `evidence/` 只属 task + `.local` 全自动（见架构师模型 §9/§9b）。
-- 时机：P1 标准冻结 + P2 三仓实现就绪后；未做前不阻塞 P3（adapter 对旧格式降级进 `invalid` lane）。
-- 门禁：逐批转正，相对链接不断；迁移前后 `verify-harness-standard` 全绿 + 投影 `invalid` 不新增。
-
-### 明确不在本计划内
-
-- 新增 note kind（`module` 已撤回）；任何 `harness-core` / agentX 的 schema 变更
-- 放开 `parse.ts:462` 的 `depends-on` kind 限制（方案 A 验证失败后才考虑）
-- legacy 蓝图的处理方式：C1 段"不读取"会使画布上用户写过的 description / todos / issues /
-  techSolution 成为孤儿（adapter 无对应段）。**建议改为一次性迁移归档**
-  （`blueprint-migrate.ts:335` 的 `applyMigration` 已具备能力），不做静默丢弃 —— 待确认。
-
-(End of file)
+正式实施时，R1 使用标准校验、消费者 fixtures 与哈希锁；R2 核对全量清单、索引及投影样例；R3/R4 核对目录、引用、新鲜度、跨仓和 checkout 场景；R5 核对选择、冲突、删除及撤销链路。每段 task 再固定具体命令和人工演示步骤，未执行项保持未完成。

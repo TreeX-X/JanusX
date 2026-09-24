@@ -1,435 +1,135 @@
-# Agent Note: 架构师工作区 —— 项目级规划、权责拆分与共享治理
+---
+schema: harness-note/1
+id: 41e93b25-92ce-4547-9250-e28cf4b1907f
+kind: decision
+lifecycle: accepted
+created: 2026-09-23
+class: architecture
+tags: [blueprint, wiki, note-index]
+relations:
+  - type: related-to
+    target: note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/c61d7a4e-6f8b-4a2e-9d31-5c7e8b0f2a14
+---
 
-Status: proposed
+# 架构师工作区：Note、wiki 与蓝图的共同契约
 
-Builds on [V2 workspace visualization](./2026-09-23-blueprint-workspace-graph-v2.md) and **supersedes the
-storage half of** [V3 composition blueprint](./2026-09-23-blueprint-composition-v3.md): V3's three-layer
-model, cross-workspace relations, stale-evidence rule and reusable-mechanism inventory all stand; its
-"L1 规划骨架 = GLOBAL 蓝图 JSON（userData，`__global__` scope）" is replaced by "L1 规划骨架 = 一个共享
-git 仓库里的标准 harness note". No prototype yet: the design landed in conversation first, prototype is
-the next gate per the standing rule (先设计原型图才动手).
+本文规定目标设计；完成位置、实施顺序和验收只记在[实施计划](./2026-09-23-blueprint-notev2-implementation-plan.md)。本文保持 proposed，文档完善不代表功能已实现。
 
-> 修订线：2026-09-23 初版（取代 V3 存储半）→ 2026-09-24 三阶段/P1 冻结/§9 无 1.2/§9b 运行约定/
-> §10 三能力评估 → 2026-09-25 重排 P1→P2→P2b→P3、§8b `xarch`、§10b 打包版本道。各节标题不再重复标日期。
+设计沿用 [V2 单工作区投影](./2026-09-23-blueprint-workspace-graph-v2.md)和 [V3 组合视图](./2026-09-23-blueprint-composition-v3.md)的分层与证据概念。规划骨架的唯一存储为架构师 Git 仓库中的标准 Note。共享索引的上游依据为 [WorkFlowX 派生索引约定](note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/c61d7a4e-6f8b-4a2e-9d31-5c7e8b0f2a14)。
 
 ## Problem
 
-V3 定义了"规划骨架 × 证据装配"的读时组合，但把骨架放在 userData 的 GLOBAL JSON 里，并假设
-"一个项目"是一个单机概念。用户的实际设计意图比这更强，V3 无法表达：
+一个项目可能横跨 UI、业务、算法等多个开发仓库。架构师需要声明模块职责与接口，各开发仓库负责自身机制和任务。项目全景必须在部分仓库未接入时仍可阅读，维护顶层规划也不能要求拥有所有开发仓库的写权限。
 
-1. **用户是架构师，不是画图的人。** 他要按架构设计把项目拆成若干**核心模块**，为每个模块**建立独立的
-   开发工作区**，完成**权责拆分**。模块是权责边界（谁负责什么），不是代码边界。工作区内部再由 note
-   维护和管理——“每个工作区是由 note 去维护管理的”。
-2. **一个工作区可能是项目的一部分；多个工作区共同表达一个完整项目。** 工业软件的真实形态：
-   UI 是一个工作区，UI 调用业务层（独立工作区），业务层调用算法模块（独立），UI 又调用渲染模块
-   （独立），另有数据载入层（独立）。这是**横跨 5 个仓库、分叉的调用图**，不是一棵树。
-3. **权限不对称是常态，不是例外。** 超大项目里不同工作区由不同人员开发，**开发者本身没有那么多
-   工作区的权限**。任何"必须能写全部工作区才能维护顶层蓝图"的设计在大项目里都不成立，因为那种人
-   不存在（或存在但不能那么用）。
-4. **跨工作区的表示缺乏定义与存储。** 一条 UI→业务层的调用边，两端分属两个仓库：存在 UI 库则业务层
-   看不到调用方，存在业务层库则 UI 不知道自己在调谁，存在"骨架"上则骨架退化为杂物袋。
-
-现状盘点（本仓工作树，非 HEAD）：
-
-- 单工作区投影链已建立：`src/main/notes/note-provider.ts`（唯一读文件边界）→ `note-to-blueprint.ts`
-  （NoteAdapter v1）→ `Blueprint`；`projectView` 已透出 `adapterVersion` / `invalid`。
-- 但**右侧对话框物理上不能维护任何东西**：`BlueprintMaintenancePanel` 建会话时
-  `setApprovalMode('plan')`，agentX 的 `policy-gate.ts:179` 对 `plan` 模式拒绝所有写操作
-  （`PLAN_MODE_BLOCKED`），且 project domain 的 `toolAllowlist` 只含只读工具。所以从蓝图 UI 出发
-  没有任何写路径：“读免审批”做到了，“写走 approval”没接上。
-- `changeset.ts`（795 行）的 `expandGroupSelection` / `selectOperations` / delete 逐项确认 / 审计 /
-  撤销全部完好，**只是没有 UI 调用方**。C2 段"删 tabs/start/提案/审计/撤销 UI"把整包审批能力
-  连同入口一起删掉了，是能力退化而非简化。
-- **跳终端是坏的**：`note-to-blueprint.ts:215-218` 把投影节点的 `workspaceId`/`primaryWorkspaceId`
-  恒设为 null，而 Canvas 的"开始工作 / 进入终端"依赖它（`BlueprintCanvas.tsx:542,589`），对 harness
-  节点**必定**报 `bindWorkspaceFirst`。原型里最核心的动作是死的。
-- **多 worktree 互相吞掉**：`projectGraphId = 'harness:project:' + (repoId ?? rootKey).slice(0,8)`，
-  同一 repo 的多个 worktree 得到同一个 id，renderer 按 id 去重（`stores/blueprint.ts:100`），
-  第二个 worktree 在切换器里直接消失；repoId 为 null 时取绝对路径前 8 字符（`C:\Users`），不同目录
-  会撞 id。main 侧歧义保护只在"扫描工作区列表后发现多个匹配"时抛错（`maintenance-apply.ts:87`），
-  优先路径直接命中就不检查，写事务可能落到错误的 worktree。
-- **外部改 note 画布不刷新**：`HarnessScopeBar.tsx` 是唯一订阅 `harness:changed` 的组件，而已无任何
-  挂载点（Workbench 里的挂载点被删）。watcher 驱动的自动刷新与 share 导入导出 UI 目前双双失效。
+Note 已有稳定身份和工程关系，轻索引已有反链与查询，但蓝图转换仍丢失部分元数据和关系语义。现有知识 wiki 关联 fact 与 observation，尚无明确的 Note 来源契约。若两种视图各自重建关系、复制正文和维护状态，同一工程事实就会产生多个版本。
 
 ## Proposal
 
-### 术语（全文以此为准）
+### 1. 资产与职责
 
-- note = 资产正文（`.agents/notes/*.md`，跟 repo 走的唯一真源）；
-- 投影 = 单工作区的读时视图（NoteAdapter v1 → `projectGraph`，不持久化）；
-- 蓝图 = 画布呈现（对投影/组合视图的渲染，布局只存本机）；
-- 组合视图 = 骨架 × N 个工作区投影（读时装配，L2）；
-- lane = 蓝图内分区（harness 投影 / legacy JSON / invalid 坏件），不是三种资产。
-
-### 0. 一条更正：schema 不需要扩展
-
-结论先行：**架构师仓库所需的一切 `harness-note/1` 都有**（`HarnessNoteMeta` 自带
-`relations`/`repositories`/`codeRefs` 跨库字段，解析器逐字保留未知 key）。
-缺口在投影层：`toNoteDoc` 丢弃 `repositories`/`codeRefs`——修 adapter，不动 schema
-（选用理由并入 §4 方案 A 的论证）。
-
-### 1. 三层资产（接 V3，替换 L1 的存储）
-
-```
-L0 证据资产：各开发工作区 .agents/notes/*.md（跟 repo 走）
-     └── 写：各库自己的 harness 事务；回执/验收/版本全跟库走
-          ⇕ 绑定（repositories.primary + codeRefs[{repoId,path,role}]）
-L1 规划骨架：架构师工作区 .agents/notes/planning/*.md   ← 唯一变更：从 GLOBAL JSON 改为 note
-     └── 存：项目→模块 的权责边界、接口契约、模块所属工作区、模块代码位置
-     └── 不存：证据正文（永远现场读）；机制级结构（交给 L0 各库自治）
-     └── 写：共享 git 仓库的 PR + Agent maintenance 事务 + approval
-L2 组合视图：骨架 × N 个工作区投影（读时装配，不持久化权威源）
-```
-
-### 2. 架构师工作区（architect workspace）
-
-**物理形态：一个普通 git 仓库，里面只有一个 `.agents/` 目录。**
-
-```git
-janusx-architecture/            ← git repo，成员共同拥有
-├── .agents/
-│   ├── harness.json            ← 自己的 repoId；这个 UUID 就是被引用的那个
-│   └── notes/
-│       └── planning/
-│           ├── project-industrial.md    # 项目本身
-│           ├── module-ui.md             # 模块：UI 层
-│           ├── module-core.md           # 模块：业务层
-│           ├── module-loader.md         # 模块：数据载入层
-│           ├── module-render.md         # 模块：渲染模块
-│           └── module-algo.md           # 模块：算法模块
-├── CODEOWNERS                  ← 可选：每个模块一段 owner
-└── README.md
-```
-
-关键判定：应用只要求 `resolveRoot(cwd)` 认得 `<cwd>/.agents` 加一份 `harness.json`——
-**git 与否应用不关心**。但这里的"共同拥有"要求它**必须是 git 仓库**：
-
-| | 独立 git 仓库（采用） | 共享目录 / 云同步 |
+| 层次 | 内容与归属 | 维护方式 |
 |---|---|---|
-| 共同拥有 | clone + PR + review | 文件夹共享 |
-| 变更评审 | ✓ 标准 PR | ✗ |
-| 冲突处理 | git 解决 | 同步工具乱合并 |
-| 历史回溯 | ✓ | 通常无 |
+| L0 开发证据 | 各开发仓库的 Note、代码引用、任务回执 | 各库自己的事务与提交 |
+| L1 规划骨架 | 架构师仓库的项目、模块职责、接口、仓库绑定 | 共享 Git 仓库，可用 CODEOWNERS 分工 |
+| 读视图 | 工程 wiki、单工作区投影、项目组合蓝图 | 从同一 Note 索引派生，布局与过滤保存在本机 |
 
-选 note 存骨架（而非 GLOBAL JSON）的全部收益——版本、评审、git 回溯——**只有它是 git 仓库时才成立**；
-否则等于白折腾。反过来，只要它是 git 仓库，收益全部免费获得。
+架构师工作区是普通 Git 仓库，具有自己的 repoId 和 `.agents/harness.json`。项目与模块使用 initiative；模块内部的机制、需求和任务由开发仓库维护。项目全景由架构师仓库声明，不能随本机已打开的工作区集合改变。
 
-每个开发者的应用里，它就是一个普通工作区（加进工作区注册表，与其它仓库并列）；特殊之处是
-**它出现在每个人的切换器里且内容共享**，于是项目全景在哪台机器打开都一致（pull 最新即可）。
+Note 是工程声明的唯一真源。工程 wiki 直接展示 Note 的目录、正文、引用和反链；既有知识 wiki 继续解释其 fact/observation 来源，并可引用 Note。知识摘要、搜索结果和画布都不拥有 Note 的生命周期、执行状态或审批权。
 
-### 3. 权责拆分：模块 ↔ 工作区是多对多绑定
+### 2. 身份、索引与查询
 
-模块是规划概念（有职责、有边界、在骨架里有位置）；工作区是物理载体（有路径、有 repoId、有自己的
-note）。二者**不是一对一**：一个模块可能横跨两个库（C++ 核心 + Python 绑定），一个库可能承载两个
-模块（monorepo）。
+共享身份使用完整 `note://<repoId>/<noteId>`。改名或移动文件不改身份，代码落点由 `codeRefs` 表达。模块与仓库允许多对多绑定：`repositories.primary` 指向主要开发仓库，related 和 codeRefs 表达其它归属。repoId 与本机 workspaceId 必须分别处理。
 
-绑定由 L1 的 note 声明，用现成字段：
+同一仓库的多个 checkout 可以包含不同版本的同一 Note。查询必须携带 checkout 范围；跨仓组装由本机显式选择 repoId 对应的 checkout，存在多个候选时要求选择，不能取首个匹配。画布节点可用“checkout 标识 + 完整 Note URI”区分实例，持久引用仍使用 Note URI。
 
-```yaml
-repositories:
-  primary: <ui-workspace-repo-id>        # 该模块的归属开发工作区
-codeRefs:
-  - repoId: <ui-workspace-repo-id>
-    path: src/
-    role: implementation
-```
+复用 harness-node 的扫描和索引，只补齐以下读契约：
 
-`BlueprintNode` 里 `primaryWorkspaceId` / `linkedWorkspaceIds` 的区分说明当初想到了这点，但当前投影把
-`primaryWorkspaceId` 恒设为 null，这正是"进入终端必定失败"的根因（Problem 第 5 条）。
-
-### 4. 接口声明模式（方案 A，采用）
-
-**核心洞察：依赖是双边的，接口是单边的。**
-
-"UI 依赖业务层"这条边，谁写都有归属争议。改成两边各自声明接口需求，则**没有归属问题**：
-
-```yaml
-# module-ui.md（架构师工作区，kind: initiative）
-repositories: { primary: <ui-repo-id> }
-relations:
-  - type: related-to
-    target: note://<architect-repo-id>/<module-core-note-id>
-    reason: 需要 IBusinessEngine
-
-## Decision
-**提供给其它模块的接口**
-- `IUiShell` — 主窗口挂载点、生命周期钩子
-
-**需要其它模块提供的接口**
-- `IBusinessEngine`（提供方：业务层）— 业务规则编排
-- `IRenderPipeline`（提供方：渲染模块）— 图形后端抽象
-```
-
-```yaml
-# module-core.md（架构师工作区，kind: initiative）
-## Decision
-**提供给其它模块的接口**
-- `IBusinessEngine` — 业务规则编排
-**需要其它模块提供的接口**
-- `ILoader`（提供方：数据载入层）— 数据解析与校验
-- `ISolver`（提供方：算法模块）— 数值求解
-```
-
-装配器匹配规则：
-
-| UI 侧 | 业务层侧 | 结果 |
-|---|---|---|
-| 需要 `IBusinessEngine` | 提供 `IBusinessEngine` | **实边**（画出来） |
-| 需要 `IBusinessEngine` | 无 | **悬空需求**（虚线/警示色 + 提示"无人提供"） |
-| 无 | 提供 `IBusinessEngine` | **闲置供给**（虚线 + 提示"无人需要"） |
-
-**为什么选 A 而非放开 `parse.ts:462` 的 kind 限制：**
-
-- `parse.ts:462` 规定 `depends-on` 的 owner 只能是 `requirement`/`task`。模块是 `initiative`，
-  写 `depends-on` 会被判 `INVALID_RELATION` 进 invalid lane——**不是静默生效，是直接报错**。
-- 该规则的动机是任务契约：`CONTRACT_RELATIONS = ['implements','depends-on','governed-by']` 会进入
-  task contract hash。放开后须重新决定"`initiative` 的 `depends-on` 要不要进 contract hash"，
-  若进，则架构师每次调整模块都会改变下游任务的契约指纹、导致回执失效。**这个问题没有明显正确答案。**
-- A 方案的失败成本低：先验证接口声明好不好用，不行再改 schema。反过来先改 schema 没有退路。
-- A 的副产品 **悬空接口需求** 恰恰是架构演进中最有诊断价值的视图（"有个模块在等一个还不存在的
-  接口"），双边依赖模型画不出来。
-
-代价：接口名匹配是**软校验**——写错名字只能发现"匹配不上"，不能指出谁对。由装配器的悬空标记承担。
-
-### 5. 声明粒度：止于模块级
-
-```
-L1 声明层（架构师工作区，人工守，约 10 条）
-    项目 → 模块（权责 + 接口契约）
-         ⇕ 装配
-L0 申报层（各开发工作区，自动投影，机器扫）
-    模块 → 机制 → 任务（各库自己的 note 关系）
-```
-
-**架构师工作区不重复表达机制级结构**，只钉模块边界，模块内部交给各库自治。这正对应原始设计意图
-"对项目的各个核心模块建立独立的开发工作区进行权责拆分"——权责拆分发生在模块级，模块内部是那个
-工作区的自治范围。
-
-**共同拥有不改变这条结论，只改变理由。** 既然架构师仓库成员共同拥有，权限不再构成约束；理由
-换成**责任**：共同拥有的是说明书，不是工作台。把机制级也搬进去，等于把各模块的自治范围重新变成
-公共事务。若确需多人分管，用 CODEOWNERS 按模块分段，不发明新机制。
-
-若模块级仍嫌文件太多，退路是**一篇 note 承载模块清单**（正文用表格表达职责/工作区/接口）。代价是
-失去 per-module 的 `lifecycle` 独立性（"UI 已上线、算法还在设计"这个状态差异就看不见了）与
-per-module 证据绑定。**不推荐，仅作退路记录。**
-
-### 6. 装配器（新模块，main 侧）
-
-输入 = 架构师工作区的骨架 note + 按骨架中出现的 repoId 尝试取得的各库投影；输出 = 一张组合图。
-
-职责：
-
-1. 解析模块 note 的 `## Decision` 中 `提供`/`需要` 两个约定列表，与 `relations[].reason` 对齐。
-2. 接口匹配 → 实边 / 悬空需求 / 闲置供给。
-3. 按 `repositories.primary` / `codeRefs[].repoId` 装配证据；库不可达 → 显示声明节点 + "未接入"标记，
-   **不报错、不崩**。
-4. 节点 id 命名空间化（`wsId:nodeId`，骨架 id 不加前缀）；跨库 relation 解析失败时降级
-   （复用 unknown → `related-to` + invalid lane 通道）。
-5. rev 汇总：骨架与各库各自 rev（见 Risks）。
-
-**关键：项目全景不依赖"当前打开了哪些工作区"。** 只打开架构师工作区即可看到全貌，其它库显示为
-声明节点 + 未接入。`workspaceSnapshot{name,path}`（`types.ts:199`）正是装配降级的依据——存的是
-"叫什么、在哪"，不要求在线。
-
-`note-provider.ts` 的单导入者纪律延伸到装配器：**只有一个模块可 import harness-core/harness-node**。
-
-### 7. 治理：共同拥有的四条规则
-
-| 规则 | 内容 |
+| 数据 | 最少保留的内容 |
 |---|---|
-| 所有权 | 架构师工作区由项目成员共同拥有的 git 仓库；可选 CODEOWNERS 按模块分段 |
-| 写路径 | 计划性变更走 PR；应用内变更走 Agent maintenance 事务 + approval |
-| 并发 | `expectedHash` 乐观并发（`maintenance-bridge.ts` 已有）；冲突返回 `HARNESS_CONFLICT`，Agent 转内重读重融重试并在聊天中叙述 |
-| 原子性 | **跨库意图拆成多个事务分开提交**（架构师事务 + 各开发工作区事务），聊天里叙述顺序；**不做 saga、不做两阶段提交** |
+| Note 条目 | URI、标题、kind、lifecycle、tags、parent、仓库绑定、codeRefs、接口声明、路径、内容哈希、短摘录 |
+| 正式关系 | 完整起止 URI、原始 type，以及已声明的 criteria、scope、reason |
+| 派生引用 | 正文链接或 wiki 来源的起止身份、来源类别；与正式关系分开返回 |
+| 诊断 | 源文件、原因、目标 URI（存在时）、解析状态；保留未解析目标 |
+| 快照 | 所选 checkout 与各仓 revision，条目的哈希必须来自该次读取 |
 
-原子性这条是 V3 open question（"Atomicity boundary for one intent split across workspaces"）的定论。
-理由：两个库的 git 提交本来就独立，硬做原子性只会造出无法回滚的假象。
+反链从上述边反向计算，不手写第二份关系。parent 与 relations 中重复声明的同一边只展示一次。摘要从正文按确定规则提取并绑定内容哈希，不新增 Note summary 字段。正文按需读取；默认上下文为选中条目、一跳邻居及祖先链，遍历去重、有界，并标记截断。
 
-### 8. 两层审批串联（恢复被删掉的能力）
+查询沿用 URI、元数据、关系类型、代码引用和有界正文搜索。首版复用内存索引及宿主缓存；只有实际扫描成本需要时才增加可重建的 `.agents/.local` 缓存。启动、回焦点、切分支或 watcher 失效时重扫；正常变更使所属 checkout 的派生视图失效。
 
-现状是"用 agent 逐动作审批**替换**了变更集审批"，于是"部分通过"消失、右列无法维护。
-正确关系是**两层串联，不是二选一**：
+### 3. 关系含义与解析状态
 
-```
-用户提需求
-  → Agent 探索（plan 模式，只读）
-  → Agent 产出提案（changeset：N 组操作）        ← 停在这里等用户
-  → 用户逐组勾选（部分通过）或全选（一次性通过）
-  → 应用（原子事务 + expectedHash + 审计）
-```
+正式关系保留 `parent / depends-on / implements / governed-by / derived-from / supersedes / related-to` 的原始含义及方向。显示层可以共用线型，但不能把几种关系改写为普通 related-to。parent 环、重复 ID、未知类型必须进入诊断，不能任意选中一个目标。
 
-| | Agent 动作审批 | 变更集审批 |
-|---|---|---|
-| 粒度 | 单次工具调用 | 文档的一批操作 |
-| 实现 | agentX `policy-gate` + `ApprovalPreview` | `janus/maintenance/changeset.ts` |
-| 回答 | "这次工具调用放行吗" | "这份提案你要哪几条" |
-| 现状 | 已接（但 plan 模式阻断写入） | 后端完好，**UI 入口被删** |
+正文引用首版只提取标准 Markdown 链接，包括引用式链接，并忽略代码片段。Note URI 直接解析；相对 Markdown 路径只在当前 checkout 已扫描条目中解析到稳定 URI。外部网址保持普通链接，`[[标题]]`、标题猜测和代码自动推断留待真实需求。正文提及只产生派生引用，不自动成为模块依赖；章节锚点只用于定位，不能替代 Note 身份。
 
-**部分通过属于外层**（`expandGroupSelection` / `selectOperations` 已实现依赖闭包补齐），内层按设计
-就是逐项的、永远不该有批量。delete 必须逐项确认，不参与批量（已有校验）。
+| 状态 | 判定与展示 |
+|---|---|
+| 已解析 | 所选 checkout 中唯一目标可读；有来源哈希时必须匹配 |
+| 未接入 | 目标仓库没有绑定或不可读取；保留声明与引用，不断言目标已删除 |
+| 目标缺失或不明确 | 仓库已读但目标不存在、ID 冲突或绑定歧义；展示诊断，不猜测连线 |
+| 内容已变化 | wiki/证据保存的来源哈希与当前 Note 不同；显示过期并允许查看当前原文 |
 
-恢复成本极低：`changeset.ts` 795 行完整保留，只缺 UI 入口。**"一次性通过 + 部分通过"后端一行都不用写。**
+lifecycle、task.execution 和来源新鲜度各自展示。模块获准不代表下游任务完成，内容变化也不自动撤销已有回执；正式验收仍由现有契约与回执规则决定。
 
-### 8b. `xarch` 指令（与 `xdo` 同构，建仓脚手架）
+### 4. 接口声明与组合装配
 
-触发形态与 `xdo` 一致：前缀一敲即执行令，不经 prompt 猜、不停在计划页。
-定义面仿 `.claude/commands/xdo.md` + `orchestrateX` direct 模式：Main Agent 直接执行，
-默认不 dispatch，不隐式并行；落盘原子（脚手架文件 + 本 note 原地同步 + 入口反向注释，
-一个 commit，message 带 Note 路径）；写作文案走 `proseX`。
+接口声明遵循 WorkFlowX S1.2 的 `initiative.interfaces[]`：name、direction（provides/needs）及可选 provider Note URI。它不进入 taskContractHash。S1.2 仍为候选版，须按实施计划完成正式版本与三仓接入后启用；正文解释不再承担另一份可执行接口表。
 
-- 命令：`xarch <dir> [--name <name>] [--with-codeowners]`，过渡别名 `init-arch`
-  （P1 冻结后的过渡脚手架，不作长期真源，见 Scope boundary）。
-- 输入：目标目录（空目录或新建）；可选仓名（默认取目录名）、是否写 `CODEOWNERS` 分段模板。
-- 确定性步骤（一步一验，失败即停，不猜）：
-  1. `git init`（已是 git 仓则复用，脏树先报停，不自动 commit）；
-  2. 写 `.agents/harness.json`（`schemaVersion: 1` + 新 UUID `repoId` + `name` +
-     `profile: workflowx/1.0.0-s1.1` 当前冻结 digest；已存在则只校验不覆盖）；
-  3. 写 `notes/planning/` 模板：`project.md` + 1 个示例 `module-example.md`
-    （`kind: initiative` + `repositories.primary` 占位 + `## Decision` 提供/需要接口表示例，
-     P1 冻结口径：不加 kind/字段、不建 `views/`）；
-  4. 写 `CODEOWNERS`（`--with-codeowners` 时）+ `README.md`（建仓说明 + 后续走 PR 的提示）；
-  5. 调现有工作区注册（`workspace.create` / `chooseAndCreateWorkspace` 同链路，
-     `features/workspace/actions.ts:151`）接入本机，落 `.local/workspace-map`；
-  6. 投影验证：`projectView` 可读、`invalid` 不新增（旧格式降级通道保留）。
-- 不做的事（显式）：模块怎么切、接口名叫什么、`primary` 绑哪个 repoId——
-  一律不管，留给 chat + changeset 两层审批（§8）与"接入工作区"显式操作；
-  已纳管 note 的后续改动一律走事务 + `expectedHash` + approval，`xarch` 永不直写绕过。
-- 双端同步：`.claude/commands` 与 `.codex`（或对应 commands）同逻辑只差路径，
-  与 `orchestrateX` 的 sync contract 一致；`xdel`/`xflow` 的 bus-payload 不动，
-  `xarch` 无固定 Payload、不要求 task note URI（同 `xdo`）。
-- 落点说明（2026-09-25）：命令文件是 JanusX 本机同步产物（`.gitignore` 排除
-  `.claude/`、`.codex/`、`AGENTS.md`，与 `xdo.md` 等同待遇，不入库），
-  以 `check-skills-sync` 双端一致为准；晋升 WorkFlowX 受管集需另开版本道。
-- 门禁：`verify-harness-standard` 全绿；`projectView` 含 `adapterVersion`；
-  同 repo 多 worktree 不撞 id（E0-1 已修为前提，否则切换器仍吞条目）。
+组装时，有 provider 的 needs 必须解析到该模块的同名 provides，才能形成接口匹配边。无 provider 的 needs 按 S1.2 契约显示悬空需求，可列出候选但不凭同名自动连线。仓库不可达时显示未接入，不能判定接口不存在。未被当前范围需求引用的 provides 标为“当前范围未引用”，避免推断其它仓库也无人使用。
+
+装配器读取架构师骨架与已接入仓库的共同读数据，不另读 Note 文件。一个仓库承载多个模块时，证据归属依据显式关系和代码范围；无法判定的条目提供仓库级入口，不能复制成每个模块的证据。骨架与各库保留各自 revision，界面显示当前范围，不能拼成一个全局版本号。
+
+### 5. wiki 的最小适配
+
+工程 wiki 复用 Note 的身份、正文与索引，不为每篇 Note 新建一个 WikiPage。目录、依赖、决策依据、代码落点及被引用列表都从共同读契约生成。蓝图选中节点与工程 wiki 打开条目应定位到同一 checkout 中的同一 Note。
+
+既有知识 wiki 仅增加宿主侧可选 `sourceNoteRefs: [{ uri, sourceHash }]`。引用来自生成或审核该 wiki 内容时实际读取的 Note，哈希由读取层提供；不能让模型猜测。原有 sourceFactIds 保留。一篇 wiki 可引用多篇 Note，Note 到 wiki 的反向列表由此派生，不回写 Note，也不另存双向关系表。
+
+普通正文链接只表示提及；sourceNoteRefs 表示内容生成所依据的快照。同一 URI 的引用合并；出现不同来源哈希时保留旧引用并标记待复核，不能覆盖后宣称最新。只有基于新原文重写或复核该 Note 对应的全部页面内容，并通过现有 wiki 审核后，才能更新来源引用。只读内容页同时标明来源工作区，不能跨工作区按 slug 猜测页面。
+
+### 6. 读取边界、脚手架与展示
+
+harness-core 负责解析、校验和哈希，harness-node 负责文件、索引和事务。JanusX 的 Note 读取边界由 note-provider 封装，工程 wiki 与蓝图复用其输出；装配器不成为第二个扫描器。此纪律限定工程内容读路径，执行、回执和事务继续使用已有入口。
+
+有效、旧格式、外来格式、损坏、重复身份及未解析引用都必须可查。旧格式不能通过 silently skip 从项目中消失；无法安全迁移时保留原文与分类。迁移保持既有 UUID、可解析链接及原始事实，不能由旧 Status 伪造 task 回执。
+
+`xarch` 沿用直接执行的六步：建立或检查 Git 仓库、建立或校验身份、生成合法 initiative 模板、写可选 CODEOWNERS 与 README、注册本机工作区、核对投影与诊断。已有身份只校验；复用脏仓时停止并说明。新模板使用当前正式 profile 和标准必填节；未绑定仓库时省略字段，不能写伪 UUID 占位值。
+
+目标目录布局为平铺 `notes/`，层级由 parent 表达。当前 xarch 的 planning 子目录属于待对齐实现，扫描继续递归读取已有文件。本次原位规范化的两篇规划 Note 保留路径，批量移动归入后续迁移。
+
+UI 先完善现有原型，再实现工程 wiki 的目录、反链、来源状态及组合图的接口边、未接入态。布局、过滤和默认架构仓 pin 只属本机；不同架构仓分别呈现，不隐式合并。默认只展示正式工程关系，正文引用和知识解释按需展开。
+
+### 7. 治理与审批
+
+架构师仓库成员共同维护模块声明，各开发仓库自治。计划性变更走各库 Git 评审，应用内变更走原有 maintenance 事务、expectedHash 和审计。跨库意图拆为独立事务，逐库报告结果；不引入跨库原子提交。
+
+维护对话先在 plan 模式探索并产出 changeset。用户全选或部分选择操作组，依赖闭包补齐后才进入可写阶段，并保留现有工具动作审批。删除逐项确认，审计和撤销沿用已有能力。状态切换、工具白名单和事务接入都属于待实现工作，不能只恢复按钮便宣布完成。
+
+并发冲突由 Agent 重读并说明。若合并改变已确认的提案，必须重新确认；重试须有界，未解决时明确报告。wiki 摘要和画布交互均不能绕过该写路径。
+
+### 8. 简洁边界
+
+只保留五种 Note kind，沿用现有 class 与 tags。此次完善不新增能力注册表、机制字段、共享 views、中央 INDEX.md、搜索数据库或通用资源图框架。接口采用已裁决的 S1.2 最小字段；多任务调度另立项。任务验收引用、哈希和 lifecycle/execution 双轨保持现行语义。
+
+接口边与引用边都是读取时的派生结果，不回写为 Note 正式关系。每项派生数据都必须能由来源重建；正文、状态和反链均不得要求人工维护两份。
 
 ## Alternatives considered
 
-- **骨架存 GLOBAL JSON（V3 原方案）** — 最强论据是不需要新仓库。排除理由：引入第二种资产形态与第二套
-  版本来源，产生 rev 拼接、无法评审、无法共享、`__global__` scope 在 dev 下漂移（已修过一次）等
-  一连串问题；而"架构师仓库 = 普通 git 仓库 + 标准 note"把这些问题一并消掉，且 schema 零改动。
-- **放开 `parse.ts:462` 的 depends-on kind 限制（方案 B）** — 最强论据是边语义显式、装配器不用猜。
-  排除为**当前**方案的理由：跨仓契约变更需 agentX 同步、共享 profile digest 需两边重建、
-  `CONTRACT_RELATIONS` 语义待定；而 A 方案能先验证、保留退路。B 作为备选保留。
-- **项目 = 已打开工作区的聚合（读法一）** — 最强论据是零存储。排除理由：解释不了"某工作区未打开时
-  项目是否完整"、"模块尚无代码仓库时它算不算项目的一部分"、"两个工作区之间的依赖是谁的属性"。
-  这三问正是本 note 要解决的。
-- **机制级也由架构师工作区声明** — 最强论据是结构完整。排除理由：与"权责拆分"意图冲突（把自治范围
-  变成公共事务），且声明条数从约 10 条涨到约 80 条、由无维护动机的人维护，必然腐坏。
-- **架构师工作区用共享目录/云同步而非 git** — 最强论据是无需 PR 流程。排除理由：失去评审与历史，
-  等于放弃选 note 存骨架的全部收益。
-
-## Acceptance criteria
-
-- [ ] 一个架构师工作区（git 仓库 + `.agents/harness.json` + `notes/planning/*.md`）能被应用作为普通
-      工作区识别并投影。
-- [ ] `xarch <dir>` 一次建仓 + 注册 + 投影验证通过（§8b 六步），不依赖 prompt 拼凑文件。
-- [ ] 项目 → 模块 的 `parent` 树在组合图中渲染为层级；模块 note 的 `kind: initiative` 无
-      `INVALID_RELATION` 诊断。
-- [ ] UI→业务层、UI→渲染模块的**接口匹配**装配为实边；业务层→算法模块、业务层→数据载入层同理。
-- [ ] 单边声明渲染为悬空需求 / 闲置供给，带可点击定位（不崩、不抛错）。
-- [ ] E0 投影层五项见实施计划 E0（透出/URI/主工作区/id/订阅）；本仓验收只认两条：
-      双 worktree 双条目、终端不再 `bindWorkspaceFirst`。
-- [ ] 某个开发工作区未打开/不可达时，组合图仍完整渲染骨架，缺失部分标"未接入"，无未捕获异常。
-- [ ] 只打开架构师工作区即可看到完整项目全景（不依赖其它工作区已加载）。
-- [ ] 维护面板可发起提案并支持**一次性通过**与**部分通过**（组级勾选 + 依赖闭包自动补齐）；delete
-      仍需逐项确认。
-- [ ] 架构师工作区与开发工作区的并发修改：冲突由 Agent 转内重试并叙述，不出现用户可见冲突条。
+- 为 Note、wiki、蓝图分别建立索引和关系表：各视图可独立优化，但同一引用会产生多份身份、状态与失效逻辑。采用共同读契约，视图只负责组织和显示。
+- 把每篇 Note 复制成 WikiPage，或新增 wiki Note kind：可快速复用旧页面 CRUD，但引入正文、版本和审批的双重维护。采用直读工程 wiki，知识 wiki 仅保存实际来源引用。
+- 用标题、文件路径或接口同名推断关系：写作负担较小，但改名、多仓同名及多个 checkout 会产生错误关联。采用稳定 URI、显式 provider 和可见的未解析状态。
+- 骨架放 GLOBAL JSON、共享云目录或聚合已打开工作区：启动成本较低，但项目声明无法随仓库可靠评审、共享和恢复。采用普通架构师 Git 仓库，声明止于模块级。
+- Do nothing / reuse：保留当前分离模型的改动最少，但跨库身份丢失、wiki 无 Note 来源及旧文件静默排除会继续影响蓝图完整性。复用已有解析、索引、事务和审批，仅补上述连接。
 
 ## Risks
 
-- **接口名软校验**：声明与代码不一致时装配器只能标记不能纠正。缓解：先只对顶层模块做声明（约 10 条），
-  并保留"用构建描述文件（CMake/package.json/project reference）校验声明、不一致标 stale"的后续路径。
-- **双边声明腐坏**：接口契约需人维护，无机器来源。缓解同上传言；声明数量控制在几十条以内。
-- **共同拥有的评审成本**：模块边界变更是跨团队事件，PR 流程可能成为瓶颈。缓解：CODEOWNERS 按模块
-  分段，避免全局审批。
-- **rev 语义**：骨架、各库、组合视图三个 rev 若同屏展示会混乱。缓解：组合全景显示骨架 rev 为主，
-  证据视图显示所属库 rev；不拼成一个数字。
-- **装配器成为第二个 harness 内部导入者**：严守单导入者纪律（`note-provider.ts` 或装配器二者之一，
-  不并行）。
-- **legacy 蓝图数据不可达**：C1 段"不读取旧蓝图数据"使画布上用户写过的 description / todos / issues /
-  techSolution 变成孤儿（`note-to-blueprint.ts` 无对应段，映射不出来）。缓解：一次性迁移归档
-  （`blueprint-migrate.ts:335` 的 `applyMigration` 已具备能力），**不做静默丢弃**。
-- **repoId 登记流程**：架构师要把新工作区的 repoId 写进模块 note 才能绑定，这是人际流程而非技术问题。
-  缓解：登记动作产品化为一个明确的"接入工作区"操作。
+接口声明仍需维护，结构合法不证明代码实现符合契约；首次只服务模块级声明。规模增大后，依据实际扫描耗时决定缓存和分页，不能以未测量的性能理由增加数据库。
 
-## Scope boundary: 三阶段 + note迁移
+持久 wiki 来源引用需要在 schema、读写和审核路径中一起支持；旧页面没有来源哈希时只能标记来源未记录，不能推断为最新。分支切换必须使读取范围与缓存同步，未接入仓库的反链列表应标记覆盖范围。
 
-执行顺序：P1 → P2 → P2b → P3，单源以本节为准，实施计划 E 段服从本节门禁。
+存量蓝图的 description、todos、issues 和 techSolution 必须先盘点、预览再迁移归档，不能因切换入口而静默丢弃。legacy 诊断数量增加可能只是首次显露旧资产，迁移应核对完整清单与身份链接，不能只比较 invalid 数量。
 
-- P1 冻 WorkFlowX（note 只留五 kind，不新增字段，不建 `views/`）。门禁：现有 fixture 全绿 +
-  `verify-harness-standard`。冻结前 JanusX 只修与 schema 无关的 E0-1/E0-4。
-- P2 再修三仓底层：`harness-core` 独占哈希与校验 → `harness-node` 文件仓库/watcher/锁/恢复 →
-  `wfx-notes` 与 `janus notes` 同结果 → 同步工具（受管 skills/templates/agents/commands +
-  AGENTS/CLAUDE 双端导航）→ `harness.json digest` + `release-matrix` 锁定 + 联动验收。
-  严守单导入者纪律。
-- P2b JanusX note 按 WorkFlowX 标准迁移（新增待办，后做）：标准冻结 + 三仓实现就绪后，把 JanusX
-  `.agents/notes/` 按 `harness-note/1` 规范化（frontmatter + 五 kind + 扁平 `notes/` + 无 `views/` +
-  `evidence/` 只属 task + `.local` 全自动，见 §9/§9b）。存量旧格式（`# Agent Note:` + `Status:` 行）
-  逐批转正，相对链接不断，git 历史为归档。门禁：迁移前后 `verify-harness-standard` 全绿 +
-  投影 `invalid` 不新增。未做前不阻塞 P3 读路径（adapter 对旧格式降级进 `invalid` lane，不抛错）。
-- P3 最后做蓝图上层：E0 剩余项（E0-2/E0-3/E0-5）→ 装配器（实边/悬空需求/闲置供给）→ 切换器/橙色边/未接入态 →
-  changeset 部分通过恢复。原型先行规则不变。
-- 原 A 轨 `init-arch`/接口表/`validate` 降为 P1 冻结后的过渡脚手架，不作长期真源。
+## Open questions
 
-## 9. 已砍：无 1.2（note 冻五 kind，views 删除）
-
-- note 只留 `idea/initiative/requirement/decision/task`，不新增 `interfaces/project` 等字段；
-  接口表继续放正文，装配器在 JanusX 侧软匹配。
-- 删除 `harness-view/1` 与 `.agents/views/`：无共享视角文件，全景即架构仓内容（`parent` 树 +
-  `repositories.primary` 装配），页签与过滤只存本机 `.local`。
-- 上述 8 项收敛一律不做，维持 1.0 原样。
-
-## 9b. 运行与索引约定
-
-- `notes/` 为唯一真源：扁平存放，稳定 UUID，`parent` 树表达层级，`relations[]` 表达边。
-- `evidence/` 只属 task：永久随提交、建后不可改，`execution.receipts` 引用；临时过程只放
-  `.local/runs/transactions/locks`，可删可重建。
-- 无 `views/`：全景即架构仓内容，页签与过滤只存本机 `.local`，不共享、不提交。
-- `.local` 全自动：打开工作区写 `workspace-map`，首次投影写 `index`，画布操作写 `ui`，
-  跑 task 写 `runs/locks`；Agent 只调 `prepare/apply`，永不手写 `.local`。
-- WorkFlowX 只约定 `.local` 位置、非真源可重建、重扫时机（启动/回焦点/切分支/watcher 溢出）；
-  实现归宿主：`harness-core/node` 在 janus-agentX，`note-provider` 在 JanusX，`wfx-notes` 为轻 CLI。
-- 读取走轻索引（URI/标题/kind/lifecycle/摘要/codeRefs），默认选中+一跳+同模块祖先链，
-  全图按需取；终端直写文件由 watcher 重扫，坏值进 `invalid` lane，不抛错、不导入、不换 ID。
-
-## 10. 三能力评估（以当前 note 为基）
-
-要求 1——完整表达工作区机制和能力：部分，不及格。能：initiative→requirement→task +
-parent 树，codeRefs/work.scope/work.verification 落点，decision 四节。不能：无能力注册表
-（MCP/终端预设/runner 无栏）、无接口一等字段（靠正文表格+reason 软匹配）、无机制行为栏
-（状态机/API 签名全散文）、无边界栏（role 仅三档）。修：不补字段，装配器软匹配，能力栏后议。
-
-要求 2——蓝图索引 + wiki 快搜：基本满足。通：单导入→Adapter v1→projectGraph+invalid lane；
-cmdList/cmdShow/workspace_search 读免审批，默认选中+一跳+同模块祖先链；
-processing-queue/deterministic+llm-stage/bm25+embedding/retention MCP 两段读。漏：无反链
-（全库扫）、无摘要栏（全文或不进，80 节点必超预算）、接口表不在索引（提供/需要分不清）。
-修：不加接口与 summary 栏，反链后议。
-
-要求 3——task 工作流流转：最强超配。通：work 三组必填 + execution 7 态 + baseline
-taskContractHash + receipts/changeset/bundle + xdo/xdel/xflow + changeset.ts 整套
-（expandGroupSelection/环检测/delete逐项/审计/撤销）+ expectedHash 并发。缺：多任务调度未做
-（S9 另立项）、AC-1 按文件编号易错配、hash 逐字易雪崩、lifecycle/execution 双轨重。
-修：只收敛（验收三写→一写、验证双写→一写），不动状态机。
-
-修复序：1 机制表达 → 2 索引 → 3 task 收敛。后续设计讨论以本节为基。
-
-## 10b. 打包版本道（标尺：简洁高效好用；裁决单源见实施计划“实施总序” ballot）
-
-原则：凡碰密封文件的优化项，一律攒进**同一次**版本 bump（新版本 + 新 digest +
-三仓 checkout 重记 + F01–F12 重跑），不零散改标准；实现层可修的不进版本道；
-判冗余的直接砍并记理由。字段只增不减是负债：快变信息不出规划 note，
-派生信息由实现层算、不存第二份。
-
-逐项理由一句话：能力/机制行为栏是快变资产进慢变 note、耦合必腐坏故砍；
-摘要栏加栏必致双源分叉故砍；双轨承重（execution 进 hash 则收据自失效）故只定界不并；
-hash 保守方向正确（误过期优于误通过）故维持；反链/AC 显示/接口约定属实现层故不进版本道；
-接口字段待 P3 证伪后附条件进版。明细与用户裁决只记 ballot，此处不复记。
-
-## Open questions（已决项已移出：布局不跨机见 Risks，接口载体见 ballot #12）
-
-- 多架构师工作区并存：无 views，全景即各架构仓内容，多全景并存、各管各，不合并；
-  默认项为本机 pin（`.local`），待 E2 定案。
-- 架构师工作区是否需要独立的 `NOTE_CLASS`（如 `planning`）以便过滤？当前 `class` 是可选自由值。
-- 模块 `lifecycle` 与证据 `lifecycle` 不同步时（模块 accepted、证据全 draft）的展示规则。
-- "接入工作区"操作是否应写入 `repositories.related[]` 而非仅 `primary`。
+具体目录、反链和来源标记的视觉样式由原型确定。该交互选择不改变本契约的身份、关系、来源和审批语义。
