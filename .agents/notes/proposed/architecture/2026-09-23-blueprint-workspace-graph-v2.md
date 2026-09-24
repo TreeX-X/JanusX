@@ -72,6 +72,13 @@ borderless textarea + orange send + no meta bar — `default`/`per-action` chips
 Cross-workspace composition, planning skeleton nodes, `module` kind, per-root wiki routing, stale-evidence
 states, workspace join/leave lifecycle.
 
+## Alternatives considered
+
+- Keep native `<select>` filters: zero custom-dropdown work and free keyboard/ARIA parity, but the OS-white popup breaks the dark theme and reintroduces the exact inconsistency the toolbar language removes; rejected in favor of the `Select.tsx`同构 custom dropdowns with straight-bar selection.
+- Keep the second kind dot on canvas nodes: kind stays visible without reading text, but 5 gray shades at 8px are indistinguishable and kind is already duplicated by `kindtag` + type text; rejected in favor of one status dot + text tags.
+- Keep the full JanusChat chrome in the right column (thread bar, resource strip, status strip, message buttons, model notice): no hiding rules to maintain, but the V2 prototype body is only approval slot + message stream + wiki line + todo + composer; rejected in favor of the single-native-card reuse with the listed chrome hidden (see B/C/D landing records for what stayed).
+- Do nothing / leave interactions unlocked per surface: no reference to hold, but reimplementation drifts per surface (topbar/dropdown/terminal/node encoding diverge); rejected in favor of this locked high-fidelity reference with prototype v9 as arbiter.
+
 ## Acceptance criteria
 
 - [ ] Toolbar exposes zero create/delete entries; the only edit entry focuses the chat turn.

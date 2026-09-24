@@ -46,3 +46,22 @@ Deliberate non-borrows: the daemon/relay topology, mobile pairing, and cloud rel
 - `git clone --depth 1 --single-branch https://github.com/stablyai/orca.git` (28,685 files) into local temp; all paths above read in full, not inferred from names.
 - Installed-build state at `%APPDATA%/orca` and `%USERPROFILE%/.orca/agent-hooks` matches the source mechanism field for field.
 - No JanusX code changes in this note; no test or typecheck surface touched.
+
+## Alternatives considered
+
+- Borrow the code directly (vendor hooks/shims as a runtime dependency): strongest case is fastest parity, but it drags orca's daemon/relay topology assumptions and a third-party runtime into single-desktop scope; rejected in favor of pattern-only borrowing with JanusX-owned receiver and normalizers.
+- Do nothing / stay on pty heuristics plus checkpoint snapshots: zero new surface, but per-turn agent prose and provider session identity stay unreachable; rejected because the revisit signal that motivated this note remains open.
+- Adopt the full topology (daemon, relay twin, mobile pairing, cloud relay): complete feature parity with orca, but out of the stated single-desktop scope and expands the trust boundary (loopback tokens, endpoint files); deliberately not borrowed, recorded in Proposal.
+
+## Acceptance criteria
+
+- [ ] Every mechanism claim above resolves to a file path in the 2026-09-21 shallow clone or the installed `%APPDATA%/orca` state; no claim rests on names alone.
+- [ ] The five borrow items in Proposal stay pattern-only (no orca source vendored, no vendor SDK at runtime).
+- [ ] The transcript-content revisit consumes the hook/normalizer/transcript/backfill split as specified, or records why it diverged.
+
+## Risks
+
+- Orca paths drift with versions: the clone is pinned to 2026-09-21; later orca layouts may invalidate the cited paths, so re-verify before borrowing.
+- Windows/POSIX parity: shims and newline bindings differ per platform (see `installer-utils.ts`, per-agent newline bindings); a JanusX port must cover both or explicitly scope down.
+- Hook trust boundary: loopback receiver plus token auth plus fail-open timeouts must be re-established on JanusX terms; copying the shape without the token/fail-open discipline would widen the attack surface.
+- Scope creep into daemon/relay/mobile: the deliberate non-borrows must stay out; any revisit needs its own note and threat review.

@@ -274,6 +274,36 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
 
 恢复成本极低：`changeset.ts` 795 行完整保留，只缺 UI 入口。**"一次性通过 + 部分通过"后端一行都不用写。**
 
+### 8b. `xarch` 指令（与 `xdo` 同构，建仓脚手架，2026-09-25 落定）
+
+触发形态与 `xdo` 一致：前缀一敲即执行令，不经 prompt 猜、不停在计划页。
+定义面仿 `.claude/commands/xdo.md` + `orchestrateX` direct 模式：Main Agent 直接执行，
+默认不 dispatch，不隐式并行；落盘原子（脚手架文件 + 本 note 原地同步 + 入口反向注释，
+一个 commit，message 带 Note 路径）；写作文案走 `proseX`。
+
+- 命令：`xarch <dir> [--name <name>] [--with-codeowners]`，过渡别名 `init-arch`
+  （P1 冻结后的过渡脚手架，不作长期真源，见 Scope boundary）。
+- 输入：目标目录（空目录或新建）；可选仓名（默认取目录名）、是否写 `CODEOWNERS` 分段模板。
+- 确定性步骤（一步一验，失败即停，不猜）：
+  1. `git init`（已是 git 仓则复用，脏树先报停，不自动 commit）；
+  2. 写 `.agents/harness.json`（`schemaVersion: 1` + 新 UUID `repoId` + `name` +
+     `profile: workflowx/1.0.0-s1.1` 当前冻结 digest；已存在则只校验不覆盖）；
+  3. 写 `notes/planning/` 模板：`project.md` + 1 个示例 `module-example.md`
+    （`kind: initiative` + `repositories.primary` 占位 + `## Decision` 提供/需要接口表示例，
+     P1 冻结口径：不加 kind/字段、不建 `views/`）；
+  4. 写 `CODEOWNERS`（`--with-codeowners` 时）+ `README.md`（建仓说明 + 后续走 PR 的提示）；
+  5. 调现有工作区注册（`workspace.create` / `chooseAndCreateWorkspace` 同链路，
+     `features/workspace/actions.ts:151`）接入本机，落 `.local/workspace-map`；
+  6. 投影验证：`projectView` 可读、`invalid` 不新增（旧格式降级通道保留）。
+- 不做的事（显式）：模块怎么切、接口名叫什么、`primary` 绑哪个 repoId——
+  一律不管，留给 chat + changeset 两层审批（§8）与"接入工作区"显式操作；
+  已纳管 note 的后续改动一律走事务 + `expectedHash` + approval，`xarch` 永不直写绕过。
+- 双端同步：`.claude/commands` 与 `.codex`（或对应 commands）同逻辑只差路径，
+  与 `orchestrateX` 的 sync contract 一致；`xdel`/`xflow` 的 bus-payload 不动，
+  `xarch` 无固定 Payload、不要求 task note URI（同 `xdo`）。
+- 门禁：`verify-harness-standard` 全绿；`projectView` 含 `adapterVersion`；
+  同 repo 多 worktree 不撞 id（E0-1 已修为前提，否则切换器仍吞条目）。
+
 ## Alternatives considered
 
 - **骨架存 GLOBAL JSON（V3 原方案）** — 最强论据是不需要新仓库。排除理由：引入第二种资产形态与第二套
@@ -294,6 +324,7 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
 
 - [ ] 一个架构师工作区（git 仓库 + `.agents/harness.json` + `notes/planning/*.md`）能被应用作为普通
       工作区识别并投影。
+- [ ] `xarch <dir>` 一次建仓 + 注册 + 投影验证通过（§8b 六步），不依赖 prompt 拼凑文件。
 - [ ] 项目 → 模块 的 `parent` 树在组合图中渲染为层级；模块 note 的 `kind: initiative` 无
       `INVALID_RELATION` 诊断。
 - [ ] UI→业务层、UI→渲染模块的**接口匹配**装配为实边；业务层→算法模块、业务层→数据载入层同理。
@@ -326,52 +357,58 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
 - **repoId 登记流程**：架构师要把新工作区的 repoId 写进模块 note 才能绑定，这是人际流程而非技术问题。
   缓解：登记动作产品化为一个明确的"接入工作区"操作。
 
-## Scope boundary: 双轨（2026-09-23 定论，2026-09-24 修订）
+## Scope boundary: 三阶段 + note迁移（2026-09-24 修订，2026-09-25 重排执行顺序）
 
-- A 轨（本期蓝图重构，JanusX 单仓）：`init-arch` 脚手架 + 接口表（`## Decision` 下固定表格）
-  + `validate` 命令 + 本机 pin 默认全景，全放 JanusX 侧与架构师模板仓库；WorkFlowX 全局
-  profile 不加内容，懒 skill（`architect-module`）仅为数据文件、不触发 digest。
-- B 轨（另立项，harness-note 1.2，三仓）：下述 §9 标准改法。凡碰密封文件
-  （`note.schema.json/templates/fixtures/manifest.json`）一律走 B 轨：新版本 + 新 digest +
-  三仓 checkout 重记 + F01–F12 重跑，不塞进 A 轨。
+执行顺序：P1 → P2 → P2b → P3，单源以本节为准，实施计划 E 段服从本节门禁。
 
-## 9. 标准 1.2 改法（B 轨，架构师充分 + 原有冗余同改）
+- P1 冻 WorkFlowX（note 只留五 kind，不新增字段，不建 `views/`）。门禁：现有 fixture 全绿 +
+  `verify-harness-standard`。冻结前 JanusX 只修与 schema 无关的 E0-1/E0-4。
+- P2 再修三仓底层：`harness-core` 独占哈希与校验 → `harness-node` 文件仓库/watcher/锁/恢复 →
+  `wfx-notes` 与 `janus notes` 同结果 → 同步工具（受管 skills/templates/agents/commands +
+  AGENTS/CLAUDE 双端导航）→ `harness.json digest` + `release-matrix` 锁定 + 联动验收。
+  严守单导入者纪律。
+- P2b JanusX note 按 WorkFlowX 标准迁移（新增待办，后做）：标准冻结 + 三仓实现就绪后，把 JanusX
+  `.agents/notes/` 按 `harness-note/1` 规范化（frontmatter + 五 kind + 扁平 `notes/` + 无 `views/` +
+  `evidence/` 只属 task + `.local` 全自动，见 §9/§9b）。存量旧格式（`# Agent Note:` + `Status:` 行）
+  逐批转正，相对链接不断，git 历史为归档。门禁：迁移前后 `verify-harness-standard` 全绿 +
+  投影 `invalid` 不新增。未做前不阻塞 P3 读路径（adapter 对旧格式降级进 `invalid` lane，不抛错）。
+- P3 最后做蓝图上层：E0 剩余项（E0-2/E0-3/E0-5）→ 装配器（实边/悬空需求/闲置供给）→ 切换器/橙色边/未接入态 →
+  changeset 部分通过恢复。原型先行规则不变。
+- 原 A 轨 `init-arch`/接口表/`validate` 降为 P1 冻结后的过渡脚手架，不作长期真源。
 
-新增（可选，缺席即老样子，现有 12 fixture 全绿；`interfaces/project` 明确不进
-`taskContractHash`，回执不失效）：
+## 9. 已砍：无 1.2（note 冻五 kind，views 删除）
 
-- `interfaces?: [{name: ^[A-Z][A-Za-z0-9_]*$, direction: provides|needs, provider?: noteURI}]`
-  为接口真源，正文表格只渲染；`relations[].criteria` 删除（assembler 改读 `work`）。
-- `project?: {id: UUID, role: architect|member}` 为全景作用域（`arch repoId = projectId`），
-  多全景并存、各管各，不合并。
-- `templates/initiative.md` 末尾加注释可选 `## Decision` + 接口表示例。
-- 新增 fixture 2 合法（带接口 initiative）+ 2 非法（坏接口名、坏 projectId）。
+- note 只留 `idea/initiative/requirement/decision/task`，不新增 `interfaces/project` 等字段；
+  接口表继续放正文，装配器在 JanusX 侧软匹配。
+- 删除 `harness-view/1` 与 `.agents/views/`：无共享视角文件，全景即架构仓内容（`parent` 树 +
+  `repositories.primary` 装配），页签与过滤只存本机 `.local`。
+- 上述 8 项收敛一律不做，维持 1.0 原样。
 
-收敛冗余（同版一起做）：
+## 9b. 运行与索引约定（2026-09-24 落定）
 
-1. 验收三写→一写：正文 AC 文字为真源，`acceptanceRefs` 只存指针，删 `relations[].criteria`。
-2. 验证双写→一写：`work.verification[]` 为真源，正文 `## Verification` 只渲染。
-3. 仓库四说→双源：`repositories.primary`（声明）+ `work.scope`（执行）为准；
-   `codeRefs` 去 `repoId`（继承 primary，只留 `path+role+symbol`）；`related[]` 由装配器反推，不手填。
-4. 删 relation 类型 `parent`（7→6），`parent` 树只走顶层字段。
-5. 文件名声明为 hint（以头 `id+created` 为准），`validate` 加不一致警告，不锁。
-6. `class` 与 `tags` 二选一写死（`class` 只过滤、`tags` 只检索，或 class 降为 `class:` 前缀 tag）。
-7. 状态语义冻结（不删值）：`draft/proposed` 机器统一按未接受，`rejected/archived` 统一按终态+`reason`。
-8. 版本单钉：`harness.json` 只存 `digest`（反查版本），`release-matrix` 只记 digest + checkout SHA。
+- `notes/` 为唯一真源：扁平存放，稳定 UUID，`parent` 树表达层级，`relations[]` 表达边。
+- `evidence/` 只属 task：永久随提交、建后不可改，`execution.receipts` 引用；临时过程只放
+  `.local/runs/transactions/locks`，可删可重建。
+- 无 `views/`：全景即架构仓内容，页签与过滤只存本机 `.local`，不共享、不提交。
+- `.local` 全自动：打开工作区写 `workspace-map`，首次投影写 `index`，画布操作写 `ui`，
+  跑 task 写 `runs/locks`；Agent 只调 `prepare/apply`，永不手写 `.local`。
+- WorkFlowX 只约定 `.local` 位置、非真源可重建、重扫时机（启动/回焦点/切分支/watcher 溢出）；
+  实现归宿主：`harness-core/node` 在 janus-agentX，`note-provider` 在 JanusX，`wfx-notes` 为轻 CLI。
+- 读取走轻索引（URI/标题/kind/lifecycle/摘要/codeRefs），默认选中+一跳+同模块祖先链，
+  全图按需取；终端直写文件由 watcher 重扫，坏值进 `invalid` lane，不抛错、不导入、不换 ID。
 
 ## 10. 三能力评估（2026-09-24，以当前 note 为基）
 
 要求 1——完整表达工作区机制和能力：部分，不及格。能：initiative→requirement→task +
 parent 树，codeRefs/work.scope/work.verification 落点，decision 四节。不能：无能力注册表
 （MCP/终端预设/runner 无栏）、无接口一等字段（靠正文表格+reason 软匹配）、无机制行为栏
-（状态机/API 签名全散文）、无边界栏（role 仅三档）。修：§9 interfaces/project 先补接口与
-作用域，能力栏后议。
+（状态机/API 签名全散文）、无边界栏（role 仅三档）。修：不补字段，装配器软匹配，能力栏后议。
 
 要求 2——蓝图索引 + wiki 快搜：基本满足。通：单导入→Adapter v1→projectGraph+invalid lane；
 cmdList/cmdShow/workspace_search 读免审批，默认选中+一跳+同模块祖先链；
 processing-queue/deterministic+llm-stage/bm25+embedding/retention MCP 两段读。漏：无反链
 （全库扫）、无摘要栏（全文或不进，80 节点必超预算）、接口表不在索引（提供/需要分不清）。
-修：interfaces 进 cmdList + 加 summary 栏 + 反链。
+修：不加接口与 summary 栏，反链后议。
 
 要求 3——task 工作流流转：最强超配。通：work 三组必填 + execution 7 态 + baseline
 taskContractHash + receipts/changeset/bundle + xdo/xdel/xflow + changeset.ts 整套
@@ -383,11 +420,11 @@ taskContractHash + receipts/changeset/bundle + xdo/xdel/xflow + changeset.ts 整
 
 ## Open questions
 
-- 多架构师工作区并存时的全景作用域：暂定 `arch repoId = projectId`，多全景并存、各管各，
-  不做跨全景合并；默认项为本机 pin（`.local`），待 E2 定案。
+- 多架构师工作区并存：无 views，全景即各架构仓内容，多全景并存、各管各，不合并；
+  默认项为本机 pin（`.local`），待 E2 定案。
 - 架构师工作区是否需要独立的 `NOTE_CLASS`（如 `planning`）以便过滤？当前 `class` 是可选自由值。
 - 模块 `lifecycle` 与证据 `lifecycle` 不同步时（模块 accepted、证据全 draft）的展示规则。
 - 接口声明列表是否需要一个更结构化的载体（现为 `## Decision` 下的约定列表 + `relations[].reason`
   双写）；若后续要做机器校验，可能需要规范化格式。
-- 组合全景的布局是否跨机共享（现布局存 `<checkout>/.agents/.local/ui/project.json`，各 checkout 独立）。
+- 组合全景的布局不跨机共享（存 `<checkout>/.agents/.local/ui/project.json`，各 checkout 独立）。
 - "接入工作区"操作是否应写入 `repositories.related[]` 而非仅 `primary`。

@@ -74,6 +74,13 @@ V3 assembler / `module` kind / 跨库 orange 边 / stale 重绑明确为后续�
 5. 右列纯 `JanusChat`：composer 去 model/permission chips，单张原生确认卡，单行 wiki trace。
 6. 清理残留 native `<select>`（维护面板 targetNode 等）→ 自定义 `Select`。
 
+## Alternatives considered
+
+- V3 组合装配优先（先做 assembler/跨库橙边/stale 重绑）：最强论据是早见全景，但 E0 的四个基础缺陷（多 worktree 撞 id、`repositories`/`codeRefs` 丢弃、跨库 target 截断、`primaryWorkspaceId` 恒 null、`harness:changed` 无订阅）会让装配建在错误前提上；故降为后续，先修正确性与基础性缺陷。
+- legacy JSON 全量硬拒写：最强论据是一刀切只读闭环，但与 `2026-09-18-blueprint-migration`（loop stays until consumers migrate）冲突，未迁移蓝图的分析回写/候选采纳/维护结算仍需写通道；故拒绝点收敛到 renderer 新建入口，存量逐个迁移归档。
+- 用 agent 逐动作审批替换变更集审批：最强论据是少一套 UI，但 C2 整包删除是能力退化（E1：“部分通过”消失）；正确关系是两层串联（内层管工具调用放行，外层管提案要哪几条），故恢复组级勾选入口而非二选一。
+- Do nothing / 停在 P0/P1 不做 E 段：零增量风险，但“进入终端必报 `bindWorkspaceFirst`”、多 worktree 吞条目、外部改 note 不刷新三个缺陷继续成立，原型核心动作保持死亡；故 E 段必须做。
+
 ## Acceptance criteria
 
 - [x] P0-1: `projectView` 与 IPC 结果含 `adapterVersion === 'v1'`，工具栏徽为真实版本回显。
@@ -129,13 +136,14 @@ V3 assembler / `module` kind / 跨库 orange 边 / stale 重绑明确为后续�
 - 未做：wiki 单行索引（本仓无对应数据面，tool 卡已覆盖已读展示）、消息气泡像素级重绘、发送 glyph 换 ↑、空态横幅。
 
 
-## E: 架构师工作区模型 —— 实施顺序重排（2026-09-23）
+## E: 架构师工作区模型 —— 实施顺序重排（2026-09-23，2026-09-25 服从 P1/P2/P2b/P3）
 
-依据：[架构师工作区模型](./2026-09-23-architect-workspace-model.md)（新）
+依据：[架构师工作区模型](./2026-09-23-architect-workspace-model.md)（新，执行顺序以其 Scope boundary 为准）
 与 [V3](./2026-09-23-blueprint-composition-v3.md)（已部分修订）。
-原则：**先修正确的与基础性的缺陷，再谈组合装配**。E 段不引入新概念，全部是本仓投影层的修复。
+原则：**P1 冻结 → P2 三仓底层 → P2b note 迁移 → P3 蓝图上层**；E 段内再按正确性/基础性排序。
+E 段不引入新概念，E0-2 之后全部是本仓投影层 + 装配器的修复。
 
-### E0 前置（顺序：E0 → E1 → E2 → E3 → E4）
+### E0 前置（拆分执行：E0-1/E0-4 随 P1，其余随 P3；E 段内顺序 E0 → E1 → E2 → E3 → E4）
 
 | 编号 | 内容 | 为什么排这么前 |
 |---|---|---|
@@ -145,7 +153,8 @@ V3 assembler / `module` kind / 跨库 orange 边 / stale 重绑明确为后续�
 | E0-4 | 投影节点写入真实 `primaryWorkspaceId`（来自 `repositories.primary`） | 当前恒为 null（`note-to-blueprint.ts:215-218`），导致 Canvas"进入终端"**必定**报 `bindWorkspaceFirst`（`BlueprintCanvas.tsx:542,589`）。原型里最核心的动作是死的 |
 | E0-5 | 恢复 `harness:changed` 订阅（`HarnessScopeBar` 已无挂载点） | 外部改 note 后画布不刷新；read-only note 承诺的 "auto-refreshes on watchNotes rev bumps" 是空话 |
 
-E0 的四项可独立提交、可独立验证，互不阻塞。建议 E0-1 与 E0-4 优先（前者是正确性，后者是可用性）。
+E0 的五项可独立提交、可独立验证，互不阻塞。拆分执行：E0-1 与 E0-4 随 P1（前者是正确性，后者是可用性，
+均与 schema 无关）；E0-2/E0-3/E0-5 随 P3（依赖 P2 的哈希/watcher/锁语义稳定后）。
 
 ### E1 恢复"部分通过"（后端已备，只缺入口）
 
@@ -186,6 +195,15 @@ harness-core/harness-node）。
 
 现有原型 `design/blueprint-note-graph-composition.html`（v10）可直接作为基线；
 `module` kind 过滤项应移除或改为 `initiative`。
+
+### P2b: JanusX note 按 WorkFlowX 标准迁移（新增待办，后做）
+
+- 范围：`.agents/notes/` 内存量（约 181 文件，混合旧 `# Agent Note:` + `Status:` 行与新
+  `harness-note/1` frontmatter）按 `WorkFlowX/standards/harness-note/1` 规范化：
+  frontmatter（schema/id/kind/lifecycle/created）+ 只留五 kind + 扁平 `notes/` +
+  无 `views/` + `evidence/` 只属 task + `.local` 全自动（见架构师模型 §9/§9b）。
+- 时机：P1 标准冻结 + P2 三仓实现就绪后；未做前不阻塞 P3（adapter 对旧格式降级进 `invalid` lane）。
+- 门禁：逐批转正，相对链接不断；迁移前后 `verify-harness-standard` 全绿 + 投影 `invalid` 不新增。
 
 ### 明确不在本计划内
 
