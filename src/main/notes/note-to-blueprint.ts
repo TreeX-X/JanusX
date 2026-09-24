@@ -16,6 +16,7 @@ import type {
   BlueprintNodeType,
   BlueprintRelation,
 } from '../../shared/janus/types'
+import { createHash } from 'node:crypto'
 import { ADAPTER_VERSION } from './note-types'
 import type { NoteDoc, NoteGraph, NoteGraphEntry, NoteKind } from './note-types'
 
@@ -262,8 +263,21 @@ export function projectRelations(entries: NoteGraphEntry[]): BlueprintRelation[]
   return out
 }
 
+/**
+ * Checkout-scoped graph id (E0-1).
+ * Hash of the normalized checkout rootKey — never repoId — so two worktrees
+ * of one repo project to two ids and a null repoId cannot collide on
+ * `C:\Users`-style path prefixes. Local-only: cross-machine identity stays
+ * on repoId / sourceUri, never on this id. Windows forbids case-only sibling
+ * directories, so lowercasing is safe canonicalization for slash/case
+ * spelling variants of one checkout.
+ * See .agents/notes/proposed/architecture/2026-09-23-blueprint-notev2-implementation-plan.md (E0-1).
+ */
 export function projectGraphId(repoId: string | null, rootKey: string): string {
-  return `harness:project:${(repoId ?? rootKey).slice(0, 8)}`
+  void repoId
+  const normalized = rootKey.replace(/\\/g, '/').toLowerCase()
+  const digest = createHash('sha256').update(normalized, 'utf8').digest('hex').slice(0, 12)
+  return `harness:project:${digest}`
 }
 
 /** One virtual Blueprint per repo root. Layout/overlay state stays local-only. */

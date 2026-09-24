@@ -82,8 +82,10 @@ export async function resolveProjectCheckout(
       const hit = await attempt(candidate)
       if (hit) matches.push(hit)
     }
-    // Project ids only carry an 8-char prefix, so a scan may hit two
-    // checkouts of one repo: choosing silently would write the wrong files.
+    // Ids are checkout-scoped rootKey hashes (E0-1), so a scan normally hits
+    // exactly one checkout. The guard stays as defense-in-depth (e.g. one
+    // checkout listed twice under different path spellings): choosing
+    // silently would write the wrong files.
     if (matches.length > 1) {
       throw new Error(`项目 Note 有多个本机 checkout（${blueprintId}）：${matches.map((m) => m.root).join('、')}，请先明确绑定目录`)
     }

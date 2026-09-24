@@ -13,6 +13,7 @@ import {
   mapStatusToLifecycle,
   nodeTypeToKind,
   projectGraph,
+  projectGraphId,
   projectRelations,
 } from '../../src/main/notes/note-to-blueprint'
 import type { NoteDoc } from '../../src/main/notes/note-types'
@@ -116,7 +117,8 @@ describe('projectGraph', () => {
       },
       'root-key',
     )
-    expect(g.id).toBe('harness:project:repo1')
+    expect(g.id).toBe(projectGraphId('repo1', 'root-key'))
+    expect(g.id.startsWith('harness:project:')).toBe(true)
     expect(g.contentRevision).toBe(7)
     expect(g.nodes['root']?.children).toEqual(['child'])
     expect(g.nodes['orphan']?.parentId).toBeNull()
@@ -153,6 +155,20 @@ describe('projectGraph', () => {
     expect(g.nodes['n']?.lifecycle).toBe('implemented')
     expect(g.nodes['n']?.type).toBe('epic')
     expect(g.nodes['n']?.status).toBe('done')
+  })
+
+  it('scopes graph ids per checkout, not per repo (E0-1)', () => {
+    // Same repo, two worktrees: renderer dedup must keep both entries.
+    const sameRepoA = projectGraphId('972afef3-2fc7-49de-a3ee-7e041225d28c', 'C:\\Users\\Tree\\Desktop\\git\\JanusX')
+    const sameRepoB = projectGraphId('972afef3-2fc7-49de-a3ee-7e041225d28c', 'C:\\Users\\Tree\\Desktop\\git\\JanusX-buleadjust')
+    expect(sameRepoA).not.toBe(sameRepoB)
+    // Null repoId: no `C:\Users`-style prefix collision across directories.
+    const nullA = projectGraphId(null, 'C:\\Users\\Tree\\a')
+    const nullB = projectGraphId(null, 'C:\\Users\\Tree\\b')
+    expect(nullA).not.toBe(nullB)
+    // Same checkout, spelling variants: one stable id.
+    expect(projectGraphId(null, 'C:\\W\\R')).toBe(projectGraphId(null, 'c:/w/r'))
+    expect(projectGraphId('repo1', 'root-key')).toBe(projectGraphId(null, 'root-key'))
   })
 })
 
