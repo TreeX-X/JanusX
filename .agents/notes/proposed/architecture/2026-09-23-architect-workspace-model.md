@@ -301,6 +301,9 @@ per-module 证据绑定。**不推荐，仅作退路记录。**
 - 双端同步：`.claude/commands` 与 `.codex`（或对应 commands）同逻辑只差路径，
   与 `orchestrateX` 的 sync contract 一致；`xdel`/`xflow` 的 bus-payload 不动，
   `xarch` 无固定 Payload、不要求 task note URI（同 `xdo`）。
+- 落点说明（2026-09-25）：命令文件是 JanusX 本机同步产物（`.gitignore` 排除
+  `.claude/`、`.codex/`、`AGENTS.md`，与 `xdo.md` 等同待遇，不入库），
+  以 `check-skills-sync` 双端一致为准；晋升 WorkFlowX 受管集需另开版本道。
 - 门禁：`verify-harness-standard` 全绿；`projectView` 含 `adapterVersion`；
   同 repo 多 worktree 不撞 id（E0-1 已修为前提，否则切换器仍吞条目）。
 
