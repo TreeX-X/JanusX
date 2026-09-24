@@ -58,6 +58,7 @@ import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGr
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { collectLocalHierarchyIds, computeInitialCollapsedIds, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
+import { nodeCheckoutPath, resolveNodeWorkspace } from '@/features/blueprint/resolveNodeWorkspace'
 import { useI18n } from '@/i18n/useI18n'
 
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
@@ -539,13 +540,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const activateWorkSession = useCallback(
     async (node: BlueprintNode) => {
       setActionError(null)
-      if (!node.workspaceId) {
-        setActionError(t('blueprint:error.bindWorkspaceFirst'))
-        return
-      }
-      const workspace = workspaces.find((w) => w.id === node.workspaceId)
+      // E0-4 discounted: projected nodes resolve by checkout path, not registry id.
+      const ownerCwd = useBlueprintStore.getState().workspacePathFor(blueprintId)
+      const workspace = resolveNodeWorkspace(node, ownerCwd, workspaces)
       if (!workspace) {
-        setActionError(t('blueprint:error.workspaceMissing'))
+        // No registry entry: a node without any checkout identity was never
+        // bound; a node with checkout identity just isn't registered locally.
+        setActionError(t(nodeCheckoutPath(node, ownerCwd) ? 'blueprint:error.workspaceMissing' : 'blueprint:error.bindWorkspaceFirst'))
         return
       }
 
@@ -586,13 +587,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     async (node: BlueprintNode, requestedPreset: TerminalPreset = terminalPreset) => {
       if (terminalLaunching) return
       setActionError(null)
-      if (!node.workspaceId) {
-        setActionError(t('blueprint:error.bindWorkspaceFirst'))
-        return
-      }
-      const workspace = workspaces.find((w) => w.id === node.workspaceId)
+      // E0-4 discounted: projected nodes resolve by checkout path, not registry id.
+      const ownerCwd = useBlueprintStore.getState().workspacePathFor(blueprintId)
+      const workspace = resolveNodeWorkspace(node, ownerCwd, workspaces)
       if (!workspace) {
-        setActionError(t('blueprint:error.workspaceMissing'))
+        // No registry entry: a node without any checkout identity was never
+        // bound; a node with checkout identity just isn't registered locally.
+        setActionError(t(nodeCheckoutPath(node, ownerCwd) ? 'blueprint:error.workspaceMissing' : 'blueprint:error.bindWorkspaceFirst'))
         return
       }
 

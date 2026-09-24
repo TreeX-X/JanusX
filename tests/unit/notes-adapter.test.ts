@@ -170,6 +170,23 @@ describe('projectGraph', () => {
     expect(projectGraphId(null, 'C:\\W\\R')).toBe(projectGraphId(null, 'c:/w/r'))
     expect(projectGraphId('repo1', 'root-key')).toBe(projectGraphId(null, 'root-key'))
   })
+
+  it('stamps checkout snapshot without registry bindings (E0-4 discounted)', () => {
+    const g = projectGraph(
+      {
+        repoId: 'repo1',
+        repoName: 'R',
+        entries: [{ doc: doc({ id: 'n' }), relPath: 'n.md', sha256: 'z' }],
+        revision: 1,
+      },
+      'C:\\W\\R',
+    )
+    expect(g.nodes['n']?.workspaceSnapshot).toEqual({ name: 'R', path: 'C:\\W\\R' })
+    // Registry-UUID bindings stay null: the pure adapter cannot know them,
+    // and repositories.primary needs E0-2 (P3).
+    expect(g.nodes['n']?.workspaceId).toBeNull()
+    expect(g.nodes['n']?.primaryWorkspaceId).toBeNull()
+  })
 })
 
 describe('applyNodePatch', () => {

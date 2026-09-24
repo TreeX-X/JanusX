@@ -217,6 +217,10 @@ export function projectNode(repoId: string | null, entry: NoteGraphEntry): Bluep
     primaryWorkspaceId: null,
     linkedWorkspaceIds: [],
     workspaceSnapshot: null,
+    // E0-4 discounted: registry-UUID bindings stay null on purpose. The pure
+    // adapter cannot know renderer registry ids, and repositories.primary
+    // needs E0-2 (P3). Checkout identity rides workspaceSnapshot instead
+    // (stamped in projectGraph below); the canvas resolves it by path.
     boundTerminalId: null,
     terminalHistory: [],
     lastAnalyzedCommitSha: null,
@@ -286,6 +290,10 @@ export function projectGraph(input: NoteGraph, rootKey: string): Blueprint {
   const nodeIds: string[] = []
   for (const entry of input.entries) {
     const node = projectNode(input.repoId, entry)
+    // E0-4 discounted: every projected node carries its checkout identity in
+    // existing WorkspaceSnapshot fields (no schema change). Powers path-based
+    // terminal resolution plus the focus-view run panel / display fallbacks.
+    node.workspaceSnapshot = { name: input.repoName, path: rootKey }
     nodes[node.id] = node
     nodeIds.push(node.id)
   }
