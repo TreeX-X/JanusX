@@ -31,9 +31,9 @@ const doc = (over: Partial<NoteDoc> = {}): NoteDoc => ({
   ...over,
 })
 
-describe('NoteAdapter v1 version', () => {
+describe('NoteAdapter v2 version', () => {
   it('pins the adapter version', () => {
-    expect(ADAPTER_VERSION).toBe('v1')
+    expect(ADAPTER_VERSION).toBe('v2')
   })
 
   it('stamps the version onto every projection', () => {
@@ -46,7 +46,7 @@ describe('NoteAdapter v1 version', () => {
       },
       'root-key',
     )
-    expect(g.adapterVersion).toBe('v1')
+    expect(g.adapterVersion).toBe('v2')
   })
 })
 
@@ -89,21 +89,21 @@ describe('kind/lifecycle maps with unknown downgrade', () => {
 })
 
 describe('relation map', () => {
-  it('keeps canvas relations and degrades the rest with prose', () => {
+  it('preserves formal relations and resolves by complete URI', () => {
     const rels = projectRelations([
       { doc: doc({ id: 'a', relations: [{ type: 'depends-on', target: 'note://r/b' }] }), relPath: 'a.md', sha256: 'x' },
-      { doc: doc({ id: 'b', relations: [{ type: 'blocks', target: 'note://r/a' }] }), relPath: 'b.md', sha256: 'y' },
-    ])
+      { doc: doc({ id: 'b', relations: [{ type: 'governed-by', target: 'note://external/a', reason: 'policy' }] }), relPath: 'b.md', sha256: 'y' },
+    ], 'r')
     expect(rels).toHaveLength(2)
     expect(rels[0]).toMatchObject({ sourceNodeId: 'a', targetNodeId: 'b', type: 'depends-on' })
     expect(rels[0]?.description).toBeUndefined()
-    expect(rels[1]).toMatchObject({ sourceNodeId: 'b', targetNodeId: 'a', type: 'related-to' })
-    expect(rels[1]?.description).toBe('harness:blocks')
+    expect(rels[1]).toMatchObject({ sourceNodeId: 'b', targetNodeId: 'note://external/a', type: 'governed-by', reason: 'policy', targetUri: 'note://external/a' })
+    expect(rels[1]?.description).toBeUndefined()
   })
 })
 
 describe('projectGraph', () => {
-  it('derives children and drops dangling parents', () => {
+  it('derives directory children and retains dangling parent declarations', () => {
     const g = projectGraph(
       {
         repoId: 'repo1',
@@ -122,6 +122,7 @@ describe('projectGraph', () => {
     expect(g.contentRevision).toBe(7)
     expect(g.nodes['root']?.children).toEqual(['child'])
     expect(g.nodes['orphan']?.parentId).toBeNull()
+    expect(g.relations).toContainEqual(expect.objectContaining({ sourceNodeId: 'orphan', targetUri: 'note://repo1/missing', type: 'parent' }))
     expect(g.nodes['child']?.sourceUri).toBe('note://repo1/child')
     expect(g.nodes['child']?.sourceHash).toBe('b')
   })

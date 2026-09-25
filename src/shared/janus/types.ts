@@ -140,6 +140,10 @@ export interface BlueprintAnalysis {
 }
 
 export type BlueprintRelationType =
+  | 'parent'
+  | 'governed-by'
+  | 'derived-from'
+  | 'supersedes'
   | 'depends-on'
   | 'blocks'
   | 'related-to'
@@ -150,6 +154,13 @@ export interface BlueprintRelation {
   sourceNodeId: string
   targetNodeId: string
   type: BlueprintRelationType
+  sourceUri?: string
+  targetUri?: string
+  criteria?: string[]
+  scope?: 'full' | 'partial'
+  reason?: string
+  declarations?: string[]
+  resolution?: import('@janus-agent/harness-node').NoteResolution
   description?: string
   createdAt: string
   updatedAt: string
@@ -192,6 +203,7 @@ export interface BlueprintNode {
   sourceUri?: string
   sourceHash?: string
   sourceRelPath?: string
+  note?: import('../notes').NoteDoc
   /** @deprecated Mirror of primaryWorkspaceId kept for legacy readers; write both via store APIs. */
   workspaceId: string | null
   primaryWorkspaceId: string | null
@@ -209,6 +221,7 @@ export interface BlueprintNode {
 
 export interface BlueprintInvalidNote {
   relPath: string
+  classification?: string
   diagnostics: Array<{ code: string; message: string }>
 }
 
@@ -247,6 +260,9 @@ export interface Blueprint {
    * repair. Transient (fresh per projection, never persisted to JSON).
    */
   invalidNotes?: BlueprintInvalidNote[]
+  /** Original serializable read model, shared with engineering wiki. */
+  noteSnapshot?: import('../notes').NoteReadSnapshot
+  projectionDiagnostics?: Array<{ code: string; message: string; path?: string }>
   createdAt: string
   updatedAt: string
 }

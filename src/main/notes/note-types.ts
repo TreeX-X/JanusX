@@ -12,7 +12,10 @@
 export const NOTE_SCHEMA_VERSION = 'harness-note/1'
 
 /** NoteAdapter version surfaced as `projectView.adapterVersion`. */
-export const ADAPTER_VERSION = 'v1'
+export const ADAPTER_VERSION = 'v2'
+
+import type { NoteDoc, NoteReadSnapshot } from '../../shared/notes'
+export type { NoteDoc } from '../../shared/notes'
 
 export type NoteKind = 'idea' | 'initiative' | 'requirement' | 'decision' | 'task'
 
@@ -24,11 +27,15 @@ export interface NoteSection {
 export interface NoteAc {
   id: string
   text: string
+  checked?: boolean
 }
 
 export interface NoteRelationRef {
   type: string
   target: string
+  criteria?: string[]
+  scope?: 'full' | 'partial'
+  reason?: string
 }
 
 /**
@@ -36,18 +43,6 @@ export interface NoteRelationRef {
  * unknown values must flow through and degrade in the adapter (to
  * `issue`/`planning`/`related-to` with prose preserved), never throw.
  */
-export interface NoteDoc {
-  id: string
-  kind: string
-  lifecycle: string
-  tags: string[]
-  parent: string | null
-  created?: string
-  title: string
-  sections: NoteSection[]
-  acs: NoteAc[]
-  relations: NoteRelationRef[]
-}
 
 /** One adapter input: document plus file identity for sha-pinned reads. */
 export interface NoteGraphEntry {
@@ -62,4 +57,5 @@ export interface NoteGraph {
   repoName: string
   entries: NoteGraphEntry[]
   revision: number
+  snapshot?: NoteReadSnapshot
 }

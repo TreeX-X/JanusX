@@ -80,8 +80,8 @@ describe('harness service roundtrip', () => {
     expect(rev).toBe(1)
     const view = await svc.projectView(root)
     expect(view.blueprint.source).toBe('harness')
-    expect(view.adapterVersion).toBe('v1')
-    expect(view.blueprint.adapterVersion).toBe('v1')
+    expect(view.adapterVersion).toBe('v2')
+    expect(view.blueprint.adapterVersion).toBe('v2')
     expect(view.blueprint.nodes[id]?.title).toBe('T')
     expect(view.blueprint.nodes[id]?.sourceHash).toHaveLength(64)
     // UI side: hashed replace through the single transaction.
@@ -208,14 +208,15 @@ describe('own working-note namespace', () => {
     expect(claimsHarnessSchema(`\uFEFF${NOTE('33333333-3333-4333-8333-333333333333', 'requirement', 'proposed', 'T')}`)).toBe(true)
   })
 
-  it('working notes stay out of the graph with zero invalid diagnostics', async () => {
+  it('working notes stay visible as legacy without becoming graph nodes', async () => {
     const svc = new HarnessNoteService()
     const root = await makeRoot()
     roots.push(root)
     await fs.writeFile(join(root, '.agents', 'notes', '2026-09-18-working--deadbeef.md'), WORKING)
     const view = await svc.projectView(root)
     expect(Object.keys(view.blueprint.nodes)).toHaveLength(0)
-    expect(view.invalid).toHaveLength(0)
+    expect(view.invalid).toHaveLength(1)
+    expect(view.blueprint.noteSnapshot?.entries[0].classification).toBe('legacy')
   })
 
   it('files claiming the harness schema keep invalid diagnostics', async () => {
@@ -240,8 +241,9 @@ describe('own working-note namespace', () => {
     await fs.writeFile(join(root, '.agents', 'notes', '2026-09-18-bad--badbadba.md'), bad)
     const view = await svc.projectView(root)
     expect(Object.keys(view.blueprint.nodes)).toHaveLength(1)
-    expect(view.invalid).toHaveLength(1)
-    expect(view.invalid[0]?.relPath).toContain('2026-09-18-bad')
+    expect(view.invalid).toHaveLength(2)
+    expect(view.invalid.some((item) => item.relPath.includes('2026-09-18-bad'))).toBe(true)
+    expect(view.blueprint.noteSnapshot?.entries.some((item) => item.classification === 'legacy')).toBe(true)
     const exported = await svc.exportSnapshot(root, {}, join(root, 'share.json'))
     expect(exported.notes).toBe(1)
   })

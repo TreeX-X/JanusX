@@ -9,6 +9,7 @@
  *  See .agents/notes/implemented/architecture/2026-09-16-harness-project-graph-s4.md
  */
 import { randomUUID } from 'crypto'
+import { watch as watchDirectory, type FSWatcher } from 'fs'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import {
@@ -20,6 +21,7 @@ import {
 import {
   applyChangeSet,
   buildNoteIndex,
+  readIndexedNote,
   listTaskResults,
   proveRequirementCoverage,
   assertAssetPath,
@@ -27,13 +29,13 @@ import {
   withAssetLock,
   readWorkspaceMap,
   sha256HexBytes,
-  watchNotes,
   type NoteIndex,
   type WatchEvent,
 } from '@janus-agent/harness-node'
 import { projectGraph, projectGraphId } from '../notes/note-to-blueprint'
 import { ADAPTER_VERSION } from '../notes/note-types'
-import { loadNoteEntries } from '../notes/note-provider'
+import { loadNoteEntries, toReadSnapshot } from '../notes/note-provider'
+import type { NoteReadSnapshot } from '../../shared/notes'
 import { mergeNoteEdit, type NoteEdit } from './artifact-producer'
 import {
   assertNoLocalLeak,
@@ -83,7 +85,7 @@ export interface BindingRecord {
   selected: boolean
 }
 
-export type ChangeListener = (event: { type: 'harness:changed'; root: string; rev: number; events: WatchEvent[] }) => void
+export type ChangeListener = (event: { type: 'harness:changed'; root: string; rev: number; events: WatchEvent[]; error?: string }) => void
 
 function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
   return path === undefined ? { code, message } : { code, message, path }
@@ -119,9 +121,21 @@ export class HarnessNoteService {
   async rescan(root: string): Promise<{ rev: number; ms: number }> {
     const start = Date.now()
     const index = await withAssetLock(root, () => buildNoteIndex(root))
-    const prev = this.indexes.get(root)?.rev ?? 0
-    this.indexes.set(root, { rev: prev + 1, index })
-    return { rev: prev + 1, ms: Date.now() - start }
+    const rev = this.acceptIndex(root, index)
+    return { rev, ms: Date.now() - start }
+  }
+
+  private acceptIndex(root: string, index: NoteIndex): number {
+    const previous = this.indexes.get(root)
+    const unchanged = previous?.index.coverage.snapshotHash === index.coverage.snapshotHash && previous.index.repoId === index.repoId
+    const rev = unchanged ? previous.rev : (previous?.rev ?? 0) + 1
+    this.indexes.set(root, { rev, index })
+    return rev
+  }
+
+  async readSnapshot(root: string): Promise<NoteReadSnapshot> {
+    const { index } = await this.cachedIndex(root)
+    return toReadSnapshot(index)
   }
 
   private async cachedIndex(root: string): Promise<{ rev: number; index: NoteIndex }> {
@@ -144,8 +158,7 @@ export class HarnessNoteService {
 
   async projectView(root: string): Promise<ProjectView> {
     const loaded = await loadNoteEntries(root)
-    const rev = this.indexes.get(root)?.rev ?? 0
-    this.indexes.set(root, { rev, index: loaded.index })
+    const rev = this.acceptIndex(root, loaded.index)
     const repoName = await this.repoName(root)
     const ui = await this.loadUiState(root)
     const blueprint = projectGraph(
@@ -154,6 +167,7 @@ export class HarnessNoteService {
         repoName,
         entries: loaded.entries.map((e) => ({ doc: e.doc, relPath: e.relPath, sha256: e.sha256 })),
         revision: rev,
+        snapshot: loaded.snapshot,
       },
       root,
     )
@@ -163,6 +177,7 @@ export class HarnessNoteService {
     // the invalid-lane UI; the canvas must never throw on them.
     blueprint.invalidNotes = loaded.invalid.map((item) => ({
       relPath: item.relPath,
+      classification: item.classification,
       diagnostics: item.diagnostics.map((d) => ({ code: d.code, message: d.message })),
     }))
     // Note: coverage comes from portable receipts - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
@@ -198,14 +213,18 @@ export class HarnessNoteService {
   async readNote(
     root: string,
     id: string,
-  ): Promise<{ note: ParsedNote; raw: string; relPath: string; sha256: string }> {
+  ): Promise<{ note: ParsedNote; raw: string; relPath: string; sha256: string; indexedSourceHash: string | null; matchesSnapshot: boolean }> {
     const { index } = await this.cachedIndex(root)
-    const entry = index.byId.get(id)
+    const entry = id.startsWith('note:') ? index.byUri.get(id) : index.byId.get(id)
     if (!entry?.note) {
       throw { code: 'NOT_FOUND', message: `unknown note: ${id}`, path: id }
     }
-    const raw = await readFile(join(root, entry.relPath), 'utf8')
-    return { note: parseNote(raw), raw, relPath: entry.relPath, sha256: entry.sha256 }
+    // Note: content and its hash come from one shared byte read — see .agents/notes/2026-09-25-note-blueprint-r2-read--fa17e06b.md
+    const fresh = await readIndexedNote(index, entry.relPath)
+    if (!fresh.ok) throw fresh.diagnostics[0]
+    const note = parseNote(fresh.text)
+    if (note.meta.id !== entry.note.meta.id) throw { code: 'CONFLICT', message: 'Note identity changed; rebuild the source snapshot', path: entry.relPath }
+    return { note, raw: fresh.text, relPath: entry.relPath, sha256: fresh.sha256, indexedSourceHash: fresh.indexedSourceHash, matchesSnapshot: fresh.matchesSnapshot }
   }
 
   /** Canvas-only overlay state. Local, never shared, best effort. */
@@ -340,14 +359,49 @@ export class HarnessNoteService {
 
   async watch(root: string): Promise<void> {
     if (this.watchers.has(root)) return
-    const handle = await watchNotes(root, (events) => {
-      void this.rescan(root).then(({ rev }) => {
-        for (const listener of this.listeners) {
-          listener({ type: 'harness:changed', root, rev, events })
-        }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let closed = false
+    const handles: FSWatcher[] = []
+    const notify = (error?: string): void => {
+      for (const listener of this.listeners) listener({ type: 'harness:changed', root, rev: this.indexes.get(root)?.rev ?? 0, events: [], ...(error ? { error } : {}) })
+    }
+    const schedule = (): void => {
+      if (closed) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = undefined
+        void this.rescan(root).then(() => { if (!closed) notify() }).catch((error: unknown) => { if (!closed) notify(error instanceof Error ? error.message : String(error)) })
+      }, 100)
+    }
+    const close = (): void => { closed = true; if (timer) clearTimeout(timer); for (const handle of handles) handle.close() }
+    this.watchers.set(root, { close })
+    try {
+      // Watch the source directory recursively, including newly created Note folders.
+      const handle = watchDirectory(join(root, '.agents'), { recursive: true, persistent: false }, (_event, file) => {
+        const path = String(file ?? '').replaceAll('\\', '/')
+        if (!path || path === 'harness.json' || path === 'notes' || path.startsWith('notes/') || path.startsWith('evidence/')) schedule()
       })
-    })
-    this.watchers.set(root, handle)
+      handle.on('error', (error) => notify(error.message))
+      handles.push(handle)
+      // HEAD changes also invalidate proof overlays when source bytes are identical.
+      let gitDir = join(root, '.git')
+      try {
+        if (!(await stat(gitDir)).isDirectory()) {
+          const pointer = await readFile(gitDir, 'utf8')
+          if (pointer.startsWith('gitdir:')) gitDir = resolve(root, pointer.slice(7).trim())
+        }
+        const gitWatch = watchDirectory(gitDir, { persistent: false }, (_event, file) => { if (String(file) === 'HEAD') schedule() })
+        gitWatch.on('error', (error) => notify(error.message))
+        if (closed) gitWatch.close(); else handles.push(gitWatch)
+      } catch { /* Non-Git projects still watch their Note source. */ }
+    } catch (error) {
+      close()
+      this.watchers.delete(root)
+      notify(error instanceof Error ? error.message : String(error))
+      // The first view subscribes only after load returns: retain this failure
+      // in the awaited IPC result instead of relying on a transient event.
+      throw new Error(`Note watcher could not start for ${root}: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   unwatchAll(): void {

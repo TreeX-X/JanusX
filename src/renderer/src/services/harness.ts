@@ -208,6 +208,6 @@ export function runAbort(cwd: string, runId: string): Promise<{ state: string }>
   return window.electron.harness.runAbort(cwd, runId)
 }
 
-export function onHarnessChanged(callback: (event: { root: string; rev: number; kinds: string[] }) => void): () => void {
+export function onHarnessChanged(callback: (event: import('../../../shared/ipc/harness').HarnessChangedEvent) => void): () => void {
   return (window.electron.harness as HarnessAPI).onChanged(callback)
 }

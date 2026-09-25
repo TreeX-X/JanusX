@@ -15,6 +15,7 @@ import { BlueprintCanvas } from './BlueprintCanvas'
 import { Select } from '../ui/Select'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { useNoteRefresh } from './useNoteRefresh'
 
 interface BlueprintViewProps {
   density?: 'embedded' | 'workbench'
@@ -35,12 +36,12 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
   const blueprints = useBlueprintStore((s) => s.blueprints)
   const blueprintWorkspace = useBlueprintStore((s) => s.blueprintWorkspace)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
-  const loadEpoch = useBlueprintStore((s) => s.loadEpoch)
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprints = useBlueprintStore((s) => s.loadBlueprints)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
   const maintenanceOpenRequest = useBlueprintMaintenanceStore((s) => s.openRequest)
+  useNoteRefresh(currentBlueprint?.source === 'harness' ? currentBlueprint.id : undefined, currentBlueprint ? blueprintWorkspace[currentBlueprint.id] : undefined)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -129,9 +130,10 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
       )}
 
       {/* 画布 */}
+      {density === 'workbench' && error ? <div className="blueprint-toolbar__error" role="alert">{error}</div> : null}
       {currentBlueprint ? (
         <BlueprintCanvas
-          key={`${currentBlueprint.id}:${loadEpoch}`}
+          key={currentBlueprint.id}
           blueprintId={currentBlueprint.id}
           onDetailOpenChange={onDetailOpenChange}
           onRegisterFlush={registerFlush}

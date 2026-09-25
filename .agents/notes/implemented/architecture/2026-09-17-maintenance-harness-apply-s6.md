@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 66bf1be8-fad7-5c9c-8048-4bbe0b665950
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: architecture
+---
 # Agent Note: Maintenance writes land through the harness transaction
 
 Status: implemented

@@ -124,8 +124,7 @@ interface CurrentNote {
 }
 
 async function currentNote(root: string, uri: string): Promise<CurrentNote> {
-  const id = uri.split('/').pop() ?? uri
-  return harnessNoteService.readNote(root, id)
+  return harnessNoteService.readNote(root, uri)
 }
 
 export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): void {
@@ -136,6 +135,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       root: event.root,
       rev: event.rev,
       kinds: [...new Set(event.events.map((e) => e.type))],
+      error: event.error,
     })
   })
 

@@ -121,6 +121,7 @@ export interface HarnessChangedEvent {
   root: string
   rev: number
   kinds: string[]
+  error?: string
 }
 
 export type HarnessRunMode = 'xdo' | 'xdel' | 'xflow'

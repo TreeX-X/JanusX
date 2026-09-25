@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: bcadcdc9-1fc3-566c-90a9-e9d9f59b5b9d
+kind: decision
+lifecycle: implemented
+created: 2026-09-16
+class: architecture
+---
 # Agent Note: Harness project graph lane
 
 Status: implemented

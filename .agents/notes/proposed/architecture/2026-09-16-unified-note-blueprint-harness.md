@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 1b210a76-8f00-59d6-ae3c-605b631def0c
+kind: decision
+lifecycle: proposed
+created: 2026-09-16
+class: architecture
+---
 # Agent Note: 统一 WorkflowX Note、JanusX 蓝图与 janus-agentX Harness
 
 Status: proposed

@@ -10,6 +10,8 @@
  */
 
 import { ipcMain } from 'electron'
+import { resolve } from 'path'
+import { harnessNoteService } from '../harness/service'
 import { blueprintStore } from '../janus/blueprint-store'
 import { analyzer } from '../janus/analyzer'
 import { blueprintMaintenanceService } from '../janus/maintenance/service'
@@ -55,7 +57,9 @@ export function registerJanusHandlers(): void {
   })
 
   ipcMain.handle(JANUS_COMMAND_CHANNELS.loadBlueprint, async (_e, cwd: string, id: string) => {
-    return blueprintStore.loadBlueprint(cwd, id)
+    const blueprint = await blueprintStore.loadBlueprint(cwd, id)
+    if (blueprint?.source === 'harness') await harnessNoteService.watch(resolve(cwd))
+    return blueprint
   })
 
   ipcMain.handle(

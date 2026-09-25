@@ -1,10 +1,10 @@
 /**
- * @file NoteAdapter v1 (V2 readonly refactor)
+ * @file NoteAdapter v2 — source snapshot to blueprint middle layer
  * @description The single owner of every note->blueprint mapping table
  *  (kind->type, lifecycle->status, kind->sections, relation map) plus the
- *  patch->note translation used by Agent write flows. Mapping is lossy by
- *  design: unknown kinds degrade to `issue`, unknown lifecycles to `planning`,
- *  unknown relations to `related-to` with the original type kept in prose.
+ *  patch->note translation used by Agent write flows. Display mappings retain
+ *  original metadata, URI relations and diagnostics
+ *  alongside canvas vocabulary. No renderer interprets frontmatter.
  *  Pure: no filesystem, no Electron, no network, no harness imports.
  *  See .agents/notes/proposed/architecture/2026-09-22-blueprint-note-graph-readonly.md
  */
@@ -178,7 +178,7 @@ function sectionText(doc: NoteDoc, names: string[]): string {
 }
 
 function featuresFromAcs(doc: NoteDoc): BlueprintFeatureItem[] {
-  const now = new Date().toISOString()
+  const now = doc.created ?? '1970-01-01'
   return doc.acs.map((ac) => ({
     id: ac.id,
     title: ac.text,
@@ -193,7 +193,7 @@ function featuresFromAcs(doc: NoteDoc): BlueprintFeatureItem[] {
 
 export function projectNode(repoId: string | null, entry: NoteGraphEntry): BlueprintNode {
   const { doc, relPath, sha256 } = entry
-  const now = new Date().toISOString()
+  const now = doc.created ?? '1970-01-01'
   return {
     id: doc.id,
     title: doc.title,
@@ -225,46 +225,51 @@ export function projectNode(repoId: string | null, entry: NoteGraphEntry): Bluep
     terminalHistory: [],
     lastAnalyzedCommitSha: null,
     children: [],
-    parentId: doc.parent ? doc.parent.split('/').pop() ?? null : null,
+    parentId: null,
     tags: [...doc.tags],
     createdAt: doc.created ?? now,
     updatedAt: now,
     sourceUri: repoId ? `note://${repoId}/${doc.id}` : undefined,
     sourceHash: sha256,
     sourceRelPath: relPath,
+    note: doc,
   }
 }
 
 const RELATION_MAP: Record<string, BlueprintRelation['type']> = {
+  parent: 'parent',
+  'governed-by': 'governed-by',
+  'derived-from': 'derived-from',
+  supersedes: 'supersedes',
   'depends-on': 'depends-on',
   implements: 'implements',
   'related-to': 'related-to',
 }
 
-/** Non-canvas relations degrade to related-to with the original type kept in prose. */
-export function projectRelations(entries: NoteGraphEntry[]): BlueprintRelation[] {
-  const out: BlueprintRelation[] = []
-  const now = new Date().toISOString()
-  for (const entry of entries) {
-    const from = entry.doc.id
-    const push = (type: string, targetUri: string): void => {
-      const target = targetUri.split('/').pop() ?? targetUri
-      const mapped = RELATION_MAP[type] ?? 'related-to'
-      out.push({
-        id: `${from}:${type}:${target}`,
-        sourceNodeId: from,
-        targetNodeId: target,
-        type: mapped,
-        description: mapped === type ? undefined : `harness:${type}`,
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-    for (const r of entry.doc.relations) {
-      push(r.type, r.target)
-    }
-  }
-  return out
+/** Resolve canvas endpoints by full identity. Unbound targets keep their URI. */
+export function projectRelations(entries: NoteGraphEntry[], repoId: string | null = null, snapshot?: NoteGraph['snapshot']): BlueprintRelation[] {
+  const uriFor = (id: string): string => repoId ? `note://${repoId}/${id}` : id
+  const local = new Map(entries.map((e) => [uriFor(e.doc.id), e.doc.id]))
+  const declared = snapshot?.relations ?? entries.flatMap(({ doc }) => {
+    const refs = [...doc.relations]
+    if (doc.parent && !refs.some((r) => r.type === 'parent' && r.target === doc.parent)) refs.unshift({ type: 'parent', target: doc.parent })
+    return refs.map((r) => ({
+      ...r, sourceUri: uriFor(doc.id), targetUri: r.target, declarations: [r.type === 'parent' ? 'parent' : 'relations'],
+      resolution: { status: local.has(r.target) ? 'resolved' as const : 'unavailable' as const, diagnostics: [] },
+    }))
+  })
+  return declared.map((r) => ({
+    id: `${local.get(r.sourceUri) ?? r.sourceUri}:${r.type}:${local.get(r.targetUri) ?? r.targetUri}`,
+    sourceNodeId: local.get(r.sourceUri) ?? r.sourceUri,
+    targetNodeId: local.get(r.targetUri) ?? r.targetUri,
+    sourceUri: r.sourceUri,
+    targetUri: r.targetUri,
+    type: RELATION_MAP[r.type] ?? 'related-to',
+    description: RELATION_MAP[r.type] ? undefined : `harness:${r.type}`,
+    criteria: r.criteria, scope: r.scope, reason: r.reason,
+    declarations: r.declarations, resolution: r.resolution,
+    createdAt: '1970-01-01', updatedAt: '1970-01-01',
+  }))
 }
 
 /**
@@ -297,18 +302,39 @@ export function projectGraph(input: NoteGraph, rootKey: string): Blueprint {
     nodes[node.id] = node
     nodeIds.push(node.id)
   }
-  // Derive reverse children from parent links; drop dangling parents.
-  for (const node of Object.values(nodes)) {
-    node.children = []
+  const relations = projectRelations(input.entries, input.repoId, input.snapshot)
+  const projectionDiagnostics: NonNullable<Blueprint['projectionDiagnostics']> = []
+  const parents = new Map<string, string[]>()
+  for (const edge of relations.filter((r) => r.type === 'parent')) {
+    if (!nodes[edge.sourceNodeId] || !nodes[edge.targetNodeId] || edge.resolution?.status !== 'resolved') continue
+    parents.set(edge.sourceNodeId, [...(parents.get(edge.sourceNodeId) ?? []), edge.targetNodeId])
   }
+  for (const [id, targets] of parents) {
+    const unique = [...new Set(targets)]
+    if (unique.length === 1) nodes[id].parentId = unique[0]
+    else projectionDiagnostics.push({ code: 'INVALID_RELATION', message: 'Multiple parent declarations', path: nodes[id].sourceUri })
+  }
+  // Keep declarations in the relation layer, but never build a recursive tree.
+  const cyclic = new Set<string>()
   for (const node of Object.values(nodes)) {
-    if (node.parentId && nodes[node.parentId]) {
-      nodes[node.parentId].children.push(node.id)
-    } else {
-      node.parentId = null
+    const seen = new Set<string>()
+    let cursor: string | null = node.id
+    while (cursor && nodes[cursor]) {
+      if (seen.has(cursor)) {
+        let member: string | null = cursor
+        do { cyclic.add(member!); member = nodes[member!].parentId } while (member && member !== cursor)
+        break
+      }
+      seen.add(cursor)
+      cursor = nodes[cursor].parentId
     }
   }
-  const now = new Date().toISOString()
+  for (const id of cyclic) {
+    nodes[id].parentId = null
+    projectionDiagnostics.push({ code: 'INVALID_RELATION', message: 'Parent cycle; declaration retained outside the directory tree', path: nodes[id].sourceUri })
+  }
+  for (const node of Object.values(nodes)) if (node.parentId) nodes[node.parentId].children.push(node.id)
+  const now = input.entries.map((e) => e.doc.created ?? '1970-01-01').sort().at(-1) ?? '1970-01-01'
   return {
     contentRevision: input.revision,
     source: 'harness',
@@ -316,10 +342,12 @@ export function projectGraph(input: NoteGraph, rootKey: string): Blueprint {
     id: projectGraphId(input.repoId, rootKey),
     name: input.repoName,
     description: '',
-    rootNodeId: nodeIds[0] ?? '',
+    rootNodeId: nodeIds.find((id) => !nodes[id].parentId) ?? nodeIds[0] ?? '',
     nodeIds,
     nodes,
-    relations: projectRelations(input.entries),
+    relations,
+    noteSnapshot: input.snapshot,
+    projectionDiagnostics,
     requirementCandidates: [],
     mountedTo: null,
     canvasLayout: {},
