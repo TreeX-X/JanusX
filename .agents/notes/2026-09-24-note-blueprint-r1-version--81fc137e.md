@@ -50,10 +50,20 @@ JanusX 的 AGENTS/CLAUDE、Codex/Claude skills/agents/commands 使用 WorkFlowX 
 
 ## Acceptance criteria
 
-- [ ] AC-1: WorkFlowX 的 S1.2 正反接口样例在 harness-core、notes-cli 与 JanusX 的消费路径一致通过，非法字段不被接受，修改接口声明不改变既有任务契约哈希。
-- [ ] AC-2: 三仓 profile/version/digest 与最终 LF-normalized manifest 一致；managed sync/check 包含 JanusX，保留本地配置且重复执行不产生变化。
-- [ ] AC-3: 原有两个候选/运行时不兼容失败已解决；构建和相关回归通过，独立 evaluatorX review 通过后再启动 R2。
+- [x] AC-1: WorkFlowX 的 S1.2 正反接口样例在 harness-core、notes-cli 与 JanusX 的消费路径一致通过，非法字段不被接受，修改接口声明不改变既有任务契约哈希。
+- [x] AC-2: 三仓 profile/version/digest 与最终 LF-normalized manifest 一致；managed sync/check 包含 JanusX，保留本地配置且重复执行不产生变化。
+- [x] AC-3: 原有两个候选/运行时不兼容失败已解决；构建和相关回归通过，独立 evaluatorX review 通过后再启动 R2。
 
 ## Verification
 
 运行 WorkFlowX 标准验证与三仓受管配置检查；运行 agentX harness-core、harness-node、notes-cli 构建和相关 suites；JanusX 验证实际安装的共享包版本、profile 以及新接口样例。代码自查和独立 review 分开记录；失败不得以跳过样例、降低断言或删除旧测试消除。
+
+## Results
+
+R1 独立验收于 2026-09-25 通过。三仓 profile 对齐最终 S1.2，LF-normalized manifest SHA-256 为 1b9500b1ea5101231650f04f2e5e2c480001ccf9512ec173b8e5d737bf2d6923。共享包发布单元为 0.2.0；JanusX 锁文件仅更新两个本地 harness 包版本，并以实际安装包执行接口正反样例。
+
+实际检查：WorkFlowX 标准验证、三仓规则 source/parity/profile 检查和同步保留/幂等回归通过；agentX 三包构建通过，完整 core/node/CLI suites 分别 89/47/13 项通过；JanusX S1.2 兼容与维护应用 suites 11 项通过，typecheck 通过。维护 checkout 测试按已有 E0-1 checkout-scoped ID 修正，并继续覆盖真实 ID 冲突拒绝。没有跳过原有两个 profile/fixture 失败。
+
+JanusX 与 agentX 的 WorkflowX skills、agent managed blocks、命令及 AGENTS/CLAUDE 已同步；这些本地配置按原有 Git ignore 策略保留。WorkFlowX 的可重复 sync --apply/--check 是重新部署入口，未覆盖本地模型、权限、插件设置。
+
+独立结果位于 `.agents/.local/r1-20260925-review-02-result.md`，运行标识为 `01a0d6bb-5e6b-7682-ab35-f8b77700fe41`。AGENTS/CLAUDE 遗漏同步已修复；缺失检测、标记块修复、LF/CRLF 本地前后缀保留、无标记拒绝和重复执行等 11 组独立探针通过。Windows 只读沙箱的进程启动限制已在授权环境完成验证。失败项和阻塞项均为空。固定验收来源为 `d27c8a5d974783b985f229374b52718d854c8b3f`，准确实现提交由 WorkFlowX release-matrix.md 记录。R2 在该发布记录闭合后启动。

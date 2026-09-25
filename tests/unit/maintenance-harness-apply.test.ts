@@ -2,7 +2,7 @@ import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HarnessNoteService } from '../../src/main/harness/service'
 import {
   applyMaintenanceSelection,
@@ -248,9 +248,18 @@ describe('maintenance harness apply wiring (S6-c slice 2b)', () => {
     await expect(resolveProjectCheckout(svc, 'harness:project:deadbeef', root)).rejects.toThrow('找不到项目 Note 的本机 checkout')
     const twin = await makeRoot()
     roots.push(twin)
+    const twinView = await svc.projectView(twin)
+    expect(twinView.blueprint.id).not.toBe(view.blueprint.id)
+    // E0-1 ids identify one checkout; equal repository identity is not ambiguity.
+    await expect(resolveProjectCheckout(svc, view.blueprint.id, undefined, async () => [root, twin])).resolves.toMatchObject({ root })
+    // Still reject a real id collision instead of silently choosing a writer.
+    const projectView = vi.spyOn(svc, 'projectView').mockImplementation(async candidate =>
+      candidate === twin ? { ...twinView, blueprint: { ...twinView.blueprint, id: view.blueprint.id } } : view,
+    )
     await expect(resolveProjectCheckout(svc, view.blueprint.id, undefined, async () => [root, twin])).rejects.toThrow(
       '多个本机 checkout',
     )
+    projectView.mockRestore()
   })
 
   it('keeps the node-scope gate: out-of-scope writes fail before translating', () => {
