@@ -11,9 +11,10 @@
  *  BlueprintCanvas 在 workbench 下受控消费（embedded 无 provider 时走本地态）。
  */
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { BlueprintNodeStatus } from '@/services/blueprint'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { Blueprint, BlueprintNodeStatus } from '@/services/blueprint'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
+import { groupRootsByConnectivity, ISOLATED_HIDE_THRESHOLD } from '@/features/blueprint/canvas-navigation'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
@@ -36,6 +37,10 @@ interface BlueprintToolbarState {
   /** 画布当前选中节点（Canvas 回報，供“在对话中变更”携带 nodeId） */
   selectedId: string | null
   reportSelectedId: (id: string | null) => void
+  /** 孤立根折叠：隐藏无关联的根卡片，矩阵收成簇块；搜索激活时自动放行 */
+  hideIsolated: boolean
+  setHideIsolated: (value: boolean | ((visible: boolean) => boolean)) => void
+  isolatedCount: number
   /** 画布 fitView 入口（Canvas 注册） */
   fitRef: { current: (() => void) | null }
   toggleDetailRef: { current: (() => void) | null }
@@ -52,12 +57,47 @@ interface BlueprintToolbarState {
 
 const BlueprintToolbarContext = createContext<BlueprintToolbarState | null>(null)
 
+/**
+ * 孤立折叠开关（含自动默认）：孤立根超过阈值时默认隐藏，
+ * 用户手动切换后不再自动覆盖，切蓝图时重新评估。
+ * Provider 与 Canvas 内嵌态共用，保证两路行为一致。
+ */
+export function useHideIsolatedState(blueprint: Blueprint | null): [
+  boolean,
+  (value: boolean | ((visible: boolean) => boolean)) => void,
+  number,
+] {
+  const [hideIsolated, setHideIsolatedState] = useState(false)
+  const manualRef = useRef(false)
+  const blueprintId = blueprint?.id ?? null
+  const isolatedCount = useMemo(() => {
+    if (!blueprint) return 0
+    return groupRootsByConnectivity(
+      blueprint.nodes,
+      blueprint.relations ?? [],
+      blueprint.composition?.interfaces ?? [],
+    ).isolatedRootIds.length
+  }, [blueprint])
+  const autoHide = isolatedCount > ISOLATED_HIDE_THRESHOLD
+  useEffect(() => {
+    manualRef.current = false
+    setHideIsolatedState(autoHide)
+  }, [blueprintId, autoHide])
+  const setHideIsolated = useCallback((value: boolean | ((visible: boolean) => boolean)) => {
+    manualRef.current = true
+    setHideIsolatedState(value)
+  }, [])
+  return [hideIsolated, setHideIsolated, isolatedCount]
+}
+
 export function BlueprintToolbarProvider({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ToolbarStatusFilter>('all')
   const [kindFilter, setKindFilter] = useState<ToolbarKindFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<BlueprintLayoutSaveStatus>('clean')
+  const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const [hideIsolated, setHideIsolated, isolatedCount] = useHideIsolatedState(currentBlueprint)
   const fitRef = useRef<(() => void) | null>(null)
   const toggleDetailRef = useRef<(() => void) | null>(null)
   const restoreLayoutRef = useRef<(() => void) | null>(null)
@@ -75,12 +115,15 @@ export function BlueprintToolbarProvider({ children }: { children: ReactNode }) 
     setKindFilter,
     selectedId,
     reportSelectedId,
+    hideIsolated,
+    setHideIsolated,
+    isolatedCount,
     fitRef,
     toggleDetailRef, restoreLayoutRef, undoLayoutRef,
     detailOpen, canUndoLayout, reportDetailOpen, reportCanUndoLayout,
     saveStatus,
     reportSaveStatus,
-  }), [searchQuery, statusFilter, kindFilter, selectedId, saveStatus, reportSelectedId, reportSaveStatus, detailOpen, canUndoLayout])
+  }), [searchQuery, statusFilter, kindFilter, selectedId, hideIsolated, setHideIsolated, isolatedCount, saveStatus, reportSelectedId, reportSaveStatus, detailOpen, canUndoLayout])
   return <BlueprintToolbarContext.Provider value={value}>{children}</BlueprintToolbarContext.Provider>
 }
 
@@ -105,6 +148,7 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
     searchQuery, setSearchQuery,
     statusFilter, setStatusFilter,
     kindFilter, setKindFilter,
+    hideIsolated, setHideIsolated, isolatedCount,
     selectedId, fitRef, saveStatus, toggleDetailRef, restoreLayoutRef, undoLayoutRef, detailOpen, canUndoLayout,
   } = useRequiredBlueprintToolbar()
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
@@ -166,6 +210,16 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
       <button className="blueprint-btn" onClick={() => fitRef.current?.()} title={t('blueprint:action.fitCanvas')}>
         {t('blueprint:action.fitCanvas')}
       </button>
+      {isolatedCount > 0 && (
+        <button
+          className={`blueprint-btn blueprint-toolbar__toggle${hideIsolated ? ' blueprint-toolbar__toggle--active' : ''}`}
+          onClick={() => setHideIsolated((visible) => !visible)}
+          aria-pressed={hideIsolated}
+          title={hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
+        >
+          {hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
+        </button>
+      )}
       <button
         className="blueprint-btn"
         onClick={() => toggleDetailRef.current?.()}

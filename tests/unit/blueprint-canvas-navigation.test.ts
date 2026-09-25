@@ -3,6 +3,7 @@ import type { BlueprintNode } from '../../src/renderer/src/services/blueprint'
 import {
   collectLocalHierarchyIds,
   computeInitialCollapsedIds,
+  groupRootsByConnectivity,
   stepMatchIndex,
   visibleNodeIds
 } from '../../src/renderer/src/features/blueprint/canvas-navigation'
@@ -106,8 +107,7 @@ describe('blueprint canvas navigation', () => {
     expect(collapsed).toEqual(new Set(['m0', 'm1', 'm2', 'm3', 'm4']))
   })
 
-  it('keeps deeper levels visible while the running total fits the budget', () => {
-    const spec = [{ id: 'root', parentId: null as string | null, childIds: [] as string[] }]
+  it('keeps deeper levels visible while the running total fits the budget', () => {    const spec = [{ id: 'root', parentId: null as string | null, childIds: [] as string[] }]
     const epicIds = ['e0', 'e1', 'e2']
     spec[0].childIds = epicIds
     const featureIds: string[] = []
@@ -129,5 +129,60 @@ describe('blueprint canvas navigation', () => {
 
     expect(epicIds.some((id) => collapsed.has(id))).toBe(false)
     expect(collapsed).toEqual(new Set(featureIds.filter((id) => tree.nodes[id].children.length > 0)))
+  })
+})
+
+describe('blueprint connectivity grouping', () => {
+  it('clusters relation-linked roots and reports edgeless roots as isolated', () => {
+    const tree = buildTree([
+      { id: 'plan', parentId: null, childIds: ['r1', 'r2'] },
+      { id: 'r1', parentId: 'plan', childIds: [] },
+      { id: 'r2', parentId: 'plan', childIds: [] },
+      { id: 'a', parentId: null, childIds: [] },
+      { id: 'b', parentId: null, childIds: [] },
+      { id: 'lone', parentId: null, childIds: [] },
+    ])
+    const groups = groupRootsByConnectivity(tree.nodes, [
+      { sourceNodeId: 'a', targetNodeId: 'b' },
+      { sourceNodeId: 'ghost', targetNodeId: 'lone' },
+    ])
+    expect(groups.clusterOf.get('a')).toBe(groups.clusterOf.get('b'))
+    expect(groups.clusterOf.get('plan')).toBe(groups.clusterOf.get('r1'))
+    // Largest component ranks first: the plan tree (3) outranks the a-b pair (2).
+    expect(groups.clusterOf.get('plan')).toBe(0)
+    expect(groups.clusterOf.get('a')).toBe(1)
+    // Dangling relation targets never merge; lone stays isolated.
+    expect(groups.isolatedRootIds).toEqual(['lone'])
+  })
+
+  it('unions interface needs/provider pairs and ignores hierarchy-free orphans with children', () => {
+    const tree = buildTree([
+      { id: 'orphan', parentId: 'missing', childIds: [] },
+      { id: 'x', parentId: null, childIds: [] },
+      { id: 'y', parentId: null, childIds: [] },
+    ])
+    const groups = groupRootsByConnectivity(tree.nodes, [], [
+      { nodeId: 'x', providerNodeId: 'y' },
+    ])
+    expect(groups.clusterOf.get('x')).toBe(groups.clusterOf.get('y'))
+    // orphan has an unresolvable parent: still a root without edges, hence isolated.
+    expect(groups.isolatedRootIds).toEqual(['orphan'])
+  })
+
+  it('is deterministic regardless of input order', () => {
+    const forward = buildTree([
+      { id: 'm', parentId: null, childIds: [] },
+      { id: 'n', parentId: null, childIds: [] },
+      { id: 'o', parentId: null, childIds: [] },
+    ])
+    const first = groupRootsByConnectivity(forward.nodes, [{ sourceNodeId: 'm', targetNodeId: 'n' }])
+    const reversed = buildTree([
+      { id: 'o', parentId: null, childIds: [] },
+      { id: 'n', parentId: null, childIds: [] },
+      { id: 'm', parentId: null, childIds: [] },
+    ])
+    const second = groupRootsByConnectivity(reversed.nodes, [{ sourceNodeId: 'n', targetNodeId: 'm' }])
+    expect([...second.clusterOf.entries()]).toEqual([...first.clusterOf.entries()])
+    expect(second.isolatedRootIds).toEqual(first.isolatedRootIds)
   })
 })

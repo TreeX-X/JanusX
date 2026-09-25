@@ -93,6 +93,8 @@
     "applying": "Applying...",
     "maintainNode": "Maintain Node",
     "unbindWorkspace": "Unbind Workspace",
+    "hideIsolated": "Hide unlinked ({{count}})",
+    "showIsolated": "Show unlinked ({{count}})",
     "addPositioning": "Add Positioning",
     "addSolution": "Add Solution",
     "addFeature": "Add Feature",

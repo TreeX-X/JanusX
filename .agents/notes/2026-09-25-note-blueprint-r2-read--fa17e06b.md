@@ -17,6 +17,8 @@ codeRefs:
     path: scripts/migrate-agent-notes.mjs
     role: implementation
 relations:
+  - type: parent
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
   - type: implements
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
     criteria: [AC-2, AC-3]

@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'
-import { buildEffectiveHierarchy } from './canvas-navigation'
+import { buildEffectiveHierarchy, groupRootsByConnectivity } from './canvas-navigation'
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2, critical: 3 } as const
 const SEVERITY_LABEL = ['低', '中', '高', '严重'] as const
@@ -82,13 +82,19 @@ const ROW_PITCH = NODE_H + Y_GAP
 const GRID_ROW_PITCH = NODE_H + GRID_ROW_GAP
 const layoutCache = new WeakMap<object, Map<string, Record<string, { x: number; y: number }>>>()
 
-function layoutSignature(collapsedNodeIds: Set<string>, overrides: Blueprint['canvasLayout']): string {
+function layoutSignature(
+  collapsedNodeIds: Set<string>,
+  overrides: Blueprint['canvasLayout'],
+  extraHidden?: ReadonlySet<string>,
+  relationsKey?: string,
+): string {
   const collapsed = [...collapsedNodeIds].sort().join(',')
   const positions = Object.entries(overrides ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, point]) => `${id}:${point.x},${point.y}`)
     .join('|')
-  return `${collapsed}::${positions}`
+  const hidden = extraHidden ? [...extraHidden].sort().join(',') : ''
+  return `${collapsed}::${positions}::${hidden}::${relationsKey ?? ''}`
 }
 
 /** 叶子网格列数：接近正方形，上限 GRID_MAX_COLS，避免画布单向铺开 */
@@ -101,13 +107,29 @@ function gridBlockWidth(count: number): number {
   return cols * NODE_W + (cols - 1) * X_GAP
 }
 
+/** 无任何关联的孤立根数量（矩阵治理开关的计数来源） */
+export function countIsolatedRoots(blueprint: Blueprint): number {
+  return groupRootsByConnectivity(
+    blueprint.nodes,
+    blueprint.relations ?? [],
+    blueprint.composition?.interfaces ?? [],
+  ).isolatedRootIds.length
+}
+
 export function computeBlueprintLayout(
   nodes: Record<string, BlueprintNode>,
   rootNodeId: string,
   canvasLayout: Blueprint['canvasLayout'],
+  rootRank?: ReadonlyMap<string, number>,
 ): Record<string, { x: number; y: number }> {
   const { childrenByParent, roots } = buildEffectiveHierarchy(nodes)
-  roots.sort((a, b) => (a === rootNodeId ? -1 : b === rootNodeId ? 1 : 0))
+  roots.sort((a, b) => {
+    if (a === rootNodeId) return -1
+    if (b === rootNodeId) return 1
+    // 同簇根相邻：大分量在前，无关根沉底（矩阵变簇块）
+    const rank = (rootRank?.get(a) ?? Number.POSITIVE_INFINITY) - (rootRank?.get(b) ?? Number.POSITIVE_INFINITY)
+    return rank === 0 ? 0 : rank
+  })
 
   const splitChildren = (id: string) => {
     const children = childrenByParent.get(id) ?? []
@@ -228,8 +250,13 @@ export function computeVisibleBlueprintLayout(
   collapsedNodeIds: Set<string>,
   overrides: Blueprint['canvasLayout'],
   index: BlueprintGraphIndex = buildBlueprintGraphIndex(blueprint),
+  extraHidden?: ReadonlySet<string>,
 ): Record<string, { x: number; y: number }> {
-  const signature = layoutSignature(collapsedNodeIds, overrides)
+  const relationsKey = JSON.stringify([
+    (blueprint.relations ?? []).map((rel) => [rel.sourceNodeId, rel.type, rel.targetNodeId]),
+    (blueprint.composition?.interfaces ?? []).map((port) => [port.nodeId, port.providerNodeId]),
+  ])
+  const signature = layoutSignature(collapsedNodeIds, overrides, extraHidden, relationsKey)
   const cached = layoutCache.get(blueprint)?.get(signature)
   if (cached) return cached
   const hidden = new Set<string>()
@@ -242,9 +269,14 @@ export function computeVisibleBlueprintLayout(
   }
   const visibleNodes: Record<string, BlueprintNode> = {}
   for (const id of blueprint.nodeIds) {
-    if (!hidden.has(id) && blueprint.nodes[id]) visibleNodes[id] = blueprint.nodes[id]
+    if (!hidden.has(id) && !extraHidden?.has(id) && blueprint.nodes[id]) visibleNodes[id] = blueprint.nodes[id]
   }
-  const layout = computeBlueprintLayout(visibleNodes, blueprint.rootNodeId, overrides ?? {})
+  const { clusterOf } = groupRootsByConnectivity(
+    blueprint.nodes,
+    blueprint.relations ?? [],
+    blueprint.composition?.interfaces ?? [],
+  )
+  const layout = computeBlueprintLayout(visibleNodes, blueprint.rootNodeId, overrides ?? {}, clusterOf)
   const entries = layoutCache.get(blueprint) ?? new Map<string, Record<string, { x: number; y: number }>>()
   entries.set(signature, layout)
   layoutCache.set(blueprint, entries)
@@ -259,7 +291,16 @@ export function computeBlueprintSubtreeLayout(
   if (!blueprint.nodes[nodeId]) return current
   const subtreeIds = collectSubtreeIds(blueprint, nodeId)
 
-  const defaults = computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})
+  const defaults = computeBlueprintLayout(
+    blueprint.nodes,
+    blueprint.rootNodeId,
+    {},
+    groupRootsByConnectivity(
+      blueprint.nodes,
+      blueprint.relations ?? [],
+      blueprint.composition?.interfaces ?? [],
+    ).clusterOf,
+  )
   const anchor = current[nodeId] ?? defaults[nodeId] ?? { x: 0, y: 0 }
   const defaultAnchor = defaults[nodeId] ?? { x: 0, y: 0 }
   const next = { ...current }
@@ -280,14 +321,15 @@ export function deriveBlueprintFlow(
   focusedNodeIds: Set<string>,
   focusActive: boolean,
   collapsedNodeIds: Set<string> = new Set(),
+  options: { extraHidden?: ReadonlySet<string> } = {},
 ): { nodes: Node<BlueprintNodeData, 'blueprint'>[]; edges: Edge[] } {
   const index = buildBlueprintGraphIndex(blueprint)
-  const hidden = new Set<string>()
+  const hidden = new Set<string>(options.extraHidden ?? [])
   const hideDescendants = (id: string) => (index.childrenByParent.get(id) ?? []).forEach((childId) => {
     if (!hidden.has(childId)) { hidden.add(childId); hideDescendants(childId) }
   })
   collapsedNodeIds.forEach(hideDescendants)
-  const layout = computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, overrides ?? blueprint.canvasLayout ?? {}, index)
+  const layout = computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, overrides ?? blueprint.canvasLayout ?? {}, index, hidden)
   const nodes: Node<BlueprintNodeData, 'blueprint'>[] = blueprint.nodeIds
     .filter((id) => !hidden.has(id))
     .filter((id) => blueprint.nodes[id])

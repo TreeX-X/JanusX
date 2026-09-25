@@ -39,7 +39,7 @@ import {
 import { BlueprintNodeCard, BlueprintCardActionsContext, type BlueprintNodeData } from './BlueprintNodeCard'
 import { BlueprintAdaptiveEdge } from './BlueprintAdaptiveEdge'
 import { STATUS_VISUALS, STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, noteKindOf } from './blueprintStatus'
-import { useOptionalBlueprintToolbar, type ToolbarKindFilter, type ToolbarStatusFilter } from './BlueprintToolbar'
+import { useOptionalBlueprintToolbar, type ToolbarKindFilter, type ToolbarStatusFilter, useHideIsolatedState } from './BlueprintToolbar'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
 import terminalIcon from '@/assets/icons/terminal.svg'
@@ -57,7 +57,7 @@ import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAn
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
-import { collectLocalHierarchyIds, computeInitialCollapsedIds, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
+import { collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConnectivity, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 import { nodeCheckoutPath, resolveNodeWorkspace } from '@/features/blueprint/resolveNodeWorkspace'
 import { useI18n } from '@/i18n/useI18n'
 import { NoteWikiPanel } from './NoteWikiPanel'
@@ -65,6 +65,7 @@ import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
 import { nodeNoteSnapshot, resolveCompositionNote } from '@/features/blueprint/composition-view'
 
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
+const EMPTY_NODE_IDS: ReadonlySet<string> = new Set()
 const ANALYSIS_COMMIT_LIMIT_MIN = 1
 const ANALYSIS_COMMIT_LIMIT_MAX = 50
 const NODE_W = 240
@@ -253,6 +254,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const setStatusFilter = toolbarState?.setStatusFilter ?? setInnerStatusFilter
   const kindFilter = toolbarState?.kindFilter ?? innerKindFilter
   const setKindFilter = toolbarState?.setKindFilter ?? setInnerKindFilter
+  // 孤立折叠与搜索/过滤同源：provider 受控优先，embedded 走本地同逻辑 hook。
+  const [innerHideIsolated, setInnerHideIsolated, innerIsolatedCount] = useHideIsolatedState(currentBlueprint)
+  const hideIsolated = toolbarState?.hideIsolated ?? innerHideIsolated
+  const setHideIsolated = toolbarState?.setHideIsolated ?? setInnerHideIsolated
+  const isolatedCount = toolbarState?.isolatedCount ?? innerIsolatedCount
   const [localFocusActive, setLocalFocusActive] = useState(false)
   const [descendantDepth, setDescendantDepth] = useState(2)
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(() => new Set())
@@ -349,6 +355,16 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     return new Set(searchMatchIds)
   }, [currentBlueprint, descendantDepth, focusActive, localFocusActive, searchMatchIds, selectedId])
   const focusedNodeCount = focusedNodeIds.size
+  // 孤立折叠：搜索/过滤激活时自动放行，避免“搜得到、看不见”。
+  const isolatedIds = useMemo(() => {
+    if (!currentBlueprint) return new Set<string>()
+    return new Set(groupRootsByConnectivity(
+      currentBlueprint.nodes,
+      currentBlueprint.relations ?? [],
+      currentBlueprint.composition?.interfaces ?? [],
+    ).isolatedRootIds)
+  }, [currentBlueprint])
+  const hiddenNodeIds = hideIsolated && !searchFilterActive ? isolatedIds : EMPTY_NODE_IDS
   useEffect(() => setMatchIndex(0), [searchMatchKey])
   const detailWorkspaceMissing = !!detailNode?.workspaceId && !workspaceNameById[detailNode.workspaceId]
   const latestAnalysis = detailNode?.analyses?.length
@@ -430,6 +446,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     focusedNodeIds,
     focusActive,
     collapsedNodeIds: effectiveCollapsedNodeIds,
+    hiddenNodeIds,
     onSelectionChange: setSelectedId,
     onError: setActionError,
     onLayoutPersisted: (savedBlueprintId, layout) => mergeCanvasLayout(savedBlueprintId, layout),
@@ -808,6 +825,16 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               <button className="blueprint-btn" onClick={fitView} title={t('blueprint:action.fitCanvas')}>
                 {t('blueprint:action.fitCanvas')}
               </button>
+              {isolatedCount > 0 && (
+                <button
+                  className={`blueprint-btn blueprint-toolbar__toggle${hideIsolated ? ' blueprint-toolbar__toggle--active' : ''}`}
+                  onClick={() => setHideIsolated((visible) => !visible)}
+                  aria-pressed={hideIsolated}
+                  title={hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
+                >
+                  {hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
+                </button>
+              )}
               <button className="blueprint-btn" onClick={() => loadBlueprint(blueprintId)} title={t('blueprint:action.replayLoading')}>
                 {t('blueprint:action.replayLoading')}
               </button>

@@ -93,6 +93,8 @@
     "applying": "应用中...",
     "maintainNode": "维护此节点",
     "unbindWorkspace": "解绑工作区",
+    "hideIsolated": "隐藏未关联（{{count}}）",
+    "showIsolated": "显示未关联（{{count}}）",
     "addPositioning": "添加定位",
     "addSolution": "添加方案",
     "addFeature": "添加需求项",

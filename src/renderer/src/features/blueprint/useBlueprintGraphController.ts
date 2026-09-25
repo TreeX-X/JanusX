@@ -154,6 +154,8 @@ interface GraphControllerOptions {
   focusedNodeIds: Set<string>
   focusActive: boolean
   collapsedNodeIds?: Set<string>
+  /** 孤立折叠等视图级隐藏（与折叠语义合并，不写入布局与 Note） */
+  hiddenNodeIds?: ReadonlySet<string>
   onSelectionChange: (nodeId: string | null) => void
   onError: (message: string | null) => void
   onLayoutPersisted?: (blueprintId: string, layout: Layout) => void
@@ -170,7 +172,8 @@ export function useBlueprintGraphController({
   onError,
   onLayoutPersisted,
   onLayoutSaveStatus,
-  collapsedNodeIds = new Set()
+  collapsedNodeIds = new Set(),
+  hiddenNodeIds = new Set<string>(),
 }: GraphControllerOptions) {
   const [nodes, setNodes] = useState<Node<BlueprintNodeData, 'blueprint'>[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -213,8 +216,8 @@ export function useBlueprintGraphController({
     if (!blueprint) return ''
     const topology = blueprint.nodeIds.map((id) => `${id}:${blueprint.nodes[id]?.parentId ?? ''}`).join('|')
     const layout = Object.entries(blueprint.canvasLayout ?? {}).map(([id, p]) => `${id}:${p.x},${p.y}`).join('|')
-    return `${blueprint.id}|${topology}|${layout}|${[...collapsedNodeIds].sort().join(',')}|${JSON.stringify([blueprint.relations, blueprint.composition?.interfaces])}`
-  }, [blueprint, collapsedNodeIds])
+    return `${blueprint.id}|${topology}|${layout}|${[...collapsedNodeIds].sort().join(',')}|${[...hiddenNodeIds].sort().join(',')}|${JSON.stringify([blueprint.relations, blueprint.composition?.interfaces])}`
+  }, [blueprint, collapsedNodeIds, hiddenNodeIds])
 
   const cardDataKey = useMemo(() => {
     if (!blueprint) return ''
@@ -269,7 +272,8 @@ export function useBlueprintGraphController({
       workspaceNameById,
       focusedNodeIds,
       focusActive,
-      collapsedNodeIds
+      collapsedNodeIds,
+      { extraHidden: hiddenNodeIds }
     )
     const entering = enteredBlueprintRef.current !== blueprint.id
     const allNodes = flow.nodes.map((node, index) => ({
@@ -332,7 +336,7 @@ export function useBlueprintGraphController({
   useEffect(() => {
     if (!blueprint) return
     const dataById = new Map(
-      deriveBlueprintFlow(blueprint, pinnedRef.current ?? undefined, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds)
+      deriveBlueprintFlow(blueprint, pinnedRef.current ?? undefined, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds, { extraHidden: hiddenNodeIds })
         .nodes.map((node) => [node.id, node.data])
     )
     setNodes((current) => patchBlueprintCardNodes(current, dataById))
@@ -366,8 +370,8 @@ export function useBlueprintGraphController({
 
   const autoLayout = useCallback(async () => {
     if (!blueprint) return
-    await applyLayout(computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, {}), {})
-  }, [applyLayout, blueprint, collapsedNodeIds])
+    await applyLayout(computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, {}, undefined, hiddenNodeIds), {})
+  }, [applyLayout, blueprint, collapsedNodeIds, hiddenNodeIds])
 
   const layoutSubtree = useCallback(async (nodeId: string) => {
     if (!blueprint?.nodes[nodeId]) return
@@ -382,8 +386,8 @@ export function useBlueprintGraphController({
   const restoreDefaultLayout = useCallback(async () => {
     if (!blueprint) return
     setRestoreSnapshot({ ...positionsRef.current })
-    await applyLayout(computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, {}), {})
-  }, [applyLayout, blueprint, collapsedNodeIds])
+    await applyLayout(computeVisibleBlueprintLayout(blueprint, collapsedNodeIds, {}, undefined, hiddenNodeIds), {})
+  }, [applyLayout, blueprint, collapsedNodeIds, hiddenNodeIds])
 
   const undoRestoreDefaultLayout = useCallback(async () => {
     if (!restoreSnapshot) return

@@ -351,8 +351,7 @@ describe('blueprint canvas layout', () => {
     expect(next.analysisSummary).toBeUndefined()
   })
 
-  it('hides collapsed descendants and exposes subtree completion and risk aggregates', () => {
-    const blueprint = { id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'done', 'risk'], canvasLayout: {}, nodes: {
+  it('hides collapsed descendants and exposes subtree completion and risk aggregates', () => {    const blueprint = { id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'done', 'risk'], canvasLayout: {}, nodes: {
       root: { id: 'root', title: 'Root', type: 'epic', status: 'in-progress', progress: 20, parentId: null, children: ['done', 'risk'], workspaceId: null, boundTerminalId: null, issues: [], analyses: [] },
       done: { id: 'done', title: 'Done', type: 'task', status: 'done', progress: 100, parentId: 'root', children: [], workspaceId: null, boundTerminalId: null, issues: [], analyses: [] },
       risk: { id: 'risk', title: 'Risk', type: 'task', status: 'blocked', progress: 0, parentId: 'root', children: [], workspaceId: null, boundTerminalId: null, issues: [{ id: 'i', status: 'open', severity: 'high' }], analyses: [] },
@@ -361,5 +360,34 @@ describe('blueprint canvas layout', () => {
     expect(result.nodes.map((node) => node.id)).toEqual(['root'])
     expect(result.edges).toHaveLength(0)
     expect(result.nodes[0].data.collapsedSummary).toBe('已折叠 2 · 1/2 完成 · 1 风险')
+  })
+
+  it('orders roots by connectivity cluster so related roots read as adjacent blocks', () => {
+    const blueprint = forest([
+      ['plan', null], ['r1', 'plan'], ['r2', 'plan'],
+      ['zeta', null], ['alpha', null], ['lone', null],
+    ])
+    blueprint.relations = [
+      { sourceNodeId: 'zeta', targetNodeId: 'alpha', type: 'related-to' },
+    ] as unknown as Blueprint['relations']
+    const layout = computeVisibleBlueprintLayout(blueprint, new Set(), {})
+    // zeta-alpha pair forms a 2-node cluster; lone is isolated and sorts last.
+    expect(layout['zeta'].y).toBe(layout['alpha'].y)
+    expect(layout['lone'].y).toBeGreaterThan(layout['zeta'].y)
+  })
+
+  it('hides extra-hidden isolated roots from flow nodes, edges and layout', () => {
+    const blueprint = forest([['a', null], ['b', null], ['lone', null]])
+    blueprint.relations = [
+      { sourceNodeId: 'a', targetNodeId: 'b', type: 'related-to' },
+    ] as unknown as Blueprint['relations']
+    const hidden = new Set(['lone'])
+    const result = deriveBlueprintFlow(blueprint, {}, {}, new Set(), false, new Set(), { extraHidden: hidden })
+    expect(result.nodes.map((node) => node.id).sort()).toEqual(['a', 'b'])
+    expect(result.edges.map((edge) => [edge.source, edge.target])).toEqual([['a', 'b']])
+    const layout = computeVisibleBlueprintLayout(blueprint, new Set(), {}, undefined, hidden)
+    expect(Object.keys(layout).sort()).toEqual(['a', 'b'])
+    // Without the option the isolated root stays visible: opt-in only.
+    expect(deriveBlueprintFlow(blueprint, {}, {}, new Set(), false).nodes).toHaveLength(3)
   })
 })

@@ -82,6 +82,69 @@ export function stepMatchIndex(current: number, step: number, count: number): nu
 /** 大蓝图初始可见节点上限（超出则按层级预折叠） */
 export const DEFAULT_COLLAPSE_MAX_VISIBLE = 24
 
+/** 孤立根达到该数量时画布默认将其折叠（矩阵治理），用户可手动展开 */
+export const ISOLATED_HIDE_THRESHOLD = 24
+
+export interface BlueprintConnectivity {
+  /** nodeId -> 连通分量序号（0 = 最大分量），同簇布局时相邻 */
+  clusterOf: Map<string, number>
+  /** 无父、无子且无任何关系/接口参与的根节点（确定性 id 序） */
+  isolatedRootIds: string[]
+}
+
+/**
+ * 按层级 + 关系 + 接口边求无向连通分量。
+ * 全根图（如 189 节点 0 parent）下，同簇根在布局时相邻，
+ * 144 个孤立根可整体折叠，巨大矩形矩阵收成可读块。
+ * 纯函数：同输入必同输出，可单测。
+ * Note: 矩阵治理的分组依据 — see .agents/notes/2026-09-25-blueprint-matrix-governance--ef6d2f79.md
+ */
+export function groupRootsByConnectivity(
+  nodes: Record<string, BlueprintNode>,
+  relations: ReadonlyArray<{ sourceNodeId?: string | null; targetNodeId?: string | null }> = [],
+  interfaces: ReadonlyArray<{ nodeId: string; providerNodeId?: string | null }> = [],
+): BlueprintConnectivity {
+  const ids = Object.keys(nodes).sort(compareIds)
+  const indexOf = new Map(ids.map((id, index) => [id, index]))
+  const parent = ids.map((_, index) => index)
+  const find = (x: number): number => {
+    let root = x
+    while (parent[root] !== root) root = parent[root]
+    while (parent[x] !== root) { const next = parent[x]; parent[x] = root; x = next }
+    return root
+  }
+  const union = (a: string | null | undefined, b: string | null | undefined): void => {
+    if (!a || !b) return
+    const ia = indexOf.get(a)
+    const ib = indexOf.get(b)
+    if (ia === undefined || ib === undefined) return
+    const ra = find(ia)
+    const rb = find(ib)
+    if (ra !== rb) parent[rb] = ra
+  }
+  const { parentById, childrenByParent } = buildEffectiveHierarchy(nodes)
+  for (const [id, parentId] of parentById) union(id, parentId)
+  for (const rel of relations) union(rel.sourceNodeId, rel.targetNodeId)
+  for (const port of interfaces) union(port.nodeId, port.providerNodeId)
+  const members = new Map<number, string[]>()
+  for (const id of ids) {
+    const root = find(indexOf.get(id)!)
+    const list = members.get(root) ?? []
+    list.push(id)
+    members.set(root, list)
+  }
+  const components = [...members.values()].sort((a, b) =>
+    b.length - a.length || compareIds(a[0], b[0]))
+  const clusterOf = new Map<string, number>()
+  components.forEach((list, rank) => list.forEach((id) => clusterOf.set(id, rank)))
+  const isolatedRootIds = components
+    .filter((list) => list.length === 1)
+    .map((list) => list[0])
+    .filter((id) => !parentById.has(id) && !(childrenByParent.get(id)?.length))
+    .sort(compareIds)
+  return { clusterOf, isolatedRootIds }
+}
+
 /**
  * 大蓝图初次加载的预折叠集合：
  * 取累计可见节点数不超过 maxVisible 的最深完整层 D（至少保留根+第一层），

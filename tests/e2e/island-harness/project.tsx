@@ -32,6 +32,18 @@ for (const key of ['delete-a', 'delete-b']) {
   blueprint.nodes[key] = { ...blueprint.nodes[id], id: key, title: key, sourceUri: `note://${repoId}/${key}` }
 }
 if (workbench) Object.assign(blueprint, createWorkbenchGraph(repoId, id, workspace))
+// Matrix governance coverage: 30 edgeless roots force the isolated-fold path;
+// existing specs never pass this flag so their 5-node geometry is untouched.
+if (workbench && new URLSearchParams(location.search).has('isolated')) {
+  const template = blueprint.nodes['66666666-6666-4666-8666-666666666666']
+  for (let index = 0; index < 30; index++) {
+    const nid = `isolated-${index}`
+    blueprint.nodeIds.push(nid)
+    blueprint.nodes[nid] = { ...structuredClone(template), id: nid, title: `Isolated note ${index}`,
+      sourceUri: `note://${repoId}/${nid}`, sourceRelPath: `.agents/notes/${nid}.md`,
+      note: { ...template.note, id: nid, title: `Isolated note ${index}`, body: `# Isolated note ${index}` } }
+  }
+}
 const secondWorkspace = { ...workspace, id: 'ws-b', path: 'C:/fixture-b', name: 'Checkout B' }
 const twoCheckouts = new URLSearchParams(location.search).has('two-checkouts')
 const switchWorkspaceMode = new URLSearchParams(location.search).has('switch-workspace')

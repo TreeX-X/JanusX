@@ -219,3 +219,28 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
     })
   })
 }
+
+test.describe('isolated roots folding', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/*', route => {
+      const url = new URL(route.request().url())
+      return ['127.0.0.1', 'localhost'].includes(url.hostname) ? route.continue() : route.abort('blockedbyclient')
+    })
+  })
+  test('thirty edgeless roots auto-hide behind a toggle that restores them', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.goto('/project.html?workbench&isolated')
+    await expect(page.locator('.react-flow__node')).toHaveCount(5)
+    const toggle = page.locator('.blueprint-workbench-toolbar').getByRole('button', { name: /未关联/ })
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await expect(toggle).toContainText('30')
+    await toggle.click()
+    await expect(page.locator('.react-flow__node')).toHaveCount(35)
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await toggle.click()
+    await expect(page.locator('.react-flow__node')).toHaveCount(5)
+    expect(errors).toEqual([])
+  })
+})
