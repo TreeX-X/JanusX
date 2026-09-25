@@ -6,7 +6,7 @@
  *  engine (section slicing, round-trip guard) and the op factories used by
  *  Agent write flows. Mapping names are re-exported as deprecated shims.
  *  No filesystem, no Electron.
- *  See .agents/notes/proposed/architecture/2026-09-22-blueprint-note-graph-readonly.md
+ *  See .agents/notes/2026-09-22-blueprint-note-graph-readonly--1432f7b8.md
  */
 import { randomUUID } from 'crypto'
 import {

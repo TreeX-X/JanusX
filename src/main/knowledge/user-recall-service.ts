@@ -1,4 +1,4 @@
-// Note: user-scope recall with independent budget behind the shell seam — see .agents/notes/implemented/feature/2026-09-15-user-recall-m2.md
+// Note: user-scope recall with independent budget behind the shell seam — see .agents/notes/2026-09-15-user-recall-m2--dec987d8.md
 /**
  * @file User recall service (M2).
  * @description Person-scoped recall beside project memory. Searches user facts

@@ -342,7 +342,7 @@ export const JanusXNotifyPlugin = async ({ directory }) => ({
 `
 }
 
-// Note: janus/pi hook coverage — see .agents/notes/implemented/feature/2026-09-13-janus-pi-hook-management.md
+// Note: janus/pi hook coverage — see .agents/notes/2026-09-13-janus-pi-hook-management--a8a80c8f.md
 export function buildPiExtension(): string {
   return `function env(name) {
   const value = process.env[name];

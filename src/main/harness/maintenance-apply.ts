@@ -1,4 +1,4 @@
-// Note: maintenance proposals land on project graphs here — see .agents/notes/implemented/architecture/2026-09-17-maintenance-harness-apply-s6.md
+// Note: maintenance proposals land on project graphs here — see .agents/notes/2026-09-17-maintenance-harness-apply-s6--66bf1be8.md
 /**
  * @file Maintenance -> harness apply wiring (S6-c slice 2b)
  * @description Consumes the pure translator from maintenance-bridge and lands

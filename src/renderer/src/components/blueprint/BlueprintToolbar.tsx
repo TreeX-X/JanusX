@@ -6,7 +6,7 @@
  *  本机布局保存态。整条栏位于工作台 shell 内、横跨三列之上。
  *
  *  画布中部的旧操作栏（节点操作组/匹配导航/更多折叠面板）已收敛到此，
- *  分析、布局子树、聚焦深度、恢复默认布局等旧控件不再设入口。
+ *  节点详情与恢复布局使用 Canvas 注册的入口；本机布局不修改 Note。
  *  搜索/过滤/选中等状态由 BlueprintToolbarProvider 持有，
  *  BlueprintCanvas 在 workbench 下受控消费（embedded 无 provider 时走本地态）。
  */
@@ -19,6 +19,8 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
 import { Select } from '../ui/Select'
 import { STATUS_ORDER, STATUS_VISUALS, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter } from './blueprintStatus'
+
+// Note: two chrome rows and recoverable local layout — see .agents/notes/2026-09-25-blueprint-note-workbench-repair--62e857d3.md
 
 export type ToolbarStatusFilter = BlueprintNodeStatus | 'all'
 /** kind 下拉直接过滤 note 原始 kind（高保真同构），不再按映射后的 type 过滤 */
@@ -36,6 +38,13 @@ interface BlueprintToolbarState {
   reportSelectedId: (id: string | null) => void
   /** 画布 fitView 入口（Canvas 注册） */
   fitRef: { current: (() => void) | null }
+  toggleDetailRef: { current: (() => void) | null }
+  restoreLayoutRef: { current: (() => void) | null }
+  undoLayoutRef: { current: (() => void) | null }
+  detailOpen: boolean
+  canUndoLayout: boolean
+  reportDetailOpen: (open: boolean) => void
+  reportCanUndoLayout: (available: boolean) => void
   /** 本机布局保存态（Canvas 回報） */
   saveStatus: BlueprintLayoutSaveStatus
   reportSaveStatus: (status: BlueprintLayoutSaveStatus) => void
@@ -50,6 +59,11 @@ export function BlueprintToolbarProvider({ children }: { children: ReactNode }) 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<BlueprintLayoutSaveStatus>('clean')
   const fitRef = useRef<(() => void) | null>(null)
+  const toggleDetailRef = useRef<(() => void) | null>(null)
+  const restoreLayoutRef = useRef<(() => void) | null>(null)
+  const undoLayoutRef = useRef<(() => void) | null>(null)
+  const [detailOpen, reportDetailOpen] = useState(true)
+  const [canUndoLayout, reportCanUndoLayout] = useState(false)
   const reportSelectedId = useCallback((id: string | null) => setSelectedId(id), [])
   const reportSaveStatus = useCallback((status: BlueprintLayoutSaveStatus) => setSaveStatus(status), [])
   const value = useMemo<BlueprintToolbarState>(() => ({
@@ -62,9 +76,11 @@ export function BlueprintToolbarProvider({ children }: { children: ReactNode }) 
     selectedId,
     reportSelectedId,
     fitRef,
+    toggleDetailRef, restoreLayoutRef, undoLayoutRef,
+    detailOpen, canUndoLayout, reportDetailOpen, reportCanUndoLayout,
     saveStatus,
     reportSaveStatus,
-  }), [searchQuery, statusFilter, kindFilter, selectedId, saveStatus, reportSelectedId, reportSaveStatus])
+  }), [searchQuery, statusFilter, kindFilter, selectedId, saveStatus, reportSelectedId, reportSaveStatus, detailOpen, canUndoLayout])
   return <BlueprintToolbarContext.Provider value={value}>{children}</BlueprintToolbarContext.Provider>
 }
 
@@ -89,12 +105,11 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
     searchQuery, setSearchQuery,
     statusFilter, setStatusFilter,
     kindFilter, setKindFilter,
-    selectedId, fitRef, saveStatus,
+    selectedId, fitRef, saveStatus, toggleDetailRef, restoreLayoutRef, undoLayoutRef, detailOpen, canUndoLayout,
   } = useRequiredBlueprintToolbar()
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
-  const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
   const requestMaintenanceOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
 
   const statusFilterOptions = useMemo(
@@ -153,11 +168,16 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
       </button>
       <button
         className="blueprint-btn"
-        onClick={() => { if (currentBlueprint) void loadBlueprint(currentBlueprint.id) }}
-        title={t('blueprint:action.replayLoading')}
+        onClick={() => toggleDetailRef.current?.()}
+        aria-pressed={detailOpen}
+        disabled={!currentBlueprint}
       >
-        {t('blueprint:action.replayLoading')}
+        {t('blueprint:action.nodeDetail')}
       </button>
+      <button className="blueprint-btn" disabled={!currentBlueprint} onClick={() => restoreLayoutRef.current?.()}>
+        {t('blueprint:action.restoreDefaultLayout')}
+      </button>
+      {canUndoLayout && <button className="blueprint-btn" onClick={() => undoLayoutRef.current?.()}>{t('blueprint:action.undoRestore')}</button>}
       <button
         className="blueprint-btn blueprint-btn--primary-ghost"
         onClick={() => {

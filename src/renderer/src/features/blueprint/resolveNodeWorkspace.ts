@@ -7,7 +7,7 @@
  *  workspaceSnapshot path, matched against the registry by path.
  *  Pure: no stores, no IPC — the caller supplies ownerCwd from
  *  `useBlueprintStore.getState().workspacePathFor(blueprintId)`.
- *  See .agents/notes/proposed/architecture/2026-09-23-blueprint-notev2-implementation-plan.md (E0-4).
+ *  See .agents/notes/2026-09-23-blueprint-notev2-implementation-plan--e7c03317.md (E0-4).
  */
 import type { BlueprintNode } from '@/services/blueprint'
 import type { Workspace } from '@/types'

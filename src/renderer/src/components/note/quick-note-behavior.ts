@@ -1,4 +1,4 @@
-// Note: the Markdown view tab uses the conventional file glyph in components/ui/MarkdownIcon.tsx — see .agents/notes/implemented/feature/2026-09-21-drawer-markdown-file-glyph.md
+// Note: the Markdown view tab uses the conventional file glyph in components/ui/MarkdownIcon.tsx — see .agents/notes/2026-09-21-drawer-markdown-file-glyph--77c7030e.md
 import { createElement, useRef, type ComponentType, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { Activity } from 'lucide-react'
 import { useDraftCardStore } from '../../stores/draft-card'
@@ -92,7 +92,7 @@ export function DrawerViewTabs({ open, activeView, onSelect, labels, ariaLabel }
   )
 }
 
-// Note: the drawer keeps a per-view user height clamped between a floor and the pane reserve — see .agents/notes/implemented/feature/2026-09-19-runtime-drawer-cards-resize.md
+// Note: the drawer keeps a per-view user height clamped between a floor and the pane reserve — see .agents/notes/2026-09-19-runtime-drawer-cards-resize--faacdaf7.md
 export const DRAWER_COLLAPSED_HEIGHT = 28
 export const DRAWER_MIN_HEIGHT = 120
 export const DRAWER_MIN_PANE_HEIGHT = 160

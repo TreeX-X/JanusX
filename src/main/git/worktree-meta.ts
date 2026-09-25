@@ -1,5 +1,5 @@
 // Note: per-worktree creation metadata for Ship base resolution — see
-// .agents/notes/implemented/feature/2026-09-21-worktree-ship-merge.md
+// .agents/notes/2026-09-21-worktree-ship-merge--7822452e.md
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'

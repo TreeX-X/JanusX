@@ -1,4 +1,4 @@
-// Note: durable user scope beside project memory — see .agents/notes/implemented/feature/2026-09-15-user-memory-m1.md
+// Note: durable user scope beside project memory — see .agents/notes/2026-09-15-user-memory-m1--fd02d3bc.md
 /**
  * @file User profile store (M1).
  * @description Owns `profile/profile.json`: identity, format/tool prefs, habit

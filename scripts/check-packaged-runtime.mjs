@@ -3,7 +3,7 @@
 // win-unpacked/JanusX.exe next to the repo used to find any package missing from
 // the archive in the repo's own node_modules — the check passed on a build whose
 // portable and setup artifacts died during bootstrap with no window and no log.
-// Note: entry — see .agents/notes/implemented/bug-fix/2026-09-20-packaged-hoisted-deps.md
+// Note: entry — see .agents/notes/2026-09-20-packaged-hoisted-deps--39f58575.md
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises'

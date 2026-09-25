@@ -583,7 +583,7 @@ export async function runDeterministicStage(
   }
 
   await appendCandidateFacts(candidates)
-  // Note: frequency aggregation rides the existing queue — see .agents/notes/implemented/feature/2026-09-15-user-memory-mvp-closeout.md
+  // Note: habit promotion shares the queue and Inbox review — see .agents/notes/2026-09-15-user-memory-m1--fd02d3bc.md
   // User memory closeout: repeated preference/habit observations promote to
   // scope=user candidates on the same queue with no new cursors. The frequency
   // threshold plus Inbox review keeps the promotion noise out of truth.

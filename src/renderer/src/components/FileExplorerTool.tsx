@@ -90,7 +90,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null,
     [activeWorkspaceId, workspaces],
   )
-  // Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/implemented/bug-fix/2026-09-22-worktree-file-tree-scope.md
+  // Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/2026-09-22-worktree-file-tree-scope--c58ff1db.md
   const activeScopePath = worktreeActivePath ?? activeWorkspacePath
   const fileTreeViewportRef = useRef<HTMLDivElement>(null)
   const fileChangeMap = useMemo(() => {

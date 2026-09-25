@@ -1,5 +1,5 @@
 // Note: orca-style transcript tail read per engine capability — see
-// .agents/notes/implemented/feature/2026-09-22-session-engine-capabilities.md
+// .agents/notes/2026-09-22-session-engine-capabilities--e29da5b4.md
 import { open, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'

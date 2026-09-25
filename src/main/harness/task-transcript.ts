@@ -1,4 +1,4 @@
-// Note: durable implementation observations stay local — see .agents/notes/implemented/architecture/2026-09-19-desktop-implementation-history.md
+// Note: durable implementation observations stay local — see .agents/notes/2026-09-19-desktop-implementation-history--854981c7.md
 import { randomUUID } from 'node:crypto'
 import { readFile, realpath, stat, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'

@@ -1,5 +1,5 @@
 // Note: 灵动岛通知胶囊（一级展开 peek 与二级展开 expanded 通知面的统一内容模型）—
-// see .agents/notes/implemented/feature/2026-09-13-island-notification-capsule.md
+// see .agents/notes/2026-09-13-island-notification-capsule--ada1e07a.md
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import type { ProductFileEntry } from '../../../../shared/product'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'

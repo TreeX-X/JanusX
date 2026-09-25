@@ -12,7 +12,7 @@ directories:
 # bootstrap with no window, no dialog and no log. Patching the finished archive
 # cannot repair this safely: electron-builder writes it with its own asar writer,
 # whose smartUnpack flags no reimplementation reproduces faithfully.
-# Note: entry — see .agents/notes/implemented/bug-fix/2026-09-20-packaged-hoisted-deps.md
+# Note: entry — see .agents/notes/2026-09-20-packaged-hoisted-deps--39f58575.md
 beforeBuild: ./scripts/electron-before-pack.cjs
 includeSubNodeModules: true
 
@@ -53,7 +53,7 @@ files:
   # app.asar and again in app.asar.unpacked. electron's dist is the built-in
   # module at runtime and typescript is declared by the MCP and Lark SDKs but
   # required by neither; both are in the closure and are negated by hand.
-  # Note: entry — see .agents/notes/implemented/bug-fix/2026-09-20-packaged-runtime-size.md
+  # Note: entry — see .agents/notes/2026-09-20-packaged-runtime-size--210d9ec3.md
   - "!node_modules/electron{,/**/*}"
   - "!node_modules/typescript{,/**/*}"
   # Source maps of shipped packages carry no runtime behaviour.

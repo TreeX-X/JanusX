@@ -1,4 +1,4 @@
-// Note: Real product recordings — see .agents/notes/implemented/feature/2026-09-18-product-tour.md
+// Note: Real product recordings — see .agents/notes/2026-09-18-product-tour--609e58ef.md
 import { _electron as electron, expect } from '@playwright/test'
 import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'

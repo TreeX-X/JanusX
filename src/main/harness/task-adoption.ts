@@ -37,7 +37,7 @@ export async function readTaskDraft(root: string, uri: string): Promise<HarnessT
   })
 }
 
-// Note: explicit adoption fills the executable contract - see .agents/notes/implemented/architecture/2026-09-18-task-contract-adoption.md
+// Note: explicit adoption fills the executable contract - see .agents/notes/2026-09-18-task-contract-adoption--6b7c688e.md
 export function acceptedTaskMarkdown(note: ParsedNote, uri: string, repoId: string, input: HarnessTaskContractInput, index: NoteIndex): string {
   if (note.meta.execution) fail('BUSY', 'A task with execution cannot be adopted again')
   if (!['draft', 'proposed'].includes(note.meta.lifecycle)) fail('NOT_READY', 'Only draft or proposed tasks can be adopted')

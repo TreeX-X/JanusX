@@ -1,4 +1,4 @@
-// Note: natural-language user memory tools behind the policy gate — see .agents/notes/implemented/feature/2026-09-15-user-memory-tools-m3.md
+// Note: natural-language user memory tools behind the policy gate — see .agents/notes/2026-09-15-user-memory-tools-m3--939f0bcf.md
 /**
  * @file User memory agent tools (M3).
  * @description Exactly three tools over the existing shell `ToolRegistry`:

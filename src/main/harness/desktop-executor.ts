@@ -1,4 +1,4 @@
-// Note: desktop xdo host owns checks and self-review — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
+// Note: desktop xdo host owns checks and self-review — see .agents/notes/2026-09-18-desktop-xdo-executor--b057b3f0.md
 /**
  * @file Desktop verification and delegated execution host.
  * @description Runs an accepted task's declared verification on the desktop:

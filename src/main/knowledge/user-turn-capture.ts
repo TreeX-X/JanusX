@@ -1,4 +1,4 @@
-// Note: person-scope capture for workspace-free janus-chat turns — see .agents/notes/implemented/feature/2026-09-15-user-memory-mvp-closeout.md
+// Note: project turns skip personal capture — see .agents/notes/2026-09-17-chat-turn-guard-domain-s6--fd109997.md
 /**
  * @file Person turn capture (user memory MVP closeout).
  * @description Writes one workspace-free janus-chat turn into person scope:

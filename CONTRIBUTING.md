@@ -1,6 +1,6 @@
 # 为 JanusX 做贡献
 
-> 人类与 agent 共用同一套标准。决策背景见 `.agents/notes/implemented/process/2026-09-17-github-maintenance.md`。
+> 人类与 agent 共用同一套标准。决策背景见 `.agents/notes/2026-09-17-github-maintenance--a568cc88.md`。
 
 ## 分支与 PR
 

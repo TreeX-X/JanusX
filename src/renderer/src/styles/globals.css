@@ -765,7 +765,7 @@ body.desktop-toast-body {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   /* 实色卡片：去掉毛玻璃，半透底 + blur 在主窗口上就是灰色玻璃壳，与桌面 Toast 同口径
-     Note: solid card without backdrop-filter — see .agents/notes/implemented/feature/2026-07-05-desktop-toast.md */
+     Note: solid card without backdrop-filter — see .agents/notes/2026-07-05-desktop-toast--671574ba.md */
   background: #141416;
   box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   pointer-events: auto;

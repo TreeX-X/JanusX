@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-// Note: desktop entry to task runs incl. the xdo host — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
-// Note: external runner backflow surface — see .agents/notes/implemented/architecture/2026-09-18-external-runner-backflow.md
-// Note: thread registry, activation, and close — see .agents/notes/implemented/architecture/2026-09-18-thread-registry-activation.md
-// Note: independent review and limited repair — see .agents/notes/implemented/architecture/2026-09-18-independent-review-repair.md
-// Note: reversible managed writes — see .agents/notes/implemented/architecture/2026-09-18-harness-undo.md
+// Note: desktop entry to task runs incl. the xdo host — see .agents/notes/2026-09-18-desktop-xdo-executor--b057b3f0.md
+// Note: external runner backflow surface — see .agents/notes/2026-09-18-external-runner-backflow--5352fb79.md
+// Note: thread registry, activation, and close — see .agents/notes/2026-09-18-thread-registry-activation--d9f1d453.md
+// Note: independent review and limited repair — see .agents/notes/2026-09-18-independent-review-repair--b055c1fe.md
+// Note: reversible managed writes — see .agents/notes/2026-09-18-harness-undo--ee0e8ff1.md
 import { useI18n } from '@/i18n/useI18n'
 import { getTerminalDefault, getTerminalProviders, listModels } from '@/services/llm'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'

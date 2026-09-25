@@ -4,6 +4,10 @@ const uri = 'note://8fa19f17-c717-43a8-93a7-810a5e0cbc91/44444444-4444-4333-8333
 const panel = (page: Page) => page.getByTestId('blueprint-chat')
 const proposal = (page: Page) => panel(page).getByRole('region', { name: 'Pending proposal v1', exact: true })
 const operation = (page: Page, id: string) => proposal(page).locator('.bp-maintenance-approval-operation').getByRole('checkbox', { name: new RegExp(id + '$') })
+async function expand(page: Page, selector: string) {
+  const disclosure = panel(page).locator(selector)
+  if (!await disclosure.evaluate(element => (element as HTMLDetailsElement).open)) await disclosure.locator(':scope > summary').click()
+}
 
 async function open(page: Page, query = '') {
   await page.goto('/project.html' + query)
@@ -18,6 +22,7 @@ async function send(page: Page, message = 'Maintain this selected note') {
 async function compose(page: Page) {
   await open(page); await send(page)
   await page.evaluate(() => (window as any).projectFixture.finishStream())
+  await expand(page, '.bp-maintenance-settings')
   await panel(page).getByRole('button', { name: 'Compose as proposal', exact: true }).click()
   await expect(proposal(page)).toBeVisible()
 }
@@ -75,6 +80,7 @@ test('partial group selection closes dependencies; apply audits and selective un
   await expect(panel(page).locator('.bp-maintenance-audits article')).toContainText('Not applied: delete-a, delete-b')
   await expect(panel(page).locator('.bp-maintenance-audits article')).toContainText('C:/fixture')
   expect(state.audits[0]).toMatchObject({ selectedOperationIds: ['rename', 'description'], rejectedOperationIds: ['delete-a', 'delete-b'] })
+  await expand(page, '.bp-maintenance-task-details')
   await panel(page).getByRole('button', { name: 'Complete maintenance', exact: true }).click()
   await panel(page).getByRole('button', { name: 'Undo this application', exact: true }).click()
   const undo = panel(page).getByRole('region', { name: 'Undo proposal (reverse changes against the current blueprint)' })
@@ -117,8 +123,9 @@ test('each deletion needs confirmation and same-ID content replacement resets al
 test('switching the same note URI to another checkout updates hash and authorization', async ({ page }) => {
   await open(page, '?two-checkouts'); await send(page, 'Inspect checkout A')
   await page.evaluate(() => (window as any).projectFixture.finishStream())
+  await expand(page, '.bp-maintenance-settings')
   await panel(page).getByRole('combobox', { name: 'Target node', exact: true }).selectOption('checkout-b:' + uri.split('/').at(-1))
-  await expect(panel(page).locator('.bp-maintenance-context')).toContainText('C:/fixture-b')
+  await expect(panel(page).locator('.bp-maintenance-settings')).toContainText('C:/fixture-b')
   await expect(panel(page).locator('.bp-maintenance-workspace-picker').getByRole('checkbox', { name: /Checkout B/ })).toBeChecked()
   await send(page, 'Inspect checkout B')
   const requests = await page.evaluate(() => (window as any).projectFixture.streams)
@@ -134,6 +141,7 @@ test('undo source conflict stays visible and does not mutate or refresh the appl
   await operation(page, 'rename').check()
   await proposal(page).getByRole('button', { name: 'Approve and apply selected', exact: true }).click()
   await expect.poll(() => page.evaluate(() => (window as any).projectFixture.snapshot().node.title)).toBe('Maintained task')
+  await expand(page, '.bp-maintenance-task-details')
   await panel(page).getByRole('button', { name: 'Complete maintenance', exact: true }).click()
   await panel(page).locator('.bp-maintenance-audits > summary').click()
   await panel(page).getByRole('button', { name: 'Undo this application', exact: true }).click()

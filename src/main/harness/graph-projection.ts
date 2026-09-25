@@ -3,7 +3,7 @@
  * @description All mapping tables moved to `src/main/notes/note-to-blueprint.ts`.
  *  New code must import from `../notes/note-to-blueprint` directly; this module
  *  only keeps existing importers compiling.
- *  See .agents/notes/proposed/architecture/2026-09-22-blueprint-note-graph-readonly.md
+ *  See .agents/notes/2026-09-22-blueprint-note-graph-readonly--1432f7b8.md
  * @deprecated Use NoteAdapter v1 (`src/main/notes/note-to-blueprint.ts`).
  */
 export {

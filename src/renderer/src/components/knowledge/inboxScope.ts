@@ -1,4 +1,4 @@
-// Note: Inbox person/engineering columns share one scope rule — see .agents/notes/implemented/feature/2026-09-18-personal-engineering-separation.md
+// Note: Inbox person/engineering columns share one scope rule — see .agents/notes/2026-09-18-personal-engineering-separation--296ddf52.md
 /**
  * @file Inbox scope split (memory separation, pure)
  * @description One scope rule for the person/engineering Inbox columns: a

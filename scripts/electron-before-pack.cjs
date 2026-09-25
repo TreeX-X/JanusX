@@ -13,7 +13,7 @@
 //
 // This also skips electron-builder's own dependency install/rebuild pass, which
 // `npmRebuild: false` had already disabled.
-// Note: entry — see .agents/notes/implemented/bug-fix/2026-09-20-packaged-hoisted-deps.md
+// Note: entry — see .agents/notes/2026-09-20-packaged-hoisted-deps--39f58575.md
 
 async function beforeBuild() {
   return false

@@ -135,7 +135,7 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
     ...(captureObservation ? {
       knowledgeCapture: {
       captureTurn: async (capture) => {
-        // Note: workspace-free turns compound into person scope — see .agents/notes/implemented/feature/2026-09-15-user-memory-mvp-closeout.md
+        // Note: project domain keeps turns out of personal memory — see .agents/notes/2026-09-17-chat-turn-guard-domain-s6--fd109997.md
         // Empty targets mean a workspace-free turn; fall back to the person
         // sentinel so the observation still compounds. The seam stays generic:
         // only plain workspace-id strings cross into janus-agentX.

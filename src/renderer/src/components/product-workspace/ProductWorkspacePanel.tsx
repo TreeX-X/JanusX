@@ -1,5 +1,5 @@
-// Note: OfficeCLI is a bundled asset, preview failures mean reinstall — see .agents/notes/implemented/feature/2026-09-18-officecli-bundled.md
-// See .agents/notes/implemented/feature/2026-09-13-product-workspace.md
+// Note: OfficeCLI is a bundled asset, preview failures mean reinstall — see .agents/notes/2026-09-18-officecli-bundled--02b7c101.md
+// See .agents/notes/2026-09-13-product-workspace--034fb695.md
 import { useEffect, useMemo, useRef } from 'react'
 import { officeService } from '@/services/office'
 import { useProductWorkspaceStore } from '@/stores/productWorkspace'

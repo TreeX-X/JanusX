@@ -4,7 +4,7 @@
  *  note files (via harness-node index + harness-core parse). Execution lanes
  *  (receipts, runs, tasks, share import) keep their direct harness imports;
  *  this boundary covers listing/parsing for projection only.
- *  See .agents/notes/proposed/architecture/2026-09-22-blueprint-note-graph-readonly.md
+ *  See .agents/notes/2026-09-22-blueprint-note-graph-readonly--1432f7b8.md
  */
 import type { Diagnostic, ParsedNote } from '@janus-agent/harness-core'
 import { buildNoteIndex, withAssetLock, type NoteIndex } from '@janus-agent/harness-node'

@@ -1,4 +1,4 @@
-// Note: desktop xdo self-review evidence — see .agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md
+// Note: desktop xdo self-review evidence — see .agents/notes/2026-09-18-desktop-xdo-executor--b057b3f0.md
 /**
  * @file Desktop xdo self-review prompt and strict JSON parsing (S8-JanusX host).
  * @description Builds the read-only review prompt from the tested manifest,

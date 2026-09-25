@@ -1,4 +1,4 @@
-// Note: desktop implementation uses a scoped model turn — see .agents/notes/implemented/architecture/2026-09-19-desktop-task-implementation.md
+// Note: desktop implementation uses a scoped model turn — see .agents/notes/2026-09-19-desktop-task-implementation--958007ff.md
 import { createHash, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { createAgentRuntime, FilePolicyAuditStore, registerWorkspaceTools } from '@janus-agent/agent-core'
@@ -86,7 +86,7 @@ export interface DesktopTaskModelDeps {
   maxTurns: number
 }
 
-// Note: evaluation runs with fresh history and read-only tools — see .agents/notes/implemented/architecture/2026-09-19-desktop-delegated-modes.md
+// Note: evaluation runs with fresh history and read-only tools — see .agents/notes/2026-09-19-desktop-delegated-modes--fbac0251.md
 export async function generateDesktopReviewText(root: string, runId: string, token: string,
   kind: 'self' | 'independent', deps: DesktopTaskModelDeps, prompt: string, signal?: AbortSignal): Promise<string> {
   signal?.throwIfAborted()

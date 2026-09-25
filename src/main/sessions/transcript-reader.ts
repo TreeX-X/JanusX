@@ -1,6 +1,6 @@
 // Note: bounded full-prose transcript reads back the windowed session
 // reading — see
-// .agents/notes/implemented/feature/2026-09-22-session-resume-detail.md
+// .agents/notes/2026-09-22-session-resume-detail--1a6947ed.md
 import type { TranscriptDetail, TranscriptTurn } from '../../shared/ipc/session'
 import {
   claudeAssistantText,

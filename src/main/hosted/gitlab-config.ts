@@ -1,5 +1,5 @@
 // Note: self-hosted GitLab instance config with keychain PAT — see
-// .agents/notes/implemented/feature/2026-09-21-gitlab-instance-config.md
+// .agents/notes/2026-09-21-gitlab-instance-config--9ed7f1d7.md
 import { readFile, rm, stat } from 'fs/promises'
 import { join } from 'path'
 import { request as httpRequest } from 'http'

@@ -19,7 +19,7 @@ import {
 export type { LlmTerminalConsumer } from './config-document'
 export { LLM_TERMINAL_CONSUMERS } from './config-document'
 
-// Note: 各终端独立 Provider 集合（同一池拆分为五份，读旧池一次性迁移）——见 .agents/notes/implemented/feature/2026-09-18-terminal-provider-collections.md
+// Note: 各终端独立 Provider 集合（同一池拆分为五份，读旧池一次性迁移）——见 .agents/notes/2026-09-18-terminal-provider-collections--51ac8035.md
 
 /**
  * LLM 配置存储服务

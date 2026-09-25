@@ -285,6 +285,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const initialFitBlueprintRef = useRef<string | null>(null)
   const detailOpenRef = useRef<boolean | null>(null)
   const collapseInitRef = useRef<string | null>(null)
+  const detailInitRef = useRef<string | null>(null)
 
   const workspaceNameById = useMemo(
     () => Object.fromEntries(workspaces.map((w) => [w.id, w.name])),
@@ -477,24 +478,34 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   // 后续单击选中即展开预览，保证左列始终有内容而非常开空白。
   useEffect(() => {
     if (!currentBlueprint || currentBlueprint.id !== blueprintId) return
-    if (detailNodeId || selectedId) return
+    if (detailInitRef.current === blueprintId) return
     const root = currentBlueprint.rootNodeId && currentBlueprint.nodes[currentBlueprint.rootNodeId]
       ? currentBlueprint.rootNodeId
       : currentBlueprint.nodeIds[0] ?? null
     if (!root) return
+    detailInitRef.current = blueprintId
     setSelectedId(root)
     setDetailNodeId(root)
   }, [currentBlueprint, blueprintId, detailNodeId, selectedId])
-  useEffect(() => {
-    if (selectedId && !detailNodeId) setDetailNodeId(selectedId)
-  }, [selectedId, detailNodeId])
 
   // 统一顶栏接线（workbench）：注册 fit 入口，回報选中与保存态
   useEffect(() => {
     if (!toolbarState) return
     toolbarState.fitRef.current = () => fitViewWhenReady(200)
-    return () => { toolbarState.fitRef.current = null }
-  }, [toolbarState, fitViewWhenReady])
+    toolbarState.toggleDetailRef.current = () => setDetailNodeId(id => id ? null : selectedId ?? currentBlueprint?.rootNodeId ?? null)
+    toolbarState.restoreLayoutRef.current = () => setRestoreLayoutConfirmOpen(true)
+    toolbarState.undoLayoutRef.current = () => { void undoRestoreDefaultLayout().then(() => fitViewWhenReady(200)) }
+    return () => {
+      toolbarState.fitRef.current = null
+      toolbarState.toggleDetailRef.current = null
+      toolbarState.restoreLayoutRef.current = null
+      toolbarState.undoLayoutRef.current = null
+    }
+  }, [toolbarState, fitViewWhenReady, selectedId, currentBlueprint?.rootNodeId, undoRestoreDefaultLayout])
+  useEffect(() => {
+    toolbarState?.reportDetailOpen(Boolean(activeDetailNode))
+    toolbarState?.reportCanUndoLayout(canUndoRestoreDefaultLayout)
+  }, [toolbarState, activeDetailNode, canUndoRestoreDefaultLayout])
   useEffect(() => {
     toolbarState?.reportSelectedId(selectedId)
   }, [toolbarState, selectedId])
@@ -899,6 +910,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       )}
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      {toolbarState && actionError && <div className="blueprint-canvas-error" role="alert">{actionError}</div>}
       {!graphReady ? <div className="blueprint-canvas-loading" aria-live="polite" aria-label={t('blueprint:toolbar.loading')} /> : null}
       <BlueprintCardActionsContext.Provider value={cardActions}>
       <ReactFlow
@@ -909,6 +921,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         onNodesChange={onNodesChange}
         onNodeDragStop={() => { void flushLayoutSave() }}
         onNodeDoubleClick={onNodeDoubleClick}
+        onNodeClick={(_event, node) => { setSelectedId(node.id); setDetailNodeId(node.id) }}
         onNodeContextMenu={onNodeContextMenu}
         onInit={(inst) => {
           rfInstanceRef.current = inst
@@ -1035,6 +1048,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           {currentBlueprint && <BlueprintCompositionPanel blueprint={currentBlueprint} nodeId={detailNode.id} onSelect={selectCompositionNode} />}
           {currentBlueprint && detailSnapshot ? (
             <NoteWikiPanel
+              compact={Boolean(toolbarState)}
               snapshot={detailSnapshot}
               rootPath={detailSnapshot.coverage.checkoutRoot}
               uri={detailNode.sourceUri}
@@ -1394,7 +1408,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         </aside>
         </BlueprintDetailMount>
       ) : null}
-      {!toolbarState ? (
       <PromptDialog
         open={restoreLayoutConfirmOpen}
         title={t('blueprint:confirm.restoreLayoutTitle')}
@@ -1403,11 +1416,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         confirmText={t('blueprint:confirm.restoreConfirm')}
         onConfirm={() => {
           setRestoreLayoutConfirmOpen(false)
-          void restoreDefaultLayout()
+          void restoreDefaultLayout().then(() => fitViewWhenReady(200))
         }}
         onCancel={() => setRestoreLayoutConfirmOpen(false)}
       />
-      ) : null}
     </div>
   )
 }

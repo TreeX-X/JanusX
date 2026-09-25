@@ -1,6 +1,6 @@
 // Note: 产物工作区 canonical UI state; Office kinds lease a watch port via the
 // office engine, local kinds (md/html) render from disk with zero ports.
-// See .agents/notes/implemented/feature/2026-09-13-product-workspace.md
+// See .agents/notes/2026-09-13-product-workspace--034fb695.md
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import type { OfficeErrorCode, OfficeFileEntry } from '../../../shared/office'
 import { productKindForPath, toProductFileEntry, type ProductFileEntry, type ProductKind } from '../../../shared/product'

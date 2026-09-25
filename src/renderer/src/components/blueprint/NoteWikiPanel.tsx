@@ -11,10 +11,10 @@ import './note-wiki.css'
 
 const statusLabel: Record<string, string> = { resolved: '已解析', missing: '缺失', unavailable: '未接入 / 不可读', ambiguous: '不明确', invalid: '无效' }
 const errorText = (error: unknown): string => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : String(error)
-type Props = { snapshot: NoteReadSnapshot; rootPath: string; uri?: string; anchor?: string; canNavigate?: (uri: string) => boolean; onNavigate: (uri: string, anchor?: string) => void; onRefresh: () => void }
+type Props = { snapshot: NoteReadSnapshot; rootPath: string; uri?: string; anchor?: string; compact?: boolean; canNavigate?: (uri: string) => boolean; onNavigate: (uri: string, anchor?: string) => void; onRefresh: () => void }
 
 // Note: the engineering wiki reads the same Note, without a page copy — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
-export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, canNavigate, onNavigate, onRefresh }: Props) {
+export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false, canNavigate, onNavigate, onRefresh }: Props) {
   const [tab, setTab] = useState<'body' | 'links' | 'context'>('body')
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<NoteSourceRead | null>(null)
@@ -78,8 +78,10 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, canNavigate, on
   }
   const current = source?.uri === uri ? source : null
   const metadata = current?.doc.metadata
-  return <section className="bp-note-wiki" aria-label="工程 wiki">
-    <div className="bp-note-wiki__scope"><strong>工程 wiki</strong><span>{snapshot.coverage.status === 'complete' ? '当前 checkout 完整扫描' : '扫描不完整 · 反链覆盖有限'}</span><small title={rootPath}>{rootPath}</small></div>
+  const identity = <div className="bp-note-wiki__identity"><code title={uri}>{uri}</code><span>{current?.relPath ?? view.entry?.relPath}</span><span>{current ? 'sha256 ' + current.sourceHash.slice(0, 12) : '读取原文…'}</span></div>
+  const fields = current && <dl className="bp-note-wiki__metadata"><dt>类型 / 领域</dt><dd>{current.doc.kind} / {metadata?.class ?? '未分类'}</dd><dt>生命周期</dt><dd>{current.doc.lifecycle}</dd>{current.doc.kind === 'task' && <><dt>任务执行</dt><dd>{metadata?.execution?.state ?? '无执行记录'}</dd></>}</dl>
+  return <section className={`bp-note-wiki${compact ? ' bp-note-wiki--compact' : ''}`} aria-label="工程 wiki">
+    <div className="bp-note-wiki__scope">{!compact && <strong>工程 wiki</strong>}<span title={rootPath}>{snapshot.coverage.status === 'complete' ? (compact ? '完整索引 · 当前工作区' : '当前 checkout 完整扫描') : '扫描不完整 · 反链覆盖有限'}</span>{!compact && <small title={rootPath}>{rootPath}</small>}</div>
     <details className="bp-note-wiki__directory" open={!uri || undefined}>
       <summary>Note 目录 · {directory.length} 篇{unavailable.length ? ' · ' + unavailable.length + ' 项待处理' : ''}</summary>
       <input aria-label="查找 Note" placeholder="标题、标签或代码路径" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -87,7 +89,7 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, canNavigate, on
       {unavailable.length > 0 && <details><summary>旧格式与诊断 ({unavailable.length})</summary>{unavailable.map((entry) => <div className="bp-note-diagnostic" key={entry.relPath}><button type="button" onClick={() => void openFile(entry.relPath)}>{entry.relPath}</button><small>{entry.classification} · {entry.diagnostics.map((d) => d.message).join('; ')}</small></div>)}</details>}
     </details>
     {uri && <>
-      <div className="bp-note-wiki__identity"><code title={uri}>{uri}</code><span>{current?.relPath ?? view.entry?.relPath}</span><span>{current ? 'sha256 ' + current.sourceHash.slice(0, 12) : '读取原文…'}</span></div>
+      {compact ? <details className="bp-note-wiki__provenance"><summary>来源与字段</summary><small>{rootPath}</small>{identity}{fields}</details> : identity}
       {error && <div role="alert" className="bp-note-warning">{error}<button type="button" onClick={() => setReload((v) => v + 1)}>重试</button></div>}
       {current && !current.matchesSnapshot && <div role="status" className="bp-note-warning">源文已变化，当前显示新原文；关系仍来自旧快照。<button type="button" onClick={onRefresh}>刷新图谱</button></div>}
       {notice && <div role="status" className="bp-note-warning">{notice}<button type="button" onClick={() => setNotice('')}>关闭</button></div>}
@@ -95,7 +97,7 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, canNavigate, on
         {(['body', 'links', 'context'] as const).map((value) => <button type="button" key={value} role="tab" aria-selected={tab === value} onClick={() => setTab(value)}>{{ body: '正文', links: '关系与反链', context: '上下文' }[value]}</button>)}
       </div>
       {tab === 'body' && current && <div ref={bodyRef}>
-        <dl className="bp-note-wiki__metadata"><dt>类型 / 领域</dt><dd>{current.doc.kind} / {metadata?.class ?? '未分类'}</dd><dt>生命周期</dt><dd>{current.doc.lifecycle}</dd><dt>任务执行</dt><dd>{metadata?.execution?.state ?? '无执行记录'}</dd></dl>
+        {!compact && fields}
         <div className="bp-note-wiki__actions"><button type="button" onClick={() => setRaw(!raw)}>{raw ? '预览' : '完整源文'}</button><button type="button" onClick={() => void navigator.clipboard.writeText(current.raw).then(() => setNotice('已复制原文')).catch((reason) => setNotice(errorText(reason)))}>复制原文</button></div>
         {raw ? <pre className="bp-note-source">{current.raw}</pre> : <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={(url) => url.startsWith('note://') ? url : defaultUrlTransform(url)} components={markdownComponents}>{current.doc.body ?? ''}</ReactMarkdown></div>}
         {!!metadata?.codeRefs?.length && <div className="bp-note-wiki__group"><h4>代码落点</h4>{metadata.codeRefs.map((ref, index) => <div key={index}><button type="button" disabled={ref.repoId !== snapshot.repoId} onClick={() => void openFile(ref.path)}>{ref.path}</button><small>{ref.repoId === snapshot.repoId ? ref.role : '外部仓库 · ' + ref.repoId}</small></div>)}</div>}

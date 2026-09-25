@@ -68,7 +68,7 @@ interface WorkspaceContextMenuProps {
   onDelete: (workspace: Workspace) => void
 }
 
-// Note: expanded workspace rows open this menu only from their ⋯ button, which stays hidden until the row is hovered or focused so the terminal badge keeps the right edge; right-click stays on the collapsed rail and group headers — see .agents/notes/implemented/feature/2026-09-19-workspace-row-actions-menu.md and .agents/notes/implemented/feature/2026-09-21-workspace-row-hover-reveal.md
+// Note: expanded workspace rows open this menu only from their ⋯ button, which stays hidden until the row is hovered or focused so the terminal badge keeps the right edge; right-click stays on the collapsed rail and group headers — see .agents/notes/2026-09-19-workspace-row-actions-menu--9108f4a9.md and .agents/notes/2026-09-21-workspace-row-hover-reveal--ce93b420.md
 function WorkspaceContextMenu({
   menu,
   onRunConfiguration,
@@ -192,7 +192,7 @@ const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
   'pi': piIcon,
 }
 
-// Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/implemented/feature/2026-09-19-terminal-status-ring.md
+// Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/2026-09-19-terminal-status-ring--fc9a87e5.md
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
   const { t } = useI18n('terminal')
   const visual = getTerminalStatusVisual(status)
@@ -225,7 +225,7 @@ function workspaceInitial(name: string): string {
 
 // Note: folder is the resting glyph; the repo avatar crossfades in on row
 // hover only, with no bordered box in either state — see
-// .agents/notes/implemented/feature/2026-09-21-worktree-sidebar-scoping.md
+// .agents/notes/2026-09-21-worktree-sidebar-scoping--bda5aa81.md
 function RepoRowIcon({ workspacePath }: { workspacePath: string }) {
   const avatar = useWorktreeStore((s) => s.avatars[workspacePath])
   const [failed, setFailed] = useState(false)
@@ -258,7 +258,7 @@ function worktreeDisplayName(path: string, branch: string | null): string {
 
 // Note: terminals are level-3 items grouped under their worktree (hi-fi:
 // design/session-mgmt-hifi.html `.terms` block follows each `.ws` row) — see
-// .agents/notes/implemented/feature/2026-09-21-sidebar-terminal-hierarchy.md
+// .agents/notes/2026-09-21-sidebar-terminal-hierarchy--d87e7a46.md
 /** Terminal cwd belongs to a worktree path across git/native spellings and case. */
 function isCwdWithinWorktree(cwd: string, base: string): boolean {
   const norm = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -565,7 +565,7 @@ function WorktreeSubList({
               title={worktree.path}
               onClick={(event) => {
                 event.stopPropagation()
-                // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/implemented/bug-fix/2026-09-22-worktree-file-tree-scope.md
+                // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/2026-09-22-worktree-file-tree-scope--c58ff1db.md
                 void switchActiveWorktree(workspaceId, worktree.path)
               }}
               onKeyDown={(event) => {

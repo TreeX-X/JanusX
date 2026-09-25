@@ -1,4 +1,4 @@
-// Note: snapshots observe and never mutate — see .agents/notes/implemented/architecture/2026-06-27-checkpoint-safety.md
+// Note: snapshots observe and never mutate — see .agents/notes/2026-06-27-checkpoint-safety--94f306fb.md
 import { ipcMain } from 'electron'
 import { access } from 'fs/promises'
 import { checkpointManager } from '@janus-agent/agent-core'
@@ -96,7 +96,7 @@ export function registerCheckpointHandlers(): void {
   ipcMain.handle(
     CHECKPOINT_CHANNELS.list,
     async (_event, filter?: CheckpointFilter) => {
-      // Note: session scope joins tagged, legacy untagged, and live ids — see .agents/notes/implemented/bug-fix/2026-09-22-session-checkpoint-count-truth.md
+      // Note: session scope joins tagged, legacy untagged, and live ids — see .agents/notes/2026-09-22-session-checkpoint-count-truth--b363ad92.md
       const cps = await checkpointManager.listCheckpoints(
         filter ? { ...filter, engine: filter.engine as CheckpointEngine | undefined } : undefined,
       )

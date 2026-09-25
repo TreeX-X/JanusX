@@ -1,4 +1,4 @@
-﻿// Note: on-demand JSON migration — see .agents/notes/implemented/architecture/2026-09-18-blueprint-migration.md
+﻿// Note: on-demand JSON migration — see .agents/notes/2026-09-18-blueprint-migration--1915e29e.md
 /**
  * @file On-demand legacy JSON blueprint migration (S8-JanusX).
  * @description Converts one legacy JSON blueprint into harness Note drafts in

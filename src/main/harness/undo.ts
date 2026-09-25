@@ -1,4 +1,4 @@
-// Note: reversible managed writes — see .agents/notes/implemented/architecture/2026-09-18-harness-undo.md
+// Note: reversible managed writes — see .agents/notes/2026-09-18-harness-undo--ee0e8ff1.md
 /**
  * @file Harness undo (S8-JanusX, legacy-loop equivalence).
  * @description Reverses one committed managed write as a new transacted

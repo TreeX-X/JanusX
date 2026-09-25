@@ -6,7 +6,7 @@
  *  original metadata, URI relations and diagnostics
  *  alongside canvas vocabulary. No renderer interprets frontmatter.
  *  Pure: no filesystem, no Electron, no network, no harness imports.
- *  See .agents/notes/proposed/architecture/2026-09-22-blueprint-note-graph-readonly.md
+ *  See .agents/notes/2026-09-22-blueprint-note-graph-readonly--1432f7b8.md
  */
 import type {
   Blueprint,
@@ -280,7 +280,7 @@ export function projectRelations(entries: NoteGraphEntry[], repoId: string | nul
  * on repoId / sourceUri, never on this id. Windows forbids case-only sibling
  * directories, so lowercasing is safe canonicalization for slash/case
  * spelling variants of one checkout.
- * See .agents/notes/proposed/architecture/2026-09-23-blueprint-notev2-implementation-plan.md (E0-1).
+ * See .agents/notes/2026-09-23-blueprint-notev2-implementation-plan--e7c03317.md (E0-1).
  */
 export function projectGraphId(repoId: string | null, rootKey: string): string {
   void repoId

@@ -10,7 +10,7 @@ export function getActiveWorkspacePath(): string | null {
   return workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null
 }
 
-// Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/implemented/bug-fix/2026-09-22-worktree-file-tree-scope.md
+// Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/2026-09-22-worktree-file-tree-scope--c58ff1db.md
 /** Effective file-tree root: active worktree path when set, otherwise the workspace root. */
 export function getActiveScopePath(): string | null {
   const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
@@ -36,7 +36,7 @@ let fileTreeLoadGeneration = 0
 // directory updates separately so the older root snapshot cannot erase newly loaded children.
 let fileTreeDirectoryMutationGeneration = 0
 const pendingDirectoryLoads = new Map<string, Promise<void>>()
-// Note: background refreshes must never cancel a pending switch sweep — see .agents/notes/implemented/bug-fix/2026-09-21-file-tree-reveal-race.md
+// Note: background refreshes must never cancel a pending switch sweep — see .agents/notes/2026-09-21-file-tree-reveal-race--80f207b2.md
 // 未播出的切换扫描：visual load 起飞时登记目标路径，之后任意一次成功提交（visual 或后台刷新）
 // 若命中该路径就播一次 revealing，保证切换扫光一定出现；后台提交永不掐断已在播的 reveal。
 let pendingVisualRevealPath: string | null = null

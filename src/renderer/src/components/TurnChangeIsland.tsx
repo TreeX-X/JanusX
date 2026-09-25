@@ -13,7 +13,7 @@ type IslandView = 'latest' | 'history'
 
 const EMPTY_TURNS: TerminalTurnChangesEvent[] = []
 
-// Note: per-terminal turn file history lives on the pane's right edge — see .agents/notes/implemented/feature/2026-09-23-terminal-right-island-turn-history.md
+// Note: per-terminal turn file history lives on the pane's right edge — see .agents/notes/2026-09-23-terminal-right-island-turn-history--70beb72a.md
 /**
  * Turn-change island: one persistent overlay per terminal pane, identical for
  * all engines. The pill stays on the right edge once the first turn lands;

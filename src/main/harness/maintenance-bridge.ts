@@ -1,4 +1,4 @@
-// Note: maintenance-to-harness translation table lives here — see .agents/notes/implemented/architecture/2026-09-17-maintenance-harness-bridge-s6.md
+// Note: maintenance-to-harness translation table lives here — see .agents/notes/2026-09-17-maintenance-harness-bridge-s6--1f21d390.md
 /**
  * @file Maintenance -> harness operation bridge (S6-c slice 2a, pure)
  * @description Translates BlueprintMaintenance operations into harness

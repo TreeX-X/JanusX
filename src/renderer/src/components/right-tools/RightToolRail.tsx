@@ -1,4 +1,4 @@
-// Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/implemented/bug-fix/2026-09-16-right-dock-empty-collapse.md
+// Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/2026-09-16-right-dock-empty-collapse--9f855a20.md
 import { useEffect, useState } from 'react'
 import { Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'

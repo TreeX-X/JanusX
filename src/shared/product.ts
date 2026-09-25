@@ -1,7 +1,7 @@
-// Note: P0 产物格式为 image/text 预览；新增格式只改本文件映射 — see .agents/notes/implemented/feature/2026-09-17-product-preview-p0.md
+// Note: P0 产物格式为 image/text 预览；新增格式只改本文件映射 — see .agents/notes/2026-09-17-product-preview-p0--99b3fb78.md
 // Note: 产物工作区 canonical kind mapping; Office rendering itself is served by
 // iOfficeAI/OfficeCLI (Apache-2.0, github.com/iOfficeAI/OfficeCLI) via the office watch pool.
-// See .agents/notes/implemented/feature/2026-09-13-product-workspace.md
+// See .agents/notes/2026-09-13-product-workspace--034fb695.md
 import { OFFICE_EXTENSIONS } from './office'
 
 export const PRODUCT_MARKDOWN_EXTENSIONS = ['.md', '.markdown'] as const

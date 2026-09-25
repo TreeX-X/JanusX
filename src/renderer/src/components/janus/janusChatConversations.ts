@@ -51,7 +51,7 @@ export function createInitialSnapshot(): JanusChatStorageSnapshot {
   return { version: 1, activeConversationId: conversation.id, conversations: [conversation] }
 }
 
-// Note: both project entry points share one conversation - see .agents/notes/implemented/architecture/2026-09-18-project-conversation-controller.md
+// Note: both project entry points share one conversation - see .agents/notes/2026-09-18-project-conversation-controller--4ffa1606.md
 export function bindProjectConversation(
   conversations: PersistedJanusConversation[],
   context: EngineeringContext,

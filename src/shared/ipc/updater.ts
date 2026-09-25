@@ -8,7 +8,7 @@ export const UPDATER_CHANNELS = {
   openReleases: 'updater:open-releases',
 } as const
 
-// Note: unsupported runtimes open the designed download page, not raw Releases — see .agents/notes/implemented/feature/2026-07-14-app-auto-update-win.md
+// Note: unsupported runtimes open the designed download page, not raw Releases — see .agents/notes/2026-07-14-app-auto-update-win--5fdf2273.md
 /** 单一来源：便携版/开发版手动下载入口，main 与 fallback 共用。 */
 export const UPDATER_RELEASES_URL = 'https://treex-x.github.io/JanusX/#downloads'
 

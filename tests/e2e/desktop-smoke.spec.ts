@@ -199,7 +199,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       groupName: 'Desktop smoke group',
     })
 
-    // Note: the row's ⋯ button is hover-revealed, so the row must be hovered before it has a hit box — see .agents/notes/implemented/feature/2026-09-21-workspace-row-hover-reveal.md
+    // Note: the row's ⋯ button is hover-revealed, so the row must be hovered before it has a hit box — see .agents/notes/2026-09-21-workspace-row-hover-reveal--ce93b420.md
     await secondWorkspaceRow.hover()
     await secondWorkspaceRow.getByRole('button', { name: '更多操作' }).click()
     await page.getByRole('button', { name: '移出分组', exact: true }).click()

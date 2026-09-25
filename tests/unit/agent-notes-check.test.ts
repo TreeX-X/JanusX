@@ -42,10 +42,17 @@ const GOOD_IMPLEMENTED = [
 ].join('\n')
 
 describe('agent-notes mechanical gate', () => {
-  it('passes the real repo with zero errors', () => {
-    const { errors, checked } = checkNotes(process.cwd())
+  it('passes the real repo without skipping any Note file', async () => {
+    const { errors, checked, harnessChecked, diagnostics } = checkNotes(process.cwd())
     expect(errors).toEqual([])
-    expect(checked).toBeGreaterThan(0)
+    expect(checked).toBe(0)
+    const noteFiles = (await fs.readdir(join(process.cwd(), '.agents/notes'), { recursive: true })).filter(file => file.endsWith('.md'))
+    expect(harnessChecked).toBeGreaterThan(0)
+    expect(harnessChecked).toBe(noteFiles.length)
+    for (const diagnostic of diagnostics.filter(d => d.code === 'known-broken-link')) {
+      expect(diagnostic.target).toBe('pelican-bicycle.html')
+    }
+    expect(diagnostics.filter(d => d.code === 'unresolved-external-link')).toEqual([])
   })
 
   it('flags path, header, section, link, and version violations', async () => {
@@ -72,23 +79,44 @@ describe('agent-notes mechanical gate', () => {
     expect(joined).toMatch("wrong-status.md: Status must be 'implemented'")
   })
 
-  it('skips harness-note/1 frontmatter (covered by harness-core tests)', async () => {
+  it('validates harness-note/1 assets in the requested checkout', async () => {
     const root = await makeTree({
       '.agents/notes/2026-09-19-t--33333333.md': [
         '---',
         'schema: harness-note/1',
         'id: 33333333-3333-4333-8333-333333333333',
         'kind: requirement',
-        'lifecycle: proposed',
+        'lifecycle: draft',
         'created: 2026-09-16',
         '---',
         '',
-        '# Anything goes here',
+        '# Formal requirement',
+        '',
+        '## Problem',
+        'Existing facts.',
         '',
       ].join('\n'),
     })
     expect(checkNotes(root).errors).toEqual([])
   })
+})
+
+describe('modern asset validation', () => {
+  it('rejects malformed modern assets and broken source, image and reference links while ignoring code', async () => {
+    const header='---\nschema: harness-note/1\nid: 12345678-1234-4234-8234-123456789abc\nkind: requirement\nlifecycle: draft\ncreated: 2026-09-20\n---\n'
+    const root=await makeTree({
+      '.agents/notes/broken.md':header+'# Broken\n\n## Problem\n\n[source](../../src/missing.ts)\n\n![image](../../missing.png)\n\n[ref][r]\n\n[r]: ./missing.md "Title"\n\n~~~md\n[example](./ignored.md)\n~~~\n',
+      '.agents/notes/malformed.md':header.replace('12345678-1234-4234-8234-123456789abc','not-an-id')+'# Invalid\n',
+    })
+    const result=checkNotes(root)
+    expect(result.harnessChecked).toBe(2)
+    expect(result.errors.join('\n')).toContain('missing.ts')
+    expect(result.errors.join('\n')).toContain('missing.png')
+    expect(result.errors.join('\n')).toContain('missing.md')
+    expect(result.errors.join('\n')).toContain('malformed.md')
+    expect(result.errors.join('\n')).not.toContain('ignored.md')
+  })
+
 })
 
 describe('skills-sync gate', () => {

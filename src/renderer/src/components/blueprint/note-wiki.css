@@ -28,6 +28,12 @@
 .bp-note-warning button { margin-left: 5px; }
 .bp-note-wiki details details, .bp-note-wiki__group details { margin: 8px 0; }
 .bp-note-wiki .markdown-preview { font-size: 12px; overflow-wrap: anywhere; }
+.bp-note-wiki--compact { padding: 12px 14px; }
+.bp-note-wiki--compact .bp-note-wiki__scope { padding-bottom: 8px; color: #99989e; font-size: 10px; }
+.bp-note-wiki--compact .bp-note-wiki__directory { margin-bottom: 4px; padding: 6px 0; }
+.bp-note-wiki__provenance { margin: 0 0 10px; font-size: 11px; color: #99989e; }
+.bp-note-wiki__provenance > summary { padding: 5px 0; }
+.bp-note-wiki--compact .bp-note-wiki__tabs { padding-bottom: 2px; }
 .bp-composition { padding: 10px 14px; color: var(--text-secondary, #b8b8c0); font-size: 12px; }
 .bp-composition summary { cursor: pointer; color: var(--text-primary, #e6e6e9); }
 .bp-composition section { max-height: 300px; overflow: auto; }

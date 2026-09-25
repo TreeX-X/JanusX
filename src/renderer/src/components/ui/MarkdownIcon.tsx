@@ -1,4 +1,4 @@
-// Note: this glyph is the drawer's Markdown view tab and the note pane's empty-state mark — see .agents/notes/implemented/feature/2026-09-21-drawer-markdown-file-glyph.md
+// Note: this glyph is the drawer's Markdown view tab and the note pane's empty-state mark — see .agents/notes/2026-09-21-drawer-markdown-file-glyph--77c7030e.md
 // Conventional file glyph — page with a folded corner — carrying an M where a text file would carry its lines.
 // NotebookPen's page plus four binding ticks plus a diagonal pen read as smudge at the drawer tab's 12px; the
 // fold stays because it is what makes the shape read as a file, and the M alone carries the Markdown meaning.

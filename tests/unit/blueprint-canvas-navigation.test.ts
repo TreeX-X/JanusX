@@ -28,6 +28,47 @@ function buildTree(spec: { id: string; parentId: string | null; childIds: string
 }
 
 describe('blueprint canvas navigation', () => {
+  it('uses parentId for local descendants and collapse decisions despite stale children', () => {
+    const tree = buildTree([
+      { id: 'root', parentId: null, childIds: ['unrelated'] },
+      { id: 'branch', parentId: 'root', childIds: [] },
+      { id: 'leaf', parentId: 'branch', childIds: [] },
+      { id: 'unrelated', parentId: null, childIds: [] },
+    ])
+    expect(collectLocalHierarchyIds(tree.nodes, 'root', 2)).toEqual(new Set(['root', 'branch', 'leaf']))
+    expect(computeInitialCollapsedIds(tree.nodes, tree.nodeIds, 3)).toEqual(new Set(['branch']))
+  })
+
+  it('keeps the cycle representative visible when collapsed and uses the same effective hierarchy locally', () => {
+    const tree = buildTree([
+      { id: 'a', parentId: 'c', childIds: ['b'] },
+      { id: 'b', parentId: 'a', childIds: ['c'] },
+      { id: 'c', parentId: 'b', childIds: ['a'] },
+    ])
+    expect(visibleNodeIds(tree.nodes, tree.nodeIds, new Set(['a']))).toEqual(['a'])
+    expect(visibleNodeIds(tree.nodes, tree.nodeIds, new Set())).toEqual(tree.nodeIds)
+    expect(visibleNodeIds(tree.nodes, tree.nodeIds, new Set(['b']))).toEqual(['a', 'b'])
+    expect(collectLocalHierarchyIds(tree.nodes, 'a', 1)).toEqual(new Set(['a', 'b']))
+    expect(computeInitialCollapsedIds(tree.nodes, tree.nodeIds, 2)).toEqual(new Set(['b']))
+    expect(computeInitialCollapsedIds(Object.fromEntries(Object.entries(tree.nodes).reverse()), [...tree.nodeIds].reverse(), 2)).toEqual(new Set(['b']))
+  })
+
+  it('keeps a self-parent representative visible when collapsed', () => {
+    const tree = buildTree([{ id: 'self', parentId: 'self', childIds: ['self'] }])
+    expect(visibleNodeIds(tree.nodes, tree.nodeIds, new Set(['self']))).toEqual(['self'])
+    expect(visibleNodeIds(tree.nodes, tree.nodeIds, new Set())).toEqual(['self'])
+    expect(collectLocalHierarchyIds(tree.nodes, 'self', 5)).toEqual(new Set(['self']))
+  })
+
+  it('treats missing parents as roots when filtering visibility', () => {
+    const tree = buildTree([
+      { id: 'orphan', parentId: 'missing', childIds: [] },
+      { id: 'child', parentId: 'orphan', childIds: [] },
+    ])
+    expect(visibleNodeIds(tree.nodes, tree.nodeIds, new Set(['missing']))).toEqual(tree.nodeIds)
+    expect(collectLocalHierarchyIds(tree.nodes, 'child', 1)).toEqual(new Set(['child', 'orphan']))
+  })
+
   it('includes every ancestor and only the configured descendant depth', () => {
     expect([...collectLocalHierarchyIds(nodes, 'branch', 1)]).toEqual(['branch', 'root', 'leaf'])
     expect(collectLocalHierarchyIds(nodes, 'branch', 2).has('deep')).toBe(true)

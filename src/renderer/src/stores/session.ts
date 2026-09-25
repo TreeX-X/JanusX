@@ -62,7 +62,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Stale-while-revalidate: background refreshes and scope switches keep
     // the visible cards in place. Clearing the list plus a loading banner
     // above it shifted every card per session:event, which read as flicker.
-    // See .agents/notes/implemented/bug-fix/2026-09-22-session-flicker-storm.md
+    // See .agents/notes/2026-09-22-session-flicker-storm--3f2c9a41.md
     if (silent && previousKey === key) {
       try {
         const sessions = await window.electron.session.list(filter)
@@ -133,7 +133,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // coalescing, each event refetched the whole card list with a loading
     // banner, which read as constant flicker. One trailing refresh per burst
     // keeps cards live without the strobe, mirroring the timeline tick.
-    // See .agents/notes/implemented/bug-fix/2026-09-22-session-flicker-storm.md
+    // See .agents/notes/2026-09-22-session-flicker-storm--3f2c9a41.md
     let timer: ReturnType<typeof setTimeout> | null = null
     const unsubscribe = window.electron.session.onEvent(() => {
       if (timer) clearTimeout(timer)

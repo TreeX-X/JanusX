@@ -8,7 +8,7 @@
  *  saved as formal notes. Retry reuses the same bundle (same ids); a changed
  *  source snapshot demands a new bundle revision. No filesystem, no Electron.
  */
-// Note: roundtable natively produces harness bundles — see .agents/notes/implemented/architecture/2026-09-16-roundtable-artifact-bundle-s5.md
+// Note: roundtable natively produces harness bundles — see .agents/notes/2026-09-16-roundtable-artifact-bundle-s5--46d65946.md
 import { createHash, randomUUID } from 'node:crypto'
 import {
   HEX64_RE,

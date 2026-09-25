@@ -1,4 +1,4 @@
-// Note: glance payload for persona cards plus badge — see .agents/notes/implemented/feature/2026-09-15-user-memory-surface-m4.md
+// Note: glance payload for persona cards plus badge — see .agents/notes/2026-09-15-user-memory-surface-m4--b32f92b5.md
 /**
  * @file User memory overview service (M4).
  * @description Composes one workspace-free glance payload from the M1 stores:

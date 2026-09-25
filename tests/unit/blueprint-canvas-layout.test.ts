@@ -5,11 +5,152 @@ import {
   computeVisibleBlueprintLayout,
   deriveBlueprintFlow,
   deriveBlueprintCardData,
+  collectHiddenNodeIds,
+  collectSubtreeIds,
   relationDash
 } from '../../src/renderer/src/features/blueprint/canvas-layout'
 import type { Blueprint, BlueprintNode } from '../../src/renderer/src/services/blueprint'
 
+function forest(entries: Array<[string, string | null]>): Blueprint {
+  return {
+    id: 'forest', rootNodeId: entries[0][0], nodeIds: entries.map(([id]) => id), canvasLayout: {},
+    nodes: Object.fromEntries(entries.map(([id, parentId]) => [id, {
+      id, parentId, children: [], title: id, status: 'planned', progress: 0,
+    }])),
+  } as unknown as Blueprint
+}
+
+function expectNoOverlap(layout: Record<string, { x: number; y: number }>): void {
+  const points = Object.values(layout)
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      const a = points[i], b = points[j]
+      expect(a.x + 240 <= b.x || b.x + 240 <= a.x || a.y + 110 <= b.y || b.y + 110 <= a.y).toBe(true)
+    }
+  }
+}
+
 describe('blueprint canvas layout', () => {
+  it('packs 20 independent roots into bounded columns and a compact two-dimensional forest', () => {
+    const blueprint = forest(Array.from({ length: 20 }, (_, i) => [`root-${i}`, null]))
+    const layout = computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})
+    expect(Object.keys(layout)).toHaveLength(20)
+    expect(computeBlueprintLayout(Object.fromEntries(Object.entries(blueprint.nodes).reverse()), blueprint.rootNodeId, {})).toEqual(layout)
+    const rows = new Map<number, number>()
+    Object.values(layout).forEach(({ y }) => rows.set(y, (rows.get(y) ?? 0) + 1))
+    expect(rows.size).toBeGreaterThan(1)
+    expect(Math.max(...rows.values())).toBeLessThanOrEqual(4)
+    const width = Math.max(...Object.values(layout).map(({ x }) => x)) + 240
+    const height = Math.max(...Object.values(layout).map(({ y }) => y)) + 110
+    expect(Math.max(width / height, height / width)).toBeLessThan(3)
+    expectNoOverlap(layout)
+    expect(deriveBlueprintFlow(blueprint, {}, {}, new Set(), false).edges).toEqual([])
+  })
+
+  it('wraps five independent roots onto at least two rows', () => {
+    const blueprint = forest(Array.from({ length: 5 }, (_, i) => [`root-${i}`, null]))
+    const layout = computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})
+    expect(new Set(Object.values(layout).map(({ y }) => y)).size).toBeGreaterThanOrEqual(2)
+  })
+
+  it('keeps coordinates identical under reversed insertion and sorts numeric sibling IDs naturally', () => {
+    const blueprint = forest([['root', null], ['leaf-10', 'root'], ['leaf-2', 'root'], ['other', null]])
+    const reversed = Object.fromEntries(Object.entries(blueprint.nodes).reverse())
+    const layout = computeBlueprintLayout(blueprint.nodes, 'root', {})
+    expect(computeBlueprintLayout(reversed, 'root', {})).toEqual(layout)
+    expect(layout['leaf-2'].x).toBeLessThan(layout['leaf-10'].x)
+  })
+
+  it('packs disconnected tall and wide trees using their full bounding boxes', () => {
+    const entries: Array<[string, string | null]> = []
+    const groups: string[][] = []
+    for (let i = 0; i < 6; i++) {
+      const root = `root-${i}`
+      const group = [root]
+      entries.push([root, null])
+      for (let j = 0; j < 12; j++) {
+        const id = `${root}-child-${j}`
+        entries.push([id, i % 2 === 0 && j > 0 ? group[j] : root])
+        group.push(id)
+      }
+      groups.push(group)
+    }
+    const blueprint = forest(entries)
+    const layout = computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})
+    expect(new Set(groups.map(([id]) => layout[id].y)).size).toBeGreaterThan(1)
+    expectNoOverlap(layout)
+    const bounds = groups.map((group) => ({
+      left: Math.min(...group.map((id) => layout[id].x)),
+      right: Math.max(...group.map((id) => layout[id].x)) + 240,
+      top: Math.min(...group.map((id) => layout[id].y)),
+      bottom: Math.max(...group.map((id) => layout[id].y)) + 110,
+    }))
+    bounds.forEach((a, i) => bounds.slice(i + 1).forEach((b) =>
+      expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true)
+    ))
+    entries.forEach(([id, parentId]) => {
+      if (parentId) expect(layout[id].y).toBeGreaterThan(layout[parentId].y)
+    })
+  })
+
+  it('renders pure cycles once with finite deterministic coordinates and preserves raw parent edges', () => {
+    const blueprint = forest([['a', 'c'], ['b', 'a'], ['c', 'b'], ['self', 'self']])
+    const original = JSON.stringify(blueprint)
+    const flow = deriveBlueprintFlow(blueprint, {}, {}, new Set(), false)
+    const layout = computeBlueprintLayout(blueprint.nodes, 'a', {})
+    expect(flow.nodes.map(({ id }) => id).sort()).toEqual(['a', 'b', 'c', 'self'])
+    Object.values(layout).forEach(({ x, y }) => {
+      expect(Number.isFinite(x) && Number.isFinite(y)).toBe(true)
+    })
+    expectNoOverlap(layout)
+    expect(computeBlueprintLayout(Object.fromEntries(Object.entries(blueprint.nodes).reverse()), 'a', {})).toEqual(layout)
+    expect(flow.edges.map(({ source, target }) => `${source}->${target}`).sort()).toEqual(['a->b', 'b->c', 'c->a', 'self->self'])
+    expect(JSON.stringify(blueprint)).toBe(original)
+  })
+
+  it('keeps the collapsed cycle representative visible with consistent subtree summaries', () => {
+    const blueprint = forest([['a', 'c'], ['b', 'a'], ['c', 'b']])
+    const collapsed = new Set(['a'])
+    expect(collectHiddenNodeIds(blueprint, collapsed)).toEqual(new Set(['b', 'c']))
+    expect(collectSubtreeIds(blueprint, 'b')).toEqual(new Set(['b', 'c']))
+    const flow = deriveBlueprintFlow(blueprint, {}, {}, new Set(), false, collapsed)
+    expect(flow.nodes.map(({ id }) => id)).toEqual(['a'])
+    expect(Object.keys(computeVisibleBlueprintLayout(blueprint, collapsed, {}))).toEqual(['a'])
+    expect(flow.nodes[0].data.collapsedSummary).toBe('已折叠 2 · 0/2 完成')
+    expect(deriveBlueprintCardData(blueprint, blueprint.nodes.a, {}, false, false, true).collapsedSummary).toBe(flow.nodes[0].data.collapsedSummary)
+    const reversed = { ...blueprint, nodeIds: [...blueprint.nodeIds].reverse(), nodes: Object.fromEntries(Object.entries(blueprint.nodes).reverse()) }
+    const collapsedBranch = deriveBlueprintFlow(reversed, {}, {}, new Set(), false, new Set(['b']))
+    expect(collapsedBranch.nodes.map(({ id }) => id).sort()).toEqual(['a', 'b'])
+    expect(collapsedBranch.nodes.find(({ id }) => id === 'b')!.data.collapsedSummary).toBe('已折叠 1 · 0/1 完成')
+    expect(deriveBlueprintFlow(blueprint, {}, {}, new Set(), false).nodes).toHaveLength(3)
+  })
+
+  it('uses parentId despite stale children and retains missing-parent roots without inventing edges', () => {
+    const blueprint = forest([['root', null], ['child', 'root'], ['orphan', 'missing'], ['grandchild', 'orphan']])
+    blueprint.nodes.root.children = ['orphan']
+    const flow = deriveBlueprintFlow(blueprint, {}, {}, new Set(), false)
+    expect(flow.nodes).toHaveLength(4)
+    expect(flow.edges.map(({ source, target }) => `${source}->${target}`).sort()).toEqual(['orphan->grandchild', 'root->child'])
+    expect(collectSubtreeIds(blueprint, 'root')).toEqual(new Set(['root', 'child']))
+    expect(collectHiddenNodeIds(blueprint, new Set(['root']))).toEqual(new Set(['child']))
+    expect(flow.nodes.find(({ id }) => id === 'orphan')!.data.childCount).toBe(1)
+    const layout = computeBlueprintLayout(blueprint.nodes, 'root', {})
+    expect(layout.child.y).toBeGreaterThan(layout.root.y)
+    expect(layout.grandchild.y).toBeGreaterThan(layout.orphan.y)
+  })
+
+  it('preserves saved drag positions in a compact forest until an explicit reset', () => {
+    const blueprint = forest(Array.from({ length: 20 }, (_, i) => [`root-${i}`, null]))
+    blueprint.canvasLayout = { 'root-7': { x: -777, y: 999 }, 'root-18': { x: 9000, y: 0 } }
+    const saved = deriveBlueprintFlow(blueprint, undefined, {}, new Set(), false)
+    Object.entries(blueprint.canvasLayout).forEach(([id, point]) => {
+      expect(saved.nodes.find((node) => node.id === id)!.position).toEqual(point)
+    })
+    const reset = computeBlueprintLayout(blueprint.nodes, blueprint.rootNodeId, {})
+    expect(reset['root-7']).not.toEqual(blueprint.canvasLayout['root-7'])
+    expect(new Set(Object.values(reset).map(({ y }) => y)).size).toBeGreaterThan(1)
+  })
+
   it('derives stable nodes and parent edges while preserving saved positions', () => {
     const blueprint = {
       id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'child'], canvasLayout: { root: { x: 42, y: 24 } },

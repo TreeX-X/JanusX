@@ -152,16 +152,17 @@ function ProjectChatColumn({ onClose }: BlueprintMaintenancePanelProps) {
     <div className="bp-maintenance-controls">
       <div className="bp-maintenance-context" aria-live="polite">
         <strong>{selected?.title}</strong>
-        <small>{context?.uri ?? selected?.sourceUri}</small>
-        <small>{checkoutPath}</small>
+        <span title={context?.uri ?? selected?.sourceUri}>{t('blueprint:maintenance.scopeCurrentNode')}</span>
       </div>
       {contextError && <p role="alert">{contextError}</p>}
       {context?.stale && <p role="alert">{t('blueprint:maintenance.staleSource')}</p>}
       {context && !sourceWorkspace && <p role="alert">{t('blueprint:maintenance.registerWorkspace')}</p>}
       {(!scopeMatches || !conversationMatches) && <p role="alert">{t('blueprint:maintenance.activeScopeMismatch')}</p>}
       {(actionError || maintenance.error || task?.error) && <p role="alert">{actionError || maintenance.error || task?.error}</p>}
-      <details className="bp-maintenance-settings" open={!task}>
+      <details className="bp-maintenance-settings">
         <summary>{t('blueprint:maintenance.maintenanceTaskFold')}</summary>
+        <small>{context?.uri ?? selected?.sourceUri}</small>
+        <small>{checkoutPath}</small>
         <fieldset disabled={taskWorking || !!task}>
           <label>{t('blueprint:maintenance.targetNode')}
             <select aria-label={t('blueprint:maintenance.targetNode')} value={selectedId} onChange={event => maintenance.selectContext({ blueprintId: blueprint.id, nodeId: event.target.value })}>
@@ -185,17 +186,22 @@ function ProjectChatColumn({ onClose }: BlueprintMaintenancePanelProps) {
         <button type="button" disabled={!canPropose || !goal.trim()} onClick={() => void propose(goal)}>{t('blueprint:maintenance.composeProposal')}</button>
         <small>{t('blueprint:maintenance.policyHint')}</small>
       </details>
-      {task && <section className="bp-maintenance-task-overview" aria-live="polite">
+      {task && <details className="bp-maintenance-task-details">
+        <summary>{task.status} · {task.progress}%</summary>
+        <section className="bp-maintenance-task-overview" aria-live="polite">
         <strong>{task.goal}</strong><small>{task.workspacePath} · {task.nodeScope.type}</small>
         <div className={taskWorking ? 'bp-maintenance-thinking' : undefined}>{task.status} · {task.phase} · {task.progress}%</div>
         <progress aria-label={t('blueprint:maintenance.maintenanceTaskFold')} max={100} value={task.progress} />
         <button type="button" disabled={taskWorking} onClick={() => void run(() => maintenance.complete(task.id))}>{t('blueprint:maintenance.completeMaintenance')}</button>
         <button type="button" disabled={busy || task.status === 'applying'} onClick={() => { chat?.stop(); void run(() => maintenance.cancel(task.id)) }}>{t('blueprint:maintenance.cancelTask')}</button>
-      </section>}
-      {proposal && <MaintenanceApproval key={JSON.stringify(proposal)} changeSet={proposal}
+      </section></details>}
+      {proposal && <details className="bp-maintenance-proposal" open key={proposal.id}>
+        <summary>{t('blueprint:maintenance.composeProposal')} · {proposal.operations.length}</summary>
+        <MaintenanceApproval key={JSON.stringify(proposal)} changeSet={proposal}
         busy={taskWorking || !bound || !scopeMatches || !conversationMatches || !!context?.stale || task?.status === 'stale' || task?.status === 'failed'}
-        onApply={(ids, deletes) => run(() => maintenance.apply({ taskId: task!.id, changeSetId: proposal.id, operationIds: ids, confirmedDeleteOperationIds: deletes }))} />}
-      {proposal && <button type="button" disabled={taskWorking} onClick={() => void run(() => maintenance.dismiss({ taskId: task!.id }))}>{t('blueprint:maintenance.dismissProposal')}</button>}
+        onApply={(ids, deletes) => run(() => maintenance.apply({ taskId: task!.id, changeSetId: proposal.id, operationIds: ids, confirmedDeleteOperationIds: deletes }))} />
+        <button type="button" disabled={taskWorking} onClick={() => void run(() => maintenance.dismiss({ taskId: task!.id }))}>{t('blueprint:maintenance.dismissProposal')}</button>
+      </details>}
       {pendingUndo && <section>
         {pendingUndo.conflicts.length > 0 && <p role="alert">{t('blueprint:maintenance.undoConflicts')}: {pendingUndo.conflicts.join('; ')}</p>}
         <MaintenanceApproval key={JSON.stringify(pendingUndo.changeSet)} changeSet={pendingUndo.changeSet} undo busy={taskWorking || !!task || !bound}
@@ -229,5 +235,6 @@ function ProjectChatColumn({ onClose }: BlueprintMaintenancePanelProps) {
         }} onRewrite={chat.rewrite}
         onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} minimalComposer />
     </div>}
+    {!bound && !contextError && <p className="bp-maintenance-connecting" role="status">{t('blueprint:toolbar.loading')}</p>}
   </PanelFrame>
 }

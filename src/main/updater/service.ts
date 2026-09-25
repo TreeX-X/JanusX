@@ -1,4 +1,4 @@
-// Note: Win nsis auto-update via GitHub Releases — see .agents/notes/implemented/feature/2026-07-14-app-auto-update-win.md
+// Note: Win nsis auto-update via GitHub Releases — see .agents/notes/2026-07-14-app-auto-update-win--5fdf2273.md
 import { app, type BrowserWindow } from 'electron'
 import log from 'electron-log'
 import type { autoUpdater as AutoUpdater } from 'electron-updater'

@@ -6,7 +6,7 @@
  *  Legacy JSON blueprints keep their own lane (read + write) for old data;
  *  new project flows never write JSON. Electron-free: roots arrive from
  *  callers, change events leave through subscribed listeners (tests subscribe).
- *  See .agents/notes/implemented/architecture/2026-09-16-harness-project-graph-s4.md
+ *  See .agents/notes/2026-09-16-harness-project-graph-s4--bcadcdc9.md
  */
 import { randomUUID } from 'crypto'
 import { execFile } from 'node:child_process'
@@ -48,7 +48,7 @@ import {
 import type { Blueprint } from '../../shared/janus/types'
 
 export { assertNoLocalLeak }
-// Note: all hosts share namespace detection — see .agents/notes/implemented/architecture/2026-09-18-own-notes-namespace.md
+// Note: all hosts share namespace detection — see .agents/notes/2026-09-18-own-notes-namespace--5559a0b8.md
 export { claimsHarnessSchema } from '@janus-agent/harness-node'
 
 export interface ResolveResult {
@@ -211,7 +211,7 @@ export class HarnessNoteService {
       classification: item.classification,
       diagnostics: item.diagnostics.map((d) => ({ code: d.code, message: d.message })),
     }))
-    // Note: coverage comes from portable receipts - see .agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md
+    // Note: coverage comes from portable receipts - see .agents/notes/2026-09-18-harness-portable-results--11d8826d.md
     if (loaded.repoId) {
       const results = await listTaskResults(root)
       for (const node of Object.values(blueprint.nodes)) {

@@ -1,4 +1,4 @@
-// Note: pane tree focus with island as sole subagent surface — see .agents/notes/implemented/architecture/2026-06-27-pane-tree-subagent.md
+// Note: pane tree focus with island as sole subagent surface — see .agents/notes/2026-06-27-pane-tree-subagent--93151b7b.md
 export type PaneSplitDirection = 'horizontal' | 'vertical'
 export type PaneSplitPlacement = 'before' | 'after'
 export type PaneDropEdge = 'left' | 'right' | 'top' | 'bottom'

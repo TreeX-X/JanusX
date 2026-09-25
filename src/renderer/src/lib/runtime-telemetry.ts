@@ -1,4 +1,4 @@
-// Note: per-terminal model detection with confidence merges — see .agents/notes/implemented/architecture/2026-06-28-terminal-model-lifecycle.md
+// Note: per-terminal model detection with confidence merges — see .agents/notes/2026-06-28-terminal-model-lifecycle--2f4d605c.md
 import type { TerminalPreset } from '@/types'
 import { matchAiModel } from '@janusx/llm-core/model-registry'
 import type {
@@ -85,7 +85,7 @@ export function detectModelFromText(text: string): string | undefined {
   const explicit = normalized.match(MODEL_FIELD_PATTERN) ?? normalized.match(MODEL_FLAG_PATTERN)
   if (explicit?.[1]) return normalizeModelName(explicit[1])
   // Note: janus/pi emit no hook events, so PTY text is the live model source —
-  // see .agents/notes/implemented/feature/2026-09-11-janus-pi-context-recognition.md
+  // see .agents/notes/2026-09-11-janus-pi-context-recognition--e34329c5.md
   const janusStatus = normalized.match(JANUS_STATUS_MODEL_PATTERN)
   if (janusStatus?.[1] && isPlausibleModelId(janusStatus[1])) return normalizeModelName(janusStatus[1])
 

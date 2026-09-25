@@ -8,7 +8,7 @@ export interface TerminalStatusVisual {
 }
 
 // Note: internal status keeps six values for hook routing and sort order, but
-// approval and input share one attention visual — see .agents/notes/implemented/feature/2026-09-12-terminal-status-display.md
+// approval and input share one attention visual — see .agents/notes/2026-09-12-terminal-status-display--27891818.md
 const STATUS_VISUALS: Record<Terminal['status'], TerminalStatusVisual> = {
   running: { label: '运行中', labelKey: 'terminal:status.running', color: '#6bd89b', background: 'rgba(70, 190, 125, 0.1)' },
   wait: { label: '空闲', labelKey: 'terminal:status.wait', color: '#8a8a93', background: 'rgba(255,255,255,0.05)' },

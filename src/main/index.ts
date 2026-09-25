@@ -123,7 +123,7 @@ async function runLlmRuntimeSmoke(): Promise<void> {
 // packaged runtime check exercises every import startup performs. A dependency
 // that packaging nested away from app.asar's node_modules root surfaces here as
 // ERR_MODULE_NOT_FOUND, not as a missing feature at runtime.
-// Note: entry — see .agents/notes/implemented/bug-fix/2026-09-20-packaged-hoisted-deps.md
+// Note: entry — see .agents/notes/2026-09-20-packaged-hoisted-deps--39f58575.md
 function importBootstrapModules() {
   return Promise.all([
     import('./ipc/handlers'),

@@ -51,8 +51,11 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const openRequest = useBlueprintMaintenanceStore((s) => s.openRequest)
   const initializeMaintenance = useBlueprintMaintenanceStore((s) => s.initialize)
   const requestOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
+  // The workbench opens as a three-column inspection surface. Selection in the
+  // canvas keeps this detail pane synchronized; users can still collapse it
+  // through the existing detail controls.
   const [maintenanceOpen, setMaintenanceOpen] = useState(true)
-  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(true)
   // 工作台专属下拉承载层：z-index 12001，恰好高于遮罩 12000；
   // 零尺寸 + overflow visible，不拦截点击、不裁切子节点。
   // Select 通过 getPortalContainer 把浮层挂进这里，进入比遮罩更高的层叠上下文。
@@ -88,7 +91,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (event.key !== 'Escape' || event.defaultPrevented) return
       if (maintenanceOpen) setMaintenanceOpen(false)
       else requestClose()
     }

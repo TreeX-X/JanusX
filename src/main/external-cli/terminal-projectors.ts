@@ -9,7 +9,7 @@ import type {
 } from '../../shared/ipc/external-cli'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 
-// Note: 各终端 model 键的按格式精简投影（owned-key 合并＋备份＋重读校验）——见 .agents/notes/implemented/feature/2026-09-18-terminal-tabs-per-format-projectors.md
+// Note: 各终端 model 键的按格式精简投影（owned-key 合并＋备份＋重读校验）——见 .agents/notes/2026-09-18-terminal-tabs-per-format-projectors--2dbc27e2.md
 
 /** 精简版仅管理 model 键的终端；janus 为内部绑定，claude 走既有凭证三元组，均不在此列。 */
 export const MODEL_TERMINAL_IDS: readonly TerminalModelToolId[] = ['codex', 'opencode', 'pi']

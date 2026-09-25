@@ -1,4 +1,4 @@
-// Note: compressed handoff briefs — see .agents/notes/implemented/architecture/2026-09-18-handoff-brief.md
+// Note: compressed handoff briefs — see .agents/notes/2026-09-18-handoff-brief--a972542e.md
 /**
  * @file Task handoff brief (S8-JanusX, brief/spawn alignment P1).
  * @description Builds the compressed handoff a turn hands to its reviewer:

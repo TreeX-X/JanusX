@@ -47,7 +47,7 @@ export async function getRuntimeTelemetrySnapshot(
       : readOpenCodeBootstrapTelemetry(cwd)
   }
   // Note: janus/pi have no hook pipeline, so history + declared config are the
-  // only terminal-safe context sources — see .agents/notes/implemented/feature/2026-09-11-janus-pi-context-recognition.md
+  // only terminal-safe context sources — see .agents/notes/2026-09-11-janus-pi-context-recognition--e34329c5.md
   if (preset === 'janus') {
     return sessionId
       ? scanJanusHistory(cwd, startedAt, sessionId)
@@ -412,7 +412,7 @@ function pathsEqual(a: string, b: string): boolean {
   return normalizePath(a).toLowerCase() === normalizePath(b).toLowerCase()
 }
 
-// Note: Windows backslash vs provider forward-slash directory spellings must compare equal — see .agents/notes/implemented/bug-fix/2026-09-14-claude-opencode-context-telemetry.md
+// Note: Windows backslash vs provider forward-slash directory spellings must compare equal — see .agents/notes/2026-09-14-claude-opencode-context-telemetry--042a600f.md
 function normalizePath(value?: string): string {
   if (!value) return ''
   return value.replace(/\\/g, '/').replace(/\/+$/g, '')

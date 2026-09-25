@@ -23,7 +23,7 @@ interface AppSettingsModalProps {
 
 const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team', 'hosted']
 
-// Note: settings open/close mirrors the blueprint workbench card lifecycle — see .agents/notes/implemented/feature/2026-09-18-settings-workbench-transition.md
+// Note: settings open/close mirrors the blueprint workbench card lifecycle — see .agents/notes/2026-09-18-settings-workbench-transition--5a07c410.md
 const SETTINGS_CARD_ENTER_DURATION_MS = 260
 const SETTINGS_EXIT_BUFFER_MS = 60
 const SETTINGS_EXIT_MS = SETTINGS_CARD_ENTER_DURATION_MS + SETTINGS_EXIT_BUFFER_MS

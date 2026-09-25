@@ -446,7 +446,7 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/implemented/bug-fix/2026-09-21-workbench-close-hit-slop.md */
+/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
 .closeButton {
   position: relative;
   width: 14px;

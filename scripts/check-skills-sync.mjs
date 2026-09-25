@@ -1,4 +1,4 @@
-// Note: dual-end sync gate lives here — see .agents/notes/implemented/process/2026-09-19-note-mechanical-checks.md
+// Note: dual-end sync gate lives here — see .agents/notes/2026-09-19-note-mechanical-checks--3b7d1e9b.md
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join as joinPath } from 'node:path'

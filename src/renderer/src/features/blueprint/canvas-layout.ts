@@ -1,6 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'
+import { buildEffectiveHierarchy } from './canvas-navigation'
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2, critical: 3 } as const
 const SEVERITY_LABEL = ['低', '中', '高', '严重'] as const
@@ -11,14 +12,7 @@ interface BlueprintGraphIndex {
 }
 
 function buildBlueprintGraphIndex(blueprint: Blueprint): BlueprintGraphIndex {
-  const childrenByParent = new Map<string, string[]>()
-  for (const id of blueprint.nodeIds) {
-    const parentId = blueprint.nodes[id]?.parentId
-    if (!parentId || !blueprint.nodes[parentId]) continue
-    const children = childrenByParent.get(parentId) ?? []
-    children.push(id)
-    childrenByParent.set(parentId, children)
-  }
+  const { childrenByParent } = buildEffectiveHierarchy(blueprint.nodes)
   const descendantsById = new Map<string, BlueprintNode[]>()
   const collect = (id: string): BlueprintNode[] => {
     const cached = descendantsById.get(id)
@@ -35,25 +29,6 @@ function buildBlueprintGraphIndex(blueprint: Blueprint): BlueprintGraphIndex {
   return { childrenByParent, descendantsById }
 }
 
-function descendantsOf(blueprint: Blueprint, nodeId: string, index?: BlueprintGraphIndex): BlueprintNode[] {
-  if (index) return index.descendantsById.get(nodeId) ?? []
-  const descendants: BlueprintNode[] = []
-  const childrenByParent = new Map<string, BlueprintNode[]>()
-  for (const id of blueprint.nodeIds) {
-    const node = blueprint.nodes[id]
-    if (!node?.parentId) continue
-    const siblings = childrenByParent.get(node.parentId) ?? []
-    siblings.push(node)
-    childrenByParent.set(node.parentId, siblings)
-  }
-  const visit = (id: string) => {
-    const children = childrenByParent.get(id) ?? []
-    for (const child of children) { descendants.push(child); visit(child.id) }
-  }
-  visit(nodeId)
-  return descendants
-}
-
 export function deriveBlueprintCardData(
   blueprint: Blueprint,
   node: BlueprintNode,
@@ -61,13 +36,14 @@ export function deriveBlueprintCardData(
   focused: boolean,
   focusActive: boolean,
   collapsed: boolean,
-  index?: BlueprintGraphIndex,
+  index: BlueprintGraphIndex = buildBlueprintGraphIndex(blueprint),
 ): BlueprintNodeData {
   const openIssues = (node.issues ?? []).filter((issue) => issue.status === 'open')
   const highestSeverity = openIssues.reduce((highest, issue) => Math.max(highest, SEVERITY_RANK[issue.severity]), -1)
   const latest = node.analyses?.at(-1)
   const analysisAge = latest ? Math.max(0, Math.round((Date.now() - new Date(latest.createdAt).getTime()) / 86400000)) : 0
-  const descendants = collapsed ? descendantsOf(blueprint, node.id, index) : []
+  const descendants = collapsed ? index.descendantsById.get(node.id) ?? [] : []
+  const children = index.childrenByParent.get(node.id) ?? []
   const subtreeOpenIssues = descendants.flatMap((item) => item.issues ?? []).filter((issue) => issue.status === 'open')
   const subtreeDone = descendants.filter((item) => item.status === 'done').length
   return {
@@ -78,9 +54,9 @@ export function deriveBlueprintCardData(
     progress: node.progress,
     workspaceName: node.workspaceId ? workspaceNameById[node.workspaceId] ?? node.workspaceSnapshot?.name ?? null : null,
     boundTerminalId: node.boundTerminalId,
-    childCount: (node.children ?? []).filter((childId) => blueprint.nodes[childId]).length,
+    childCount: children.length,
     collapsed,
-    childSummary: node.children?.length ? `${node.children.filter((id) => blueprint.nodes[id]?.status === 'done').length}/${node.children.length} 子项完成` : undefined,
+    childSummary: children.length ? `${children.filter((id) => blueprint.nodes[id]?.status === 'done').length}/${children.length} 子项完成` : undefined,
     issueSummary: openIssues.length ? `${openIssues.length} 问题 · ${SEVERITY_LABEL[highestSeverity]}` : undefined,
     blockedReason: node.status === 'blocked' ? (openIssues[0]?.title || '状态阻塞') : undefined,
     analysisSummary: latest ? `分析 ${Math.round((latest.result.confidence ?? 0) * 100)}% · ${analysisAge === 0 ? '今日' : `${analysisAge}天前`}` : undefined,
@@ -100,6 +76,7 @@ const GRID_ROW_GAP = 48
 const SUBTREE_GAP = 64
 /** 独立根树之间的间距 */
 const ROOT_GAP = 120
+const ROOT_MAX_COLS = 4
 const GRID_MAX_COLS = 4
 const ROW_PITCH = NODE_H + Y_GAP
 const GRID_ROW_PITCH = NODE_H + GRID_ROW_GAP
@@ -129,24 +106,19 @@ export function computeBlueprintLayout(
   rootNodeId: string,
   canvasLayout: Blueprint['canvasLayout'],
 ): Record<string, { x: number; y: number }> {
-  const childrenOf: Record<string, string[]> = {}
-  const roots: string[] = []
-  for (const id of Object.keys(nodes)) {
-    const parentId = nodes[id].parentId
-    if (parentId && nodes[parentId]) (childrenOf[parentId] ??= []).push(id)
-    else roots.push(id)
-  }
+  const { childrenByParent, roots } = buildEffectiveHierarchy(nodes)
   roots.sort((a, b) => (a === rootNodeId ? -1 : b === rootNodeId ? 1 : 0))
 
   const splitChildren = (id: string) => {
-    const children = childrenOf[id] ?? []
+    const children = childrenByParent.get(id) ?? []
     return {
-      branches: children.filter((childId) => (childrenOf[childId] ?? []).length > 0),
-      leaves: children.filter((childId) => (childrenOf[childId] ?? []).length === 0)
+      branches: children.filter((childId) => (childrenByParent.get(childId)?.length ?? 0) > 0),
+      leaves: children.filter((childId) => (childrenByParent.get(childId)?.length ?? 0) === 0)
     }
   }
 
   const widths: Record<string, number> = {}
+  const heights: Record<string, number> = {}
   const measure = (id: string): number => {
     const { branches, leaves } = splitChildren(id)
     const units = branches.map(measure)
@@ -154,14 +126,16 @@ export function computeBlueprintLayout(
     widths[id] = units.length
       ? Math.max(NODE_W, units.reduce((sum, width) => sum + width, 0) + SUBTREE_GAP * (units.length - 1))
       : NODE_W
+    const childHeights = branches.map((childId) => heights[childId])
+    if (leaves.length) childHeights.push(NODE_H + (Math.ceil(leaves.length / gridColumns(leaves.length)) - 1) * GRID_ROW_PITCH)
+    heights[id] = childHeights.length ? ROW_PITCH + Math.max(...childHeights) : NODE_H
     return widths[id]
   }
 
   const positions: Record<string, { x: number; y: number }> = {}
-  const place = (id: string, left: number, depth: number): void => {
+  const place = (id: string, left: number, y: number): void => {
     const width = widths[id]
     const { branches, leaves } = splitChildren(id)
-    const y = depth * ROW_PITCH
     if (!branches.length && !leaves.length) {
       positions[id] = { x: left + (width - NODE_W) / 2, y }
       return
@@ -177,7 +151,7 @@ export function computeBlueprintLayout(
       extentRight = Math.max(extentRight, x + NODE_W)
     }
     for (const childId of branches) {
-      place(childId, cursor, depth + 1)
+      place(childId, cursor, y + ROW_PITCH)
       track(positions[childId].x)
       cursor += widths[childId] + SUBTREE_GAP
     }
@@ -186,7 +160,7 @@ export function computeBlueprintLayout(
       leaves.forEach((leafId, index) => {
         const position = {
           x: cursor + (index % cols) * (NODE_W + X_GAP),
-          y: (depth + 1) * ROW_PITCH + Math.floor(index / cols) * GRID_ROW_PITCH
+          y: y + ROW_PITCH + Math.floor(index / cols) * GRID_ROW_PITCH
         }
         positions[leafId] = position
         track(position.x)
@@ -195,14 +169,28 @@ export function computeBlueprintLayout(
     positions[id] = { x: (extentLeft + extentRight) / 2 - NODE_W / 2, y }
   }
 
+  roots.forEach(measure)
+  // Pack whole tree bounds onto shelves; the tallest tree controls row height.
+  const area = roots.reduce((sum, id) => sum + (widths[id] + ROOT_GAP) * (heights[id] + ROOT_GAP), 0)
+  const rowWidth = Math.max(NODE_W, ...roots.map((id) => widths[id]), Math.sqrt(area * 1.6) - ROOT_GAP)
   let rootLeft = 0
+  let rootTop = 0
+  let rowHeight = 0
+  let columns = 0
   for (const rootId of roots) {
-    measure(rootId)
-    place(rootId, rootLeft, 0)
+    if (columns && (columns >= ROOT_MAX_COLS || rootLeft + widths[rootId] > rowWidth)) {
+      rootLeft = 0
+      rootTop += rowHeight + ROOT_GAP
+      rowHeight = 0
+      columns = 0
+    }
+    place(rootId, rootLeft, rootTop)
     rootLeft += widths[rootId] + ROOT_GAP
+    rowHeight = Math.max(rowHeight, heights[rootId])
+    columns++
   }
-  for (const id of Object.keys(canvasLayout)) {
-    if (nodes[id] && canvasLayout[id]) positions[id] = canvasLayout[id]
+  for (const id of Object.keys(canvasLayout ?? {})) {
+    if (nodes[id] && canvasLayout?.[id]) positions[id] = canvasLayout[id]
   }
   return positions
 }
@@ -224,10 +212,13 @@ export function collectSubtreeIds(blueprint: Blueprint, nodeId: string): Set<str
 export function collectHiddenNodeIds(blueprint: Blueprint, collapsedNodeIds: Set<string>): Set<string> {
   const hidden = new Set<string>()
   const childrenByParent = buildBlueprintGraphIndex(blueprint).childrenByParent
-  const hideDescendants = (id: string) => (childrenByParent.get(id) ?? []).forEach((childId) => {
-    if (!hidden.has(childId)) { hidden.add(childId); hideDescendants(childId) }
-  })
-  collapsedNodeIds.forEach(hideDescendants)
+  const queue = [...collapsedNodeIds]
+  while (queue.length) {
+    const id = queue.shift()!
+    for (const childId of childrenByParent.get(id) ?? []) {
+      if (!hidden.has(childId)) { hidden.add(childId); queue.push(childId) }
+    }
+  }
   return hidden
 }
 
@@ -242,10 +233,13 @@ export function computeVisibleBlueprintLayout(
   const cached = layoutCache.get(blueprint)?.get(signature)
   if (cached) return cached
   const hidden = new Set<string>()
-  const hideDescendants = (id: string) => (index.childrenByParent.get(id) ?? []).forEach((childId) => {
-    if (!hidden.has(childId)) { hidden.add(childId); hideDescendants(childId) }
-  })
-  collapsedNodeIds.forEach(hideDescendants)
+  const queue = [...collapsedNodeIds]
+  while (queue.length) {
+    const id = queue.shift()!
+    for (const childId of index.childrenByParent.get(id) ?? []) {
+      if (!hidden.has(childId)) { hidden.add(childId); queue.push(childId) }
+    }
+  }
   const visibleNodes: Record<string, BlueprintNode> = {}
   for (const id of blueprint.nodeIds) {
     if (!hidden.has(id) && blueprint.nodes[id]) visibleNodes[id] = blueprint.nodes[id]

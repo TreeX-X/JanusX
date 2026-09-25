@@ -1,6 +1,6 @@
 // Pure resolver for workspace-local preview assets (no React, no Electron).
 // Testable under node; the IPC-backed loader lives in components/viewers/local-asset.tsx.
-// Note: leading `/` means workspace-root while a workspace is known — see .agents/notes/implemented/bug-fix/2026-09-18-markdown-preview-local-assets.md
+// Note: leading `/` means workspace-root while a workspace is known — see .agents/notes/2026-09-18-markdown-preview-local-assets--64286344.md
 
 export const LOCAL_ASSET_MAX_BYTES = 8 * 1024 * 1024
 

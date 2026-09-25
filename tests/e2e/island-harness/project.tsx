@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client'
 import { JanusChatProvider, useJanusChatController, useOptionalJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import { BlueprintMaintenancePanel } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
+import { BlueprintWorkbench } from '../../../src/renderer/src/components/blueprint/BlueprintWorkbench'
+import { createWorkbenchGraph, installWorkbenchBoundary } from './workbench-fixture'
 import { HarnessRunPanel } from '../../../src/renderer/src/components/janus/HarnessRunPanel'
 import { useBlueprintStore } from '../../../src/renderer/src/stores/blueprint'
 import { installMaintenanceFixture } from './maintenance-fixture'
@@ -17,6 +19,7 @@ import '../../../src/renderer/src/components/janus/janus-island.css'
 import '../../../src/renderer/src/components/blueprint/blueprint.css'
 
 installElectronApiFallback()
+const workbench = new URLSearchParams(location.search).has('workbench')
 Object.assign(window.electron.system, { getLanguage: async () => 'en', setLanguage: async () => undefined })
 const repoId = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 const id = '44444444-4444-4333-8333-444444444444'
@@ -28,6 +31,7 @@ for (const key of ['delete-a', 'delete-b']) {
   blueprint.nodeIds.push(key)
   blueprint.nodes[key] = { ...blueprint.nodes[id], id: key, title: key, sourceUri: `note://${repoId}/${key}` }
 }
+if (workbench) Object.assign(blueprint, createWorkbenchGraph(repoId, id, workspace))
 const secondWorkspace = { ...workspace, id: 'ws-b', path: 'C:/fixture-b', name: 'Checkout B' }
 const twoCheckouts = new URLSearchParams(location.search).has('two-checkouts')
 const workspaces = twoCheckouts ? [workspace, secondWorkspace] : [workspace]
@@ -220,6 +224,7 @@ Object.assign(window.electron.harness, {
 })
 
 const maintenance = installMaintenanceFixture(blueprint as never, workspace)
+if (workbench) installWorkbenchBoundary(maintenance.graph, workspace.path)
 if (twoCheckouts) maintenance.checkoutViews[secondWorkspace.path] = {
   ...blueprint, id: blueprint.id + ':checkout-b', nodeIds: [id], nodes: { [id]: { ...blueprint.nodes[id], title: 'Task checkout B', sourceHash: 'd'.repeat(64) } }, composition: undefined,
 } as never
@@ -259,7 +264,7 @@ function App() {
   </main>
 }
 async function boot() {
-  await initI18n(); await changeLanguage('en')
-  ReactDOM.createRoot(document.getElementById('root')!).render(<JanusChatProvider><App /></JanusChatProvider>)
+  await initI18n(); await changeLanguage(workbench ? 'zh-CN' : 'en')
+  ReactDOM.createRoot(document.getElementById('root')!).render(<JanusChatProvider>{workbench ? <BlueprintWorkbench isOpen onClose={() => {}} /> : <App />}</JanusChatProvider>)
 }
 void boot()

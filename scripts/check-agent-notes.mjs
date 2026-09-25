@@ -1,7 +1,9 @@
-// Note: mechanical noteX gate lives here — see .agents/notes/implemented/process/2026-09-19-note-mechanical-checks.md
+// Note: mechanical noteX gate lives here — see .agents/notes/2026-09-19-note-mechanical-checks--3b7d1e9b.md
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, normalize, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseNote, validateNote, splitFrontmatter } from '@janus-agent/harness-core'
+import { markdownDestinations, relativeLinkTarget } from './migrate-agent-notes.mjs'
 
 export const LIFECYCLES = ['proposed', 'implemented', 'rejected', 'archived']
 export const CLASSES = ['feature', 'bug-fix', 'architecture', 'process', 'testing', 'simplification']
@@ -39,6 +41,7 @@ function walk(dir, out = []) {
 }
 
 function isHarnessNote(text) {
+  text = text.replace(/^\uFEFF/, '')
   if (!text.startsWith('---')) return false
   const end = text.indexOf('\n---', 3)
   if (end === -1) return false
@@ -54,18 +57,40 @@ function parseSections(text) {
   return sections
 }
 
-function extractLinks(text) {
-  const links = []
-  const re = /\[([^\]]*)\]\(([^)]+)\)/g
-  let m
-  while ((m = re.exec(text))) links.push(m[2].trim())
-  return links
+// Fixed pre-organization defects, pinned to Note identity and exact target.
+export const PREEXISTING_LINKS = new Map([
+  [
+    "5996294e-e9e3-5408-8239-b1a8bb24b616:pelican-bicycle.html",
+    "Unresolved at baseline d59d9a8; retained as an explicit diagnostic, no target invented."
+  ]
+])
+function checkLinks(root, relPath, body, id, errors, diagnostics) {
+  for (const link of markdownDestinations(body)) {
+    let target
+    try { target = relativeLinkTarget(root, relPath, link.destination) }
+    catch { errors.push(relPath + ': invalid relative link ' + link.destination); continue }
+    if (!target) continue
+    const local = relative(resolve(root), target).replaceAll('\\', '/')
+    if (local === '..' || local.startsWith('../')) {
+      diagnostics.push({ code: existsSync(target) ? 'external-link' : 'unresolved-external-link', path: relPath, destination: link.destination, target: local })
+      continue
+    }
+    if (!existsSync(target)) {
+      const reason = PREEXISTING_LINKS.get(id + ':' + local)
+      if (reason) diagnostics.push({ code: 'known-broken-link', path: relPath, destination: link.destination, target: local, reason })
+      else errors.push(relPath + ': broken relative link ' + link.destination)
+    }
+  }
 }
 
 export function checkNotes(root = process.cwd()) {
+  root = resolve(root)
   const notesDir = join(root, '.agents', 'notes')
   const errors = []
-  if (!existsSync(notesDir)) return { errors: ['missing .agents/notes directory'], checked: 0 }
+  const diagnostics = []
+  let harnessChecked = 0
+  const identities = new Set()
+  if (!existsSync(notesDir)) return { errors: ['missing .agents/notes directory'], checked: 0, harnessChecked: 0, diagnostics }
 
   const files = walk(notesDir)
   for (const f of files) {
@@ -83,8 +108,17 @@ export function checkNotes(root = process.cwd()) {
     const parts = rest.split('/')
     const text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
 
-    // New-shape harness assets are validated by harness-core unit tests, not this gate.
-    if (isHarnessNote(text)) continue
+    if (isHarnessNote(text)) {
+      harnessChecked++
+      try {
+        const parsed = parseNote(text)
+        for (const diagnostic of validateNote(parsed)) errors.push(relPath + ': ' + diagnostic.message)
+        if (identities.has(parsed.meta.id)) errors.push(relPath + ': duplicate Note identity ' + parsed.meta.id)
+        identities.add(parsed.meta.id)
+        checkLinks(root, relPath, splitFrontmatter(text).body, parsed.meta.id, errors, diagnostics)
+      } catch (error) { errors.push(relPath + ': ' + error.message) }
+      continue
+    }
 
     if (parts.length !== 3) {
       errors.push(`${relPath}: path depth must be .agents/notes/{lifecycle}/{class}/file.md`)
@@ -150,18 +184,7 @@ export function checkNotes(root = process.cwd()) {
       errors.push(`${relPath}: missing ## Alternatives considered`)
     }
 
-    // Relative links resolve (in-repo only; sibling-checkout links can't verify here).
-    const noteDir = dirname(file)
-    const repoRoot = resolve(root)
-    for (const target of extractLinks(text)) {
-      if (/^(https?:|note:\/\/|#|mailto:)/i.test(target)) continue
-      const bare = target.split('#')[0].trim()
-      if (!bare || !bare.includes('.md')) continue
-      if (/^[a-zA-Z]+:/.test(bare)) continue
-      const abs = normalize(resolve(noteDir, bare))
-      if (!abs.startsWith(repoRoot)) continue
-      if (!existsSync(abs)) errors.push(`${relPath}: broken relative link ${target}`)
-    }
+    checkLinks(root, relPath, text, null, errors, diagnostics)
 
     // Provenance pins: no Parent/Child numbers, PR numbers, version pins.
     const body = lines.slice(3).join('\n')
@@ -175,7 +198,7 @@ export function checkNotes(root = process.cwd()) {
     }
   }
 
-  return { errors, checked }
+  return { errors, checked, harnessChecked, diagnostics }
 }
 
 function rel(root, abs) {
@@ -185,12 +208,13 @@ function rel(root, abs) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const { errors, checked } = checkNotes()
+  const { errors, checked, harnessChecked, diagnostics } = checkNotes()
+  for (const d of diagnostics) console.warn(JSON.stringify(d))
   if (errors.length) {
-    console.error(`agent-notes check failed (${checked} notes, ${errors.length} errors):`)
+    console.error('agent-notes check failed: ' + checked + ' legacy + ' + harnessChecked + ' harness Notes, ' + errors.length + ' errors')
     for (const e of errors) console.error(`  - ${e}`)
     process.exitCode = 1
   } else {
-    console.log(`Agent notes verified: ${checked} old-shape notes, 0 errors (harness-note/1 files covered by unit tests).`)
+    console.log('Agent notes verified: ' + checked + ' legacy + ' + harnessChecked + ' harness Notes, 0 errors, ' + diagnostics.length + ' explicit link diagnostics.')
   }
 }

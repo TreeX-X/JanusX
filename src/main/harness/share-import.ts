@@ -1,4 +1,4 @@
-// Note: share import lands twin-checkout snapshots here — see .agents/notes/implemented/architecture/2026-09-19-share-import.md
+// Note: share import lands twin-checkout snapshots here — see .agents/notes/2026-09-19-share-import--eece2e89.md
 /**
  * @file Share import planning (J3-JanusX).
  * @description Pure planner for applying an exported harness snapshot into

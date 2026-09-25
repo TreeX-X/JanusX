@@ -60,7 +60,7 @@ function formatSize(bytes: number): string {
 // Note: windowed session reading with orca-aligned preview layers — internal
 // turns keep scoped checkpoints with inline diff, external rows stay
 // transcript-only — see
-// .agents/notes/implemented/feature/2026-09-22-session-windowed-reading.md
+// .agents/notes/2026-09-22-session-windowed-reading--e968d1ae.md
 
 /** Provider resume command for external rows (orca parity); null when the engine has no known resume shape. */
 function buildResumeCommand(session: AgentSessionSummary): string | null {
@@ -110,7 +110,7 @@ export function SessionPanel() {
   const scopePath = activeWorktreePath ?? activeWorkspace?.path ?? null
   const activeWorktree = worktrees.find((w) => w.path === scopePath) ?? null
   const setUiForPath = useWorktreeStore((s) => s.setUiForPath)
-  // Note: single card expand subscribes to uiByPath so timeline toggles re-render — see .agents/notes/implemented/bug-fix/2026-09-22-session-checkpoint-expand.md
+  // Note: single card expand subscribes to uiByPath so timeline toggles re-render — see .agents/notes/2026-09-22-session-checkpoint-expand--d216f355.md
   const expandedId = useWorktreeStore((s) =>
     scopePath ? (s.uiByPath[scopePath]?.expandedSessionId ?? null) : null,
   )
@@ -121,7 +121,7 @@ export function SessionPanel() {
   const [allCounts, setAllCounts] = useState<{ all: number; archived: number } | null>(null)
   // Note: open-card live refresh follows the same session:event — debounced
   // so submit/checkpoint/turn bursts reload the timeline once — see
-  // .agents/notes/implemented/feature/2026-09-22-session-timeline-live.md
+  // .agents/notes/2026-09-22-session-timeline-live--2b60cc2c.md
   const [timelineTick, setTimelineTick] = useState(0)
 
   useEffect(() => {
@@ -399,12 +399,12 @@ function baseNameOf(path: string): string {
 
 // Note: session-owned checkpoints with review-gated restore absorb the retired
 // standalone checkpoints tool — see
-// .agents/notes/implemented/feature/2026-09-21-session-checkpoint-migration.md
+// .agents/notes/2026-09-21-session-checkpoint-migration--bb3ef36c.md
 
 // Note: unified turn timeline follows HiFi v5 — one expand owns Q/A plus the
 // bound checkpoint strip, file lists stay collapsed, diff opens in a
 // traffic-bar modal — see
-// .agents/notes/implemented/feature/2026-09-23-session-timeline-v5.md
+// .agents/notes/2026-09-22-session-timeline-v5--e782007f.md
 
 /**
  * Traffic-light title bar shared by the session modals. Matches the

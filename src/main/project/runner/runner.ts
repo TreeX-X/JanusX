@@ -61,7 +61,7 @@ export interface ExitedAdhocProject {
 const WINDOWS_SHELL_COMMANDS = new Set(['npm', 'yarn', 'pnpm', 'bun'])
 const WINDOWS_SHELL_META = /[&|<>^\r\n]/
 
-// Note: 后台 adhoc 与同步 command.run 共享 shell 判定，启动失败落盘、win32 整树强杀 — see .agents/notes/implemented/bug-fix/2026-09-14-adhoc-shell-parity.md
+// Note: 后台 adhoc 与同步 command.run 共享 shell 判定，启动失败落盘、win32 整树强杀 — see .agents/notes/2026-09-14-adhoc-shell-parity--4f9cb92a.md
 
 /*-- 不完整行缓冲上限：长期无换行的输出（单行 JSON 流等）保尾截断，防止无界增长（audit M3） --*/
 const MAX_OUTPUT_LINE_BUFFER_CHARS = 256 * 1024

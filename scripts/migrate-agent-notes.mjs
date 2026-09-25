@@ -1,14 +1,16 @@
 // Note: migration preserves source facts — see .agents/notes/2026-09-25-note-blueprint-r2-read--fa17e06b.md
 import { createHash } from 'node:crypto'
 import { readFile, mkdir, writeFile, lstat } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, resolve, relative, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { parseDocument, stringify } from 'yaml'
+import { fromMarkdown } from 'mdast-util-from-markdown'
 import { parseNote, validateNote, readMarkdownView, splitFrontmatter, UUID_RE } from '@janus-agent/harness-core'
 import { buildNoteIndex, readIndexedNote, sha256HexBytes, acquireLock, releaseLock, commitAssetFiles, assertAssetPath, listPendingTx, readCommitted } from '@janus-agent/harness-node'
 
 export const REPORT_SCHEMA = 'r2-note-migration/1'
+export const FLAT_REPORT_SCHEMA = 'r6-note-flat-migration/1'
 const hash = (text) => sha256HexBytes(Buffer.from(text, 'utf8'))
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const fail = (message) => { throw new Error(message) }
@@ -26,7 +28,7 @@ export function legacyId(repoId, relPath) {
 }
 
 // Shared splitFrontmatter owns syntax; this slice preserves bytes it normalizes.
-function sourceParts(raw) {
+export function sourceParts(raw) {
   if (!/^\uFEFF?---[ \t]*(?:\r?\n|$)/.test(raw)) return { prefix: '', body: raw, fmText: null }
   const { fmText } = splitFrontmatter(raw)
   const lines = [...raw.matchAll(/[^\n]*(?:\n|$)/g)]
@@ -271,10 +273,239 @@ export async function applyPreview(root, report, selectedPaths) {
   } finally { await releaseLock(root, lock) }
 }
 
+function flatName(relPath, raw) {
+  const { meta } = parseNote(raw)
+  // Preserve the human-authored date/topic instead of generating a title slug.
+  const stem = basename(relPath, '.md').replace(/--[a-f0-9]{8}$/i, '')
+  return stem + '--' + meta.id.slice(0, 8) + '.md'
+}
+
+/** Locate only CommonMark destinations, including image/reference definitions.
+ * AST offsets keep code, labels, whitespace and optional titles byte-for-byte. */
+export function markdownDestinations(body) {
+  const rows = []
+  function visit(node) {
+    if (['link', 'image', 'definition'].includes(node.type)) {
+      const start = node.position.start.offset
+      const end = node.position.end.offset
+      let cursor
+      if (node.type === 'definition') {
+        const prefix = /^ {0,3}\[(?:\\.|[^\]\\])*\]:\s*/.exec(body.slice(start, end))
+        if (!prefix) fail('Cannot locate Markdown definition destination')
+        cursor = start + prefix[0].length
+      } else {
+        const lastChild = node.children?.at(-1)?.position?.end.offset
+        // Children end at the label boundary; images have no child nodes.
+        let labelEnd
+        if (lastChild !== undefined) labelEnd = body.indexOf('](', lastChild)
+        else {
+          let depth = 0
+          for (let i = start + (node.type === 'image' ? 1 : 0); i < end; i++) {
+            if (body[i] === '\\') { i++; continue }
+            if (body[i] === '[') depth++
+            if (body[i] === ']' && --depth === 0) { labelEnd = i; break }
+          }
+        }
+        if (labelEnd === undefined || labelEnd < start || labelEnd >= end || body[labelEnd + 1] !== '(') {
+          // Autolinks cannot be relative destinations.
+          if (/^[a-z][a-z0-9+.-]*:/i.test(node.url)) return
+          fail('Cannot locate Markdown link destination')
+        }
+        cursor = labelEnd + 2
+        while (/\s/.test(body[cursor] ?? '') && cursor < end) cursor++
+      }
+      const angle = body[cursor] === '<'
+      if (angle) cursor++
+      const from = cursor
+      let depth = 0
+      while (cursor < end) {
+        const ch = body[cursor]
+        if (ch === '\\') { cursor += 2; continue }
+        if (angle ? ch === '>' : /\s/.test(ch) || (ch === ')' && depth === 0)) break
+        if (ch === '(') depth++
+        if (ch === ')') depth--
+        cursor++
+      }
+      rows.push({ destination: node.url, start: from, end: cursor, line: node.position.start.line })
+    }
+    for (const child of node.children ?? []) visit(child)
+  }
+  visit(fromMarkdown(body))
+  return rows.sort((a, b) => a.start - b.start)
+}
+
+export function relativeLinkTarget(root, sourcePath, destination) {
+  if (!destination || /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(destination)) return null
+  const split = destination.search(/[?#]/)
+  const path = split < 0 ? destination : destination.slice(0, split)
+  if (!path) return null
+  const decoded = decodeURIComponent(path)
+  return resolve(path.startsWith('/') ? root : dirname(resolve(root, sourcePath)), decoded.replace(/^\/+/, ''))
+}
+
+export function rewriteRelativeLinks(raw, oldPath, newPath, map, root) {
+  if (!root) fail('Explicit checkout root required for link rebasing')
+  const parts = sourceParts(raw)
+  let body = parts.body
+  for (const link of markdownDestinations(body).reverse()) {
+    const target = relativeLinkTarget(root, oldPath, link.destination)
+    if (!target) continue
+    const oldRel = relative(root, target).replaceAll('\\', '/')
+    const mapped = map.get(oldRel)
+    const rootRelative = link.destination.startsWith('/')
+    if (rootRelative && !mapped) continue
+    const next = rootRelative ? '/' + mapped : relative(dirname(resolve(root, newPath)), mapped ? resolve(root, mapped) : target).replaceAll('\\', '/')
+    // Keep original query/fragment spelling, including Markdown entity escapes.
+    const literal = body.slice(link.start, link.end)
+    const split = literal.search(/[?#]/)
+    const suffix = split < 0 ? '' : literal.slice(split)
+    const prefix = rootRelative || next.startsWith('.') ? next : './' + next
+    const dest = prefix.split('/').map(part => encodeURIComponent(part).replace(/[()]/g, ch => ch === '(' ? '%28' : '%29')).join('/') + suffix
+    body = body.slice(0, link.start) + dest + body.slice(link.end)
+  }
+  return parts.prefix + body
+}
+
+/** Mechanical display cleanup only. Disposition prose remains a visible fact. */
+export function normalizeNoteBody(raw) {
+  const parts = sourceParts(raw)
+  const lines = parts.body.split(/(?<=\n)/)
+  const edits = []
+  for (const h of readMarkdownView(parts.body).headings) {
+    if (h.depth === 1 && /^Agent Note:\s*/.test(h.text)) {
+      lines[h.line - 1] = lines[h.line - 1].replace(/^( {0,3}#\s+)Agent Note:\s*/, '$1')
+      edits.push('Removed redundant Agent Note title prefix')
+    }
+  }
+  const tree = fromMarkdown(parts.body)
+  for (const node of tree.children) {
+    if (node.type !== 'paragraph' || node.position.start.line !== node.position.end.line) continue
+    const line = node.position.start.line - 1
+    const match = /^Status:\s*(proposed|implemented|draft|accepted|archived|rejected)(?:\s*[\u2014\u2013-]\s*(.+))?\s*$/i.exec(lines[line].trim())
+    if (!match) continue
+    lines[line] = match[2] ? 'Historical disposition: ' + match[2].trim() + '\n' : ''
+    edits.push(match[2] ? 'Retained Status reason as historical disposition' : 'Removed lifecycle duplicated by frontmatter')
+  }
+  return { raw: parts.prefix + lines.join(''), edits }
+}
+
+export function preserveOrganizationSource(raw, before, sourcePath, details = {}) {
+  if (raw === before && !Object.keys(details).length) return raw
+  const parts = sourceParts(raw)
+  const doc = parseDocument(parts.fmText)
+  if (doc.hasIn(['extensions', 'r6Organization'])) fail('Existing organization provenance requires explicit review')
+  doc.setIn(['extensions', 'r6Organization'], {
+    sourcePath, sourceHash: hash(before), originalSourceBase64: Buffer.from(before, 'utf8').toString('base64'),
+    originalBodyHash: hash(sourceParts(before).body), ...details,
+  })
+  return (raw.startsWith('\uFEFF') ? '\uFEFF' : '') + '---\n' + doc.toString() + '---\n' + parts.body
+}
+
+/** Preview all Notes so inbound links in stationary files move with their targets. */
+export async function flattenNotes(root = process.cwd(), options = {}) {
+  root = resolve(root)
+  const index = await buildNoteIndex(root)
+  if (!index.repoId || index.coverage.status !== 'complete') fail('Incomplete inventory cannot be flattened')
+  const map = new Map()
+  const rows = []
+  const destinations = new Set()
+  for (const entry of index.entries) {
+    const read = await readIndexedNote(index, entry.relPath)
+    if (!read.ok || !read.matchesSnapshot || hash(read.text) !== read.sha256 || entry.classification !== 'valid') {
+      rows.push({ oldPath: entry.relPath, status: 'blocked', reason: 'Valid, unchanged roundtrippable UTF-8 Note required' })
+      continue
+    }
+    const next = entry.relPath.split('/').length > 3 ? '.agents/notes/' + flatName(entry.relPath, read.text) : entry.relPath
+    if (destinations.has(next) || (next !== entry.relPath && index.byPath.has(next))) {
+      rows.push({ oldPath: entry.relPath, newPath: next, status: 'blocked', reason: 'Destination collision' })
+      continue
+    }
+    destinations.add(next)
+    map.set(entry.relPath, next)
+    rows.push({ oldPath: entry.relPath, newPath: next, id: entry.note.meta.id, before: read.text, beforeHash: read.sha256 })
+  }
+  for (const row of rows.filter(row => !row.status)) {
+    const rewritten = rewriteRelativeLinks(row.before, row.oldPath, row.newPath, map, root)
+    row.after = rewritten !== row.before || row.oldPath !== row.newPath
+      ? preserveOrganizationSource(rewritten, row.before, row.oldPath, { operation: 'flatten' }) : row.before
+    row.afterHash = hash(row.after)
+    row.status = row.oldPath !== row.newPath || row.before !== row.after ? 'ready' : 'unchanged'
+  }
+  const report = { schema: FLAT_REPORT_SCHEMA, root, repoId: index.repoId, coverage: index.coverage,
+    counts: { total: rows.length, nested: rows.filter(r => r.oldPath.split('/').length > 3).length,
+      ready: rows.filter(r => r.status === 'ready').length, blocked: rows.filter(r => r.status === 'blocked').length }, rows }
+  if (options.apply) await applyFlattenPreview(root, report)
+  return report
+}
+
+/** Creates and deletes share one recoverable journal; all expected bytes are checked
+ * before staging. Unmanaged writers retain the shared writer's final-rename race. */
+export async function applyFlattenPreview(root, report) {
+  root = resolve(root)
+  if (report.schema !== FLAT_REPORT_SCHEMA || report.root !== root || report.coverage.status !== 'complete') fail('Invalid flatten preview checkout or coverage')
+  if (report.rows.some(row => row.status === 'blocked')) fail('Flatten inventory contains blocked rows')
+  await assertAssetPath(root, '.agents/.local/runs/.path-check')
+  const lock = await acquireLock(root)
+  try {
+    for (const tx of await listPendingTx(root)) {
+      if (!(await readCommitted(root, tx))?.committed) fail('Pending harness transaction requires recovery before migration')
+    }
+    const index = await buildNoteIndex(root)
+    if (index.repoId !== report.repoId || index.coverage.status !== 'complete') fail('Repository identity or coverage changed')
+    const files = []
+    const occupied = new Set()
+    for (const row of report.rows) {
+      await assertAssetPath(root, row.oldPath)
+      await assertAssetPath(root, row.newPath)
+      if (occupied.has(row.newPath)) fail('Destination collision: ' + row.newPath)
+      occupied.add(row.newPath)
+      if (hash(row.before) !== row.beforeHash || hash(row.after) !== row.afterHash) fail('Preview integrity mismatch')
+      const note = parseNote(row.after)
+      if (validateNote(note).length || note.meta.id !== row.id) fail('Invalid output Note or identity')
+      const prior = parseNote(row.before)
+      for (const key of ['id', 'created', 'parent', 'relations', 'codeRefs', 'work', 'execution', 'repositories', 'interfaces']) {
+        if (!equal(prior.meta[key], note.meta[key])) fail('Protected metadata changed: ' + key)
+      }
+      if (index.byPath.get(row.oldPath)?.classification !== 'valid') fail('Missing or conflicting current source: ' + row.oldPath)
+      const current = await readFile(resolve(root, row.oldPath))
+      if (sha256HexBytes(current) !== row.beforeHash || !current.equals(Buffer.from(current.toString('utf8'), 'utf8'))) fail('Source conflict: ' + row.oldPath)
+      if (row.oldPath !== row.newPath) {
+        try { await lstat(resolve(root, row.newPath)); fail('Destination collision: ' + row.newPath) } catch (e) { if (e.code !== 'ENOENT') throw e }
+        files.push({ path: row.newPath, before: null, after: row.after })
+      } else if (row.beforeHash !== row.afterHash) files.push({ path: row.oldPath, before: row.beforeHash, after: row.after })
+    }
+    for (const row of report.rows.filter(row => row.oldPath !== row.newPath)) files.push({ path: row.oldPath, before: row.beforeHash, after: null })
+    if (files.length) await commitAssetFiles(root, files)
+    for (const row of report.rows) {
+      if (sha256HexBytes(await readFile(resolve(root, row.newPath))) !== row.afterHash) fail('Post-apply hash mismatch: ' + row.newPath)
+    }
+    return { changed: report.rows.filter(row => row.oldPath !== row.newPath || row.beforeHash !== row.afterHash).length }
+  } finally { await releaseLock(root, lock) }
+}
+
 export async function main(args = process.argv.slice(2)) {
-  const { values } = parseArgs({ args, options: { root: { type: 'string', default: process.cwd() }, report: { type: 'string' }, apply: { type: 'string' }, select: { type: 'string', multiple: true }, help: { type: 'boolean' } } })
-  if (values.help) return console.log('Preview: node scripts/migrate-agent-notes.mjs --report .agents/.local/r2-migration-preview.json\nApply reviewed selection: node scripts/migrate-agent-notes.mjs --apply .agents/.local/r2-migration-preview.json --select .agents/notes/path.md [--select ...]\nPreview is the default. No selection means no apply. Helpers and blocked rows never count as migrated.')
+  const { values } = parseArgs({ args, options: { root: { type: 'string', default: process.cwd() }, report: { type: 'string' }, apply: { type: 'string' }, select: { type: 'string', multiple: true }, flatten: { type: 'boolean' }, commit: { type: 'boolean' }, help: { type: 'boolean' } } })
+  if (values.help) return console.log('Preview: node scripts/migrate-agent-notes.mjs --report .agents/.local/r2-migration-preview.json\nApply reviewed selection: node scripts/migrate-agent-notes.mjs --apply .agents/.local/r2-migration-preview.json --select .agents/notes/path.md [--select ...]\nFlatten preview: node scripts/migrate-agent-notes.mjs --root CHECKOUT --flatten [--report .agents/.local/r6-preview.json]\nApply flatten: node scripts/migrate-agent-notes.mjs --root CHECKOUT --flatten --commit\nPreview is the default; --commit requires --flatten. Helpers and blocked rows never count as migrated.')
+  if (values.commit && !values.flatten) fail('--commit requires --flatten')
+  if (values.flatten && (values.apply || values.select)) fail('--flatten cannot be combined with --apply/--select')
   const root = resolve(values.root)
+  if (values.flatten) {
+    const report = await flattenNotes(root)
+    if (values.report) {
+      const relPath = relative(root, resolve(root, values.report)).replaceAll('\\', '/')
+      if (!/^\.agents\/\.local\/r6-[\w.-]+\.json$/.test(relPath)) fail('Flatten report must be .agents/.local/r6-*.json inside the checkout')
+      for (const path of ['.agents', '.agents/.local', relPath]) {
+        try {
+          const stat = await lstat(resolve(root, path))
+          if (stat.isSymbolicLink() || (path === relPath ? !stat.isFile() || stat.nlink > 1 : !stat.isDirectory())) fail('Linked or non-regular report path: ' + path)
+        } catch (error) { if (error.code !== 'ENOENT') throw error }
+      }
+      await mkdir(resolve(root, '.agents/.local'), { recursive: true })
+      await writeFile(resolve(root, relPath), JSON.stringify(report, null, 2) + '\n', 'utf8')
+    }
+    if (values.commit) await applyFlattenPreview(root, report)
+    return console.log(JSON.stringify({ schema: report.schema, counts: report.counts, report: values.report ?? null, applied: values.commit === true }, null, 2))
+  }
   if (values.apply) {
     if (values.report) fail('--report and --apply are mutually exclusive')
     return console.log(JSON.stringify(await applyPreview(root, JSON.parse(await readFile(resolve(root, values.apply), 'utf8')), values.select ?? []), null, 2))

@@ -4,7 +4,7 @@
 // lands in app.asar and app.asar.unpacked: electron-builder's own binaries,
 // `electron`'s dist and the test toolchain were 612 MiB of a 301 MiB installer's
 // 870 MiB payload.
-// Note: entry — see .agents/notes/implemented/bug-fix/2026-09-20-packaged-runtime-size.md
+// Note: entry — see .agents/notes/2026-09-20-packaged-runtime-size--210d9ec3.md
 //
 // Usage:
 //   npm run exclusions:sync                  # rewrite the marked block in electron-builder.yml
