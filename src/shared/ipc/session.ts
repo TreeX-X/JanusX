@@ -123,6 +123,22 @@ export function buildProviderResumeCommand(
   return `${engine} ${args.join(' ')}`
 }
 
+/**
+ * Native-resume argv for Continue in New Session on internal rows.
+ * Only opencode re-enters its provider session id today: the typed handoff is
+ * lossy there (fixed-delay delivery into a slow TUI drops it), while
+ * `opencode --session` restores full history. Engine switches and rows without
+ * a resumable id return null so the caller keeps the focused handoff.
+ */
+export function buildContinueResumeArgs(
+  source: { engine: string; providerSessionId?: string; transcriptPath?: string },
+  targetEngine?: string,
+): string[] | null {
+  if (source.engine !== 'opencode') return null
+  if (targetEngine !== undefined && targetEngine !== source.engine) return null
+  return buildProviderResumeArgs(source.engine, source.providerSessionId, source.transcriptPath)
+}
+
 export interface SessionAPI {
   list(filter?: SessionFilter): Promise<AgentSessionSummary[]>
   get(sessionId: string): Promise<AgentSessionDetail | null>

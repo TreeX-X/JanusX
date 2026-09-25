@@ -4,6 +4,7 @@ import { terminalManager } from '../terminal/manager'
 import { checkpointManager } from '@janus-agent/agent-core'
 import type { CheckpointEngine } from '@janus-agent/agent-core'
 import { agentSessionRegistry, type AgentSessionRecord } from '../sessions/session-registry'
+import { probeOpencodeSessionPresence } from '../sessions/opencode-sessions'
 import { analyzer } from '../janus/analyzer'
 import { isTerminalPreset, resolveTerminalLaunchProgram } from '../../shared/terminalLaunch'
 import { resolveCLIPath } from '../janus-runner/cli-resolver'
@@ -12,7 +13,7 @@ import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
 import { AgentHookConfigManager } from '../notifications/agent-hook-config'
 import { AgentHookCoordinator, getRawString } from '../notifications/agent-hook-coordinator'
-import { AGENT_ENGINE_CAPABILITIES } from '../notifications/agent-engine-capabilities'
+import { AGENT_ENGINE_CAPABILITIES, resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
 import { AgentTurnSentinel } from '../notifications/agent-turn-sentinel'
 import {
   JANUSX_SYNTHETIC_HOOK_EVENTS,
@@ -45,7 +46,7 @@ import {
 } from '../../shared/ipc/terminal'
 import { AGENT_CHANNELS } from '../../shared/ipc/janus-runner'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
-import { buildProviderResumeArgs } from '../../shared/ipc/session'
+import { buildContinueResumeArgs, buildProviderResumeArgs } from '../../shared/ipc/session'
 import { companionSessionState } from '../companion/session-state'
 import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
 import { terminalContextCoordinator } from '../runtime-telemetry/coordinator'
@@ -114,6 +115,7 @@ let continueSessionImpl:
   | null = null
 
 /** Continue in New Session: fresh terminal plus focused handoff for one task. */
+// Note: internal opencode rows resume natively via --session instead — see .agents/notes/2026-09-25-opencode-continue-native-resume--3a976752.md
 export function continueAgentSession(
   sessionId: string,
   opts?: ContinueSessionOptions,
@@ -152,6 +154,24 @@ function buildContinueHandoff(source: AgentSessionRecord): string {
   const lastCheckpoint = source.checkpointIds.at(-1)
   if (lastCheckpoint) parts.push(`还原点：${lastCheckpoint.slice(0, 8)}。`)
   return parts.join('')
+}
+
+/**
+ * Preflight for opencode native resume: the sqlite store opens but the id is
+ * gone, so spawning `--session` would land in a silent fresh session instead
+ * of reporting the miss. Unresolvable stores and locked/unreadable databases
+ * fail open so resume is never blocked on a probe.
+ */
+function assertOpencodeResumeAvailable(source: AgentSessionRecord): void {
+  if (source.engine !== 'opencode' || !source.providerSessionId) return
+  const store = resolveSessionStorePath('opencode')
+  if (!store) return
+  const presence = probeOpencodeSessionPresence(store, source.providerSessionId)
+  if (presence === 'absent') {
+    throw new Error(
+      `Opencode session ${source.providerSessionId} is no longer in the session store; copy the resume command to retry manually`,
+    )
+  }
 }
 
 /**
@@ -1119,6 +1139,45 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       throw error
     }
   }
+  // Provider-native resume spawn shared by external rows and internal opencode
+  // rows with a resumable id: the recorded engine preset starts in the recorded
+  // cwd with the resume argv appended, so hook wiring follows the engine and
+  // turns track live from the resume point. A failed spawn archives the empty
+  // row instead of leaving a ghost card.
+  const spawnResumeTerminal = async (
+    source: AgentSessionRecord,
+    resumeArgs: string[],
+    shell: string,
+  ): Promise<{ sessionId: string; terminalId: string }> => {
+    const preset = isTerminalPreset(source.engine) ? source.engine : undefined
+    const terminalId = randomUUID()
+    const record = agentSessionRegistry.createSession({
+      terminalId,
+      workspaceId: source.workspaceId,
+      engine: source.engine,
+      cwd: source.cwd,
+      shell,
+      preset,
+      branch: source.branch,
+      providerSessionId: source.providerSessionId,
+      transcriptPath: source.transcriptPath,
+      continuedFrom: source.id,
+    })
+    try {
+      await createTerminalLifecycle({
+        id: terminalId,
+        workspaceId: source.workspaceId || undefined,
+        cwd: source.cwd,
+        shell,
+        preset,
+        extraArgs: resumeArgs,
+      })
+    } catch (err) {
+      agentSessionRegistry.archiveSession(record.id)
+      throw err
+    }
+    return { sessionId: record.id, terminalId }
+  }
   companionTerminalCreator = createTerminalLifecycle
   continueSessionImpl = async (sessionId, opts) => {
     const source = agentSessionRegistry.getSession(sessionId)
@@ -1132,35 +1191,17 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       if (!resumeArgs) {
         throw new Error(`Resume is not supported for engine: ${source.engine}`)
       }
-      const shell = getDefaultShell()
-      const preset = isTerminalPreset(source.engine) ? source.engine : undefined
-      const terminalId = randomUUID()
-      const record = agentSessionRegistry.createSession({
-        terminalId,
-        workspaceId: source.workspaceId,
-        engine: source.engine,
-        cwd: source.cwd,
-        shell,
-        preset,
-        branch: source.branch,
-        providerSessionId: source.providerSessionId,
-        transcriptPath: source.transcriptPath,
-        continuedFrom: source.id,
-      })
-      try {
-        await createTerminalLifecycle({
-          id: terminalId,
-          workspaceId: source.workspaceId || undefined,
-          cwd: source.cwd,
-          shell,
-          preset,
-          extraArgs: resumeArgs,
-        })
-      } catch (err) {
-        agentSessionRegistry.archiveSession(record.id)
-        throw err
-      }
-      return { sessionId: record.id, terminalId }
+      assertOpencodeResumeAvailable(source)
+      return spawnResumeTerminal(source, resumeArgs, getDefaultShell())
+    }
+    // Internal opencode rows keep their provider session id from hook turn
+    // starts, so native resume re-enters full history where the fixed-delay
+    // typed handoff drops in a slow TUI. Engine switches and rows without a
+    // resumable id keep the focused handoff below.
+    const nativeResumeArgs = buildContinueResumeArgs(source, opts?.engine)
+    if (nativeResumeArgs) {
+      assertOpencodeResumeAvailable(source)
+      return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell())
     }
     const engine = (opts?.engine ?? source.engine) as CheckpointEngine
     if (!source.shell) {

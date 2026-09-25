@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   listOpencodeSessions,
+  probeOpencodeSessionPresence,
   readOpencodeTurns,
   resolveOpencodeDbPath,
 } from '../../src/main/sessions/opencode-sessions'
@@ -127,5 +128,19 @@ describe('opencode sessions', async () => {
     expect(readOpencodeTurns(path, 'missing')).toBeNull()
     expect(readOpencodeTurns(join(tmpdir(), 'opencode-absent.db'), 's')).toBeNull()
     expect(readOpencodeTurns(path, '')).toBeNull()
+  })
+
+  it('probes presence without opening the message tables', async () => {
+    const path = await fixtureDb()
+    insertSession(path, { id: 'live' })
+    expect(probeOpencodeSessionPresence(path, 'live')).toBe('present')
+    expect(probeOpencodeSessionPresence(path, 'gone')).toBe('absent')
+  })
+
+  it('reports unknown for missing stores and blank ids', async () => {
+    expect(probeOpencodeSessionPresence(join(tmpdir(), 'opencode-absent.db'), 's')).toBe('unknown')
+    const path = await fixtureDb()
+    expect(probeOpencodeSessionPresence(path, '')).toBe('unknown')
+    expect(probeOpencodeSessionPresence(path, '   ')).toBe('unknown')
   })
 })

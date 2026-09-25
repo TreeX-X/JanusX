@@ -28,6 +28,34 @@ export function resolveOpencodeDbPath(home: string = homedir()): string {
   return join(home, '.local', 'share', 'opencode', 'opencode.db')
 }
 
+/**
+ * Presence of one session id in the opencode sqlite store.
+ * `unknown` covers missing, locked, and unreadable databases so callers fail
+ * open and still attempt resume; `absent` means the store opened and the id is
+ * gone, which deserves an explicit resume error instead of a silent fresh
+ * session.
+ */
+export function probeOpencodeSessionPresence(
+  dbPath: string,
+  sessionId: string,
+): 'present' | 'absent' | 'unknown' {
+  if (!sessionId || !sessionId.trim()) return 'unknown'
+  let database: DatabaseSync | undefined
+  try {
+    database = new DatabaseSync(dbPath, { readOnly: true })
+    const row = database.prepare('SELECT 1 AS ok FROM session WHERE id = ? LIMIT 1').get(sessionId)
+    return row === undefined || row === null ? 'absent' : 'present'
+  } catch {
+    return 'unknown'
+  } finally {
+    try {
+      database?.close()
+    } catch {
+      // Read-only handle on a live database; close failures stay silent.
+    }
+  }
+}
+
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
