@@ -17,11 +17,12 @@ const SWITCH_NOTICE_MS = 5000
 
 interface BlueprintMaintenancePanelProps { onClose: () => void }
 
-function PanelFrame({ onClose, children }: BlueprintMaintenancePanelProps & { children: React.ReactNode }) {
+function PanelFrame({ onClose, onClear, children }: BlueprintMaintenancePanelProps & { onClear?: () => void; children: React.ReactNode }) {
   const { t } = useI18n('blueprint')
   return <aside className="bp-maintenance-panel" aria-label={t('blueprint:maintenance.consoleAria')}>
     <header className="bp-maintenance-panel__header">
       <div className="bp-maintenance-janus-head"><span className="bp-maintenance-janus-dot" aria-hidden="true" /><strong>Janus</strong></div>
+      {onClear && <button type="button" className="bp-maintenance-clear" onClick={onClear} title={t('blueprint:action.clear')}>{t('blueprint:action.clear')}</button>}
       <button type="button" className="bp-panel-close" onClick={onClose} aria-label={t('blueprint:maintenance.closeConsole')}><X size={16} /></button>
     </header>
     {children}
@@ -57,7 +58,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     bindingKey.current = key
     const switched = prevWorkspaceId.current !== null && prevWorkspaceId.current !== activeWorkspace.id
     prevWorkspaceId.current = activeWorkspace.id
-    const id = registry.bindProject(context, [activeWorkspace.id], activeWorkspace.name)
+    const id = registry.bindPanelProject(context, [activeWorkspace.id], activeWorkspace.name)
     const chat = registry.getController(id)
     chat.setEngineeringContext(context)
     chat.setApprovalMode('plan')
@@ -83,7 +84,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     && chat.engineeringContext?.viewRef?.viewId === BLUEPRINT_PANEL_VIEW_REF.viewId
     && chat.resourceController.resources.some(item => item.workspaceId === activeWorkspace.id)
 
-  return <PanelFrame onClose={onClose}>
+  return <PanelFrame onClose={onClose} onClear={bound && chat ? () => { setSwitchNotice(null); chat.clear() } : undefined}>
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}

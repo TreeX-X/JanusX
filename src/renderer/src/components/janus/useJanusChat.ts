@@ -141,6 +141,12 @@ export interface UseJanusChatRegistryReturn {
   islandConversationId: string
   persistenceReady: boolean
   bindProject: (context: EngineeringContext, workspaceIds: string[], title: string) => string
+  /**
+   * Blueprint panel slot: find-or-create WITHOUT hijacking the island
+   * conversation. Ephemeral: excluded from island lists and persistence,
+   * hence valid until restart; the panel clears it on workspace switch.
+   */
+  bindPanelProject: (context: EngineeringContext, workspaceIds: string[], title: string) => string
   getController: (conversationId?: string) => UseJanusChatReturn
 }
 
@@ -160,6 +166,8 @@ interface ConversationRuntime {
 
 interface RuntimeHandles {
   proposalRetry?: { messageId: string; taskId: string }
+  /** Pairing-400 auto-retry guard: at most one recovery turn per generation. */
+  pairRetryAttempted?: boolean
   generation: number
   active: boolean
   abort: (() => void) | null
@@ -231,6 +239,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   const runtimesRef = useRef(runtimeStates)
   const workspacesRef = useRef(availableWorkspaces)
   const modelOptionsRef = useRef(modelOptions)
+  /** Blueprint panel conversation ids: island-independent, never persisted. */
+  const ephemeralIdsRef = useRef<Set<string>>(new Set())
   const handlesRef = useRef(new Map<string, RuntimeHandles>())
   const legacyResourcesRef = useRef(parseJanusResourcePreferences(
     typeof localStorage === 'undefined' ? null : localStorage.getItem(JANUS_RESOURCE_STORAGE_KEY),
@@ -372,9 +382,15 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     }
     void persistence.load().then((snapshot) => {
       if (cancelled || !snapshot?.conversations.length) return
-      const activeId = snapshot.conversations.some((item) => item.id === snapshot.activeConversationId)
+      // Pre-separation snapshots may carry the panel conversation as a plain
+      // entry: re-mark it ephemeral so it never surfaces in island lists.
+      for (const item of snapshot.conversations) {
+        if (item.engineeringContext?.viewRef?.viewId === 'workspace-dialog') ephemeralIdsRef.current.add(item.id)
+      }
+      const visible = snapshot.conversations.filter((item) => !ephemeralIdsRef.current.has(item.id))
+      const activeId = visible.some((item) => item.id === snapshot.activeConversationId)
         ? snapshot.activeConversationId
-        : snapshot.conversations[0].id
+        : visible[0]?.id ?? snapshot.conversations[0].id
       conversationsRef.current = snapshot.conversations
       setConversations(snapshot.conversations)
       setIslandConversationId(activeId)
@@ -391,7 +407,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const snapshot: JanusChatStorageSnapshot = {
       version: 1,
       activeConversationId: islandConversationId,
-      conversations,
+      conversations: conversations.filter((conversation) => !ephemeralIdsRef.current.has(conversation.id)),
     }
     void window.electron.janusChat?.save(snapshot).catch(() => undefined)
   }, [conversations, islandConversationId, persistenceReady])
@@ -540,6 +556,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const handles = getHandles(id)
     if (!conversation || runtime?.isStreaming || handles.active) return
     handles.proposalRetry = maintenanceTaskId ? { messageId: userMessage.id, taskId: maintenanceTaskId } : undefined
+    handles.pairRetryAttempted = false
     const generation = handles.generation + 1
     handles.generation = generation
     handles.active = true
@@ -620,6 +637,22 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
           snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
           handles.assistantMessageId = null
+          // Pairing 400 (tool calls vs responses out of balance, e.g. after a
+          // steered turn): the persisted history is plain text, so exactly one
+          // fresh turn recovers. Never auto-retry anything else, never twice.
+          if (!handles.pairRetryAttempted && /function response parts|function call parts/i.test(error)) {
+            handles.pairRetryAttempted = true
+            window.setTimeout(() => {
+              if (handles.generation !== generation) return
+              if (runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) return
+              const latest = conversationsRef.current.find((item) => item.id === id)
+              if (!latest) return
+              const turn = getRetryTurn(latest.messages)
+              if (!turn) return
+              updateConversation(id, (current) => ({ ...current, toolTraces: [] }))
+              startRequest(id, turn.history, turn.userMessage)
+            }, 0)
+          }
         },
         {
           ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
@@ -935,7 +968,15 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     return bound.id
   }, [updateConversations])
 
+  const bindPanelProject = useCallback((context: EngineeringContext, workspaceIds: string[], title: string) => {
+    const bound = bindProjectConversation(conversationsRef.current, context, workspaceIds, title)
+    ephemeralIdsRef.current.add(bound.id)
+    updateConversations(() => bound.conversations)
+    return bound.id
+  }, [updateConversations])
+
   const selectConversation = useCallback((id: string) => {
+    if (ephemeralIdsRef.current.has(id)) return
     if (conversationsRef.current.some((conversation) => conversation.id === id)) {
       setIslandConversationId(id)
     }
@@ -968,14 +1009,18 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       return next
     })
     const remaining = conversationsRef.current.filter((conversation) => conversation.id !== id)
-    const fallback = remaining[0] ?? createJanusConversation()
-    const next = remaining.length > 0 ? remaining : [fallback]
+    // The panel slot must never become the island fallback.
+    const visible = remaining.filter((conversation) => !ephemeralIdsRef.current.has(conversation.id))
+    const fallback = visible[0] ?? createJanusConversation()
+    const next = visible.length > 0 ? remaining : [...remaining, fallback]
     conversationsRef.current = next
     setConversations(next)
     setIslandConversationId((current) => current === id ? fallback.id : current)
   }, [invalidateRuntime])
 
-  const summaries = useMemo<ConversationSummary[]>(() => conversations.map((conversation) => ({
+  const summaries = useMemo<ConversationSummary[]>(() => conversations
+    .filter((conversation) => !ephemeralIdsRef.current.has(conversation.id))
+    .map((conversation) => ({
     id: conversation.id,
     title: conversation.title,
     updatedAt: conversation.updatedAt,
@@ -1075,5 +1120,5 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     updateConversation,
   ])
 
-  return { islandConversationId, getController, bindProject, persistenceReady }
+  return { islandConversationId, getController, bindProject, bindPanelProject, persistenceReady }
 }

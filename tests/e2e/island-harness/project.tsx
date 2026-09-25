@@ -252,12 +252,13 @@ function App() {
   const projectChat = useOptionalJanusChatController({ ...BLUEPRINT_PANEL_VIEW_REF })
   const [open, setOpen] = useState(true)
   const [taskOpen, setTaskOpen] = useState(true)
+  const [homeId, setHomeId] = useState<string | null>(null)
   return <main>
     <button onClick={() => setOpen((value) => !value)}>Toggle blueprint</button>
     <button onClick={() => setTaskOpen((value) => !value)}>Toggle task</button>
     <button onClick={() => chat.selectModel('p', 'model-b')}>Choose model B</button>
-    <button onClick={() => chat.createConversation()}>New personal chat</button>
-    <button onClick={() => projectChat && chat.selectConversation(projectChat.conversationId)}>Return to project</button>
+    <button onClick={() => { setHomeId((current) => current ?? chat.conversationId); chat.createConversation() }}>New personal chat</button>
+    <button onClick={() => homeId && chat.selectConversation(homeId)}>Return to main chat</button>
     <button onClick={() => {
       const request = fixture.streams.at(-1)!
       emit({ type: 'question_requested', requestId: request.requestId, callId: 'q1', allowCustom: true, questions: [{ header: 'Scope', question: 'Which scope?', multiple: false, options: [{ label: 'Selected', description: 'Current task' }, { label: 'All', description: 'Whole project' }] }] })

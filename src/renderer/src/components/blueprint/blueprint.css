@@ -2523,6 +2523,11 @@
 .bp-maintenance-janus-head { display: flex; align-items: center; gap: 8px; color: #e4e4e4; font-size: 12px; letter-spacing: 0.02em; }
 .bp-maintenance-janus-head strong { font-weight: 600; }
 .bp-maintenance-janus-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #ff7830; box-shadow: 0 0 6px rgba(255, 120, 48, 0.9); }
+.bp-maintenance-clear {
+  margin-left: auto; margin-right: 8px; padding: 3px 8px; border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 4px; background: transparent; color: #8a8a8a; font-size: 11px; cursor: pointer;
+}
+.bp-maintenance-clear:hover { color: #e4e4e4; border-color: rgba(255, 255, 255, .25); }
 .bp-maintenance-machine { border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 8px; }
 .bp-maintenance-machine > summary { cursor: pointer; color: #8a8a8a; font-size: 11px; padding: 4px 0; }
 .bp-maintenance-machine > summary:hover { color: #e4e4e4; }
