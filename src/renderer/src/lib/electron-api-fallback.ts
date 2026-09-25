@@ -93,6 +93,10 @@ export function installElectronApiFallback(): void {
       onAgentControlChanged: () => () => {},
     },
     knowledge: {
+      noteWikiPages: () => unavailableKnowledge(),
+      prepareNoteWiki: () => unavailableKnowledge(),
+      proposeNoteWiki: () => unavailableKnowledge(),
+      noteWikiStatuses: () => unavailableKnowledge(),
       contracts: () => unavailableKnowledge(),
       bootstrap: () => unavailableKnowledge(),
       observe: () => unavailableKnowledge(),
@@ -162,6 +166,7 @@ export function installElectronApiFallback(): void {
       onMaintenanceTask: () => () => {},
     },
     harness: {
+      noteRead: () => unavailableJanus(),
       taskRead: () => unavailableJanus(),
       taskAdopt: () => unavailableJanus(),
       resolve: () => unavailableJanus(),

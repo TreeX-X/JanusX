@@ -150,9 +150,11 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'tags',
       'status',
       'sourceFactIds',
+      'sourceNoteRefs',
       'updatedAt',
       'version',
       'workspaceId',
+      'workspacePath',
     ],
     graphEdge: [
       'id',
@@ -189,6 +191,9 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'conflicts',
       'mergedFrom',
       'sourceFactIds',
+      'sourceNoteRefs',
+      'reviewMode',
+      'expectedVersion',
     ],
   },
   rules: [

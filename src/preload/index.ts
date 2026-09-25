@@ -148,6 +148,10 @@ const browserAPI: BrowserAPI = {
 }
 
 const knowledgeAPI: KnowledgeAPI = {
+  noteWikiPages: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.noteWikiPages, input),
+  prepareNoteWiki: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.prepareNoteWiki, input),
+  proposeNoteWiki: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.proposeNoteWiki, input),
+  noteWikiStatuses: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.noteWikiStatuses, input),
   contracts: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.contracts),
   bootstrap: (workspacePath) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.bootstrap, workspacePath),
   observe: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.observe, input),
@@ -232,6 +236,7 @@ const janusAPI: JanusAPI = {
 }
 
 const harnessAPI: HarnessAPI = {
+  noteRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.noteRead, cwd, uri),
   taskRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskRead, cwd, uri),
   taskAdopt: (cwd, uri, expectedHash, contract) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskAdopt, cwd, uri, expectedHash, contract),
   resolve: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.resolve, cwd),

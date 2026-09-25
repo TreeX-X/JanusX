@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { createHash } from 'crypto'
 import type {
   CandidateFact,
   CandidateGraphEdge,
@@ -233,6 +234,7 @@ describe('KnowledgeReviewService', () => {
       knowledgeRoot,
       'wiki',
       'pages',
+      createHash('sha256').update(candidate.provenance.workspaceId).digest('hex'),
       'knowledge-engine',
       'persistence.md',
     )
@@ -249,7 +251,7 @@ describe('KnowledgeReviewService', () => {
     expect(index.pages).toHaveLength(1)
     expect(index.pages[0]?.slug).toBe('knowledge-engine/persistence')
     expect(index.pages[0]?.relativePath.replace(/\\/g, '/')).toBe(
-      'wiki/pages/knowledge-engine/persistence.md',
+      'wiki/pages/' + createHash('sha256').update(candidate.provenance.workspaceId).digest('hex') + '/knowledge-engine/persistence.md',
     )
     expect(index.pages[0]?.version).toBe(1)
   })
@@ -258,6 +260,7 @@ describe('KnowledgeReviewService', () => {
     const candidate = makeWikiCandidate({ sourceFactIds: ['fact-new', 'fact-new'] })
     await seedJsonl('wiki/patches.jsonl', [candidate])
     await mkdir(join(knowledgeRoot, 'wiki', 'pages'), { recursive: true })
+    await writeFile(join(knowledgeRoot, 'wiki', 'pages', 'persistence-design.md'), '# Existing page')
     await writeFile(
       join(knowledgeRoot, 'wiki', 'pages-index.json'),
       JSON.stringify({

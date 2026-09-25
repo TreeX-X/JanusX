@@ -77,13 +77,17 @@ function factToKnowledgeCard(fact: MemoryFact): KnowledgeCard {
 
 function wikiPageToKnowledgeCard(page: WikiPage): KnowledgeCard {
   return {
-    id: page.slug,
+    id: JSON.stringify([page.workspaceId, page.slug]),
     kind: 'wiki',
     title: page.title,
     summary: truncateSummary(page.markdown),
+    fullContent: page.markdown,
+    pageSlug: page.slug,
+    sourceNoteRefs: page.sourceNoteRefs,
     score: 1,
     tags: page.tags,
     workspaceId: page.workspaceId,
+    workspacePath: page.workspacePath,
     sourceRefs: { observationIds: [], fileRefs: [] },
     createdAt: page.updatedAt,
   }

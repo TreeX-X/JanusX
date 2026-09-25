@@ -1,0 +1,12 @@
+.detail, .editor { display: grid; gap: 10px; min-width: 0; padding: 12px 0; }
+.editor { border-top: 1px solid var(--border-color, #5554); }
+.detail pre, .editor pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 55vh; overflow: auto; padding: 10px; background: var(--bg-secondary, #8881); }
+.editor label { display: grid; gap: 5px; }
+.editor input:not([type=checkbox]), .editor textarea { width: 100%; box-sizing: border-box; padding: 8px; background: var(--bg-secondary, #8881); color: inherit; border: 1px solid var(--border-color, #5554); border-radius: 5px; }
+.editor textarea { resize: vertical; }
+.editor .confirm { display: flex; align-items: flex-start; gap: 8px; }
+.sources { display: grid; gap: 9px; padding-left: 18px; }
+.sources li { overflow-wrap: anywhere; }
+.sources small, .sources span { display: block; }
+.sources small { opacity: .75; }
+.actions { display: flex; gap: 8px; }

@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import { noteWikiPages, prepareNoteWiki, wikiSourceStatuses } from '../knowledge/note-sources'
+import type { PrepareNoteWikiInput } from '../../shared/ipc/knowledge'
 import { knowledgeContractService } from '../knowledge/contract-service'
 import { knowledgeAuditService } from '../knowledge/audit-service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
@@ -34,6 +36,19 @@ import type {
 } from '../../shared/knowledge'
 
 export function registerKnowledgeHandlers(): void {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.noteWikiPages, async (_event, input: { rootPath: string; uri: string }) => noteWikiPages(input.rootPath, input.uri))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.prepareNoteWiki, async (_event, input: PrepareNoteWikiInput) => prepareNoteWiki(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.proposeNoteWiki, async (_event, input: { draftId: string; title: string; markdown: string; rationale: string }) => knowledgeReviewService.proposeNoteWiki(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.noteWikiStatuses, async (_event, input: { candidateId?: string; workspaceId?: string; slug?: string }) => {
+    if (input.candidateId) {
+      const candidate = (await knowledgeExtractService.listWikiPatchCandidates()).find(c => c.id === input.candidateId)
+      if (!candidate) throw new Error('Wiki candidate not found')
+      return wikiSourceStatuses(candidate.provenance.workspacePath, candidate.sourceNoteRefs)
+    }
+    const page = (await knowledgeTruthService.list()).wikiPages.find(p => p.workspaceId === input.workspaceId && p.slug === input.slug)
+    if (!page) throw new Error('Wiki page not found')
+    return wikiSourceStatuses(page.workspacePath ?? '', page.sourceNoteRefs)
+  })
   ipcMain.handle(KNOWLEDGE_CHANNELS.contracts, async () => {
     return knowledgeContractService.getContracts()
   })

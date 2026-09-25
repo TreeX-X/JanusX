@@ -1,7 +1,9 @@
 import type { Blueprint } from '../janus/types'
 import type { WorkContract } from '@janus-agent/harness-core'
+import type { NoteSourceRead } from '../notes'
 
 export const HARNESS_COMMAND_CHANNELS = {
+  noteRead: 'harness:note:read',
   resolve: 'harness:resolve',
   projectGraph: 'harness:project-graph',
   rescan: 'harness:rescan',
@@ -327,6 +329,7 @@ export interface HarnessTaskDraft {
 }
 
 export interface HarnessAPI {
+  noteRead(cwd: string, uri: string): Promise<NoteSourceRead>
   taskRead(cwd: string, uri: string): Promise<HarnessTaskDraft>
   taskAdopt(cwd: string, uri: string, expectedHash: string, contract: HarnessTaskContractInput): Promise<HarnessTaskDraft>
   resolve(cwd: string): Promise<HarnessResolveResult>

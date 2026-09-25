@@ -1,0 +1,30 @@
+.bp-note-wiki { padding: 14px; font-size: 12px; line-height: 1.6; color: #d8d8dc; min-width: 0; }
+.bp-note-wiki button, .bp-note-wiki summary { cursor: pointer; }
+.bp-note-wiki button:disabled { cursor: default; opacity: .55; }
+.bp-note-wiki button:focus-visible, .bp-note-wiki input:focus-visible, .bp-note-wiki summary:focus-visible { outline: 1px solid #f39861; outline-offset: 2px; }
+.bp-note-wiki button { border: 1px solid #39383b; background: #222125; color: inherit; border-radius: 5px; padding: 4px 8px; }
+.bp-note-wiki__scope, .bp-note-wiki__identity { display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; overflow-wrap: anywhere; }
+.bp-note-wiki__scope strong { color: #f4aa78; letter-spacing: .05em; }
+.bp-note-wiki small, .bp-note-wiki__identity { color: #99989e; font-size: 10px; }
+.bp-note-wiki__directory { border-block: 1px solid #363539; padding: 8px 0; margin-bottom: 12px; }
+.bp-note-wiki__directory input { width: 100%; box-sizing: border-box; background: #17171b; border: 1px solid #414044; color: #eee; padding: 7px 9px; margin: 8px 0; border-radius: 5px; }
+.bp-note-wiki__directory nav { max-height: 270px; overflow-y: auto; display: grid; gap: 3px; }
+.bp-note-wiki__directory nav button { text-align: left; display: flex; flex-direction: column; border-color: transparent; background: transparent; }
+.bp-note-wiki__directory nav button[aria-current] { background: #392b24; border-color: #82583d; }
+.bp-note-wiki__directory nav button:hover { background: #2d2b2d; }
+.bp-note-diagnostic { padding: 7px 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.bp-note-wiki__tabs { display: flex; gap: 4px; padding-bottom: 12px; }
+.bp-note-wiki__tabs [aria-selected=true] { color: #ffb586; border-color: #9b653f; background: #34271f; }
+.bp-note-wiki__metadata { display: grid; grid-template-columns: 88px 1fr; gap: 4px; }
+.bp-note-wiki__metadata dt { color: #929098; }
+.bp-note-wiki__metadata dd { margin: 0; }
+.bp-note-wiki__actions { display: flex; gap: 5px; margin: 10px 0; }
+.bp-note-wiki .bp-note-link { color: #f3ae83; background: transparent; border: 0; padding: 0; text-align: left; overflow-wrap: anywhere; }
+.bp-note-source { white-space: pre-wrap; overflow-wrap: anywhere; background: #18171b; padding: 10px; border: 1px solid #333238; border-radius: 5px; font-size: 11px; max-height: 520px; overflow: auto; }
+.bp-note-wiki__group { border-top: 1px solid #363539; padding-top: 10px; margin-top: 12px; }
+.bp-note-wiki__group h4 { margin: 6px 0 10px; font-size: 12px; color: #dddce0; }
+.bp-note-relation { display: flex; flex-direction: column; padding: 7px 0; gap: 3px; border-bottom: 1px solid #302e34; }
+.bp-note-warning { border-left: 2px solid #c28f55; padding: 8px; margin: 8px 0; background: #35291f; overflow-wrap: anywhere; }
+.bp-note-warning button { margin-left: 5px; }
+.bp-note-wiki details details, .bp-note-wiki__group details { margin: 8px 0; }
+.bp-note-wiki .markdown-preview { font-size: 12px; overflow-wrap: anywhere; }

@@ -293,6 +293,15 @@ export interface MemoryFact {
   updatedBy?: string | null
 }
 
+// Note: wiki sources are host-read snapshots — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+export interface WikiNoteRef { uri: string; sourceHash: string }
+export interface WikiNoteStatus {
+  uri: string
+  sourceHash?: string
+  currentHash?: string
+  status: 'fresh' | 'changed' | 'missing' | 'ambiguous' | 'unbound' | 'unknown'
+  detail?: string
+}
 export interface WikiPage {
   slug: string
   title: string
@@ -303,6 +312,8 @@ export interface WikiPage {
   updatedAt: string
   version: number
   workspaceId: string
+  workspacePath?: string
+  sourceNoteRefs?: WikiNoteRef[]
   /** ToB M1 归属字段（全可选；version 即本体的 version，不另设）。 */
   ownerScope?: OwnerScope
   tenantId?: string | null
@@ -470,6 +481,9 @@ export interface CandidateWikiPatch {
   type: 'wiki-patch'
   status: CandidateStatus
   pageSlug: string
+  sourceNoteRefs?: WikiNoteRef[]
+  reviewMode?: 'incremental' | 'full-page'
+  expectedVersion?: number
   title: string
   patchMarkdown: string
   rationale: string
@@ -636,6 +650,9 @@ export interface KnowledgeCardSourceRefs {
 }
 
 export interface KnowledgeCard {
+  fullContent?: string
+  pageSlug?: string
+  sourceNoteRefs?: WikiNoteRef[]
   id: string
   kind: KnowledgeCardKind
   title: string

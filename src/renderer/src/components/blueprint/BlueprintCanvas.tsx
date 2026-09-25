@@ -60,6 +60,7 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { collectLocalHierarchyIds, computeInitialCollapsedIds, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 import { nodeCheckoutPath, resolveNodeWorkspace } from '@/features/blueprint/resolveNodeWorkspace'
 import { useI18n } from '@/i18n/useI18n'
+import { NoteWikiPanel } from './NoteWikiPanel'
 
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
 const ANALYSIS_COMMIT_LIMIT_MIN = 1
@@ -233,6 +234,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
+  const [wikiAnchor, setWikiAnchor] = useState<{ uri: string; value?: string } | null>(null)
   const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 统一顶栏（workbench）存在时过滤走 provider 受控；embedded 无 provider 时走本地态。
@@ -1019,6 +1021,23 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             </div>
           </div>
 
+          {currentBlueprint?.noteSnapshot ? (
+            <NoteWikiPanel
+              snapshot={currentBlueprint.noteSnapshot}
+              rootPath={currentBlueprint.noteSnapshot.coverage.checkoutRoot}
+              uri={detailNode.sourceUri}
+              anchor={wikiAnchor?.uri === detailNode.sourceUri ? wikiAnchor?.value : undefined}
+              onRefresh={() => { void loadBlueprint(blueprintId) }}
+              onNavigate={(uri, anchor) => {
+                const target = Object.values(currentBlueprint.nodes).find((node) => node.sourceUri === uri)
+                if (!target) return
+                setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
+                setCollapsedNodeIds(new Set())
+                setSelectedId(target.id); setDetailNodeId(target.id); setWikiAnchor({ uri, value: anchor })
+                onNodeOpen?.(target.id)
+              }}
+            />
+          ) : (<>
           <div className="bp-node-detail__section bp-node-detail__section--content">
             <label className="bp-node-detail__label">{t('blueprint:detailPanel.description')}</label>
             {detailNode.description ? (
@@ -1316,6 +1335,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             </div>
           </div>
 
+          </>)}
           <div className="bp-node-detail__terminal-footer">
             <div className="bp-node-detail__section-head">
               <label className="bp-node-detail__label">{t('blueprint:detailPanel.terminal')}</label>

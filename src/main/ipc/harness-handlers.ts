@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { ParsedNote } from '@janus-agent/harness-core'
+import { readMarkdownView } from '@janus-agent/harness-core'
 import {
   applyNodePatch,
   archiveNoteOp,
@@ -128,6 +129,14 @@ async function currentNote(root: string, uri: string): Promise<CurrentNote> {
 }
 
 export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): void {
+  // Note: wiki and blueprint resolve the same source — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteRead, async (_e, cwd: string, uri: string) => {
+    if (typeof uri !== 'string' || !uri.startsWith('note://')) throw new Error('A complete Note URI is required')
+    const source = await harnessNoteService.readNote(await withRoot(cwd), uri)
+    return { uri, relPath: source.relPath, raw: source.raw, sourceHash: source.sha256,
+      indexedSourceHash: source.indexedSourceHash, matchesSnapshot: source.matchesSnapshot,
+      doc: toNoteDoc(source.note), view: readMarkdownView(source.note.body) }
+  })
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.taskRead, async (_e, cwd: string, uri: string) => readTaskDraft(await withRoot(cwd), uri))
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.taskAdopt, async (_e, cwd: string, uri: string, expectedHash: string, contract: HarnessTaskContractInput) => adoptTask(await withRoot(cwd), uri, expectedHash, contract))
   harnessNoteService.onChange((event) => {

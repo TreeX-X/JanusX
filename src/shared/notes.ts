@@ -30,6 +30,18 @@ export interface NoteReadEntry {
   diagnostics: Diagnostic[]
 }
 
+/** Fresh source bytes and the shared Markdown model, scoped to one checkout. */
+export interface NoteSourceRead {
+  uri: string
+  relPath: string
+  raw: string
+  sourceHash: string
+  indexedSourceHash: string | null
+  matchesSnapshot: boolean
+  doc: NoteDoc
+  view: MarkdownView
+}
+
 /** One disposable read snapshot for one explicitly selected checkout. */
 export interface NoteReadSnapshot {
   repoId: string | null

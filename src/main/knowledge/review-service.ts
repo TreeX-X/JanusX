@@ -9,6 +9,7 @@
  */
 import { rename, writeFile, mkdir, readFile, unlink } from 'fs/promises'
 import { dirname, join } from 'path'
+import { createHash } from 'crypto'
 import type {
   AuditEvent,
   CandidateFact,
@@ -53,6 +54,8 @@ interface WikiPageIndexEntry {
   tags: string[]
   status: WikiPageStatus
   sourceFactIds: string[]
+  sourceNoteRefs?: WikiPage['sourceNoteRefs']
+  workspacePath?: string
   updatedAt: string
   version: number
   workspaceId: string
@@ -151,6 +154,10 @@ export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<
   return withMutationLock(FACT_CANDIDATES_FILE, operation)
 }
 
+export function withWikiCandidatesLock<T>(operation: () => Promise<T>): Promise<T> {
+  return withMutationLock(WIKI_PATCHES_FILE, operation)
+}
+
 /**
  * User memory closeout: the single reader for proposed person-scope fact
  * candidates. The glance overview reads through here instead of parsing the
@@ -218,14 +225,15 @@ function sanitizePageSlug(slug: string): string {
   if (!trimmed) throw new Error('Wiki page slug is empty')
   const parts = trimmed.split('/').filter(Boolean)
   for (const part of parts) {
-    if (part === '.' || part === '..') {
+    if (part === '.' || part === '..' || /[<>:"|?*]/.test(part) || /[. ]$/.test(part) || [...part].some(char => char.charCodeAt(0) < 32)) {
       throw new Error(`Invalid wiki page slug: ${slug}`)
     }
   }
   return parts.join('/')
 }
 
-function wikiPageRelativePath(slug: string): string {
+function wikiPageRelativePath(slug: string, workspaceId: string): string {
+  slug = createHash('sha256').update(workspaceId).digest('hex') + '/' + slug
   return join('wiki', 'pages', `${sanitizePageSlug(slug)}.md`)
 }
 
@@ -287,6 +295,17 @@ function mergeWikiMarkdown(existing: string | null, title: string, patchMarkdown
 }
 
 export class KnowledgeReviewService {
+  async proposeNoteWiki(input: { draftId: string; title: string; markdown: string; rationale: string }): Promise<CandidateWikiPatch> {
+    return withWikiCandidatesLock(async () => {
+      const { buildNoteWikiCandidate } = await import('./note-sources')
+      const candidate = await buildNoteWikiCandidate(input)
+      sanitizePageSlug(candidate.pageSlug)
+      const records = await readJsonl<CandidateWikiPatch>(WIKI_PATCHES_FILE)
+      await writeJsonlAtomic(WIKI_PATCHES_FILE, [...records, candidate])
+      return candidate
+    })
+  }
+
   async rejectCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
     return withMutationLock(candidateRelativePath(input.type), () => this.rejectLocked(input))
   }
@@ -505,22 +524,42 @@ export class KnowledgeReviewService {
     rollback: () => Promise<void>
   }> {
     const slug = sanitizePageSlug(candidate.pageSlug)
-    const relativePath = wikiPageRelativePath(slug)
-    const existingMarkdown = await readWikiMarkdown(relativePath)
+    const workspaceId = candidate.provenance.workspaceId
+    const index = await readWikiIndex()
+    const previousIndex = { version: 1 as const, pages: [...index.pages] }
+    const samePage = (page: WikiPageIndexEntry) => page.slug === slug && page.workspaceId === workspaceId
+    const existingEntry = index.pages.find(samePage)
+    const fullReview = candidate.reviewMode === 'full-page'
+    if ((fullReview || candidate.sourceNoteRefs?.length) && candidate.expectedVersion !== (existingEntry?.version ?? 0)) {
+      throw new Error('Wiki page version changed; create a new proposal from the current full page')
+    }
+    const refs = new Map((existingEntry?.sourceNoteRefs ?? []).map(ref => [ref.uri, ref]))
+    for (const ref of candidate.sourceNoteRefs ?? []) {
+      const old = refs.get(ref.uri)
+      if (old && old.sourceHash !== ref.sourceHash && !fullReview) throw new Error('Note source changed; full-page review is required: ' + ref.uri)
+      refs.set(ref.uri, ref)
+    }
+    if (fullReview && (existingEntry?.sourceNoteRefs ?? []).some(ref => !candidate.sourceNoteRefs?.some(next => next.uri === ref.uri))) {
+      throw new Error('Full-page review must include every recorded Note source')
+    }
+    if (candidate.sourceNoteRefs?.length) {
+      const { assertWikiSources } = await import('./note-sources')
+      await assertWikiSources(candidate.provenance.workspacePath, candidate.sourceNoteRefs)
+    }
+    const sharedPath = existingEntry && index.pages.some(page => !samePage(page) && page.relativePath === existingEntry.relativePath)
+    const relativePath = existingEntry && !sharedPath ? existingEntry.relativePath : wikiPageRelativePath(slug, workspaceId)
+    const existingMarkdown = existingEntry ? await readWikiMarkdown(existingEntry.relativePath) : null
+    if (existingEntry && existingMarkdown === null) throw new Error('Existing wiki content is missing; restore it before review')
+    const previousTarget = await readWikiMarkdown(relativePath)
     const patch = candidate.patchMarkdown.trim()
-    const alreadyMaterialized = existingMarkdown?.includes(patch) ?? false
-    const markdown = alreadyMaterialized && existingMarkdown !== null
+    if (!patch) throw new Error('Wiki content is empty')
+    const alreadyMaterialized = !fullReview && (existingMarkdown?.includes(patch) ?? false)
+    const markdown = fullReview ? patch + String.fromCharCode(10) : alreadyMaterialized && existingMarkdown !== null
       ? existingMarkdown
       : mergeWikiMarkdown(existingMarkdown, candidate.title, patch)
     await writeTextAtomic(relativePath, markdown)
-
-    const index = await readWikiIndex()
-    const previousIndex = { version: 1 as const, pages: [...index.pages] }
     const now = new Date().toISOString()
-    const existingEntry = index.pages.find((page) => page.slug === slug)
-    const version = alreadyMaterialized && existingEntry
-      ? existingEntry.version
-      : (existingEntry?.version ?? 0) + 1
+    const version = (existingEntry?.version ?? 0) + 1
     const entry: WikiPageIndexEntry = {
       slug,
       title: candidate.title || existingEntry?.title || slug,
@@ -534,16 +573,18 @@ export class KnowledgeReviewService {
       ])],
       updatedAt: now,
       version,
-      workspaceId: candidate.provenance.workspaceId,
+      workspaceId,
+      workspacePath: candidate.provenance.workspacePath || existingEntry?.workspacePath,
+      ...(refs.size ? { sourceNoteRefs: [...refs.values()] } : {}),
     }
-    index.pages = [...index.pages.filter((page) => page.slug !== slug), entry]
+    index.pages = [...index.pages.filter((page) => !samePage(page)), entry]
     try {
       await writeWikiIndex(index)
     } catch (error) {
-      if (existingMarkdown === null) {
+      if (previousTarget === null) {
         await unlink(absolute(relativePath)).catch(() => undefined)
       } else {
-        await writeTextAtomic(relativePath, existingMarkdown)
+        await writeTextAtomic(relativePath, previousTarget)
       }
       throw error
     }
@@ -555,6 +596,8 @@ export class KnowledgeReviewService {
       tags: entry.tags,
       status: entry.status,
       sourceFactIds: entry.sourceFactIds,
+      sourceNoteRefs: entry.sourceNoteRefs,
+      workspacePath: entry.workspacePath,
       updatedAt: entry.updatedAt,
       version: entry.version,
       workspaceId: entry.workspaceId,
@@ -562,10 +605,10 @@ export class KnowledgeReviewService {
     return {
       value: page,
       rollback: async () => {
-        if (existingMarkdown === null) {
+        if (previousTarget === null) {
           await unlink(absolute(relativePath)).catch(() => undefined)
         } else {
-          await writeTextAtomic(relativePath, existingMarkdown)
+          await writeTextAtomic(relativePath, previousTarget)
         }
         await writeWikiIndex(previousIndex)
       },

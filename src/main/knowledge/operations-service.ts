@@ -13,6 +13,7 @@ import type {
 import type { RevokeTruthInput } from '../../shared/ipc/knowledge'
 export type { RevokeTruthInput, TruthKind } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
+import { withWikiCandidatesLock } from './review-service'
 import { knowledgeAuditService } from './audit-service'
 
 const paths = {
@@ -63,14 +64,14 @@ function provenanceForEdge(edge: GraphEdge): KnowledgeProvenance {
 
 export class KnowledgeOperationsService {
   async revoke(input: RevokeTruthInput): Promise<void> {
-    return serialized(() => this.revokeLocked(input))
+    return input.kind === 'wiki' ? withWikiCandidatesLock(() => this.revokeLocked(input)) : serialized(() => this.revokeLocked(input))
   }
 
   private async revokeLocked(input: RevokeTruthInput): Promise<void> {
     if (input.kind === 'wiki') {
       let index: { version: 1; pages: Array<{ slug: string; status: string; workspaceId: string }> }
       try { index = JSON.parse(await readFile(absolute(paths.wikiIndex), 'utf8')) } catch { throw new Error(`Truth not found: wiki:${input.id}`) }
-      const page = index.pages.find((item) => item.slug === input.id)
+      const page = index.pages.find((item) => item.slug === input.id && item.workspaceId === input.workspaceId)
       if (!page) throw new Error(`Truth not found: wiki:${input.id}`)
       if (page.workspaceId !== input.workspaceId) throw new Error('Truth workspace mismatch')
       if (page.status === 'archived') return

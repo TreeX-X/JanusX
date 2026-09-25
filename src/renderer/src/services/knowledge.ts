@@ -17,6 +17,7 @@ import type {
   Observation,
   RetentionStats,
   UserMemoryOverview,
+  WikiPage,
 } from '../../../shared/knowledge'
 import type { KnowledgeProcessingMode } from '../../../shared/knowledge-settings'
 import type {
@@ -37,6 +38,7 @@ import {
 } from '../../../shared/knowledge-card'
 
 export interface KnowledgeWorkbenchSnapshot {
+  wikiPages?: WikiPage[]
   observations: Observation[]
   factCandidates: CandidateFact[]
   wikiPatches: CandidateWikiPatch[]
@@ -115,6 +117,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     libraryCards,
     conflicts,
     truthFacts: truth.facts,
+    wikiPages: truth.wikiPages,
     truthEdges: truth.graphEdges,
     mode: settings?.mode ?? 'auto',
     loadedAt: new Date().toISOString(),

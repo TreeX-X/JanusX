@@ -64,6 +64,10 @@ export function projectGraph(cwd: string): Promise<HarnessGraphResult | null> {
   return window.electron.harness.projectGraph(cwd)
 }
 
+export function readNoteSource(cwd: string, uri: string) {
+  return window.electron.harness.noteRead(cwd, uri)
+}
+
 export function rescanProject(cwd: string): Promise<{ rev: number; ms: number }> {
   return window.electron.harness.rescan(cwd)
 }

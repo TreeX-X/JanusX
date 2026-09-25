@@ -24,10 +24,15 @@ import type {
   RetentionStats,
   UserMemoryOverview,
   WikiPage,
+  WikiNoteStatus,
 } from '../knowledge'
 import type { KnowledgeSettings } from '../knowledge-settings'
 
 export const KNOWLEDGE_CHANNELS = {
+  noteWikiPages: 'knowledge:note-wiki:pages',
+  prepareNoteWiki: 'knowledge:note-wiki:prepare',
+  proposeNoteWiki: 'knowledge:note-wiki:propose',
+  noteWikiStatuses: 'knowledge:note-wiki:statuses',
   contracts: 'knowledge:contracts:get',
   bootstrap: 'knowledge:bootstrap',
   observe: 'knowledge:observe',
@@ -249,6 +254,10 @@ export interface ExternalMcpRegisterResult {
 }
 
 export interface KnowledgeAPI {
+  noteWikiPages: (input: { rootPath: string; uri: string }) => Promise<NoteWikiPage[]>
+  prepareNoteWiki: (input: PrepareNoteWikiInput) => Promise<NoteWikiDraft>
+  proposeNoteWiki: (input: { draftId: string; title: string; markdown: string; rationale: string }) => Promise<CandidateWikiPatch>
+  noteWikiStatuses: (input: { candidateId?: string; workspaceId?: string; slug?: string }) => Promise<WikiNoteStatus[]>
   contracts: () => Promise<KnowledgeContractsSnapshot>
   bootstrap: (workspacePath?: string) => Promise<KnowledgeBootstrapResult>
   observe: (input: CaptureObservationInput) => Promise<Observation>
@@ -280,3 +289,17 @@ export interface KnowledgeAPI {
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }
+
+export interface PrepareNoteWikiInput {
+  rootPath: string
+  uris: string[]
+  pageSlug: string
+  reviewMode: 'incremental' | 'full-page'
+  expectedVersion: number
+}
+export interface NoteWikiDraft {
+  draftId: string
+  page?: WikiPage
+  sources: Array<{ uri: string; sourceHash: string; raw: string }>
+}
+export interface NoteWikiPage { page: WikiPage; sources: WikiNoteStatus[] }
