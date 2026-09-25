@@ -262,6 +262,7 @@ export interface Blueprint {
   invalidNotes?: BlueprintInvalidNote[]
   /** Original serializable read model, shared with engineering wiki. */
   noteSnapshot?: import('../notes').NoteReadSnapshot
+  composition?: import('../blueprint-composition').BlueprintComposition
   projectionDiagnostics?: Array<{ code: string; message: string; path?: string }>
   createdAt: string
   updatedAt: string

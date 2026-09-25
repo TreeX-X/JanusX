@@ -11,10 +11,10 @@ import './note-wiki.css'
 
 const statusLabel: Record<string, string> = { resolved: '已解析', missing: '缺失', unavailable: '未接入 / 不可读', ambiguous: '不明确', invalid: '无效' }
 const errorText = (error: unknown): string => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : String(error)
-type Props = { snapshot: NoteReadSnapshot; rootPath: string; uri?: string; anchor?: string; onNavigate: (uri: string, anchor?: string) => void; onRefresh: () => void }
+type Props = { snapshot: NoteReadSnapshot; rootPath: string; uri?: string; anchor?: string; canNavigate?: (uri: string) => boolean; onNavigate: (uri: string, anchor?: string) => void; onRefresh: () => void }
 
 // Note: the engineering wiki reads the same Note, without a page copy — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
-export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, onNavigate, onRefresh }: Props) {
+export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, canNavigate, onNavigate, onRefresh }: Props) {
   const [tab, setTab] = useState<'body' | 'links' | 'context'>('body')
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<NoteSourceRead | null>(null)
@@ -43,12 +43,12 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, onNavigate, onR
   }
   useEffect(() => { if (anchor && source && tab === 'body' && !raw) jump(anchor) }, [anchor, source, tab, raw])
   const open = (target: string, targetAnchor?: string): void => {
-    if (!view.entries.has(target)) { setNotice('目标在当前 checkout 中不可唯一解析：' + target); return }
+    if (!view.entries.has(target) && !canNavigate?.(target)) { setNotice('目标在当前 checkout 中不可唯一解析：' + target); return }
     setTab('body'); setRaw(false)
     if (target === uri) { if (targetAnchor) jump(targetAnchor) }
     else onNavigate(target, targetAnchor)
   }
-  const link = (target: string, label?: string, targetAnchor?: string) => <button type="button" className="bp-note-link" title={target} disabled={!view.entries.has(target)} onClick={() => open(target, targetAnchor)}>{label ?? view.entries.get(target)?.doc?.title ?? target}</button>
+  const link = (target: string, label?: string, targetAnchor?: string) => <button type="button" className="bp-note-link" title={target} disabled={!view.entries.has(target) && !canNavigate?.(target)} onClick={() => open(target, targetAnchor)}>{label ?? view.entries.get(target)?.doc?.title ?? target}</button>
   const headings: Components = {}
   for (const tag of ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const) {
     headings[tag] = ({ node, children }) => {
@@ -66,7 +66,7 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, onNavigate, onR
       return <button type="button" className="bp-note-link" onClick={() => {
         if (href.startsWith('#')) { try { jump(decodeURIComponent(href.slice(1))) } catch { setNotice('无效锚点') }; return }
         if (!canUseSnapshot) { setNotice('正文已变更，请刷新关系快照后定位链接'); return }
-        if (mention?.targetUri && mention.resolution.status === 'resolved') open(mention.targetUri, mention.anchor)
+        if (mention?.targetUri && (mention.resolution.status === 'resolved' || canNavigate?.(mention.targetUri))) open(mention.targetUri, mention.anchor)
         else setNotice((statusLabel[mention?.resolution.status ?? 'unavailable'] ?? '未解析') + '：' + href)
       }}>{children}</button>
     },

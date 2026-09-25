@@ -3,10 +3,11 @@ import type { HarnessChangedEvent } from '../../src/shared/ipc/harness'
 const mocks = vi.hoisted(() => ({
   callback: null as null | ((event: HarnessChangedEvent) => void),
   off: vi.fn(), load: vi.fn(), set: vi.fn(), current: 'graph', loading: null as string | null,
+  checkouts: [] as Array<{ path: string }>,
 }))
 vi.mock('@/services/harness', () => ({ onHarnessChanged: (callback: typeof mocks.callback) => { mocks.callback = callback; return mocks.off } }))
 vi.mock('@/stores/blueprint', () => ({ useBlueprintStore: {
-  getState: () => ({ currentBlueprint: { id: mocks.current }, loadBlueprint: mocks.load, loadingBlueprintId: mocks.loading }),
+  getState: () => ({ currentBlueprint: { id: mocks.current, composition: { checkouts: mocks.checkouts } }, loadBlueprint: mocks.load, loadingBlueprintId: mocks.loading }),
   setState: mocks.set,
 } }))
 import { subscribeNoteRefresh } from '../../src/renderer/src/components/blueprint/useNoteRefresh'
@@ -17,9 +18,16 @@ beforeEach(() => {
   vi.stubGlobal('window', new EventTarget())
   vi.clearAllMocks()
   mocks.current = 'graph'; mocks.loading = null; mocks.load.mockResolvedValue(undefined)
+  mocks.checkouts = []
 })
 afterEach(() => { stop?.(); stop = undefined; vi.useRealTimers(); vi.unstubAllGlobals() })
 describe('mounted Note view refresh', () => {
+  it('refreshes the architecture graph when an explicitly bound checkout changes', async () => {
+    mocks.checkouts = [{ path: 'C:/work/dependency' }]
+    stop = subscribeNoteRefresh('graph', 'C:/work/notes')
+    send('C:/work/dependency'); await vi.advanceTimersByTimeAsync(160)
+    expect(mocks.load).toHaveBeenCalledWith('graph')
+  })
   it('coalesces bursts, normalizes checkout spelling, and ignores other roots', async () => {
     stop = subscribeNoteRefresh('graph', 'c:/work/notes/')
     send('C:/work/other'); await vi.advanceTimersByTimeAsync(160)
@@ -61,4 +69,3 @@ describe('mounted Note view refresh', () => {
     expect(mocks.load).not.toHaveBeenCalled()
   })
 })
-

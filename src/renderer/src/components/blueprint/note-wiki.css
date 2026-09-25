@@ -28,3 +28,9 @@
 .bp-note-warning button { margin-left: 5px; }
 .bp-note-wiki details details, .bp-note-wiki__group details { margin: 8px 0; }
 .bp-note-wiki .markdown-preview { font-size: 12px; overflow-wrap: anywhere; }
+.bp-composition { padding: 10px 14px; color: var(--text-secondary, #b8b8c0); font-size: 12px; }
+.bp-composition summary { cursor: pointer; color: var(--text-primary, #e6e6e9); }
+.bp-composition section { max-height: 300px; overflow: auto; }
+.bp-composition button { background: transparent; border: 0; color: #e78b63; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.bp-composition button:disabled { color: #93939d; cursor: default; }
+.bp-composition-overlay { position: absolute; top: 12px; left: 12px; z-index: 4; max-width: min(460px, 65%); background: rgba(25, 25, 29, .94); border: 1px solid #34343b; border-radius: 8px; }

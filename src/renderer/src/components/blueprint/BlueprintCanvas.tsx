@@ -61,6 +61,8 @@ import { collectLocalHierarchyIds, computeInitialCollapsedIds, stepMatchIndex, v
 import { nodeCheckoutPath, resolveNodeWorkspace } from '@/features/blueprint/resolveNodeWorkspace'
 import { useI18n } from '@/i18n/useI18n'
 import { NoteWikiPanel } from './NoteWikiPanel'
+import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
+import { nodeNoteSnapshot, resolveCompositionNote } from '@/features/blueprint/composition-view'
 
 const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
 const ANALYSIS_COMMIT_LIMIT_MIN = 1
@@ -293,6 +295,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const leavingNodeRef = useRef<typeof activeDetailNode>(null)
   if (activeDetailNode) leavingNodeRef.current = activeDetailNode
   const detailNode = activeDetailNode ?? (detailAnim.rendered ? leavingNodeRef.current : null)
+  const detailSnapshot = currentBlueprint && detailNode ? nodeNoteSnapshot(currentBlueprint, detailNode.id) : undefined
+  const selectCompositionNode = (id: string): void => {
+    setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
+    setCollapsedNodeIds(new Set()); setSelectedId(id); setDetailNodeId(id); onNodeOpen?.(id)
+  }
   const detailInCanvas = Boolean(detailNode && !detailPortal)
   const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
   /** 详情展示 note 原始词汇（HTML 高保真同构；legacy 缺透传时回退映射标签） */
@@ -924,6 +931,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           style={{ background: 'rgba(12,12,12,0.9)' }}
         />
       </ReactFlow>
+      {currentBlueprint?.composition && <div className="bp-composition-overlay"><BlueprintCompositionPanel blueprint={currentBlueprint} onSelect={selectCompositionNode} /></div>}
       <div className="bp-canvas-legend" aria-hidden="true">
         {(['planning', 'in-progress', 'done', 'archived'] as const).map((status) => (
           <span key={status}>
@@ -1021,15 +1029,18 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             </div>
           </div>
 
-          {currentBlueprint?.noteSnapshot ? (
+          {currentBlueprint && <BlueprintCompositionPanel blueprint={currentBlueprint} nodeId={detailNode.id} onSelect={selectCompositionNode} />}
+          {currentBlueprint && detailSnapshot ? (
             <NoteWikiPanel
-              snapshot={currentBlueprint.noteSnapshot}
-              rootPath={currentBlueprint.noteSnapshot.coverage.checkoutRoot}
+              snapshot={detailSnapshot}
+              rootPath={detailSnapshot.coverage.checkoutRoot}
               uri={detailNode.sourceUri}
               anchor={wikiAnchor?.uri === detailNode.sourceUri ? wikiAnchor?.value : undefined}
               onRefresh={() => { void loadBlueprint(blueprintId) }}
+              canNavigate={(uri) => !!resolveCompositionNote(currentBlueprint, detailNode.id, uri)}
               onNavigate={(uri, anchor) => {
-                const target = Object.values(currentBlueprint.nodes).find((node) => node.sourceUri === uri)
+                const targetId = resolveCompositionNote(currentBlueprint, detailNode.id, uri)
+                const target = targetId ? currentBlueprint.nodes[targetId] : undefined
                 if (!target) return
                 setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
                 setCollapsedNodeIds(new Set())

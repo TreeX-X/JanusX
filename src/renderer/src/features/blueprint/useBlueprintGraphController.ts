@@ -213,7 +213,7 @@ export function useBlueprintGraphController({
     if (!blueprint) return ''
     const topology = blueprint.nodeIds.map((id) => `${id}:${blueprint.nodes[id]?.parentId ?? ''}`).join('|')
     const layout = Object.entries(blueprint.canvasLayout ?? {}).map(([id, p]) => `${id}:${p.x},${p.y}`).join('|')
-    return `${blueprint.id}|${topology}|${layout}|${[...collapsedNodeIds].sort().join(',')}`
+    return `${blueprint.id}|${topology}|${layout}|${[...collapsedNodeIds].sort().join(',')}|${JSON.stringify([blueprint.relations, blueprint.composition?.interfaces])}`
   }, [blueprint, collapsedNodeIds])
 
   const cardDataKey = useMemo(() => {

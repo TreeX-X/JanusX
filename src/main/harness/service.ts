@@ -9,6 +9,8 @@
  *  See .agents/notes/implemented/architecture/2026-09-16-harness-project-graph-s4.md
  */
 import { randomUUID } from 'crypto'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { watch as watchDirectory, type FSWatcher } from 'fs'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
@@ -33,6 +35,7 @@ import {
   type WatchEvent,
 } from '@janus-agent/harness-node'
 import { projectGraph, projectGraphId } from '../notes/note-to-blueprint'
+import { composeBlueprint, type BlueprintCheckoutInput } from '../blueprint/blueprint-composition'
 import { ADAPTER_VERSION } from '../notes/note-types'
 import { loadNoteEntries, toReadSnapshot } from '../notes/note-provider'
 import type { NoteReadSnapshot } from '../../shared/notes'
@@ -101,6 +104,7 @@ async function isDir(path: string): Promise<boolean> {
 
 export class HarnessNoteService {
   private indexes = new Map<string, { rev: number; index: NoteIndex }>()
+  private compositionHashes = new Map<string, Record<string, string>>()
   private watchers = new Map<string, { close: () => void }>()
   private listeners = new Set<ChangeListener>()
 
@@ -157,6 +161,33 @@ export class HarnessNoteService {
   }
 
   async projectView(root: string): Promise<ProjectView> {
+    // Note: explicit checkout projections compose outside the source adapter — see .agents/notes/2026-09-25-blueprint-r4--9b7b1e15.md
+    const view = await this.singleProjectView(root)
+    const bindings = await this.getBindings(root)
+    const checkouts: BlueprintCheckoutInput[] = []
+    for (const binding of bindings) {
+      if (resolve(binding.path).toLowerCase() === resolve(root).toLowerCase()) continue
+      const key = root + '\0' + binding.repoId + '\0' + binding.checkoutId
+      try {
+        const resolved = await this.resolveRoot(binding.path)
+        if (!resolved.ok || !resolved.root) throw new Error('Checkout has no .agents directory')
+        const projection = await this.singleProjectView(resolved.root)
+        if (projection.repoId !== binding.repoId) throw new Error('Checkout repository identity does not match its binding')
+        let dirty: boolean | undefined
+        try {
+          const result = await promisify(execFile)('git', ['status', '--porcelain', '--untracked-files=normal'], { cwd: resolved.root, timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 })
+          dirty = result.stdout.trim().length > 0
+        } catch { /* A registered Note workspace may have no Git repository. */ }
+        checkouts.push({ ...binding, path: resolved.root, name: projection.repoName, blueprint: projection.blueprint, snapshot: projection.blueprint.noteSnapshot, revision: projection.rev, expectedSourceHashes: this.compositionHashes.get(key), dirty })
+        this.compositionHashes.set(key, Object.fromEntries(Object.values(projection.blueprint.nodes).filter((node) => node.sourceUri && node.sourceHash).map((node) => [node.sourceUri!, node.sourceHash!])))
+      } catch (error) {
+        checkouts.push({ ...binding, bound: false, diagnostic: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    return { ...view, blueprint: composeBlueprint({ skeleton: view.blueprint, checkouts }) }
+  }
+
+  private async singleProjectView(root: string): Promise<ProjectView> {
     const loaded = await loadNoteEntries(root)
     const rev = this.acceptIndex(root, loaded.index)
     const repoName = await this.repoName(root)
@@ -379,7 +410,7 @@ export class HarnessNoteService {
       // Watch the source directory recursively, including newly created Note folders.
       const handle = watchDirectory(join(root, '.agents'), { recursive: true, persistent: false }, (_event, file) => {
         const path = String(file ?? '').replaceAll('\\', '/')
-        if (!path || path === 'harness.json' || path === 'notes' || path.startsWith('notes/') || path.startsWith('evidence/')) schedule()
+        if (!path || path === 'harness.json' || path === '.local/workspace-map.json' || path === 'notes' || path.startsWith('notes/') || path.startsWith('evidence/')) schedule()
       })
       handle.on('error', (error) => notify(error.message))
       handles.push(handle)
@@ -417,9 +448,19 @@ export class HarnessNoteService {
   }
 
   async setBinding(root: string, binding: BindingRecord): Promise<BindingRecord[]> {
-    if (!(await isDir(binding.path))) {
-      throw { code: 'NOT_FOUND', message: `checkout path missing: ${binding.path}` }
+    if (!binding.checkoutId?.trim() || !binding.repoId || typeof binding.selected !== 'boolean') {
+      throw { code: 'SCHEMA_INVALID', message: 'Explicit repoId, checkoutId and selected flag are required' }
     }
+    if (!(await isDir(binding.path))) {
+      throw { code: 'NOT_FOUND', message: 'checkout path missing: ' + binding.path }
+    }
+    let profile: { repoId?: unknown }
+    try {
+      profile = JSON.parse(await readFile(join(binding.path, '.agents', 'harness.json'), 'utf8')) as { repoId?: unknown }
+    } catch {
+      throw { code: 'NOT_FOUND', message: 'checkout harness profile missing: ' + binding.path }
+    }
+    if (profile.repoId !== binding.repoId) throw { code: 'SCHEMA_INVALID', message: 'Checkout repository identity does not match its binding' }
     const { map } = await readWorkspaceMap(root)
     const bindings: BindingRecord[] = [...(map?.bindings ?? [])]
     const at = bindings.findIndex((b) => b.checkoutId === binding.checkoutId)

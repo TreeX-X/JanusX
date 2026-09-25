@@ -165,7 +165,13 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.projectGraph, async (_e, cwd: string) => {
     const root = await withRoot(cwd)
     await harnessNoteService.watch(root)
-    return harnessNoteService.projectView(root)
+    const view = await harnessNoteService.projectView(root)
+    for (const checkout of view.blueprint.composition?.checkouts ?? []) {
+      if (checkout.status === 'unbound') continue
+      try { await harnessNoteService.watch(checkout.path) }
+      catch (error) { view.blueprint.composition!.diagnostics.push({ code: 'WATCH_FAILED', checkoutId: checkout.checkoutId, message: String(error) }) }
+    }
+    return view
   })
 
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.rescan, async (_e, cwd: string) => {

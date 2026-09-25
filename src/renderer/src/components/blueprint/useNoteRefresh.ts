@@ -38,7 +38,9 @@ export function subscribeNoteRefresh(blueprintId: string, root: string): () => v
       timer = setTimeout(() => { void refresh() }, 150)
     }
     const off = onHarnessChanged((event) => {
-      if (key(event.root) !== key(root)) return
+      const active = useBlueprintStore.getState().currentBlueprint
+      const dependency = active?.id === blueprintId && active.composition?.checkouts.some(row => key(row.path) === key(event.root))
+      if (key(event.root) !== key(root) && !dependency) return
       if (event.error) { useBlueprintStore.setState({ error: event.error, loadState: 'error' }); return }
       schedule()
     })

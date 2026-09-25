@@ -347,7 +347,11 @@ export function deriveBlueprintFlow(
         strokeDasharray: relationDash(rel.type)
       },
     }))
-  return { nodes, edges: [...edges, ...relationEdges] }
+  const interfaceEdges: Edge[] = (blueprint.composition?.interfaces ?? [])
+    .filter(port => port.direction === 'needs' && port.providerNodeId && !hidden.has(port.nodeId) && !hidden.has(port.providerNodeId))
+    .map(port => ({ id: 'e-interface-' + port.id, source: port.providerNodeId!, target: port.nodeId, type: 'blueprintAdaptive', label: port.name,
+      style: { stroke: port.status === 'stale' ? '#eab15f' : '#e78b63', strokeWidth: 1.6, strokeDasharray: '6 3' } }))
+  return { nodes, edges: [...edges, ...relationEdges, ...interfaceEdges] }
 }
 
 /** Canvas dash language, mirrored by the legend in BlueprintCanvas. */

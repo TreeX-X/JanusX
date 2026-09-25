@@ -18,6 +18,7 @@ export function BlueprintAdaptiveEdge({
   markerEnd,
   markerStart,
   style,
+  label,
   interactionWidth,
 }: EdgeProps<BlueprintAdaptiveEdgeType>) {
   const sourceNode = useInternalNode(source)
@@ -36,7 +37,7 @@ export function BlueprintAdaptiveEdge({
       height: targetNode.measured.height ?? FALLBACK_HEIGHT,
     },
   )
-  const [path] = getBezierPath({
+  const [path, labelX, labelY] = getBezierPath({
     sourceX: endpoints.source.x,
     sourceY: endpoints.source.y,
     sourcePosition: endpoints.source.position,
@@ -48,6 +49,11 @@ export function BlueprintAdaptiveEdge({
   return (
     <BaseEdge
       path={path}
+      label={label}
+      labelX={labelX}
+      labelY={labelY}
+      labelStyle={{ fill: '#e78b63', fontSize: 11 }}
+      labelBgStyle={{ fill: '#19191d' }}
       markerStart={markerStart}
       markerEnd={markerEnd}
       style={style}
