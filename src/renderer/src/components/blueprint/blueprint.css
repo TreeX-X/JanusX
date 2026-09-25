@@ -2476,6 +2476,8 @@
   margin: 0 0 6px; padding: 7px 10px; border: 1px solid rgba(255, 120, 48, .35); border-radius: 6px;
   background: rgba(255, 120, 48, .08); color: #ffb085; font-size: 11px; line-height: 1.5;
 }
+/* 纯对话框不展示空态 JANUSX 像素 banner 与会话侧边栏（后者由 compactNavigation 关闭）。 */
+.bp-maintenance-panel .janus-chat-empty { display: none; }
 
 .bp-maintenance-panel {
   display: flex;

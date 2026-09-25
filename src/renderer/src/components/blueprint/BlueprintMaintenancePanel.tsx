@@ -84,13 +84,9 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     && chat.resourceController.resources.some(item => item.workspaceId === activeWorkspace.id)
 
   return <PanelFrame onClose={onClose}>
-    <div className="bp-maintenance-context" aria-live="polite">
-      <strong>{activeWorkspace.name}</strong>
-      <span>{t('blueprint:maintenance.scopeBlueprint')}</span>
-    </div>
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
-      <JanusChat visible docked focused modeColor="#ff7830" messages={chat.messages}
+      <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}

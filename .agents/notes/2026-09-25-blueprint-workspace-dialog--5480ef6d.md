@@ -35,13 +35,13 @@ The blueprint workbench right column is one Janus dialog bound to the current wo
 
 ## Scope
 
-`BlueprintMaintenancePanel` keeps exactly one project conversation (`BLUEPRINT_PANEL_VIEW_REF`), always attached to the active workspace only, `plan` approval mode, `chat.send` directly, `JanusChat minimalComposer` (messages + approval slot + single input; thread toolbar, resource chips, edit actions, status bar hidden). On workspace switch the panel clears the conversation, shows `maintenance.workspaceSwitched` for 5s, and rebinds. The workbench capsule looks up the same stable `viewRef`. The maintenance backend (store, service, changeset, audit, undo, `maintenanceContext`) stays intact and unit-covered; only the right-column UI entry is minimal now.
+`BlueprintMaintenancePanel` keeps exactly one project conversation (`BLUEPRINT_PANEL_VIEW_REF`), always attached to the active workspace only, `plan` approval mode, `chat.send` directly, `JanusChat minimalComposer + compactNavigation` (messages + approval slot + single input; thread toolbar, session sidebar, resource chips, edit actions, status bar hidden). The empty-state JANUSX banner is hidden by scoped CSS; the workspace/scope context line is removed — only the transient switch notice remains. On workspace switch the panel clears the conversation, shows `maintenance.workspaceSwitched` for 5s, and rebinds. The workbench capsule looks up the same stable `viewRef`. The maintenance backend (store, service, changeset, audit, undo, `maintenanceContext`) stays intact and unit-covered; only the right-column UI entry is minimal now.
 
 `tests/e2e/blueprint-workbench.spec.ts` asserts the pure dialog plus a switch-workspace case (one session, context reset, notice, second stream scoped to the new workspace) driven by a `?switch-workspace` fixture flag in `tests/e2e/island-harness/project.tsx`. `tests/e2e/project-conversation.spec.ts` asserts the single dialog. `tests/e2e/blueprint-maintenance.spec.ts` drove the removed settings/proposal/audit UI and stays deleted.
 
 ## Acceptance criteria
 
-- [x] AC-1: Right column contains no `.bp-maintenance-controls`, settings, proposal, or audit sections; a workspace context line, an optional switch notice, plus a minimal `JanusChat` (single input) remain.
+- [x] AC-1: Right column contains no `.bp-maintenance-controls`, `.bp-maintenance-context`, session sidebar, resource chips, or empty-state banner; a minimal `JanusChat` (single input) plus the transient switch notice remain.
 - [x] AC-2: One persisted conversation across workspace switches (`conversationId` set size 1); sending emits a `project` stream scoped to the active workspace with no `maintenanceTaskId`; switching shows the notice, clears old messages, and the next stream carries the new workspace.
 
 ## Verification
@@ -60,4 +60,4 @@ The blueprint workbench right column is one Janus dialog bound to the current wo
 
 2026-09-25: Panel rewritten to a single-session dialog; workbench capsule follows the same stable `viewRef`. Trade-off: cross-checkout one-shot edits and in-panel proposal/audit/undo entries are gone from the right column; use chat tool approvals and the remaining maintenance store paths instead. `maintenanceContext.ts` is no longer referenced by the panel but stays (with its scope-ui test) as a backend utility.
 
-2026-09-25 (follow-up): removed per-workspace sessions in favor of one conversation; workspace switch clears context with a 5s notice; dialog switched to `minimalComposer` (single input box). Workbench capsule, fixture `project-controller`, and switch e2e updated to the stable `viewRef`.
+2026-09-25 (follow-up-2): user-reported remnants removed — session sidebar via `compactNavigation`, empty JANUSX banner via scoped CSS, workspace/scope context line deleted. Panel chrome is now header (title + close) + messages + single input.
