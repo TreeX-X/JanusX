@@ -8,7 +8,15 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Black-screen crash from worktree selectors
+extensions:
+  r5Migration:
+    sourceHash: 5d3143763f8715468389397e0b8e9002d533a7f91a9b45d009b2da5faed300e4
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Black-screen crash from worktree selectors
 ---
 
 # Agent Note: Stable refs for keyed zustand selectors

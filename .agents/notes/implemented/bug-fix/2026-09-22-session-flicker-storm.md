@@ -8,7 +8,17 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb7e75d4-4db1-4a7d-b321-6ea866df241c
-    reason: Per-write session:event emission from that slice meets uncoalesced scan imports and an unthrottled panel here, producing the event storm this fix collapses
+extensions:
+  r5Migration:
+    sourceHash: 69a7d44797817caa5315fc7e84a2cdc4db95de5858dda8897ef3f746b0629c82
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb7e75d4-4db1-4a7d-b321-6ea866df241c
+        reason: Per-write session:event emission from that slice meets uncoalesced scan
+          imports and an unthrottled panel here, producing the event storm this
+          fix collapses
 ---
 
 # Agent Note: Session card flicker from the external-scan event storm

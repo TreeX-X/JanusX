@@ -82,8 +82,11 @@ vi.mock('@janus-agent/agent-core', () => ({
 
 import { blueprintMaintenanceService } from '../../src/main/janus/maintenance/service'
 import { ChatSessionRuntime } from '@janus-agent/chat-core'
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
 
-const PROJECT_ID = 'harness:project:8fa19f17'
+const { HarnessNoteService } = await vi.importActual<typeof import('../../src/main/harness/service')>('../../src/main/harness/service')
+
+let PROJECT_ID = 'harness:project:8fa19f17'
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 const REQ = '11111111-1111-4111-8111-111111111111'
 const OTHER = '99999999-9999-4999-8999-999999999999'
@@ -130,7 +133,7 @@ function projectBlueprint(): Blueprint {
     nodeIds: [REQ],
     nodes: {
       [REQ]: {
-        id: REQ, title: 'Requirement one', type: 'feature', status: 'in-progress', progress: 0,
+        id: REQ, sourceHash: '0'.repeat(64), title: 'Requirement one', type: 'feature', status: 'in-progress', progress: 0,
         statusSource: 'manual', positioning: '', description: 'The widget fails.', features: [], completedItems: [],
         techSolution: '', notes: '', todos: [], issues: [], activities: [], analyses: [], workspaceId: null,
         workspaceSnapshot: null, boundTerminalId: null, terminalHistory: [], lastAnalyzedCommitSha: null,
@@ -203,6 +206,7 @@ function changeSetWith(operations: BlueprintOperation[]): BlueprintChangeSet {
     version: 1,
     status: 'ready',
     reason: 'test',
+    sourceHashes: { [REQ]: '0'.repeat(64) },
     evidence: [
       {
         workspaceId: 'ws-1',
@@ -228,9 +232,10 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
   it('binds proposal-only maintenance to shared conversation history and rejects foreign callers', async () => {
     const task = await blueprintMaintenanceService.start({ blueprintId: PROJECT_ID, workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir, nodeScope: { type: 'blueprint' }, goal: 'Maintain', conversationId: 'shared' })
     expect(task).toMatchObject({ status: 'active', conversationId: 'shared', messages: [] })
-    const input = { taskId: task.id, conversationId: 'shared', providerId: 'p', modelId: 'm', messages: [{ role: 'user', content: 'Preserve the exact selected scope' }], signal: new AbortController().signal, chatSession: new ChatSessionRuntime(), workspaceIds: ['ws-1'] }
+    const input = { taskId: task.id, conversationId: 'shared', providerId: 'p', modelId: 'm', messages: [{ role: 'user', content: 'Preserve the exact selected scope' }], signal: new AbortController().signal, chatSession: new ChatSessionRuntime(), workspaceIds: ['ws-1'], workspaceRoots: { 'ws-1': checkoutDir } }
     await expect(blueprintMaintenanceService.proposeForConversation({ ...input, conversationId: 'foreign' })).rejects.toThrow('another conversation')
     await expect(blueprintMaintenanceService.proposeForConversation({ ...input, workspaceIds: [] })).rejects.toThrow('detached')
+    await expect(blueprintMaintenanceService.proposeForConversation({ ...input, workspaceRoots: { 'ws-1': recordsDir } })).rejects.toThrow('root does not match')
     mocks.getLanguageModel.mockResolvedValue({})
     mocks.generateObject.mockResolvedValue({ object: { summary: 'Shared proposal', operations: [updateOp('shared-op', REQ, 'Revised requirement')] } })
     const text = await blueprintMaintenanceService.proposeForConversation(input)
@@ -240,6 +245,7 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
     expect(serviceOf().tasks.get(task.id)?.messages).toEqual([])
   })
   beforeEach(async () => {
+    PROJECT_ID = 'harness:project:8fa19f17'
     currentRev = 7
     recordsDir = await fs.mkdtemp(join(tmpdir(), 'maint-routing-records-'))
     checkoutDir = await fs.mkdtemp(join(tmpdir(), 'maint-routing-checkout-'))
@@ -483,5 +489,168 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
     expect(task.authorizedWorkspaces).toHaveLength(2)
     expect(task.nodeScope).toEqual({ type: 'blueprint' })
     blueprintMaintenanceService.cancel(task.id)
+  })
+
+  it('rejects an unregistered claimed path before reading the project graph', async () => {
+    await expect(blueprintMaintenanceService.start({ blueprintId: PROJECT_ID, workspaceId: 'ws-1', workspaceName: 'W', workspacePath: recordsDir,
+      authorizedWorkspaces: [{ workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir }],
+      nodeScope: { type: 'blueprint' }, goal: 'Unbound primary', conversationId: 'unbound' })).rejects.toThrow('primary checkout')
+    expect(mocks.projectView).not.toHaveBeenCalled()
+  })
+
+  describe('R5 real Note transactions', () => {
+    let harness: InstanceType<typeof HarnessNoteService>
+    const notePath = () => join(checkoutDir, '.agents', 'notes', 'requirement.md')
+    beforeEach(async () => {
+      await fs.mkdir(join(checkoutDir, '.agents', 'notes'), { recursive: true })
+      await fs.writeFile(join(checkoutDir, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'R5 fixture', profile: SUPPORTED_HARNESS_PROFILE }))
+      await fs.writeFile(notePath(), REQUIREMENT_MD)
+      await fs.writeFile(join(checkoutDir, '.agents', 'notes', 'other.md'), REQUIREMENT_MD.replaceAll(REQ, OTHER).replace('Requirement one', 'Other requirement'))
+      harness = new HarnessNoteService()
+      PROJECT_ID = (await harness.projectView(checkoutDir)).blueprint.id
+      mocks.resolveRoot.mockImplementation(harness.resolveRoot.bind(harness))
+      // Hold projection revision fixed to prove raw hashes protect writes independently.
+      mocks.projectView.mockImplementation(async (root: string) => {
+        const view = await harness.projectView(root)
+        return { ...view, rev: currentRev, blueprint: { ...view.blueprint, contentRevision: currentRev } }
+      })
+      mocks.readNote.mockImplementation(harness.readNote.bind(harness))
+      mocks.applyBundleChangeSet.mockImplementation(harness.applyBundleChangeSet.bind(harness))
+      mocks.getLanguageModel.mockResolvedValue({})
+    })
+
+    async function propose(operations: BlueprintOperation[]) {
+      const task = await blueprintMaintenanceService.start({ blueprintId: PROJECT_ID, workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir,
+        nodeScope: { type: 'blueprint' }, goal: 'Maintain these Notes', conversationId: 'real-conversation' })
+      mocks.generateObject.mockResolvedValue({ object: { summary: 'Real proposal', operations } })
+      await blueprintMaintenanceService.proposeForConversation({ taskId: task.id, conversationId: 'real-conversation', providerId: 'p', modelId: 'm',
+        messages: [{ role: 'user', content: 'Apply the requested changes' }], signal: new AbortController().signal, chatSession: new ChatSessionRuntime(),
+        workspaceIds: ['ws-1'], workspaceRoots: { 'ws-1': checkoutDir } })
+      return serviceOf().tasks.get(task.id)!
+    }
+
+    it('captures proposal-time hashes and rejects later source bytes despite equal revision', async () => {
+      const task = await propose([updateOp('retitle', REQ, 'Approved title')])
+      const hash = (await harness.readNote(checkoutDir, REQ)).sha256
+      expect(task.changeSet?.sourceHashes).toMatchObject({ [REQ]: hash })
+      const changed = REQUIREMENT_MD + '\nExternal edit without a revision notification.\n'
+      await fs.writeFile(notePath(), changed)
+      await expect(blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['retitle'] }))
+        .rejects.toThrow('HARNESS_CONFLICT')
+      expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(changed)
+      expect((await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })).every(audit => audit.status !== 'applied')).toBe(true)
+    })
+
+    it('applies a partial group selection and persists the actual applied and rejected operations through undo', async () => {
+      const task = await propose([updateOp('selected', REQ, 'Approved title'), updateOp('unselected', OTHER, 'Unselected title')])
+      const changeSet = task.changeSet!
+      const group = changeSet.groups!.find(item => item.operationIds.includes('selected'))!
+      const result = await blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: changeSet.id, operationIds: [], groupIds: [group.id] })
+      expect(result.appliedOperationIds).toEqual(['selected'])
+      expect((await harness.readNote(checkoutDir, REQ)).raw).toContain('# Approved title')
+      expect((await harness.readNote(checkoutDir, OTHER)).raw).toContain('# Other requirement')
+      const [audit] = await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })
+      expect(audit).toMatchObject({ status: 'applied', harnessRoot: checkoutDir, selectedOperationIds: ['selected'], rejectedOperationIds: ['unselected'] })
+      expect((audit.afterSnapshot as Blueprint).nodes[REQ].sourceHash).toBe((await harness.readNote(checkoutDir, REQ)).sha256)
+      blueprintMaintenanceService.complete(task.id)
+      const undo = await blueprintMaintenanceService.prepareUndo({ blueprintId: PROJECT_ID, auditId: audit.id })
+      const undone = await blueprintMaintenanceService.applyUndo({ blueprintId: PROJECT_ID, undoChangeSetId: undo.changeSet.id, operationIds: undo.changeSet.operations.map(op => op.operationId) })
+      expect((await harness.readNote(checkoutDir, REQ)).raw).toContain('# Requirement one')
+      expect((await harness.readNote(checkoutDir, OTHER)).raw).toContain('# Other requirement')
+      expect((await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })).find(item => item.id === undone.auditId))
+        .toMatchObject({ status: 'applied', undoOfAuditId: audit.id, harnessRoot: checkoutDir, selectedOperationIds: ['undo-selected'] })
+    })
+
+    it.each(['before preparation', 'after preparation'])('refuses undo with a changed source %s even at the same revision', async timing => {
+      const task = await propose([updateOp('retitle', REQ, 'Approved title')])
+      await blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['retitle'] })
+      blueprintMaintenanceService.complete(task.id)
+      const [audit] = await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })
+      const changed = (await harness.readNote(checkoutDir, REQ)).raw + '\nA newer source change.\n'
+      if (timing === 'before preparation') await fs.writeFile(notePath(), changed)
+      const undo = await blueprintMaintenanceService.prepareUndo({ blueprintId: PROJECT_ID, auditId: audit.id })
+      if (timing === 'after preparation') await fs.writeFile(notePath(), changed)
+      mocks.applyBundleChangeSet.mockClear()
+      await expect(blueprintMaintenanceService.applyUndo({ blueprintId: PROJECT_ID, undoChangeSetId: undo.changeSet.id, operationIds: undo.changeSet.operations.map(op => op.operationId) }))
+        .rejects.toThrow('HARNESS_CONFLICT')
+      expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(changed)
+    })
+
+    it('refuses evidence drift before apply and reports the changed critical file', async () => {
+      const manifest = { workspaceId: 'ws-1', workspaceRootFingerprint: 'fp', gitHead: 'head', files: [{ path: 'src/widget.ts', sha256: 'a', sourceState: 'tracked', role: 'supporting', supportsOperationIds: [] }] }
+      mocks.collectEvidence.mockImplementation(async () => ({ ok: true, value: { manifest: structuredClone(manifest), context: 'src/widget.ts' } }))
+      const task = await propose([{ ...updateOp('retitle', REQ, 'Approved title'), evidenceRefs: ['src/widget.ts'] }])
+      manifest.files[0].sha256 = 'b'
+      await expect(blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['retitle'] }))
+        .rejects.toThrow('src/widget.ts')
+      expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+      expect((await harness.readNote(checkoutDir, REQ)).raw).toBe(REQUIREMENT_MD)
+    })
+
+    it('rechecks undo evidence and workspace authorization without writing', async () => {
+      const manifest = { workspaceId: 'ws-1', workspaceRootFingerprint: 'fp', gitHead: 'head', files: [{ path: 'src/widget.ts', sha256: 'a', sourceState: 'tracked', role: 'supporting', supportsOperationIds: [] }] }
+      mocks.collectEvidence.mockImplementation(async () => ({ ok: true, value: { manifest: structuredClone(manifest), context: 'src/widget.ts' } }))
+      const task = await propose([{ ...updateOp('retitle', REQ, 'Approved title'), evidenceRefs: ['src/widget.ts'] }])
+      await blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['retitle'] })
+      blueprintMaintenanceService.complete(task.id)
+      const [audit] = await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })
+      const undo = await blueprintMaintenanceService.prepareUndo({ blueprintId: PROJECT_ID, auditId: audit.id })
+      const input = { blueprintId: PROJECT_ID, undoChangeSetId: undo.changeSet.id, operationIds: undo.changeSet.operations.map(op => op.operationId) }
+      mocks.applyBundleChangeSet.mockClear()
+      manifest.files[0].sha256 = 'b'
+      await expect(blueprintMaintenanceService.applyUndo(input)).rejects.toThrow('src/widget.ts')
+      manifest.files[0].sha256 = 'a'
+      await fs.unlink(join(recordsDir, 'ws-1.json'))
+      await expect(blueprintMaintenanceService.applyUndo(input)).rejects.toThrow('授权工作区未注册或已移除')
+      expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+      expect((await harness.readNote(checkoutDir, REQ)).raw).toContain('# Approved title')
+    })
+
+    it('refuses legacy proposals without captured hashes instead of rebasing them', async () => {
+      const task = await propose([updateOp('retitle', REQ, 'Approved title')])
+      delete task.changeSet!.sourceHashes
+      await expect(blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['retitle'] })).rejects.toThrow('HARNESS_CONFLICT')
+      expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+      expect((await harness.readNote(checkoutDir, REQ)).raw).toBe(REQUIREMENT_MD)
+    })
+
+    it('does not resolve an authorized workspace to a different registered checkout', async () => {
+      const other = join(recordsDir, 'other-checkout')
+      await fs.mkdir(join(other, '.agents', 'notes'), { recursive: true })
+      await fs.copyFile(join(checkoutDir, '.agents', 'harness.json'), join(other, '.agents', 'harness.json'))
+      await fs.writeFile(join(other, '.agents', 'notes', 'requirement.md'), REQUIREMENT_MD)
+      await fs.writeFile(join(recordsDir, 'ws-2.json'), JSON.stringify({ id: 'ws-2', path: other }))
+      await expect(blueprintMaintenanceService.start({ blueprintId: PROJECT_ID, workspaceId: 'ws-2', workspaceName: 'Other', workspacePath: other,
+        nodeScope: { type: 'blueprint' }, goal: 'Wrong checkout', conversationId: 'foreign-checkout' })).rejects.toThrow('checkout')
+      expect(mocks.applyBundleChangeSet).not.toHaveBeenCalled()
+    })
+
+    it('undoes an individually confirmed delete as an archive reversal', async () => {
+      const task = await propose([{ operationId: 'delete', type: 'delete-node', nodeId: REQ, reason: 'Retire', evidenceRefs: [], dependsOn: [], risk: 'high',
+        impact: { title: 'Requirement one', parentId: null, childIds: [], incomingRelationIds: [], outgoingRelationIds: [] } }])
+      await blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['delete'], confirmedDeleteOperationIds: ['delete'] })
+      expect((await harness.readNote(checkoutDir, REQ)).raw).toContain('lifecycle: archived')
+      blueprintMaintenanceService.complete(task.id)
+      const [audit] = await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })
+      const undo = await blueprintMaintenanceService.prepareUndo({ blueprintId: PROJECT_ID, auditId: audit.id })
+      await blueprintMaintenanceService.applyUndo({ blueprintId: PROJECT_ID, undoChangeSetId: undo.changeSet.id, operationIds: undo.changeSet.operations.map(op => op.operationId) })
+      expect((await harness.readNote(checkoutDir, REQ)).raw).toContain('lifecycle: accepted')
+    })
+
+    it('records the actual composition relation identity for an audit-backed undo', async () => {
+      const task = await propose([{ operationId: 'relate', type: 'add-relation', tempRelationId: 'new-relation',
+        after: { sourceNodeId: REQ, targetNodeId: OTHER, relationType: 'depends-on' }, reason: 'Order', evidenceRefs: [], dependsOn: [], risk: 'medium' }])
+      await blueprintMaintenanceService.apply({ taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['relate'] })
+      blueprintMaintenanceService.complete(task.id)
+      const [audit] = await blueprintMaintenanceService.listAudits({ blueprintId: PROJECT_ID })
+      const view = await harness.projectView(checkoutDir)
+      expect(view.blueprint.relations.find(relation => relation.id === audit.createdRelationIds?.['new-relation']))
+        .toMatchObject({ sourceNodeId: REQ, targetNodeId: OTHER, type: 'depends-on' })
+      const undo = await blueprintMaintenanceService.prepareUndo({ blueprintId: PROJECT_ID, auditId: audit.id })
+      await blueprintMaintenanceService.applyUndo({ blueprintId: PROJECT_ID, undoChangeSetId: undo.changeSet.id, operationIds: undo.changeSet.operations.map(op => op.operationId) })
+      expect((await harness.projectView(checkoutDir)).blueprint.relations).toEqual([])
+    })
   })
 })

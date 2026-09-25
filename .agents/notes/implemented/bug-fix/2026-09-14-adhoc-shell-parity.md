@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 4f9cb92a-9bf8-55be-b2a5-bf65e5124bee
+kind: decision
+lifecycle: implemented
+created: 2026-09-14
+class: bug-fix
+---
 # Agent Note: 后台 adhoc 与同步命令共享 shell 判定并透出启动失败
 
 Status: implemented

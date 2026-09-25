@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: a568cc88-94af-5ffe-af61-7b60f787cd43
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: process
+---
 # Agent Note: GitHub 维护标准
 
 Status: implemented

@@ -5,11 +5,13 @@ import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import { BlueprintMaintenancePanel } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
 import { HarnessRunPanel } from '../../../src/renderer/src/components/janus/HarnessRunPanel'
 import { useBlueprintStore } from '../../../src/renderer/src/stores/blueprint'
+import { installMaintenanceFixture } from './maintenance-fixture'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import type { ChatAgentEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
 import type { HarnessTaskDraft, HarnessTranscript } from '../../../src/shared/ipc/harness'
+import type { CreateAgentSessionInput } from '../../../src/shared/ipc/agent-runtime'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
 import '../../../src/renderer/src/components/blueprint/blueprint.css'
@@ -20,30 +22,50 @@ const repoId = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
 const id = '44444444-4444-4333-8333-444444444444'
 const uri = `note://${repoId}/${id}`
 const workspace = { id: 'ws', path: 'C:/fixture', name: 'Project', clis: [], layout: { mode: 'tabs', positions: [] } }
-const blueprint = { id: `harness:project:${repoId}`, source: 'harness', name: 'Project', rootNodeId: id, nodeIds: [id], nodes: { [id]: { id, title: 'Task', sourceUri: uri, sourceHash: 'a'.repeat(64), children: [] } } }
-useWorkspaceStore.setState({ workspaces: [workspace] as never, activeWorkspaceId: 'ws' })
-useBlueprintStore.setState({ currentBlueprint: blueprint as never, activeSession: { workspacePath: workspace.path } as never })
+const rootNode = { id, title: 'Task', sourceUri: uri, sourceHash: 'a'.repeat(64), children: [] }
+const blueprint = { id: `harness:project:${repoId}`, source: 'harness', name: 'Project', rootNodeId: id, nodeIds: [id], nodes: { [id]: rootNode } as Record<string, typeof rootNode> }
+for (const key of ['delete-a', 'delete-b']) {
+  blueprint.nodeIds.push(key)
+  blueprint.nodes[key] = { ...blueprint.nodes[id], id: key, title: key, sourceUri: `note://${repoId}/${key}` }
+}
+const secondWorkspace = { ...workspace, id: 'ws-b', path: 'C:/fixture-b', name: 'Checkout B' }
+const twoCheckouts = new URLSearchParams(location.search).has('two-checkouts')
+const workspaces = twoCheckouts ? [workspace, secondWorkspace] : [workspace]
+if (twoCheckouts) {
+  const alternateId = 'checkout-b:' + id
+  blueprint.nodeIds.push(alternateId)
+  blueprint.nodes[alternateId] = { ...blueprint.nodes[id], id: alternateId, title: 'Task checkout B', sourceHash: 'd'.repeat(64) }
+  Object.assign(blueprint, { composition: { version: 'r4', checkouts: [], interfaces: [], evidence: [], diagnostics: [], nodes: {
+    [id]: { layer: 'evidence', status: 'bound', repoId, path: workspace.path },
+    [alternateId]: { layer: 'evidence', status: 'bound', repoId, path: secondWorkspace.path },
+  } } })
+}
+useWorkspaceStore.setState({ workspaces: workspaces as never, activeWorkspaceId: 'ws' })
+useBlueprintStore.setState({ currentBlueprint: blueprint as never, blueprintWorkspace: { [blueprint.id]: workspace.path }, activeSession: { blueprintId: blueprint.id, nodeId: id, workspacePath: workspace.path, nodeSnapshot: blueprint.nodes[id] } as never })
 const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
+  runtimeSessions: [] as CreateAgentSessionInput[],
   streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
   prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0, reviews: 0, finishes: 0, repairs: 0, undoPreviews: 0, undoApplies: 0,
   gateExecute: false, gateResolve: null as null | (() => void),
   lastExecute: null as null | { runId: string; providerId?: string; modelId?: string; manualEvidence?: Array<{ stepId: string; observer: string; observation: string }> },
   transcript: { runId: 'run-1', active: false, turns: [] } as HarnessTranscript,
-  runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean }>,
+  runs: [] as Array<{ runId: string; taskUri: string; mode: string; state: string; attempt: number; executor: string; closeout: string; receipts: number; updatedAt: string; local: boolean; repairBudget: { maxAuto: number; usedAuto: number } }>,
 }
 ;(window as any).projectFixture = fixture
 const emit = (event: ChatAgentEvent) => events.forEach((listener) => listener(event))
 const emitRuntime = (event: unknown) => runtimeEvents.forEach((listener) => listener(event))
-Object.assign(window.electron.workspace, { list: async () => [workspace] })
-Object.assign(window.electron.janus, { listMaintenanceTasks: async () => [], listMaintenanceAudits: async () => [] })
+Object.assign(window.electron.workspace, { list: async () => workspaces })
 Object.assign(window.electron, { janusChat: {
   load: async () => JSON.parse(localStorage.getItem('project-conversations') ?? 'null'),
   save: async (snapshot: unknown) => localStorage.setItem('project-conversations', JSON.stringify(snapshot)),
 } })
 Object.assign(window.electron.agentRuntime, {
-  createSession: async () => ({ id: 'session', status: 'running', workspace: { workspaceId: 'ws', workspaceRoot: workspace.path } }),
+  createSession: async (input: CreateAgentSessionInput) => {
+    fixture.runtimeSessions.push(structuredClone(input))
+    return { id: input.workspaceId === 'ws' ? 'session' : 'session-b', status: 'running', workspace: { workspaceId: input.workspaceId, workspaceRoot: input.workspaceRoot } }
+  },
   cancelSession: async () => true,
   setApprovalMode: async () => true,
   onEvent: (listener: (event: unknown) => void) => { runtimeEvents.add(listener); return () => runtimeEvents.delete(listener) },
@@ -58,7 +80,16 @@ Object.assign(window.electron.llm, {
   getTerminalDefault: async () => ({ provider: { id: 'p', name: 'Fixture' }, modelId: 'model-a' }),
   listModels: async () => [{ id: 'model-a', name: 'Model A' }, { id: 'model-b', name: 'Model B' }],
   onAgentEvent: (listener: (event: ChatAgentEvent) => void) => { events.add(listener); return () => events.delete(listener) },
-  startChatStream: (request: ChatStreamRequest) => { fixture.streams.push(request); queueMicrotask(() => emit({ type: 'text_delta', requestId: request.requestId, delta: 'Project reply in progress' })) },
+  startChatStream: (request: ChatStreamRequest) => {
+    fixture.streams.push(request)
+    queueMicrotask(() => {
+      emit({ type: 'text_delta', requestId: request.requestId, delta: 'Project reply in progress' })
+      if (request.maintenanceTaskId) {
+        maintenance.completeProposal(request.maintenanceTaskId)
+        emit({ type: 'stream_end', requestId: request.requestId, cancelled: false })
+      }
+    })
+  },
   abortChat: async () => { fixture.aborts++ },
   steerChat: async () => { fixture.steers++; return { accepted: true } },
   answerQuestion: async ({ requestId, callId }: { requestId: string; callId: string }) => { fixture.answers++; emit({ type: 'question_resolved', requestId, callId, status: 'answered' }); return { accepted: true } },
@@ -188,6 +219,16 @@ Object.assign(window.electron.harness, {
   },
 })
 
+const maintenance = installMaintenanceFixture(blueprint as never, workspace)
+if (twoCheckouts) maintenance.checkoutViews[secondWorkspace.path] = {
+  ...blueprint, id: blueprint.id + ':checkout-b', nodeIds: [id], nodes: { [id]: { ...blueprint.nodes[id], title: 'Task checkout B', sourceHash: 'd'.repeat(64) } }, composition: undefined,
+} as never
+Object.assign(fixture, { maintenance,
+  finishStream: () => emit({ type: 'stream_end', requestId: fixture.streams.at(-1)!.requestId, cancelled: false }),
+  failStream: () => emit({ type: 'stream_error', requestId: fixture.streams.at(-1)!.requestId, error: 'Fixture provider unavailable' }),
+  snapshot: () => { const state = useBlueprintStore.getState(); return { graph: state.currentBlueprint, node: state.activeSession?.nodeSnapshot } },
+})
+
 function App() {
   const chat = useJanusChatController()
   const projectChat = useOptionalJanusChatController({ ownerRepoId: repoId, viewId: blueprint.id })
@@ -201,7 +242,7 @@ function App() {
     <button onClick={() => projectChat && chat.selectConversation(projectChat.conversationId)}>Return to project</button>
     <button onClick={() => {
       const request = fixture.streams.at(-1)!
-      emit({ type: 'question_requested', requestId: request.requestId, callId: 'q1', allowCustom: true, questions: [{ id: 'choice', header: 'Scope', question: 'Which scope?', options: [{ label: 'Selected', description: 'Current task' }, { label: 'All', description: 'Whole project' }] }] })
+      emit({ type: 'question_requested', requestId: request.requestId, callId: 'q1', allowCustom: true, questions: [{ header: 'Scope', question: 'Which scope?', multiple: false, options: [{ label: 'Selected', description: 'Current task' }, { label: 'All', description: 'Whole project' }] }] })
     }}>Ask question</button>
     <button onClick={() => emitRuntime({ type: 'approval-requested', request: {
       id: 'approval', sessionId: 'session', workspaceId: 'ws', toolName: 'workspace.edit',

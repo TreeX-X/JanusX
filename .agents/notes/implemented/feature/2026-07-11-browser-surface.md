@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 48db2e15-9318-5068-b300-b1913abf5463
+kind: decision
+lifecycle: implemented
+created: 2026-07-11
+class: feature
+---
 # Agent Note: Embedded browser surface
 
 Status: implemented

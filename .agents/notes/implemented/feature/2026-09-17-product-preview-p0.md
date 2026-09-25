@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 99b3fb78-bfbb-5ef5-8d2c-22ce5bbadc5e
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: feature
+---
 # Agent Note: 产物工作区 P0 预览格式扩展
 
 Status: implemented

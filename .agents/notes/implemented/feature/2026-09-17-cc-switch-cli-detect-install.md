@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 4814a657-5198-5e3f-9284-d0bfc600d43f
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: feature
+---
 # Agent Note: Claude Code version detection and install in Settings
 
 Status: implemented

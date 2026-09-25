@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 6471d8f2-ee72-5a63-897c-0d8e44110eb6
+kind: decision
+lifecycle: implemented
+created: 2026-09-16
+class: architecture
+---
 # Agent Note: Roundtable artifact card with blueprint refresh
 
 Status: implemented

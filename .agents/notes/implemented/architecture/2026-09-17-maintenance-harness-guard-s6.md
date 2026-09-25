@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 2b73dd7d-a2e0-50b4-aa75-31f0ed371ba2
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: architecture
+---
 # Agent Note: Maintenance harness guard for project graphs
 
 Status: implemented

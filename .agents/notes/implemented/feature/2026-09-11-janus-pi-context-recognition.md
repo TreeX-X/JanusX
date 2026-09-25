@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: e34329c5-dbea-5a5e-869c-e7263aa95663
+kind: decision
+lifecycle: implemented
+created: 2026-09-11
+class: feature
+---
 # Agent Note: Janus/Pi 上下文识别
 
 Status: implemented

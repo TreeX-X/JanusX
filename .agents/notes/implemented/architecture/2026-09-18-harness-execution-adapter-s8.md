@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 553f17a8-e800-5e4a-ac55-ae454a51825b
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: JanusX harness execution adapter and legacy-lane closeout
 
 Status: implemented

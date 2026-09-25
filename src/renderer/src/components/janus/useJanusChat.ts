@@ -159,6 +159,7 @@ interface ConversationRuntime {
 }
 
 interface RuntimeHandles {
+  proposalRetry?: { messageId: string; taskId: string }
   generation: number
   active: boolean
   abort: (() => void) | null
@@ -538,6 +539,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const conversation = conversationsRef.current.find((item) => item.id === id)
     const handles = getHandles(id)
     if (!conversation || runtime?.isStreaming || handles.active) return
+    handles.proposalRetry = maintenanceTaskId ? { messageId: userMessage.id, taskId: maintenanceTaskId } : undefined
     const generation = handles.generation + 1
     handles.generation = generation
     handles.active = true
@@ -822,7 +824,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const turn = getRetryTurn(conversation.messages)
     if (!turn) return
     updateConversation(id, (current) => ({ ...current, toolTraces: [] }))
-    startRequest(id, turn.history, turn.userMessage)
+    const proposal = handlesRef.current.get(id)?.proposalRetry
+    startRequest(id, turn.history, turn.userMessage, proposal?.messageId === turn.userMessage.id ? proposal.taskId : undefined)
   }, [startRequest, updateConversation])
 
   const clear = useCallback((id: string) => {

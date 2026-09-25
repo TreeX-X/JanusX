@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 5c873080-4f76-597f-9fbd-0bdcc59a02a3
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: bug-fix
+---
 # Agent Note: Monaco diff single line number
 
 Status: implemented

@@ -8,7 +8,16 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/d87e7a46-1d85-45e5-a635-63a6838d441c
-    reason: Session cards render the checkpoints surfaced under each sidebar worktree group
+extensions:
+  r5Migration:
+    sourceHash: 2acff95fff17418bba67bb204271d95217c14887eb2ef17400d63fb24aed818a
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/d87e7a46-1d85-45e5-a635-63a6838d441c
+        reason: Session cards render the checkpoints surfaced under each sidebar
+          worktree group
 ---
 
 # Agent Note: Session-owned checkpoints, standalone checkpoints tool retired

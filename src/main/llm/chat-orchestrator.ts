@@ -64,7 +64,7 @@ export interface ChatStreamRequest {
    */
   domain?: 'personal' | 'project'
   /** Renderer selection request only; never trusted for paths or grants. */
-  noteRefs?: Array<{ uri: string; expectedHash?: string }>
+  noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
   maintenanceTaskId?: string
 }
 
@@ -436,6 +436,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         text = await blueprintMaintenanceService.proposeForConversation({
           taskId: request.maintenanceTaskId, conversationId, messages: history, providerId, modelId,
           signal: controller.signal, chatSession, workspaceIds: (workspaceResources ?? []).map((item) => item.workspaceId),
+          workspaceRoots: Object.fromEntries((workspaceResources ?? []).map(item => [item.workspaceId, item.workspacePath])),
         })
       } while (!controller.signal.aborted && steeringPort.size > 0)
       if (!controller.signal.aborted) sendAgentEvent({ type: 'text_delta', requestId, delta: text })

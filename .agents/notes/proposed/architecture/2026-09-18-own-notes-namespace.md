@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 134ce6f7-07c1-55be-b2c4-b37bc216c37f
+kind: decision
+lifecycle: proposed
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Own working notes live outside the harness graph
 
 Status: proposed

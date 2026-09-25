@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: fd4aef5f-f428-569d-b592-152b147d547b
+kind: decision
+lifecycle: implemented
+created: 2026-09-13
+class: feature
+---
 # Agent Note: 产物工作区关闭竞态修复与 peek 胶囊满宽对齐
 
 Status: implemented

@@ -53,15 +53,17 @@ test('project entries share one stream, steering, questions and model across pan
   await expect(page.getByTestId('controller')).toHaveAttribute('data-streaming', 'false')
   expect(await page.evaluate(() => (window as any).projectFixture.aborts)).toBe(1)
   await expect(main.locator('.janus-resource-chip')).toHaveCount(1)
-  await blueprint.locator('.janus-resource-remove').click()
-  await expect(main.locator('.janus-resource-chip')).toHaveCount(0)
+  // The chipless maintenance composer exposes authorization in its settings.
   await expect(blueprint.locator('.janus-resource-chip')).toHaveCount(0)
-  await expect(blueprint.getByRole('button', { name: 'Compose as proposal', exact: true })).toBeDisabled()
+  const sourceWorkspace = blueprint.locator('.bp-maintenance-workspace-picker').getByRole('checkbox')
+  await expect(sourceWorkspace).toBeChecked()
+  await expect(sourceWorkspace).toBeDisabled()
+  await expect(blueprint.getByRole('button', { name: 'Compose as proposal', exact: true })).toBeEnabled()
   await page.reload()
   await expect(page.getByTestId('controller')).toHaveAttribute('data-id', id!)
   await expect(page.getByTestId('main-chat')).toContainText('Inspect this task')
-  await expect(page.getByTestId('main-chat').locator('.janus-resource-chip')).toHaveCount(0)
-  await expect(page.getByTestId('blueprint-chat').getByRole('button', { name: 'Compose as proposal', exact: true })).toBeDisabled()
+  await expect(page.getByTestId('main-chat').locator('.janus-resource-chip')).toHaveCount(1)
+  await expect(page.getByTestId('blueprint-chat').getByRole('button', { name: 'Compose as proposal', exact: true })).toBeEnabled()
 })
 
 test('task contract adoption enables preparation at a narrow viewport', async ({ page }) => {

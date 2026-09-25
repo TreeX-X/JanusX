@@ -8,10 +8,23 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836
-    reason: Worktree rows switch the active path while the file tree stays pinned to the workspace root
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/636764b9-0105-4944-91f7-72fcbd3c4869
-    reason: Worktree creation and deletion move the active path and need the same tree rescope
+extensions:
+  r5Migration:
+    sourceHash: 63d10102479f0b608e746db69614f83e8986a86509fda43e79d6a2385652f1c3
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836
+        reason: Worktree rows switch the active path while the file tree stays pinned to
+          the workspace root
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/636764b9-0105-4944-91f7-72fcbd3c4869
+        reason: Worktree creation and deletion move the active path and need the same
+          tree rescope
 ---
 
 # Agent Note: Worktree switch rescopes the file tree with a sweep

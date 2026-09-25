@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 39f58575-dba9-584f-a285-a33a2c73cdc4
+kind: decision
+lifecycle: implemented
+created: 2026-09-20
+class: bug-fix
+---
 # Agent Note: Packaged node_modules is copied verbatim, not re-derived
 
 Status: implemented

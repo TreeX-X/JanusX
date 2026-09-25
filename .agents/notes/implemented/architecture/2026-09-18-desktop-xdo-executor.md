@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: b057b3f0-463e-544c-b6ea-f0d81106b1fa
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Desktop xdo host executes checks and self-review
 
 Status: implemented

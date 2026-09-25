@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 1915e29e-2d68-5b6d-9fbd-b2f1219dec9c
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: On-demand legacy blueprint migration
 
 Status: implemented

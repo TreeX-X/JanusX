@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 958007ff-748f-57c1-ae16-b9b99a94c198
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: architecture
+---
 # Agent Note: Scoped desktop implementation before task verification
 
 Status: implemented

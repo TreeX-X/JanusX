@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: ad7e45c2-3f6b-5c81-89c0-37bb979b9e73
+kind: decision
+lifecycle: proposed
+created: 2026-09-20
+class: feature
+---
 # Agent Note: Janus CLI npm 发布与设置页检测安装
 
 Status: proposed

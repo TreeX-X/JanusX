@@ -393,7 +393,15 @@
       "targetNodeId": "目标节点",
       "primaryWorkspaceId": "主要工作区",
       "linkedWorkspaceIds": "辅助工作区"
-    }
+    },
+    "dependencies": "必要依赖",
+    "selectAll": "全选非删除操作",
+    "selectOperation": "选择操作 {{id}}",
+    "staleSource": "来源已变化，请刷新蓝图并重新生成提案。",
+    "registerWorkspace": "请先将此 checkout 注册为工作区，再生成维护提案。",
+    "activeScopeMismatch": "当前任务的范围或对话不同，请选择对应节点，或先完成、取消当前任务。",
+    "appliedOperations": "已应用操作",
+    "rejectedOperations": "未应用操作"
   },
   "workbench": {
     "ariaLabel": "Blueprint Workbench",

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 70beb72a-424d-5e96-a0d0-8e1a29635220
+kind: decision
+lifecycle: implemented
+created: 2026-09-23
+class: feature
+---
 # Agent Note: Terminal right-island turn file history
 
 Status: implemented

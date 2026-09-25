@@ -8,16 +8,36 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
-    reason: Orca-aligned three-layer requirement lands here as its first renderer slice
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e782007f-d07b-4f60-be32-63d1b22ec1f8
-    reason: Unified inline timeline plus modal diff is the dock layout this slice retires
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
-    reason: Pull-mode transcript backfill supplies the external rows this slice presents read-only
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
-    reason: Turn-owned prompt plus excerpt fields seed the preview and window prose
+extensions:
+  r5Migration:
+    sourceHash: a12ae1c493684dcda245733b5873d3af12e9d519117bf7370111dd329f8e574d
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+      - relations[2].reason
+      - relations[3].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
+        reason: Orca-aligned three-layer requirement lands here as its first renderer
+          slice
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e782007f-d07b-4f60-be32-63d1b22ec1f8
+        reason: Unified inline timeline plus modal diff is the dock layout this slice
+          retires
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
+        reason: Pull-mode transcript backfill supplies the external rows this slice
+          presents read-only
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
+        reason: Turn-owned prompt plus excerpt fields seed the preview and window prose
 ---
 
 # Agent Note: Windowed session reading with orca-aligned preview layers

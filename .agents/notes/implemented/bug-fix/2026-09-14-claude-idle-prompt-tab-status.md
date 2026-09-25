@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: bb75d2cd-3c9e-51fd-bcaa-d484e7c3a1dc
+kind: decision
+lifecycle: implemented
+created: 2026-09-14
+class: bug-fix
+---
 # Agent Note: Claude idle nudge no longer stains the tab orange
 
 Status: implemented

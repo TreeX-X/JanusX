@@ -393,7 +393,15 @@
       "targetNodeId": "Target node",
       "primaryWorkspaceId": "Primary workspace",
       "linkedWorkspaceIds": "Linked workspaces"
-    }
+    },
+    "dependencies": "Required dependencies",
+    "selectAll": "Select all non-delete operations",
+    "selectOperation": "Select operation {{id}}",
+    "staleSource": "The source has changed. Refresh the blueprint and regenerate the proposal.",
+    "registerWorkspace": "Register this checkout as a workspace before proposing changes.",
+    "activeScopeMismatch": "The active task has a different scope or conversation. Select its node, or finish or cancel it first.",
+    "appliedOperations": "Applied operations",
+    "rejectedOperations": "Not applied"
   },
   "workbench": {
     "ariaLabel": "Blueprint Workbench",

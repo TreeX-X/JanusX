@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: ff0fe2db-3fbe-5071-b9dd-a8a947b756dc
+kind: decision
+lifecycle: implemented
+created: 2026-06-28
+class: feature
+---
 # Agent Note: Agent desktop notifications
 
 Status: implemented

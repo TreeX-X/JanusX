@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: c0f3f75a-474f-5487-9426-c54c91759ac5
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: architecture
+---
 # Agent Note: Maintenance panel renders shared conversation units
 
 Status: implemented

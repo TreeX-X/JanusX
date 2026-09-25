@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 77c7030e-fb80-5e57-9dfa-ad92cbc76540
+kind: decision
+lifecycle: implemented
+created: 2026-09-21
+class: feature
+---
 # Agent Note: Conventional file glyph for the drawer's Markdown view
 
 Status: implemented

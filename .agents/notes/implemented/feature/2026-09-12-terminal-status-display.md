@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 27891818-004c-5bf2-a82a-34b838ce4884
+kind: decision
+lifecycle: implemented
+created: 2026-09-12
+class: feature
+---
 # Agent Note: Terminal status display simplification and tab parity
 
 Status: implemented

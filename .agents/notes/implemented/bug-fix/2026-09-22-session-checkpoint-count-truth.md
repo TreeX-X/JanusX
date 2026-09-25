@@ -8,10 +8,23 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
-    reason: The migration moves checkpoint ownership into session cards, whose count and list must read one truth
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
-    reason: Expand-content states assume the session-scoped list returns the counted checkpoints
+extensions:
+  r5Migration:
+    sourceHash: c35aeb2ee2efccf2bae9c651bc2cff71844e80bc920b96b94f7f0c9aadb77dc7
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
+        reason: The migration moves checkpoint ownership into session cards, whose count
+          and list must read one truth
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
+        reason: Expand-content states assume the session-scoped list returns the counted
+          checkpoints
 ---
 
 # Agent Note: Session checkpoint count and list share one truth

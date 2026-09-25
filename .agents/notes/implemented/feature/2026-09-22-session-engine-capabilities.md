@@ -8,7 +8,16 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
-    reason: The content slice defines turn prompt and excerpt fields; this slice supplies excerpts for every engine with a readable transcript store
+extensions:
+  r5Migration:
+    sourceHash: dd40b9880d9642ce4cdecb7d627334f58f025c64e38a7adbcbf6a3a76e7713bd
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
+        reason: The content slice defines turn prompt and excerpt fields; this slice
+          supplies excerpts for every engine with a readable transcript store
 ---
 
 # Agent Note: Per-engine hook capabilities plus transcript resolvers

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 0f2f5228-525d-5aec-86ec-e963e8cdd99a
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: process
+---
 # Agent Note: JanusX repo identity for the harness
 
 Status: implemented

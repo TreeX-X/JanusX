@@ -8,7 +8,16 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836
-    reason: Worktree sub-rows own the sidebar section that terminals now follow per worktree
+extensions:
+  r5Migration:
+    sourceHash: f98046041c0d47a3ed8ff4eed1f964183a9ba17e82f129c9e44483efc7cbfcdc
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836
+        reason: Worktree sub-rows own the sidebar section that terminals now follow per
+          worktree
 ---
 
 # Agent Note: Terminals as level-3 items grouped under their worktree

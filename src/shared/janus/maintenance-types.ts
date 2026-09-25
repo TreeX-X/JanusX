@@ -203,6 +203,8 @@ export interface BlueprintChangeSet {
   version: number
   status: BlueprintChangeSetStatus
   reason: string
+  /** Host-captured raw Note hashes at proposal time, keyed by source UUID. */
+  sourceHashes?: Record<string, string>
   evidence?: BlueprintEvidenceManifest[]
   operations: BlueprintOperation[]
   /** Node-aggregated approval groups derived from operations. Absent on legacy records. */

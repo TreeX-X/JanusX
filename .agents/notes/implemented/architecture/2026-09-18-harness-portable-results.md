@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 11d8826d-52d7-58bb-99bd-49b6ba04dfaf
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Desktop projections of portable task evidence
 
 Status: implemented

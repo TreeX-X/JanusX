@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 2dbc27e2-f13e-5fea-8c9e-72141f4cb574
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: feature
+---
 # Agent Note: Tabbed per-terminal maintenance with per-format model projectors
 
 Status: implemented

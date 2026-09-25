@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: ce93b420-be7c-5f68-95f7-12f7d4703d06
+kind: decision
+lifecycle: implemented
+created: 2026-09-21
+class: feature
+---
 # Agent Note: Hover-revealed actions button on the workspace row
 
 Status: implemented

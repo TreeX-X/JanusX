@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 8e32dd4e-bb0f-588e-a581-653b94a609be
+kind: decision
+lifecycle: implemented
+created: 2026-08-14
+class: feature
+---
 # Agent Note: F12 code navigation workbench
 
 Status: implemented

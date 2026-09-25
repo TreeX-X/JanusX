@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: e7bb35aa-e265-5307-834c-fc5ba36ec317
+kind: decision
+lifecycle: proposed
+created: 2026-07-14
+class: process
+---
 # Agent Note: Adjacent-suite scope boundary with auto-update
 
 Status: proposed

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: cddc53a5-dcf8-5852-a83c-94dd90d02788
+kind: decision
+lifecycle: proposed
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Legacy maintenance loop removal plan
 
 Status: proposed

@@ -39,7 +39,7 @@ export interface ChatRequest {
    */
   domain?: 'personal' | 'project'
   /** Renderer selection request only; the host resolves URIs and never trusts paths/grants from here. */
-  noteRefs?: Array<{ uri: string; expectedHash?: string }>
+  noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
   maintenanceTaskId?: string
 }
 export interface ChatStreamRequest extends ChatRequest { requestId: string }

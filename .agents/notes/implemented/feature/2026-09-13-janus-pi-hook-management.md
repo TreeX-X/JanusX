@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: a8a80c8f-638e-5fe3-b288-9e99dbeb52d1
+kind: decision
+lifecycle: implemented
+created: 2026-09-13
+class: feature
+---
 # Agent Note: janus/pi 接入 hook 管理终端运行状态
 
 Status: implemented

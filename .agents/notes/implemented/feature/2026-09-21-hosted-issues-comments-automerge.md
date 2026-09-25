@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Issue tasks, review comments, and auto-merge for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: 2db28c3d16da4f504eed58786aa6f5ca5f534e73d749cf65d0231faef7d846d1
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Issue tasks, review comments, and auto-merge for the session requirement
 ---
 
 # Agent Note: Hosted issues, comments, and auto-merge

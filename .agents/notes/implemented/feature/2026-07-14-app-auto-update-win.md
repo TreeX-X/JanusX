@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 5fdf2273-99b3-5416-9e4a-ef42c63bbfb2
+kind: decision
+lifecycle: implemented
+created: 2026-07-14
+class: feature
+---
 # Agent Note: Win app auto-update via GitHub Releases
 
 Status: implemented

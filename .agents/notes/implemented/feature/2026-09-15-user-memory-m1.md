@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: fd02d3bc-6c00-5225-a0e2-c82b4cda740f
+kind: decision
+lifecycle: implemented
+created: 2026-09-15
+class: feature
+---
 # Agent Note: User memory M1 storage with TTL harvest and aggregator skeleton
 
 Status: implemented

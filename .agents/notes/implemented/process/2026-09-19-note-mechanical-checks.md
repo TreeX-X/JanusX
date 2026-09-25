@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 3b7d1e9b-8880-5052-93e9-68d26adbceb6
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: process
+---
 # Agent Note: Note mechanical gates run in verify
 
 Status: implemented

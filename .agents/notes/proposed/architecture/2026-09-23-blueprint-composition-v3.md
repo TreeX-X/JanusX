@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 8c8ee0b6-0fda-5410-ab7a-f4da4c78f861
+kind: decision
+lifecycle: proposed
+created: 2026-09-23
+class: architecture
+---
 # Agent Note: Composition blueprint — planning skeleton × evidence assembly (V3)
 
 Status: proposed

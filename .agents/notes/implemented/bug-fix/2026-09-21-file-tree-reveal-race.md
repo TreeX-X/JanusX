@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 80f207b2-591b-5a1d-824e-e169dc5b80c0
+kind: decision
+lifecycle: implemented
+created: 2026-09-21
+class: bug-fix
+---
 # Agent Note: Workspace switch sweep survives background file-tree refreshes
 
 Status: implemented

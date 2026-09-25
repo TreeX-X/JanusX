@@ -1,27 +1,24 @@
-import { readFile } from 'fs/promises'
 import { describe, expect, it } from 'vitest'
+import { maintenanceSelection } from '../../src/renderer/src/components/blueprint/maintenanceSelection'
+import type { BlueprintChangeSet, BlueprintOperation } from '../../src/shared/janus/maintenance-types'
 
-describe('Blueprint maintenance progress UI', () => {
-  it('keeps progress integrated and provides a quick return to the conversation bottom', async () => {
-    const [panel, styles] = await Promise.all([
-      readFile('src/renderer/src/components/blueprint/BlueprintMaintenancePanel.tsx', 'utf8'),
-      readFile('src/renderer/src/components/blueprint/blueprint.css', 'utf8'),
-    ])
+const operation = (operationId: string, dependsOn: string[] = []): BlueprintOperation => ({ operationId, dependsOn, type: 'update-node', nodeId: 'node', before: {}, after: { title: operationId }, reason: operationId, risk: 'low', evidenceRefs: [] })
+const proposal = (...operations: BlueprintOperation[]) => ({ operations } as BlueprintChangeSet)
 
-    expect(panel).toContain('className="bp-maintenance-task-overview" role="status" aria-live="polite"')
-    expect(panel).toContain("taskWorking = task?.status === 'analyzing' || task?.status === 'applying'")
-    expect(panel).toContain('className="bp-maintenance-thinking"')
-    expect(panel).not.toContain("import { ThinkingRegion } from '../janus/ThinkingRegion'")
-    expect(panel).not.toContain("import { ToolCallGroup } from '../janus/ToolCallCard'")
-    expect(panel).not.toContain('<ThinkingRegion snapshot={taskReasoning} streaming />')
-    expect(panel).not.toContain('taskToolTraces')
-    expect(styles).toMatch(/\.bp-maintenance-task-overview\s*\{[^}]*position:\s*sticky;/s)
-    expect(styles).toMatch(/\.bp-maintenance-task-overview\s*\{[^}]*top:\s*0;/s)
-    expect(styles).not.toMatch(/\.bp-maintenance-task-overview\s*\{[^}]*box-shadow:/s)
-    expect(panel).toContain('className="bp-maintenance-scroll-bottom"')
-    expect(panel).toContain('target.offsetTop - container.clientHeight + 24')
-    expect(panel).toContain('ref={conversationBottomRef}')
-    expect(styles).toMatch(/\.bp-maintenance-scroll-bottom\s*\{[^}]*position:\s*sticky;/s)
-    expect(styles).toContain('@keyframes bp-maintenance-thinking')
+describe('maintenance approval selection', () => {
+  it('expands transitive dependencies once, before dependent operations', () => {
+    const changeSet = proposal(operation('base'), operation('middle', ['base']), operation('leaf', ['middle', 'base']), operation('unselected'))
+    expect(maintenanceSelection(changeSet, ['leaf', 'middle']).map(op => op.operationId)).toEqual(['base', 'middle', 'leaf'])
+    expect(maintenanceSelection(changeSet, [])).toEqual([])
+    expect(changeSet.operations).toHaveLength(4)
+  })
+  it('rejects missing, duplicate and cyclic identities instead of approving a partial closure', () => {
+    expect(() => maintenanceSelection(proposal(operation('a', ['missing'])), ['a'])).toThrow(/Missing/)
+    expect(() => maintenanceSelection(proposal(operation('a'), operation('a')), ['a'])).toThrow(/Duplicate/)
+    expect(() => maintenanceSelection(proposal(operation('a', ['b']), operation('b', ['a'])), ['a'])).toThrow(/Cyclic/)
+  })
+  it('retains required deletions for the separate individual-confirmation gate', () => {
+    const deletion: BlueprintOperation = { operationId: 'delete', type: 'delete-node', nodeId: 'old', dependsOn: [], evidenceRefs: [], reason: 'obsolete', risk: 'high', impact: { title: 'Old', parentId: null, childIds: [], incomingRelationIds: [], outgoingRelationIds: [] } }
+    expect(maintenanceSelection(proposal(deletion, operation('update', ['delete'])), ['update'])).toEqual([deletion, operation('update', ['delete'])])
   })
 })

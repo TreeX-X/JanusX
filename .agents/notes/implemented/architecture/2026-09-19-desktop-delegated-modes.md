@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: fbac0251-beff-50d7-9363-18fa7e812781
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: architecture
+---
 # Agent Note: Desktop delegated task modes
 
 Status: implemented

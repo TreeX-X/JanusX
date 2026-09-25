@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: b1978fa7-4732-553a-83c3-12aefd34c248
+kind: decision
+lifecycle: implemented
+created: 2026-06-27
+class: feature
+---
 # Agent Note: Application runtime status bar
 
 Status: implemented

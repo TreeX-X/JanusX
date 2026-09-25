@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 80e64e6f-91eb-50a2-94b4-fbc40b112e10
+kind: decision
+lifecycle: implemented
+created: 2026-09-09
+class: feature
+---
 # Agent Note: Run-orb budding for multi-workspace running state
 
 Status: implemented

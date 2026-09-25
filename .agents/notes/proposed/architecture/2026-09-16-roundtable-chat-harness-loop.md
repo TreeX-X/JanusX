@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: f8f6586b-c491-5e2b-878f-598547829618
+kind: decision
+lifecycle: proposed
+created: 2026-09-16
+class: architecture
+---
 # Agent Note: 圆桌原生产出、统一 Janus Chat 与 Harness 实施闭环
 
 Status: proposed

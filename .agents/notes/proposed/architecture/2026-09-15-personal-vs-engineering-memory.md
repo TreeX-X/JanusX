@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 4515fa0e-caa1-59ba-99a7-7cb7f2bc51d0
+kind: decision
+lifecycle: proposed
+created: 2026-09-15
+class: architecture
+---
 # Agent Note: 个人记忆与工程知识分离
 
 Status: proposed

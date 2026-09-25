@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 5996294e-e9e3-5408-8239-b1a8bb24b616
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: feature
+---
 # Agent Note: 鹈鹕骑行 SVG 动画
 
 Status: implemented

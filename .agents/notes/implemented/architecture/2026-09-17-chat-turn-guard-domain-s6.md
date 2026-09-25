@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: fd109997-ae5c-588b-a0aa-02c197562a68
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: architecture
+---
 # Agent Note: Chat single-turn lock with project domain isolation
 
 Status: implemented

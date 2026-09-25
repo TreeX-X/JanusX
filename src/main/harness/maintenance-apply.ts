@@ -27,6 +27,7 @@ export interface ProjectCheckout {
 }
 
 export interface HarnessSelectionRequest {
+  sourceHashes?: Record<string, string>
   root: string
   repoId: string
   operations: BlueprintOperation[]
@@ -46,10 +47,9 @@ export interface HarnessSelectionResult {
 }
 
 /**
- * Finds the local checkout serving a project graph id. The id only carries an
- * 8-char prefix, so it never identifies a checkout alone: the preferred path
- * (task workspace or audit record) wins, and the injected workspace list is
- * the restart-safe fallback. Throws before any write when nothing matches.
+ * Resolves the explicitly bound checkout. A failed explicit binding must not
+ * fall through to another registered workspace. Discovery is available only
+ * when no binding was supplied and still refuses ambiguous graph ids.
  */
 export async function resolveProjectCheckout(
   service: HarnessNoteService,
@@ -74,6 +74,7 @@ export async function resolveProjectCheckout(
   if (preferredPath) {
     const hit = await attempt(preferredPath)
     if (hit) return hit
+    throw new Error('找不到项目 Note 的本机 checkout（' + blueprintId + '）：绑定目录不可用或不匹配，请重新确认绑定')
   }
   if (listWorkspacePaths) {
     const matches: ProjectCheckout[] = []
@@ -101,7 +102,7 @@ export async function resolveProjectCheckout(
  * inside the allowed set. Unparseable relation ids pass here and fail loudly
  * inside the translator instead of being silently dropped.
  */
-export function assertHarnessScope(operations: BlueprintOperation[], allowed: Set<string>): void {
+export function assertHarnessScope(operations: BlueprintOperation[], allowed: Set<string>, blueprint?: Blueprint): void {
   const temps = new Set<string>()
   for (const op of operations) {
     if (op.type === 'create-node') temps.add(op.tempNodeId)
@@ -126,6 +127,11 @@ export function assertHarnessScope(operations: BlueprintOperation[], allowed: Se
         break
       case 'update-relation':
       case 'remove-relation': {
+        const relation = blueprint?.relations.find(item => item.id === op.relationId)
+        if (relation) {
+          check(op.operationId, relation.sourceNodeId)
+          break
+        }
         const parts = op.relationId.split(':')
         check(op.operationId, parts.length === 3 && parts[0] ? parts[0] : null)
         break
@@ -174,9 +180,27 @@ export async function applyMaintenanceSelection(
       // loudly inside the translator as an unknown note.
     }
   }
-  const bridge = translateMaintenanceOpsToHarness(req.operations, {
+  // The composition projection uses opaque relation ids; the legacy bridge
+  // expects owner:type:target. Resolve through the current checkout, never by
+  // splitting an opaque id or trusting the caller's before snapshot.
+  const operations = req.operations.map(op => {
+    if (op.type !== 'update-relation' && op.type !== 'remove-relation') return op
+    const relation = view.blueprint.relations.find(item => item.id === op.relationId)
+    if (!relation) return op
+    const matches = view.blueprint.relations.filter(item => item.sourceNodeId === relation.sourceNodeId
+      && item.targetNodeId === relation.targetNodeId && item.type === relation.type)
+    if (matches.length !== 1) throw new Error('项目 Note 关系声明不唯一，请先明确需要维护的关系')
+    return { ...op, relationId: [relation.sourceNodeId, relation.type, relation.targetNodeId].join(':') }
+  })
+  const bridge = translateMaintenanceOpsToHarness(operations, {
     repoId: req.repoId,
-    resolveNote: (nodeId: string) => snapshots.get(nodeId) ?? null,
+    resolveNote: (nodeId: string) => {
+      const snapshot = snapshots.get(nodeId)
+      if (req.sourceHashes && snapshot && req.sourceHashes[nodeId] !== snapshot.expectedHash) {
+        throw new Error(`HARNESS_CONFLICT: ${snapshot.uri} source changed since proposal; regenerate and confirm`)
+      }
+      return snapshot ?? null
+    },
   })
   if (!bridge.complete) {
     const reasons = bridge.untranslatable.map((item) => `${item.operationId}: ${item.reason}`)
@@ -202,7 +226,14 @@ export async function applyMaintenanceSelection(
   )
   const appliedSet = new Set(applied.applied.map((item) => item.operationId))
   const createdRelationIds: Record<string, string> = {}
-  for (const [tempId, ref] of Object.entries(bridge.createdRelations)) createdRelationIds[tempId] = ref.relationId
+  if (Object.keys(bridge.createdRelations).length) {
+    const fresh = await service.projectView(req.root)
+    for (const [tempId, ref] of Object.entries(bridge.createdRelations)) {
+      const relation = fresh.blueprint.relations.find(item => item.sourceNodeId === ref.ownerId
+        && item.targetNodeId === ref.targetId && item.type === ref.type)
+      if (relation) createdRelationIds[tempId] = relation.id
+    }
+  }
   return {
     txId: applied.txId,
     appliedMaintenanceIds: bridge.ops.filter((op) => appliedSet.has(op.operationId)).flatMap((op) => op.maintenanceOperationIds),

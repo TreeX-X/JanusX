@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: d50b6b23-b80a-5748-a34e-f89200058a5d
+kind: decision
+lifecycle: implemented
+created: 2026-06-22
+class: bug-fix
+---
 # Agent Note: IME candidate window drift
 
 Status: implemented

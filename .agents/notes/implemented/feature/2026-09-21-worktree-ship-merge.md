@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Local Ship merge flow for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: d3b3ba2162e0422a661e05a3b3e468532a8fd3cb464f5ca305b0a0def95579cd
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Local Ship merge flow for the session requirement
 ---
 
 # Agent Note: Local Ship merge flow for worktrees

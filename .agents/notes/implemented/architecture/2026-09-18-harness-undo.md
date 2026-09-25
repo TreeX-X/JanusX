@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: ee0e8ff1-8aba-560e-8585-498c71f1718c
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Reversible managed writes
 
 Status: implemented

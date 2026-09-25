@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: bc53c6cc-29fb-59db-a0cf-1e32eaf2fc0a
+kind: decision
+lifecycle: proposed
+created: 2026-09-21
+class: architecture
+---
 # Agent Note: Orca terminal-type acquisition and event parsing, source-verified
 
 Status: proposed

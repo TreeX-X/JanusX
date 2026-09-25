@@ -8,13 +8,30 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
-    reason: Orca-aligned requirement assumes every CLI leaves a readable store; opencode is that store
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
-    reason: Pull-mode transcript backfill gains its third engine beside claude and codex
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/1a6947ed-0b47-4d33-aa9a-21d37be1db07
-    reason: Transcript detail reads serve opencode pairs through the same session-keyed channel
+extensions:
+  r5Migration:
+    sourceHash: ba0a686dec5ff917dcf159ce93bb52d611bd69df6baf7ecfbb6e0808367e01fc
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+      - relations[2].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
+        reason: Orca-aligned requirement assumes every CLI leaves a readable store;
+          opencode is that store
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
+        reason: Pull-mode transcript backfill gains its third engine beside claude and
+          codex
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/1a6947ed-0b47-4d33-aa9a-21d37be1db07
+        reason: Transcript detail reads serve opencode pairs through the same
+          session-keyed channel
 ---
 
 # Agent Note: Opencode sqlite session driver

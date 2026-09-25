@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: b766003d-d1a9-5e67-9b92-d32167421cc4
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Legacy maintenance loop exits, settlement stays
 
 Status: implemented

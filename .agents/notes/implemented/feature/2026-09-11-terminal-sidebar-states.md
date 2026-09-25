@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 22f762b8-1b14-522d-a971-b11e2dfc9af6
+kind: decision
+lifecycle: implemented
+created: 2026-09-11
+class: feature
+---
 # Agent Note: Terminal sidebar six-state expression
 
 Status: implemented

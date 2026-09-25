@@ -8,19 +8,44 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b3704d91-c17d-4492-ae71-a44cfec8bbd7
-    reason: V1 session ledger owns identity and scoped checkpoints this requirement re-presents
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e782007f-d07b-4f60-be32-63d1b22ec1f8
-    reason: Unified inline timeline plus modal diff is the layout this requirement retires from the right dock
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
-    reason: Pull-mode transcript backfill is the scanner this requirement extends into detail reading
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
-    reason: Turn-owned prompt plus excerpt fields seed the preview layer this requirement keeps
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Workspace session plus checkpoint requirement is the parent scope this requirement narrows to presentation and restore
+extensions:
+  r5Migration:
+    sourceHash: c7bc9d083a19ff84d5d9e9d9709013b4b6b1e4a2cd2d437953d4f499fbe9866a
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+      - relations[2].reason
+      - relations[3].reason
+      - relations[4].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b3704d91-c17d-4492-ae71-a44cfec8bbd7
+        reason: V1 session ledger owns identity and scoped checkpoints this requirement
+          re-presents
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e782007f-d07b-4f60-be32-63d1b22ec1f8
+        reason: Unified inline timeline plus modal diff is the layout this requirement
+          retires from the right dock
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
+        reason: Pull-mode transcript backfill is the scanner this requirement extends
+          into detail reading
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
+        reason: Turn-owned prompt plus excerpt fields seed the preview layer this
+          requirement keeps
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Workspace session plus checkpoint requirement is the parent scope this
+          requirement narrows to presentation and restore
 ---
 
 # Agent Note: Orca-aligned session management with restore points and windowed reading

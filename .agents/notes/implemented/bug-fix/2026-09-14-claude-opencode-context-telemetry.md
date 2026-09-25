@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 042a600f-8720-5799-827f-53eaa6343faf
+kind: decision
+lifecycle: implemented
+created: 2026-09-14
+class: bug-fix
+---
 # Agent Note: Claude/Opencode bottom context telemetry counts again
 
 Status: implemented

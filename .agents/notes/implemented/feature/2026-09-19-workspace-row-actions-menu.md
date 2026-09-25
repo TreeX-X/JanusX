@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 9108f4a9-39d6-5d2a-9a6b-5b79bbef493a
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: feature
+---
 # Agent Note: Workspace row actions menu
 
 Status: implemented

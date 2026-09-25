@@ -141,7 +141,7 @@ export function chatStream(
     workspaceResources?: ChatWorkspaceResource[]
     toolTraces?: ChatToolTraceEntry[]
     domain?: 'personal' | 'project'
-    noteRefs?: Array<{ uri: string; expectedHash?: string }>
+    noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
     maintenanceTaskId?: string
     onAgentEvent?: (event: ChatAgentEvent) => void
     onRecallTrace?: (trace: KnowledgeRecallTrace) => void

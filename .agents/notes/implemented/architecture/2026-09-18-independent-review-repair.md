@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: b055c1fe-f0ec-59f7-98b5-75f8ddf39d31
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Independent review and limited repair on the desktop
 
 Status: implemented

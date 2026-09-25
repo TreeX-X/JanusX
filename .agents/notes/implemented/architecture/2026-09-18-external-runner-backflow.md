@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 5352fb79-fb38-570a-aed8-7f39cac2a91b
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: External runner backflow through handoff and takeover
 
 Status: implemented

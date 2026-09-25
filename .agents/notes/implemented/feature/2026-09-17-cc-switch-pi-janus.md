@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 1866e39d-dca9-5783-a5c8-cefbf730075a
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: feature
+---
 # Agent Note: Pi and self-built Janus lifecycle
 
 Status: implemented

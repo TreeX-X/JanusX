@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 3178e4f9-f730-57ab-ad67-3f38ab60a5d4
+kind: decision
+lifecycle: implemented
+created: 2026-09-14
+class: feature
+---
 # Agent Note: 壳侧 command 报错自愈对齐与打包依赖固化
 
 Status: implemented

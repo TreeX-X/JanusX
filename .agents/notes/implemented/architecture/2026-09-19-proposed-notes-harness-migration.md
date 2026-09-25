@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 2c0f6364-2d0f-53af-9b70-966f8a57ec97
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: architecture
+---
 # Agent Note: Proposed notes enter the blueprint graph as drafts
 
 Status: implemented

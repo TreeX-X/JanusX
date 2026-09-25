@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: ada1e07a-7499-54dc-938f-bd43f714c98f
+kind: decision
+lifecycle: implemented
+created: 2026-09-13
+class: feature
+---
 # Agent Note: 灵动岛一级展开重设计为通用通知胶囊
 
 Status: implemented

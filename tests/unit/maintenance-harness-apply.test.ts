@@ -203,9 +203,15 @@ describe('maintenance harness apply wiring (S6-c slice 2b)', () => {
       changeSetVersion: 1,
       reason: 'test relation',
     })
-    expect(result.createdRelationIds['tmp-rel-1']).toBe(`${TASK}:depends-on:${REQ}`)
     const view = await svc.projectView(root)
-    expect(view.blueprint.relations.some((r) => r.id === `${TASK}:depends-on:${REQ}`)).toBe(true)
+    expect(view.blueprint.relations.find((r) => r.id === result.createdRelationIds['tmp-rel-1']))
+      .toMatchObject({ sourceNodeId: TASK, targetNodeId: REQ, type: 'depends-on' })
+    await applyMaintenanceSelection(svc, {
+      root, repoId: REPO, taskId: 'task-undo-relation', changeSetVersion: 1, reason: 'Undo relation',
+      operations: [{ operationId: 'remove', type: 'remove-relation', relationId: result.createdRelationIds['tmp-rel-1'],
+        reason: 'undo', evidenceRefs: [], dependsOn: [], risk: 'medium' }],
+    })
+    expect((await svc.projectView(root)).blueprint.relations).toEqual([])
   })
 
   it('downgrades delete to archive instead of removing the file', async () => {
@@ -250,6 +256,8 @@ describe('maintenance harness apply wiring (S6-c slice 2b)', () => {
     roots.push(twin)
     const twinView = await svc.projectView(twin)
     expect(twinView.blueprint.id).not.toBe(view.blueprint.id)
+    await expect(resolveProjectCheckout(svc, view.blueprint.id, twin, async () => [root, twin]))
+      .rejects.toThrow('checkout')
     // E0-1 ids identify one checkout; equal repository identity is not ambiguity.
     await expect(resolveProjectCheckout(svc, view.blueprint.id, undefined, async () => [root, twin])).resolves.toMatchObject({ root })
     // Still reject a real id collision instead of silently choosing a writer.
@@ -267,6 +275,37 @@ describe('maintenance harness apply wiring (S6-c slice 2b)', () => {
       assertHarnessScope([updateTitleOp('99999999-9999-4999-8999-999999999999', 'Elsewhere')], new Set([REQ])),
     ).toThrow('维护节点范围外禁止写入')
     expect(() => assertHarnessScope([updateTitleOp(REQ, 'Inside')], new Set([REQ]))).not.toThrow()
+  })
+
+  it('checks the owner scope of opaque composition relation ids', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    await applyMaintenanceSelection(svc, { root, repoId: REPO, taskId: 'scope', changeSetVersion: 1, reason: 'Setup edge', operations: [{
+      operationId: 'add', type: 'add-relation', tempRelationId: 'temp-edge', after: { sourceNodeId: TASK, targetNodeId: REQ, relationType: 'depends-on' },
+      reason: 'Order', evidenceRefs: [], dependsOn: [], risk: 'medium',
+    }] })
+    const { blueprint } = await svc.projectView(root)
+    const operation: BlueprintOperation = { operationId: 'remove', type: 'remove-relation', relationId: blueprint.relations[0].id,
+      reason: 'Remove edge', evidenceRefs: [], dependsOn: [], risk: 'medium' }
+    expect(() => assertHarnessScope([operation], new Set([REQ]), blueprint)).toThrow('维护节点范围外禁止写入')
+    expect(() => assertHarnessScope([operation], new Set([TASK]), blueprint)).not.toThrow()
+  })
+
+  it('lets the transaction reject a source edit after translation without overwriting it', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    const hash = (await svc.readNote(root, REQ)).sha256
+    const apply = svc.applyBundleChangeSet.bind(svc)
+    const changed = REQUIREMENT_MD + '\nConcurrent source edit.\n'
+    vi.spyOn(svc, 'applyBundleChangeSet').mockImplementationOnce(async (...args) => {
+      await fs.writeFile(join(root, '.agents', 'notes', '2026-09-17-req--11111111.md'), changed)
+      return apply(...args)
+    })
+    await expect(applyMaintenanceSelection(svc, { root, repoId: REPO, taskId: 'race', changeSetVersion: 1, reason: 'Proposed edit',
+      sourceHashes: { [REQ]: hash }, operations: [updateTitleOp(REQ, 'Approved title')] })).rejects.toMatchObject({ code: 'HARNESS_CONFLICT' })
+    expect((await svc.readNote(root, REQ)).raw).toBe(changed)
   })
 
   it('exposes created mappings for undo bookkeeping', async () => {

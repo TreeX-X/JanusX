@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: a972542e-5b39-5d6a-bf51-5179c72086bc
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Compressed handoff briefs for desktop reviews
 
 Status: implemented

@@ -2404,6 +2404,46 @@
   }
 }
 
+.bp-maintenance-controls {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 58%;
+  overflow-y: auto;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: #c4c4ca;
+  overflow-wrap: anywhere;
+}
+.bp-maintenance-controls small { display: block; color: #8b8b94; font-size: 10px; line-height: 1.5; }
+.bp-maintenance-context { display: grid; gap: 3px; margin-bottom: 10px; }
+.bp-maintenance-context strong { color: #eee; font-size: 12px; }
+.bp-maintenance-controls summary { cursor: pointer; padding: 7px 0; color: #dedee2; }
+.bp-maintenance-controls fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.bp-maintenance-settings label { display: grid; gap: 4px; margin-bottom: 8px; }
+.bp-maintenance-settings select, .bp-maintenance-settings textarea {
+  width: 100%; min-width: 0; box-sizing: border-box; font: inherit;
+  color: #e4e4e8; background: #16161a; border: 1px solid #35353c; border-radius: 4px; padding: 6px;
+}
+.bp-maintenance-settings textarea { resize: vertical; min-height: 52px; max-height: 130px; }
+.bp-maintenance-workspace-picker > label { display: block; margin: 7px 0; }
+.bp-maintenance-controls input[type='checkbox'] { accent-color: #ff7830; margin-right: 6px; }
+.bp-maintenance-controls button {
+  font: inherit; color: #dedee4; background: #222228; border: 1px solid #42424a;
+  border-radius: 4px; padding: 6px 8px; margin: 4px 5px 4px 0; cursor: pointer;
+}
+.bp-maintenance-controls button:hover:not(:disabled) { border-color: #ff7830; color: #ffb085; }
+.bp-maintenance-controls button:disabled { opacity: .45; cursor: default; }
+.bp-maintenance-controls [role='alert'] { color: #ff9a88; white-space: pre-wrap; }
+.bp-maintenance-approval { padding: 10px 0; border-top: 1px solid #35353c; }
+.bp-maintenance-approval-group, .bp-maintenance-audits article { padding: 8px 0; border-bottom: 1px solid #303036; }
+.bp-maintenance-approval-operation { margin: 6px 0 6px 8px; }
+.bp-maintenance-delete-confirm { display: block; margin: 8px 0; color: #ffb39e; }
+.bp-maintenance-operation-details pre { overflow: auto; max-height: 180px; font-size: 10px; white-space: pre-wrap; }
+.bp-maintenance-controls progress { width: 100%; height: 5px; accent-color: #ff7830; }
+.bp-maintenance-panel > .bp-maintenance-task { padding: 8px; min-height: 200px; overflow: hidden; }
+.bp-maintenance-panel > .bp-maintenance-task > .janus-chat--docked { flex: 1 1 auto; min-height: 0; }
+
 .bp-maintenance-panel {
   display: flex;
   flex-direction: column;

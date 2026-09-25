@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 97efe07c-2d7e-54c0-a4ac-a55cb12c8fc3
+kind: decision
+lifecycle: implemented
+created: 2026-08-20
+class: feature
+---
 # Agent Note: Account-system LAN remote control
 
 Status: implemented

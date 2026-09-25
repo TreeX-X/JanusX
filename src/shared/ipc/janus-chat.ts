@@ -17,6 +17,8 @@ export type EngineeringIntent = 'assist' | 'discuss' | 'maintain' | 'implement'
 export type EngineeringScope = 'selected' | 'subtree' | 'view'
 
 export interface EngineeringNoteRef {
+  /** Checkout selector only; attached sessions authorize access. */
+  checkoutPath?: string
   uri: string
   expectedHash?: string
 }
@@ -88,7 +90,8 @@ function normalizeNoteRef(value: unknown): EngineeringNoteRef | null {
   const uri = boundedString(source.uri, MAX_URI_LENGTH)
   if (!uri) return null
   const expectedHash = boundedString(source.expectedHash, MAX_ID_LENGTH) ?? undefined
-  return { uri, ...(expectedHash ? { expectedHash } : {}) }
+  const checkoutPath = boundedString(source.checkoutPath, 4096) ?? undefined
+  return { uri, ...(expectedHash ? { expectedHash } : {}), ...(checkoutPath ? { checkoutPath } : {}) }
 }
 
 function normalizeEngineeringContext(value: unknown): EngineeringContext | undefined {

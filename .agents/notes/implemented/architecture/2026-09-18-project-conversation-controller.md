@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 4ffa1606-df23-5880-a1a5-003ab5fac9e3
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: One project conversation for Chat and Note blueprints
 
 Status: implemented

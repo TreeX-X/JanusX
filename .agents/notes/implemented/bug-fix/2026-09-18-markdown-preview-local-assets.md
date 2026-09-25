@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 64286344-5e03-5193-8250-854abd64acff
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: bug-fix
+---
 # Agent Note: Preview panes resolve workspace-local images
 
 Status: implemented

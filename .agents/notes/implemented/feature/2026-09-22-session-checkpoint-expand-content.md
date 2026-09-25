@@ -8,10 +8,24 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
-    reason: The migration assigns checkpoint detail, diff preview, and review-gated restore to session cards; this slice brings their expanded states to HiFi v3
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/d216f355-f951-4f60-b209-7bb98b08dcbf
-    reason: The subscription fix makes the expand button render the list; this slice makes the rendered list always show content
+extensions:
+  r5Migration:
+    sourceHash: 3f3fd7291c6d9ef9f776af171a5dc036689d5ca72ee3f079bfd9330c68f2946e
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
+        reason: The migration assigns checkpoint detail, diff preview, and review-gated
+          restore to session cards; this slice brings their expanded states to
+          HiFi v3
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/d216f355-f951-4f60-b209-7bb98b08dcbf
+        reason: The subscription fix makes the expand button render the list; this slice
+          makes the rendered list always show content
 ---
 
 # Agent Note: Session checkpoint expand content per HiFi v3

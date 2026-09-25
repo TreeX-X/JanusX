@@ -8,7 +8,16 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
-    reason: The migration assigns checkpoint-list ownership to the session card expand button this fix repairs
+extensions:
+  r5Migration:
+    sourceHash: 1f9e3686df77c5c38cd4019be5533842e8201bc8e1a244bcfe6091388feb842f
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
+        reason: The migration assigns checkpoint-list ownership to the session card
+          expand button this fix repairs
 ---
 
 # Agent Note: Session checkpoint expand subscribes to worktree UI state

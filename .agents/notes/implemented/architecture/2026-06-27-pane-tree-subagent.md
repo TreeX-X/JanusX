@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 93151b7b-6a33-5e5d-bf83-f2109fc85389
+kind: decision
+lifecycle: implemented
+created: 2026-06-27
+class: architecture
+---
 # Agent Note: Pane tree with island subagent surface
 
 Status: implemented

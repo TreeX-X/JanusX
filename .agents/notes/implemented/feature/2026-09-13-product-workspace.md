@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 034fb695-ff94-5476-b085-9818bcbef5c1
+kind: decision
+lifecycle: implemented
+created: 2026-09-13
+class: feature
+---
 # Agent Note: 产物工作区彻底重构
 
 Status: implemented

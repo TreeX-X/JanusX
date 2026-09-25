@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: b32f92b5-0256-5402-8a15-d19e9fa4db73
+kind: decision
+lifecycle: implemented
+created: 2026-09-15
+class: feature
+---
 # Agent Note: User memory glance surface with persona cards plus badge
 
 Status: implemented

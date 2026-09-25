@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 9f855a20-5b26-5bcd-8fd8-225e93c1be62
+kind: decision
+lifecycle: implemented
+created: 2026-09-16
+class: bug-fix
+---
 # Agent Note: Right dock hides panel toggle with no open tools
 
 Status: implemented

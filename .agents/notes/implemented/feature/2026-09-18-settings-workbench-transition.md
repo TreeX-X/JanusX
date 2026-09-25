@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 5a07c410-1f0c-5a72-bec0-1e48fc4acdfc
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: feature
+---
 # Agent Note: Settings open and close on the blueprint workbench beat
 
 Status: implemented

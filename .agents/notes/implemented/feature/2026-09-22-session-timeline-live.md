@@ -8,10 +8,23 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb7e75d4-4db1-4a7d-b321-6ea866df241c
-    reason: Change events reach the summary list; this slice carries the same events into open timelines
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
-    reason: Durable per-turn prose needs a live timeline to surface in; this slice provides the refresh
+extensions:
+  r5Migration:
+    sourceHash: 69c69c5bb6604123846600602c3beaa94e2bd3b1c138be3083398353821e784f
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb7e75d4-4db1-4a7d-b321-6ea866df241c
+        reason: Change events reach the summary list; this slice carries the same events
+          into open timelines
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
+        reason: Durable per-turn prose needs a live timeline to surface in; this slice
+          provides the refresh
 ---
 
 # Agent Note: Session timeline live refresh on session events

@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Cold-restore shells for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: fbf99486b67b1cb65a15c80ace404c1aea5bb3ed07f4dc2da57a7ecc37309c71
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Cold-restore shells for the session requirement
 ---
 
 # Agent Note: Cold-restore shells with one-shot layout

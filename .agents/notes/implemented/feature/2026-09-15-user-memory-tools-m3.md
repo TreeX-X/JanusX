@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 939f0bcf-10ec-555f-bd6c-7fdf041c8047
+kind: decision
+lifecycle: implemented
+created: 2026-09-15
+class: feature
+---
 # Agent Note: User memory tools over the shell registry
 
 Status: implemented

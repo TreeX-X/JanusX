@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: cb026d42-c260-5e79-a66f-e455228d6eaf
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: architecture
+---
 # Agent Note: Maintenance discussions run on the shared turn
 
 Status: implemented

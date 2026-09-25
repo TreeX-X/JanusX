@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: bfb406a2-8cd3-5384-ba90-18accf90ca0d
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: process
+---
 # Agent Note: CI builds sibling workspaces in dependency order
 
 Status: implemented

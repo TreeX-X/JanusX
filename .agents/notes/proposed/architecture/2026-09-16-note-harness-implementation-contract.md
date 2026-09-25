@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 537de6bf-7fb0-585f-99a8-531fcae192ed
+kind: decision
+lifecycle: proposed
+created: 2026-09-16
+class: architecture
+---
 # Agent Note: 统一 Note Harness 的实施契约与 Agent 交接
 
 Status: proposed

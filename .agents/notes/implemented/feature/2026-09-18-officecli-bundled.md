@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 02b7c101-50c6-5501-a4be-262dd867ba7c
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: feature
+---
 # Agent Note: OfficeCLI bundled
 
 Status: implemented

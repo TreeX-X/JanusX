@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: dec987d8-570e-57f0-9694-3e2475a5a532
+kind: decision
+lifecycle: implemented
+created: 2026-09-15
+class: feature
+---
 # Agent Note: User-scope recall with independent budget and fusion order
 
 Status: implemented

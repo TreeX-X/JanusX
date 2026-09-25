@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: abb5ed88-3467-505f-be6e-de09801eea6f
+kind: decision
+lifecycle: proposed
+created: 2026-08-20
+class: architecture
+---
 # Agent Note: Team sync transport foundation
 
 Status: proposed

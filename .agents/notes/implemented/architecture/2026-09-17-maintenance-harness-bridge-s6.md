@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 1f21d390-171c-57ba-9b8b-cca02d74c39a
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: architecture
+---
 # Agent Note: Maintenance to harness operation bridge
 
 Status: implemented

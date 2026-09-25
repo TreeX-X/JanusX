@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 609e58ef-9930-59ef-80b7-80cc5890cb26
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: feature
+---
 # Agent Note: Product recordings and onboarding
 
 Status: implemented

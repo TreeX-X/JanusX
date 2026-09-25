@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: V1 delivery of the workspace session requirement
+extensions:
+  r5Migration:
+    sourceHash: 015af5a52f9c2a5285ea98cecb94c17476f310e1bf6c7d51faf5851017a3d771
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: V1 delivery of the workspace session requirement
 ---
 
 # Agent Note: Workspace session cards with rebuilt checkpoints and continue

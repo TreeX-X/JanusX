@@ -8,10 +8,24 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
-    reason: The v3 slice fills the split checkpoint section with content; this slice removes the split and binds strips to turns per HiFi v5
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
-    reason: The migration assigns checkpoint detail and review-gated restore to session cards; this slice keeps that ownership while changing the presentation
+extensions:
+  r5Migration:
+    sourceHash: 88deb4f3f228b1fc32b093850ecb7bd1360192bc4cb666513fa2d554f22a5eda
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
+        reason: The v3 slice fills the split checkpoint section with content; this slice
+          removes the split and binds strips to turns per HiFi v5
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367
+        reason: The migration assigns checkpoint detail and review-gated restore to
+          session cards; this slice keeps that ownership while changing the
+          presentation
 ---
 
 # Agent Note: Session unified timeline with modal diff per HiFi v5

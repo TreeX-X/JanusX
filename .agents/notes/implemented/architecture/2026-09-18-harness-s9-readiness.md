@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 28ce4fe4-bca4-5cbb-b7d7-e068e14ab387
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Harness S9 readiness on JanusX with the F-matrix
 
 Status: implemented

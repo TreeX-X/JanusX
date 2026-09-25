@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 2d731f6a-f10c-51dd-bf53-f54917fc91e0
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: feature
+---
 # Agent Note: Settings opens on general with per-terminal LLM bindings
 
 Status: implemented

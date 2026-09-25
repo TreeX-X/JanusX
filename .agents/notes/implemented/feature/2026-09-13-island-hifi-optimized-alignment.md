@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: e22d4cdb-c2aa-5a6c-ae54-945ea26e91ce
+kind: decision
+lifecycle: implemented
+created: 2026-09-13
+class: feature
+---
 # Agent Note: 灵动岛运行态/一级展开/通知面高保真对齐（hifi Optimized）
 
 Status: implemented

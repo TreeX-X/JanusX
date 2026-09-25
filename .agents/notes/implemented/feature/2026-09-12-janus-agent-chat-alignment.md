@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 6813a52b-249b-556e-a0eb-55acc6930922
+kind: decision
+lifecycle: implemented
+created: 2026-09-12
+class: feature
+---
 # Agent Note: Janus chat aligns to janus-agent event contract
 
 Status: implemented

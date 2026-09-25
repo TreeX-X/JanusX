@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 387ee6c3-8aa7-5bee-958c-b0f420249b10
+kind: decision
+lifecycle: proposed
+created: 2026-09-22
+class: simplification
+---
 # Agent Note: Rename terminal NoteCard to DraftCard to end confusion with workspace notes
 
 Status: proposed

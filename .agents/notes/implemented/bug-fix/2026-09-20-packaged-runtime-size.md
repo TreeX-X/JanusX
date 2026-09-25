@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 210d9ec3-b3e9-5998-98c5-17d2ec4fcb34
+kind: decision
+lifecycle: implemented
+created: 2026-09-20
+class: bug-fix
+---
 # Agent Note: Packaged node_modules carries the production closure only
 
 Status: implemented

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 8688b5ab-1f7f-5ff9-ba1b-ef75b7fd5917
+kind: decision
+lifecycle: implemented
+created: 2026-09-21
+class: bug-fix
+---
 # Agent Note: Workbench close controls keep a 30px hit area on a 14px visual
 
 Status: implemented

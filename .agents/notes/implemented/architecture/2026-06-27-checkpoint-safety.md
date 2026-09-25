@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 94f306fb-8a21-5ef6-ae2f-34eea7a35f1a
+kind: decision
+lifecycle: implemented
+created: 2026-06-27
+class: architecture
+---
 # Agent Note: Checkpoint snapshot safety
 
 Status: implemented

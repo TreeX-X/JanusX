@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 854981c7-ab43-521f-a379-020ce1549f12
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: architecture
+---
 # Agent Note: Durable desktop implementation history
 
 Status: implemented

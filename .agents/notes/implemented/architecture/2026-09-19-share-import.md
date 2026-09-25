@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: eece2e89-ae59-54cc-baf6-2d40bacc2c34
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: architecture
+---
 # Agent Note: Share import applies snapshots per checkout
 
 Status: implemented

@@ -113,10 +113,14 @@ R5 接通右侧维护对话：传递当前蓝图及选中节点上下文，流�
 - [ ] AC-5: 知识 wiki 可引用多篇 Note，并能反查相关页面；来源哈希变化、目标缺失和仓库未接入分别展示；未复核内容不自动更新来源哈希，旧页面不被伪装为最新。
 - [ ] AC-6: xarch 建立合法架构师仓库并完成注册与投影；仅打开架构仓也可呈现全部模块声明；模块绑定明确区分 repoId 与本机 checkout，多候选不随机选中。
 - [ ] AC-7: 组合图支持跨仓解析、接口匹配与悬空需求，保留未接入及过期证据；同名接口不产生未经声明的连线，模块与任务状态不互相冒充。
-- [ ] AC-8: 维护提案支持全选及部分选择，依赖闭包、删除逐项确认、模式/白名单、expectedHash、审计和撤销连成可达流程；提案内容变化后重新确认，跨仓结果逐库可见。
-- [ ] AC-9: JanusX 仓库内全部旧 Note 迁移至正式新版本格式，迁移前后逐文件对账并通过解析校验；保留原始正文、既有 UUID、代码引用及可解析链接，不伪造执行回执。分类为 legacy/foreign 或登记保留理由不能代替旧 Note 迁移完成。真正非 Note 的辅助文件单独列清单；无法自动迁移的 Note 必须补齐并验收。旧蓝图内容经盘点、预览、确认后处理，原始事实没有静默丢失。
-- [ ] AC-10: 蓝图界面以 v11 为基线具备完整可达的操作；解析中间层、正式 Note 详情和右侧对话节点调整链均有针对性检查与可复现的交互验收。各阶段有独立 review 结论和修复记录。
+- [x] AC-8: 维护提案支持全选及部分选择，依赖闭包、删除逐项确认、模式/白名单、expectedHash、审计和撤销连成可达流程；提案内容变化后重新确认，跨仓结果逐库可见。
+- [x] AC-9: JanusX 仓库内全部旧 Note 迁移至正式新版本格式，迁移前后逐文件对账并通过解析校验；保留原始正文、既有 UUID、代码引用及可解析链接，不伪造执行回执。分类为 legacy/foreign 或登记保留理由不能代替旧 Note 迁移完成。真正非 Note 的辅助文件单独列清单；无法自动迁移的 Note 必须补齐并验收。旧蓝图内容经盘点、预览、确认后处理，原始事实没有静默丢失。
+- [x] AC-10: 蓝图界面以 v11 为基线具备完整可达的操作；解析中间层、正式 Note 详情和右侧对话节点调整链均有针对性检查与可复现的交互验收。各阶段有独立 review 结论和修复记录。
 
 ## Verification
 
 正式实施时，R1 使用标准校验、消费者 fixtures 与哈希锁；R2 核对全量清单、索引及投影样例；R3/R4 核对目录、引用、新鲜度、跨仓和 checkout 场景；R5 核对选择、冲突、删除及撤销链路。每段 task 再固定具体命令和人工演示步骤，未执行项保持未完成。
+
+## Closeout
+
+2026-09-25: R1-R5 completed through their stage gates. R5 task: [2026-09-25-blueprint-r5--7be391fd.md](../../2026-09-25-blueprint-r5--7be391fd.md). Independent review covers the maintenance chat loop, composed blueprint source checkout, full Note migration and legacy blueprint preview. Legacy JSON files were retained pending explicit archive selection; live Electron was not run.

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 671574ba-c6e4-54ab-8fee-8d762e72f622
+kind: decision
+lifecycle: implemented
+created: 2026-07-05
+class: feature
+---
 # Agent Note: Custom desktop toast window
 
 Status: implemented

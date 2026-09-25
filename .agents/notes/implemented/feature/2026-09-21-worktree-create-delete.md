@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Worktree creation and deletion for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: ceac71d615c28b385e2a71d536530c547a2856d463d5d798e47b991f55f7456c
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Worktree creation and deletion for the session requirement
 ---
 
 # Agent Note: Worktree creation and deletion with scoped terminals

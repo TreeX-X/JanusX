@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Hosted GitHub reviews and checks for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: 21e3beef9c3a5e773194188563a8ae65714c9b88f33121500cb54388743add3c
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Hosted GitHub reviews and checks for the session requirement
 ---
 
 # Agent Note: Hosted GitHub reviews and checks over gh

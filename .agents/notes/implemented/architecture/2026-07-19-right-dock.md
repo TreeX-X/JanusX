@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: a73f2f05-7198-52b1-90ca-187f682460c1
+kind: decision
+lifecycle: implemented
+created: 2026-07-19
+class: architecture
+---
 # Agent Note: Right dock rail with semantic file icons
 
 Status: implemented

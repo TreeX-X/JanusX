@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 82db94eb-97de-5c31-a47f-0723e8c4a9d3
+kind: decision
+lifecycle: proposed
+created: 2026-09-14
+class: feature
+---
 # Agent Note: Agent assistant OSS survey
 
 Status: proposed

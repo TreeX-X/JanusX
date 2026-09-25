@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Checkpoint retention and eviction for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: c382d6a629951ba6d0d9993f0b89b1e2d0a6374bbfbcd10a4cc630376f12b004
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Checkpoint retention and eviction for the session requirement
 ---
 
 # Agent Note: Checkpoint retention with count and age caps

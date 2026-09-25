@@ -8,7 +8,16 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
-    reason: The v3 slice renders card content; this slice makes the content arrive while the conversation runs
+extensions:
+  r5Migration:
+    sourceHash: e3e1dd9b36ebd019b2dc918f6978100fb1fcab30cf9f52d135328e50c98c1802
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
+        reason: The v3 slice renders card content; this slice makes the content arrive
+          while the conversation runs
 ---
 
 # Agent Note: Session change events on conversation writes

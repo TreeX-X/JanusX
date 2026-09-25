@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: d0720a3c-13f0-5cc0-9a16-d509e755ef47
+kind: decision
+lifecycle: proposed
+created: 2026-09-22
+class: architecture
+---
 # Agent Note: External Session Transcript Backfill
 
 Status: proposed

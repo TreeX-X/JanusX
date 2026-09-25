@@ -8,10 +8,23 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e968d1ae-593c-4a7e-b2a0-aba9fcb12f82
-    reason: Windowed renderer slice owns the modals this fix re-mounts above the dock
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
-    reason: Pull-mode transcript backfill gains first-prompt repair for titleless hook rows
+extensions:
+  r5Migration:
+    sourceHash: 5ba0c2478181ef1b4a5f11a5594cded1a11f8944cfa01caca09e9aef851d1ac2
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e968d1ae-593c-4a7e-b2a0-aba9fcb12f82
+        reason: Windowed renderer slice owns the modals this fix re-mounts above the
+          dock
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
+        reason: Pull-mode transcript backfill gains first-prompt repair for titleless
+          hook rows
 ---
 
 # Agent Note: Session modals above the dock plus recognizable empty states

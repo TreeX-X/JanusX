@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: c32cd9ef-9e87-5fca-a1d8-1c45321e0795
+kind: decision
+lifecycle: proposed
+created: 2026-09-18
+class: feature
+---
 # Agent Note: MIT-only desktop ADE survey and H2 upgrade points
 
 Status: proposed

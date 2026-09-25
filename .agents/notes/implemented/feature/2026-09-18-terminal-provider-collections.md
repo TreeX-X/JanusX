@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 51ac8035-0111-5900-8bbd-fe3f81ccd03b
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: feature
+---
 # Agent Note: Per-terminal provider collections with icon tabs
 
 Status: implemented

@@ -8,13 +8,30 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
-    reason: Orca-aligned three-layer requirement closes its remaining main-side clauses here
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e968d1ae-593c-4a7e-b2a0-aba9fcb12f82
-    reason: Windowed renderer slice owns the detail surface this slice feeds with prose and resume
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
-    reason: Pull-mode transcript backfill lends the bounded parsers this slice reuses for detail reads
+extensions:
+  r5Migration:
+    sourceHash: 0d2ef1207332c3c664232837f165778efd9ba315b9b3df14606a0ef9404c029d
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+      - relations[2].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
+        reason: Orca-aligned three-layer requirement closes its remaining main-side
+          clauses here
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e968d1ae-593c-4a7e-b2a0-aba9fcb12f82
+        reason: Windowed renderer slice owns the detail surface this slice feeds with
+          prose and resume
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2
+        reason: Pull-mode transcript backfill lends the bounded parsers this slice
+          reuses for detail reads
 ---
 
 # Agent Note: Transcript detail reads plus provider resume runs

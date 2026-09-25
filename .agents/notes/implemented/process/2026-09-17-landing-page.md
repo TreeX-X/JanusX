@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 85cfee57-254e-5739-b177-0d6e6ac82c86
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: process
+---
 # Agent Note: GitHub Pages 下载落地页
 
 Status: implemented

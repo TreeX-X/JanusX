@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 2a6cd90c-60fa-5fdf-acc4-2989cdf5bdc2
+kind: decision
+lifecycle: proposed
+created: 2026-09-19
+class: architecture
+---
 # Agent Note: Entry switch to unified asset navigation at cutover
 
 Status: proposed

@@ -60,18 +60,18 @@ function publicTask(task: BlueprintMaintenanceTask): BlueprintMaintenanceTask {
   return structuredClone(task)
 }
 
-async function resolveAuthorizedWorkspace(workspaceId: string, claimedPath: string): Promise<string> {
+function samePath(left: string, right: string): boolean {
+  return process.platform === 'win32' ? resolve(left).toLowerCase() === resolve(right).toLowerCase() : resolve(left) === resolve(right)
+}
+
+async function resolveAuthorizedWorkspace(workspaceId: string, claimedPath?: string): Promise<string> {
   const files = await fs.readdir(workspacesDir()).catch(() => [])
   for (const file of files) {
     if (!file.endsWith('.json')) continue
     const record = await readJson<{ id: string; path: string }>(join(workspacesDir(), file))
     if (record?.id !== workspaceId) continue
     const registered = resolve(record.path)
-    const claimed = resolve(claimedPath)
-    const equal = process.platform === 'win32'
-      ? registered.toLowerCase() === claimed.toLowerCase()
-      : registered === claimed
-    if (!equal) throw new Error('工作区身份与路径不匹配')
+    if (claimedPath !== undefined && !samePath(registered, claimedPath)) throw new Error('工作区身份与路径不匹配')
     return registered
   }
   throw new Error('授权工作区未注册或已移除')
@@ -98,6 +98,30 @@ function evidenceOptions(workspaceCount: number): { maxContextBytes: number; max
     maxContextBytes: Math.max(16 * 1024, Math.floor((240 * 1024) / Math.max(1, workspaceCount))),
     maxFiles: Math.max(8, Math.floor(100 / Math.max(1, workspaceCount))),
   }
+}
+
+function sourceHashes(blueprint: Blueprint): Record<string, string> {
+  return Object.fromEntries(Object.values(blueprint.nodes).flatMap(node =>
+    node.sourceHash ? [[node.id, node.sourceHash]] : []))
+}
+
+/** Undo remains bound to an authorized checkout and captures its own evidence baseline. */
+async function collectUndoEvidence(root: string, recorded: BlueprintEvidenceManifest[]): Promise<BlueprintEvidenceManifest[]> {
+  const workspaces = await Promise.all(recorded.map(async manifest => ({
+    manifest, path: await resolveAuthorizedWorkspace(manifest.workspaceId),
+  })))
+  const roots = await Promise.all(workspaces.map(workspace => harnessNoteService.resolveRoot(workspace.path)))
+  if (!roots.some(candidate => candidate.ok && candidate.root && samePath(candidate.root, root))) {
+    throw new Error('PERMISSION_DENIED: undo checkout is no longer authorized')
+  }
+  return Promise.all(workspaces.map(async ({ manifest, path }) => {
+    const result = await janusWorkspaceFs.collectTextEvidence(path, manifest.workspaceId, new AbortController().signal, evidenceOptions(workspaces.length))
+    if (!result.ok) throw new Error('撤销工程证据扫描失败')
+    return { ...result.value.manifest, files: result.value.manifest.files.map(file => {
+      const previous = manifest.files.find(item => item.path === file.path)
+      return { ...file, role: previous?.role ?? file.role, supportsOperationIds: previous?.supportsOperationIds ?? file.supportsOperationIds }
+    }) }
+  }))
 }
 
 function changeSetContext(task: BlueprintMaintenanceTask): string {
@@ -253,6 +277,10 @@ async function loadMaintenanceBlueprint(blueprintId: string, preferredPath?: str
 }
 
 function harnessErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    const code = 'code' in error && typeof error.code === 'string' ? error.code + ': ' : ''
+    return code + error.message
+  }
   return error instanceof Error ? error.message : String(error)
 }
 
@@ -287,10 +315,6 @@ class BlueprintMaintenanceService {
     if (existing || this.startingBlueprints.has(input.blueprintId)) throw new Error('该蓝图已有活动维护任务')
     this.startingBlueprints.add(input.blueprintId)
     try {
-      const { blueprint } = await loadMaintenanceBlueprint(input.blueprintId, input.workspacePath, () => this.listHarnessWorkspacePaths())
-      if (!blueprint) throw new Error('目标蓝图不存在')
-      const allowed = scopeNodeIds(blueprint, input.nodeScope)
-      if (!allowed.size) throw new Error('维护节点范围无效')
       const requestedWorkspaces = inputWorkspaces(input)
       const uniqueWorkspaceIds = new Set(requestedWorkspaces.map((item) => item.workspaceId))
       if (!requestedWorkspaces.length || requestedWorkspaces.length > 12 || uniqueWorkspaceIds.size !== requestedWorkspaces.length) throw new Error('授权工作区无效')
@@ -298,7 +322,12 @@ class BlueprintMaintenanceService {
         ...workspace,
         workspacePath: await resolveAuthorizedWorkspace(workspace.workspaceId, workspace.workspacePath),
       })))
-      const primaryWorkspace = authorizedWorkspaces[0]
+      const primaryWorkspace = authorizedWorkspaces.find(workspace => workspace.workspaceId === input.workspaceId && samePath(workspace.workspacePath, input.workspacePath))
+      if (!primaryWorkspace) throw new Error('PERMISSION_DENIED: primary checkout must be an authorized workspace')
+      const { blueprint } = await loadMaintenanceBlueprint(input.blueprintId, primaryWorkspace.workspacePath)
+      if (!blueprint) throw new Error('目标蓝图不存在')
+      const allowed = scopeNodeIds(blueprint, input.nodeScope)
+      if (!allowed.size) throw new Error('维护节点范围无效')
       const now = nowIso()
       const task: BlueprintMaintenanceTask = {
         id: randomUUID(), blueprintId: blueprint.id, blueprintName: blueprint.name, baseRevision: blueprint.contentRevision,
@@ -326,10 +355,16 @@ class BlueprintMaintenanceService {
   async proposeForConversation(input: {
     taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
     providerId: string; modelId?: string; signal: AbortSignal; chatSession: ChatSessionRuntime; workspaceIds: string[]
+    workspaceRoots: Record<string, string>
   }): Promise<string> {
     const task = this.requireActive(input.taskId)
     if (task.conversationId !== input.conversationId) throw new Error('PERMISSION_DENIED: proposal belongs to another conversation')
     if (taskWorkspaces(task).some((workspace) => !input.workspaceIds.includes(workspace.workspaceId))) throw new Error('PERMISSION_DENIED: proposal workspace is detached')
+    for (const workspace of taskWorkspaces(task)) {
+      const registered = await resolveAuthorizedWorkspace(workspace.workspaceId, workspace.workspacePath)
+      const attached = input.workspaceRoots[workspace.workspaceId]
+      if (!attached || !samePath(attached, registered)) throw new Error('PERMISSION_DENIED: proposal workspace root does not match attached session')
+    }
     if (task.status === 'analyzing' || task.status === 'applying') throw new Error('BUSY: proposal is already active')
     await this.generateProposal(task.id, input.providerId, input.modelId, input)
     if (input.signal.aborted) return ''
@@ -491,14 +526,26 @@ class BlueprintMaintenanceService {
     if (audit.status !== 'applied') throw new Error('只有已应用的审计记录可以撤销')
     const { blueprint, root } = await loadMaintenanceBlueprint(input.blueprintId, audit.harnessRoot, () => this.listHarnessWorkspacePaths())
     if (!blueprint) throw new Error('目标蓝图不存在')
-    const { operations, conflicts } = buildReverseOperations(audit, blueprint)
+    const evidence = root ? await collectUndoEvidence(root, audit.changeSetSnapshot.evidence ?? []) : undefined
+    // Harness deletes archive the Note. Reverse that actual effect while
+    // retaining the original delete and confirmation in the audit record.
+    const reverseAudit = root ? structuredClone(audit) : audit
+    if (root) {
+      const before = audit.beforeSnapshot as Blueprint
+      reverseAudit.changeSetSnapshot.operations = reverseAudit.changeSetSnapshot.operations.map(operation =>
+        operation.type === 'delete-node' && before.nodes[operation.nodeId]
+          ? { ...operation, type: 'archive-node' as const, beforeStatus: before.nodes[operation.nodeId].status }
+          : operation)
+    }
+    const { operations, conflicts } = buildReverseOperations(reverseAudit, blueprint)
     if (!operations.length) throw new Error(`没有可撤销的操作${conflicts.length ? `：${conflicts.join('；')}` : ''}`)
     const groups = groupMaintenanceOperations(operations, blueprint)
     const changeSet: BlueprintChangeSet = {
       id: randomUUID(), taskId: audit.taskId, blueprintId: input.blueprintId,
       baseRevision: blueprint.contentRevision, version: 1, status: 'ready',
       reason: `撤销审计 ${audit.id}（原提案：${audit.changeSetSnapshot.reason}）`,
-      operations, groups, digest: buildGroupDigest(groups, 1), createdAt: nowIso(), undoOfAuditId: audit.id,
+      sourceHashes: root ? sourceHashes((audit.afterSnapshot ?? audit.beforeSnapshot) as Blueprint) : undefined,
+      evidence, operations, groups, digest: buildGroupDigest(groups, 1), createdAt: nowIso(), undoOfAuditId: audit.id,
     }
     this.undoChangeSets.set(changeSet.id, changeSet)
     if (root) this.undoHarnessRoots.set(changeSet.id, root)
@@ -617,8 +664,8 @@ class BlueprintMaintenanceService {
     allowed: Set<string>,
   ): Promise<BlueprintMaintenanceApplyResult> {
     try {
-      assertHarnessScope(operations, allowed)
       const checkout = await resolveProjectCheckout(harnessNoteService, task.blueprintId, task.workspacePath, () => this.listHarnessWorkspacePaths())
+      assertHarnessScope(operations, allowed, checkout.blueprint)
       if (checkout.blueprint.contentRevision !== task.baseRevision) {
         task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化，请重新创建提案'; this.emit(task)
         throw new Error(task.error)
@@ -636,7 +683,7 @@ class BlueprintMaintenanceService {
       }
       await this.writeAudit(audit)
       const result = await applyMaintenanceSelection(harnessNoteService, {
-        root: checkout.root, repoId: checkout.repoId, operations,
+        root: checkout.root, repoId: checkout.repoId, operations, sourceHashes: changeSet.sourceHashes ?? {},
         taskId: task.id, changeSetVersion: changeSet.version, reason: changeSet.reason,
       })
       const fresh = await harnessNoteService.projectView(checkout.root)
@@ -675,6 +722,9 @@ class BlueprintMaintenanceService {
   ): Promise<BlueprintMaintenanceUndoApplyResult> {
     const root = this.undoHarnessRoots.get(changeSet.id)
     if (!root) throw new Error('撤销提案缺少项目目录绑定，请重新发起撤销')
+    const freshEvidence = await collectUndoEvidence(root, changeSet.evidence ?? [])
+    const mismatches = evidenceMismatchDetail(changeSet.evidence ?? [], freshEvidence)
+    if (mismatches.length) throw new Error('撤销工程证据已变化：' + mismatches.join('；'))
     const rejectedOperationIds = changeSet.operations
       .filter((item) => !input.operationIds.includes(item.operationId)).map((item) => item.operationId)
     const audit: BlueprintMaintenanceAuditRecord = {
@@ -689,9 +739,9 @@ class BlueprintMaintenanceService {
     }
     await this.writeAudit(audit)
     const checkout = await resolveProjectCheckout(harnessNoteService, input.blueprintId, root, () => this.listHarnessWorkspacePaths())
-    assertHarnessScope(operations, new Set(checkout.blueprint.nodeIds))
+    assertHarnessScope(operations, new Set(checkout.blueprint.nodeIds), checkout.blueprint)
     const result = await applyMaintenanceSelection(harnessNoteService, {
-      root: checkout.root, repoId: checkout.repoId, operations,
+      root: checkout.root, repoId: checkout.repoId, operations, sourceHashes: changeSet.sourceHashes ?? {},
       taskId: `${changeSet.taskId}-undo`, changeSetVersion: changeSet.version, reason: changeSet.reason,
     })
     const fresh = await harnessNoteService.projectView(checkout.root)
@@ -856,6 +906,7 @@ class BlueprintMaintenanceService {
       const nextChangeSet: BlueprintChangeSet | null = operations.length ? {
         id: randomUUID(), taskId, blueprintId: task.blueprintId, baseRevision: task.baseRevision, version,
         status: 'ready' as const, reason: object.summary, evidence, operations, groups, digest, createdAt: now,
+        sourceHashes: blueprint.source === 'harness' ? sourceHashes(blueprint) : undefined,
       } : null
       if (nextChangeSet) {
         if (previousChangeSet) task.changeSetHistory.push(structuredClone(previousChangeSet))

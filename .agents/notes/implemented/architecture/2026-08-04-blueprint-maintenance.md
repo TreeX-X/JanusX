@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 4b49f066-10dc-5ef6-8223-bcc3d0656016
+kind: decision
+lifecycle: implemented
+created: 2026-08-04
+class: architecture
+---
 # Agent Note: Controlled blueprint maintenance
 
 Status: implemented

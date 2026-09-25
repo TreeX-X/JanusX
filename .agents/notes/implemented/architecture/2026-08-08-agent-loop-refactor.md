@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 33f0f481-52fd-5672-b546-6c1c4d7689ed
+kind: decision
+lifecycle: implemented
+created: 2026-08-08
+class: architecture
+---
 # Agent Note: Policy-neutral agent loop refactor
 
 Status: implemented

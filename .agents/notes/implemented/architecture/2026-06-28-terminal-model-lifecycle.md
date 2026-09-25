@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 2f4d605c-e761-59dd-8a18-8963b56cf8a1
+kind: decision
+lifecycle: implemented
+created: 2026-06-28
+class: architecture
+---
 # Agent Note: Terminal model telemetry lifecycle
 
 Status: implemented

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 31cda2d8-3b47-5cce-affd-3978b2189c19
+kind: decision
+lifecycle: implemented
+created: 2026-07-09
+class: process
+---
 # Agent Note: Unified model registry with OpenRouter sync
 
 Status: implemented

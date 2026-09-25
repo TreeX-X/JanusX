@@ -8,7 +8,15 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Shutdown durability and archived sessions for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: 6c0ea2ed5104dd66abc0bff2fa6108cc8506eedac303b1575f10204001935e86
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Shutdown durability and archived sessions for the session requirement
 ---
 
 # Agent Note: Session durability with quit flush and archived scope

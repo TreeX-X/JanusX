@@ -235,6 +235,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
 
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  useEffect(() => {
+    if (selectedId) useBlueprintMaintenanceStore.getState().selectContext({ blueprintId, nodeId: selectedId })
+  }, [blueprintId, selectedId])
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [wikiAnchor, setWikiAnchor] = useState<{ uri: string; value?: string } | null>(null)
   const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)

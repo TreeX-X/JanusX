@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 6b7c688e-278f-5878-b88f-2bbb9d766fae
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Explicit adoption of roundtable task contracts
 
 Status: implemented

@@ -8,7 +8,16 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Worktree sidebar rows, right-side rescoping, and repo avatars for the session requirement
+extensions:
+  r5Migration:
+    sourceHash: 361b01930cf98b6686e53875a0a5cba77f73b049a9a65d74000b6598773e8880
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Worktree sidebar rows, right-side rescoping, and repo avatars for the
+          session requirement
 ---
 
 # Agent Note: Worktree sidebar rows with scoped surfaces and repo avatars

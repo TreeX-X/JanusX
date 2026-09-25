@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: b327657e-4cf1-561a-98fd-d365d7edc259
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: feature
+---
 # Agent Note: Note drawer underline tabs, black tray and Markdown toolbar
 
 Status: implemented

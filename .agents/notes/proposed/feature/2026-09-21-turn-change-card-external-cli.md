@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 82bea9ca-7e3d-55f9-a887-3646790aaca6
+kind: decision
+lifecycle: proposed
+created: 2026-09-21
+class: feature
+---
 # Agent Note: Post-turn changed-file card across external CLIs
 
 Status: proposed

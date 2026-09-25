@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 2b16ef61-0073-5589-a8ea-4061dc6c680b
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: feature
+---
 # Agent Note: LLM-side multi-CLI matrix with sync state
 
 Status: implemented

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 8ac68f05-8b94-52c1-809a-b75176904195
+kind: decision
+lifecycle: implemented
+created: 2026-09-04
+class: architecture
+---
 # Agent Note: Remote control direction and gateway
 
 Status: implemented

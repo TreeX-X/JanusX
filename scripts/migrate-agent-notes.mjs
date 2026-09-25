@@ -68,7 +68,7 @@ function declaredScalar(body, key) {
 }
 
 /** Pure conversion. Unknown semantics remain blocked; Status never creates execution. */
-export function previewNote({ repoId, relPath, raw, classification = 'legacy' }) {
+export function previewNote({ repoId, relPath, raw, classification = 'legacy', allowR5Repairs = false }) {
   const row = { relPath, classification, outcome: 'blocked', beforeHash: hash(raw), afterHash: null, before: raw, after: null, reasons: [], changes: [] }
   try {
     if (['conflicting-identity', 'unreadable'].includes(classification)) fail('Indexed ' + classification)
@@ -96,11 +96,30 @@ export function previewNote({ repoId, relPath, raw, classification = 'legacy' })
       const doc = parseDocument(parts.fmText)
       if (doc.errors.length) fail(doc.errors[0].message)
       if (doc.get('schema') !== 'harness-note/1') fail('Foreign or missing schema requires explicit metadata review')
-      const parsed = parseNote(prefix + repaired.body)
+      let parsed = parseNote(prefix + repaired.body)
+      const parsedErrors = validateNote(parsed)
+      if (allowR5Repairs && parsedErrors.length && parsedErrors.every((item) => item.message === 'scope/reason only for supersedes')) {
+        if (Object.prototype.hasOwnProperty.call(parsed.meta.extensions ?? {}, 'r5Migration')) fail('Existing r5Migration extension requires manual review')
+        const value = doc.toJS()
+        const repairs = []
+        const relations = Array.isArray(value.relations) ? value.relations.map((relation, index) => {
+          if (!relation || relation.type === 'supersedes') return relation
+          const next = { ...relation }
+          if (Object.prototype.hasOwnProperty.call(next, 'scope')) { delete next.scope; repairs.push(`relations[${index}].scope`) }
+          if (Object.prototype.hasOwnProperty.call(next, 'reason')) { delete next.reason; repairs.push(`relations[${index}].reason`) }
+          return next
+        }) : value.relations
+        if (!repairs.length) fail('No supported relation repair found')
+        doc.set('relations', relations)
+        doc.setIn(['extensions', 'r5Migration'], { sourceHash: row.beforeHash, repairs, originalRelations: value.relations })
+        prefix = (raw.startsWith('\uFEFF') ? '\uFEFF' : '') + '---\n' + doc.toString() + '---\n'
+        row.changes.push({ field: 'relations', source: 'Removed scope/reason fields invalid for non-supersedes relations; original values retained in extensions.r5Migration' })
+        parsed = parseNote(prefix + repaired.body)
+      }
       meta = parsed.meta
       originalMeta = parsed.meta
       if (repaired.mapping.length) {
-        if (meta.extensions?.r2Migration) fail('Existing r2Migration extension requires manual review')
+        if (Object.prototype.hasOwnProperty.call(meta.extensions ?? {}, 'r2Migration')) fail('Existing r2Migration extension requires manual review')
         doc.setIn(['extensions', 'r2Migration'], { sourceHash: row.beforeHash, originalBodyBase64: Buffer.from(parts.body).toString('base64'), headingMapping: repaired.mapping })
         prefix = (raw.startsWith('\uFEFF') ? '\uFEFF' : '') + '---\n' + doc.toString() + '---\n'
       }
@@ -108,6 +127,8 @@ export function previewNote({ repoId, relPath, raw, classification = 'legacy' })
       const first = facts.headings.find((h) => h.depth === 1)
       if (!first?.text.startsWith('Agent Note:')) fail('Unknown Markdown document; human Note/helper classification required')
       const sections = new Set(readMarkdownView(repaired.body).headings.filter((h) => h.depth === 2).map((h) => h.text))
+      const hasProposal = [...sections].some((name) => name === 'Proposal' || name.startsWith('Proposal '))
+      const hasDecision = sections.has('Decision')
       const folder = relPath.split('/')[2]
       const status = declaredScalar(parts.body, 'Status')?.toLowerCase()
       const id = declaredScalar(parts.body, '(?:Id|UUID)')
@@ -115,17 +136,36 @@ export function previewNote({ repoId, relPath, raw, classification = 'legacy' })
       if (id && !UUID_RE.test(id)) fail('Legacy ID requires manual identity review')
       if (!created) fail('Creation date is unknown; do not substitute migration time')
       let lifecycle
-      if (['archived', 'rejected'].includes(folder) || ['archived', 'rejected'].includes(status)) fail('Archived/rejected legacy Note needs an explicit disposition and lifecycle review')
-      if (sections.has('Decision') && !sections.has('Proposal') && status === 'implemented' && folder === 'implemented') lifecycle = 'implemented'
-      else if (sections.has('Proposal') && !sections.has('Decision') && status === 'proposed' && folder === 'proposed') lifecycle = 'proposed'
+      const historical = ['archived', 'rejected'].includes(folder) || ['archived', 'rejected'].includes(status)
+      if (historical) {
+        if (!allowR5Repairs) fail('Archived/rejected legacy Note needs an explicit disposition and lifecycle review')
+        lifecycle = folder === 'rejected' || status === 'rejected' ? 'rejected' : 'archived'
+        if (allowR5Repairs) {
+          const originalBody = repaired.body
+          repaired.body = repaired.body.replace(/^## Decision\s*$/m, '## Proposal').replace(/^## Consequences\s*$/m, '## Risks')
+          if (!/^## Risks\s*$/m.test(repaired.body)) repaired.body += '\n\n## Risks\n\nHistorical source has no separate risk section; migration preserves its archived lifecycle.\n'
+          if (repaired.body !== originalBody) row.changes.push({ field: 'body headings', source: 'Normalized legacy Decision/Consequences headings to formal Proposal/Risks sections; original body is retained in extensions.r5Migration' })
+        }
+      } else if (hasDecision && !hasProposal && status === 'implemented' && folder === 'implemented') lifecycle = 'implemented'
+      else if (hasProposal && !hasDecision && (status === 'proposed' || (!status && folder === 'proposed'))) {
+        lifecycle = 'proposed'
+        if (allowR5Repairs && [...sections].some((name) => name.startsWith('Proposal '))) {
+          repaired.body = repaired.body.replace(/^## Proposal[^\r\n]*$/m, '## Proposal')
+          row.changes.push({ field: 'body heading', source: 'Normalized a legacy Proposal heading suffix to the formal section name' })
+        }
+      }
       else fail('Legacy kind/lifecycle is ambiguous; review decision sections, folder and Status')
       if (!sections.has('Problem') || !sections.has('Alternatives considered')) fail('Legacy decision shape is incomplete')
       meta = { schema: 'harness-note/1', id: id ?? legacyId(repoId, relPath), kind: 'decision', lifecycle, created }
       const cls = relPath.split('/')[3]
       if (['feature', 'bug-fix', 'architecture', 'process', 'testing', 'simplification'].includes(cls)) meta.class = cls
+      if (['archived', 'rejected'].includes(lifecycle)) meta.disposition = { reason: 'Migrated from legacy lifecycle folder; historical state is retained and no execution is inferred.' }
+      if (allowR5Repairs && row.changes.some((change) => change.field === 'body headings' || change.field === 'body heading')) {
+        meta.extensions = { ...(meta.extensions ?? {}), r5Migration: { sourceHash: row.beforeHash, originalBodyBase64: Buffer.from(parts.body).toString('base64') } }
+      }
       row.changes.push({ field: 'frontmatter', source: 'legacy decision sections, lifecycle folder and Status; no task execution inferred' })
       row.identitySource = id ? 'existing legacy UUID' : 'UUIDv5(repoId namespace, unchanged relPath)'
-      if (repaired.mapping.length) meta.extensions = { r2Migration: { sourceHash: row.beforeHash, originalBodyBase64: Buffer.from(parts.body).toString('base64'), headingMapping: repaired.mapping } }
+      if (repaired.mapping.length) meta.extensions = { ...meta.extensions, r2Migration: { sourceHash: row.beforeHash, originalBodyBase64: Buffer.from(parts.body).toString('base64'), headingMapping: repaired.mapping } }
       prefix = '---\n' + stringify(meta) + '---\n'
     }
     const after = prefix + repaired.body
@@ -152,7 +192,7 @@ function finish(row, after, beforeBody, afterBody, beforeMeta, afterMeta, mappin
 }
 
 /** One shared index covers every source, including invalid and foreign records. */
-export async function inventoryNotes(root = process.cwd()) {
+export async function inventoryNotes(root = process.cwd(), options = {}) {
   root = resolve(root)
   const index = await buildNoteIndex(root)
   if (!index.repoId) fail('Repository identity is unavailable')
@@ -163,7 +203,7 @@ export async function inventoryNotes(root = process.cwd()) {
       entries.push({ relPath: entry.relPath, classification: entry.classification, outcome: 'blocked', beforeHash: entry.sourceHash, afterHash: null, reasons: ['Unreadable, changed during inventory, or non-roundtrippable UTF-8 source'], diagnostics: entry.diagnostics })
       continue
     }
-    entries.push({ ...previewNote({ repoId: index.repoId, relPath: entry.relPath, raw: read.text, classification: entry.classification }), diagnostics: entry.diagnostics })
+    entries.push({ ...previewNote({ repoId: index.repoId, relPath: entry.relPath, raw: read.text, classification: entry.classification, allowR5Repairs: options.allowR5Repairs === true }), diagnostics: entry.diagnostics })
   }
   const groups = new Map()
   for (const row of entries) {
@@ -208,7 +248,7 @@ export async function applyPreview(root, report, selectedPaths) {
       const row = rows[0]
       if (!['ready', 'unchanged'].includes(row.outcome)) fail('Selection is blocked or is a helper: ' + path)
       if (typeof row.before !== 'string' || typeof row.after !== 'string' || hash(row.before) !== row.beforeHash || hash(row.after) !== row.afterHash) fail('Preview integrity mismatch: ' + path)
-      const reproduced = previewNote({ repoId: report.repoId, relPath: path, raw: row.before, classification: row.classification })
+      const reproduced = previewNote({ repoId: report.repoId, relPath: path, raw: row.before, classification: row.classification, allowR5Repairs: true })
       if (reproduced.after !== row.after || reproduced.outcome !== row.outcome) fail('Preview is not reproducible: ' + path)
       const current = index.byPath.get(path)
       if (!current || current.classification === 'conflicting-identity') fail('Missing or conflicting current source: ' + path)
@@ -240,9 +280,9 @@ export async function main(args = process.argv.slice(2)) {
     return console.log(JSON.stringify(await applyPreview(root, JSON.parse(await readFile(resolve(root, values.apply), 'utf8')), values.select ?? []), null, 2))
   }
   if (values.select) fail('--select requires --apply')
-  const report = await inventoryNotes(root)
+  const report = await inventoryNotes(root, { allowR5Repairs: true })
   if (values.report) {
-    if (!/^\.agents\/\.local\/r2-migration-[\w.-]+\.json$/.test(values.report)) fail('Report path must be .agents/.local/r2-migration-*.json')
+    if (!/^\.agents\/\.local\/r[25]-migration-[\w.-]+\.json$/.test(values.report)) fail('Report path must be .agents/.local/r2-migration-*.json or r5-migration-*.json')
     for (const suffix of ['.agents', '.agents/.local', values.report]) {
       try {
         const stat = await lstat(resolve(root, suffix))

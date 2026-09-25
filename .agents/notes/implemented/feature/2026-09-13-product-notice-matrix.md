@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: c4b9de4e-36f2-5b20-b7e0-4227835253a4
+kind: decision
+lifecycle: implemented
+created: 2026-09-13
+class: feature
+---
 # Agent Note: 产物通知矩阵（新增/覆盖/基线修改三分）
 
 Status: implemented

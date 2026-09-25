@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 296ddf52-c0cc-518e-b490-0e95c80cb5c6
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: feature
+---
 # Agent Note: Personal versus engineering memory separation, first slice
 
 Status: implemented

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: ec2fb5e6-6368-54e6-a3c9-762b982f24b4
+kind: decision
+lifecycle: proposed
+created: 2026-08-20
+class: feature
+---
 # Agent Note: Team identity with local email provider
 
 Status: proposed

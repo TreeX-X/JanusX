@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 40cc28a8-0ca8-5ac3-b2c6-fafd93175e2c
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: process
+---
 # Agent Note: verify 管道硬化与 Windows 稳定性
 
 Status: implemented

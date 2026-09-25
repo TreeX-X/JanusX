@@ -8,13 +8,30 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
-    reason: Orca-aligned requirement assumes every mounted CLI is scannable without list edits
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/ba08f562-a2bc-4a97-98dc-8b835bcc9107
-    reason: Opencode sqlite driver is the second engine served by the derived scan set
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/1a6947ed-0b47-4d33-aa9a-21d37be1db07
-    reason: Transcript detail reads serve pi pairs through the same session-keyed channel
+extensions:
+  r5Migration:
+    sourceHash: ff8387bc43bf7838cdc774e5d62064544b69a2cac45ad1bff4d6dc1c94dfbb8f
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+      - relations[2].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3e9ec8d6-9ccc-44ee-ba3f-c1b577d88b7b
+        reason: Orca-aligned requirement assumes every mounted CLI is scannable without
+          list edits
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/ba08f562-a2bc-4a97-98dc-8b835bcc9107
+        reason: Opencode sqlite driver is the second engine served by the derived scan
+          set
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/1a6947ed-0b47-4d33-aa9a-21d37be1db07
+        reason: Transcript detail reads serve pi pairs through the same session-keyed
+          channel
 ---
 
 # Agent Note: Derived session scan set plus pi file driver

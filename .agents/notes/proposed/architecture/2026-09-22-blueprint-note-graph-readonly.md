@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 1432f7b8-6dff-5351-9e27-b1c3553bac0d
+kind: decision
+lifecycle: proposed
+created: 2026-09-22
+class: architecture
+---
 # Agent Note: Blueprint becomes a read-only NoteGraph view maintained by agents
 
 Status: proposed

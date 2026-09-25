@@ -8,10 +8,23 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb7e75d4-4db1-4a7d-b321-6ea866df241c
-    reason: Change events deliver fresh summaries; this slice gives the timeline durable per-turn prose to display
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
-    reason: The v3 slice keeps answers status-only for lack of prose; this slice supplies the prose source
+extensions:
+  r5Migration:
+    sourceHash: 1f5a38fef6b9309c1bfac82c60b8581d9deda2ba3d2846d0354920f8023dd9b9
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb7e75d4-4db1-4a7d-b321-6ea866df241c
+        reason: Change events deliver fresh summaries; this slice gives the timeline
+          durable per-turn prose to display
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0
+        reason: The v3 slice keeps answers status-only for lack of prose; this slice
+          supplies the prose source
 ---
 
 # Agent Note: Session conversation content from turn snapshot plus transcript excerpt

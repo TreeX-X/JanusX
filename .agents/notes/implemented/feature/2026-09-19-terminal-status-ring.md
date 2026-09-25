@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: fc9a87e5-4dcc-5e5b-9d79-f5a79b4ce21b
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: feature
+---
 # Agent Note: Terminal status ring in the sidebar
 
 Status: implemented

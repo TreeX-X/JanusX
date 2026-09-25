@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 434babf4-fac2-5482-aeb8-3a091332ee09
+kind: decision
+lifecycle: implemented
+created: 2026-09-17
+class: feature
+---
 # Agent Note: Multi-terminal detection with icon rows
 
 Status: implemented

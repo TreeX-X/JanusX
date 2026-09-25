@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 46d65946-125b-56d0-b23e-05552f5b281e
+kind: decision
+lifecycle: implemented
+created: 2026-09-16
+class: architecture
+---
 # Agent Note: Roundtable native artifact bundles
 
 Status: implemented

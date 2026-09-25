@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: dcc5e8a0-7733-52a4-83c8-695c14ed8dd7
+kind: decision
+lifecycle: implemented
+created: 2026-09-03
+class: architecture
+---
 # Agent Note: Queue-owned dual-path knowledge pipeline
 
 Status: implemented

@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: d9f1d453-d9cc-5fba-8655-6ac51f3cb75c
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Thread registry with activation and confirmed close
 
 Status: implemented

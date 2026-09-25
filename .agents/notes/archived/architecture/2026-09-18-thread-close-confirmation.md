@@ -1,3 +1,14 @@
+---
+schema: harness-note/1
+id: abb1ccb3-be21-5f64-9b55-de5089e621e9
+kind: decision
+lifecycle: archived
+created: 2026-09-18
+class: architecture
+disposition:
+  reason: Migrated from legacy lifecycle folder; historical state is retained and
+    no execution is inferred.
+---
 # Agent Note: Thread close needs a user decision
 
 Status: proposed

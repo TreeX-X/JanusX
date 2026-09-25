@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: faacdaf7-3feb-5b33-90e0-eeb59d6b0c62
+kind: decision
+lifecycle: implemented
+created: 2026-09-19
+class: feature
+---
 # Agent Note: Runtime drawer cards and drag height
 
 Status: implemented

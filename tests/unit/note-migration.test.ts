@@ -30,8 +30,8 @@ async function fixture(files: Record<string, string> = { [path]: legacy }) {
 function formal(meta: Record<string, unknown> = {}, body = '# Formal\n\n## Problem\n\nPreserve existing facts.\n') {
   return '---\n' + stringify({ schema: 'harness-note/1', id, kind: 'decision', lifecycle: 'draft', created: '2026-09-20', ...meta }) + '---\n' + body
 }
-function preview(raw = legacy, relPath = path, classification = 'legacy') {
-  return previewNote({ repoId, raw, relPath, classification })
+function preview(raw = legacy, relPath = path, classification = 'legacy', options: { allowR5Repairs?: boolean } = {}) {
+  return previewNote({ repoId, raw, relPath, classification, ...options })
 }
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))) })
 
@@ -128,6 +128,52 @@ describe('Note migration conversion', () => {
       expect(row.outcome).toBe('blocked')
       expect(row.before).toBe(raw)
       expect(row.reasons.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('R5 repair mode normalizes historical relations and archived decision sections without inventing execution', () => {
+    const malformed = formal({ relations: [{ type: 'related-to', target: 'note://' + repoId + '/' + otherId, reason: 'Historical link' }] })
+    const repaired = preview(malformed, path, 'malformed', { allowR5Repairs: true })
+    expect(repaired.outcome).toBe('ready')
+    expect(parseNote(repaired.after!).meta.extensions?.r5Migration).toBeTruthy()
+    expect(parseNote(repaired.after!).meta.relations?.[0]).toEqual({ type: 'related-to', target: 'note://' + repoId + '/' + otherId })
+    const archived = preview(legacy, '.agents/notes/archived/feature/2026-09-17-old.md', 'legacy', { allowR5Repairs: true })
+    expect(archived.outcome).toBe('ready')
+    const parsed = parseNote(archived.after!)
+    expect(parsed.meta.lifecycle).toBe('archived')
+    expect(parsed.meta.disposition?.reason).toContain('Migrated from legacy')
+    expect(parsed.meta.execution).toBeUndefined()
+  })
+
+  it('composes relation and heading repairs while preserving both original sources', () => {
+    const relations = [{ type: 'related-to', target: 'note://' + repoId + '/' + otherId, reason: 'Historical link' }]
+    const raw = formal({ relations }, '# Formal\n\n## Problem\n\n# Nested heading\n\n[Other](./other.md)\n')
+    const row = preview(raw, path, 'malformed', { allowR5Repairs: true })
+    expect(row.outcome).toBe('ready')
+    const parsed = parseNote(row.after!)
+    expect(validateNote(parsed)).toEqual([])
+    expect(parsed.meta.extensions?.r5Migration).toMatchObject({ sourceHash: sha(raw), originalRelations: relations })
+    expect(parsed.meta.extensions?.r2Migration).toMatchObject({ sourceHash: sha(raw) })
+    const archived = preview(legacy + '\n# Extra heading\n', '.agents/notes/archived/feature/2026-09-17-old.md', 'legacy', { allowR5Repairs: true })
+    expect(archived.outcome).toBe('ready')
+    const extensions = parseNote(archived.after!).meta.extensions
+    expect(extensions?.r5Migration).toBeTruthy()
+    expect(extensions?.r2Migration).toBeTruthy()
+    expect(preview(formal({ relations, extensions: { r5Migration: { previous: true } } }), path, 'malformed', { allowR5Repairs: true }).outcome).toBe('blocked')
+  })
+
+  it.each([null, false, 0, '', {}, { previous: true }])('preserves occupied migration extension keys (%j)', (value) => {
+    const relations = [{ type: 'related-to', target: 'note://' + repoId + '/' + otherId, reason: 'Historical link' }]
+    const inputs = [
+      formal({ relations, extensions: { r5Migration: value } }),
+      formal({ extensions: { r2Migration: value } }, '# Formal\n\n## Problem\n\n# Nested heading\n'),
+    ]
+    for (const raw of inputs) {
+      const row = preview(raw, path, 'malformed', { allowR5Repairs: true })
+      expect(row.outcome).toBe('blocked')
+      expect(row.before).toBe(raw)
+      expect(row.after).toBeNull()
+      expect(row.reasons.join(' ')).toContain('extension requires manual review')
     }
   })
 

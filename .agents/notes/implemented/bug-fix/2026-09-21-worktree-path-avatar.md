@@ -8,7 +8,15 @@ class: bug-fix
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
-    reason: Duplicate main rows and avatar restyle
+extensions:
+  r5Migration:
+    sourceHash: 8e88e74f6114ab6ff05bcf6b61b1feb2139e44a44949ce31554ff912e790bec2
+    repairs:
+      - relations[0].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22
+        reason: Duplicate main rows and avatar restyle
 ---
 
 # Agent Note: Worktree path normalization and hover avatar

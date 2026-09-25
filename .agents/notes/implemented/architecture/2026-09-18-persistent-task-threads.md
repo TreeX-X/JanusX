@@ -1,3 +1,11 @@
+---
+schema: harness-note/1
+id: 90af6e6c-526e-58a8-b0c1-f524a24af92b
+kind: decision
+lifecycle: implemented
+created: 2026-09-18
+class: architecture
+---
 # Agent Note: Task-bound persistent threads for desktop runs
 
 Status: implemented

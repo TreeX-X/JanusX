@@ -8,13 +8,29 @@ class: feature
 relations:
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e29da5b4-dc65-40a9-883d-9026e3b280b1
-    reason: The capability table owns the sessionStore resolvers this backfill walks
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
-    reason: Turn prompt and excerpt fields give the imported timeline its readable Q/A pair
   - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b3704d91-c17d-4492-ae71-a44cfec8bbd7
-    reason: The session ledger owns identity and Continue handoff that external rows reuse read-only
+extensions:
+  r5Migration:
+    sourceHash: 5e5575ebcff31bd9063c9006337de34c020ae48c438245702724f06520c138d4
+    repairs:
+      - relations[0].reason
+      - relations[1].reason
+      - relations[2].reason
+    originalRelations:
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e29da5b4-dc65-40a9-883d-9026e3b280b1
+        reason: The capability table owns the sessionStore resolvers this backfill walks
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7
+        reason: Turn prompt and excerpt fields give the imported timeline its readable
+          Q/A pair
+      - type: related-to
+        target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b3704d91-c17d-4492-ae71-a44cfec8bbd7
+        reason: The session ledger owns identity and Continue handoff that external rows
+          reuse read-only
 ---
 
 # Agent Note: External session backfill from provider transcript stores
