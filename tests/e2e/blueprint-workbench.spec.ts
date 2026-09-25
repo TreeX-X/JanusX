@@ -34,8 +34,8 @@ async function insideViewport(page: Page, locator: Locator) {
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height + 1)
 }
 
-async function open(page: Page) {
-  await page.goto('/project.html?workbench')
+async function open(page: Page, query = '?workbench') {
+  await page.goto('/project.html' + query)
   await expect(detail(page).locator('.markdown-preview')).toContainText('Root Note body from the authorized checkout.')
   await expect(page.locator('.react-flow__node')).toHaveCount(5)
   await expect(chat(page).locator('.janus-chat textarea')).toBeVisible()
@@ -187,6 +187,33 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       expect(request.domain).toBe('project')
       expect(request.workspaceResources).toEqual([{ workspaceId: 'ws', workspacePath: 'C:/fixture', workspaceName: 'Project' }])
       expect(request.maintenanceTaskId).toBeUndefined()
+    })
+
+    test('switching workspace notifies once, resets context and stays in one session', async ({ page }) => {
+      const errors: string[] = []
+      page.on('pageerror', error => errors.push(error.message))
+      await open(page, '?workbench&switch-workspace')
+      const input = chat(page).locator('.janus-chat textarea')
+      await input.fill('First workspace note')
+      await input.press('Enter')
+      await expect(chat(page)).toContainText('Project reply in progress')
+      await page.evaluate(() => (window as any).projectFixture.finishStream())
+      await expect(chat(page)).toContainText('First workspace note')
+      await page.getByRole('button', { name: 'Switch workspace', exact: true }).click()
+      const notice = chat(page).locator('.bp-maintenance-switch-notice')
+      await expect(notice).toContainText('Checkout B')
+      await expect(chat(page).locator('.bp-maintenance-context')).toContainText('Checkout B')
+      await expect(chat(page)).not.toContainText('First workspace note')
+      await expect(chat(page)).not.toContainText('Project reply in progress')
+      await input.fill('Second workspace note')
+      await input.press('Enter')
+      await expect(chat(page)).toContainText('Project reply in progress')
+      const streams = await page.evaluate(() => (window as any).projectFixture.streams)
+      expect(streams).toHaveLength(2)
+      expect(new Set(streams.map((item: { conversationId: string }) => item.conversationId)).size).toBe(1)
+      expect(streams[1].workspaceResources).toEqual([{ workspaceId: 'ws-b', workspacePath: 'C:/fixture-b', workspaceName: 'Checkout B' }])
+      await insideViewport(page, input)
+      expect(errors).toEqual([])
     })
   })
 }

@@ -293,6 +293,7 @@
     "viewHistory": "历史",
     "authorizeWorkspace": "授权工作区",
     "workspaceSelected": "已选择 {{count}} 个工作区",
+    "workspaceSwitched": "已切换到「{{name}}」工作区，上下文已重置",
     "workspaceSelectPlaceholder": "选择工作区",
     "workspaceEmpty": "暂无可授权的工作区",
     "nodeScope": "节点范围",

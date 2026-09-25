@@ -293,6 +293,7 @@
     "viewHistory": "History",
     "authorizeWorkspace": "Authorize workspace",
     "workspaceSelected": "{{count}} workspaces selected",
+    "workspaceSwitched": "Switched to workspace {{name}}; context has been reset",
     "workspaceSelectPlaceholder": "Select workspaces",
     "workspaceEmpty": "No workspaces available",
     "nodeScope": "Node scope",

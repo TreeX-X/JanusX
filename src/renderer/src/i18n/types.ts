@@ -284,6 +284,7 @@ export type TypedI18nKey =
   | 'blueprint:maintenance.workspaceEmpty'
   | 'blueprint:maintenance.workspaceSelectPlaceholder'
   | 'blueprint:maintenance.workspaceSelected'
+  | 'blueprint:maintenance.workspaceSwitched'
   | 'blueprint:nodeCard.blocked'
   | 'blueprint:nodeCard.collapseSubtree'
   | 'blueprint:nodeCard.expandSubtree'

@@ -2472,6 +2472,10 @@
 .bp-maintenance-panel .janus-chat-messages { flex: 1 1 0; min-height: 0; overflow-y: auto; }
 .bp-maintenance-panel .janus-chat-input-area { flex: 0 0 auto; }
 .bp-maintenance-connecting { padding: 16px; color: #8b8b94; font-size: 12px; }
+.bp-maintenance-switch-notice {
+  margin: 0 0 6px; padding: 7px 10px; border: 1px solid rgba(255, 120, 48, .35); border-radius: 6px;
+  background: rgba(255, 120, 48, .08); color: #ffb085; font-size: 11px; line-height: 1.5;
+}
 
 .bp-maintenance-panel {
   display: flex;

@@ -10,7 +10,7 @@ import { BlueprintToolbar, BlueprintToolbarProvider } from './BlueprintToolbar'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
 import { Select } from '../ui/Select'
 import { BlueprintDetailPortalContext } from './blueprintDetailPortal'
-import { BlueprintMaintenancePanel } from './BlueprintMaintenancePanel'
+import { BlueprintMaintenancePanel, BLUEPRINT_PANEL_VIEW_REF } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
 import { useAnimatedOpen, useWorkbenchPhase } from '@/components/shared/CardFrame'
@@ -43,9 +43,8 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const blueprintWorkspace = useBlueprintStore((s) => s.blueprintWorkspace)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
   const activeWorkspacePath = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.path ?? null)
-  const ownerRepoId = currentBlueprint?.nodes[currentBlueprint.rootNodeId]?.sourceUri?.split('/')[2]
-  const chat = useOptionalJanusChatController(ownerRepoId && currentBlueprint ? { ownerRepoId, viewId: currentBlueprint.id } : undefined)
-  const projectChat = chat?.engineeringContext?.viewRef?.viewId === currentBlueprint?.id ? chat : null
+  const chat = useOptionalJanusChatController({ ...BLUEPRINT_PANEL_VIEW_REF })
+  const projectChat = chat?.engineeringContext?.viewRef?.viewId === BLUEPRINT_PANEL_VIEW_REF.viewId ? chat : null
   const maintenanceTasks = useBlueprintMaintenanceStore((s) => s.tasks)
   const maintenanceInitialized = useBlueprintMaintenanceStore((s) => s.initialized)
   const openRequest = useBlueprintMaintenanceStore((s) => s.openRequest)

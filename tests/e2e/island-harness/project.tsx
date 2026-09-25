@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { JanusChatProvider, useJanusChatController, useOptionalJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
-import { BlueprintMaintenancePanel } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
+import { BlueprintMaintenancePanel, BLUEPRINT_PANEL_VIEW_REF } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
 import { BlueprintWorkbench } from '../../../src/renderer/src/components/blueprint/BlueprintWorkbench'
 import { createWorkbenchGraph, installWorkbenchBoundary } from './workbench-fixture'
 import { HarnessRunPanel } from '../../../src/renderer/src/components/janus/HarnessRunPanel'
@@ -34,7 +34,8 @@ for (const key of ['delete-a', 'delete-b']) {
 if (workbench) Object.assign(blueprint, createWorkbenchGraph(repoId, id, workspace))
 const secondWorkspace = { ...workspace, id: 'ws-b', path: 'C:/fixture-b', name: 'Checkout B' }
 const twoCheckouts = new URLSearchParams(location.search).has('two-checkouts')
-const workspaces = twoCheckouts ? [workspace, secondWorkspace] : [workspace]
+const switchWorkspaceMode = new URLSearchParams(location.search).has('switch-workspace')
+const workspaces = twoCheckouts || switchWorkspaceMode ? [workspace, secondWorkspace] : [workspace]
 if (twoCheckouts) {
   const alternateId = 'checkout-b:' + id
   blueprint.nodeIds.push(alternateId)
@@ -236,7 +237,7 @@ Object.assign(fixture, { maintenance,
 
 function App() {
   const chat = useJanusChatController()
-  const projectChat = useOptionalJanusChatController({ ownerRepoId: repoId, viewId: blueprint.id })
+  const projectChat = useOptionalJanusChatController({ ...BLUEPRINT_PANEL_VIEW_REF })
   const [open, setOpen] = useState(true)
   const [taskOpen, setTaskOpen] = useState(true)
   return <main>
@@ -265,6 +266,14 @@ function App() {
 }
 async function boot() {
   await initI18n(); await changeLanguage(workbench ? 'zh-CN' : 'en')
-  ReactDOM.createRoot(document.getElementById('root')!).render(<JanusChatProvider>{workbench ? <BlueprintWorkbench isOpen onClose={() => {}} /> : <App />}</JanusChatProvider>)
+  ReactDOM.createRoot(document.getElementById('root')!).render(<JanusChatProvider>{workbench ? <>
+    {switchWorkspaceMode && <button
+      style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 13000 }}
+      onClick={() => {
+        const store = useWorkspaceStore.getState()
+        store.setActiveWorkspace(store.activeWorkspaceId === 'ws-b' ? 'ws' : 'ws-b')
+      }}>Switch workspace</button>}
+    <BlueprintWorkbench isOpen onClose={() => {}} />
+  </> : <App />}</JanusChatProvider>)
 }
 void boot()
