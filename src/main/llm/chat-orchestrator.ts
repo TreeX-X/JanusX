@@ -39,6 +39,7 @@ import {
 } from './janus-agent-ports'
 import { injectUserMemoryContext, type UserRecallResult } from '../knowledge/user-recall-service'
 import { capturePersonChatTurn, capturePersonEpisodeFromTurn } from '../knowledge/user-turn-capture'
+import { sanitizeLoopMessages } from './loop-message-sanitize'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -341,7 +342,12 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     scheduleSettled: (workspaceId) => {
       knowledgeProcessingQueue.scheduleImmediate(workspaceId)
     },
-    streamTextFn: streamText as unknown as ChatTurnPorts['streamTextFn'],
+    // Note: strict providers reject mid-conversation system follow-ups — see .agents/notes/2026-09-26-chat-system-mid-conversation--e373dd26.md
+    streamTextFn: (async (options: Record<string, unknown>) => {
+      const messages = (options as { messages?: Array<{ role: string }> }).messages
+      if (!Array.isArray(messages)) return streamText(options as never)
+      return streamText({ ...options, messages: sanitizeLoopMessages(messages) } as never)
+    }) as unknown as ChatTurnPorts['streamTextFn'],
     question: createShellQuestionPort(requestId),
   })
 }
