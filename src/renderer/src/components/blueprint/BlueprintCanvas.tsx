@@ -976,6 +976,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
+        minZoom={0.05}
+        maxZoom={4}
         style={{ background: 'transparent' }}
       >
         <Background color="rgba(255,255,255,0.05)" gap={24} />
