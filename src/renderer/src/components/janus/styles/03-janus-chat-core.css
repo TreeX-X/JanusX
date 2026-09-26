@@ -485,6 +485,22 @@
   padding: 4px 0;
 }
 
+/* agentX Activity parity：流式状态行（状态文案 + 实时耗时，替代纯三点） */
+.janus-chat-turn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 4px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.janus-chat-turn-elapsed {
+  color: rgba(255, 255, 255, 0.42);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 思维链收纳区：只活在对话加载效果区内，默认收起为单行进度 */
 .janus-chat-thinking {
   display: flex;
@@ -528,6 +544,24 @@
   font-size: 11px;
   line-height: 1.5;
   font-family: inherit;
+}
+
+/* agentX collapsed thinking parity：收起仍可见的实时尾行（带光标） */
+.janus-chat-thinking-live {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.janus-chat-thinking-live span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 杈撳叆妗?textarea 鑷€傚簲 */

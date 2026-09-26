@@ -160,6 +160,14 @@
       "expandTitle": "展开思考过程",
       "collapseTitle": "收起思考过程"
     },
+    "turnStatus": {
+      "thinking": "思考中…",
+      "writing": "正在输出…",
+      "preparing": "准备工具…",
+      "running": "正在执行 {{tool}}…",
+      "awaiting": "等待你的选择…",
+      "finishing": "收尾中…"
+    },
     "kind": {
       "provider": "provider",
       "model": "model"

@@ -16,8 +16,8 @@ import { useI18n } from '@/i18n/useI18n'
 import { PromptDialog } from '../blueprint/PromptDialog'
 import { ToolCallGroup } from './ToolCallCard'
 import { ThinkingRegion } from './ThinkingRegion'
-import type { ReasoningSnapshot } from './janusReasoning'
-import type { JanusPendingQuestion } from './janusRuntimeState'
+import { formatThinkingDuration, type ReasoningSnapshot } from './janusReasoning'
+import type { JanusChatStatus, JanusPendingQuestion } from './janusRuntimeState'
 import { Select } from '../ui/Select'
 
 type SelectionMenu = 'provider' | 'model' | 'permission'
@@ -106,6 +106,10 @@ interface JanusChatProps {
   reasoningByTurn?: Record<string, ReasoningSnapshot> | null
   /** 是否正在流式输出 */
   isStreaming: boolean
+  /** 本轮开始时间（默认取 conversationController；agentX Activity parity）。 */
+  turnStartedAt?: number | null
+  /** 本轮状态（默认取 conversationController；agentX store.ts parity）。 */
+  turnStatus?: JanusChatStatus | null
   /** 错误信息 */
   error: string | null
   modelOptions?: ChatModelOption[]
@@ -321,11 +325,45 @@ function QuestionGate({ gate, onAnswer }: { gate: JanusPendingQuestion; onAnswer
 }
 
 /* ════════════════════════════════════════════════════════════
+   agentX Activity parity：流式状态行（状态文案 + 实时耗时）
+   ════════════════════════════════════════════════════════════ */
+
+function TurnStatusRow({ status, startedAt }: { status: JanusChatStatus; startedAt: number | null }) {
+  const { t } = useI18n('janus')
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [startedAt])
+  const elapsed = typeof startedAt === 'number' ? formatThinkingDuration(Math.max(0, now - startedAt)) : null
+  const text = status.kind === 'running' && status.toolName
+    ? t('janus:chat.turnStatus.running', { tool: status.toolName })
+    : status.kind === 'thinking'
+      ? t('janus:chat.turnStatus.thinking')
+      : status.kind === 'writing'
+        ? t('janus:chat.turnStatus.writing')
+        : status.kind === 'preparing'
+          ? t('janus:chat.turnStatus.preparing')
+          : status.kind === 'awaiting'
+            ? t('janus:chat.turnStatus.awaiting')
+            : t('janus:chat.turnStatus.finishing')
+  return (
+    <div className="janus-chat-turn-status" role="status" aria-live="polite">
+      <LoaderCircle size={11} className="janus-runtime-tool-spinner" aria-hidden="true" />
+      <span>{text}</span>
+      {elapsed && <span className="janus-chat-turn-elapsed">· {elapsed}</span>}
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════
    JanusChat 组件
    ════════════════════════════════════════════════════════════ */
 
 const EMPTY_REASONING_SNAPSHOT: ReasoningSnapshot = { text: '', chars: 0, truncated: false }
 const EMPTY_REASONING_BY_TURN: Record<string, ReasoningSnapshot> = {}
+const FALLBACK_TURN_STATUS: JanusChatStatus = { kind: 'thinking' }
 
 export function JanusChat({
   visible,
@@ -340,6 +378,8 @@ export function JanusChat({
   pendingReasoning: pendingReasoningProp = null,
   reasoningByTurn: reasoningByTurnProp = null,
   isStreaming,
+  turnStartedAt: turnStartedAtProp = null,
+  turnStatus: turnStatusProp = null,
   error,
   modelOptions = [],
   activeModel = null,
@@ -406,6 +446,8 @@ export function JanusChat({
   const activeApprovalMode = approvalMode ?? conversations?.approvalMode ?? 'per-action'
   const activePendingReasoning = pendingReasoningProp ?? conversations?.pendingReasoning ?? EMPTY_REASONING_SNAPSHOT
   const activeReasoningByTurn = reasoningByTurnProp ?? conversations?.reasoningByTurn ?? EMPTY_REASONING_BY_TURN
+  const activeTurnStartedAt = turnStartedAtProp ?? conversations?.turnStartedAt ?? null
+  const activeTurnStatus = turnStatusProp ?? conversations?.turnStatus ?? FALLBACK_TURN_STATUS
   // R6-full：在途 steering 以消息内徽标呈现（文本已乐观进历史）；无 controller
   // 的展示路径（圆桌中央等）没有在途集合，不渲染徽标。
   const pendingSteerIds = conversations?.pendingSteerIds ?? []
@@ -1421,15 +1463,18 @@ export function JanusChat({
           <div className="janus-chat-message assistant streaming">
             <div className="janus-chat-message-author">{t('janus:chat.author.assistant')}</div>
             <div className="janus-chat-message-content">
-              <ThinkingRegion snapshot={activePendingReasoning} streaming />
+              {isStreaming && <TurnStatusRow status={activeTurnStatus} startedAt={activeTurnStartedAt} />}
+              <ThinkingRegion snapshot={activePendingReasoning} streaming={isStreaming} startedAt={activeTurnStartedAt} />
               {pendingContent ? (
                 <StreamingText content={pendingContent} />
               ) : (
-                <div className="janus-chat-loading">
-                  <span className="janus-chat-dot" />
-                  <span className="janus-chat-dot" />
-                  <span className="janus-chat-dot" />
+                isStreaming && (
+                  <div className="janus-chat-loading" role="status" aria-label={t('janus:chat.turnStatus.thinking')}>
+                    <span className="janus-chat-dot" />
+                    <span className="janus-chat-dot" />
+                    <span className="janus-chat-dot" />
                   </div>
+                )
               )}
               <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} defaultExpanded />
             </div>

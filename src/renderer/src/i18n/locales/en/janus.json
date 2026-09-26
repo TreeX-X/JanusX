@@ -160,6 +160,14 @@
       "expandTitle": "Show thinking",
       "collapseTitle": "Hide thinking"
     },
+    "turnStatus": {
+      "thinking": "Thinking…",
+      "writing": "Writing…",
+      "preparing": "Preparing tool…",
+      "running": "Running {{tool}}…",
+      "awaiting": "Awaiting your pick…",
+      "finishing": "Finishing…"
+    },
     "kind": {
       "provider": "provider",
       "model": "model"

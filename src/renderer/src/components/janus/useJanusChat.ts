@@ -48,9 +48,12 @@ import {
 import { consumeSteeredIds, removeMessageById } from './janusSteering'
 import {
   EMPTY_JANUS_RUNTIME_STATE,
+  INITIAL_JANUS_CHAT_STATUS,
+  chatStatusForEvent,
   reduceChatAgentEvent,
   reduceJanusRuntimeState,
   runtimeEventSessionId,
+  type JanusChatStatus,
   type JanusRuntimeState,
   type JanusToolActivity,
 } from './janusRuntimeState'
@@ -102,6 +105,10 @@ export interface UseJanusChatReturn {
   /** 已提交 assistant 消息的思维链快照（key 为消息 id，默认收起回看）。 */
   reasoningByTurn: Record<string, ReasoningSnapshot>
   isStreaming: boolean
+  /** 本轮开始时间（毫秒时间戳，agentX Activity parity；未在途为 null）。 */
+  turnStartedAt: number | null
+  /** 本轮状态行（agentX store.ts parity：思考/输出/工具/等待）。 */
+  turnStatus: JanusChatStatus
   error: string | null
   modelOptions: ChatModelOption[]
   activeModel: ChatModelOption | null
@@ -157,6 +164,10 @@ interface ConversationRuntime {
   /** R6-full：在途 steering 条目 id；badge 用，请求结束即清（文本留历史）。 */
   pendingSteerIds: string[]
   isStreaming: boolean
+  /** 本轮开始时间（毫秒时间戳；未在途为 null，供状态行计时）。 */
+  turnStartedAt: number | null
+  /** 本轮状态行（agentX store.ts parity）。 */
+  turnStatus: JanusChatStatus
   error: string | null
   modelNotice: string | null
   latestRecallTrace: KnowledgeRecallTrace | null
@@ -188,6 +199,8 @@ function emptyRuntime(approvalMode: AgentApprovalMode = 'per-action'): Conversat
     reasoningByTurn: {},
     pendingSteerIds: [],
     isStreaming: false,
+    turnStartedAt: null,
+    turnStatus: INITIAL_JANUS_CHAT_STATUS,
     error: null,
     modelNotice: null,
     latestRecallTrace: null,
@@ -333,16 +346,20 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   /**
    * 收敛本轮思维链：清显示态；正文成功落库时把快照挂到该 assistant 消息下供收起回看。
    * 推理永不进入 messages/toolTraces/模型上下文，仅 UI 展示。
+   * durationMs 由调用方按 turnStartedAt 结算（agentX done 行 parity）。
    */
-  const snapshotReasoning = useCallback((id: string, messageId: string | undefined, store: boolean) => {
+  const snapshotReasoning = useCallback((id: string, messageId: string | undefined, store: boolean, durationMs?: number) => {
     const handles = getHandles(id)
     const snapshot = handles.reasoning
     handles.reasoning = emptyReasoning()
+    const settled = typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs >= 0
+      ? { ...snapshot, durationMs }
+      : snapshot
     setRuntime(id, (current) => ({
       ...current,
       pendingReasoning: emptyReasoning(),
-      ...(store && messageId && snapshot.chars > 0
-        ? { reasoningByTurn: { ...current.reasoningByTurn, [messageId]: snapshot } }
+      ...(store && messageId && settled.chars > 0
+        ? { reasoningByTurn: { ...current.reasoningByTurn, [messageId]: settled } }
         : {}),
     }))
   }, [getHandles, setRuntime])
@@ -579,6 +596,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       pendingContent: '',
       pendingReasoning: emptyReasoning(),
       isStreaming: true,
+      turnStartedAt: Date.now(),
+      turnStatus: INITIAL_JANUS_CHAT_STATUS,
       error: null,
       latestRecallTrace: null,
       agent: EMPTY_JANUS_RUNTIME_STATE,
@@ -615,10 +634,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           handles.abort = null
           const final = flushPending(id)
           handles.pendingBuffer = ''
+          const durationMs = runtimesRef.current[id]?.turnStartedAt
+            ? Math.max(0, Date.now() - (runtimesRef.current[id]?.turnStartedAt ?? Date.now()))
+            : undefined
           // R6-full：在途 steering badge 清除；文本早已在历史中保留。
-          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, pendingSteerIds: [] }))
+          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [] }))
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
-          snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
+          snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0, durationMs)
           handles.assistantMessageId = null
         },
         (error) => {
@@ -627,15 +649,20 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           handles.abort = null
           const final = flushPending(id)
           handles.pendingBuffer = ''
+          const durationMs = runtimesRef.current[id]?.turnStartedAt
+            ? Math.max(0, Date.now() - (runtimesRef.current[id]?.turnStartedAt ?? Date.now()))
+            : undefined
           setRuntime(id, (current) => ({
             ...current,
             pendingContent: '',
             isStreaming: false,
+            turnStartedAt: null,
+            turnStatus: INITIAL_JANUS_CHAT_STATUS,
             error,
             pendingSteerIds: [],
           }))
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
-          snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
+          snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0, durationMs)
           handles.assistantMessageId = null
           // Pairing 400 (tool calls vs responses out of balance, e.g. after a
           // steered turn): the persisted history is plain text, so exactly one
@@ -695,9 +722,11 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
                   return next === current.pendingSteerIds ? current : { ...current, pendingSteerIds: next }
                 })
               }
+              const status = chatStatusForEvent(agentEvent)
               setRuntime(id, (current) => ({
                 ...current,
                 agent: reduceChatAgentEvent(current.agent, agentEvent),
+                ...(status ? { turnStatus: status } : {}),
               }))
             }
           },
@@ -711,6 +740,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       setRuntime(id, (current) => ({
         ...current,
         isStreaming: false,
+        turnStartedAt: null,
+        turnStatus: INITIAL_JANUS_CHAT_STATUS,
         error: reason instanceof Error ? reason.message : 'Workspace session failed',
         pendingSteerIds: [],
       }))
@@ -729,9 +760,12 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const final = flushPending(id)
     handles.pendingBuffer = ''
     // R6-full：stop 保留 steering 文本在历史（badge 清除），不断言自动重发。
-    setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, pendingSteerIds: [] }))
+    const stopDurationMs = runtimesRef.current[id]?.turnStartedAt
+      ? Math.max(0, Date.now() - (runtimesRef.current[id]?.turnStartedAt ?? Date.now()))
+      : undefined
+    setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [] }))
     commitAssistant(id, final, handles.assistantMessageId ?? undefined)
-    snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0)
+    snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0, stopDurationMs)
     handles.assistantMessageId = null
   }, [commitAssistant, flushPending, setRuntime, snapshotReasoning])
 
@@ -1057,6 +1091,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       pendingReasoning: runtime.pendingReasoning,
       reasoningByTurn: runtime.reasoningByTurn,
       isStreaming: runtime.isStreaming,
+      turnStartedAt: runtime.turnStartedAt,
+      turnStatus: runtime.turnStatus,
       error: runtime.error,
       modelOptions,
       activeModel,

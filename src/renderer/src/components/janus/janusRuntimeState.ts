@@ -32,6 +32,50 @@ export interface JanusRuntimeState {
 
 export const EMPTY_JANUS_RUNTIME_STATE: JanusRuntimeState = { activities: [], pendingApprovals: [], todos: [], pendingQuestions: [] }
 
+/**
+ * agentX store.ts parity：ChatAgentEvent -> 聊天状态行（思考/输出/工具/等待）。
+ * 返回 null 表示该事件不改变状态行（沿用上一状态）。
+ */
+export type JanusChatStatusKind = 'thinking' | 'writing' | 'preparing' | 'running' | 'awaiting' | 'finishing'
+
+export interface JanusChatStatus {
+  kind: JanusChatStatusKind
+  toolName?: string
+}
+
+export const INITIAL_JANUS_CHAT_STATUS: JanusChatStatus = { kind: 'thinking' }
+
+export function chatStatusForEvent(event: ChatAgentEvent): JanusChatStatus | null {
+  switch (event.type) {
+    case 'agent_start':
+      return { kind: 'thinking' }
+    case 'reasoning_delta':
+      return { kind: 'thinking' }
+    case 'text_delta':
+      return { kind: 'writing' }
+    case 'tool_call_start':
+    case 'tool_call_ready':
+      return { kind: 'preparing' }
+    case 'tool_execution_start':
+    case 'tool_execution_update':
+      return { kind: 'running', toolName: event.toolName }
+    case 'tool_execution_end':
+      return null
+    case 'model_finish':
+      if (event.reason === 'tool_calls') return { kind: 'running' }
+      return { kind: 'finishing' }
+    case 'question_requested':
+      return { kind: 'awaiting' }
+    case 'question_resolved':
+    case 'todo_update':
+    case 'steering_consumed':
+    case 'tool_call_delta':
+      return null
+    default:
+      return null
+  }
+}
+
 function replaceActivity(state: JanusRuntimeState, activity: JanusToolActivity): JanusToolActivity[] {
   const previous = state.activities.find((item) => item.correlationId === activity.correlationId)
   return [
