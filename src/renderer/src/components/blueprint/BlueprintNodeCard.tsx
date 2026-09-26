@@ -63,7 +63,10 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
         d.searchDimmed ? 'bp-node-card--dimmed' : ''
       ].filter(Boolean).join(' ')}
     >
+      {/* Note: hierarchy edges use Top/Bottom, relation edges may exit Left/Right — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <Handle type="target" id="left" position={Position.Left} style={{ opacity: 0 }} />
+      <Handle type="target" id="right" position={Position.Right} style={{ opacity: 0 }} />
 
       <div className="bp-node-card__header">
         <span className="bp-node-card__dot" style={{ background: visual.color, color: visual.color }} />
@@ -123,6 +126,8 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
       )}
 
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+      <Handle type="source" id="left" position={Position.Left} style={{ opacity: 0 }} />
+      <Handle type="source" id="right" position={Position.Right} style={{ opacity: 0 }} />
     </div>
   )
 }

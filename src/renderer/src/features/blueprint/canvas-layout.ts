@@ -359,7 +359,10 @@ export function deriveBlueprintFlow(
       id: `e-${blueprint.nodes[id].parentId}->${id}`,
       source: blueprint.nodes[id].parentId as string,
       target: id,
-      type: 'blueprintAdaptive',
+      type: 'blueprintHierarchy',
+      className: 'bp-flow-edge--hierarchy',
+      data: { kind: 'hierarchy' },
+      interactionWidth: 24,
       style: {
         stroke: '#8a8a8a',
         strokeWidth: 1.6
@@ -383,6 +386,9 @@ export function deriveBlueprintFlow(
       source: rel.sourceNodeId,
       target: rel.targetNodeId,
       type: 'blueprintAdaptive',
+      className: 'bp-flow-edge--relation',
+      data: { kind: 'relation' },
+      interactionWidth: 16,
       style: {
         stroke: 'rgba(255,255,255,.2)',
         strokeWidth: 1.5,
@@ -391,7 +397,7 @@ export function deriveBlueprintFlow(
     }))
   const interfaceEdges: Edge[] = (blueprint.composition?.interfaces ?? [])
     .filter(port => port.direction === 'needs' && port.providerNodeId && !hidden.has(port.nodeId) && !hidden.has(port.providerNodeId))
-    .map(port => ({ id: 'e-interface-' + port.id, source: port.providerNodeId!, target: port.nodeId, type: 'blueprintAdaptive', label: port.name,
+    .map(port => ({ id: 'e-interface-' + port.id, source: port.providerNodeId!, target: port.nodeId, type: 'blueprintAdaptive', className: 'bp-flow-edge--interface', data: { kind: 'interface' }, label: port.name, interactionWidth: 16,
       style: { stroke: port.status === 'stale' ? '#eab15f' : '#e78b63', strokeWidth: 1.6, strokeDasharray: '6 3' } }))
   return { nodes, edges: [...edges, ...relationEdges, ...interfaceEdges] }
 }

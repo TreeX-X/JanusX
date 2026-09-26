@@ -6,6 +6,8 @@ import { deriveBlueprintFlow } from '../../src/renderer/src/features/blueprint/c
 import {
   BlueprintLayoutSaveController,
   blueprintNodeEntryClass,
+  buildBlueprintTopologyKey,
+  capEntryIndex,
   patchBlueprintCardNodes
 } from '../../src/renderer/src/features/blueprint/useBlueprintGraphController'
 
@@ -33,6 +35,46 @@ describe('blueprint graph controller seams', () => {
     expect(blueprintNodeEntryClass(true, 0)).toBe('bp-flow-node--enter bp-flow-node--enter-0')
     expect(blueprintNodeEntryClass(true, 20)).toBe('bp-flow-node--enter bp-flow-node--enter-8')
     expect(blueprintNodeEntryClass(false, 0)).toBeUndefined()
+    expect(capEntryIndex(199)).toBe(8)
+    expect(capEntryIndex(-3)).toBe(0)
+  })
+
+  it('keeps topology identity stable across layout-save coordinate echoes', () => {
+    const base = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root'], canvasLayout: { root: { x: 1, y: 2 } },
+      nodes: { root: { id: 'root', parentId: null } },
+      relations: [],
+    } as unknown as Blueprint
+    const moved = {
+      ...base,
+      canvasLayout: { root: { x: 900, y: 900 } },
+      nodes: { ...base.nodes },
+    } as unknown as Blueprint
+    expect(buildBlueprintTopologyKey(moved, new Set(), new Set()))
+      .toBe(buildBlueprintTopologyKey(base, new Set(), new Set()))
+  })
+
+  it('changes topology identity when structure or relations change', () => {
+    const base = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'child'], canvasLayout: {},
+      nodes: {
+        root: { id: 'root', parentId: null },
+        child: { id: 'child', parentId: 'root' },
+      },
+      relations: [],
+    } as unknown as Blueprint
+    const relinked = {
+      ...base,
+      nodes: { root: base.nodes.root, child: { ...base.nodes.child, parentId: null } },
+    } as unknown as Blueprint
+    const related = {
+      ...base,
+      relations: [{ sourceNodeId: 'root', targetNodeId: 'child', type: 'related-to' }],
+    } as unknown as Blueprint
+    const key = buildBlueprintTopologyKey(base, new Set(), new Set())
+    expect(buildBlueprintTopologyKey(relinked, new Set(), new Set())).not.toBe(key)
+    expect(buildBlueprintTopologyKey(related, new Set(), new Set())).not.toBe(key)
+    expect(buildBlueprintTopologyKey(base, new Set(['root']), new Set())).not.toBe(key)
   })
 
   it('keeps only edges whose endpoints have been mounted', () => {

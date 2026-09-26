@@ -165,7 +165,7 @@ describe('blueprint canvas layout', () => {
     expect(result.nodes).toHaveLength(2)
     expect(result.nodes.find((node) => node.id === 'root')?.position).toEqual({ x: 42, y: 24 })
     expect(result.nodes.find((node) => node.id === 'child')?.data.searchMatched).toBe(true)
-    expect(result.edges).toEqual([expect.objectContaining({ source: 'root', target: 'child' })])
+    expect(result.edges).toEqual([expect.objectContaining({ source: 'root', target: 'child', type: 'blueprintHierarchy' })])
     expect(result.edges[0].style).toMatchObject({ stroke: '#8a8a8a', strokeWidth: 1.6 })
     expect(result.edges[0].style).not.toHaveProperty('strokeDasharray')
   })

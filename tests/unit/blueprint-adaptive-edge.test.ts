@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Position } from '@xyflow/react'
-import { getAdaptiveEdgeEndpoints } from '../../src/renderer/src/features/blueprint/adaptive-edge-geometry'
+import { getAdaptiveEdgeEndpoints, getHierarchicalEdgeEndpoints } from '../../src/renderer/src/features/blueprint/adaptive-edge-geometry'
 import { deriveBlueprintFlow } from '../../src/renderer/src/features/blueprint/canvas-layout'
 import type { Blueprint } from '../../src/renderer/src/services/blueprint'
 
@@ -50,8 +50,35 @@ describe('blueprint adaptive edge geometry', () => {
 
     expect(after.edges).toEqual(before.edges)
     expect(after.edges[0]).toMatchObject({
-      id: 'e-root->child', source: 'root', target: 'child', type: 'blueprintAdaptive'
+      id: 'e-root->child', source: 'root', target: 'child', type: 'blueprintHierarchy'
     })
     expect(blueprint.nodes.child.parentId).toBe('root')
+  })
+
+  it('keeps hierarchy edges on vertical ports regardless of horizontal offset', () => {
+    const endpoints = getHierarchicalEdgeEndpoints(rect(0, 0), rect(300, 200))
+
+    expect(endpoints.source).toEqual({ x: 50, y: 50, position: Position.Bottom })
+    expect(endpoints.target).toEqual({ x: 350, y: 200, position: Position.Top })
+  })
+
+  it('routes parent links as hierarchy edges and relations as adaptive edges', () => {
+    const blueprint = {
+      id: 'bp', rootNodeId: 'root', nodeIds: ['root', 'a', 'b'], canvasLayout: {},
+      nodes: {
+        root: { id: 'root', title: 'Root', type: 'epic', status: 'planned', progress: 0, parentId: null, children: ['a'] },
+        a: { id: 'a', title: 'A', type: 'task', status: 'planned', progress: 0, parentId: 'root', children: [] },
+        b: { id: 'b', title: 'B', type: 'task', status: 'planned', progress: 0, parentId: null, children: [] },
+      },
+      relations: [{ id: 'a:related-to:b', sourceNodeId: 'a', targetNodeId: 'b', type: 'related-to' }],
+    } as unknown as Blueprint
+    const flow = deriveBlueprintFlow(blueprint, {}, {}, new Set(), false)
+
+    expect(flow.edges.find((edge) => edge.id === 'e-root->a')).toMatchObject({
+      type: 'blueprintHierarchy', className: 'bp-flow-edge--hierarchy',
+    })
+    expect(flow.edges.find((edge) => edge.id === 'e-rel-a-related-to-b')).toMatchObject({
+      type: 'blueprintAdaptive', className: 'bp-flow-edge--relation',
+    })
   })
 })

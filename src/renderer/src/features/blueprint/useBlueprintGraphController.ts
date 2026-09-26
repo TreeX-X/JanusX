@@ -23,7 +23,41 @@ export type BlueprintLayoutSaveStatus = 'clean' | 'pending' | 'saving' | 'saved'
 
 /** Class applied while a blueprint's nodes are entering the canvas. */
 export function blueprintNodeEntryClass(entering: boolean, index: number): string | undefined {
-  return entering ? `bp-flow-node--enter bp-flow-node--enter-${Math.min(index, 8)}` : undefined
+  return entering ? `bp-flow-node--enter bp-flow-node--enter-${Math.min(index, ENTRY_STAGGER_CAP)}` : undefined
+}
+
+/**
+ * Entry stagger stays pure CSS but the delay variable is capped: without the
+ * cap a 200-node graph parks its tail for ~14s behind the workbench reveal.
+ */
+// Note: capped stagger keeps large-graph entry readable — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md
+export const ENTRY_STAGGER_CAP = 8
+
+export function capEntryIndex(index: number): number {
+  return Math.min(Math.max(0, index), ENTRY_STAGGER_CAP)
+}
+
+function relationSignature(blueprint: Blueprint): string {
+  const relations = (blueprint.relations ?? [])
+    .map((rel) => `${rel.sourceNodeId ?? ''}:${rel.type ?? ''}:${rel.targetNodeId ?? ''}`)
+    .sort()
+    .join('|')
+  const interfaces = (blueprint.composition?.interfaces ?? [])
+    .map((port) => `${port.nodeId}:${port.providerNodeId ?? ''}:${port.direction ?? ''}`)
+    .sort()
+    .join('|')
+  return `${relations}::${interfaces}`
+}
+
+/** Topology identity for full re-derives: structure + visibility only, never coordinates. */
+export function buildBlueprintTopologyKey(
+  blueprint: Blueprint,
+  collapsedNodeIds: ReadonlySet<string>,
+  hiddenNodeIds: ReadonlySet<string>,
+): string {
+  const topology = blueprint.nodeIds.map((id) => `${id}:${blueprint.nodes[id]?.parentId ?? ''}`).join('|')
+  const layoutKeys = Object.keys(blueprint.canvasLayout ?? {}).sort().join(',')
+  return `${blueprint.id}|${topology}|${layoutKeys}|${[...collapsedNodeIds].sort().join(',')}|${[...hiddenNodeIds].sort().join(',')}|${relationSignature(blueprint)}`
 }
 
 function cardDataEqual(left: BlueprintNodeData, right: BlueprintNodeData): boolean {
@@ -207,9 +241,9 @@ export function useBlueprintGraphController({
 
   const topologyKey = useMemo(() => {
     if (!blueprint) return ''
-    const topology = blueprint.nodeIds.map((id) => `${id}:${blueprint.nodes[id]?.parentId ?? ''}`).join('|')
-    const layout = Object.entries(blueprint.canvasLayout ?? {}).map(([id, p]) => `${id}:${p.x},${p.y}`).join('|')
-    return `${blueprint.id}|${topology}|${layout}|${[...collapsedNodeIds].sort().join(',')}|${[...hiddenNodeIds].sort().join(',')}|${JSON.stringify([blueprint.relations, blueprint.composition?.interfaces])}`
+    // Note: coordinates stay out of the key so layout-save echoes reuse the
+    // pinned flow instead of rebuilding all nodes/edges — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md
+    return buildBlueprintTopologyKey(blueprint, collapsedNodeIds, hiddenNodeIds)
   }, [blueprint, collapsedNodeIds, hiddenNodeIds])
 
   const cardDataKey = useMemo(() => {
@@ -273,7 +307,7 @@ export function useBlueprintGraphController({
       ...node,
       className: blueprintNodeEntryClass(entering, index),
       style: entering
-        ? { ...node.style, '--bp-entry-index': index } as typeof node.style
+        ? { ...node.style, '--bp-entry-index': capEntryIndex(index) } as typeof node.style
         : node.style,
     }))
     flowRef.current = { key: topologyKey, nodes: allNodes }
@@ -285,13 +319,18 @@ export function useBlueprintGraphController({
     // entry animation is pure CSS stagger on --bp-entry-index and needs no JS
     // batching. One commit also keeps edges and nodes in the same paint.
     setNodes(allNodes)
-    setEdges(flow.edges.map((edge) => ({
-      ...edge,
-      className: entering ? 'bp-flow-edge--enter' : undefined,
-      style: entering
-        ? { ...edge.style, '--bp-edge-entry-index': nodeIndexById.get(edge.target) ?? 0 } as typeof edge.style
-        : edge.style,
-    })))
+    setEdges(flow.edges.map((edge) => {
+      const className = [edge.className, entering ? 'bp-flow-edge--enter' : '']
+        .filter(Boolean)
+        .join(' ') || undefined
+      return {
+        ...edge,
+        className,
+        style: entering
+          ? { ...edge.style, '--bp-edge-entry-index': capEntryIndex(nodeIndexById.get(edge.target) ?? 0) } as typeof edge.style
+          : edge.style,
+      }
+    }))
     if (entering) {
       entryMarkFrameRef.current = requestAnimationFrame(() => {
         entryMarkFrameRef.current = null

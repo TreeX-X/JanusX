@@ -9,7 +9,7 @@
  *  - canvasLayout：拖拽后防抖写回 Blueprint.canvasLayout。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ReactFlow,
@@ -38,6 +38,7 @@ import {
 } from '@/services/blueprint'
 import { BlueprintNodeCard, BlueprintCardActionsContext, type BlueprintNodeData } from './BlueprintNodeCard'
 import { BlueprintAdaptiveEdge } from './BlueprintAdaptiveEdge'
+import { BlueprintHierarchyEdge } from './BlueprintHierarchyEdge'
 import { STATUS_VISUALS, STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, noteKindOf } from './blueprintStatus'
 import { useOptionalBlueprintToolbar, type ToolbarKindFilter, type ToolbarStatusFilter, useHideIsolatedState } from './BlueprintToolbar'
 import { PromptDialog } from './PromptDialog'
@@ -178,10 +179,16 @@ function buildNodeSearchText(node: BlueprintNode): string {
     .toLowerCase()
 }
 
-function nodeMatchesFocus(node: BlueprintNode, query: string, statusFilter: StatusFilter, kindFilter: KindFilter): boolean {
+function nodeMatchesFocus(
+  node: BlueprintNode,
+  query: string,
+  statusFilter: StatusFilter,
+  kindFilter: KindFilter,
+  searchText?: string,
+): boolean {
   const statusMatches = statusFilter === 'all' || node.status === statusFilter
   const kindMatches = kindFilter === 'all' || noteKindOf(node) === kindFilter
-  const queryMatches = !query || buildNodeSearchText(node).includes(query)
+  const queryMatches = !query || (searchText ?? buildNodeSearchText(node)).includes(query)
   return statusMatches && kindMatches && queryMatches
 }
 
@@ -339,11 +346,17 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     [canvasLoadPlan, emptyCollapsedNodeIds],
   )
   const normalizedSearchQuery = useMemo(() => normalizeSearchText(searchQuery), [searchQuery])
-  const searchFilterActive = normalizedSearchQuery.length > 0 || statusFilter !== 'all' || kindFilter !== 'all'
+  // Note: deferred query keeps typing responsive while large graphs filter — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md
+  const deferredSearchQuery = useDeferredValue(normalizedSearchQuery)
+  const searchFilterActive = deferredSearchQuery.length > 0 || statusFilter !== 'all' || kindFilter !== 'all'
+  const nodeSearchTextById = useMemo(() => {
+    if (!currentBlueprint) return new Map<string, string>()
+    return new Map(currentBlueprint.nodeIds.map((id) => [id, buildNodeSearchText(currentBlueprint.nodes[id]).toLowerCase()]))
+  }, [currentBlueprint])
   const allSearchMatchIds = useMemo(() => currentBlueprint?.nodeIds.filter((id) => {
     const node = currentBlueprint.nodes[id]
-    return node ? nodeMatchesFocus(node, normalizedSearchQuery, statusFilter, kindFilter) : false
-  }) ?? [], [currentBlueprint, normalizedSearchQuery, statusFilter, kindFilter])
+    return node ? nodeMatchesFocus(node, deferredSearchQuery, statusFilter, kindFilter, nodeSearchTextById.get(id)) : false
+  }) ?? [], [currentBlueprint, deferredSearchQuery, statusFilter, kindFilter, nodeSearchTextById])
   const searchMatchIds = useMemo(() => currentBlueprint
     ? visibleNodeIds(currentBlueprint.nodes, allSearchMatchIds, effectiveCollapsedNodeIds)
     : [], [allSearchMatchIds, currentBlueprint, effectiveCollapsedNodeIds])
@@ -727,7 +740,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   }, [matchIndex, searchMatchIds])
 
   const nodeTypes = useMemo(() => ({ blueprint: BlueprintNodeCard }), [])
-  const edgeTypes = useMemo(() => ({ blueprintAdaptive: BlueprintAdaptiveEdge }), [])
+  const edgeTypes = useMemo(
+    () => ({ blueprintAdaptive: BlueprintAdaptiveEdge, blueprintHierarchy: BlueprintHierarchyEdge }),
+    [],
+  )
   const statusFilterOptions = useMemo(
     () => [
       { value: 'all', label: t('blueprint:search.statusAll') },
@@ -964,15 +980,17 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       >
         <Background color="rgba(255,255,255,0.05)" gap={24} />
         <Controls showInteractive={false} />
-        <MiniMap
-          pannable
-          zoomable
-          nodeColor={(n) => {
-            const d = n.data as BlueprintNodeData | undefined
-            return d ? STATUS_VISUALS[d.status].color : '#555'
-          }}
-          style={{ background: 'rgba(12,12,12,0.9)' }}
-        />
+        {rfNodes.length <= 250 ? (
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={(n) => {
+              const d = n.data as BlueprintNodeData | undefined
+              return d ? STATUS_VISUALS[d.status].color : '#555'
+            }}
+            style={{ background: 'rgba(12,12,12,0.9)' }}
+          />
+        ) : null}
       </ReactFlow>
       {currentBlueprint?.composition && <div className="bp-composition-overlay"><BlueprintCompositionPanel blueprint={currentBlueprint} onSelect={selectCompositionNode} /></div>}
       <div className="bp-canvas-legend" aria-hidden="true">

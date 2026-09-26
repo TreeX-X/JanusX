@@ -696,7 +696,16 @@
 /* A branch edge is revealed with its child node, never ahead of it. */
 .bp-flow-edge--enter {
   animation: blueprint-edge-enter 140ms ease-out both;
+  /* Note: --bp-edge-entry-index is capped at 8 in JS so large graphs stay readable. */
   animation-delay: calc(320ms + var(--bp-edge-entry-index, 0) * 70ms + 170ms);
+}
+
+/* Hierarchy parent links render as vertical S-curves; relation links stay faint. */
+.bp-flow-edge--hierarchy path.react-flow__edge-path {
+  stroke-linecap: round;
+}
+.bp-flow-edge--relation path.react-flow__edge-path {
+  stroke-opacity: 0.55;
 }
 
 .bp-flow-node--enter-1 .bp-node-card { animation-delay: 16ms; }

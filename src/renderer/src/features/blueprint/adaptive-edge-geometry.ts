@@ -52,3 +52,22 @@ export function getAdaptiveEdgeEndpoints(source: NodeRect, target: NodeRect): {
     target: boundaryPoint(target, -dx, -dy, Position.Top),
   }
 }
+
+// Note: hierarchy edges stay vertical so parent links read as clean S-curves — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md
+export function getHierarchicalEdgeEndpoints(source: NodeRect, target: NodeRect): {
+  source: EdgeEndpoint
+  target: EdgeEndpoint
+} {
+  return {
+    source: {
+      x: source.x + source.width / 2,
+      y: source.y + source.height,
+      position: Position.Bottom,
+    },
+    target: {
+      x: target.x + target.width / 2,
+      y: target.y,
+      position: Position.Top,
+    },
+  }
+}
