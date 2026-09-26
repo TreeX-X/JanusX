@@ -152,6 +152,7 @@ function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   )
 }
 
+// Note: emphasis renders as orange type with no fill blocks — see .agents/notes/2026-09-27-markdown-emphasis-orange-text--0d703ca1.md
 export const MARKDOWN_COMPONENTS: Components = {
   h1: ({ children }) => (
     <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, marginBottom: 12, marginTop: 20, lineHeight: 1.3, paddingBottom: 8, borderBottom: '1px solid rgba(255, 255, 255, 0.12)' }}>
@@ -194,10 +195,10 @@ export const MARKDOWN_COMPONENTS: Components = {
     </a>
   ),
   strong: ({ children }) => (
-    <strong style={{ color: '#fff', fontWeight: 700 }}>{children}</strong>
+    <strong style={{ color: '#ff9159', fontWeight: 700 }}>{children}</strong>
   ),
   em: ({ children }) => (
-    <em style={{ color: '#e0e0e0' }}>{children}</em>
+    <em style={{ color: '#ff9159', fontStyle: 'italic' }}>{children}</em>
   ),
   del: ({ children }) => (
     <del style={{ color: '#888' }}>{children}</del>
@@ -217,12 +218,12 @@ export const MARKDOWN_COMPONENTS: Components = {
       return (
         <code
           style={{
-            background: 'rgba(255, 120, 48, 0.13)',
-            border: '1px solid rgba(255, 120, 48, 0.28)',
-            borderRadius: 4,
-            padding: '1px 5px',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 0,
+            padding: 0,
             fontSize: 12,
-            color: '#ffb37a',
+            color: '#ff9159',
             fontFamily: CODE_FONT,
             overflowWrap: 'break-word',
           }}
@@ -251,9 +252,9 @@ export const MARKDOWN_COMPONENTS: Components = {
     <blockquote
       style={{
         borderLeft: '3px solid #ff7830',
-        background: 'rgba(255, 120, 48, 0.06)',
-        borderRadius: '0 6px 6px 0',
-        padding: '10px 12px',
+        background: 'transparent',
+        borderRadius: 0,
+        padding: '2px 0 2px 12px',
         color: '#b5b5b5',
         margin: '0 0 12px',
         fontFamily: PROSE_FONT,
@@ -263,6 +264,9 @@ export const MARKDOWN_COMPONENTS: Components = {
     >
       {children}
     </blockquote>
+  ),
+  mark: ({ children }) => (
+    <mark style={{ background: 'transparent', color: '#ff9159', padding: 0 }}>{children}</mark>
   ),
   ul: ({ children }) => (
     <ul style={{ color: '#d4d4d4', fontSize: 13, lineHeight: 1.7, marginBottom: 10, paddingLeft: 20, fontFamily: PROSE_FONT }}>
