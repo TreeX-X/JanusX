@@ -80,7 +80,9 @@ const ROOT_MAX_COLS = 4
 const GRID_MAX_COLS = 4
 const ROW_PITCH = NODE_H + Y_GAP
 const GRID_ROW_PITCH = NODE_H + GRID_ROW_GAP
-const layoutCache = new WeakMap<object, Map<string, Record<string, { x: number; y: number }>>>()
+const layoutCache = new Map<string, Record<string, { x: number; y: number }>>()
+/** Bound the layout cache: signatures churn while dragging, entries are cheap to recompute. */
+const LAYOUT_CACHE_LIMIT = 64
 
 function layoutSignature(
   collapsedNodeIds: Set<string>,
@@ -257,7 +259,12 @@ export function computeVisibleBlueprintLayout(
     (blueprint.composition?.interfaces ?? []).map((port) => [port.nodeId, port.providerNodeId]),
   ])
   const signature = layoutSignature(collapsedNodeIds, overrides, extraHidden, relationsKey)
-  const cached = layoutCache.get(blueprint)?.get(signature)
+  // Note: the cache used to be a WeakMap keyed by the blueprint object, but
+  // every IPC load deserializes a fresh object, so it never hit. Key by
+  // stable identity plus content instead; nodeIds join the key because the
+  // signature alone does not cover membership changes.
+  const cacheKey = `${blueprint.id}::${[...blueprint.nodeIds].sort().join(',')}::${signature}`
+  const cached = layoutCache.get(cacheKey)
   if (cached) return cached
   const hidden = new Set<string>()
   const queue = [...collapsedNodeIds]
@@ -277,9 +284,8 @@ export function computeVisibleBlueprintLayout(
     blueprint.composition?.interfaces ?? [],
   )
   const layout = computeBlueprintLayout(visibleNodes, blueprint.rootNodeId, overrides ?? {}, clusterOf)
-  const entries = layoutCache.get(blueprint) ?? new Map<string, Record<string, { x: number; y: number }>>()
-  entries.set(signature, layout)
-  layoutCache.set(blueprint, entries)
+  if (layoutCache.size >= LAYOUT_CACHE_LIMIT) layoutCache.clear()
+  layoutCache.set(cacheKey, layout)
   return layout
 }
 

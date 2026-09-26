@@ -50,4 +50,11 @@ export interface NoteReadSnapshot {
   relations: IndexedRelation[]
   mentions: IndexedMention[]
   diagnostics: Diagnostic[]
+  /**
+   * Transport slimming: entry docs drop `body` and `sections` text (navigation
+   * keeps titles/tags/relations). Slim snapshots are never cached as truth and
+   * never written; the wiki detail fetches the full snapshot on demand.
+   * See .agents/notes/2026-09-26-note-graph-parent-backfill--c50eb80e.md
+   */
+  slim?: boolean
 }

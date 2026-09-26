@@ -144,6 +144,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       root: event.root,
       rev: event.rev,
       kinds: [...new Set(event.events.map((e) => e.type))],
+      external: event.external,
       error: event.error,
     })
   })
@@ -177,6 +178,21 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.rescan, async (_e, cwd: string) => {
     const root = await withRoot(cwd)
     return harnessNoteService.rescan(root)
+  })
+
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.getRev, async (_e, cwd: string) => {
+    const root = await withRoot(cwd)
+    return harnessNoteService.getRev(root)
+  })
+
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.warmup, async (_e, cwd: string) => {
+    const root = await withRoot(cwd)
+    return harnessNoteService.warmup(root)
+  })
+
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteSnapshot, async (_e, cwd: string) => {
+    const root = await withRoot(cwd)
+    return harnessNoteService.readSnapshot(root)
   })
 
   ipcMain.handle(

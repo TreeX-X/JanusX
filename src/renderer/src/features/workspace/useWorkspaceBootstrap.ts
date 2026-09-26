@@ -4,8 +4,32 @@ import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useGitStore } from '@/stores/git'
+import { warmupIndex } from '@/services/harness'
 import { getActiveScopePath, getScopePathForWorkspace, loadWorkspaceFileTree, refreshScopeFileTree } from './actions'
 import { collectShellRestore, restoreShells } from '@/lib/shell-restore'
+
+/**
+ * Idle-time note-index warmup: fills the main-process index cache for every
+ * known workspace checkout while the user is still orienting, so the first
+ * blueprint entry reads hot cache instead of paying a full 200-file parse.
+ * Sequential and best-effort; failures stay silent by design.
+ */
+function scheduleIndexWarmup(paths: string[]): void {
+  const queue = [...new Set(paths.filter(Boolean))]
+  const pump = (): void => {
+    const next = queue.shift()
+    if (!next) return
+    void warmupIndex(next).catch(() => {}).finally(() => {
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => pump(), { timeout: 5000 })
+      else setTimeout(pump, 800)
+    })
+  }
+  const kick = (): void => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => pump(), { timeout: 8000 })
+    else setTimeout(pump, 2500)
+  }
+  kick()
+}
 
 export function useWorkspaceBootstrap(): void {
   useEffect(() => {
@@ -39,6 +63,7 @@ export function useWorkspaceBootstrap(): void {
       if (activeWorkspace) await loadWorkspaceFileTree(activeWorkspace.path).catch(() => {})
       // One-shot cold restore of pre-quit shells; agents never auto-run.
       void restoreShells().catch(() => undefined)
+      scheduleIndexWarmup(state.workspaces.map((workspace) => workspace.path))
     }).catch(() => useAppStore.setState({ loadState: 'no-workspace' }))
   }, [])
 

@@ -6,8 +6,7 @@ import { deriveBlueprintFlow } from '../../src/renderer/src/features/blueprint/c
 import {
   BlueprintLayoutSaveController,
   blueprintNodeEntryClass,
-  patchBlueprintCardNodes,
-  splitNodeBatches
+  patchBlueprintCardNodes
 } from '../../src/renderer/src/features/blueprint/useBlueprintGraphController'
 
 function cardData(title: string): BlueprintNodeData {
@@ -24,8 +23,10 @@ function cardData(title: string): BlueprintNodeData {
 }
 
 describe('blueprint graph controller seams', () => {
-  it('splits large graphs into bounded render batches', () => {
-    expect(splitNodeBatches([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
+  it('mounts the full graph in one commit: entry stagger stays pure CSS', () => {
+    // Note: single-commit mount replaced 8-per-frame batching; the stagger
+    // index still caps at 8 for the CSS delay classes.
+    expect(blueprintNodeEntryClass(true, 199)).toBe('bp-flow-node--enter bp-flow-node--enter-8')
   })
 
   it('assigns a stagger class only during blueprint entry and caps the delay index', () => {

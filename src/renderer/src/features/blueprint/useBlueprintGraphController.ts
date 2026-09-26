@@ -18,20 +18,12 @@ import {
 
 const SAVE_DELAY_MS = 500
 const RETRY_DELAYS_MS = [500, 1_000, 2_000, 4_000]
-const NODE_BATCH_SIZE = 8
 type Layout = Record<string, { x: number; y: number }>
 export type BlueprintLayoutSaveStatus = 'clean' | 'pending' | 'saving' | 'saved' | 'failed'
 
 /** Class applied while a blueprint's nodes are entering the canvas. */
 export function blueprintNodeEntryClass(entering: boolean, index: number): string | undefined {
   return entering ? `bp-flow-node--enter bp-flow-node--enter-${Math.min(index, 8)}` : undefined
-}
-
-export function splitNodeBatches<T>(items: readonly T[], size = NODE_BATCH_SIZE): T[][] {
-  if (size <= 0) return [Array.from(items)]
-  const batches: T[][] = []
-  for (let index = 0; index < items.length; index += size) batches.push(Array.from(items.slice(index, index + size)))
-  return batches
 }
 
 function cardDataEqual(left: BlueprintNodeData, right: BlueprintNodeData): boolean {
@@ -178,8 +170,9 @@ export function useBlueprintGraphController({
   const [nodes, setNodes] = useState<Node<BlueprintNodeData, 'blueprint'>[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [restoreSnapshot, setRestoreSnapshot] = useState<Layout | null>(null)
-  const batchFrameRef = useRef<number | null>(null)
   const entryMarkFrameRef = useRef<number | null>(null)
+  /** Last derived flow keyed by topologyKey; the card-data effect reuses it. */
+  const flowRef = useRef<{ key: string; nodes: Node<BlueprintNodeData, 'blueprint'>[] } | null>(null)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const dirtyPositionsRef = useRef<Set<string>>(new Set())
   const blueprintRef = useRef<Blueprint | null>(blueprint)
@@ -242,7 +235,6 @@ export function useBlueprintGraphController({
   }, [blueprintId])
 
   useEffect(() => () => {
-    if (batchFrameRef.current !== null) cancelAnimationFrame(batchFrameRef.current)
     void saveControllerRef.current!.dispose()
   }, [])
 
@@ -258,6 +250,7 @@ export function useBlueprintGraphController({
     }
     if (!blueprint) {
       enteredBlueprintRef.current = null
+      flowRef.current = null
       setNodes([])
       setEdges([])
       positionsRef.current = {}
@@ -283,34 +276,22 @@ export function useBlueprintGraphController({
         ? { ...node.style, '--bp-entry-index': index } as typeof node.style
         : node.style,
     }))
+    flowRef.current = { key: topologyKey, nodes: allNodes }
     const computedPositions = Object.fromEntries(allNodes.map((node) => [node.id, node.position]))
     positionsRef.current = Object.fromEntries(allNodes.map((node) => [node.id, dirtyPositionsRef.current.has(node.id) ? positionsRef.current[node.id] ?? node.position : computedPositions[node.id]]))
-    if (batchFrameRef.current !== null) cancelAnimationFrame(batchFrameRef.current)
-    const batches = splitNodeBatches(allNodes)
-    let batchIndex = 0
-    const mountedNodeIds = new Set((batches[batchIndex++] ?? []).map((node) => node.id))
     const nodeIndexById = new Map(allNodes.map((node, index) => [node.id, index]))
-    const visibleEdges = () => flow.edges
-      .filter((edge) => mountedNodeIds.has(edge.source) && mountedNodeIds.has(edge.target))
-      .map((edge) => ({
-        ...edge,
-        className: entering ? 'bp-flow-edge--enter' : undefined,
-        style: entering
-          ? { ...edge.style, '--bp-edge-entry-index': nodeIndexById.get(edge.target) ?? 0 } as typeof edge.style
-          : edge.style,
-      }))
-    setNodes(batches[0] ?? [])
-    setEdges(visibleEdges())
-    const appendBatch = () => {
-      batchFrameRef.current = null
-      const batch = batches[batchIndex++]
-      if (!batch) return
-      batch.forEach((node) => mountedNodeIds.add(node.id))
-      setNodes((current) => [...current, ...batch])
-      setEdges(visibleEdges())
-      if (batchIndex < batches.length) batchFrameRef.current = requestAnimationFrame(appendBatch)
-    }
-    if (batchIndex < batches.length) batchFrameRef.current = requestAnimationFrame(appendBatch)
+    // Note: single-commit mount. Nodes used to arrive 8 per animation frame
+    // (25 commits for 200 nodes, each reconciling the growing array); the
+    // entry animation is pure CSS stagger on --bp-entry-index and needs no JS
+    // batching. One commit also keeps edges and nodes in the same paint.
+    setNodes(allNodes)
+    setEdges(flow.edges.map((edge) => ({
+      ...edge,
+      className: entering ? 'bp-flow-edge--enter' : undefined,
+      style: entering
+        ? { ...edge.style, '--bp-edge-entry-index': nodeIndexById.get(edge.target) ?? 0 } as typeof edge.style
+        : edge.style,
+    })))
     if (entering) {
       entryMarkFrameRef.current = requestAnimationFrame(() => {
         entryMarkFrameRef.current = null
@@ -322,10 +303,6 @@ export function useBlueprintGraphController({
       })
     }
     return () => {
-      if (batchFrameRef.current !== null) {
-        cancelAnimationFrame(batchFrameRef.current)
-        batchFrameRef.current = null
-      }
       if (entryMarkFrameRef.current !== null) {
         cancelAnimationFrame(entryMarkFrameRef.current)
         entryMarkFrameRef.current = null
@@ -335,10 +312,11 @@ export function useBlueprintGraphController({
 
   useEffect(() => {
     if (!blueprint) return
-    const dataById = new Map(
-      deriveBlueprintFlow(blueprint, pinnedRef.current ?? undefined, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds, { extraHidden: hiddenNodeIds })
-        .nodes.map((node) => [node.id, node.data])
-    )
+    const cached = flowRef.current
+    const nodes = cached && cached.key === topologyKey
+      ? cached.nodes
+      : deriveBlueprintFlow(blueprint, pinnedRef.current ?? undefined, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds, { extraHidden: hiddenNodeIds }).nodes
+    const dataById = new Map(nodes.map((node) => [node.id, node.data]))
     setNodes((current) => patchBlueprintCardNodes(current, dataById))
   }, [cardDataKey]) // eslint-disable-line react-hooks/exhaustive-deps
 

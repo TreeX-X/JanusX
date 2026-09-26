@@ -1,12 +1,15 @@
 import type { Blueprint } from '../janus/types'
 import type { WorkContract } from '@janus-agent/harness-core'
-import type { NoteSourceRead } from '../notes'
+import type { NoteReadSnapshot, NoteSourceRead } from '../notes'
 
 export const HARNESS_COMMAND_CHANNELS = {
   noteRead: 'harness:note:read',
   resolve: 'harness:resolve',
   projectGraph: 'harness:project-graph',
   rescan: 'harness:rescan',
+  getRev: 'harness:index:rev',
+  warmup: 'harness:index:warmup',
+  noteSnapshot: 'harness:notes:snapshot',
   apply: 'harness:apply',
   bindingsGet: 'harness:bindings:get',
   bindingsSet: 'harness:bindings:set',
@@ -123,6 +126,7 @@ export interface HarnessChangedEvent {
   root: string
   rev: number
   kinds: string[]
+  external: boolean
   error?: string
 }
 
@@ -335,6 +339,9 @@ export interface HarnessAPI {
   resolve(cwd: string): Promise<HarnessResolveResult>
   projectGraph(cwd: string): Promise<HarnessGraphResult | null>
   rescan(cwd: string): Promise<{ rev: number; ms: number }>
+  getRev(cwd: string): Promise<number>
+  warmup(cwd: string): Promise<{ rev: number; ms: number }>
+  noteSnapshot(cwd: string): Promise<NoteReadSnapshot>
   apply(cwd: string, operations: HarnessEditOp[], reason: string): Promise<HarnessApplyResult>
   getBindings(cwd: string): Promise<HarnessBinding[]>
   setBinding(cwd: string, binding: HarnessBinding): Promise<HarnessBinding[]>

@@ -27,6 +27,7 @@ import type {
   HarnessMigrationPreview,
   HarnessMigrationResult,
 } from '../../../shared/ipc/harness'
+import type { NoteReadSnapshot } from '../../../shared/notes'
 
 export type {
   HarnessApplyResult,
@@ -70,6 +71,18 @@ export function readNoteSource(cwd: string, uri: string) {
 
 export function rescanProject(cwd: string): Promise<{ rev: number; ms: number }> {
   return window.electron.harness.rescan(cwd)
+}
+
+export function getIndexRev(cwd: string): Promise<number> {
+  return window.electron.harness.getRev(cwd)
+}
+
+export function warmupIndex(cwd: string): Promise<{ rev: number; ms: number }> {
+  return window.electron.harness.warmup(cwd)
+}
+
+export function fetchNoteSnapshot(cwd: string): Promise<NoteReadSnapshot> {
+  return window.electron.harness.noteSnapshot(cwd)
 }
 
 export function applyEdits(cwd: string, operations: HarnessEditOp[], reason: string): Promise<HarnessApplyResult> {

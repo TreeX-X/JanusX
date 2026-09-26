@@ -79,6 +79,21 @@ export function toReadSnapshot(index: NoteIndex): NoteReadSnapshot {
  */
 export async function loadNoteEntries(root: string): Promise<LoadedNotes> {
   const index = await withAssetLock(root, () => buildNoteIndex(root))
+  return entriesFromIndex(index)
+}
+
+/**
+ * Pure projection over an already-built index: no disk reads, safe to run on
+ * the cached index for every blueprint load. Full snapshot (bodies included);
+ * the canvas entry path prefers `toSlimSnapshot`.
+ */
+export function entriesFromIndex(index: NoteIndex): LoadedNotes {
+  const { entries, invalid } = indexEntries(index)
+  return { repoId: index.repoId, index, snapshot: toReadSnapshot(index), entries, invalid }
+}
+
+/** Entry/invalid split without snapshot construction (slim path builds its own). */
+export function indexEntries(index: NoteIndex): { entries: LoadedNoteEntry[]; invalid: LoadedNotes['invalid'] } {
   const entries: LoadedNoteEntry[] = []
   const invalid: LoadedNotes['invalid'] = index.diagnostics.map((problem) => ({
     relPath: problem.path ?? '.agents/harness.json',
@@ -96,5 +111,23 @@ export async function loadNoteEntries(root: string): Promise<LoadedNotes> {
     const previous = grouped.get(item.relPath)
     grouped.set(item.relPath, { ...previous, ...item, diagnostics: [...new Map([...(previous?.diagnostics ?? []), ...item.diagnostics].map((d) => [JSON.stringify(d), d])).values()] })
   }
-  return { repoId: index.repoId, index, snapshot: toReadSnapshot(index), entries, invalid: [...grouped.values()] }
+  return { entries, invalid: [...grouped.values()] }
+}
+
+/**
+ * Slim snapshot for the canvas entry path: entry docs keep identity, titles,
+ * tags, relations and metadata, but drop `body` and `sections` text (the
+ * multi-MB payload). Canvas cards and the wiki directory/navigation never read
+ * body text from the snapshot; note bodies arrive on demand via `readNote`.
+ * Marked `slim` so the wiki detail can upgrade to the full snapshot.
+ */
+export function toSlimSnapshot(index: NoteIndex): NoteReadSnapshot {
+  const full = toReadSnapshot(index)
+  return {
+    ...full,
+    slim: true,
+    entries: full.entries.map((entry) => entry.doc
+      ? { ...entry, doc: { ...entry.doc, body: undefined, sections: [] } }
+      : entry),
+  }
 }

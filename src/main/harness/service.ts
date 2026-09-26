@@ -12,7 +12,7 @@ import { randomUUID } from 'crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { watch as watchDirectory, type FSWatcher } from 'fs'
-import { mkdir, readFile, stat, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, stat, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import {
   parseNote,
@@ -23,6 +23,7 @@ import {
 import {
   applyChangeSet,
   buildNoteIndex,
+  readHarnessIdentity,
   readIndexedNote,
   listTaskResults,
   proveRequirementCoverage,
@@ -37,7 +38,8 @@ import {
 import { projectGraph, projectGraphId } from '../notes/note-to-blueprint'
 import { composeBlueprint, type BlueprintCheckoutInput } from '../blueprint/blueprint-composition'
 import { ADAPTER_VERSION } from '../notes/note-types'
-import { loadNoteEntries, toReadSnapshot } from '../notes/note-provider'
+import { indexEntries, toReadSnapshot, toSlimSnapshot, type LoadedNoteEntry } from '../notes/note-provider'
+import { patchNoteIndex, probeChangedPaths } from '../notes/note-index-patch'
 import type { NoteReadSnapshot } from '../../shared/notes'
 import { mergeNoteEdit, type NoteEdit } from './artifact-producer'
 import {
@@ -88,10 +90,37 @@ export interface BindingRecord {
   selected: boolean
 }
 
-export type ChangeListener = (event: { type: 'harness:changed'; root: string; rev: number; events: WatchEvent[]; error?: string }) => void
+export type ChangeListener = (event: { type: 'harness:changed'; root: string; rev: number; events: WatchEvent[]; external: boolean; error?: string }) => void
+
+/** Watcher patch ceiling: more changed files than this fall back to full rescan. */
+const PATCH_THRESHOLD = 8
 
 function diag(code: Diagnostic['code'], message: string, path?: string): Diagnostic {
   return path === undefined ? { code, message } : { code, message, path }
+}
+
+/**
+ * Cheap evidence-dir fingerprint: file names plus mtimes, no receipt parsing.
+ * Receipts land outside the note corpus, so coverage overlays gate on this
+ * stamp in addition to the index rev.
+ */
+async function evidenceStamp(root: string): Promise<string> {
+  try {
+    const dir = join(root, '.agents', 'evidence')
+    const names = await readdir(dir)
+    const parts: string[] = []
+    for (const name of names.sort()) {
+      try {
+        const st = await stat(join(dir, name))
+        parts.push(`${name}:${st.size}:${st.mtimeMs}`)
+      } catch {
+        parts.push(`${name}:gone`)
+      }
+    }
+    return parts.join('|')
+  } catch {
+    return ''
+  }
 }
 
 async function isDir(path: string): Promise<boolean> {
@@ -103,10 +132,17 @@ async function isDir(path: string): Promise<boolean> {
 }
 
 export class HarnessNoteService {
+  // Note: reads ride the cached index with watcher-driven incremental patch — see .agents/notes/2026-09-26-note-graph-r7-perf--58f0e24f.md
   private indexes = new Map<string, { rev: number; index: NoteIndex }>()
   private compositionHashes = new Map<string, Record<string, string>>()
   private watchers = new Map<string, { close: () => void }>()
   private listeners = new Set<ChangeListener>()
+  /**
+   * Coverage overlays (task results + requirement proofs) keyed by checkout
+   * root. Valid only for the stored index rev plus the evidence-dir stamp;
+   * receipts land outside the note corpus, so rev alone cannot gate them.
+   */
+  private overlayCache = new Map<string, { rev: number; evidenceStamp: string; overlay: Map<string, { taskDone: boolean; requirement: { covered: boolean; uncovered: string[] } | null; acCount: number }> }>()
 
   onChange(listener: ChangeListener): () => void {
     this.listeners.add(listener)
@@ -127,6 +163,27 @@ export class HarnessNoteService {
     const index = await withAssetLock(root, () => buildNoteIndex(root))
     const rev = this.acceptIndex(root, index)
     return { rev, ms: Date.now() - start }
+  }
+
+  /**
+   * Current cached revision without rebuilding. Rescans once when cold; every
+   * later call is a map lookup, so focus returns and polling can gate on it.
+   */
+  async getRev(root: string): Promise<number> {
+    const hit = this.indexes.get(root)
+    if (hit) return hit.rev
+    const { rev } = await this.rescan(root)
+    return rev
+  }
+
+  /**
+   * Idle-time cache fill for a known checkout: full scan, projection discarded.
+   * Entering the blueprint later reads the hot cache instead of scanning.
+   */
+  async warmup(root: string): Promise<{ rev: number; ms: number }> {
+    const resolved = await this.resolveRoot(root)
+    if (!resolved.ok || !resolved.root) throw { code: 'NOT_FOUND', message: `no project notes under ${root}` }
+    return this.rescan(resolved.root)
   }
 
   private acceptIndex(root: string, index: NoteIndex): number {
@@ -164,9 +221,11 @@ export class HarnessNoteService {
     // Note: explicit checkout projections compose outside the source adapter — see .agents/notes/2026-09-25-blueprint-r4--9b7b1e15.md
     const view = await this.singleProjectView(root)
     const bindings = await this.getBindings(root)
-    const checkouts: BlueprintCheckoutInput[] = []
-    for (const binding of bindings) {
-      if (resolve(binding.path).toLowerCase() === resolve(root).toLowerCase()) continue
+    // Bound checkouts project independently: run them concurrently and keep
+    // binding order for a stable composition. Each checkout rides its own
+    // cached index, so this is projection-only work, never extra scans.
+    const foreign = bindings.filter((binding) => resolve(binding.path).toLowerCase() !== resolve(root).toLowerCase())
+    const checkouts = await Promise.all(foreign.map(async (binding): Promise<BlueprintCheckoutInput> => {
       const key = root + '\0' + binding.repoId + '\0' + binding.checkoutId
       try {
         const resolved = await this.resolveRoot(binding.path)
@@ -178,62 +237,110 @@ export class HarnessNoteService {
           const result = await promisify(execFile)('git', ['status', '--porcelain', '--untracked-files=normal'], { cwd: resolved.root, timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 })
           dirty = result.stdout.trim().length > 0
         } catch { /* A registered Note workspace may have no Git repository. */ }
-        checkouts.push({ ...binding, path: resolved.root, name: projection.repoName, blueprint: projection.blueprint, snapshot: projection.blueprint.noteSnapshot, revision: projection.rev, expectedSourceHashes: this.compositionHashes.get(key), dirty })
+        const row: BlueprintCheckoutInput = { ...binding, path: resolved.root, name: projection.repoName, blueprint: projection.blueprint, snapshot: projection.blueprint.noteSnapshot, revision: projection.rev, expectedSourceHashes: this.compositionHashes.get(key), dirty }
         this.compositionHashes.set(key, Object.fromEntries(Object.values(projection.blueprint.nodes).filter((node) => node.sourceUri && node.sourceHash).map((node) => [node.sourceUri!, node.sourceHash!])))
+        return row
       } catch (error) {
-        checkouts.push({ ...binding, bound: false, diagnostic: error instanceof Error ? error.message : String(error) })
+        return { ...binding, bound: false, diagnostic: error instanceof Error ? error.message : String(error) }
       }
-    }
+    }))
     return { ...view, blueprint: composeBlueprint({ skeleton: view.blueprint, checkouts }) }
   }
 
   private async singleProjectView(root: string): Promise<ProjectView> {
-    const loaded = await loadNoteEntries(root)
-    const rev = this.acceptIndex(root, loaded.index)
+    const started = Date.now()
+    // Note: reads ride the cached index; only the watcher path (probe/patch/
+    // rescan) and explicit rescan rebuild it. A full YAML/mdast parse per load
+    // cost ~1.4s for 200 notes; the cache makes repeat loads allocation-only.
+    const { index } = await this.cachedIndex(root)
+    const afterCache = Date.now()
+    const { entries, invalid } = indexEntries(index)
+    const rev = this.acceptIndex(root, index)
     const repoName = await this.repoName(root)
     const ui = await this.loadUiState(root)
     const blueprint = projectGraph(
       {
-        repoId: loaded.repoId,
+        repoId: index.repoId,
         repoName,
-        entries: loaded.entries.map((e) => ({ doc: e.doc, relPath: e.relPath, sha256: e.sha256 })),
+        entries: entries.map((e) => ({ doc: e.doc, relPath: e.relPath, sha256: e.sha256 })),
         revision: rev,
-        snapshot: loaded.snapshot,
+        snapshot: toSlimSnapshot(index),
       },
       root,
     )
+    // Transport slimming: cards and composition overlays read metadata only;
+    // bodies/sections travel on demand via readNote, never on every load.
+    for (const node of Object.values(blueprint.nodes)) {
+      if (node.note && (node.note.body || (node.note.sections?.length ?? 0) > 0)) {
+        node.note = { ...node.note, body: undefined, sections: [] }
+      }
+    }
+    const afterProject = Date.now()
     blueprint.canvasLayout = ui.canvasLayout
     blueprint.collapsedNodeIds = ui.collapsedNodeIds
     // Invalid notes stay out of the graph but travel on the projection for
     // the invalid-lane UI; the canvas must never throw on them.
-    blueprint.invalidNotes = loaded.invalid.map((item) => ({
+    blueprint.invalidNotes = invalid.map((item) => ({
       relPath: item.relPath,
       classification: item.classification,
       diagnostics: item.diagnostics.map((d) => ({ code: d.code, message: d.message })),
     }))
     // Note: coverage comes from portable receipts - see .agents/notes/2026-09-18-harness-portable-results--11d8826d.md
-    if (loaded.repoId) {
-      const results = await listTaskResults(root)
+    if (index.repoId) {
+      const overlay = await this.coverageOverlay(root, rev, entries, index.repoId)
       for (const node of Object.values(blueprint.nodes)) {
-        const entry = loaded.entries.find((item) => item.doc.id === node.id)
-        if (!entry) continue
-        if (entry.doc.kind === 'task') {
-          const result = results.find((item) => item.taskUri === node.sourceUri)
-          if (result?.execution?.state === 'done' && result.validity === 'valid') { node.status = 'done'; node.progress = 100 }
-        }
-        if (entry.doc.kind === 'requirement') {
-          const proof = await proveRequirementCoverage(root, loaded.repoId, node.sourceUri!, entry.raw)
+        const state = overlay.get(node.id)
+        if (!state) continue
+        if (state.taskDone) { node.status = 'done'; node.progress = 100 }
+        if (state.requirement) {
           for (const feature of node.features) {
-            const covered = !proof.uncovered.includes(feature.id)
+            const covered = !state.requirement.uncovered.includes(feature.id)
             feature.progress = covered ? 100 : 0
             feature.status = covered ? 'done' : 'planned'
           }
-          node.progress = entry.doc.acs.length ? Math.round(100 * (entry.doc.acs.length - proof.uncovered.length) / entry.doc.acs.length) : 0
-          if (proof.covered) node.status = 'done'
+          node.progress = state.acCount ? Math.round(100 * (state.acCount - state.requirement.uncovered.length) / state.acCount) : 0
+          if (state.requirement.covered) node.status = 'done'
         }
       }
     }
-    return { blueprint, rev, repoId: loaded.repoId, repoName, invalid: loaded.invalid, adapterVersion: ADAPTER_VERSION }
+    console.debug(`[blueprint-r7] projectView rev=${rev} cache=${afterCache - started}ms project=${afterProject - afterCache}ms overlay=${Date.now() - afterProject}ms total=${Date.now() - started}ms root=${root}`)
+    return { blueprint, rev, repoId: index.repoId, repoName, invalid, adapterVersion: ADAPTER_VERSION }
+  }
+
+  /**
+   * Portable-receipt overlay, cached per index rev plus the evidence-dir
+   * stamp. Receipts land outside the note corpus, so the index rev alone
+   * cannot gate them; the stamp is a readdir+stat pass, no receipt parsing.
+   */
+  private async coverageOverlay(
+    root: string,
+    rev: number,
+    entries: LoadedNoteEntry[],
+    repoId: string,
+  ): Promise<Map<string, { taskDone: boolean; requirement: { covered: boolean; uncovered: string[] } | null; acCount: number }>> {
+    const stamp = await evidenceStamp(root)
+    const cached = this.overlayCache.get(root)
+    if (cached && cached.rev === rev && cached.evidenceStamp === stamp) return cached.overlay
+    const overlay = new Map<string, { taskDone: boolean; requirement: { covered: boolean; uncovered: string[] } | null; acCount: number }>()
+    const results = await listTaskResults(root)
+    const proofs = new Map<string, Awaited<ReturnType<typeof proveRequirementCoverage>>>()
+    const byId = new Map(entries.map((item) => [item.doc.id, item]))
+    for (const node of byId.values()) {
+      if (node.doc.kind === 'task') {
+        const result = results.find((item) => item.taskUri === `note://${repoId}/${node.doc.id}`)
+        overlay.set(node.doc.id, { taskDone: result?.execution?.state === 'done' && result.validity === 'valid', requirement: null, acCount: 0 })
+      } else if (node.doc.kind === 'requirement') {
+        const uri = `note://${repoId}/${node.doc.id}`
+        let proof = proofs.get(uri)
+        if (!proof) {
+          proof = await proveRequirementCoverage(root, repoId, uri, node.raw)
+          proofs.set(uri, proof)
+        }
+        overlay.set(node.doc.id, { taskDone: false, requirement: proof, acCount: node.doc.acs.length })
+      }
+    }
+    this.overlayCache.set(root, { rev, evidenceStamp: stamp, overlay })
+    return overlay
   }
 
   projectIdForRoot(root: string, repoId: string | null): string {
@@ -388,31 +495,70 @@ export class HarnessNoteService {
     return { txId: report.txId, applied: report.results.map((r) => ({ operationId: r.operationId, relPath: r.relPath })) }
   }
 
+  /**
+   * Watcher-driven refresh without the full-parse tax. A hash-only probe
+   * (~70ms for 200 notes, no YAML/mdast) decides: unchanged files short-
+   * circuit with the same rev, a handful of changed files take the targeted
+   * patch path, anything bigger falls back to a full rescan. Managed writes
+   * already rescan via apply(), so this path only serves external edits.
+   * Triggers outside the notes corpus (receipts, bindings, identity, HEAD)
+   * never move the note rev but still need a reload; they return external.
+   */
+  private async refreshAfterChange(root: string, trigger: string | null): Promise<{ rev: number; events: WatchEvent[]; external: boolean }> {
+    const external = trigger === null || trigger === '' || !(trigger === 'notes' || trigger.startsWith('notes/'))
+    const cached = this.indexes.get(root)
+    if (!cached) return { rev: (await this.rescan(root)).rev, events: [], external }
+    const probe = await probeChangedPaths(root, cached.index)
+    if (!probe.complete || probe.scanDiagnostics.length > 0) {
+      return { rev: (await this.rescan(root)).rev, events: [], external }
+    }
+    // The identity file lives outside the notes corpus; a repoId change needs
+    // a rebuild, never a patch.
+    const identity = await readHarnessIdentity(root).catch(() => null)
+    if (!identity || identity.repoId !== cached.index.repoId) {
+      return { rev: (await this.rescan(root)).rev, events: [], external }
+    }
+    const total = probe.changed.length + probe.removed.length
+    // Notes untouched: keep the cached rev. External triggers (receipts,
+    // bindings, identity name, HEAD) still reload the view from cache; the
+    // overlay cache keys off the evidence stamp, so no rescan is needed.
+    if (total === 0) return { rev: cached.rev, events: [], external }
+    if (total > PATCH_THRESHOLD) {
+      return { rev: (await this.rescan(root)).rev, events: [], external }
+    }
+    const { index, events } = await withAssetLock(root, () => patchNoteIndex(root, cached.index, probe.changed, probe.removed, probe.scanDiagnostics))
+    return { rev: this.acceptIndex(root, index), events, external }
+  }
+
   async watch(root: string): Promise<void> {
     if (this.watchers.has(root)) return
     let timer: ReturnType<typeof setTimeout> | undefined
     let closed = false
     const handles: FSWatcher[] = []
-    const notify = (error?: string): void => {
-      for (const listener of this.listeners) listener({ type: 'harness:changed', root, rev: this.indexes.get(root)?.rev ?? 0, events: [], ...(error ? { error } : {}) })
+    const notify = (rev: number, events: WatchEvent[], external: boolean, error?: string): void => {
+      for (const listener of this.listeners) listener({ type: 'harness:changed', root, rev, events, external, ...(error ? { error } : {}) })
     }
-    const schedule = (): void => {
+    const schedule = (trigger: string | null = null): void => {
       if (closed) return
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         timer = undefined
-        void this.rescan(root).then(() => { if (!closed) notify() }).catch((error: unknown) => { if (!closed) notify(error instanceof Error ? error.message : String(error)) })
+        void this.refreshAfterChange(root, trigger)
+          .then(({ rev, events, external }) => { if (!closed) notify(rev, events, external) })
+          .catch((error: unknown) => { if (!closed) notify(this.indexes.get(root)?.rev ?? 0, [], true, error instanceof Error ? error.message : String(error)) })
       }, 100)
     }
     const close = (): void => { closed = true; if (timer) clearTimeout(timer); for (const handle of handles) handle.close() }
     this.watchers.set(root, { close })
     try {
       // Watch the source directory recursively, including newly created Note folders.
+      // The triggering path threads through so no-op fires stay silent while
+      // receipt/binding/identity/HEAD fires still reload from the hot cache.
       const handle = watchDirectory(join(root, '.agents'), { recursive: true, persistent: false }, (_event, file) => {
         const path = String(file ?? '').replaceAll('\\', '/')
-        if (!path || path === 'harness.json' || path === '.local/workspace-map.json' || path === 'notes' || path.startsWith('notes/') || path.startsWith('evidence/')) schedule()
+        if (!path || path === 'harness.json' || path === '.local/workspace-map.json' || path === 'notes' || path.startsWith('notes/') || path.startsWith('evidence/')) schedule(path || null)
       })
-      handle.on('error', (error) => notify(error.message))
+        handle.on('error', (error) => notify(this.indexes.get(root)?.rev ?? 0, [], true, error.message))
       handles.push(handle)
       // HEAD changes also invalidate proof overlays when source bytes are identical.
       let gitDir = join(root, '.git')
@@ -421,14 +567,14 @@ export class HarnessNoteService {
           const pointer = await readFile(gitDir, 'utf8')
           if (pointer.startsWith('gitdir:')) gitDir = resolve(root, pointer.slice(7).trim())
         }
-        const gitWatch = watchDirectory(gitDir, { persistent: false }, (_event, file) => { if (String(file) === 'HEAD') schedule() })
-        gitWatch.on('error', (error) => notify(error.message))
+        const gitWatch = watchDirectory(gitDir, { persistent: false }, (_event, file) => { if (String(file) === 'HEAD') schedule('.git/HEAD') })
+        gitWatch.on('error', (error) => notify(this.indexes.get(root)?.rev ?? 0, [], true, error.message))
         if (closed) gitWatch.close(); else handles.push(gitWatch)
       } catch { /* Non-Git projects still watch their Note source. */ }
     } catch (error) {
       close()
       this.watchers.delete(root)
-      notify(error instanceof Error ? error.message : String(error))
+      notify(this.indexes.get(root)?.rev ?? 0, [], true, error instanceof Error ? error.message : String(error))
       // The first view subscribes only after load returns: retain this failure
       // in the awaited IPC result instead of relying on a transient event.
       throw new Error(`Note watcher could not start for ${root}: ${error instanceof Error ? error.message : String(error)}`)

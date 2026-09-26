@@ -3,11 +3,15 @@ import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markd
 import remarkGfm from 'remark-gfm'
 import type { NoteReadSnapshot, NoteSourceRead } from '../../../../shared/notes'
 import { noteDirectory, noteWikiView } from '../../../../shared/note-wiki'
-import { readNoteSource } from '@/services/harness'
+import { fetchNoteSnapshot, readNoteSource } from '@/services/harness'
 import { useEditorStore } from '@/stores/editor'
 import { MARKDOWN_COMPONENTS } from '../viewers/markdown-components'
 import { NoteWikiLinks } from '../knowledge/NoteWikiLinks'
 import './note-wiki.css'
+
+/** Full snapshots by checkout plus content hash; bodies travel only on wiki demand. */
+const fullSnapshotCache = new Map<string, NoteReadSnapshot>()
+const FULL_SNAPSHOT_CACHE_LIMIT = 8
 
 const statusLabel: Record<string, string> = { resolved: '已解析', missing: '缺失', unavailable: '未接入 / 不可读', ambiguous: '不明确', invalid: '无效' }
 const errorText = (error: unknown): string => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : String(error)
@@ -23,9 +27,27 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
   const [reload, setReload] = useState(0)
   const [notice, setNotice] = useState('')
   const bodyRef = useRef<HTMLDivElement>(null)
-  const view = useMemo(() => noteWikiView(snapshot, uri ?? ''), [snapshot, uri])
-  const directory = useMemo(() => noteDirectory(snapshot), [snapshot])
-  const unavailable = snapshot.entries.filter((entry) => entry.classification !== 'valid')
+  // Note: the canvas entry snapshot is slim (no bodies); the full snapshot
+  // arrives on demand so opening a detail never waits on the multi-MB corpus.
+  const [fullSnapshot, setFullSnapshot] = useState<NoteReadSnapshot | null>(null)
+  useEffect(() => {
+    setFullSnapshot(null)
+    if (!snapshot.slim || !uri) return
+    const cacheKey = `${rootPath}::${snapshot.coverage.snapshotHash}`
+    const hit = fullSnapshotCache.get(cacheKey)
+    if (hit) { setFullSnapshot(hit); return }
+    let active = true
+    void fetchNoteSnapshot(rootPath).then((full) => {
+      if (fullSnapshotCache.size >= FULL_SNAPSHOT_CACHE_LIMIT) fullSnapshotCache.clear()
+      fullSnapshotCache.set(cacheKey, full)
+      if (active) setFullSnapshot(full)
+    }).catch(() => { /* Slim snapshot stays usable for navigation. */ })
+    return () => { active = false }
+  }, [snapshot, rootPath, uri])
+  const snap = fullSnapshot ?? snapshot
+  const view = useMemo(() => noteWikiView(snap, uri ?? ''), [snap, uri])
+  const directory = useMemo(() => noteDirectory(snap), [snap])
+  const unavailable = snap.entries.filter((entry) => entry.classification !== 'valid')
   const sourceHash = view.entry?.sourceHash
   useEffect(() => {
     let active = true
@@ -81,7 +103,7 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
   const identity = <div className="bp-note-wiki__identity"><code title={uri}>{uri}</code><span>{current?.relPath ?? view.entry?.relPath}</span><span>{current ? 'sha256 ' + current.sourceHash.slice(0, 12) : '读取原文…'}</span></div>
   const fields = current && <dl className="bp-note-wiki__metadata"><dt>类型 / 领域</dt><dd>{current.doc.kind} / {metadata?.class ?? '未分类'}</dd><dt>生命周期</dt><dd>{current.doc.lifecycle}</dd>{current.doc.kind === 'task' && <><dt>任务执行</dt><dd>{metadata?.execution?.state ?? '无执行记录'}</dd></>}</dl>
   return <section className={`bp-note-wiki${compact ? ' bp-note-wiki--compact' : ''}`} aria-label="工程 wiki">
-    <div className="bp-note-wiki__scope">{!compact && <strong>工程 wiki</strong>}<span title={rootPath}>{snapshot.coverage.status === 'complete' ? (compact ? '完整索引 · 当前工作区' : '当前 checkout 完整扫描') : '扫描不完整 · 反链覆盖有限'}</span>{!compact && <small title={rootPath}>{rootPath}</small>}</div>
+    <div className="bp-note-wiki__scope">{!compact && <strong>工程 wiki</strong>}<span title={rootPath}>{snap.coverage.status === 'complete' ? (compact ? '完整索引 · 当前工作区' : '当前 checkout 完整扫描') : '扫描不完整 · 反链覆盖有限'}</span>{!compact && <small title={rootPath}>{rootPath}</small>}</div>
     <details className="bp-note-wiki__directory" open={!uri || undefined}>
       <summary>Note 目录 · {directory.length} 篇{unavailable.length ? ' · ' + unavailable.length + ' 项待处理' : ''}</summary>
       <input aria-label="查找 Note" placeholder="标题、标签或代码路径" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -100,7 +122,7 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
         {!compact && fields}
         <div className="bp-note-wiki__actions"><button type="button" onClick={() => setRaw(!raw)}>{raw ? '预览' : '完整源文'}</button><button type="button" onClick={() => void navigator.clipboard.writeText(current.raw).then(() => setNotice('已复制原文')).catch((reason) => setNotice(errorText(reason)))}>复制原文</button></div>
         {raw ? <pre className="bp-note-source">{current.raw}</pre> : <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={(url) => url.startsWith('note://') ? url : defaultUrlTransform(url)} components={markdownComponents}>{current.doc.body ?? ''}</ReactMarkdown></div>}
-        {!!metadata?.codeRefs?.length && <div className="bp-note-wiki__group"><h4>代码落点</h4>{metadata.codeRefs.map((ref, index) => <div key={index}><button type="button" disabled={ref.repoId !== snapshot.repoId} onClick={() => void openFile(ref.path)}>{ref.path}</button><small>{ref.repoId === snapshot.repoId ? ref.role : '外部仓库 · ' + ref.repoId}</small></div>)}</div>}
+        {!!metadata?.codeRefs?.length && <div className="bp-note-wiki__group"><h4>代码落点</h4>{metadata.codeRefs.map((ref, index) => <div key={index}><button type="button" disabled={ref.repoId !== snap.repoId} onClick={() => void openFile(ref.path)}>{ref.path}</button><small>{ref.repoId === snap.repoId ? ref.role : '外部仓库 · ' + ref.repoId}</small></div>)}</div>}
         <details><summary>完整正式字段</summary><pre className="bp-note-source">{JSON.stringify({ ...metadata, ...(Object.keys(current.doc.unknownFields ?? {}).length ? { unknownFields: current.doc.unknownFields } : {}) }, null, 2)}</pre></details>
       </div>}
       {tab === 'links' && <div className="bp-note-wiki__group">
@@ -113,6 +135,6 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
       </div>}
       {tab === 'context' && <div className="bp-note-wiki__group"><p>本篇、一跳邻居与祖先 · {view.context.length} 篇{view.truncated ? ' · 已截断' : ''}{view.unavailable.length ? ' · ' + view.unavailable.length + ' 个目标不可读' : ''}</p><button type="button" onClick={() => void navigator.clipboard.writeText(view.context.map((entry) => entry.uri + '\nsha256 ' + entry.sourceHash + '\n' + entry.text).join('\n\n')).then(() => setNotice('已复制有界上下文')).catch((reason) => setNotice(errorText(reason)))}>复制上下文</button>{view.context.map((entry) => <details key={entry.uri}><summary>{entry.title}</summary><small>{entry.uri}</small><pre className="bp-note-source">{entry.text}</pre></details>)}</div>}
     </>}
-    {snapshot.diagnostics.length > 0 && <details className="bp-note-wiki__group"><summary>索引诊断 · {snapshot.diagnostics.length}</summary>{snapshot.diagnostics.map((d, index) => <p key={index}>{d.path}: {d.message}</p>)}</details>}
+    {snap.diagnostics.length > 0 && <details className="bp-note-wiki__group"><summary>索引诊断 · {snap.diagnostics.length}</summary>{snap.diagnostics.map((d, index) => <p key={index}>{d.path}: {d.message}</p>)}</details>}
   </section>
 }
