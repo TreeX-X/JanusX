@@ -4,6 +4,7 @@ id: f2b9e5d6-8b65-4a46-b634-61eaeec39b33
 kind: requirement
 lifecycle: draft
 created: 2026-09-10
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c0a75c6a-5d06-4088-b7ed-9ecdd835b3d3
 class: feature
 extensions:
   r6Organization:

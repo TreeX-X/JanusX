@@ -4,6 +4,7 @@ id: bc53c6cc-29fb-59db-a0cf-1e32eaf2fc0a
 kind: decision
 lifecycle: proposed
 created: 2026-09-21
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570
 class: architecture
 extensions:
   r6Organization:

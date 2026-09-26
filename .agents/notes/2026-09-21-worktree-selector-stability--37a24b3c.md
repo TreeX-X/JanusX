@@ -4,6 +4,7 @@ id: 37a24b3c-ddab-42c8-a266-a08ad89df0de
 kind: decision
 lifecycle: implemented
 created: 2026-09-21
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662
 class: bug-fix
 relations:
   - type: related-to

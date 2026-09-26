@@ -4,6 +4,7 @@ id: a361448b-58fe-4bb7-826f-540d250d224a
 kind: requirement
 lifecycle: draft
 created: 2026-09-19
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662
 class: architecture
 extensions:
   r6Organization:

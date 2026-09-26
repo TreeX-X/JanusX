@@ -4,6 +4,7 @@ id: 2ec6c79b-9310-494b-a1af-9d6ef95b62c4
 kind: task
 lifecycle: accepted
 created: 2026-09-25
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
 class: bug-fix
 tags: [janus-chat, blueprint, island, gemini, tool-pairing]
 relations:

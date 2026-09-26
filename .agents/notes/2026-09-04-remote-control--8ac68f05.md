@@ -4,6 +4,7 @@ id: 8ac68f05-8b94-52c1-809a-b75176904195
 kind: decision
 lifecycle: implemented
 created: 2026-09-04
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5
 class: architecture
 extensions:
   r6Organization:

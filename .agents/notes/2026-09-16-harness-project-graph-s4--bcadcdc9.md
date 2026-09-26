@@ -2,8 +2,11 @@
 schema: harness-note/1
 id: bcadcdc9-1fc3-566c-90a9-e9d9f59b5b9d
 kind: decision
-lifecycle: implemented
+lifecycle: archived
+disposition:
+  reason: Superseded by the read-only NoteGraph direction; retained frozen as history.
 created: 2026-09-16
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
 class: architecture
 extensions:
   r6Organization:

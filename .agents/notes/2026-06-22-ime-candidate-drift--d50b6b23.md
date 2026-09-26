@@ -4,6 +4,7 @@ id: d50b6b23-b80a-5748-a34e-f89200058a5d
 kind: decision
 lifecycle: implemented
 created: 2026-06-22
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570
 class: bug-fix
 extensions:
   r6Organization:

@@ -4,6 +4,7 @@ id: ef6d2f79-c5d6-4306-82ea-4ecd34d5157c
 kind: task
 lifecycle: accepted
 created: 2026-09-25
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
 class: architecture
 tags: [blueprint, canvas, hierarchy, simplification]
 relations:

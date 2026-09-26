@@ -2,8 +2,11 @@
 schema: harness-note/1
 id: 4b49f066-10dc-5ef6-8223-bcc3d0656016
 kind: decision
-lifecycle: implemented
+lifecycle: archived
+disposition:
+  reason: Superseded by the R5 maintenance loop reusing JanusChat and harness transactions; retained frozen as history.
 created: 2026-08-04
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
 class: architecture
 extensions:
   r6Organization:

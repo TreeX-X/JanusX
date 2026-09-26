@@ -2,8 +2,11 @@
 schema: harness-note/1
 id: 032db994-4a8b-483a-93df-3f9c0cc025cf
 kind: requirement
-lifecycle: draft
+lifecycle: archived
+disposition:
+  reason: Superseded by the V2 workspace visualization and the R4/R5 workbench; retained frozen as history.
 created: 2026-09-01
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
 class: feature
 extensions:
   r6Organization:

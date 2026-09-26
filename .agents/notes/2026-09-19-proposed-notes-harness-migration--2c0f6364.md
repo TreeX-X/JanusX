@@ -2,8 +2,11 @@
 schema: harness-note/1
 id: 2c0f6364-2d0f-53af-9b70-966f8a57ec97
 kind: decision
-lifecycle: implemented
+lifecycle: archived
+disposition:
+  reason: One-shot batch complete; remaining migration owned by R5; retained frozen as history.
 created: 2026-09-19
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5
 class: architecture
 extensions:
   r6Organization:

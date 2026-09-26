@@ -4,6 +4,7 @@ id: faacdaf7-3feb-5b33-90e0-eeb59d6b0c62
 kind: decision
 lifecycle: implemented
 created: 2026-09-19
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c
 class: feature
 extensions:
   r6Organization:

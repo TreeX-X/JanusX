@@ -4,6 +4,7 @@ id: fbac0251-beff-50d7-9363-18fa7e812781
 kind: decision
 lifecycle: implemented
 created: 2026-09-19
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e
 class: architecture
 extensions:
   r6Organization:
