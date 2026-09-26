@@ -14,7 +14,6 @@ import { createPortal } from 'react-dom'
 import {
   ReactFlow,
   Background,
-  Controls,
   MiniMap,
   type Node,
   type Edge,
@@ -981,7 +980,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         style={{ background: 'transparent' }}
       >
         <Background color="rgba(255,255,255,0.05)" gap={24} />
-        <Controls showInteractive={false} />
         {rfNodes.length <= 250 ? (
           <MiniMap
             pannable
