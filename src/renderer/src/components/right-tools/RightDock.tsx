@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { RightToolId } from '@/right-tools/types'
 import { useAppStore } from '@/stores/app'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useRightToolStore } from '@/stores/right-tools'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
@@ -49,6 +50,8 @@ export function RightDock({
   const toggleFromRail = useRightToolStore((state) => state.toggleFromRail)
   const setPanelWidth = useRightToolStore((state) => state.setPanelWidth)
   const togglePanel = useAppStore((state) => state.togglePanel)
+  const personaEnabled = useExperimentalStore((state) => state.persona)
+  const loadExperimental = useExperimentalStore((state) => state.load)
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const workspaces = useWorkspaceStore((state) => state.workspaces)
   const resizeSessionRef = useRef<ResizeSession | null>(null)
@@ -87,6 +90,17 @@ export function RightDock({
   useEffect(() => {
     if (effectiveCollapsed) finishResize()
   }, [effectiveCollapsed, finishResize])
+
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
+
+  // 创新开关关闭个人画像时，若 persona 工具正开着则关闭，避免悬空态。
+  useEffect(() => {
+    if (!personaEnabled && useRightToolStore.getState().openToolIds.includes('persona')) {
+      useRightToolStore.getState().closeTool('persona')
+    }
+  }, [personaEnabled, openToolIds])
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return

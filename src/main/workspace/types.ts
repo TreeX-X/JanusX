@@ -2,6 +2,7 @@ import type { AgentNotificationSettings } from '../../shared/notifications'
 import type { KnowledgeSettings } from '../../shared/knowledge-settings'
 import type { UpdaterSettings } from '../../shared/ipc/updater'
 import type { AgentApprovalMode } from '../../shared/ipc/agent-runtime'
+import type { ExperimentalFeatures } from '../../shared/ipc/experimental'
 
 export interface Workspace {
   id: string
@@ -64,6 +65,8 @@ export interface GlobalConfig {
   agentMaxSteps?: number
   /** R2：安全编译自动放行总开关（默认 true；false 则安全编译命令也走逐次审批）。 */
   safeCompileAutoAllow?: boolean
+  /** 创新实验功能三路开关（知识库/圆桌/个人画像）；缺席即默认全关，兼容旧配置。 */
+  experimentalFeatures?: ExperimentalFeatures
 }
 
 export interface CLIRegistration {

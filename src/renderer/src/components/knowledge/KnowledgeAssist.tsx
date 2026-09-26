@@ -4,6 +4,7 @@ import { getKnowledgeContext } from '../../services/knowledge'
 import { useAppStore } from '../../stores/app'
 import { useI18n } from '@/i18n/useI18n'
 import { AssistRequestGate, createAssistRequest } from './KnowledgeAssistState'
+import { useExperimentalStore } from '@/stores/experimental'
 import styles from './KnowledgeAssist.module.css'
 
 interface Props {
@@ -74,18 +75,21 @@ export function KnowledgeAssist({ workspaceId, workspacePath }: Props) {
 
   const selected = result?.items.find((item) => itemKey(item) === selectedKey) ?? null
   const hasWorkspace = Boolean(workspaceId || workspacePath)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
 
   return (
     <section className={styles.root} aria-label={t('knowledge:aria.section')}>
       <form className={styles.searchForm} onSubmit={search}>
         <input value={query} onChange={(event) => setQuery(event.target.value)} className={styles.searchInput} placeholder={hasWorkspace ? t('knowledge:search.placeholder.active') : t('knowledge:search.placeholder.idle')} disabled={!hasWorkspace || loadState === 'loading'} aria-label={t('knowledge:aria.query')} />
         <button type="submit" className={styles.searchButton} disabled={!hasWorkspace || !query.trim() || loadState === 'loading'}>{loadState === 'loading' ? t('knowledge:action.wait') : t('knowledge:action.search')}</button>
+        {knowledgeEnabled && (
         <button type="button" className={styles.workbenchLink} title={t('knowledge:aria.openWorkbench')} aria-label={t('knowledge:aria.openWorkbench')} onClick={() => setActiveWorkbench('knowledge')}>
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M6.5 3.25H3.75c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h8c.55 0 1-.45 1-1V9.5" />
             <path d="M9.75 2.75h3.5v3.5M13 3 8.25 7.75" />
           </svg>
         </button>
+        )}
       </form>
 
       <div className={styles.body}>

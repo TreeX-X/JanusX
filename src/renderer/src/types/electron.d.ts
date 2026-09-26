@@ -19,6 +19,7 @@ import type { ExternalCliAPI } from '../../../shared/ipc/external-cli'
 import type { JanusChatAPI } from '../../../shared/ipc/janus-chat'
 import type { RoundtableAPI } from '../../../shared/ipc/roundtable'
 import type { AgentSettingsAPI, NotificationSettingsAPI } from '../../../shared/ipc/settings'
+import type { ExperimentalAPI } from '../../../shared/ipc/experimental'
 import type { DesktopToastAPI, DialogAPI, SystemAPI, WindowAPI } from '../../../shared/ipc/system'
 import type { TeamAPI } from '../../../shared/ipc/team'
 import type { UpdaterAPI } from '../../../shared/ipc/updater'
@@ -52,6 +53,7 @@ interface ElectronAPI {
   git: GitAPI
   notificationSettings: NotificationSettingsAPI
   agentSettings: AgentSettingsAPI
+  experimental: ExperimentalAPI
   updater: UpdaterAPI
   subAgentRun: SubAgentRunAPI
   team: TeamAPI

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, LogIn, Settings2, UserRound } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useTeamStore } from '@/stores/team'
 import styles from './TeamFooter.module.css'
 
@@ -38,7 +39,15 @@ export function TeamFooter() {
   const switchTenant = useTeamStore((s) => s.switchTenant)
   const requestLogin = useTeamStore((s) => s.requestLogin)
   const [open, setOpen] = useState(false)
+  // 创新开关门控：teamCollab 关闭时整行隐藏（登录态与组织数据保留在 store，重开即恢复）。
+  const teamCollabEnabled = useExperimentalStore((s) => s.teamCollab)
+  const loadExperimental = useExperimentalStore((s) => s.load)
 
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
+
+  if (!teamCollabEnabled) return null
   if (status === 'guest') return null
   // 本地模式：与已登录同行高/同双行节奏，但前导用幽灵图标——
   // 透明底 + 1px 边框 + dim 文字，不用 accent 填充大色块抢视觉（见 globals.css：accent 只做 1px 边框与文字）。
@@ -170,7 +179,9 @@ export function TeamFooterCollapsed() {
   const activeTenantId = useTeamStore((s) => s.activeTenantId)
   const openTeamSettings = useTeamStore((s) => s.openTeamSettings)
   const requestLogin = useTeamStore((s) => s.requestLogin)
+  const teamCollabEnabled = useExperimentalStore((s) => s.teamCollab)
 
+  if (!teamCollabEnabled) return null
   if (status === 'guest') return null
   // 收起态本地模式：与工作区收起首字母同语言——透明底无边框 dim 图标，hover 只抬底色不染 accent。
   if (status === 'local') {

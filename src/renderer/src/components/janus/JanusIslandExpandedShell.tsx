@@ -6,6 +6,7 @@ import type { ProductFileEntry } from '../../../../shared/product'
 import type { AgentResultCard } from '../../../../shared/roundtable/events'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useSubAgentRunStore } from '@/stores/subagent-run'
 import { useI18n } from '@/i18n/useI18n'
 import { JanusIdentityCore } from './JanusIdentityCore'
@@ -99,6 +100,10 @@ export function JanusIslandExpandedShell({
   const subscribeToSubAgentRuns = useSubAgentRunStore((state) => state.subscribeToEvents)
   const activeTerminalId = useWorkspaceStore((state) => state.activeTerminalId)
   const terminals = useWorkspaceStore((state) => state.terminals)
+  const roundtableEnabled = useExperimentalStore((state) => state.roundtable)
+  const visibleViews = (['monitor', 'chat', 'roundtable'] as JanusExpandedView[]).filter(
+    (item) => item !== 'roundtable' || roundtableEnabled,
+  )
 
   const activeTerminal = useMemo(
     () => activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null,
@@ -202,7 +207,7 @@ export function JanusIslandExpandedShell({
                   <span>*</span> {t('janus:island.expanded.brand')}
                 </div>
                 <div className="janus-expanded-view-switch" aria-label={t('janus:island.expanded.viewSwitchAria')}>
-                  {(['monitor', 'chat', 'roundtable'] as JanusExpandedView[]).map((item) => (
+                  {visibleViews.map((item) => (
                     <button
                       key={item}
                       type="button"

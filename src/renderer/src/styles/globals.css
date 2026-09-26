@@ -654,6 +654,64 @@ body.desktop-toast-body {
 @media (prefers-reduced-motion: reduce) {
   .term-status-pulse { animation: none; }
   [data-turn-island] { transition: none !important; }
+  [data-turn-island] .turn-island-content { animation: none !important; }
+  [data-turn-island] .turn-island-dock { transition: none !important; }
+}
+
+/* ── Turn-change island morph：灵动岛式弹性形变 ──
+ * 壳先到、内容跟至：容器宽高用 overshoot 回弹曲线，内容延迟 70ms 淡入+微缩，
+ * 避免展开中途文本挤压闪烁。latest 窄、history 宽，靠行内宽高差触发过渡。
+ * 收起用无 overshoot 的 snappy 曲线回落。 */
+[data-turn-island] {
+  will-change: width, max-height;
+  transition:
+    width 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    max-height 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    box-shadow 0.25s ease,
+    background 0.2s ease;
+}
+
+[data-turn-island][data-stage="collapsed"] {
+  transition:
+    width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s ease,
+    background 0.2s ease;
+}
+
+[data-turn-island][data-stage="collapsed"]:hover {
+  box-shadow: -10px 0 28px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 255, 255, 0.06);
+}
+
+.turn-island-dock {
+  transition: transform 0.18s ease, background 0.2s ease, filter 0.2s ease;
+  transform-origin: center;
+}
+
+.turn-island-dock:hover {
+  background: rgba(255, 255, 255, 0.06);
+  filter: brightness(1.25);
+}
+
+.turn-island-dock:active {
+  transform: scale(0.9);
+}
+
+@keyframes turn-island-content-in {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+[data-turn-island] .turn-island-content {
+  animation: turn-island-content-in 0.24s cubic-bezier(0.175, 0.885, 0.32, 1.275) 70ms backwards;
+}
+
+[data-turn-island] .turn-island-viewtab {
+  transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+[data-turn-island] .turn-island-viewtab:active {
+  transform: scale(0.94);
 }
 
 /*-- 长按工作区视觉反馈：径向渐变波纹从中心扩散 --*/

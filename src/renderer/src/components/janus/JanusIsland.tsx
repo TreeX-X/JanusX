@@ -46,6 +46,7 @@ const ROUNDTABLE_CARD_STATUS_KEYS: Record<AgentWorkState, string> = {
 import { faceClass } from './janusIslandRuntime'
 import { nudgeRunOrb } from '@/stores/running'
 import { useRightToolStore } from '@/stores/right-tools'
+import { useExperimentalStore } from '@/stores/experimental'
 import { getUserMemoryOverview } from '@/services/knowledge'
 import type { JanusExpandedView, JanusIslandProps } from './janusIslandTypes'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
@@ -155,12 +156,28 @@ export function JanusIsland({
   const blueprintMode = useAppStore((s) => s.blueprintMode)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
+  const roundtableEnabled = useExperimentalStore((s) => s.roundtable)
+  const personaEnabled = useExperimentalStore((s) => s.persona)
+  const loadExperimental = useExperimentalStore((s) => s.load)
+
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
+
+  // 创新开关关闭圆桌时，若正停在圆桌视图则退回聊天，避免悬空态。
+  useEffect(() => {
+    if (!roundtableEnabled) setView((current) => (current === 'roundtable' ? 'chat' : current))
+  }, [roundtableEnabled])
 
   // User memory M4: quiet badge for habit candidates awaiting review. Mount
   // plus recall-turn refresh; failures stay silent (no badge, no banner).
   const knowledgeTraceRequestId = knowledgeTrace?.requestId
   const [memoryPending, setMemoryPending] = useState(0)
   useEffect(() => {
+    if (!personaEnabled) {
+      setMemoryPending(0)
+      return
+    }
     let alive = true
     void getUserMemoryOverview().then((overview) => {
       if (alive) setMemoryPending(overview?.pendingHabitCount ?? 0)
@@ -168,7 +185,7 @@ export function JanusIsland({
     return () => {
       alive = false
     }
-  }, [knowledgeTraceRequestId])
+  }, [knowledgeTraceRequestId, personaEnabled])
 
   /** 长按仅启动（幂等）：已运行只脉冲对应运行球，永不停止 */
   const flashHint = useCallback((text: string) => {
@@ -267,10 +284,10 @@ export function JanusIsland({
    * product path owns its own dismiss/consume flow in Titlebar. */
   const runNotificationAction = useCallback((notificationId: string, actionId: IslandNotificationActionId) => {
     if (actionId === 'open-knowledge') {
-      setActiveWorkbench('knowledge')
+      if (useExperimentalStore.getState().knowledge) setActiveWorkbench('knowledge')
       onDismiss()
     } else if (actionId === 'open-memory') {
-      useRightToolStore.getState().openTool('persona')
+      if (useExperimentalStore.getState().persona) useRightToolStore.getState().openTool('persona')
       onDismiss()
     } else if (actionId === 'open-blueprint') {
       handleOpenBlueprintWorkbench()
@@ -330,9 +347,9 @@ export function JanusIsland({
       trace: knowledgeTrace,
       matchLabel: knowledgeTrace?.topHit ? formatKnowledgeMatch(knowledgeTrace.topHit.score, t) : undefined,
     }),
-    memoryNotification({ pendingHabitCount: memoryPending }),
+    personaEnabled ? memoryNotification({ pendingHabitCount: memoryPending }) : null,
     maintenanceNotification(maintenanceTask, maintenanceNeedsAttention),
-  ]), [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, memoryPending, maintenanceNeedsAttention, maintenanceTask, productNotice, t])
+  ]), [knowledgePeekActive, knowledgePeekEmpty, knowledgeTrace, memoryPending, maintenanceNeedsAttention, maintenanceTask, productNotice, personaEnabled, t])
   const [clearedIds, setClearedIds] = useState<string[]>([])
   const visibleNotifications = useMemo(
     () => notifications.filter((notification) => !clearedIds.includes(notification.id)),

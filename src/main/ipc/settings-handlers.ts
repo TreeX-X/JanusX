@@ -12,6 +12,7 @@ import {
   type RemoteSendResult,
 } from '../../shared/notifications'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS } from '../../shared/ipc/settings'
+import { EXPERIMENTAL_CHANNELS, type ExperimentalFeatures } from '../../shared/ipc/experimental'
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle(AGENT_SETTINGS_CHANNELS.get, async () => ({
@@ -81,6 +82,17 @@ export function registerSettingsHandlers(): void {
     KNOWLEDGE_CHANNELS.updateSettings,
     async (_event, settings: Partial<KnowledgeSettings>) => {
       return configService.updateKnowledgeSettings(settings ?? {})
+    },
+  )
+
+  ipcMain.handle(EXPERIMENTAL_CHANNELS.get, async () => {
+    return configService.getExperimentalFeatures()
+  })
+
+  ipcMain.handle(
+    EXPERIMENTAL_CHANNELS.update,
+    async (_event, settings: Partial<ExperimentalFeatures>) => {
+      return configService.updateExperimentalFeatures(settings ?? {})
     },
   )
 }

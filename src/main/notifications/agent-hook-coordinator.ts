@@ -57,13 +57,13 @@ function normalizePathForMatch(value?: string): string | undefined {
   return normalized || undefined
 }
 
-function getHookMatcher(payload: AgentHookPayload): string | undefined {
+export function getHookMatcher(payload: AgentHookPayload): string | undefined {
   if (payload.matcher?.trim()) return payload.matcher.trim()
   const raw = payload.raw
   if (!raw || typeof raw !== 'object') return undefined
   const record = raw as Record<string, unknown>
   const matcher = record.matcher ?? record.notification_type ?? record.type
-  return typeof matcher === 'string' && matcher.trim() ? matcher : undefined
+  return typeof matcher === 'string' && matcher.trim() ? matcher.trim() : undefined
 }
 
 // Note: Claude idle_prompt is a 60s-idle nudge, not a question — see .agents/notes/2026-09-14-claude-idle-prompt-tab-status--bb75d2cd.md
@@ -73,19 +73,14 @@ function isIdlePromptNotification(payload: AgentHookPayload): boolean {
 }
 
 function isHookAttentionNotification(payload: AgentHookPayload): boolean {
-  // Claude Notification hooks carry permission_prompt/idle_prompt matchers;
-  // janus/pi extensions repost the same matcher contract, so any source with
-  // a matcher-shaped raw payload qualifies — see agent-hook-config pi extension.
+  // Any non-opencode Notification means the CLI is waiting (approval or option
+  // input). Matcher only decides which one; the toast fires either way so the
+  // desktop reminder stays wired to the terminal needs-input/needs-approval
+  // status. Top-level payload.matcher is authoritative (hook argv), raw is the
+  // fallback — real hook clients send the matcher top-level, not in raw.
   if (payload.event !== 'Notification') return false
-  const raw = payload.raw
-  if (!raw || typeof raw !== 'object') return payload.source === 'claude'
-  const matcher =
-    (raw as Record<string, unknown>).matcher ??
-    (raw as Record<string, unknown>).notification_type ??
-    (raw as Record<string, unknown>).type
-
-  if (typeof matcher !== 'string') return payload.source === 'claude'
-  return matcher === 'permission_prompt' || matcher === 'idle_prompt'
+  if (payload.source === 'opencode') return false
+  return true
 }
 
 function isStartEvent(payload: AgentHookPayload): boolean {
@@ -147,10 +142,16 @@ function isAttentionEvent(payload: AgentHookPayload): boolean {
 
 function isApprovalEvent(payload: AgentHookPayload): boolean {
   // Engine-agnostic by design: either approval literal qualifies everywhere.
-  return (
+  // Notification + permission_prompt is also an approval wait (terminal shows
+  // needs-approval for it), so remote severity and coordinator event type stay
+  // aligned with the sidebar instead of downgrading to plain attention.
+  if (
     matchesEngineEvents(payload.source, 'approval', payload.event, payload.raw) ||
     payload.event === 'permission.asked'
-  )
+  ) {
+    return true
+  }
+  return payload.event === 'Notification' && getHookMatcher(payload) === 'permission_prompt'
 }
 
 function buildAttentionRemoteEventId(
@@ -410,10 +411,11 @@ export class AgentHookCoordinator {
   }
 
   private notifyAttention(payload: AgentHookPayload, terminal: RegisteredHookTerminal): void {
+    const approval = isApprovalEvent(payload)
     Promise.resolve(this.deliverAttention(payload, terminal))
       .then((delivered) => {
         this.emit({
-          type: payload.event === 'PermissionRequest' || payload.event === 'permission.asked' ? 'approval' : 'attention',
+          type: approval ? 'approval' : 'attention',
           terminalId: terminal.terminalId,
           engine: terminal.engine,
           source: payload.source,

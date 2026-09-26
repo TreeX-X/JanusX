@@ -12,7 +12,7 @@ import { subAgentRunRegistry } from '../janus-runner/subagent-run-registry'
 import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
 import { AgentHookConfigManager } from '../notifications/agent-hook-config'
-import { AgentHookCoordinator, getRawString } from '../notifications/agent-hook-coordinator'
+import { AgentHookCoordinator, getHookMatcher, getRawString } from '../notifications/agent-hook-coordinator'
 import { AGENT_ENGINE_CAPABILITIES, resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
 import { AgentTurnSentinel } from '../notifications/agent-turn-sentinel'
 import {
@@ -83,11 +83,11 @@ interface TerminalCpState {
 
 const terminalStates = new Map<string, TerminalCpState>()
 
-function getHookRawMatcher(raw: unknown): string | undefined {
-  if (!raw || typeof raw !== 'object') return undefined
-  const record = raw as Record<string, unknown>
-  const matcher = record.matcher ?? record.notification_type ?? record.type
-  return typeof matcher === 'string' ? matcher : undefined
+function getHookRawMatcher(payload: AgentHookPayload): string | undefined {
+  // Top-level payload.matcher is authoritative (hook argv --matcher/-Matcher);
+  // raw is the fallback. Must stay aligned with the coordinator's
+  // getHookMatcher so sidebar status and desktop toasts never diverge.
+  return getHookMatcher(payload)
 }
 
 function isHookApprovalRequest(payload: AgentHookPayload, lowerEvent: string): boolean {
@@ -97,13 +97,13 @@ function isHookApprovalRequest(payload: AgentHookPayload, lowerEvent: string): b
   }
   if (approvals.some((name) => name.toLowerCase() === lowerEvent)) return true
   if (lowerEvent !== 'notification') return false
-  return getHookRawMatcher(payload.raw) === 'permission_prompt'
+  return getHookRawMatcher(payload) === 'permission_prompt'
 }
 
 function isHookInputRequest(payload: AgentHookPayload, lowerEvent: string): boolean {
   if (payload.source === 'opencode') return false
   if (lowerEvent !== 'notification') return false
-  return getHookRawMatcher(payload.raw) !== 'permission_prompt'
+  return getHookRawMatcher(payload) !== 'permission_prompt'
 }
 
 let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null

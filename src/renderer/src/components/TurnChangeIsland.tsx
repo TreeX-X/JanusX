@@ -15,11 +15,13 @@ const EMPTY_TURNS: TerminalTurnChangesEvent[] = []
 
 // Note: per-terminal turn file history lives on the pane's right edge — see .agents/notes/2026-09-23-terminal-right-island-turn-history--70beb72a.md
 /**
- * Turn-change island: one persistent overlay per terminal pane, identical for
- * all engines. The pill stays on the right edge once the first turn lands;
- * single click expands the latest turn, double click expands per-turn history.
- * File rows reuse the embedded editor preview; the session panel holds the
- * audit record.
+ * Turn-change island: one persistent vertical overlay per terminal pane,
+ * identical for all engines. It stays docked to the right edge even before
+ * the first turn lands (empty state); single click expands the latest turn
+ * (compact), double click expands per-turn history (larger). Shell morphs
+ * with a Dynamic-Island overshoot curve, content follows with a delayed
+ * fade-scale. File rows reuse the embedded editor preview; the session
+ * panel holds the audit record.
  */
 export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; focused: boolean }) {
   const { t } = useI18n('terminal')
@@ -44,6 +46,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
   const [narrow, setNarrow] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const focusedRef = useRef(focused)
   focusedRef.current = focused
 
@@ -71,7 +74,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
     return () => observer.disconnect()
   }, [])
 
-  // TTL: collapse back to the pill, paused on hover/focus, cleared on pin.
+  // TTL: collapse back to the dock, paused on hover/focus, cleared on pin.
   useEffect(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
@@ -80,6 +83,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
     if (!expanded || pinned || hovering || focusWithin) return
     timerRef.current = setTimeout(() => {
       setExpanded(false)
+      setPinned(false)
       timerRef.current = null
     }, COLLAPSE_TTL_MS)
     return () => {
@@ -90,17 +94,20 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
     }
   }, [expanded, pinned, hovering, focusWithin, turnKey, view])
 
-  // Esc and click-away collapse the island to the persistent pill.
+  // Esc and click-away collapse the island to the persistent vertical block.
+  // Manual expand (pinned) no longer blocks dismissal: no X button, click
+  // elsewhere is the single return path.
   useEffect(() => {
     if (!expanded || !change) return
     const onPointerDown = (event: PointerEvent) => {
-      if (pinned) return
       if (rootRef.current?.contains(event.target as Node)) return
       setExpanded(false)
+      setPinned(false)
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setExpanded(false)
+      setPinned(false)
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -108,12 +115,36 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [expanded, pinned, change])
-  if (!change) return null
+  }, [expanded, change])
 
-  const summary = `${t('terminal:turnChanges.files', { count: change.fileCount })} · +${change.additions} −${change.deletions}`
-  const visibleFiles = change.files.slice(0, MAX_VISIBLE_FILES)
-  const hiddenCount = change.fileCount - visibleFiles.length
+  // Single/double click share one button: delay the single-click path so a
+  // double-click never flashes the latest view before history mounts.
+  useEffect(() => () => {
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+  }, [])
+  const hasChange = !!change
+
+  // History cleared (terminal kill / zero-exit): fall back to the empty dock.
+  useEffect(() => {
+    if (!hasChange) {
+      setExpanded(false)
+      setPinned(false)
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current)
+        clickTimerRef.current = null
+      }
+    }
+  }, [hasChange])
+
+  const summary = change
+    ? `${t('terminal:turnChanges.files', { count: change.fileCount })} · +${change.additions} −${change.deletions}`
+    : t('terminal:turnChanges.empty')
+  const visibleFiles = change?.files.slice(0, MAX_VISIBLE_FILES) ?? []
+  const hiddenCount = (change?.fileCount ?? 0) - visibleFiles.length
+
+  // 灵动岛式两档展开：latest 窄、history 宽高更大，靠宽高差驱动壳形变过渡。
+  const expandedWidth = view === 'history' ? 'min(368px, 68%)' : 'min(300px, 55%)'
+  const expandedMaxHeight = view === 'history' ? '80%' : '60%'
 
   const openPreview = (relPath: string, status: string) => {
     if (!cwd || status === 'deleted') return
@@ -121,17 +152,37 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
   }
 
   const expandLatest = () => {
-    if (narrow) return
+    if (narrow || !hasChange) return
     setView('latest')
     setExpanded(true)
     setPinned(true)
   }
 
   const expandHistory = () => {
-    if (narrow) return
+    if (narrow || !hasChange) return
     setView('history')
     setExpanded(true)
     setPinned(true)
+  }
+
+  const handleDockClick = () => {
+    if (narrow || !hasChange) return
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+    // Wait out the dblclick window: without this, a double-click flashes
+    // latest for one frame before history replaces it.
+    clickTimerRef.current = setTimeout(() => {
+      expandLatest()
+      clickTimerRef.current = null
+    }, 220)
+  }
+
+  const handleDockDoubleClick = () => {
+    if (narrow || !hasChange) return
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+    }
+    expandHistory()
   }
 
   return (
@@ -140,6 +191,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       data-turn-island=""
       data-stage={expanded ? 'expanded' : 'collapsed'}
       data-view={expanded ? view : undefined}
+      data-empty={!hasChange ? 'true' : undefined}
       onMouseDown={(event) => {
         // The chrome never steals xterm focus; only controls focus themselves.
         event.preventDefault()
@@ -150,50 +202,81 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       onBlur={() => setFocusWithin(false)}
       className="absolute z-20"
       style={{
-        right: 8,
+        right: 0,
         top: '50%',
         transform: 'translateY(-50%)',
-        width: expanded ? 'min(320px, 60%)' : 'auto',
-        maxHeight: expanded ? '70%' : 'none',
+        width: expanded ? expandedWidth : 26,
+        maxHeight: expanded ? expandedMaxHeight : 'none',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        background: 'var(--shell-chrome)',
-        border: '1px solid var(--shell-border)',
-        borderRadius: expanded ? 8 : 999,
-        boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
-        transition: 'width 0.25s cubic-bezier(0.16, 1, 0.3, 1), height 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-radius 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+        background: '#000',
+        border: '1px solid rgba(255,255,255,0.12)',
+        borderRight: 'none',
+        borderRadius: '12px 0 0 12px',
+        boxShadow: '-8px 0 24px rgba(0,0,0,0.5)',
       }}
     >
       {!expanded ? (
-        <button
-          type="button"
-          title={t('terminal:turnChanges.hint')}
-          onClick={expandLatest}
-          onDoubleClick={expandHistory}
-          onMouseDown={(event) => event.stopPropagation()}
-          className="cursor-pointer whitespace-nowrap"
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#cfcfcf',
-            fontFamily: "'SF Mono', monospace",
-            fontSize: 10.5,
-            padding: '5px 12px',
-            lineHeight: 1.4,
-          }}
-        >
-          {summary}
-          {history.length > 1 ? ` · ${t('terminal:turnChanges.turns', { count: history.length })}` : null}
-        </button>
+        hasChange ? (
+          <button
+            type="button"
+            title={t('terminal:turnChanges.hint')}
+            aria-label={summary}
+            onClick={handleDockClick}
+            onDoubleClick={handleDockDoubleClick}
+            onMouseDown={(event) => event.stopPropagation()}
+            className="cursor-pointer turn-island-dock"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '10px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 6,
+              minHeight: 72,
+              justifyContent: 'center',
+              fontFamily: "'SF Mono', monospace",
+              lineHeight: 1.2,
+            }}
+          >
+            <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>{change!.fileCount}</span>
+            {(change!.additions > 0 || change!.deletions > 0) && (
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, fontSize: 9 }}>
+                {change!.additions > 0 && <span style={{ color: '#4ec9b0' }}>+{change!.additions}</span>}
+                {change!.deletions > 0 && <span style={{ color: '#e06c75' }}>−{change!.deletions}</span>}
+              </span>
+            )}
+            {history.length > 1 && (
+              <span style={{ color: '#737373', fontSize: 9 }}>×{history.length}</span>
+            )}
+          </button>
+        ) : (
+          <div
+            title={t('terminal:turnChanges.empty')}
+            aria-label={t('terminal:turnChanges.empty')}
+            style={{
+              padding: '12px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 8,
+              minHeight: 64,
+              justifyContent: 'center',
+            }}
+          >
+            <span style={{ color: '#555', fontSize: 10, fontFamily: "'SF Mono', monospace" }}>0</span>
+          </div>
+        )
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div key={view} className="turn-island-content" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div className="flex items-center" style={{ gap: 8, padding: '8px 10px 6px' }}>
             <button
               type="button"
               onClick={() => setView('latest')}
               onMouseDown={(event) => event.stopPropagation()}
-              className="cursor-pointer"
+              className="cursor-pointer turn-island-viewtab"
               style={{
                 background: 'none',
                 border: 'none',
@@ -209,7 +292,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               type="button"
               onClick={() => setView('history')}
               onMouseDown={(event) => event.stopPropagation()}
-              className="cursor-pointer"
+              className="cursor-pointer turn-island-viewtab"
               style={{
                 background: 'none',
                 border: 'none',
@@ -220,16 +303,6 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               }}
             >
               {t('terminal:turnChanges.history', { count: history.length })}
-            </button>
-            <button
-              type="button"
-              aria-label="close"
-              onClick={() => setExpanded(false)}
-              onMouseDown={(event) => event.stopPropagation()}
-              className="cursor-pointer"
-              style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#666', fontSize: 12, padding: '0 2px' }}
-            >
-              ×
             </button>
           </div>
           {view === 'latest' ? (
@@ -349,9 +422,22 @@ function HistoryTurn({
   const visible = turn.files.slice(0, MAX_HISTORY_FILES_PER_TURN)
   const hidden = turn.fileCount - visible.length
   return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ color: '#d4d4d4', fontSize: 10.5 }}>
-        #{index} · {turn.kind} · {turn.fileCount} · +{turn.additions} −{turn.deletions}
+    <div
+      style={{
+        background: '#141417',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: 8,
+        padding: '7px 9px 6px',
+        marginBottom: 8,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+        <span style={{ fontWeight: 700, fontSize: 10.5, color: '#a1a1a1' }}>#{index}</span>
+        <span style={{ fontSize: 10.5, color: '#737373' }}>{turn.kind}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: '#737373', whiteSpace: 'nowrap' }}>
+          {turn.fileCount} · <span style={{ color: '#4ec9b0' }}>+{turn.additions}</span>{' '}
+          <span style={{ color: '#e06c75' }}>−{turn.deletions}</span>
+        </span>
       </div>
       {visible.map((file) => (
         <FileRow

@@ -17,6 +17,7 @@ import { getSingleActivationIntent } from '@/components/janus/islandInteraction'
 import { officeService } from '@/services/office'
 import { startProductDiscovery } from '@/components/product-workspace/productDiscovery'
 import { useProductWorkspaceStore } from '@/stores/productWorkspace'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useTeamStore } from '@/stores/team'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
@@ -41,15 +42,18 @@ export function Titlebar() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 侧栏团队区请求打开设置 team 页（计数器变化即打开）。
+  // 创新开关关闭时忽略请求：入口已隐藏，不应再弹出 team 页。
   const teamSettingsRequest = useTeamStore((s) => s.settingsRequest)
+  const teamCollabEnabled = useExperimentalStore((s) => s.teamCollab)
   const lastTeamSettingsRequest = useRef(teamSettingsRequest)
   useEffect(() => {
     if (teamSettingsRequest !== lastTeamSettingsRequest.current) {
       lastTeamSettingsRequest.current = teamSettingsRequest
+      if (!teamCollabEnabled) return
       setSettingsInitialTab('team')
       setSettingsModalOpen(true)
     }
-  }, [teamSettingsRequest])
+  }, [teamSettingsRequest, teamCollabEnabled])
 
   const conversationController = useJanusChatController()
   const {
@@ -73,6 +77,12 @@ export function Titlebar() {
 
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const loadExperimental = useExperimentalStore((s) => s.load)
+
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const previousActiveWorkspaceId = useRef(activeWorkspaceId)
@@ -323,7 +333,7 @@ export function Titlebar() {
         />
       </Suspense>
       <KnowledgeWorkbench
-        isOpen={activeWorkbench === 'knowledge'}
+        isOpen={knowledgeEnabled && activeWorkbench === 'knowledge'}
         onClose={() => setActiveWorkbench(null)}
       />
 

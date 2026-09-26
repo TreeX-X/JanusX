@@ -1,7 +1,8 @@
 // Note: bottom bar as application running-state layer — see .agents/notes/2026-06-27-runtime-statusbar--b1978fa7.md
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useRemoteStore } from '@/stores/remote'
 import { useTeamStore } from '@/stores/team'
 import { useI18n } from '@/i18n/useI18n'
@@ -20,6 +21,22 @@ export function StatusBar() {
   const remoteHosting = useRemoteStore((s) => s.hostService.running)
   const teamStatus = useTeamStore((s) => s.status)
   const [remoteOpen, setRemoteOpen] = useState(false)
+  // 创新开关门控远控入口：默认关闭，关闭后隐藏胶囊并断开连接、停止被控服务。
+  const remoteControlEnabled = useExperimentalStore((s) => s.remoteControl)
+  const experimentalLoaded = useExperimentalStore((s) => s.loaded)
+  const loadExperimental = useExperimentalStore((s) => s.load)
+
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
+
+  useEffect(() => {
+    if (!experimentalLoaded || remoteControlEnabled) return
+    setRemoteOpen(false)
+    const { status, hostService, disconnect, stopHostService } = useRemoteStore.getState()
+    if (status !== 'disconnected') disconnect()
+    if (hostService.running) void stopHostService()
+  }, [experimentalLoaded, remoteControlEnabled])
 
   const statusText: Record<string, string> = {
     'no-workspace': t('common:statusBar.waitingWorkspace'),
@@ -60,31 +77,33 @@ export function StatusBar() {
         />
         <span>{blueprintMode ? t('common:statusBar.blueprintRunning') : (statusText[loadState] ?? t('common:statusBar.ready'))}</span>
       </div>
-      {/* 远控入口：搬离侧栏左下角后唯一的常驻入口（左下角只留 TeamFooter）。 */}
-      <button
-        type="button"
-        onClick={() => setRemoteOpen(true)}
-        title={t('team:remote.title')}
-        aria-label={t('team:remote.title')}
-        className="flex h-6 items-center gap-1.5 rounded-[4px] border border-transparent px-2 transition-colors hover:bg-white/[0.06]"
-        style={{ color: 'var(--shell-dim)' }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'rgba(255,120,48,0.28)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'transparent'
-        }}
-      >
-        <span
-          className="h-[6px] w-[6px] rounded-full"
-          style={{
-            background: remoteDotColor,
-            boxShadow: remoteConnected || remoteHosting ? `0 0 6px ${remoteDotColor}` : 'none',
+      {/* 远控入口：创新开关 remoteControl 关闭时隐藏；搬离侧栏左下角后这是唯一的常驻入口。 */}
+      {remoteControlEnabled && (
+        <button
+          type="button"
+          onClick={() => setRemoteOpen(true)}
+          title={t('team:remote.title')}
+          aria-label={t('team:remote.title')}
+          className="flex h-6 items-center gap-1.5 rounded-[4px] border border-transparent px-2 transition-colors hover:bg-white/[0.06]"
+          style={{ color: 'var(--shell-dim)' }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'rgba(255,120,48,0.28)'
           }}
-        />
-        <span className="max-w-[260px] truncate font-mono">{remoteLabel}</span>
-      </button>
-      <RemoteModal open={remoteOpen} onClose={() => setRemoteOpen(false)} />
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'transparent'
+          }}
+        >
+          <span
+            className="h-[6px] w-[6px] rounded-full"
+            style={{
+              background: remoteDotColor,
+              boxShadow: remoteConnected || remoteHosting ? `0 0 6px ${remoteDotColor}` : 'none',
+            }}
+          />
+          <span className="max-w-[260px] truncate font-mono">{remoteLabel}</span>
+        </button>
+      )}
+      {remoteControlEnabled && <RemoteModal open={remoteOpen} onClose={() => setRemoteOpen(false)} />}
     </footer>
   )
 }

@@ -8,6 +8,12 @@
       "nav": "通用",
       "navMeta": "Language"
     },
+    "experimental": {
+      "title": "创新功能",
+      "subtitle": "Experimental · 默认关闭，开启后即时生效",
+      "nav": "创新功能",
+      "navMeta": "Experimental"
+    },
     "notifications": {
       "title": "通知提醒",
       "subtitle": "Notifications · Agent 终端任务完成与失败提醒策略",
@@ -44,6 +50,38 @@
       "label": "界面语言",
       "help": "切换后立即生效，重启后保持上次选择",
       "followSystem": "跟随系统"
+    }
+  },
+  "experimental": {
+    "warning": "创新功能处于实验阶段：开启后可能遇到 bug，或部分功能不可用。关闭后对应入口立即隐藏。",
+    "unavailable": "当前环境不可用（浏览器预览）。",
+    "section": {
+      "features": "实验功能 Experimental Features"
+    },
+    "toggle": {
+      "knowledge": {
+        "label": "知识库",
+        "hint": "显示知识库工作台入口。关闭后标题栏切换器与工作台同时隐藏。"
+      },
+      "roundtable": {
+        "label": "圆桌",
+        "hint": "显示灵动岛二级展开中的圆桌视图。关闭后入口隐藏，进行中的讨论不受影响。"
+      },
+      "persona": {
+        "label": "个人画像",
+        "hint": "显示右侧 Dock 的个人画像工具与灵动岛记忆提醒。关闭后入口隐藏。"
+      },
+      "remoteControl": {
+        "label": "远程协作控制",
+        "hint": "显示状态栏远控入口与远控弹窗（配对、终端尾流、受控提交、被控服务）。关闭后入口隐藏并断开连接、停止被控服务。"
+      },
+      "teamCollab": {
+        "label": "团队协作",
+        "hint": "显示侧栏团队行、首屏登录挡板与设置中心团队页。关闭后入口隐藏，登录态与组织数据保留，重开即恢复。"
+      }
+    },
+    "error": {
+      "save": "创新功能开关保存失败"
     }
   },
   "updater": {

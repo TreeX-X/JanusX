@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ModalCloseButton } from './ModalCloseButton'
 import { useWorkbenchPhase } from '@/components/shared/CardFrame'
 import { GeneralSettingsPanel } from './GeneralSettingsPanel'
+import { ExperimentalSettingsPanel } from './ExperimentalSettingsPanel'
 import { NotificationSettingsPanel } from './NotificationSettingsPanel'
 import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
@@ -10,10 +11,11 @@ import { ModelCatalogPanel } from './ModelCatalogPanel'
 import { AgentSettingsPanel } from './AgentSettingsPanel'
 import { HostedSettingsPanel } from './HostedSettingsPanel'
 import { TeamSettingsPanel } from './team/TeamSettingsPanel'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-export type SettingsTab = 'general' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models' | 'team' | 'hosted'
+export type SettingsTab = 'general' | 'experimental' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models' | 'team' | 'hosted'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -21,7 +23,7 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_ORDER: SettingsTab[] = ['general', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team', 'hosted']
+const TAB_ORDER: SettingsTab[] = ['general', 'experimental', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team', 'hosted']
 
 // Note: settings open/close mirrors the blueprint workbench card lifecycle — see .agents/notes/2026-09-18-settings-workbench-transition--5a07c410.md
 const SETTINGS_CARD_ENTER_DURATION_MS = 260
@@ -36,6 +38,18 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
   const [revealReady, setRevealReady] = useState(false)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<Element | null>(null)
+  // 创新开关门控团队页：关闭时 tab 隐藏；正停在 team 页则退回 general，避免悬空态。
+  const teamCollabEnabled = useExperimentalStore((s) => s.teamCollab)
+  const loadExperimental = useExperimentalStore((s) => s.load)
+  const tabOrder = teamCollabEnabled ? TAB_ORDER : TAB_ORDER.filter((tab) => tab !== 'team')
+
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
+
+  useEffect(() => {
+    if (!teamCollabEnabled) setActiveTab((prev) => (prev === 'team' ? 'general' : prev))
+  }, [teamCollabEnabled])
 
   const handleHidden = useCallback(() => {
     const trigger = triggerRef.current as HTMLElement | null
@@ -132,7 +146,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
             <span className={styles.brandTitle}>JanusX</span>
             <span className={styles.brandMeta}>{t('settings:brand')}</span>
           </div>
-          {TAB_ORDER.map((tab) => (
+          {tabOrder.map((tab) => (
             <button
               key={tab}
               type="button"
@@ -156,6 +170,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
 
           <main className={styles.body}>
             {activeTab === 'general' && <GeneralSettingsPanel />}
+            {activeTab === 'experimental' && <ExperimentalSettingsPanel />}
             {activeTab === 'notifications' && <NotificationSettingsPanel />}
             {activeTab === 'knowledge' && <KnowledgeSettingsPanel />}
             {activeTab === 'agent' && <AgentSettingsPanel />}

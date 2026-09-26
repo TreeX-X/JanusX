@@ -452,7 +452,9 @@ describe('AgentHookCoordinator synthetic turn ends', () => {
     await Promise.resolve()
 
     expect(attentionPayloads).toHaveLength(1)
-    expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+    // Notification + permission_prompt is an approval wait (terminal shows
+    // needs-approval), so the coordinator emits approval, not plain attention.
+    expect(events.at(-1)).toMatchObject({ type: 'approval', delivered: true })
   })
 
   it('keeps legacy matcher-less Claude notifications as attention', async () => {
@@ -485,6 +487,68 @@ describe('AgentHookCoordinator synthetic turn ends', () => {
 
     expect(attentionPayloads).toHaveLength(1)
     expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+  })
+
+  it('toasts top-level matcher Notifications whose raw lacks the matcher (real hook client shape)', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal({
+      terminalId: 'term-pi',
+      engine: 'pi',
+      workspaceId: 'workspace-1',
+      cwd: 'C:/repo',
+    })
+    // Real hook clients (posix argv --matcher / Windows -Matcher) forward the
+    // matcher as a top-level payload field; raw is the untouched CLI stdin.
+    coordinator.handleHookPayload({
+      source: 'pi',
+      event: 'Notification',
+      terminalId: 'term-pi',
+      matcher: 'idle_prompt',
+      raw: { hook: 'ui_prompt_start', kind: 'select' },
+    })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+  })
+
+  it('toasts matcher-less codex Notifications as needs-input instead of dropping them', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal(codexTerminal)
+    coordinator.handleHookPayload({
+      source: 'codex',
+      event: 'Notification',
+      terminalId: 'term-1',
+      raw: { hook: 'ask-user' },
+    })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'attention', delivered: true })
+  })
+
+  it('emits approval for top-level permission_prompt so sidebar and toast stay aligned', async () => {
+    const { coordinator, attentionPayloads, events } = createCoordinator(() => 1_000)
+
+    coordinator.registerTerminal({
+      terminalId: 'term-pi',
+      engine: 'pi',
+      workspaceId: 'workspace-1',
+      cwd: 'C:/repo',
+    })
+    coordinator.handleHookPayload({
+      source: 'pi',
+      event: 'Notification',
+      terminalId: 'term-pi',
+      matcher: 'permission_prompt',
+      raw: { hook: 'ui_prompt_start', kind: 'confirm' },
+    })
+    await Promise.resolve()
+
+    expect(attentionPayloads).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'approval', delivered: true })
   })
 
   it('notifies turn lifecycle callbacks with transcript binding info', () => {

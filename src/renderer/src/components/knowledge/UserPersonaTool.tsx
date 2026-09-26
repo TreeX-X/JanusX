@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UserMemoryOverview } from '../../../../shared/knowledge'
 import { getUserMemoryOverview } from '../../services/knowledge'
 import { useAppStore } from '../../stores/app'
+import { useExperimentalStore } from '../../stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './KnowledgeAssist.module.css'
 import { UserPersonaCards } from './UserPersonaCards'
@@ -39,7 +40,7 @@ export function UserPersonaTool() {
   }, [])
 
   const openInbox = useCallback(() => {
-    setActiveWorkbench('knowledge')
+    if (useExperimentalStore.getState().knowledge) setActiveWorkbench('knowledge')
   }, [setActiveWorkbench])
 
   return (

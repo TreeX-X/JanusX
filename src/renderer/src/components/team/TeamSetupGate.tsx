@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useTeamStore } from '@/stores/team'
 import styles from './TeamSetupGate.module.css'
 
@@ -21,6 +22,14 @@ export function TeamSetupGate() {
   const skipLogin = useTeamStore((s) => s.skipLogin)
   const closeGate = useTeamStore((s) => s.closeGate)
   const clearError = useTeamStore((s) => s.clearError)
+  // 创新开关门控：teamCollab 关闭时不自动弹挡板；等开关加载完再决定，避免首屏闪现。
+  const teamCollabEnabled = useExperimentalStore((s) => s.teamCollab)
+  const experimentalLoaded = useExperimentalStore((s) => s.loaded)
+  const loadExperimental = useExperimentalStore((s) => s.load)
+
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
@@ -32,7 +41,10 @@ export function TeamSetupGate() {
   const [joinCode, setJoinCode] = useState('')
 
   const needsOrg = status === 'authed' && tenants.length === 0
-  const showGate = status === 'guest' || gateForced || needsOrg
+  // 创新开关门控：teamCollab 关闭时不自动弹挡板（首屏 guest / 建组织分支）；
+  // 用户在远控面板等处主动触发的登录（gateForced）仍响应，避免死按钮。
+  const autoGate = experimentalLoaded && teamCollabEnabled && (status === 'guest' || needsOrg)
+  const showGate = autoGate || gateForced
   if (!showGate) return null
   // 本地模式被强制唤起时允许关闭；首屏 guest 与建组织分支只能跳过进本地模式。
   const closable = status === 'local' && gateForced

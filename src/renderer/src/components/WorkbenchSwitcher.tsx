@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useAppStore, type ActiveWorkbench } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
+import { useExperimentalStore } from '@/stores/experimental'
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './WorkbenchSwitcher.module.css'
@@ -17,6 +19,19 @@ export function WorkbenchSwitcher() {
   const toggleWorkbench = useAppStore((s) => s.toggleWorkbench)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const activeSession = useBlueprintStore((s) => s.activeSession)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const loadExperimental = useExperimentalStore((s) => s.load)
+
+  useEffect(() => {
+    void loadExperimental()
+  }, [loadExperimental])
+
+  // 创新开关关闭知识库时，若工作台正开着则收起，避免悬空态。
+  useEffect(() => {
+    if (!knowledgeEnabled && useAppStore.getState().activeWorkbench === 'knowledge') {
+      useAppStore.getState().setActiveWorkbench(null)
+    }
+  }, [knowledgeEnabled])
 
   const pendingCandidateCount =
     currentBlueprint?.requirementCandidates?.filter((candidate) => candidate.status === 'pending').length ?? 0
@@ -36,9 +51,11 @@ export function WorkbenchSwitcher() {
     return t('common:workbench.titleAction', { action, label })
   }
 
+  const visibleWorkbenches = WORKBENCHES.filter((item) => item.id !== 'knowledge' || knowledgeEnabled)
+
   return (
     <div className={styles.switcher} data-open={activeWorkbench ?? 'none'} aria-label={t('common:workbench.switcherAria')}>
-      {WORKBENCHES.map((item) => {
+      {visibleWorkbenches.map((item) => {
         const isActive = activeWorkbench === item.id
         const status = getButtonStatus(item.id, isActive)
         const badge = item.id === 'blueprint' ? pendingCandidateCount : 0

@@ -8,6 +8,12 @@
       "nav": "General",
       "navMeta": "Language"
     },
+    "experimental": {
+      "title": "Experimental",
+      "subtitle": "Experimental · Off by default, takes effect immediately",
+      "nav": "Experimental",
+      "navMeta": "Experimental"
+    },
     "notifications": {
       "title": "Notifications",
       "subtitle": "Notifications · Agent terminal task completion and failure alerts",
@@ -44,6 +50,38 @@
       "label": "Interface language",
       "help": "Takes effect immediately, persists across restarts",
       "followSystem": "Follow system"
+    }
+  },
+  "experimental": {
+    "warning": "Experimental features may contain bugs or be partially unavailable. Turning a switch off hides its entry immediately.",
+    "unavailable": "Unavailable in this environment (browser preview).",
+    "section": {
+      "features": "Experimental Features"
+    },
+    "toggle": {
+      "knowledge": {
+        "label": "Knowledge",
+        "hint": "Show the knowledge workbench entry. Turning off hides the title-bar switcher and the workbench."
+      },
+      "roundtable": {
+        "label": "Roundtable",
+        "hint": "Show the roundtable view in the island expanded stage. Turning off hides the entry; ongoing discussions are unaffected."
+      },
+      "persona": {
+        "label": "Persona",
+        "hint": "Show the persona tool in the right dock plus island memory reminders. Turning off hides the entries."
+      },
+      "remoteControl": {
+        "label": "Remote collaboration",
+        "hint": "Show the status-bar remote entry and remote dialog (pairing, terminal tail, controlled submit, host service). Turning off hides the entry, disconnects, and stops the host service."
+      },
+      "teamCollab": {
+        "label": "Team collaboration",
+        "hint": "Show the sidebar team row, the first-run login gate, and the team page in Settings. Turning off hides the entries; login state and org data are kept and restored on re-enable."
+      }
+    },
+    "error": {
+      "save": "Failed to save experimental feature toggles"
     }
   },
   "updater": {

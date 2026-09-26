@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import { getUserMemoryOverview } from '@/services/knowledge'
 import styles from './RightDock.module.css'
@@ -27,7 +28,9 @@ export function RightToolRail({
   onTogglePanel,
 }: RightToolRailProps) {
   const { t } = useI18n('common')
+  const personaEnabled = useExperimentalStore((s) => s.persona)
   const panelToggle = onTogglePanel ?? onExpandPanel
+  const visibleTools = RIGHT_TOOL_REGISTRY.filter((tool) => tool.id !== 'persona' || personaEnabled)
   const hasOpenTools = openToolIds.length > 0
   const panelToggleLabel = collapsed
     ? t('common:rightDock.expandAria')
@@ -51,7 +54,7 @@ export function RightToolRail({
               : <PanelRightClose size={16} strokeWidth={1.6} aria-hidden="true" />}
           </button>
         )}
-        {RIGHT_TOOL_REGISTRY.map((tool) => {
+        {visibleTools.map((tool) => {
           const state = activeToolId === tool.id ? 'active' : openToolIds.includes(tool.id) ? 'open' : 'closed'
           const stateLabel = state === 'active'
             ? t('common:rightTool.railStateActive')

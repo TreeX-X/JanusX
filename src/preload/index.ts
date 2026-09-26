@@ -38,6 +38,7 @@ import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat
 import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
+import { EXPERIMENTAL_CHANNELS, type ExperimentalAPI } from '../shared/ipc/experimental'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 import { TEAM_CHANNELS, type TeamAPI } from '../shared/ipc/team'
 import { UPDATER_CHANNELS, UPDATER_EVENT_CHANNELS, type UpdaterAPI } from '../shared/ipc/updater'
@@ -414,6 +415,11 @@ const agentSettingsAPI: AgentSettingsAPI = {
   update: (settings) => ipcRenderer.invoke(AGENT_SETTINGS_CHANNELS.update, settings),
 }
 
+const experimentalAPI: ExperimentalAPI = {
+  get: () => ipcRenderer.invoke(EXPERIMENTAL_CHANNELS.get),
+  update: (settings) => ipcRenderer.invoke(EXPERIMENTAL_CHANNELS.update, settings),
+}
+
 const updaterAPI: UpdaterAPI = {
   getState: () => ipcRenderer.invoke(UPDATER_CHANNELS.getState),
   check: () => ipcRenderer.invoke(UPDATER_CHANNELS.check),
@@ -601,6 +607,7 @@ contextBridge.exposeInMainWorld('electron', {
   git: gitAPI,
   notificationSettings: notificationSettingsAPI,
   agentSettings: agentSettingsAPI,
+  experimental: experimentalAPI,
   updater: updaterAPI,
   subAgentRun: subAgentRunAPI,
   team: teamAPI,

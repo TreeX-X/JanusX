@@ -21,6 +21,10 @@ import {
   normalizeUpdaterSettings,
   type UpdaterSettings,
 } from '../../shared/ipc/updater'
+import {
+  normalizeExperimentalFeatures,
+  type ExperimentalFeatures,
+} from '../../shared/ipc/experimental'
 import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 
 /** P6：janus-chat 循环步数默认 40（P6 前为硬编码 20），钳制 1~100。 */
@@ -88,6 +92,7 @@ export class ConfigService {
         agentApprovalMode: normalizeAgentApprovalMode(parsed.agentApprovalMode),
         agentMaxSteps: normalizeAgentMaxSteps(parsed.agentMaxSteps),
         safeCompileAutoAllow: normalizeSafeCompileAutoAllow(parsed.safeCompileAutoAllow),
+        experimentalFeatures: normalizeExperimentalFeatures(parsed.experimentalFeatures),
       }
     } catch (error) {
       // 解析失败（文件存在但损坏）时先备份，避免默认配置覆盖后用户数据无法恢复
@@ -260,6 +265,21 @@ export class ConfigService {
     const normalized = normalizeSafeCompileAutoAllow(value)
     await this.update({ safeCompileAutoAllow: normalized })
     return normalized
+  }
+
+  async getExperimentalFeatures(): Promise<ExperimentalFeatures> {
+    const config = await this.get()
+    return normalizeExperimentalFeatures(config.experimentalFeatures)
+  }
+
+  async updateExperimentalFeatures(partial: Partial<ExperimentalFeatures>): Promise<ExperimentalFeatures> {
+    const current = await this.getExperimentalFeatures()
+    const experimentalFeatures = normalizeExperimentalFeatures({
+      ...current,
+      ...partial,
+    })
+    await this.update({ experimentalFeatures })
+    return experimentalFeatures
   }
 
   async addRecentWorkspace(id: string): Promise<void> {
