@@ -35,6 +35,16 @@ jobs:
           ref: 043552b1dd0932e29e09b95a60bde7c4e2660ee7
           path: janus-agentX
 
+      # S1.2 相容测试与 Note 外链检查按相对路径 ../WorkFlowX 读取标准与
+      # fixture；缺席则 ENOENT/unresolved-external-link 全红（v0.8.8 未推送
+      # 时本地能过、远端必挂的根因）。pin 显式 SHA 以保证可复现。
+      - name: Checkout sibling WorkFlowX
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/WorkFlowX
+          ref: 0e91a87eea6569c228dfb525a87118e72f9696b9
+          path: WorkFlowX
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -67,6 +77,12 @@ jobs:
       - name: Prepackage
         working-directory: JanusX
         run: npm run prepackage
+
+      # knowledge-note-ui 单测在 beforeAll 起 headless chromium；runner
+      # 无预装浏览器则整个文件失败（v0.8.8 R3 新增用例首个需要的）。
+      - name: Install Playwright chromium
+        working-directory: JanusX
+        run: npx playwright install chromium
 
       # 下述步骤与 package.json 的 verify 同序，拆步只为失败归因；
       # 改链时以 package.json 为准并同步此处。

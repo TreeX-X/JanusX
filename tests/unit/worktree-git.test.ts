@@ -245,6 +245,11 @@ async function initRepo(): Promise<string> {
   const git = (args: string[]) =>
     execFileAsync('git', ['-c', 'user.email=test@local', '-c', 'user.name=test', ...args], { cwd: dir })
   await git(['init', '-b', 'main'])
+  // Hermetic identity: src-driven operations (e.g. merge commits) must not
+  // depend on ambient global git config — CI runners have none, which used
+  // to fail merges with "Committer identity unknown" and report no conflicts.
+  await git(['config', 'user.email', 'test@local'])
+  await git(['config', 'user.name', 'test'])
   const { writeFile, mkdir } = await import('node:fs/promises')
   // Realistic checkout: dependencies and secrets stay untracked.
   await writeFile(join(dir, '.gitignore'), 'node_modules/\n.env\n.env.local\n')
